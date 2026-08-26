@@ -49,6 +49,8 @@ export type CarBodySpec = {
   trackHalf: number;
   wheelRadius: number;
   wheelWidth: number;
+  /** Alloy spokes per wheel face. 0 leaves a plain steel-wheel disc. */
+  wheelSpokes?: number;
   /** The glass house. roofPaint "accent" gives the rally two-tone roof. */
   cabin: {
     cowlZ: number;
@@ -58,6 +60,22 @@ export type CarBodySpec = {
     roofY: number;
     roofHalf: number;
     roofPaint?: "paint" | "accent";
+    /** Body-colored frame left around the glass, m. The cabin is built as
+     * a solid shell and the glass is cut into it, so these widths ARE the
+     * pillars: a/b/c are the windscreen, door and rear posts. */
+    pillars?: {
+      a?: number;
+      b?: number;
+      c?: number;
+      /** Metal under the side windows (the door top) and over them. */
+      sill?: number;
+      header?: number;
+      /** B-pillar position along the cabin, 0 at the cowl, 1 at the tail. */
+      split?: number;
+      /** Extra sill under the rear quarter window — the rally kick-up. */
+      quarterRise?: number;
+    };
+    pillarPaint?: "paint" | "accent";
   };
   /** Fender flares: extra belt half-width peaking over each axle, m. */
   flare?: { extra: number; length: number };
@@ -243,14 +261,97 @@ function buildShell(b: MeshBuilder, spec: CarBodySpec, stations: Station[]): voi
   cap(stations[stations.length - 1], false);
 }
 
+/** A cabin panel as a bilinear patch. Corners counter-clockwise seen from
+ * OUTSIDE, in the order [p00, p10, p11, p01]: u runs p00→p10, v runs
+ * p00→p01. The greenhouse's side panels are warped quads (the cowl is
+ * narrower than the roof), so glass openings sample the patch instead of
+ * assuming a plane. */
+type Patch = readonly [V3, V3, V3, V3];
+
+function mix3(a: V3, b: V3, t: number): V3 {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+}
+
+function dist3(a: V3, b: V3): number {
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
+function patchAt(q: Patch, u: number, v: number): V3 {
+  return mix3(mix3(q[0], q[1], u), mix3(q[3], q[2], u), v);
+}
+
+/** Outward normal from the diagonals — stable on the warped side panels,
+ * and on a mirrored patch it comes out mirrored too, i.e. still outward. */
+function patchNormal(q: Patch): V3 {
+  const d1: V3 = [q[2][0] - q[0][0], q[2][1] - q[0][1], q[2][2] - q[0][2]];
+  const d2: V3 = [q[3][0] - q[1][0], q[3][1] - q[1][1], q[3][2] - q[1][2]];
+  const n: V3 = [
+    d1[1] * d2[2] - d1[2] * d2[1],
+    d1[2] * d2[0] - d1[0] * d2[2],
+    d1[0] * d2[1] - d1[1] * d2[0],
+  ];
+  const len = Math.hypot(n[0], n[1], n[2]) || 1;
+  return [n[0] / len, n[1] / len, n[2] / len];
+}
+
+/** Sizes of a patch in metres, averaged across its opposite edges — the
+ * conversion from pillar widths in metres to patch (u, v) fractions. */
+function patchSpan(q: Patch): { u: number; v: number } {
+  return {
+    u: (dist3(q[0], q[1]) + dist3(q[3], q[2])) / 2,
+    v: (dist3(q[0], q[3]) + dist3(q[1], q[2])) / 2,
+  };
+}
+
+/** One sub-rectangle of a patch, lifted along its normal so glass sits
+ * proud of the metal it is cut into. `mirrored` patches are wound the
+ * other way round; their normal is already correct. */
+function patchQuad(
+  b: MeshBuilder,
+  q: Patch,
+  rect: { u0: number; u1: number; v0: number; v1: number },
+  color: number,
+  lift = 0,
+  mirrored = false,
+): void {
+  if (rect.u1 - rect.u0 < 1e-3 || rect.v1 - rect.v0 < 1e-3) return;
+  const n = patchNormal(q);
+  const p = (u: number, v: number): V3 => {
+    const q0 = patchAt(q, u, v);
+    return [q0[0] + n[0] * lift, q0[1] + n[1] * lift, q0[2] + n[2] * lift];
+  };
+  const c = [p(rect.u0, rect.v0), p(rect.u1, rect.v0), p(rect.u1, rect.v1), p(rect.u0, rect.v1)];
+  if (mirrored) b.quad(c[3], c[2], c[1], c[0], color);
+  else b.quad(c[0], c[1], c[2], c[3], color);
+}
+
+const PILLARS = {
+  a: 0.1,
+  b: 0.09,
+  c: 0.16,
+  sill: 0.055,
+  header: 0.045,
+  split: 0.5,
+  quarterRise: 0,
+};
+
+/** Glass sits this far proud of the cabin metal — enough to beat depth
+ * fighting, small enough to read as flush at any camera distance. */
+const GLASS_PROUD = 0.006;
+
+/** The cabin: a solid body-colored shell with the windows cut into it, so
+ * every window is framed by metal — A-pillar, B-pillar, C-pillar, sill and
+ * roof header. Without them a car reads as a glass canopy on a tub. */
 function buildGreenhouse(b: MeshBuilder, spec: CarBodySpec): void {
   const { cowlZ, roofFrontZ, roofRearZ, baseRearZ, roofY, roofHalf } = spec.cabin;
   const glass = spec.colors.glass ?? 0x1b2430;
   const roofColor = spec.cabin.roofPaint === "accent" ? spec.colors.accent : spec.colors.paint;
+  const pillar = spec.cabin.pillarPaint === "accent" ? spec.colors.accent : spec.colors.paint;
+  const p = { ...PILLARS, ...spec.cabin.pillars };
 
   const cowl = sampleProfile(spec.profile, cowlZ);
   const tail = sampleProfile(spec.profile, baseRearZ);
-  // The glass sits just inside the body's top edge so the shoulder reads
+  // The cabin sits just inside the body's top edge so the shoulder reads
   // as a sill under the windows.
   const xc = cowl.half * SHOULDER * 0.94;
   const xt = tail.half * SHOULDER * 0.94;
@@ -264,11 +365,79 @@ function buildGreenhouse(b: MeshBuilder, spec: CarBodySpec): void {
   const TL: V3 = [-xt, tail.topY, baseRearZ];
   const TR: V3 = [xt, tail.topY, baseRearZ];
 
-  b.quad(CL, CR, FR, FL, glass); // windshield
-  b.quad(FL, FR, RR, RL, roofColor); // roof
-  b.quad(RL, RR, TR, TL, glass); // rear window
-  b.quad(TR, RR, FR, CR, glass); // right side glass
-  b.quad(CL, FL, RL, TL, glass); // left side glass
+  const full = { u0: 0, u1: 1, v0: 0, v1: 1 };
+
+  // Windscreen: u across the car, v cowl → roof.
+  const screen: Patch = [CL, CR, FR, FL];
+  const sSpan = patchSpan(screen);
+  patchQuad(b, screen, full, pillar);
+  patchQuad(
+    b,
+    screen,
+    {
+      u0: p.a / sSpan.u,
+      u1: 1 - p.a / sSpan.u,
+      v0: p.sill / sSpan.v,
+      v1: 1 - p.header / sSpan.v,
+    },
+    glass,
+    GLASS_PROUD,
+  );
+
+  // Backlight: u across the car, v roof → deck.
+  const back: Patch = [RL, RR, TR, TL];
+  const bSpan = patchSpan(back);
+  patchQuad(b, back, full, pillar);
+  patchQuad(
+    b,
+    back,
+    {
+      u0: p.c / bSpan.u,
+      u1: 1 - p.c / bSpan.u,
+      v0: p.header / bSpan.v,
+      v1: 1 - p.sill / bSpan.v,
+    },
+    glass,
+    GLASS_PROUD,
+  );
+
+  patchQuad(b, [FL, FR, RR, RL], full, roofColor);
+
+  // Sides: u cowl → tail, v sill → roof. The door glass and the rear
+  // quarter glass are two openings with the B-pillar of metal between.
+  for (const side of [1, -1]) {
+    const m = (q: V3): V3 => [q[0] * side, q[1], q[2]];
+    const flank: Patch = [m(CR), m(TR), m(RR), m(FR)];
+    const span = patchSpan(flank);
+    const mirrored = side < 0;
+    patchQuad(b, flank, full, pillar, 0, mirrored);
+
+    const v0 = p.sill / span.v;
+    const v1 = 1 - p.header / span.v;
+    const half = p.b / 2 / span.u;
+    const split = p.split;
+    patchQuad(
+      b,
+      flank,
+      { u0: p.a / span.u, u1: split - half, v0, v1 },
+      glass,
+      GLASS_PROUD,
+      mirrored,
+    );
+    patchQuad(
+      b,
+      flank,
+      {
+        u0: split + half,
+        u1: 1 - p.c / span.u,
+        v0: v0 + p.quarterRise / span.v,
+        v1,
+      },
+      glass,
+      GLASS_PROUD,
+      mirrored,
+    );
+  }
 }
 
 function buildDetails(b: MeshBuilder, spec: CarBodySpec, axles: number[]): void {
@@ -310,15 +479,19 @@ function buildDetails(b: MeshBuilder, spec: CarBodySpec, axles: number[]): void 
     }
   }
 
+  // Mud flaps hang off the arch lip behind each wheel. Their top is buried
+  // in the bodywork so they read as bolted on, not floating alongside it.
   if (spec.mudflaps !== false) {
+    const top = spec.floorY + 0.13;
+    const bottom = 0.07;
     for (const axle of axles) {
       for (const side of [-1, 1]) {
         b.box(
-          side * spec.trackHalf,
-          (spec.floorY + 0.06) / 2,
-          axle - spec.wheelRadius - 0.03,
-          spec.wheelWidth + 0.02,
-          spec.floorY - 0.04,
+          side * (spec.trackHalf - 0.015),
+          (top + bottom) / 2,
+          axle - spec.wheelRadius - 0.02,
+          spec.wheelWidth * 0.92,
+          top - bottom,
           0.03,
           trim,
         );
@@ -400,30 +573,64 @@ function bakeShading(source: THREE.BufferGeometry, color: number): THREE.BufferG
   return geo;
 }
 
-/** One wheel: chunky 12-gon tire with a wider, lighter 8-gon hub poking
- * through both faces. Axle along x; origin at the wheel center. */
-function buildWheel(
-  spec: CarBodySpec,
-  material: THREE.Material,
-): { spin: THREE.Group; geos: THREE.BufferGeometry[] } {
+// The alloy, as fractions of the tire radius: the rim lip is a ring near
+// the tire's shoulder, the spokes bridge it to the centre cap, and the
+// dark tire face left showing between them reads as the voids.
+const RIM_OUTER = 0.75;
+const RIM_INNER = 0.57;
+const RIM_HUB = 0.2;
+const RIM_SPOKE_WIDTH = 0.12;
+const RIM_FACETS = 12;
+
+/** A flat ring/disc part of the wheel face, drawn in the wheel's y-z plane
+ * at ±x. Angles run y = cos, z = sin, which is counter-clockwise seen from
+ * +x — the winding an outward-facing +x surface needs. */
+function rimFace(b: MeshBuilder, x: number, outward: number, spokes: number, hub: number): void {
+  const pt = (r: number, a: number): V3 => [x, r * Math.cos(a), r * Math.sin(a)];
+  const quad = (r0: number, a0: number, r1: number, a1: number, ao0: number, ao1: number): void => {
+    const c = [pt(r0, a0), pt(r1, ao0), pt(r1, ao1), pt(r0, a1)];
+    if (outward > 0) b.quad(c[0], c[1], c[2], c[3], hub);
+    else b.quad(c[3], c[2], c[1], c[0], hub);
+  };
+
+  for (let i = 0; i < RIM_FACETS; i++) {
+    const a0 = (i / RIM_FACETS) * Math.PI * 2;
+    const a1 = ((i + 1) / RIM_FACETS) * Math.PI * 2;
+    quad(RIM_INNER, a0, RIM_OUTER, a1, a0, a1);
+    // Centre cap, fanned from the axle.
+    const c = [pt(RIM_HUB, a0), pt(RIM_HUB, a1)];
+    if (outward > 0) b.tri([x, 0, 0], c[0], c[1], hub);
+    else b.tri([x, 0, 0], c[1], c[0], hub);
+  }
+
+  // Straight-sided spokes: constant width, so the half-angle shrinks with
+  // radius. They stop at the lip, leaving the tire face as the void.
+  const w = RIM_SPOKE_WIDTH / 2;
+  for (let i = 0; i < spokes; i++) {
+    const a = (i / spokes) * Math.PI * 2;
+    const ai = w / RIM_HUB;
+    const ao = w / RIM_INNER;
+    quad(RIM_HUB, a - ai, RIM_INNER, a + ai, a - ao, a + ao);
+  }
+}
+
+/** One wheel: chunky 12-gon tire wearing a spoked alloy on each face.
+ * Axle along x; origin at the wheel center. */
+function buildWheel(spec: CarBodySpec): THREE.BufferGeometry[] {
+  const r = spec.wheelRadius;
   const tireGeo = bakeShading(
-    new THREE.CylinderGeometry(spec.wheelRadius, spec.wheelRadius, spec.wheelWidth, 12).rotateZ(
-      Math.PI / 2,
-    ),
+    new THREE.CylinderGeometry(r, r, spec.wheelWidth, RIM_FACETS).rotateZ(Math.PI / 2),
     0x181c22,
   );
-  const hubGeo = bakeShading(
-    new THREE.CylinderGeometry(
-      spec.wheelRadius * 0.56,
-      spec.wheelRadius * 0.56,
-      spec.wheelWidth + 0.05,
-      8,
-    ).rotateZ(Math.PI / 2),
-    spec.colors.hub ?? 0xe6e3da,
-  );
-  const spin = new THREE.Group();
-  spin.add(new THREE.Mesh(tireGeo, material), new THREE.Mesh(hubGeo, material));
-  return { spin, geos: [tireGeo, hubGeo] };
+  const b = new MeshBuilder();
+  const hub = spec.colors.hub ?? 0xe6e3da;
+  const spokes = spec.wheelSpokes ?? 6;
+  for (const side of [1, -1]) {
+    rimFace(b, side * (spec.wheelWidth / 2 + 0.005), side, spokes, hub);
+  }
+  const rimGeo = b.geometry();
+  rimGeo.scale(1, r, r);
+  return [tireGeo, rimGeo];
 }
 
 export function buildCarBody(spec: CarBodySpec): CarBodyParts {
@@ -442,17 +649,19 @@ export function buildCarBody(spec: CarBodySpec): CarBodyParts {
 
   const wheelGroups: THREE.Group[] = [];
   const wheelSpin: THREE.Object3D[] = [];
-  const wheelGeos: THREE.BufferGeometry[] = [];
+  // All four wheels share one tire and one alloy — only their transforms
+  // differ, so the geometry is built once and disposed once.
+  const wheelGeos = buildWheel(spec);
   for (const axle of axles) {
     for (const side of [-1, 1]) {
       const wheel = new THREE.Group();
       wheel.position.set(side * spec.trackHalf, spec.wheelRadius, axle);
-      const { spin, geos } = buildWheel(spec, material);
+      const spin = new THREE.Group();
+      for (const geo of wheelGeos) spin.add(new THREE.Mesh(geo, material));
       wheel.add(spin);
       group.add(wheel);
       wheelGroups.push(wheel);
       wheelSpin.push(spin);
-      wheelGeos.push(...geos);
     }
   }
 
