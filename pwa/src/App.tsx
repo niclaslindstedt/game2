@@ -27,7 +27,7 @@ import {
 import { cacheIdForBase } from "./app-pwa.ts";
 import { connectOutput } from "./output-bridge.ts";
 import { createInput } from "./game/input.ts";
-import { createRenderer, type GameRenderer } from "./game/renderer.ts";
+import type { GameRenderer } from "./game/renderer.ts";
 import { Hud, type HudFlash, type HudPacenote, type HudSnapshot } from "./game/hud.tsx";
 import {
   PreRaceMenu,
@@ -257,98 +257,114 @@ export function App() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const renderer = createRenderer(canvas);
-    rendererRef.current = renderer;
-    newGameRef.current(seedRef.current, true);
+    let disposed = false;
+    const cleanups: (() => void)[] = [];
+    // The render stack — three.js and the whole world builder — loads as
+    // its own chunk, keeping the entry script inside the §11.3.9
+    // critical-path budget: the shell parses and paints at once, the world
+    // follows a breath later (from the service-worker cache once installed).
+    void import("./game/renderer.ts").then(({ createRenderer }) => {
+      if (disposed) return;
+      const renderer = createRenderer(canvas);
+      rendererRef.current = renderer;
+      cleanups.push(() => renderer.dispose());
+      newGameRef.current(seedRef.current, true);
 
-    const restart = (): void => newGameRef.current(seedRef.current, false);
-    const menu = (): void => {
-      newGameRef.current(seedRef.current, false);
-      setMenuOpen(true);
-    };
-    const camera = (): void => {
-      const mode = renderer.cycleCamera();
-      flash(mode === "hood" ? "HOOD CAM" : "CHASE CAM", "info");
-    };
-    actionsRef.current = { restart, menu, camera };
-    input.onAction((action) => {
-      if (action === "restart") restart();
-      else if (action === "swap") menu();
-      else camera();
+      const restart = (): void => newGameRef.current(seedRef.current, false);
+      const menu = (): void => {
+        newGameRef.current(seedRef.current, false);
+        setMenuOpen(true);
+      };
+      const camera = (): void => {
+        const mode = renderer.cycleCamera();
+        flash(mode === "hood" ? "HOOD CAM" : "CHASE CAM", "info");
+      };
+      actionsRef.current = { restart, menu, camera };
+      input.onAction((action) => {
+        if (action === "restart") restart();
+        else if (action === "swap") menu();
+        else camera();
+      });
+
+      let nextStageTimer: ReturnType<typeof setTimeout> | null = null;
+      cleanups.push(() => {
+        if (nextStageTimer) clearTimeout(nextStageTimer);
+      });
+      const handleEvents = (state: GameState, events: GameEvent[]): void => {
+        renderer.onEvents(state, events);
+        for (const ev of events) {
+          if (ev.type === "landing") {
+            flash(
+              ev.clean ? `CLEAN AIR ${ev.airTime.toFixed(1)}s` : "ROUGH LANDING",
+              ev.clean ? "good" : "bad",
+            );
+          } else if (ev.type === "splash") {
+            flash("SPLASH", "info");
+          } else if (ev.type === "boostEmpty") {
+            flash("BOOSTER SPENT", "bad");
+          } else if (ev.type === "crash") {
+            flash(ev.into === "water" ? "INTO THE WATER" : "CRASHED", "bad");
+          } else if (ev.type === "respawn") {
+            flash("BACK ON THE ROAD", "bad");
+          } else if (ev.type === "finish") {
+            finishTimeRef.current = ev.time;
+            nextStageTimer = setTimeout(() => {
+              const next = seedRef.current + 1;
+              seedRef.current = next;
+              setSeed(next);
+              newGameRef.current(next, true);
+            }, 4000);
+          }
+        }
+      };
+
+      // Fixed-timestep driver: engine steps at TUNING.dt regardless of frame
+      // rate; a hitching tab clamps the backlog instead of spiraling. While
+      // the menu is up the engine holds and only the scene breathes.
+      let raf = 0;
+      let last = performance.now();
+      let acc = 0;
+      let hudClock = 0;
+      const frame = (now: number): void => {
+        raf = requestAnimationFrame(frame);
+        const dtFrame = Math.min(0.1, (now - last) / 1000);
+        last = now;
+        const state = gameRef.current;
+        if (!state) return;
+        if (menuOpenRef.current) {
+          acc = 0;
+          renderer.render(state, dtFrame);
+          return;
+        }
+        acc += dtFrame;
+        while (acc >= TUNING.dt) {
+          acc -= TUNING.dt;
+          const events = step(state, input.sample(TUNING.dt));
+          if (events.length > 0) handleEvents(state, events);
+        }
+        renderer.render(state, dtFrame);
+        hudClock += dtFrame;
+        if (hudClock > 0.08) {
+          hudClock = 0;
+          setSnap(takeSnapshot(state, finishTimeRef.current));
+        }
+      };
+      raf = requestAnimationFrame(frame);
+      cleanups.push(() => cancelAnimationFrame(raf));
+
+      const onResize = (): void => renderer.resize();
+      window.addEventListener("resize", onResize);
+      window.addEventListener("orientationchange", onResize);
+      cleanups.push(() => {
+        window.removeEventListener("resize", onResize);
+        window.removeEventListener("orientationchange", onResize);
+      });
     });
 
-    let nextStageTimer: ReturnType<typeof setTimeout> | null = null;
-    const handleEvents = (state: GameState, events: GameEvent[]): void => {
-      renderer.onEvents(state, events);
-      for (const ev of events) {
-        if (ev.type === "landing") {
-          flash(
-            ev.clean ? `CLEAN AIR ${ev.airTime.toFixed(1)}s` : "ROUGH LANDING",
-            ev.clean ? "good" : "bad",
-          );
-        } else if (ev.type === "splash") {
-          flash("SPLASH", "info");
-        } else if (ev.type === "boostEmpty") {
-          flash("BOOSTER SPENT", "bad");
-        } else if (ev.type === "crash") {
-          flash(ev.into === "water" ? "INTO THE WATER" : "CRASHED", "bad");
-        } else if (ev.type === "respawn") {
-          flash("BACK ON THE ROAD", "bad");
-        } else if (ev.type === "finish") {
-          finishTimeRef.current = ev.time;
-          nextStageTimer = setTimeout(() => {
-            const next = seedRef.current + 1;
-            seedRef.current = next;
-            setSeed(next);
-            newGameRef.current(next, true);
-          }, 4000);
-        }
-      }
-    };
-
-    // Fixed-timestep driver: engine steps at TUNING.dt regardless of frame
-    // rate; a hitching tab clamps the backlog instead of spiraling. While
-    // the menu is up the engine holds and only the scene breathes.
-    let raf = 0;
-    let last = performance.now();
-    let acc = 0;
-    let hudClock = 0;
-    const frame = (now: number): void => {
-      raf = requestAnimationFrame(frame);
-      const dtFrame = Math.min(0.1, (now - last) / 1000);
-      last = now;
-      const state = gameRef.current;
-      if (!state) return;
-      if (menuOpenRef.current) {
-        acc = 0;
-        renderer.render(state, dtFrame);
-        return;
-      }
-      acc += dtFrame;
-      while (acc >= TUNING.dt) {
-        acc -= TUNING.dt;
-        const events = step(state, input.sample(TUNING.dt));
-        if (events.length > 0) handleEvents(state, events);
-      }
-      renderer.render(state, dtFrame);
-      hudClock += dtFrame;
-      if (hudClock > 0.08) {
-        hudClock = 0;
-        setSnap(takeSnapshot(state, finishTimeRef.current));
-      }
-    };
-    raf = requestAnimationFrame(frame);
-
-    const onResize = (): void => renderer.resize();
-    window.addEventListener("resize", onResize);
-    window.addEventListener("orientationchange", onResize);
-
     return () => {
-      cancelAnimationFrame(raf);
-      if (nextStageTimer) clearTimeout(nextStageTimer);
-      window.removeEventListener("resize", onResize);
-      window.removeEventListener("orientationchange", onResize);
-      renderer.dispose();
+      disposed = true;
+      // LIFO: stop the loop and listeners before the renderer they drive.
+      for (const fn of cleanups.reverse()) fn();
       input.dispose();
     };
     // The loop is created once; menu, settings, and restarts flow through refs.
