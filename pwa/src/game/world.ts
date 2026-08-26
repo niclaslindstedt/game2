@@ -11,13 +11,13 @@
 // and dropping them behind it.
 
 import * as THREE from "three";
-import { createRng, type GameState, type Track } from "@engine";
+import { createRng, inStream, type GameState, type Track, type WildObstacle } from "@engine";
 
 import { hash2, valueNoise } from "../lib/noise.ts";
 import { biomeFor, type Biome, type Community, type FloraMix } from "./biome.ts";
-import { buildFlora, type FloraPlacement } from "./flora.ts";
+import { buildFlora, type Flora, type FloraPlacement } from "./flora.ts";
 import { APRON, buildTerrain, LAKE_Y, type Terrain } from "./terrain.ts";
-import { buildStreamMeshes, inStream } from "./streams.ts";
+import { buildStreamMeshes } from "./streams.ts";
 import { bannerTexture, gravelTexture, waterTexture } from "./textures.ts";
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -248,6 +248,26 @@ function buildFords(
   return { group, next };
 }
 
+/** Which plant community owns a patch of ground: a hash over grove-sized
+ * cells (uniform, so the biome's weights hold exactly), the lookup wobbled
+ * by noise so grove borders meander instead of running straight. Shared by
+ * the road-band scenery and the wild — one seed, one quilt. */
+function communityPicker(seed: number, biome: Biome): (x: number, z: number) => Community {
+  const groveSeed = (seed ^ 0x9e3779b9) >>> 0;
+  const totalWeight = biome.communities.reduce((sum, c) => sum + c.weight, 0);
+  return (x: number, z: number): Community => {
+    const wx = x + (valueNoise(x, z, 47, groveSeed + 1) - 0.5) * 70;
+    const wz = z + (valueNoise(z, x, 53, groveSeed + 2) - 0.5) * 70;
+    let t = hash2(Math.floor(wx / biome.groveScale), Math.floor(wz / biome.groveScale), groveSeed);
+    t *= totalWeight;
+    for (const c of biome.communities) {
+      t -= c.weight;
+      if (t <= 0) return c;
+    }
+    return biome.communities[biome.communities.length - 1];
+  };
+}
+
 /** Draw one flora variant id from a weighted mix. */
 function pickFlora(mix: FloraMix, roll: number): string {
   let total = 0;
@@ -291,22 +311,7 @@ function buildScenery(
   const clearance = half + 3.5;
   const heightAt = terrain.heightAt;
 
-  // Which plant community owns a patch of ground: a hash over grove-sized
-  // cells (uniform, so the biome's weights hold exactly), the lookup
-  // wobbled by noise so grove borders meander instead of running straight.
-  const groveSeed = (track.seed ^ 0x9e3779b9) >>> 0;
-  const totalWeight = biome.communities.reduce((sum, c) => sum + c.weight, 0);
-  const communityAt = (x: number, z: number): Community => {
-    const wx = x + (valueNoise(x, z, 47, groveSeed + 1) - 0.5) * 70;
-    const wz = z + (valueNoise(z, x, 53, groveSeed + 2) - 0.5) * 70;
-    let t = hash2(Math.floor(wx / biome.groveScale), Math.floor(wz / biome.groveScale), groveSeed);
-    t *= totalWeight;
-    for (const c of biome.communities) {
-      t -= c.weight;
-      if (t <= 0) return c;
-    }
-    return biome.communities[biome.communities.length - 1];
-  };
+  const communityAt = communityPicker(track.seed, biome);
 
   // Clearance checks walk the guard samples — the chunk's own road with
   // its aprons plus a margin of neighbours — so nothing grows on the road,
@@ -339,7 +344,7 @@ function buildScenery(
     const scale = rng.range(0.75, 1.35);
     const spin = rng.range(0, Math.PI * 2);
     if (!clearOfRoad(x, z, clearance)) continue;
-    if (inStream(terrain.streams, x, z, 1.5)) continue;
+    if (inStream(terrain.field.streams, x, z, 1.5)) continue;
     const y = heightAt(x, z);
     if (y < LAKE_Y + 1.2) continue;
     let mix: FloraMix;
@@ -373,7 +378,7 @@ function buildScenery(
       const chance = (biome.undergrowthDensity / 2) * (community.groundCover ?? 1);
       if (!rng.chance(chance)) continue;
       if (!clearOfRoad(x, z, half + 1.2)) continue;
-      if (inStream(terrain.streams, x, z, 0.5)) continue;
+      if (inStream(terrain.field.streams, x, z, 0.5)) continue;
       const y = heightAt(x, z);
       if (y < LAKE_Y + 1.2) continue;
       flora.push({
@@ -407,7 +412,7 @@ function buildScenery(
     const z = s.z + r.z * offset * side + rng.range(-3, 3);
     const drop = rng.next();
     if (!clearOfRoad(x, z, clearance)) continue;
-    if (inStream(terrain.streams, x, z, 0.5)) continue;
+    if (inStream(terrain.field.streams, x, z, 0.5)) continue;
     const y = heightAt(x, z);
     if (y < LAKE_Y + 1.2) continue;
     rocks.push({ x, y, z, s: drop });
@@ -594,6 +599,212 @@ export type World = {
   dispose: () => void;
 };
 
+/** Cell edge for the wild's scenery, m (the terrain's tile grid). */
+const WILD_CELL = 224;
+/** Wild cells dressed within this range of the car, m. */
+const WILD_FAR = 430;
+/** Cells dressed per sync at most — the forest streams in, never hitches. */
+const WILD_BUDGET = 2;
+
+type WildCell = {
+  group: THREE.Group;
+  flora: Flora;
+  boulders: { mesh: THREE.InstancedMesh; list: WildObstacle[] } | null;
+};
+
+type Wild = {
+  group: THREE.Group;
+  sync: (carX: number, carZ: number) => void;
+  update: (dt: number) => void;
+  /** Retire wild props that newly built road now runs through. */
+  clearNear: (t: Track, from: number, to: number) => void;
+};
+
+/** The wild: the living landscape beyond the road bands' 150 m — the
+ * nature an exploring car actually drives through. Cells on the terrain's
+ * tile grid stream in around the CAR (wherever it is, road or not), each
+ * planting the same biome quilt the road bands plant, thinner — plus the
+ * engine terrain's solid props, drawn exactly where the physics collides
+ * with them: fallen trunks join the flora instancing, boulders get their
+ * own instanced rock. Deterministic per seed and cell. */
+function buildWild(track: Track, biome: Biome, terrain: Terrain): Wild {
+  const group = new THREE.Group();
+  const communityAt = communityPicker(track.seed, biome);
+  const cells = new Map<string, WildCell>();
+  const heightAt = terrain.heightAt;
+  const field = terrain.field;
+
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const v = new THREE.Vector3();
+  const sc = new THREE.Vector3();
+  const tint = new THREE.Color();
+
+  const buildCell = (cx: number, cz: number): WildCell => {
+    const cellGroup = new THREE.Group();
+    const rng = createRng(
+      (track.seed ^ 0x2ce1a373 ^ (Math.imul(cx, 2246822519) + Math.imul(cz, 668265263))) >>> 0,
+    );
+    const originX = cx * WILD_CELL;
+    const originZ = cz * WILD_CELL;
+    const placements: FloraPlacement[] = [];
+
+    // The wild forest — same communities as the road bands, at about half
+    // density: this is scenery a car drives THROUGH now, so the gaps to
+    // thread matter as much as the trees.
+    for (let i = 0; i < 44; i++) {
+      const x = originX + rng.range(0, WILD_CELL);
+      const z = originZ + rng.range(0, WILD_CELL);
+      const roll = rng.next();
+      const scale = rng.range(0.75, 1.35);
+      const spin = rng.range(0, Math.PI * 2);
+      if (field.roadDistanceAt(x, z) < 150) continue; // the road bands own that ground
+      if (inStream(field.streams, x, z, 1.5)) continue;
+      const y = heightAt(x, z);
+      if (y < LAKE_Y + 1.2) continue;
+      let mix: FloraMix;
+      if (y < LAKE_Y + 4) mix = biome.lakeshoreTrees;
+      else if (y > 26) mix = biome.highlandTrees;
+      else {
+        const community = communityAt(x, z);
+        if (!rng.chance(community.density * 0.55)) continue;
+        mix = community.trees;
+      }
+      placements.push({ id: pickFlora(mix, roll), x, y, z, scale, spin });
+    }
+    // Ground cover barely reads at exploring pace — a light scatter.
+    for (let i = 0; i < 20; i++) {
+      const x = originX + rng.range(0, WILD_CELL);
+      const z = originZ + rng.range(0, WILD_CELL);
+      const roll = rng.next();
+      const scale = rng.range(0.7, 1.3);
+      const spin = rng.range(0, Math.PI * 2);
+      const community = communityAt(x, z);
+      if (!rng.chance((biome.undergrowthDensity / 3) * (community.groundCover ?? 1))) continue;
+      if (field.roadDistanceAt(x, z) < 150) continue;
+      if (inStream(field.streams, x, z, 0.5)) continue;
+      const y = heightAt(x, z);
+      if (y < LAKE_Y + 1.2) continue;
+      placements.push({
+        id: pickFlora(community.undergrowth ?? biome.undergrowth, roll),
+        x,
+        y,
+        z,
+        scale,
+        spin,
+      });
+    }
+
+    // The solid props. Each obstacle is drawn by the cell that OWNS its
+    // position, so neighbouring cells never draw it twice.
+    const obstacles = field
+      .obstaclesNear(originX + WILD_CELL / 2, originZ + WILD_CELL / 2, WILD_CELL * 0.71)
+      .filter((ob) => Math.floor(ob.x / WILD_CELL) === cx && Math.floor(ob.z / WILD_CELL) === cz);
+    for (const ob of obstacles) {
+      if (ob.kind === "log") {
+        placements.push({
+          id: "fallenLog",
+          x: ob.x,
+          y: ob.y,
+          z: ob.z,
+          scale: ob.size,
+          spin: ob.spin,
+        });
+      }
+    }
+    const flora = buildFlora(placements, () => rng.next());
+    cellGroup.add(flora.group);
+
+    const boulderList = obstacles.filter((ob) => ob.kind === "boulder");
+    let boulders: WildCell["boulders"] = null;
+    if (boulderList.length > 0) {
+      const geo = new THREE.DodecahedronGeometry(1);
+      const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color(biome.ground.bedrock) });
+      const mesh = new THREE.InstancedMesh(geo, mat, boulderList.length);
+      boulderList.forEach((ob, i) => {
+        q.setFromAxisAngle(UP, ob.spin);
+        // Sunk near half in, matched to the collision circle — a face of
+        // rock the size the physics says it is.
+        m.compose(
+          v.set(ob.x, ob.y + ob.height * 0.42, ob.z),
+          q,
+          sc.set(ob.radius * 0.95, ob.height * 0.85, ob.radius * 0.8),
+        );
+        mesh.setMatrixAt(i, m);
+        mesh.setColorAt(i, tint.setScalar(0.75 + (ob.spin % 1) * 0.35));
+      });
+      cellGroup.add(mesh);
+      boulders = { mesh, list: boulderList };
+    }
+    group.add(cellGroup);
+    return { group: cellGroup, flora, boulders };
+  };
+
+  const dropCell = (key: string): void => {
+    const cell = cells.get(key);
+    if (!cell) return;
+    cells.delete(key);
+    group.remove(cell.group);
+    disposeGroup(cell.group);
+  };
+
+  const sync = (carX: number, carZ: number): void => {
+    const reach = Math.ceil(WILD_FAR / WILD_CELL);
+    const ccx = Math.floor(carX / WILD_CELL);
+    const ccz = Math.floor(carZ / WILD_CELL);
+    const missing: { key: string; d: number }[] = [];
+    const needed = new Set<string>();
+    for (let dx = -reach; dx <= reach; dx++) {
+      for (let dz = -reach; dz <= reach; dz++) {
+        const centerX = (ccx + dx + 0.5) * WILD_CELL;
+        const centerZ = (ccz + dz + 0.5) * WILD_CELL;
+        const d = Math.hypot(centerX - carX, centerZ - carZ);
+        if (d > WILD_FAR + WILD_CELL * 0.71) continue;
+        const key = `${ccx + dx},${ccz + dz}`;
+        needed.add(key);
+        if (!cells.has(key)) missing.push({ key, d });
+      }
+    }
+    missing.sort((a, b) => a.d - b.d);
+    for (const { key } of missing.slice(0, WILD_BUDGET)) {
+      const [cx, cz] = key.split(",").map(Number);
+      cells.set(key, buildCell(cx, cz));
+    }
+    for (const key of [...cells.keys()]) {
+      if (!needed.has(key)) dropCell(key);
+    }
+  };
+
+  const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+  const clearNear = (t: Track, from: number, to: number): void => {
+    const hits = (x: number, z: number): boolean => {
+      for (let i = from; i < to; i += 2) {
+        const dx = x - t.samples[i].x;
+        const dz = z - t.samples[i].z;
+        if (dx * dx + dz * dz < 12 * 12) return true;
+      }
+      return false;
+    };
+    for (const cell of cells.values()) {
+      cell.flora.retire(hits);
+      if (!cell.boulders) continue;
+      let touched = false;
+      cell.boulders.list.forEach((ob, i) => {
+        if (!hits(ob.x, ob.z)) return;
+        cell.boulders?.mesh.setMatrixAt(i, zero);
+        touched = true;
+      });
+      if (touched) cell.boulders.mesh.instanceMatrix.needsUpdate = true;
+    }
+  };
+
+  const update = (dt: number): void => {
+    for (const cell of cells.values()) cell.flora.update(dt);
+  };
+
+  return { group, sync, update, clearNear };
+}
+
 function disposeGroup(group: THREE.Group): void {
   group.traverse((obj) => {
     if (obj instanceof THREE.Mesh) {
@@ -615,7 +826,10 @@ export function buildWorld(track: Track): World {
   const waterTex = waterTexture();
   const terrain = buildTerrain(track, biome, waterTex);
   group.add(terrain.group);
-  terrain.sync(track, 0);
+  terrain.sync(track, 0, track.samples[0].x, track.samples[0].z);
+  const wild = buildWild(track, biome, terrain);
+  group.add(wild.group);
+  wild.sync(track.samples[0].x, track.samples[0].z);
 
   type Chunk = { toS: number; group: THREE.Group; scenery: SceneryChunk };
   const chunks: Chunk[] = [];
@@ -633,7 +847,7 @@ export function buildWorld(track: Track): World {
     fordScan = fords.next;
     chunkGroup.add(fords.group);
     const toS = track.samples[to - 1].s;
-    const fresh = terrain.streams.filter((s) => s.centerS >= streamScanS && s.centerS < toS);
+    const fresh = terrain.field.streams.filter((s) => s.centerS >= streamScanS && s.centerS < toS);
     if (fresh.length > 0) chunkGroup.add(buildStreamMeshes(fresh, waterTex));
     streamScanS = toS;
     // The clearance guard: this chunk's aproned ribbon plus a margin of
@@ -658,8 +872,11 @@ export function buildWorld(track: Track): World {
   builtIndex = track.samples.length;
 
   const sync = (state: GameState): void => {
+    // The ground and the wild follow the CAR — on a finite stage too, so
+    // an excursion far off the corridor still stands on drawn land.
+    terrain.sync(track, state.progressS, state.car.x, state.car.z);
+    wild.sync(state.car.x, state.car.z);
     if (!track.endless) return;
-    terrain.sync(track, state.progressS);
     const len = track.samples.length;
     if (len - builtIndex >= CHUNK_SAMPLES) {
       const from = builtIndex;
@@ -668,6 +885,7 @@ export function buildWorld(track: Track): World {
       // Road that has just come into being may run through props planted
       // when it did not exist yet — retire them before anyone sees it.
       for (const chunk of chunks) chunk.scenery.clearNear(track, from, len);
+      wild.clearNear(track, from, len);
     }
     while (chunks.length > 1 && chunks[0].toS < state.progressS - PRUNE_BEHIND) {
       const old = chunks.shift() as Chunk;
@@ -678,6 +896,7 @@ export function buildWorld(track: Track): World {
 
   const update = (dt: number): void => {
     terrain.update(dt);
+    wild.update(dt);
     for (const chunk of chunks) chunk.scenery.update(dt);
   };
 

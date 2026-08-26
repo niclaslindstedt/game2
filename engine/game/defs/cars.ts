@@ -3,6 +3,9 @@
 // not physics edits: the handling model in car.ts reads these numbers and
 // nothing else differs between the two launch cars except them (and the
 // gearbox mode). Speeds are m/s, accelerations m/s², angles radians.
+// Nominal gear tops overshoot what drag lets a car actually hold: against
+// TUNING.surfaces.drag the classic levels out around 64 m/s (230 km/h)
+// and the compact around 59 m/s (214 km/h) on flat gravel.
 
 export type GearboxMode = "auto" | "manual";
 
@@ -41,9 +44,11 @@ export const CARS: CarSpec[] = [
     id: "compact",
     name: "Vireo GT (auto)",
     gearbox: "auto",
-    gearTop: [13, 21, 30, 38, 46],
-    gearAccel: [11.5, 10, 8, 5.8, 3.7],
-    brake: 16,
+    gearTop: [13, 21, 30, 40, 52, 65],
+    // gearAccel[4] holds clear headroom over drag at 0.94·gearTop[4], or
+    // the auto box parks just under its own upshift threshold forever.
+    gearAccel: [11.5, 10, 8.4, 6.6, 5.6, 3.6],
+    brake: 18,
     steerRate: 2.6,
     gripAccel: 16,
     gripLat: 8.5,
@@ -58,9 +63,9 @@ export const CARS: CarSpec[] = [
     id: "classic",
     name: "Sable 4WD (manual)",
     gearbox: "manual",
-    gearTop: [12, 20, 29, 37, 46, 54],
-    gearAccel: [13, 11, 9, 6.8, 4.8, 3.1],
-    brake: 17,
+    gearTop: [12, 20, 29, 39, 52, 70],
+    gearAccel: [13, 11, 9.2, 7.2, 5.4, 3.8],
+    brake: 19,
     steerRate: 2.5,
     gripAccel: 14,
     gripLat: 7.5,

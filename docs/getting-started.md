@@ -19,6 +19,7 @@ Open [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/). The game boo
 | Q / Z     | Shift down (manual car)         |
 | C         | Race setup (time, weather, car) |
 | V         | Camera: chase ↔ hood            |
+| B         | Back to the track (off-road)    |
 | R         | Restart stage                   |
 
 **Phone (touch):** the left half of the screen is the wheel — touch anywhere and drag sideways to steer; the wheel turns as far as you push it. The right half is the pedal: touching it is GAS, drag up to BRAKE, drag down to burn the BOOSTER (finite — it never refills), drag right for the handbrake (DRIFT — unsticks the rear for tight curves). The manual car adds − / + gear buttons. Works in portrait and landscape — the HUD re-flows.
@@ -29,7 +30,9 @@ The game is a PWA. iOS Safari: Share → **Add to Home Screen**. Android Chrome:
 
 ### How a run works
 
-Stages are point-to-point: start gate to finish gate. The cluster in the bottom-left is the instrument panel: rev counter, gear (with a shift light), and speed. The stage number in the HUD is the seed — everyone gets the same stage on a given day, and every finish rolls into the next seed after a few seconds. Go too far off the road and the game lifts you back on after a moment (that's the respawn).
+Stages are point-to-point: start gate to finish gate. The cluster in the bottom-left is the instrument panel: rev counter, gear (with a shift light), and speed. The stage number in the HUD is the seed — everyone gets the same stage on a given day, and every finish rolls into the next seed after a few seconds.
+
+**Off the road is a real place.** The landscape around every stage is driveable — forests, hills, mountains, streams, lakes and open sea — and the car rides it fast (up to ~150 km/h in the wild; ~230 km/h flat out on the road). Cliff edges and banks throw the car if you hit them with pace; boulders and fallen trunks are genuinely solid, and deep water swallows the car whole. A crash puts you back on the track where you left it. There is no off-road timer: explore as long as you like, and press **B** (or the HUD's TRACK button) when you want back.
 
 **Drifting** is not a button — it is just what the car does when you turn harder than the tires can hold, which past about 70 km/h is any committed turn. Steer into the bend and the car goes sideways while the road keeps flowing: steering into it deepens it, lifting the throttle tightens it, counter-steering gathers it up. It costs you almost no speed, so there is nothing to count and nothing to cash in — just keep it flowing. The handbrake is there to unstick the rear in something really tight. **Jumps** throw you off ramps; midair the car barely answers, so line up before the lip and land straight or lose speed. **Fords** splash and drag; **crests** can go light at full speed.
 

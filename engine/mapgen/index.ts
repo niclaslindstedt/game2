@@ -9,6 +9,17 @@ export {
 } from "./rules.ts";
 export { generateStage, createStageStream, type StageStream } from "./generate.ts";
 export {
+  createTerrain,
+  computeStreams,
+  carveGround,
+  inStream,
+  LAKE_Y,
+  APRON,
+  type TerrainField,
+  type Stream,
+  type WildObstacle,
+} from "./terrain.ts";
+export {
   compileTrack,
   compileStage,
   elevationAt,

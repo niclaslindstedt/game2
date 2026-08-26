@@ -85,20 +85,49 @@ Generated stages roll (`STAGE_RULES.elevation` — long climbs, medium rollers, 
 
 ## Surfaces
 
-| Surface | Effect                                                                 |
-| ------- | ---------------------------------------------------------------------- |
-| Gravel  | The baseline: full power, honest grip, dust off the rear when sideways |
-| Water   | Fords: a splash on entry, heavy drag, reduced grip and power           |
-| Grass   | Off the road: heavy drag, half grip — the road is faster, always       |
+| Surface | Effect                                                                    |
+| ------- | ------------------------------------------------------------------------- |
+| Gravel  | The baseline: full power, honest grip, dust off the rear when sideways    |
+| Water   | Fords and shallows: a splash on entry, heavy drag, reduced grip and power |
+| Nature  | The open landscape off the road: loose grip, fast — up to ~150 km/h       |
 
-Too far off the road (or lingering off it) respawns the car back on the centerline at the cost of all momentum.
+## The open world
+
+The road runs through a landscape the car can actually drive
+(`engine/mapgen/terrain.ts` — the same seeded field the renderer draws, so
+the ground under the wheels IS the ground on screen). Leaving the road is
+not a mistake anymore; it is exploration:
+
+- **The ground** — off the verge the car rides the terrain: embankments,
+  rolling hills, ridged mountains, stream valleys, escarpment cliffs. Slope
+  and brow are read along the heading exactly like the road's, so a cliff
+  edge or a sharp bank at pace throws the car — spontaneous jumps, no ramp
+  required. Rough ground caps pace around 150 km/h
+  (`TUNING.surfaces.natureTop`); the road is faster, always.
+- **Water** — the landscape floods below the water table
+  (`terrain.LAKE_Y`): lakes, and whole sea basins. Shallows and streams
+  slow the car and splash; **deep water is a crash** — splash, `crash`
+  event, and a respawn on the track at last progress. Crash physics proper
+  is a later chapter; for now a crash simply puts the car back.
+- **Solid props** — the wild scatters boulders and fallen trunks
+  (`terrain.obstaclesNear`), seeded, off-road only, drawn by the renderer
+  exactly where the physics collides with them. Contact above
+  `TUNING.crash.obstacleSpeed` is a crash; a crawl just stops the car. A
+  fallen trunk lies low enough to jump.
+- **The way home** — exploring never times out and never teleports the car:
+  the only ways back to the track are a crash or the **reset input**
+  (`CarInput.reset`, the B key / the HUD's TRACK button), which respawns at
+  the last on-road progress.
 
 ## Cars and gearboxes
 
 Cars are data rows (`engine/game/defs/cars.ts`) — the model never branches per car:
 
-- **Vireo GT (auto)** — shifts itself, quicker off the line, grippier, softer top end. The phone-first car.
-- **Sable 4WD (manual)** — six gears on the driver, taller top, less grip to lean on so it slides earlier and further. Per-gear torque tapers near each gear's ceiling, so holding a gear too long stops pulling — shifting is part of the pace.
+- **Vireo GT (auto)** — shifts itself, quicker off the line, grippier, softer top end (~215 km/h flat out). The phone-first car.
+- **Sable 4WD (manual)** — six gears on the driver, taller top (~230 km/h flat out), less grip to lean on so it slides earlier and further. Per-gear torque tapers near each gear's ceiling, so holding a gear too long stops pulling — shifting is part of the pace.
+
+Nominal gear tops overshoot what surface drag lets a car hold; the flat-out
+speeds above are the real equilibria, and `tests/explore_test.ts` pins them.
 
 A manual shift cuts throttle briefly while it engages. The bot shifts by the same thresholds the auto box uses, so both cars are simulated fairly (see [simulation.md](simulation.md)).
 

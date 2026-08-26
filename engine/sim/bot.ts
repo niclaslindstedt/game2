@@ -107,12 +107,17 @@ export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): Car
     const counterWeight = clamp(1 - Math.abs(error) / 0.6, 0, 1);
     steer = clamp(error * profile.steerGain + car.slip * 0.9 * counterWeight, -1, 1);
   }
+  let reset = false;
   if (state.offRoad) {
-    // On the grass: slow right down and let the aim point pull the nose
-    // back to the road — sliding along the verge at pace is how a car
-    // gets lost for good.
-    throttle = 0;
-    if (car.u > 10) brake = 1;
+    // Out in the wild: cruise back toward the road at a pace the nature
+    // surface can steer at, and give up cleanly when the excursion is
+    // hopeless — wedged against something solid, or carried too far out
+    // for driving back to beat the reset.
+    throttle = car.u < 16 ? 0.8 : 0;
+    brake = car.u > 22 ? 0.7 : 0;
+    const outFor = state.t - state.offRoadSince;
+    const wedged = car.u < 1.5 && outFor > 1.5;
+    reset = !car.airborne && (wedged || outFor > 8);
   }
   if (car.airborne) {
     // Committed: line the nose up with the travel direction for the landing.
@@ -130,5 +135,5 @@ export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): Car
     else if (car.gear > 0 && car.u < top[car.gear - 1] * TUNING.gearbox.downAt) shiftDown = true;
   }
 
-  return { steer, throttle, brake, handbrake, boost: false, shiftUp, shiftDown };
+  return { steer, throttle, brake, handbrake, boost: false, shiftUp, shiftDown, reset };
 }

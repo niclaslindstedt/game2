@@ -3,7 +3,7 @@
 // Structural SEO assertions (OSS_SPEC §11.3) over the built site in
 // pwa/dist/. Errors exit 1 and block CI; run with `npm run check:seo` after
 // a build. Pattern copied from the sibling contacts app.
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import { join } from "node:path";
 
@@ -75,20 +75,34 @@ if (existsSync(join(dist, "manifest.webmanifest"))) {
   );
 }
 
-// §11.3.9 — critical-path JS budget: every render-blocking/entry script,
-// 600 KB min / 175 KB gzip.
-const assetsDir = join(dist, "assets");
+// §11.3.9 — critical-path JS budget: the ENTRY chunk plus every chunk the
+// static HTML pulls via `<link rel="modulepreload">` — exactly the scripts
+// that gate first render, which is what the spec bounds. Chunks fetched
+// later through dynamic import (the three.js render stack) are off the
+// critical path on purpose and outside this sum; total transfer is still
+// bounded by the precache manifest.
+const critical = new Set();
+for (const m of html.matchAll(/<script[^>]*type="module"[^>]*src="([^"]+)"/g)) critical.add(m[1]);
+for (const m of html.matchAll(/<script[^>]*src="([^"]+)"[^>]*type="module"/g)) critical.add(m[1]);
+for (const m of html.matchAll(/<link[^>]*rel="modulepreload"[^>]*href="([^"]+)"/g)) {
+  critical.add(m[1]);
+}
 let rawTotal = 0;
 let gzipTotal = 0;
-if (existsSync(assetsDir)) {
-  for (const f of readdirSync(assetsDir)) {
-    if (!f.endsWith(".js")) continue;
-    const path = join(assetsDir, f);
-    rawTotal += statSync(path).size;
-    gzipTotal += gzipSync(readFileSync(path)).length;
+for (const src of critical) {
+  // Refs are base-prefixed (`/`, `/preview/`, …) — resolve by their tail.
+  const tail = src.includes("/assets/")
+    ? join("assets", src.split("/").pop())
+    : src.split("/").pop();
+  const path = join(dist, tail);
+  if (!existsSync(path)) {
+    failures.push(`critical script ${src} not found in dist/`);
+    continue;
   }
+  rawTotal += statSync(path).size;
+  gzipTotal += gzipSync(readFileSync(path)).length;
 }
-assert(rawTotal > 0, "no JS bundles found under dist/assets/");
+assert(rawTotal > 0, "no critical-path JS referenced from index.html");
 assert(
   rawTotal <= 600 * 1024,
   `critical-path JS ${(rawTotal / 1024).toFixed(0)} KB exceeds 600 KB`,

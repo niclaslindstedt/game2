@@ -7,7 +7,7 @@
 // slides out to the left of its nose — a drift out of a clockwise turn.
 
 import type { CarSpec } from "./defs/cars.ts";
-import type { Track } from "../mapgen/index.ts";
+import type { Surface, TerrainField, Track } from "../mapgen/index.ts";
 import type { Rng } from "../lib/prng.ts";
 
 export type CarInput = {
@@ -24,6 +24,10 @@ export type CarInput = {
   /** Edge-triggered: consumed by the step they arrive in (manual box). */
   shiftUp: boolean;
   shiftDown: boolean;
+  /** Edge-triggered: put the car back on the track at its last progress —
+   * the way home from a wedged rock or the bottom of a valley, since
+   * exploring never times out on its own. */
+  reset: boolean;
 };
 
 export const NEUTRAL_INPUT: CarInput = {
@@ -34,6 +38,7 @@ export const NEUTRAL_INPUT: CarInput = {
   boost: false,
   shiftUp: false,
   shiftDown: false,
+  reset: false,
 };
 
 export type CarState = {
@@ -101,6 +106,7 @@ export type GameEvent =
   | { type: "boostStart" }
   | { type: "boostEmpty" }
   | { type: "offRoad"; off: boolean }
+  | { type: "crash"; into: "water" | "boulder" | "log" }
   | { type: "respawn" }
   | { type: "finish"; time: number };
 
@@ -113,6 +119,7 @@ export type RunStats = {
   cleanLandings: number;
   splashes: number;
   offRoadTime: number;
+  crashes: number;
   respawns: number;
   topSpeed: number;
 };
@@ -123,6 +130,9 @@ export type GameState = {
   seed: number;
   spec: CarSpec;
   track: Track;
+  /** The landscape around the road — the ground the car rides once it
+   * leaves the samples, with its water and its solid wild props. */
+  terrain: TerrainField;
   car: CarState;
   phase: GamePhase;
   /** Sim time since creation, seconds. */
@@ -137,6 +147,9 @@ export type GameState = {
   lateral: number;
   offRoad: boolean;
   offRoadSince: number;
+  /** The surface driven this step — road samples on the road, the
+   * terrain's call in the wild (readout for FX and the splash edge). */
+  surface: Surface | "nature";
   /** The stage's conditions (fixed for the run). */
   env: RaceEnv;
   /** Current gusting wind velocity, world space m/s — updated every step;
