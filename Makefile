@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim track screenshots shellcheck actionlint changelog bump hooks docs
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim track cars screenshots shellcheck actionlint changelog bump hooks docs
 
 build:
 	npm run build
@@ -41,6 +41,12 @@ sim:
 # rules engine's output.
 track:
 	npm run track
+
+# Render the car models to a labeled contact sheet (previews/cars.png):
+# the chase-cam gaming angle plus turntable views, for the car-design
+# iteration loop. Same Chromium requirements as `screenshots`.
+cars:
+	npm run cars
 
 # Drive the built app headlessly and screenshot the moments that matter
 # (grid, speed, drift, hood cam, portrait). Needs `npm i --no-save
