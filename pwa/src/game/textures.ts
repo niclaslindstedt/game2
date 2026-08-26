@@ -54,14 +54,18 @@ export function gravelTexture(): THREE.CanvasTexture {
   return toTexture(canvas, 1);
 }
 
-export function grassTexture(): THREE.CanvasTexture {
+/** A near-white speckle that multiplies vertex colors: pure grain, no hue.
+ * The ground and every flora instance share it, so grass, bedrock and
+ * foliage all carry the same chunky arcade noise whatever color they are. */
+export function detailTexture(): THREE.CanvasTexture {
   const { canvas, ctx } = makeCanvas(128);
-  speckle(ctx, 128, "#7cbf3f", [
-    { color: "#6cae35", count: 900, min: 1, max: 4 },
-    { color: "#9ad24f", count: 700, min: 1, max: 3 },
-    { color: "#579027", count: 250, min: 1, max: 3 },
+  speckle(ctx, 128, "#ffffff", [
+    { color: "#e6e6e0", count: 900, min: 1, max: 3 },
+    { color: "#d4d4cc", count: 450, min: 1, max: 3 },
+    { color: "#c2c2ba", count: 180, min: 1, max: 2 },
+    { color: "#f2f2ec", count: 500, min: 1, max: 4 },
   ]);
-  return toTexture(canvas, 64);
+  return toTexture(canvas, 1);
 }
 
 export function waterTexture(): THREE.CanvasTexture {
@@ -88,13 +92,4 @@ export function glowTexture(): THREE.CanvasTexture {
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
-}
-
-export function foliageTexture(): THREE.CanvasTexture {
-  const { canvas, ctx } = makeCanvas(64);
-  speckle(ctx, 64, "#2f8f3c", [
-    { color: "#1f6e2e", count: 320, min: 1, max: 4 },
-    { color: "#43a84e", count: 260, min: 1, max: 3 },
-  ]);
-  return toTexture(canvas, 1);
 }

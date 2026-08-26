@@ -11,6 +11,9 @@
 import * as THREE from "three";
 import { createRng, type Track } from "@engine";
 
+import type { Biome } from "./biome.ts";
+import { detailTexture } from "./textures.ts";
+
 /** How far the landscape extends past the track bounds, m. */
 const MARGIN = 700;
 /** Target ground-mesh cell size, m (capped so huge stages stay light). */
@@ -57,7 +60,7 @@ export type Terrain = {
   dispose: () => void;
 };
 
-export function buildTerrain(track: Track, waterTexture: THREE.Texture): Terrain {
+export function buildTerrain(track: Track, biome: Biome, waterTexture: THREE.Texture): Terrain {
   const seed = (track.seed ^ 0x1b873593) >>> 0;
   const rng = createRng(seed);
   const noiseSeed = rng.int(1, 1 << 30);
@@ -152,31 +155,59 @@ export function buildTerrain(track: Track, waterTexture: THREE.Texture): Terrain
   const pos = geo.getAttribute("position");
   const colors = new Float32Array(pos.count * 3);
 
-  const grass = new THREE.Color(0x74b23c);
-  const grassDark = new THREE.Color(0x578f2b);
-  const rock = new THREE.Color(0x8d8f94);
-  const shore = new THREE.Color(0xc2a878);
-  const bed = new THREE.Color(0x3f6c8e);
-  const c = new THREE.Color();
-
   const centerX = (minX + maxX) / 2;
   const centerZ = (minZ + maxZ) / 2;
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i) + centerX;
     const z = pos.getZ(i) + centerZ;
-    const y = heightAt(x, z);
-    pos.setXYZ(i, x - centerX, y, z - centerZ);
+    pos.setXYZ(i, x - centerX, heightAt(x, z), z - centerZ);
+  }
+  // Normals before colors: the color pass reads slope off them, so steep
+  // embankments and road cuts paint themselves as bare bedrock.
+  geo.computeVertexNormals();
+  const nor = geo.getAttribute("normal");
+
+  const grass = new THREE.Color(biome.ground.grass);
+  const grassDark = new THREE.Color(biome.ground.grassDark);
+  const moss = new THREE.Color(biome.ground.moss);
+  const heath = new THREE.Color(biome.ground.heath);
+  const floor = new THREE.Color(biome.ground.forestFloor);
+  const rock = new THREE.Color(biome.ground.bedrock);
+  const rockDark = new THREE.Color(biome.ground.bedrockDark);
+  const shore = new THREE.Color(biome.ground.shore);
+  const bed = new THREE.Color(biome.ground.lakeBed);
+  const c = new THREE.Color();
+
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i) + centerX;
+    const z = pos.getZ(i) + centerZ;
+    const y = pos.getY(i);
 
     // Color by altitude band with a per-vertex speckle — the same chunky
-    // grain the road textures carry, without a tiling texture.
+    // grain the road textures carry, on top of the tiling detail map.
     const speck = 0.88 + hash2(Math.round(x * 2), Math.round(z * 2), noiseSeed + 29) * 0.24;
     if (y < LAKE_Y + 0.6) c.copy(bed);
     else if (y < LAKE_Y + 3) c.copy(shore);
     else {
+      // The meadow base, broken by big soft patches of moss, heath and
+      // bare forest floor so no two hillsides read the same.
       const blend = valueNoise(x, z, 27, noiseSeed + 31);
       c.copy(grass).lerp(grassDark, blend);
-      const rockiness = clamp01((y - 26) / 26);
-      c.lerp(rock, rockiness);
+      const m = valueNoise(x, z, 90, noiseSeed + 37);
+      if (m > 0.6) c.lerp(moss, clamp01((m - 0.6) / 0.4) * 0.85);
+      const h = valueNoise(x, z, 130, noiseSeed + 41);
+      if (h > 0.64) c.lerp(heath, clamp01((h - 0.64) / 0.36) * 0.8);
+      const f = valueNoise(x, z, 55, noiseSeed + 43);
+      if (f > 0.68) c.lerp(floor, clamp01((f - 0.68) / 0.32) * 0.6);
+      c.lerp(rock, clamp01((y - 26) / 26));
+    }
+    // Bedrock breaks through wherever the ground is steep — mountain
+    // flanks, and the cut walls where the road runs between high rock.
+    const ny = nor.getY(i);
+    const steep = clamp01((0.88 - ny) / 0.18);
+    if (steep > 0) {
+      const band = valueNoise(x, z, 18, noiseSeed + 47);
+      c.lerp(band > 0.5 ? rock : rockDark, steep);
     }
     c.multiplyScalar(speck);
     colors[i * 3] = c.r;
@@ -184,9 +215,12 @@ export function buildTerrain(track: Track, waterTexture: THREE.Texture): Terrain
     colors[i * 3 + 2] = c.b;
   }
   geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-  geo.computeVertexNormals();
 
-  const groundMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  // The detail map multiplies the vertex colors — fine grain between the
+  // 14 m vertices, where per-vertex speckle can't reach.
+  const groundTex = detailTexture();
+  groundTex.repeat.set(spanX / 16, spanZ / 16);
+  const groundMat = new THREE.MeshLambertMaterial({ vertexColors: true, map: groundTex });
   const ground = new THREE.Mesh(geo, groundMat);
   ground.position.set(centerX, 0, centerZ);
 
@@ -216,6 +250,7 @@ export function buildTerrain(track: Track, waterTexture: THREE.Texture): Terrain
 
   const dispose = (): void => {
     geo.dispose();
+    groundTex.dispose();
     groundMat.dispose();
     water.geometry.dispose();
     waterMat.dispose();
