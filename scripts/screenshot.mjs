@@ -9,6 +9,9 @@
 //
 //   node scripts/screenshot.mjs                # default script
 //   node scripts/screenshot.mjs --scene drift  # hold a handbrake drift
+//
+// The app boots to the pre-race menu; captures pass ?start=1 (plus ?seed=,
+// ?tod=, ?weather=) to pin a run and skip the menu.
 import { mkdirSync } from "node:fs";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -54,10 +57,10 @@ const { chromium } = await import("playwright-core");
 const executablePath = process.env.CHROMIUM_PATH;
 const browser = await chromium.launch(executablePath ? { executablePath } : undefined);
 
-async function capture(name, viewport, script) {
+async function capture(name, viewport, script, params = "") {
   const page = await browser.newPage({ viewport });
   page.on("pageerror", (err) => console.error(`[pageerror] ${err.message}`));
-  await page.goto(url);
+  await page.goto(`${url}?seed=42&start=1${params}`);
   await page.waitForSelector("canvas.game-canvas");
   await script(page);
   await page.screenshot({ path: join(outDir, `${name}.png`) });
@@ -110,6 +113,60 @@ await capture("shot-hood", { width: 1280, height: 720 }, async (page) => {
   await page.keyboard.down("ArrowUp");
   await page.waitForTimeout(4500);
 });
+
+// The pre-race menu itself, over the live stage.
+await capture(
+  "shot-menu",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await page.waitForSelector(".hud-menu");
+    await page.waitForTimeout(800);
+  },
+  "&menu=1",
+);
+
+// The conditions: a dawn run, the dusk sun, storm rain at speed, and night
+// under the headlights.
+await capture(
+  "shot-dawn",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await page.waitForTimeout(3200);
+    await page.keyboard.down("ArrowUp");
+    await page.waitForTimeout(4000);
+  },
+  "&tod=dawn",
+);
+await capture(
+  "shot-dusk",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await page.waitForTimeout(3200);
+    await page.keyboard.down("ArrowUp");
+    await page.waitForTimeout(4000);
+  },
+  "&tod=dusk",
+);
+await capture(
+  "shot-storm",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await page.waitForTimeout(3200);
+    await page.keyboard.down("ArrowUp");
+    await page.waitForTimeout(4000);
+  },
+  "&weather=storm",
+);
+await capture(
+  "shot-night",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await page.waitForTimeout(3200);
+    await page.keyboard.down("ArrowUp");
+    await page.waitForTimeout(4000);
+  },
+  "&tod=night",
+);
 
 await browser.close();
 server.close();

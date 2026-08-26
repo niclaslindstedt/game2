@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Builds the 3D world for one stage: the road ribbon with its red/white
 // edge strips and dirt skirts, the fords, the tree line, rocks, jump cones,
-// and the start/finish gates. Everything is fullbright, low-poly, and
-// vertex-colored — the arcade look — and everything derives from the same
-// compiled track samples the physics reads.
+// and the start/finish gates. Everything is low-poly, vertex-colored, and
+// Lambert-lit — the environment module's hemisphere + sun set the mood, the
+// chunky speckle textures keep the arcade grain — and everything derives
+// from the same compiled track samples the physics reads.
 
 import * as THREE from "three";
 import { createRng, type Track } from "@engine";
 
-import { foliageTexture, grassTexture, gravelTexture, waterTexture } from "./textures.ts";
+import { buildTerrain, LAKE_Y } from "./terrain.ts";
+import { foliageTexture, gravelTexture, waterTexture } from "./textures.ts";
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -50,7 +52,8 @@ function buildRoad(track: Track): THREE.Mesh {
   geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
   geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
   geo.setIndex(indices);
-  const mat = new THREE.MeshBasicMaterial({ map: gravelTexture(), vertexColors: true });
+  geo.computeVertexNormals();
+  const mat = new THREE.MeshLambertMaterial({ map: gravelTexture(), vertexColors: true });
   return new THREE.Mesh(geo, mat);
 }
 
@@ -68,7 +71,9 @@ function buildSkirts(track: Track): THREE.Mesh {
       const r = rightOf(s.heading);
       const ex = s.x + r.x * half * side;
       const ez = s.z + r.z * half * side;
-      positions.push(ex, s.elevation + 0.02, ez, ex, 0, ez);
+      // The skirt drops a few meters below grade — deep enough to meet the
+      // terrain shelf under every roll of the road.
+      positions.push(ex, s.elevation + 0.02, ez, ex, s.elevation - 5, ez);
       if (i > 0) {
         const a = start + (i - 1) * 2;
         if (side > 0) indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
@@ -79,7 +84,8 @@ function buildSkirts(track: Track): THREE.Mesh {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   geo.setIndex(indices);
-  const mat = new THREE.MeshBasicMaterial({ color: "#8a6f4d", side: THREE.DoubleSide });
+  geo.computeVertexNormals();
+  const mat = new THREE.MeshLambertMaterial({ color: "#8a6f4d", side: THREE.DoubleSide });
   return new THREE.Mesh(geo, mat);
 }
 
@@ -123,7 +129,8 @@ function buildRumble(track: Track): THREE.Mesh {
   geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
   geo.setIndex(indices);
-  const mat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  geo.computeVertexNormals();
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
   return new THREE.Mesh(geo, mat);
 }
 
@@ -153,7 +160,15 @@ function buildWater(track: Track): THREE.Group {
     geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
     geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
     geo.setIndex(indices);
-    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.85 });
+    geo.computeVertexNormals();
+    // Phong, like the lakes: the ford glitters when the sun catches it.
+    const mat = new THREE.MeshPhongMaterial({
+      map: tex,
+      specular: 0xcfe4ff,
+      shininess: 120,
+      transparent: true,
+      opacity: 0.85,
+    });
     group.add(new THREE.Mesh(geo, mat));
   };
   for (let i = 0; i < samples.length; i++) {
@@ -168,9 +183,11 @@ function buildWater(track: Track): THREE.Group {
   return group;
 }
 
-/** Very rough trees and rocks scattered off the road, instanced. Placement
- * is seeded by the track seed and validated to stay off every road sample. */
-function buildScenery(track: Track): THREE.Group {
+/** Very rough trees and rocks scattered over the landscape, instanced.
+ * Placement is seeded by the track seed, validated to stay off every road
+ * sample, and every trunk stands on the terrain height under it — up the
+ * hillsides, never in a lake. */
+function buildScenery(track: Track, heightAt: (x: number, z: number) => number): THREE.Group {
   const group = new THREE.Group();
   const rng = createRng((track.seed ^ 0x5f356495) >>> 0);
   const samples = track.samples;
@@ -185,17 +202,23 @@ function buildScenery(track: Track): THREE.Group {
     return true;
   };
 
-  type Spot = { x: number; z: number; s: number };
+  type Spot = { x: number; z: number; y: number; s: number };
   const spots: Spot[] = [];
   for (let i = 4; i < samples.length; i += 3) {
     const s = samples[i];
     const r = rightOf(s.heading);
     const side = rng.chance(0.5) ? 1 : -1;
-    const offset = rng.range(clearance + 2, 42);
+    // Two bands: a treeline hugging the road, and a spread climbing the
+    // hills — the landscape reads inhabited all the way out.
+    const offset = rng.chance(0.6) ? rng.range(clearance + 2, 46) : rng.range(46, 150);
     const jitter = rng.range(-3, 3);
     const x = s.x + r.x * offset * side + jitter;
     const z = s.z + r.z * offset * side + jitter;
-    if (clearOfRoad(x, z)) spots.push({ x, z, s: rng.next() });
+    const drop = rng.next();
+    if (!clearOfRoad(x, z)) continue;
+    const y = heightAt(x, z);
+    if (y < LAKE_Y + 1.2) continue;
+    spots.push({ x, z, y, s: drop });
   }
 
   const treeSpots = spots.filter((p) => p.s < 0.82);
@@ -203,8 +226,8 @@ function buildScenery(track: Track): THREE.Group {
 
   // Trees: a chunky trunk box and two stacked foliage cones. Deliberately
   // crude — five-sided cones, nearest-filtered speckle, big scale spread.
-  const foliage = new THREE.MeshBasicMaterial({ map: foliageTexture() });
-  const trunkMat = new THREE.MeshBasicMaterial({ color: "#7a4f2a" });
+  const foliage = new THREE.MeshLambertMaterial({ map: foliageTexture() });
+  const trunkMat = new THREE.MeshLambertMaterial({ color: "#7a4f2a" });
   const cone = new THREE.ConeGeometry(1.6, 3.2, 5);
   const trunk = new THREE.BoxGeometry(0.5, 1.6, 0.5);
   const coneMesh = new THREE.InstancedMesh(cone, foliage, treeSpots.length * 2);
@@ -217,12 +240,12 @@ function buildScenery(track: Track): THREE.Group {
     const scale = 0.8 + (p.s / 0.82) * 1.4;
     const spin = p.s * 6.28;
     q.setFromAxisAngle(UP, spin);
-    m.compose(v.set(p.x, 0.8 * scale, p.z), q, sc.set(scale, scale, scale));
+    m.compose(v.set(p.x, p.y + 0.8 * scale, p.z), q, sc.set(scale, scale, scale));
     trunkMesh.setMatrixAt(i, m);
-    m.compose(v.set(p.x, (1.6 + 1.4) * scale, p.z), q, sc.set(scale, scale, scale));
+    m.compose(v.set(p.x, p.y + (1.6 + 1.4) * scale, p.z), q, sc.set(scale, scale, scale));
     coneMesh.setMatrixAt(i * 2, m);
     m.compose(
-      v.set(p.x, (1.6 + 2.9) * scale, p.z),
+      v.set(p.x, p.y + (1.6 + 2.9) * scale, p.z),
       q,
       sc.set(scale * 0.7, scale * 0.8, scale * 0.7),
     );
@@ -231,12 +254,12 @@ function buildScenery(track: Track): THREE.Group {
   group.add(trunkMesh, coneMesh);
 
   const rockGeo = new THREE.DodecahedronGeometry(1);
-  const rockMat = new THREE.MeshBasicMaterial({ color: "#9aa0a8" });
+  const rockMat = new THREE.MeshLambertMaterial({ color: "#9aa0a8" });
   const rocks = new THREE.InstancedMesh(rockGeo, rockMat, rockSpots.length);
   rockSpots.forEach((p, i) => {
     const scale = 0.5 + (p.s - 0.82) * 6;
     q.setFromAxisAngle(UP, p.s * 20);
-    m.compose(v.set(p.x, scale * 0.4, p.z), q, sc.set(scale, scale * 0.7, scale));
+    m.compose(v.set(p.x, p.y + scale * 0.4, p.z), q, sc.set(scale, scale * 0.7, scale));
     rocks.setMatrixAt(i, m);
   });
   group.add(rocks);
@@ -248,7 +271,7 @@ function buildMarkers(track: Track): THREE.Group {
   const group = new THREE.Group();
   const half = track.width / 2;
   const coneGeo = new THREE.ConeGeometry(0.45, 1.1, 6);
-  const coneMat = new THREE.MeshBasicMaterial({ color: "#ff7d1f" });
+  const coneMat = new THREE.MeshLambertMaterial({ color: "#ff7d1f" });
   for (const s of track.samples) {
     if (!s.jump) continue;
     const r = rightOf(s.heading);
@@ -267,10 +290,10 @@ function buildMarkers(track: Track): THREE.Group {
     const s = track.samples[index];
     const r = rightOf(s.heading);
     const postGeo = new THREE.BoxGeometry(0.4, 5, 0.4);
-    const postMat = new THREE.MeshBasicMaterial({ color: "#f6f3ea" });
+    const postMat = new THREE.MeshLambertMaterial({ color: "#f6f3ea" });
     const banner = new THREE.Mesh(
       new THREE.BoxGeometry(track.width + 2, 1.1, 0.25),
-      new THREE.MeshBasicMaterial({ color }),
+      new THREE.MeshLambertMaterial({ color }),
     );
     for (const side of [-1, 1]) {
       const post = new THREE.Mesh(postGeo, postMat);
@@ -291,28 +314,21 @@ function buildMarkers(track: Track): THREE.Group {
   return group;
 }
 
-export type World = { group: THREE.Group; dispose: () => void };
+export type World = { group: THREE.Group; update: (dt: number) => void; dispose: () => void };
 
 export function buildWorld(track: Track): World {
   const group = new THREE.Group();
 
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(4200, 4200),
-    new THREE.MeshBasicMaterial({ map: grassTexture() }),
-  );
-  ground.rotation.x = -Math.PI / 2;
-  ground.position.set(
-    (track.bounds.minX + track.bounds.maxX) / 2,
-    -0.02,
-    (track.bounds.minZ + track.bounds.maxZ) / 2,
-  );
-  group.add(ground);
+  const terrain = buildTerrain(track, waterTexture());
+  group.add(terrain.group);
   group.add(buildSkirts(track));
   group.add(buildRoad(track));
   group.add(buildRumble(track));
   group.add(buildWater(track));
-  group.add(buildScenery(track));
+  group.add(buildScenery(track, terrain.heightAt));
   group.add(buildMarkers(track));
+
+  const update = (dt: number): void => terrain.update(dt);
 
   const dispose = (): void => {
     group.traverse((obj) => {
@@ -320,11 +336,13 @@ export function buildWorld(track: Track): World {
         obj.geometry.dispose();
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
         for (const mat of mats) {
-          if (mat instanceof THREE.MeshBasicMaterial) mat.map?.dispose();
+          if (mat instanceof THREE.MeshLambertMaterial || mat instanceof THREE.MeshPhongMaterial) {
+            mat.map?.dispose();
+          }
           mat.dispose();
         }
       }
     });
   };
-  return { group, dispose };
+  return { group, update, dispose };
 }

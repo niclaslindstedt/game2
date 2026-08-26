@@ -2,24 +2,24 @@
 
 ## Playing
 
-Open [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/). The game boots straight into today's stage — a 3-2-1 countdown and you're driving. There is no menu yet, by design: the slice is the driving.
+Open [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/). The game boots to the pre-race screen over a live view of today's stage: pick the **time of day** (dawn, day, dusk, night — the stage re-lights as you tap), the **weather** (clear, rain, storm — weather sets the wind, and the wind leans on the car), and the **car**, then START — a 3-2-1 countdown and you're driving.
 
 ### Controls
 
 **Desktop (keyboard):**
 
-| Key       | Action                        |
-| --------- | ----------------------------- |
-| ↑ / W     | Throttle                      |
-| ↓ / S     | Brake                         |
-| ← → / A D | Steer                         |
-| Space     | Handbrake — the drift button  |
-| L. Shift  | Booster — finite, no refills  |
-| E / X     | Shift up (manual car)         |
-| Q / Z     | Shift down (manual car)       |
-| C         | Swap car (restarts the stage) |
-| V         | Camera: chase ↔ hood          |
-| R         | Restart stage                 |
+| Key       | Action                          |
+| --------- | ------------------------------- |
+| ↑ / W     | Throttle                        |
+| ↓ / S     | Brake                           |
+| ← → / A D | Steer                           |
+| Space     | Handbrake — the drift button    |
+| L. Shift  | Booster — finite, no refills    |
+| E / X     | Shift up (manual car)           |
+| Q / Z     | Shift down (manual car)         |
+| C         | Race setup (time, weather, car) |
+| V         | Camera: chase ↔ hood            |
+| R         | Restart stage                   |
 
 **Phone (touch):** the left half of the screen is the wheel — touch anywhere and drag sideways to steer; the wheel turns as far as you push it. The right half is the pedal: touching it is GAS, drag up to BRAKE, drag down to burn the BOOSTER (finite — it never refills), drag right for the handbrake (DRIFT — good for tight curves). The manual car adds − / + gear buttons. Works in portrait and landscape — the HUD re-flows.
 

@@ -83,6 +83,32 @@ export const TUNING = {
     overrun: 1.12,
   },
 
+  hills: {
+    /** Fraction of real gravity felt along the road grade — climbing costs
+     * speed, a descent gives it back. Kept arcade-soft so the top of a long
+     * rise never stalls the run. */
+    gravityAlong: 0.6,
+  },
+
+  wind: {
+    /** Mean wind speed range per weather, m/s. The exact value inside the
+     * range is seeded — every stage gets its own wind, every replay the same. */
+    speed: { clear: [0, 3], rain: [3.5, 6.5], storm: [7, 11] },
+    /** Gust swing as a fraction of the mean speed (0–1): the wind breathes
+     * between roughly (1−gust)× and (1+gust)× its mean. */
+    gust: 0.45,
+    /** Wander of the wind bearing around its mean, radians. */
+    veer: 0.25,
+    /** Head/tailwind push on forward speed while grounded, m/s² per m/s of
+     * wind along the car's axis — a storm headwind trims the top end. */
+    longForce: 0.06,
+    /** Fraction of the wind velocity that carries the whole car downwind
+     * (dimensionless): rolling tires resist it, a drifting car resists
+     * less, and in the air nothing resists — a storm gust visibly moves a
+     * jump sideways. */
+    carry: { grounded: 0.04, drifting: 0.12, airborne: 0.3 },
+  },
+
   offTrack: {
     /** Lateral overhang past the road edge that still counts as verge, m. */
     verge: 1.5,

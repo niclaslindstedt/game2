@@ -1,19 +1,27 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The renderer facade: owns the THREE scene, swaps worlds when a new stage
 // arrives, and draws one frame from the GameState the engine produced. The
-// engine never imports THREE; this module never steps physics.
+// engine never imports THREE; this module never steps physics. Sky, fog,
+// lights, and weather live in environment.ts; this file wires them to the
+// run and drives the ground-contact and exhaust particle systems.
 
 import * as THREE from "three";
 import type { GameEvent, GameState } from "@engine";
 
+import { createAmbientLife } from "./ambient-life.ts";
 import { createGameCamera, type CameraMode } from "./camera.ts";
 import { buildCar, type CarVisual } from "./car-mesh.ts";
 import { createDust } from "./dust.ts";
+import { createEnvironment } from "./environment.ts";
+import { createFumes } from "./fumes.ts";
+import { createRain } from "./rain.ts";
 import { buildWorld, type World } from "./world.ts";
-import { PALETTE } from "../identity.ts";
 
 export type GameRenderer = {
   setGame: (state: GameState) => void;
+  /** Re-light an already-built stage (the pre-race menu flipping time of
+   * day / weather) without rebuilding its geometry. */
+  setConditions: (state: GameState) => void;
   cycleCamera: () => CameraMode;
   render: (state: GameState, dt: number) => void;
   onEvents: (state: GameState, events: GameEvent[]) => void;
@@ -26,32 +34,47 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(PALETTE.sky);
-  scene.fog = new THREE.Fog(PALETTE.horizon, 160, 520);
-
-  // Cloud puffs: flattened white spheres parked high up; they follow the
-  // camera laterally so the sky never runs out.
-  const clouds = new THREE.Group();
-  const cloudMat = new THREE.MeshBasicMaterial({ color: "#ffffff", fog: false });
-  const cloudGeo = new THREE.SphereGeometry(1, 7, 5);
-  for (let i = 0; i < 10; i++) {
-    const puff = new THREE.Mesh(cloudGeo, cloudMat);
-    const angle = (i / 10) * Math.PI * 2;
-    const radius = 220 + (i % 3) * 90;
-    puff.position.set(Math.sin(angle) * radius, 90 + (i % 4) * 22, Math.cos(angle) * radius);
-    const s = 18 + (i % 5) * 7;
-    puff.scale.set(s, s * 0.35, s * 0.8);
-    clouds.add(puff);
-  }
-  scene.add(clouds);
+  const environment = createEnvironment(scene);
 
   const chase = createGameCamera(canvas.clientWidth || 1, canvas.clientHeight || 1);
   const dust = createDust();
   scene.add(dust.points);
+  const fumes = createFumes();
+  scene.add(fumes.points);
+  const rain = createRain();
+  scene.add(rain.lines);
+  const life = createAmbientLife();
+  scene.add(life.group);
 
   let world: World | null = null;
   let car: CarVisual | null = null;
   let dustClock = 0;
+  let fumeClock = 0;
+
+  /** The environment's light tint, pushed onto everything that carries its
+   * own baked or vertex colors (the car, the particles). */
+  const applyTint = (): void => {
+    const tint = environment.carTint();
+    car?.group.traverse((obj) => {
+      if (obj instanceof THREE.Mesh || obj instanceof THREE.Points) {
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        for (const mat of mats) {
+          if (mat instanceof THREE.MeshBasicMaterial || mat instanceof THREE.PointsMaterial) {
+            mat.color.copy(tint);
+          }
+        }
+      }
+    });
+    (dust.points.material as THREE.PointsMaterial).color.copy(tint);
+    (fumes.points.material as THREE.PointsMaterial).color.copy(tint);
+    life.setTint(tint);
+  };
+
+  const setConditions = (state: GameState): void => {
+    environment.apply(state.env);
+    rain.setIntensity(state.env.weather === "storm" ? 1 : state.env.weather === "rain" ? 0.55 : 0);
+    applyTint();
+  };
 
   const setGame = (state: GameState): void => {
     if (world) {
@@ -66,6 +89,7 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
     scene.add(world.group);
     car = buildCar(state.spec);
     scene.add(car.group, car.shadow);
+    setConditions(state);
   };
 
   const onEvents = (state: GameState, events: GameEvent[]): void => {
@@ -87,22 +111,23 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
 
   const render = (state: GameState, dt: number): void => {
     const c = state.car;
+    const fwdX = Math.sin(c.heading);
+    const fwdZ = Math.cos(c.heading);
+    const rightX = Math.cos(c.heading);
+    const rightZ = -Math.sin(c.heading);
+
     // Gravel kicked up at the wheels — the ground-contact half of the speed
     // feel. Three overlapping sources, strongest first: the drift/off-road
     // rooster tail, the braking plume, and the plain rolling kickup that
-    // rides with pace. Particles inherit part of the car's wake so every
-    // cloud streams backward instead of hanging where it spawned.
+    // rides with pace. Particles inherit part of the car's wake plus the
+    // wind, so every cloud streams backward and leans downwind.
     dustClock += dt;
     if (!c.airborne && dustClock > 0.03) {
       dustClock = 0;
-      const fwdX = Math.sin(c.heading);
-      const fwdZ = Math.cos(c.heading);
-      const rightX = Math.cos(c.heading);
-      const rightZ = -Math.sin(c.heading);
       const inWater = state.track.samples[state.progressIndex]?.surface === "water";
       const color = inWater ? 0x4fa0f0 : 0xb29268;
-      const wakeX = -fwdX * c.u * 0.35;
-      const wakeZ = -fwdZ * c.u * 0.35;
+      const wakeX = -fwdX * c.u * 0.35 + state.wind.x * 0.6;
+      const wakeZ = -fwdZ * c.u * 0.35 + state.wind.z * 0.6;
       const sideways = Math.abs(c.slip) > 0.12 && c.u > 6;
       const rear = (side: number, count: number, spread: number): void =>
         dust.spawn(
@@ -126,13 +151,36 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
         rear(Math.random() < 0.5 ? -1 : 1, 2, 1.6);
       }
     }
+
+    // Exhaust: puffs off the tailpipe, faster and sootier on throttle and
+    // boost, handed to the wind the moment they leave the pipe.
+    fumeClock += dt;
+    const fumeEvery = c.boosting ? 0.02 : c.u > 1 ? 0.045 : 0.12;
+    if (!c.airborne && fumeClock > fumeEvery) {
+      fumeClock = 0;
+      const shade = c.boosting ? 0.9 : 0.35 + 0.4 * Math.min(1, c.u / 30);
+      fumes.spawn(
+        c.x - fwdX * 1.9 + rightX * 0.35,
+        c.y + 0.32,
+        c.z - fwdZ * 1.9 + rightZ * 0.35,
+        -fwdX * c.u * 0.15 + state.wind.x * 0.85,
+        -fwdZ * c.u * 0.15 + state.wind.z * 0.85,
+        shade,
+      );
+    }
+
     dust.update(dt);
+    fumes.update(dt);
+    world?.update(dt);
     car?.update(state, dt);
     chase.update(state, dt);
+    environment.update(state, chase.camera, dt);
+    const cam = chase.camera.position;
+    rain.update(cam.x, cam.y, cam.z, state.wind.x, state.wind.z, dt);
+    life.update(cam.x, cam.z, state.wind.x, state.wind.z, dt);
     // The hood cam sits inside the car — hide the body so it doesn't fill
     // the frame; the blob shadow stays for ground reference.
     if (car) car.group.visible = chase.mode() !== "hood";
-    clouds.position.set(chase.camera.position.x, 0, chase.camera.position.z);
     renderer.render(scene, chase.camera);
   };
 
@@ -147,11 +195,21 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
     world?.dispose();
     car?.dispose();
     dust.dispose();
-    cloudGeo.dispose();
-    cloudMat.dispose();
+    fumes.dispose();
+    rain.dispose();
+    life.dispose();
+    environment.dispose();
     renderer.dispose();
   };
 
   resize();
-  return { setGame, cycleCamera: () => chase.cycle(), render, onEvents, resize, dispose };
+  return {
+    setGame,
+    setConditions,
+    cycleCamera: () => chase.cycle(),
+    render,
+    onEvents,
+    resize,
+    dispose,
+  };
 }

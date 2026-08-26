@@ -59,8 +59,21 @@ export const STAGE_RULES = {
   /** R5 — cap on same-direction turns in a row. */
   maxSameDirectionTurns: 2,
 
-  /** Road width, meters (full width, centerline to edge is half). */
-  roadWidth: 12.5,
+  /** Road width, meters (full width, centerline to edge is half). Broad,
+   * Sega Rally style — the road is a boulevard through the landscape. */
+  roadWidth: 16,
+
+  /** Rolling elevation, layered under the feature ramps: the road breathes
+   * in three seeded sine layers — long climbs, medium rollers, and surface
+   * bumps you feel more than see. Amplitude/wavelength in meters; combined
+   * worst-case grade stays under ~18% so a crest taken flat never reads as
+   * a glitch launch. Applied to GENERATED stages only — synthetic test
+   * tracks stay flat rigs. */
+  elevation: {
+    long: { amplitude: { min: 4, max: 7 }, wavelength: { min: 420, max: 640 } },
+    roll: { amplitude: { min: 1.2, max: 2.4 }, wavelength: { min: 130, max: 240 } },
+    bump: { amplitude: { min: 0.04, max: 0.09 }, wavelength: { min: 9, max: 16 } },
+  },
 
   /** R6 — jump placement. */
   jump: {

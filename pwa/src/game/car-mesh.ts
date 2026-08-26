@@ -2,7 +2,7 @@
 // The car in the scene: a body generated part-by-part from the car's
 // CarBodySpec (car-body.ts builds it, car-styles.ts shapes it), plus the
 // one visual that sells the jump — a blob shadow that stays on the ground
-// and shrinks while the car is airborne. Attitude (drift roll, air pitch)
+// and shrinks while the car is airborne. Airborne attitude (pitch, wobble)
 // is applied to the body group; the physics owns the position and heading.
 
 import * as THREE from "three";
@@ -42,11 +42,11 @@ export function buildCar(spec: CarSpec): CarVisual {
     group.position.set(car.x, car.y, car.z);
     group.rotation.y = car.heading;
 
-    // Drift lean and airborne attitude, smoothed so landings snap back with
-    // a touch of suspension travel instead of teleporting.
-    const targetRoll = car.airborne
-      ? Math.sin(state.t * 7) * 0.06
-      : clamp(car.slip * 0.5, -0.5, 0.5);
+    // Airborne attitude, smoothed so landings snap back with a touch of
+    // suspension travel instead of teleporting. Grounded the body stays
+    // FLAT — a drift reads through the yaw, the counter-steered wheels and
+    // the dust, never through a banked body.
+    const targetRoll = car.airborne ? Math.sin(state.t * 7) * 0.06 : 0;
     const targetPitch = car.airborne
       ? clamp(-car.vy * 0.045, -0.4, 0.5)
       : clamp(-car.u * 0.002, -0.1, 0);

@@ -484,3 +484,102 @@ body {
     transform: translateY(-1rem);
   }
 }
+
+/* Wind readout beside the speed cluster: the arrow points where the wind
+   blows in screen space, the number is km/h. */
+.hud-wind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: clamp(0.85rem, 2.6vmin, 1.2rem);
+  color: var(--hud-info);
+}
+
+.hud-wind-arrow {
+  display: inline-block;
+  line-height: 1;
+  transition: transform 160ms linear;
+}
+
+/* The pre-race menu: a chunky arcade card floating over the live stage. */
+.hud-menu-wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
+}
+
+.hud-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  background: rgb(18 48 105 / 82%);
+  border: 3px solid rgb(255 255 255 / 65%);
+  border-radius: 1rem;
+  padding: 1.2rem clamp(1rem, 4vw, 2.2rem);
+  color: var(--hud-ink);
+  max-width: min(34rem, 94vw);
+}
+
+.hud-menu-title {
+  font-size: clamp(1.4rem, 6vmin, 2.4rem);
+  text-align: center;
+  color: var(--hud-good);
+}
+
+.hud-menu-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.hud-menu-label {
+  font-size: clamp(0.6rem, 2vmin, 0.8rem);
+  letter-spacing: 0.14em;
+  opacity: 0.85;
+}
+
+.hud-menu-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.hud-opt {
+  font: inherit;
+  font-size: clamp(0.65rem, 2.2vmin, 0.9rem);
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 12%);
+  border: 2px solid rgb(255 255 255 / 45%);
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.7rem;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.hud-opt-active {
+  background: var(--hud-good);
+  border-color: var(--hud-ink);
+  color: var(--hud-shadow);
+  font-weight: 800;
+}
+
+.hud-start {
+  font: inherit;
+  font-size: clamp(1.1rem, 4.5vmin, 1.8rem);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--hud-shadow);
+  background: var(--hud-good);
+  border: 3px solid var(--hud-ink);
+  border-radius: 0.7rem;
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+  margin-top: 0.2rem;
+}
+
+.hud-start:active {
+  transform: translateY(1px);
+}

@@ -26,6 +26,7 @@ make sim                              # seeds 1..8, both cars, the balance table
 npm run sim -- --seeds 42,99          # specific seeds
 npm run sim -- --car classic          # one car
 npm run sim -- --count 20             # a wider sweep
+npm run sim -- --weather storm        # race in rain/storm wind
 npm run sim -- --json report.json     # machine-readable dump
 ```
 

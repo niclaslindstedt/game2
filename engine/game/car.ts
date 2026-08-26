@@ -100,9 +100,19 @@ export type GroundContext = {
   slope: number;
   /** True when this step crossed a jump lip. */
   onLip: boolean;
+  /** Current wind velocity, world space m/s. */
+  windX: number;
+  windZ: number;
   t: number;
   rng: Rng;
 };
+
+/** How much of the wind carries the car this step. A translation, not a
+ * torque — the wind moves the car off its line without ever spinning it. */
+function windCarry(car: CarState): number {
+  if (car.airborne) return T.wind.carry.airborne;
+  return car.drifting ? T.wind.carry.drifting : T.wind.carry.grounded;
+}
 
 /** One grounded physics step. Returns events emitted this step. */
 export function stepGrounded(
@@ -162,6 +172,8 @@ export function stepGrounded(
   car.u += accel * dt;
   car.u -= spec.brake * input.brake * Math.sign(car.u) * dt;
   car.u -= surfaceDrag * car.u * dt;
+  // Grade: gravity along the road — the hills push back (or push on).
+  car.u -= 9.8 * T.hills.gravityAlong * ctx.slope * dt;
   if (input.handbrake) car.u -= 4 * Math.sign(car.u) * dt;
   if (Math.abs(car.u) < 0.05 && input.throttle === 0) car.u = 0;
 
@@ -178,6 +190,13 @@ export function stepGrounded(
     car.u += T.boost.accel * headroom * dt;
     car.boostLeft = Math.max(0, car.boostLeft - dt);
     if (car.boostLeft === 0) events.push({ type: "boostEmpty" });
+  }
+
+  // ── Wind ─────────────────────────────────────────────────────────────────
+  // Head/tailwind on the top end; the sideways carry is applied in the move.
+  {
+    const along = ctx.windX * Math.sin(car.heading) + ctx.windZ * Math.cos(car.heading);
+    car.u += along * T.wind.longForce * dt;
   }
 
   // ── Lateral grip ─────────────────────────────────────────────────────────
@@ -225,8 +244,9 @@ export function stepGrounded(
   // ── Move ─────────────────────────────────────────────────────────────────
   const sinH = Math.sin(car.heading);
   const cosH = Math.cos(car.heading);
-  car.x += (sinH * car.u + cosH * car.w) * dt;
-  car.z += (cosH * car.u - sinH * car.w) * dt;
+  const carry = windCarry(car);
+  car.x += (sinH * car.u + cosH * car.w + ctx.windX * carry) * dt;
+  car.z += (cosH * car.u - sinH * car.w + ctx.windZ * carry) * dt;
 
   // ── Ground follow / takeoff ──────────────────────────────────────────────
   if (ctx.onLip) {
@@ -279,8 +299,9 @@ export function stepAirborne(
 
   const sinH = Math.sin(car.heading);
   const cosH = Math.cos(car.heading);
-  car.x += (sinH * car.u + cosH * car.w) * dt;
-  car.z += (cosH * car.u - sinH * car.w) * dt;
+  const carry = windCarry(car);
+  car.x += (sinH * car.u + cosH * car.w + ctx.windX * carry) * dt;
+  car.z += (cosH * car.u - sinH * car.w + ctx.windZ * carry) * dt;
   car.vy -= T.air.gravity * dt;
   car.y += car.vy * dt;
 

@@ -15,7 +15,10 @@ import {
   type CarState,
   type GameEvent,
   type GameState,
+  type RaceEnv,
   type RunStats,
+  type TimeOfDay,
+  type Weather,
 } from "./state.ts";
 import { status } from "../output.ts";
 
@@ -70,11 +73,47 @@ export type CreateGameOptions = {
   /** Inject a pre-compiled track (tests and tooling); defaults to the
    * generated stage for `seed`. */
   track?: ReturnType<typeof compileTrack>;
+  /** Race conditions. Time of day is presentation-only; weather sets the
+   * wind band (TUNING.wind.speed). Defaults: day, clear. */
+  env?: { timeOfDay?: TimeOfDay; weather?: Weather };
 };
+
+/** Wind direction, mean speed, and gust phase are seeded on their own
+ * stream so adding weather never shifts the in-run RNG the physics draws
+ * from. The same seed and weather always blow the same wind. */
+function buildEnv(seed: number, timeOfDay: TimeOfDay, weather: Weather): RaceEnv {
+  const rng = createRng((seed ^ 0x51ab3d75) >>> 0);
+  const [minSpeed, maxSpeed] = T.wind.speed[weather];
+  return {
+    timeOfDay,
+    weather,
+    windDir: rng.range(0, Math.PI * 2),
+    windSpeed: rng.range(minSpeed, maxSpeed),
+    gustPhase: rng.range(0, Math.PI * 2),
+  };
+}
+
+/** The wind at sim time `t`: the mean vector breathing through two slow
+ * sine gusts and veering a little around its bearing — deterministic, so
+ * replays and sim digests hold. */
+function windAt(env: RaceEnv, t: number): { x: number; z: number } {
+  const gust =
+    1 +
+    T.wind.gust *
+      (0.7 * Math.sin(t * 0.9 + env.gustPhase) + 0.3 * Math.sin(t * 2.3 + env.gustPhase * 1.7));
+  const dir = env.windDir + T.wind.veer * Math.sin(t * 0.13 + env.gustPhase);
+  const speed = env.windSpeed * gust;
+  return { x: Math.sin(dir) * speed, z: Math.cos(dir) * speed };
+}
 
 export function createGame(options: CreateGameOptions): GameState {
   const spec = carById(options.carId ?? "compact");
   const track = options.track ?? compileTrack(options.seed);
+  const env = buildEnv(
+    options.seed,
+    options.env?.timeOfDay ?? "day",
+    options.env?.weather ?? "clear",
+  );
   status(
     `Stage ${options.seed}: ${(track.length / 1000).toFixed(1)} km, ` +
       `${track.segments.filter((p) => p.kind === "turn").length} turns, ` +
@@ -93,6 +132,8 @@ export function createGame(options: CreateGameOptions): GameState {
     lateral: 0,
     offRoad: false,
     offRoadSince: 0,
+    env,
+    wind: windAt(env, 0),
     stats: freshStats(),
     rng: createRng((options.seed ^ 0x9e3779b9) >>> 0),
   };
@@ -121,6 +162,12 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   const events: GameEvent[] = [];
   state.t += T.dt;
 
+  // The wind blows through every phase — the grid's flags and fumes drift
+  // before the lights go green.
+  const wind = windAt(state.env, state.t);
+  state.wind.x = wind.x;
+  state.wind.z = wind.z;
+
   if (state.phase === "countdown") {
     if (state.t >= T.countdown) {
       state.phase = "racing";
@@ -145,6 +192,8 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     groundY: preFix.elevation,
     slope: slopeAt(track, preFix.index),
     onLip: false,
+    windX: state.wind.x,
+    windZ: state.wind.z,
     t: state.t,
     rng: state.rng,
   };
