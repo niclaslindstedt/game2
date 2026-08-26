@@ -19,12 +19,16 @@ Do **not** use this skill for a targeted fix — if you know exactly which artif
 
 The registry is the single source of truth for which sync skills exist in this repo. Every `update-*` directory under `.agent/skills/` must appear here exactly once. Add rows whenever you create a new sync skill.
 
-| Skill           | Fixes                                                  | Spec sections | Run order |
-| --------------- | ------------------------------------------------------ | ------------- | --------- |
-| `update-docs`   | `docs/*.md` vs. engine/app/tooling source of truth     | §11.1         | 1         |
-| `update-readme` | `README.md` vs. current commands, cars, controls, URLs | §3            | 2         |
+| Skill            | Fixes                                                        | Spec sections | Run order |
+| ---------------- | ------------------------------------------------------------ | ------------- | --------- |
+| `update-docs`    | `docs/*.md` vs. engine/app/tooling source of truth           | §11.1         | 1         |
+| `update-readme`  | `README.md` vs. current commands, cars, controls, URLs       | §3            | 2         |
+| `update-website` | SEO surfaces + identity-derived shell vs. `identity.ts`/docs | §11.2–§11.3   | 3         |
+| `update-prompts` | `prompts/` templates vs. their sources of truth (dormant)    | §13.5         | 4         |
 
-Run order matters: `update-docs` runs before `update-readme` because the README links into docs pages and summarizes their content — a README synced against stale docs re-imports the staleness.
+Run order matters: `update-docs` runs before `update-readme` because the README links into docs pages and summarizes their content — a README synced against stale docs re-imports the staleness. `update-website` runs after both because the site's SEO copy describes what the README and docs claim; `update-prompts` runs last (currently dormant — no prompts shipped yet, so it usually just refreshes its baseline).
+
+After the registry, finish a full sweep with the `sync-oss-spec` skill — it catches residual conformance violations the per-artifact skills did not touch.
 
 ## Discovery process
 
