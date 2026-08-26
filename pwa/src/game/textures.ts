@@ -78,6 +78,36 @@ export function waterTexture(): THREE.CanvasTexture {
   return toTexture(canvas, 2);
 }
 
+/** A rally gate banner: the word in chunky dark caps on a white ground,
+ * framed by checkered-flag bands top and bottom. Nearest filtering keeps
+ * the lettering as blocky as the rest of the world. */
+export function bannerTexture(text: string): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 96;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("2d context unavailable");
+  ctx.fillStyle = "#f6f3ea";
+  ctx.fillRect(0, 0, 512, 96);
+  const sq = 16;
+  for (let x = 0; x < 512 / sq; x++) {
+    for (const row of [0, 1, 4, 5]) {
+      ctx.fillStyle = (x + row) % 2 === 0 ? "#1c1e22" : "#f6f3ea";
+      ctx.fillRect(x * sq, row < 2 ? row * (sq / 2) : 96 - (6 - row) * (sq / 2), sq, sq / 2);
+    }
+  }
+  ctx.fillStyle = "#1c1e22";
+  ctx.font = "bold 58px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, 256, 50);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 /** A soft radial glow (white core fading to transparent) — the sun's halo,
  * the moon's veil, a lightning bloom. Tint via the material's color. */
 export function glowTexture(): THREE.CanvasTexture {

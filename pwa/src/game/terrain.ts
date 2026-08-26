@@ -11,6 +11,7 @@
 import * as THREE from "three";
 import { createRng, type Track } from "@engine";
 
+import { hash2, smooth, valueNoise } from "../lib/noise.ts";
 import type { Biome } from "./biome.ts";
 import { detailTexture } from "./textures.ts";
 
@@ -21,32 +22,11 @@ const CELL = 14;
 const MAX_SEGMENTS = 190;
 /** The water table: far-field ground below this floods into lakes, m. */
 export const LAKE_Y = -11;
-
-/** Deterministic lattice hash in [0, 1). */
-function hash2(ix: number, iz: number, seed: number): number {
-  let h = (ix * 374761393 + iz * 668265263 + seed * 2246822519) | 0;
-  h = Math.imul(h ^ (h >>> 13), 1274126177);
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-}
-
-function smooth(t: number): number {
-  return t * t * (3 - 2 * t);
-}
-
-/** Bilinear value noise over a lattice of `hash2` values, period `scale` m. */
-function valueNoise(x: number, z: number, scale: number, seed: number): number {
-  const gx = x / scale;
-  const gz = z / scale;
-  const ix = Math.floor(gx);
-  const iz = Math.floor(gz);
-  const fx = smooth(gx - ix);
-  const fz = smooth(gz - iz);
-  const a = hash2(ix, iz, seed);
-  const b = hash2(ix + 1, iz, seed);
-  const c = hash2(ix, iz + 1, seed);
-  const d = hash2(ix + 1, iz + 1, seed);
-  return (a + (b - a) * fx) * (1 - fz) + (c + (d - c) * fx) * fz;
-}
+/** Plain dirt road extrapolated straight past each stage end, m — the
+ * rally start's run-up before the gate, and run-off past the flying
+ * finish. world.ts draws the ribbon; the terrain keeps its shelf flat
+ * under the same corridor so the apron never floats or drowns. */
+export const APRON = 30;
 
 function clamp01(t: number): number {
   return t < 0 ? 0 : t > 1 ? 1 : t;
@@ -101,7 +81,16 @@ export function buildTerrain(track: Track, biome: Biome, waterTexture: THREE.Tex
     if (best < 0) return null;
     const s = samples[best];
     const lateral = (x - s.x) * Math.cos(s.heading) - (z - s.z) * Math.sin(s.heading);
-    return { d: Math.sqrt(bestD2), index: best, lateral };
+    let d = Math.sqrt(bestD2);
+    // Past either stage end, distance to the end sample would swing the
+    // shelf away under the road apron — measure from the apron's spine
+    // instead while within its reach.
+    if (best === 0 || best === samples.length - 1) {
+      const lon = (x - s.x) * Math.sin(s.heading) + (z - s.z) * Math.cos(s.heading);
+      const out = best === 0 ? -lon : lon;
+      if (out > 0) d = Math.hypot(lateral, Math.max(0, out - APRON));
+    }
+    return { d, index: best, lateral };
   };
 
   // The rolling far field, m: broad rises, medium hills, close texture.

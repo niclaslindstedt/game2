@@ -35,6 +35,8 @@ const WILLOW = new THREE.Color(0x6da157);
 const JUNIPER = new THREE.Color(0x2b5e33);
 const ROWAN_LEAF = new THREE.Color(0x6fae4a);
 const ROWAN_BERRY = new THREE.Color(0xe05a2b);
+const OAK_LEAF = new THREE.Color(0x4e7d31);
+const MAPLE_LEAF = new THREE.Color(0x74a23c);
 const MOSS = new THREE.Color(0x90a84f);
 
 const GRASS_BASE = new THREE.Color(0x4a7a28);
@@ -264,6 +266,25 @@ const VARIANTS: Record<string, VariantDef> = {
   },
   larch: { build: (b) => conifer(b, 9, 2, 4, LARCH, TRUNK, 0.14) },
   larchOld: { build: (b) => conifer(b, 13, 2.4, 5, LARCH, TRUNK_DARK, 0.22) },
+  oak: {
+    build: (b) => {
+      b.cyl(TRUNK_DARK, 0.3, 0.46, 3.4, 0);
+      b.cyl(TRUNK_DARK, 0.14, 0.22, 2.2, 2.8, { x: 0.2, tiltZ: 0.55 });
+      b.cyl(TRUNK_DARK, 0.14, 0.22, 2, 3, { x: -0.2, tiltZ: -0.5 });
+      b.blob(OAK_LEAF, 2.4, 0, 5.6, 0, { sy: 0.8 });
+      b.blob(OAK_LEAF, 1.7, 2, 4.8, 0.6, { sy: 0.8 });
+      b.blob(OAK_LEAF, 1.7, -1.9, 5, -0.5, { sy: 0.8 });
+      b.blob(OAK_LEAF, 1.3, 0.4, 6.8, -0.9);
+    },
+  },
+  maple: {
+    build: (b) => {
+      b.cyl(TRUNK, 0.18, 0.3, 3.2, 0, { tiltZ: 0.04 });
+      b.blob(MAPLE_LEAF, 2, 0, 5, 0, { sy: 1.05 });
+      b.blob(MAPLE_LEAF, 1.4, 1.3, 4.2, 0.5);
+      b.blob(MAPLE_LEAF, 1.3, -1.2, 4.4, -0.6);
+    },
+  },
   rowan: {
     build: (b) => {
       b.cyl(TRUNK, 0.12, 0.18, 2.8, 0, { tiltZ: 0.08 });
@@ -382,11 +403,14 @@ export type FloraPlacement = {
   spin: number;
 };
 
+export type Flora = { group: THREE.Group; update: (dt: number) => void };
+
 /** Turn a placement list into instanced meshes — one per variant used,
- * two shared materials (solid and double-sided ground cover). `rand`
- * drives only cosmetic jitter; pass the stage's seeded RNG so a seed
- * always grows the same forest. */
-export function buildFlora(placements: FloraPlacement[], rand: () => number): THREE.Group {
+ * two shared materials (solid and double-sided ground cover). The ground
+ * cover sways on a vertex-shader breeze, weighted by blade height so the
+ * bases stay planted. `rand` drives only cosmetic jitter; pass the
+ * stage's seeded RNG so a seed always grows the same forest. */
+export function buildFlora(placements: FloraPlacement[], rand: () => number): Flora {
   const group = new THREE.Group();
   const byId = new Map<string, FloraPlacement[]>();
   for (const p of placements) {
@@ -403,6 +427,27 @@ export function buildFlora(placements: FloraPlacement[], rand: () => number): TH
     map,
     side: THREE.DoubleSide,
   });
+  // The breeze: each ground-cover instance leans on its own phase (from
+  // its world position), displacing tips more than bases.
+  const uTime = { value: 0 };
+  leafy.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = uTime;
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nuniform float uTime;")
+      .replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+        {
+          float swayPhase = uTime * 1.9;
+          #ifdef USE_INSTANCING
+            swayPhase += (instanceMatrix[3].x + instanceMatrix[3].z) * 0.31;
+          #endif
+          float reach = max(transformed.y, 0.0);
+          transformed.x += sin(swayPhase) * 0.07 * reach;
+          transformed.z += cos(swayPhase * 0.63) * 0.045 * reach;
+        }`,
+      );
+  };
 
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
@@ -426,5 +471,10 @@ export function buildFlora(placements: FloraPlacement[], rand: () => number): TH
     });
     group.add(mesh);
   }
-  return group;
+  return {
+    group,
+    update: (dt) => {
+      uTime.value += dt;
+    },
+  };
 }

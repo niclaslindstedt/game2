@@ -10,10 +10,11 @@
 import * as THREE from "three";
 import { createRng, type Track } from "@engine";
 
-import { biomeFor, type Biome, type FloraMix } from "./biome.ts";
+import { hash2, valueNoise } from "../lib/noise.ts";
+import { biomeFor, type Biome, type Community, type FloraMix } from "./biome.ts";
 import { buildFlora, type FloraPlacement } from "./flora.ts";
-import { buildTerrain, LAKE_Y } from "./terrain.ts";
-import { gravelTexture, waterTexture } from "./textures.ts";
+import { APRON, buildTerrain, LAKE_Y } from "./terrain.ts";
+import { bannerTexture, gravelTexture, waterTexture } from "./textures.ts";
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -21,10 +22,42 @@ function rightOf(heading: number): { x: number; z: number } {
   return { x: Math.cos(heading), z: -Math.sin(heading) };
 }
 
+/** The stage's samples plus a straight dirt apron extrapolated past each
+ * end: a rally car launches from dirt already laid before the start gate,
+ * and the flying finish has road to run off onto. Only the drawn ribbon —
+ * the physics' samples are untouched. */
+function withAprons(track: Track): Track["samples"] {
+  const first = track.samples[0];
+  const last = track.samples[track.samples.length - 1];
+  const n = Math.round(APRON / track.step);
+  const pre: Track["samples"] = [];
+  const post: Track["samples"] = [];
+  for (let i = n; i >= 1; i--) {
+    pre.push({
+      ...first,
+      x: first.x - Math.sin(first.heading) * track.step * i,
+      z: first.z - Math.cos(first.heading) * track.step * i,
+      s: first.s - track.step * i,
+      surface: "gravel",
+      jump: false,
+    });
+  }
+  for (let i = 1; i <= n; i++) {
+    post.push({
+      ...last,
+      x: last.x + Math.sin(last.heading) * track.step * i,
+      z: last.z + Math.cos(last.heading) * track.step * i,
+      s: last.s + track.step * i,
+      surface: "gravel",
+      jump: false,
+    });
+  }
+  return [...pre, ...track.samples, ...post];
+}
+
 /** The road surface: a triangulated ribbon along the samples. */
-function buildRoad(track: Track): THREE.Mesh {
-  const samples = track.samples;
-  const half = track.width / 2;
+function buildRoad(samples: Track["samples"], width: number): THREE.Mesh {
+  const half = width / 2;
   const positions: number[] = [];
   const uvs: number[] = [];
   const colors: number[] = [];
@@ -62,9 +95,8 @@ function buildRoad(track: Track): THREE.Mesh {
 
 /** Dirt skirts: close the gap between a raised road (ramps, crests) and the
  * ground so lips read as solid landforms, not floating carpet. */
-function buildSkirts(track: Track): THREE.Mesh {
-  const samples = track.samples;
-  const half = track.width / 2;
+function buildSkirts(samples: Track["samples"], width: number): THREE.Mesh {
+  const half = width / 2;
   const positions: number[] = [];
   const indices: number[] = [];
   for (const side of [-1, 1]) {
@@ -210,17 +242,37 @@ function buildScenery(
   track: Track,
   biome: Biome,
   heightAt: (x: number, z: number) => number,
-): THREE.Group {
+  roadPoints: Track["samples"],
+): { group: THREE.Group; update: (dt: number) => void } {
   const group = new THREE.Group();
   const rng = createRng((track.seed ^ 0x5f356495) >>> 0);
   const samples = track.samples;
   const half = track.width / 2;
   const clearance = half + 3.5;
 
+  // Which plant community owns a patch of ground: a hash over grove-sized
+  // cells (uniform, so the biome's weights hold exactly), the lookup
+  // wobbled by noise so grove borders meander instead of running straight.
+  const groveSeed = (track.seed ^ 0x9e3779b9) >>> 0;
+  const totalWeight = biome.communities.reduce((sum, c) => sum + c.weight, 0);
+  const communityAt = (x: number, z: number): Community => {
+    const wx = x + (valueNoise(x, z, 47, groveSeed + 1) - 0.5) * 70;
+    const wz = z + (valueNoise(z, x, 53, groveSeed + 2) - 0.5) * 70;
+    let t = hash2(Math.floor(wx / biome.groveScale), Math.floor(wz / biome.groveScale), groveSeed);
+    t *= totalWeight;
+    for (const c of biome.communities) {
+      t -= c.weight;
+      if (t <= 0) return c;
+    }
+    return biome.communities[biome.communities.length - 1];
+  };
+
+  // Clearance checks walk the aproned samples so nothing grows on the
+  // start run-up or the finish run-off either.
   const clearOfRoad = (x: number, z: number, r: number): boolean => {
-    for (let i = 0; i < samples.length; i += 4) {
-      const dx = x - samples[i].x;
-      const dz = z - samples[i].z;
+    for (let i = 0; i < roadPoints.length; i += 4) {
+      const dx = x - roadPoints[i].x;
+      const dz = z - roadPoints[i].z;
       if (dx * dx + dz * dz < r * r) return false;
     }
     return true;
@@ -229,8 +281,10 @@ function buildScenery(
   const flora: FloraPlacement[] = [];
 
   // ── The forest: two bands, a treeline near the road and a spread
-  // climbing the hills. The mix shifts with the ground: willow and birch
-  // crowd the shorelines, only the tough survive the high bedrock.
+  // climbing the hills. WHAT grows at a spot is the community's call —
+  // groves of a few species, meadows left open — with the shorelines and
+  // the high bedrock overriding: willow and birch crowd the water, only
+  // the tough survive up high.
   for (let i = 4; i < samples.length; i += 2) {
     const s = samples[i];
     const r = rightOf(s.heading);
@@ -245,14 +299,22 @@ function buildScenery(
     if (!clearOfRoad(x, z, clearance)) continue;
     const y = heightAt(x, z);
     if (y < LAKE_Y + 1.2) continue;
-    const mix = y < LAKE_Y + 4 ? biome.lakeshoreTrees : y > 26 ? biome.highlandTrees : biome.trees;
+    let mix: FloraMix;
+    if (y < LAKE_Y + 4) mix = biome.lakeshoreTrees;
+    else if (y > 26) mix = biome.highlandTrees;
+    else {
+      const community = communityAt(x, z);
+      if (!rng.chance(community.density)) continue;
+      mix = community.trees;
+    }
     flora.push({ id: pickFlora(mix, roll), x, y, z, scale, spin });
   }
 
   // ── Ground cover: a dense strip just past the shoulder (what the car
-  // actually sees at speed), and a sparser scatter under the treeline.
+  // actually sees at speed), and a sparser scatter under the treeline —
+  // each clump drawn from its community's mix, so meadows fill with tall
+  // grass and spruce woods with ferns.
   for (let i = 4; i < samples.length; i += 2) {
-    if (!rng.chance(biome.undergrowthDensity / 2)) continue;
     const s = samples[i];
     const r = rightOf(s.heading);
     for (const band of [0, 1]) {
@@ -264,14 +326,25 @@ function buildScenery(
       const roll = rng.next();
       const scale = rng.range(0.7, 1.3);
       const spin = rng.range(0, Math.PI * 2);
+      const community = communityAt(x, z);
+      const chance = (biome.undergrowthDensity / 2) * (community.groundCover ?? 1);
+      if (!rng.chance(chance)) continue;
       if (!clearOfRoad(x, z, half + 1.2)) continue;
       const y = heightAt(x, z);
       if (y < LAKE_Y + 1.2) continue;
-      flora.push({ id: pickFlora(biome.undergrowth, roll), x, y, z, scale, spin });
+      flora.push({
+        id: pickFlora(community.undergrowth ?? biome.undergrowth, roll),
+        x,
+        y,
+        z,
+        scale,
+        spin,
+      });
     }
   }
 
-  group.add(buildFlora(flora, () => rng.next()));
+  const planted = buildFlora(flora, () => rng.next());
+  group.add(planted.group);
 
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
@@ -348,7 +421,7 @@ function buildScenery(
   });
   group.add(slabMesh);
 
-  return group;
+  return { group, update: planted.update };
 }
 
 /** Warning cones flanking each jump lip, and start/finish gates. */
@@ -371,31 +444,66 @@ function buildMarkers(track: Track): THREE.Group {
     }
   }
 
-  const gate = (index: number, color: string, label: "start" | "finish"): void => {
+  // Rally gates, after the real thing: red/white candy-striped legs, a
+  // white banner with checkered bands carrying its word on the face the
+  // approaching car reads, and hay bales lining the road below.
+  const red = new THREE.MeshLambertMaterial({ color: "#e23c2c" });
+  const white = new THREE.MeshLambertMaterial({ color: "#f6f3ea" });
+  const stripeGeo = new THREE.BoxGeometry(0.45, 1, 0.45);
+  const baleGeo = new THREE.BoxGeometry(1.5, 0.75, 0.85);
+  const baleMat = new THREE.MeshLambertMaterial({ color: "#d9b45c" });
+  const gate = (index: number, label: "start" | "finish"): void => {
     const s = track.samples[index];
     const r = rightOf(s.heading);
-    const postGeo = new THREE.BoxGeometry(0.4, 5, 0.4);
-    const postMat = new THREE.MeshLambertMaterial({ color: "#f6f3ea" });
-    const banner = new THREE.Mesh(
-      new THREE.BoxGeometry(track.width + 2, 1.1, 0.25),
-      new THREE.MeshLambertMaterial({ color }),
-    );
     for (const side of [-1, 1]) {
-      const post = new THREE.Mesh(postGeo, postMat);
-      post.position.set(
-        s.x + r.x * (half + 1) * side,
-        s.elevation + 2.5,
-        s.z + r.z * (half + 1) * side,
-      );
-      group.add(post);
+      for (let k = 0; k < 5; k++) {
+        const seg = new THREE.Mesh(stripeGeo, k % 2 === 0 ? red : white);
+        seg.position.set(
+          s.x + r.x * (half + 1) * side,
+          s.elevation + k + 0.5,
+          s.z + r.z * (half + 1) * side,
+        );
+        seg.rotation.y = s.heading;
+        group.add(seg);
+      }
+      // A short wall of bales each side: three along the road, one on top.
+      for (let k = 0; k < 4; k++) {
+        const along =
+          track.samples[Math.max(0, Math.min(track.samples.length - 1, index + (k - 1) * 2))];
+        const bale = new THREE.Mesh(baleGeo, baleMat);
+        const lat = (half + 1.9) * side;
+        const top = k === 3;
+        const b = top ? track.samples[index] : along;
+        bale.position.set(
+          b.x + rightOf(b.heading).x * lat,
+          b.elevation + (top ? 1.12 : 0.38),
+          b.z + rightOf(b.heading).z * lat,
+        );
+        bale.rotation.y = b.heading + Math.PI / 2 + (k - 1.5) * 0.07;
+        group.add(bale);
+      }
     }
-    banner.position.set(s.x, s.elevation + 4.6, s.z);
+    const text = new THREE.MeshLambertMaterial({
+      color: "#ffffff",
+      map: bannerTexture(label.toUpperCase()),
+    });
+    // BoxGeometry face order is +x,-x,+y,-y,+z,-z; with rotation.y set to
+    // the heading, -z is the face looking back down the road at the car.
+    const banner = new THREE.Mesh(new THREE.BoxGeometry(track.width + 2, 1.3, 0.3), [
+      white,
+      white,
+      white,
+      white,
+      white,
+      text,
+    ]);
+    banner.position.set(s.x, s.elevation + 4.7, s.z);
     banner.rotation.y = s.heading;
     banner.name = label;
     group.add(banner);
   };
-  gate(2, "#28a84c", "start");
-  gate(track.samples.length - 2, "#123069", "finish");
+  gate(2, "start");
+  gate(track.samples.length - 2, "finish");
   return group;
 }
 
@@ -406,15 +514,20 @@ export function buildWorld(track: Track): World {
 
   const biome = biomeFor();
   const terrain = buildTerrain(track, biome, waterTexture());
+  const aproned = withAprons(track);
   group.add(terrain.group);
-  group.add(buildSkirts(track));
-  group.add(buildRoad(track));
+  group.add(buildSkirts(aproned, track.width));
+  group.add(buildRoad(aproned, track.width));
   group.add(buildRumble(track));
   group.add(buildWater(track));
-  group.add(buildScenery(track, biome, terrain.heightAt));
+  const scenery = buildScenery(track, biome, terrain.heightAt, aproned);
+  group.add(scenery.group);
   group.add(buildMarkers(track));
 
-  const update = (dt: number): void => terrain.update(dt);
+  const update = (dt: number): void => {
+    terrain.update(dt);
+    scenery.update(dt);
+  };
 
   const dispose = (): void => {
     group.traverse((obj) => {
