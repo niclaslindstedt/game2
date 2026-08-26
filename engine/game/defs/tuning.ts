@@ -34,10 +34,20 @@ export const TUNING = {
     /** Slip angle where the forces that DEEPEN a slide begin to fade... */
     satAt: 0.46,
     /** ...and the range over which they fade to nothing, rad. Together these
-     * park a held slide at a stable angle instead of spinning the car. */
+     * park a breathed-throttle slide at a stable angle instead of spinning
+     * the car. */
     satWidth: 0.2,
-    /** Yaw response rate while gripping and while fully sliding, 1/s. */
-    yawResponse: { grip: 8, slide: 6.4 },
+    /** RWD power oversteer: yaw the driven rear axle feeds the slide while
+     * the power is down, rad/s at full throttle, full slide and pace.
+     * Deliberately NOT gated by the saturation band, so a drift held
+     * flat-out keeps creeping deeper — the counter-steer (or a lift) is
+     * what balances it. Zero restores a car that always parks itself. */
+    powerYaw: 1.25,
+    /** Yaw response rate while gripping and while fully sliding, 1/s. The
+     * slide rate is deliberately low enough to leave momentum in the body:
+     * a hard catch swings the car through centre into an opposite slide —
+     * the pendulum — instead of stopping dead where the wheel points. */
+    yawResponse: { grip: 8, slide: 5 },
     /** Rear grip while the handbrake is pulled (multiplier)... */
     handbrakeGrip: 0.4,
     /** ...and the yaw it adds toward the steered side, rad/s. The handbrake

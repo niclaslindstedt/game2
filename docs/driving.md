@@ -18,15 +18,26 @@ one continuous response rather than two modes.
   speed; a committed turn slides from about 70 km/h up. No flick, no
   handbrake, no kick — nothing is ever injected into the car's velocity.
 - **The rotation** — as the slide opens, the car gains yaw authority
-  (`driftYaw`) and the slip starts turning the nose itself: the tail leads
-  and you catch it on the counter. Two stabilizers keep it a dance instead of
-  a spin:
+  (`driftYaw`) and the slip starts turning the nose itself — sustained by
+  steering INTO the slide, so releasing the wheel stops feeding it and
+  counter-steer both cuts the deepening and steers the catch.
+- **Power oversteer** — these are rear-wheel-drive cars, and the drift is
+  where it shows: while the throttle is down, the driven axle keeps feeding
+  the slide (`TUNING.grip.powerYaw`, ungated by saturation). A drift never
+  ends on its own with the power on — the car parks sideways and stays
+  there until the driver counter-steers or lifts. The catch carries yaw
+  momentum (`yawResponse.slide` is deliberately low), so an over-held
+  counter swings the pendulum: the slip crosses centre into a second drift
+  the other way, which needs its own counter. Balancing that dance on the
+  wheel is the game.
+- Two stabilizers keep it a dance instead of an instant spin:
   - **Saturation** — past ~26° of slip everything that deepens the slide
-    fades to zero, so held full lock parks the car at a big stable angle
-    rather than spinning out. Only counter-steer keeps full authority.
+    fades to zero except the power's own oversteer, so a breathed slide
+    parks at a big stable angle. Only counter-steer keeps full authority.
   - **Lift-to-tighten** — lateral grip scales up as the throttle lifts
     (arcade weight transfer). On the power the slide runs; breathe and the
-    line tightens. This is the tool against running wide.
+    car both tightens its line and calms its tail. This is the tool against
+    running wide and the no-hands way out of a drift.
 - **The cost** — the tires **redirect** the car instead of braking it: the
   velocity swings back in behind the nose while its magnitude is kept, so a
   corner taken sideways comes out at pace. Only `TUNING.grip.scrub × sin²
@@ -35,7 +46,8 @@ one continuous response rather than two modes.
   brake; that is the whole point.
 - **The handbrake** — cuts rear grip and adds some yaw while it is held. It
   unsticks the car; it does not teleport it sideways, and it does not slow it
-  down.
+  down. It is a flick, not a hold: with the power down and full lock, a held
+  handbrake takes the rear past any catch and spins the car around.
 
 `car.slide` and `car.drifting` are readouts for the dust, the HUD and the
 balance table — nothing in the model branches on them. `drifting` is read off
