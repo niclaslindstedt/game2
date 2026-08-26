@@ -116,6 +116,12 @@ export const TUNING = {
     /** Roll past this at touchdown means the car came down on its side —
      * a sloppy landing however straight the nose was, rad. */
     rollLandLimit: 0.7,
+    /** Off the road only: ground falling away by more than this in one
+     * step is an edge — a cliff lip, a cut bank — and throws the car
+     * instead of gluing it down the face, m. Comfortably more than the
+     * shelf drop at the road boundary, so leaving the verge is a curb,
+     * not a takeoff. */
+    edgeDrop: 0.8,
     /** Landing slip beyond this scrubs speed and wobbles the car, rad. */
     cleanSlipLimit: 0.24,
     /** Speed kept on a clean landing vs a sloppy one (fractions). */
@@ -126,12 +132,21 @@ export const TUNING = {
   },
 
   surfaces: {
-    /** Longitudinal drag per surface, 1/s. */
-    drag: { gravel: 0.035, water: 0.5, grass: 0.9 },
+    /** Longitudinal drag per surface, 1/s. `nature` is the open landscape
+     * off the road — loose but fast: the wild is a place to DRIVE, not a
+     * wall of molasses at the verge. */
+    drag: { gravel: 0.028, water: 0.5, nature: 0.032 },
     /** Lateral grip multiplier per surface. */
-    grip: { gravel: 1.0, water: 0.55, grass: 0.5 },
+    grip: { gravel: 1.0, water: 0.55, nature: 0.7 },
     /** Throttle effectiveness per surface. */
-    power: { gravel: 1.0, water: 0.7, grass: 0.55 },
+    power: { gravel: 1.0, water: 0.7, nature: 0.8 },
+    /** Rough ground caps pace where gearing cannot: above this speed the
+     * nature surface pulls the car back hard (about 150 km/h) — a linear
+     * per-surface drag would instead stall the box under its own upshift
+     * thresholds. Grounded only: a flight keeps what it took off with. */
+    natureTop: 42,
+    /** How hard the wild claws back each m/s over that cap, 1/s. */
+    natureOverDrag: 3,
   },
 
   boost: {
@@ -174,14 +189,23 @@ export const TUNING = {
   },
 
   offTrack: {
-    /** Lateral overhang past the road edge that still counts as verge, m. */
+    /** Lateral overhang past the road edge that still counts as verge, m.
+     * Beyond it the car is exploring: the terrain owns the ground, and
+     * nothing but a crash (or the reset input) brings it back. */
     verge: 1.5,
-    /** Offset beyond which the car is lost and gets respawned, m. */
-    lostOffset: 16,
-    /** Seconds off the road before an automatic respawn. */
-    lostAfter: 2.5,
     /** Respawn forward speed, m/s. */
     respawnSpeed: 6,
+  },
+
+  crash: {
+    /** Water this much over the ground is deep — a grounded car in it (or
+     * an airborne one dropping under the surface) has driven into a lake
+     * or the sea: splash, crash, back to the track. Stream fords stay
+     * shallower than this and just slow the car. */
+    deepWater: 0.9,
+    /** Ground speed above which contact with a wild prop (boulder, fallen
+     * trunk) is a crash, m/s; slower is a bump that stops the car. */
+    obstacleSpeed: 8,
   },
 
   gearbox: {

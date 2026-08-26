@@ -124,8 +124,9 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
     dustClock += dt;
     if (!c.airborne && dustClock > 0.03) {
       dustClock = 0;
-      const inWater = state.track.samples[state.progressIndex]?.surface === "water";
-      const color = inWater ? 0x4fa0f0 : 0xb29268;
+      // The engine tracks the driven surface — road fords AND the wild's
+      // lakes and streams throw the blue spray.
+      const color = state.surface === "water" ? 0x4fa0f0 : 0xb29268;
       const wakeX = -fwdX * c.u * 0.35 + state.wind.x * 0.6;
       const wakeZ = -fwdZ * c.u * 0.35 + state.wind.z * 0.6;
       // The tires letting go is what throws gravel — `slide` is that

@@ -1,24 +1,30 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// The landscape the road runs through — as important as the road itself.
-// A seeded heightfield hugs the corridor: a flat verge shelf at road grade,
-// then per-side embankment profiles that rise into hillsides (the Sega
-// Rally cut-into-the-hill look) or fall away toward valleys, blending into
-// a rolling far field with lakes wherever the ground dips under the water
-// table, and stream valleys carved through wherever a ford crosses the
-// road. The ground is built as TILES on a fixed world grid, so a finite
-// stage materializes its whole corridor up front while an endless one
-// streams tiles in around the car and drops them again behind it — the same
-// landscape either way, painted from the biome's palette. Everything is
-// deterministic in the track seed; the physics never reads any of it — the
-// engine's road samples stay the only truth the car touches.
+// The drawn landscape. The landscape's SHAPE — corridor shelf, embankments,
+// mountains, sea basins, stream valleys — lives in the engine's terrain
+// field, because the car can drive on all of it; this module samples that
+// field into ground TILES on a fixed world grid and paints them from the
+// biome's palette. Tiles live around the road corridor (so a stage always
+// sits in scenery) AND around the car itself, streaming in as an
+// exploring run leaves the road and dropping again behind it — the world
+// never visibly ends, on the road or a kilometer from it. Anywhere a tile
+// dips under the water table, a lake — or the open sea — floods it.
 
 import * as THREE from "three";
-import { createRng, type Track } from "@engine";
+import {
+  APRON,
+  LAKE_Y,
+  createRng,
+  createTerrain,
+  inStream,
+  type TerrainField,
+  type Track,
+} from "@engine";
 
-import { hash2, smooth, valueNoise } from "../lib/noise.ts";
+import { hash2, valueNoise } from "../lib/noise.ts";
 import type { Biome } from "./biome.ts";
-import { carveGround, computeStreams, type Stream } from "./streams.ts";
 import { detailTexture } from "./textures.ts";
+
+export { APRON, LAKE_Y };
 
 /** Tile edge length, m — 16 cells of 14 m. */
 const TILE = 224;
@@ -27,13 +33,11 @@ const CELL = TILE / CELLS;
 /** Tiles exist within this range of the road, m — past the fog ceiling
  * (520 m), so the world never visibly ends. */
 const FAR = 640;
-/** The water table: ground below this floods into lakes, m. */
-export const LAKE_Y = -11;
-/** Plain dirt road extrapolated straight past each stage end, m — the
- * rally start's run-up before the gate, and run-off past the flying
- * finish. world.ts draws the ribbon; the terrain keeps its shelf flat
- * under the same corridor so the apron never floats or drowns. */
-export const APRON = 30;
+/** Tiles kept alive around the CAR when it roams off the corridor, m. */
+const CAR_FAR = 560;
+/** Freshly needed car-window tiles built per sync at most — an excursion
+ * streams the ground in over a few frames instead of hitching on one. */
+const BUILD_BUDGET = 3;
 
 function clamp01(t: number): number {
   return t < 0 ? 0 : t > 1 ? 1 : t;
@@ -41,118 +45,27 @@ function clamp01(t: number): number {
 
 export type Terrain = {
   group: THREE.Group;
+  /** The engine's terrain field this ground is drawn from — heights,
+   * streams, water, road distance, wild props. */
+  field: TerrainField;
   /** Landscape height at a world position (what scenery stands on). */
   heightAt: (x: number, z: number) => number;
-  /** The stream valleys cut so far (world.ts draws their water). */
-  streams: Stream[];
-  /** Catch the ground up with the track: index new samples, cut new stream
-   * valleys, build the tiles the road now needs, and (endless only) drop
-   * the ones the car has left behind. */
-  sync: (track: Track, carS: number) => void;
+  /** Catch the ground up with the track and the car: index new samples,
+   * cut new stream valleys, build the tiles the road and the car now
+   * need, and drop the ones both have left behind. */
+  sync: (track: Track, carS: number, carX: number, carZ: number) => void;
   update: (dt: number) => void;
   dispose: () => void;
 };
 
 export function buildTerrain(track: Track, biome: Biome, waterTexture: THREE.Texture): Terrain {
-  const seed = (track.seed ^ 0x1b873593) >>> 0;
-  const rng = createRng(seed);
-  const noiseSeed = rng.int(1, 1 << 30);
-  const sideSeed = rng.int(1, 1 << 30);
-
-  // ── Corridor queries: a spatial hash over the road samples ─────────────
-  // Rebuilt from the live window as an endless run moves on, so a fresh
-  // tile never snaps to road the world has already forgotten.
+  const field = createTerrain(track);
+  const heightAt = field.heightAt;
   const samples = track.samples;
-  const GRID = 48;
-  let grid = new Map<string, number[]>();
-  let firstIndexed = 0;
-  let indexed = 0;
 
-  const indexSamples = (from: number, to: number): void => {
-    for (let i = from; i < to; i++) {
-      const key = `${Math.floor(samples[i].x / GRID)},${Math.floor(samples[i].z / GRID)}`;
-      let cell = grid.get(key);
-      if (!cell) grid.set(key, (cell = []));
-      cell.push(i);
-    }
-  };
-
-  type Near = { d: number; index: number; lateral: number };
-  const nearestSample = (x: number, z: number): Near | null => {
-    const cx = Math.floor(x / GRID);
-    const cz = Math.floor(z / GRID);
-    let best = -1;
-    let bestD2 = Infinity;
-    for (let dx = -3; dx <= 3; dx++) {
-      for (let dz = -3; dz <= 3; dz++) {
-        const cell = grid.get(`${cx + dx},${cz + dz}`);
-        if (!cell) continue;
-        for (const i of cell) {
-          const ddx = x - samples[i].x;
-          const ddz = z - samples[i].z;
-          const d2 = ddx * ddx + ddz * ddz;
-          if (d2 < bestD2) {
-            bestD2 = d2;
-            best = i;
-          }
-        }
-      }
-    }
-    if (best < 0) return null;
-    const s = samples[best];
-    const lateral = (x - s.x) * Math.cos(s.heading) - (z - s.z) * Math.sin(s.heading);
-    let d = Math.sqrt(bestD2);
-    // Past either stage end, distance to the end sample would swing the
-    // shelf away under the road apron — measure from the apron's spine
-    // instead while within its reach.
-    if (best === firstIndexed || best === samples.length - 1) {
-      const lon = (x - s.x) * Math.sin(s.heading) + (z - s.z) * Math.cos(s.heading);
-      const out = best === firstIndexed ? -lon : lon;
-      if (out > 0) d = Math.hypot(lateral, Math.max(0, out - APRON));
-    }
-    return { d, index: best, lateral };
-  };
-
-  // The rolling far field, m: broad rises, medium hills, close texture.
-  const farField = (x: number, z: number): number =>
-    (valueNoise(x, z, 430, noiseSeed) - 0.5) * 52 +
-    (valueNoise(x, z, 150, noiseSeed + 7) - 0.5) * 16 +
-    (valueNoise(x, z, 46, noiseSeed + 13) - 0.5) * 4;
-
-  // Per-side embankment grade along the stage, m per m of distance from the
-  // shoulder: positive climbs into a hillside wall, negative drops toward a
-  // valley (or the sea the lakes make). Varies slowly with arc position.
-  const sideGrade = (s: number, side: number): number => {
-    const raw = valueNoise(s, side * 97.3, 210, sideSeed);
-    return -0.34 + raw * 1.1;
-  };
-
-  const half = track.width / 2;
-  const shelfEnd = half + 7; // flat-ish shoulder past the rumble strips
-
-  const streams: Stream[] = [];
-
-  /** The landscape before any stream is cut through it. */
-  const rawHeight = (x: number, z: number): number => {
-    const far = farField(x, z);
-    const near = nearestSample(x, z);
-    if (!near || near.d > 240) return far;
-    const s = samples[near.index];
-    if (near.d < shelfEnd) {
-      // Under and beside the road: a shelf pinned just below road grade so
-      // the ribbon and its skirts always sit proud of the landscape — the
-      // shoulder's texture noise stays below grade too.
-      return s.elevation - 0.35 + (near.d > half ? valueNoise(x, z, 9, noiseSeed + 3) * 0.25 : 0);
-    }
-    const grade = sideGrade(s.s, near.lateral >= 0 ? 1 : -1);
-    const embankment = s.elevation + (near.d - shelfEnd) * grade;
-    const toFar = smooth(clamp01((near.d - shelfEnd) / 150));
-    const shaped = embankment * (1 - toFar) + far * toFar;
-    const off = smooth(clamp01((near.d - shelfEnd) / 26));
-    return (s.elevation - 0.35) * (1 - off) + shaped * off;
-  };
-
-  const heightAt = (x: number, z: number): number => carveGround(streams, x, z, rawHeight(x, z));
+  // Paint-only noise seeds (the shape's seeds live inside the field).
+  const rng = createRng((track.seed ^ 0x513ac1b7) >>> 0);
+  const noiseSeed = rng.int(1, 1 << 30);
 
   // ── Tiles ───────────────────────────────────────────────────────────────
   const group = new THREE.Group();
@@ -198,10 +111,9 @@ export function buildTerrain(track: Track, biome: Biome, waterTexture: THREE.Tex
       for (let i = 0; i < n; i++) {
         const x = originX + (i - 1) * CELL;
         const z = originZ + (j - 1) * CELL;
-        const raw = rawHeight(x, z);
-        const y = carveGround(streams, x, z, raw);
+        const y = heightAt(x, z);
         H[j * n + i] = y;
-        if (raw - y > 0.25) carved[j * n + i] = 1;
+        if (inStream(field.streams, x, z, 0)) carved[j * n + i] = 1;
         if (y < minH) minH = y;
       }
     }
@@ -276,8 +188,9 @@ export function buildTerrain(track: Track, biome: Biome, waterTexture: THREE.Tex
     const ground = new THREE.Mesh(geo, groundMat);
     group.add(ground);
 
-    // Anywhere the tile dips under the water table, a lake pane floods it.
-    // UVs are world-anchored so the sheet reads as one continuous water.
+    // Anywhere the tile dips under the water table, a water pane floods it
+    // — a lake in a hollow, the open sea across a basin. UVs are
+    // world-anchored so the sheet reads as one continuous water.
     let lake: THREE.Mesh | null = null;
     if (minH < LAKE_Y + 0.5) {
       const lakeGeo = new THREE.PlaneGeometry(TILE, TILE, 1, 1);
@@ -311,7 +224,7 @@ export function buildTerrain(track: Track, biome: Biome, waterTexture: THREE.Tex
   };
 
   /** Tiles the window of road [fromS, end) needs on screen right now. */
-  const neededTiles = (fromS: number): Set<string> => {
+  const corridorTiles = (fromS: number): Set<string> => {
     const needed = new Set<string>();
     const reach = Math.ceil(FAR / TILE);
     for (let i = 0; i < samples.length; i += 4) {
@@ -332,42 +245,75 @@ export function buildTerrain(track: Track, biome: Biome, waterTexture: THREE.Tex
     return needed;
   };
 
-  let lastSyncedS = -Infinity;
-  let streamScan = 0;
-
-  const sync = (t: Track, carS: number): void => {
-    const grew = samples.length > indexed;
-    if (grew) {
-      indexSamples(indexed, samples.length);
-      indexed = samples.length;
-      streams.push(...computeStreams(t, streamScan, farField));
-      streamScan = samples.length;
-    }
-    if (!t.endless) {
-      // A finite stage is built once, in full.
-      if (tiles.size === 0) {
-        for (const key of neededTiles(0)) tiles.set(key, buildTile(...parseKey(key)));
+  /** Tiles the car's own surroundings need — how the wild materializes. */
+  const carTiles = (carX: number, carZ: number): Set<string> => {
+    const needed = new Set<string>();
+    const reach = Math.ceil(CAR_FAR / TILE);
+    const cx = Math.floor(carX / TILE);
+    const cz = Math.floor(carZ / TILE);
+    for (let dx = -reach; dx <= reach; dx++) {
+      for (let dz = -reach; dz <= reach; dz++) {
+        const centerX = (cx + dx + 0.5) * TILE;
+        const centerZ = (cz + dz + 0.5) * TILE;
+        if (Math.hypot(centerX - carX, centerZ - carZ) < CAR_FAR + TILE * 0.75) {
+          needed.add(`${cx + dx},${cz + dz}`);
+        }
       }
-      return;
     }
-    if (!grew && carS - lastSyncedS < 250) return;
+    return needed;
+  };
+
+  /** The corridor tiles built so far — never dropped on a finite stage. */
+  let corridor = new Set<string>();
+  let lastSyncedS = -Infinity;
+  let lastCarX = Infinity;
+  let lastCarZ = Infinity;
+  let indexed = 0;
+
+  const sync = (t: Track, carS: number, carX: number, carZ: number): void => {
+    const grew = samples.length > indexed;
+    indexed = samples.length;
+    // The renderer's own field instance follows the streamed road the same
+    // way the engine's does — same rules, same prune, same landscape.
+    field.sync(carS);
+    const moved = Math.hypot(carX - lastCarX, carZ - lastCarZ);
+    if (!grew && carS - lastSyncedS < 250 && moved < 100) return;
     lastSyncedS = carS;
-    // Forget road the run has left behind: the sample grid re-anchors to
-    // the live window so new tiles never shape themselves around it, and
-    // spent stream descriptors stop taxing the carve.
-    const floorS = carS - 700;
-    if (samples[firstIndexed]?.s < floorS - 400) {
-      while (firstIndexed < samples.length - 1 && samples[firstIndexed].s < floorS) firstIndexed++;
-      grid = new Map();
-      indexSamples(firstIndexed, samples.length);
-      while (streams.length > 0 && streams[0].centerS < floorS) streams.shift();
+    lastCarX = carX;
+    lastCarZ = carZ;
+
+    if (!t.endless && corridor.size === 0) {
+      // A finite stage's corridor is built once, in full.
+      corridor = corridorTiles(0);
+      for (const key of corridor) {
+        if (!tiles.has(key)) tiles.set(key, buildTile(...parseKey(key)));
+      }
     }
-    const needed = neededTiles(Math.max(0, carS - 450));
-    for (const key of needed) {
-      if (!tiles.has(key)) tiles.set(key, buildTile(...parseKey(key)));
+    if (t.endless && grew) {
+      corridor = corridorTiles(Math.max(0, carS - 450));
+      for (const key of corridor) {
+        if (!tiles.has(key)) tiles.set(key, buildTile(...parseKey(key)));
+      }
     }
+
+    // The car's window: build the nearest missing ground first, a few
+    // tiles a frame, so an excursion streams in instead of hitching.
+    const around = carTiles(carX, carZ);
+    const missing = [...around]
+      .filter((key) => !tiles.has(key))
+      .map((key) => {
+        const [tx, tz] = parseKey(key);
+        return { key, d: Math.hypot((tx + 0.5) * TILE - carX, (tz + 0.5) * TILE - carZ) };
+      })
+      .sort((a, b) => a.d - b.d);
+    for (const { key } of missing.slice(0, BUILD_BUDGET)) {
+      tiles.set(key, buildTile(...parseKey(key)));
+    }
+    if (missing.length > BUILD_BUDGET) lastSyncedS = -Infinity; // come back next frame
+
+    // Drop what neither the corridor nor the car can see anymore.
     for (const key of [...tiles.keys()]) {
-      if (!needed.has(key)) dropTile(key);
+      if (!corridor.has(key) && !around.has(key)) dropTile(key);
     }
   };
 
@@ -383,7 +329,7 @@ export function buildTerrain(track: Track, biome: Biome, waterTexture: THREE.Tex
     waterMat.dispose();
   };
 
-  return { group, heightAt, streams, sync, update, dispose };
+  return { group, field, heightAt, sync, update, dispose };
 }
 
 function parseKey(key: string): [number, number] {

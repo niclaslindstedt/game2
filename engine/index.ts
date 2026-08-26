@@ -47,6 +47,15 @@ export {
   compileStage,
   elevationAt,
   SAMPLE_STEP,
+  createTerrain,
+  computeStreams,
+  carveGround,
+  inStream,
+  LAKE_Y,
+  APRON,
+  type TerrainField,
+  type Stream,
+  type WildObstacle,
   type SegmentPlan,
   type SegmentFeature,
   type TurnSeverity,
@@ -65,3 +74,4 @@ export { botInput, RALLY_BOT, type BotProfile } from "./sim/bot.ts";
 
 // Deterministic utilities shared with tooling.
 export { createRng, type Rng } from "./lib/prng.ts";
+export { hash2, smooth, valueNoise } from "./lib/noise.ts";

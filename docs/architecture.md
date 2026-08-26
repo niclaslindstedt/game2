@@ -20,16 +20,16 @@ Determinism is a hard invariant: everything random draws from the seeded RNG in 
 
 Internally:
 
-| Module          | Owns                                                                                                   |
-| --------------- | ------------------------------------------------------------------------------------------------------ |
-| `game/car.ts`   | The handling model: grounded + airborne steps, the grip-and-slide model, gearboxes                     |
-| `game/defs/`    | Content as data: the car catalog, the global feel tuning                                               |
-| `game/step.ts`  | Run orchestration: phases, progress, respawns, finish, event emission                                  |
-| `game/track.ts` | Car-to-track queries: progress fix, lateral offset, surfaces, lips                                     |
-| `mapgen/`       | The stage rules engine — see [track-generator.md](track-generator.md)                                  |
-| `sim/`          | The bot driver and headless simulator — see [simulation.md](simulation.md)                             |
-| `output.ts`     | The §19.4 central output module (semantic `status/info/warn/error/header/debug` with a pluggable sink) |
-| `version.ts`    | The engine version constant (rewritten by `scripts/update-versions.sh`)                                |
+| Module          | Owns                                                                                                                                                                                         |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `game/car.ts`   | The handling model: grounded + airborne steps, the grip-and-slide model, gearboxes                                                                                                           |
+| `game/defs/`    | Content as data: the car catalog, the global feel tuning                                                                                                                                     |
+| `game/step.ts`  | Run orchestration: phases, progress, respawns, finish, event emission                                                                                                                        |
+| `game/track.ts` | Car-to-track queries: progress fix, lateral offset, surfaces, lips                                                                                                                           |
+| `mapgen/`       | The stage rules engine — see [track-generator.md](track-generator.md) — and the terrain field (`terrain.ts`): the seeded driveable landscape around the road, shared by physics and renderer |
+| `sim/`          | The bot driver and headless simulator — see [simulation.md](simulation.md)                                                                                                                   |
+| `output.ts`     | The §19.4 central output module (semantic `status/info/warn/error/header/debug` with a pluggable sink)                                                                                       |
+| `version.ts`    | The engine version constant (rewritten by `scripts/update-versions.sh`)                                                                                                                      |
 
 ## `pwa/` — the browser shell
 

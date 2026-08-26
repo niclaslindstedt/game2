@@ -106,8 +106,8 @@ export function launch(car: CarState, vy: number, events: GameEvent[], stats: Ru
 }
 
 export type GroundContext = {
-  surface: "gravel" | "water" | "grass";
-  /** Road elevation under the car before this step's move. */
+  surface: "gravel" | "water" | "nature";
+  /** Ground elevation under the car before this step's move. */
   groundY: number;
   /** Road slope dy/ds under the car... */
   slope: number;
@@ -119,6 +119,10 @@ export type GroundContext = {
   windZ: number;
   t: number;
   rng: Rng;
+  /** Off the road only: the terrain height under any world position. When
+   * set, ground-follow and landings ride this instead of extrapolating the
+   * road's slope — a slide across a hillside tracks the hillside. */
+  groundAt?: (x: number, z: number) => number;
 };
 
 /** How much of the wind carries the car this step. A translation, not a
@@ -208,6 +212,10 @@ export function stepGrounded(
   car.u += accel * dt;
   car.u -= spec.brake * input.brake * Math.sign(car.u) * dt;
   car.u -= surfaceDrag * car.u * dt;
+  if (ctx.surface === "nature") {
+    // The rough-ground cap: open nature is fast but never road-fast.
+    car.u -= Math.max(0, car.u - T.surfaces.natureTop) * T.surfaces.natureOverDrag * dt;
+  }
   // Grade: gravity along the road — the hills push back (or push on).
   car.u -= 9.8 * T.hills.gravityAlong * ctx.slope * dt;
   if (Math.abs(car.u) < 0.05 && input.throttle === 0) car.u = 0;
@@ -293,6 +301,21 @@ export function stepGrounded(
   const roadPull = -car.u * car.u * ctx.roadCurve;
   if (car.u > T.air.crestSpeed && roadPull > T.air.gravity * T.air.crestPull) {
     launch(car, car.vy, events, stats);
+  } else if (ctx.groundAt) {
+    // Open ground: ride the terrain under the wheels — a slide carries the
+    // car ACROSS the slope, which the along-heading slope can't see, so the
+    // height is read where the car actually is. A sharp edge (a cliff lip,
+    // a cut bank) falls away faster than the smoothed crest check can read;
+    // at pace it throws the car instead of gluing it down the face.
+    const gy = ctx.groundAt(car.x, car.z);
+    if (car.u > T.air.crestSpeed && gy < car.y - T.air.edgeDrop) {
+      launch(car, car.vy, events, stats);
+    } else {
+      car.y = gy;
+      // Attitude from the smoothed slope: the raw per-step height delta
+      // would pitch-jitter the nose over every ripple of noise.
+      car.vy = roadVy;
+    }
   } else {
     // ctx.groundY is the elevation the step STARTED from; the slope carries
     // it forward to where the car has just moved to.
@@ -338,13 +361,16 @@ export function stepAirborne(
   car.vy -= T.air.gravity * dt;
   car.y += car.vy * dt;
 
-  // The road under where the car has just moved TO — `ctx.groundY` is where
-  // the step started, and on a steep descent that stale height is already
-  // above the road, which lands the car in mid-air. The carry only ever
-  // LOWERS the ground: a rising slope under a car that has just left a lip
-  // is the ramp it is no longer on, and following it up would land the car
-  // the instant it took off.
-  const groundNow = Math.min(ctx.groundY, ctx.groundY + car.u * ctx.slope * dt);
+  // The ground under where the car has just moved TO. Off the road the
+  // terrain answers directly; on the road, `ctx.groundY` is where the step
+  // started, and on a steep descent that stale height is already above the
+  // road, which lands the car in mid-air. The road carry only ever LOWERS
+  // the ground: a rising slope under a car that has just left a lip is the
+  // ramp it is no longer on, and following it up would land the car the
+  // instant it took off.
+  const groundNow = ctx.groundAt
+    ? ctx.groundAt(car.x, car.z)
+    : Math.min(ctx.groundY, ctx.groundY + car.u * ctx.slope * dt);
   if (car.y <= groundNow) {
     car.y = groundNow;
     car.airborne = false;

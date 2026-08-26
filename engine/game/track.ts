@@ -16,7 +16,7 @@ export type TrackFix = {
   lateral: number;
   /** True when the car is beyond the road edge plus the verge. */
   offRoad: boolean;
-  surface: "gravel" | "water" | "grass";
+  surface: "gravel" | "water" | "nature";
   /** Road height under the car, interpolated between samples — the road is
    * a ramp, not a staircase. */
   elevation: number;
@@ -50,7 +50,7 @@ export function locate(track: Track, x: number, z: number, hint: number): TrackF
   const lateral = dx * rightX + dz * rightZ;
   const halfRoad = track.width / 2;
   const offRoad = Math.abs(lateral) > halfRoad + TUNING.offTrack.verge;
-  const surface = offRoad ? "grass" : s.surface;
+  const surface = offRoad ? "nature" : s.surface;
   // Ground height and slope come from BETWEEN the samples. The nearest
   // sample alone quantizes the road to the 2 m sample grid, and on a graded
   // road that staircase reads as the ground falling away — a car that hops

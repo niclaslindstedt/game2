@@ -437,6 +437,16 @@ export function Hud({ snap, flashes, input, onMenu, onRestart, onCamera }: HudPr
           </div>
         )}
         <div className="hud-actions pointer-events-auto">
+          {snap.offRoad && (
+            <button
+              type="button"
+              className="hud-mini hud-mini-alert"
+              onClick={() => input.requestReset()}
+              title="Back to track (B)"
+            >
+              TRACK
+            </button>
+          )}
           <button type="button" className="hud-mini" onClick={onCamera} title="Camera (V)">
             CAM
           </button>

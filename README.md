@@ -11,7 +11,7 @@
 
 ## What
 
-Sideways is an arcade rally game — no account, no download. Pick your stage length (one minute to seven — or endless), your conditions (dawn, day, dusk, or night; clear, rain, or storm), and START. The feel is the point: drifts that are simply what happens when you turn at speed, jumps where the air is committed and slightly out of control, water fords that explode, a seeded wind that leans on the car and rips the exhaust fumes sideways. Stages are point-to-point and generated fresh from a seeded rules engine that respects rally reality: braking zones before hairpins, run-ups before jumps, fords sitting in real dips where a stream crosses the road, grades that climb on the straights and flatten through corners — rolling through a landscape of hillsides, distant mountains, and lakes that glitter in the sun. A co-driver strip calls every corner before it arrives — EASY LEFT, LONG HARD RIGHT — the way rally games always have. The endless stage just keeps generating road from the seed until you stop. Everyone gets the same stage on a given day; every finish rolls into the next one.
+Sideways is an arcade rally game — no account, no download. Pick your stage length (one minute to seven — or endless), your conditions (dawn, day, dusk, or night; clear, rain, or storm), and START. The feel is the point: drifts that are simply what happens when you turn at speed, jumps where the air is committed and slightly out of control, water fords that explode, a seeded wind that leans on the car and rips the exhaust fumes sideways. Stages are point-to-point and generated fresh from a seeded rules engine that respects rally reality: braking zones before hairpins, run-ups before jumps, fords sitting in real dips where a stream crosses the road, grades that climb on the straights and flatten through corners — rolling through a landscape of hillsides, mountains, and lakes that glitter in the sun. And the landscape is not a backdrop: leave the road and drive it — forests, cliff edges that launch the car, streams, boulders and fallen trunks that are really there, all the way to the open sea. Up to ~150 km/h in the wild, ~230 km/h flat out on the road; crash and you're set back on the track. A co-driver strip calls every corner before it arrives — EASY LEFT, LONG HARD RIGHT — the way rally games always have. The endless stage just keeps generating road from the seed until you stop. Everyone gets the same stage on a given day; every finish rolls into the next one.
 
 Two cars ship at launch: the **Vireo GT** (automatic — quick, forgiving) and the **Sable 4WD** (manual — taller gears, looser rear, faster in good hands).
 
@@ -45,7 +45,7 @@ If the install fails on `@niclaslindstedt/oss-framework`, add a GitHub Packages 
 npm run dev
 ```
 
-Open the printed URL — pick stage length, time of day, weather, and car on the pre-race screen, then START into a 3-2-1 countdown. Keyboard: arrows/WASD drive, Space is the handbrake (unsticks the rear), Left Shift burns the finite booster, Q/E shift the manual car, C reopens the race setup, V cycles the camera (chase/hood), R restarts the stage.
+Open the printed URL — pick stage length, time of day, weather, and car on the pre-race screen, then START into a 3-2-1 countdown. Keyboard: arrows/WASD drive, Space is the handbrake (unsticks the rear), Left Shift burns the finite booster, Q/E shift the manual car, C reopens the race setup, V cycles the camera (chase/hood), B resets a lost car back to the track, R restarts the stage.
 
 ## Usage
 

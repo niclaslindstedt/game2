@@ -25,6 +25,9 @@ export type InputManager = {
     boost: boolean;
   };
   requestShift: (dir: 1 | -1) => void;
+  /** Queue a reset-to-track (B key / HUD button) — edge-triggered into the
+   * engine, which respawns the car at its last on-road progress. */
+  requestReset: () => void;
   /** Fired on R (restart) / C (race setup) / V (camera) so the app can react. */
   onAction: (handler: (action: "restart" | "swap" | "camera") => void) => void;
   dispose: () => void;
@@ -35,6 +38,7 @@ export function createInput(target: Window = window): InputManager {
   let steer = 0;
   let shiftUp = false;
   let shiftDown = false;
+  let reset = false;
   let actionHandler: ((action: "restart" | "swap" | "camera") => void) | null = null;
 
   const touch = { steer: 0, throttle: false, brake: false, handbrake: false, boost: false };
@@ -44,6 +48,7 @@ export function createInput(target: Window = window): InputManager {
     down.add(e.code);
     if (e.code === "KeyE" || e.code === "KeyX" || e.code === "ShiftRight") shiftUp = true;
     if (e.code === "KeyQ" || e.code === "KeyZ" || e.code === "ControlRight") shiftDown = true;
+    if (e.code === "KeyB") reset = true;
     if (e.code === "KeyR") actionHandler?.("restart");
     if (e.code === "KeyC") actionHandler?.("swap");
     if (e.code === "KeyV") actionHandler?.("camera");
@@ -77,9 +82,11 @@ export function createInput(target: Window = window): InputManager {
       boost: down.has("ShiftLeft") || touch.boost,
       shiftUp,
       shiftDown,
+      reset,
     };
     shiftUp = false;
     shiftDown = false;
+    reset = false;
     return input;
   };
 
@@ -89,6 +96,9 @@ export function createInput(target: Window = window): InputManager {
     requestShift: (dir) => {
       if (dir === 1) shiftUp = true;
       else shiftDown = true;
+    },
+    requestReset: () => {
+      reset = true;
     },
     onAction: (handler) => {
       actionHandler = handler;

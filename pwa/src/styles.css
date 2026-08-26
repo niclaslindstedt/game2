@@ -123,6 +123,12 @@ body {
   text-shadow: none;
 }
 
+/* The way home from the wild: appears beside the minis while off-road. */
+.hud-mini-alert {
+  background: rgb(160 60 20 / 80%);
+  border-color: rgb(255 210 160 / 80%);
+}
+
 /* ── The co-driver: pacenote calls under the top bar ────────────────────── */
 
 .hud-pace {

@@ -290,6 +290,8 @@ export function App() {
           flash("SPLASH", "info");
         } else if (ev.type === "boostEmpty") {
           flash("BOOSTER SPENT", "bad");
+        } else if (ev.type === "crash") {
+          flash(ev.into === "water" ? "INTO THE WATER" : "CRASHED", "bad");
         } else if (ev.type === "respawn") {
           flash("BACK ON THE ROAD", "bad");
         } else if (ev.type === "finish") {
