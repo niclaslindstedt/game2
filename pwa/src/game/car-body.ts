@@ -614,8 +614,11 @@ function rimFace(b: MeshBuilder, x: number, outward: number, spokes: number, hub
   }
 }
 
-/** One wheel: chunky 12-gon tire wearing a spoked alloy on each face.
- * Axle along x; origin at the wheel center. */
+/** One wheel: chunky 12-gon tire wearing a spoked alloy on each face, plus
+ * tread lugs embedded around the rim. The alloy breaks the face's
+ * rotational symmetry, the lugs break the tread's — together the spin rate
+ * is legible at a glance from any angle. Axle along x; origin at the wheel
+ * center. */
 function buildWheel(spec: CarBodySpec): THREE.BufferGeometry[] {
   const r = spec.wheelRadius;
   const tireGeo = bakeShading(
@@ -630,7 +633,23 @@ function buildWheel(spec: CarBodySpec): THREE.BufferGeometry[] {
   }
   const rimGeo = b.geometry();
   rimGeo.scale(1, r, r);
-  return [tireGeo, rimGeo];
+
+  // Tread lugs: blocks a shade lighter than the tire, riding the rolling
+  // surface so the tire itself visibly turns even seen dead from the side.
+  const geos = [tireGeo, rimGeo];
+  const lugs = 6;
+  for (let i = 0; i < lugs; i++) {
+    const angle = (i / lugs) * Math.PI * 2;
+    geos.push(
+      bakeShading(
+        new THREE.BoxGeometry(spec.wheelWidth + 0.015, 0.06, 0.11)
+          .translate(0, r - 0.01, 0)
+          .rotateX(angle),
+        0x333a44,
+      ),
+    );
+  }
+  return geos;
 }
 
 export function buildCarBody(spec: CarBodySpec): CarBodyParts {

@@ -6,7 +6,7 @@ The handling model (`engine/game/car.ts`, numbers in `engine/game/defs/`) is arc
 
 The slip angle (`atan2(w, |u|)`) is the drift. The state machine:
 
-- **Start** — two ways in: the **handbrake flick** at speed (injects a sideways kick and a yaw impulse — the car snaps sideways immediately), or a **committed steering flick** that pushes slip past the entry threshold. Emits `driftStart`.
+- **Start** — three ways in: the **handbrake flick** at speed (injects a sideways kick and a yaw impulse — the car snaps sideways immediately), a **committed steering flick** that pushes slip past the entry threshold, or — past ~70 km/h — **sharp steering alone** (`TUNING.drift.steerEnterSpeed`): at pace the rear gives up before the nose does and a scaled-down kick steps the tail out, Sega Rally style. Emits `driftStart`.
 - **Hold** — while drifting, lateral grip drops (per-car `driftLat`), the slip self-rotates the car into the slide, and the wheel is the throttle of the slide: steering into it deepens it, releasing lets grip straighten the car, counter-steering exits fast. Two stabilizers keep it a dance instead of a spin:
   - **Saturation** — past ~28° of slip, everything that deepens the slide fades to zero, so held full lock parks the car at a big stable angle rather than spinning out. Only counter-steer keeps full authority.
   - **Lift-to-tighten** — lateral grip scales up as the throttle lifts (arcade weight transfer). On the power the slide runs; breathe and the line tightens. This is the tool against running wide.

@@ -69,16 +69,16 @@ function updateSlip(car: CarState): void {
   car.slip = Math.atan2(car.w, Math.max(1, Math.abs(car.u)));
 }
 
-function startDrift(car: CarState, dir: number, kick: boolean): void {
+function startDrift(car: CarState, dir: number, kick: number): void {
   car.drifting = true;
   car.driftTime = 0;
   car.driftSlipSum = 0;
-  if (kick) {
-    // Handbrake entry: throw the tail out of the steered direction and give
-    // the nose a matching rotation so the car snaps sideways immediately.
-    car.w -= dir * T.drift.kick;
-    car.yawRate += dir * T.drift.yawKick;
-  }
+  // The entry kick throws the tail out of the steered direction and gives
+  // the nose a matching rotation. At full scale (the handbrake) the car
+  // snaps sideways immediately; the speed entry uses a fraction so the
+  // rear steps out instead of snapping.
+  car.w -= dir * T.drift.kick * kick;
+  car.yawRate += dir * T.drift.yawKick * kick;
 }
 
 function endDrift(spec: CarSpec, car: CarState, events: GameEvent[], stats: RunStats): void {
@@ -117,6 +117,9 @@ export function stepGrounded(
   const surfaceGrip = T.surfaces.grip[ctx.surface];
   const surfaceDrag = T.surfaces.drag[ctx.surface];
   const surfacePower = T.surfaces.power[ctx.surface];
+
+  car.steer = input.steer;
+  car.braking = input.brake > 0.2 && Math.abs(car.u) > 3;
 
   stepGearbox(spec, car, input, ctx.t, events);
 
@@ -190,11 +193,17 @@ export function stepGrounded(
   if (!car.drifting) {
     const fast = car.u > T.drift.minSpeed;
     if (fast && input.handbrake) {
-      startDrift(car, Math.sign(input.steer) || 1, true);
+      startDrift(car, Math.sign(input.steer) || 1, 1);
       events.push({ type: "driftStart" });
       stats.driftCount += 1;
     } else if (fast && Math.abs(car.slip) > spec.driftEnter && Math.abs(input.steer) > 0.35) {
-      startDrift(car, Math.sign(input.steer), false);
+      startDrift(car, Math.sign(input.steer), 0);
+      events.push({ type: "driftStart" });
+      stats.driftCount += 1;
+    } else if (car.u > T.drift.steerEnterSpeed && Math.abs(input.steer) > T.drift.steerEnterLock) {
+      // The speed entry: past ~70 km/h a sharp turn IS a drift entry —
+      // grip at the rear gives up before the nose does.
+      startDrift(car, Math.sign(input.steer), T.drift.steerEnterKick);
       events.push({ type: "driftStart" });
       stats.driftCount += 1;
     }
@@ -257,6 +266,8 @@ export function stepAirborne(
   car.airTime += dt;
   stats.airTime += dt;
   car.boosting = false; // no thrust in the air — the velocity is committed
+  car.steer = input.steer;
+  car.braking = false;
 
   car.yawRate += input.steer * T.air.yawAuthority * dt;
   car.yawRate += (ctx.rng.next() - 0.5) * 2 * T.air.turbulence * dt;

@@ -10,6 +10,7 @@ import { clamp } from "../lib/util.ts";
 import type { CarSpec, GameState } from "@engine";
 
 import { buildCarBody } from "./car-body.ts";
+import { createCarDirt } from "./car-dirt.ts";
 import { bodySpecFor } from "./car-styles.ts";
 
 export type CarVisual = {
@@ -24,6 +25,7 @@ export function buildCar(spec: CarSpec): CarVisual {
   const bodySpec = bodySpecFor(spec);
   const body = buildCarBody(bodySpec);
   group.add(body.group);
+  const dirt = createCarDirt(body.group);
 
   const length = bodySpec.profile[0].z - bodySpec.profile[bodySpec.profile.length - 1].z;
   const shadow = new THREE.Mesh(
@@ -34,6 +36,7 @@ export function buildCar(spec: CarSpec): CarVisual {
 
   let roll = 0;
   let pitch = 0;
+  let steerVisual = 0;
   const update = (state: GameState, dt: number): void => {
     const car = state.car;
     group.position.set(car.x, car.y, car.z);
@@ -53,14 +56,17 @@ export function buildCar(spec: CarSpec): CarVisual {
     body.group.rotation.z = roll;
     body.group.rotation.x = pitch;
 
-    // Wheels: spin with speed, front pair follows the slip for the
-    // counter-steer look.
+    // Wheels: spin with road speed, front pair points where the driver
+    // points them — counter-steer in a drift shows because the input does.
     const spin = (car.u * dt) / bodySpec.wheelRadius;
-    const steer = clamp(-car.slip * 1.4, -0.6, 0.6);
+    const wantSteer = clamp(car.steer * 0.55, -0.7, 0.7);
+    steerVisual += (wantSteer - steerVisual) * clamp(14 * dt, 0, 1);
     for (let i = 0; i < body.wheelSpin.length; i++) {
       body.wheelSpin[i].rotation.x += spin;
-      if (i < 2) body.wheelGroups[i].rotation.y = steer;
+      if (i < 2) body.wheelGroups[i].rotation.y = steerVisual;
     }
+
+    dirt.update(state, dt);
 
     // Blob shadow: pinned to the ground under the car, fading with height.
     const height = Math.max(0, car.y - groundYUnder(state));

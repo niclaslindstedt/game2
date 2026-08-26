@@ -57,6 +57,8 @@ function freshCar(): CarState {
     shiftCutUntil: 0,
     boostLeft: T.boost.capacity,
     boosting: false,
+    steer: 0,
+    braking: false,
   };
 }
 
