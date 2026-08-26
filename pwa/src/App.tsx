@@ -38,6 +38,9 @@ function takeSnapshot(state: GameState, finishTime: number | null): HudSnapshot 
     carName: state.spec.name,
     offRoad: state.offRoad,
     finishTime,
+    boostLeft: state.car.boostLeft,
+    boostMax: TUNING.boost.capacity,
+    boosting: state.car.boosting,
   };
 }
 
@@ -120,6 +123,8 @@ export function App() {
           );
         } else if (ev.type === "splash") {
           flash("SPLASH", "info");
+        } else if (ev.type === "boostEmpty") {
+          flash("BOOSTER SPENT", "bad");
         } else if (ev.type === "respawn") {
           flash("BACK ON THE ROAD", "bad");
         } else if (ev.type === "finish") {

@@ -4,8 +4,10 @@
 // is not), and owns the touch controls, which write straight into the
 // input manager between snapshots.
 
+import { useRef } from "react";
+
 import type { InputManager } from "./input.ts";
-import { formatTime } from "../lib/util.ts";
+import { clamp, formatTime } from "../lib/util.ts";
 
 export type HudSnapshot = {
   phase: "countdown" | "racing" | "finished";
@@ -22,6 +24,10 @@ export type HudSnapshot = {
   carName: string;
   offRoad: boolean;
   finishTime: number | null;
+  /** Booster tank readout, seconds left / full tank. */
+  boostLeft: number;
+  boostMax: number;
+  boosting: boolean;
 };
 
 export type HudFlash = { id: number; text: string; tone: "good" | "bad" | "info" };
@@ -34,6 +40,168 @@ type HudProps = {
   onRestart: () => void;
   onCamera: () => void;
 };
+
+/** Capture the pointer so a drag that leaves the zone keeps steering; a
+ * pointer that cannot be captured (synthetic, already released) is fine —
+ * the zone still tracks it by id. */
+function capturePointer(e: { currentTarget: EventTarget | null; pointerId: number }): void {
+  try {
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  } catch {
+    /* see above */
+  }
+}
+
+/** Thumb travel (px) from the anchor for full steering lock — the wheel's
+ * whole throw. Long enough that holding a line is a push, not a switch. */
+const WHEEL_REACH_PX = 70;
+/** Drag (px) from the anchor before a pedal gesture beats plain gas. */
+const PEDAL_DEAD_PX = 28;
+
+/** The left thumb: touching anywhere anchors a steering wheel under the
+ * finger; dragging sideways turns it — rotation tracks the drag, so a small
+ * push is a small steer — and releasing recenters. Screen-space: right = +1
+ * (input.ts flips the sign for the engine once). Written straight into the
+ * input manager and the wheel's DOM from the pointer events; the 12 Hz HUD
+ * re-render never touches these styles. */
+function SteerZone({ touch }: { touch: InputManager["touch"] }) {
+  const wheelRef = useRef<HTMLDivElement>(null);
+  const pointerRef = useRef<number | null>(null);
+  const originRef = useRef(0);
+
+  const setSteer = (value: number): void => {
+    touch.steer = value;
+    wheelRef.current?.style.setProperty("--turn", `${(value * 120).toFixed(1)}deg`);
+  };
+  const release = (e: { pointerId: number }): void => {
+    if (e.pointerId !== pointerRef.current) return;
+    pointerRef.current = null;
+    setSteer(0);
+    if (wheelRef.current) wheelRef.current.style.display = "none";
+  };
+
+  return (
+    <div
+      className="hud-zone hud-zone-left"
+      onPointerDown={(e) => {
+        // The first finger owns the wheel; a second touch on this half is
+        // ignored rather than re-anchoring the steering under the first.
+        if (pointerRef.current !== null) return;
+        pointerRef.current = e.pointerId;
+        originRef.current = e.clientX;
+        capturePointer(e);
+        const wheel = wheelRef.current;
+        if (wheel) {
+          const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          wheel.style.left = `${e.clientX - box.left}px`;
+          wheel.style.top = `${e.clientY - box.top}px`;
+          wheel.style.display = "block";
+        }
+        setSteer(0);
+      }}
+      onPointerMove={(e) => {
+        if (e.pointerId !== pointerRef.current) return;
+        setSteer(clamp((e.clientX - originRef.current) / WHEEL_REACH_PX, -1, 1));
+      }}
+      onPointerUp={release}
+      onPointerCancel={release}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <div ref={wheelRef} className="hud-wheel" aria-hidden="true">
+        <svg className="hud-wheel-svg" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="43" fill="none" stroke="currentColor" strokeWidth="11" />
+          <path
+            d="M50 50 L50 89 M50 50 L16 32 M50 50 L84 32"
+            stroke="currentColor"
+            strokeWidth="9"
+            strokeLinecap="round"
+          />
+          <circle cx="50" cy="50" r="10" fill="currentColor" />
+          <rect x="46" y="1" width="8" height="12" rx="2" fill="currentColor" />
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+type PedalMode = "gas" | "brake" | "boost" | "handbrake";
+
+/** The right thumb: touching anywhere is GAS; dragging up from the anchor
+ * brakes, down burns the booster, right pulls the handbrake (gas stays on
+ * through boost and handbrake — that is what makes the handbrake a drift
+ * tool). Sliding back inside the deadzone returns to plain gas; releasing
+ * lets everything go. Three anchored hint arrows light the active gesture. */
+function PedalZone({ touch }: { touch: InputManager["touch"] }) {
+  const hintRef = useRef<HTMLDivElement>(null);
+  const pointerRef = useRef<number | null>(null);
+  const originRef = useRef({ x: 0, y: 0 });
+
+  const setMode = (mode: PedalMode | null): void => {
+    touch.throttle = mode !== null && mode !== "brake";
+    touch.brake = mode === "brake";
+    touch.boost = mode === "boost";
+    touch.handbrake = mode === "handbrake";
+    const hint = hintRef.current;
+    if (hint) hint.dataset.mode = mode ?? "";
+  };
+  const release = (e: { pointerId: number }): void => {
+    if (e.pointerId !== pointerRef.current) return;
+    pointerRef.current = null;
+    setMode(null);
+    if (hintRef.current) hintRef.current.style.display = "none";
+  };
+
+  return (
+    <div
+      className="hud-zone hud-zone-right"
+      onPointerDown={(e) => {
+        if (pointerRef.current !== null) return;
+        pointerRef.current = e.pointerId;
+        originRef.current = { x: e.clientX, y: e.clientY };
+        capturePointer(e);
+        const hint = hintRef.current;
+        if (hint) {
+          const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          hint.style.left = `${e.clientX - box.left}px`;
+          hint.style.top = `${e.clientY - box.top}px`;
+          hint.style.display = "block";
+        }
+        setMode("gas");
+      }}
+      onPointerMove={(e) => {
+        if (e.pointerId !== pointerRef.current) return;
+        const dx = e.clientX - originRef.current.x;
+        const dy = e.clientY - originRef.current.y;
+        // Dominant axis picks the gesture; a drag left means nothing and
+        // stays gas, so a sloppy thumb never brakes by accident.
+        let mode: PedalMode = "gas";
+        if (Math.max(Math.abs(dx), Math.abs(dy)) >= PEDAL_DEAD_PX) {
+          if (Math.abs(dy) >= Math.abs(dx)) mode = dy < 0 ? "brake" : "boost";
+          else if (dx > 0) mode = "handbrake";
+        }
+        setMode(mode);
+      }}
+      onPointerUp={release}
+      onPointerCancel={release}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <div ref={hintRef} className="hud-pedal-hint" aria-hidden="true">
+        <span className="hud-hint hud-hint-up">
+          <i className="hud-hint-arrow hud-hint-arrow-up" />
+          BRAKE
+        </span>
+        <span className="hud-hint hud-hint-down">
+          <i className="hud-hint-arrow hud-hint-arrow-down" />
+          BOOST
+        </span>
+        <span className="hud-hint hud-hint-right">
+          <i className="hud-hint-arrow hud-hint-arrow-right" />
+          DRIFT
+        </span>
+      </div>
+    </div>
+  );
+}
 
 function TouchButton({
   label,
@@ -124,66 +292,40 @@ export function Hud({ snap, flashes, input, onSwapCar, onRestart, onCamera }: Hu
         </span>
         {snap.drifting && <span className="hud-drift">DRIFT {Math.round(snap.driftScore)}</span>}
         {snap.offRoad && <span className="hud-off">OFF ROAD</span>}
+        <span className={`hud-boostbar ${snap.boosting ? "hud-boostbar-hot" : ""}`}>
+          <span className="hud-boostbar-label">BOOST</span>
+          <span className="hud-boostbar-track">
+            <span
+              className="hud-boostbar-fill"
+              style={{ width: `${((snap.boostLeft / snap.boostMax) * 100).toFixed(1)}%` }}
+            />
+          </span>
+        </span>
       </div>
 
-      {/* Touch controls — steering pads left, pedals right. */}
-      <div className="hud-touch pointer-events-auto">
-        <div className="hud-touch-left">
-          <TouchButton
-            label="◀"
-            className="hud-steer"
-            onPress={() => (touch.steer = -1)}
-            onRelease={() => {
-              if (touch.steer < 0) touch.steer = 0;
-            }}
-          />
-          <TouchButton
-            label="▶"
-            className="hud-steer"
-            onPress={() => (touch.steer = 1)}
-            onRelease={() => {
-              if (touch.steer > 0) touch.steer = 0;
-            }}
-          />
-        </div>
-        <div className="hud-touch-right">
-          {snap.gearbox === "manual" && (
-            <div className="hud-gears">
-              <TouchButton
-                label="−"
-                className="hud-shift"
-                onPress={() => input.requestShift(-1)}
-                onRelease={() => undefined}
-              />
-              <TouchButton
-                label="+"
-                className="hud-shift"
-                onPress={() => input.requestShift(1)}
-                onRelease={() => undefined}
-              />
-            </div>
-          )}
-          <TouchButton
-            label="DRIFT"
-            className="hud-hand"
-            onPress={() => (touch.handbrake = true)}
-            onRelease={() => (touch.handbrake = false)}
-          />
-          <div className="hud-pedals">
+      {/* Touch controls — the left half of the screen anchors a steering
+          wheel under the thumb, the right half is the gesture pedal (gas /
+          brake / boost / handbrake). Manual gear taps float above the
+          pedal zone. */}
+      <div className="hud-touch">
+        <SteerZone touch={touch} />
+        <PedalZone touch={touch} />
+        {snap.gearbox === "manual" && (
+          <div className="hud-gears">
             <TouchButton
-              label="BRAKE"
-              className="hud-brake"
-              onPress={() => (touch.brake = true)}
-              onRelease={() => (touch.brake = false)}
+              label="−"
+              className="hud-shift"
+              onPress={() => input.requestShift(-1)}
+              onRelease={() => undefined}
             />
             <TouchButton
-              label="GAS"
-              className="hud-gas"
-              onPress={() => (touch.throttle = true)}
-              onRelease={() => (touch.throttle = false)}
+              label="+"
+              className="hud-shift"
+              onPress={() => input.requestShift(1)}
+              onRelease={() => undefined}
             />
           </div>
-        </div>
+        )}
       </div>
 
       <div className="hud-build">{__BUILD_LABEL__}</div>

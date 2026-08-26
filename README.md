@@ -45,7 +45,7 @@ If the install fails on `@niclaslindstedt/oss-framework`, add a GitHub Packages 
 npm run dev
 ```
 
-Open the printed URL — the game starts immediately after a 3-2-1 countdown. Keyboard: arrows/WASD drive, Space is the handbrake (the drift button), Q/E shift the manual car, C swaps car, V cycles the camera (chase/hood), R restarts the stage.
+Open the printed URL — the game starts immediately after a 3-2-1 countdown. Keyboard: arrows/WASD drive, Space is the handbrake (the drift button), Left Shift burns the finite booster, Q/E shift the manual car, C swaps car, V cycles the camera (chase/hood), R restarts the stage.
 
 ## Usage
 
@@ -63,7 +63,7 @@ Open the printed URL — the game starts immediately after a 3-2-1 countdown. Ke
 | `make check-seo`   | Build + structural SEO/PWA/bundle-budget assertions               |
 | `make hooks`       | Install the pre-commit / commit-msg git hooks                     |
 
-**On the phone:** the game is an installable PWA — open [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/), then "Add to Home Screen" (iOS Safari: Share → Add to Home Screen). It launches fullscreen, works offline, plays in portrait or landscape, and prompts in-app when a new build ships. Touch controls: steer pads bottom-left; GAS, BRAKE, and the DRIFT (handbrake) button bottom-right.
+**On the phone:** the game is an installable PWA — open [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/), then "Add to Home Screen" (iOS Safari: Share → Add to Home Screen). It launches fullscreen, works offline, plays in portrait or landscape, and prompts in-app when a new build ships. Touch controls: the left half of the screen anchors a steering wheel under your thumb (drag sideways to turn); the right half is the pedal — touch for gas, drag up to brake, down to boost, right for the handbrake.
 
 ## Configuration
 

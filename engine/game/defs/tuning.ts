@@ -60,6 +60,19 @@ export const TUNING = {
     power: { gravel: 1.0, water: 0.7, grass: 0.55 },
   },
 
+  boost: {
+    /** The whole tank, seconds of burn. Spent is spent — it never refills,
+     * not even on respawn; rationing it across the stage is the game. */
+    capacity: 5,
+    /** Extra forward acceleration while burning, m/s² — on top of engine
+     * torque, unaffected by gearing or surface. */
+    accel: 9,
+    /** Boost pushes past gearing up to this factor of the car's final
+     * gear top, m/m — the thrust fades to zero approaching that cap so the
+     * top end stretches instead of breaking. */
+    overrun: 1.12,
+  },
+
   offTrack: {
     /** Lateral overhang past the road edge that still counts as verge, m. */
     verge: 1.5,

@@ -55,6 +55,8 @@ function freshCar(): CarState {
     driftSlipSum: 0,
     gear: 0,
     shiftCutUntil: 0,
+    boostLeft: T.boost.capacity,
+    boosting: false,
   };
 }
 

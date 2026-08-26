@@ -18,6 +18,9 @@ export type CarInput = {
   /** 0..1. */
   brake: number;
   handbrake: boolean;
+  /** Hold to burn the finite booster (TUNING.boost); no-op when the tank
+   * is dry or the car is airborne. */
+  boost: boolean;
   /** Edge-triggered: consumed by the step they arrive in (manual box). */
   shiftUp: boolean;
   shiftDown: boolean;
@@ -28,6 +31,7 @@ export const NEUTRAL_INPUT: CarInput = {
   throttle: 0,
   brake: 0,
   handbrake: false,
+  boost: false,
   shiftUp: false,
   shiftDown: false,
 };
@@ -54,6 +58,10 @@ export type CarState = {
   gear: number;
   /** Sim time until which throttle is cut by an engaging shift. */
   shiftCutUntil: number;
+  /** Boost seconds left in the tank — finite for the whole run. */
+  boostLeft: number;
+  /** True while the booster is burning this step (renderer/HUD readout). */
+  boosting: boolean;
 };
 
 export type GameEvent =
@@ -64,6 +72,8 @@ export type GameEvent =
   | { type: "landing"; airTime: number; clean: boolean }
   | { type: "splash" }
   | { type: "shift"; gear: number }
+  | { type: "boostStart" }
+  | { type: "boostEmpty" }
   | { type: "offRoad"; off: boolean }
   | { type: "respawn" }
   | { type: "finish"; time: number };
