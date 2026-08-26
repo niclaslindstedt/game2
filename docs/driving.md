@@ -21,15 +21,16 @@ one continuous response rather than two modes.
   (`driftYaw`) and the slip starts turning the nose itself — sustained by
   steering INTO the slide, so releasing the wheel stops feeding it and
   counter-steer both cuts the deepening and steers the catch.
-- **Power oversteer** — these are rear-wheel-drive cars, and the drift is
-  where it shows: while the throttle is down, the driven axle keeps feeding
-  the slide (`TUNING.grip.powerYaw`, ungated by saturation). A drift never
-  ends on its own with the power on — the car parks sideways and stays
-  there until the driver counter-steers or lifts. The catch carries yaw
-  momentum (`yawResponse.slide` is deliberately low), so an over-held
-  counter swings the pendulum: the slip crosses centre into a second drift
-  the other way, which needs its own counter. Balancing that dance on the
-  wheel is the game.
+- **Power oversteer** — these are rear-wheel-drive cars, and the EXIT is
+  where it shows: steered into the slide the corner behaves classically,
+  but once the wheel stops asking for the angle the driven axle keeps
+  feeding it (`TUNING.grip.powerYaw`, ungated by saturation, faded by
+  steering into the slide). So a drift never settles on its own with the
+  power on — coming out of the corner takes a real counter-steer, or a
+  lift. The catch carries yaw momentum (`yawResponse.slide` sits a touch
+  under the grip-matched rate), so an over-held counter swings the
+  pendulum: the slip crosses centre into a second drift the other way,
+  which needs its own counter. Balancing that on the wheel is the game.
 - Two stabilizers keep it a dance instead of an instant spin:
   - **Saturation** — past ~26° of slip everything that deepens the slide
     fades to zero except the power's own oversteer, so a breathed slide
