@@ -1,0 +1,37 @@
+name: lighthouse
+
+# Scheduled measured Lighthouse audit against the built app, with thresholds
+# enforced via `.github/lighthouse/lighthouserc.json` (OSS_SPEC §11.3.10 /
+# §11.4.7). The measured signals are advisory because shared-runner variance
+# makes them unsuitable as PR gates; deterministic SEO and bundle-budget
+# failures remain in `seo.yml`.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 6 * * 1"
+
+permissions:
+  contents: read
+  # npm ci resolves @niclaslindstedt/oss-framework from GitHub Packages.
+  packages: read
+
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@niclaslindstedt"
+      - run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: npm run build --workspace pwa
+      - run: npm install --global @lhci/cli@0.14.x
+      - run: lhci autorun --config=./.github/lighthouse/lighthouserc.json

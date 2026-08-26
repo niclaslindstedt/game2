@@ -1,0 +1,40 @@
+name: version-bump
+
+# The OSS_SPEC §10.3 release entry point. In this repo the version bump and
+# the release live in ONE dispatched run (release.yml computes the bump from
+# the .changes/unreleased/ fragments, tags, publishes, and chains the Pages
+# deploy — the pattern copied from the sibling game repo), so this workflow
+# is a thin dispatcher: it exists so the documented "run version-bump, then
+# release picks the tag up" contract has its named entry point, and simply
+# starts release.yml with the same bump input.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump type (auto detects from the .changes/unreleased/ fragments)"
+        required: true
+        default: auto
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+
+permissions:
+  # Dispatching another workflow run is a write on the actions surface.
+  actions: write
+
+jobs:
+  dispatch-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch the release workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh workflow run release.yml --ref main -f bump="${{ inputs.bump }}"
+          echo "Dispatched release.yml with bump=${{ inputs.bump }} — the" \
+               "release run computes the version, tags, and deploys."

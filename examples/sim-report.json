@@ -1,0 +1,86 @@
+[
+  {
+    "seed": 42,
+    "carId": "compact",
+    "finished": true,
+    "time": 60.04999999999723,
+    "trackLength": 1583.7113889848752,
+    "stats": {
+      "driftCount": 3,
+      "driftTime": 8.666666666666815,
+      "cleanDrifts": 3,
+      "driftScore": 58.681678397332554,
+      "jumps": 0,
+      "airTime": 0,
+      "cleanLandings": 0,
+      "splashes": 1,
+      "offRoadTime": 0,
+      "respawns": 0,
+      "topSpeed": 35.038963803119174
+    },
+    "digest": "a2ac9f48"
+  },
+  {
+    "seed": 42,
+    "carId": "classic",
+    "finished": true,
+    "time": 59.999999999997236,
+    "trackLength": 1583.7113889848752,
+    "stats": {
+      "driftCount": 3,
+      "driftTime": 8.925000000000134,
+      "cleanDrifts": 3,
+      "driftScore": 61.99632603117727,
+      "jumps": 0,
+      "airTime": 0,
+      "cleanLandings": 0,
+      "splashes": 1,
+      "offRoadTime": 0,
+      "respawns": 0,
+      "topSpeed": 37.084258964642885
+    },
+    "digest": "336f0cb5"
+  },
+  {
+    "seed": 99,
+    "carId": "compact",
+    "finished": true,
+    "time": 69.17500000000112,
+    "trackLength": 1858.5104056038358,
+    "stats": {
+      "driftCount": 3,
+      "driftTime": 9.475000000000103,
+      "cleanDrifts": 3,
+      "driftScore": 60.63810496910794,
+      "jumps": 2,
+      "airTime": 1.274999999999998,
+      "cleanLandings": 2,
+      "splashes": 1,
+      "offRoadTime": 0,
+      "respawns": 0,
+      "topSpeed": 34.076292997956195
+    },
+    "digest": "9f41084c"
+  },
+  {
+    "seed": 99,
+    "carId": "classic",
+    "finished": true,
+    "time": 69.26666666666786,
+    "trackLength": 1858.5104056038358,
+    "stats": {
+      "driftCount": 5,
+      "driftTime": 9.533333333333433,
+      "cleanDrifts": 3,
+      "driftScore": 65.41737019993403,
+      "jumps": 2,
+      "airTime": 1.274999999999998,
+      "cleanLandings": 2,
+      "splashes": 1,
+      "offRoadTime": 0,
+      "respawns": 0,
+      "topSpeed": 36.540416494699016
+    },
+    "digest": "1d60128b"
+  }
+]
