@@ -52,6 +52,11 @@ export type CarState = {
   slip: number;
   airborne: boolean;
   airTime: number;
+  /** Body roll, radians — positive lifts the car's right side. Only the air
+   * ever puts any in: the ground unwinds it. */
+  roll: number;
+  /** Roll rate, rad/s — set by the take-off, spent in the air. */
+  rollRate: number;
   /** How sideways the car is this step, 0..1 — 0 gripping, 1 fully sliding
    * (renderer/HUD readout; the handling model computes it every step). */
   slide: number;

@@ -63,16 +63,27 @@ export const STAGE_RULES = {
    * Sega Rally style — the road is a boulevard through the landscape. */
   roadWidth: 16,
 
-  /** Rolling elevation, layered under the feature ramps: the road breathes
-   * in three seeded sine layers — long climbs, medium rollers, and surface
-   * bumps you feel more than see. Amplitude/wavelength in meters; combined
-   * worst-case grade stays under ~18% so a crest taken flat never reads as
-   * a glitch launch. Applied to GENERATED stages only — synthetic test
+  /** Rolling elevation, laid under the feature ramps: seeded value NOISE
+   * summed over a few octaves along arc length, so no two hills on a stage
+   * are the same shape and none of them repeat. Sine layers do repeat —
+   * every rise identical to the last — and a layer shorter than a few dozen
+   * meters is not a hill at all but a washboard, a grade that flips sign
+   * every ripple across a road sampled every 2 m. Hence: one amplitude, one
+   * length, and octaves that only ever get SMALLER than it. Per-stage
+   * character is drawn from these ranges, so a seed can be near-flat or
+   * genuinely hilly. Applied to GENERATED stages only — synthetic test
    * tracks stay flat rigs. */
   elevation: {
-    long: { amplitude: { min: 4, max: 7 }, wavelength: { min: 420, max: 640 } },
-    roll: { amplitude: { min: 1.2, max: 2.4 }, wavelength: { min: 130, max: 240 } },
-    bump: { amplitude: { min: 0.04, max: 0.09 }, wavelength: { min: 9, max: 16 } },
+    /** Height of the longest wave, meters (peak to trough is twice this). */
+    amplitude: { min: 3, max: 7 },
+    /** Length of that longest wave, meters. */
+    wavelength: { min: 450, max: 750 },
+    /** How many further octaves ride under it, each half as long... */
+    octaves: 4,
+    /** ...and this much of the amplitude. Well under 0.5, so the shorter the
+     * wave the gentler its grade — that is what keeps the road rolling
+     * rather than rippling. */
+    roughness: { min: 0.28, max: 0.38 },
   },
 
   /** R6 — jump placement. */
@@ -92,11 +103,14 @@ export const STAGE_RULES = {
     clearAfterJump: 50, // meters past a lip before water may start
   },
 
-  /** R8 — crest placement. */
+  /** R8 — crest placement. A blind brow is a long, gentle rise that hides
+   * what is past it, not a ramp: the height/length ratio here keeps its
+   * steepest grade around 13%, in the same band as the rolling ground it
+   * sits on. */
   crest: {
     minStraight: 70,
-    height: { min: 1.5, max: 3.5 },
-    length: { min: 50, max: 80 },
+    height: { min: 1.2, max: 2.6 },
+    length: { min: 60, max: 100 },
   },
 
   /** R9 — world half-extent, meters; soft margin where turn-back kicks in. */

@@ -8,8 +8,8 @@ import { createRng } from "../lib/prng.ts";
 import { compileTrack } from "../mapgen/index.ts";
 import { carById } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
-import { stepAirborne, stepGrounded, type GroundContext } from "./car.ts";
-import { crossedLip, locate, slopeAt } from "./track.ts";
+import { launch, stepAirborne, stepGrounded, type GroundContext } from "./car.ts";
+import { crossedLip, curvatureAt, locate, slopeAt } from "./track.ts";
 import {
   type CarInput,
   type CarState,
@@ -52,6 +52,8 @@ function freshCar(): CarState {
     slip: 0,
     airborne: false,
     airTime: 0,
+    roll: 0,
+    rollRate: 0,
     slide: 0,
     drifting: false,
     gear: 0,
@@ -149,6 +151,8 @@ function respawn(state: GameState, events: GameEvent[]): void {
   car.vy = 0;
   car.yawRate = 0;
   car.airborne = false;
+  car.roll = 0;
+  car.rollRate = 0;
   car.slide = 0;
   car.drifting = false;
   state.offRoad = false;
@@ -186,20 +190,18 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // Locate against the centerline BEFORE the move to know the ground ahead;
   // the fix after the move drives progress, lip detection, and respawn.
   const preFix = locate(track, car.x, car.z, state.progressIndex);
-  // The ground the car is asked to follow, now and a beat ahead — the pair
-  // is what decides whether a brow throws it. A jump lip inside that
-  // lookahead is NOT a brow: its drop belongs to the ramp launch below, and
-  // reading it here would fire a stutter of hops on the run-up instead.
-  const aheadIndex = Math.min(
-    track.samples.length - 1,
-    preFix.index + Math.round((car.u * T.air.crestLook) / track.step),
-  );
-  const lipAhead = crossedLip(track, preFix.index, aheadIndex) >= 0;
+  // How sharply the road brows under the car — what decides whether it
+  // throws the car. A jump lip anywhere in that window is NOT a brow: its
+  // drop belongs to the ramp launch below, and reading it here would fire a
+  // stutter of hops on the run-up instead.
+  const reach = Math.max(1, Math.round(T.air.crestSpan / track.step));
+  const lipNear =
+    crossedLip(track, Math.max(-1, preFix.index - reach - 1), preFix.index + reach) >= 0;
   const ctx: GroundContext = {
     surface: state.offRoad ? "grass" : preFix.surface,
     groundY: preFix.elevation,
     slope: preFix.slope,
-    slopeAhead: lipAhead ? preFix.slope : slopeAt(track, aheadIndex),
+    roadCurve: lipNear ? 0 : curvatureAt(track, preFix.index, T.air.crestSpan),
     windX: state.wind.x,
     windZ: state.wind.z,
     t: state.t,
@@ -224,12 +226,13 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   if (!car.airborne && fix.index > prevIndex) {
     const lipIndex = crossedLip(track, prevIndex, fix.index);
     if (lipIndex >= 0 && car.u > 6) {
-      car.airborne = true;
-      car.airTime = 0;
       car.y = track.samples[lipIndex].elevation;
-      car.vy = Math.max(0.5, car.u * slopeAt(track, lipIndex) * T.air.launchScale);
-      events.push({ type: "takeoff", vy: car.vy });
-      state.stats.jumps += 1;
+      launch(
+        car,
+        Math.max(0.5, car.u * slopeAt(track, lipIndex) * T.air.launchScale),
+        events,
+        state.stats,
+      );
     }
   }
 

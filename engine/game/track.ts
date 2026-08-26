@@ -68,7 +68,6 @@ export function locate(track: Track, x: number, z: number, hint: number): TrackF
 function clampIndex(samples: { length: number }, index: number): number {
   return Math.min(samples.length - 1, Math.max(0, index));
 }
-}
 
 /** True when a jump lip sits between the two progress positions. */
 export function crossedLip(track: Track, fromIndex: number, toIndex: number): number {
@@ -76,6 +75,24 @@ export function crossedLip(track: Track, fromIndex: number, toIndex: number): nu
     if (track.samples[i].jump) return i;
   }
   return -1;
+}
+
+/** Vertical curvature of the road at a sample, 1/m — negative over a brow,
+ * positive through a dip. Measured over a baseline WIDER than the bump layer
+ * the generator lays under every stage (`R.elevation.bump`, ~9–16 m): a
+ * short window reads that road TEXTURE as a series of launches at pace, when
+ * what decides a takeoff is the shape of the hill. */
+export function curvatureAt(track: Track, index: number, span: number): number {
+  const reach = Math.max(1, Math.round(span / track.step));
+  const back = track.samples[clampIndex(track.samples, index - reach)];
+  const mid = track.samples[index];
+  const fwd = track.samples[clampIndex(track.samples, index + reach)];
+  const behind = mid.s - back.s;
+  const ahead = fwd.s - mid.s;
+  if (behind < 1e-6 || ahead < 1e-6) return 0;
+  const rise = (fwd.elevation - mid.elevation) / ahead;
+  const fall = (mid.elevation - back.elevation) / behind;
+  return (2 * (rise - fall)) / (behind + ahead);
 }
 
 /** Approximate road slope (dy/ds) at a sample, from the ground behind it —

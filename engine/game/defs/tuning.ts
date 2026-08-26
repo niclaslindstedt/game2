@@ -69,15 +69,15 @@ export const TUNING = {
     /** Below this speed the car stays glued to the road however fast the
      * ground falls away — only pace launches you off a crest, m/s. */
     crestSpeed: 12,
-    /** How far ahead (seconds of travel) the car asks whether it can still
-     * follow the road down. Long enough that a brow either throws the car
-     * properly or not at all — comparing one 120 Hz frame to the next turns
-     * every gentle crest into a stutter of one-frame hops. */
-    crestLook: 0.15,
-    /** How much harder than gravity the road has to pull the car down over
-     * that look before it actually leaves the ground. A brow the car only
-     * just outruns would otherwise separate by a fraction of a millimetre
-     * and land again next frame — a stutter of takeoffs and landings. */
+    /** Baseline the road's vertical curvature is measured over, m. Wider
+     * than the generator's bump layer, so a brow is judged by the shape of
+     * the HILL and not by the road's texture — a short baseline turns every
+     * ripple at pace into a one-frame hop. */
+    crestSpan: 12,
+    /** How much harder than gravity the road has to pull the car down before
+     * it actually leaves the ground (`u²·curvature` against `g`). A brow the
+     * car only just outruns would otherwise separate by a fraction of a
+     * millimetre and land again next frame. */
     crestPull: 1.4,
     /** Steering yaw authority while airborne, rad/s — barely any. */
     yawAuthority: 0.35,
@@ -85,6 +85,26 @@ export const TUNING = {
     turbulence: 1.4,
     /** Air drag on forward speed, 1/s — flight carries. */
     drag: 0.02,
+    /** A car that leaves the ground crossed up trips over its outside
+     * wheels. The roll it takes into the air is its sideways speed times
+     * this... */
+    rollFromSlide: 0.055,
+    /** ...plus the rotation already in the body times this, rad/s per rad/s.
+     * Straight and level flies flat; properly sideways goes a long way over,
+     * and the unluckiest launches go all the way round. */
+    rollFromYaw: 0.5,
+    /** Random roll torque in flight, rad/s² — the same seeded turbulence
+     * that unsettles the nose. */
+    rollTurbulence: 0.5,
+    /** Roll damping in the air, 1/s — the body keeps most of what it took. */
+    rollDamp: 0.25,
+    /** How fast the ground unwinds body roll, 1/s. It settles toward the
+     * NEAREST upright, so a car already most of the way over finishes the
+     * roll rather than rewinding it. */
+    rollRecover: 5,
+    /** Roll past this at touchdown means the car came down on its side —
+     * a sloppy landing however straight the nose was, rad. */
+    rollLandLimit: 0.7,
     /** Landing slip beyond this scrubs speed and wobbles the car, rad. */
     cleanSlipLimit: 0.24,
     /** Speed kept on a clean landing vs a sloppy one (fractions). */

@@ -3,8 +3,8 @@
 // CarBodySpec (car-body.ts builds it, car-styles.ts shapes it), plus the
 // one visual that sells the jump — a blob shadow that stays on the ground
 // and shrinks while the car is airborne. Attitude (the pitch of the road
-// and of the flight, plus a wobble in the air) is applied to the body
-// group; the physics owns the position and heading.
+// and of the flight, plus the roll a take-off put in the body) is applied
+// to the body group; the physics owns the position and heading.
 
 import * as THREE from "three";
 import { clamp } from "../lib/util.ts";
@@ -35,7 +35,6 @@ export function buildCar(spec: CarSpec): CarVisual {
   );
   shadow.rotation.x = -Math.PI / 2;
 
-  let roll = 0;
   let pitch = 0;
   let steerVisual = 0;
   const update = (state: GameState, dt: number): void => {
@@ -43,11 +42,12 @@ export function buildCar(spec: CarSpec): CarVisual {
     group.position.set(car.x, car.y, car.z);
     group.rotation.y = car.heading;
 
-    // Attitude is PITCH, plus a wobble while the car is in the air. A rally
-    // car goes sideways FLAT: leaning the body into the slide is what makes
-    // a drift read as a skier carving rather than a car turning, so nothing
-    // on the ground ever rolls the body — a drift reads through the yaw, the
-    // counter-steered wheels and the dust.
+    // Attitude is PITCH, plus whatever ROLL the physics has put in the body
+    // — which only a take-off ever does. A rally car goes sideways FLAT:
+    // leaning into the slide is what makes a drift read as a skier carving
+    // rather than a car turning, so nothing on the ground rolls the body —
+    // a drift reads through the yaw, the counter-steered wheels and the
+    // dust. In the air the roll is the engine's, tumble and all.
     //
     // The pitch is the direction the car is actually travelling in the
     // vertical plane — vy/u. Grounded that is the road's own gradient (the
@@ -55,12 +55,9 @@ export function buildCar(spec: CarSpec): CarVisual {
     // going up a grade and drops over the far side; airborne it is the
     // ballistic arc. Smoothed, so landings settle with a touch of suspension
     // travel instead of snapping.
-    const targetRoll = car.airborne ? Math.sin(state.t * 7) * 0.06 : 0;
     const targetPitch = clamp(Math.atan2(car.vy, Math.max(8, car.u)), -0.5, 0.5);
-    const k = clamp(10 * dt, 0, 1);
-    roll += (targetRoll - roll) * k;
-    pitch += (targetPitch - pitch) * k;
-    body.group.rotation.z = roll;
+    pitch += (targetPitch - pitch) * clamp(10 * dt, 0, 1);
+    body.group.rotation.z = car.roll;
     body.group.rotation.x = pitch;
 
     // Wheels: spin with road speed, front pair points where the driver

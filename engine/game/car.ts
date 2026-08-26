@@ -91,14 +91,29 @@ function slideFactor(
   return Math.max(forced, held);
 }
 
+/** Leave the ground. A car that launches crossed up trips over its outside
+ * wheels, so the roll it carries into the air is the slide the tires were
+ * fighting plus the rotation already in the body: straight and level flies
+ * flat, properly sideways goes a long way over, and once in a while it goes
+ * all the way round. Physics decides — nothing here aims for it. */
+export function launch(car: CarState, vy: number, events: GameEvent[], stats: RunStats): void {
+  car.airborne = true;
+  car.airTime = 0;
+  car.vy = vy;
+  car.rollRate = -(car.w * T.air.rollFromSlide + car.yawRate * T.air.rollFromYaw);
+  events.push({ type: "takeoff", vy });
+  stats.jumps += 1;
+}
+
 export type GroundContext = {
   surface: "gravel" | "water" | "grass";
   /** Road elevation under the car before this step's move. */
   groundY: number;
   /** Road slope dy/ds under the car... */
   slope: number;
-  /** ...and the slope it will be on in `T.air.crestLook` seconds. */
-  slopeAhead: number;
+  /** Vertical curvature of the road under the car, 1/m — negative over a
+   * brow. Zero anywhere a jump lip owns the launch. */
+  roadCurve: number;
   /** Current wind velocity, world space m/s. */
   windX: number;
   windZ: number;
@@ -225,6 +240,13 @@ export function stepGrounded(
   }
   updateSlip(car);
 
+  // The ground unwinds whatever roll the last flight left, toward the
+  // NEAREST upright — a car most of the way over finishes the roll instead
+  // of rewinding it.
+  car.rollRate = 0;
+  const upright = Math.round(car.roll / (Math.PI * 2)) * Math.PI * 2;
+  car.roll += (upright - car.roll) * clamp(T.air.rollRecover * dt, 0, 1);
+
   // ── Drift readout ────────────────────────────────────────────────────────
   // Nothing in the model above branches on this: it is what the dust, the
   // HUD and the balance table read off a car that happens to be sideways.
@@ -252,12 +274,9 @@ export function stepGrounded(
   // only when the road falls away faster than gravity could pull it down —
   // so the same crest launches you at pace and holds you at a crawl.
   const roadVy = car.u * ctx.slope;
-  const roadPull = (car.u * (ctx.slope - ctx.slopeAhead)) / T.air.crestLook;
+  const roadPull = -car.u * car.u * ctx.roadCurve;
   if (car.u > T.air.crestSpeed && roadPull > T.air.gravity * T.air.crestPull) {
-    car.airborne = true;
-    car.airTime = 0;
-    events.push({ type: "takeoff", vy: car.vy });
-    stats.jumps += 1;
+    launch(car, car.vy, events, stats);
   } else {
     // ctx.groundY is the elevation the step STARTED from; the slope carries
     // it forward to where the car has just moved to.
@@ -284,6 +303,11 @@ export function stepAirborne(
 
   car.yawRate += input.steer * T.air.yawAuthority * dt;
   car.yawRate += (ctx.rng.next() - 0.5) * 2 * T.air.turbulence * dt;
+  // The body keeps rolling the way the take-off sent it — the wheel does
+  // nothing about it, which is the whole point of being in the air.
+  car.rollRate += (ctx.rng.next() - 0.5) * 2 * T.air.rollTurbulence * dt;
+  car.rollRate *= Math.exp(-T.air.rollDamp * dt);
+  car.roll += car.rollRate * dt;
   const delta = car.yawRate * dt;
   car.heading += delta;
   rotateFrame(car, delta);
@@ -298,10 +322,20 @@ export function stepAirborne(
   car.vy -= T.air.gravity * dt;
   car.y += car.vy * dt;
 
-  if (car.y <= ctx.groundY) {
-    car.y = ctx.groundY;
+  // The road under where the car has just moved TO — `ctx.groundY` is where
+  // the step started, and on a steep descent that stale height is already
+  // above the road, which lands the car in mid-air. The carry only ever
+  // LOWERS the ground: a rising slope under a car that has just left a lip
+  // is the ramp it is no longer on, and following it up would land the car
+  // the instant it took off.
+  const groundNow = Math.min(ctx.groundY, ctx.groundY + car.u * ctx.slope * dt);
+  if (car.y <= groundNow) {
+    car.y = groundNow;
     car.airborne = false;
-    const clean = Math.abs(car.slip) <= T.air.cleanSlipLimit;
+    // Straight nose AND upright: coming down on your side is never clean,
+    // however well the nose was lined up.
+    const clean =
+      Math.abs(car.slip) <= T.air.cleanSlipLimit && Math.abs(car.roll) < T.air.rollLandLimit;
     if (clean) {
       car.u *= T.air.cleanKeep;
       stats.cleanLandings += 1;
@@ -309,7 +343,10 @@ export function stepAirborne(
       car.u *= T.air.sloppyKeep;
       car.yawRate += -Math.sign(car.slip) * T.air.sloppyWobble;
     }
-    car.vy = 0;
+    // Pick the road's own vertical speed back up instead of zeroing: land on
+    // a brow and the car may be off the ground again next step, and a stale
+    // zero there is a bounce where there should be a flight.
+    car.vy = car.u * ctx.slope;
     events.push({ type: "landing", airTime: car.airTime, clean });
     car.airTime = 0;
   }

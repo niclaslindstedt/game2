@@ -52,16 +52,18 @@ export function createGameCamera(width: number, height: number): GameCamera {
 
     // Proportions read off the Sega Rally chase cam: roof-height camera
     // (~2 m) pitched only a few degrees down, close behind, so the car
-    // anchors the BOTTOM of the frame and the horizon rides high. The air
-    // pulls up and back.
-    const wantDist = car.airborne ? 10 : 5.6 + car.u * 0.02;
-    const wantHeight = car.airborne ? 4.2 + car.vy * 0.14 : 2.0;
+    // anchors the BOTTOM of the frame and the horizon rides high. The frame
+    // does NOT change when the car leaves the ground: pulling back for a
+    // jump makes the biggest moment in the stage read as small and safe,
+    // and it is the one moment the camera should hold its nerve.
+    const wantDist = 5.6 + car.u * 0.02;
+    const wantHeight = 2.0;
     dist += (wantDist - dist) * clamp(3 * dt, 0, 1);
     height_ += (wantHeight - height_) * clamp(3 * dt, 0, 1);
 
     // Speed lives in the FOV: it stretches hard with pace (capped before
     // the boost overrun turns the world into a tunnel).
-    const wantFov = Math.min(86, 58 + car.u * 0.38 + (car.airborne ? 6 : 0));
+    const wantFov = Math.min(86, 58 + car.u * 0.38);
     fov += (wantFov - fov) * clamp(4 * dt, 0, 1);
 
     // Turning swings the camera toward the OUTSIDE of the corner, so a
@@ -97,7 +99,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
     // The hood cam sits on the car and looks where the NOSE points — in a
     // drift the world sweeps across the windshield, which is the drama.
     yaw = angleLerp(yaw, car.heading, clamp(14 * dt, 0, 1));
-    const wantFov = Math.min(92, 64 + car.u * 0.42 + (car.airborne ? 8 : 0));
+    const wantFov = Math.min(92, 64 + car.u * 0.42);
     fov += (wantFov - fov) * clamp(5 * dt, 0, 1);
     const sx = (Math.random() - 0.5) * shake * 0.6;
     const sy = (Math.random() - 0.5) * shake * 0.6;

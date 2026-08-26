@@ -75,7 +75,7 @@ describe("the jump", () => {
         throttle: 1,
         shiftUp: state.car.u > state.spec.gearTop[state.car.gear] * 0.93,
       });
-      if (state.car.y > 0.05) {
+      if (state.car.y > 0.05 && !state.car.airborne) {
         heights.push(state.car.y);
         // The attitude the renderer draws: vy/u is the gradient the car is
         // climbing, and on the ramp that is the ramp's own slope.
@@ -84,12 +84,17 @@ describe("the jump", () => {
       guard += 1;
     }
     expect(heights.length).toBeGreaterThan(20);
+    // Monotonic up the ramp, and climbing at a rate that only ever changes
+    // gradually: the road is sampled every 2 m, so a car that snapped to the
+    // nearest sample would climb in ~0.5 m stairs — alternating plateaus and
+    // jumps — and bounce off every one of them.
+    const climb: number[] = [];
     for (let i = 1; i < heights.length; i++) {
-      // Monotonic up the ramp, and never a step big enough to see: the road
-      // is sampled every 2 m, so a car that snapped to the nearest sample
-      // would climb in ~0.5 m stairs and bounce off every one of them.
       expect(heights[i]).toBeGreaterThanOrEqual(heights[i - 1]);
-      expect(heights[i] - heights[i - 1]).toBeLessThan(0.1);
+      climb.push(heights[i] - heights[i - 1]);
+    }
+    for (let i = 1; i < climb.length; i++) {
+      expect(Math.abs(climb[i] - climb[i - 1])).toBeLessThan(0.02);
     }
     // Nose up the whole climb — this is the tilt, and it is never absurd.
     expect(Math.min(...pitches)).toBeGreaterThan(0);
