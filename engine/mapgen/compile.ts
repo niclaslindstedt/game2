@@ -44,19 +44,17 @@ export type Track = {
 /** Sample spacing along the centerline, meters. */
 export const SAMPLE_STEP = 2;
 
-function smoothstep(t: number): number {
-  const c = t < 0 ? 0 : t > 1 ? 1 : t;
-  return c * c * (3 - 2 * c);
-}
-
 /** Elevation profile within one segment at local arc position `u`. */
 function segmentElevation(plan: SegmentPlan, u: number): number {
   if (plan.feature === "jump" && plan.featureStart !== undefined && plan.featureEnd !== undefined) {
     // Ramp rises to the lip, then the ground drops back to grade — the drop
     // is what throws the car. Past the lip the road is flat landing zone.
+    // The rise EASES IN (steepest right at the lip): a ramp that flattens
+    // as it reaches the top — a smoothstep — leaves the car with no upward
+    // speed at the one moment it matters, and a jump that does not jump.
     if (u >= plan.featureStart && u < plan.featureEnd) {
       const t = (u - plan.featureStart) / (plan.featureEnd - plan.featureStart);
-      return (plan.lipHeight ?? 2) * smoothstep(t);
+      return (plan.lipHeight ?? 2) * t * t;
     }
     return 0;
   }
@@ -87,23 +85,44 @@ function segmentSurface(plan: SegmentPlan, u: number): Surface {
   return "gravel";
 }
 
-/** The rolling ground under a generated stage: three seeded sine layers
- * (R.elevation) summed along arc length. Long climbs put the horizon above
- * or below the hood, rollers load and unload the car through a straight,
- * and the bump layer is road texture. */
+/** Lattice size for the elevation noise. A stage is at most a couple of
+ * kilometers and the shortest octave's lattice is tens of meters apart, so
+ * the profile never gets far enough to wrap. */
+const NOISE_LATTICE = 256;
+
+/** Seeded 1-D value noise: random heights every `spacing` meters, joined by
+ * smootherstep so the road has no kinks (a kink is a grade discontinuity,
+ * which the car feels as a step). */
+function valueNoise(values: number[], s: number, spacing: number): number {
+  const t = s / spacing;
+  const i = Math.floor(t);
+  const f = t - i;
+  const a = values[((i % values.length) + values.length) % values.length];
+  const b = values[(((i + 1) % values.length) + values.length) % values.length];
+  return a + (b - a) * (f * f * f * (f * (f * 6 - 15) + 10));
+}
+
+/** The rolling ground under a generated stage: octaves of seeded value noise
+ * (R.elevation) summed along arc length. Long waves put the horizon above or
+ * below the hood and shorter ones load and unload the car through a
+ * straight — but every wave is a different shape, because a road built from
+ * sines announces itself as a machine on the first two hills. */
 function buildRolling(seed: number): (s: number) => number {
   const rng = createRng((seed ^ 0x7e11a7d1) >>> 0);
-  const layers = (["long", "roll", "bump"] as const).map((name) => {
-    const spec = R.elevation[name];
-    return {
-      amplitude: rng.range(spec.amplitude.min, spec.amplitude.max),
-      frequency: (Math.PI * 2) / rng.range(spec.wavelength.min, spec.wavelength.max),
-      phase: rng.range(0, Math.PI * 2),
-    };
-  });
+  const amplitude = rng.range(R.elevation.amplitude.min, R.elevation.amplitude.max);
+  const wavelength = rng.range(R.elevation.wavelength.min, R.elevation.wavelength.max);
+  const roughness = rng.range(R.elevation.roughness.min, R.elevation.roughness.max);
+  const octaves = Array.from({ length: R.elevation.octaves }, (_, o) => ({
+    values: Array.from({ length: NOISE_LATTICE }, () => rng.range(-1, 1)),
+    spacing: wavelength / 2 ** o,
+    amplitude: amplitude * roughness ** o,
+    // Each octave reads its own lattice from a different place, so they
+    // never line up into a shape that looks deliberate.
+    offset: rng.range(0, 1e4),
+  }));
   return (s: number): number => {
     let y = 0;
-    for (const l of layers) y += l.amplitude * Math.sin(s * l.frequency + l.phase);
+    for (const o of octaves) y += o.amplitude * valueNoise(o.values, s + o.offset, o.spacing);
     return y;
   };
 }

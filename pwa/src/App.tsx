@@ -60,7 +60,18 @@ function initialSettings(): RaceSettings {
   return settings;
 }
 
+/** Tach reading, 0..1 of the redline: how far up the current gear the car
+ * is, over an idle floor so the needle never falls off the dial. The engine
+ * has no rev model — gearing plus FORWARD speed is the rev counter, and
+ * forward speed is what the gearbox shifts on, so the needle and the shift
+ * light always agree with the gear. */
+function tachometer(state: GameState): number {
+  const top = state.spec.gearTop[state.car.gear];
+  return Math.min(1, 0.18 + 0.82 * Math.max(0, state.car.u / top));
+}
+
 function takeSnapshot(state: GameState, finishTime: number | null): HudSnapshot {
+  const rpm = tachometer(state);
   // The rendered world is a mirror of the engine's map view, so the wind
   // arrow's screen angle is the NEGATED car-relative bearing (the same
   // one-flip rule input.ts applies to steering).
@@ -71,12 +82,15 @@ function takeSnapshot(state: GameState, finishTime: number | null): HudSnapshot 
     phase: state.phase,
     countdown: Math.max(0, TUNING.countdown - state.t),
     time: state.raceTime,
-    speedKmh: Math.max(0, state.car.u * 3.6),
+    // The speedo reads GROUND speed, not forward speed: a car crossed up
+    // at 140 km/h is doing 140 km/h, and a needle that dips every time the
+    // nose swings would tell the player the slide is costing them.
+    speedKmh: Math.max(0, Math.hypot(state.car.u, state.car.w) * 3.6),
     gear: state.car.gear,
     gearbox: state.spec.gearbox,
-    drifting: state.car.drifting,
+    rpm,
+    shiftUp: rpm > 0.83 && state.car.gear < state.spec.gearTop.length - 1,
     airborne: state.car.airborne,
-    driftScore: state.stats.driftScore,
     progress: Math.min(1, state.progressS / state.track.length),
     seed: state.seed,
     carName: state.spec.name,
@@ -201,9 +215,7 @@ export function App() {
     const handleEvents = (state: GameState, events: GameEvent[]): void => {
       renderer.onEvents(state, events);
       for (const ev of events) {
-        if (ev.type === "driftEnd" && ev.clean) {
-          flash(`DRIFT +${ev.boost.toFixed(1)}`, "good");
-        } else if (ev.type === "landing") {
+        if (ev.type === "landing") {
           flash(
             ev.clean ? `CLEAN AIR ${ev.airTime.toFixed(1)}s` : "ROUGH LANDING",
             ev.clean ? "good" : "bad",

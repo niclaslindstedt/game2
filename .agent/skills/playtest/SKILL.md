@@ -39,9 +39,10 @@ Never run `playwright install`; point `CHROMIUM_PATH` at an existing binary.
 ### The scenes
 
 The default script captures the moments that matter: the **start grid**
-(landscape + portrait), **full speed** down the opening straight, a
-**handbrake drift** (flick at speed, power held through the slide), **portrait
-at speed** (the touch HUD's world), and the **hood cam**. `--scene <name>`
+(landscape + portrait), **full speed** down the opening straight, a **drift**
+(a committed turn at speed, power held through the slide), the **first jump**
+the stage offers (skipped when the run never reaches one), **portrait at
+speed** (the touch HUD's world), and the **hood cam**. `--scene <name>`
 runs one.
 
 **A new player-visible feature earns a scene in the same change.** The scenes

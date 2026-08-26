@@ -51,7 +51,7 @@ the game harder, not faster.
 | Stage scale          | `engine/mapgen/rules.ts`                      | `mapgen-improvement` |
 | Camera               | `pwa/src/game/camera.ts`                      | (this skill)         |
 | Ground-contact FX    | `pwa/src/game/{dust,renderer,car-dirt}.ts`    | `visual-effects`     |
-| The car's motion cue | `pwa/src/game/car-mesh.ts` (wheels, roll)     | `car-design`         |
+| The car's motion cue | `pwa/src/game/car-mesh.ts` (wheels, pitch)    | `car-design`         |
 
 What each contributes:
 
@@ -98,6 +98,11 @@ What each contributes:
 
 ## Hard-earned constraints
 
+- **The car stays FLAT in a slide.** Rolling the body into the drift angle is
+  the single change that makes a rally car read as a skier carving instead of
+  a car turning — the reference has none of it. Body attitude is pitch only
+  (the road's gradient grounded, the ballistic arc airborne, both free from
+  `vy/u`); the drift is displayed by the YAW against the camera's framing.
 - The renderer never mutates `GameState`; feel state that must persist
   (dirt level, camera smoothing) lives in renderer-side closures and resets
   with the next stage's meshes.
