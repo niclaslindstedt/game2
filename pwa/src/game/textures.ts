@@ -54,14 +54,18 @@ export function gravelTexture(): THREE.CanvasTexture {
   return toTexture(canvas, 1);
 }
 
-export function grassTexture(): THREE.CanvasTexture {
+/** A near-white speckle that multiplies vertex colors: pure grain, no hue.
+ * The ground and every flora instance share it, so grass, bedrock and
+ * foliage all carry the same chunky arcade noise whatever color they are. */
+export function detailTexture(): THREE.CanvasTexture {
   const { canvas, ctx } = makeCanvas(128);
-  speckle(ctx, 128, "#7cbf3f", [
-    { color: "#6cae35", count: 900, min: 1, max: 4 },
-    { color: "#9ad24f", count: 700, min: 1, max: 3 },
-    { color: "#579027", count: 250, min: 1, max: 3 },
+  speckle(ctx, 128, "#ffffff", [
+    { color: "#e6e6e0", count: 900, min: 1, max: 3 },
+    { color: "#d4d4cc", count: 450, min: 1, max: 3 },
+    { color: "#c2c2ba", count: 180, min: 1, max: 2 },
+    { color: "#f2f2ec", count: 500, min: 1, max: 4 },
   ]);
-  return toTexture(canvas, 64);
+  return toTexture(canvas, 1);
 }
 
 export function waterTexture(): THREE.CanvasTexture {
@@ -72,6 +76,36 @@ export function waterTexture(): THREE.CanvasTexture {
     { color: "#dff1ff", count: 60, min: 1, max: 2 },
   ]);
   return toTexture(canvas, 2);
+}
+
+/** A rally gate banner: the word in chunky dark caps on a white ground,
+ * framed by checkered-flag bands top and bottom. Nearest filtering keeps
+ * the lettering as blocky as the rest of the world. */
+export function bannerTexture(text: string): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 96;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("2d context unavailable");
+  ctx.fillStyle = "#f6f3ea";
+  ctx.fillRect(0, 0, 512, 96);
+  const sq = 16;
+  for (let x = 0; x < 512 / sq; x++) {
+    for (const row of [0, 1, 4, 5]) {
+      ctx.fillStyle = (x + row) % 2 === 0 ? "#1c1e22" : "#f6f3ea";
+      ctx.fillRect(x * sq, row < 2 ? row * (sq / 2) : 96 - (6 - row) * (sq / 2), sq, sq / 2);
+    }
+  }
+  ctx.fillStyle = "#1c1e22";
+  ctx.font = "bold 58px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, 256, 50);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
 /** A soft radial glow (white core fading to transparent) — the sun's halo,
@@ -88,13 +122,4 @@ export function glowTexture(): THREE.CanvasTexture {
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
-}
-
-export function foliageTexture(): THREE.CanvasTexture {
-  const { canvas, ctx } = makeCanvas(64);
-  speckle(ctx, 64, "#2f8f3c", [
-    { color: "#1f6e2e", count: 320, min: 1, max: 4 },
-    { color: "#43a84e", count: 260, min: 1, max: 3 },
-  ]);
-  return toTexture(canvas, 1);
 }

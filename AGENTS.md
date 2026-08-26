@@ -116,6 +116,7 @@ Skills live in `.agent/skills/` (`.claude/skills` symlinks there) — each a `SK
 - **`playtest`** / **`ui-review`** — looking at the real game (`make screenshots`); the HUD fit-and-finish sweep.
 - **`visual-effects`** — transient FX in the three.js world and the HUD layer.
 - **`car-design`** — how the cars LOOK: the parametric body builder, the per-car specs, and the `make cars` render-compare-iterate loop.
+- **`nature`** — the biomes, trees and flora, ground cover, terrain paint, and the rally-gate dressing: the world the road runs through.
 
 **Maintenance** (each with a `.last-updated` baseline):
 

@@ -265,6 +265,9 @@ body {
   border-radius: 0.2rem;
   padding: 0.05rem 0.3rem 0.15rem;
   line-height: 1;
+  /* The cluster bottom-aligns; a lift centers the plate on the speed
+     number's height instead of hanging below its baseline. */
+  margin-bottom: clamp(0.2rem, 1vmin, 0.5rem);
 }
 
 .hud-shiftlight {
