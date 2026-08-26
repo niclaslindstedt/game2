@@ -92,12 +92,31 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 - The service worker contract (cache id, emitted files) is shared between `pwa/pwa-plugin.ts` and `pwa/src/app-pwa.ts` — keep them agreeing.
 - The deployed site IS the product (§11.2-as-webapp): there is no separate `website/` tree. SEO copy lives in `pwa/index.html` + `pwa/public/`; keep it in sync with identity.ts, and treat a stale deployed site after identity/feature changes as a bug.
 
-## Maintenance skills
+## Skills
 
-Skills live in `.agent/skills/` (`.claude/skills` symlinks there). Each has a `SKILL.md` playbook and a `.last-updated` baseline:
+Skills live in `.agent/skills/` (`.claude/skills` symlinks there) — each a `SKILL.md` playbook. Load the one that owns the task's SUBJECT, plus the workflow ones its steps name. This file is the router; the procedures live in the skills.
+
+**Session workflow** (every task):
+
+- **`start-work`** — the preflight: clean tree, sync with `origin/main`, the deliver-by-default contract.
+- **`write-code`** — how code is written here: comments, the edit loop, file caps, test conventions, aliases. Load beside the subject skill on any code change.
+- **`skill-reflection`** — read each loaded skill's lessons at the start (`node scripts/skill-lessons.mjs <skill>`), record/prune/promote at the end.
+- **`changelog`** → **`commit`** — the fragment-or-label call, then gates, push, PR. **`conflict`** whenever a branch moves onto another.
+
+**Craft** (the subject owners):
+
+- **`engine-system`** — adding/changing a gameplay system, engine-first.
+- **`mapgen-improvement`** — the stage generator (rules/search/geometry, the R-rules).
+- **`bot-improvement`** — the bot driver in `engine/sim/bot.ts`.
+- **`simulate-run`** — measuring balance with `make sim`; owns reading the table.
+- **`debug-game`** / **`test-scenario`** — deterministic repros; staging exact situations on synthetic tracks.
+- **`playtest`** / **`ui-review`** — looking at the real game (`make screenshots`); the HUD fit-and-finish sweep.
+- **`visual-effects`** — transient FX in the three.js world and the HUD layer.
+
+**Maintenance** (each with a `.last-updated` baseline):
 
 - **`maintenance`** — the umbrella: dispatches every `update-*` skill in registry order after big merges or on a cadence.
-- **`update-readme`** — re-syncs README.md when the public surface (commands, cars, controls, URLs) moved.
-- **`update-docs`** — re-syncs `docs/*.md` against the sync-point table above.
+- **`update-docs`** / **`update-readme`** / **`update-website`** / **`update-prompts`** — re-sync `docs/*.md`, README.md, the SEO/identity shell, and `prompts/` against their sources of truth.
+- **`sync-oss-spec`** — walk OSS_SPEC.md's mandates against the repo; the closing step of a full sweep.
 
 Run the specific skill when you know what drifted; run `maintenance` when you don't.
