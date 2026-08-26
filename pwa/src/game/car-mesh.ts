@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// The car: a handful of boxes and cylinders in the car's livery, plus the
+// The car in the scene: a body generated part-by-part from the car's
+// CarBodySpec (car-body.ts builds it, car-styles.ts shapes it), plus the
 // one visual that sells the jump — a blob shadow that stays on the ground
 // and shrinks while the car is airborne. Attitude (drift roll, air pitch)
 // is applied to the body group; the physics owns the position and heading.
@@ -7,6 +8,9 @@
 import * as THREE from "three";
 import { clamp } from "../lib/util.ts";
 import type { CarSpec, GameState } from "@engine";
+
+import { buildCarBody } from "./car-body.ts";
+import { bodySpecFor } from "./car-styles.ts";
 
 export type CarVisual = {
   group: THREE.Group;
@@ -17,42 +21,13 @@ export type CarVisual = {
 
 export function buildCar(spec: CarSpec): CarVisual {
   const group = new THREE.Group();
-  const body = new THREE.Group();
-  group.add(body);
+  const bodySpec = bodySpecFor(spec);
+  const body = buildCarBody(bodySpec);
+  group.add(body.group);
 
-  const paint = new THREE.MeshBasicMaterial({ color: spec.color });
-  const accent = new THREE.MeshBasicMaterial({ color: spec.accent });
-  const dark = new THREE.MeshBasicMaterial({ color: "#14181f" });
-
-  const hull = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.5, 3.6), paint);
-  hull.position.y = 0.45;
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.45, 1.5), dark);
-  cabin.position.set(0, 0.85, -0.2);
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.1, 1.6), accent);
-  roof.position.set(0, 1.1, -0.2);
-  const wing = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.09, 0.45), accent);
-  wing.position.set(0, 0.95, -1.75);
-  const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.52, 3.62), accent);
-  stripe.position.y = 0.45;
-  body.add(hull, cabin, roof, wing, stripe);
-
-  const wheelGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.3, 10);
-  wheelGeo.rotateZ(Math.PI / 2);
-  const wheels: THREE.Mesh[] = [];
-  for (const [x, z] of [
-    [-0.85, 1.15],
-    [0.85, 1.15],
-    [-0.85, -1.15],
-    [0.85, -1.15],
-  ]) {
-    const wheel = new THREE.Mesh(wheelGeo, dark);
-    wheel.position.set(x, 0.34, z);
-    body.add(wheel);
-    wheels.push(wheel);
-  }
-
+  const length = bodySpec.profile[0].z - bodySpec.profile[bodySpec.profile.length - 1].z;
   const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(1.6, 16),
+    new THREE.CircleGeometry(length * 0.42, 16),
     new THREE.MeshBasicMaterial({ color: "#000000", transparent: true, opacity: 0.28 }),
   );
   shadow.rotation.x = -Math.PI / 2;
@@ -75,15 +50,16 @@ export function buildCar(spec: CarSpec): CarVisual {
     const k = clamp(10 * dt, 0, 1);
     roll += (targetRoll - roll) * k;
     pitch += (targetPitch - pitch) * k;
-    body.rotation.z = roll;
-    body.rotation.x = pitch;
+    body.group.rotation.z = roll;
+    body.group.rotation.x = pitch;
 
     // Wheels: spin with speed, front pair follows the slip for the
     // counter-steer look.
-    const spin = (car.u * dt) / 0.34;
-    for (let i = 0; i < wheels.length; i++) {
-      wheels[i].rotation.x += spin;
-      if (i < 2) wheels[i].rotation.y = clamp(-car.slip * 1.4, -0.6, 0.6);
+    const spin = (car.u * dt) / bodySpec.wheelRadius;
+    const steer = clamp(-car.slip * 1.4, -0.6, 0.6);
+    for (let i = 0; i < body.wheelSpin.length; i++) {
+      body.wheelSpin[i].rotation.x += spin;
+      if (i < 2) body.wheelGroups[i].rotation.y = steer;
     }
 
     // Blob shadow: pinned to the ground under the car, fading with height.
@@ -95,10 +71,8 @@ export function buildCar(spec: CarSpec): CarVisual {
   };
 
   const dispose = (): void => {
-    for (const g of [hull, cabin, roof, wing, stripe, ...wheels, shadow]) g.geometry.dispose();
-    paint.dispose();
-    accent.dispose();
-    dark.dispose();
+    body.dispose();
+    shadow.geometry.dispose();
     (shadow.material as THREE.MeshBasicMaterial).dispose();
   };
 

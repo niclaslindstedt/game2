@@ -57,6 +57,7 @@ Open the printed URL — the game starts immediately after a 3-2-1 countdown. Ke
 | `make lint`        | ESLint + typecheck across engine, app, tests, and tooling         |
 | `make sim`         | Headless balance sweep: bots drive stages, prints the pace table  |
 | `make track`       | Render generated stages to `previews/track-<seed>.png`            |
+| `make cars`        | Render the car models to a contact sheet (`previews/cars.png`)    |
 | `make screenshots` | Drive the built app headlessly and screenshot the key moments     |
 | `make icons`       | Regenerate PWA icons, favicon, and the OG image from the app mark |
 | `make check-seo`   | Build + structural SEO/PWA/bundle-budget assertions               |

@@ -35,7 +35,8 @@ Internally:
 
 A Vite + Preact app that renders the engine and ships it as an installable PWA:
 
-- `src/game/renderer.ts` — the three.js facade: builds a `World` per stage (road ribbon, rumble strips, dirt skirts, fords, instanced trees/rocks, gates), a low-poly car with a blob shadow, dust particles, and the camera. It reads `GameState`; it never steps physics. Everything is fullbright and vertex-colored with procedural speckle textures (`textures.ts`) — the rough arcade look is deliberate.
+- `src/game/renderer.ts` — the three.js facade: builds a `World` per stage (road ribbon, rumble strips, dirt skirts, fords, instanced trees/rocks, gates), the car, dust particles, and the camera. It reads `GameState`; it never steps physics. Everything is fullbright and vertex-colored with procedural speckle textures (`textures.ts`) — the rough arcade look is deliberate.
+- `src/game/car-body.ts` / `car-styles.ts` / `car-mesh.ts` — the car: a parametric builder that lofts a low-poly body (hood, greenhouse, fender flares, bumpers, lights, wheels, spoilers) from a JSON-friendly `CarBodySpec`, with a fixed fake sun baked into vertex colors; the per-car specs (keyed by catalog id); and the scene wrapper that adds drift/air attitude, wheel spin and steer, and the jump-selling blob shadow. Iterate on looks with `make cars` (see the `car-design` skill).
 - `src/game/camera.ts` — camera **modes** (`chase`, `hood`), built to grow more. The chase cam tracks a blend of nose and travel direction so drift angle reads on screen.
 - `src/game/input.ts` / `hud.tsx` — keyboard + touch, and the arcade HUD (also the touch control surface).
 - `src/App.tsx` — the fixed-timestep loop (engine at 120 Hz regardless of frame rate), the daily-seed stage rotation, car swap, and the framework's PWA update toast.
