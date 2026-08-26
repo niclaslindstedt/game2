@@ -128,7 +128,10 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
       const color = inWater ? 0x4fa0f0 : 0xb29268;
       const wakeX = -fwdX * c.u * 0.35 + state.wind.x * 0.6;
       const wakeZ = -fwdZ * c.u * 0.35 + state.wind.z * 0.6;
-      const sideways = Math.abs(c.slip) > 0.12 && c.u > 6;
+      // The tires letting go is what throws gravel — `slide` is that
+      // number, so the plume comes up the instant the car is asked for more
+      // grip than it has, not once the angle has already developed.
+      const sideways = c.slide > 0.15 && c.u > 6;
       const rear = (side: number, count: number, spread: number): void =>
         dust.spawn(
           c.x - fwdX * 1.5 + rightX * side * 0.8,
@@ -141,9 +144,11 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
           wakeZ,
         );
       if (sideways || state.offRoad) {
-        // The drift plume also blows toward the slide, off the outside wheels.
-        rear(-1, 6, 3.5);
-        rear(1, 6, 3.5);
+        // The drift plume also blows toward the slide, off the outside
+        // wheels, and thickens as the slide deepens.
+        const thrown = 4 + Math.round(c.slide * 5);
+        rear(-1, thrown, 3.5);
+        rear(1, thrown, 3.5);
       } else if (c.braking && c.u > 8) {
         rear(-1, 4, 2.5);
         rear(1, 4, 2.5);

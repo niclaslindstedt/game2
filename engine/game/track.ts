@@ -17,7 +17,11 @@ export type TrackFix = {
   /** True when the car is beyond the road edge plus the verge. */
   offRoad: boolean;
   surface: "gravel" | "water" | "grass";
+  /** Road height under the car, interpolated between samples — the road is
+   * a ramp, not a staircase. */
   elevation: number;
+  /** Road slope dy/ds under the car, interpolated the same way. */
+  slope: number;
 };
 
 /** Locate the car against the centerline, searching near `hint`. */
@@ -47,18 +51,23 @@ export function locate(track: Track, x: number, z: number, hint: number): TrackF
   const halfRoad = track.width / 2;
   const offRoad = Math.abs(lateral) > halfRoad + TUNING.offTrack.verge;
   const surface = offRoad ? "grass" : s.surface;
-  // Interpolate elevation toward the neighbour the car is actually between:
-  // on a graded road the nearest sample alone quantizes ground height to the
-  // sample grid, and that stairstep reads as the ground falling away — a
-  // phantom launch at every sample crossing.
-  const ahead = dx * Math.sin(s.heading) + dz * Math.cos(s.heading);
-  let elevation = s.elevation;
-  const towards = ahead > 0 ? best + 1 : best - 1;
-  if (towards >= 0 && towards < samples.length) {
-    const t = Math.min(1, Math.abs(ahead) / track.step);
-    elevation += (samples[towards].elevation - s.elevation) * t;
-  }
-  return { index: best, s: s.s, lateral, offRoad, surface, elevation };
+  // Ground height and slope come from BETWEEN the samples. The nearest
+  // sample alone quantizes the road to the 2 m sample grid, and on a graded
+  // road that staircase reads as the ground falling away — a car that hops
+  // its way up every ramp and phantom-launches at every sample crossing.
+  // Project onto the sample's forward axis, then blend toward the neighbour
+  // the car is heading for.
+  const along = dx * Math.sin(s.heading) + dz * Math.cos(s.heading);
+  const next = clampIndex(samples, best + Math.sign(along));
+  const f = Math.min(1, Math.abs(along) / track.step);
+  const elevation = s.elevation + (samples[next].elevation - s.elevation) * f;
+  const slope = slopeAt(track, best) + (slopeAt(track, next) - slopeAt(track, best)) * f;
+  return { index: best, s: s.s, lateral, offRoad, surface, elevation, slope };
+}
+
+function clampIndex(samples: { length: number }, index: number): number {
+  return Math.min(samples.length - 1, Math.max(0, index));
+}
 }
 
 /** True when a jump lip sits between the two progress positions. */
@@ -69,7 +78,9 @@ export function crossedLip(track: Track, fromIndex: number, toIndex: number): nu
   return -1;
 }
 
-/** Approximate road slope (dy/ds) at a sample, from its neighbours. */
+/** Approximate road slope (dy/ds) at a sample, from the ground behind it —
+ * backward-looking on purpose, so a jump lip reports the RAMP that throws
+ * the car rather than averaging in the drop on its far side. */
 export function slopeAt(track: Track, index: number): number {
   const samples = track.samples;
   const i1 = Math.max(0, index - 2);

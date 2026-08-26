@@ -18,18 +18,17 @@ export type CarSpec = {
   brake: number;
   /** Base steering yaw authority at low speed, rad/s. */
   steerRate: number;
-  /** Lateral grip while gripping: how fast sideways speed bleeds off, 1/s. */
+  /** Lateral acceleration the tires can hold before the car starts to
+   * slide, m/s² — the whole drift-entry threshold, since a slide is just a
+   * turn the tires cannot pay for. */
+  gripAccel: number;
+  /** Lateral grip while gripping: how fast the velocity swings back behind
+   * the nose, 1/s. */
   gripLat: number;
-  /** Lateral grip while drifting — low keeps the car sliding, 1/s. */
+  /** Lateral grip once fully sliding — low keeps the car sideways, 1/s. */
   driftLat: number;
-  /** Extra yaw authority while drifting (the car rotates under you), rad/s. */
+  /** Extra yaw authority while sliding (the car rotates under you), rad/s. */
   driftYaw: number;
-  /** Slip angle that starts a drift when committed to a turn, radians. */
-  driftEnter: number;
-  /** Slip angle under which a drift ends, radians. */
-  driftExit: number;
-  /** Speed boost per second of clean drift, m/s (capped in tuning). */
-  driftBoostRate: number;
   /** Body color for the renderer (hex) — palette lives with the car. */
   color: number;
   accent: number;
@@ -46,18 +45,16 @@ export const CARS: CarSpec[] = [
     gearAccel: [11.5, 10, 8, 5.8, 3.7],
     brake: 16,
     steerRate: 2.6,
+    gripAccel: 16,
     gripLat: 8.5,
-    driftLat: 2.0,
-    driftYaw: 1.9,
-    driftEnter: 0.2,
-    driftExit: 0.1,
-    driftBoostRate: 2.0,
+    driftLat: 2.2,
+    driftYaw: 1.5,
     color: 0x1f6fde,
     accent: 0xffffff,
   },
   {
-    // The reward car: manual box, taller gearing, looser rear — faster in
-    // hands that can keep it sideways and keep it in gear.
+    // The reward car: manual box, taller gearing, less grip to lean on —
+    // faster in hands that can keep it flowing and keep it in gear.
     id: "classic",
     name: "Sable 4WD (manual)",
     gearbox: "manual",
@@ -65,12 +62,10 @@ export const CARS: CarSpec[] = [
     gearAccel: [13, 11, 9, 6.8, 4.8, 3.1],
     brake: 17,
     steerRate: 2.5,
+    gripAccel: 14,
     gripLat: 7.5,
-    driftLat: 1.75,
-    driftYaw: 2.2,
-    driftEnter: 0.18,
-    driftExit: 0.1,
-    driftBoostRate: 2.6,
+    driftLat: 1.9,
+    driftYaw: 1.8,
     color: 0xd8342c,
     accent: 0xf4e9d0,
   },

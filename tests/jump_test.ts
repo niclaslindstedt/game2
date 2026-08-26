@@ -63,6 +63,39 @@ function driveToLip(state: GameState): GameEvent[] {
 }
 
 describe("the jump", () => {
+  it("climbs the ramp smoothly — no hopping its way up", () => {
+    const state = game();
+    // Roll up to the ramp and record every height on the way up it.
+    const heights: number[] = [];
+    const pitches: number[] = [];
+    let guard = 0;
+    while (!state.car.airborne && guard < 120 * 60) {
+      step(state, {
+        ...NEUTRAL_INPUT,
+        throttle: 1,
+        shiftUp: state.car.u > state.spec.gearTop[state.car.gear] * 0.93,
+      });
+      if (state.car.y > 0.05) {
+        heights.push(state.car.y);
+        // The attitude the renderer draws: vy/u is the gradient the car is
+        // climbing, and on the ramp that is the ramp's own slope.
+        pitches.push(Math.atan2(state.car.vy, state.car.u));
+      }
+      guard += 1;
+    }
+    expect(heights.length).toBeGreaterThan(20);
+    for (let i = 1; i < heights.length; i++) {
+      // Monotonic up the ramp, and never a step big enough to see: the road
+      // is sampled every 2 m, so a car that snapped to the nearest sample
+      // would climb in ~0.5 m stairs and bounce off every one of them.
+      expect(heights[i]).toBeGreaterThanOrEqual(heights[i - 1]);
+      expect(heights[i] - heights[i - 1]).toBeLessThan(0.1);
+    }
+    // Nose up the whole climb — this is the tilt, and it is never absurd.
+    expect(Math.min(...pitches)).toBeGreaterThan(0);
+    expect(Math.max(...pitches)).toBeLessThan(0.6);
+  });
+
   it("the lip throws the car with upward speed scaled by pace", () => {
     const state = game();
     const events = driveToLip(state);

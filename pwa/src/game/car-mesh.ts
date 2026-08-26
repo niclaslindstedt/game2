@@ -2,8 +2,9 @@
 // The car in the scene: a body generated part-by-part from the car's
 // CarBodySpec (car-body.ts builds it, car-styles.ts shapes it), plus the
 // one visual that sells the jump — a blob shadow that stays on the ground
-// and shrinks while the car is airborne. Airborne attitude (pitch, wobble)
-// is applied to the body group; the physics owns the position and heading.
+// and shrinks while the car is airborne. Attitude (the pitch of the road
+// and of the flight, plus a wobble in the air) is applied to the body
+// group; the physics owns the position and heading.
 
 import * as THREE from "three";
 import { clamp } from "../lib/util.ts";
@@ -42,14 +43,20 @@ export function buildCar(spec: CarSpec): CarVisual {
     group.position.set(car.x, car.y, car.z);
     group.rotation.y = car.heading;
 
-    // Airborne attitude, smoothed so landings snap back with a touch of
-    // suspension travel instead of teleporting. Grounded the body stays
-    // FLAT — a drift reads through the yaw, the counter-steered wheels and
-    // the dust, never through a banked body.
+    // Attitude is PITCH, plus a wobble while the car is in the air. A rally
+    // car goes sideways FLAT: leaning the body into the slide is what makes
+    // a drift read as a skier carving rather than a car turning, so nothing
+    // on the ground ever rolls the body — a drift reads through the yaw, the
+    // counter-steered wheels and the dust.
+    //
+    // The pitch is the direction the car is actually travelling in the
+    // vertical plane — vy/u. Grounded that is the road's own gradient (the
+    // engine gives the car the road's vertical speed), so the nose lifts
+    // going up a grade and drops over the far side; airborne it is the
+    // ballistic arc. Smoothed, so landings settle with a touch of suspension
+    // travel instead of snapping.
     const targetRoll = car.airborne ? Math.sin(state.t * 7) * 0.06 : 0;
-    const targetPitch = car.airborne
-      ? clamp(-car.vy * 0.045, -0.4, 0.5)
-      : clamp(-car.u * 0.002, -0.1, 0);
+    const targetPitch = clamp(Math.atan2(car.vy, Math.max(8, car.u)), -0.5, 0.5);
     const k = clamp(10 * dt, 0, 1);
     roll += (targetRoll - roll) * k;
     pitch += (targetPitch - pitch) * k;

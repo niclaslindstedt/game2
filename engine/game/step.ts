@@ -28,7 +28,6 @@ function freshStats(): RunStats {
   return {
     driftCount: 0,
     driftTime: 0,
-    cleanDrifts: 0,
     driftScore: 0,
     jumps: 0,
     airTime: 0,
@@ -53,9 +52,8 @@ function freshCar(): CarState {
     slip: 0,
     airborne: false,
     airTime: 0,
+    slide: 0,
     drifting: false,
-    driftTime: 0,
-    driftSlipSum: 0,
     gear: 0,
     shiftCutUntil: 0,
     boostLeft: T.boost.capacity,
@@ -151,6 +149,7 @@ function respawn(state: GameState, events: GameEvent[]): void {
   car.vy = 0;
   car.yawRate = 0;
   car.airborne = false;
+  car.slide = 0;
   car.drifting = false;
   state.offRoad = false;
   state.stats.respawns += 1;
@@ -187,11 +186,20 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // Locate against the centerline BEFORE the move to know the ground ahead;
   // the fix after the move drives progress, lip detection, and respawn.
   const preFix = locate(track, car.x, car.z, state.progressIndex);
+  // The ground the car is asked to follow, now and a beat ahead — the pair
+  // is what decides whether a brow throws it. A jump lip inside that
+  // lookahead is NOT a brow: its drop belongs to the ramp launch below, and
+  // reading it here would fire a stutter of hops on the run-up instead.
+  const aheadIndex = Math.min(
+    track.samples.length - 1,
+    preFix.index + Math.round((car.u * T.air.crestLook) / track.step),
+  );
+  const lipAhead = crossedLip(track, preFix.index, aheadIndex) >= 0;
   const ctx: GroundContext = {
     surface: state.offRoad ? "grass" : preFix.surface,
     groundY: preFix.elevation,
-    slope: slopeAt(track, preFix.index),
-    onLip: false,
+    slope: preFix.slope,
+    slopeAhead: lipAhead ? preFix.slope : slopeAt(track, aheadIndex),
     windX: state.wind.x,
     windZ: state.wind.z,
     t: state.t,

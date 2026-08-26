@@ -8,7 +8,7 @@ A deterministic player stand-in that reads the same `GameState` the HUD reads an
 
 1. **Aim** — a lookahead point on the centerline, speed-scaled; steering is proportional to the angle error.
 2. **Corner-speed plan** — scans the curvature ahead; each corner caps speed at `√(a_lat/κ)`, distance-discounted by braking capability. Hard corners are planned HOT (a few m/s over the cap) — rally style: the drift scrubs the excess.
-3. **The flick** — arriving hot at a hard corner pulls the handbrake once. So bots drift hairpins the way players do, and drift regressions show up in bot stats.
+3. **The flick** — arriving hot at a hard corner pulls the handbrake once, unsticking the rear. So bots drift hairpins the way players do, and drift regressions show up in bot stats.
 4. **Drift management** — power through the slide, breathe when the angle gets deep, counter-steer only once the nose is nearly where it should be (damping earlier is what runs a drift wide).
 5. **Recovery** — off the grass: slow right down, let the aim pull the nose back.
 6. **Gears** — shifts the manual by the same thresholds the auto box uses, so both cars simulate fairly.
@@ -17,7 +17,7 @@ Bot profiles are data (`BotProfile`); `RALLY_BOT` is the default. Slower/faster 
 
 ## The harness (`engine/sim/simulate.ts`)
 
-`simulateStage({ seed, carId, profile, maxTime })` runs a full stage and returns: finish state and time, the whole event log, the run stats (drift count/time/score, clean exits, jumps, air time, splashes, off-road time, respawns, top speed), and a **digest** — an FNV hash over sampled positions. Runs are deterministic: same seed + car + profile ⇒ same digest, which is exactly what `tests/simulation_test.ts` asserts.
+`simulateStage({ seed, carId, profile, maxTime })` runs a full stage and returns: finish state and time, the whole event log, the run stats (drift count/time/score, jumps, air time, clean landings, splashes, off-road time, respawns, top speed), and a **digest** — an FNV hash over sampled positions. Runs are deterministic: same seed + car + profile ⇒ same digest, which is exactly what `tests/simulation_test.ts` asserts.
 
 ## The CLI
 
@@ -30,7 +30,7 @@ npm run sim -- --weather storm        # race in rain/storm wind
 npm run sim -- --json report.json     # machine-readable dump
 ```
 
-The table columns: stage length, time, average pace, drifts / clean exits / drift time / drift score, jumps / air time, fords, off-road time, respawns, top speed, finished. The footer aggregates. **The workflow rule: run it before and after every handling or generator change and paste both tables in the PR.** Exit code is non-zero if any run failed to finish, so CI's `simulate` job doubles as a smoke alarm.
+The table columns: stage length, time, average pace, drifts / drift time / drift score, jumps / air time, fords, off-road time, respawns, top speed, finished. The footer aggregates. **The workflow rule: run it before and after every handling or generator change and paste both tables in the PR.** Exit code is non-zero if any run failed to finish, so CI's `simulate` job doubles as a smoke alarm.
 
 ## What the tests pin down
 
@@ -45,4 +45,4 @@ If a tuning change breaks one of these, the change is wrong or the test's world 
 
 ## Screenshots close the loop
 
-Numbers say whether the game is _sound_; pictures say whether it _looks and reads_ right. `make screenshots` (scripts/screenshot.mjs) serves the built app, drives it with scripted keyboard input, and captures the grid, full speed, a handbrake drift, the hood cam, and portrait framing into `previews/`. Iterate: change → `make sim` → `make screenshots` → look.
+Numbers say whether the game is _sound_; pictures say whether it _looks and reads_ right. `make screenshots` (scripts/screenshot.mjs) serves the built app, drives it with scripted keyboard input, and captures the grid, full speed, a drift, the first jump reached, the hood cam, and portrait framing into `previews/`. Iterate: change → `make sim` → `make screenshots` → look.

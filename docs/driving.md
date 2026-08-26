@@ -2,21 +2,52 @@
 
 The handling model (`engine/game/car.ts`, numbers in `engine/game/defs/`) is arcade by conviction: the car is a point with a nose, forward speed `u`, sideways speed `w`, and a yaw rate. Everything is tuned around three moments.
 
-## The drift
+## Turning, and the drift
 
-The slip angle (`atan2(w, |u|)`) is the drift. The state machine:
+The slip angle (`atan2(w, |u|)`) is the drift, and there is no state machine
+behind it: **drifting is just what a car does when you turn harder than the
+tires can pay for.** One number, the **slide** (0..1), carries the whole
+thing, and every force below fades in and out with it, so grip and slide are
+one continuous response rather than two modes.
 
-- **Start** — three ways in: the **handbrake flick** at speed (injects a sideways kick and a yaw impulse — the car snaps sideways immediately), a **committed steering flick** that pushes slip past the entry threshold, or — past ~70 km/h — **sharp steering alone** (`TUNING.drift.steerEnterSpeed`): at pace the rear gives up before the nose does and a scaled-down kick steps the tail out, Sega Rally style. Emits `driftStart`.
-- **Hold** — while drifting, lateral grip drops (per-car `driftLat`), the slip self-rotates the car into the slide, and the wheel is the throttle of the slide: steering into it deepens it, releasing lets grip straighten the car, counter-steering exits fast. Two stabilizers keep it a dance instead of a spin:
-  - **Saturation** — past ~28° of slip, everything that deepens the slide fades to zero, so held full lock parks the car at a big stable angle rather than spinning out. Only counter-steer keeps full authority.
-  - **Lift-to-tighten** — lateral grip scales up as the throttle lifts (arcade weight transfer). On the power the slide runs; breathe and the line tightens. This is the tool against running wide.
-- **End** — slip under the exit threshold ends the drift (`driftEnd`). A drift that lasted and held real angle is **clean** and pays a speed boost proportional to its duration (capped). A token flick pays nothing; scrubbing to a crawl mid-slide ends the drift unpaid.
+- **The slide** — the turn being asked for costs `u × yawRate` of lateral
+  acceleration; the car has `gripAccel` to spend. Past that ceiling the slide
+  opens up (`TUNING.grip.slideRange`), and an angle already established keeps
+  it alive on its own (`slideSlip`) so the car does not snap back to grip in
+  the instant the wheel passes centre. Gentle steering never slides at any
+  speed; a committed turn slides from about 70 km/h up. No flick, no
+  handbrake, no kick — nothing is ever injected into the car's velocity.
+- **The rotation** — as the slide opens, the car gains yaw authority
+  (`driftYaw`) and the slip starts turning the nose itself: the tail leads
+  and you catch it on the counter. Two stabilizers keep it a dance instead of
+  a spin:
+  - **Saturation** — past ~26° of slip everything that deepens the slide
+    fades to zero, so held full lock parks the car at a big stable angle
+    rather than spinning out. Only counter-steer keeps full authority.
+  - **Lift-to-tighten** — lateral grip scales up as the throttle lifts
+    (arcade weight transfer). On the power the slide runs; breathe and the
+    line tightens. This is the tool against running wide.
+- **The cost** — the tires **redirect** the car instead of braking it: the
+  velocity swings back in behind the nose while its magnitude is kept, so a
+  corner taken sideways comes out at pace. Only `TUNING.grip.scrub × sin²
+(slip)` is actually burned off — ordinary cornering costs nothing, and even
+  a big drift bleeds a few percent per second. A drift is never _felt_ as a
+  brake; that is the whole point.
+- **The handbrake** — cuts rear grip and adds some yaw while it is held. It
+  unsticks the car; it does not teleport it sideways, and it does not slow it
+  down.
 
-Drift score accumulates as `|slip| × speed × time` — sideways AND fast is the score.
+`car.slide` and `car.drifting` are readouts for the dust, the HUD and the
+balance table — nothing in the model branches on them. `drifting` is read off
+the slip ANGLE, with hysteresis, because the angle is what a player sees and
+because it moves smoothly. Drift score accumulates as `|slip| × speed ×
+time` — sideways AND fast — purely as a measurement; nothing in the game
+rewards it, and no drift seconds are counted at the player.
 
 ## The jump
 
-- **Takeoff** — jump segments ramp up to a lip; crossing it throws the car with vertical speed proportional to pace × ramp slope (`takeoff`). Fast crests can also lift the car when the ground falls away.
+- **The ground** — grounded, the car **rides** the road: its vertical speed is the road's own, sampled between centerline points rather than snapped to the nearest one, so it climbs a ramp smoothly and nose-up (the renderer reads that attitude straight off `vy/u`) instead of hopping up it in 2 m stairs.
+- **Takeoff** — jump segments ramp up to a lip; crossing it throws the car with vertical speed proportional to pace × ramp slope (`takeoff`). A crest launches the car too, but only when the road falls away harder than gravity could pull it down over the next tenth of a second (`TUNING.air.crestLook`, `crestPull`) — so the same brow throws you at speed and holds you at a crawl, and a brow the car only just outruns does not stutter it into the air.
 - **Airborne** — the velocity vector is committed. Gravity is arcade-heavy (floatier hangs read as slow motion), the nose answers only faintly, and a small seeded turbulence rolls the car — flying, slightly out of control, exactly as intended. No lateral grip: whatever attitude you took off with survives to the ground.
 - **Landing** — straight (slip inside the clean limit) keeps all your speed: `CLEAN AIR`. Sideways scrubs speed and wobbles the car. Line up before the lip.
 
@@ -53,7 +84,7 @@ Too far off the road (or lingering off it) respawns the car back on the centerli
 Cars are data rows (`engine/game/defs/cars.ts`) — the model never branches per car:
 
 - **Vireo GT (auto)** — shifts itself, quicker off the line, grippier, softer top end. The phone-first car.
-- **Sable 4WD (manual)** — six gears on the driver, taller top, looser rear, a stronger drift boost. Per-gear torque tapers near each gear's ceiling, so holding a gear too long stops pulling — shifting is part of the pace.
+- **Sable 4WD (manual)** — six gears on the driver, taller top, less grip to lean on so it slides earlier and further. Per-gear torque tapers near each gear's ceiling, so holding a gear too long stops pulling — shifting is part of the pace.
 
 A manual shift cuts throttle briefly while it engages. The bot shifts by the same thresholds the auto box uses, so both cars are simulated fairly (see [simulation.md](simulation.md)).
 

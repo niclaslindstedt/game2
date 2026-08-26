@@ -85,7 +85,7 @@ export function createCarDirt(root: THREE.Group): CarDirt {
     let rate = 0;
     if (state.offRoad) rate = 0.14;
     else if (surface === "water") rate = 0.5;
-    else if (car.drifting) rate = 0.07;
+    else if (car.slide > 0.15) rate = 0.07;
     else if (car.u > 10) rate = 0.012;
     if (rate === 0) return;
     dirt = Math.min(1, dirt + rate * dt);

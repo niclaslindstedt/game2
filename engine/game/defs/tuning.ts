@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Global handling tuning — the numbers that shape the FEEL, shared by every
-// car (per-car numbers live in cars.ts). Grouped by the moments that matter:
-// the drift (start, hold, exit), the jump (takeoff, airborne, landing), and
-// the surfaces. Tweak here, verify with `npm run sim` and the drift/jump
-// tests; the render layer never reads these directly.
+// car (per-car numbers live in cars.ts). Grouped by what they shape: the
+// grip (which is also the drift — there is no separate drift model), the
+// jump (takeoff, airborne, landing), and the surfaces. Tweak here, verify
+// with `npm run sim` and the drift/jump tests; the render layer never reads
+// these directly.
 
 export const TUNING = {
   /** Fixed physics timestep, seconds (120 Hz). */
@@ -12,33 +13,52 @@ export const TUNING = {
   /** Countdown before control is handed over, seconds. */
   countdown: 3,
 
-  drift: {
-    /** Minimum forward speed for a drift to start, m/s. */
-    minSpeed: 9,
-    /** Above this speed (~70 km/h) a sharp steering input alone breaks the
-     * rear out — the Sega Rally entry: crank the wheel at pace and the car
-     * goes sideways without the handbrake. m/s. */
-    steerEnterSpeed: 19.5,
-    /** How committed the steering must be (|steer|, 0–1) for the
-     * speed entry to trigger. */
-    steerEnterLock: 0.75,
-    /** The speed entry's kick as a fraction of the handbrake kick — the
-     * tail steps out, it doesn't snap out. */
-    steerEnterKick: 0.55,
-    /** Handbrake sideways kick: lateral speed injected at drift start, m/s. */
-    kick: 4.5,
-    /** Yaw impulse at drift start in the steered direction, rad/s. */
-    yawKick: 1.1,
-    /** How strongly slip self-rotates the car while drifting, rad/s per rad. */
+  grip: {
+    /** The slide, 0..1, is how far past the tires' lateral limit the car is
+     * being asked to turn: demand (u·yawRate) over the car's grip ceiling,
+     * minus 1, divided by this range. Turn gently and it stays 0 — turn hard
+     * at pace and it reaches 1, which is all "drifting" means here. */
+    slideRange: 0.75,
+    /** A slide that is already established stays alive on slip angle alone,
+     * from this angle... */
+    slideSlip: 0.12,
+    /** ...up to this much more, so the car does not snap back to grip in the
+     * instant the wheel passes centre. Radians. */
+    slipRange: 0.3,
+    /** Speed a sliding tire actually burns off, 1/s — scaled by sin²(slip),
+     * so ordinary cornering costs nothing and even a big drift costs little.
+     * This is the number that decides whether a drift is FELT as a brake. */
+    scrub: 0.5,
+    /** How strongly slip self-rotates the car while sliding, rad/s per rad. */
     slipYaw: 1.6,
-    /** Counter-steer damping while drifting — the tug-of-war authority. */
-    counterDamp: 2.4,
-    /** Clean-exit boost cap, m/s. */
-    boostCap: 6,
-    /** Average slip a drift must hold for its exit to count as clean, rad. */
-    cleanSlip: 0.22,
-    /** Seconds a drift must last before the exit boost applies. */
-    minDuration: 0.5,
+    /** Slip angle where the forces that DEEPEN a slide begin to fade... */
+    satAt: 0.46,
+    /** ...and the range over which they fade to nothing, rad. Together these
+     * park a held slide at a stable angle instead of spinning the car. */
+    satWidth: 0.2,
+    /** Yaw response rate while gripping and while fully sliding, 1/s. */
+    yawResponse: { grip: 8, slide: 6.4 },
+    /** Rear grip while the handbrake is pulled (multiplier)... */
+    handbrakeGrip: 0.4,
+    /** ...and the yaw it adds toward the steered side, rad/s. The handbrake
+     * unsticks the rear; it does not teleport the car sideways. */
+    handbrakeYaw: 0.9,
+    /** Extra lateral grip from lifting off mid-slide (weight transfer). */
+    liftGrip: 0.6,
+  },
+
+  drift: {
+    /** Slip angle at which the car READS as drifting — dust, HUD, stats.
+     * Read off the ANGLE rather than the slide, because the angle is what a
+     * player sees and because it moves smoothly: the slide tracks steering
+     * input, which chatters, and a readout that chatters is a stuttering
+     * dust plume and a meaningless drift count. Radians. */
+    enterSlip: 0.18,
+    /** ...and the angle it has to settle back under before that drift is
+     * over. One corner is one drift, not thirty. */
+    exitSlip: 0.09,
+    /** Minimum forward speed for the readout, m/s. */
+    minSpeed: 9,
   },
 
   air: {
@@ -46,6 +66,19 @@ export const TUNING = {
     gravity: 9.8 * 1.6, // arcade gravity: floatier hangs read as slow-motion
     /** Vertical launch scale from the lip's ramp slope. */
     launchScale: 1.0,
+    /** Below this speed the car stays glued to the road however fast the
+     * ground falls away — only pace launches you off a crest, m/s. */
+    crestSpeed: 12,
+    /** How far ahead (seconds of travel) the car asks whether it can still
+     * follow the road down. Long enough that a brow either throws the car
+     * properly or not at all — comparing one 120 Hz frame to the next turns
+     * every gentle crest into a stutter of one-frame hops. */
+    crestLook: 0.15,
+    /** How much harder than gravity the road has to pull the car down over
+     * that look before it actually leaves the ground. A brow the car only
+     * just outruns would otherwise separate by a fraction of a millimetre
+     * and land again next frame — a stutter of takeoffs and landings. */
+    crestPull: 1.4,
     /** Steering yaw authority while airborne, rad/s — barely any. */
     yawAuthority: 0.35,
     /** Random turbulence torque while airborne, rad/s² — out of control. */

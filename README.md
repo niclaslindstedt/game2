@@ -11,13 +11,13 @@
 
 ## What
 
-Sideways is an arcade rally game — no account, no download. Pick your conditions on the pre-race screen (dawn, day, dusk, or night; clear, rain, or storm) and START. The feel is the point: drifts that start with a flick and end with a boost, jumps where the air is committed and slightly out of control, water fords that explode, a seeded wind that leans on the car and rips the exhaust fumes sideways. Stages are point-to-point and generated fresh from a seeded rules engine that respects rally reality: braking zones before hairpins, run-ups before jumps, fords only on straights, grades that climb on the straights and flatten through corners — rolling through a landscape of hillsides, distant mountains, and lakes that glitter in the sun. Everyone gets the same stage on a given day; every finish rolls into the next one.
+Sideways is an arcade rally game — no account, no download. Pick your conditions on the pre-race screen (dawn, day, dusk, or night; clear, rain, or storm) and START. The feel is the point: drifts that are simply what happens when you turn at speed, jumps where the air is committed and slightly out of control, water fords that explode, a seeded wind that leans on the car and rips the exhaust fumes sideways. Stages are point-to-point and generated fresh from a seeded rules engine that respects rally reality: braking zones before hairpins, run-ups before jumps, fords only on straights, grades that climb on the straights and flatten through corners — rolling through a landscape of hillsides, distant mountains, and lakes that glitter in the sun. Everyone gets the same stage on a given day; every finish rolls into the next one.
 
 Two cars ship at launch: the **Vireo GT** (automatic — quick, forgiving) and the **Sable 4WD** (manual — taller gears, looser rear, faster in good hands).
 
 ## Why
 
-- **Drifting first.** The handling model is built around three moments — the start of the drift, the hold against counter-steer, and the clean exit that pays a speed boost. Everything else serves those.
+- **Drifting first.** There is no drift button and no drift mode: turn harder than the tires can pay for and the car slides, and the tires redirect it rather than braking it, so going sideways keeps your pace. Everything else serves that.
 - **Flying, not floating.** The lip throws you, gravity is arcade-heavy, the nose barely answers midair, and a sideways landing costs you. Airborne feels like flying because you are along for the ride.
 - **Stages, endlessly.** A rules engine builds every stage under hard constraints (see [docs/track-generator.md](docs/track-generator.md)) — same seed, same stage, shareable and replayable.
 - **Measured, not guessed.** A headless simulator drives bot drivers through the real engine ([docs/simulation.md](docs/simulation.md)); the balance table and the test suite keep the generator and the handling honest with each other.
@@ -45,7 +45,7 @@ If the install fails on `@niclaslindstedt/oss-framework`, add a GitHub Packages 
 npm run dev
 ```
 
-Open the printed URL — pick time of day, weather, and car on the pre-race screen, then START into a 3-2-1 countdown. Keyboard: arrows/WASD drive, Space is the handbrake (the drift button), Left Shift burns the finite booster, Q/E shift the manual car, C reopens the race setup, V cycles the camera (chase/hood), R restarts the stage.
+Open the printed URL — pick time of day, weather, and car on the pre-race screen, then START into a 3-2-1 countdown. Keyboard: arrows/WASD drive, Space is the handbrake (unsticks the rear), Left Shift burns the finite booster, Q/E shift the manual car, C reopens the race setup, V cycles the camera (chase/hood), R restarts the stage.
 
 ## Usage
 

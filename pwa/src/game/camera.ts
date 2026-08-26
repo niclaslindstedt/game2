@@ -80,8 +80,16 @@ export function createGameCamera(width: number, height: number): GameCamera {
     );
     // Aim well down the road and low over the roof: the drop from camera
     // to aim point over ~14 m of run is the ~5° downward pitch of the
-    // reference frame — car at the bottom, horizon high.
-    camera.lookAt(car.x + Math.sin(yaw) * 8, car.y + 0.8 + sy * 0.5, car.z + Math.cos(yaw) * 8);
+    // reference frame — car at the bottom, horizon high. On a slope the aim
+    // rides the climb (vy/u is the road's gradient while grounded), so a
+    // ramp shows the sky over the brow instead of the camera burying its
+    // aim in the hillside.
+    const climb = clamp(car.vy / Math.max(10, car.u), -0.4, 0.4);
+    camera.lookAt(
+      car.x + Math.sin(yaw) * 8,
+      car.y + 0.8 + climb * 6 + sy * 0.5,
+      car.z + Math.cos(yaw) * 8,
+    );
   };
 
   const updateHood = (state: GameState, dt: number): void => {
@@ -93,12 +101,17 @@ export function createGameCamera(width: number, height: number): GameCamera {
     fov += (wantFov - fov) * clamp(5 * dt, 0, 1);
     const sx = (Math.random() - 0.5) * shake * 0.6;
     const sy = (Math.random() - 0.5) * shake * 0.6;
+    const climb = clamp(car.vy / Math.max(10, car.u), -0.4, 0.4);
     camera.position.set(
       car.x + Math.sin(yaw) * 0.4 + sx,
       car.y + 1.15 + sy,
       car.z + Math.cos(yaw) * 0.4,
     );
-    camera.lookAt(car.x + Math.sin(yaw) * 12, car.y + 0.9 + sy, car.z + Math.cos(yaw) * 12);
+    camera.lookAt(
+      car.x + Math.sin(yaw) * 12,
+      car.y + 0.9 + climb * 9 + sy,
+      car.z + Math.cos(yaw) * 12,
+    );
   };
 
   const update = (state: GameState, dt: number): void => {

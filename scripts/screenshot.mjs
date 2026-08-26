@@ -8,7 +8,7 @@
 // (CI/web sessions have one preinstalled at PLAYWRIGHT_BROWSERS_PATH).
 //
 //   node scripts/screenshot.mjs                # default script
-//   node scripts/screenshot.mjs --scene drift  # hold a handbrake drift
+//   node scripts/screenshot.mjs                # every scene below
 //
 // The app boots to the pre-race menu; captures pass ?start=1 (plus ?seed=,
 // ?tod=, ?weather=) to pin a run and skip the menu.
@@ -68,12 +68,6 @@ async function capture(name, viewport, script, params = "") {
   await page.close();
 }
 
-const hold = async (page, key, ms) => {
-  await page.keyboard.down(key);
-  await page.waitForTimeout(ms);
-  await page.keyboard.up(key);
-};
-
 // Start grid, landscape + portrait.
 await capture("shot-grid", { width: 1280, height: 720 }, async (page) => {
   await page.waitForTimeout(800);
@@ -89,14 +83,27 @@ await capture("shot-speed", { width: 1280, height: 720 }, async (page) => {
   await page.waitForTimeout(5000);
 });
 
-// Handbrake drift: flick at speed, stay on the power through the slide.
+// The drift: no flick, no handbrake — just a committed turn at pace, which
+// is the whole entry now. Held on the power so the slide is at its angle.
 await capture("shot-drift", { width: 1280, height: 720 }, async (page) => {
   await page.waitForTimeout(3200);
   await page.keyboard.down("ArrowUp");
   await page.waitForTimeout(4000);
   await page.keyboard.down("ArrowRight");
-  await hold(page, "Space", 180);
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(520);
+});
+
+// The first jump the stage offers, caught in the air — the moment the car's
+// attitude has to read right. Stages are generated, so a stage with no lip
+// inside the run-up just skips this shot instead of failing the sweep.
+await capture("shot-air", { width: 1280, height: 720 }, async (page) => {
+  await page.waitForTimeout(3200);
+  await page.keyboard.down("ArrowUp");
+  try {
+    await page.waitForSelector(".hud-air", { timeout: 45000 });
+  } catch {
+    console.log("  (no jump reached — shot-air is just the run)");
+  }
 });
 
 // Portrait at speed (touch HUD hidden on desktop; portrait shows scale).
