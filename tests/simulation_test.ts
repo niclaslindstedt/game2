@@ -5,7 +5,15 @@
 // builds a stage a decent driver cannot finish, this is what goes red.
 import { describe, expect, it } from "vitest";
 
-import { compileTrack, simulateStage } from "@engine";
+import {
+  STAGE_RULES,
+  TUNING,
+  botInput,
+  compileTrack,
+  createGame,
+  simulateStage,
+  step,
+} from "@engine";
 
 const SEEDS = [1, 2, 3, 7, 42, 99];
 
@@ -71,5 +79,21 @@ describe("bot simulations", () => {
     const a = simulateStage({ seed: 42, carId: "compact" });
     const b = simulateStage({ seed: 42, carId: "classic" });
     expect(a.digest).not.toBe(b.digest);
+  });
+
+  it("the bot can drive an endless stage forever — road always ahead, no finish", () => {
+    const state = createGame({ seed: 7, length: "endless", skipCountdown: true });
+    expect(state.track.endless).toBe(true);
+    const steps = Math.round(90 / TUNING.dt);
+    for (let i = 0; i < steps; i++) {
+      const events = step(state, botInput(state));
+      for (const ev of events) expect(ev.type).not.toBe("finish");
+    }
+    expect(state.phase).toBe("racing");
+    // Real distance covered, and the stream kept the horizon of road alive.
+    expect(state.progressS).toBeGreaterThan(1200);
+    expect(state.track.length).toBeGreaterThanOrEqual(
+      state.progressS + STAGE_RULES.endless.horizon,
+    );
   });
 });

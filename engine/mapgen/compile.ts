@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Compiles a stage plan (segment list) into the sampled centerline the
 // physics and the renderer both consume: evenly spaced samples carrying
-// position, heading, elevation, surface, and the jump lip flags. One
-// compilation is the single geometric truth for a stage — the car's ground
-// height, the road mesh, and the bot's racing line all read these samples.
+// position, heading, elevation, surface, and the jump lip flags — plus the
+// pacenote list the HUD calls from. One compilation is the single geometric
+// truth for a stage — the car's ground height, the road mesh, and the bot's
+// racing line all read these samples. The compiler is incremental: an
+// endless stage keeps appending to the same track as its stream produces
+// new sections.
 
-import type { SegmentPlan } from "./rules.ts";
+import type { SegmentPlan, StageLength, TurnSeverity } from "./rules.ts";
 import { STAGE_RULES as R } from "./rules.ts";
-import { generateStage } from "./generate.ts";
+import { createStageStream, generateStage } from "./generate.ts";
 import { createRng } from "../lib/prng.ts";
 
 export type Surface = "gravel" | "water";
@@ -24,8 +27,24 @@ export type TrackSample = {
   jump: boolean;
   /** Arc length from the stage start, meters. */
   s: number;
-  /** Signed curvature (1/radius, positive turning left), for the bot. */
+  /** Signed curvature (1/radius) of the plan the sample sits on, for the
+   * bot and the pacenotes; positive means the heading is growing. */
   curvature: number;
+};
+
+/** One co-driver call: a turn (or a run of same-direction turns) with its
+ * severity and total angle. `dir` is in ENGINE map-space — positive grows
+ * the heading, which the chase cam reads as a LEFT turn (the rendered world
+ * mirrors the engine's map view; the app flips once, like steering). */
+export type Pacenote = {
+  /** Arc position where the turn begins, meters. */
+  s: number;
+  /** Arc position where it ends, meters. */
+  endS: number;
+  dir: 1 | -1;
+  severity: TurnSeverity;
+  /** Total heading change through the note, radians — the LONG modifier. */
+  angle: number;
 };
 
 export type Track = {
@@ -39,10 +58,21 @@ export type Track = {
   /** Full road width, meters. */
   width: number;
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
+  /** Co-driver calls, in stage order. On an endless stage the tail note can
+   * still grow while its turn combination is at the streaming frontier. */
+  pacenotes: Pacenote[];
+  /** True when the stage streams forever instead of finishing. */
+  endless: boolean;
+  /** Endless only: materialize road until `length >= upToS`. Deterministic
+   * in the seed — when it is called makes no difference to what it builds.
+   * Returns true when new samples were appended. */
+  extend?: (upToS: number) => boolean;
 };
 
 /** Sample spacing along the centerline, meters. */
 export const SAMPLE_STEP = 2;
+
+const SEVERITY_RANK: Record<TurnSeverity, number> = { soft: 0, medium: 1, hard: 2 };
 
 /** Elevation profile within one segment at local arc position `u`. */
 function segmentElevation(plan: SegmentPlan, u: number): number {
@@ -85,9 +115,9 @@ function segmentSurface(plan: SegmentPlan, u: number): Surface {
   return "gravel";
 }
 
-/** Lattice size for the elevation noise. A stage is at most a couple of
- * kilometers and the shortest octave's lattice is tens of meters apart, so
- * the profile never gets far enough to wrap. */
+/** Lattice size for the elevation noise. The shortest octave's lattice is
+ * tens of meters apart, so even a long stage never gets far enough along
+ * the profile to notice the wrap. */
 const NOISE_LATTICE = 256;
 
 /** Seeded 1-D value noise: random heights every `spacing` meters, joined by
@@ -138,67 +168,163 @@ function straightness(curvature: number): number {
   return Math.max(0.06, Math.min(1, 1 / (1 + c * 120)));
 }
 
-/** Compile a stage. Omitting `segments` compiles the seed's GENERATED stage,
- * rolling hills included; passing segments builds a flat synthetic rig for
- * tests and tooling — scripted physics scenarios stay exactly scripted. */
-export function compileTrack(seed: number, segments?: SegmentPlan[]): Track {
-  const rolling = segments === undefined ? buildRolling(seed) : () => 0;
-  segments = segments ?? generateStage(seed);
-  const samples: TrackSample[] = [];
-  /** Arc position as the rolling layers see it — pauses through turns. */
-  let rollS = 0;
-  let x = 0;
-  let z = 0;
-  let heading = 0;
-  let s = 0;
-  let minX = 0;
-  let maxX = 0;
-  let minZ = 0;
-  let maxZ = 0;
+function smoothstep(t: number): number {
+  const c = t < 0 ? 0 : t > 1 ? 1 : t;
+  return c * c * (3 - 2 * c);
+}
 
-  for (const plan of segments) {
-    const steps = Math.max(1, Math.round(plan.length / SAMPLE_STEP));
-    const step = plan.length / steps;
-    const curvature = plan.kind === "turn" && plan.radius ? (plan.dir ?? 1) / plan.radius : 0;
-    const lipAt = plan.feature === "jump" ? (plan.featureEnd ?? -1) : -1;
-    for (let i = 0; i < steps; i++) {
-      const uPrev = i * step;
-      const u = uPrev + step;
-      if (curvature !== 0) heading += curvature * step;
-      x += Math.sin(heading) * step;
-      z += Math.cos(heading) * step;
-      s += step;
-      rollS += step * straightness(curvature);
-      // The lip flag lands on the last ramp sample: the one the car leaves.
-      // That sample sits at full lip height; past it the road is back at
-      // grade, which is the drop that throws the car.
-      const jump = lipAt >= 0 && uPrev < lipAt && u >= lipAt;
-      samples.push({
-        x,
-        z,
-        heading,
-        elevation: rolling(rollS) + (jump ? (plan.lipHeight ?? 2) : segmentElevation(plan, u)),
-        surface: segmentSurface(plan, u),
-        jump,
-        s,
-        curvature,
-      });
-      if (x < minX) minX = x;
-      if (x > maxX) maxX = x;
-      if (z < minZ) minZ = z;
-      if (z > maxZ) maxZ = z;
+/** R12 — the dip a ford sits in. Water lies FLAT at `bedDepth` below the
+ * lowest rolling grade around it (so it reads as collected, never perched),
+ * and the road eases down to it and back out over the aprons. Fords sit on
+ * straights, where the rolling profile advances 1:1 with arc, so the whole
+ * dip can be shaped from local arc position alone. Returns the elevation
+ * override for local position `u`, or null outside the dip. */
+function fordDip(
+  plan: SegmentPlan,
+  u: number,
+  rollS0: number,
+  rolling: (s: number) => number,
+): number | null {
+  if (plan.feature !== "water" || plan.featureStart === undefined || plan.featureEnd === undefined)
+    return null;
+  const from = plan.featureStart - R.water.apron;
+  const to = plan.featureEnd + R.water.apron;
+  if (u < from || u > to) return null;
+  let low = Infinity;
+  for (let v = from; v <= to; v += 2) low = Math.min(low, rolling(rollS0 + v));
+  const water = low - R.water.bedDepth;
+  if (u >= plan.featureStart && u <= plan.featureEnd) return water;
+  const t = u < plan.featureStart ? (u - from) / R.water.apron : (to - u) / R.water.apron;
+  const base = rolling(rollS0 + u);
+  return base + (water - base) * smoothstep(t);
+}
+
+type Cursor = { x: number; z: number; heading: number; s: number; rollS: number };
+
+type Compiler = {
+  append: (plans: SegmentPlan[]) => void;
+};
+
+/** The incremental heart: walks plans into samples, bounds, and pacenotes,
+ * carrying the cursor (and the open pacenote, so a turn combination split
+ * across two endless sections still merges into one call). */
+function createCompiler(track: Track, rolling: (s: number) => number): Compiler {
+  const cursor: Cursor = { x: 0, z: 0, heading: 0, s: 0, rollS: 0 };
+  let openNote: Pacenote | null = null;
+
+  const append = (plans: SegmentPlan[]): void => {
+    const b = track.bounds;
+    for (const plan of plans) {
+      track.segments.push(plan);
+      const steps = Math.max(1, Math.round(plan.length / SAMPLE_STEP));
+      const step = plan.length / steps;
+      const curvature = plan.kind === "turn" && plan.radius ? (plan.dir ?? 1) / plan.radius : 0;
+      const lipAt = plan.feature === "jump" ? (plan.featureEnd ?? -1) : -1;
+      const rollS0 = cursor.rollS;
+
+      // The co-driver's book: a turn opens a call (or deepens the open one
+      // when it continues in the same direction with no straight between);
+      // a straight closes it.
+      if (plan.kind === "turn" && plan.dir && plan.radius) {
+        const angle = plan.length / plan.radius;
+        const severity = plan.severity ?? "soft";
+        if (openNote && openNote.dir === plan.dir) {
+          openNote.endS = cursor.s + plan.length;
+          openNote.angle += angle;
+          if (SEVERITY_RANK[severity] > SEVERITY_RANK[openNote.severity]) {
+            openNote.severity = severity;
+          }
+        } else {
+          openNote = { s: cursor.s, endS: cursor.s + plan.length, dir: plan.dir, severity, angle };
+          track.pacenotes.push(openNote);
+        }
+      } else {
+        openNote = null;
+      }
+
+      for (let i = 0; i < steps; i++) {
+        const uPrev = i * step;
+        const u = uPrev + step;
+        if (curvature !== 0) cursor.heading += curvature * step;
+        cursor.x += Math.sin(cursor.heading) * step;
+        cursor.z += Math.cos(cursor.heading) * step;
+        cursor.s += step;
+        cursor.rollS += step * straightness(curvature);
+        // The lip flag lands on the last ramp sample: the one the car
+        // leaves. That sample sits at full lip height; past it the road is
+        // back at grade, which is the drop that throws the car.
+        const jump = lipAt >= 0 && uPrev < lipAt && u >= lipAt;
+        const dip = fordDip(plan, u, rollS0, rolling);
+        track.samples.push({
+          x: cursor.x,
+          z: cursor.z,
+          heading: cursor.heading,
+          elevation:
+            dip ??
+            rolling(cursor.rollS) + (jump ? (plan.lipHeight ?? 2) : segmentElevation(plan, u)),
+          surface: segmentSurface(plan, u),
+          jump,
+          s: cursor.s,
+          curvature,
+        });
+        if (cursor.x < b.minX) b.minX = cursor.x;
+        if (cursor.x > b.maxX) b.maxX = cursor.x;
+        if (cursor.z < b.minZ) b.minZ = cursor.z;
+        if (cursor.z > b.maxZ) b.maxZ = cursor.z;
+      }
     }
-  }
+    track.length = cursor.s;
+  };
 
+  return { append };
+}
+
+function emptyTrack(seed: number, endless: boolean): Track {
   return {
     seed,
-    segments,
-    samples,
+    segments: [],
+    samples: [],
     step: SAMPLE_STEP,
-    length: s,
+    length: 0,
     width: R.roadWidth,
-    bounds: { minX, maxX, minZ, maxZ },
+    bounds: { minX: 0, maxX: 0, minZ: 0, maxZ: 0 },
+    pacenotes: [],
+    endless,
   };
+}
+
+/** Compile the GENERATED stage for a seed at a menu length. Finite lengths
+ * build the whole stage; `endless` builds the opening stretch and hands
+ * back a track that extends itself (track.extend) as the run progresses. */
+export function compileStage(seed: number, length: StageLength = "medium"): Track {
+  const rolling = buildRolling(seed);
+  if (length !== "endless") {
+    const track = emptyTrack(seed, false);
+    createCompiler(track, rolling).append(generateStage(seed, length));
+    return track;
+  }
+  const track = emptyTrack(seed, true);
+  const compiler = createCompiler(track, rolling);
+  const stream = createStageStream(seed);
+  track.extend = (upToS: number): boolean => {
+    if (track.length >= upToS) return false;
+    const plans = stream.extendTo(upToS);
+    compiler.append(plans);
+    return plans.length > 0;
+  };
+  track.extend(R.endless.initial);
+  return track;
+}
+
+/** Compile a stage. Omitting `segments` compiles the seed's GENERATED stage
+ * at the default (medium) length, rolling hills included; passing segments
+ * builds a flat synthetic rig for tests and tooling — scripted physics
+ * scenarios stay exactly scripted. */
+export function compileTrack(seed: number, segments?: SegmentPlan[]): Track {
+  if (segments === undefined) return compileStage(seed, "medium");
+  const track = emptyTrack(seed, false);
+  createCompiler(track, () => 0).append(segments);
+  return track;
 }
 
 /** Ground elevation of the road at arc position `s` (clamped). */

@@ -9,6 +9,7 @@
 //   npm run sim -- --seeds 42,99         # specific seeds
 //   npm run sim -- --car classic         # one car
 //   npm run sim -- --count 20            # seeds 1..20
+//   npm run sim -- --length long         # stage length band (default medium)
 //   npm run sim -- --weather storm       # race in rain/storm wind
 //   npm run sim -- --json report.json    # machine-readable dump
 import { writeFileSync } from "node:fs";
@@ -17,7 +18,7 @@ import { fileURLToPath } from "node:url";
 import process from "node:process";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const { simulateStage, CARS } = await import(join(root, "engine/index.ts"));
+const { simulateStage, CARS, STAGE_RULES } = await import(join(root, "engine/index.ts"));
 
 const args = process.argv.slice(2);
 function flag(name) {
@@ -29,6 +30,15 @@ const seeds = flag("seeds")
   : Array.from({ length: Number(flag("count") ?? 8) }, (_, i) => i + 1);
 const cars = flag("car") ? [flag("car")] : CARS.map((c) => c.id);
 const weather = flag("weather") ?? "clear";
+const length = flag("length") ?? "medium";
+if (!(length in STAGE_RULES.stageLengths)) {
+  console.error(
+    `unknown length "${length}" (finite lengths: ${Object.keys(STAGE_RULES.stageLengths).join(", ")})`,
+  );
+  process.exit(1);
+}
+// The timeout scales with the band: twice the menu minutes is generous.
+const maxTime = Math.max(300, STAGE_RULES.stageLengths[length].minutes * 120);
 
 const pad = (v, n) => String(v).padStart(n);
 const rows = [];
@@ -53,7 +63,7 @@ console.log(
 );
 for (const seed of seeds) {
   for (const carId of cars) {
-    const r = simulateStage({ seed, carId, maxTime: 300, weather });
+    const r = simulateStage({ seed, carId, length, maxTime, weather });
     rows.push(r);
     console.log(
       [

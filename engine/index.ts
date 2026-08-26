@@ -42,15 +42,21 @@ export { TUNING } from "./game/defs/tuning.ts";
 export {
   STAGE_RULES,
   generateStage,
+  createStageStream,
   compileTrack,
+  compileStage,
   elevationAt,
   SAMPLE_STEP,
   type SegmentPlan,
   type SegmentFeature,
   type TurnSeverity,
+  type StageLength,
+  type FiniteStageLength,
+  type StageStream,
   type Surface,
   type Track,
   type TrackSample,
+  type Pacenote,
 } from "./mapgen/index.ts";
 
 // The headless simulator and its bot driver.

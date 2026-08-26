@@ -176,6 +176,9 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
 
     dust.update(dt);
     fumes.update(dt);
+    // An endless run streams its world: the road chunks and terrain tiles
+    // ahead get built here, the ones far behind get dropped.
+    world?.sync(state);
     world?.update(dt);
     car?.update(state, dt);
     chase.update(state, dt);
