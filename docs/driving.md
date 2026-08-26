@@ -21,20 +21,28 @@ one continuous response rather than two modes.
   (`driftYaw`) and the slip starts turning the nose itself — sustained by
   steering INTO the slide, so releasing the wheel stops feeding it and
   counter-steer both cuts the deepening and steers the catch.
+- **The wheel commands the angle.** The drift never steers itself: the
+  self-feeding forces are kept well under the wheel's authority, so full
+  lock is a deep drift, half lock a shallower one, and a centred wheel
+  hands the car back. What the front wheels show is what the car does.
 - **Power oversteer** — these are rear-wheel-drive cars, and the EXIT is
   where it shows: steered into the slide the corner behaves classically,
   but once the wheel stops asking for the angle the driven axle keeps
-  feeding it (`TUNING.grip.powerYaw`, ungated by saturation, faded by
-  steering into the slide). So a drift never settles on its own with the
-  power on — coming out of the corner takes a real counter-steer, or a
-  lift. The catch carries yaw momentum (`yawResponse.slide` sits a touch
-  under the grip-matched rate), so an over-held counter swings the
-  pendulum: the slip crosses centre into a second drift the other way,
-  which needs its own counter. Balancing that on the wheel is the game.
+  feeding it for a beat (`TUNING.grip.powerYaw`, ungated by saturation,
+  faded by steering into the slide). So a centred wheel on the power lets
+  the slide LINGER before grip gathers the car up — and a counter-steer
+  settles it faster still. The catch carries yaw momentum
+  (`yawResponse.slide` sits a touch under the grip-matched rate), so an
+  over-held counter swings the pendulum: the slip crosses centre into a
+  second drift the other way, which needs its own counter. Balancing that
+  on the wheel is the game.
 - Two stabilizers keep it a dance instead of an instant spin:
-  - **Saturation** — past ~26° of slip everything that deepens the slide
-    fades to zero except the power's own oversteer, so a breathed slide
-    parks at a big stable angle. Only counter-steer keeps full authority.
+  - **Saturation** — from ~17° of slip everything that deepens the slide
+    fades, reaching zero around 43° (`satAt` + `satWidth`), except the
+    power's own oversteer. The fade is deliberately WIDE: a narrow band
+    would park every steer past a third of lock at the same angle, while
+    the wide one moves the parked angle with the wheel. Only counter-steer
+    keeps full authority.
   - **Lift-to-tighten** — lateral grip scales up as the throttle lifts
     (arcade weight transfer). On the power the slide runs; breathe and the
     car both tightens its line and calms its tail. This is the tool against
@@ -98,12 +106,19 @@ The road runs through a landscape the car can actually drive
 the ground under the wheels IS the ground on screen). Leaving the road is
 not a mistake anymore; it is exploration:
 
-- **The ground** — off the verge the car rides the terrain: embankments,
-  rolling hills, ridged mountains, stream valleys, escarpment cliffs. Slope
-  and brow are read along the heading exactly like the road's, so a cliff
-  edge or a sharp bank at pace throws the car — spontaneous jumps, no ramp
-  required. Rough ground caps pace around 150 km/h
-  (`TUNING.surfaces.natureTop`); the road is faster, always.
+- **The ground** — off the verge the car rides the terrain — and it rides
+  the DRAWN terrain: the physics samples the same triangle lattice the
+  renderer builds its ground tiles from (`TerrainField.groundAt`,
+  `GROUND_CELL`), so the car sits on the slope on screen instead of
+  sinking into it where the analytic field and the mesh disagree. The
+  grade under the wheels is read over a wheelbase-scale baseline
+  (`TUNING.hills.gradeSpan`) along the heading AND across it: banks push
+  back the moment the wheels touch them, the nose pitches with the local
+  hillside, and a side slope pulls the car toward its downhill side. The
+  brow keeps the road's wide baseline, so a cliff edge or a sharp bank at
+  pace still throws the car — spontaneous jumps, no ramp required. Rough
+  ground caps pace around 150 km/h (`TUNING.surfaces.natureTop`); the road
+  is faster, always.
 - **Water** — the landscape floods below the water table
   (`terrain.LAKE_Y`): lakes, and whole sea basins. Shallows and streams
   slow the car and splash; **deep water is a crash** — splash, `crash`
@@ -133,4 +148,4 @@ A manual shift cuts throttle briefly while it engages. The bot shifts by the sam
 
 ## Tuning etiquette
 
-Numbers live in `engine/game/defs/tuning.ts` (global feel) and `cars.ts` (per car) — never inline in the model. Any change here must run `make sim` before and after, and keep `tests/drift_test.ts` / `tests/jump_test.ts` honest: those tests encode the moments this document describes.
+Numbers live in `engine/game/defs/tuning.ts` (global feel) and `cars.ts` (per car) — never inline in the model. The steering response has its own knob group (`TUNING.steering`: low-speed ramp-in, high-speed fade, the centred-wheel commitment floor, the tail-torque chatter guard) beside the grip/drift group (`TUNING.grip`). Any change here must run `make sim` before and after, and keep `tests/drift_test.ts` / `tests/jump_test.ts` honest: those tests encode the moments this document describes.

@@ -152,16 +152,21 @@ describe("rear-wheel drive", () => {
     expect(state.car.drifting).toBe(true);
   }
 
-  it("centering the wheel does not end a power slide — the counter does", () => {
+  it("centering the wheel lets the slide linger, then hands the car back", () => {
     const state = game();
     enterDrift(state);
     const entrySign = Math.sign(state.car.slip);
-    // Wheel straight, power still down: the driven rear keeps feeding the
-    // slide, so the car stays parked sideways instead of straightening.
-    run(state, { throttle: 1 }, 1.5);
+    // Wheel straight, power still down: the driven rear keeps the tail out
+    // for a beat — the drift does not snap off the instant the wheel
+    // centres...
+    run(state, { throttle: 1 }, 0.4);
     expect(state.car.drifting).toBe(true);
     expect(Math.sign(state.car.slip)).toBe(entrySign);
-    expect(Math.abs(state.car.slip)).toBeGreaterThan(0.3);
+    // ...but the angle is COMMANDED by the wheel, so with no input it
+    // gathers itself within a couple of seconds — slower than a counter
+    // (see below), never needing one.
+    run(state, { throttle: 1 }, 1.6);
+    expect(state.car.drifting).toBe(false);
   });
 
   it("lifting the throttle calms the car without any counter-steer", () => {

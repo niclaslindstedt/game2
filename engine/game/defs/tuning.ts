@@ -13,6 +13,25 @@ export const TUNING = {
   /** Countdown before control is handed over, seconds. */
   countdown: 3,
 
+  steering: {
+    /** Below this speed the wheel's authority ramps in from zero — you
+     * cannot pivot a parked car, m/s. Lower = livelier launches. */
+    deadSpeed: 6,
+    /** Speed that halves the wheel's authority at pace: the base gain is
+     * steerRate / (1 + u / this), m/s. Higher = twitchier at speed,
+     * lower = more straight-line stability. */
+    fadeSpeed: 20,
+    /** How much the slip's self-rotation acts with the wheel CENTRED,
+     * 0..1, rising linearly to 1 at full lock. This is the "commitment"
+     * that lets a held wheel sustain a slide, a centred wheel gather the
+     * car up, and a full counter damp the catch into a clean exit. */
+    commitmentFloor: 0.25,
+    /** Slip angle over which the power oversteer's tail torque softens its
+     * sign as the slip crosses centre, rad — the chatter guard that keeps
+     * the drift's push from flip-flopping at tiny angles. */
+    tailSoftSlip: 0.08,
+  },
+
   grip: {
     /** The slide, 0..1, is how far past the tires' lateral limit the car is
      * being asked to turn: demand (u·yawRate) over the car's grip ceiling,
@@ -32,18 +51,23 @@ export const TUNING = {
     /** How strongly slip self-rotates the car while sliding, rad/s per rad. */
     slipYaw: 1.6,
     /** Slip angle where the forces that DEEPEN a slide begin to fade... */
-    satAt: 0.46,
+    satAt: 0.3,
     /** ...and the range over which they fade to nothing, rad. Together these
      * park a breathed-throttle slide at a stable angle instead of spinning
-     * the car. */
-    satWidth: 0.2,
+     * the car. The fade is deliberately WIDE: a narrow band is a cliff that
+     * parks every steer past a third of lock at the same angle — spread out,
+     * the equilibrium moves with the wheel, so half lock is a shallower
+     * drift than full lock and the angle is COMMANDED, not self-chosen. */
+    satWidth: 0.45,
     /** RWD power oversteer: yaw the driven rear axle feeds the slide while
      * the power is down and the wheel is NOT steered into it, rad/s at full
-     * throttle, full slide and pace. Ungated by the saturation band, so the
-     * slide never dies on its own after the corner — the counter-steer (or
-     * a lift) is what settles the car back to straight. Zero restores a car
-     * that straightens itself the moment the wheel centres. */
-    powerYaw: 1.0,
+     * throttle, full slide and pace. Ungated by the saturation band, so a
+     * centred wheel on the power lets the slide LINGER for a beat instead
+     * of snapping straight — a counter still settles it faster. Kept well
+     * under the wheel's own authority (driftYaw): if the hands-off push
+     * rivals what full lock adds, the drift steers itself and the wheel
+     * commands only the last few degrees. */
+    powerYaw: 0.55,
     /** Yaw response rate while gripping and while fully sliding, 1/s. The
      * slide rate sits a touch under the old grip-matched value so a hard,
      * over-held catch carries enough momentum to swing the pendulum into an
@@ -165,8 +189,16 @@ export const TUNING = {
   hills: {
     /** Fraction of real gravity felt along the road grade — climbing costs
      * speed, a descent gives it back. Kept arcade-soft so the top of a long
-     * rise never stalls the run. */
+     * rise never stalls the run. Off the road the same fraction also acts
+     * ACROSS the car (see slopeLat in car.ts), pulling it toward a
+     * hillside's downhill side. */
     gravityAlong: 0.6,
+    /** Baseline the off-road grade under the car is measured over, m —
+     * wheelbase scale, so a bank pushes back the moment the wheels are on
+     * it. The crest check keeps its own wide baseline (air.crestSpan): this
+     * one is for the slope the car STANDS on, that one for the shape of
+     * the hill ahead. */
+    gradeSpan: 4,
   },
 
   wind: {

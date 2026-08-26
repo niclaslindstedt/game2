@@ -17,6 +17,9 @@ import type { Track } from "./compile.ts";
 
 /** The water table: ground below this floods into lakes and seas, m. */
 export const LAKE_Y = -11;
+/** Edge length of the ground lattice the physics rides and the renderer
+ * triangulates its ground tiles on, m. The two must agree — see groundAt. */
+export const GROUND_CELL = 14;
 /** Plain dirt road extrapolated straight past each stage end, m — the
  * rally start's run-up before the gate, and run-off past the flying
  * finish. The terrain keeps its shelf flat under the same corridor so the
@@ -228,9 +231,15 @@ const OB_ROAD_CLEAR = 10;
 
 export type TerrainField = {
   /** Final ground height at a world position — corridor shelf, hills,
-   * mountains, sea floor, stream beds and all. What the car rides and what
-   * scenery stands on. */
+   * mountains, sea floor, stream beds and all. The analytic field scenery
+   * stands on and the renderer samples its ground meshes from. */
   heightAt: (x: number, z: number) => number;
+  /** The ground the car RIDES: `heightAt` sampled on the GROUND_CELL
+   * lattice and interpolated across the same triangles the renderer draws,
+   * so the physics ground IS the drawn ground. The analytic field between
+   * lattice points disagrees with the mesh by up to a meter on curved
+   * slopes — riding it buries the car in every concave hillside. */
+  groundAt: (x: number, z: number) => number;
   /** The landscape far from any road (mountains and sea included) — what
    * streams read to find their downhill side, and tooling can preview. */
   farHeightAt: (x: number, z: number) => number;
@@ -368,6 +377,40 @@ export function createTerrain(track: Track): TerrainField {
 
   const heightAt = (x: number, z: number): number => carveGround(streams, x, z, rawHeight(x, z));
 
+  // Lattice corners are hot (every off-road step reads several), so they
+  // are cached; the cache clears whenever the field itself changes shape
+  // (new streams carved, the endless prune re-anchoring the corridor).
+  let cornerCache = new Map<string, number>();
+  const cornerHeight = (i: number, j: number): number => {
+    const key = `${i},${j}`;
+    const hit = cornerCache.get(key);
+    if (hit !== undefined) return hit;
+    if (cornerCache.size > 8192) cornerCache = new Map();
+    const y = heightAt(i * GROUND_CELL, j * GROUND_CELL);
+    cornerCache.set(key, y);
+    return y;
+  };
+
+  // Each lattice cell splits into two triangles along the same diagonal the
+  // renderer's tile indexing uses — (i+1,j) to (i,j+1) — so this is the
+  // exact drawn surface, not an approximation of it.
+  const groundAt = (x: number, z: number): number => {
+    const gx = x / GROUND_CELL;
+    const gz = z / GROUND_CELL;
+    const i = Math.floor(gx);
+    const j = Math.floor(gz);
+    const fx = gx - i;
+    const fz = gz - j;
+    if (fx + fz <= 1) {
+      const h00 = cornerHeight(i, j);
+      return h00 + fx * (cornerHeight(i + 1, j) - h00) + fz * (cornerHeight(i, j + 1) - h00);
+    }
+    const h11 = cornerHeight(i + 1, j + 1);
+    return (
+      h11 + (1 - fx) * (cornerHeight(i, j + 1) - h11) + (1 - fz) * (cornerHeight(i + 1, j) - h11)
+    );
+  };
+
   const waterAt = (x: number, z: number): number | null => {
     const ground = heightAt(x, z);
     if (ground < LAKE_Y) return LAKE_Y;
@@ -394,7 +437,10 @@ export function createTerrain(track: Track): TerrainField {
       const near = nearestSample(x, z);
       const clear = !near || near.d > half + OB_ROAD_CLEAR;
       if (clear && !inStream(streams, x, z, 1)) {
-        const y = heightAt(x, z);
+        // Feet on the RIDDEN ground: the car collides against `y`, so a
+        // prop planted on the analytic field could hover a step above the
+        // surface the car actually drives on.
+        const y = groundAt(x, z);
         if (y > LAKE_Y + 1) {
           const boulder = hash2(cx, cz, obSeed + 3) < 0.55;
           const size = 0.8 + hash2(cx, cz, obSeed + 4);
@@ -439,8 +485,10 @@ export function createTerrain(track: Track): TerrainField {
       indexed = samples.length;
       streams.push(...computeStreams(track, streamScan, farField));
       streamScan = samples.length;
-      // New road may have arrived where a prop stood — revalidate.
+      // New road may have arrived where a prop stood — revalidate; fresh
+      // stream valleys reshape the ground, so the lattice re-samples too.
       obCache = new Map();
+      cornerCache = new Map();
     }
     if (!track.endless) return;
     // Forget road the run has left behind: the sample grid re-anchors to
@@ -453,6 +501,7 @@ export function createTerrain(track: Track): TerrainField {
       indexSamples(firstIndexed, samples.length);
       while (streams.length > 0 && streams[0].centerS < floorS) streams.shift();
       obCache = new Map();
+      cornerCache = new Map();
     }
   };
 
@@ -460,5 +509,14 @@ export function createTerrain(track: Track): TerrainField {
 
   const roadDistanceAt = (x: number, z: number): number => nearestSample(x, z)?.d ?? Infinity;
 
-  return { heightAt, farHeightAt: farField, waterAt, roadDistanceAt, streams, obstaclesNear, sync };
+  return {
+    heightAt,
+    groundAt,
+    farHeightAt: farField,
+    waterAt,
+    roadDistanceAt,
+    streams,
+    obstaclesNear,
+    sync,
+  };
 }

@@ -17,6 +17,25 @@ import type { GameState } from "@engine";
 export type CameraMode = "chase" | "hood";
 export const CAMERA_MODES: CameraMode[] = ["chase", "hood"];
 
+/** Aspect ratio the fov numbers in this file are tuned against (landscape). */
+const REF_ASPECT = 16 / 9;
+/** Vertical fov ceiling on narrow viewports, deg — where hor+ stops before
+ * a phone held upright turns into a fisheye. */
+const MAX_VFOV = 110;
+
+/** three.js fov is VERTICAL, so a fixed number collapses the horizontal
+ * field on a narrow viewport: portrait would see ~30° across, and every
+ * degree of yaw would sweep three times more of the frame width than in
+ * landscape — steering and drift READ as wildly amplified even though the
+ * physics is identical. Below the reference aspect the horizontal field is
+ * held instead (hor+), so a turn sweeps the same share of the frame
+ * whichever way the phone is held. */
+function verticalFovFor(designFov: number, aspect: number): number {
+  if (!(aspect < REF_ASPECT)) return designFov;
+  const halfH = Math.atan(Math.tan((designFov * Math.PI) / 360) * REF_ASPECT);
+  return Math.min(MAX_VFOV, (Math.atan(Math.tan(halfH) / aspect) * 360) / Math.PI);
+}
+
 export type GameCamera = {
   camera: THREE.PerspectiveCamera;
   mode: () => CameraMode;
@@ -133,7 +152,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
     shake = Math.max(0, shake - 6 * dt * shake - 0.4 * dt);
     if (mode === "hood") updateHood(state, dt);
     else updateChase(state, dt);
-    camera.fov = fov;
+    camera.fov = verticalFovFor(fov, camera.aspect);
     camera.updateProjectionMatrix();
   };
 

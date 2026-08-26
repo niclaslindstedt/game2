@@ -1,28 +1,23 @@
 ---
-title: Oversteer that needs a counter is a BOUNDED ungated torque — un-gating the saturation spins instantly
+title: Self-feeding drift torques must stay well under the wheel's authority, and the saturation fade must be WIDE
 date: 2026-08-26
 scope: engine/game/
-concepts: [drift, oversteer, rwd, counter-steer, pendulum]
+concepts: [drift, oversteer, rwd, counter-steer, pendulum, steering-authority]
 ---
 
-Two ways to make a drift demand counter-steer, and only one is playable.
-Pushing the saturation angle out with throttle un-gates EVERY deepening
-force at once (full-lock steer term + slip self-rotation), and the car
-swaps ends in ~1.2 s — no reaction window. A separate bounded power torque
-(`T.grip.powerYaw · throttle · slide`, ungated by `sat`) instead parks the
-slip at a predictable equilibrium `powerYaw / (driftLat · surfaceGrip)`:
-deep enough that the drift never ends on its own, gentle enough to catch.
-That formula is the tuning handle — surface grip scales it, so low-grip
-surfaces spin easier for free. But even the bounded torque must ALSO fade
-with steering INTO the slide (`× (1 − intoSlide)`): applied mid-corner it
-deepens the held drift past the tuned park angle and the whole game reads
-as steering too much — playtesting called it "wobbly". Gated that way the
-oversteer lives only at the EXIT: steered in, the corner is classic; wheel
-released, the slide lingers and takes a real counter to settle. The
-pendulum (a catch that swings into an opposite drift) needs no extra
-mechanism: a slightly lowered `yawResponse.slide` leaves momentum in the
-body, and the soft sign on the torque (`clamp(-slip/0.08)`) re-aims it at
-the new slide the moment slip crosses centre. Verify with slip-vs-time
-traces from a scripted probe, not the sim table — the table only shows
-drift time rising; the traces show whether the catch exists and whether
-the mid-corner park angle moved.
+Two ways a drift model stops answering the wheel, both playtested into this
+repo. (1) A power torque (`T.grip.powerYaw`) whose hands-off equilibrium
+`powerYaw / (driftLat · surfaceGrip)` sits at or above where full lock
+parks: the slide reaches its angle on its own and the wheel commands only
+the last few degrees — reported as "the drift is steering itself". Keep
+that equilibrium far below the full-lock park angle; the lingering tail on
+exit survives at a fraction of the wheel's authority. (2) A narrow
+saturation band (`satAt`/`satWidth`): the deepening forces hit a cliff, so
+every steer past about a third of lock parks at the same angle — half lock
+and full lock become the same drift. A wide fade tilts the equilibrium so
+the parked angle moves with the wheel. The bounded torque still needs its
+`× (1 − intoSlide)` gate (ungated it deepens held corners past the tuned
+angle — "wobbly") and the soft sign `clamp(-slip/T.steering.tailSoftSlip)`
+for the pendulum. Verify with slip-vs-time traces from a scripted probe at
+several LOCKS (0, 0.5, 1.0) — the sim table cannot see whether the wheel
+commands the angle, and a full-lock-only probe cannot either.

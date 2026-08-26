@@ -33,6 +33,15 @@ export type InputManager = {
   dispose: () => void;
 };
 
+/** Keyboard steering ramp, 1/s: a held arrow eases toward full lock at
+ * this rate... */
+const KEY_STEER_ATTACK = 6;
+/** ...and a released one snaps back to centre at this one — faster, so
+ * letting go is letting go, not a slow unwind. */
+const KEY_STEER_RELEASE = 9;
+/** Below this the centred keyboard axis snaps to exactly zero. */
+const KEY_STEER_SNAP = 0.02;
+
 export function createInput(target: Window = window): InputManager {
   const down = new Set<string>();
   let steer = 0;
@@ -70,9 +79,9 @@ export function createInput(target: Window = window): InputManager {
     const right = down.has("ArrowRight") || down.has("KeyD");
     // Screen-space: the right arrow is +1 here, negated below for the engine.
     const keyTarget = (right ? 1 : 0) - (left ? 1 : 0);
-    const rate = keyTarget === 0 ? 9 : 6;
+    const rate = keyTarget === 0 ? KEY_STEER_RELEASE : KEY_STEER_ATTACK;
     steer += (keyTarget - steer) * Math.min(1, rate * dt);
-    if (Math.abs(steer) < 0.02 && keyTarget === 0) steer = 0;
+    if (Math.abs(steer) < KEY_STEER_SNAP && keyTarget === 0) steer = 0;
 
     const input: CarInput = {
       steer: -(touch.steer !== 0 ? touch.steer : steer),

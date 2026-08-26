@@ -14,6 +14,14 @@ import { buildCarBody } from "./car-body.ts";
 import { createCarDirt } from "./car-dirt.ts";
 import { bodySpecFor } from "./car-styles.ts";
 
+/** Front-wheel visual steer: radians of wheel angle at full lock... */
+const WHEEL_STEER_LOCK = 0.55;
+/** ...hard-clamped here, rad — past this the wheels read as broken. */
+const WHEEL_STEER_MAX = 0.7;
+/** How fast the drawn wheels chase the input, 1/s — quick enough to read
+ * as the driver's hands, slow enough not to strobe at 120 Hz input. */
+const WHEEL_STEER_RATE = 14;
+
 export type CarVisual = {
   group: THREE.Group;
   shadow: THREE.Mesh;
@@ -63,8 +71,8 @@ export function buildCar(spec: CarSpec): CarVisual {
     // Wheels: spin with road speed, front pair points where the driver
     // points them — counter-steer in a drift shows because the input does.
     const spin = (car.u * dt) / bodySpec.wheelRadius;
-    const wantSteer = clamp(car.steer * 0.55, -0.7, 0.7);
-    steerVisual += (wantSteer - steerVisual) * clamp(14 * dt, 0, 1);
+    const wantSteer = clamp(car.steer * WHEEL_STEER_LOCK, -WHEEL_STEER_MAX, WHEEL_STEER_MAX);
+    steerVisual += (wantSteer - steerVisual) * clamp(WHEEL_STEER_RATE * dt, 0, 1);
     for (let i = 0; i < body.wheelSpin.length; i++) {
       body.wheelSpin[i].rotation.x += spin;
       if (i < 2) body.wheelGroups[i].rotation.y = steerVisual;
