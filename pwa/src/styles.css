@@ -210,6 +210,40 @@ body {
   line-height: 1;
 }
 
+.hud-boostbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: 0.5rem;
+}
+
+.hud-boostbar-label {
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.hud-boostbar-track {
+  position: relative;
+  width: clamp(4.5rem, 14vmin, 7rem);
+  height: 0.55rem;
+  background: rgb(18 48 105 / 55%);
+  border: 2px solid rgb(255 255 255 / 70%);
+  border-radius: 0.4rem;
+  overflow: hidden;
+}
+
+.hud-boostbar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--hud-good);
+  transition: width 120ms linear;
+}
+
+.hud-boostbar-hot .hud-boostbar-fill {
+  background: var(--hud-bad);
+}
+
 .hud-speed-unit {
   font-size: clamp(0.8rem, 2.6vmin, 1.2rem);
 }
@@ -249,24 +283,130 @@ body {
   pointer-events: none;
 }
 
-.hud-touch-left,
-.hud-touch-right {
+/* The two thumb zones: the screen's halves below the top bar. The wheel or
+   pedal hint anchors wherever the thumb lands inside its zone. */
+.hud-zone {
   position: absolute;
-  bottom: max(4.5rem, calc(env(safe-area-inset-bottom) + 4rem));
-  display: flex;
-  gap: 0.8rem;
-  align-items: flex-end;
+  top: 22%;
+  bottom: 0;
+  width: 50%;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.hud-zone-left {
+  left: 0;
+}
+
+.hud-zone-right {
+  right: 0;
+}
+
+/* The steering wheel, anchored at the touch point. Rotation follows the
+   drag via --turn — written by the pointer events, never by React, so it
+   answers at pointer rate rather than the HUD's 12 Hz. */
+.hud-wheel {
+  position: absolute;
+  display: none;
+  width: 0;
+  height: 0;
   pointer-events: none;
+  animation: hud-anchor-in 100ms steps(2);
 }
 
-.hud-touch-left {
-  left: max(1rem, env(safe-area-inset-left));
+.hud-wheel-svg {
+  position: absolute;
+  left: -60px;
+  top: -60px;
+  width: 120px;
+  height: 120px;
+  color: var(--hud-ink);
+  opacity: 0.85;
+  transform: rotate(var(--turn, 0deg));
+  filter: drop-shadow(2px 2px 0 rgb(18 48 105 / 60%));
 }
 
-.hud-touch-right {
-  right: max(1rem, env(safe-area-inset-right));
+@keyframes hud-anchor-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* The pedal hint: three arrows ringing the right thumb's anchor — up
+   BRAKE, down BOOST, right DRIFT — the active gesture lit via data-mode. */
+.hud-pedal-hint {
+  position: absolute;
+  display: none;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  animation: hud-anchor-in 100ms steps(2);
+}
+
+.hud-hint {
+  position: absolute;
+  display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--hud-ink);
+  opacity: 0.4;
+  transition: opacity 90ms steps(2);
+}
+
+.hud-hint-up {
+  left: 0;
+  top: -4.8rem;
+  transform: translateX(-50%);
+}
+
+.hud-hint-down {
+  left: 0;
+  top: 2.6rem;
+  transform: translateX(-50%);
+  flex-direction: column-reverse;
+}
+
+.hud-hint-right {
+  left: 2.6rem;
+  top: 0;
+  transform: translateY(-50%);
+  flex-direction: row;
+}
+
+.hud-hint-arrow {
+  width: 0;
+  height: 0;
+  border: 7px solid transparent;
+}
+
+.hud-hint-arrow-up {
+  border-top-width: 0;
+  border-bottom: 10px solid currentcolor;
+}
+
+.hud-hint-arrow-down {
+  border-bottom-width: 0;
+  border-top: 10px solid currentcolor;
+}
+
+.hud-hint-arrow-right {
+  border-right-width: 0;
+  border-left: 10px solid currentcolor;
+}
+
+.hud-pedal-hint[data-mode="brake"] .hud-hint-up,
+.hud-pedal-hint[data-mode="boost"] .hud-hint-down,
+.hud-pedal-hint[data-mode="handbrake"] .hud-hint-right {
+  opacity: 1;
+  color: var(--hud-good);
 }
 
 .hud-btn {
@@ -289,40 +429,14 @@ body {
   color: var(--hud-shadow);
 }
 
-.hud-steer {
-  width: clamp(4.2rem, 16vmin, 6.5rem);
-  height: clamp(4.2rem, 16vmin, 6.5rem);
-  font-size: 2rem;
-}
-
-.hud-pedals {
-  display: flex;
-  gap: 0.8rem;
-}
-
-.hud-gas {
-  width: clamp(4.2rem, 16vmin, 6.5rem);
-  height: clamp(4.2rem, 16vmin, 6.5rem);
-  font-size: clamp(0.9rem, 3vmin, 1.2rem);
-}
-
-.hud-brake {
-  width: clamp(3.2rem, 12vmin, 5rem);
-  height: clamp(4.2rem, 16vmin, 6.5rem);
-  font-size: clamp(0.7rem, 2.4vmin, 1rem);
-}
-
-.hud-hand {
-  width: clamp(3.6rem, 14vmin, 5.6rem);
-  height: clamp(2.6rem, 9vmin, 3.6rem);
-  margin-bottom: 0.7rem;
-  font-size: clamp(0.75rem, 2.6vmin, 1.05rem);
-}
-
+/* Manual gear taps float over the pedal zone's top-right corner — later in
+   the DOM than the zones, so a tap lands on the button, not the pedal. */
 .hud-gears {
+  position: absolute;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(4.5rem, calc(env(safe-area-inset-bottom) + 4rem));
   display: flex;
   gap: 0.5rem;
-  margin-bottom: 0.7rem;
   pointer-events: none;
 }
 

@@ -14,13 +14,14 @@ Open [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/). The game boo
 | ↓ / S     | Brake                         |
 | ← → / A D | Steer                         |
 | Space     | Handbrake — the drift button  |
+| L. Shift  | Booster — finite, no refills  |
 | E / X     | Shift up (manual car)         |
 | Q / Z     | Shift down (manual car)       |
 | C         | Swap car (restarts the stage) |
 | V         | Camera: chase ↔ hood          |
 | R         | Restart stage                 |
 
-**Phone (touch):** steer pads bottom-left; GAS, BRAKE and DRIFT bottom-right; the manual car adds − / + gear buttons. Works in portrait and landscape — the HUD re-flows.
+**Phone (touch):** the left half of the screen is the wheel — touch anywhere and drag sideways to steer; the wheel turns as far as you push it. The right half is the pedal: touching it is GAS, drag up to BRAKE, drag down to burn the BOOSTER (finite — it never refills), drag right for the handbrake (DRIFT — good for tight curves). The manual car adds − / + gear buttons. Works in portrait and landscape — the HUD re-flows.
 
 ### Installing on your phone
 

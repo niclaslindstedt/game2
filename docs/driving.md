@@ -20,6 +20,10 @@ Drift score accumulates as `|slip| × speed × time` — sideways AND fast is th
 - **Airborne** — the velocity vector is committed. Gravity is arcade-heavy (floatier hangs read as slow motion), the nose answers only faintly, and a small seeded turbulence rolls the car — flying, slightly out of control, exactly as intended. No lateral grip: whatever attitude you took off with survives to the ground.
 - **Landing** — straight (slip inside the clean limit) keeps all your speed: `CLEAN AIR`. Sideways scrubs speed and wobbles the car. Line up before the lip.
 
+## The booster
+
+A finite tank of raw thrust (`TUNING.boost`): hold boost to burn it for extra forward acceleration on top of engine torque, unaffected by gearing or surface. The thrust fades to zero approaching an overrun cap just past the car's final gear top, so it stretches the top end rather than breaking it. The tank never refills — not even on respawn — and rationing it across the stage is the game. Grounded only: airborne the velocity is committed, booster included. Emits `boostStart` on ignition and `boostEmpty` once, when the tank runs dry.
+
 ## Surfaces
 
 | Surface | Effect                                                                 |

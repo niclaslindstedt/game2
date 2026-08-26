@@ -162,6 +162,21 @@ export function stepGrounded(
   if (input.handbrake) car.u -= 4 * Math.sign(car.u) * dt;
   if (Math.abs(car.u) < 0.05 && input.throttle === 0) car.u = 0;
 
+  // ── Boost ────────────────────────────────────────────────────────────────
+  // The finite booster: raw thrust on top of engine torque, ignoring gearing
+  // and surface, fading to zero toward the overrun cap so it stretches the
+  // top end rather than breaking it. The tank never refills — see freshCar.
+  const burning = input.boost && car.boostLeft > 0;
+  if (burning && !car.boosting) events.push({ type: "boostStart" });
+  car.boosting = burning;
+  if (burning) {
+    const cap = spec.gearTop[spec.gearTop.length - 1] * T.boost.overrun;
+    const headroom = clamp((cap - car.u) / (cap * 0.12), 0, 1);
+    car.u += T.boost.accel * headroom * dt;
+    car.boostLeft = Math.max(0, car.boostLeft - dt);
+    if (car.boostLeft === 0) events.push({ type: "boostEmpty" });
+  }
+
   // ── Lateral grip ─────────────────────────────────────────────────────────
   // Weight transfer, arcade-sized: staying on the power keeps the rear
   // loose; lifting mid-drift tightens the line. This is the player's tool
@@ -241,6 +256,7 @@ export function stepAirborne(
   const dt = T.dt;
   car.airTime += dt;
   stats.airTime += dt;
+  car.boosting = false; // no thrust in the air — the velocity is committed
 
   car.yawRate += input.steer * T.air.yawAuthority * dt;
   car.yawRate += (ctx.rng.next() - 0.5) * 2 * T.air.turbulence * dt;
