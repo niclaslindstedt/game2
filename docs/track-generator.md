@@ -22,6 +22,10 @@ The generator respects rally reality. Verbatim from the rule book, each enforced
 - **R10** The centerline never crosses itself — non-adjacent parts of the stage keep a minimum distance between them (measured per candidate point beyond an 80 m route-neighbour window, so hairpins stay legal and folds stay impossible).
 - **R11** Total stage length lands inside the mandated band (~1.6–2.6 km).
 
+## Rolling elevation
+
+Generated stages are genuinely 3D: under the feature ramps, `compileTrack` layers three seeded sine waves along arc length (`STAGE_RULES.elevation` — long climbs, medium rollers, and a bump layer you feel more than see). Grades live on the straights and flatten through corners (`straightness` in `compile.ts`) — partly stage-design taste, partly load-bearing: a car cutting inside a turn sweeps whole samples of arc per physics step, and a real grade across that sweep would read as the ground falling away. Synthetic tracks (`compileTrack(seed, segments)`) stay flat rigs so scripted physics tests measure exactly what they script.
+
 ## Determinism and the daily stage
 
 `generateStage(seed)` → `compileTrack(seed)` is deterministic end to end: the same seed always builds the same stage, on every device. The app seeds from the day number, so everyone drives the same stage today; each finish advances to the next seed. Seeds are also the bug-report currency (the HUD shows the stage seed).

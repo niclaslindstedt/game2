@@ -25,7 +25,7 @@ export type InputManager = {
     boost: boolean;
   };
   requestShift: (dir: 1 | -1) => void;
-  /** Fired on R (restart) / C (car swap) / V (camera) so the app can react. */
+  /** Fired on R (restart) / C (race setup) / V (camera) so the app can react. */
   onAction: (handler: (action: "restart" | "swap" | "camera") => void) => void;
   dispose: () => void;
 };

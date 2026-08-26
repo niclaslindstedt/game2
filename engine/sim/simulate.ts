@@ -7,7 +7,7 @@
 // seed, car, and profile always produce the same digest.
 
 import { createGame, step } from "../game/step.ts";
-import type { GameEvent, GameState } from "../game/state.ts";
+import type { GameEvent, GameState, Weather } from "../game/state.ts";
 import { botInput, RALLY_BOT, type BotProfile } from "./bot.ts";
 import { TUNING } from "../game/defs/tuning.ts";
 
@@ -17,6 +17,8 @@ export type SimOptions = {
   profile?: BotProfile;
   /** Give up after this much simulated race time, seconds. */
   maxTime?: number;
+  /** Weather to race in (sets the wind band). Defaults to clear. */
+  weather?: Weather;
 };
 
 export type SimResult = {
@@ -37,7 +39,12 @@ export function simulateStage(options: SimOptions): SimResult {
   const carId = options.carId ?? "compact";
   const profile = options.profile ?? RALLY_BOT;
   const maxTime = options.maxTime ?? 300;
-  const state = createGame({ seed: options.seed, carId, skipCountdown: true });
+  const state = createGame({
+    seed: options.seed,
+    carId,
+    skipCountdown: true,
+    env: { weather: options.weather ?? "clear" },
+  });
 
   const events: GameEvent[] = [];
   let hash = 0x811c9dc5;

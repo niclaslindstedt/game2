@@ -28,6 +28,10 @@ export type HudSnapshot = {
   boostLeft: number;
   boostMax: number;
   boosting: boolean;
+  /** Wind readout: strength plus the arrow's screen-space rotation
+   * (degrees; 0 = blowing up-screen with the car). */
+  windKmh: number;
+  windScreenAngle: number;
 };
 
 export type HudFlash = { id: number; text: string; tone: "good" | "bad" | "info" };
@@ -36,7 +40,7 @@ type HudProps = {
   snap: HudSnapshot;
   flashes: HudFlash[];
   input: InputManager;
-  onSwapCar: () => void;
+  onMenu: () => void;
   onRestart: () => void;
   onCamera: () => void;
 };
@@ -231,7 +235,7 @@ function TouchButton({
   );
 }
 
-export function Hud({ snap, flashes, input, onSwapCar, onRestart, onCamera }: HudProps) {
+export function Hud({ snap, flashes, input, onMenu, onRestart, onCamera }: HudProps) {
   const { touch } = input;
   return (
     <div className="hud pointer-events-none absolute inset-0 select-none">
@@ -252,8 +256,8 @@ export function Hud({ snap, flashes, input, onSwapCar, onRestart, onCamera }: Hu
           <button type="button" className="hud-mini" onClick={onCamera} title="Camera (V)">
             CAM
           </button>
-          <button type="button" className="hud-mini" onClick={onSwapCar} title="Swap car (C)">
-            SWAP CAR
+          <button type="button" className="hud-mini" onClick={onMenu} title="Race setup (C)">
+            SETUP
           </button>
           <button type="button" className="hud-mini" onClick={onRestart} title="Restart stage (R)">
             RESTART
@@ -292,6 +296,17 @@ export function Hud({ snap, flashes, input, onSwapCar, onRestart, onCamera }: Hu
         </span>
         {snap.drifting && <span className="hud-drift">DRIFT {Math.round(snap.driftScore)}</span>}
         {snap.offRoad && <span className="hud-off">OFF ROAD</span>}
+        {snap.windKmh >= 4 && (
+          <span className="hud-wind" title="Wind">
+            <span
+              className="hud-wind-arrow"
+              style={{ transform: `rotate(${snap.windScreenAngle.toFixed(0)}deg)` }}
+            >
+              ↑
+            </span>
+            {Math.round(snap.windKmh)}
+          </span>
+        )}
         <span className={`hud-boostbar ${snap.boosting ? "hud-boostbar-hot" : ""}`}>
           <span className="hud-boostbar-label">BOOST</span>
           <span className="hud-boostbar-track">

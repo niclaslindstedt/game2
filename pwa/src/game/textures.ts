@@ -74,6 +74,22 @@ export function waterTexture(): THREE.CanvasTexture {
   return toTexture(canvas, 2);
 }
 
+/** A soft radial glow (white core fading to transparent) — the sun's halo,
+ * the moon's veil, a lightning bloom. Tint via the material's color. */
+export function glowTexture(): THREE.CanvasTexture {
+  const { canvas, ctx } = makeCanvas(128);
+  const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, "rgba(255,255,255,1)");
+  g.addColorStop(0.25, "rgba(255,255,255,0.55)");
+  g.addColorStop(0.6, "rgba(255,255,255,0.18)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 export function foliageTexture(): THREE.CanvasTexture {
   const { canvas, ctx } = makeCanvas(64);
   speckle(ctx, 64, "#2f8f3c", [

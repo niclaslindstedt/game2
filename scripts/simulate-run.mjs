@@ -9,6 +9,7 @@
 //   npm run sim -- --seeds 42,99         # specific seeds
 //   npm run sim -- --car classic         # one car
 //   npm run sim -- --count 20            # seeds 1..20
+//   npm run sim -- --weather storm       # race in rain/storm wind
 //   npm run sim -- --json report.json    # machine-readable dump
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -27,6 +28,7 @@ const seeds = flag("seeds")
   ? flag("seeds").split(",").map(Number)
   : Array.from({ length: Number(flag("count") ?? 8) }, (_, i) => i + 1);
 const cars = flag("car") ? [flag("car")] : CARS.map((c) => c.id);
+const weather = flag("weather") ?? "clear";
 
 const pad = (v, n) => String(v).padStart(n);
 const rows = [];
@@ -52,7 +54,7 @@ console.log(
 );
 for (const seed of seeds) {
   for (const carId of cars) {
-    const r = simulateStage({ seed, carId, maxTime: 300 });
+    const r = simulateStage({ seed, carId, maxTime: 300, weather });
     rows.push(r);
     console.log(
       [

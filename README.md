@@ -11,7 +11,7 @@
 
 ## What
 
-Sideways is an arcade rally game that boots straight into a stage — no menu, no account, no download. The feel is the point: drifts that start with a flick and end with a boost, jumps where the air is committed and slightly out of control, water fords that explode. Stages are point-to-point and generated fresh from a seeded rules engine that respects rally reality: braking zones before hairpins, run-ups before jumps, fords only on straights. Everyone gets the same stage on a given day; every finish rolls into the next one.
+Sideways is an arcade rally game — no account, no download. Pick your conditions on the pre-race screen (dawn, day, dusk, or night; clear, rain, or storm) and START. The feel is the point: drifts that start with a flick and end with a boost, jumps where the air is committed and slightly out of control, water fords that explode, a seeded wind that leans on the car and rips the exhaust fumes sideways. Stages are point-to-point and generated fresh from a seeded rules engine that respects rally reality: braking zones before hairpins, run-ups before jumps, fords only on straights, grades that climb on the straights and flatten through corners — rolling through a landscape of hillsides, distant mountains, and lakes that glitter in the sun. Everyone gets the same stage on a given day; every finish rolls into the next one.
 
 Two cars ship at launch: the **Vireo GT** (automatic — quick, forgiving) and the **Sable 4WD** (manual — taller gears, looser rear, faster in good hands).
 
@@ -45,7 +45,7 @@ If the install fails on `@niclaslindstedt/oss-framework`, add a GitHub Packages 
 npm run dev
 ```
 
-Open the printed URL — the game starts immediately after a 3-2-1 countdown. Keyboard: arrows/WASD drive, Space is the handbrake (the drift button), Left Shift burns the finite booster, Q/E shift the manual car, C swaps car, V cycles the camera (chase/hood), R restarts the stage.
+Open the printed URL — pick time of day, weather, and car on the pre-race screen, then START into a 3-2-1 countdown. Keyboard: arrows/WASD drive, Space is the handbrake (the drift button), Left Shift burns the finite booster, Q/E shift the manual car, C reopens the race setup, V cycles the camera (chase/hood), R restarts the stage.
 
 ## Usage
 

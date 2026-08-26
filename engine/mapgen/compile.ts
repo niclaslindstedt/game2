@@ -8,6 +8,7 @@
 import type { SegmentPlan } from "./rules.ts";
 import { STAGE_RULES as R } from "./rules.ts";
 import { generateStage } from "./generate.ts";
+import { createRng } from "../lib/prng.ts";
 
 export type Surface = "gravel" | "water";
 
@@ -86,8 +87,47 @@ function segmentSurface(plan: SegmentPlan, u: number): Surface {
   return "gravel";
 }
 
-export function compileTrack(seed: number, segments = generateStage(seed)): Track {
+/** The rolling ground under a generated stage: three seeded sine layers
+ * (R.elevation) summed along arc length. Long climbs put the horizon above
+ * or below the hood, rollers load and unload the car through a straight,
+ * and the bump layer is road texture. */
+function buildRolling(seed: number): (s: number) => number {
+  const rng = createRng((seed ^ 0x7e11a7d1) >>> 0);
+  const layers = (["long", "roll", "bump"] as const).map((name) => {
+    const spec = R.elevation[name];
+    return {
+      amplitude: rng.range(spec.amplitude.min, spec.amplitude.max),
+      frequency: (Math.PI * 2) / rng.range(spec.wavelength.min, spec.wavelength.max),
+      phase: rng.range(0, Math.PI * 2),
+    };
+  });
+  return (s: number): number => {
+    let y = 0;
+    for (const l of layers) y += l.amplitude * Math.sin(s * l.frequency + l.phase);
+    return y;
+  };
+}
+
+/** How fast the rolling layers advance through a sample, 0–1. Grades live
+ * on the straights and flatten through corners — partly stage-design taste
+ * (Sega Rally climbs between turns, not through them), but load-bearing
+ * too: a car cutting inside a turn sweeps whole samples of arc per physics
+ * step, and any real grade across that sweep reads as the ground falling
+ * away — a phantom launch. */
+function straightness(curvature: number): number {
+  const c = Math.abs(curvature);
+  return Math.max(0.06, Math.min(1, 1 / (1 + c * 120)));
+}
+
+/** Compile a stage. Omitting `segments` compiles the seed's GENERATED stage,
+ * rolling hills included; passing segments builds a flat synthetic rig for
+ * tests and tooling — scripted physics scenarios stay exactly scripted. */
+export function compileTrack(seed: number, segments?: SegmentPlan[]): Track {
+  const rolling = segments === undefined ? buildRolling(seed) : () => 0;
+  segments = segments ?? generateStage(seed);
   const samples: TrackSample[] = [];
+  /** Arc position as the rolling layers see it — pauses through turns. */
+  let rollS = 0;
   let x = 0;
   let z = 0;
   let heading = 0;
@@ -109,6 +149,7 @@ export function compileTrack(seed: number, segments = generateStage(seed)): Trac
       x += Math.sin(heading) * step;
       z += Math.cos(heading) * step;
       s += step;
+      rollS += step * straightness(curvature);
       // The lip flag lands on the last ramp sample: the one the car leaves.
       // That sample sits at full lip height; past it the road is back at
       // grade, which is the drop that throws the car.
@@ -117,7 +158,7 @@ export function compileTrack(seed: number, segments = generateStage(seed)): Trac
         x,
         z,
         heading,
-        elevation: jump ? (plan.lipHeight ?? 2) : segmentElevation(plan, u),
+        elevation: rolling(rollS) + (jump ? (plan.lipHeight ?? 2) : segmentElevation(plan, u)),
         surface: segmentSurface(plan, u),
         jump,
         s,

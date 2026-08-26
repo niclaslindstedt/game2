@@ -69,6 +69,22 @@ export type CarState = {
   braking: boolean;
 };
 
+/** When the stage is driven — presentation picks lighting from it; the
+ * engine itself only cares about weather (which sets the wind). */
+export type TimeOfDay = "dawn" | "day" | "dusk" | "night";
+export type Weather = "clear" | "rain" | "storm";
+
+export type RaceEnv = {
+  timeOfDay: TimeOfDay;
+  weather: Weather;
+  /** Mean bearing the air moves TOWARD, radians (heading convention). */
+  windDir: number;
+  /** Mean wind speed, m/s — gusts breathe around it (TUNING.wind.gust). */
+  windSpeed: number;
+  /** Seeded phase offset for the gust oscillators, radians. */
+  gustPhase: number;
+};
+
 export type GameEvent =
   | { type: "go" }
   | { type: "driftStart" }
@@ -117,6 +133,11 @@ export type GameState = {
   lateral: number;
   offRoad: boolean;
   offRoadSince: number;
+  /** The stage's conditions (fixed for the run). */
+  env: RaceEnv;
+  /** Current gusting wind velocity, world space m/s — updated every step;
+   * the renderer reads it for fumes/rain and the HUD for its indicator. */
+  wind: { x: number; z: number };
   stats: RunStats;
   /** Seeded stream for in-run randomness (airborne turbulence only). */
   rng: Rng;

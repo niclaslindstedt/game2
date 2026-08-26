@@ -47,7 +47,18 @@ export function locate(track: Track, x: number, z: number, hint: number): TrackF
   const halfRoad = track.width / 2;
   const offRoad = Math.abs(lateral) > halfRoad + TUNING.offTrack.verge;
   const surface = offRoad ? "grass" : s.surface;
-  return { index: best, s: s.s, lateral, offRoad, surface, elevation: s.elevation };
+  // Interpolate elevation toward the neighbour the car is actually between:
+  // on a graded road the nearest sample alone quantizes ground height to the
+  // sample grid, and that stairstep reads as the ground falling away — a
+  // phantom launch at every sample crossing.
+  const ahead = dx * Math.sin(s.heading) + dz * Math.cos(s.heading);
+  let elevation = s.elevation;
+  const towards = ahead > 0 ? best + 1 : best - 1;
+  if (towards >= 0 && towards < samples.length) {
+    const t = Math.min(1, Math.abs(ahead) / track.step);
+    elevation += (samples[towards].elevation - s.elevation) * t;
+  }
+  return { index: best, s: s.s, lateral, offRoad, surface, elevation };
 }
 
 /** True when a jump lip sits between the two progress positions. */

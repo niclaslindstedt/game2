@@ -29,7 +29,10 @@ export {
   type GameEvent,
   type GamePhase,
   type GameState,
+  type RaceEnv,
   type RunStats,
+  type TimeOfDay,
+  type Weather,
 } from "./game/state.ts";
 export { locate, type TrackFix } from "./game/track.ts";
 export { CARS, carById, type CarSpec, type GearboxMode } from "./game/defs/cars.ts";
