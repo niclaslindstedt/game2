@@ -6,7 +6,9 @@
 //
 // Two silhouettes ship: a short, tall, boxy rally hatchback for the
 // starter car, and a longer, lower, big-winged coupe for the reward car —
-// the classic small-car/big-car arcade rally pairing.
+// the classic small-car/big-car arcade rally pairing. Each carries its own
+// pillar widths, because how much METAL frames the glass is most of what
+// separates a hatch greenhouse from a coupe one.
 
 import type { CarSpec } from "@engine";
 import type { CarBodySpec } from "./car-body.ts";
@@ -29,6 +31,7 @@ export const COMPACT_BODY: CarBodySpec = {
   trackHalf: 0.73,
   wheelRadius: 0.33,
   wheelWidth: 0.26,
+  wheelSpokes: 5,
   cabin: {
     cowlZ: 0.62,
     roofFrontZ: 0.3,
@@ -37,6 +40,17 @@ export const COMPACT_BODY: CarBodySpec = {
     roofY: 1.4,
     roofHalf: 0.64,
     roofPaint: "accent",
+    // Thick posts and a small kicked-up quarter light: the hot-hatch
+    // greenhouse, upright and heavily framed.
+    pillars: {
+      a: 0.12,
+      b: 0.12,
+      c: 0.28,
+      sill: 0.07,
+      header: 0.05,
+      split: 0.43,
+      quarterRise: 0.05,
+    },
   },
   flare: { extra: 0.055, length: 0.85 },
   spoiler: { kind: "lip", z: -1.72, y: 1.1, span: 1.24 },
@@ -62,6 +76,7 @@ export const CLASSIC_BODY: CarBodySpec = {
   trackHalf: 0.77,
   wheelRadius: 0.35,
   wheelWidth: 0.28,
+  wheelSpokes: 6,
   cabin: {
     cowlZ: 0.55,
     roofFrontZ: 0.02,
@@ -69,6 +84,16 @@ export const CLASSIC_BODY: CarBodySpec = {
     baseRearZ: -1.6,
     roofY: 1.27,
     roofHalf: 0.64,
+    // A long door glass ahead of a heavy fastback C-pillar — the coupe
+    // reads rear-heavy even at a glance.
+    pillars: {
+      a: 0.13,
+      b: 0.11,
+      c: 0.28,
+      sill: 0.06,
+      split: 0.55,
+      quarterRise: 0.045,
+    },
   },
   flare: { extra: 0.06, length: 0.95 },
   spoiler: { kind: "wing", z: -2.02, y: 1.14, span: 1.5, chord: 0.34 },
