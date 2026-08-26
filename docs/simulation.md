@@ -17,7 +17,7 @@ Bot profiles are data (`BotProfile`); `RALLY_BOT` is the default. Slower/faster 
 
 ## The harness (`engine/sim/simulate.ts`)
 
-`simulateStage({ seed, carId, profile, maxTime })` runs a full stage and returns: finish state and time, the whole event log, the run stats (drift count/time/score, jumps, air time, clean landings, splashes, off-road time, respawns, top speed), and a **digest** — an FNV hash over sampled positions. Runs are deterministic: same seed + car + profile ⇒ same digest, which is exactly what `tests/simulation_test.ts` asserts.
+`simulateStage({ seed, carId, profile, length, maxTime })` runs a full stage (at a finite stage length band — default medium) and returns: finish state and time, the whole event log, the run stats (drift count/time/score, jumps, air time, clean landings, splashes, off-road time, respawns, top speed), and a **digest** — an FNV hash over sampled positions. Runs are deterministic: same seed + car + profile ⇒ same digest, which is exactly what `tests/simulation_test.ts` asserts.
 
 ## The CLI
 
@@ -26,6 +26,7 @@ make sim                              # seeds 1..8, both cars, the balance table
 npm run sim -- --seeds 42,99          # specific seeds
 npm run sim -- --car classic          # one car
 npm run sim -- --count 20             # a wider sweep
+npm run sim -- --length long          # stage length band (default medium)
 npm run sim -- --weather storm        # race in rain/storm wind
 npm run sim -- --json report.json     # machine-readable dump
 ```

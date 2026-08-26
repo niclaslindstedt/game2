@@ -123,6 +123,82 @@ body {
   text-shadow: none;
 }
 
+/* ── The co-driver: pacenote calls under the top bar ────────────────────── */
+
+.hud-pace {
+  position: absolute;
+  top: 11%;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  pointer-events: none;
+}
+
+.hud-pace-call {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: rgb(18 48 105 / 62%);
+  border-radius: 0.7rem;
+  padding: 0.3rem 0.8rem 0.3rem 0.45rem;
+}
+
+.hud-pace-arrow {
+  width: clamp(2.4rem, 9vmin, 4.2rem);
+  height: clamp(2.4rem, 9vmin, 4.2rem);
+  filter: drop-shadow(2px 2px 0 var(--hud-shadow));
+}
+
+.hud-pace-text {
+  font-size: clamp(1.1rem, 4.5vmin, 2.1rem);
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.hud-pace-dist {
+  font-size: 0.62em;
+  opacity: 0.9;
+  color: var(--hud-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-pace-next {
+  transform: scale(0.58);
+  transform-origin: top center;
+  opacity: 0.92;
+  background: rgb(18 48 105 / 45%);
+}
+
+/* Severity is the color story: green flows, amber commits, red bites. */
+.hud-pace-soft {
+  color: #6de37f;
+}
+
+.hud-pace-medium {
+  color: #ffd23e;
+}
+
+.hud-pace-hard {
+  color: #ff5a4e;
+}
+
+.hud-progress-km {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: auto;
+  background: none;
+  border: none;
+  font-size: clamp(0.9rem, 2.5vmin, 1.3rem);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
 .hud-center {
   position: absolute;
   inset: 0;

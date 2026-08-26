@@ -4,9 +4,11 @@
 // generator's output can be LOOKED at while tuning the rules — part of the
 // screenshot-and-iterate workflow. Writes to the gitignored previews/ dir.
 //
-//   npm run track                      # seeds 1..6
+//   npm run track                      # seeds 1..6 (medium)
 //   npm run track -- --seeds 42,99     # specific seeds
 //   npm run track -- --count 12        # seeds 1..12
+//   npm run track -- --length xlong    # a stage length band
+//   npm run track -- --length endless --km 8   # a streamed endless stretch
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,7 +17,7 @@ import process from "node:process";
 import { createCanvas } from "./lib/png.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const { compileTrack } = await import(join(root, "engine/index.ts"));
+const { compileStage } = await import(join(root, "engine/index.ts"));
 
 const args = process.argv.slice(2);
 function flag(name) {
@@ -25,6 +27,8 @@ function flag(name) {
 const seeds = flag("seeds")
   ? flag("seeds").split(",").map(Number)
   : Array.from({ length: Number(flag("count") ?? 6) }, (_, i) => i + 1);
+const length = flag("length") ?? "medium";
+const endlessKm = Number(flag("km") ?? 6);
 
 const SIZE = 900;
 const COLORS = {
@@ -42,7 +46,8 @@ const outDir = join(root, "previews");
 mkdirSync(outDir, { recursive: true });
 
 for (const seed of seeds) {
-  const track = compileTrack(seed);
+  const track = compileStage(seed, length);
+  if (track.endless) track.extend(endlessKm * 1000);
   const { minX, maxX, minZ, maxZ } = track.bounds;
   const span = Math.max(maxX - minX, maxZ - minZ) + 80;
   const scale = SIZE / span;

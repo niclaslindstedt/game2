@@ -4,13 +4,24 @@
 // scene, so switching a setting re-lights the stage behind it immediately;
 // the countdown holds until START is pressed.
 
-import { CARS, type TimeOfDay, type Weather } from "@engine";
+import { CARS, type StageLength, type TimeOfDay, type Weather } from "@engine";
 
 export type RaceSettings = {
   timeOfDay: TimeOfDay;
   weather: Weather;
   carId: string;
+  length: StageLength;
 };
+
+/** The menu's stage lengths — minutes of driving at rally pace, or the
+ * endless stream that keeps generating road off the seed forever. */
+export const STAGE_LENGTH_OPTIONS: { id: StageLength; label: string }[] = [
+  { id: "short", label: "SHORT 1′" },
+  { id: "medium", label: "MEDIUM 3′" },
+  { id: "long", label: "LONG 5′" },
+  { id: "xlong", label: "X-LONG 7′" },
+  { id: "endless", label: "ENDLESS" },
+];
 
 export const TIMES_OF_DAY: { id: TimeOfDay; label: string }[] = [
   { id: "dawn", label: "DAWN" },
@@ -67,6 +78,12 @@ export function PreRaceMenu({ seed, settings, onChange, onStart }: MenuProps) {
     <div className="hud-menu-wrap pointer-events-auto">
       <div className="hud-menu">
         <div className="hud-menu-title">STAGE {seed}</div>
+        <OptionRow
+          label="LENGTH"
+          options={STAGE_LENGTH_OPTIONS}
+          value={settings.length}
+          onPick={(length) => onChange({ ...settings, length })}
+        />
         <OptionRow
           label="TIME"
           options={TIMES_OF_DAY}

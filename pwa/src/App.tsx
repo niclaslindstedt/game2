@@ -12,12 +12,13 @@ import { UpdateToast, usePwaUpdate } from "@niclaslindstedt/oss-framework/pwa";
 import {
   TUNING,
   carById,
-  compileTrack,
+  compileStage,
   createGame,
   status,
   step,
   type GameEvent,
   type GameState,
+  type StageLength,
   type TimeOfDay,
   type Track,
   type Weather,
@@ -27,8 +28,14 @@ import { cacheIdForBase } from "./app-pwa.ts";
 import { connectOutput } from "./output-bridge.ts";
 import { createInput } from "./game/input.ts";
 import { createRenderer, type GameRenderer } from "./game/renderer.ts";
-import { Hud, type HudFlash, type HudSnapshot } from "./game/hud.tsx";
-import { PreRaceMenu, TIMES_OF_DAY, WEATHERS, type RaceSettings } from "./game/menu.tsx";
+import { Hud, type HudFlash, type HudPacenote, type HudSnapshot } from "./game/hud.tsx";
+import {
+  PreRaceMenu,
+  STAGE_LENGTH_OPTIONS,
+  TIMES_OF_DAY,
+  WEATHERS,
+  type RaceSettings,
+} from "./game/menu.tsx";
 
 connectOutput();
 
@@ -43,13 +50,19 @@ const SETTINGS_KEY = "sideways-race-settings";
 /** Initial settings: URL params (tooling) beat the stored choice beats the
  * defaults. Storage can be unavailable (private mode) — defaults are fine. */
 function initialSettings(): RaceSettings {
-  const settings: RaceSettings = { timeOfDay: "day", weather: "clear", carId: "compact" };
+  const settings: RaceSettings = {
+    timeOfDay: "day",
+    weather: "clear",
+    carId: "compact",
+    length: "medium",
+  };
   try {
     const stored = localStorage.getItem(SETTINGS_KEY);
     if (stored) Object.assign(settings, JSON.parse(stored));
   } catch {
     /* storage unavailable — keep defaults */
   }
+  if (!STAGE_LENGTH_OPTIONS.some((l) => l.id === settings.length)) settings.length = "medium";
   const params = new URLSearchParams(location.search);
   const tod = params.get("tod");
   if (TIMES_OF_DAY.some((t) => t.id === tod)) settings.timeOfDay = tod as TimeOfDay;
@@ -57,7 +70,39 @@ function initialSettings(): RaceSettings {
   if (WEATHERS.some((w) => w.id === weather)) settings.weather = weather as Weather;
   const car = params.get("car");
   if (car === "compact" || car === "classic") settings.carId = car;
+  const length = params.get("length");
+  if (STAGE_LENGTH_OPTIONS.some((l) => l.id === length)) settings.length = length as StageLength;
   return settings;
+}
+
+/** How far ahead the co-driver calls, meters — four seconds at pace, with a
+ * floor so slow corners still get called and a ceiling so a long straight
+ * is not spent staring at the far end's turn. */
+function callDistance(u: number): number {
+  return Math.min(320, Math.max(150, u * 4));
+}
+
+/** Turn angle past which a call earns the LONG modifier, radians (~100°). */
+const LONG_NOTE_ANGLE = 1.75;
+
+/** The next co-driver calls: the note under or ahead of the car plus the
+ * one after it (so combinations read as "hard left INTO easy right"). The
+ * engine's positive dir grows the heading, which the mirrored screen shows
+ * as a LEFT turn — the same one-flip rule input.ts applies to steering. */
+function upcomingPacenotes(state: GameState): HudPacenote[] {
+  const out: HudPacenote[] = [];
+  for (const note of state.track.pacenotes) {
+    if (note.endS <= state.progressS) continue;
+    if (note.s - state.progressS > callDistance(state.car.u)) break;
+    out.push({
+      dir: note.dir > 0 ? "left" : "right",
+      severity: note.severity,
+      long: note.angle > LONG_NOTE_ANGLE,
+      distance: Math.max(0, note.s - state.progressS),
+    });
+    if (out.length >= 2) break;
+  }
+  return out;
 }
 
 /** Tach reading, 0..1 of the redline: how far up the current gear the car
@@ -91,7 +136,10 @@ function takeSnapshot(state: GameState, finishTime: number | null): HudSnapshot 
     rpm,
     shiftUp: rpm > 0.83 && state.car.gear < state.spec.gearTop.length - 1,
     airborne: state.car.airborne,
-    progress: Math.min(1, state.progressS / state.track.length),
+    progress: state.track.endless ? 0 : Math.min(1, state.progressS / state.track.length),
+    endless: state.track.endless,
+    distanceKm: state.progressS / 1000,
+    pacenotes: state.phase === "racing" ? upcomingPacenotes(state) : [],
     seed: state.seed,
     carName: state.spec.name,
     offRoad: state.offRoad,
@@ -135,7 +183,7 @@ export function App() {
   seedRef.current = seed;
   const menuOpenRef = useRef(menuOpen);
   menuOpenRef.current = menuOpen;
-  const trackRef = useRef<{ seed: number; track: Track } | null>(null);
+  const trackRef = useRef<{ seed: number; length: StageLength; track: Track } | null>(null);
 
   const pwa = usePwaUpdate({
     base: import.meta.env.BASE_URL,
@@ -150,15 +198,26 @@ export function App() {
   };
 
   /** (Re)build the run for the current seed and settings. The compiled
-   * track is cached per seed, so menu tweaks re-light instantly. */
+   * track is cached per seed and length, so menu tweaks re-light instantly. */
   const newGame = (nextSeed: number, rebuildWorld: boolean): void => {
     const renderer = rendererRef.current;
     if (!renderer) return;
-    if (trackRef.current?.seed !== nextSeed) {
-      trackRef.current = { seed: nextSeed, track: compileTrack(nextSeed) };
+    const s = settingsRef.current;
+    // An endless track is never reused: a restart must begin from a fresh
+    // opening window, not from however far the last run streamed (the
+    // renderer has long since dropped the world around the start).
+    if (
+      trackRef.current?.seed !== nextSeed ||
+      trackRef.current.length !== s.length ||
+      s.length === "endless"
+    ) {
+      trackRef.current = {
+        seed: nextSeed,
+        length: s.length,
+        track: compileStage(nextSeed, s.length),
+      };
     }
     finishTimeRef.current = null;
-    const s = settingsRef.current;
     const state = createGame({
       seed: nextSeed,
       carId: s.carId,
@@ -167,7 +226,14 @@ export function App() {
     });
     const previous = gameRef.current;
     gameRef.current = state;
-    if (rebuildWorld || !previous || previous.seed !== nextSeed || previous.spec.id !== s.carId) {
+    // A different track object (new seed OR new length) is a different
+    // world; only same-track tweaks get away with a re-light.
+    if (
+      rebuildWorld ||
+      !previous ||
+      previous.track !== state.track ||
+      previous.spec.id !== s.carId
+    ) {
       renderer.setGame(state);
     } else {
       renderer.setConditions(state);

@@ -8,6 +8,7 @@
 
 import { createGame, step } from "../game/step.ts";
 import type { GameEvent, GameState, Weather } from "../game/state.ts";
+import type { FiniteStageLength } from "../mapgen/index.ts";
 import { botInput, RALLY_BOT, type BotProfile } from "./bot.ts";
 import { TUNING } from "../game/defs/tuning.ts";
 
@@ -15,6 +16,9 @@ export type SimOptions = {
   seed: number;
   carId?: string;
   profile?: BotProfile;
+  /** Stage length band to race (finite only — an endless stage has no
+   * finish for a sim run to reach). Defaults to medium. */
+  length?: FiniteStageLength;
   /** Give up after this much simulated race time, seconds. */
   maxTime?: number;
   /** Weather to race in (sets the wind band). Defaults to clear. */
@@ -42,6 +46,7 @@ export function simulateStage(options: SimOptions): SimResult {
   const state = createGame({
     seed: options.seed,
     carId,
+    length: options.length,
     skipCountdown: true,
     env: { weather: options.weather ?? "clear" },
   });

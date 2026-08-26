@@ -31,7 +31,7 @@ export const RALLY_BOT: BotProfile = {
   steerGain: 2.2,
   lookahead: 0.65,
   planHorizon: 3.0,
-  hardCurvature: 1 / 34,
+  hardCurvature: 1 / 30,
   brakeMargin: 2.5,
 };
 

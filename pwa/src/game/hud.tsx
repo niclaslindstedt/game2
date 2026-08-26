@@ -6,8 +6,21 @@
 
 import { useRef } from "react";
 
+import type { TurnSeverity } from "@engine";
+
 import type { InputManager } from "./input.ts";
 import { clamp, formatTime } from "../lib/util.ts";
+
+/** One co-driver call, already flipped into SCREEN space by the snapshot
+ * (left means the road bends left through the windshield). */
+export type HudPacenote = {
+  dir: "left" | "right";
+  severity: TurnSeverity;
+  /** True when the turn holds long enough to earn the LONG modifier. */
+  long: boolean;
+  /** Meters from the car to the turn entry (0 while inside the turn). */
+  distance: number;
+};
 
 export type HudSnapshot = {
   phase: "countdown" | "racing" | "finished";
@@ -22,6 +35,11 @@ export type HudSnapshot = {
   shiftUp: boolean;
   airborne: boolean;
   progress: number;
+  /** Endless run: no finish, so the top bar reads distance, not progress. */
+  endless: boolean;
+  distanceKm: number;
+  /** The co-driver's next calls (current turn first), screen-space. */
+  pacenotes: HudPacenote[];
   seed: number;
   carName: string;
   offRoad: boolean;
@@ -269,6 +287,106 @@ function Tachometer({ rpm }: { rpm: number }) {
   );
 }
 
+/** The pacenote arrows, drawn like rally corner signs: the shaft is the
+ * road, the bend is the corner. Points bend RIGHT here; a left call mirrors
+ * the whole icon. The head is computed from the last two points so every
+ * severity's arrow stays consistent. */
+const PACE_ARROWS: Record<TurnSeverity, [number, number][]> = {
+  soft: [
+    [42, 92],
+    [42, 55],
+    [47, 38],
+    [58, 26],
+    [68, 19],
+  ],
+  medium: [
+    [40, 92],
+    [40, 58],
+    [44, 44],
+    [54, 37],
+    [70, 34],
+    [80, 34],
+  ],
+  hard: [
+    [38, 92],
+    [38, 52],
+    [42, 32],
+    [56, 24],
+    [68, 28],
+    [74, 42],
+    [74, 58],
+  ],
+};
+
+function PacenoteArrow({ severity, dir }: { severity: TurnSeverity; dir: "left" | "right" }) {
+  const pts = PACE_ARROWS[severity];
+  const d = `M ${pts.map((p) => p.join(" ")).join(" L ")}`;
+  const [x1, y1] = pts[pts.length - 2];
+  const [x2, y2] = pts[pts.length - 1];
+  const len = Math.hypot(x2 - x1, y2 - y1);
+  const ux = (x2 - x1) / len;
+  const uy = (y2 - y1) / len;
+  const head = [
+    [x2 + ux * 15, y2 + uy * 15],
+    [x2 - uy * 10, y2 + ux * 10],
+    [x2 + uy * 10, y2 - ux * 10],
+  ];
+  return (
+    <svg
+      className="hud-pace-arrow"
+      viewBox="0 0 100 100"
+      style={dir === "left" ? { transform: "scaleX(-1)" } : undefined}
+      aria-hidden="true"
+    >
+      <path
+        d={d}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="13"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <polygon points={head.map((p) => p.join(",")).join(" ")} fill="currentColor" />
+    </svg>
+  );
+}
+
+const SEVERITY_WORD: Record<TurnSeverity, string> = {
+  soft: "EASY",
+  medium: "MEDIUM",
+  hard: "HARD",
+};
+
+function pacenoteText(note: HudPacenote): string {
+  return `${note.long ? "LONG " : ""}${SEVERITY_WORD[note.severity]} ${note.dir.toUpperCase()}`;
+}
+
+/** The co-driver strip: the current call big, the following call small —
+ * "HARD LEFT … into easy right", the way a crew reads a stage. */
+function Pacenotes({ notes }: { notes: HudPacenote[] }) {
+  const now = notes[0];
+  const next = notes[1];
+  return (
+    <div className="hud-pace">
+      <div className={`hud-pace-call hud-pace-${now.severity}`}>
+        <PacenoteArrow severity={now.severity} dir={now.dir} />
+        <span className="hud-pace-text">
+          {pacenoteText(now)}
+          {now.distance >= 45 && (
+            <span className="hud-pace-dist">{Math.round(now.distance / 10) * 10}m</span>
+          )}
+        </span>
+      </div>
+      {next && (
+        <div className={`hud-pace-call hud-pace-next hud-pace-${next.severity}`}>
+          <PacenoteArrow severity={next.severity} dir={next.dir} />
+          <span className="hud-pace-text">{pacenoteText(next)}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TouchButton({
   label,
   className,
@@ -308,12 +426,16 @@ export function Hud({ snap, flashes, input, onMenu, onRestart, onCamera }: HudPr
           <span className="hud-chip-sub">{snap.carName}</span>
         </div>
         <div className="hud-chip hud-timer">{formatTime(snap.time)}</div>
-        <div className="hud-progress">
-          <div
-            className="hud-progress-fill"
-            style={{ width: `${(snap.progress * 100).toFixed(1)}%` }}
-          />
-        </div>
+        {snap.endless ? (
+          <div className="hud-progress hud-progress-km">{snap.distanceKm.toFixed(1)} KM</div>
+        ) : (
+          <div className="hud-progress">
+            <div
+              className="hud-progress-fill"
+              style={{ width: `${(snap.progress * 100).toFixed(1)}%` }}
+            />
+          </div>
+        )}
         <div className="hud-actions pointer-events-auto">
           <button type="button" className="hud-mini" onClick={onCamera} title="Camera (V)">
             CAM
@@ -326,6 +448,9 @@ export function Hud({ snap, flashes, input, onMenu, onRestart, onCamera }: HudPr
           </button>
         </div>
       </div>
+
+      {/* The co-driver: upcoming corner calls, front and center. */}
+      {snap.phase === "racing" && snap.pacenotes.length > 0 && <Pacenotes notes={snap.pacenotes} />}
 
       {/* Center: countdown / finish / event flashes. */}
       <div className="hud-center">

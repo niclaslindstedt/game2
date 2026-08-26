@@ -5,7 +5,7 @@
 // same function — there is no other way to advance a run.
 
 import { createRng } from "../lib/prng.ts";
-import { compileTrack } from "../mapgen/index.ts";
+import { compileStage, compileTrack, STAGE_RULES, type StageLength } from "../mapgen/index.ts";
 import { carById } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 import { launch, stepAirborne, stepGrounded, type GroundContext } from "./car.ts";
@@ -68,10 +68,12 @@ function freshCar(): CarState {
 export type CreateGameOptions = {
   seed: number;
   carId?: string;
+  /** Menu stage length (finite band or endless); defaults to medium. */
+  length?: StageLength;
   /** Skip the countdown (sim runs start racing immediately). */
   skipCountdown?: boolean;
   /** Inject a pre-compiled track (tests and tooling); defaults to the
-   * generated stage for `seed`. */
+   * generated stage for `seed` at `length`. */
   track?: ReturnType<typeof compileTrack>;
   /** Race conditions. Time of day is presentation-only; weather sets the
    * wind band (TUNING.wind.speed). Defaults: day, clear. */
@@ -108,16 +110,18 @@ function windAt(env: RaceEnv, t: number): { x: number; z: number } {
 
 export function createGame(options: CreateGameOptions): GameState {
   const spec = carById(options.carId ?? "compact");
-  const track = options.track ?? compileTrack(options.seed);
+  const track = options.track ?? compileStage(options.seed, options.length ?? "medium");
   const env = buildEnv(
     options.seed,
     options.env?.timeOfDay ?? "day",
     options.env?.weather ?? "clear",
   );
   status(
-    `Stage ${options.seed}: ${(track.length / 1000).toFixed(1)} km, ` +
-      `${track.segments.filter((p) => p.kind === "turn").length} turns, ` +
-      `${track.segments.filter((p) => p.feature === "jump").length} jumps — ${spec.name}`,
+    track.endless
+      ? `Stage ${options.seed}: endless — ${spec.name}`
+      : `Stage ${options.seed}: ${(track.length / 1000).toFixed(1)} km, ` +
+          `${track.segments.filter((p) => p.kind === "turn").length} turns, ` +
+          `${track.segments.filter((p) => p.feature === "jump").length} jumps — ${spec.name}`,
   );
   return {
     seed: options.seed,
@@ -220,6 +224,11 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   state.lateral = fix.lateral;
   state.stats.topSpeed = Math.max(state.stats.topSpeed, car.u);
 
+  // An endless stage keeps the road materialized well past the horizon —
+  // the bot's plan, the pacenotes, and the renderer all read ahead of the
+  // car, and none of them may ever see the end of the world.
+  if (track.endless) track.extend?.(state.progressS + STAGE_RULES.endless.horizon);
+
   // Jump lips are keyed to progress so a lip cannot be skipped by a fast
   // step; the grounded step already applied ground-follow, so takeoff here
   // overrides it with the ramp launch.
@@ -258,8 +267,9 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     if (lost && !car.airborne) respawn(state, events);
   }
 
-  // The finish line is the last sample.
-  if (state.progressIndex >= track.samples.length - 1) {
+  // The finish line is the last sample. An endless stage has none — the
+  // stream above always keeps road ahead of the car.
+  if (!track.endless && state.progressIndex >= track.samples.length - 1) {
     state.phase = "finished";
     events.push({ type: "finish", time: state.raceTime });
     status(`Finished stage ${state.seed} in ${state.raceTime.toFixed(2)} s`);

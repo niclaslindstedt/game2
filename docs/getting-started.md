@@ -2,7 +2,7 @@
 
 ## Playing
 
-Open [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/). The game boots to the pre-race screen over a live view of today's stage: pick the **time of day** (dawn, day, dusk, night — the stage re-lights as you tap), the **weather** (clear, rain, storm — weather sets the wind, and the wind leans on the car), and the **car**, then START — a 3-2-1 countdown and you're driving.
+Open [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/). The game boots to the pre-race screen over a live view of today's stage: pick the **stage length** (short ≈1 minute, medium ≈3, long ≈5, extra long ≈7 — or **endless**, which streams new road from the seed for as long as you drive), the **time of day** (dawn, day, dusk, night — the stage re-lights as you tap), the **weather** (clear, rain, storm — weather sets the wind, and the wind leans on the car), and the **car**, then START — a 3-2-1 countdown and you're driving.
 
 ### Controls
 

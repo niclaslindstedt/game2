@@ -403,7 +403,13 @@ export type FloraPlacement = {
   spin: number;
 };
 
-export type Flora = { group: THREE.Group; update: (dt: number) => void };
+export type Flora = {
+  group: THREE.Group;
+  update: (dt: number) => void;
+  /** Zero out every planted instance whose position `hits` — how an
+   * endless run retires plants that road built later runs through. */
+  retire: (hits: (x: number, z: number) => boolean) => void;
+};
 
 /** Turn a placement list into instanced meshes — one per variant used,
  * two shared materials (solid and double-sided ground cover). The ground
@@ -456,6 +462,7 @@ export function buildFlora(placements: FloraPlacement[], rand: () => number): Fl
   const up = new THREE.Vector3(0, 1, 0);
   const c = new THREE.Color();
 
+  const planted: { mesh: THREE.InstancedMesh; list: FloraPlacement[] }[] = [];
   for (const [id, list] of byId) {
     const def = VARIANTS[id];
     const b = new GeoBuilder(rand);
@@ -470,11 +477,24 @@ export function buildFlora(placements: FloraPlacement[], rand: () => number): Fl
       mesh.setColorAt(i, c.setScalar(0.88 + rand() * 0.24));
     });
     group.add(mesh);
+    planted.push({ mesh, list });
   }
+  const zero = new THREE.Matrix4().makeScale(0, 0, 0);
   return {
     group,
     update: (dt) => {
       uTime.value += dt;
+    },
+    retire: (hits) => {
+      for (const { mesh, list } of planted) {
+        let touched = false;
+        list.forEach((p, i) => {
+          if (!hits(p.x, p.z)) return;
+          mesh.setMatrixAt(i, zero);
+          touched = true;
+        });
+        if (touched) mesh.instanceMatrix.needsUpdate = true;
+      }
     },
   };
 }

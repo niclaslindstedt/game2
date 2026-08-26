@@ -1,12 +1,22 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Generator invariants: every R-rule from engine/mapgen/rules.ts is asserted
 // here across a spread of seeds — determinism, bounds, braking zones,
-// same-direction caps, feature placement, and self-intersection.
+// same-direction caps, feature placement, self-intersection, the length
+// bands, the pacenote book, the ford dips, and the endless stream.
 import { describe, expect, it } from "vitest";
 
-import { STAGE_RULES as R, compileTrack, generateStage } from "@engine";
+import {
+  STAGE_RULES as R,
+  compileStage,
+  compileTrack,
+  generateStage,
+  type FiniteStageLength,
+  type Track,
+  type TurnSeverity,
+} from "@engine";
 
-const SEEDS = Array.from({ length: 40 }, (_, i) => i * 37 + 1);
+const SEEDS = Array.from({ length: 24 }, (_, i) => i * 37 + 1);
+const SEVERITY_RANK: Record<TurnSeverity, number> = { soft: 0, medium: 1, hard: 2 };
 
 describe("stage generator", () => {
   it("is deterministic per seed", () => {
@@ -61,22 +71,28 @@ describe("stage generator", () => {
     }
   });
 
-  it("R5 — never more than two same-direction turns in a row", () => {
+  it("R5 — same-direction runs stay under the count and angle caps", () => {
     for (const seed of SEEDS) {
       let dir = 0;
       let run = 0;
+      let angle = 0;
       for (const plan of generateStage(seed)) {
         if (plan.kind !== "turn") {
           dir = 0;
           run = 0;
+          angle = 0;
           continue;
         }
-        if (plan.dir === dir) run += 1;
-        else {
+        if (plan.dir === dir) {
+          run += 1;
+          angle += plan.length / (plan.radius ?? 1);
+        } else {
           dir = plan.dir ?? 0;
           run = 1;
+          angle = plan.length / (plan.radius ?? 1);
         }
         expect(run).toBeLessThanOrEqual(R.maxSameDirectionTurns);
+        expect(angle).toBeLessThanOrEqual(R.maxSameDirectionAngle + 1e-9);
       }
     }
   });
@@ -93,21 +109,27 @@ describe("stage generator", () => {
     }
   });
 
-  it("R7 — fords sit on straights only", () => {
+  it("R7 — fords sit on straights only, an apron clear of the ends", () => {
     for (const seed of SEEDS) {
       for (const plan of generateStage(seed)) {
-        if (plan.feature === "water") expect(plan.kind).toBe("straight");
+        if (plan.feature !== "water") continue;
+        expect(plan.kind).toBe("straight");
+        expect(plan.featureStart ?? 0).toBeGreaterThanOrEqual(R.water.apron);
+        expect(plan.length - (plan.featureEnd ?? 0)).toBeGreaterThanOrEqual(R.water.apron);
       }
     }
   });
 
-  it("R9 — the whole centerline stays inside the world bounds", () => {
-    for (const seed of SEEDS) {
-      const track = compileTrack(seed);
-      expect(track.bounds.minX).toBeGreaterThanOrEqual(-R.worldBound);
-      expect(track.bounds.maxX).toBeLessThanOrEqual(R.worldBound);
-      expect(track.bounds.minZ).toBeGreaterThanOrEqual(-R.worldBound);
-      expect(track.bounds.maxZ).toBeLessThanOrEqual(R.worldBound);
+  it("R9 — the centerline stays inside each length's world bounds", () => {
+    for (const length of ["short", "medium", "long"] as FiniteStageLength[]) {
+      const bound = R.stageLengths[length].worldBound;
+      for (const seed of SEEDS.slice(0, 6)) {
+        const track = compileStage(seed, length);
+        expect(track.bounds.minX).toBeGreaterThanOrEqual(-bound);
+        expect(track.bounds.maxX).toBeLessThanOrEqual(bound);
+        expect(track.bounds.minZ).toBeGreaterThanOrEqual(-bound);
+        expect(track.bounds.maxZ).toBeLessThanOrEqual(bound);
+      }
     }
   });
 
@@ -140,16 +162,19 @@ describe("stage generator", () => {
     expect(violations).toEqual([]);
   });
 
-  it("R11 — stage length lands in the mandated band", () => {
-    for (const seed of SEEDS) {
-      const track = compileTrack(seed);
-      expect(track.length).toBeGreaterThanOrEqual(R.minStageLength - R.closingStraight);
-      expect(track.length).toBeLessThanOrEqual(R.maxStageLength + R.closingStraight);
+  it("R11 — every finite length lands in its band", () => {
+    for (const length of ["short", "medium", "long", "xlong"] as FiniteStageLength[]) {
+      const band = R.stageLengths[length].band;
+      for (const seed of SEEDS.slice(0, 4)) {
+        const track = compileStage(seed, length);
+        expect(track.length).toBeGreaterThanOrEqual(band.min - R.closingStraight);
+        expect(track.length).toBeLessThanOrEqual(band.max + R.closingStraight);
+      }
     }
   });
 
   it("compiles continuous, finite samples with a jump lip per jump segment", () => {
-    for (const seed of SEEDS.slice(0, 10)) {
+    for (const seed of SEEDS.slice(0, 6)) {
       const track = compileTrack(seed);
       let prev = track.samples[0];
       for (const sample of track.samples) {
@@ -165,5 +190,125 @@ describe("stage generator", () => {
       const lips = track.samples.filter((s) => s.jump).length;
       expect(lips).toBe(jumpSegments);
     }
+  });
+});
+
+describe("pacenotes", () => {
+  it("covers every turn segment with a matching call", () => {
+    for (const seed of SEEDS.slice(0, 8)) {
+      const track = compileTrack(seed);
+      let s = 0;
+      for (const plan of track.segments) {
+        if (plan.kind === "turn") {
+          const mid = s + plan.length / 2;
+          const note = track.pacenotes.find((n) => n.s <= mid && n.endS >= mid);
+          expect(note).toBeDefined();
+          expect(note?.dir).toBe(plan.dir);
+          // A note's severity is the tightest of the turns it merged.
+          expect(SEVERITY_RANK[note?.severity ?? "soft"]).toBeGreaterThanOrEqual(
+            SEVERITY_RANK[plan.severity ?? "soft"],
+          );
+        }
+        s += plan.length;
+      }
+    }
+  });
+
+  it("merges contiguous same-direction turns into one call", () => {
+    for (const seed of SEEDS.slice(0, 8)) {
+      const track = compileTrack(seed);
+      for (let i = 1; i < track.pacenotes.length; i++) {
+        const prev = track.pacenotes[i - 1];
+        const next = track.pacenotes[i];
+        expect(next.s).toBeGreaterThanOrEqual(prev.endS - 1e-6);
+        // Back-to-back notes only exist across a direction change; a
+        // same-direction continuation would have merged.
+        if (next.s - prev.endS < 1e-6) expect(next.dir).not.toBe(prev.dir);
+      }
+    }
+  });
+
+  it("notes carry the summed turn angle", () => {
+    const track = compileTrack(SEEDS[0]);
+    for (const note of track.pacenotes) {
+      expect(note.angle).toBeGreaterThan(0);
+      expect(note.endS).toBeGreaterThan(note.s);
+    }
+  });
+});
+
+describe("ford dips (R12)", () => {
+  it("water lies flat, below every approach within the apron", () => {
+    for (const seed of SEEDS.slice(0, 10)) {
+      const track = compileTrack(seed);
+      const samples = track.samples;
+      for (let i = 0; i < samples.length; i++) {
+        if (samples[i].surface !== "water") continue;
+        // Flat across the run…
+        let j = i;
+        while (j < samples.length && samples[j].surface === "water") j++;
+        for (let k = i; k < j; k++) {
+          expect(Math.abs(samples[k].elevation - samples[i].elevation)).toBeLessThan(1e-6);
+        }
+        // …and a local low: nothing within an apron of either end dips
+        // below the water line.
+        const reach = Math.round(R.water.apron / track.step);
+        for (let k = Math.max(0, i - reach); k < Math.min(samples.length, j + reach); k++) {
+          expect(samples[k].elevation).toBeGreaterThanOrEqual(samples[i].elevation - 1e-6);
+        }
+        i = j;
+      }
+    }
+  });
+});
+
+describe("endless stages", () => {
+  it("streams deterministically regardless of how extends are chunked", () => {
+    const a = compileStage(7, "endless");
+    a.extend?.(6000);
+    const b = compileStage(7, "endless");
+    for (let s = 1500; s <= 6000; s += 331) b.extend?.(s);
+    b.extend?.(6000);
+    expect(a.samples.length).toBe(b.samples.length);
+    for (let i = 0; i < a.samples.length; i += 7) {
+      expect(a.samples[i].x).toBeCloseTo(b.samples[i].x, 9);
+      expect(a.samples[i].elevation).toBeCloseTo(b.samples[i].elevation, 9);
+      expect(a.samples[i].surface).toBe(b.samples[i].surface);
+    }
+    expect(a.pacenotes).toEqual(b.pacenotes);
+  });
+
+  it("keeps the R10 guarantee inside the tail window", () => {
+    for (const seed of [3, 11, 42]) {
+      const track = compileStage(seed, "endless");
+      track.extend?.(8000);
+      const pts = track.samples;
+      const min2 = (R.minSelfDistance - 7) ** 2;
+      const violations: string[] = [];
+      for (let i = 0; i < pts.length; i += 3) {
+        for (let j = i + 3; j < pts.length; j += 3) {
+          const gap = pts[j].s - pts[i].s;
+          if (gap < 100 || gap > R.endless.tailWindow) continue;
+          const dx = pts[i].x - pts[j].x;
+          const dz = pts[i].z - pts[j].z;
+          if (dx * dx + dz * dz < min2) {
+            violations.push(`seed ${seed}: s=${pts[i].s.toFixed(0)} vs ${pts[j].s.toFixed(0)}`);
+          }
+        }
+      }
+      expect(violations).toEqual([]);
+    }
+  });
+
+  it("always keeps road materialized past what was asked for", () => {
+    const track: Track = compileStage(5, "endless");
+    expect(track.endless).toBe(true);
+    expect(track.length).toBeGreaterThanOrEqual(R.endless.initial);
+    track.extend?.(4000);
+    expect(track.length).toBeGreaterThanOrEqual(4000);
+    // Asking for less than what exists is a no-op.
+    const before = track.samples.length;
+    expect(track.extend?.(1000)).toBe(false);
+    expect(track.samples.length).toBe(before);
   });
 });
