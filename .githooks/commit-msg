@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Conventional-commit message lint (OSS_SPEC §8.1/§16). Install once with
+# `make hooks`. Merge commits and fixups pass through untouched.
+set -euo pipefail
+
+msg_file="$1"
+subject=$(head -n1 "$msg_file")
+
+case "$subject" in
+  Merge\ *|Revert\ *|fixup!\ *|squash!\ *) exit 0 ;;
+esac
+
+pattern='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9./-]+\))?!?: .+'
+if ! printf '%s' "$subject" | grep -qE "$pattern"; then
+  echo "commit-msg: subject is not a conventional commit:"
+  echo "  $subject"
+  echo "Expected: <type>[(scope)][!]: <description>"
+  echo "Types: build chore ci docs feat fix perf refactor revert style test"
+  exit 1
+fi

@@ -1,0 +1,282 @@
+name: pages
+
+# Deploys the game (the `pwa/` Vite app, built against the engine source)
+# to GitHub Pages across three slots (pattern copied from the sibling game
+# repo):
+#
+#   /          the latest release (highest `v*` tag), or `main` when there
+#              is no release yet
+#   /preview/  the current `main` (every push)
+#   /branch/   a feature branch parked via workflow_dispatch, persisted in
+#              the `branch-deploy` orphan branch so it survives later deploys
+#
+# Served at the custom domain game2.niclaslindstedt.se (public/CNAME) — a
+# DNS CNAME on the GitHub Pages origin. The Pages artifact root IS the site
+# root, so the slot directories inside the artifact are `.`, `preview/`, and
+# `branch/`, matching the Vite base paths `/`, `/preview/`, `/branch/`.
+#
+# Pre-requisites: the repo's Pages source must be set to "GitHub Actions"
+# and the custom domain set to game2.niclaslindstedt.se (Settings → Pages);
+# the DNS CNAME record must point at the GitHub Pages origin
+# (`niclaslindstedt.github.io`).
+#
+# THE SHAPE OF THE RUN — one runner per slot:
+#
+#   resolve  →  build (root ∥ preview ∥ branch)  →  assemble  →  deploy
+#
+# Every slot is a WHOLE build of the site at its own base path, from its own
+# ref. `resolve` answers the one question the slots cannot answer for
+# themselves (which tag, if any, the root slot serves) and emits the slot
+# list as a matrix. `assemble` merges the artifacts into the Pages tree and
+# owns every git write (the `/branch/` slot's orphan branch).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      branch_ref:
+        description: "Optional branch to park in the stable /branch/ slot. Persists across regular deploys until the next branch_ref dispatch overwrites it."
+        required: false
+        type: string
+        default: ""
+  # Let release.yml chain into us after a release is tagged. The tag passes
+  # in via `release_ref`; otherwise we resolve the highest `v*` tag in the
+  # repo. Before the first release exists both lookups come up empty and we
+  # fall back to serving `main` at the root slot.
+  workflow_call:
+    inputs:
+      release_ref:
+        description: "Tag or sha to build for the production slot."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  # npm ci resolves @niclaslindstedt/oss-framework from GitHub Packages.
+  packages: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  # Stable orphan branch storing the most recently dispatched /branch/
+  # build. Created on demand by the first workflow_dispatch with a
+  # branch_ref; every run rehydrates the branch slot from here so regular
+  # deploys preserve it.
+  BRANCH_DEPLOY_REF: branch-deploy
+
+jobs:
+  # ---- Which ref each slot is built from -----------------------------------
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      slots: ${{ steps.plan.outputs.slots }}
+      root_label: ${{ steps.plan.outputs.root_label }}
+    steps:
+      # Tags and their trees only — no dependency install, no build.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Resolve production tag
+        id: tag
+        run: |
+          if [ -n "${{ inputs.release_ref }}" ]; then
+            REF="${{ inputs.release_ref }}"
+          else
+            # Highest semver tag, not the nearest reachable one — only
+            # release.yml creates `v*` tags, so the highest is the intended
+            # production release regardless of ancestry.
+            REF=$(git tag --list 'v*' --sort=-v:refname | head -n1)
+          fi
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          if [ -n "$REF" ]; then
+            echo "Resolved production ref: $REF"
+          else
+            echo "No release tag — will serve main at the root slot."
+          fi
+
+      # The matrix, as JSON. `branch` is in it only when this run was
+      # dispatched with one; an ordinary push leaves the slot alone and
+      # `assemble` rehydrates it from the orphan branch instead.
+      - name: Plan the slots
+        id: plan
+        env:
+          ROOT_REF: ${{ steps.tag.outputs.ref }}
+          BRANCH_REF: ${{ inputs.branch_ref }}
+          SHA: ${{ github.sha }}
+        run: |
+          ROOT="${ROOT_REF:-$SHA}"
+          # The parentheses around the appended value are load-bearing: jq's
+          # object-value grammar does not admit a bare `[…] + (…)` after
+          # `include:` without them.
+          SLOTS=$(jq -cn --arg root "$ROOT" --arg sha "$SHA" --arg branch "$BRANCH_REF" '
+            { include:
+                ( [ { slot: "root",    base: "/",         ref: $root }
+                  , { slot: "preview", base: "/preview/", ref: $sha  }
+                  ]
+                  + (if $branch == "" then [] else [{ slot: "branch", base: "/branch/", ref: $branch }] end)
+                )
+            }')
+          echo "slots=$SLOTS" >> "$GITHUB_OUTPUT"
+          echo "root_label=${ROOT_REF:-main}" >> "$GITHUB_OUTPUT"
+          echo "$SLOTS" | jq .
+
+  # ---- One whole site per slot, in parallel --------------------------------
+  build:
+    needs: resolve
+    name: build ${{ matrix.slot }}
+    runs-on: ubuntu-latest
+    strategy:
+      # Not fail-fast: when two slots break, seeing both failures in one run
+      # is the difference between one fix and two.
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.resolve.outputs.slots) }}
+    steps:
+      # THIS SLOT'S OWN REF, checked out directly.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ matrix.ref }}
+          fetch-depth: 0
+
+      # AFTER the checkout, so the lockfile hash keying the npm cache is this
+      # slot's own — a tag installs the tree it was cut with.
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@niclaslindstedt"
+      - run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build ${{ matrix.slot }}
+        run: npm run build --workspace pwa
+        env:
+          VITE_BASE: ${{ matrix.base }}
+          # Only the root slot nests the sibling channels under its service
+          # worker scope; it must disown their navigations (pwa-plugin.ts
+          # `ignorePaths`) so each channel's own worker serves its pages.
+          VITE_PWA_IGNORE_PATHS: ${{ matrix.slot == 'root' && '/preview/,/branch/' || '' }}
+
+      - name: Upload the ${{ matrix.slot }} slot
+        uses: actions/upload-artifact@v7
+        with:
+          name: site-${{ matrix.slot }}
+          path: pwa/dist
+          retention-days: 1
+          # The tree is mostly hashed bundles; a second compression pass
+          # buys little and costs the upload.
+          compression-level: 1
+          if-no-files-found: error
+          # Dotfiles are dropped by default, and the day the site grows a
+          # `.well-known/` that would go missing from the deploy alone.
+          include-hidden-files: true
+
+  # ---- Merge the slots into the one Pages artifact -------------------------
+  # Also the only job that writes to git: the `/branch/` slot is persisted
+  # in an orphan branch so a dispatched build survives later deploys.
+  assemble:
+    needs: [resolve, build]
+    runs-on: ubuntu-latest
+    steps:
+      # Only for its git remote and credentials — nothing here is built.
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: site-*
+          path: slots
+
+      # A dispatched build is force-pushed to the orphan branch and used as
+      # is; any other run has no branch artifact and reads the last one back
+      # out of that branch. Force-push is safe: the branch is auto-managed
+      # and only ever written by this step.
+      - name: Assemble the branch slot
+        id: branch
+        run: |
+          if [ -d slots/site-branch ]; then
+            STAGE=$(mktemp -d)
+            cp -R slots/site-branch/. "$STAGE/"
+            # Only the root artifact may carry the Pages CNAME.
+            rm -f "$STAGE/CNAME"
+            # The identity must be configured INSIDE the staging repo —
+            # `git init` creates a fresh repo with no inherited config.
+            cd "$STAGE"
+            git init -q -b "$BRANCH_DEPLOY_REF"
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -q -m "branch deploy: ${{ inputs.branch_ref }} (${{ github.run_id }})"
+            REMOTE_URL=$(git -C "$GITHUB_WORKSPACE" remote get-url origin)
+            AUTH_URL=$(printf '%s' "$REMOTE_URL" \
+              | sed "s|https://|https://x-access-token:${{ github.token }}@|")
+            git remote add origin "$AUTH_URL"
+            git push -f origin "HEAD:$BRANCH_DEPLOY_REF"
+            cd "$GITHUB_WORKSPACE"
+            mkdir -p site-branch
+            cp -R "$STAGE/." site-branch/
+            echo "has_branch_dist=true" >> "$GITHUB_OUTPUT"
+            echo "Persisted the dispatched branch build to $BRANCH_DEPLOY_REF."
+          elif git ls-remote --exit-code --heads origin "$BRANCH_DEPLOY_REF" >/dev/null 2>&1; then
+            git fetch origin "$BRANCH_DEPLOY_REF"
+            mkdir -p site-branch
+            git --work-tree=site-branch checkout "origin/$BRANCH_DEPLOY_REF" -- .
+            echo "has_branch_dist=true" >> "$GITHUB_OUTPUT"
+            echo "Rehydrated branch slot from $BRANCH_DEPLOY_REF."
+          else
+            echo "has_branch_dist=false" >> "$GITHUB_OUTPUT"
+            echo "$BRANCH_DEPLOY_REF branch does not exist yet — skipping branch slot."
+          fi
+
+      # The artifact root is the root slot (release tag, or main before the
+      # first release); `preview/` always tracks the triggering commit.
+      - name: Merge builds
+        run: |
+          mv slots/site-root site
+          mkdir -p site/preview
+          cp -R slots/site-preview/. site/preview/
+          rm -f site/preview/CNAME
+          echo "Merged: / = ${{ needs.resolve.outputs.root_label }}, /preview/ = ${{ github.sha }}"
+          if [ "${{ steps.branch.outputs.has_branch_dist }}" = "true" ]; then
+            mkdir -p site/branch
+            cp -R site-branch/. site/branch/
+            echo "Merged: /branch/ from $BRANCH_DEPLOY_REF"
+          fi
+
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    needs: assemble
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      # Whichever attempt actually published reports the URL.
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      # GitHub Pages' publish backend intermittently rejects a fresh
+      # deployment while it settles the previous one. The build is fine (the
+      # artifact uploaded cleanly); re-creating the deployment from the SAME
+      # artifact a moment later succeeds — exactly what a manual re-run
+      # does. Retry once in-job so the deploy is self-healing; a second
+      # failure still fails the job so a genuinely broken deploy surfaces.
+      - id: deployment
+        uses: actions/deploy-pages@v5
+        continue-on-error: true
+      - name: Wait before retrying a rejected deployment
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 45
+      - id: deployment_retry
+        if: steps.deployment.outcome == 'failure'
+        uses: actions/deploy-pages@v5

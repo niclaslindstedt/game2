@@ -1,0 +1,86 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    # Include `labeled` / `unlabeled` so the `no-changelog` escape
+    # hatch re-runs the changeset job when the label is toggled after
+    # the PR opened. The default activity types (`opened`,
+    # `synchronize`, `reopened`) would otherwise leave the check stuck
+    # red until the next push.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+  # npm ci resolves @niclaslindstedt/oss-framework from GitHub Packages.
+  packages: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@niclaslindstedt"
+      - run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: make fmt-check
+      - run: make lint
+      - run: make test
+      - run: make build
+
+  # Bots must keep finishing what the generator builds — the simulation
+  # sweep is its own job so a balance regression is named as such rather
+  # than buried in a unit-test log.
+  simulate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@niclaslindstedt"
+      - run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: make sim
+
+  shell-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: make shellcheck
+      - name: Install actionlint
+        run: |
+          curl -sSfL \
+            https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash \
+            | bash -s -- 1.7.7 /usr/local/bin
+      - run: make actionlint
+
+  changeset:
+    # Enforces that every PR touching user-visible code drops a
+    # changelog fragment under .changes/unreleased/, or opts out via
+    # the `no-changelog` label. Pure refactors, CI/build tweaks, and
+    # docs-only edits pass via the skip-list inside the script.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Check for changelog fragment
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: node scripts/release/check-changeset.mjs
