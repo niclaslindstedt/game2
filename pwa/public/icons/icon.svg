@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- The app mark: a car caught mid-drift, tire arcs sweeping behind it,
+       on the game's sky blue. The raster icons (pwa-*.png, apple-touch,
+       favicon, og.png) are generated from this same geometry by
+       scripts/generate-icons.mjs — keep the two in lockstep. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1f7fe0"/>
+      <stop offset="1" stop-color="#3fa9f5"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#sky)"/>
+  <!-- Tire arcs: two concentric sweeps around a center low-left of canvas. -->
+  <g fill="none" stroke="#f6f3ea" stroke-linecap="round">
+    <path d="M 96 512 A 300 300 0 0 1 396 212" stroke-width="30" opacity="0.95"/>
+    <path d="M 180 512 A 220 220 0 0 1 400 292" stroke-width="30" opacity="0.95"/>
+  </g>
+  <!-- The car: a chunky slab, rotated like it's hanging the tail out. -->
+  <g transform="translate(352,168) rotate(52)">
+    <rect x="-88" y="-52" width="176" height="104" rx="22" fill="#e23c2c"/>
+    <rect x="-30" y="-52" width="60" height="104" fill="#f6f3ea"/>
+    <rect x="-88" y="-52" width="176" height="104" rx="22" fill="none" stroke="#123069" stroke-width="10"/>
+  </g>
+</svg>

@@ -1,0 +1,372 @@
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+
+/* App stylesheet.
+
+     1. Tailwind v4 base + utilities.
+     2. The framework's prebuilt stylesheet — theme tokens the UpdateToast
+        reads (surface, line, fg).
+     3. `@source` — scan the installed framework package so the utility
+        classes its components use are emitted into this app's CSS.
+     4. The game shell: a full-viewport, non-scrolling canvas with the
+        arcade HUD painted over it. */
+
+@import "tailwindcss";
+@import "@niclaslindstedt/oss-framework/styles.css";
+
+@source "../../node_modules/@niclaslindstedt/oss-framework/dist";
+
+:root {
+  --hud-ink: #ffffff;
+  --hud-shadow: #123069;
+  --hud-good: #ffd23e;
+  --hud-bad: #ff5a4e;
+  --hud-info: #9fd8ff;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: #3fa9f5;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  font-family: "Avenir Next Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+}
+
+#root,
+.app-root {
+  position: fixed;
+  inset: 0;
+}
+
+.game-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ── HUD chrome ─────────────────────────────────────────────────────────── */
+
+.hud {
+  color: var(--hud-ink);
+  font-weight: 800;
+  font-style: italic;
+  text-shadow:
+    2px 2px 0 var(--hud-shadow),
+    -1px -1px 0 var(--hud-shadow),
+    1px -1px 0 var(--hud-shadow),
+    -1px 1px 0 var(--hud-shadow);
+}
+
+.hud-top {
+  position: absolute;
+  top: max(0.6rem, env(safe-area-inset-top));
+  left: max(0.8rem, env(safe-area-inset-left));
+  right: max(0.8rem, env(safe-area-inset-right));
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.hud-chip {
+  font-size: clamp(0.9rem, 2.5vmin, 1.3rem);
+  letter-spacing: 0.04em;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+
+.hud-chip-sub {
+  font-size: 0.62em;
+  opacity: 0.9;
+}
+
+.hud-timer {
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(1.1rem, 3.2vmin, 1.7rem);
+}
+
+.hud-progress {
+  flex: 1;
+  height: 0.55rem;
+  border: 2px solid var(--hud-shadow);
+  background: rgb(255 255 255 / 35%);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.hud-progress-fill {
+  height: 100%;
+  background: var(--hud-good);
+}
+
+.hud-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.hud-mini {
+  font: inherit;
+  font-size: clamp(0.55rem, 1.8vmin, 0.8rem);
+  color: var(--hud-ink);
+  background: rgb(18 48 105 / 75%);
+  border: 2px solid rgb(255 255 255 / 65%);
+  border-radius: 0.4rem;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.hud-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.hud-count {
+  font-size: clamp(4rem, 18vmin, 9rem);
+  animation: hud-pop 1s infinite;
+}
+
+.hud-air {
+  position: absolute;
+  top: 22%;
+  font-size: clamp(1rem, 4vmin, 2rem);
+  color: var(--hud-info);
+  animation: hud-pop 0.8s infinite;
+}
+
+.hud-finish {
+  text-align: center;
+  background: rgb(18 48 105 / 82%);
+  border-radius: 1rem;
+  padding: 1.2rem 2.2rem;
+}
+
+.hud-finish-title {
+  font-size: clamp(1.6rem, 7vmin, 3.2rem);
+  color: var(--hud-good);
+}
+
+.hud-finish-time {
+  font-size: clamp(1.4rem, 6vmin, 2.6rem);
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-finish-sub {
+  font-size: clamp(0.75rem, 2.4vmin, 1rem);
+  opacity: 0.85;
+}
+
+.hud-flashes {
+  position: absolute;
+  top: 32%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.hud-flash {
+  font-size: clamp(1.1rem, 4.5vmin, 2.2rem);
+  animation: hud-rise 1.8s forwards;
+}
+
+.hud-flash-good {
+  color: var(--hud-good);
+}
+
+.hud-flash-bad {
+  color: var(--hud-bad);
+}
+
+.hud-flash-info {
+  color: var(--hud-info);
+}
+
+.hud-speed {
+  position: absolute;
+  left: max(1rem, env(safe-area-inset-left));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.hud-speed-num {
+  font-size: clamp(2.2rem, 9vmin, 4.5rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.hud-speed-unit {
+  font-size: clamp(0.8rem, 2.6vmin, 1.2rem);
+}
+
+.hud-gear {
+  font-size: clamp(1.2rem, 4.5vmin, 2.2rem);
+  color: var(--hud-good);
+}
+
+.hud-drift {
+  font-size: clamp(1rem, 3.6vmin, 1.8rem);
+  color: var(--hud-good);
+  animation: hud-pop 0.5s infinite;
+}
+
+.hud-off {
+  font-size: clamp(0.9rem, 3vmin, 1.5rem);
+  color: var(--hud-bad);
+}
+
+.hud-build {
+  position: absolute;
+  right: max(0.5rem, env(safe-area-inset-right));
+  bottom: 0.2rem;
+  font-size: 0.55rem;
+  font-style: normal;
+  font-weight: 500;
+  opacity: 0.55;
+  text-shadow: none;
+}
+
+/* ── Touch controls ─────────────────────────────────────────────────────── */
+
+.hud-touch {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hud-touch-left,
+.hud-touch-right {
+  position: absolute;
+  bottom: max(4.5rem, calc(env(safe-area-inset-bottom) + 4rem));
+  display: flex;
+  gap: 0.8rem;
+  align-items: flex-end;
+  pointer-events: none;
+}
+
+.hud-touch-left {
+  left: max(1rem, env(safe-area-inset-left));
+}
+
+.hud-touch-right {
+  right: max(1rem, env(safe-area-inset-right));
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.hud-btn {
+  pointer-events: auto;
+  font: inherit;
+  font-weight: 800;
+  color: var(--hud-ink);
+  background: rgb(18 48 105 / 55%);
+  border: 3px solid rgb(255 255 255 / 70%);
+  border-radius: 1rem;
+  cursor: pointer;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hud-btn:active {
+  background: rgb(255 210 62 / 75%);
+  color: var(--hud-shadow);
+}
+
+.hud-steer {
+  width: clamp(4.2rem, 16vmin, 6.5rem);
+  height: clamp(4.2rem, 16vmin, 6.5rem);
+  font-size: 2rem;
+}
+
+.hud-pedals {
+  display: flex;
+  gap: 0.8rem;
+}
+
+.hud-gas {
+  width: clamp(4.2rem, 16vmin, 6.5rem);
+  height: clamp(4.2rem, 16vmin, 6.5rem);
+  font-size: clamp(0.9rem, 3vmin, 1.2rem);
+}
+
+.hud-brake {
+  width: clamp(3.2rem, 12vmin, 5rem);
+  height: clamp(4.2rem, 16vmin, 6.5rem);
+  font-size: clamp(0.7rem, 2.4vmin, 1rem);
+}
+
+.hud-hand {
+  width: clamp(3.6rem, 14vmin, 5.6rem);
+  height: clamp(2.6rem, 9vmin, 3.6rem);
+  margin-bottom: 0.7rem;
+  font-size: clamp(0.75rem, 2.6vmin, 1.05rem);
+}
+
+.hud-gears {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.7rem;
+  pointer-events: none;
+}
+
+.hud-shift {
+  width: clamp(2.6rem, 9vmin, 3.6rem);
+  height: clamp(2.6rem, 9vmin, 3.6rem);
+  font-size: 1.4rem;
+}
+
+/* Desktop with a mouse: the touch pads are noise; keyboard drives. */
+@media (hover: hover) and (pointer: fine) {
+  .hud-touch {
+    display: none;
+  }
+}
+
+@keyframes hud-pop {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.12);
+  }
+}
+
+@keyframes hud-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(0.8rem) scale(0.8);
+  }
+
+  15% {
+    opacity: 1;
+    transform: translateY(0) scale(1.05);
+  }
+
+  80% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-1rem);
+  }
+}

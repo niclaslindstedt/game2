@@ -1,0 +1,20 @@
+# Sideways
+
+> A drift-first arcade rally game that runs in the browser: low-poly 3D
+> stages generated fresh every day — hairpins, jumps, fords — playable on
+> phone and desktop, installable as a PWA, offline once loaded. No account,
+> no download, free.
+
+The game boots straight into a stage. Two cars ship at launch: an automatic
+and a manual. Stages are built by a seeded rules engine that respects rally
+reality — braking zones before hairpins, run-ups before jumps, fords only on
+straights — so every seed is drivable flat out.
+
+## Play
+
+- [Play Sideways](https://game2.niclaslindstedt.se/): the game itself.
+
+## Source
+
+- [Repository](https://github.com/niclaslindstedt/game2): engine, stage
+  generator, simulation harness, and the PWA shell. Noncommercial license.
