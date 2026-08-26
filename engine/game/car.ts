@@ -163,21 +163,28 @@ export function stepGrounded(
   const sat = clamp(1 - (Math.abs(car.slip) - T.grip.satAt) / T.grip.satWidth, 0, 1);
   const deepening = Math.sign(input.steer) === -Math.sign(car.slip) && car.slip !== 0;
   const steerTerm = input.steer * (steerGain + spec.driftYaw * speedFactor * slide);
-  // The slip's self-rotation scales with steering INTO the slide, so
-  // holding into it sustains the drift, releasing lets grip straighten the
-  // car, and counter-steer both cuts the deepening and steers the catch.
-  // An unconditional slip term would be a positive feedback loop — a car
-  // that never stops rotating once sideways.
+  // The slip's self-rotation scales with steering commitment, so holding
+  // into the slide sustains it, releasing lets grip straighten the car, and
+  // counter-steer exits fast. An unconditional slip term would be a
+  // positive feedback loop — a car that never stops rotating once sideways.
+  // Full commitment on the counter too: it damps the catch, which is what
+  // keeps the exit a gather-up instead of a twitch.
+  const commitment = 0.25 + 0.75 * Math.abs(input.steer);
+  /** How much the wheel is steered INTO the slide, 0..1 — what gates the
+   * power's oversteer off while the driver is still asking for the angle. */
   const intoSlide = clamp(input.steer * -Math.sign(car.slip), 0, 1);
-  const commitment = 0.25 + 0.75 * intoSlide;
   const handbrakeYaw = input.handbrake
     ? Math.sign(input.steer) * T.grip.handbrakeYaw * speedFactor
     : 0;
-  // RWD power oversteer: the driven rear keeps feeding the slide while the
-  // throttle is down. The soft sign keeps the term from chattering through
-  // the instant the slip crosses centre.
+  // RWD power oversteer: the driven rear keeps feeding the slide — but only
+  // once the wheel stops asking for the angle. Steered into the slide the
+  // corner behaves classically (saturation parks it); released or countered
+  // after the turn, the tail keeps pushing, so settling back to driving
+  // straight takes a real counter-steer. The soft sign keeps the term from
+  // chattering through the instant the slip crosses centre.
   const tailDir = clamp(-car.slip / 0.08, -1, 1);
-  const powerYaw = tailDir * T.grip.powerYaw * input.throttle * slide * speedFactor;
+  const powerYaw =
+    tailDir * T.grip.powerYaw * input.throttle * slide * speedFactor * (1 - intoSlide);
   // Saturation gates EVERYTHING that deepens the slide except the power's
   // own oversteer; counter-steer keeps full authority, because it always
   // has somewhere to go.

@@ -38,16 +38,17 @@ export const TUNING = {
      * the car. */
     satWidth: 0.2,
     /** RWD power oversteer: yaw the driven rear axle feeds the slide while
-     * the power is down, rad/s at full throttle, full slide and pace.
-     * Deliberately NOT gated by the saturation band, so a drift held
-     * flat-out keeps creeping deeper — the counter-steer (or a lift) is
-     * what balances it. Zero restores a car that always parks itself. */
-    powerYaw: 1.25,
+     * the power is down and the wheel is NOT steered into it, rad/s at full
+     * throttle, full slide and pace. Ungated by the saturation band, so the
+     * slide never dies on its own after the corner — the counter-steer (or
+     * a lift) is what settles the car back to straight. Zero restores a car
+     * that straightens itself the moment the wheel centres. */
+    powerYaw: 1.0,
     /** Yaw response rate while gripping and while fully sliding, 1/s. The
-     * slide rate is deliberately low enough to leave momentum in the body:
-     * a hard catch swings the car through centre into an opposite slide —
-     * the pendulum — instead of stopping dead where the wheel points. */
-    yawResponse: { grip: 8, slide: 5 },
+     * slide rate sits a touch under the old grip-matched value so a hard,
+     * over-held catch carries enough momentum to swing the pendulum into an
+     * opposite slide — while a timed counter still settles without wobble. */
+    yawResponse: { grip: 8, slide: 6 },
     /** Rear grip while the handbrake is pulled (multiplier)... */
     handbrakeGrip: 0.4,
     /** ...and the yaw it adds toward the steered side, rad/s. The handbrake

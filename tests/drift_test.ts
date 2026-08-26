@@ -81,11 +81,8 @@ describe("turning at pace", () => {
     // Two full seconds pinned sideways on the power — a longer drift than
     // any real corner asks for — and the car still carries most of its
     // pace. Measured on the velocity's MAGNITUDE: a slide turns speed, the
-    // forward component alone would count that turn as a loss. The bar sits
-    // a little under the gripped case because the power's oversteer holds
-    // the car DEEPER than the old parked angle, and a deeper slide pays
-    // more scrub — that extra cost is the price of not catching it.
-    expect(Math.hypot(state.car.u, state.car.w)).toBeGreaterThan(before * 0.78);
+    // forward component alone would count that turn as a loss.
+    expect(Math.hypot(state.car.u, state.car.w)).toBeGreaterThan(before * 0.82);
   });
 
   it("a held slide parks at an angle instead of spinning", () => {
@@ -122,10 +119,11 @@ describe("turning at pace", () => {
     // A FLICK provokes the drift within a few tenths...
     run(state, { throttle: 1, steer: 1, handbrake: true }, 0.3);
     expect(state.car.drifting).toBe(true);
-    // ...and HOLDING it with the power down and full lock spins the car:
-    // rear grip is cut, the driven axle keeps pushing, nothing catches it.
+    // ...and HOLDING it with the power down and full lock takes the rear
+    // far past the saturation band — deeper than any drift the wheel can
+    // catch, well beyond where the slide parks without it.
     run(state, { throttle: 1, steer: 1, handbrake: true }, 0.7);
-    expect(Math.abs(state.car.slip)).toBeGreaterThan(1.2);
+    expect(Math.abs(state.car.slip)).toBeGreaterThan(0.9);
   });
 
   it("stays gripped below the speed where turning outruns the tires", () => {
