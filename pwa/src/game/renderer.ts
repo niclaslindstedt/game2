@@ -87,16 +87,44 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
 
   const render = (state: GameState, dt: number): void => {
     const c = state.car;
-    // Rooster tail: dust streams off the rear while drifting or off-road.
+    // Gravel kicked up at the wheels — the ground-contact half of the speed
+    // feel. Three overlapping sources, strongest first: the drift/off-road
+    // rooster tail, the braking plume, and the plain rolling kickup that
+    // rides with pace. Particles inherit part of the car's wake so every
+    // cloud streams backward instead of hanging where it spawned.
     dustClock += dt;
-    const sideways = Math.abs(c.slip) > 0.12 && !c.airborne && c.u > 6;
-    if ((sideways || state.offRoad) && dustClock > 0.03) {
+    if (!c.airborne && dustClock > 0.03) {
       dustClock = 0;
-      const back = 1.6;
-      const bx = c.x - Math.sin(c.heading) * back;
-      const bz = c.z - Math.cos(c.heading) * back;
+      const fwdX = Math.sin(c.heading);
+      const fwdZ = Math.cos(c.heading);
+      const rightX = Math.cos(c.heading);
+      const rightZ = -Math.sin(c.heading);
       const inWater = state.track.samples[state.progressIndex]?.surface === "water";
-      dust.spawn(bx, c.y + 0.15, bz, inWater ? 0x4fa0f0 : 0xb29268, 4, 3);
+      const color = inWater ? 0x4fa0f0 : 0xb29268;
+      const wakeX = -fwdX * c.u * 0.35;
+      const wakeZ = -fwdZ * c.u * 0.35;
+      const sideways = Math.abs(c.slip) > 0.12 && c.u > 6;
+      const rear = (side: number, count: number, spread: number): void =>
+        dust.spawn(
+          c.x - fwdX * 1.5 + rightX * side * 0.8,
+          c.y + 0.15,
+          c.z - fwdZ * 1.5 + rightZ * side * 0.8,
+          color,
+          count,
+          spread,
+          wakeX,
+          wakeZ,
+        );
+      if (sideways || state.offRoad) {
+        // The drift plume also blows toward the slide, off the outside wheels.
+        rear(-1, 6, 3.5);
+        rear(1, 6, 3.5);
+      } else if (c.braking && c.u > 8) {
+        rear(-1, 4, 2.5);
+        rear(1, 4, 2.5);
+      } else if (c.u > 15) {
+        rear(Math.random() < 0.5 ? -1 : 1, 2, 1.6);
+      }
     }
     dust.update(dt);
     car?.update(state, dt);

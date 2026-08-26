@@ -5,11 +5,22 @@
 
 import * as THREE from "three";
 
-const POOL = 320;
+const POOL = 768;
 
 export type Dust = {
   points: THREE.Points;
-  spawn: (x: number, y: number, z: number, color: number, count: number, spread: number) => void;
+  /** `vx`/`vz` seed every particle with a base world velocity (the car's
+   * wake) on top of the random spread. */
+  spawn: (
+    x: number,
+    y: number,
+    z: number,
+    color: number,
+    count: number,
+    spread: number,
+    vx?: number,
+    vz?: number,
+  ) => void;
   update: (dt: number) => void;
   dispose: () => void;
 };
@@ -25,7 +36,9 @@ export function createDust(): Dust {
   geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   const mat = new THREE.PointsMaterial({
-    size: 0.55,
+    // Small grains, many of them: near the lowered chase cam a big point
+    // sprite reads as a glitchy square, a swarm of small ones as spray.
+    size: 0.22,
     vertexColors: true,
     transparent: true,
     opacity: 0.85,
@@ -42,6 +55,8 @@ export function createDust(): Dust {
     color: number,
     count: number,
     spread: number,
+    vx = 0,
+    vz = 0,
   ): void => {
     tint.set(color);
     for (let n = 0; n < count; n++) {
@@ -50,9 +65,9 @@ export function createDust(): Dust {
       positions[i * 3] = x + (Math.random() - 0.5) * 0.6;
       positions[i * 3 + 1] = y + Math.random() * 0.3;
       positions[i * 3 + 2] = z + (Math.random() - 0.5) * 0.6;
-      velocities[i * 3] = (Math.random() - 0.5) * spread;
+      velocities[i * 3] = vx + (Math.random() - 0.5) * spread;
       velocities[i * 3 + 1] = 1.5 + Math.random() * spread;
-      velocities[i * 3 + 2] = (Math.random() - 0.5) * spread;
+      velocities[i * 3 + 2] = vz + (Math.random() - 0.5) * spread;
       colors[i * 3] = tint.r * (0.85 + Math.random() * 0.3);
       colors[i * 3 + 1] = tint.g * (0.85 + Math.random() * 0.3);
       colors[i * 3 + 2] = tint.b * (0.85 + Math.random() * 0.3);

@@ -15,6 +15,16 @@ export const TUNING = {
   drift: {
     /** Minimum forward speed for a drift to start, m/s. */
     minSpeed: 9,
+    /** Above this speed (~70 km/h) a sharp steering input alone breaks the
+     * rear out — the Sega Rally entry: crank the wheel at pace and the car
+     * goes sideways without the handbrake. m/s. */
+    steerEnterSpeed: 19.5,
+    /** How committed the steering must be (|steer|, 0–1) for the
+     * speed entry to trigger. */
+    steerEnterLock: 0.75,
+    /** The speed entry's kick as a fraction of the handbrake kick — the
+     * tail steps out, it doesn't snap out. */
+    steerEnterKick: 0.55,
     /** Handbrake sideways kick: lateral speed injected at drift start, m/s. */
     kick: 4.5,
     /** Yaw impulse at drift start in the steered direction, rad/s. */

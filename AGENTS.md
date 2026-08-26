@@ -107,6 +107,7 @@ Skills live in `.agent/skills/` (`.claude/skills` symlinks there) — each a `SK
 
 **Craft** (the subject owners):
 
+- **`game-feel`** — how the game FEELS: the sensation of speed and the drift as drama. Owns the Sega Rally reference, the camera, and the cross-system levers (speed × stage scale × framing × FX). Load it whenever the acceptance test is "does it feel right".
 - **`engine-system`** — adding/changing a gameplay system, engine-first.
 - **`mapgen-improvement`** — the stage generator (rules/search/geometry, the R-rules).
 - **`bot-improvement`** — the bot driver in `engine/sim/bot.ts`.

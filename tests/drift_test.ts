@@ -98,6 +98,18 @@ describe("the drift", () => {
     expect(events.some((e) => e.type === "driftStart")).toBe(true);
   });
 
+  it("past ~70 km/h a sharp turn breaks the rear out immediately", () => {
+    const state = game();
+    run(state, { throttle: 1 }, 8);
+    expect(state.car.u).toBeGreaterThan(TUNING.drift.steerEnterSpeed);
+    // No handbrake, no slip buildup — the wheel alone starts the slide,
+    // and the entry kick gives it real angle within a couple of frames.
+    const events = run(state, { throttle: 1, steer: 1 }, 0.1);
+    expect(events.some((e) => e.type === "driftStart")).toBe(true);
+    expect(state.car.drifting).toBe(true);
+    expect(Math.abs(state.car.slip)).toBeGreaterThan(0.05);
+  });
+
   it("accumulates drift score while sideways", () => {
     const state = game();
     run(state, { throttle: 1 }, 5);

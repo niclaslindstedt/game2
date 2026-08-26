@@ -20,7 +20,7 @@ The generator respects rally reality. Verbatim from the rule book, each enforced
 - **R8** Crests (blind brows) sit on straights and never combine with a jump or a ford on the same segment.
 - **R9** The whole centerline stays inside the world bounds; when the stage nears the boundary the generator must turn back toward the middle.
 - **R10** The centerline never crosses itself — non-adjacent parts of the stage keep a minimum distance between them (measured per candidate point beyond an 80 m route-neighbour window, so hairpins stay legal and folds stay impossible).
-- **R11** Total stage length lands inside the mandated band (~1.2–2.0 km).
+- **R11** Total stage length lands inside the mandated band (~1.6–2.6 km).
 
 ## Determinism and the daily stage
 

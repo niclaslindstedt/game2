@@ -29,26 +29,29 @@ export type TurnSeverity = "soft" | "hard";
 export type SegmentFeature = "none" | "jump" | "water" | "crest";
 
 export const STAGE_RULES = {
-  /** R11 — target stage length, meters. */
-  minStageLength: 1200,
-  maxStageLength: 2000,
+  /** R11 — target stage length, meters. Sized for cars that cruise past
+   * 150 km/h: stages long enough that pace has somewhere to live. */
+  minStageLength: 1600,
+  maxStageLength: 2600,
 
   /** R1/R2 — opening and closing straights, meters. */
-  openingStraight: 80,
-  closingStraight: 60,
+  openingStraight: 110,
+  closingStraight: 80,
 
-  /** Straight vocabulary, meters. */
-  straightShort: { min: 30, max: 60 },
-  straightLong: { min: 80, max: 170 },
+  /** Straight vocabulary, meters — long enough to reach the top gears. */
+  straightShort: { min: 40, max: 80 },
+  straightLong: { min: 110, max: 240 },
 
-  /** R3 — turn vocabulary: radius in meters, angle in radians. */
+  /** R3 — turn vocabulary: radius in meters, angle in radians. Soft turns
+   * are sized to be taken flat-out or near it at speed; hard turns stay
+   * tight — they are the drift moments. */
   turn: {
     soft: {
-      radius: { min: 45, max: 90 },
+      radius: { min: 60, max: 115 },
       angle: { min: Math.PI / 6, max: Math.PI / 2.6 },
     },
     hard: {
-      radius: { min: 14, max: 32 },
+      radius: { min: 15, max: 34 },
       angle: { min: Math.PI / 3.4, max: Math.PI / 1.5 },
     },
   },
@@ -57,38 +60,38 @@ export const STAGE_RULES = {
   maxSameDirectionTurns: 2,
 
   /** Road width, meters (full width, centerline to edge is half). */
-  roadWidth: 11,
+  roadWidth: 12.5,
 
   /** R6 — jump placement. */
   jump: {
-    minStraight: 70, // segment must be at least this long to carry a lip
-    runUp: 25, // meters of straight before the lip
-    landing: 35, // meters of straight after the lip
-    minSpacing: 150, // meters of stage between two lips
+    minStraight: 90, // segment must be at least this long to carry a lip
+    runUp: 35, // meters of straight before the lip
+    landing: 50, // meters of straight after the lip
+    minSpacing: 200, // meters of stage between two lips
     lipHeight: { min: 1.4, max: 2.4 },
     rampLength: { min: 10, max: 16 },
   },
 
   /** R7 — ford placement. */
   water: {
-    minStraight: 50,
+    minStraight: 60,
     length: { min: 8, max: 16 },
-    clearAfterJump: 40, // meters past a lip before water may start
+    clearAfterJump: 50, // meters past a lip before water may start
   },
 
   /** R8 — crest placement. */
   crest: {
-    minStraight: 60,
+    minStraight: 70,
     height: { min: 1.5, max: 3.5 },
-    length: { min: 40, max: 60 },
+    length: { min: 50, max: 80 },
   },
 
   /** R9 — world half-extent, meters; soft margin where turn-back kicks in. */
-  worldBound: 900,
-  boundMargin: 200,
+  worldBound: 1100,
+  boundMargin: 240,
 
   /** R10 — minimum distance between non-adjacent centerline points. */
-  minSelfDistance: 26,
+  minSelfDistance: 30,
 
   /** Feature probabilities per eligible straight. */
   featureChance: { jump: 0.4, water: 0.3, crest: 0.3 },

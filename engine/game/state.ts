@@ -62,6 +62,11 @@ export type CarState = {
   boostLeft: number;
   /** True while the booster is burning this step (renderer/HUD readout). */
   boosting: boolean;
+  /** Steer input applied this step, -1..1 (renderer readout: the front
+   * wheels point where the driver points them). */
+  steer: number;
+  /** True while the brakes bite this step (renderer readout: brake FX). */
+  braking: boolean;
 };
 
 export type GameEvent =

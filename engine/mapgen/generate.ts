@@ -37,8 +37,31 @@ function probePoints(from: Cursor, plan: SegmentPlan): { points: Cursor[]; end: 
   return { points, end: { x, z, heading, arc } };
 }
 
+/** The probe walks at PROBE_STEP while compile samples finer, and the two
+ * Euler walks diverge cumulatively over a whole stage (coarser steps cut
+ * every arc's corners). Validate against a bound pulled in by this slack so
+ * the compiled centerline never leaves R9. */
+const BOUND_SLACK = 8;
+
 function inBounds(p: Cursor): boolean {
-  return Math.abs(p.x) <= R.worldBound && Math.abs(p.z) <= R.worldBound;
+  const bound = R.worldBound - BOUND_SLACK;
+  return Math.abs(p.x) <= bound && Math.abs(p.z) <= bound;
+}
+
+/** Rebuild the same-direction run from the committed plans' tail — the run
+ * state after a backtrack must reflect what is actually still committed,
+ * or a re-draw can stack a third same-direction turn past R5. */
+function recomputeSameDirRun(plans: SegmentPlan[], run: { dir: 1 | -1 | 0; count: number }): void {
+  run.dir = 0;
+  run.count = 0;
+  const last = plans[plans.length - 1];
+  if (!last || last.kind !== "turn" || !last.dir) return;
+  run.dir = last.dir;
+  for (let i = plans.length - 1; i >= 0; i--) {
+    const p = plans[i];
+    if (p.kind !== "turn" || p.dir !== run.dir) break;
+    run.count += 1;
+  }
 }
 
 /** R10 — every candidate point must keep clear of every committed point
@@ -186,7 +209,15 @@ function tryGenerateStage(seed: number): SegmentPlan[] | null {
 
   const targetLength = rng.range(R.minStageLength, R.maxStageLength) - R.closingStraight;
 
+  // A boxed-in search can place-and-backtrack around the same pocket for a
+  // very long time (a random walk with no exit). Normal stages assemble in
+  // well under a thousand iterations; past this cap the attempt is hopeless
+  // — reject it and let the caller retry with the next sub-seed.
+  const maxIterations = 4000;
+  let iterations = 0;
+
   while (total < targetLength) {
+    if (++iterations > maxIterations) return null;
     let placed = false;
     for (let attempt = 0; attempt < 10 && !placed; attempt++) {
       // R9 — near the boundary, steer back toward the middle: force a turn
@@ -214,6 +245,10 @@ function tryGenerateStage(seed: number): SegmentPlan[] | null {
         plan = { kind: "straight", length, ...assignFeature(rng, length, total, sLastLipEnd) };
       }
 
+      // R11 — the segment that crosses targetLength must not overshoot the
+      // band's ceiling once the closing straight lands on top.
+      if (total + plan.length > R.maxStageLength - R.closingStraight) continue;
+
       const { points, end } = probePoints(cursor, plan);
       if (!points.every(inBounds)) continue;
       if (!clearsSelf(points, committed)) continue;
@@ -232,8 +267,7 @@ function tryGenerateStage(seed: number): SegmentPlan[] | null {
       total -= dropped.length;
       const tail = committed[committed.length - 1];
       cursor = { ...tail };
-      sameDirRun.dir = 0;
-      sameDirRun.count = 0;
+      recomputeSameDirRun(plans, sameDirRun);
     }
   }
 
