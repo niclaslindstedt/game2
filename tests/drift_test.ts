@@ -81,8 +81,11 @@ describe("turning at pace", () => {
     // Two full seconds pinned sideways on the power — a longer drift than
     // any real corner asks for — and the car still carries most of its
     // pace. Measured on the velocity's MAGNITUDE: a slide turns speed, the
-    // forward component alone would count that turn as a loss.
-    expect(Math.hypot(state.car.u, state.car.w)).toBeGreaterThan(before * 0.85);
+    // forward component alone would count that turn as a loss. The bar sits
+    // a little under the gripped case because the power's oversteer holds
+    // the car DEEPER than the old parked angle, and a deeper slide pays
+    // more scrub — that extra cost is the price of not catching it.
+    expect(Math.hypot(state.car.u, state.car.w)).toBeGreaterThan(before * 0.78);
   });
 
   it("a held slide parks at an angle instead of spinning", () => {
@@ -116,8 +119,13 @@ describe("turning at pace", () => {
     // Six frames of handbrake: no injected sideways speed, no lost pace.
     expect(Math.abs(state.car.slip)).toBeLessThan(0.06);
     expect(state.car.u).toBeGreaterThan(speed * 0.97);
-    run(state, { throttle: 1, steer: 1, handbrake: true }, 0.8);
+    // A FLICK provokes the drift within a few tenths...
+    run(state, { throttle: 1, steer: 1, handbrake: true }, 0.3);
     expect(state.car.drifting).toBe(true);
+    // ...and HOLDING it with the power down and full lock spins the car:
+    // rear grip is cut, the driven axle keeps pushing, nothing catches it.
+    run(state, { throttle: 1, steer: 1, handbrake: true }, 0.7);
+    expect(Math.abs(state.car.slip)).toBeGreaterThan(1.2);
   });
 
   it("stays gripped below the speed where turning outruns the tires", () => {
@@ -135,5 +143,58 @@ describe("turning at pace", () => {
     expect(state.stats.driftCount).toBe(1);
     expect(state.stats.driftTime).toBeGreaterThan(0.5);
     expect(state.stats.driftScore).toBeGreaterThan(0);
+  });
+});
+
+describe("rear-wheel drive", () => {
+  /** Build speed, then hold a full-lock power slide for a second. */
+  function enterDrift(state: GameState): void {
+    upToSpeed(state, 8);
+    run(state, { throttle: 1, steer: 1 }, 1);
+    expect(state.car.drifting).toBe(true);
+  }
+
+  it("centering the wheel does not end a power slide — the counter does", () => {
+    const state = game();
+    enterDrift(state);
+    const entrySign = Math.sign(state.car.slip);
+    // Wheel straight, power still down: the driven rear keeps feeding the
+    // slide, so the car stays parked sideways instead of straightening.
+    run(state, { throttle: 1 }, 1.5);
+    expect(state.car.drifting).toBe(true);
+    expect(Math.sign(state.car.slip)).toBe(entrySign);
+    expect(Math.abs(state.car.slip)).toBeGreaterThan(0.3);
+  });
+
+  it("lifting the throttle calms the car without any counter-steer", () => {
+    const state = game();
+    enterDrift(state);
+    run(state, {}, 1.5);
+    expect(state.car.drifting).toBe(false);
+    expect(Math.abs(state.car.slip)).toBeLessThan(0.15);
+  });
+
+  it("over-holding the counter swings the pendulum into an opposite drift", () => {
+    const state = game();
+    enterDrift(state);
+    const entrySign = Math.sign(state.car.slip);
+    // Full counter-lock held straight through the catch: the body's yaw
+    // momentum plus the power carries the slip past centre into a second
+    // drift the other way — which needs its own counter.
+    run(state, { throttle: 1, steer: -1 }, 1.2);
+    expect(Math.sign(state.car.slip)).toBe(-entrySign);
+    expect(Math.abs(state.car.slip)).toBeGreaterThan(TUNING.drift.enterSlip);
+    expect(state.car.drifting).toBe(true);
+  });
+
+  it("a timed counter-and-release settles the car back to straight", () => {
+    const state = game();
+    enterDrift(state);
+    // Counter until the nose is nearly back, then breathe everything —
+    // the skilled exit: no pendulum, pace kept.
+    run(state, { throttle: 1, steer: -0.7 }, 0.55);
+    run(state, {}, 1.2);
+    expect(state.car.drifting).toBe(false);
+    expect(Math.abs(state.car.slip)).toBeLessThan(0.15);
   });
 });

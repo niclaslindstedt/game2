@@ -31,6 +31,10 @@ export function createGameCamera(width: number, height: number): GameCamera {
   const camera = new THREE.PerspectiveCamera(60, width / height, 0.25, 900);
   let mode: CameraMode = "chase";
   let yaw = 0;
+  /** Chase yaw, decomposed: the part that follows the nose... */
+  let headYaw = 0;
+  /** ...and the drift's slip angle riding on top of it, rad. */
+  let driftOff = 0;
   let dist = 6.2;
   let height_ = 2.0;
   let shake = 0;
@@ -41,14 +45,23 @@ export function createGameCamera(width: number, height: number): GameCamera {
   const updateChase = (state: GameState, dt: number): void => {
     const car = state.car;
     const speed = Math.hypot(car.u, car.w);
-    const velAngle =
-      speed > 3 ? car.heading + Math.atan2(car.w, Math.max(0.001, car.u)) : car.heading;
     // Grounded: 20% nose, 80% travel — the Sega Rally read: the camera
     // follows the ROAD, so a drift swings the car across the frame while
     // the road keeps flowing to the vanishing point. Airborne: follow the
     // travel direction fully; the nose is doing its own thing.
-    const target = car.airborne ? velAngle : angleLerp(car.heading, velAngle, 0.8);
-    yaw = angleLerp(yaw, target, clamp((car.airborne ? 2.2 : 4.5) * dt, 0, 1));
+    const slip = speed > 3 ? Math.atan2(car.w, Math.max(0.001, car.u)) : 0;
+    const wantOff = slip * (car.airborne ? 1 : 0.8);
+    // The drift arrives in the frame at full speed, but once the car has
+    // settled the leftover angle unwinds gently: a camera that snaps back
+    // to centre the instant the slide ends reads as the game grabbing the
+    // wheel. A slide building the OTHER way (the pendulum) counts as
+    // developing, not settling.
+    const developing =
+      Math.abs(wantOff) > Math.abs(driftOff) ||
+      (Math.sign(wantOff) !== Math.sign(driftOff) && Math.abs(wantOff) > 0.05);
+    driftOff += (wantOff - driftOff) * clamp((developing ? 4.5 : 1.6) * dt, 0, 1);
+    headYaw = angleLerp(headYaw, car.heading, clamp((car.airborne ? 2.2 : 4.5) * dt, 0, 1));
+    yaw = headYaw + driftOff;
 
     // Proportions read off the Sega Rally chase cam: roof-height camera
     // (~2 m) pitched only a few degrees down, close behind, so the car

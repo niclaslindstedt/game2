@@ -158,24 +158,33 @@ export function stepGrounded(
   const speedFactor = clamp(car.u / 6, 0, 1);
   const steerGain = (spec.steerRate / (1 + car.u / 20)) * speedFactor;
   // The slide SATURATES: past ~26° of slip the forces that deepen it fade
-  // to nothing, so a held turn parks the car at a big, stable, movie drift
-  // angle instead of spinning it to a stop.
+  // to nothing, so a breathed slide parks at a big, stable, movie drift
+  // angle instead of spinning the car.
   const sat = clamp(1 - (Math.abs(car.slip) - T.grip.satAt) / T.grip.satWidth, 0, 1);
   const deepening = Math.sign(input.steer) === -Math.sign(car.slip) && car.slip !== 0;
   const steerTerm = input.steer * (steerGain + spec.driftYaw * speedFactor * slide);
-  // The slip's self-rotation scales with steering commitment, so holding
-  // into the slide sustains it, releasing lets grip straighten the car, and
-  // counter-steer exits fast. An unconditional slip term would be a
-  // positive feedback loop — a car that never stops rotating once sideways.
-  const commitment = 0.25 + 0.75 * Math.abs(input.steer);
+  // The slip's self-rotation scales with steering INTO the slide, so
+  // holding into it sustains the drift, releasing lets grip straighten the
+  // car, and counter-steer both cuts the deepening and steers the catch.
+  // An unconditional slip term would be a positive feedback loop — a car
+  // that never stops rotating once sideways.
+  const intoSlide = clamp(input.steer * -Math.sign(car.slip), 0, 1);
+  const commitment = 0.25 + 0.75 * intoSlide;
   const handbrakeYaw = input.handbrake
     ? Math.sign(input.steer) * T.grip.handbrakeYaw * speedFactor
     : 0;
-  // Saturation gates EVERYTHING that deepens the slide; only counter-steer
-  // keeps full authority, because it always has somewhere to go.
+  // RWD power oversteer: the driven rear keeps feeding the slide while the
+  // throttle is down. The soft sign keeps the term from chattering through
+  // the instant the slip crosses centre.
+  const tailDir = clamp(-car.slip / 0.08, -1, 1);
+  const powerYaw = tailDir * T.grip.powerYaw * input.throttle * slide * speedFactor;
+  // Saturation gates EVERYTHING that deepens the slide except the power's
+  // own oversteer; counter-steer keeps full authority, because it always
+  // has somewhere to go.
   const yawTarget =
     (deepening ? steerTerm * sat : steerTerm) +
-    handbrakeYaw -
+    handbrakeYaw +
+    powerYaw -
     car.slip * T.grip.slipYaw * commitment * sat * slide;
   const yawResponse =
     T.grip.yawResponse.grip + (T.grip.yawResponse.slide - T.grip.yawResponse.grip) * slide;
