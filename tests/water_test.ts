@@ -8,11 +8,17 @@ import { describe, expect, it } from "vitest";
 
 import {
   LAKE_Y,
+  NEUTRAL_INPUT,
   STAGE_RULES as R,
+  TUNING,
   collectAnchors,
   compileStage,
+  createGame,
   createTerrain,
+  step,
   traceRivers,
+  type GameEvent,
+  type GameState,
 } from "@engine";
 
 const SEEDS = [1, 2, 3, 5, 8, 13, 21, 34];
@@ -150,5 +156,100 @@ describe("the river (R18)", () => {
     const lakeland = wetness(1);
     expect(dry).toBeLessThan(middling);
     expect(middling).toBeLessThan(lakeland);
+  });
+});
+
+describe("going under (TUNING.crash.drown)", () => {
+  /** Drive a run straight off the side until it finds water deep enough to
+   * drown in, and hand back the state at the moment the water took it. The
+   * lakeland dial is turned up so there IS water to find. */
+  function driveIntoDeepWater(): { state: GameState; entry: GameEvent[] } {
+    for (const seed of SEEDS) {
+      const state = createGame({ seed, length: "long", skipCountdown: true, knobs: { water: 1 } });
+      // Hard lock and full throttle: off the road, across the verge, and
+      // into whatever the seed put beside it.
+      const input = { ...NEUTRAL_INPUT, throttle: 1, steer: 1 };
+      for (let i = 0; i < 120 * 60; i++) {
+        const events = step(state, input);
+        if (state.drowning) return { state, entry: events };
+      }
+    }
+    throw new Error("no seed put drownable water within reach of the road");
+  }
+
+  it("holds the car in the water instead of teleporting it off the lake", () => {
+    const { state, entry } = driveIntoDeepWater();
+    const types = entry.map((e) => e.type);
+    // The entry is a crash and a deep splash — and NOT a respawn, which is
+    // the whole change: the run is lost, the car is still in the lake.
+    expect(types).toContain("crash");
+    expect(types).not.toContain("respawn");
+    const splash = entry.find((e) => e.type === "splash");
+    expect(splash?.deep).toBe(true);
+    expect(state.drowning).not.toBeNull();
+  });
+
+  it("floats it at the waterline, then sinks it, and only then brings it home", () => {
+    const { state } = driveIntoDeepWater();
+    const D = TUNING.crash.drown;
+    const waterY = state.drowning?.waterY ?? 0;
+    const since = state.drowning?.since ?? 0;
+
+    let sank = 0;
+    let respawned = 0;
+    let floatDepth = -Infinity;
+    let deepest = Infinity;
+    for (let i = 0; i < Math.round((D.duration + 0.5) / TUNING.dt); i++) {
+      const age = state.t - since;
+      // Through the float the hull rides its waterline: within half a metre
+      // of the surface, bobbing, never gone.
+      if (state.drowning && age > 0.9 && age < D.float) {
+        floatDepth = Math.max(floatDepth, waterY - state.car.y);
+      }
+      if (state.drowning) deepest = Math.min(deepest, state.car.y);
+      for (const ev of step(state, { ...NEUTRAL_INPUT, throttle: 1, steer: -1 })) {
+        if (ev.type === "sink") sank += 1;
+        if (ev.type === "respawn") respawned += 1;
+      }
+    }
+    // Under the surface, but only just: sills awash, not gone. The lower
+    // bound also keeps the assertion from passing on a window the loop
+    // never actually visited.
+    expect(floatDepth).toBeGreaterThan(0);
+    expect(floatDepth).toBeLessThan(D.draft + 0.5);
+    // It went under once, roof and all...
+    expect(sank).toBe(1);
+    expect(deepest).toBeLessThan(waterY - D.roof);
+    // ...and the crew arrived exactly once, at the far end.
+    expect(respawned).toBe(1);
+    expect(state.drowning).toBeNull();
+  });
+
+  it("ignores the driver for the whole penalty — the seconds are the point", () => {
+    const { state } = driveIntoDeepWater();
+    const D = TUNING.crash.drown;
+    const since = state.drowning?.since ?? 0;
+    const raceAtEntry = state.raceTime;
+    // Everything the panicking driver can reach, including the reset that
+    // normally drags a wandering car home on the spot.
+    const mashing = {
+      ...NEUTRAL_INPUT,
+      throttle: 1,
+      brake: 1,
+      handbrake: true,
+      boost: true,
+      reset: true,
+    };
+    let home = 0;
+    while (state.t - since < D.duration - TUNING.dt) {
+      for (const ev of step(state, mashing)) if (ev.type === "respawn") home += 1;
+      expect(state.drowning, `t=${(state.t - since).toFixed(2)}`).not.toBeNull();
+    }
+    expect(home).toBe(0);
+    // ...and the clock never stopped while it was ignoring them: the whole
+    // penalty is charged to the run, which is what makes it one.
+    expect(state.raceTime - raceAtEntry).toBeCloseTo(D.duration, 3);
+    step(state, mashing);
+    expect(state.drowning).toBeNull();
   });
 });

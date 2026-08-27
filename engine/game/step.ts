@@ -30,6 +30,7 @@ import {
 } from "./track.ts";
 import {
   DAMAGE_ZONES,
+  updateSlip,
   type CarInput,
   type CarState,
   type GameEvent,
@@ -190,6 +191,7 @@ export function createGame(options: CreateGameOptions): GameState {
     offRoadSince: 0,
     lost: false,
     stuck: { x: car.x, z: car.z, since: 0 },
+    drowning: null,
     surface: "gravel",
     env,
     wind: windAt(env, 0),
@@ -234,6 +236,7 @@ function respawn(state: GameState, events: GameEvent[]): void {
   // chassis is patched to a drivable fraction, and the dents, the torn-off
   // parts and the hurt systems all stay.
   if (car.damage.wear >= 1) car.damage.wear = T.collision.repairTo;
+  state.drowning = null;
   state.offRoad = false;
   state.stuck.x = car.x;
   state.stuck.z = car.z;
@@ -242,11 +245,98 @@ function respawn(state: GameState, events: GameEvent[]): void {
   events.push({ type: "respawn" });
 }
 
-function crash(state: GameState, events: GameEvent[]): boolean {
+/** The water takes the car. The run is lost here and the crew are already
+ * on their way, but the car is not lifted off the lake until it has gone
+ * down: `stepDrowning` owns the seconds in between, and the respawn is at
+ * the far end of them. */
+function drown(state: GameState, events: GameEvent[], waterY: number): void {
+  const car = state.car;
   state.stats.crashes += 1;
   events.push({ type: "crash" });
-  respawn(state, events);
-  return true;
+  state.drowning = { since: state.t, waterY, under: false };
+  // Whatever the entry was — a wade off the verge or a plunge off a deck —
+  // it is a swim from here: the springs, the slide and the flight all stop
+  // being things that are happening to this car.
+  car.airborne = false;
+  car.settling = false;
+  car.airTime = 0;
+  car.drifting = false;
+  car.slide = 0;
+  car.braking = false;
+  car.boosting = false;
+  car.reversing = false;
+  // A body arriving fast enough to reach the bed before it has floated at
+  // all skips the whole beat, so the water is allowed to swallow only so
+  // much of a plunge.
+  car.vy = Math.max(car.vy, -T.crash.drown.plunge);
+}
+
+/** One step of a car going down. Nothing else in the run advances while
+ * this is running — no progress, no surface, no wedge clock, and no input:
+ * the seconds ARE the penalty, and a driver who could steer out of them
+ * would not be paying it. */
+function stepDrowning(state: GameState, events: GameEvent[]): void {
+  const car = state.car;
+  const d = state.drowning as NonNullable<GameState["drowning"]>;
+  const D = T.crash.drown;
+  const age = state.t - d.since;
+
+  // The water takes the momentum, but not instantly: the car carries its
+  // entry line a few metres into the lake, and keeps swinging on its yaw
+  // long after it has stopped going anywhere.
+  car.u *= Math.exp(-T.dt / D.stopIn);
+  car.w *= Math.exp(-T.dt / D.stopIn);
+  car.yawRate *= Math.exp(-T.dt / D.slewIn);
+  car.heading += car.yawRate * T.dt;
+  const sinH = Math.sin(car.heading);
+  const cosH = Math.cos(car.heading);
+  car.x += (sinH * car.u + cosH * car.w) * T.dt;
+  car.z += (cosH * car.u - sinH * car.w) * T.dt;
+  updateSlip(car);
+
+  // Where the hull wants to sit. For the first `float` seconds that is its
+  // waterline; after it, the waterline itself walks down to the bed and
+  // takes the car with it. Smoothstepped, so the water starts winning
+  // gradually rather than the car dropping on a cue.
+  const going = Math.min(1, Math.max(0, (age - D.float) / (D.duration - D.float)));
+  const gone = going * going * (3 - 2 * going);
+  // ...and it can only go as deep as there is water: a shallow tarn is a
+  // car settled on the bottom with its roof awash, not a car sinking
+  // through the landscape.
+  const bed = state.terrain.groundAt(car.x, car.z) - D.draft;
+  const bottom = Math.max(bed, d.waterY - D.depth);
+  const rest = (1 - gone) * (d.waterY - D.draft) + gone * bottom;
+
+  // Buoyancy, as an underdamped spring: the entry is swallowed, the hull
+  // corks back up past its waterline, and the rocking dies out over the
+  // float. That bob is the whole difference between a car settling in a
+  // lake and a car waiting on a timer.
+  car.vy += (rest - car.y) * D.buoyancy * T.dt;
+  car.vy -= car.vy * Math.min(1, D.damping * T.dt);
+  car.y += car.vy * T.dt;
+
+  // The attitude forgets the crash and takes the water's: level while it
+  // floats, rocking as it settles, nose down once the heavy end starts to
+  // go. The springs unload — nothing is standing on them any more.
+  const follow = Math.min(1, D.settle * T.dt);
+  const swell = D.rock * Math.exp(-age / D.calm) * Math.sin(age * D.rockRate);
+  car.roll += (swell - car.roll) * follow;
+  car.rollRate = 0;
+  car.pitch += (-D.noseDown * gone - car.pitch) * follow;
+  car.ride += (0 - car.ride) * follow;
+  car.rideRate = 0;
+  car.pitchLoad += (0 - car.pitchLoad) * follow;
+
+  // The gulp: the water closing over the roof for good. Not the entry —
+  // a fast plunge ducks the whole car under on the way in and corks it
+  // straight back up, and calling that the sinking spends the moment
+  // three seconds before the car actually goes.
+  if (!d.under && gone > 0 && car.y + D.roof <= d.waterY) {
+    d.under = true;
+    events.push({ type: "sink" });
+  }
+
+  if (age >= D.duration) respawn(state, events);
 }
 
 /** The wedge check: a car pinned against a trunk with the throttle buried
@@ -305,6 +395,12 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   if (state.phase === "finished") return events;
 
   state.raceTime += T.dt;
+  // Going down in deep water is time that still costs the run but is not
+  // being driven — the clock above runs, and nothing below it does.
+  if (state.drowning) {
+    stepDrowning(state, events);
+    return events;
+  }
   const car = state.car;
   const track = state.track;
   const terrain = state.terrain;
@@ -427,7 +523,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
       ? offRoadSurface(state, car.x, car.z)
       : track.samples[fix.index].surface;
   if (!car.airborne && nowSurface === "water" && state.surface !== "water") {
-    events.push({ type: "splash" });
+    events.push({ type: "splash", speed: Math.abs(car.u), deep: false });
     state.stats.splashes += 1;
   }
   state.surface = nowSurface;
@@ -450,13 +546,23 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   if (fix.offRoad) {
     const water = terrain.waterAt(car.x, car.z);
     if (water !== null && water - car.y > T.crash.deepWater) {
-      // A plunge straight off a cliff into the sea never grounds in the
-      // shallows first — the crash IS the splash.
-      if (state.surface !== "water") {
-        events.push({ type: "splash" });
-        state.stats.splashes += 1;
-      }
-      crashed = crash(state, events);
+      // The entry gets its own splash whether or not the shallows already
+      // gave it one: a car going under displaces a different amount of
+      // water from a car wading, and this is the big one. A plunge
+      // straight off a cliff into the sea never grounds in the shallows at
+      // all, so for that one this is also the only splash there is.
+      events.push({
+        type: "splash",
+        speed: Math.hypot(car.u, car.vy),
+        deep: true,
+      });
+      // ...but the STAT counts water ENTRIES, not splash events, and the
+      // shallows this car waded through to get here already booked one.
+      // Double-counting would quietly file every drowning in the sim
+      // table's ford column as two fords.
+      if (state.surface !== "water") state.stats.splashes += 1;
+      drown(state, events, water);
+      crashed = true;
     }
     if (!crashed) {
       const solids = terrain.obstaclesNear(car.x, car.z, 2.5);

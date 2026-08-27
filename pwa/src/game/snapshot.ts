@@ -112,12 +112,19 @@ export function takeSnapshot(
       state.phase === "racing" && rpm > 0.83 && state.car.gear < state.spec.gearTop.length - 1,
     airborne: state.car.airborne,
     minimap: buildMinimap(state),
-    pacenotes: state.phase === "racing" ? upcomingPacenotes(state) : [],
+    // The co-driver stops calling corners the moment the car is in the
+    // water: the next one is not going to be taken, and reading it out
+    // over a sinking car is the same wrong note as the way-home prompt.
+    pacenotes: state.phase === "racing" && !state.drowning ? upcomingPacenotes(state) : [],
     seed: state.seed,
     carName: state.spec.name,
-    offRoad: state.offRoad,
-    lost: state.lost,
-    homeDistance: state.lost ? wayHome(state).distance : 0,
+    // Both of these are DRIVING aids — the co-driver's way-home call, and
+    // the button that takes it there — so a car the water has already
+    // taken is neither off-road nor lost as far as the HUD is concerned:
+    // nothing the player asks for over the next few seconds reaches it.
+    offRoad: state.offRoad && !state.drowning,
+    lost: state.lost && !state.drowning,
+    homeDistance: state.lost && !state.drowning ? wayHome(state).distance : 0,
     finishTime,
     boostLeft: state.car.boostLeft,
     boostMax: TUNING.boost.capacity,

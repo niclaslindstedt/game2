@@ -52,7 +52,9 @@ noise. Three kinds of sound come out the other side:
 - **Event sounds** answer a moment the simulation reported: a landing, a
   shift, an impact, the finish. `route.ts` maps the event to a bank id and a
   `PlayShape` — a scale (`gain`, `pitch`, `stretch`, `pan`) applied to the
-  authored voices, so one landing covers a kerb hop and a forty-metre flight.
+  authored voices, so one landing covers a kerb hop and a forty-metre flight,
+  and one `splash` covers a ford crossed at pace and a car going into a lake
+  it will not be coming out of (an octave down, half again as long).
 - **Cues** are moments the app knows and the engine never reported. The
   countdown lights are the worked example: nothing happens in the simulation
   when a light changes, so the light is the bed's business. Menu clicks are

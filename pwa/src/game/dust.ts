@@ -57,6 +57,35 @@ export const TIRE_SMOKE: DustStyle = {
   puffy: true,
 };
 
+/** WATER THROWN, as opposed to water sprayed off a rolling wheel. What a
+ * car displaces going INTO a body of water is a column, not a sheet: heavy
+ * droplets launched hard, arcing high and coming straight back down, and a
+ * lot of them — the count is what makes it read as a mass of water rather
+ * than a puff of blue. Small and fast for the same reason gravel is (a big
+ * sprite this close to the chase cam is a rectangle), and heavier than
+ * gravel because water falls out of the air faster than it goes up. */
+export const SPLASH_WATER: DustStyle = {
+  size: 0.085,
+  opacity: 0.9,
+  rise: 4.5,
+  gravity: 13,
+  life: { min: 0.6, max: 1.2 },
+};
+
+/** ...and the froth left on the surface once the column has come down: the
+ * white water over a hull that is still displacing, and the bubbles a
+ * sinking car lets go of. Puffy, near-weightless, drifting UP a little
+ * (negative gravity) so it breaks and spreads on the surface instead of
+ * raining back into it. */
+export const WATER_FOAM: DustStyle = {
+  size: 0.26,
+  opacity: 0.34,
+  rise: 0.4,
+  gravity: -0.15,
+  life: { min: 0.6, max: 1.3 },
+  puffy: true,
+};
+
 /** WHEN a sealed road smokes — the policy that goes with the style above.
  * Tarmac has nothing lying on it to throw, so unlike gravel it gives up
  * nothing at all for ordinary driving, however hard it is being driven.

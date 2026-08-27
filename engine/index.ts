@@ -32,6 +32,7 @@ export {
   type CarInput,
   type CarState,
   type DamagePart,
+  type DrownState,
   type GameEvent,
   type InternalSystem,
   type GamePhase,
