@@ -34,14 +34,18 @@ const CELL = GROUND_CELL;
 const CELLS = 16;
 const TILE = CELL * CELLS;
 /** Tiles exist within this range of the road, m — past the fog ceiling
- * (520 m), so the world never visibly ends. Exported because it is also how
- * far the LAND reaches: the map view frames the whole of it. */
-export const GROUND_REACH = 640;
+ * (520 m), so the world never visibly ends for a driver, and far enough out
+ * that someone who abandons the road entirely still finds ground under the
+ * wheels. The map view never shows this much: it cuts the world to a
+ * tighter island (map-island.ts), because a corridor of square tiles seen
+ * from above is a staircase. */
+const GROUND_REACH = 640;
 const FAR = GROUND_REACH;
 /** Tiles kept alive around the CAR when it roams off the corridor, m. */
 const CAR_FAR = 560;
-/** Freshly needed car-window tiles built per sync at most — an excursion
- * streams the ground in over a few frames instead of hitching on one. */
+/** Freshly needed tiles built per sync at most — an excursion, and a whole
+ * stage's corridor, stream the ground in over a few frames instead of
+ * hitching on one. The caller can raise it (see `sync`). */
 const BUILD_BUDGET = 3;
 
 function clamp01(t: number): number {
@@ -83,8 +87,9 @@ export type Terrain = {
   heightAt: (x: number, z: number) => number;
   /** Catch the ground up with the track and the car: index new samples,
    * cut new stream valleys, build the tiles the road and the car now
-   * need, and drop the ones both have left behind. */
-  sync: (track: Track, carS: number, carX: number, carZ: number) => void;
+   * need, and drop the ones both have left behind. `budget` caps how many
+   * tiles one call may raise; the rest come on later calls, nearest first. */
+  sync: (track: Track, carS: number, carX: number, carZ: number, budget?: number) => void;
   update: (dt: number) => void;
   dispose: () => void;
 };
@@ -294,14 +299,20 @@ export function buildTerrain(track: Track, biome: Biome, waterTexture: THREE.Tex
     return needed;
   };
 
-  /** The corridor tiles built so far — never dropped on a finite stage. */
+  /** The corridor tiles the road wants — never dropped on a finite stage. */
   let corridor = new Set<string>();
   let lastSyncedS = -Infinity;
   let lastCarX = Infinity;
   let lastCarZ = Infinity;
   let indexed = 0;
 
-  const sync = (t: Track, carS: number, carX: number, carZ: number): void => {
+  const sync = (
+    t: Track,
+    carS: number,
+    carX: number,
+    carZ: number,
+    budget = BUILD_BUDGET,
+  ): void => {
     const grew = samples.length > indexed;
     indexed = samples.length;
     // The renderer's own field instance follows the streamed road the same
@@ -313,34 +324,29 @@ export function buildTerrain(track: Track, biome: Biome, waterTexture: THREE.Tex
     lastCarX = carX;
     lastCarZ = carZ;
 
-    if (!t.endless && corridor.size === 0) {
-      // A finite stage's corridor is built once, in full.
-      corridor = corridorTiles(0);
-      for (const key of corridor) {
-        if (!tiles.has(key)) tiles.set(key, buildTile(...parseKey(key)));
-      }
+    // WHICH tiles are wanted: a finite stage's corridor is settled once and
+    // for all, an endless one's follows the streaming frontier, and the car's
+    // own window rides along with it wherever it wanders off the road.
+    if (corridor.size === 0 || (t.endless && grew)) {
+      corridor = corridorTiles(t.endless ? Math.max(0, carS - 450) : 0);
     }
-    if (t.endless && grew) {
-      corridor = corridorTiles(Math.max(0, carS - 450));
-      for (const key of corridor) {
-        if (!tiles.has(key)) tiles.set(key, buildTile(...parseKey(key)));
-      }
-    }
-
-    // The car's window: build the nearest missing ground first, a few
-    // tiles a frame, so an excursion streams in instead of hitching.
     const around = carTiles(carX, carZ);
-    const missing = [...around]
+
+    // ...and how many of them are RAISED now: the nearest missing ground
+    // first, a few tiles a call, so a stage arrives over a handful of frames.
+    // A whole corridor is a hundred-odd tiles and half a second of work, and
+    // spending it in one go stops the music as surely as it stops the map.
+    const missing = [...new Set([...corridor, ...around])]
       .filter((key) => !tiles.has(key))
       .map((key) => {
         const [tx, tz] = parseKey(key);
         return { key, d: Math.hypot((tx + 0.5) * TILE - carX, (tz + 0.5) * TILE - carZ) };
       })
       .sort((a, b) => a.d - b.d);
-    for (const { key } of missing.slice(0, BUILD_BUDGET)) {
+    for (const { key } of missing.slice(0, budget)) {
       tiles.set(key, buildTile(...parseKey(key)));
     }
-    if (missing.length > BUILD_BUDGET) lastSyncedS = -Infinity; // come back next frame
+    if (missing.length > budget) lastSyncedS = -Infinity; // come back next frame
 
     // Drop what neither the corridor nor the car can see anymore.
     for (const key of [...tiles.keys()]) {

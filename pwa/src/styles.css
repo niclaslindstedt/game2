@@ -1624,7 +1624,10 @@ body {
    is worth on a screen this short. */
 @media (orientation: landscape) and (max-height: 34rem) {
   .menu-grid {
-    grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+    /* Wide enough for a dial's three chips to sit on ONE line: a column that
+     wraps them turns five short dials into fifteen lines of chips, which is
+     the stack this layout exists to get rid of. */
+    grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
   }
 }
 
@@ -1914,19 +1917,6 @@ a.menu-version:focus-visible {
   pointer-events: auto;
 }
 
-.roam-head {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  flex: 0 0 auto;
-}
-
-.roam-title {
-  font-size: clamp(0.9rem, 3.4vmin, 1.4rem);
-  letter-spacing: 0.16em;
-  color: var(--hud-good);
-}
-
 .roam-split {
   flex: 1;
   min-height: 0;
@@ -1961,8 +1951,10 @@ a.menu-version:focus-visible {
    text sits on the flat sky the renderer leaves around the map, which is
    why the labels carry the HUD's shadow. */
 .roam-pane-stage {
-  flex: 1;
-  min-height: 0;
+  /* Grows into the room there is, and never shrinks below its own contents:
+     stacked on a phone the pane is taller than the viewport, and a pane that
+     shrank would simply cut the last two dials off. The split scrolls. */
+  flex: 1 0 auto;
   background: none;
   backdrop-filter: none;
   text-shadow:
@@ -1970,11 +1962,28 @@ a.menu-version:focus-visible {
     -1px -1px 0 var(--hud-shadow);
 }
 
+/* The stage pane's header carries the whole page's chrome — the way back,
+   the page's name, and the seed — so none of it costs a row of its own
+   above the map. It wraps rather than crushing on a narrow phone. */
 .roam-pane-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.7rem;
+}
+
+/* The way back, as the arrow alone. Sized off the page title beside it so
+   the two read as one piece of chrome rather than a button and a heading. */
+.roam-back {
+  font-size: clamp(0.85rem, 3vmin, 1.25rem);
+  line-height: 1;
+  padding: 0.1rem 0.55rem;
+}
+
+.roam-title {
+  font-size: clamp(0.9rem, 3.4vmin, 1.4rem);
+  letter-spacing: 0.16em;
+  color: var(--hud-good);
 }
 
 .roam-pane-title {
@@ -1983,18 +1992,43 @@ a.menu-version:focus-visible {
   color: var(--hud-good);
 }
 
-/* The hole. Transparent by design — see the block comment above. */
+/* What the map can be DONE to, in the corner of the map itself. Quiet, and
+   deaf: a label lying across the pane must not swallow the drag it is
+   advertising. */
+.roam-map-hint {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.7rem;
+  pointer-events: none;
+  font-size: clamp(0.46rem, 1.5vmin, 0.6rem);
+  letter-spacing: 0.14em;
+  opacity: 0.6;
+}
+
+/* The hole. Transparent by design — see the block comment above. It is also
+   the handle on the map camera: the browser must not claim the drag for a
+   scroll or a page zoom before the pane sees it. */
 .roam-map {
+  position: relative;
   flex: 1;
-  min-height: clamp(9rem, 30vh, 22rem);
+  /* The floor is what a phone held SIDEWAYS can spare once the slider and
+     five dials have had theirs — everything taller gets 30vh. */
+  min-height: clamp(6.5rem, 30vh, 22rem);
   border-radius: 0.6rem;
   border: 2px solid rgb(255 255 255 / 22%);
+  touch-action: none;
+  cursor: grab;
+}
+
+.roam-map:active {
+  cursor: grabbing;
 }
 
 .roam-seed {
   display: flex;
   align-items: center;
   gap: 0.3rem;
+  margin-left: auto;
 }
 
 .roam-step {
@@ -2055,13 +2089,19 @@ a.menu-version:focus-visible {
   opacity: 1;
 }
 
-/* The generator's dials, under the map they change. Tighter than the
-   conditions rows: four of them share the pane with the map, and the map
-   is the thing worth the space. */
+/* The generator's dials, under the map they change. In COLUMNS, and tighter
+   than the conditions rows: a dial is a short label over three small chips,
+   so one per line spends the pane's whole width on a third of it and takes
+   five lines off the map. Auto-fit rather than a fixed count — the same rule
+   gives a phone one column and a desktop four. */
 .roam-dials {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
+  display: grid;
+  /* Two columns on the narrowest phone — a dial per full-width line is the
+     stack this layout exists to get rid of, and a chip wrapping now and then
+     costs less than that. Landscape widens the column below, where there is
+     room for all three chips on one line. */
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.2rem 0.75rem;
   flex: 0 0 auto;
 }
 
@@ -2069,12 +2109,16 @@ a.menu-version:focus-visible {
   gap: 0.4rem;
 }
 
+.roam-dials .menu-opts {
+  gap: 0.25rem;
+}
+
 .roam-dials .menu-label {
   font-size: clamp(0.5rem, 1.6vmin, 0.64rem);
 }
 
 .roam-dials .menu-opt {
-  padding: 0.2rem 0.4rem;
+  padding: 0.2rem 0.34rem;
   font-size: clamp(0.48rem, 1.5vmin, 0.6rem);
 }
 
@@ -2635,14 +2679,27 @@ a.menu-version:focus-visible {
 
   .roam-column {
     flex: 0 0 auto;
-    width: min(20rem, 38vw);
+    /* Wide enough for the stage dials to stand two abreast in it — they
+       moved here off the map, and stacked one per line they would give the
+       column back the height the map just won. */
+    width: min(26rem, 40vw);
     overflow-y: auto;
     overscroll-behavior: contain;
+  }
+
+  .roam-dials {
+    grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
   }
 
   .roam-pane-stage {
     flex: 1;
     min-width: 0;
+    /* A phone held sideways has ~390 px of height for the map, the slider
+       and five dials. It fits; if a shorter shell ever does not, the pane
+       scrolls rather than cutting the last dial in half (the map pane
+       re-measures itself on scroll). */
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 }
 

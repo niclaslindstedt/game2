@@ -58,7 +58,7 @@ import {
   type RaceSettings,
 } from "./game/menu.tsx";
 import { MainMenu, type MenuPage, type PlayMode } from "./game/main-menu.tsx";
-import type { MapRect } from "./game/menu-roam.tsx";
+import type { MapRect, MapView } from "./game/menu-roam.tsx";
 import {
   levelLaps,
   loadProgress,
@@ -552,6 +552,17 @@ export function App() {
     rendererRef.current?.setMapRect(rect);
   };
 
+  /** Roam's map pane, driving the camera it is a window onto. Held in a memo
+   * so the pane's native listeners are wired once rather than on every
+   * re-render the menu does. */
+  const mapView = useMemo<MapView>(
+    () => ({
+      onMove: (dAz, dPitch, zoomBy) => rendererRef.current?.nudgeMap(dAz, dPitch, zoomBy),
+      onReset: () => rendererRef.current?.resetMap(),
+    }),
+    [],
+  );
+
   /** The chassis secret, found. It sticks: a player who drummed seven times
    * on purpose does not want to do it again next launch. */
   const revealDeveloper = (): void => {
@@ -904,6 +915,7 @@ export function App() {
           onDeveloper={revealDeveloper}
           onUnlockEverything={() => setProgress(unlockEverything())}
           onMapRect={setMapRect}
+          mapView={mapView}
         />
       )}
       {splashUp && <SplashScreen warm={booted} onDone={() => setSplashUp(false)} />}
