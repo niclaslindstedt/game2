@@ -2273,7 +2273,7 @@ a.menu-version:focus-visible {
    tightest surface in the app. */
 .splash-flags {
   width: min(82vw, 56vh, 30rem);
-  aspect-ratio: 22 / 13;
+  aspect-ratio: 13 / 8;
 }
 
 .splash-flag-svg {

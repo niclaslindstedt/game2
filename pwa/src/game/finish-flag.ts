@@ -91,10 +91,10 @@ interface ClothSpec {
   w: number;
   h: number;
   /** How far off level the cloth sits where it meets the pole, degrees —
-   * negative rises away from the hoist. Set close to MINUS the pole's lean,
-   * so the cloth flies roughly square to the staff: the pair then reads as
-   * one hinged crest, where a cloth held level under a leaning pole reads as
-   * a flag that has given up. */
+   * positive falls away from the hoist. Set to MATCH the pole's lean, so the
+   * cloth carries the staff's angle on outward and the flag and its pole read
+   * as one line rather than two: a cloth held level under a leaned staff is
+   * the join the eye picks out first. */
   tilt: number;
   /** Planted facing the other way: pole leaning left, cloth flying left. */
   mirror: boolean;
@@ -112,18 +112,19 @@ interface ClothSpec {
  *
  * The numbers fill {@link VIEW_BOX} deliberately: the box is the drawn extent
  * of the pair mid-flap, and the clear strip left under the butts at y=118 is
- * what holds the crest off the game's name at every viewport. The cloths fly
- * UP off the staffs, so the box starts above the origin — a level cloth would
- * leave the top third of it empty and the flags looking dropped.
+ * what holds the crest off the game's name at every viewport. The cloths fall
+ * away at the staffs' own angle, which keeps them inside the poles' vertical
+ * span — so the box is only as tall as the staffs, and as wide as the cloths
+ * reach.
  *
  * `.splash-flags` in `styles.css` restates this ratio to reserve the space
  * before a flag is hung: change one, change both.
  */
-const VIEW_BOX = "18 -26 264 156";
+const VIEW_BOX = "46 0 208 128";
 
 const CLOTHS: ClothSpec[] = [
-  { x: 118, y: 118, pole: 122, lean: 26, w: 83, h: 48, tilt: -22, mirror: false, phase: 0 },
-  { x: 182, y: 118, pole: 122, lean: 26, w: 83, h: 48, tilt: -22, mirror: true, phase: 2.3 },
+  { x: 118, y: 118, pole: 122, lean: 26, w: 83, h: 48, tilt: 26, mirror: false, phase: 0 },
+  { x: 182, y: 118, pole: 122, lean: 26, w: 83, h: 48, tilt: 26, mirror: true, phase: 2.3 },
 ];
 
 /** A cloth's live drawing state: its cells, the numbers derived from its
