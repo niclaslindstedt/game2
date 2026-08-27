@@ -82,9 +82,9 @@ async function racing(page) {
   );
 }
 
-async function capture(name, viewport, script, params = {}) {
+async function capture(name, viewport, script, params = {}, pageOptions = {}) {
   if (only.length > 0 && !only.some((f) => name.includes(f))) return;
-  const page = await browser.newPage({ viewport });
+  const page = await browser.newPage({ viewport, ...pageOptions });
   page.on("pageerror", (err) => console.error(`[pageerror] ${err.message}`));
   await page.goto(`${url}?${new URLSearchParams({ ...SCENE_DEFAULTS, ...params })}`);
   await page.waitForSelector("canvas.game-canvas");
@@ -178,6 +178,29 @@ await capture("shot-speed-portrait", { width: 390, height: 844 }, async (page) =
   await page.keyboard.down("ArrowUp");
   await page.waitForTimeout(4500);
 });
+
+// The touch controls, which only a coarse pointer ever sees — the desktop
+// shots above hide them by media query. A thumb dragged partway across the
+// left zone and HELD: the rim chases the thumb instead of snapping to it, so
+// the blue arc from 12 o'clock is the lock the car is actually being given.
+await capture(
+  "shot-touch-steer",
+  { width: 390, height: 844 },
+  async (page) => {
+    await racing(page);
+    const zone = await page.locator(".hud-zone-left").boundingBox();
+    const x = zone.x + zone.width * 0.5;
+    const y = zone.y + zone.height * 0.6;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 46, y, { steps: 10 });
+    // Long enough for the rim to have caught up — a shot taken mid-chase
+    // measures the harness's timing, not the control.
+    await page.waitForTimeout(700);
+  },
+  {},
+  { hasTouch: true, isMobile: true },
+);
 
 // Deep into a short stage, portrait: the minimap's route, the car on it, and
 // a gauge with a real fraction of the stage filled in.

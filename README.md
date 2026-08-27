@@ -63,7 +63,7 @@ Open the printed URL — pick stage length, time of day, weather, and car on the
 | `make check-seo`   | Build + structural SEO/PWA/bundle-budget assertions               |
 | `make hooks`       | Install the pre-commit / commit-msg git hooks                     |
 
-**On the phone:** the game is an installable PWA — open [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/), then "Add to Home Screen" (iOS Safari: Share → Add to Home Screen). It launches fullscreen, works offline, plays in portrait or landscape, and prompts in-app when a new build ships. Touch controls: the left half of the screen anchors a steering wheel under your thumb (drag sideways to turn); the right half is the pedal — touch for gas, drag up to brake, down to boost, right for the handbrake.
+**On the phone:** the game is an installable PWA — open [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/), then "Add to Home Screen" (iOS Safari: Share → Add to Home Screen). It launches fullscreen, works offline, plays in portrait or landscape, and prompts in-app when a new build ships. Touch controls: the left half of the screen anchors a steering wheel under your thumb (drag sideways to turn — the rim has weight, so a nudge is a small correction and a shove is full lock, with a blue arc showing how far it is turned); the right half is the pedal — touch for gas, drag up to brake, down to boost, right for the handbrake.
 
 ## Configuration
 
