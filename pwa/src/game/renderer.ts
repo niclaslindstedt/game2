@@ -35,17 +35,18 @@ import { createEnvironment } from "./environment.ts";
 import { createFumes } from "./fumes.ts";
 import { createRain } from "./rain.ts";
 import { createWayHomeArrow } from "./way-home.ts";
+import { islandPlanes } from "./map-island.ts";
 import { buildMapRoute, type MapRoute } from "./map-route.ts";
 import { classify } from "./standings.ts";
 import { rockAt } from "./terrain.ts";
 import { buildWorld, type World } from "./world.ts";
 
 /** The map view's fog, as fractions of the camera's standoff distance. The
- * ground is only built ~640 m past the road, so it HAS an edge; hanging the
- * fog off the framing distance is what dissolves that edge into the sky
- * instead of ending the world on a visible straight line. */
-const MAP_FOG_NEAR = 0.85;
-const MAP_FOG_FAR = 1.75;
+ * island's coastline is a deliberate edge (map-island.ts), so the fog is
+ * not there to hide it — it starts past the near shore and only ever thins
+ * the far half, which is the aerial haze that tells the two apart. */
+const MAP_FOG_NEAR = 1.15;
+const MAP_FOG_FAR = 2.2;
 
 /** Dry grit: the loose stuff lying on top of a graded road. */
 const GRIT = 0xb29268;
@@ -101,6 +102,10 @@ export type GameRenderer = {
    * its top-left — the Roam page's map pane. The rest of the canvas is left
    * as flat sky for the DOM cards to sit on. Null draws full-bleed. */
   setMapRect: (rect: { x: number; y: number; width: number; height: number } | null) => void;
+  /** Turn, tilt and zoom the map view — a drag or a wheel over the pane. */
+  nudgeMap: (dAz: number, dPitch: number, zoomBy: number) => void;
+  /** Put the map back on the framing that shows the whole stage. */
+  resetMap: () => void;
   /** Re-light an already-built stage (the pre-race menu flipping time of
    * day / weather) without rebuilding its geometry. */
   setConditions: (state: GameState) => void;
@@ -121,6 +126,10 @@ export type GameRenderer = {
 
 export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings): GameRenderer {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  // The map view cuts the world to an island; the sky it hangs in must not
+  // be cut with it, so the planes ride on the WORLD's own materials rather
+  // than on the renderer.
+  renderer.localClippingEnabled = true;
   let quality = video;
   const applyResolution = (): void => {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, RESOLUTION_SCALE[quality.resolution]));
@@ -172,6 +181,11 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   let mapView = false;
   /** The map pane, CSS pixels from the canvas' top-left. */
   let mapRect: { x: number; y: number; width: number; height: number } | null = null;
+  /** The map view's coastline, as clipping planes. ONE array for the whole
+   * run of the app: the world's materials are handed this exact reference
+   * once and never again, and emptying it is what turns the cut off — a
+   * material with no planes clips nothing. */
+  const island: THREE.Plane[] = [];
   let dustClock = 0;
   /** Grains owed but not yet thrown. Pace and the surface thin a cloud's
    * count into a fraction, and rounding each spawn on its own turns a thin
@@ -217,6 +231,28 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
    * across is invisible and still costs a draw. */
   const fxScale = (): number => (mapView ? 0 : EFFECTS_SCALE[quality.effects]);
 
+  /** Cut the world to the island, or stop cutting it. The planes are solved
+   * from the track, so this is also how a new stage's coastline arrives. */
+  const applyIsland = (): void => {
+    island.length = 0;
+    if (mapView && game) island.push(...islandPlanes(game.track));
+    clipWorld();
+  };
+
+  /** Hand the island array to every material the world is drawn with. Cheap
+   * and idempotent — the materials are shared between chunks, and assigning
+   * the same array again is a no-op — so it can simply be redone whenever
+   * new road has been raised rather than tracked. */
+  const clipWorld = (): void => {
+    world?.group.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.material) return;
+      for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        mat.clippingPlanes = island;
+      }
+    });
+  };
+
   const applyRange = (): void => {
     if (!mapView) {
       environment.setRange(DRAW_DISTANCE_SCALE[quality.drawDistance]);
@@ -257,8 +293,12 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     const wasMap = mapView;
     chase.setMode(mode);
     mapView = mode === "map";
+    // The sky is for a camera standing IN the world; the map view is a
+    // satellite over it and hangs the stage on the flat background instead.
+    environment.setSky(!mapView);
     applyAspect();
     if (mapView === wasMap) return;
+    applyIsland();
     if (game) setConditions(game);
     else applyRange();
   };
@@ -302,6 +342,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     environment.setLampSpread(car.lampSpread.front, car.lampSpread.rear);
     // A new stage is a new run: whoever wants a ghost on it says so after.
     dropGhost();
+    applyIsland();
     setConditions(state);
   };
 
@@ -580,7 +621,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     fumes.update(dt);
     // An endless run streams its world: the road chunks and terrain tiles
     // ahead get built here, the ones far behind get dropped.
-    world?.sync(state);
+    world?.sync(state, dt);
     world?.update(dt, c.x, c.z);
     celebration.update(dt);
     car?.update(state, dt);
@@ -613,6 +654,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     if (mapView) {
       applyAspect();
       applyRange();
+      // The stage is still growing in behind the map (world.sync), and a
+      // slice raised this frame has materials that have never seen the cut.
+      clipWorld();
     }
     // The map view is looking at a stage, not a car, and at that range the
     // car is a speck that only draws the eye away from the route. Every
@@ -688,6 +732,8 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     setVideo,
     setCamera,
     setMapRect,
+    nudgeMap: (dAz, dPitch, zoomBy) => chase.nudgeMap(dAz, dPitch, zoomBy),
+    resetMap: () => chase.resetMap(),
     setConditions,
     setGhost,
     onGhostEvents,

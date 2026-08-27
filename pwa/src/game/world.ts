@@ -50,6 +50,25 @@ const UP = new THREE.Vector3(0, 1, 0);
  * road comfortably past the fog ceiling. */
 const CHUNK_SAMPLES = 100;
 const PRUNE_BEHIND = 450;
+/** Road raised in one go at most, samples (2 m each → 300 m). A whole
+ * stage's road, its markings and everything planted along it is the best
+ * part of a second of work: raised in one hit it freezes the app — the
+ * music stalls, the map stops turning, and a dial the player only nudged
+ * costs them a beat. Raised a slice a frame it costs a frame each, and the
+ * stage GROWS IN instead. */
+const BUILD_SLICE = 150;
+/** ...and how much of that a single frame gets through at 60 fps: three
+ * terrain tiles and one slice of road. Both scale with the frame's own
+ * length (see `pace`), so a machine drawing at 6 fps works through six
+ * times as much per frame rather than taking ten times as long. */
+const BUILD_TILES = 3;
+const BUILD_SLICES = 1;
+/** How many frames' worth of building this frame is allowed, from how long
+ * it took. Capped, so one long stall (a tab coming back) does not cash in
+ * a whole stage's build on the frame after it. */
+function pace(dt: number): number {
+  return Math.min(8, Math.max(1, Math.round(dt * 60)));
+}
 
 /** The community a grove-quilt index names — the quilt itself lives in the
  * ENGINE's terrain field now (terrain.field.groveAt), because the trunks it
@@ -601,9 +620,12 @@ export type World = {
   /** Advance everything that moves on its own. The focus point is the car:
    * R26's crowd only animates the stands near it. */
   update: (dt: number, focusX: number, focusZ: number) => void;
-  /** Endless: catch the world up with the streamed track and the car —
-   * build the road chunks that now exist, drop the ones left behind. */
-  sync: (state: GameState) => void;
+  /** Catch the world up with the track and the car, one frame's worth at a
+   * time: raise the road still owed, build the ground the car and the
+   * corridor now need, and — on an endless stage — drop what is behind.
+   * `dt` is the frame's own length, which is how much of the outstanding
+   * work this call takes on. */
+  sync: (state: GameState, dt: number) => void;
   /** R22 — where the finish's cannons point, for the renderer to fire.
    * Empty until the chunk carrying the finish gate is built, and on an
    * endless stage forever: nothing there ever finishes. */
@@ -858,6 +880,11 @@ export function buildWorld(track: Track, density = 1): World {
   const terrain = buildTerrain(track, biome, waterTex);
   group.add(terrain.group);
   terrain.sync(track, 0, track.samples[0].x, track.samples[0].z);
+  // A finite stage's road is known in full before the first tree is planted,
+  // so every slice keeps its scenery off ALL of it. An endless one cannot:
+  // the road ahead is unwritten when the props beside it go in, and
+  // `clearNear` is what retires the ones it later claims.
+  const fullGuard = track.endless ? null : chunkSamples(track, 0, track.samples.length);
   const wild = buildWild(track, biome, terrain, density);
   group.add(wild.group);
   wild.sync(track.samples[0].x, track.samples[0].z);
@@ -904,9 +931,10 @@ export function buildWorld(track: Track, density = 1): World {
     const fresh = terrain.field.streams.filter((s) => s.centerS >= streamScanS && s.centerS < toS);
     if (fresh.length > 0) chunkGroup.add(buildStreamMeshes(fresh, waterTex));
     streamScanS = toS;
-    // The clearance guard: this chunk's aproned ribbon plus a margin of
-    // neighbouring road, so props keep off the seams too.
-    const guard = [
+    // The clearance guard: the whole road where it is known, and otherwise
+    // this chunk's aproned ribbon plus a margin of neighbouring road so
+    // props keep off the seams too.
+    const guard = fullGuard ?? [
       ...ribbon,
       ...track.samples.slice(Math.max(0, from - 120), Math.max(0, from - 1)),
       ...track.samples.slice(to, Math.min(track.samples.length, to + 120)),
@@ -944,27 +972,49 @@ export function buildWorld(track: Track, density = 1): World {
     group.add(crowd.group);
   };
 
-  buildChunk(0, track.samples.length);
-  builtIndex = track.samples.length;
+  /** Raise the next slice of road, if any is owed. The start line comes up
+   * with the world so there is something to stand on; the rest arrives over
+   * the frames after it. */
+  const raiseSlice = (): boolean => {
+    const len = track.samples.length;
+    if (builtIndex >= len) return false;
+    const from = builtIndex;
+    const to = Math.min(len, from + BUILD_SLICE);
+    buildChunk(from, to);
+    builtIndex = to;
+    // Road that has just come into being on an endless stage may run through
+    // props planted when it did not exist yet — retire them before anyone
+    // sees it. A finite stage's props were kept off it in the first place.
+    if (track.endless) {
+      for (const chunk of chunks) chunk.scenery.clearNear(track, from, to);
+      wild.clearNear(track, from, to);
+    }
+    return true;
+  };
+
+  raiseSlice();
   buildPeople();
 
-  const sync = (state: GameState): void => {
+  const sync = (state: GameState, dt: number): void => {
+    const rate = pace(dt);
     // The ground and the wild follow the CAR — on a finite stage too, so
     // an excursion far off the corridor still stands on drawn land.
-    terrain.sync(track, state.progressS, state.car.x, state.car.z);
+    terrain.sync(track, state.progressS, state.car.x, state.car.z, BUILD_TILES * rate);
     wild.sync(state.car.x, state.car.z);
+    // Road owed: the rest of a finite stage, or — on an endless one — only
+    // once a chunk's worth of new samples has been streamed, so the slices
+    // stay full-sized rather than a fresh group every frame.
+    const owed =
+      !track.endless || track.samples.length - builtIndex >= CHUNK_SAMPLES
+        ? BUILD_SLICES * rate
+        : 0;
+    for (let i = 0; i < owed; i++) {
+      if (!raiseSlice()) break;
+    }
+    // The stands come with the road that carries them (R26), so the people
+    // arrive with each slice rather than all at the start.
     buildPeople();
     if (!track.endless) return;
-    const len = track.samples.length;
-    if (len - builtIndex >= CHUNK_SAMPLES) {
-      const from = builtIndex;
-      buildChunk(from, len);
-      builtIndex = len;
-      // Road that has just come into being may run through props planted
-      // when it did not exist yet — retire them before anyone sees it.
-      for (const chunk of chunks) chunk.scenery.clearNear(track, from, len);
-      wild.clearNear(track, from, len);
-    }
     while (chunks.length > 1 && chunks[0].toS < state.progressS - PRUNE_BEHIND) {
       const old = chunks.shift() as Chunk;
       for (const key of old.scenery.treeKeys) drawnTrees.delete(key);

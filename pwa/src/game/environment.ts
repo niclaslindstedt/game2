@@ -230,6 +230,17 @@ export type Environment = {
    * meaningless; what it needs is ground that dissolves just before the
    * built terrain runs out, instead of ending on a visible edge. */
   setFogRange: (near: number, far: number) => void;
+  /** Show or hide the SKY — the dome and everything pinned inside it: the
+   * stars, the sun's disc and halo, the clouds, the ridge rings.
+   *
+   * Every one of them is a fixed-size shell a few hundred metres around a
+   * camera at head height, which is the only place any of it makes sense.
+   * Seen from the map view's satellite, kilometres up, the ridges lie across
+   * the middle of the stage, the clouds sit under it, and the dome itself is
+   * a ball hanging below the map with the camera outside it. Down there the
+   * sky is the sky; up here it is `scene.background`, the same flat colour
+   * the page's own cards sit on, and the stage reads as an island on it. */
+  setSky: (show: boolean) => void;
   /** Current tint for the car's baked vertex lighting. */
   carTint: () => THREE.Color;
   /** Whether the run's light is gone and the car has its lights on. */
@@ -554,6 +565,16 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     applyRange();
   };
 
+  const setSky = (show: boolean): void => {
+    dome.visible = show;
+    stars.visible = show;
+    cloudGroup.visible = show;
+    ridgeFar.visible = show;
+    ridgeNear.visible = show;
+    disc.visible = show;
+    halo.visible = show;
+  };
+
   const apply = (env: RaceEnv): void => {
     preset = weathered(env.timeOfDay, env.weather);
     stormy = env.weather === "storm";
@@ -694,6 +715,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     apply,
     setRange,
     setFogRange,
+    setSky,
     carTint: () => carTintFor(preset),
     lampsLit: () => preset.headlights,
     setGrime,
