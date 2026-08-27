@@ -407,12 +407,18 @@ export function createSynth(): Synth {
    */
   const envelope = (
     gain: GainNode,
-    peak: number,
+    target: number,
     t0: number,
     t1: number,
     attackMs: number,
     holdMs: number,
   ): void => {
+    // An exponential ramp may not touch zero — WebAudio throws rather than
+    // silently flooring it — and a voice CAN legitimately arrive at zero: a
+    // muted track in the audition page is a patch whose volume is 0. The floor
+    // is far below anything audible, so a voice that lands on it is silence
+    // either way; what it buys is that no caller has to know the rule.
+    const peak = Math.max(1e-5, target);
     const durationMs = (t1 - t0) * 1000;
     let level = t0; // when the voice is up at `peak` and the decay may begin
     if (attackMs > 0) {

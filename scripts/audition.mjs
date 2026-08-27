@@ -127,54 +127,193 @@ const page = `<!doctype html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Scandinavian Flick — audition</title>
+<title>Service Park</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap"
+/>
 <style>
-  :root { color-scheme: dark; --bg:#0d1013; --card:#161b20; --line:#26313a;
-          --ink:#e8eef2; --dim:#8fa3b0; --hot:#7fd4a0; }
+  /* ONE VISUAL WORLD, DELIBERATELY: a service park at first light. Cold blue
+     dark, birch-white ink, and the sodium amber of the lights they work
+     under. It does not follow the viewer's theme because the thing it is
+     imitating — a timing board in a tent in a forest — only exists at night. */
+  :root {
+    color-scheme: dark;
+    --ground: #12161b;
+    --panel: #191f26;
+    --panel-2: #1f2731;
+    --line: #2b3743;
+    --ink: #e7ecf0;
+    --dim: #8a99a7;
+    --amber: #f2a33c;
+    --live: #5fd39a;
+    --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+    --body: "Barlow", system-ui, -apple-system, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
   * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.5 ui-monospace,
-         SFMono-Regular, Menlo, monospace; padding:24px; }
-  h1 { font-size:18px; letter-spacing:.14em; margin:0 0 4px; }
-  h2 { font-size:13px; letter-spacing:.18em; color:var(--dim); margin:32px 0 10px;
-       border-bottom:1px solid var(--line); padding-bottom:6px; }
-  p.lede { color:var(--dim); margin:0 0 8px; max-width:70ch; }
-  .cards { display:grid; gap:10px; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px; }
-  .card b { display:block; letter-spacing:.08em; margin-bottom:6px; }
-  .card .desc { color:var(--dim); font-size:12px; }
-  button { font:inherit; background:#1e2932; color:var(--ink); border:1px solid var(--line);
-           border-radius:6px; padding:6px 12px; cursor:pointer; }
-  button:hover { border-color:var(--hot); color:var(--hot); }
-  button.on { background:var(--hot); color:#0d1013; border-color:var(--hot); }
-  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:8px 0; }
-  label.sl { display:grid; grid-template-columns:120px 1fr 56px; gap:10px; align-items:center;
-             margin:6px 0; color:var(--dim); }
-  label.sl span:last-child { color:var(--ink); text-align:right; }
-  input[type=range] { width:100%; accent-color:var(--hot); }
-  .voices { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
-  .voices button { padding:3px 9px; font-size:12px; }
-  .locked { color:#f0a; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font: 400 16px/1.6 var(--body);
+    padding: 0 20px 72px;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+
+  /* The masthead reads like the board over a service bay: a rule, a name in
+     condensed caps, and the count of what is on the truck. */
+  header { padding: 40px 0 22px; border-bottom: 2px solid var(--amber); }
+  h1 {
+    font: 700 clamp(30px, 6vw, 52px)/0.98 var(--display);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    text-wrap: balance;
+    margin: 0;
+  }
+  h1 small {
+    display: block;
+    font: 600 13px/1.4 var(--display);
+    letter-spacing: 0.34em;
+    color: var(--amber);
+    margin-bottom: 10px;
+  }
+  header p { color: var(--dim); max-width: 62ch; margin: 14px 0 0; }
+
+  h2 {
+    font: 600 13px/1 var(--display);
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin: 46px 0 4px;
+  }
+  h2 + .sub { color: var(--dim); font-size: 14px; margin: 0 0 16px; max-width: 62ch; }
+
+  /* The transport strip. Sticky, because the unlock is the one control the
+     page is useless without and the page is long. */
+  .transport {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+    background: color-mix(in srgb, var(--ground) 92%, transparent);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--line);
+    padding: 12px 0; margin-top: 6px;
+  }
+  .status {
+    font: 500 12px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
+    display: inline-flex; align-items: center; gap: 8px; color: var(--dim);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+  .status.live { color: var(--live); }
+  .status.live .dot { background: var(--live); box-shadow: 0 0 0 3px color-mix(in srgb, var(--live) 22%, transparent); }
+
+  button {
+    font: 600 13px/1 var(--display);
+    letter-spacing: 0.16em; text-transform: uppercase;
+    background: var(--panel-2); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 3px;
+    padding: 9px 16px; cursor: pointer;
+    transition: border-color 120ms, color 120ms, background 120ms;
+  }
+  button:hover { border-color: var(--amber); color: var(--amber); }
+  button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  button.on { background: var(--amber); border-color: var(--amber); color: #14181d; }
+  button.primary { border-color: var(--amber); color: var(--amber); }
+  button.primary.on { color: #14181d; }
+
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 16px; }
+
+  /* A sound is a NAME, a play control, its LAYERS, and the sentence it was
+     written against. The layer chips are the information design: they say
+     what a sound is actually made of before you hear it. */
+  .sound { display: grid; gap: 10px; align-content: start; }
+  .sound .top { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+  .id { font: 500 13px/1 var(--mono); letter-spacing: 0.02em; color: var(--ink); }
+  .layers { display: flex; gap: 4px; flex-wrap: wrap; }
+  .chip {
+    font: 500 10px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 4px 7px; border-radius: 2px; border: 1px solid var(--line); color: var(--dim);
+  }
+  .chip.tone { border-color: color-mix(in srgb, var(--amber) 45%, var(--line)); color: var(--amber); }
+  .desc { color: var(--dim); font-size: 14px; line-height: 1.55; margin: 0; }
+
+  /* A score is a spec line and a rack of voice switches. */
+  .score .spec {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 18px; margin: 14px 0 6px;
+  }
+  .score .spec div { display: grid; gap: 3px; }
+  .score .spec dt, .score .spec .k {
+    font: 600 10px/1 var(--display); letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim);
+  }
+  .score .spec .v { font: 500 17px/1 var(--mono); font-variant-numeric: tabular-nums; }
+  .score h3 { font: 700 22px/1.05 var(--display); letter-spacing: 0.04em; text-transform: uppercase; margin: 0; }
+  .order { font: 400 12px/1.5 var(--mono); color: var(--dim); word-break: break-word; }
+  .rack { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 14px; }
+  .rack button { padding: 5px 10px; font-size: 11px; letter-spacing: 0.1em; }
+  /* A voice that is SOUNDING is outlined, not filled: twenty amber blocks
+     would spend the page's one bold colour on its least important control.
+     A muted one recedes and wears a rule through it. */
+  .rack button.on { background: transparent; color: var(--amber); border-color: color-mix(in srgb, var(--amber) 55%, var(--line)); }
+  .rack button:not(.on) { color: var(--dim); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--dim) 60%, transparent); }
+
+  /* The console: sliders that are read as a column of gauges. */
+  .sl { display: grid; grid-template-columns: 108px 1fr 52px; gap: 14px; align-items: center; margin: 10px 0; }
+  .sl .k { font: 600 11px/1 var(--display); letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim); }
+  .sl .v { font: 500 14px/1 var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+  input[type="range"] { width: 100%; accent-color: var(--amber); }
+  input[type="range"]:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+  .switches { display: flex; gap: 6px; flex-wrap: wrap; margin: 16px 0 4px; }
+
+  footer { color: var(--dim); font-size: 13px; margin-top: 52px; border-top: 1px solid var(--line); padding-top: 16px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
 <body>
-<h1>SCANDINAVIAN FLICK — AUDITION</h1>
-<p class="lede">Every sound below is produced by the game's own code, compiled straight out of
-the repository. Nothing here is a recording.</p>
-<div class="row"><button id="unlock">START AUDIO</button><span id="state" class="locked">
-browsers will not make a sound until you press this</span></div>
+<div class="wrap">
+  <header>
+    <h1><small>Scandinavian Flick</small>Service park</h1>
+    <p>
+      Everything the game makes a noise with, played by the game's own code. Nothing here is a
+      recording — every effect and every note is synthesized from a handful of numbers, which is
+      why it can all be read as well as heard. A browser will not make a sound until you press
+      the button below.
+    </p>
+  </header>
 
-<h2>THE SCORES</h2>
-<div class="cards" id="scores"></div>
+  <div class="transport">
+    <button id="unlock" class="primary" type="button">Start audio</button>
+    <span class="status" id="state"><span class="dot"></span><span id="stateText">Waiting for a gesture</span></span>
+  </div>
 
-<h2>THE ROAD — the continuous bed</h2>
-<div class="card">
-  <div class="row"><button id="road">START THE CAR</button>
-    <span class="desc">the engine, the tyres, the wind and the slide, live</span></div>
-  <div id="sliders"></div>
+  <h2>The scores</h2>
+  <p class="sub">
+    Two looping tracker arrangements. Mute the voices one at a time — it is the only way to hear
+    what any single line is contributing to a mix.
+  </p>
+  <div class="grid" id="scores"></div>
+
+  <h2>The road</h2>
+  <p class="sub">
+    The continuous bed: the engine, the tyres, the wind and the drift. None of it is a clip — all
+    four are functions of the numbers below, so the only honest way to judge them is to move them.
+  </p>
+  <div class="panel">
+    <div class="switches"><button id="road" class="primary" type="button">Start the car</button></div>
+    <div id="sliders"></div>
+  </div>
+
+  <div id="banks"></div>
+
+  <footer>
+    Built by <span class="id">make audition</span> from the repository's own synth, bank, sequencer
+    and road grain. If it sounds right here, it sounds right in the game.
+  </footer>
 </div>
-
-<h2>THE BANK</h2>
-<div id="banks"></div>
 
 <script type="module">
 ${runtime}
@@ -183,60 +322,92 @@ const DATA = ${data};
 const synth = createSynth();
 const player = createTrackPlayer(synth);
 
+const stateEl = document.getElementById("state");
+const stateText = document.getElementById("stateText");
+function refreshState() {
+  const live = synth.now() !== null;
+  stateEl.className = live ? "status live" : "status";
+  stateText.textContent = live ? "Audio running" : "Still locked — press again";
+}
 document.getElementById("unlock").addEventListener("click", () => {
   synth.unlock();
-  const el = document.getElementById("state");
-  el.textContent = synth.now() === null ? "still locked — try again" : "audio running";
-  el.className = synth.now() === null ? "locked" : "";
+  refreshState();
 });
+
+/** Build an element in one call — the page is all DOM, no innerHTML. */
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
 
 // ── The scores ─────────────────────────────────────────────────────────────
 const scores = document.getElementById("scores");
 let playing = null;
+const transports = [];
 for (const [id, entry] of Object.entries(DATA.scores)) {
-  const card = document.createElement("div");
-  card.className = "card";
-  const seconds = (flattenTrack(entry.track).totalSteps * 60) / entry.track.bpm /
-    entry.track.stepsPerBeat;
-  card.innerHTML = \`<b>\${entry.title}</b><div class="desc">\${entry.track.bpm} bpm ·
-    \${seconds.toFixed(0)} s a loop · \${Object.keys(entry.track.patterns).length} sections ·
-    order: \${entry.track.order.join(" ")}</div>\`;
-  const row = document.createElement("div");
-  row.className = "row";
-  const play = document.createElement("button");
-  play.textContent = "PLAY";
+  const track = entry.track;
+  const card = el("div", "panel score");
+  card.append(el("h3", null, entry.title));
+
+  const seconds = (flattenTrack(track).totalSteps * 60) / track.bpm / track.stepsPerBeat;
+  const spec = el("div", "spec");
+  const facts = [
+    ["Tempo", track.bpm + " bpm"],
+    ["Loop", seconds.toFixed(0) + " s"],
+    ["Sections", String(Object.keys(track.patterns).length)],
+    ["Voices", String(Object.keys(track.instruments).length)],
+  ];
+  for (const [k, v] of facts) {
+    const cell = el("div");
+    cell.append(el("span", "k", k), el("span", "v", v));
+    spec.append(cell);
+  }
+  card.append(spec, el("div", "order", track.order.join("  ›  ")));
+
   const muted = new Set();
+  const play = el("button", null, "Play");
+  play.type = "button";
+  transports.push({ id, button: play });
   play.addEventListener("click", () => {
     synth.unlock();
-    if (playing === id) { player.stop(); playing = null; play.textContent = "PLAY"; return; }
+    refreshState();
+    if (playing === id) {
+      player.stop();
+      playing = null;
+      play.textContent = "Play";
+      play.className = "";
+      return;
+    }
     playing = id;
-    for (const b of scores.querySelectorAll("button")) if (b !== play && b.dataset.play)
-      b.textContent = "PLAY";
-    play.textContent = "STOP";
-    player.play(withMutes(entry.track, muted));
+    for (const t of transports) {
+      t.button.textContent = t.id === id ? "Stop" : "Play";
+      t.button.className = t.id === id ? "on" : "";
+    }
+    player.play(withMutes(track, muted));
   });
-  play.dataset.play = id;
-  row.append(play);
-  card.append(row);
-  const voices = document.createElement("div");
-  voices.className = "voices";
-  for (const name of Object.keys(entry.track.instruments)) {
-    const b = document.createElement("button");
-    b.textContent = name;
-    b.className = "on";
-    b.addEventListener("click", () => {
-      if (muted.has(name)) muted.delete(name); else muted.add(name);
-      b.className = muted.has(name) ? "" : "on";
-      if (playing === id) player.play(withMutes(entry.track, muted));
+  const bar = el("div", "switches");
+  bar.append(play);
+  card.append(bar);
+
+  const rack = el("div", "rack");
+  for (const name of Object.keys(track.instruments)) {
+    const sw = el("button", "on", name);
+    sw.type = "button";
+    sw.addEventListener("click", () => {
+      if (muted.has(name)) muted.delete(name);
+      else muted.add(name);
+      sw.className = muted.has(name) ? "" : "on";
+      if (playing === id) player.play(withMutes(track, muted));
     });
-    voices.append(b);
+    rack.append(sw);
   }
-  card.append(voices);
+  card.append(rack);
   scores.append(card);
 }
 
-/** A copy of the track with the muted voices silenced — the only way to hear
- * what one line is actually contributing to a mix. */
+/** A copy of the track with the muted voices silenced. */
 function withMutes(track, muted) {
   if (muted.size === 0) return track;
   const instruments = {};
@@ -247,66 +418,62 @@ function withMutes(track, muted) {
 
 // ── The road ───────────────────────────────────────────────────────────────
 const CONTROLS = [
-  { id: "rev", label: "REVS", min: 0, max: 1, step: 0.01, value: 0.5 },
-  { id: "load", label: "LOAD", min: 0, max: 1, step: 0.01, value: 0.7 },
-  { id: "air", label: "SPEED", min: 0, max: 1, step: 0.01, value: 0.5 },
-  { id: "slide", label: "SIDEWAYS", min: 0, max: 1, step: 0.01, value: 0 },
-  { id: "wear", label: "DAMAGE", min: 0, max: 1, step: 0.01, value: 0 },
+  ["rev", "Revs", 0.5],
+  ["load", "Load", 0.7],
+  ["air", "Speed", 0.5],
+  ["slide", "Sideways", 0],
+  ["wear", "Damage", 0],
 ];
-const value = {};
+const value = { surface: "gravel", airborne: false };
 const sliders = document.getElementById("sliders");
-for (const c of CONTROLS) {
-  value[c.id] = c.value;
-  const label = document.createElement("label");
-  label.className = "sl";
-  label.innerHTML = \`<span>\${c.label}</span>\`;
+for (const [id, label, initial] of CONTROLS) {
+  value[id] = initial;
+  const row = el("label", "sl");
   const input = document.createElement("input");
-  Object.assign(input, { type: "range", min: c.min, max: c.max, step: c.step, value: c.value });
-  const read = document.createElement("span");
-  read.textContent = c.value.toFixed(2);
+  Object.assign(input, { type: "range", min: 0, max: 1, step: 0.01, value: initial });
+  const read = el("span", "v", initial.toFixed(2));
   input.addEventListener("input", () => {
-    value[c.id] = Number(input.value);
-    read.textContent = value[c.id].toFixed(2);
+    value[id] = Number(input.value);
+    read.textContent = value[id].toFixed(2);
   });
-  label.append(input, read);
-  sliders.append(label);
+  row.append(el("span", "k", label), input, read);
+  sliders.append(row);
 }
-const surfRow = document.createElement("div");
-surfRow.className = "row";
-value.surface = "gravel";
-value.airborne = false;
+const switches = el("div", "switches");
 for (const s of ["gravel", "asphalt", "nature", "water"]) {
-  const b = document.createElement("button");
-  b.textContent = s.toUpperCase();
-  if (s === "gravel") b.className = "on";
+  const b = el("button", s === "gravel" ? "on" : null, s);
+  b.type = "button";
   b.addEventListener("click", () => {
     value.surface = s;
-    for (const other of surfRow.children) other.className = "";
+    for (const other of switches.children) if (other.dataset.surface) other.className = "";
     b.className = "on";
   });
-  surfRow.append(b);
+  b.dataset.surface = s;
+  switches.append(b);
 }
-const airBtn = document.createElement("button");
-airBtn.textContent = "IN THE AIR";
+const airBtn = el("button", null, "In the air");
+airBtn.type = "button";
 airBtn.addEventListener("click", () => {
   value.airborne = !value.airborne;
   airBtn.className = value.airborne ? "on" : "";
 });
-surfRow.append(airBtn);
-sliders.append(surfRow);
+switches.append(airBtn);
+sliders.append(switches);
 
 let bed = null;
-document.getElementById("road").addEventListener("click", (e) => {
+const roadBtn = document.getElementById("road");
+roadBtn.addEventListener("click", () => {
   synth.unlock();
+  refreshState();
   if (bed !== null) {
     clearInterval(bed);
     bed = null;
-    e.target.className = "";
-    e.target.textContent = "START THE CAR";
+    roadBtn.className = "primary";
+    roadBtn.textContent = "Start the car";
     return;
   }
-  e.target.className = "on";
-  e.target.textContent = "STOP THE CAR";
+  roadBtn.className = "primary on";
+  roadBtn.textContent = "Stop the car";
   let nextAt = 0;
   let tickMs = 0;
   let lastHz = 0;
@@ -345,26 +512,36 @@ document.getElementById("road").addEventListener("click", (e) => {
 // ── The bank ───────────────────────────────────────────────────────────────
 const banks = document.getElementById("banks");
 for (const [title, bank] of Object.entries(DATA.banks)) {
-  const h = document.createElement("h2");
-  h.textContent = title;
-  const grid = document.createElement("div");
-  grid.className = "cards";
+  banks.append(el("h2", null, title));
+  const sub = el(
+    "p",
+    "sub",
+    "Every voice is listed before you press it: what a sound is MADE of is most of what it is.",
+  );
+  banks.append(sub);
+  const grid = el("div", "grid");
   for (const [id, def] of Object.entries(bank)) {
-    const card = document.createElement("div");
-    card.className = "card";
-    const b = document.createElement("button");
-    b.textContent = id;
-    b.addEventListener("click", () => {
+    const card = el("div", "panel sound");
+    const top = el("div", "top");
+    const play = el("button", null, "Play");
+    play.type = "button";
+    play.addEventListener("click", () => {
       synth.unlock();
+      refreshState();
       playDef(synth, def);
     });
-    const desc = document.createElement("div");
-    desc.className = "desc";
-    desc.textContent = def.description;
-    card.append(b, document.createElement("br"), desc);
+    top.append(el("span", "id", id), play);
+
+    const layers = el("div", "layers");
+    for (const voice of def.voices) {
+      const kind = voice.call === "tone" ? voice.type || "square" : (voice.color || "white") + " noise";
+      const chip = el("span", voice.call === "tone" ? "chip tone" : "chip", kind);
+      layers.append(chip);
+    }
+    card.append(top, layers, el("p", "desc", def.description));
     grid.append(card);
   }
-  banks.append(h, grid);
+  banks.append(grid);
 }
 </script>
 </body>
