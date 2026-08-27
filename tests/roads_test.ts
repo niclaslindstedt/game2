@@ -10,6 +10,7 @@ import {
   DEFAULT_KNOBS,
   NEUTRAL_INPUT,
   ROAD_CROSS,
+  SPUR,
   STAGE_RULES as R,
   TUNING,
   compileStage,
@@ -20,6 +21,7 @@ import {
   junctionFlat,
   createGame,
   junctionMainEdge,
+  roadClearance,
   knobScale,
   locate,
   step,
@@ -161,7 +163,7 @@ describe("junctions (R17)", () => {
     }
   });
 
-  it("runs every branch off the map, or to the water that stopped it", () => {
+  it("runs every branch off the map, or to whatever stopped it", () => {
     for (const seed of seeds) {
       const track = compileStage(seed, "medium", { asphalt: 0.4 });
       const land = createLandField(seed, track.knobs);
@@ -172,18 +174,76 @@ describe("junctions (R17)", () => {
           end.x > track.bounds.maxX ||
           end.z < track.bounds.minZ ||
           end.z > track.bounds.maxZ;
-        // A branch leads somewhere: off the edge of the world, or to the
-        // shore of the lake that stopped it. Never into open country, and
+        // A branch leads somewhere: off the edge of the world, to the shore
+        // of the lake that stopped it, or up to the ground the stage had
+        // already taken (R23). Never into open country for no reason, and
         // never out ACROSS the water on an embankment.
-        expect(out || spur.endsAt === "water").toBe(true);
+        expect(out || spur.endsAt === "water" || spur.endsAt === "stage").toBe(true);
         // ...and wherever it stops, it stops on dry ground: a road ending
         // in mid-air over open water is the one thing worse than a road
-        // ending in a field.
-        expect(land.flooded(end.x, end.z)).toBe(false);
+        // ending in a field. The one exception is a junction laid on a
+        // shore, where the water is inside the first `keep` meters — the
+        // stretch that is never trimmed, because a junction whose other
+        // arm is simply missing reads as the main road stopping dead.
+        expect(land.flooded(end.x, end.z) && end.s > SPUR.keep).toBe(false);
         // ...and it is a real road while it lasts: sealed, then degrading
         // to gravel as it leaves the world.
         expect(spur.samples[0].surface).toBe("asphalt");
         expect(end.surface).toBe("gravel");
+      }
+    }
+  });
+
+  it("R23 — keeps every branch off the stage it left, and off its start", () => {
+    for (const seed of seeds) {
+      const track = compileStage(seed, "medium", { asphalt: 0.4 });
+      const keepOut = roadClearance(track.width);
+      const first = track.samples[0];
+      /** Distance from a point to the apron the start stands on (R24). */
+      const toStart = (x: number, z: number): number => {
+        const along = -(
+          (x - first.x) * Math.sin(first.heading) +
+          (z - first.z) * Math.cos(first.heading)
+        );
+        const lateral =
+          (x - first.x) * Math.cos(first.heading) - (z - first.z) * Math.sin(first.heading);
+        return Math.hypot(lateral, along <= 0 ? -along : Math.max(0, along - R.startZone.apron));
+      };
+      // The route, bucketed at the clearance, so a branch's whole walk is
+      // checked against a 3x3 probe instead of the stage's every sample.
+      const cells = new Map<string, (typeof track.samples)[number][]>();
+      for (const road of track.samples) {
+        const at = `${Math.floor(road.x / keepOut)},${Math.floor(road.z / keepOut)}`;
+        const bucket = cells.get(at);
+        if (bucket) bucket.push(road);
+        else cells.set(at, [road]);
+      }
+      for (const spur of track.spurs) {
+        for (const sample of spur.samples) {
+          // The first stretch is exempt: there the branch IS the road the
+          // route turned off, running beside it out of their shared
+          // junction. Past that it is a road of its own and keeps its
+          // distance — from the stage and from the start alike, because
+          // the terrain can only lay its shelf under one of them.
+          if (sample.s <= 60) continue;
+          expect(toStart(sample.x, sample.z)).toBeGreaterThanOrEqual(keepOut - 1);
+          const cx = Math.floor(sample.x / keepOut);
+          const cz = Math.floor(sample.z / keepOut);
+          for (let dx = -1; dx <= 1; dx++) {
+            for (let dz = -1; dz <= 1; dz++) {
+              for (const road of cells.get(`${cx + dx},${cz + dz}`) ?? []) {
+                // ...except around its own junction, where the two are one
+                // road by construction.
+                if (Math.abs(road.s - spur.atS) < 240) continue;
+                const d = Math.hypot(road.x - sample.x, road.z - sample.z);
+                // The generator measures against a coarsened copy of the
+                // route, so it keeps a little MORE room than the rule asks
+                // for, never less; the slack here is that coarsening.
+                expect(d).toBeGreaterThanOrEqual(keepOut - 9);
+              }
+            }
+          }
+        }
       }
     }
   });

@@ -9,6 +9,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  APRON,
   LAKE_Y,
   NEUTRAL_INPUT,
   ROAD_CROSS,
@@ -117,6 +118,37 @@ describe("exploring", () => {
     expect(state.offRoad).toBe(true);
     expect(events.filter((e) => e.type === "respawn")).toHaveLength(0);
     expect(state.stats.offRoadTime).toBeGreaterThan(5);
+  });
+
+  it("runs out of ROAD at the ends, not just at the edges (R24)", () => {
+    // The apron is the last road there is: one apron behind the start line
+    // and the terrain owns the ground. Without that, the nearest sample at
+    // the end of the stage stays nearest forever and the car reverses away
+    // down an invisible flat ribbon, held at the start's elevation over
+    // whatever the country is doing — floating over a valley, buried in a
+    // hillside, and driving straight through both.
+    const state = createGame({ seed: 2, skipCountdown: true });
+    const grid = state.track.samples[0];
+    // Set down ON the ground it is being moved to: dropped from the start's
+    // height into a valley the car is simply falling, and a fall is a
+    // different test.
+    const back = (metres: number): void => {
+      state.car.x = grid.x - Math.sin(grid.heading) * metres;
+      state.car.z = grid.z - Math.cos(grid.heading) * metres;
+      state.car.y = state.terrain.groundAt(state.car.x, state.car.z);
+    };
+    // On the apron the road still answers, flat at the grid's own height.
+    back(APRON * 0.5);
+    step(state, NEUTRAL_INPUT);
+    expect(state.offRoad).toBe(false);
+    expect(state.car.y).toBeCloseTo(grid.elevation, 1);
+    expect(state.terrain.groundAt(state.car.x, state.car.z)).toBeCloseTo(grid.elevation, 1);
+    // Past it the ground is the terrain's, and it is nothing like flat.
+    back(APRON + 90);
+    step(state, NEUTRAL_INPUT);
+    expect(state.offRoad).toBe(true);
+    expect(state.car.y).toBeCloseTo(state.terrain.groundAt(state.car.x, state.car.z), 1);
+    expect(Math.abs(state.car.y - grid.elevation)).toBeGreaterThan(1);
   });
 
   it("wedged against a rock with the throttle buried: back on the road in 2 s", () => {

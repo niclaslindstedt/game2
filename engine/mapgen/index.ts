@@ -27,9 +27,10 @@ export {
   junctionFlat,
   junctionMainEdge,
   junctionPlatformY,
+  roadClearance,
   type RoadShape,
 } from "./road.ts";
-export { buildSpur, spurReach, type Spur, type SpurSample } from "./spurs.ts";
+export { SPUR, buildSpur, spurReach, type Spur, type SpurSample } from "./spurs.ts";
 export { createGuardField, type CornerGuard, type GuardField } from "./guards.ts";
 export {
   createTerrain,

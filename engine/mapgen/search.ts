@@ -26,11 +26,12 @@ export type PointField = ReturnType<typeof createPointField>;
 /** The committed probe points, spatially hashed so the R10 check per
  * candidate point is a 3×3 cell probe instead of a scan of the whole stage
  * — the difference between a millisecond search and a multi-second one on
- * the long bands. Cell size equals `minSelfDistance`, so every point within
- * that distance of a query sits in one of the neighbouring cells. */
-export function createPointField() {
-  const cell = R.minSelfDistance;
-  const minD2 = R.minSelfDistance * R.minSelfDistance;
+ * the long bands. Cell size equals the clearance the field is enforcing
+ * (R23's `roadClearance`), so every point within that distance of a query
+ * sits in one of the neighbouring cells. */
+export function createPointField(clear: number) {
+  const cell = clear;
+  const minD2 = clear * clear;
   const points: Cursor[] = [];
   const grid = new Map<string, Cursor[]>();
   const keyOf = (p: Cursor): string => `${Math.floor(p.x / cell)},${Math.floor(p.z / cell)}`;
@@ -72,8 +73,9 @@ export function createPointField() {
       }
       points.splice(0, cut);
     },
-    /** R10 — does any committed point beyond the route-neighbour window sit
-     * closer than `minSelfDistance` to `c`? On a CIRCUIT arc distance is
+    /** R10/R23 — does any committed point beyond the route-neighbour window
+     * sit closer than the road's own clearance to `c`? On a CIRCUIT arc
+     * distance is
      * cyclic: pass the lap's total length as `cycle` and the road running
      * back into the start line counts as the neighbour it actually is,
      * instead of as a crossing of a stage it is the continuation of. */
@@ -96,6 +98,24 @@ export function createPointField() {
       return false;
     },
   };
+}
+
+/** R24 — how far a probe point is from the ground the START stands on, m.
+ * Every plan is walked from the origin heading toward +z, so the start line
+ * is (0, 0) and the apron behind it runs back to (0, −apron): the zone is
+ * that segment, and this is the distance to it. */
+export function startZoneDistance(p: Cursor): number {
+  const spine = Math.min(0, Math.max(-R.startZone.apron, p.z));
+  return Math.hypot(p.x, p.z - spine);
+}
+
+/** R24 — does this candidate point come back INTO the start? Only road that
+ * has already gone somewhere is asked: the opening straight and the corner
+ * off it are the route LEAVING, which is not a return. A CIRCUIT never asks:
+ * closing onto its own start line is the whole shape of it (R22), and the
+ * road it closes with lies along the apron rather than across it. */
+export function entersStart(p: Cursor, clear: number): boolean {
+  return p.arc >= R.startZone.fromArc && startZoneDistance(p) < clear;
 }
 
 /** Walk a candidate segment from `from`, at the coarse validation spacing. */

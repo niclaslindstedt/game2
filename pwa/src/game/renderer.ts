@@ -17,7 +17,7 @@ import {
   RESOLUTION_SCALE,
   type VideoSettings,
 } from "./settings.ts";
-import { buildCar, type CarVisual } from "./car-mesh.ts";
+import { LAMP_MATERIAL, buildCar, type CarVisual } from "./car-mesh.ts";
 import { hoodEyeFor } from "./car-styles.ts";
 import {
   createDust,
@@ -187,9 +187,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         if (obj instanceof THREE.Mesh || obj instanceof THREE.Points) {
           const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
           for (const mat of mats) {
-            if (mat instanceof THREE.MeshBasicMaterial || mat instanceof THREE.PointsMaterial) {
-              mat.color.copy(tint);
-            }
+            const painted =
+              mat instanceof THREE.MeshBasicMaterial || mat instanceof THREE.PointsMaterial;
+            if (painted && mat.name !== LAMP_MATERIAL) mat.color.copy(tint);
           }
         }
       });

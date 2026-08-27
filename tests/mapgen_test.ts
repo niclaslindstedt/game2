@@ -10,6 +10,7 @@ import {
   compileStage,
   compileTrack,
   generateStage,
+  roadClearance,
   type FiniteStageLength,
   type Track,
   type TurnSeverity,
@@ -150,6 +151,11 @@ describe("stage generator", () => {
     expect(concrete).toBeGreaterThan(0);
   });
 
+  // Thirty-two LONG stages, and the top of the dial is the one that builds
+  // the most junctions — every one of them a branch that has to walk the
+  // country keeping clear of the stage (R23). This is the heaviest test in
+  // the file by a distance, and it is measuring a statistical claim: it
+  // needs the seeds, and it needs the time.
   it("R15 — the asphalt dial is the share of the stage that comes out sealed", () => {
     const share = (asphalt: number): number => {
       let paved = 0;
@@ -168,7 +174,7 @@ describe("stage generator", () => {
     expect(share(0.25)).toBeLessThan(0.36);
     expect(share(0.5)).toBeGreaterThan(share(0.25));
     expect(share(1)).toBeGreaterThan(0.95);
-  });
+  }, 20000);
 
   it("the dials are deterministic, and different dials build different stages", () => {
     const dials = { elevation: 0.8, water: 0.2, trees: 0.9, asphalt: 0.4 };
@@ -202,18 +208,19 @@ describe("stage generator", () => {
     }
   });
 
-  it("R10 — the centerline never comes close to crossing itself", () => {
+  it("R10/R23 — the centerline keeps a road's clearance from itself", () => {
     // Compare coarsely (every 3rd sample) for test speed; ignore route
     // neighbours within 100 m of arc length — the generator's guarantee
     // starts at its 80 m ignore window plus probe coarseness. The
-    // guarantee itself is minSelfDistance at 6 m probe spacing, so the
-    // continuous line can dip up to ~one probe step closer. Violations are
-    // collected in plain code (an expect() per pair would time the test out)
-    // and asserted once.
-    const min2 = (R.minSelfDistance - 7) ** 2;
+    // guarantee itself is the road's own clearance at 6 m probe spacing, so
+    // the continuous line can dip up to ~one probe step closer. Violations
+    // are collected in plain code (an expect() per pair would time the test
+    // out) and asserted once.
     const violations: string[] = [];
     for (const seed of SEEDS) {
-      const pts = compileTrack(seed).samples;
+      const track = compileTrack(seed);
+      const min2 = (roadClearance(track.width) - 7) ** 2;
+      const pts = track.samples;
       for (let i = 0; i < pts.length; i += 3) {
         for (let j = i + 3; j < pts.length; j += 3) {
           if (pts[j].s - pts[i].s < 100) continue;
@@ -224,6 +231,50 @@ describe("stage generator", () => {
               `seed ${seed}: s=${pts[i].s.toFixed(0)} vs s=${pts[j].s.toFixed(0)} at ` +
                 `${Math.sqrt(dx * dx + dz * dz).toFixed(1)} m`,
             );
+          }
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("R24 — nothing comes back into the start, on any length", () => {
+    const violations: string[] = [];
+    for (const length of ["short", "medium", "long", "xlong"] as FiniteStageLength[]) {
+      for (const seed of SEEDS.slice(0, 8)) {
+        const track = compileStage(seed, length);
+        const clear = roadClearance(track.width) - 7;
+        const first = track.samples[0];
+        const last = track.samples[track.samples.length - 1];
+        // The zone is the grid, the apron of dirt behind it, and the road's
+        // clearance around both. Measured from the start's own axis, since
+        // that is the line the apron is laid along.
+        const toStart = (x: number, z: number): number => {
+          const along = -(
+            (x - first.x) * Math.sin(first.heading) +
+            (z - first.z) * Math.cos(first.heading)
+          );
+          const lateral =
+            (x - first.x) * Math.cos(first.heading) - (z - first.z) * Math.sin(first.heading);
+          return Math.hypot(lateral, along <= 0 ? -along : Math.max(0, along - R.startZone.apron));
+        };
+        for (const sample of track.samples) {
+          if (sample.s < R.startZone.fromArc) continue;
+          if (toStart(sample.x, sample.z) < clear) {
+            violations.push(
+              `${length} seed ${seed}: s=${sample.s.toFixed(0)} is ` +
+                `${toStart(sample.x, sample.z).toFixed(1)} m from the start`,
+            );
+          }
+        }
+        // ...and the finish's run-off is held to it too: the apron past the
+        // flying finish is drawn road with a shelf under it, so a stage
+        // that closes across its own start leaves that road in the air.
+        for (let past = 0; past <= R.startZone.apron; past += 6) {
+          const x = last.x + Math.sin(last.heading) * past;
+          const z = last.z + Math.cos(last.heading) * past;
+          if (toStart(x, z) < clear) {
+            violations.push(`${length} seed ${seed}: the run-off lands in the start zone`);
           }
         }
       }
@@ -352,7 +403,7 @@ describe("endless stages", () => {
       const track = compileStage(seed, "endless");
       track.extend?.(8000);
       const pts = track.samples;
-      const min2 = (R.minSelfDistance - 7) ** 2;
+      const min2 = (roadClearance(track.width) - 7) ** 2;
       const violations: string[] = [];
       for (let i = 0; i < pts.length; i += 3) {
         for (let j = i + 3; j < pts.length; j += 3) {

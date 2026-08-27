@@ -5,7 +5,7 @@
 // per step is constant and progress can only creep forward or slightly back
 // — a car that leaves the road keeps its last on-road progress for respawn.
 
-import type { Surface, Track } from "../mapgen/index.ts";
+import { STAGE_RULES, type Surface, type Track } from "../mapgen/index.ts";
 import { corridorOffset, crossOffset } from "../mapgen/road.ts";
 import { TUNING } from "./defs/tuning.ts";
 import type { GameState } from "./state.ts";
@@ -175,7 +175,16 @@ export function locate(track: Track, x: number, z: number, hint: number): TrackF
   const rightZ = -Math.sin(s.heading);
   const lateral = dx * rightX + dz * rightZ;
   const halfRoad = track.width / 2;
-  const offRoad = Math.abs(lateral) > halfRoad + TUNING.offTrack.verge;
+  // Off the END of the road is off the road too. The nearest sample at
+  // either end of the stage stays the nearest however far past it the car
+  // gets, and its lateral offset alone would report a car a kilometre
+  // behind the start line as sitting on the road — a flat invisible ribbon
+  // running to the horizon, holding the car at the start's elevation over
+  // valleys and through hillsides. Road is drawn and shelved for one apron
+  // past each end (R24); past that the terrain owns the ground. A circuit
+  // has no such end — its road runs back into its own start line.
+  const offEnd = pastApron(track, best, s, dx, dz);
+  const offRoad = offEnd || Math.abs(lateral) > halfRoad + TUNING.offTrack.verge;
   const surface = offRoad ? "nature" : s.surface;
   // Ground height and slope come from BETWEEN the samples. The nearest
   // sample alone quantizes the road to the 2 m sample grid, and on a graded
@@ -220,6 +229,31 @@ export function locate(track: Track, x: number, z: number, hint: number): TrackF
     slope,
     slopeLat,
   };
+}
+
+/** True when the car has run off one of the stage's ENDS — past the apron
+ * of dirt the generator lays before the start gate and after the flying
+ * finish (R24). Only the two end samples can report it: anywhere else the
+ * road carries on past the nearest sample in both directions.
+ *
+ * Two stages have no such end. An endless one has only a frontier the stream
+ * has not reached yet, and a CIRCUIT (R22) closes onto its own start line —
+ * its last sample IS its first, so the road past either of them is the lap
+ * carrying on, not country. */
+function pastApron(
+  track: Track,
+  index: number,
+  sample: Track["samples"][number],
+  dx: number,
+  dz: number,
+): boolean {
+  if (track.circuit) return false;
+  const first = index === 0;
+  const last = index === track.samples.length - 1 && !track.endless;
+  if (!first && !last) return false;
+  const along = dx * Math.sin(sample.heading) + dz * Math.cos(sample.heading);
+  const past = first ? -along : along;
+  return past > STAGE_RULES.startZone.apron;
 }
 
 function clampIndex(samples: { length: number }, index: number): number {

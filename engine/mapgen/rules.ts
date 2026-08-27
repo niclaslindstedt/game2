@@ -69,6 +69,20 @@
 //       closed onto the grid exactly by a solved turn-straight-turn.
 //       Everything else — the vocabulary, R3 through R8, R10's
 //       self-distance (measured cyclically), the features — is the sprint's.
+//   R23 No two pieces of road share ground. The terrain lays its shelf under
+//       ONE road, so a second corridor over the same country is left hanging
+//       in the air with nothing under it and nothing to drive on. R10's
+//       distance is therefore a floor, not the rule: the rule is `roadClear`,
+//       measured centerline to centerline and sized from the road's own
+//       width, and it binds the abandoned branches (R17) exactly as it binds
+//       the route.
+//   R24 The START is a PLACE, not a line: the grid, the APRON of dirt behind
+//       it, and `roadClear` of country around both belong to the start. On a
+//       sprint the route may not come back into it and no branch may cross
+//       it — a road floating over the start is the first thing a run ever
+//       sees. A circuit closes onto its own start line by construction
+//       (R22), so what it must not do is come at it ACROSS the apron; its
+//       closure lies along it.
 
 /** Sample spacing along the compiled centerline, meters. It lives here
  * because it is not only the compiler's business: a search that has to land
@@ -488,8 +502,30 @@ export const STAGE_RULES = {
    * length, `stageLengths[*].worldBound`.) */
   boundMargin: { min: 240, frac: 0.18 },
 
-  /** R10 — minimum distance between non-adjacent centerline points. */
+  /** R10 — floor under the distance between non-adjacent centerline points,
+   * m. The distance actually enforced is R23's `roadClear`, which grows with
+   * the road: this is only the least it may ever be. */
   minSelfDistance: 30,
+
+  /** R23 — the room a road keeps to itself. `margin` is the bare country
+   * left between two corridors' outer LIPS, m; what the rule enforces is
+   * that plus both corridors' full reach, so it widens with the `width`
+   * dial instead of letting a boulevard-wide stage lay its mats over each
+   * other. The margin is the most room that can be asked for without
+   * costing the stage vocabulary its tightest folds: the hairpin's two arms
+   * are a road's width apart by definition, and pushing this further starts
+   * rejecting hard corner combinations instead of crossings (the sim's
+   * severity mix is the measurement that says where the line is). */
+  roadClear: { margin: 13 },
+
+  /** R24 — the start zone. `apron` is the dirt extrapolated straight past
+   * each stage end, m: the run-up before the gate and the run-off past the
+   * flying finish. Road is drawn on it, the terrain lays its shelf under it
+   * and the physics rides it, so it is stage and it is kept clear like
+   * stage. `fromArc` is how far the route has to have travelled before it
+   * counts as coming BACK to the start — inside it the road is simply
+   * leaving, which is not a violation of anything. */
+  startZone: { apron: 30, fromArc: 160 },
 
   /** Feature probabilities per eligible straight. The water entry is the
    * chance of ANY crossing; the `water` knob scales it and splits it into

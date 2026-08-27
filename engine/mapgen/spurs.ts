@@ -14,11 +14,19 @@
 // asphalt grip, and the forest keeps off it — so a player who ignores the
 // tape can drive up it and see where it goes. Which is the point of a
 // world you are allowed to leave the route in.
+//
+// And because the terrain flattens a shelf under it, R23 binds it: the
+// shelf can only be laid under ONE road, so a branch that wanders back over
+// the stage leaves one of the two ribbons hanging in the air over the
+// country — a wall of road with nothing under it, which is exactly what the
+// player sees. So the stage, and the ground its start stands on, are as
+// solid an obstacle to a branch as the lake is: it turns away from them,
+// and where it cannot, it stops.
 
 import { createRng } from "../lib/prng.ts";
 import type { Surface } from "./compile.ts";
 import { LAKE_Y, type LandField } from "./land.ts";
-import { ROAD_CROSS } from "./road.ts";
+import { ROAD_CROSS, roadClearance } from "./road.ts";
 
 /** One sample of a spur's centerline — the same shape as a track sample,
  * minus everything only the stage proper needs (progress, pacenotes). */
@@ -47,11 +55,12 @@ export type Spur = {
   /** Full road width, meters — the MAIN road's, continued: a branch is the
    * far arm of the road the route turned onto, not a road of its own. */
   width: number;
-  /** Where it got to: off the edge of the world, or the water that stopped
-   * it. A branch heads for the map's edge and usually reaches it; a branch
-   * that ran onto a headland ends on the shore, because the one thing it
-   * must never do is carry on across the lake on an embankment. */
-  endsAt: "map" | "water";
+  /** Where it got to: off the edge of the world, the water that stopped it,
+   * or the stage it was not allowed to cross. A branch heads for the map's
+   * edge and usually reaches it; a branch that ran onto a headland ends on
+   * the shore, because the one thing it must never do is carry on across
+   * the lake on an embankment — or over the road it left (R23). */
+  endsAt: "map" | "water" | "stage";
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
 };
 
@@ -60,7 +69,7 @@ export type Spur = {
  * middle of a field is not a road — it is a mistake the player can see
  * from a kilometer away. Where it goes after that is nobody's business,
  * which is exactly what makes it worth following. */
-const SPUR = {
+export const SPUR = {
   /** How far past the stage's own bounding box a branch has to get before
    * it may end, m — past the fog ceiling, so it is never seen ending. */
   escape: 140,
@@ -81,6 +90,10 @@ const SPUR = {
   straight: 70,
   /** Steepest grade the branch climbs or drops, m per m. */
   maxGrade: 0.055,
+  /** How far ahead the branch looks for the stage it must keep off (R23),
+   * m — a longer look than the water's, because a road is a line the branch
+   * can only get past by turning early, not a shore it can follow. */
+  stageLook: 130,
   /** How far ahead the branch looks for water, m, and how far above the
    * water table the ground has to stand before it will happily drive on
    * it. A road does not strike out across a lake on an embankment, and one
@@ -121,6 +134,11 @@ export function buildSpur(
    * the carriageway the route was on. Anything else puts a step in the
    * middle of a junction that no amount of paving hides. */
   width: number,
+  /** R23 — distance from a point to the nearest piece of ground that is
+   * already road: the stage outside this junction's own neighbourhood, and
+   * the aprons its start and finish stand on. Infinity where the country is
+   * the branch's to take. */
+  roadDistance: (x: number, z: number) => number,
 ): Spur {
   const rng = createRng(
     (seed ^ (Math.round(atS) * 2654435761) ^ (end === "entry" ? 0x9e37 : 0x85eb)) >>> 0,
@@ -149,7 +167,7 @@ export function buildSpur(
   // known only once the run's length is, so the surfaces are painted on in
   // a second pass below.
   let length: number = SPUR.length.max;
-  let endsAt: "map" | "water" = "map";
+  let endsAt: Spur["endsAt"] = "map";
   /** The bearing out of the country: toward whichever edge of the box is
    * nearest. Once the branch has had its wander, this is what it follows —
    * a road heading out of the map has decided where it is going. */
@@ -180,6 +198,23 @@ export function buildSpur(
   const wet = (px: number, pz: number, bearing: number): boolean =>
     clearance(px, pz, bearing) < SPUR.shoreFreeboard;
 
+  /** R23 — how much room this bearing leaves between the branch and the
+   * stage: the least distance to road anywhere inside the look-ahead. The
+   * branch's own position is not in it — the caller has that already, and
+   * it is the same for every bearing. */
+  const room = (px: number, pz: number, bearing: number): number => {
+    let worst = Infinity;
+    for (const ahead of [SPUR.stageLook * 0.35, SPUR.stageLook * 0.7, SPUR.stageLook]) {
+      const d = roadDistance(px + Math.sin(bearing) * ahead, pz + Math.cos(bearing) * ahead);
+      if (d < worst) worst = d;
+    }
+    return worst;
+  };
+  const keepOut = roadClearance(width);
+  /** Steps still covered by the last keep-out query's promise — see the
+   * walk below. */
+  let stageSkip = 0;
+
   for (let s = 0; s <= length; s += SPUR.step) {
     // A branch may only stop where a road could: past the edge of the
     // world, and on ground that is out of the water.
@@ -208,6 +243,49 @@ export function buildSpur(
         if (bestClear < SPUR.shoreFreeboard) endsAt = "water";
       }
     }
+    // R23 — and the stage itself, by the same move: swing to whichever
+    // bearing leaves the most room between this branch and the road it
+    // left. A branch that has already been pushed inside the clearance and
+    // can find no way out simply stops there, because the alternative is a
+    // second carriageway laid over ground the terrain has already given to
+    // the first.
+    //
+    // The distance to the road is also a PROMISE about the next few steps:
+    // nothing can come inside the look-ahead until the branch has covered
+    // the slack, so a branch out in open country walks on without asking
+    // again. Most of a branch is open country and the query is a grid
+    // probe — without the skip it is most of the cost of compiling a stage.
+    if (s > 0 && stageSkip > 0) stageSkip -= 1;
+    else if (s > 0) {
+      const here = roadDistance(x, z);
+      const slack = here - keepOut - SPUR.stageLook;
+      if (slack > 0) stageSkip = Math.floor(slack / SPUR.step);
+      else if (room(x, z, heading) < keepOut) {
+        let best = 0;
+        let bestRoom = room(x, z, heading);
+        for (const swing of [0.4, -0.4, 0.9, -0.9, 1.5, -1.5, 2.2, -2.2, Math.PI]) {
+          const open = room(x, z, heading + swing);
+          if (open <= bestRoom) continue;
+          bestRoom = open;
+          best = swing;
+          if (open >= keepOut) break;
+        }
+        if (best !== 0) {
+          const turn = Math.sign(best);
+          curvature = turn / SPUR.minRadius;
+          heading += turn * Math.min(Math.abs(best), SPUR.step / SPUR.minRadius);
+        }
+        // ...but never inside `keep`: a junction whose other arm is a stub
+        // is the main road stopping dead at the crossing, which is a worse
+        // thing to look at than a branch that runs a little close for a few
+        // meters.
+        if (s >= SPUR.keep && bestRoom < keepOut && here < keepOut) {
+          endsAt = "stage";
+          length = s;
+          break;
+        }
+      }
+    }
     samples.push({ x, z, heading, elevation: y, s, surface: "asphalt", lift: 0, flat: 0 });
     if (s >= SPUR.straight && s % SPUR.bend < SPUR.step) {
       curvature = rng.range(-1 / SPUR.minRadius, 1 / SPUR.minRadius);
@@ -228,10 +306,18 @@ export function buildSpur(
     x += Math.sin(heading) * SPUR.step;
     z += Math.cos(heading) * SPUR.step;
     y += grade * SPUR.step;
-    if (x < box.minX) box.minX = x;
-    if (x > box.maxX) box.maxX = x;
-    if (z < box.minZ) box.minZ = z;
-    if (z > box.maxZ) box.maxZ = z;
+  }
+  // R23 — and then the guarantee the steering only tries for: the branch is
+  // CUT at the first step that stands inside the clearance. Not backed up
+  // to it — cut. A branch that dips into the stage's ground halfway along
+  // and comes out the far side is over at the dip, because everything past
+  // it was reached by crossing ground that was never this road's to cross.
+  for (let i = 0; i < samples.length; i++) {
+    if (samples[i].s <= SPUR.keep) continue;
+    if (roadDistance(samples[i].x, samples[i].z) >= keepOut) continue;
+    samples.length = i;
+    endsAt = "stage";
+    break;
   }
   // Wherever it got to, it stops on DRY ground: a branch backed up out of
   // whatever shallows the last stretch walked into, because a road ending
@@ -259,6 +345,15 @@ export function buildSpur(
     const out = Math.min(1, Math.max(0, (sealedTo - sample.s) / ROAD_CROSS.liftRamp));
     const up = Math.min(1, Math.max(0, sample.s / ROAD_CROSS.liftRamp));
     sample.lift = sealed ? ROAD_CROSS.asphaltLift * Math.min(out, up) : 0;
+  }
+  // The box is the branch that SURVIVED the trims, not the walk that built
+  // it: a cut branch reporting the country it never reached is a lie the
+  // next reader has no way to spot.
+  for (const sample of samples) {
+    if (sample.x < box.minX) box.minX = sample.x;
+    if (sample.x > box.maxX) box.maxX = sample.x;
+    if (sample.z < box.minZ) box.minZ = sample.z;
+    if (sample.z > box.maxZ) box.maxZ = sample.z;
   }
   return { atS, end, samples, width, endsAt, bounds: box };
 }
