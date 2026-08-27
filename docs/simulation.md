@@ -28,8 +28,12 @@ npm run sim -- --car classic          # one car
 npm run sim -- --count 20             # a wider sweep
 npm run sim -- --length long          # stage length band (default medium)
 npm run sim -- --weather storm        # race in rain/storm wind
+npm run sim -- --asphalt 0.8          # the generator's dials, each 0..1:
+                                      # --elevation --water --trees --asphalt
 npm run sim -- --json report.json     # machine-readable dump
 ```
+
+The dials change what the stage IS, so they change the table: tarmac buys pace and costs drift time (that is what it is FOR), water and hills cost both. Sweep one at a time — a dial moved with a handling change makes the diff unreadable.
 
 The table columns: stage length, time, average pace, drifts / drift time / drift score, jumps / air time, fords, off-road time, hits (damaging impacts — trees, boulders, slammed landings), respawns (crash respawns and bot resets both land here), top speed, finished. The footer aggregates. **The workflow rule: run it before and after every handling or generator change and paste both tables in the PR.** Exit code is non-zero if any run failed to finish, so CI's `simulate` job doubles as a smoke alarm.
 

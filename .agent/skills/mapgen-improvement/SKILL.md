@@ -1,6 +1,6 @@
 ---
 name: mapgen-improvement
-description: "Use when improving the STAGE GENERATOR (engine/mapgen/) — the rules engine that builds every stage fresh from its seed. Covers the three-file split (rules.ts data / generate.ts search / compile.ts geometry), the R-rules and where each is stated, the render → LOOK → simulate → judge loop, how to extend the vocabulary with a new feature, and the invariants (determinism, sub-seed rejection, docs sync) that are load-bearing and easy to undo by accident."
+description: "Use when improving the STAGE GENERATOR (engine/mapgen/) — the rules engine that builds every stage fresh from its seed. Covers the module split (rules.ts data / generate.ts search / compile.ts geometry / road, spurs, guards, river), the R-rules and where each is stated, the four stage dials, the render → LOOK → simulate → judge loop over BOTH preview pictures, how to extend the vocabulary with a new feature, and the invariants (determinism, sub-seed rejection, docs sync) that are load-bearing and easy to undo by accident."
 ---
 
 # Improving the Stage Generator
@@ -16,13 +16,17 @@ let the sim sweep drive them all.
 task touches (`--scope=…`, `--concepts=…`). Load **`skill-reflection`** at
 both ends of the session.
 
-## The three files, three jobs
+## The modules, and their jobs
 
 | File          | Job                                                                                                                                                                                                                                                                                                    |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `rules.ts`    | **The rule book.** Every constraint and vocabulary number as DATA: turn radii/angles per severity, straight lengths, feature placement, world bounds, the self-distance floor. Tuning the generator means editing this file.                                                                           |
 | `generate.ts` | **The search.** Draws candidate segments from the seeded RNG, validates each against the rules, retries bounded, backtracks when boxed in, and rejects a whole attempt (retrying with a derived sub-seed) rather than ever shipping a violation. `generateStage(seed)` is a pure function of the seed. |
-| `compile.ts`  | **The geometry.** Turns the segment plan into evenly spaced samples (position, heading, elevation, surface, curvature, lips) — the single geometric truth read by the physics, the renderer, and the bots alike.                                                                                       |
+| `compile.ts`  | **The geometry.** Turns the segment plan into evenly spaced samples (position, heading, elevation, surface, deck, mat lift, curvature, lips) — the single geometric truth read by the physics, the renderer, and the bots alike. Also where the paving field and its junctions live.                   |
+| `road.ts`     | **The cross-section.** What a road is ACROSS its width: camber, worn wheel tracks, asphalt mat, shoulder, ditch, and the junction throat. Read by the renderer, the terrain's verge, AND the physics — change it once, all three move.                                                                 |
+| `spurs.ts`    | **The other roads.** The branch each junction abandons: real road that runs off the map, taped off at the mouth.                                                                                                                                                                                       |
+| `guards.ts`   | **The corner guards (R14).** Mounds and groves that shut the inside of a sharp corner so the fast line is not straight across the grass.                                                                                                                                                               |
+| `river.ts`    | **The water (R18).** One watercourse per valley, traced through the road's crossings by the rules of nature rather than one stream sprouting per ford.                                                                                                                                                 |
 
 Keep the split: a placement decision in `compile.ts`, or a geometric fudge in
 `generate.ts`, is how this module rots. Rules are data; the search enforces
@@ -35,9 +39,25 @@ in `docs/track-generator.md` (that page's sync obligation is in `AGENTS.md`),
 and asserted across seeds in `tests/mapgen_test.ts`. R1–R11 today: opening and
 closing straights, the two turn severities, braking zones before hard turns,
 the same-direction cap, jump/ford/crest placement, world bounds, no
-self-crossing, the length band. A rule changed in one place and not the other
-two is worse than no rule — the tests then pin yesterday's reality and the doc
-describes a generator that doesn't exist.
+self-crossing, the length band; R12–R18 add the ford dip, bridges, corner
+guards, the paving runs, the road's cross-section, junctions, and the river. A
+rule changed in one place and not the other two is worse than no rule — the
+tests then pin yesterday's reality and the doc describes a generator that
+doesn't exist. (R13–R18's tests live in `tests/water_test.ts` and
+`tests/roads_test.ts`; `tests/mapgen_test.ts` still owns the plan-level ones.)
+
+## The dials
+
+Four knobs — `elevation`, `water`, `trees`, `asphalt`, each `0..1` — say what
+KIND of stage a seed builds (`StageKnobs`, `DEFAULT_KNOBS`, `knobScale` in
+`rules.ts`). They must never break a rule: a dial moves the RANGE a rule draws
+from, it does not switch a rule off. Every entry point takes them
+(`compileStage`, `createGame`, `simulateStage`, `--asphalt` on both CLIs, the
+menu, the URL), and a track carries the dials it was built with
+(`track.knobs`) so the terrain field and the renderer read the same set
+instead of being handed it. When you add a dial-able number, put its band in
+`rules.ts` beside the rule it belongs to — never a bare multiplier in a
+consumer.
 
 ## The loop
 
@@ -48,13 +68,25 @@ and the sim are the units of judgement, not the plan JSON.**
 1. **Render:**
 
    ```sh
-   make track                        # previews/track-1..6.png
+   make track                        # two pictures per seed, 1..6
    npm run track -- --seeds 42,99    # specific seeds
    npm run track -- --count 12       # a wider look
+   npm run track -- --water 1 --elevation 1   # what a dial actually does
+   npm run track -- --only render    # skip the schematic
    ```
 
-   Top-down maps: gravel road, red jump lips, blue fords, yellow crests,
-   green start, black finish, plus a per-stage stat line.
+   Two pictures, and they answer different questions:
+   - `track-<seed>.png` — the **schematic**: surfaces, features, junctions,
+     guards, in colors that separate at a glance. Judge the RULES here.
+   - `track-<seed>-render.png` — the **place**: shaded landscape, water,
+     forest, and the road at full width with its wheel tracks, ditches,
+     markings, bridges and branches, the route called out in magenta.
+     Judge whether the world reads as a world here.
+
+   The rendered picture is the one that catches what the schematic cannot:
+   water that floats or runs uphill, roads that stop in a field, junctions
+   where two ribbons merge instead of meeting, a landscape that is more lake
+   than land. Every one of those shipped invisibly until it was drawn.
 
 2. **LOOK at several seeds**, not one. Judge: does the stage read as a rally
    stage (flow, rhythm, braking zones before hairpins), do features land
@@ -73,10 +105,34 @@ and the sim are the units of judgement, not the plan JSON.**
 5. **Verify** — `npx vitest run tests/mapgen_test.ts` on every edit (fast),
    then the full gates before shipping.
 
+## Rules of nature
+
+The generator's job is not just legality, it is PLAUSIBILITY — a stage has to
+read as country somebody laid a road across. The rules that carry that weight:
+
+- **Water runs downhill, collects, and ends somewhere.** One watercourse per
+  valley (R18), not one per ford. It is born above its highest crossing,
+  visits the rest in descending order, widens as it goes, pools flat where the
+  ground dips, and ends in the lowest water it can find. Two crossings with a
+  ridge between them are on different water — say so by splitting the course,
+  never by running water over the ridge.
+- **Roads lead somewhere.** A road that ends in a field is a bug you can see
+  from a kilometer up. Every branch runs off the map (R17); where it goes is
+  the player's business.
+- **Roads MEET, they do not merge.** A junction is planned: it happens at a
+  corner, one road runs straight through it, the other turns onto it, both
+  borders are cut away and the gap is paved. Two ribbons that touch
+  tangentially read as a rendering accident, because that is what they are.
+- **A corner has an inside.** If the grass across it is faster than the road
+  around it, the corner does not exist (R14).
+
+When something looks wrong in a render, ask which rule of nature it breaks
+before reaching for a number.
+
 ## Extending the vocabulary
 
-A new stage ingredient (say, tunnels or bridges) follows the settled pattern,
-in order:
+A new stage ingredient (say, tunnels or level crossings) follows the settled
+pattern, in order:
 
 1. A feature enum value + its placement rules (min straight, clearances,
    probabilities) in `rules.ts` — data first; if the constraint can't be
@@ -116,12 +172,24 @@ undoes it without knowing it was ever a rule.
 - **Stages must stay finishable by both cars.** `tests/simulation_test.ts` is
   the contract; a generator change that breaks it is wrong until argued
   otherwise, explicitly, in the PR.
+- **The terrain field must never shape itself around the road it is not
+  nearest to.** Corridor shelves, spur shelves and junction aprons all
+  overlap; whichever road is nearer owns the ground. Get this wrong and the
+  ground under the stage road inherits a branch's grade — a six-meter step
+  under the racing line that no test but the shelf assertion will catch.
+- **`smooth()` is a Hermite fade, not a curve.** Outside `0..1` it turns over
+  and runs away. Every call needs `clamp01` around its argument; an unclamped
+  one is how stream ends ended up a kilometer off the map.
 
 ## Shipping
 
-- Render the previews at more than one seed and put the images in front of
+- Render BOTH pictures at more than one seed and put the images in front of
   the user before shipping. A generator change that looked fine on seed 3 has
-  been wrong on the next seed more than once.
+  been wrong on the next seed more than once — and one that looked fine on the
+  schematic has been wrong in the world more than once.
+- Zoom in on the things the whole-stage frame cannot resolve (a junction, a
+  bridge, a guarded hairpin): render with the bounds narrowed around one, and
+  LOOK at it at a few meters per pixel.
 - `docs/track-generator.md` updated if any rule moved (the verbatim list).
 - Both `make sim` tables (before/after) in the PR — the `commit` skill's
   contract for generator changes.

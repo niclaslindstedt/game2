@@ -12,7 +12,8 @@
 //
 // The pause card holds the run where it stands. The heavy state lives in
 // refs; the HUD re-renders from a ~12 Hz snapshot. URL params (?seed=,
-// ?tod=, ?weather=, ?car=, ?length=, ?start=1) pin a run for tooling and
+// ?tod=, ?weather=, ?car=, ?length=, the four generator dials ?elevation=
+// ?water= ?trees= ?asphalt=, and ?start=1) pin a run for tooling and
 // screenshots.
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -23,10 +24,12 @@ import {
   carById,
   compileStage,
   createGame,
+  resolveKnobs,
   status,
   step,
   type GameEvent,
   type GameState,
+  type StageKnobs,
   type StageLength,
   type TimeOfDay,
   type Track,
@@ -41,7 +44,9 @@ import type { GameRenderer } from "./game/renderer.ts";
 import { Hud, type HudFlash, type HudSnapshot } from "./game/hud.tsx";
 import { takeSnapshot } from "./game/snapshot.ts";
 import {
+  DEFAULT_STAGE_KNOBS,
   PauseMenu,
+  STAGE_DIALS,
   STAGE_LENGTH_OPTIONS,
   TIMES_OF_DAY,
   WEATHERS,
@@ -79,6 +84,7 @@ function initialRace(): RaceSettings {
     weather: "clear",
     carId: "compact",
     length: "medium",
+    knobs: { ...DEFAULT_STAGE_KNOBS },
   };
   try {
     const stored = localStorage.getItem(RACE_KEY);
@@ -96,6 +102,14 @@ function initialRace(): RaceSettings {
   if (car === "compact" || car === "classic") race.carId = car;
   const length = params.get("length");
   if (STAGE_LENGTH_OPTIONS.some((l) => l.id === length)) race.length = length as StageLength;
+  // The generator's dials, each 0..1 — the tooling pins a stage's character
+  // the same way it pins its seed.
+  race.knobs = resolveKnobs(race.knobs);
+  for (const dial of STAGE_DIALS) {
+    const raw = params.get(dial.key);
+    if (raw !== null && Number.isFinite(Number(raw))) race.knobs[dial.key] = Number(raw);
+  }
+  race.knobs = resolveKnobs(race.knobs);
   return race;
 }
 
@@ -104,6 +118,8 @@ function initialRace(): RaceSettings {
 type StageSpec = {
   seed: number;
   length: StageLength;
+  /** The generator's dials — what KIND of country the seed is built in. */
+  knobs: StageKnobs;
   carId: string;
   timeOfDay: TimeOfDay;
   weather: Weather;
@@ -116,6 +132,7 @@ function sameStage(a: StageSpec | null, b: StageSpec): boolean {
     a !== null &&
     a.seed === b.seed &&
     a.length === b.length &&
+    STAGE_DIALS.every((dial) => a.knobs[dial.key] === b.knobs[dial.key]) &&
     a.carId === b.carId &&
     a.timeOfDay === b.timeOfDay &&
     a.weather === b.weather &&
@@ -130,6 +147,7 @@ function demoStage(race: RaceSettings, seed: number): StageSpec {
   return {
     seed,
     length: "medium",
+    knobs: race.knobs,
     carId: race.carId,
     timeOfDay: race.timeOfDay,
     weather: race.weather,
@@ -145,6 +163,7 @@ function backdropFor(page: MenuPage, race: RaceSettings, seed: number, demoSeed:
       stage: {
         seed,
         length: race.length,
+        knobs: race.knobs,
         carId: race.carId,
         timeOfDay: race.timeOfDay,
         weather: race.weather,
@@ -218,7 +237,9 @@ export function App() {
   runRef.current = run;
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
-  const trackRef = useRef<{ seed: number; length: StageLength; track: Track } | null>(null);
+  /** The compiled stage, cached under everything that decides what it IS:
+   * the seed, the length band, and the dials. */
+  const trackRef = useRef<{ key: string; track: Track } | null>(null);
   const stageRef = useRef<StageSpec | null>(null);
   /** Roam's map pane, held here so a renderer that finishes loading after
    * the pane has already measured itself still learns where to draw. */
@@ -247,16 +268,9 @@ export function App() {
     // An endless track is never reused: a restart must begin from a fresh
     // opening window, not from however far the last run streamed (the
     // renderer has long since dropped the world around the start).
-    if (
-      trackRef.current?.seed !== spec.seed ||
-      trackRef.current.length !== spec.length ||
-      spec.length === "endless"
-    ) {
-      trackRef.current = {
-        seed: spec.seed,
-        length: spec.length,
-        track: compileStage(spec.seed, spec.length),
-      };
+    const key = `${spec.seed}/${spec.length}/${STAGE_DIALS.map((d) => spec.knobs[d.key]).join(",")}`;
+    if (trackRef.current?.key !== key || spec.length === "endless") {
+      trackRef.current = { key, track: compileStage(spec.seed, spec.length, spec.knobs) };
     }
     finishTimeRef.current = null;
     const state = createGame({
@@ -313,6 +327,9 @@ export function App() {
       {
         seed: level.seed,
         length: level.length,
+        // A campaign stage is the same country for everybody: the dials are
+        // Roam's to play with, not the campaign's to inherit.
+        knobs: DEFAULT_STAGE_KNOBS,
         carId: raceRef.current.carId,
         timeOfDay: level.timeOfDay,
         weather: level.weather,
@@ -330,6 +347,7 @@ export function App() {
       {
         seed: seedRef.current,
         length: r.length,
+        knobs: r.knobs,
         carId: r.carId,
         timeOfDay: r.timeOfDay,
         weather: r.weather,
@@ -400,6 +418,7 @@ export function App() {
           {
             seed: seedRef.current,
             length: r.length,
+            knobs: r.knobs,
             carId: r.carId,
             timeOfDay: r.timeOfDay,
             weather: r.weather,

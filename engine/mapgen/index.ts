@@ -1,16 +1,32 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 export {
   STAGE_RULES,
+  DEFAULT_KNOBS,
+  resolveKnobs,
+  knobScale,
   type SegmentPlan,
   type TurnSeverity,
   type SegmentFeature,
+  type Crossing,
+  type StageKnobs,
   type StageLength,
   type FiniteStageLength,
 } from "./rules.ts";
 export { generateStage, createStageStream, type StageStream } from "./generate.ts";
 export {
+  ROAD_CROSS,
+  corridorOffset,
+  crossOffset,
+  vergeOffset,
+  wearAt,
+  junctionThroat,
+} from "./road.ts";
+export { buildSpur, spurReach, type Spur, type SpurSample } from "./spurs.ts";
+export { createGuardField, type CornerGuard, type GuardField } from "./guards.ts";
+export {
   createTerrain,
   computeStreams,
+  collectAnchors,
   carveGround,
   inStream,
   LAKE_Y,
@@ -31,5 +47,8 @@ export {
   type Track,
   type TrackSample,
   type Surface,
+  type BridgeDeck,
+  type RoadJunction,
   type Pacenote,
 } from "./compile.ts";
+export { traceRivers, type River, type RiverAnchor, type RiverPoint } from "./river.ts";

@@ -10,7 +10,14 @@
 
 import { angleDiff } from "../lib/math.ts";
 import { createRng, type Rng } from "../lib/prng.ts";
-import { STAGE_RULES as R, type FiniteStageLength, type SegmentPlan } from "./rules.ts";
+import {
+  STAGE_RULES as R,
+  knobScale,
+  resolveKnobs,
+  type FiniteStageLength,
+  type SegmentPlan,
+  type StageKnobs,
+} from "./rules.ts";
 
 type Cursor = { x: number; z: number; heading: number; arc: number };
 
@@ -164,6 +171,53 @@ function straightLength(rng: Rng): number {
   return rng.range(bucket.min, bucket.max);
 }
 
+type FeatureFields = Pick<
+  SegmentPlan,
+  "feature" | "featureStart" | "featureEnd" | "lipHeight" | "crestHeight" | "crossing"
+>;
+
+/** R7/R13 — how this straight meets water, if it does. A crossing is drawn
+ * as a WIDTH first and the architecture follows from it: narrow enough to
+ * wade is a ford, anything wider needs a deck, and a deck past
+ * `bridge.timberMax` is beyond what two trunks and a plank floor can span
+ * — that one is concrete. The `water` dial decides both how wide the
+ * crossings run and how often one is a river rather than a stream. */
+function assignCrossing(
+  rng: Rng,
+  length: number,
+  sStart: number,
+  sLastLipEnd: number,
+  knobs: StageKnobs,
+): FeatureFields | null {
+  if (rng.chance(knobScale(knobs.water, R.wet.bridgeShare)) && length >= R.bridge.minStraight) {
+    const reach = knobScale(knobs.water, R.wet.spanReach);
+    const span = rng.range(
+      R.bridge.span.min,
+      R.bridge.span.min + (R.bridge.span.max - R.bridge.span.min) * reach,
+    );
+    const earliest = Math.max(R.bridge.margin, sLastLipEnd + R.bridge.clearAfterJump - sStart);
+    const latest = length - span - R.bridge.margin;
+    if (earliest < latest) {
+      const at = rng.range(earliest, latest);
+      return {
+        feature: "water",
+        featureStart: at,
+        featureEnd: at + span,
+        crossing: span > R.bridge.timberMax ? "concrete" : "timber",
+      };
+    }
+  }
+  if (length < R.water.minStraight) return null;
+  const span = rng.range(R.water.length.min, R.water.length.max);
+  // R12 — the dip's aprons must fit inside the segment, so the ford keeps
+  // an apron's clearance from both ends (and from the last jump's ramp).
+  const earliest = Math.max(R.water.apron, sLastLipEnd + R.water.clearAfterJump - sStart);
+  const latest = length - span - R.water.apron;
+  if (earliest >= latest) return null;
+  const at = rng.range(earliest, latest);
+  return { feature: "water", featureStart: at, featureEnd: at + span, crossing: "ford" };
+}
+
 /** Feature assignment for a mid-stage straight (R6/R7/R8). `sStart` is the
  * segment's absolute start along the stage; `sLastLipEnd` the absolute end of
  * the last jump's ramp (or -Infinity). */
@@ -172,7 +226,8 @@ function assignFeature(
   length: number,
   sStart: number,
   sLastLipEnd: number,
-): Pick<SegmentPlan, "feature" | "featureStart" | "featureEnd" | "lipHeight" | "crestHeight"> {
+  knobs: StageKnobs,
+): FeatureFields {
   // Jumps first — they are the headline feature.
   if (
     length >= R.jump.minStraight &&
@@ -188,16 +243,12 @@ function assignFeature(
       lipHeight: rng.range(R.jump.lipHeight.min, R.jump.lipHeight.max),
     };
   }
-  if (length >= R.water.minStraight && rng.chance(R.featureChance.water)) {
-    const span = rng.range(R.water.length.min, R.water.length.max);
-    // R12 — the dip's aprons must fit inside the segment, so the ford keeps
-    // an apron's clearance from both ends (and from the last jump's ramp).
-    const earliest = Math.max(R.water.apron, sLastLipEnd + R.water.clearAfterJump - sStart);
-    const latest = length - span - R.water.apron;
-    if (earliest < latest) {
-      const at = rng.range(earliest, latest);
-      return { feature: "water", featureStart: at, featureEnd: at + span };
-    }
+  if (
+    length >= R.water.minStraight &&
+    rng.chance(R.featureChance.water * knobScale(knobs.water, R.wet.crossingChance))
+  ) {
+    const crossing = assignCrossing(rng, length, sStart, sLastLipEnd, knobs);
+    if (crossing) return crossing;
   }
   if (length >= R.crest.minStraight && rng.chance(R.featureChance.crest)) {
     const span = Math.min(rng.range(R.crest.length.min, R.crest.length.max), length - 16);
@@ -251,15 +302,24 @@ function drawTurn(
  * Deterministic; always satisfies the R-rules. A search that boxes itself
  * in so badly that even the closing straight cannot be placed legally is
  * retried with a derived sub-seed — still a pure function of the seed. */
-export function generateStage(seed: number, length: FiniteStageLength = "medium"): SegmentPlan[] {
+export function generateStage(
+  seed: number,
+  length: FiniteStageLength = "medium",
+  knobs?: Partial<StageKnobs>,
+): SegmentPlan[] {
+  const dials = resolveKnobs(knobs);
   for (let attempt = 0; attempt < 40; attempt++) {
-    const plans = tryGenerateStage((seed + attempt * 0x9e3779b9) >>> 0, length);
+    const plans = tryGenerateStage((seed + attempt * 0x9e3779b9) >>> 0, length, dials);
     if (plans) return plans;
   }
   throw new Error(`stage generation failed for seed ${seed} (${length})`);
 }
 
-function tryGenerateStage(seed: number, length: FiniteStageLength): SegmentPlan[] | null {
+function tryGenerateStage(
+  seed: number,
+  length: FiniteStageLength,
+  knobs: StageKnobs,
+): SegmentPlan[] | null {
   const spec = R.stageLengths[length];
   const rng = createRng(seed);
   const plans: SegmentPlan[] = [];
@@ -328,7 +388,11 @@ function tryGenerateStage(seed: number, length: FiniteStageLength): SegmentPlan[
         plan = drawTurn(rng, prevWasStraight, forcedDir, sameDirRun);
       } else {
         const length = straightLength(rng);
-        plan = { kind: "straight", length, ...assignFeature(rng, length, total, sLastLipEnd) };
+        plan = {
+          kind: "straight",
+          length,
+          ...assignFeature(rng, length, total, sLastLipEnd, knobs),
+        };
       }
 
       // R11 — the segment that crosses targetLength must not overshoot the
@@ -409,7 +473,8 @@ export type StageStream = {
  * R10 holds against the trailing `R.endless.tailWindow` meters — older road
  * is far behind the car, out of sight, and dropped from the working set,
  * which is what keeps memory and search time flat forever. */
-export function createStageStream(seed: number): StageStream {
+export function createStageStream(seed: number, knobs?: Partial<StageKnobs>): StageStream {
+  const dials = resolveKnobs(knobs);
   const rng = createRng(seed);
   const field = createPointField();
   let cursor: Cursor = { x: 0, z: 0, heading: 0, arc: 0 };
@@ -464,7 +529,11 @@ export function createStageStream(seed: number): StageStream {
         );
       } else {
         const length = straightLength(rng);
-        plan = { kind: "straight", length, ...assignFeature(rng, length, total, lastLipEnd()) };
+        plan = {
+          kind: "straight",
+          length,
+          ...assignFeature(rng, length, total, lastLipEnd(), dials),
+        };
       }
       const { points, end } = probePoints(cursor, plan);
       // Keep the road on course: a turn whose exit heading strays past the

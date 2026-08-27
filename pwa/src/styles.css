@@ -1744,6 +1744,29 @@ a.menu-version:focus-visible {
   opacity: 1;
 }
 
+/* The generator's dials, under the map they change. Tighter than the
+   conditions rows: four of them share the pane with the map, and the map
+   is the thing worth the space. */
+.roam-dials {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 0 0 auto;
+}
+
+.roam-dials .menu-row {
+  gap: 0.4rem;
+}
+
+.roam-dials .menu-label {
+  font-size: clamp(0.5rem, 1.6vmin, 0.64rem);
+}
+
+.roam-dials .menu-opt {
+  padding: 0.2rem 0.4rem;
+  font-size: clamp(0.48rem, 1.5vmin, 0.6rem);
+}
+
 /* ── Options ─────────────────────────────────────────────────────────── */
 
 .opt-tabs {

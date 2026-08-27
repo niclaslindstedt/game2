@@ -16,9 +16,11 @@ import { STAGE_RULES, type StageLength } from "@engine";
 import { CarPicker } from "./car-picker.tsx";
 import {
   OptionRow,
+  STAGE_DIALS,
   STAGE_LENGTH_OPTIONS,
   TIMES_OF_DAY,
   WEATHERS,
+  dialStop,
   type RaceSettings,
 } from "./menu.tsx";
 
@@ -152,6 +154,24 @@ export function RoamPage({
               <b>{STAGE_LENGTH_OPTIONS[lengthIndex].label}</b>
               {lengthBilling(race.length)}
             </span>
+          </div>
+          {/* The generator's dials belong in the STAGE pane and nowhere
+              else: they say what the seed BUILDS, and the map above shows
+              it the moment one moves. */}
+          <div className="roam-dials">
+            {STAGE_DIALS.map((dial) => (
+              <OptionRow
+                key={dial.key}
+                label={dial.label}
+                options={dial.stops}
+                value={dialStop(dial.stops, race.knobs[dial.key])}
+                onPick={(id) => {
+                  const stop = dial.stops.find((s) => s.id === id);
+                  if (!stop) return;
+                  onRace({ ...race, knobs: { ...race.knobs, [dial.key]: stop.value } });
+                }}
+              />
+            ))}
           </div>
         </section>
 

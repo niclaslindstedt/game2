@@ -71,5 +71,51 @@ export function createCanvas(width, height, bg = [0, 0, 0]) {
       }
     }
   };
-  return { width, height, rgb, set, disk, toPng: () => encodePng(width, height, rgb) };
+  /** Fill a convex polygon (3 or 4 points, in order) — how the track
+   * preview lays down a road: one quad per band of the cross-section, per
+   * pair of samples. Bounding box plus a half-plane test, which is all a
+   * convex fill needs and keeps this file dependency-free. */
+  const poly = (points, color) => {
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const [px, py] of points) {
+      if (px < minX) minX = px;
+      if (px > maxX) maxX = px;
+      if (py < minY) minY = py;
+      if (py > maxY) maxY = py;
+    }
+    const x0 = Math.max(0, Math.floor(minX));
+    const x1 = Math.min(width - 1, Math.ceil(maxX));
+    const y0 = Math.max(0, Math.floor(minY));
+    const y1 = Math.min(height - 1, Math.ceil(maxY));
+    if (x1 < x0 || y1 < y0) return;
+    // A degenerate sliver (a road band thinner than a pixel at this zoom)
+    // would rasterize to nothing; give it the one pixel it deserves.
+    if (x1 === x0 && y1 === y0) {
+      set(x0, y0, color);
+      return;
+    }
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        const cx = x + 0.5;
+        const cy = y + 0.5;
+        let inside = true;
+        let sign = 0;
+        for (let i = 0; i < points.length && inside; i++) {
+          const [ax, ay] = points[i];
+          const [bx, by] = points[(i + 1) % points.length];
+          const cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+          if (Math.abs(cross) < 1e-9) continue;
+          const s = cross > 0 ? 1 : -1;
+          if (sign === 0) sign = s;
+          else if (s !== sign) inside = false;
+        }
+        if (inside) set(x, y, color);
+      }
+    }
+  };
+
+  return { width, height, rgb, set, disk, poly, toPng: () => encodePng(width, height, rgb) };
 }

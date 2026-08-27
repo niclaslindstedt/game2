@@ -21,6 +21,7 @@ import {
 } from "./state.ts";
 import { landingDamage } from "./collision.ts";
 import type { Rng } from "../lib/prng.ts";
+import type { Surface } from "../mapgen/index.ts";
 
 const T = TUNING;
 /** The drift group, used on nearly every line below. */
@@ -152,14 +153,15 @@ function settlePitch(car: CarState, target: number): void {
 }
 
 export type GroundContext = {
-  surface: "gravel" | "water" | "nature";
+  surface: Surface | "nature";
   /** Ground elevation under the car before this step's move. */
   groundY: number;
   /** Road slope dy/ds under the car... */
   slope: number;
-  /** Off the road only: ground slope ACROSS the heading, positive when the
-   * ground rises to the car's right — what pulls a car on a hillside
-   * toward the downhill side. Absent (on the road) means flat. */
+  /** Ground slope ACROSS the heading, positive when the ground rises to
+   * the car's right — what pulls a car toward the downhill side. Off the
+   * road it is the hillside; on the road it is the camber and the worn
+   * wheel tracks (road.ts). Absent means dead flat. */
   slopeLat?: number;
   /** Vertical curvature of the road under the car, 1/m — negative over a
    * brow. Zero anywhere a jump lip owns the launch. */
@@ -365,8 +367,10 @@ export function stepGrounded(
   // a car most of the way over finishes the roll instead of rewinding it —
   // and then settles onto the CAMBER: out in the wild a hillside tips the
   // car the way the hillside goes, which is the same cross-slope that is
-  // already pulling it downhill. A road has no banking, so on it the target
-  // is level.
+  // already pulling it downhill. On the road it is the road's OWN camber
+  // (R16 — the crown it sheds water off, the wheel track it drops into):
+  // a fraction of a degree where a hillside is tens of them, and never the
+  // drift's, which contributes nothing to how level the car sits.
   car.rollRate = 0;
   const upright = Math.round(car.roll / (Math.PI * 2)) * Math.PI * 2;
   const camber = ctx.slopeLat ? Math.atan(ctx.slopeLat) : 0;

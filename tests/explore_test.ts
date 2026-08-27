@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import {
   LAKE_Y,
   NEUTRAL_INPUT,
+  ROAD_CROSS,
   TUNING,
   compileTrack,
   createGame,
@@ -341,8 +342,10 @@ describe("the attitude the ground puts in the body", () => {
     for (let i = 0; i < 120 * 2; i++) step(state, drive());
     // Right side up, and by roughly the angle of the slope itself.
     expect(state.car.roll).toBeCloseTo(Math.atan(0.25), 1);
-    // Flat road, flat car: the camber is the ground's, never the drift's,
-    // so a car thrown fully sideways on the road stays dead level.
+    // The camber is the GROUND's, never the drift's: a car thrown fully
+    // sideways on the road leans by the road's own cross-section (R16 —
+    // the crown, the wheel tracks) and by nothing else. That is a fraction
+    // of a degree, where the hillside above banks it by fourteen.
     const level = createGame({
       seed: 3,
       skipCountdown: true,
@@ -350,7 +353,8 @@ describe("the attitude the ground puts in the body", () => {
     });
     for (let i = 0; i < 120 * 2 && !level.offRoad; i++) step(level, drive({ steer: 1 }));
     expect(level.car.slide).toBeGreaterThan(0.5);
-    expect(Math.abs(level.car.roll)).toBeLessThan(1e-6);
+    const crown = Math.atan((2 * ROAD_CROSS.crown.gravel) / (level.track.width / 2));
+    expect(Math.abs(level.car.roll)).toBeLessThan(crown);
   });
 });
 

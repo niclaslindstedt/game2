@@ -5,7 +5,8 @@
 // per step is constant and progress can only creep forward or slightly back
 // — a car that leaves the road keeps its last on-road progress for respawn.
 
-import type { Track } from "../mapgen/index.ts";
+import type { Surface, Track } from "../mapgen/index.ts";
+import { crossOffset } from "../mapgen/road.ts";
 import { TUNING } from "./defs/tuning.ts";
 import type { GameState } from "./state.ts";
 
@@ -46,12 +47,17 @@ export type TrackFix = {
   lateral: number;
   /** True when the car is beyond the road edge plus the verge. */
   offRoad: boolean;
-  surface: "gravel" | "water" | "nature";
-  /** Road height under the car, interpolated between samples — the road is
-   * a ramp, not a staircase. */
+  surface: Surface | "nature";
+  /** Road height under the car, interpolated between samples AND across the
+   * road's own cross-section (road.ts) — the road is a ramp with a crown
+   * and a pair of worn wheel tracks in it, not a flat staircase. */
   elevation: number;
   /** Road slope dy/ds under the car, interpolated the same way. */
   slope: number;
+  /** Cross-slope under the car, dy per meter to its RIGHT: the camber that
+   * sheds a car toward the outside of the road, and the wheel track that
+   * holds it once it drops into one. */
+  slopeLat: number;
 };
 
 /** Locate the car against the centerline, searching near `hint`. */
@@ -90,9 +96,31 @@ export function locate(track: Track, x: number, z: number, hint: number): TrackF
   const along = dx * Math.sin(s.heading) + dz * Math.cos(s.heading);
   const next = clampIndex(samples, best + Math.sign(along));
   const f = Math.min(1, Math.abs(along) / track.step);
-  const elevation = s.elevation + (samples[next].elevation - s.elevation) * f;
+  const crown = s.elevation + (samples[next].elevation - s.elevation) * f;
   const slope = slopeAt(track, best) + (slopeAt(track, next) - slopeAt(track, best)) * f;
-  return { index: best, s: s.s, lateral, offRoad, surface, elevation, slope };
+  // Across the road: the sample's elevation is the CROWN, and where the car
+  // actually sits depends on how far out it is — down the camber, or in one
+  // of the two tracks every car before it wore into the gravel. The verge
+  // beyond the edge belongs to the terrain, so the shape is read at the
+  // edge at furthest.
+  const bridge = s.deck !== null;
+  const onRoad = Math.max(-halfRoad, Math.min(halfRoad, lateral));
+  const cross = crossOffset(s.surface, bridge, onRoad, track.width);
+  const probe = 0.5;
+  const slopeLat =
+    (crossOffset(s.surface, bridge, Math.min(halfRoad, onRoad + probe), track.width) -
+      crossOffset(s.surface, bridge, Math.max(-halfRoad, onRoad - probe), track.width)) /
+    (2 * probe);
+  return {
+    index: best,
+    s: s.s,
+    lateral,
+    offRoad,
+    surface,
+    elevation: crown + cross,
+    slope,
+    slopeLat,
+  };
 }
 
 function clampIndex(samples: { length: number }, index: number): number {

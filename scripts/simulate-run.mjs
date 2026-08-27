@@ -11,6 +11,8 @@
 //   npm run sim -- --count 20            # seeds 1..20
 //   npm run sim -- --length long         # stage length band (default medium)
 //   npm run sim -- --weather storm       # race in rain/storm wind
+//   npm run sim -- --asphalt 0.8         # generator dials, each 0..1:
+//                                        # --elevation --water --trees --asphalt
 //   npm run sim -- --json report.json    # machine-readable dump
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -30,6 +32,12 @@ const seeds = flag("seeds")
   : Array.from({ length: Number(flag("count") ?? 8) }, (_, i) => i + 1);
 const cars = flag("car") ? [flag("car")] : CARS.map((c) => c.id);
 const weather = flag("weather") ?? "clear";
+// The generator's dials — anything not passed keeps its default position.
+const knobs = {};
+for (const dial of ["elevation", "water", "trees", "asphalt"]) {
+  const value = flag(dial);
+  if (value !== undefined) knobs[dial] = Number(value);
+}
 const length = flag("length") ?? "medium";
 if (!(length in STAGE_RULES.stageLengths)) {
   console.error(
@@ -64,7 +72,7 @@ console.log(
 );
 for (const seed of seeds) {
   for (const carId of cars) {
-    const r = simulateStage({ seed, carId, length, maxTime, weather });
+    const r = simulateStage({ seed, carId, length, maxTime, weather, knobs });
     rows.push(r);
     console.log(
       [
@@ -88,6 +96,11 @@ for (const seed of seeds) {
     );
   }
 }
+
+const dials = Object.entries(knobs)
+  .map(([k, v]) => `${k} ${v}`)
+  .join(", ");
+if (dials) console.log(`\ndials: ${dials}`);
 
 const finished = rows.filter((r) => r.finished).length;
 const avg = (f) => rows.reduce((a, r) => a + f(r), 0) / rows.length;

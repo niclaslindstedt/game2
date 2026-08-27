@@ -8,7 +8,7 @@
 
 import { createGame, step } from "../game/step.ts";
 import type { GameEvent, GameState, Weather } from "../game/state.ts";
-import type { FiniteStageLength } from "../mapgen/index.ts";
+import type { FiniteStageLength, StageKnobs } from "../mapgen/index.ts";
 import { botInput, RALLY_BOT, type BotProfile } from "./bot.ts";
 import { TUNING } from "../game/defs/tuning.ts";
 
@@ -23,6 +23,9 @@ export type SimOptions = {
   maxTime?: number;
   /** Weather to race in (sets the wind band). Defaults to clear. */
   weather?: Weather;
+  /** The generator's dials for the stage (rules.ts). Defaults to the
+   * middle of every one. */
+  knobs?: Partial<StageKnobs>;
 };
 
 export type SimResult = {
@@ -49,6 +52,7 @@ export function simulateStage(options: SimOptions): SimResult {
     length: options.length,
     skipCountdown: true,
     env: { weather: options.weather ?? "clear" },
+    knobs: options.knobs,
   });
 
   const events: GameEvent[] = [];

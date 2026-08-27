@@ -10,9 +10,9 @@ import type { Stream } from "@engine";
 
 export type { Stream };
 
-/** The water surfaces: one ribbon per stream, tapering toward both ends,
- * lifted a hair above the carved bed. Shares the ford sheets' material
- * look (Phong — the sun glitters on it). */
+/** The water surfaces: one ribbon per piece of river, as wide as the water
+ * is there, lifted a hair above the carved bed. Shares the ford sheets'
+ * material look (Phong — the sun glitters on it). */
 export function buildStreamMeshes(streams: Stream[], texture: THREE.Texture): THREE.Group {
   const group = new THREE.Group();
   for (const s of streams) {
@@ -29,9 +29,10 @@ export function buildStreamMeshes(streams: Stream[], texture: THREE.Texture): TH
       const len = Math.hypot(dx, dz) || 1;
       dx /= len;
       dz /= len;
-      // Taper: full width at the road, narrowing to a trickle at the ends.
-      const end = Math.min(i, n - 1 - i) / (n / 3);
-      const w = s.halfWidth * (0.45 + 0.55 * Math.min(1, end));
+      // The width is the WATER's own, point by point: a river is a trickle
+      // at its spring and broad at its mouth (R18), and the shape of that
+      // is the river's to say, not the ribbon builder's.
+      const w = p.w;
       positions.push(
         p.x - dz * w,
         p.y + 0.07,
