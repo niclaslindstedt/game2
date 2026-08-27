@@ -208,8 +208,10 @@ export type Environment = {
   carTint: () => THREE.Color;
   /** Whether the run's light is gone and the car has its lights on. */
   lampsLit: () => boolean;
-  /** How filthy the car is, 0..1 — both beams fade under a caked lens. */
+  /** How filthy the car is, 0..1 — every beam fades under a caked lens. */
   setGrime: (level: number) => void;
+  /** How far off the centerline the car's lamps sit, m — front and rear. */
+  setLampSpread: (front: number, rear: number) => void;
   update: (state: GameState, camera: THREE.Camera, dt: number) => void;
   dispose: () => void;
 };
@@ -402,20 +404,75 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   sunLight.target.position.set(0, 0, 0);
   scene.add(hemi, sunLight, sunLight.target);
 
-  // Headlights: one warm spot ahead of the nose, on when the preset says so.
-  const headlight = new THREE.SpotLight(0xffeecb, 0, 70, 0.55, 0.6, 1.2);
-  headlight.visible = false;
-  scene.add(headlight, headlight.target);
-
+  // Lights come in PAIRS, because a car has two of each. One beam on the
+  // centerline throws a single symmetric pool that never breaks up, and the
+  // eye reads it as a searchlight bolted to the roof rather than as the car's
+  // own lamps. Two beams, splayed so their cones cross a few metres out, give
+  // the double-lobed pool a car actually lays down — and they sit where the
+  // lenses are, so a wide car lights a wide road.
+  const beam = (color: number, distance: number, angle: number): THREE.SpotLight => {
+    const light = new THREE.SpotLight(color, 0, distance, angle, 0.6, 1.2);
+    light.visible = false;
+    scene.add(light, light.target);
+    return light;
+  };
+  // Headlights: warm, long, and narrow enough that the pair reads as two.
+  const headlights = [beam(0xffeecb, 70, 0.42), beam(0xffeecb, 70, 0.42)];
   // ...and the tail lamps' own wash on the ground behind. A tail light is a
   // MARKER, not a driving light — it exists to be seen, not to see by — so it
   // is a fraction of the beam ahead and reaches a few car lengths at most:
   // enough that the road behind a car at night is red, never enough to light
   // the way out of a corner backwards. It comes on with the headlights,
   // because that is the switch it is wired to.
-  const taillight = new THREE.SpotLight(0xff2814, 0, 18, 1, 0.85, 1.5);
-  taillight.visible = false;
-  scene.add(taillight, taillight.target);
+  const taillights = [beam(0xff2814, 18, 0.8), beam(0xff2814, 18, 0.8)];
+  const lamps = [...headlights, ...taillights];
+
+  /** How far off the centerline each lamp sits, m — pushed in by the renderer
+   * when a car is built, because a car is as wide as it is and its beams
+   * belong to its own lenses (car-body.ts owns the anchors). */
+  let headSpread = 0.6;
+  let tailSpread = 0.55;
+  const setLampSpread = (front: number, rear: number): void => {
+    headSpread = front;
+    tailSpread = rear;
+  };
+
+  /** Point one pair. Each beam sits `spread` off the centerline `from` metres
+   * along the car's own axis (negative is behind it) and `up` above the
+   * contact patch, aiming `to` metres out and `down` below it — plus `splay`
+   * further out to the side, which is the whole reason there are two. */
+  type Aim = {
+    intensity: number;
+    spread: number;
+    from: number;
+    up: number;
+    to: number;
+    down: number;
+    splay: number;
+  };
+  const aimLamps = (
+    pair: THREE.SpotLight[],
+    car: { x: number; y: number; z: number },
+    fwd: { x: number; z: number },
+    right: { x: number; z: number },
+    aim: Aim,
+  ): void => {
+    for (let i = 0; i < pair.length; i++) {
+      const side = i === 0 ? -1 : 1;
+      const light = pair[i];
+      light.intensity = aim.intensity;
+      light.position.set(
+        car.x + fwd.x * aim.from + right.x * side * aim.spread,
+        car.y + aim.up,
+        car.z + fwd.z * aim.from + right.z * side * aim.spread,
+      );
+      light.target.position.set(
+        car.x + fwd.x * aim.to + right.x * side * aim.splay,
+        car.y + aim.down,
+        car.z + fwd.z * aim.to + right.z * side * aim.splay,
+      );
+    }
+  };
 
   /** How filthy the car is, 0..1 — pushed in by the renderer, which is where
    * the dirt is accumulated. The lenses are under the same coat as the
@@ -510,8 +567,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     haloMat.color.set(preset.halo);
     haloMat.opacity = preset.haloOpacity;
     halo.visible = preset.haloOpacity > 0.01;
-    headlight.visible = preset.headlights;
-    taillight.visible = preset.headlights;
+    for (const lamp of lamps) lamp.visible = preset.headlights;
     flash = 0;
     boltMat.opacity = 0;
     bolt.visible = false;
@@ -533,17 +589,31 @@ export function createEnvironment(scene: THREE.Scene): Environment {
       cloud.pivot.position.z = Math.cos(cloud.angle) * cloud.radius;
     }
 
-    // Headlights track the nose, tail lamps the tail.
+    // Headlights track the nose, tail lamps the tail. Each pair's beams carry
+    // half of what the single light used to, so the road ahead is as bright
+    // as it was — it is just lit by two lamps instead of one.
     if (preset.headlights) {
       const car = state.car;
-      const fwdX = Math.sin(car.heading);
-      const fwdZ = Math.cos(car.heading);
-      headlight.intensity = 260 * (1 - HEAD_GRIME * grime);
-      headlight.position.set(car.x + fwdX * 1.4, car.y + 0.8, car.z + fwdZ * 1.4);
-      headlight.target.position.set(car.x + fwdX * 32, car.y - 1.5, car.z + fwdZ * 32);
-      taillight.intensity = 34 * (1 - TAIL_GRIME * grime);
-      taillight.position.set(car.x - fwdX * 1.6, car.y + 0.55, car.z - fwdZ * 1.6);
-      taillight.target.position.set(car.x - fwdX * 8, car.y - 1, car.z - fwdZ * 8);
+      const fwd = { x: Math.sin(car.heading), z: Math.cos(car.heading) };
+      const right = { x: fwd.z, z: -fwd.x };
+      aimLamps(headlights, car, fwd, right, {
+        intensity: 150 * (1 - HEAD_GRIME * grime),
+        spread: headSpread,
+        from: 1.4,
+        up: 0.8,
+        to: 32,
+        down: -1.5,
+        splay: 5,
+      });
+      aimLamps(taillights, car, fwd, right, {
+        intensity: 20 * (1 - TAIL_GRIME * grime),
+        spread: tailSpread,
+        from: -1.6,
+        up: 0.55,
+        to: -8,
+        down: -1,
+        splay: 2.2,
+      });
     }
 
     // Thunder: a storm builds toward a strike, the strike floods the light
@@ -588,8 +658,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     cloudGeo.dispose();
     cloudMat.dispose();
     cloudBaseMat.dispose();
-    headlight.dispose();
-    taillight.dispose();
+    for (const lamp of lamps) lamp.dispose();
     sunLight.dispose();
     hemi.dispose();
   };
@@ -602,6 +671,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     carTint: () => new THREE.Color(preset.carTint),
     lampsLit: () => preset.headlights,
     setGrime,
+    setLampSpread,
     update,
     dispose,
   };

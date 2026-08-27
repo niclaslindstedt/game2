@@ -470,11 +470,11 @@ function buildDetails(
   part("bumperR").box(0, bumperY, tail.z + 0.04, tail.half * 2 + 0.12, 0.17, 0.34, bumper);
 
   // Headlights and grille ride proud of the nose cap.
-  const lightY = spec.beltY + (nose.topY - spec.beltY) * 0.45;
-  const lightW = nose.half * 0.52;
-  b.box(-nose.half * 0.52, lightY, nose.z, lightW, 0.13, 0.07, 0xf6f1d8);
-  b.box(nose.half * 0.52, lightY, nose.z, lightW, 0.13, 0.07, 0xf6f1d8);
-  b.box(0, lightY - 0.13, nose.z, nose.half * 1.05, 0.09, 0.06, trim);
+  for (const lamp of headLamps(spec)) {
+    b.box(lamp.x, lamp.y, lamp.z, lamp.width, lamp.height, 0.07, 0xf6f1d8);
+  }
+  const grilleY = spec.beltY + (nose.topY - spec.beltY) * 0.45 - 0.13;
+  b.box(0, grilleY, nose.z, nose.half * 1.05, 0.09, 0.06, trim);
 
   // Taillights: one red bar each side of the tail cap.
   for (const lamp of tailLamps(spec)) {
@@ -671,13 +671,27 @@ function buildWheel(spec: CarBodySpec): THREE.BufferGeometry[] {
   return geos;
 }
 
-/** Where the tail lamps sit in car space, one per side. The lens boxes and
- * the glow laid over them (car-mesh.ts) read the SAME anchor, so a change to
- * the tail's shape moves the lamp and its light together instead of leaving
- * a red smudge floating off the corner of a restyled car. */
-export function tailLamps(
-  spec: CarBodySpec,
-): { x: number; y: number; z: number; width: number; height: number }[] {
+/** One lamp's place on the car, in car space. */
+export type Lamp = { x: number; y: number; z: number; width: number; height: number };
+
+/** Where a car's lamps sit, one per side. The lens boxes, the glow laid over
+ * the tail pair (car-mesh.ts) and the beams they throw (environment.ts) all
+ * read the SAME anchors, so restyling a nose or a tail moves the lamp and its
+ * light together instead of leaving a bloom floating off the corner. */
+export function headLamps(spec: CarBodySpec): Lamp[] {
+  const nose = spec.profile[0];
+  const width = nose.half * 0.52;
+  return [-1, 1].map((side) => ({
+    x: side * nose.half * 0.52,
+    y: spec.beltY + (nose.topY - spec.beltY) * 0.45,
+    z: nose.z,
+    width,
+    height: 0.13,
+  }));
+}
+
+/** ...and the pair at the other end. */
+export function tailLamps(spec: CarBodySpec): Lamp[] {
   const tail = spec.profile[spec.profile.length - 1];
   return [-1, 1].map((side) => ({
     x: side * tail.half * 0.55,

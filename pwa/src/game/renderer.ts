@@ -222,6 +222,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     scene.add(route.group);
     car = buildCar(state.spec);
     scene.add(car.group, car.shadow, car.debris);
+    environment.setLampSpread(car.lampSpread.front, car.lampSpread.rear);
     setConditions(state);
   };
 

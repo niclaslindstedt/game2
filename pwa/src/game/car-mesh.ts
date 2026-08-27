@@ -10,7 +10,7 @@ import * as THREE from "three";
 import { clamp } from "../lib/util.ts";
 import type { CarSpec, GameEvent, GameState } from "@engine";
 
-import { buildCarBody, tailLamps } from "./car-body.ts";
+import { buildCarBody, headLamps, tailLamps } from "./car-body.ts";
 import { createCarDamage } from "./car-damage.ts";
 import { createCarDirt } from "./car-dirt.ts";
 import { bodySpecFor } from "./car-styles.ts";
@@ -56,6 +56,9 @@ export type CarVisual = {
   /** How filthy the car has got, 0..1 — the environment dims its beams by
    * it, because the dirt is on the glass too. */
   grime: () => number;
+  /** How far off the centerline this car's lamps sit, m. The environment
+   * hangs a beam on each one, so a wide car lights a wide road. */
+  lampSpread: { front: number; rear: number };
   dispose: () => void;
 };
 
@@ -192,6 +195,7 @@ export function buildCar(spec: CarSpec): CarVisual {
     onEvents: damage.onEvents,
     setLights,
     grime: dirt.level,
+    lampSpread: { front: headLamps(bodySpec)[1].x, rear: tailLamps(bodySpec)[1].x },
     dispose,
   };
 }
