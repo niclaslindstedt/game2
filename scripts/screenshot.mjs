@@ -78,8 +78,13 @@ const only = process.argv.slice(2);
  * done — a bare timeout from page load spends most of itself on the loading
  * screen and captures the start line however long it waits. */
 async function racing(page) {
+  // The HUD is not in the DOM at all while the world builds, and an
+  // absent timer must not read as a started run: `undefined !== '0:00.0'`
+  // is true, so the optional chain alone hands every driving scene a page
+  // with no game on it and lets the script start pressing keys at the
+  // loading screen. Default the read to the stopped clock instead.
   await page.waitForFunction(
-    "document.querySelector('.hud-timer')?.textContent !== '0:00.0'",
+    "(document.querySelector('.hud-timer')?.textContent ?? '0:00.0') !== '0:00.0'",
     null,
     { timeout: 60000 },
   );

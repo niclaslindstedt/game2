@@ -410,9 +410,69 @@ export const TUNING = {
   crash: {
     /** Water this much over the ground is deep — a grounded car in it (or
      * an airborne one dropping under the surface) has driven into a lake
-     * or the sea: splash, crash, back to the track. Stream fords stay
-     * shallower than this and just slow the car. */
+     * or the sea: the water takes it, and the crew put it back. Stream
+     * fords stay shallower than this and just slow the car. */
     deepWater: 0.9,
+
+    /** WHAT THE WATER DOES WITH IT. Driving into water too deep to drive
+     * out of is the one mistake a stage never hands straight back: the car
+     * is not lifted off the lake the instant it goes in, it is WATCHED
+     * going down, and the seconds of not driving are the penalty. Three
+     * beats inside `duration`, and they have to be three: the plunge (the
+     * water swallows the entry and the hull corks back up), the float (it
+     * rides the surface, rocking less each time, going nowhere), and the
+     * sink (the water wins, nose first, until it has closed over the
+     * roof). Cut any one and it reads as a teleport with a delay on it. */
+    drown: {
+      /** Entry to back-on-the-road, s. */
+      duration: 5,
+      /** How long the hull rides the surface before the water starts
+       * winning, s — the plunge and the whole settle happen inside this,
+       * and the rest of `duration` is the car going under. */
+      float: 2.4,
+      /** Time constant the water takes the car's speed over, s — a car
+       * that hits a lake at pace still carries its line a few metres in
+       * before the water has all of it. */
+      stopIn: 0.5,
+      /** ...and the slower one it takes the YAW over, s. The water stops a
+       * car long before it stops it turning, so the hull keeps swinging
+       * gently while it floats instead of freezing on its entry heading. */
+      slewIn: 2.5,
+      /** Fastest the entry is allowed to drive the body under, m/s — a
+       * plunge off a bridge would otherwise put the car on the lakebed
+       * before it has floated at all. */
+      plunge: 7,
+      /** How far under the surface the wheels sit while it floats, m — the
+       * sills at the waterline, which is what a car ABOUT to go down looks
+       * like from behind. */
+      draft: 0.5,
+      /** ...and how far under they are by the time the crew reach it, m.
+       * Clamped to the bed it is sinking toward: in a shallow tarn the car
+       * settles on the bottom instead of sinking through it. */
+      depth: 3.4,
+      /** Roof height over the wheels' contact, m — where the water closes
+       * over the car, which is the moment worth a sound and a gulp of
+       * foam. */
+      roof: 1.3,
+      /** Buoyancy spring, 1/s²... */
+      buoyancy: 15,
+      /** ...and its damping, 1/s. Deliberately UNDERdamped: a hull that
+       * eases onto its waterline has not been swallowed by anything, and
+       * the two or three bobs are the whole reason this is a beat and not
+       * a wait. */
+      damping: 2.2,
+      /** How far the hull rocks as it settles, rad, at this rate, rad/s,
+       * dying over `calm` seconds. */
+      rock: 0.12,
+      rockRate: 2.4,
+      calm: 1.4,
+      /** How far the nose drops as it goes under, rad — the engine is the
+       * heavy end of a car, so it sinks nose first. */
+      noseDown: 0.32,
+      /** How fast the attitude forgets the crash that put it there and
+       * takes the water's instead, 1/s. */
+      settle: 3,
+    },
   },
 
   collision: {

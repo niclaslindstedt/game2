@@ -195,7 +195,10 @@ export type GameEvent =
   | { type: "go" }
   | { type: "takeoff"; vy: number }
   | { type: "landing"; airTime: number; clean: boolean }
-  | { type: "splash" }
+  /** Water taken at speed. `speed` is how fast the car went in, m/s;
+   * `deep` marks water it will not be driving out of — the entry that
+   * starts a drowning, as opposed to a ford crossed on the way past. */
+  | { type: "splash"; speed: number; deep: boolean }
   | { type: "shift"; gear: number }
   | { type: "boostStart" }
   | { type: "boostEmpty" }
@@ -209,8 +212,12 @@ export type GameEvent =
   | { type: "partBreak"; part: DamagePart }
   /** The car has gone somewhere it cannot drive out of — deep water. A
    * solid never crashes the car: trees and rocks bend it and let it drive
-   * on, and a wedge is answered by the stuck rule, not by a crash. */
+   * on, and a wedge is answered by the stuck rule, not by a crash. The
+   * respawn does NOT follow immediately: `state.drowning` runs first. */
   | { type: "crash" }
+  /** The water has closed over the roof. Emitted once per drowning, part
+   * way through it — the gulp, not the entry. */
+  | { type: "sink" }
   | { type: "respawn" }
   | { type: "finish"; time: number };
 
@@ -232,6 +239,22 @@ export type RunStats = {
 
 export type GamePhase = "countdown" | "racing" | "finished";
 
+/** A car in the water it cannot drive out of. While this is set the run is
+ * not being driven: input is ignored, nothing progresses, and the only
+ * thing happening is the water taking the car (TUNING.crash.drown). It
+ * clears on the respawn at the far end. */
+export type DrownState = {
+  /** Sim time the water took it, s. */
+  since: number;
+  /** The water's surface height there, m — everything else is measured
+   * down from this, so the hull floats on the lake rather than on a
+   * remembered height. */
+  waterY: number;
+  /** Whether the water has already closed over the roof — the `sink` event
+   * fires once, on the edge. */
+  under: boolean;
+};
+
 export type GameState = {
   seed: number;
   spec: CarSpec;
@@ -241,6 +264,10 @@ export type GameState = {
   terrain: TerrainField;
   car: CarState;
   phase: GamePhase;
+  /** Set while the car is going down in deep water; null while it drives.
+   * The renderer reads it to boil the surface around the hull, and the bot
+   * and the HUD to know that nothing they ask for is being listened to. */
+  drowning: DrownState | null;
   /** Sim time since creation, seconds. */
   t: number;
   /** Time spent racing (excludes countdown), seconds. */

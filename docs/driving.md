@@ -240,10 +240,10 @@ not a mistake anymore; it is exploration:
 - **Water** — the landscape floods below the water table
   (`terrain.LAKE_Y`): lakes, sea basins, and the rivers that run into them
   (R18). Shallows and fords slow the car and splash; **deep water is the
-  one crash left** — splash, `crash` event, and a respawn on the track at
-  last progress. Nothing solid ever crashes the car. The channel under a
-  bridge is cut deep enough to qualify, so going over a parapet is a
-  drowning, not a shortcut.
+  one crash left** — and it is a drowning, not a teleport: see below.
+  Nothing solid ever crashes the car. The channel under a bridge is cut
+  deep enough to qualify, so going over a parapet is a drowning, not a
+  shortcut.
 - **Other people's roads** — the branch the route abandons at each junction
   is real road: the terrain flattens its shelf, the forest keeps off it,
   and a car that drives past the tape drives on the surface that branch is
@@ -258,6 +258,44 @@ not a mistake anymore; it is exploration:
   Contact does not teleport the car anywhere: it bends it — see the
   collision model below. A fallen trunk lies low enough to jump; a tree is
   not.
+
+### Going under
+
+Water more than `TUNING.crash.deepWater` (0.9 m) over the ground the car is
+standing on is water it is not driving out of. The run is lost at that
+instant — a big `splash` (`deep: true`, carrying the entry speed) and the
+`crash` event — but the car is **not** lifted off the lake. `state.drowning`
+is set instead, and for `TUNING.crash.drown.duration` seconds nothing else
+in the run advances: no input is read, no progress accrues, no surface is
+resolved and the wedge clock does not run. The race clock does, and those
+seconds ARE the penalty.
+
+What happens inside them is three beats, and it needs to be three or it
+reads as a teleport with a delay bolted on:
+
+1. **The plunge.** The water takes the momentum over `stopIn` (0.5 s) and
+   the yaw over the slower `slewIn` (2.5 s), so the car carries its line a
+   few metres in and keeps swinging after it has stopped going anywhere. A
+   fall from a bridge is swallowed only as far as `plunge` (7 m/s) — enough
+   to duck the whole car under, not enough to put it on the bed before it
+   has floated.
+2. **The float.** Buoyancy is an underdamped spring (`buoyancy`, `damping`)
+   pulling the hull to its waterline `draft` (0.5 m) under the surface, so
+   the entry corks back up past it and rocks two or three times before the
+   lake goes flat. The attitude forgets the crash that put it there over
+   `settle`, and the roll settles through a decaying swell (`rock`,
+   `rockRate`, `calm`).
+3. **The sink.** From `float` (2.4 s) to the end, that waterline walks down
+   — smoothstepped, so the water starts winning gradually — toward
+   `depth` (3.4 m) or the bed, whichever is shallower: in a tarn the car
+   settles on the bottom with its roof awash rather than sinking through
+   the landscape. The nose drops `noseDown` on the way, because the engine
+   is the heavy end. When the roof (`roof`, 1.3 m over the wheels) passes
+   under, a one-shot `sink` event fires — the gulp, not the entry.
+
+The respawn is at the far end, and it is the only thing that clears
+`state.drowning`.
+
 - **The way home** — exploring never times out, and hitting things never
   ends it: crash into trees for as long as the car still moves. Only two
   things put a car back on the road (both at the last on-road progress, both

@@ -573,6 +573,46 @@ export const RUN_BANK: SoundBank = {
     ],
   },
 
+  sink: {
+    description:
+      "The water closing over the roof. The car is already gone by the time " +
+      "this plays, so nothing in it is an impact: a soft pink swell folding " +
+      "shut over a descending note, with the last bubbles thinning out behind " +
+      "it. The filters all travel DOWNWARD — everything about this sound is " +
+      "leaving.",
+    voices: [
+      {
+        call: "noise",
+        durationMs: 900,
+        volume: 0.038,
+        color: "pink",
+        attackMs: 90,
+        holdMs: 120,
+        filter: { type: "lowpass", frequency: 1600, to: 200 },
+      },
+      {
+        call: "tone",
+        type: "sine",
+        from: 130,
+        to: 44,
+        durationMs: 850,
+        volume: 0.034,
+        attackMs: 50,
+        holdMs: 120,
+      },
+      {
+        call: "noise",
+        durationMs: 1100,
+        volume: 0.022,
+        color: "white",
+        delayMs: 140,
+        attackMs: 40,
+        filter: { type: "bandpass", frequency: 3200, to: 900, q: 2.2 },
+        echo: 0.35,
+      },
+    ],
+  },
+
   crash: {
     description:
       "The run over: the car somewhere it cannot drive out of. Not an impact — " +

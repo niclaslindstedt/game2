@@ -78,8 +78,22 @@ export function soundForEvent(
       };
     }
 
-    case "splash":
-      return { id: "splash" };
+    case "splash": {
+      // How much water the car moved. A ford is a sheet thrown off the
+      // nose at whatever pace it was crossed at; going INTO a lake is the
+      // whole side of the car displacing at once, so it takes the same
+      // sound down an octave and stretches it into the longest water in
+      // the game — which is right, because the car is not coming out.
+      const force = ramp(event.speed, 4, 26);
+      if (!event.deep) return { id: "splash", shape: { gain: 0.6 + 0.6 * force } };
+      return {
+        id: "splash",
+        shape: { gain: 1.1 + 0.5 * force, pitch: 0.74 - 0.1 * force, stretch: 1.5 + 0.5 * force },
+      };
+    }
+
+    case "sink":
+      return { id: "sink" };
 
     case "impact": {
       // Three rungs, because an impact spans a brush past a branch and a

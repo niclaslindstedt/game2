@@ -6,7 +6,7 @@
 // run and drives the ground-contact and exhaust particle systems.
 
 import * as THREE from "three";
-import type { GameEvent, GameState } from "@engine";
+import { TUNING, type GameEvent, type GameState } from "@engine";
 
 import { createAmbientLife } from "./ambient-life.ts";
 import { createGameCamera, type CameraMode } from "./camera.ts";
@@ -21,8 +21,10 @@ import { buildCar, type CarVisual } from "./car-mesh.ts";
 import {
   createDust,
   paceScale,
+  SPLASH_WATER,
   TARMAC_SMOKE,
   TIRE_SMOKE,
+  WATER_FOAM,
   WILD_THROW,
   type DustTint,
 } from "./dust.ts";
@@ -49,6 +51,17 @@ const SPRAY = 0x4fa0f0;
 /** Tire smoke — boiled off the rubber, so it is the one cloud in the game
  * that has nothing to do with the ground under the car. */
 const SMOKE = 0xd8d5cf;
+/** Water thrown by the car itself, rather than off a wheel. A displaced
+ * mass of water is not one color: it is lake with white torn through it,
+ * and the white is what makes a column read as a splash instead of a blue
+ * puff — so half the droplets are foam. */
+const WATER_DROPS: DustTint = { base: 0x86c4f4, fleck: 0xffffff, fleckMix: 0.5 };
+/** ...and the froth on the surface after it, which is nearly all white —
+ * a shade of the lake left in it so it belongs to the water it sits on. */
+const FOAM: DustTint = { base: 0xeaf5ff, fleck: 0xb6d6f0, fleckMix: 0.35 };
+/** How fast a car has to meet water for the splash to be as big as it
+ * gets, m/s. */
+const SPLASH_FULL = 26;
 /** Off the road there is turf on top of the earth, and a wheel brings up
  * both: mostly torn grass with dark clods of the dirt under it. The green
  * is the biome's own meadow taken a shade down — a blade in the air is not
@@ -121,6 +134,13 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   // them instead of letting go under them.
   const smoke = createDust(TIRE_SMOKE);
   scene.add(smoke.points);
+  // Water the CAR throws, which is a different cloud from the sheet a
+  // rolling wheel sprays: the column an entry displaces, and the froth it
+  // leaves working on the surface afterwards.
+  const spray = createDust(SPLASH_WATER);
+  scene.add(spray.points);
+  const foam = createDust(WATER_FOAM);
+  scene.add(foam.points);
   const fumes = createFumes();
   scene.add(fumes.points);
   const rain = createRain();
@@ -154,6 +174,8 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
    * change in it. */
   let lastSpeed = 0;
   let fumeClock = 0;
+  /** Beat for the water working around a hull that is going down. */
+  let drownClock = 0;
 
   /** The environment's light tint, pushed onto everything that carries its
    * own baked or vertex colors (the car, the particles). */
@@ -314,8 +336,43 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
           4,
         );
       } else if (ev.type === "splash") {
-        chase.kick(0.2);
-        dust.spawn(c.x, c.y + 0.3, c.z, SPRAY, Math.round(30 * fx), 5);
+        // How much water the car moved. A ford taken at pace throws a
+        // sheet off the nose; a car going into a lake throws a COLUMN, and
+        // since that one is the last thing the run does it gets the frame:
+        // several times the droplets, thrown wider and harder, with froth
+        // left working on the surface behind it.
+        const force = Math.min(1, ev.speed / SPLASH_FULL);
+        const surface = (state.drowning?.waterY ?? c.y) + 0.1;
+        // The nose is what displaces the water, so the column comes up in
+        // front of the car and carries part of its way in with it.
+        const nose = c.heading;
+        const reach = ev.deep ? 1.4 : 1;
+        chase.kick(ev.deep ? 0.45 + 0.25 * force : 0.2 + 0.2 * force);
+        spray.spawn(
+          c.x + Math.sin(nose) * reach,
+          surface,
+          c.z + Math.cos(nose) * reach,
+          WATER_DROPS,
+          Math.round((ev.deep ? 140 + 180 * force : 24 + 46 * force) * fx),
+          (ev.deep ? 4.5 : 3) + 3 * force,
+          Math.sin(nose) * ev.speed * 0.25,
+          Math.cos(nose) * ev.speed * 0.25,
+        );
+        foam.spawn(
+          c.x,
+          surface,
+          c.z,
+          FOAM,
+          Math.round((ev.deep ? 26 : 8) * fx),
+          ev.deep ? 2.6 : 1.6,
+        );
+      } else if (ev.type === "sink") {
+        // The water closing over the roof: the column is long gone, and
+        // what is left is the hole in the surface filling itself in.
+        const surface = (state.drowning?.waterY ?? c.y) + 0.06;
+        chase.kick(0.18);
+        spray.spawn(c.x, surface, c.z, WATER_DROPS, Math.round(46 * fx), 2.2);
+        foam.spawn(c.x, surface, c.z, FOAM, Math.round(30 * fx), 2.4);
       } else if (ev.type === "takeoff") {
         dust.spawn(c.x, c.y + 0.1, c.z, groundDust(state), Math.round(10 * fx), 3);
       } else if (ev.type === "respawn") {
@@ -460,8 +517,53 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       );
     }
 
+    // A car going down keeps the water working the whole time. While the
+    // hull rides the surface it is still displacing — droplets slopping
+    // off it as it rocks — and once the roof is under, all that is left is
+    // what the body is letting go of, breaking on a surface with nothing
+    // visible beneath it. The engine owns the beat (TUNING.crash.drown);
+    // this is what it looks like.
+    if (fx > 0 && state.drowning) {
+      const D = TUNING.crash.drown;
+      const surface = state.drowning.waterY;
+      const age = state.t - state.drowning.since;
+      // The entry is still boiling for the first second or so; by the time
+      // the hull has settled the water around it is nearly flat again.
+      const working = Math.max(0, 1 - age / D.float);
+      const awash = c.y + D.roof > surface;
+      drownClock += dt;
+      if (drownClock > 0.05) {
+        drownClock = 0;
+        // Somewhere AROUND the hull, never on top of it. The chase camera
+        // sits barely a metre over the waterline while this plays, so
+        // anything born at the car's own position drifts straight across
+        // the lens as a white wash; a ring keeps the water where the water
+        // is, and stops the churn reading as a fountain bolted to the
+        // car's middle besides.
+        const a = Math.random() * Math.PI * 2;
+        const ring = 1.3 + Math.random() * 0.9;
+        const rx = c.x + Math.cos(a) * ring;
+        const rz = c.z + Math.sin(a) * ring;
+        if (awash) {
+          spray.spawn(
+            rx,
+            surface + 0.05,
+            rz,
+            WATER_DROPS,
+            Math.round((3 + 12 * working) * fx),
+            1 + 1.8 * working,
+          );
+        }
+        // Bubbles break AT the surface however deep the car is: under a
+        // lake nobody can see them leave the body.
+        foam.spawn(rx, surface + 0.06, rz, FOAM, Math.round(3 * fx), 0.9);
+      }
+    }
+
     dust.update(dt);
     smoke.update(dt);
+    spray.update(dt);
+    foam.update(dt);
     fumes.update(dt);
     // An endless run streams its world: the road chunks and terrain tiles
     // ahead get built here, the ones far behind get dropped.
@@ -472,7 +574,14 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // The way home is a DRIVING aid, bolted to the camera. Under the menu's
     // drone and the map view there is nobody lost and nobody to point: left
     // running, it would hang a compass needle over the middle of the menu.
-    const driving = view === "chase" || view === "hood";
+    // And there is nobody to point while the water is taking the car
+    // either: a compass needle over a sinking wreck is an instruction the
+    // player has no way to act on.
+    //
+    // Stated as "not the two overhead views" rather than as a list of the
+    // play cameras, because that list grows: naming them is how the arrow
+    // quietly stops appearing in the next camera somebody adds.
+    const driving = view !== "drone" && view !== "map" && !state.drowning;
     wayHomeArrow.group.visible = driving;
     if (driving) wayHomeArrow.update(state, chase.camera, dt);
     chase.update(state, dt);
@@ -548,6 +657,8 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     ghostCar?.dispose();
     dust.dispose();
     smoke.dispose();
+    spray.dispose();
+    foam.dispose();
     fumes.dispose();
     rain.dispose();
     life.dispose();

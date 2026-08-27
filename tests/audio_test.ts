@@ -108,7 +108,8 @@ describe("event routing", () => {
     { type: "takeoff", vy: 6 },
     { type: "landing", airTime: 1.2, clean: true },
     { type: "landing", airTime: 1.2, clean: false },
-    { type: "splash" },
+    { type: "splash", speed: 12, deep: false },
+    { type: "splash", speed: 24, deep: true },
     { type: "shift", gear: 3 },
     { type: "boostStart" },
     { type: "boostEmpty" },
@@ -119,6 +120,7 @@ describe("event routing", () => {
     { type: "impact", speed: 24, angle: 2, belly: true },
     { type: "partBreak", part: "bumperF" },
     { type: "crash" },
+    { type: "sink" },
     { type: "respawn" },
     { type: "finish", time: 120 },
   ];
@@ -144,6 +146,18 @@ describe("event routing", () => {
       (speed) => soundForEvent({ type: "impact", speed, angle: 0, belly: false }, 0)?.id,
     );
     expect(ids).toEqual(["impact_scuff", "impact_hit", "impact_crunch"]);
+  });
+
+  it("takes a car going under an octave below a ford crossed at the same pace", () => {
+    // The two are one bank sound at two sizes, and the size is the whole
+    // difference between water the car drives through and water it does
+    // not come out of.
+    const ford = soundForEvent({ type: "splash", speed: 18, deep: false }, 0);
+    const lake = soundForEvent({ type: "splash", speed: 18, deep: true }, 0);
+    expect(lake?.id).toBe(ford?.id);
+    expect(lake?.shape?.gain ?? 1).toBeGreaterThan(ford?.shape?.gain ?? 1);
+    expect(lake?.shape?.pitch ?? 1).toBeLessThan(ford?.shape?.pitch ?? 1);
+    expect(lake?.shape?.stretch ?? 1).toBeGreaterThan(ford?.shape?.stretch ?? 1);
   });
 
   it("makes a bigger landing louder and lower", () => {
