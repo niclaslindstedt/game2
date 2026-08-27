@@ -412,15 +412,23 @@ body {
   animation: hud-pop 0.8s infinite;
 }
 
+/* The finish card sits HIGH, not in the middle of the screen. Crossing the
+   line is a show — the cannons go off, the crowd is there, the car coasts
+   away down the run-out with the camera watching it — and a slab of navy
+   parked over the vanishing point is a card covering the thing it is
+   congratulating you on. Up under the banner it reads as a caption on the
+   shot instead. */
 .hud-finish {
+  position: absolute;
+  top: 8%;
   text-align: center;
-  background: rgb(18 48 105 / 82%);
+  background: rgb(18 48 105 / 78%);
   border-radius: 1rem;
-  padding: 1.2rem 2.2rem;
+  padding: 0.85rem 1.8rem;
 }
 
 .hud-finish-title {
-  font-size: clamp(1.6rem, 7vmin, 3.2rem);
+  font-size: clamp(1.3rem, 5.4vmin, 2.4rem);
   color: var(--hud-good);
 }
 
@@ -434,6 +442,35 @@ body {
   font-size: clamp(1.8rem, 7.5vmin, 3.4rem);
   font-variant-numeric: tabular-nums;
   line-height: 1.05;
+}
+
+/* The classification: the placing is the loud half of it, the field size
+   and the gap the quiet half, all on one baseline so the card stays three
+   lines tall on a phone. */
+.hud-finish-place {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.5em;
+  margin: 0.15rem 0 0.3rem;
+}
+
+.hud-place {
+  font-size: clamp(1.1rem, 4.4vmin, 1.9rem);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A podium place is the whole reason the cannons went off; it wears the
+   same gold the STAGE CLEAR title does. Everything else stays plain. */
+.hud-place.is-podium {
+  color: var(--hud-good);
+}
+
+.hud-finish-of,
+.hud-finish-gap {
+  font-size: clamp(0.7rem, 2.2vmin, 0.95rem);
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
 }
 
 .hud-finish-record {

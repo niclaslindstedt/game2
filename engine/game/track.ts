@@ -5,7 +5,7 @@
 // per step is constant and progress can only creep forward or slightly back
 // — a car that leaves the road keeps its last on-road progress for respawn.
 
-import { STAGE_RULES, type Surface, type Track } from "../mapgen/index.ts";
+import { STAGE_RULES, finishIndex, type Surface, type Track } from "../mapgen/index.ts";
 import { corridorOffset, crossOffset } from "../mapgen/road.ts";
 import { TUNING } from "./defs/tuning.ts";
 import type { GameState } from "./state.ts";
@@ -106,14 +106,6 @@ export type TrackFix = {
  * car comes back with road left to cross the line with rather than being
  * dropped onto it. */
 const HOME_BACKOFF = 2;
-
-/** The sample the finish gate stands on: the second to last, so the closing
- * straight still runs on past the line and a flying finish has somewhere to
- * land. The renderer builds the gate here too — the line the timer watches
- * is the line the player sees. */
-export function finishIndex(track: Track): number {
-  return Math.max(0, track.samples.length - 2);
-}
 
 /** Half the width of a start/finish gate, m: the road plus the verge that
  * still counts as being on it. The posts stand at its ends. */

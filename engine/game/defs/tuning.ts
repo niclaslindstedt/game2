@@ -429,6 +429,27 @@ export const TUNING = {
     guide: { near: 20, nearClear: 15, away: 1.92, awayClear: Math.PI / 2 },
   },
 
+  /** R25 — the roll-out past the finish gate: what drives the car once the
+   * clock has stopped and the player is out of the loop. The brake is a
+   * TRAILING one — a car that stands on the pedal at the line stops dead
+   * under the banner, which reads as a stage that ended rather than a
+   * finish that was crossed — so it eases in over `brakeRamp` seconds and
+   * never reaches the full pedal. */
+  rollOut: {
+    /** Peak brake pressure the roll-out ever asks for, 0..1. */
+    brake: 0.45,
+    /** Seconds it takes to get there. */
+    brakeRamp: 1.6,
+    /** Steering authority the roll-out has, 0..1 — enough to gather a car
+     * that crossed the line sideways, not enough to place it. */
+    steer: 0.35,
+    /** Under this the car counts as stopped and the run is over, m/s. */
+    restSpeed: 1.2,
+    /** ...and the ceiling on the whole beat, seconds: a car that crossed
+     * the line already wrecked, or facing a hill, still has to finish. */
+    maxTime: 14,
+  },
+
   crash: {
     /** Water this much over the ground is deep — a grounded car in it (or
      * an airborne one dropping under the surface) has driven into a lake

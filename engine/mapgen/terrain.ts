@@ -15,6 +15,7 @@ import { createRng } from "../lib/prng.ts";
 import { hash2, smooth, valueNoise } from "../lib/noise.ts";
 import type { Surface, Track, TrackSample } from "./compile.ts";
 import { createGuardField, type CornerGuard, type GuardField } from "./guards.ts";
+import { createStandField, type Stand, type StandField } from "./stands.ts";
 import { traceRivers, type River, type RiverAnchor } from "./river.ts";
 import {
   corridorOffset,
@@ -34,7 +35,7 @@ export const GROUND_CELL = 14;
 /** Plain dirt road extrapolated straight past each stage end, m — the
  * rally start's run-up before the gate, and run-off past the flying
  * finish. The terrain keeps its shelf flat under the same corridor so the
- * apron never floats or drowns, the physics rides it, and R24 keeps every
+ * apron never floats or drowns, the physics rides it, and R26 keeps every
  * other road off it. One number, stated in the rule book. */
 export const APRON = R.startZone.apron;
 
@@ -348,6 +349,10 @@ export type TerrainField = {
   /** The corner guards placed so far (R14) — the renderer reads them to
    * dress the mounds, the tooling to draw them on a preview. */
   guards: CornerGuard[];
+  /** R27 — the spectator stands placed so far, in stage order. The
+   * renderer builds the people; the run reads the order to know which
+   * crowd the car has just gone past. */
+  stands: Stand[];
   /** Solid wild props near a point (within `r` of it), collision-checked
    * by the physics and drawn by the renderer. */
   obstaclesNear: (x: number, z: number, r: number) => WildObstacle[];
@@ -453,6 +458,7 @@ export function createTerrain(track: Track): TerrainField {
    * Built here, from the corner geometry, because the ground they raise
    * and the trunks they stand are both this field's to report. */
   const guards: GuardField = createGuardField(track);
+  const stands: StandField = createStandField(track);
 
   /** How far under the drawn ribbon the ground TILES are pinned, m. The
    * road mesh draws the whole corridor — mat, shoulder, ditch, lip (R16) —
@@ -870,10 +876,24 @@ export function createTerrain(track: Track): TerrainField {
       // (R14) — placed against the road as it stands, so a guard never
       // lands on the stage and never on a stream or a branch.
       for (; spurCount < track.spurs.length; spurCount++) spurs.add(track.spurs[spurCount]);
+      const committedS = samples[samples.length - 1].s - (track.endless ? 250 : 0);
+      const roadAt = (x: number, z: number): number => nearestSample(x, z)?.d ?? Infinity;
       guards.extend(
-        samples[samples.length - 1].s - (track.endless ? 250 : 0),
-        (x, z) => nearestSample(x, z)?.d ?? Infinity,
+        committedS,
+        roadAt,
         (x, z) => inStream(streams, x, z, 4) || spurClearance(x, z) < R.guard.moundClear,
+      );
+      // R27 — and the crowd, placed last of the three so it can refuse the
+      // ground a guard's mound has just taken: spectators stand on flat
+      // ground beside a corner, not up the side of the hill shutting it.
+      stands.extend(
+        committedS,
+        roadAt,
+        (x, z) =>
+          waterAt(x, z) !== null ||
+          inStream(streams, x, z, 4) ||
+          spurClearance(x, z) < R.guard.groveClear ||
+          guards.riseAt(x, z) > 0.5,
       );
       // New road may have arrived where a prop stood — revalidate; fresh
       // stream valleys reshape the ground, so the lattice re-samples too.
@@ -893,6 +913,7 @@ export function createTerrain(track: Track): TerrainField {
       indexSamples(firstIndexed, samples.length);
       while (streams.length > 0 && streams[0].centerS < floorS) streams.shift();
       guards.pruneBefore(floorS);
+      stands.pruneBefore(floorS);
       spurs.pruneBefore(floorS);
       obCache = new Map();
       treeCache = new Map();
@@ -914,6 +935,7 @@ export function createTerrain(track: Track): TerrainField {
     spurSurfaceAt,
     streams,
     guards: guards.guards,
+    stands: stands.stands,
     obstaclesNear,
     treesNear,
     groveAt,

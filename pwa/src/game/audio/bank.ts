@@ -165,6 +165,71 @@ export const RUN_BANK: SoundBank = {
     ],
   },
 
+  cheer: {
+    description:
+      "Going past a stand of spectators. A CROWD is the hardest thing on this " +
+      "list to synthesize, because it has no transient and no pitch — it is a " +
+      "band of noise with voices somewhere in it. So: pink air swelling and " +
+      "falling through a wide, resonant bandpass around the vowel region, " +
+      "which is what turns hiss into people; a second, brighter band a beat " +
+      "later for the ones further down the line; and two barely-pitched " +
+      "sawtooth swells under it, detuned hard against each other, which is a " +
+      "hundred throats never quite agreeing on a note. Nothing percussive — a " +
+      "cheer has no attack, it ARRIVES, so every layer fades in over a long " +
+      "attack and the car goes past before it has finished. Quiet: this fires " +
+      "at every stand on the stage, and a crowd louder than the engine is a " +
+      "crowd standing inside the car.",
+    voices: [
+      {
+        call: "noise",
+        durationMs: 1500,
+        volume: 0.026,
+        color: "pink",
+        attackMs: 420,
+        holdMs: 330,
+        echo: 0.2,
+        filter: { type: "bandpass", frequency: 620, to: 1250, q: 0.75 },
+      },
+      {
+        call: "noise",
+        durationMs: 1150,
+        volume: 0.016,
+        color: "pink",
+        delayMs: 260,
+        attackMs: 340,
+        holdMs: 220,
+        filter: { type: "bandpass", frequency: 1800, to: 2500, q: 1.1 },
+      },
+      {
+        call: "tone",
+        type: "sawtooth",
+        from: 196,
+        to: 233,
+        durationMs: 1250,
+        volume: 0.012,
+        attackMs: 460,
+        holdMs: 320,
+        detuneCents: 38,
+        vibrato: { rateHz: 4.4, depthCents: 55, delayMs: 200 },
+        filter: { type: "lowpass", frequency: 1100, to: 1900 },
+      },
+      {
+        call: "tone",
+        type: "sawtooth",
+        from: 294,
+        to: 262,
+        durationMs: 1050,
+        volume: 0.009,
+        delayMs: 180,
+        attackMs: 400,
+        holdMs: 240,
+        detuneCents: 46,
+        vibrato: { rateHz: 5.1, depthCents: 62, delayMs: 160 },
+        filter: { type: "lowpass", frequency: 1500 },
+      },
+    ],
+  },
+
   // ── The drivetrain ───────────────────────────────────────────────────────
   shift_up: {
     description:

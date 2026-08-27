@@ -9,6 +9,7 @@
 import { DAMAGE_ZONES, TUNING, wayHome, type GameState } from "@engine";
 
 import { buildMinimap } from "./minimap.tsx";
+import { classify } from "./standings.ts";
 import type { HudDamage, HudPacenote, HudSnapshot } from "./hud.tsx";
 
 /** How far ahead the co-driver calls, meters — four seconds at pace, with a
@@ -130,6 +131,7 @@ export function takeSnapshot(
     // water: the next one is not going to be taken, and reading it out
     // over a sinking car is the same wrong note as the way-home prompt.
     pacenotes: state.phase === "racing" && !state.drowning ? upcomingPacenotes(state) : [],
+    standing: finishTime === null ? null : classify(state.track, finishTime),
     seed: state.seed,
     carName: state.spec.name,
     // Both of these are DRIVING aids — the co-driver's way-home call, and

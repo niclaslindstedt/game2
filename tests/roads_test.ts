@@ -24,6 +24,7 @@ import {
   roadClearance,
   knobScale,
   locate,
+  rutAt,
   step,
   vergeOffset,
   wearAt,
@@ -44,18 +45,41 @@ describe("the road's cross-section (R16)", () => {
   });
 
   it("wears two tracks into the gravel where every car has driven", () => {
-    const rut = ROAD_CROSS.rut.at * HALF;
+    const rut = rutAt(WIDTH);
     // The wheel track is lower than the road a meter either side of it...
-    expect(crossOffset(gravel, rut, WIDTH)).toBeLessThan(crossOffset(gravel, rut - 1.6, WIDTH));
+    expect(crossOffset(gravel, rut, WIDTH)).toBeLessThan(crossOffset(gravel, 0, WIDTH));
+    expect(crossOffset(gravel, rut, WIDTH)).toBeLessThan(crossOffset(gravel, rut + 1.6, WIDTH));
     // ...and it is the most worn part of the surface.
     expect(wearAt(rut, WIDTH)).toBeGreaterThan(wearAt(HALF, WIDTH));
     expect(wearAt(rut, WIDTH)).toBeCloseTo(1, 1);
     // Both sides, because a car has two wheels on an axle.
     expect(crossOffset(gravel, -rut, WIDTH)).toBeCloseTo(crossOffset(gravel, rut, WIDTH), 6);
+    // A wheel track is a real-world distance, so it sits where a car's
+    // wheels go rather than scaling out to the edge of a wide road.
+    expect(rut).toBeLessThan(HALF * 0.5);
+  });
+
+  it("runs FIVE lines down a dirt road, not one flat band (R16)", () => {
+    const rut = rutAt(WIDTH);
+    // Across the road: a loose edge, a worn track, the crown between the
+    // tracks, the other track, the other edge. What makes them read is that
+    // each is a different amount of worn from the one beside it.
+    const edge = wearAt(HALF - 0.4, WIDTH);
+    const track = wearAt(rut, WIDTH);
+    const crown = wearAt(0, WIDTH);
+    expect(track).toBeGreaterThan(crown);
+    expect(crown).toBeGreaterThan(edge);
+    // ...and the edge is still ROAD, so it can hand over to the verge
+    // instead of stopping at it.
+    expect(edge).toBeGreaterThan(0);
+    // The road is CURVED across its width: the crown stands proud of both
+    // tracks by more than a token amount.
+    const dish = crossOffset(gravel, 0, WIDTH) - crossOffset(gravel, rut, WIDTH);
+    expect(dish).toBeGreaterThan(0.08);
   });
 
   it("polishes asphalt rather than rutting it, and lays it flatter", () => {
-    const rut = ROAD_CROSS.rut.at * HALF;
+    const rut = rutAt(WIDTH);
     const sealedRut = crossOffset(asphalt, 0, WIDTH) - crossOffset(asphalt, rut, WIDTH);
     const looseRut = crossOffset(gravel, 0, WIDTH) - crossOffset(gravel, rut, WIDTH);
     expect(sealedRut).toBeLessThan(looseRut);
@@ -81,13 +105,24 @@ describe("the road's cross-section (R16)", () => {
     // Positive bank stands the LEFT edge proud — the outside of a
     // right-hand turn, which is what positive curvature is.
     expect(crossOffset(banked, -HALF, WIDTH)).toBeGreaterThan(crossOffset(banked, HALF, WIDTH));
-    // The fall runs one way across the whole width: no crown left to make
-    // the inside edge a gutter.
-    let previous = crossOffset(banked, -HALF, WIDTH);
-    for (let l = -HALF; l <= HALF; l += 0.5) {
+    // No crown left to make the inside edge a gutter: the inside edge is
+    // the lowest line on the road, and outside the wheel tracks — which are
+    // troughs wherever the road goes, and not what R19 is about — the fall
+    // runs one way all the way to it.
+    const inner = crossOffset(banked, HALF, WIDTH);
+    for (let l = -HALF; l < HALF; l += 0.25) {
+      expect(crossOffset(banked, l, WIDTH)).toBeGreaterThan(inner);
+    }
+    let previous = Infinity;
+    for (let l = rutAt(WIDTH) + 2 * ROAD_CROSS.rut.width; l <= HALF; l += 0.25) {
       const here = crossOffset(banked, l, WIDTH);
       expect(here).toBeLessThanOrEqual(previous + 1e-6);
       previous = here;
+    }
+    // The whole width falls the same way: nothing on the outside half sits
+    // below its opposite number on the inside one.
+    for (let l = 0.25; l <= HALF; l += 0.25) {
+      expect(crossOffset(banked, -l, WIDTH)).toBeGreaterThan(crossOffset(banked, l, WIDTH));
     }
     // And it is a road, not a speedway: the cross-fall stays inside the
     // rate a car can be parked on.

@@ -6,11 +6,12 @@
 
 import { useEffect, useRef, type CSSProperties } from "react";
 
-import type { TurnSeverity } from "@engine";
+import type { GamePhase, TurnSeverity } from "@engine";
 
 import type { InputManager } from "./input.ts";
 import { Minimap, type HudMinimap } from "./minimap.tsx";
 import { deviceControls, type HudSettings, type PedalDir, type TouchSettings } from "./settings.ts";
+import type { Standing } from "./standings.ts";
 import { clamp, formatTime } from "../lib/util.ts";
 
 /** One co-driver call, already flipped into SCREEN space by the snapshot
@@ -25,7 +26,7 @@ export type HudPacenote = {
 };
 
 export type HudSnapshot = {
-  phase: "countdown" | "racing" | "finished";
+  phase: GamePhase;
   countdown: number;
   /** Total race time, seconds — the clock that never resets. */
   time: number;
@@ -71,6 +72,9 @@ export type HudSnapshot = {
   finishTime: number | null;
   /** Set on the finish overlay when the run beat the stored record. */
   record: boolean;
+  /** Where that time placed on the stage's start list — null until the car
+   * has crossed the line. */
+  standing: Standing | null;
   /** Booster tank readout, seconds left / full tank. */
   boostLeft: number;
   boostMax: number;
@@ -851,6 +855,15 @@ function RaceClock({ snap }: { snap: HudSnapshot }) {
   );
 }
 
+/** "1st", "2nd", "3rd", "4th"… A placing reads as a placing or it reads as
+ * a number, and the whole point of the finish card is that third place and
+ * fourth are different things. */
+function ordinal(place: number): string {
+  const tens = place % 100;
+  if (tens >= 11 && tens <= 13) return `${place}th`;
+  return `${place}${["th", "st", "nd", "rd"][place % 10] ?? "th"}`;
+}
+
 export function Hud({ snap, flashes, input, show, touchLayout, onPause, onCamera }: HudProps) {
   const { touch } = input;
   const pedalSide = touchLayout.steerSide === "left" ? "right" : "left";
@@ -946,12 +959,28 @@ export function Hud({ snap, flashes, input, show, touchLayout, onPause, onCamera
         {snap.phase === "countdown" && (
           <div className="hud-count">{Math.ceil(snap.countdown) || "GO"}</div>
         )}
-        {snap.phase === "finished" && snap.finishTime !== null && (
+        {/* The card comes up the instant the line is crossed, not when the
+            car stops: the clock has stopped, and the roll-out past the gate
+            (R22) is the celebration, not a wait for one. */}
+        {(snap.phase === "rollout" || snap.phase === "finished") && snap.finishTime !== null && (
           <div className="hud-finish">
             <div className="hud-finish-title">STAGE CLEAR</div>
             <div className="hud-finish-label">TOTAL TIME</div>
             <div className="hud-finish-time">{formatTime(snap.finishTime)}</div>
             {snap.record && <div className="hud-finish-record">NEW RECORD</div>}
+            {snap.standing && (
+              <div className="hud-finish-place">
+                <span className={`hud-place${snap.standing.place <= 3 ? " is-podium" : ""}`}>
+                  {ordinal(snap.standing.place)}
+                </span>
+                <span className="hud-finish-of">of {snap.standing.of}</span>
+                {snap.standing.target !== null && (
+                  <span className="hud-finish-gap">
+                    +{formatTime(snap.finishTime - snap.standing.target)}
+                  </span>
+                )}
+              </div>
+            )}
             {snap.laps > 1 && (
               <div className="hud-finish-laps">
                 {snap.lapTimes.map((t, i) => (

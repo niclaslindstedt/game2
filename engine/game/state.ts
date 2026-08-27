@@ -223,6 +223,10 @@ export type GameEvent =
    * just completed (1-based), `time` how long it took, and `best` says it
    * is the quickest of the run so far. */
   | { type: "lap"; lap: number; time: number; best: boolean }
+  /** R27 — the car has come past a stand of spectators at a pace worth
+   * cheering. `size` is how big that crowd is, 0..1, so one voice route
+   * covers a knot of six at a corner and the bank at the finish. */
+  | { type: "cheer"; size: number }
   | { type: "finish"; time: number };
 
 export type RunStats = {
@@ -241,7 +245,12 @@ export type RunStats = {
   topSpeed: number;
 };
 
-export type GamePhase = "countdown" | "racing" | "finished";
+/** The run's arc. `rollout` is the beat after the flying finish: the clock
+ * has stopped and the result is already on screen, but the car is still
+ * doing what a car crossing a finish line at 180 km/h does — carrying on
+ * down R22's run-out road, off the throttle, slowing to a stop. Nothing the
+ * player does reaches the car any more; it is being driven home. */
+export type GamePhase = "countdown" | "racing" | "rollout" | "finished";
 
 /** A car in the water it cannot drive out of. While this is set the run is
  * not being driven: input is ignored, nothing progresses, and the only
@@ -274,7 +283,8 @@ export type GameState = {
   drowning: DrownState | null;
   /** Sim time since creation, seconds. */
   t: number;
-  /** Time spent racing (excludes countdown), seconds. */
+  /** Time spent racing (excludes countdown), seconds — it stops at the
+   * finish line, so the roll-out past it is free. */
   raceTime: number;
   /** R22 — which lap the run is on, 1-based, and how many it is raced
    * over. A sprint is one lap of a road that never comes back, so it sits
@@ -286,6 +296,16 @@ export type GameState = {
   /** Race time the current lap started at, seconds — the lap clock is
    * `raceTime - lapStart`, so there is only ever one clock running. */
   lapStart: number;
+  /** Seconds since the car crossed the finish line; 0 until it does. The
+   * camera plants itself on the first of them and the finish's cannons
+   * fire off it. */
+  rollout: number;
+  /** R27 — how far along the stage the crowd has already been heard from,
+   * meters. Stands are kept in stage order, so the window between this and
+   * `progressS` is exactly the crowds this step drove past — and an arc
+   * position, unlike an index, survives an endless stage pruning the stands
+   * it has left behind. */
+  cheeredS: number;
   /** Index into track.samples the car is nearest to. */
   progressIndex: number;
   /** Arc position along the stage, meters. */
