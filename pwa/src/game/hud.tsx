@@ -43,6 +43,9 @@ export type HudSnapshot = {
   seed: number;
   carName: string;
   offRoad: boolean;
+  /** Ground distance back to the point the reset would put the car, m —
+   * only meaningful while `offRoad`. */
+  homeDistance: number;
   finishTime: number | null;
   /** Booster tank readout, seconds left / full tank. */
   boostLeft: number;
@@ -462,6 +465,38 @@ function pacenoteText(note: HudPacenote): string {
   return `${note.long ? "LONG " : ""}${SEVERITY_WORD[note.severity]} ${note.dir.toUpperCase()}`;
 }
 
+/** The way home, in the co-driver's own slot. Off the road there is no next
+ * corner to call — the road itself is the thing that has to be found again —
+ * so the strip stops reading the stage and starts reading the way back. The
+ * metres are the distance to the exact point the arrow over the car points
+ * at, and that the TRACK button hands you directly. */
+function WayHomeCall({ distance }: { distance: number }) {
+  return (
+    <div className="hud-pace">
+      <div className="hud-pace-call hud-pace-home">
+        {/* A warning triangle, drawn in the co-driver strip's own hand —
+            chunky rounded strokes, one color — so it reads as the same
+            instrument as the corner calls it stands in for. */}
+        <svg className="hud-pace-arrow" viewBox="0 0 100 100" aria-hidden="true">
+          <path
+            d="M 50 17 L 89 83 L 11 83 Z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="11"
+            strokeLinejoin="round"
+          />
+          <path d="M 50 41 L 50 60" stroke="currentColor" strokeWidth="11" strokeLinecap="round" />
+          <circle cx="50" cy="72" r="6" fill="currentColor" />
+        </svg>
+        <span className="hud-pace-text">
+          RETURN TO TRACK
+          <span className="hud-pace-dist">{Math.round(distance)}m</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 /** The co-driver strip: the current call big, the following call small —
  * "HARD LEFT … into easy right", the way a crew reads a stage. */
 function Pacenotes({ notes }: { notes: HudPacenote[] }) {
@@ -717,8 +752,14 @@ export function Hud({ snap, flashes, input, onPause, onCamera }: HudProps) {
         <Minimap map={snap.minimap} onOpen={onPause} />
       </div>
 
-      {/* The co-driver: upcoming corner calls, front and center. */}
-      {snap.phase === "racing" && snap.pacenotes.length > 0 && <Pacenotes notes={snap.pacenotes} />}
+      {/* The co-driver's slot: corner calls while there is a road to call,
+          the way back the moment there isn't. */}
+      {snap.phase === "racing" &&
+        (snap.offRoad ? (
+          <WayHomeCall distance={snap.homeDistance} />
+        ) : (
+          snap.pacenotes.length > 0 && <Pacenotes notes={snap.pacenotes} />
+        ))}
 
       {/* Center: countdown / finish / event flashes. */}
       <div className="hud-center">
@@ -753,18 +794,18 @@ export function Hud({ snap, flashes, input, onPause, onCamera }: HudProps) {
       <div className="hud-speed">
         <div className="hud-status">
           <DamagePanel damage={snap.damage} />
+          {/* Off the road the co-driver's strip says WHERE the road is and
+              the arrow over the car says which way; all this row owes is the
+              button that takes you there. */}
           {snap.offRoad && (
-            <>
-              <span className="hud-off">OFF ROAD</span>
-              <button
-                type="button"
-                className="hud-mini hud-mini-alert pointer-events-auto"
-                onClick={() => input.requestReset()}
-                title="Back to track (B)"
-              >
-                TRACK
-              </button>
-            </>
+            <button
+              type="button"
+              className="hud-mini hud-mini-alert pointer-events-auto"
+              onClick={() => input.requestReset()}
+              title="Back to track (B)"
+            >
+              TRACK
+            </button>
           )}
           {snap.windKmh >= 4 && (
             <span className="hud-wind" title="Wind">

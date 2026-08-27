@@ -230,6 +230,16 @@ export const TUNING = {
     gradeSpan: 4,
   },
 
+  attitude: {
+    /** How fast the body settles onto the attitude the ground (or the
+     * flight) asks for, 1/s — suspension travel, not a rigid weld: a curb
+     * or a ripple leans the car rather than snapping it. */
+    settle: 8,
+    /** Nose attitude is clamped here, rad — a plunge off a cliff still
+     * reads as a dive without the body standing on end. */
+    pitchMax: 0.6,
+  },
+
   wind: {
     /** Mean wind speed range per weather, m/s. The exact value inside the
      * range is seeded — every stage gets its own wind, every replay the same. */
@@ -256,6 +266,13 @@ export const TUNING = {
     verge: 1.5,
     /** Respawn forward speed, m/s. */
     respawnSpeed: 6,
+    /** Wedged: the only thing that ever drags the car home by itself.
+     * Hitting a tree bends the car and leaves it where it is, so the one
+     * unrecoverable state left is being pinned against something with the
+     * throttle buried. Asking to move for `after` seconds without covering
+     * `radius` meters is that state — long enough that a slow scrabble up
+     * a bank or a nudge off a rock is never mistaken for it. */
+    stuck: { after: 2, radius: 1.5 },
   },
 
   crash: {
@@ -294,8 +311,9 @@ export const TUNING = {
     /** Structural wear per meter of crush dealt (wear reaching 1 is the
      * wreck). ~1.1 lets a car survive several hard hits, not a dozen. */
     wearPerCrush: 2.4,
-    /** Wear the wreck respawn patches the car back to — rally service on
-     * the spot: drivable, but half the car's life is spent. */
+    /** Wear a wrecked car is patched back to when it is next put on the
+     * road — rally service on the spot: drivable, but half the car's life
+     * is spent. A wreck is never teleported home on its own. */
     repairTo: 0.5,
     /** Zone crush that tears each part off its bolts, m. Mirrors pop off
      * a brush; bumpers and the wing take a real hit. */

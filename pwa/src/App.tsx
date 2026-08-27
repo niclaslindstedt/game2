@@ -17,6 +17,7 @@ import {
   createGame,
   status,
   step,
+  wayHome,
   type GameEvent,
   type GameState,
   type StageLength,
@@ -177,6 +178,7 @@ function takeSnapshot(state: GameState, finishTime: number | null): HudSnapshot 
     seed: state.seed,
     carName: state.spec.name,
     offRoad: state.offRoad,
+    homeDistance: state.offRoad ? wayHome(state).distance : 0,
     finishTime,
     boostLeft: state.car.boostLeft,
     boostMax: TUNING.boost.capacity,
@@ -188,6 +190,11 @@ function takeSnapshot(state: GameState, finishTime: number | null): HudSnapshot 
 }
 
 let flashId = 0;
+
+/** Air time under which a landing is not worth a banner, s — every ripple
+ * and curb technically leaves the ground, and "CLEAN AIR 0.0s" three times
+ * in a row is the HUD talking over the game. */
+const REAL_AIR = 0.5;
 
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -336,19 +343,14 @@ export function App() {
       const handleEvents = (state: GameState, events: GameEvent[]): void => {
         renderer.onEvents(state, events);
         for (const ev of events) {
-          if (ev.type === "landing") {
-            flash(
-              ev.clean ? `CLEAN AIR ${ev.airTime.toFixed(1)}s` : "ROUGH LANDING",
-              ev.clean ? "good" : "bad",
-            );
-          } else if (ev.type === "splash") {
-            flash("SPLASH", "info");
+          // The banner is for what the player CANNOT see: how long that jump
+          // hung, and the moment the tank runs dry. Splashes, crashes,
+          // landings and respawns all announce themselves on screen already
+          // — captioning them is noise over the top of the game.
+          if (ev.type === "landing" && ev.clean && ev.airTime >= REAL_AIR) {
+            flash(`CLEAN AIR ${ev.airTime.toFixed(1)}s`, "good");
           } else if (ev.type === "boostEmpty") {
             flash("BOOSTER SPENT", "bad");
-          } else if (ev.type === "crash") {
-            flash(ev.into === "water" ? "INTO THE WATER" : "CRASHED", "bad");
-          } else if (ev.type === "respawn") {
-            flash("BACK ON THE ROAD", "bad");
           } else if (ev.type === "finish") {
             finishTimeRef.current = ev.time;
             nextStageTimer = setTimeout(() => {

@@ -15,6 +15,7 @@ import { createDust } from "./dust.ts";
 import { createEnvironment } from "./environment.ts";
 import { createFumes } from "./fumes.ts";
 import { createRain } from "./rain.ts";
+import { createWayHomeArrow } from "./way-home.ts";
 import { buildWorld, type World } from "./world.ts";
 
 export type GameRenderer = {
@@ -45,6 +46,11 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
   scene.add(rain.lines);
   const life = createAmbientLife();
   scene.add(life.group);
+  const wayHomeArrow = createWayHomeArrow();
+  // The arrow lives in camera space, and a camera only draws its children
+  // when it is itself part of the scene being rendered.
+  scene.add(chase.camera);
+  chase.camera.add(wayHomeArrow.group);
 
   let world: World | null = null;
   let car: CarVisual | null = null;
@@ -197,6 +203,7 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
     world?.sync(state);
     world?.update(dt);
     car?.update(state, dt);
+    wayHomeArrow.update(state, chase.camera, dt);
     chase.update(state, dt);
     environment.update(state, chase.camera, dt);
     const cam = chase.camera.position;
@@ -222,6 +229,7 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
     fumes.dispose();
     rain.dispose();
     life.dispose();
+    wayHomeArrow.dispose();
     environment.dispose();
     renderer.dispose();
   };

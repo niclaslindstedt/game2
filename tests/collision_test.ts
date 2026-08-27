@@ -2,7 +2,7 @@
 // The contact model: the car as an oriented box against the wild's circular
 // solids — the impulse that bounces and scrapes, the yaw kick that spins a
 // clipped car, the crush that bends the body and tears parts off, and the
-// wear that eventually wrecks the chassis. Plus the forest's trunk field:
+// wear that spends the chassis for good. Plus the forest's trunk field:
 // deterministic, dense where the groves are, and never on the road.
 
 import { describe, expect, it } from "vitest";
@@ -107,7 +107,12 @@ describe("the impulse", () => {
     car.u = 0;
     car.w = 9; // sliding right, flank first
     const events: GameEvent[] = [];
-    const tree = solid({ kind: "tree", x: car.x + TUNING.collision.halfWidth + 0.2, radius: 0.4 });
+    const tree = solid({
+      kind: "tree",
+      x: car.x + TUNING.collision.halfWidth + 0.2,
+      z: car.z,
+      radius: 0.4,
+    });
     collideCar(car, [tree], events, state.stats);
 
     expect(car.damage.broken).toContain("mirrorR");
@@ -119,11 +124,12 @@ describe("the impulse", () => {
     const state = freshState();
     const car = state.car;
     const events: GameEvent[] = [];
-    const tree = solid({ kind: "tree", z: car.z + TUNING.collision.halfLength + 0.5 });
+    const grid = car.z;
+    const tree = solid({ kind: "tree", x: car.x, z: grid + TUNING.collision.halfLength + 0.5 });
     car.u = 30;
     collideCar(car, [tree], events, state.stats);
     car.u = 30;
-    car.z = 0;
+    car.z = grid;
     collideCar(car, [tree], events, state.stats);
     expect(events.filter((e) => e.type === "partBreak" && e.part === "bumperF")).toHaveLength(1);
   });
@@ -135,7 +141,7 @@ describe("the impulse", () => {
     car.y = 1.2;
     car.airborne = true;
     const events: GameEvent[] = [];
-    const log = solid({ kind: "log", z: car.z + 1, height: 0.75 });
+    const log = solid({ kind: "log", x: car.x, z: car.z + 1, height: 0.75 });
     collideCar(car, [log], events, state.stats);
     expect(car.u).toBe(30);
     expect(events).toHaveLength(0);
@@ -146,7 +152,7 @@ describe("the impulse", () => {
     const car = state.car;
     car.u = TUNING.collision.scuffSpeed - 0.5;
     const events: GameEvent[] = [];
-    const rock = solid({ z: car.z + TUNING.collision.halfLength + 0.5 });
+    const rock = solid({ x: car.x, z: car.z + TUNING.collision.halfLength + 0.5 });
     collideCar(car, [rock], events, state.stats);
     expect(car.damage.wear).toBe(0);
     expect(events).toHaveLength(0);
@@ -155,35 +161,25 @@ describe("the impulse", () => {
 });
 
 describe("the wreck", () => {
-  it("wear reaching 1 wrecks the car: crash, respawn, patched half-way back", () => {
+  it("wear reaching 1 leaves the car where it stands — a wreck is driven home", () => {
     const state = freshState();
-    const boulder = solid({ x: 30, z: 250, y: -0.35, radius: 2, height: 2 });
-    state.terrain = {
-      ...state.terrain,
-      heightAt: () => -0.35,
-      groundAt: () => -0.35,
-      waterAt: () => null,
-      obstaclesNear: (x, z, r) =>
-        Math.hypot(boulder.x - x, boulder.z - z) < r + boulder.radius ? [boulder] : [],
-      treesNear: () => [],
-    };
-    state.car.x = 30;
-    state.car.z = 200;
-    state.car.y = -0.35;
-    state.car.u = 30;
-    const events: GameEvent[] = [];
-    // Keep ramming the rock — the chassis runs out of life.
-    for (let i = 0; i < 120 * 30 && !events.some((e) => e.type === "crash"); i++) {
-      events.push(...step(state, { ...NEUTRAL_INPUT, throttle: 1 }));
+    const car = state.car;
+    const grid = car.z;
+    const tree = solid({ kind: "tree", x: car.x, z: grid + TUNING.collision.halfLength + 0.5 });
+    // Ram it until the chassis has nothing left: three head-on hits at pace.
+    for (let i = 0; i < 3; i++) {
+      car.u = 30;
+      car.z = grid;
+      collideCar(car, [tree], [], state.stats);
     }
-    const crash = events.find((e) => e.type === "crash");
-    expect(crash).toMatchObject({ type: "crash", into: "wreck" });
-    expect(events.some((e) => e.type === "respawn")).toBe(true);
-    expect(state.car.damage.wear).toBe(TUNING.collision.repairTo);
-    // The dents and the torn-off parts survive the service.
-    expect(state.car.damage.zones[0]).toBeGreaterThan(0);
-    expect(state.car.damage.broken.length).toBeGreaterThan(0);
-    expect(state.stats.crashes).toBe(1);
+    expect(car.damage.wear).toBe(1);
+
+    // No crash, no respawn, no service: the car is still out there, bent.
+    const events = step(state, { ...NEUTRAL_INPUT, throttle: 1 });
+    expect(events.some((e) => e.type === "crash")).toBe(false);
+    expect(events.some((e) => e.type === "respawn")).toBe(false);
+    expect(state.stats.crashes).toBe(0);
+    expect(car.damage.wear).toBe(1);
   });
 });
 
@@ -192,7 +188,7 @@ describe("the internal systems", () => {
     const state = freshState();
     const car = state.car;
     car.u = 30;
-    const tree = solid({ kind: "tree", z: car.z + TUNING.collision.halfLength + 0.5 });
+    const tree = solid({ kind: "tree", x: car.x, z: car.z + TUNING.collision.halfLength + 0.5 });
     collideCar(car, [tree], [], state.stats);
     expect(car.damage.systems.engine).toBeGreaterThan(0.2); // nose → radiator
     expect(car.damage.systems.gearbox).toBe(0); // the back is untouched

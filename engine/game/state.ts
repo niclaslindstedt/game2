@@ -73,8 +73,9 @@ export type CarDamage = {
    * hit the suspension could not. The renderer sags and wrinkles the body
    * from it rather than folding a flank. */
   belly: number;
-  /** Structural wear, 0..1 — reaching 1 wrecks the car (crash + respawn,
-   * after which the wreck is patched back to a drivable fraction). */
+  /** Structural wear, 0..1 — reaching 1 is the wreck: a car with nothing
+   * left to give, still driveable, patched back to a fraction of its life
+   * the next time it is put back on the road. */
   wear: number;
   /** Damage per internal system, 0 (sound) .. 1 (broken) — fed by where
    * the crush lands, read back by the handling model. Never repaired. */
@@ -102,11 +103,17 @@ export type CarState = {
   slip: number;
   airborne: boolean;
   airTime: number;
-  /** Body roll, radians — positive lifts the car's right side. Only the air
-   * ever puts any in: the ground unwinds it. */
+  /** Body roll, radians — positive lifts the car's right side. The air puts
+   * the tumble in; on the ground it settles onto the camber of whatever the
+   * wheels are standing on, which off-road is the hillside itself. */
   roll: number;
   /** Roll rate, rad/s — set by the take-off, spent in the air. */
   rollRate: number;
+  /** Nose attitude, radians — positive lifts the nose. Grounded it is the
+   * grade under the wheels (the road's, or the terrain's out in the wild);
+   * airborne it is the angle of the flight itself. Renderer readout: the
+   * physics never reads it back. */
+  pitch: number;
   /** How sideways the car is this step, 0..1 — 0 gripping, 1 fully sliding
    * (renderer/HUD readout; the handling model computes it every step). */
   slide: number;
@@ -167,7 +174,10 @@ export type GameEvent =
   | { type: "impact"; speed: number; angle: number; belly: boolean }
   /** A piece of the body tearing off — the renderer sends it flying. */
   | { type: "partBreak"; part: DamagePart }
-  | { type: "crash"; into: "water" | "wreck" }
+  /** The car has gone somewhere it cannot drive out of — deep water. A
+   * solid never crashes the car: trees and rocks bend it and let it drive
+   * on, and a wedge is answered by the stuck rule, not by a crash. */
+  | { type: "crash" }
   | { type: "respawn" }
   | { type: "finish"; time: number };
 
@@ -210,6 +220,10 @@ export type GameState = {
   lateral: number;
   offRoad: boolean;
   offRoadSince: number;
+  /** Where and when the car last actually got somewhere. A car pinned
+   * against a trunk with the throttle buried never leaves this anchor, and
+   * that is what puts it back on the road (TUNING.offTrack.stuck). */
+  stuck: { x: number; z: number; since: number };
   /** The surface driven this step — road samples on the road, the
    * terrain's call in the wild (readout for FX and the splash edge). */
   surface: Surface | "nature";
