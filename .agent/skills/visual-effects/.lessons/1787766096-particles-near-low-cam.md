@@ -11,7 +11,16 @@ square of the frame and reads as a rendering bug, not spray. Dust proved
 it at size 0.55 (fixed to 0.22 with 2-3x counts); the exhaust fumes
 re-proved it at 0.26 (fixed to 0.16, slower idle rate). Seed particles
 with a fraction of the car's velocity (the wake) — plus the wind, now that
-state.wind exists — so plumes stream instead of hanging. Same readability
+state.wind exists — so plumes stream instead of hanging.
+
+Small is the answer for anything made of GRAINS. It is not the answer for
+smoke: shrinking tire smoke to 0.28 only made the squares smaller, and the
+puffs stopped reading as puffs. What a big particle needs is a MASK — the
+`puffy` flag on a DustStyle gives its points `puffTexture()` (textures.ts):
+a lumpy three-step blob on a 16 px canvas, nearest-filtered so the edge is
+made of visible pixels rather than a gradient. With that on, tire smoke
+carries 0.55 without reading as a rectangle stuck to the lens, and it still
+sits inside the chunky arcade look. Same readability
 rule for the dirt coat: dark mud is invisible on saturated dark paint — a
 light gravel-dust tan (0x9c7f57) is what reads as "dirty", capped below
 ~0.72 so the livery survives.

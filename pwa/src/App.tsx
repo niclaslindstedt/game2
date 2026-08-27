@@ -13,7 +13,7 @@
 // The pause card holds the run where it stands. The heavy state lives in
 // refs; the HUD re-renders from a ~12 Hz snapshot. URL params (?seed=,
 // ?tod=, ?weather=, ?car=, ?length=, the four generator dials ?elevation=
-// ?water= ?trees= ?asphalt=, and ?start=1) pin a run for tooling and
+// ?water= ?trees= ?asphalt=, ?start=1 and ?bot=1) pin a run for tooling and
 // screenshots.
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -27,6 +27,7 @@ import {
   resolveKnobs,
   status,
   step,
+  type CarInput,
   type GameEvent,
   type GameState,
   type StageKnobs,
@@ -78,6 +79,25 @@ function dailySeed(): number {
 }
 
 const RACE_KEY = "scandi-flick-race-settings";
+
+/** ?bot=1 (tooling): the bot drives the run until a control is touched, and
+ * then hands the wheel over for good. Blind key presses can only ever reach
+ * the first corner, so this is how a scripted scene gets to a PLACE on the
+ * stage — a sealed section, a ford, a jump — and takes over there. */
+function autopilotRequested(): boolean {
+  return new URLSearchParams(location.search).get("bot") === "1";
+}
+
+/** Whether the player is actually asking for anything this step. */
+function driving(input: CarInput): boolean {
+  return (
+    input.throttle > 0 ||
+    input.brake > 0 ||
+    input.handbrake ||
+    input.boost ||
+    Math.abs(input.steer) > 0
+  );
+}
 
 /** Initial race settings: URL params (tooling) beat the stored choice beats
  * the defaults. Storage can be unavailable (private mode) — defaults are
@@ -541,6 +561,7 @@ export function App() {
       // the menu the BOT is at the wheel; on the Roam page nothing drives at
       // all and only the map camera turns.
       let raf = 0;
+      let autopilot = autopilotRequested();
       let last = performance.now();
       let acc = 0;
       let hudClock = 0;
@@ -561,7 +582,12 @@ export function App() {
         acc += dtFrame;
         while (acc >= TUNING.dt) {
           acc -= TUNING.dt;
-          const events = step(state, page ? botInput(state) : input.sample(TUNING.dt));
+          // Sampled every step whether or not it is the one driving: the
+          // pedals and the wheel RAMP, and a sample skipped is a ramp that
+          // never moves.
+          const human = input.sample(TUNING.dt);
+          if (autopilot && driving(human)) autopilot = false;
+          const events = step(state, page || autopilot ? botInput(state) : human);
           if (events.length > 0) handleEvents(state, events);
         }
         // The road bed belongs to a run the player is IN. Behind the menu the
