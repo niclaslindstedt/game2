@@ -149,6 +149,14 @@ export type Track = {
    * the first, on the same heading, so the start line is also the finish
    * line and the run can be raced over laps. */
   circuit: boolean;
+  /** R25 — where a SPRINT's finish gate stands, meters along the stage. The
+   * samples do not stop there: `STAGE_RULES.runOut` meters of road carry on
+   * past it for the car to coast down, so `length` is the longer number.
+   * Null where there is no run-out to coast down: a circuit (whose finish is
+   * its own start line, with a whole lap already the other side of it), an
+   * endless stage, and the synthetic rigs `compileTrack` builds from a
+   * segment list — all of which finish at their last sample. */
+  finishS: number | null;
   /** The dials this stage was generated with — carried on the track so the
    * terrain field, the renderer and the tooling all shape themselves from
    * the same set without being handed it separately. */
@@ -896,6 +904,10 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
         ? { ...plan, feature: "none", featureStart: undefined, featureEnd: undefined }
         : plan;
       track.segments.push(built);
+      // R25 — the gate stands where the last segment has its run-out left
+      // to give. Recorded here rather than derived from `track.length`,
+      // which by the end has the run-out in it.
+      if (built.runOut !== undefined) track.finishS = cursor.s + built.length - built.runOut;
       const steps = Math.max(1, Math.round(built.length / SAMPLE_STEP));
       const step = built.length / steps;
       const curvature = built.kind === "turn" && built.radius ? (built.dir ?? 1) / built.radius : 0;
@@ -1007,6 +1019,7 @@ function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs, circuit =
     pacenotes: [],
     endless,
     circuit,
+    finishS: null,
     knobs,
     spurs: [],
     junctions: [],
@@ -1062,6 +1075,43 @@ export function compileTrack(
   const track = emptyTrack(seed, false, dials);
   createCompiler(track, () => 0, buildPaving(seed, dials.asphalt)).append(segments);
   return track;
+}
+
+/** R25 — the arc position the CLOCK stops at: the finish gate where the
+ * stage has one, the last sample where it has none (the synthetic rigs
+ * `compileTrack` builds from a segment list), and null on an endless stage,
+ * which never stops at all. */
+export function finishAt(track: Track): number | null {
+  if (track.endless) return null;
+  if (track.finishS !== null) return track.finishS;
+  // No run-out at all — a synthetic rig built from a segment list. Its gate
+  // stands on the second-to-last sample rather than the last, so even there
+  // a flying finish has a couple of metres of road to land on.
+  return track.samples[Math.max(0, track.samples.length - 2)]?.s ?? track.length;
+}
+
+/** ...and the sample the gate itself stands on.
+ *
+ * Found by SEARCHING the samples rather than by dividing by `step`. Sample
+ * spacing is only approximately `SAMPLE_STEP` — each segment divides its own
+ * length into a whole number of steps — and the slack accumulates, so on a
+ * long stage `s / step` misses by several meters. The gate is a thing the
+ * player drives under at the exact moment the clock stops; it has to stand
+ * on the line and not near it. */
+export function finishIndex(track: Track): number {
+  const at = finishAt(track);
+  const samples = track.samples;
+  if (at === null || samples.length === 0) return samples.length - 1;
+  let lo = 0;
+  let hi = samples.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (samples[mid].s < at) lo = mid + 1;
+    else hi = mid;
+  }
+  // Whichever of the two straddling samples is actually nearest the line.
+  if (lo > 0 && at - samples[lo - 1].s < samples[lo].s - at) return lo - 1;
+  return lo;
 }
 
 /** Ground elevation of the road at arc position `s` (clamped). */

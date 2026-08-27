@@ -173,17 +173,33 @@ function tryGenerateStage(
     }
   }
 
-  // R2 — closing straight (featureless: the finish must be readable). It is
-  // validated like any other segment: a finish that would cross the stage
-  // (R10) or leave the world (R9) sheds tail segments until it fits, and a
-  // stage that cannot fit a legal finish above the minimum length is
+  // R2 — closing straight (featureless: the finish must be readable), with
+  // R23's run-out on the end of it: one straight, walked as one piece,
+  // carrying the finish line `runOut` meters short of its end. The two are
+  // validated together because they ARE together — a run-out that left the
+  // world or ran back across the stage would be exactly the dead end the
+  // rule exists to remove.
+  //
+  // It is validated like any other segment: a finish that would cross the
+  // stage (R10) or leave the world (R9) sheds tail segments until it fits,
+  // and a stage that cannot fit a legal finish above the minimum length is
   // rejected so the caller retries with a sub-seed.
   //
-  // Validated with the RUN-OFF on the end of it (R24): the apron past the
-  // flying finish is drawn road with a terrain shelf under it, so a stage
-  // that closes across its own line leaves that road hanging in the air
-  // just as surely as one that closes across the line itself.
-  const closing: SegmentPlan = { kind: "straight", length: R.closingStraight, feature: "none" };
+  // R25's RUN-OUT rides on the end of it: the closing straight and the road
+  // past the gate are one piece of straight, walked and validated as one,
+  // because a run-out that left the world or ran back across the stage
+  // would be exactly the dead end the rule exists to remove.
+  //
+  // And R24's run-off apron rides on the end of THAT: drawn road with a
+  // terrain shelf under it, so a stage that closes across its own line
+  // leaves that road hanging in the air just as surely as one that closes
+  // across the line itself.
+  const closing: SegmentPlan = {
+    kind: "straight",
+    length: R.closingStraight + R.runOut,
+    feature: "none",
+    runOut: R.runOut,
+  };
   const runOff: SegmentPlan = { kind: "straight", length: R.startZone.apron, feature: "none" };
   for (;;) {
     const { points, end } = probePoints(cursor, closing);
@@ -198,7 +214,9 @@ function tryGenerateStage(
       past.every(clearOfEverything)
     ) {
       commit(closing, points, end);
-      return total >= spec.band.min ? plans : null;
+      // R11 measures the RACED stage — the road up to the line. The
+      // run-out is road the clock never sees.
+      return total - R.runOut >= spec.band.min ? plans : null;
     }
     const dropped = plans.pop();
     if (!dropped || plans.length <= 1) return null;

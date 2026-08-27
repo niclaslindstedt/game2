@@ -9,6 +9,7 @@ import * as THREE from "three";
 import { TUNING, type GameEvent, type GameState } from "@engine";
 
 import { createAmbientLife } from "./ambient-life.ts";
+import { createCelebration } from "./celebration.ts";
 import { createGameCamera, type CameraMode } from "./camera.ts";
 import {
   DRAW_DISTANCE_SCALE,
@@ -35,6 +36,7 @@ import { createFumes } from "./fumes.ts";
 import { createRain } from "./rain.ts";
 import { createWayHomeArrow } from "./way-home.ts";
 import { buildMapRoute, type MapRoute } from "./map-route.ts";
+import { classify } from "./standings.ts";
 import { rockAt } from "./terrain.ts";
 import { buildWorld, type World } from "./world.ts";
 
@@ -148,6 +150,11 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   scene.add(rain.lines);
   const life = createAmbientLife();
   scene.add(life.group);
+  // The finish's salute. Its clouds live in the scene for the whole run and
+  // are empty until the line is crossed — a particle pool costs nothing
+  // while it is parked.
+  const celebration = createCelebration();
+  for (const cloud of celebration.clouds) scene.add(cloud);
   const wayHomeArrow = createWayHomeArrow();
   // The arrow lives in camera space, and a camera only draws its children
   // when it is itself part of the scene being rendered.
@@ -377,6 +384,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         foam.spawn(c.x, surface, c.z, FOAM, Math.round(30 * fx), 2.4);
       } else if (ev.type === "takeoff") {
         dust.spawn(c.x, c.y + 0.1, c.z, groundDust(state), Math.round(10 * fx), 3);
+      } else if (ev.type === "finish") {
+        // R25 — the salute, sized by where the time placed. Fourth and
+        // worse fire nothing, and `fire` knows it.
+        celebration.fire(classify(state.track, ev.time).place, world?.muzzles() ?? []);
       } else if (ev.type === "respawn") {
         chase.kick(0.3);
       } else if (ev.type === "impact") {
@@ -570,7 +581,8 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // An endless run streams its world: the road chunks and terrain tiles
     // ahead get built here, the ones far behind get dropped.
     world?.sync(state);
-    world?.update(dt);
+    world?.update(dt, c.x, c.z);
+    celebration.update(dt);
     car?.update(state, dt);
     if (ghost && ghostCar) ghostCar.update(ghost, dt);
     // The way home is a DRIVING aid, bolted to the camera. Under the menu's
@@ -664,6 +676,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     fumes.dispose();
     rain.dispose();
     life.dispose();
+    celebration.dispose();
     wayHomeArrow.dispose();
     environment.dispose();
     renderer.dispose();

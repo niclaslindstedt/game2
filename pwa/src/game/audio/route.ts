@@ -54,6 +54,19 @@ export function soundForEvent(
     case "lap":
       return { id: "lap", shape: event.best ? { pitch: 1.18, gain: 1.15 } : undefined };
 
+    case "cheer":
+      // R27 — how big the crowd is decides how loud and how WIDE it is: a
+      // knot of six at a corner is a thinner, tighter sound than the bank
+      // at the finish, and stretching it is most of what carries that.
+      return {
+        id: "cheer",
+        shape: {
+          gain: 0.55 + 0.75 * event.size,
+          pitch: 1.06 - 0.12 * event.size,
+          stretch: 0.85 + 0.35 * event.size,
+        },
+      };
+
     case "shift":
       return { id: event.gear > lastGear ? "shift_up" : "shift_down" };
 

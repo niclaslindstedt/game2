@@ -287,8 +287,12 @@ describe("stage generator", () => {
       const band = R.stageLengths[length].band;
       for (const seed of SEEDS.slice(0, 4)) {
         const track = compileStage(seed, length);
-        expect(track.length).toBeGreaterThanOrEqual(band.min - R.closingStraight);
-        expect(track.length).toBeLessThanOrEqual(band.max + R.closingStraight);
+        // R11 measures the RACED stage: the road up to the finish gate.
+        // R22's run-out past it is not part of the band.
+        const raced = track.finishS ?? track.length;
+        expect(raced).toBeGreaterThanOrEqual(band.min - R.closingStraight);
+        expect(raced).toBeLessThanOrEqual(band.max + R.closingStraight);
+        expect(track.length).toBeCloseTo(raced + R.runOut, 3);
       }
     }
   });

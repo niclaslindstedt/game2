@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // R16 — the road's CROSS-SECTION: what the ribbon looks like across its
 // width, and how the ground falls away beside it. A rally road is not a
-// flat carpet ruled onto the landscape. Cars have driven it: two worn
-// tracks run down it where every one of them puts its wheels, the loose
-// gravel they push aside piles at the edges, and the whole surface is
-// crowned so water runs off it. Asphalt is laid ON the ground rather than
+// flat carpet ruled onto the landscape. Look down a real dirt road and
+// there are FIVE LINES on it: a loose pale edge either side that no wheel
+// ever touches, two worn tracks where every car that came before put its
+// wheels, and the crown between them, driven over but never grooved. The
+// road is CURVED across its width, not level — the tracks are troughs and
+// the crown stands proud of them, which is what sheds the water and what
+// tells you from inside the car that the road has been used.
+//
+// Asphalt is laid ON the ground rather than
 // cut into it, so the mat stands proud of the verge with its chippings
 // spilled down the edge — and past the shoulder, on both, the ground
 // simply falls away into the country. No ditch: a trench ruled down each
@@ -37,15 +42,35 @@ export const ROAD_CROSS = {
    * flatter. */
   crown: { gravel: 0.17, asphalt: 0.1, deck: 0.03 },
 
-  /** The worn racing line: two tracks where every car that came before put
-   * its wheels. `at` is their lateral position as a fraction of the
-   * half-width, `width` how wide one track is, `depth` how far the gravel
-   * is worn down inside it — and on asphalt, how little (a sealed road
-   * polishes rather than ruts). */
+  /** THE FIVE LINES. Look at any dirt road that gets driven on and it is
+   * not one surface: it is five lines running down it. Two worn TRACKS
+   * where every car that came before put its wheels; the CROWN between
+   * them, driven over but never worn into a groove, so it stays the
+   * highest line across the road; and outside them a loose EDGE on each
+   * side that no wheel ever touches, which is why it is pale, why it is
+   * where the loose stuff ends up, and why it is the half of the road that
+   * grass grows back into.
+   *
+   * `at` is where a track's centre sits, in METERS from the road's own
+   * centerline — not a fraction of the width, because a wheel track is a
+   * wheel track whether the road is a lane or a boulevard: it is where the
+   * wheels of the traffic that wore it went. `width` is the trough's
+   * half-width, `depth` how far the gravel is worn down inside it — and on
+   * asphalt, how little, because a sealed road polishes rather than ruts.
+   * `centre` is how worn the crown between the tracks reads next to them. */
   rut: {
-    at: 0.44,
-    width: 1.35,
-    depth: { gravel: 0.085, asphalt: 0.015, deck: 0 },
+    at: 1.7,
+    width: 0.95,
+    depth: { gravel: 0.14, asphalt: 0.02, deck: 0 },
+    centre: 0.52,
+    /** ...and how worn the loose outer margin reads where the mat meets
+     * the verge. Low, but never zero: the edge of a road is still road,
+     * and a hard step from surfacing to nothing is the ruled line the
+     * transition into the grass is supposed to dissolve. */
+    edge: 0.22,
+    /** The share of the half-width the pair is never allowed past, so a
+     * narrow lane still has an edge outside its tracks. */
+    maxAt: 0.42,
   },
 
   /** The berm: the loose stuff the traffic pushes to the outside, piled up
@@ -127,6 +152,14 @@ export type RoadShape = {
   flat?: number;
 };
 
+/** Where the two wheel tracks run on a road of this width, meters from the
+ * centerline. A real-world distance, pulled in on a narrow lane so the
+ * loose outer edge never disappears — the five lines are five lines on
+ * every road the width dial can build (R16). */
+export function rutAt(width: number): number {
+  return Math.min(ROAD_CROSS.rut.at, (width / 2) * ROAD_CROSS.rut.maxAt);
+}
+
 /** Which cross-section a sample wears. A ford is flat water and a bridge
  * deck is flat concrete or plank — neither is bladed, rutted, or crowned
  * like a road that gets graded. */
@@ -157,8 +190,11 @@ export function crossOffset(shape: RoadShape, lateral: number, width: number): n
   const depth = ROAD_CROSS.rut.depth[kind] * open;
   if (depth > 0) {
     // Two tracks, each a soft trough — a hard-edged groove would be a rail
-    // the car steers against instead of a line it settles into.
-    const from = Math.abs(lateral) - ROAD_CROSS.rut.at * half;
+    // the car steers against instead of a line it settles into. Deep enough
+    // that the road is visibly CURVED across its width rather than a flat
+    // carpet with a paint job: this and the crown are the whole reason a
+    // dirt road reads as worn from inside the car.
+    const from = Math.abs(lateral) - rutAt(width);
     y -= depth * Math.exp(-sq(from / ROAD_CROSS.rut.width));
   }
   if (kind === "gravel" && t > ROAD_CROSS.berm.from) {
@@ -172,18 +208,32 @@ function clamp01(v: number): number {
 }
 
 /** How worn the surface is at a lateral offset, 0 (untouched edge) to 1
- * (the bottom of a wheel track). The renderer paints with it — polished
- * dark lines down an asphalt lane, gravel scrubbed to hardpack down a
- * dirt one — and the preview tooling shades the same way. */
+ * (the bottom of a wheel track) — the five lines of R16, as a number the
+ * paint can be mixed from. The renderer reads it (gravel scrubbed to
+ * hardpack down the tracks and loose between, polished lines down an
+ * asphalt lane) and the preview tooling shades the same way.
+ *
+ * Read it across the road and it goes: nothing at the edge, up to full in
+ * the near track, back down to `rut.centre` over the crown, up to full
+ * again in the far track, and back to nothing. That profile IS the look —
+ * a road painted from a single wear value is a flat band whatever colour
+ * it is painted. */
 export function wearAt(lateral: number, width: number): number {
   const half = width / 2;
-  const t = Math.min(1, Math.abs(lateral) / half);
-  const from = Math.abs(lateral) - ROAD_CROSS.rut.at * half;
-  const inRut = Math.exp(-sq(from / (ROAD_CROSS.rut.width * 0.9)));
-  // Everything between the tracks is swept too (the middle of the road is
-  // driven, just not worn into a groove); the outer tenth never is.
-  const swept = 0.45 * (1 - Math.min(1, sq(t / 0.8)));
-  return Math.min(1, Math.max(inRut, swept));
+  const at = rutAt(width);
+  const d = Math.abs(lateral);
+  // The tracks themselves.
+  const track = Math.exp(-sq((d - at) / (ROAD_CROSS.rut.width * 0.9)));
+  // The crown between them is driven over — swept clean, never grooved —
+  // so it holds one value right across the middle instead of peaking on
+  // the centerline, where in fact nothing drives at all.
+  const swept = ROAD_CROSS.rut.centre * clamp01(1 - sq(d / Math.max(1e-6, at * 1.3)));
+  // ...and outside them the road loosens off toward an edge no wheel has
+  // ever touched, over a fade rather than a step. That fade is what lets
+  // the road MEET the grass instead of stopping at it: the verge picks the
+  // same tone up where the mat hands over.
+  const fade = d <= at ? 1 : clamp01((half - d) / Math.max(1e-6, half - at));
+  return clamp01(Math.max(track, swept, ROAD_CROSS.rut.edge * fade));
 }
 
 /** The ground beside the road, relative to the sample's elevation: the

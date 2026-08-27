@@ -31,6 +31,7 @@ import {
 } from "./track.ts";
 import {
   DAMAGE_ZONES,
+  NEUTRAL_INPUT,
   updateSlip,
   type CarInput,
   type CarState,
@@ -202,6 +203,8 @@ export function createGame(options: CreateGameOptions): GameState {
     laps,
     lapTimes: [],
     lapStart: 0,
+    rollout: 0,
+    cheeredS: 0,
     progressIndex: 0,
     progressS: 0,
     lateral: 0,
@@ -285,8 +288,11 @@ function drown(state: GameState, events: GameEvent[], waterY: number): void {
   car.reversing = false;
   // A body arriving fast enough to reach the bed before it has floated at
   // all skips the whole beat, so the water is allowed to swallow only so
-  // much of a plunge.
-  car.vy = Math.max(car.vy, -T.crash.drown.plunge);
+  // much of a plunge — and none of a bounce. A car that arrives off a bank
+  // still RISING keeps that climb through the entry otherwise, and the
+  // buoyancy spring pays it straight back as a dip: the hull ducks under
+  // its own waterline on a moment the water should have taken.
+  car.vy = Math.min(0, Math.max(car.vy, -T.crash.drown.plunge));
 }
 
 /** One step of a car going down. Nothing else in the run advances while
@@ -378,6 +384,46 @@ function stepStuck(state: GameState, input: CarInput, events: GameEvent[]): void
   }
 }
 
+/** R25 — how a car is driven once the clock has stopped. The player is out
+ * of the loop from the moment the nose crosses the line, so the roll-out is
+ * driven by the stage instead: off the throttle, easing onto the brakes
+ * rather than standing on them (a car that stops dead at the gate never
+ * looks like it CROSSED anything), and steering back toward the middle of
+ * the road it is on so a car that arrived sideways straightens up and
+ * coasts rather than driving off into the trees while nobody is at the
+ * wheel. Deterministic: it reads the state and nothing else. */
+function rollOutInput(state: GameState): CarInput {
+  const roll = T.rollOut;
+  // Half the road's width is the whole correction — enough to gather a car
+  // that crossed the line off-line, gentle enough that it is a driver
+  // straightening up and not a rail.
+  const wanted = -state.lateral / (state.track.width * 0.5);
+  return {
+    ...NEUTRAL_INPUT,
+    steer: Math.max(-roll.steer, Math.min(roll.steer, wanted * roll.steer)),
+    brake: Math.min(1, state.rollout / roll.brakeRamp) * roll.brake,
+  };
+}
+
+/** R27 — the crowd noise. Stands are in stage order, so passing one is
+ * progress reaching its arc position: a cursor walks them, each is heard
+ * exactly once, and no step ever looks at more than the stands it just went
+ * by. Crawling past a crowd is not an event — nobody cheers a car being
+ * driven home — so a slow pass spends the stand silently rather than
+ * banking it for later. */
+function cheerFor(state: GameState, events: GameEvent[]): void {
+  const from = state.cheeredS;
+  const to = state.progressS;
+  if (to <= from) return;
+  state.cheeredS = to;
+  if (state.car.u < STAGE_RULES.crowd.cheerSpeed) return;
+  for (const stand of state.terrain.stands) {
+    if (stand.s <= from) continue;
+    if (stand.s > to) break;
+    events.push({ type: "cheer", size: stand.size });
+  }
+}
+
 /** Advance the run by one fixed timestep. Returns the events it emitted. */
 export function step(state: GameState, input: CarInput): GameEvent[] {
   const events: GameEvent[] = [];
@@ -412,13 +458,18 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   }
   if (state.phase === "finished") return events;
 
-  state.raceTime += T.dt;
+  // R25 — the roll-out. The clock has stopped; the car has not. Nothing the
+  // player is doing reaches it any more: it coasts down the run-out on a
+  // trailing brake, holding the road it is on, until it is stopped.
+  if (state.phase === "rollout") state.rollout += T.dt;
+  else state.raceTime += T.dt;
   // Going down in deep water is time that still costs the run but is not
   // being driven — the clock above runs, and nothing below it does.
   if (state.drowning) {
     stepDrowning(state, events);
     return events;
   }
+  const drive = state.phase === "rollout" ? rollOutInput(state) : input;
   const car = state.car;
   const track = state.track;
   const terrain = state.terrain;
@@ -490,9 +541,9 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   }
 
   if (car.airborne) {
-    stepAirborne(state.spec, car, input, ctx, events, state.stats);
+    stepAirborne(state.spec, car, drive, ctx, events, state.stats);
   } else {
-    stepGrounded(state.spec, car, input, ctx, events, state.stats);
+    stepGrounded(state.spec, car, drive, ctx, events, state.stats);
   }
 
   const fix = locate(track, car.x, car.z, state.progressIndex);
@@ -591,15 +642,20 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // A wreck is driven, not teleported: wear reaching 1 leaves a car with
   // nothing left to give still sitting where it stopped. Only the wedge
   // check below, or the reset input, ever brings it home.
-  if (input.reset && !crashed) respawn(state, events);
-  else if (!crashed) stepStuck(state, input, events);
+  if (drive.reset && !crashed) respawn(state, events);
+  else if (!crashed) stepStuck(state, drive, events);
 
-  // Through the gate. On a sprint that is the finish; on a circuit (R22) it
-  // is the same line the run started on, so crossing it books a lap and —
-  // until the last one — puts the car back at the top of the road it is
-  // already standing on. An endless stage has no gate at all: the stream
-  // above always keeps road ahead of the car.
-  if (finished) {
+  // R25 — the crowd, which only exists to be driven past.
+  if (state.phase === "racing") cheerFor(state, events);
+
+  // Through the gate. On a circuit (R22) it is the same line the run
+  // started on, so crossing it books a lap and — until the last one — puts
+  // the car back at the top of the road it is already standing on. On the
+  // last crossing the CLOCK is over; the car need not be, because a sprint
+  // has R25's run-out behind its gate and coasts down it. Whatever has no
+  // run-out — a circuit, a synthetic rig, an endless stage's absent finish
+  // — is simply over at the line, having nothing to coast down.
+  if (finished && state.phase === "racing") {
     const lapTime = state.raceTime - state.lapStart;
     const best = state.lapTimes.every((t) => lapTime < t);
     state.lapTimes.push(lapTime);
@@ -614,10 +670,20 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
       state.progressIndex = 0;
       state.progressS = track.samples[0].s;
     } else {
-      state.phase = "finished";
       events.push({ type: "finish", time: state.raceTime });
       status(`Finished stage ${state.seed} in ${state.raceTime.toFixed(2)} s`);
+      state.phase = track.finishS !== null ? "rollout" : "finished";
+      state.rollout = 0;
     }
+  }
+  // ...and the end of the roll-out: stopped, or out of road to stop on.
+  if (
+    state.phase === "rollout" &&
+    (car.u <= T.rollOut.restSpeed ||
+      state.rollout >= T.rollOut.maxTime ||
+      state.progressIndex >= track.samples.length - 1)
+  ) {
+    state.phase = "finished";
   }
 
   return events;

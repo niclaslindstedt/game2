@@ -104,6 +104,19 @@ async function atStageTime(page, seconds) {
   await page.waitForFunction(`${READ_CLOCK} >= ${seconds}`, null, { timeout: 180000 });
 }
 
+/** Wait until the car has slowed past `kmh`. The finish's two moments are
+ * both defined by where the car IS, and under software rendering the sim
+ * advances at a fraction of wall time — so a `waitForTimeout` after the
+ * flying finish lands somewhere different on every machine and usually
+ * catches the car still at rally pace. The speedo is the honest cursor. */
+async function slowerThan(page, kmh) {
+  await page.waitForFunction(
+    `Number.parseInt(document.querySelector('.hud-speed-num')?.textContent ?? '999', 10) < ${kmh}`,
+    null,
+    { timeout: 180000 },
+  );
+}
+
 /** The run's own clock, seconds. */
 async function stageTime(page) {
   return (await page.evaluate(`${READ_CLOCK} ?? 0`)) ?? 0;
@@ -888,6 +901,41 @@ await captureElement(
     await page.waitForTimeout(2000);
   },
   { shape: "circuit", length: "medium", seed: "3", bot: "1" },
+);
+
+// THE SALUTE, and the run-out behind it (R23/R24/R25). The one scene that
+// cannot be staged: the car has to actually drive a whole stage to reach a
+// finish, so the BOT drives a short SPRINT — a circuit's finish is its own
+// start line and has no run-out to coast down — and the shots wait for the
+// results card, which goes up the instant the line is crossed.
+//
+// Two frames, because the finish is two moments. The first catches the
+// cannons going off over the car as it comes through the gate, with the
+// crowd banked either side of it; the second catches the end of the
+// roll-out, the camera still planted at the line and the car well down the
+// run-out road, which is the one thing a still can prove about R23.
+//
+// Both wait on the SPEEDO rather than a timer: headless rendering advances
+// the sim at a fraction of wall time, so a `waitForTimeout` after the flying
+// finish lands somewhere different on every machine.
+const FINISH_WAIT = 600000;
+await capture(
+  "shot-salute",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await page.waitForSelector(".hud-finish", { timeout: FINISH_WAIT });
+    await slowerThan(page, 105);
+  },
+  { bot: "1", length: "short", seed: "38" },
+);
+await capture(
+  "shot-runout",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await page.waitForSelector(".hud-finish", { timeout: FINISH_WAIT });
+    await slowerThan(page, 12);
+  },
+  { bot: "1", length: "short", seed: "38" },
 );
 
 await browser.close();

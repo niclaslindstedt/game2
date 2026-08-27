@@ -30,7 +30,7 @@ The generator respects rally reality. Verbatim from the rule book, each enforced
 - **R13** A water crossing too wide to wade carries a BRIDGE instead of a ford: the road stays level across it, the water runs in a ravine below, and the deck is timber up to `bridge.timberMax` — past that only concrete spans it. Going over the side is a drowning, which is what a parapet is for.
 - **R14** The inside of a sharp corner is GUARDED: a turn (or a combination) that bends past `guard.angle` gets the ground between its entry and its exit filled with a steep mound or a dense grove. Neither is a wall — both can be taken — but both cost more than the corner does, which is the point: a corner whose inside is open grass is not a corner, it is a suggestion.
 - **R15** Asphalt comes in RUNS, never a chequerboard: the stage alternates gravel and sealed sections hundreds of meters long, and the `asphalt` dial is the share of the stage that comes out paved.
-- **R16** A road has a CROSS-SECTION: crowned so water runs off it, worn into two tracks where every car before you put its wheels, loose at the edges where they pushed the gravel; asphalt laid ON the ground so its mat stands proud with chippings down the edge. Past the shoulder the ground simply leans away into the field. No ditch — a trench ruled down both sides reads as a scar cut by a machine, and it is a trap that swallows a car the moment it puts a wheel wide.
+- **R16** A road has a CROSS-SECTION, and it is CURVED across its width rather than flat: FIVE LINES run down it — a loose pale edge on each side that no wheel ever touches, two worn tracks a real car's track-width apart where every car before you put its wheels, and the crown between them, driven over but never grooved and so the highest line on the road. The tracks are troughs deep enough to feel and to see, which is what tells you from inside the car that the road has been used; the loose edges fade into the shoulder rather than stopping at it, so the surfacing meets the country instead of ending at a ruled line. Asphalt is laid ON the ground so its mat stands proud with chippings down the edge. Past the shoulder the ground simply leans away into the field. No ditch — a trench ruled down both sides reads as a scar cut by a machine, and it is a trap that swallows a car the moment it puts a wheel wide.
 - **R17** A surface change is a JUNCTION, and a junction is a PLACE. It sits ON the route's centerline, at a corner tight enough that the two carriageways actually part (`paving.junctionParts`, measured in road widths) rather than peel apart over a slip road's worth of tangent. The sealed road is the MAIN road: it runs straight through, made of the route's own collinear arm on one side and the abandoned branch — the same road, the same width — on the other. The gravel road is the MINOR one, and it stops at the main road's edge, cut at that angle, with the smear of gravel every car turning out of it drags onto the seal. Inside the platform both carriageways are warped onto one graded plane: no camber, no bank, no wheel tracks, no borders, no markings. Where they part, the pavement is carried into the wedge between them so the gore starts as an island and not a knife edge. The abandoned branch is real road — it runs off the map (or to the shore of the lake that stopped it, never out across the water), and a player who ignores the tape can follow it.
 - **R18** Water obeys nature: ONE watercourse per valley, born on the high ground above the highest crossing, visiting every place the road crosses it in descending order, gathering width as it goes, pooling flat where the ground dips, and ending in the lowest water it can find. Two crossings the land refuses to join — a ridge between them — are on different water.
 - **R19** Turns are BANKED. A road built through a corner is superelevated: the cross-fall rolls out of the crown and into the turn over a runoff, tops out at a rate read off the corner's radius, and rolls back out again. Never a wall of a bank — the ceiling is a road a car could be parked on, and gravel takes more of it than tarmac because a bladed corner always does.
@@ -38,7 +38,10 @@ The generator respects rally reality. Verbatim from the rule book, each enforced
 - **R21** The road's WIDTH is a dial, from a narrow lane the trees crowd to a broad boulevard with room to place the car.
 - **R22** A stage is SHAPED as a sprint or as a CIRCUIT. A circuit's last sample lands back on its first, on the same heading, so the start line is also the finish line and the stage can be raced over laps. Everything else — the vocabulary, R3 through R8, the world bound, the features — is the sprint's; R10's self-distance is measured cyclically, because on a ring the road running back into the start line is that line's neighbour and not a crossing of it.
 - **R23** No two pieces of road share ground. The terrain lays its shelf under ONE road (`terrain.ts` picks the nearest), so a second corridor over the same country is left hanging in the air with nothing under it and nothing to drive on — a wall of road you can see through and drive through. So the clearance is measured centerline to centerline and sized from the road's own width: both corridors' full reach plus `roadClear.margin` of bare country between them. It binds the route against itself (R10) and it binds the abandoned branches (R17), which turn away from the stage the way they turn away from a lake and stop where they cannot.
-- **R24** The START is a PLACE, not a line. The grid, the APRON of dirt behind it — real road, with a terrain shelf under it and physics on it — and R23's clearance around both belong to the start: on a sprint the route may not come back into it, no branch may cross it, and the finish's run-off may not land in it. A road floating over the start is the first thing a run ever sees. A circuit is the exception the shape makes: it closes onto its own start line along the apron rather than across it (R22). Past the apron, at either end of a sprint, the stage is simply over and the terrain owns the ground.
+- **R24** The START is a PLACE, not a line. The grid, the APRON of dirt behind it — real road, with a terrain shelf under it and physics on it — and R23's clearance around both belong to the start: on a sprint the route may not come back into it, no branch may cross it, and the finish's run-out may not land in it. A road floating over the start is the first thing a run ever sees. A circuit is the exception the shape makes: it closes onto its own start line along the apron rather than across it (R22). Past the apron, at either end of a sprint, the stage is simply over and the terrain owns the ground.
+- **R25** A SPRINT's finish line is not the end of its road. It carries on past the gate for a RUN-OUT (`runOut`, 220 m) — road the car coasts down after the clock has stopped, so the finish is a line drawn across a road rather than the cliff edge of a world that ran out of budget. The run-out is NOT part of the raced stage: R11's length band measures the road up to the line, and `track.finishS` is where that line is. Crossing it puts the run into its `rollout` phase, and the car is driven home from there (`TUNING.rollOut`) with the camera planted at the gate. A circuit needs none — its finish is its own start line, with a whole lap of road already the other side of it — so it finishes at the line the way it always has.
+- **R26** Red-and-white KERBING goes where a driver needs it and nowhere else. See [the placement guide](#kerb-placement-r26) below.
+- **R27** A stage is WATCHED. Spectators gather where a rally crowd actually gathers — at the finish, and at the corners worth standing at — on ground clear of the road, on the OUTSIDE of the bend where nothing leaving the road is coming at them. Driving past a stand at pace is heard (`cheer`).
 
 ## The dials
 
@@ -98,6 +101,36 @@ An attempt that boxes itself in is abandoned quickly and restarted on a derived 
 ## Pacenotes
 
 The compiler emits one co-driver call per turn — contiguous same-direction turns merge into a single call — carrying direction, the tightest severity in the run, and the summed angle (`track.pacenotes`). The HUD reads them ahead of the car and shows the rally-style calls (EASY/MEDIUM/HARD LEFT/RIGHT, LONG past ~100°); the engine's positive direction reads as a LEFT turn on screen (the rendered world mirrors the engine's map view — the same one-flip rule as steering).
+
+## Kerb placement (R26)
+
+Red-and-white kerbing is placed for a reason, and there are only four of
+them. A stage edged in stripes from end to end is a bobsleigh run with trees
+behind it; kerbing at the corners that earn it is a road with a rally on it,
+and it is also readable — a driver at 160 km/h has about a second to take in
+what the road is telling them, so the marking has to mean something.
+
+`engine/mapgen/kerbs.ts` decides WHERE (returning arc-span zones per side);
+`pwa/src/game/kerbs.ts` decides what stands there.
+
+| Role       | Where it goes                                                           | What it says                                                                                      |
+| ---------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| **apex**   | the INSIDE of the bend, around its tightest point                       | "Aim here." The target that defines the line, and what stops it being cut into the ditch.         |
+| **exit**   | the OUTSIDE, from where the corner stops bending out along the straight | "The road ends here." Centrifugal force takes the car wide under power; this is the usable width. |
+| **entry**  | the OUTSIDE, on the approach to a hard corner                           | "Brake." A braking marker — so it only appears in front of a corner that needs braking for.       |
+| **hazard** | both sides, wrapped around a bridge deck or a jump lip's shoulders      | "This one will hurt." High-risk collision zones, marked all the way round.                        |
+
+Corners under `kerb.minAngle` (~41°) get nothing at all, which is what makes
+kerbing an event: on a stage of soft sweepers almost nothing is marked, and
+the one hairpin reads from a long way out. Only corners past
+`kerb.entryAngle` also earn a braking marker.
+
+**What is built there depends on the surface.** Tarmac gets a low-profile
+continuous kerb running through the whole zone. Gravel does not: a poured
+concrete kerb down the side of a forest road is a lie, so a dirt stage is
+marked with a run of red-and-white marker posts at `kerb.postSpacing`, and
+anti-cut blocks at an apex where cutting is the temptation. Discrete objects
+with country between them, never a painted band.
 
 ## Rolling elevation
 

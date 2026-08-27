@@ -29,7 +29,28 @@ export type DustStyle = {
    * instead of the sprite's bare square, which is the only way a particle
    * gets to be big enough to read as smoke. */
   puffy?: boolean;
+  /** Air resistance, 1/s, on all three axes. Grit is dense and keeps
+   * whatever it was thrown with; anything LIGHT — a scrap of paper, a cloud
+   * of smoke — gives that speed up almost at once, and the difference
+   * between the two is the whole difference between a spray and a burst.
+   *
+   * It has to act VERTICALLY too, or a burst fired upward keeps every bit
+   * of its muzzle speed against nothing but gravity and leaves the frame:
+   * a cannon charge at 17 m/s and paper's gravity would climb seventy
+   * metres. With drag the same charge arcs a few metres up, which is what a
+   * cannon full of paper actually does. */
+  drag?: number;
+  /** How far a particle wanders sideways as it falls, m/s at its widest.
+   * This is what makes confetti confetti: a flat scrap does not fall, it
+   * flutters, and a burst of colour that drops in straight lines reads as
+   * sparks. Each grain wanders on its own phase, so a cloud of them never
+   * sways in unison. */
+  flutter?: number;
 };
+
+/** How fast a fluttering particle wanders, Hz. Slow enough to read as
+ * paper turning over rather than a vibration. */
+const FLUTTER_HZ = 1.15;
 
 /** Gravel: fine grit, and a lot of it. The grains are deliberately SMALL —
  * near the lowered chase cam a big point sprite reads as a glitchy square,
@@ -163,8 +184,10 @@ export type DustTint = {
 
 export type Dust = {
   points: THREE.Points;
-  /** `vx`/`vz` seed every particle with a base world velocity (the car's
-   * wake) on top of the random spread. */
+  /** `vx`/`vy`/`vz` seed every particle with a base world velocity on top
+   * of the random spread — the car's wake for a thrown cloud, the barrel's
+   * own aim for anything fired out of one. `vy` ADDS to the style's rise
+   * rather than replacing it. */
   spawn: (
     x: number,
     y: number,
@@ -174,6 +197,7 @@ export type Dust = {
     spread: number,
     vx?: number,
     vz?: number,
+    vy?: number,
   ) => void;
   update: (dt: number) => void;
   dispose: () => void;
@@ -211,6 +235,7 @@ export function createDust(style: DustStyle = GRAVEL_DUST): Dust {
     spread: number,
     vx = 0,
     vz = 0,
+    vy = 0,
   ): void => {
     const mix = typeof color === "number" ? null : color;
     if (!mix) tint.set(color as number);
@@ -222,7 +247,7 @@ export function createDust(style: DustStyle = GRAVEL_DUST): Dust {
       positions[i * 3 + 1] = y + Math.random() * 0.3;
       positions[i * 3 + 2] = z + (Math.random() - 0.5) * 0.6;
       velocities[i * 3] = vx + (Math.random() - 0.5) * spread;
-      velocities[i * 3 + 1] = style.rise + Math.random() * spread;
+      velocities[i * 3 + 1] = vy + style.rise + Math.random() * spread;
       velocities[i * 3 + 2] = vz + (Math.random() - 0.5) * spread;
       colors[i * 3] = tint.r * (0.85 + Math.random() * 0.3);
       colors[i * 3 + 1] = tint.g * (0.85 + Math.random() * 0.3);
@@ -231,14 +256,32 @@ export function createDust(style: DustStyle = GRAVEL_DUST): Dust {
     }
   };
 
+  let clock = 0;
+  const drag = style.drag ?? 0;
+  const flutter = style.flutter ?? 0;
   const update = (dt: number): void => {
+    clock += dt;
+    // A drag of `k` over `dt` leaves this share of the horizontal speed.
+    const keep = drag > 0 ? Math.max(0, 1 - drag * dt) : 1;
     for (let i = 0; i < POOL; i++) {
       if (life[i] <= 0) continue;
       life[i] -= dt;
       velocities[i * 3 + 1] -= style.gravity * dt;
+      if (keep !== 1) {
+        velocities[i * 3] *= keep;
+        velocities[i * 3 + 1] *= keep;
+        velocities[i * 3 + 2] *= keep;
+      }
       positions[i * 3] += velocities[i * 3] * dt;
       positions[i * 3 + 1] += velocities[i * 3 + 1] * dt;
       positions[i * 3 + 2] += velocities[i * 3 + 2] * dt;
+      if (flutter > 0) {
+        // The phase comes off the slot index, which is free and never
+        // repeats inside a burst — no per-particle state to carry.
+        const phase = i * 0.618;
+        positions[i * 3] += Math.cos(clock * FLUTTER_HZ * 6.283 + phase) * flutter * dt;
+        positions[i * 3 + 2] += Math.sin(clock * FLUTTER_HZ * 4.71 + phase) * flutter * dt;
+      }
       if (life[i] <= 0) positions[i * 3 + 1] = -50; // park expired below ground
     }
     geo.attributes.position.needsUpdate = true;

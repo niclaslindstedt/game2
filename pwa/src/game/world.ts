@@ -13,19 +13,10 @@
 import * as THREE from "three";
 import {
   GROVES,
-  ROAD_CROSS,
   STAGE_RULES,
-  corridorOffset,
   createRng,
-  finishIndex,
-  gateHalfWidth,
   inStream,
-  junctionDust,
-  junctionFlat,
-  junctionMainEdge,
   junctionPlatformY,
-  type RoadShape,
-  wearAt,
   type GameState,
   type Spur,
   type Track,
@@ -34,9 +25,22 @@ import {
 
 import { biomeFor, type Biome, type Community, type FloraMix } from "./biome.ts";
 import { buildFlora, type Flora, type FloraPlacement } from "./flora.ts";
-import { APRON, buildTerrain, LAKE_Y, type Terrain } from "./terrain.ts";
+import { buildTerrain, LAKE_Y, type Terrain } from "./terrain.ts";
 import { buildStreamMeshes } from "./streams.ts";
-import { bannerTexture, chevronTexture, gravelTexture, waterTexture } from "./textures.ts";
+import { chevronTexture, gravelTexture, waterTexture } from "./textures.ts";
+import { buildFinishGate, buildStartGate, type FinishGate, type Muzzle } from "./finish-gate.ts";
+import { buildKerbing } from "./kerbs.ts";
+import { buildCrowd, type Crowd } from "./crowd.ts";
+import { rightOf } from "./ribbon.ts";
+import {
+  ROAD_PAINT,
+  buildChippings,
+  buildFords,
+  buildMarkings,
+  buildRoad,
+  buildSkirts,
+  chunkSamples,
+} from "./road-mesh.ts";
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -46,551 +50,6 @@ const UP = new THREE.Vector3(0, 1, 0);
  * road comfortably past the fog ceiling. */
 const CHUNK_SAMPLES = 100;
 const PRUNE_BEHIND = 450;
-
-function rightOf(heading: number): { x: number; z: number } {
-  return { x: Math.cos(heading), z: -Math.sin(heading) };
-}
-
-/** Anything with a road's cross-section: the stage's own samples, or an
- * abandoned branch's (R17). The ribbon builder does not care which. */
-type Ribbon = RoadShape & {
-  x: number;
-  z: number;
-  heading: number;
-  elevation: number;
-  s: number;
-};
-
-/** The road's palette. Gravel is graded dirt, worn to hardpack down the two
- * tracks every car before you drove in, loose and pale at the edges;
- * asphalt is bitumen, polished lighter where the tires have burnished it
- * and grey-black between. */
-const ROAD_PAINT = {
-  gravel: { loose: "#d2b489", worn: "#8a7046" },
-  asphalt: { loose: "#3a3b40", worn: "#54555c" },
-  water: { loose: "#8fa6c6", worn: "#8fa6c6" },
-  deck: { loose: "#b7b3a8", worn: "#a4a096" },
-  shoulder: "#8a734f",
-  /** Past the bare shoulder the verge greens over and meets the terrain's
-   * own grass — there is no ditch to color (R16). */
-  verge: "#6f8f3e",
-};
-
-/** Where the ribbon puts a vertex across the road, as a fraction of the
- * half-width: dense around the wheel tracks (0.44) so the worn line has a
- * shape, sparser between. Mirrored for the far side. */
-const MAT_STATIONS = [0, 0.18, 0.32, 0.38, 0.44, 0.5, 0.6, 0.75, 0.88, 1];
-/** ...and past the edge, in meters out from it: the mat's chamfer, the
- * bare shoulder, and the grassed slope tipping away to where the landscape
- * takes over (R16 — no ditch). */
-const VERGE_STATIONS = [
-  ROAD_CROSS.chamfer,
-  ROAD_CROSS.verge.bareTo,
-  ROAD_CROSS.verge.bareTo + (ROAD_CROSS.reach - ROAD_CROSS.verge.bareTo) * 0.45,
-  ROAD_CROSS.reach,
-];
-
-/** R17 — inside a junction, neither road wears a border: no shoulder, no
- * edge line, no camber. The ribbon builders drop those stations here, and
- * the engine has already warped both carriageways onto the junction's own
- * plane, so what is left is one paved area with two roads leaving it. */
-function junctionAt(track: Track, x: number, z: number): number {
-  let best = 0;
-  for (const junction of track.junctions) {
-    const flat = junctionFlat(junction, x, z);
-    if (flat > best) best = flat;
-  }
-  return best;
-}
-
-/** R17 — how far a point is past the MAIN road's edge at the junction it
- * is nearest to, m; null where no junction reaches it. The seam between
- * the tarmac and the gravel road that meets it runs along that edge, at
- * that angle, because that is where one road's surfacing stops and the
- * other's begins. */
-function mainEdgeAt(track: Track, x: number, z: number): number | null {
-  let best: number | null = null;
-  for (const junction of track.junctions) {
-    const out = junctionMainEdge(junction, x, z);
-    if (out === null) continue;
-    if (best === null || out < best) best = out;
-  }
-  return best;
-}
-
-/** How far past the main road's edge gravel is still dragged out onto the
- * tarmac, m — the smear of stones every car turning out of a dirt road
- * carries with it, which in life is the most obvious thing about a
- * junction between a sealed road and an unsealed one. */
-const DRAG_OUT = 13;
-/** ...and how much of the tarmac's own color the smear takes at the mouth
- * of the junction, where every car turning off the dirt road drops what it
- * carried onto the seal. */
-const DRAG_ON = 0.42;
-
-/** R17 — how much gravel the tarmac wears here, dragged out of the dirt
- * road by every car that has turned off it. */
-function dustAt(track: Track, x: number, z: number): number {
-  let best = 0;
-  for (const junction of track.junctions) {
-    const dust = junctionDust(junction, x, z);
-    if (dust > best) best = dust;
-  }
-  return best;
-}
-
-/** R17 — is this piece of road standing on the MAIN road's mat? A minor
- * road has no border where it crosses the road it meets: its shoulder and
- * its edge line stop at that edge, which is the whole reason a junction
- * looks built. Wider than the mat by a margin, so the border comes back
- * once the corner is properly clear of it and not a meter after. */
-function onMainMat(track: Track, x: number, z: number): boolean {
-  const out = mainEdgeAt(track, x, z);
-  return out !== null && out < 1.5;
-}
-
-/** Signed lateral offsets of every vertex across the corridor, left to
- * right: verge, mat, verge. */
-function stations(width: number): number[] {
-  const half = width / 2;
-  const mat = MAT_STATIONS.map((t) => t * half);
-  const out = VERGE_STATIONS.map((d) => half + d);
-  return [
-    ...out.map((d) => -d).reverse(),
-    ...mat.map((v) => -v).reverse(),
-    ...mat.slice(1),
-    ...out,
-  ];
-}
-
-/** A chunk's samples for ribbon building: the range overlapped one sample
- * back so consecutive chunks weld, plus a straight dirt apron extrapolated
- * past the stage's ends — a rally car launches from dirt already laid
- * before the start gate, and a finite stage's flying finish has road to
- * run off onto. Only the drawn ribbon — the physics' samples are
- * untouched. */
-function chunkSamples(track: Track, from: number, to: number): Track["samples"] {
-  const base = track.samples.slice(Math.max(0, from - 1), to);
-  const n = Math.round(APRON / track.step);
-  if (from === 0) {
-    const first = track.samples[0];
-    const pre: Track["samples"] = [];
-    for (let i = n; i >= 1; i--) {
-      pre.push({
-        ...first,
-        x: first.x - Math.sin(first.heading) * track.step * i,
-        z: first.z - Math.cos(first.heading) * track.step * i,
-        s: first.s - track.step * i,
-        surface: "gravel",
-        deck: null,
-        lift: 0,
-        jump: false,
-      });
-    }
-    base.unshift(...pre);
-  }
-  if (!track.endless && to === track.samples.length) {
-    const last = track.samples[track.samples.length - 1];
-    for (let i = 1; i <= n; i++) {
-      base.push({
-        ...last,
-        x: last.x + Math.sin(last.heading) * track.step * i,
-        z: last.z + Math.cos(last.heading) * track.step * i,
-        s: last.s + track.step * i,
-        surface: "gravel",
-        deck: null,
-        lift: 0,
-        jump: false,
-      });
-    }
-  }
-  return base;
-}
-
-/** The road, across its whole width and a little past it: the mat with its
- * camber and its two worn wheel tracks, the chamfered edge, the shoulder,
- * the ditch, and the lip where the landscape takes over (R16). The SHAPE
- * comes from the engine (road.ts) — the same profile the physics rides and
- * the terrain field hangs its shelf off — so what the car climbs out of is
- * exactly what the player sees it climb out of.
- *
- * The paint is this module's: gravel worn to hardpack down the tracks and
- * loose at the edges, asphalt burnished where the tires polish it, a
- * shoulder of spilled dirt, and a ditch that greens over. */
-function buildRoad(track: Track, samples: Ribbon[], width: number, bias = 0.02): THREE.Mesh {
-  const half = width / 2;
-  const lat = stations(width);
-  const matOnly = lat.filter((l) => Math.abs(l) <= half);
-  const positions: number[] = [];
-  const uvs: number[] = [];
-  const colors: number[] = [];
-  const indices: number[] = [];
-  const paint = new THREE.Color();
-  const shoulder = new THREE.Color(ROAD_PAINT.shoulder);
-  const verge = new THREE.Color(ROAD_PAINT.verge);
-  const loose = new THREE.Color();
-  const worn = new THREE.Color();
-  const sealedLoose = new THREE.Color(ROAD_PAINT.asphalt.loose);
-  const sealedWorn = new THREE.Color(ROAD_PAINT.asphalt.worn);
-  const sealed = new THREE.Color();
-  const gravelDust = new THREE.Color();
-  const looseGravel = new THREE.Color(ROAD_PAINT.gravel.loose);
-  const wornGravel = new THREE.Color(ROAD_PAINT.gravel.worn);
-
-  let lastCount = -1;
-  let run = 0;
-  for (let i = 0; i < samples.length; i++) {
-    const s = samples[i];
-    const r = rightOf(s.heading);
-    const bridge = s.deck != null;
-    // Inside a junction the road is mat and nothing else — its border is
-    // cut away and the throat below pays the gap back as road surface.
-    // Only the mouth loses its border, not the whole platform: a junction
-    // cuts a hole in both roads' edges, it does not delete a hundred
-    // meters of them.
-    const cross = junctionAt(track, s.x, s.z) > 0.25 || onMainMat(track, s.x, s.z) ? matOnly : lat;
-    // The strip has to restart wherever the station count changes: the two
-    // cross-sections cannot be woven into each other.
-    if (cross.length !== lastCount) {
-      lastCount = cross.length;
-      run = 0;
-    }
-    const kind = bridge
-      ? "deck"
-      : s.surface === "water"
-        ? "water"
-        : s.surface === "asphalt"
-          ? "asphalt"
-          : "gravel";
-    loose.set(ROAD_PAINT[kind].loose);
-    worn.set(ROAD_PAINT[kind].worn);
-    for (const l of cross) {
-      const out = Math.abs(l) - half;
-      const px = s.x + r.x * l;
-      const pz = s.z + r.z * l;
-      const y = s.elevation + corridorOffset(s, l, width) + bias;
-      positions.push(px, y, pz);
-      // UVs run meters along and across, so the grain is the same size
-      // whatever the road does and never stretches through a corner.
-      uvs.push(l / 3.5, s.s / 3.5);
-      if (out <= 0) {
-        // On the mat: the wear map decides the mix. The bridge deck is
-        // planks or concrete, worn the same way but never bermed. Inside a
-        // junction the wear FLATTENS: two roads' wheel tracks crossing each
-        // other is the tell that two ribbons were laid over one another,
-        // and a real crossing is scuffed evenly all over anyway.
-        const flat = s.flat ?? 0;
-        paint.copy(loose).lerp(worn, wearAt(l, width) * (1 - flat) + 0.55 * flat);
-        // R17 — and at a junction the surfacing changes along the MAIN
-        // road's edge, not across the minor road: the tarmac is laid to
-        // its own edge line and the gravel starts there, smeared out over
-        // the drag-out every car turning off it leaves behind. Read per
-        // vertex, so the seam is that edge, at that angle.
-        if (kind === "gravel") {
-          const past = mainEdgeAt(track, px, pz);
-          if (past !== null && past < DRAG_OUT) {
-            const t = Math.max(0, past) / DRAG_OUT;
-            sealed.copy(sealedLoose).lerp(sealedWorn, 0.55);
-            paint.lerp(sealed, 1 - t * t * (3 - 2 * t));
-          }
-        } else if (kind === "asphalt") {
-          // ...and the other way: every car that turns out of the dirt
-          // road carries stones onto the tarmac, so the sealed side of a
-          // junction wears a smear of gravel too. In life it is the most
-          // obvious thing about a junction between a sealed road and an
-          // unsealed one.
-          const dust = dustAt(track, px, pz);
-          if (dust > 0) {
-            gravelDust.copy(looseGravel).lerp(wornGravel, 0.5);
-            paint.lerp(gravelDust, dust * DRAG_ON);
-          }
-        }
-      } else if (out < ROAD_CROSS.verge.bareTo) {
-        paint.copy(shoulder);
-      } else {
-        paint
-          .copy(shoulder)
-          .lerp(
-            verge,
-            Math.min(
-              1,
-              (out - ROAD_CROSS.verge.bareTo) / (ROAD_CROSS.reach - ROAD_CROSS.verge.bareTo),
-            ),
-          );
-      }
-      colors.push(paint.r, paint.g, paint.b);
-    }
-    if (run > 0) {
-      // Wound so the face normals point up — the road is drawn single-sided
-      // and a downward winding would cull the whole surface from above.
-      const b = positions.length / 3 - cross.length;
-      const a = b - cross.length;
-      for (let k = 0; k < cross.length - 1; k++) {
-        indices.push(a + k, b + k, a + k + 1, a + k + 1, b + k, b + k + 1);
-      }
-    }
-    run += 1;
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
-  geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-  geo.setIndex(indices);
-  geo.computeVertexNormals();
-  const mat = new THREE.MeshLambertMaterial({ map: gravelTexture(), vertexColors: true });
-  return new THREE.Mesh(geo, mat);
-}
-
-/** Dirt skirts: close the gap between the ribbon's outer lip and the ground
- * lattice under it, so a raised road (ramps, crests, an asphalt mat) reads
- * as a solid landform and never as floating carpet. A bridge deck gets
- * none — there is nothing under a bridge but air and water. */
-function buildSkirts(samples: Ribbon[], width: number): THREE.Mesh {
-  const half = width / 2;
-  const edge = half + ROAD_CROSS.reach;
-  const positions: number[] = [];
-  const indices: number[] = [];
-  for (const side of [-1, 1]) {
-    let start = positions.length / 3;
-    let run = 0;
-    for (let i = 0; i < samples.length; i++) {
-      const s = samples[i];
-      if (s.deck != null) {
-        // Break the strip: the next stretch of ground starts its own.
-        start = positions.length / 3;
-        run = 0;
-        continue;
-      }
-      const r = rightOf(s.heading);
-      const ex = s.x + r.x * edge * side;
-      const ez = s.z + r.z * edge * side;
-      const top = s.elevation + corridorOffset(s, edge * side, width);
-      // The skirt drops a few meters below grade — deep enough to meet the
-      // terrain shelf under every roll of the road.
-      positions.push(ex, top, ez, ex, top - 5, ez);
-      if (run > 0) {
-        const a = start + (run - 1) * 2;
-        if (side > 0) indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
-        else indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
-      }
-      run += 1;
-    }
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  geo.setIndex(indices);
-  geo.computeVertexNormals();
-  const mat = new THREE.MeshLambertMaterial({ color: "#8a6f4d", side: THREE.DoubleSide });
-  return new THREE.Mesh(geo, mat);
-}
-
-/** The road's markings, both edges and the middle. Which markings depends
- * on what the road IS: a rally gravel road is edged with the red and white
- * strips the stage's tape and boards are made of, a public asphalt road
- * with a solid white edge line and a dashed centre — which is most of what
- * makes the tarmac sections read as a road the rally borrowed rather than
- * a differently-colored stripe. Fords and bridge decks carry neither.
- * Markings run the stage proper, never the aprons — pass the bare range. */
-function buildMarkings(track: Track, samples: Ribbon[], width: number): THREE.Mesh {
-  const half = width / 2;
-  const positions: number[] = [];
-  const colors: number[] = [];
-  const indices: number[] = [];
-  const red = new THREE.Color("#e23c2c");
-  const white = new THREE.Color("#f6f3ea");
-  const paint = new THREE.Color("#e6e2d2");
-
-  /** One strip of paint along the road: a band between two lateral offsets
-   * that only exists where `on` says it does. */
-  const strip = (
-    from: (s: Ribbon) => number,
-    to: (s: Ribbon) => number,
-    on: (s: Ribbon) => boolean,
-    color: (s: Ribbon) => THREE.Color | null,
-    flip: boolean,
-  ): void => {
-    let start = positions.length / 3;
-    let run = 0;
-    for (const s of samples) {
-      const tint = on(s) ? color(s) : null;
-      if (!tint) {
-        start = positions.length / 3;
-        run = 0;
-        continue;
-      }
-      const r = rightOf(s.heading);
-      const inner = from(s);
-      const outer = to(s);
-      const yIn = s.elevation + corridorOffset(s, inner, width) + 0.035;
-      const yOut = s.elevation + corridorOffset(s, outer, width) + 0.035;
-      positions.push(
-        s.x + r.x * inner,
-        yIn,
-        s.z + r.z * inner,
-        s.x + r.x * outer,
-        yOut,
-        s.z + r.z * outer,
-      );
-      colors.push(tint.r, tint.g, tint.b, tint.r, tint.g, tint.b);
-      if (run > 0) {
-        const a = start + (run - 1) * 2;
-        if (flip) indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
-        else indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
-      }
-      run += 1;
-    }
-  };
-
-  const plain = (s: Ribbon): boolean =>
-    s.surface !== "water" &&
-    s.deck == null &&
-    junctionAt(track, s.x, s.z) < 0.4 &&
-    !onMainMat(track, s.x, s.z);
-  for (const side of [-1, 1]) {
-    // Gravel: the rally's own red-and-white edging, alternating every few
-    // meters, sat on the outer band of the mat.
-    strip(
-      () => (half - 0.9) * side,
-      () => half * side,
-      (s) => plain(s) && s.surface !== "asphalt",
-      (s) => (Math.floor(s.s / 4) % 2 === 0 ? red : white),
-      side > 0,
-    );
-    // Asphalt: a solid white edge line, a hand's width inside the kerb.
-    strip(
-      () => (half - 0.65) * side,
-      () => (half - 0.3) * side,
-      (s) => plain(s) && s.surface === "asphalt",
-      () => paint,
-      side > 0,
-    );
-  }
-  // ...and the broken centre line, 3 m of paint every 9.
-  strip(
-    () => -0.16,
-    () => 0.16,
-    (s) => plain(s) && s.surface === "asphalt" && s.s % 9 < 3,
-    () => paint,
-    false,
-  );
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-  geo.setIndex(indices);
-  geo.computeVertexNormals();
-  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
-  return new THREE.Mesh(geo, mat);
-}
-
-/** The chippings that spill down an asphalt mat's edge. Asphalt is LAID —
- * a mat built up on the ground with nothing holding its sides — so its
- * edge is always a scatter of loose stone rather than a clean line, and
- * that scatter is most of what tells you the road stands proud. */
-function buildChippings(
-  track: Track,
-  samples: Ribbon[],
-  width: number,
-): THREE.InstancedMesh | null {
-  const half = width / 2;
-  const stones: { x: number; y: number; z: number; s: number; spin: number }[] = [];
-  for (let i = 0; i < samples.length; i += 1) {
-    const s = samples[i];
-    if (s.surface !== "asphalt" || s.deck != null) continue;
-    if (junctionAt(track, s.x, s.z) > 0.25 || onMainMat(track, s.x, s.z)) continue;
-    const r = rightOf(s.heading);
-    for (const side of [-1, 1]) {
-      // Two rows per side, jittered off the sample index so the scatter
-      // never lines up into a rail.
-      const jitter = ((i * 2654435761) % 1000) / 1000;
-      const out = half + ROAD_CROSS.chamfer * (0.4 + jitter * 0.9);
-      const x = s.x + r.x * out * side;
-      const z = s.z + r.z * out * side;
-      stones.push({
-        x,
-        y: s.elevation + corridorOffset(s, out * side, width),
-        z,
-        s: 0.1 + jitter * 0.22,
-        spin: jitter * Math.PI * 2,
-      });
-    }
-  }
-  if (stones.length === 0) return null;
-  const geo = new THREE.DodecahedronGeometry(1);
-  const mat = new THREE.MeshLambertMaterial({ color: "#7f7a70" });
-  const mesh = new THREE.InstancedMesh(geo, mat, stones.length);
-  const m = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  const v = new THREE.Vector3();
-  const sc = new THREE.Vector3();
-  stones.forEach((p, i) => {
-    q.setFromAxisAngle(UP, p.spin);
-    m.compose(v.set(p.x, p.y + p.s * 0.3, p.z), q, sc.set(p.s, p.s * 0.7, p.s));
-    mesh.setMatrixAt(i, m);
-  });
-  return mesh;
-}
-
-/** Ford overlays: a wider translucent water sheet over each water run.
- * Only draws runs that COMPLETE before `to`; returns where the next call
- * should resume so a run straddling a chunk boundary is drawn whole by the
- * chunk that owns its end. */
-function buildFords(
-  track: Track,
-  from: number,
-  to: number,
-  tex: THREE.Texture,
-): { group: THREE.Group; next: number } {
-  const group = new THREE.Group();
-  const samples = track.samples;
-  const half = track.width / 2 + 2.5;
-  const flush = (a: number, b: number): void => {
-    const positions: number[] = [];
-    const uvs: number[] = [];
-    const indices: number[] = [];
-    for (let i = a; i <= b; i++) {
-      const s = samples[i];
-      const r = rightOf(s.heading);
-      const y = s.elevation + 0.09;
-      positions.push(s.x - r.x * half, y, s.z - r.z * half, s.x + r.x * half, y, s.z + r.z * half);
-      uvs.push(0, s.s / 4, 1, s.s / 4);
-      if (i > a) {
-        const q = (i - a - 1) * 2;
-        indices.push(q, q + 2, q + 1, q + 1, q + 2, q + 3);
-      }
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-    geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
-    geo.setIndex(indices);
-    geo.computeVertexNormals();
-    // Phong, like the lakes: the ford glitters when the sun catches it.
-    const mat = new THREE.MeshPhongMaterial({
-      map: tex,
-      specular: 0xcfe4ff,
-      shininess: 120,
-      transparent: true,
-      opacity: 0.85,
-    });
-    group.add(new THREE.Mesh(geo, mat));
-  };
-  let i = from;
-  let next = from;
-  while (i < to) {
-    if (samples[i].surface !== "water") {
-      i++;
-      next = i;
-      continue;
-    }
-    let j = i;
-    while (j < samples.length && samples[j].surface === "water") j++;
-    if (j >= to && to < samples.length) break; // straddles the frontier — defer
-    flush(Math.max(0, i - 1), Math.min(j, samples.length - 1));
-    i = j;
-    next = i;
-  }
-  return { group, next };
-}
 
 /** The community a grove-quilt index names — the quilt itself lives in the
  * ENGINE's terrain field now (terrain.field.groveAt), because the trunks it
@@ -1137,75 +596,18 @@ function buildCones(track: Track, from: number, to: number): THREE.Group {
   return group;
 }
 
-/** A rally gate over the road at a sample, after the real thing: red/white
- * candy-striped legs, a white banner with its word on the face the
- * approaching car reads, and hay bales lining the road below. */
-/** A gantry over the road, posts standing on the line the engine watches.
- * On a CIRCUIT (R22) the start line and the finish line are the same line,
- * so it gets ONE gate saying so rather than two ten metres apart. */
-function buildGate(track: Track, index: number, label: string): THREE.Group {
-  const group = new THREE.Group();
-  // The posts stand at the ends of the LINE the engine watches, so what the
-  // player aims between is exactly what the timer counts as crossed.
-  const half = gateHalfWidth(track);
-  const s = track.samples[index];
-  const r = rightOf(s.heading);
-  const red = new THREE.MeshLambertMaterial({ color: "#e23c2c" });
-  const white = new THREE.MeshLambertMaterial({ color: "#f6f3ea" });
-  const stripeGeo = new THREE.BoxGeometry(0.45, 1, 0.45);
-  const baleGeo = new THREE.BoxGeometry(1.5, 0.75, 0.85);
-  const baleMat = new THREE.MeshLambertMaterial({ color: "#d9b45c" });
-  for (const side of [-1, 1]) {
-    for (let k = 0; k < 5; k++) {
-      const seg = new THREE.Mesh(stripeGeo, k % 2 === 0 ? red : white);
-      seg.position.set(s.x + r.x * half * side, s.elevation + k + 0.5, s.z + r.z * half * side);
-      seg.rotation.y = s.heading;
-      group.add(seg);
-    }
-    // A short wall of bales each side: three along the road, one on top.
-    for (let k = 0; k < 4; k++) {
-      const along =
-        track.samples[Math.max(0, Math.min(track.samples.length - 1, index + (k - 1) * 2))];
-      const bale = new THREE.Mesh(baleGeo, baleMat);
-      const lat = (half + 0.9) * side;
-      const top = k === 3;
-      const b = top ? track.samples[index] : along;
-      bale.position.set(
-        b.x + rightOf(b.heading).x * lat,
-        b.elevation + (top ? 1.12 : 0.38),
-        b.z + rightOf(b.heading).z * lat,
-      );
-      bale.rotation.y = b.heading + Math.PI / 2 + (k - 1.5) * 0.07;
-      group.add(bale);
-    }
-  }
-  const text = new THREE.MeshLambertMaterial({
-    color: "#ffffff",
-    map: bannerTexture(label),
-  });
-  // BoxGeometry face order is +x,-x,+y,-y,+z,-z; with rotation.y set to
-  // the heading, -z is the face looking back down the road at the car.
-  const banner = new THREE.Mesh(new THREE.BoxGeometry(half * 2, 1.3, 0.3), [
-    white,
-    white,
-    white,
-    white,
-    white,
-    text,
-  ]);
-  banner.position.set(s.x, s.elevation + 4.7, s.z);
-  banner.rotation.y = s.heading;
-  banner.name = label;
-  group.add(banner);
-  return group;
-}
-
 export type World = {
   group: THREE.Group;
-  update: (dt: number) => void;
+  /** Advance everything that moves on its own. The focus point is the car:
+   * R26's crowd only animates the stands near it. */
+  update: (dt: number, focusX: number, focusZ: number) => void;
   /** Endless: catch the world up with the streamed track and the car —
    * build the road chunks that now exist, drop the ones left behind. */
   sync: (state: GameState) => void;
+  /** R22 — where the finish's cannons point, for the renderer to fire.
+   * Empty until the chunk carrying the finish gate is built, and on an
+   * endless stage forever: nothing there ever finishes. */
+  muzzles: () => Muzzle[];
   dispose: () => void;
 };
 
@@ -1469,6 +871,12 @@ export function buildWorld(track: Track, density = 1): World {
   let fordScan = 0;
   let streamScanS = 0;
   let spurScan = 0;
+  let finish: FinishGate | null = null;
+  /** R26 — the crowd, rebuilt whenever the stage grows a new stand. The
+   * whole crowd is a handful of instanced meshes, so it is cheaper to
+   * rebuild it than to grow one. */
+  let crowd: Crowd | null = null;
+  let standCount = 0;
 
   const buildChunk = (from: number, to: number): void => {
     const chunkGroup = new THREE.Group();
@@ -1477,6 +885,8 @@ export function buildWorld(track: Track, density = 1): World {
     chunkGroup.add(buildSkirts(ribbon, track.width));
     chunkGroup.add(buildRoad(track, ribbon, track.width));
     chunkGroup.add(buildMarkings(track, bare, track.width));
+    // R25 — the rally's own red and white, at the corners that earn it.
+    chunkGroup.add(buildKerbing(track, bare, track.width));
     const chippings = buildChippings(track, bare, track.width);
     if (chippings) chunkGroup.add(chippings);
     chunkGroup.add(buildBridges(track, from, to));
@@ -1504,24 +914,46 @@ export function buildWorld(track: Track, density = 1): World {
     const scenery = buildScenery(track, biome, terrain, from, to, guard, drawnTrees, density);
     chunkGroup.add(scenery.group);
     chunkGroup.add(buildCones(track, from, to));
-    if (from === 0 && !track.circuit) chunkGroup.add(buildGate(track, 2, "START"));
+    // A circuit's start line IS its finish line (R22), so it gets one gate
+    // saying so rather than two ten metres apart.
+    if (from === 0 && !track.circuit) chunkGroup.add(buildStartGate(track, 2));
+    // R25 — the finish GATE, which on a sprint is no longer the last thing
+    // on the road: the run-out carries on past it, and this chunk draws
+    // both. The cannons stand beside it either way.
     if (!track.endless && to === track.samples.length) {
-      chunkGroup.add(
-        buildGate(track, finishIndex(track), track.circuit ? "START/FINISH" : "FINISH"),
-      );
+      finish = buildFinishGate(track, track.circuit ? "START/FINISH" : "FINISH");
+      chunkGroup.add(finish.group);
     }
     group.add(chunkGroup);
     chunks.push({ toS, group: chunkGroup, scenery });
   };
 
+  /** R26 — (re)build the people. The stands come from the terrain field,
+   * which places them against the world as the road commits, so this runs
+   * whenever that list has grown. */
+  const buildPeople = (): void => {
+    const stands = terrain.field.stands;
+    if (stands.length === standCount) return;
+    standCount = stands.length;
+    if (crowd) {
+      group.remove(crowd.group);
+      disposeGroup(crowd.group);
+      crowd.dispose();
+    }
+    crowd = buildCrowd(stands, terrain.field.groundAt, density);
+    group.add(crowd.group);
+  };
+
   buildChunk(0, track.samples.length);
   builtIndex = track.samples.length;
+  buildPeople();
 
   const sync = (state: GameState): void => {
     // The ground and the wild follow the CAR — on a finite stage too, so
     // an excursion far off the corridor still stands on drawn land.
     terrain.sync(track, state.progressS, state.car.x, state.car.z);
     wild.sync(state.car.x, state.car.z);
+    buildPeople();
     if (!track.endless) return;
     const len = track.samples.length;
     if (len - builtIndex >= CHUNK_SAMPLES) {
@@ -1541,16 +973,18 @@ export function buildWorld(track: Track, density = 1): World {
     }
   };
 
-  const update = (dt: number): void => {
+  const update = (dt: number, focusX = 0, focusZ = 0): void => {
     terrain.update(dt);
     wild.update(dt);
+    crowd?.update(dt, focusX, focusZ);
     for (const chunk of chunks) chunk.scenery.update(dt);
   };
 
   const dispose = (): void => {
+    crowd?.dispose();
     disposeGroup(group);
     terrain.dispose();
   };
 
-  return { group, update, sync, dispose };
+  return { group, update, sync, dispose, muzzles: () => finish?.muzzles ?? [] };
 }

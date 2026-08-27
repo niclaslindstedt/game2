@@ -69,19 +69,28 @@ describe("the jump", () => {
     const heights: number[] = [];
     const pitches: number[] = [];
     let guard = 0;
-    while (!state.car.airborne && guard < 120 * 60) {
+    const drive = (): void => {
       step(state, {
         ...NEUTRAL_INPUT,
         throttle: 1,
         shiftUp: state.car.u > state.spec.gearTop[state.car.gear] * 0.93,
       });
-      if (state.car.y > 0.05 && !state.car.airborne) {
+      guard += 1;
+    };
+    // Run up to the foot of the ramp first and take the car's height THERE
+    // as the floor. The road has a cross-section (R16) — a crown, and two
+    // wheel tracks a car settles into — so "on the flat" is not zero, and a
+    // threshold measured off zero starts recording part-way up the ramp.
+    while (state.progressS < JUMP_STAGE[0].featureStart! - 20 && guard < 120 * 60) drive();
+    const rest = state.car.y;
+    while (!state.car.airborne && guard < 120 * 60) {
+      drive();
+      if (state.car.y > rest + 0.05 && !state.car.airborne) {
         heights.push(state.car.y);
         // The attitude the renderer draws: vy/u is the gradient the car is
         // climbing, and on the ramp that is the ramp's own slope.
         pitches.push(Math.atan2(state.car.vy, state.car.u));
       }
-      guard += 1;
     }
     expect(heights.length).toBeGreaterThan(20);
     // Monotonic up the ramp, and climbing at a rate that only ever changes

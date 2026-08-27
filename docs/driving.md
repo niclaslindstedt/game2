@@ -217,10 +217,16 @@ ribbon, the terrain's verge and the physics all read):
   the physics gets it for free, because the cross-slope under the wheels
   is the same lateral pull a hillside gives. On a corner it is the biggest
   of the three, and it is what makes a turn something you can lean on.
-- **The worn line.** Two tracks run down every gravel road where every car
-  before you put its wheels: a little lower than the road beside them, so
-  the car settles into them and has to be steered out. Asphalt polishes
-  rather than ruts.
+- **The five lines.** A dirt road is not one surface: read across it there
+  are a loose pale edge on each side that no wheel ever touches, two worn
+  TRACKS where every car before you put its wheels, and the crown between
+  them. The tracks sit a real car's track-width apart — a wheel track is a
+  wheel track whether the road is a lane or a boulevard, so they do not
+  scale out with the width — and they are troughs deep enough to feel: the
+  car settles into one and has to be steered out of it, and a car left to
+  itself on the crown will drift off into a track. That curvature across
+  the road is also what stops a gravel stage looking like a flat brown
+  ribbon. Asphalt polishes rather than ruts.
 - **The mat.** Asphalt is laid ON the ground: the mat stands proud of the
   verge with its edge chippings spilled down the side, and the joint at
   each end of a sealed run ramps rather than steps.
@@ -230,6 +236,27 @@ ribbon, the terrain's verge and the physics all read):
   lattice, which could not hold an edge. There is no ditch: a trench ruled
   down both sides of a rally road reads as a scar cut by a machine, and it
   swallows a car the moment it puts a wheel wide.
+
+## Crossing the line
+
+The finish is a gate on a road, not the end of one. R25 builds a RUN-OUT
+past it — a couple of hundred metres of road the clock never sees — and the
+run does not stop when the time does. Crossing the line puts the run into
+its `rollout` phase: the result goes up immediately, control leaves the
+player, and the car is driven home by `TUNING.rollOut` — off the throttle,
+easing onto a trailing brake rather than standing on it, steering gently
+back toward the middle of the road so a car that arrived sideways gathers
+itself up. The camera plants where it was standing and pans to watch the
+car go. The run is over when the car has stopped (or, for a wreck facing a
+hill, when `rollOut.maxTime` runs out).
+
+A circuit has no run-out and needs none: its finish is its own start line,
+with a whole lap of road already the other side of it, so it finishes at the
+line the way it always has.
+
+Anything measuring the run measures it at the LINE: `raceTime` stops there,
+and the sim's `trackLength` is the raced distance rather than the whole
+compiled ribbon, so a pace column never has a coast-down folded into it.
 
 ## The open world
 

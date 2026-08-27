@@ -35,6 +35,12 @@
 // The hood cam is the one that is not a rig, because it is not standing
 // anywhere: it is sat in the car, and what makes it worth driving from is
 // that the eye has WEIGHT (HEAD) and the road has GRAIN (GRAIN).
+//
+// And one BEAT overrides whichever of them is up: the flying finish. The
+// moment the car crosses the line the camera stops travelling with it,
+// plants itself where it stood, and simply turns to watch the car go — the
+// shot every rally broadcast cuts to, and the reason R25 builds road past
+// the gate for the car to disappear down.
 
 import * as THREE from "three";
 import { angleLerp, clamp } from "../lib/angles.ts";
@@ -408,6 +414,37 @@ const SPRING_STEP = 1 / 90;
  * position, never the car's. */
 const CHASE_CLEARANCE = 1.3;
 
+/** THE FINISH SHOT. The camera stops dead at the line and lets the car
+ * leave, so everything here is about what a planted camera does.
+ *
+ * It rises a little as it plants — a broadcast camera is on a rostrum, not
+ * on the road — and pulls its field of view in over the same beat, which is
+ * a lens going long: the car recedes into a flatter, tighter frame instead
+ * of racing away down a wide-angle tunnel. Both ease in over `settle`
+ * rather than cutting, because a cut would land in the middle of the one
+ * moment the player is watching. */
+const FINISH = {
+  /** Seconds the plant takes to complete. */
+  settle: 1.1,
+  /** How far the camera rises onto its rostrum, m. Deliberately modest: the
+   * gate's banner hangs at 4.7 m, and a camera that climbs to meet it turns
+   * the arch into a wall ruled across the middle of the frame. Staying
+   * under it leaves the gate where it belongs — an arch over the top third,
+   * with the road and the departing car running away beneath it. */
+  lift: 1,
+  /** ...and how far back off the line it drifts while it does, m. A nudge,
+   * not a retreat: the whole point of the shot is that the camera STAYS. */
+  back: 1.5,
+  /** The long lens it settles to, degrees. */
+  fov: 46,
+  /** How fast the aim follows the car, 1/s. Loose: a planted camera pans,
+   * and a pan that tracks perfectly reads as a lock rather than an
+   * operator. */
+  pan: 3.4,
+  /** How far above the car's own height the aim sits, m. */
+  aimUp: 0.7,
+};
+
 /** Aspect ratio the fov numbers in this file are tuned against (landscape). */
 const REF_ASPECT = 16 / 9;
 /** Vertical fov ceiling on narrow viewports, deg — where hor+ stops before
@@ -483,6 +520,10 @@ export function createGameCamera(width: number, height: number): GameCamera {
   /** How hard the road is coming through the seat right now, 0..~1.5 — pace
    * and surface, eased so the wheels leaving the ground fades it. */
   let grain = 0;
+  /** Where the camera was standing when the car crossed the line, and where
+   * it is aiming now. Null until it plants; cleared when a fresh run puts
+   * the camera back in the player's hands. */
+  let planted: { x: number; y: number; z: number; back: THREE.Vector3 } | null = null;
   const aim = new THREE.Vector3();
 
   const updateChase = (rig: ChaseRig, state: GameState, dt: number): void => {
@@ -817,11 +858,67 @@ export function createGameCamera(width: number, height: number): GameCamera {
     camera.far = Math.max(900, range * 2.4);
   };
 
+  /**
+   * The flying finish: the camera stops where it is and watches the car go.
+   *
+   * The plant is taken from wherever the camera happened to be on the last
+   * racing frame — whichever rig was up, hood included — so the shot begins
+   * from the view the player was already in rather than cutting to a
+   * position they have never seen. From there it only rises, eases back,
+   * and pans.
+   */
+  const updateFinish = (state: GameState, dt: number): void => {
+    const car = state.car;
+    if (!planted) {
+      // Behind the camera along its own view axis: which way "back off the
+      // line" is, without assuming the camera was ever facing down the road.
+      const back = new THREE.Vector3();
+      camera.getWorldDirection(back);
+      back.y = 0;
+      if (back.lengthSq() < 1e-6) back.set(0, 0, 1);
+      back.normalize().negate();
+      planted = { x: camera.position.x, y: camera.position.y, z: camera.position.z, back };
+      aim.set(car.x, car.y + FINISH.aimUp, car.z);
+    }
+    // A smoothstep on the roll-out's own clock, so the plant is a fixed
+    // gesture and not something a slow frame can outrun.
+    const t = Math.min(1, state.rollout / FINISH.settle);
+    const ease = t * t * (3 - 2 * t);
+    const px = planted.x + planted.back.x * FINISH.back * ease;
+    const pz = planted.z + planted.back.z * FINISH.back * ease;
+    const ground = state.terrain.groundAt(px, pz);
+    camera.position.set(px, Math.max(planted.y + FINISH.lift * ease, ground + CHASE_CLEARANCE), pz);
+    // The pan lags the car, which is what makes it read as an operator
+    // following it rather than a rig bolted to it.
+    const follow = clamp(FINISH.pan * dt, 0, 1);
+    aim.x += (car.x - aim.x) * follow;
+    aim.y += (car.y + FINISH.aimUp - aim.y) * follow;
+    aim.z += (car.z - aim.z) * follow;
+    camera.lookAt(aim);
+    fov += (FINISH.fov - fov) * clamp(2.4 * dt, 0, 1);
+  };
+
   const update = (state: GameState, dt: number): void => {
     shake = Math.max(0, shake - 6 * dt * shake - 0.4 * dt);
     orbit += dt;
     if (mode !== "map") camera.far = DRIVING_FAR;
-    camera.near = mode === "hood" ? HOOD_NEAR : DRIVING_NEAR;
+    // The finish owns the shot in every mode a player can drive from.
+    // Overhead it does not: the drone is the menu's backdrop, where a bot
+    // finishes a stage every couple of minutes and nobody is watching it
+    // arrive, and the map view is not a camera anybody is driving under.
+    const watching = state.phase === "rollout" || state.phase === "finished";
+    const inCar = mode === "hood" && !watching;
+    // The finish camera is standing on the ground outside the car whichever
+    // view it planted from, so it takes the outside near plane even when the
+    // player was in the hood a moment ago.
+    camera.near = inCar ? HOOD_NEAR : DRIVING_NEAR;
+    if (watching && mode !== "drone" && mode !== "map") {
+      updateFinish(state, dt);
+      camera.fov = verticalFovFor(fov, camera.aspect);
+      camera.updateProjectionMatrix();
+      return;
+    }
+    if (!watching) planted = null;
     if (mode === "hood") updateHood(state, dt);
     else if (mode === "drone") updateDrone(state, dt);
     else if (mode === "map") updateMap(state);

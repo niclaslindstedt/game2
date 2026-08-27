@@ -8,7 +8,12 @@
 
 import { createGame, step } from "../game/step.ts";
 import type { GameEvent, GameState, Weather } from "../game/state.ts";
-import type { FiniteStageLength, StageKnobs, StageShape } from "../mapgen/index.ts";
+import {
+  finishAt,
+  type FiniteStageLength,
+  type StageKnobs,
+  type StageShape,
+} from "../mapgen/index.ts";
 import { botInput, RALLY_BOT, type BotProfile } from "./bot.ts";
 import { TUNING } from "../game/defs/tuning.ts";
 
@@ -41,7 +46,9 @@ export type SimResult = {
   /** R22 — the laps raced, and the time each of them took, seconds. */
   laps: number;
   lapTimes: number[];
-  /** One lap of the road, meters. */
+  /** One RACED lap of the road, meters: the road up to the finish line and
+   * no further. R25's run-out past a sprint's gate is driven after the
+   * clock has stopped, and counting it would inflate every pace below. */
   trackLength: number;
   /** Ground actually covered by the race: the lap times the laps. */
   raceLength: number;
@@ -76,7 +83,11 @@ export function simulateStage(options: SimOptions): SimResult {
 
   let steps = 0;
   const maxSteps = Math.ceil(maxTime / TUNING.dt);
-  while (state.phase !== "finished" && steps < maxSteps) {
+  // The run is over for measurement purposes at the LINE. R25's roll-out
+  // past it is the car being driven home with nobody at the wheel — road
+  // that costs the sim wall-clock and tells it nothing, and that would
+  // fold a coast-down into every pace and top-speed column.
+  while (state.phase !== "rollout" && state.phase !== "finished" && steps < maxSteps) {
     const input = botInput(state, profile);
     events.push(...step(state, input));
     steps += 1;
@@ -87,15 +98,16 @@ export function simulateStage(options: SimOptions): SimResult {
     }
   }
 
+  const raced = finishAt(state.track) ?? state.track.length;
   return {
     seed: options.seed,
     carId,
-    finished: state.phase === "finished",
+    finished: state.phase === "rollout" || state.phase === "finished",
     time: state.raceTime,
     laps: state.laps,
     lapTimes: state.lapTimes,
-    trackLength: state.track.length,
-    raceLength: state.track.length * state.laps,
+    trackLength: raced,
+    raceLength: raced * state.laps,
     stats: state.stats,
     events,
     digest: hash.toString(16).padStart(8, "0"),

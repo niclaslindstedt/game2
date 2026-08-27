@@ -186,7 +186,7 @@ function initialRace(): RaceSettings {
 type StageSpec = {
   seed: number;
   length: StageLength;
-  /** R22 — a sprint from a start to a finish, or a circuit raced over laps. */
+  /** R25 — a sprint from a start to a finish, or a circuit raced over laps. */
   shape: StageShape;
   /** Laps a circuit is raced over; 1 on anything that does not come back. */
   laps: number;
@@ -268,6 +268,12 @@ let flashId = 0;
  * and curb technically leaves the ground, and "CLEAN AIR 0.0s" three times
  * in a row is the HUD talking over the game. */
 const REAL_AIR = 0.5;
+
+/** How long the results card stays up AFTER the car has finally stopped
+ * rolling, ms. The whole roll-out past the gate is already card time, so
+ * this only has to be the last beat — long enough to read the placing, short
+ * enough that the stage does not end with everybody waiting for a menu. */
+const RESULT_LINGER = 2600;
 
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -638,6 +644,10 @@ export function App() {
 
       const restart = (): void => {
         setPaused(false);
+        // A restart cancels a finish that was on its way back to the menu:
+        // without this the new run is interrupted by the last one's timer.
+        if (nextStageTimer) clearTimeout(nextStageTimer);
+        nextStageTimer = null;
         const spec = stageRef.current;
         if (!spec) return;
         applyStageRef.current(spec, true);
@@ -659,6 +669,7 @@ export function App() {
       });
 
       let nextStageTimer: ReturnType<typeof setTimeout> | null = null;
+
       cleanups.push(() => {
         if (nextStageTimer) clearTimeout(nextStageTimer);
       });
@@ -715,9 +726,11 @@ export function App() {
               recorderRef.current = null;
               setProgress(recordFinish(active.levelId, ev.time));
             }
-            // A stage ends where it started: back to the menu, with the
-            // result on screen long enough to read.
-            nextStageTimer = setTimeout(goMainMenu, 4500);
+            // The card goes up NOW — the clock has stopped — but the run
+            // is not over: the car is still coasting down R25's run-out with
+            // the camera planted at the gate, and that beat IS the
+            // celebration. The frame loop below sends everyone back to the
+            // menu once the car has actually come to rest.
             continue;
           }
           if (demo) continue;
@@ -791,6 +804,17 @@ export function App() {
             const ghostEvents = step(ghost.state, ghost.tape.at(ghost.at++));
             if (ghostEvents.length > 0) renderer.onGhostEvents(ghost.state, ghostEvents);
           }
+        }
+        // A stage ends where it started: back to the menu, once the car has
+        // come to rest past the finish AND the result has been on screen
+        // long enough to read.
+        if (
+          finishTimeRef.current !== null &&
+          !page &&
+          nextStageTimer === null &&
+          state.phase === "finished"
+        ) {
+          nextStageTimer = setTimeout(goMainMenu, RESULT_LINGER);
         }
         // The road bed belongs to a run the player is IN. Behind the menu the
         // stage is scenery under a theme, and an engine bed over the top of

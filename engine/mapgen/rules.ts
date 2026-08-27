@@ -43,8 +43,10 @@
 //   R15 Asphalt comes in RUNS, never a chequerboard: the paving field lays
 //       the road down in sections hundreds of meters long, and the knobs'
 //       `asphalt` is the share of the stage that comes out paved.
-//   R16 The road has a CROSS-SECTION: a crown it sheds water off, two worn
-//       wheel tracks, a berm of pushed gravel at its edges, and a shoulder
+//   R16 The road has a CROSS-SECTION, and it is CURVED: five lines across
+//       its width — a loose edge either side that nothing drives on, two
+//       worn wheel tracks a real car's track apart, and the crown between
+//       them — plus a berm of pushed gravel at its edges and a shoulder
 //       that falls gently away to the landscape. No ditch — a trench beside
 //       a rally road is a trap the eye reads as a scar, not as drainage.
 //   R17 Roads MEET at a planned junction, ON the centerline: the route turns
@@ -83,6 +85,23 @@
 //       sees. A circuit closes onto its own start line by construction
 //       (R22), so what it must not do is come at it ACROSS the apron; its
 //       closure lies along it.
+//   R25 A SPRINT's finish line is not the end of its road. It carries on
+//       past the gate for a RUN-OUT — road the car coasts down after the
+//       clock stops, so the finish is a line drawn across a road rather
+//       than the cliff edge of a world that ran out of budget. A circuit
+//       needs none: its finish is its own start line, with a whole lap of
+//       road already the other side of it.
+//   R26 Red-and-white KERBING is placed where a driver needs it and nowhere
+//       else: on the inside of a corner at its apex, on the outside where
+//       the corner unwinds onto a straight, on the outside of the braking
+//       zone before a hard turn, and around a hazard. A rally road edged in
+//       stripes from end to end is a bobsleigh run, not a road — and on
+//       gravel the kerb is a run of marker posts, never a continuous
+//       painted band (see docs/track-generator.md for the placement guide).
+//   R27 A stage is WATCHED. Spectators gather where a rally crowd actually
+//       gathers — at the finish, and at the corners worth standing at — on
+//       ground clear of the road, on the OUTSIDE of the bend where nothing
+//       leaving the road is coming at them.
 
 /** Sample spacing along the compiled centerline, meters. It lives here
  * because it is not only the compiler's business: a search that has to land
@@ -252,6 +271,16 @@ export const STAGE_RULES = {
   openingStraight: 110,
   closingStraight: 80,
 
+  /** R25 — the RUN-OUT: road built past a sprint's finish gate, meters. The clock
+   * stops at the line and the car keeps going, so there has to be
+   * somewhere for it to go. Long enough to shed rally pace without using
+   * the brakes as a wall — a car crossing at 50 m/s coasts to walking pace
+   * in well under this — and long enough that the road still reaches the
+   * horizon in the shot the finish is watched from, which is what stops
+   * the gate reading as the end of the world. It is NOT part of the raced
+   * stage: R11's length band measures the road up to the line. */
+  runOut: 220,
+
   /** Straight vocabulary, meters. Short breathers between corners are the
    * norm; the long bucket is where the top gears live, drawn less often so
    * the stage reads as corners connected by straights rather than the other
@@ -390,6 +419,78 @@ export const STAGE_RULES = {
    * mound where there is room for one, a dense grove where there is not.
    * Neither is a wall: a mound can be climbed and a grove threaded, but
    * both cost more than the corner they replace, which is the point. */
+  /** R26 — where the red-and-white goes. The level-design guide states the
+   * placement in prose (docs/track-generator.md); these are the numbers it
+   * resolves to. A zone is an arc-length span on ONE side of the road, and
+   * the four roles are the four reasons a kerb is ever painted:
+   *
+   *   apex   — inside the bend, around its tightest point: the target the
+   *            driver aims at, and the thing that stops the line being cut
+   *            into the ditch.
+   *   exit   — outside the road where the corner unwinds: the edge of the
+   *            usable width as the car is pushed wide under power.
+   *   entry  — outside the road on the approach to a hard corner: the
+   *            braking marker.
+   *   hazard — wrapped around something that will hurt: a bridge parapet,
+   *            a jump lip's shoulders.
+   *
+   * Corners under `minAngle` get nothing at all. That threshold is what
+   * makes kerbing an event: on a stage of soft sweepers almost nothing is
+   * marked, and the one hairpin reads from a long way out. */
+  kerb: {
+    /** Total bend a turn (or a same-direction combination) must carry
+     * before it is marked at all, radians — a shade over 40°, which puts
+     * every hairpin and every real medium in and leaves the sweepers bare. */
+    minAngle: 0.72,
+    /** ...and the bend past which the corner also earns a braking marker
+     * on the way in, radians. A hard corner at the end of a straight is
+     * the one place a rally actually boards the outside edge. */
+    entryAngle: 1.25,
+    /** How much of the corner the apex kerb covers, as a fraction of its
+     * arc, centred on the middle of the bend — and the meters it is held
+     * between, so a hairpin is not marked by a stub and a long fourth-gear
+     * sweeper is not marked from end to end. */
+    apexSpan: { frac: 0.5, min: 14, max: 55 },
+    /** The exit kerb starts where the corner ends and runs this far down
+     * the straight, meters. */
+    exitRun: { min: 16, max: 40 },
+    /** The braking marker sits this far back from the corner's entry,
+     * meters, and runs for `entryRun`. */
+    entryLead: 46,
+    entryRun: 34,
+    /** Kerbing on either side of a hazard's own span, meters. */
+    hazardPad: 12,
+    /** Marker posts on gravel stand this far apart, meters (R26 — a dirt
+     * road is marked by posts, not by a painted band). */
+    postSpacing: 6,
+  },
+
+  /** R27 — the crowd. Spectators stand where a rally crowd stands: at the
+   * finish, and on the outside of the corners worth watching, back far
+   * enough that a car losing it does not arrive among them. */
+  crowd: {
+    /** A corner earns a stand once it bends this far, radians — the same
+     * corners worth marking are the ones worth watching, a shade looser. */
+    minAngle: 0.9,
+    /** Never two stands closer together than this along the stage, m. */
+    spacing: 320,
+    /** How far back from the road EDGE a stand is planted, m — a band, so
+     * a run of them is not a fence ruled parallel to the road. */
+    setback: { min: 7, max: 13 },
+    /** How wide a stand is along the road, m, and how many rows deep. */
+    width: { min: 7, max: 15 },
+    rows: { min: 2, max: 4 },
+    /** People per meter of front row — a crowd, not a queue. */
+    density: 0.55,
+    /** How far back down the road the finish crowd is banked, m: the one
+     * place on the stage where the stands are guaranteed and biggest. */
+    finishReach: 70,
+    /** How close to the car a stand has to be before it is HEARD, m. */
+    cheerRange: 46,
+    /** ...and the pace under which nobody bothers, m/s. */
+    cheerSpeed: 11,
+  },
+
   guard: {
     /** Total bend that makes a combination worth cutting, radians. */
     angle: 1.5,
@@ -586,4 +687,8 @@ export type SegmentPlan = {
   crestHeight?: number;
   /** Water-only (R13): how the road gets across — waded, or on a deck. */
   crossing?: Crossing;
+  /** R25 — set on a sprint's last segment: how many of its meters lie
+   * PAST the finish gate. The line is drawn where the segment has this
+   * much left to run, and everything after it is run-out. */
+  runOut?: number;
 };
