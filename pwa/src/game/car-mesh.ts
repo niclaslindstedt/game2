@@ -2,9 +2,9 @@
 // The car in the scene: a body generated part-by-part from the car's
 // CarBodySpec (car-body.ts builds it, car-styles.ts shapes it), plus the
 // one visual that sells the jump — a blob shadow that stays on the ground
-// and shrinks while the car is airborne. Attitude (the pitch of the road
-// and of the flight, plus the roll a take-off put in the body) is applied
-// to the body group; the physics owns the position and heading.
+// and shrinks while the car is airborne. The engine owns everything about
+// how the car sits: position, heading, and both attitude angles; this file
+// only spends them on the right three.js axes.
 
 import * as THREE from "three";
 import { clamp } from "../lib/util.ts";
@@ -25,7 +25,9 @@ const WHEEL_STEER_RATE = 14;
 
 export type CarVisual = {
   group: THREE.Group;
-  shadow: THREE.Mesh;
+  /** The blob shadow, in its own group so it can lie on the ground's slope
+   * while the car above it pitches, rolls and flies. */
+  shadow: THREE.Group;
   /** World-anchored debris (torn-off parts) — scene sibling of the car. */
   debris: THREE.Group;
   update: (state: GameState, dt: number) => void;
@@ -42,36 +44,42 @@ export function buildCar(spec: CarSpec): CarVisual {
   const damage = createCarDamage(body);
 
   const length = bodySpec.profile[0].z - bodySpec.profile[bodySpec.profile.length - 1].z;
-  const shadow = new THREE.Mesh(
+  const blob = new THREE.Mesh(
     new THREE.CircleGeometry(length * 0.42, 16),
     new THREE.MeshBasicMaterial({ color: "#000000", transparent: true, opacity: 0.28 }),
   );
-  shadow.rotation.x = -Math.PI / 2;
+  // Laid flat, then lifted along whatever "up" its parents end up meaning —
+  // the clearance has to leave the GROUND, not the world's y axis, or the
+  // disc knifes into a hillside and reads as a hole under the car.
+  blob.rotation.x = -Math.PI / 2;
+  blob.position.y = 0.06;
+  // Same two-group nesting as the car itself, so the disc takes the same
+  // heading-then-attitude chain and lands flush on the same triangle.
+  const shadowTilt = new THREE.Group();
+  shadowTilt.add(blob);
+  const shadow = new THREE.Group();
+  shadow.add(shadowTilt);
 
-  let pitch = 0;
   let steerVisual = 0;
+  // The ground's own attitude, held over a flight: in the air the car's
+  // angles are the arc's and the tumble's, and the shadow belongs to the
+  // ground the car left, not to the car.
+  let groundPitch = 0;
+  let groundRoll = 0;
   const update = (state: GameState, dt: number): void => {
     const car = state.car;
     group.position.set(car.x, car.y, car.z);
     group.rotation.y = car.heading;
 
-    // Attitude is PITCH, plus whatever ROLL the physics has put in the body
-    // — which only a take-off ever does. A rally car goes sideways FLAT:
-    // leaning into the slide is what makes a drift read as a skier carving
-    // rather than a car turning, so nothing on the ground rolls the body —
-    // a drift reads through the yaw, the counter-steered wheels and the
-    // dust. In the air the roll is the engine's, tumble and all.
-    //
-    // The pitch is the direction the car is actually travelling in the
-    // vertical plane — vy/u. Grounded that is the road's own gradient (the
-    // engine gives the car the road's vertical speed), so the nose lifts
-    // going up a grade and drops over the far side; airborne it is the
-    // ballistic arc. Smoothed, so landings settle with a touch of suspension
-    // travel instead of snapping.
-    const targetPitch = clamp(Math.atan2(car.vy, Math.max(8, car.u)), -0.5, 0.5);
-    pitch += (targetPitch - pitch) * clamp(10 * dt, 0, 1);
+    // Both attitude angles come off the engine already settled. In the car's
+    // local frame +z is the nose and +x its right side, so a positive roll
+    // (right side up) IS +z rotation, while a nose-up pitch is a NEGATIVE
+    // rotation about +x — turning the nose down is the positive direction
+    // there. A rally car still goes sideways FLAT: the roll is the camber
+    // of the ground and the tumble of a flight, never a lean into the
+    // slide, which reads through the yaw, the counter-steer and the dust.
     body.group.rotation.z = car.roll;
-    body.group.rotation.x = pitch;
+    body.group.rotation.x = -car.pitch;
 
     // Wheels: spin with road speed, front pair points where the driver
     // points them — counter-steer in a drift shows because the input does.
@@ -86,25 +94,37 @@ export function buildCar(spec: CarSpec): CarVisual {
     dirt.update(state, dt);
     damage.update(state, dt);
 
-    // Blob shadow: pinned to the ground under the car, fading with height.
-    const height = Math.max(0, car.y - groundYUnder(state));
-    shadow.position.set(car.x, groundYUnder(state) + 0.06, car.z);
+    // Blob shadow: pinned to the ground under the car, lying on its slope,
+    // fading with height.
+    if (!car.airborne) {
+      groundPitch = car.pitch;
+      groundRoll = car.roll;
+    }
+    const ground = groundYUnder(state);
+    const height = Math.max(0, car.y - ground);
+    shadow.position.set(car.x, ground, car.z);
+    shadow.rotation.y = car.heading;
+    shadowTilt.rotation.z = groundRoll;
+    shadowTilt.rotation.x = -groundPitch;
     const s = clamp(1 - height * 0.12, 0.35, 1);
     shadow.scale.set(s, s, s);
-    (shadow.material as THREE.MeshBasicMaterial).opacity = 0.28 * s;
+    (blob.material as THREE.MeshBasicMaterial).opacity = 0.28 * s;
   };
 
   const dispose = (): void => {
     damage.dispose();
     body.dispose();
-    shadow.geometry.dispose();
-    (shadow.material as THREE.MeshBasicMaterial).dispose();
+    blob.geometry.dispose();
+    (blob.material as THREE.MeshBasicMaterial).dispose();
   };
 
   return { group, shadow, debris: damage.debris, update, onEvents: damage.onEvents, dispose };
 }
 
-/** Road height under the car (the sample the physics last locked to). */
+/** Ground height under the car. Out in the wild the road sample the car is
+ * measured against can be a hillside away, so the terrain answers directly
+ * there — a shadow at the road's elevation floats over the valley below. */
 function groundYUnder(state: GameState): number {
+  if (state.offRoad) return state.terrain.groundAt(state.car.x, state.car.z);
   return state.track.samples[state.progressIndex]?.elevation ?? 0;
 }

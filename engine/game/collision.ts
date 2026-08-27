@@ -126,14 +126,15 @@ export function landingDamage(
 
 /** Resolve the car against every solid in reach. Mutates position (pushed
  * out of penetration), velocity (impulse), yaw rate (lever kick), and the
- * damage ledger; returns true when the accumulated wear has wrecked the
- * chassis — the caller owns what a wreck means (crash + respawn). */
+ * damage ledger. A contact never ends the excursion however hard it lands:
+ * the car bends and drives on, and step.ts decides when a car that has
+ * stopped moving altogether gets put back on the road. */
 export function collideCar(
   car: CarState,
   solids: WildObstacle[],
   events: GameEvent[],
   stats: RunStats,
-): boolean {
+): void {
   const hl = T.collision.halfLength;
   const hw = T.collision.halfWidth;
 
@@ -208,6 +209,4 @@ export function collideCar(
       }
     }
   }
-
-  return car.damage.wear >= 1;
 }

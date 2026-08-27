@@ -92,9 +92,10 @@ rewards it, and no drift seconds are counted at the player.
 
 ## The jump
 
-- **The ground** — grounded, the car **rides** the road: its vertical speed is the road's own, sampled between centerline points rather than snapped to the nearest one, so it climbs a ramp smoothly and nose-up (the renderer reads that attitude straight off `vy/u`) instead of hopping up it in 2 m stairs.
+- **The ground** — grounded, the car **rides** the road: its vertical speed is the road's own, sampled between centerline points rather than snapped to the nearest one, so it climbs a ramp smoothly instead of hopping up it in 2 m stairs.
+- **Attitude** — the engine owns how the car SITS, in `CarState.pitch` and `CarState.roll` (positive lifts the nose and the right side). Grounded, both are the ground under the wheels: the nose takes the grade along the heading, the body takes the camber across it. Airborne, the pitch is the flight's own arc and the roll is the tumble the take-off put in. Both ease toward their target at `TUNING.attitude.settle` — that lag IS the suspension travel a landing settles through. The renderer only spends the two angles on the right axes; it never derives them.
 - **Takeoff** — jump segments ramp up to a lip; crossing it throws the car with vertical speed proportional to pace × ramp slope (`takeoff`). The ramp EASES IN, steepest right at the lip, because a ramp that flattens as it reaches the top hands the car no upward speed at the one moment that matters. A crest launches the car too, but only when the road's own curvature would pull it down harder than gravity can (`TUNING.air.crestSpan`, `crestPull`) — so a real brow throws you at pace and holds you at a crawl, while the rolling ground under every stage is just ridden over.
-- **The roll** — a car that leaves the ground crossed up trips over its outside wheels: the take-off puts roll in the body from the slide it was holding plus the rotation already in it, and nothing in the air takes it out. Straight and level flies flat; properly sideways goes a long way over; the unluckiest launches go all the way round. Landing on your side is never a clean landing. The ground unwinds the roll toward the nearest upright, so a car most of the way over finishes the roll rather than rewinding it.
+- **The roll** — a car that leaves the ground crossed up trips over its outside wheels: the take-off puts roll in the body from the slide it was holding plus the rotation already in it, and nothing in the air takes it out. Straight and level flies flat; properly sideways goes a long way over; the unluckiest launches go all the way round. Landing on your side is never a clean landing. The ground unwinds the roll toward the nearest upright, and then onto the CAMBER under the wheels — level on the road, tipped with the hillside out in the wild.
 - **Airborne** — the velocity vector is committed. Gravity is arcade-heavy (floatier hangs read as slow motion), the nose answers only faintly, and a small seeded turbulence rolls the car — flying, slightly out of control, exactly as intended. No lateral grip: whatever attitude you took off with survives to the ground.
 - **Landing** — straight (slip inside the clean limit) keeps all your speed: `CLEAN AIR`. Sideways scrubs speed and wobbles the car. Line up before the lip.
 
@@ -146,8 +147,9 @@ not a mistake anymore; it is exploration:
   is faster, always.
 - **Water** — the landscape floods below the water table
   (`terrain.LAKE_Y`): lakes, and whole sea basins. Shallows and streams
-  slow the car and splash; **deep water is a crash** — splash, `crash`
-  event, and a respawn on the track at last progress.
+  slow the car and splash; **deep water is the one crash left** — splash,
+  `crash` event, and a respawn on the track at last progress. Nothing solid
+  ever crashes the car.
 - **Solid props and the forest** — the wild scatters boulders and fallen
   trunks (`terrain.obstaclesNear`), and the forest's trees stand on solid
   trunks of their own (`terrain.treesNear`, placed by the same engine-side
@@ -156,10 +158,16 @@ not a mistake anymore; it is exploration:
   Contact does not teleport the car anywhere: it bends it — see the
   collision model below. A fallen trunk lies low enough to jump; a tree is
   not.
-- **The way home** — exploring never times out and never teleports the car:
-  the only ways back to the track are a crash or the **reset input**
-  (`CarInput.reset`, the B key / the HUD's TRACK button), which respawns at
-  the last on-road progress.
+- **The way home** — exploring never times out, and hitting things never
+  ends it: crash into trees for as long as the car still moves. Only two
+  things put a car back on the road (both at the last on-road progress, both
+  the same point `wayHome` reports): the **reset input** (`CarInput.reset`,
+  the B key / the HUD's TRACK button), and the **wedge check** — throttle
+  held for `TUNING.offTrack.stuck.after` seconds without covering
+  `stuck.radius` meters. A car pinned against a trunk is not driving out of
+  it; anything still making ground is left alone. While the car is off the
+  road the co-driver's strip reads RETURN TO TRACK with that distance, and
+  an arrow hangs over the car pointing at the spot itself.
 
 ## Collision and damage
 
@@ -183,10 +191,12 @@ solid a circle, and a hit does three things at once:
   into tumbling debris. **Hard landings are impacts too**: descent the
   suspension cannot absorb (`hardLandSpeed`) crushes the underside (the
   `belly`), or the flank the car came down on.
-- **The wear.** Every crush adds structural wear; wear 1 is the wreck —
-  `crash` event, respawn at last progress, chassis patched back to
-  `repairTo`. The dents, the torn-off parts and the hurt systems all stay:
-  the run remembers.
+- **The wear.** Every crush adds structural wear; wear 1 is the wreck — a
+  car with nothing left to give, which keeps driving exactly where it is.
+  Nothing recovers it: a wreck is driven home, and the chassis is patched
+  back to `repairTo` only once something (the reset, the wedge check) puts
+  it back on the road. The dents, the torn-off parts and the hurt systems
+  all stay: the run remembers.
 
 Under the panels live four **internal systems** (`damage.systems`), each
 fed by the crush landing nearest to it and each degrading its own job:

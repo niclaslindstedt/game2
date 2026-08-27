@@ -143,6 +143,14 @@ export function launch(car: CarState, vy: number, events: GameEvent[], stats: Ru
   stats.jumps += 1;
 }
 
+/** Ease the nose toward the attitude the ground (or the flight) asks for.
+ * Snapping it would strobe the body over every ripple of terrain noise; the
+ * lag IS the suspension travel a landing settles through. */
+function settlePitch(car: CarState, target: number): void {
+  const want = clamp(target, -T.attitude.pitchMax, T.attitude.pitchMax);
+  car.pitch += (want - car.pitch) * clamp(T.attitude.settle * T.dt, 0, 1);
+}
+
 export type GroundContext = {
   surface: "gravel" | "water" | "nature";
   /** Ground elevation under the car before this step's move. */
@@ -350,12 +358,20 @@ export function stepGrounded(
   }
   updateSlip(car);
 
-  // The ground unwinds whatever roll the last flight left, toward the
-  // NEAREST upright — a car most of the way over finishes the roll instead
-  // of rewinding it.
+  // ── Attitude: the body sits on the ground it is standing on ─────────────
+  // The wheels are what the car's attitude is made of, so both angles come
+  // from the ground under them and neither feeds back into the handling.
+  // Roll unwinds whatever the last flight left toward the NEAREST upright —
+  // a car most of the way over finishes the roll instead of rewinding it —
+  // and then settles onto the CAMBER: out in the wild a hillside tips the
+  // car the way the hillside goes, which is the same cross-slope that is
+  // already pulling it downhill. A road has no banking, so on it the target
+  // is level.
   car.rollRate = 0;
   const upright = Math.round(car.roll / (Math.PI * 2)) * Math.PI * 2;
-  car.roll += (upright - car.roll) * clamp(T.air.rollRecover * dt, 0, 1);
+  const camber = ctx.slopeLat ? Math.atan(ctx.slopeLat) : 0;
+  car.roll += (upright + camber - car.roll) * clamp(T.air.rollRecover * dt, 0, 1);
+  settlePitch(car, Math.atan(ctx.slope));
 
   // ── Drift readout ────────────────────────────────────────────────────────
   // Nothing in the model above branches on this: it is what the dust, the
@@ -446,6 +462,10 @@ export function stepAirborne(
   car.z += (cosH * car.u - sinH * car.w + ctx.windZ * carry) * dt;
   car.vy -= T.air.gravity * dt;
   car.y += car.vy * dt;
+  // In the air the nose follows the arc: up over the launch, down into the
+  // landing. The speed floor keeps a near-vertical plunge from reading as a
+  // right angle when the forward speed has all but gone.
+  settlePitch(car, Math.atan2(car.vy, Math.max(6, Math.hypot(car.u, car.w))));
 
   // The ground under where the car has just moved TO. Off the road the
   // terrain answers directly; on the road, `ctx.groundY` is where the step

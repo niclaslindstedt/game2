@@ -250,6 +250,12 @@ body {
   color: #ff5a4e;
 }
 
+/* Off the road the strip is not calling a corner any more: amber, the same
+   amber as the arrow hanging over the car, so the two read as one marker. */
+.hud-pace-home {
+  color: #ffa726;
+}
+
 .hud-center {
   position: absolute;
   inset: 0;
@@ -490,11 +496,6 @@ body {
   font-size: clamp(1.4rem, 5vmin, 2.4rem);
   font-variant-numeric: tabular-nums;
   text-align: center;
-}
-
-.hud-off {
-  font-size: clamp(0.9rem, 3vmin, 1.5rem);
-  color: var(--hud-bad);
 }
 
 /* ── The damage instrument ──────────────────────────────────────────────

@@ -24,7 +24,7 @@ STAND, and **`test-scenario`** for staging exact contacts.
 | Every number: box size, restitution, crush rates, part bolts, system transfer + effects                     | `engine/game/defs/tuning.ts` → `TUNING.collision`                       |
 | The ledger: `CarState.damage` (zones, belly, wear, systems, broken, version), impact/partBreak/crash events | `engine/game/state.ts`                                                  |
 | Damaged-handling effects (power, grip, shift cuts, steering, landing tolerance)                             | `engine/game/car.ts` — reads `car.damage.systems`, never writes         |
-| When collision runs, the wreck + respawn, deep-water crash                                                  | `engine/game/step.ts`                                                   |
+| When collision runs, the wedge check that is the only way home, deep-water crash                            | `engine/game/step.ts`                                                   |
 | Solid trunks + grove quilt (`treesNear`, `groveAt`, `GROVES`); boulders/logs (`obstaclesNear`)              | `engine/mapgen/terrain.ts`                                              |
 | Bending the polygons, scuff darkening, debris                                                               | `pwa/src/game/car-damage.ts` (+ `car-body.ts` `breakables`)             |
 | Drawing the engine's trunks as trees (species stays app-side)                                               | `pwa/src/game/world.ts` (`treePlacement`, `solidMix`)                   |
@@ -52,8 +52,13 @@ STAND, and **`test-scenario`** for staging exact contacts.
   erases any impulse applied against a stale angle.
 - **Crush is monotonic and capped** (`zoneMax`); `damage.version` bumps on
   every change — that is the renderer's only re-bend trigger. Wear is the
-  only thing a wreck-respawn resets (`repairTo`); dents, parts and systems
-  persist for the run.
+  only thing a respawn resets (`repairTo`, and only on a wrecked chassis);
+  dents, parts and systems persist for the run.
+- **A contact never ends the excursion.** `collideCar` bends the car and
+  returns nothing; wear reaching 1 is a wreck that keeps driving. The only
+  automatic way home is `TUNING.offTrack.stuck` — throttle held without
+  covering ground — so any change that stops a hit car from moving at all
+  now costs a respawn two seconds later.
 - **Damage degrades, never disables.** Every system effect is sized so a
   broken system cripples the car's feel without parking it — bots must
   still finish (`make sim`).
@@ -74,10 +79,11 @@ STAND, and **`test-scenario`** for staging exact contacts.
 3. **Assert the rule you claim** in `tests/collision_test.ts`: head-on,
    glancing (needs real closing speed — a pure side contact with no
    sideways velocity closes at 0 and does nothing), part-breaks-once,
-   scuff floor, wreck, system effects.
+   scuff floor, the wreck that stays put, system effects.
 4. **Measure.** `make sim` before and after — watch the `hit` column and
-   respawns; bots must keep finishing at pace. Collision changes that slow
-   or wreck the bots are balance regressions.
+   respawns; bots must keep finishing at pace. A respawn in the table now
+   means a bot wedged itself hard enough to sit there for two seconds, so
+   any movement off zero is a real regression.
 5. **LOOK.** Build, then drive a crash on purpose (playtest-style script:
    full throttle off the road into the treeline, screenshot over several
    seconds) — the crumple must read on the 3D body, the debris must fly,
