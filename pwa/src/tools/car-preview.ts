@@ -9,6 +9,7 @@
 import * as THREE from "three";
 
 import { buildCarBody, type CarBodySpec } from "../game/car-body.ts";
+import { createDirtPainter, wheelSpray, type DirtCoat } from "../game/car-dirt.ts";
 import { gravelTexture } from "../game/textures.ts";
 
 declare global {
@@ -27,6 +28,9 @@ type View = {
   game?: { carYaw: number };
   /** Turntable: azimuth from the nose, elevation, distance in car lengths. */
   orbit?: { az: number; el: number; dist: number };
+  /** Bake this much grime onto the car before rendering. Dirt only ever
+   * accumulates, so a dirty view has to come after every clean one. */
+  dirt?: DirtCoat;
 };
 
 const VIEWS: View[] = [
@@ -36,6 +40,13 @@ const VIEWS: View[] = [
   { name: "side", fov: 35, orbit: { az: Math.PI / 2, el: 0.1, dist: 1.45 } },
   { name: "rear 3/4", fov: 35, orbit: { az: Math.PI - 0.62, el: 0.28, dist: 1.55 } },
   { name: "top", fov: 35, orbit: { az: 0.4, el: 1.15, dist: 1.5 } },
+  // A stage's worth of grime, in the view that has to survive it.
+  {
+    name: "dirty",
+    fov: 35,
+    orbit: { az: 0.62, el: 0.26, dist: 1.55 },
+    dirt: { dust: 0.85, mud: 0.6 },
+  },
 ];
 
 const CELL_W = 440;
@@ -77,11 +88,13 @@ async function main(): Promise<void> {
 
     const car = buildCarBody(variant.spec);
     scene.add(car.group);
+    const dirty = createDirtPainter(car.group, wheelSpray(variant.spec));
 
     const zs = variant.spec.profile.map((p) => p.z);
     const length = Math.max(...zs) - Math.min(...zs);
 
     VIEWS.forEach((view, col) => {
+      if (view.dirt) dirty(view.dirt);
       camera.fov = view.fov;
       camera.updateProjectionMatrix();
       if (view.game) {

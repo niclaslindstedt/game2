@@ -84,6 +84,21 @@ advance, not fired from the animation frame — a bed fired per frame breathes
 with the frame rate, and a breathing engine is the most obvious tell there is
 that a game's audio is being generated.
 
+Two things keep that true over a long session, and both are the difference
+between a bed and a stutter:
+
+- **A grain is never booked in the past.** WebAudio starts a source whose time
+  has already gone the instant it is handed over, so a stall that leaves the
+  scheduler's anchor behind the clock does not delay the bed — it fires every
+  missed grain at once, on top of the next one. The bed re-anchors the moment
+  it is late instead: its phase means nothing, its regularity is everything.
+- **Noise is generated once, not once per voice.** The road bed alone asks for
+  about twenty seconds of noise per second of play, so synthesising a buffer
+  per grain churned ~4 MB of `Float32Array` a second on the renderer's own
+  thread — and the collector eventually answers that with a pause long enough
+  to cause exactly the lateness above. `synth.ts` keeps four seconds of each
+  colour (`NOISE_POOL_S`) and every voice reads a random window of it.
+
 ### What the engine is made of
 
 `RPM_PER_HZ = 30`, because a four-cylinder four-stroke fires twice per
@@ -106,13 +121,30 @@ wind is pink noise rising with the SQUARE of speed, and it is the only bed that
 keeps going in the air — the silence where the tyres were is what a jump sounds
 like.
 
-The **scrub** is the drift, and it is the loudest thing in the bed. It is
-proportional to `car.slide`, the engine's own measure of how far past gripping
-the car is, so it IS the drift rather than an effect layered over one. On
-tarmac a tyre grips and releases at a rate the ear reads as a pitch, so the
-sealed-surface slide is a resonant band with a driven note in it. On gravel
-there is nothing to grip and let go of, so there is no pitch at all: the sound
-is the surface being thrown, and the spray pans to the outside of the slide.
+**A tyre rolling straight ahead barely makes a noise.** What makes the noise is
+a tyre being asked to turn the car, so every surface is written as a quiet
+cruise `level` plus a `corner` multiplier it reaches at full lateral load, and
+the multiplier lifts the crunch with the roar. Tarmac's cruise is close to
+silence — down a sealed straight the player should be hearing the engine and
+almost nothing else — and gravel's is a low rush rather than the roar it used
+to be. Off the road stays loud on the straight, because being off the road
+should sound like a mistake.
+
+The cornering signal is **lateral acceleration** (`car.u * car.yawRate`,
+against `LAT_LIMIT` in `drive-bed.ts`): zero on a straight at any speed, zero at
+a standstill on full lock, largest exactly where a tyre is loudest. It is
+smoothed with a time constant rather than a per-frame fraction, so the bed
+responds the same way on a 40 Hz phone as on a 120 Hz display.
+
+The **scrub** is the drift, and it is the loudest thing in the bed. On gravel it
+is proportional to `car.slide`, the engine's own measure of how far past
+gripping the car is, so it IS the drift rather than an effect layered over one:
+there is nothing to grip and let go of out there, so there is no pitch at all —
+the sound is the surface being thrown, and the spray pans to the outside of the
+slide. On tarmac a tyre grips and releases at a rate the ear reads as a pitch,
+and it starts protesting **while it is still winning**: the sealed-surface
+squeal is a resonant band with a driven note in it, driven by the cornering load
+past `SING_FLOOR`, with a genuine slide taking over from there.
 
 ## The scores
 
@@ -175,10 +207,13 @@ A self-contained page built from the repository's own code — the same synth,
 bank, sequencer and road grain that ship — with every sound on a button beside
 the description it was written against, both scores under the real sequencer
 with a per-voice mute, and the continuous bed under sliders for revs, load,
-speed, how sideways and what surface. It is the only honest way to judge a
+speed, how hard it is cornering, how sideways it has gone, and what surface. It is the only honest way to judge a
 continuous sound, and the only way a reviewer can hear a change at all.
 
 `tests/audio_test.ts` holds the rest: every event routes to a sound the bank
 actually has, no voice exceeds the mixing ceiling, the interface stays quieter
 than the car, both scores flatten with every token a real note and come in
-inside their length bounds, and the engine bed's grains tile without a hole.
+inside their length bounds, the engine bed's grains tile without a hole and
+re-anchor rather than booking into the past after a stall, and the tyre bed
+stays quiet on a straight, quietest of all on tarmac, and sings there from the
+cornering load alone.

@@ -10,9 +10,9 @@ import * as THREE from "three";
 import { clamp } from "../lib/util.ts";
 import type { CarSpec, GameEvent, GameState } from "@engine";
 
-import { buildCarBody, headLamps, tailLamps } from "./car-body.ts";
+import { buildCarBody, frontLampAnchors, rearLampAnchors } from "./car-body.ts";
 import { createCarDamage } from "./car-damage.ts";
-import { createCarDirt } from "./car-dirt.ts";
+import { createCarDirt, wheelSpray } from "./car-dirt.ts";
 import { bodySpecFor } from "./car-styles.ts";
 import { glowTexture } from "./textures.ts";
 
@@ -32,6 +32,11 @@ const LAMP_NIGHT = 0.85;
  * of gravel on the glass is the reason rally cars carry lamp pods and
  * somebody wipes them at every service. */
 const LAMP_GRIME = 0.6;
+
+/** Where a car with no authored lamps at one end throws its beam from, m
+ * from the centerline — a spec is allowed to have a bare face, and a beam
+ * still has to come from somewhere sensible. */
+const LAMP_FALLBACK = 0.6;
 
 /** Front-wheel visual steer: radians of wheel angle at full lock... */
 const WHEEL_STEER_LOCK = 0.55;
@@ -62,12 +67,22 @@ export type CarVisual = {
   dispose: () => void;
 };
 
+/** How far off the centerline this car's beams hang, front and rear. */
+function lampSpread(bodySpec: Parameters<typeof frontLampAnchors>[0]): {
+  front: number;
+  rear: number;
+} {
+  const off = (anchors: { x: number }[]): number =>
+    anchors.length > 0 ? Math.abs(anchors[0].x) : LAMP_FALLBACK;
+  return { front: off(frontLampAnchors(bodySpec)), rear: off(rearLampAnchors(bodySpec)) };
+}
+
 export function buildCar(spec: CarSpec): CarVisual {
   const group = new THREE.Group();
   const bodySpec = bodySpecFor(spec);
   const body = buildCarBody(bodySpec);
   group.add(body.group);
-  const dirt = createCarDirt(body.group);
+  const dirt = createCarDirt(body.group, wheelSpray(bodySpec));
   const damage = createCarDamage(body);
 
   // The lamp blooms ride the SPRUNG body, so they squat and rebound with the
@@ -82,7 +97,7 @@ export function buildCar(spec: CarSpec): CarVisual {
     depthWrite: false,
   });
   const lampGeos: THREE.BufferGeometry[] = [];
-  for (const lamp of tailLamps(bodySpec)) {
+  for (const lamp of rearLampAnchors(bodySpec)) {
     const geo = new THREE.PlaneGeometry(lamp.width * LAMP_SPREAD, lamp.height * LAMP_SPREAD * 1.5);
     const glow = new THREE.Mesh(geo, lampMat);
     // The tail cap faces −z in car space; the bloom sits just off the lens.
@@ -195,7 +210,7 @@ export function buildCar(spec: CarSpec): CarVisual {
     onEvents: damage.onEvents,
     setLights,
     grime: dirt.level,
-    lampSpread: { front: headLamps(bodySpec)[1].x, rear: tailLamps(bodySpec)[1].x },
+    lampSpread: lampSpread(bodySpec),
     dispose,
   };
 }

@@ -347,12 +347,24 @@ the four wheels. A sound part reads as quiet steel; a hurt one takes color,
 yellow folding to red as it gives out, so a glance finds the one part that is
 wrong instead of scanning a row of bars.
 
+Seven pieces can come off: the two bumpers, the two mirrors, the spoiler, and
+the two lids. A bonnet or boot lid is bolted deeper than the bumper in front
+of it (`TUNING.collision.partAt.lid`), so it only lets go once the clip around
+it has folded far enough to pull its hinges — and what is left showing is the
+dark bay the panel was covering.
+
 ## Cars and gearboxes
 
 Cars are data rows (`engine/game/defs/cars.ts`) — the model never branches per car:
 
-- **Vireo GT (auto)** — shifts itself, quicker off the line, grippier, softer top end (~215 km/h flat out). The phone-first car.
-- **Sable 4WD (manual)** — six gears on the driver, taller top (~230 km/h flat out), less grip to lean on so it slides earlier and further. Per-gear torque tapers near each gear's ceiling, so holding a gear too long stops pulling — shifting is part of the pace.
+- **Vireo GT (auto, FWD)** — shifts itself, quicker off the line, grippier, softer top end (~215 km/h flat out). The phone-first car.
+- **Sable 4WD (manual, AWD)** — six gears on the driver, taller top (~230 km/h flat out), less grip to lean on so it slides earlier and further. Per-gear torque tapers near each gear's ceiling, so holding a gear too long stops pulling — shifting is part of the pace.
+- **Kestrel RS (manual, FWD)** — the lightest of the three and the shortest geared. More lateral grip than the Sable and less yaw once loose: quicker where the stage flows, harder work where it does not.
+
+Each row also carries a `drive` layout (`fwd`/`rwd`/`awd`). Today it is a
+LABEL — the handling model treats every car the same and the grip and yaw
+numbers are what actually separate them. It exists so the roster can say
+what a car is, and so a drivetrain-aware model has something to read.
 
 Nominal gear tops overshoot what surface drag lets a car hold; the flat-out
 speeds above are the real equilibria, and `tests/explore_test.ts` pins them.

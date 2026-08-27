@@ -37,6 +37,8 @@ const PART_BOLTS: { part: DamagePart; zones: number[]; crushAt: number }[] = [
   { part: "mirrorR", zones: [1, 2], crushAt: T.collision.partAt.mirror },
   { part: "mirrorL", zones: [6, 7], crushAt: T.collision.partAt.mirror },
   { part: "spoiler", zones: [3, 4, 5], crushAt: T.collision.partAt.spoiler },
+  { part: "hood", zones: [7, 0, 1], crushAt: T.collision.partAt.lid },
+  { part: "hatch", zones: [3, 4, 5], crushAt: T.collision.partAt.lid },
 ];
 
 /** The car's mass against the mass every collision number is written for.

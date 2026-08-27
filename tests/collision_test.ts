@@ -120,6 +120,27 @@ describe("the impulse", () => {
     expect(car.damage.broken).not.toContain("bumperR");
   });
 
+  it("the bonnet only lets go once the nose has folded well past the bumper", () => {
+    const light = freshState();
+    // 18 m/s: enough crush to shear the bumper's bolts, not the bonnet's.
+    light.car.u = 18;
+    const nose = solid({
+      kind: "tree",
+      x: light.car.x,
+      z: light.car.z + TUNING.collision.halfLength + 0.5,
+    });
+    collideCar(light.spec, light.car, [nose], [], light.stats);
+    expect(light.car.damage.broken).toContain("bumperF");
+    expect(light.car.damage.broken).not.toContain("hood");
+
+    const hard = freshState();
+    hard.car.u = 34;
+    collideCar(hard.spec, hard.car, [nose], [], hard.stats);
+    expect(hard.car.damage.broken).toContain("hood");
+    // The bonnet is a NOSE part: a rear-end hit must never take it.
+    expect(hard.car.damage.broken).not.toContain("hatch");
+  });
+
   it("a part breaks once — further hits on the same zone stay silent", () => {
     const state = freshState();
     const car = state.car;

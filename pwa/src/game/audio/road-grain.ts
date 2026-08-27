@@ -17,6 +17,16 @@
 // it is proportional to how sideways the car actually is, and it is mixed to
 // be heard over the engine at full lock. If a slide does not sound dangerous,
 // nothing else in the mix will make it feel that way.
+//
+// AND THE COROLLARY, WHICH IS WHAT THE ROLLING BED IS FOR: a straight is
+// almost NOTHING. A tyre rolling straight ahead barely makes a noise — what
+// makes the noise is a tyre being asked to turn the car, which is why every
+// surface here is written as a quiet cruise level plus a `corner` multiplier
+// rather than as one constant hiss. On tarmac the cruise is close to silence
+// and the car is just an engine; lean on it and the rubber sings. On gravel
+// the cruise is a low rush and the corner is the surface being thrown. A bed
+// that is as loud on the straight as it is in the corner tells the player
+// nothing, and it is the loudest thing in the mix for the whole run.
 
 import type { NoiseColor, Synth } from "../../lib/voice.ts";
 
@@ -39,6 +49,14 @@ const ROLL_FLOOR = 1.5;
  * they make is the ordinary rolling bed. */
 const SCRUB_FLOOR = 0.12;
 
+/** How hard the car has to be cornering before a tarmac tyre starts to sing,
+ * 0..1 of `RoadVoice.corner`. A TYRE DOES NOT WAIT UNTIL IT LETS GO TO SQUEAL
+ * — it protests while it is still winning, which is the whole sound of a
+ * sealed-surface stage — so the sing is driven by the lateral load and only
+ * takes over from the slide once the car is actually sideways. Under this the
+ * car is going round a bend rather than taking a corner. */
+const SING_FLOOR = 0.4;
+
 /**
  * What a surface sounds like under a rolling tyre.
  *
@@ -51,22 +69,33 @@ type SurfaceVoice = {
   color: NoiseColor;
   hz: number;
   q: number;
+  /** The bed rolling STRAIGHT AHEAD at speed — the quiet half. */
   level: number;
+  /** …and what it multiplies up to with the tyres at full lateral load. 1 is a
+   * surface that sounds the same through a corner; 4 is one you only really
+   * hear when you turn. It scales `grain` with it, because the stones only get
+   * thrown when something asks them to move. */
+  corner: number;
   grain: number;
 };
 
 export const SURFACES: Record<string, SurfaceVoice> = {
-  // Tarmac: tight, high and almost tonal. Quiet, because a sealed surface is —
-  // which is what makes a stage's tarmac section feel fast and exposed.
-  asphalt: { color: "pink", hz: 620, q: 1.6, level: 0.022, grain: 0.006 },
-  // Graded gravel: the game's home surface. Broad, busy, and the loudest of
-  // the three, with real crunch over it.
-  gravel: { color: "pink", hz: 340, q: 0.8, level: 0.034, grain: 0.02 },
-  // Water: a hiss with weight behind it and no crunch at all.
-  water: { color: "pink", hz: 900, q: 0.6, level: 0.04, grain: 0 },
+  // Tarmac: tight, high and almost tonal. On a straight it is very nearly
+  // nothing — a sealed surface under a rolling tyre is the quietest a car ever
+  // is, and the engine is meant to be the whole sound. What tarmac HAS is the
+  // corner, where the same tyre goes from silent to singing.
+  asphalt: { color: "pink", hz: 620, q: 1.6, level: 0.005, corner: 3.6, grain: 0.0016 },
+  // Graded gravel: the game's home surface. Broad and busy, but a rush rather
+  // than a roar until the car turns — then it is the surface being thrown.
+  gravel: { color: "pink", hz: 340, q: 0.8, level: 0.011, corner: 3.4, grain: 0.006 },
+  // Water: a hiss with weight behind it and no crunch at all. Barely cares
+  // which way the car is pointing — a ford is loud because it is being ploughed
+  // through, not because it is being cornered on.
+  water: { color: "pink", hz: 900, q: 0.6, level: 0.036, corner: 1.3, grain: 0 },
   // Off the road entirely — turf, moss, rutted forest floor. Low, muffled and
-  // rough: most of the energy is the suspension rather than the tread.
-  nature: { color: "brown", hz: 190, q: 0.7, level: 0.038, grain: 0.014 },
+  // rough: most of the energy is the suspension rather than the tread, so it
+  // stays loud on the straight. Being off the road should sound like a mistake.
+  nature: { color: "brown", hz: 190, q: 0.7, level: 0.026, corner: 1.6, grain: 0.011 },
 };
 
 /** The road under one car at one instant. Everything the grain needs, and
@@ -79,6 +108,9 @@ export type RoadVoice = {
   /** What the wheels are on — a key of `SURFACES`; anything unknown is
    * gravel, which is the surface most of this game is made of. */
   surface: string;
+  /** How hard the tyres are being asked to turn the car, 0..1, whether or not
+   * they are winning — the lateral load, smoothed by the scheduler. */
+  corner: number;
   /** How far past gripping the tyres are, 0..1 — the engine's own `slide`. */
   slide: number;
   /** Which way the back end has gone: sideways velocity, m/s. Only its sign
@@ -95,7 +127,7 @@ export type RoadVoice = {
  * one grain to the next — noise has none to carry.
  */
 export function playRoadGrain(synth: Synth, voice: RoadVoice, at: number): void {
-  const { speed, air, surface, slide, sideways, airborne } = voice;
+  const { speed, air, surface, corner, slide, sideways, airborne } = voice;
 
   // ── The air ────────────────────────────────────────────────────────────
   // Wind is the layer that actually sells pace: pitch says revs, noise says
@@ -122,13 +154,18 @@ export function playRoadGrain(synth: Synth, voice: RoadVoice, at: number): void 
   // ── The tyres ──────────────────────────────────────────────────────────
   const road = SURFACES[surface] ?? (SURFACES.gravel as SurfaceVoice);
   const roll = Math.min(1, air / 0.8);
+  // The cornering multiplier: 1 dead ahead, `road.corner` with the tyres at
+  // their lateral limit. It is what makes a straight quiet and a corner an
+  // event, and it lifts the crunch with the roar because a stone is only
+  // thrown by a tyre that is pushing it sideways.
+  const lean = 1 + (road.corner - 1) * corner;
   synth.noise({
     at,
     durationMs: NOISE_LIFE_MS,
     attackMs: NOISE_ATTACK_MS,
     holdMs: NOISE_HOLD_MS,
     color: road.color,
-    volume: road.level * (0.25 + 0.75 * roll),
+    volume: road.level * lean * (0.25 + 0.75 * roll),
     filter: { type: "bandpass", frequency: road.hz * (0.7 + 0.5 * roll), q: road.q },
   });
   if (road.grain > 0) {
@@ -140,28 +177,32 @@ export function playRoadGrain(synth: Synth, voice: RoadVoice, at: number): void 
       durationMs: NOISE_LIFE_MS * 0.5,
       attackMs: NOISE_ATTACK_MS * 0.5,
       holdMs: NOISE_HOLD_MS * 0.5,
-      volume: road.grain * roll,
+      volume: road.grain * lean * roll,
       filter: { type: "highpass", frequency: 2200 + 2600 * roll },
     });
   }
 
   // ── The scrub ──────────────────────────────────────────────────────────
-  if (slide <= SCRUB_FLOOR) return;
-  const scrub = ((slide - SCRUB_FLOOR) / (1 - SCRUB_FLOOR)) * roll;
+  // How far past gripping the tyres actually are. On a loose surface this is
+  // the whole story; on tarmac it is only the half that arrives last.
+  const slip = Math.max(0, (slide - SCRUB_FLOOR) / (1 - SCRUB_FLOOR));
 
   if (surface === "asphalt") {
-    // ON TARMAC A TYRE SINGS. The rubber grips, releases and grips again at a
-    // rate the ear hears as a pitch — so the sealed-surface slide is a
-    // resonant band with a driven note inside it, and it is the one place in
-    // this game anything squeals. The pitch rises with how hard the tyre is
-    // being asked to work.
+    // ON TARMAC A TYRE SINGS, AND IT STARTS SINGING BEFORE IT LETS GO. The
+    // rubber grips, releases and grips again at a rate the ear hears as a pitch
+    // — so the sealed-surface corner is a resonant band with a driven note
+    // inside it, and it is the one place in this game anything squeals. It is
+    // driven by the LOAD rather than by the slide, so a corner taken flat and
+    // gripped still howls; a genuine slide takes over from there.
+    const scrub = Math.max(slip, Math.max(0, (corner - SING_FLOOR) / (1 - SING_FLOOR))) * roll;
+    if (scrub <= 0) return;
     const sing = 780 + 520 * scrub;
     synth.noise({
       at,
       durationMs: NOISE_LIFE_MS,
       attackMs: NOISE_ATTACK_MS,
       holdMs: NOISE_HOLD_MS,
-      volume: 0.03 * scrub,
+      volume: 0.038 * scrub,
       filter: { type: "bandpass", frequency: sing, q: 7 },
     });
     synth.tone({
@@ -172,7 +213,7 @@ export function playRoadGrain(synth: Synth, voice: RoadVoice, at: number): void 
       durationMs: NOISE_LIFE_MS,
       attackMs: NOISE_ATTACK_MS,
       holdMs: NOISE_HOLD_MS,
-      volume: 0.016 * scrub * scrub,
+      volume: 0.02 * scrub * scrub,
       detuneCents: 14,
       drive: 0.35,
       vibrato: { rateHz: 7.5, depthCents: 22, delayMs: 40 },
@@ -181,9 +222,13 @@ export function playRoadGrain(synth: Synth, voice: RoadVoice, at: number): void 
     return;
   }
   // ON GRAVEL A TYRE DIGS. There is nothing to grip and let go of, so there is
-  // no pitch: what a slide sounds like out here is the surface being thrown —
-  // a wide rush that opens up the more sideways the car is, with the stones
-  // themselves spraying off the top of it.
+  // no pitch, and no protest before the fact either: a loose surface only makes
+  // a new noise once the car is genuinely sideways, and what that sounds like
+  // is the surface being thrown — a wide rush that opens up the more sideways
+  // the car is, with the stones themselves spraying off the top of it. The
+  // ordinary cornering load is already in the rolling bed above.
+  const scrub = slip * roll;
+  if (scrub <= 0) return;
   synth.noise({
     at,
     durationMs: NOISE_LIFE_MS,

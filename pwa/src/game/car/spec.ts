@@ -1,0 +1,246 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// The CarBodySpec vocabulary: every dimension, part and color a generated
+// car is authored from. Pure types plus JSON-friendly shapes — the specs
+// in car-styles.ts are plain data so Node tooling (scripts/car-preview.mjs)
+// and the --variants iteration loop can read and clone them without a
+// TypeScript build or a three.js import.
+//
+// Everything past the shell is OPTIONAL and defaults to off, so a new part
+// can land here without touching a spec that does not want it.
+
+/** One silhouette station: where the top surface (hood/roof-deck/trunk)
+ * sits and how wide the belt line is at that point along the car. Stations
+ * run nose (+z) → tail (−z); the loft interpolates linearly between them,
+ * which is exactly the faceted look the art direction wants. */
+export type ProfilePoint = {
+  /** Position along the car, m — +z is the nose, −z the tail. */
+  z: number;
+  /** Height of the body's top surface at this station, m. */
+  topY: number;
+  /** Half-width at the belt line here, m. */
+  half: number;
+};
+
+export type Spoiler =
+  | { kind: "none" }
+  /** A subtle lip riding the tail/hatch edge. */
+  | { kind: "lip"; z: number; y: number; span: number; color?: number }
+  /** The full rally wing: posts, blade, endplates. */
+  | { kind: "wing"; z: number; y: number; span: number; chord: number; color?: number }
+  /** A hatchback's roof-edge blade, on stubby end posts. */
+  | { kind: "roof"; z: number; y: number; span: number; chord: number; color?: number };
+
+/** Wheel faces, in rally-car vocabulary. `alloy` is a multi-spoke rim;
+ * `steel` is a painted rim under a small hubcap; `split` is the wide
+ * four-spoke period classic with a polished lip. */
+export type WheelStyle = "alloy" | "steel" | "split";
+
+/** A flat band laid on the flank between two z stations — livery stripes,
+ * a rubbing strip, a rocker skirt. Heights are absolute, m. */
+export type SideBand = {
+  zFrom: number;
+  zTo: number;
+  /** Band bottom and top, m — absolute heights, sampled onto whatever
+   * width the flank has at each z. */
+  yFrom: number;
+  yTo: number;
+  color: number;
+  /** Rake, m — how much higher the band sits at its front end than its
+   * rear, so a stripe can climb the fender the way a race livery does. */
+  rise?: number;
+  /** How far proud of the flank it floats, m. Bigger than a decal's few
+   * mm turns the band into a physical rubbing strip. */
+  proud?: number;
+  /** What the band does where a wheel arch has cut the flank away.
+   * `clip` (the default) lets the opening eat into it, so a painted panel
+   * stops where the metal does; `ride` keeps the band's full height and
+   * arcs it over the arch, the way a rocker stripe runs. */
+  overArch?: "clip" | "ride";
+};
+
+/** A grille: a recessed dark panel with a colored surround (the bright
+ * frame a period hot hatch outlines its grille with) and bars across it. */
+export type Grille = {
+  /** Full width and height of the opening, m. */
+  width: number;
+  height: number;
+  /** Center height above the ground, m. */
+  y: number;
+  /** How deep the panel sits into the nose, m. */
+  depth?: number;
+  /** Frame thickness, m. 0 leaves the grille flush with the paint. */
+  surround?: number;
+  surroundColor?: number;
+  color?: number;
+  /** Horizontal bars across the opening; 0 leaves it a plain dark mouth. */
+  bars?: number;
+  barColor?: number;
+};
+
+export type Lights = {
+  kind: "round" | "rect";
+  /** Center of the INNER lamp of each pair, m from the centerline. */
+  x: number;
+  y: number;
+  /** Round: radius. Rect: half-width. Both m. */
+  size: number;
+  /** Rect lamps only — half-height, m. */
+  height?: number;
+  /** A second, smaller lamp outboard of the first (the quad-headlight
+   * face). Distance from the inner lamp, m. */
+  pairGap?: number;
+  pairSize?: number;
+  /** Chrome or black ring around each lamp, m of extra radius. */
+  bezel?: number;
+  bezelColor?: number;
+  color?: number;
+};
+
+/** The front clip: everything laid onto the nose cap. */
+export type FrontSpec = {
+  grille?: Grille;
+  lights?: Lights;
+  /** Amber corner lamps, sized as a fraction of the nose half-width. */
+  indicators?: { y: number; x: number; width: number; height: number; color?: number };
+  /** The bumper bar. `wrap` runs it back along the flanks around the
+   * corners; a shallow `height` reads as a 70s chrome blade, a deep one
+   * as the plastic slab of an 80s car. */
+  bumper?: { y: number; height: number; depth: number; wrap?: number; color?: number };
+  /** Air dam / chin spoiler under the bumper. */
+  splitter?: { y: number; height: number; depth: number; span: number; color?: number };
+  /** Bonnet shut line: the hood's half-width and how far back it runs. */
+  hood?: { half: number; zFrom: number; zTo: number };
+  /** A tow hook / lamp bar the rally cars carry, x offsets in m. */
+  lampPods?: { y: number; z: number; radius: number; offsets: number[]; color?: number };
+};
+
+/** The rear clip: everything laid onto the tail cap. */
+export type RearSpec = {
+  lights?: {
+    /** Center of each cluster from the centerline, m. */
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    color?: number;
+    /** A second stripe under the red one — the amber/white of a period
+     * cluster. Fraction of the cluster height, 0 disables. */
+    lower?: number;
+    lowerColor?: number;
+  };
+  bumper?: { y: number; height: number; depth: number; wrap?: number; color?: number };
+  /** Recessed number plate, m. */
+  plate?: { y: number; width: number; height: number; color?: number };
+  /** Exhaust pipe under the valance, at +x of the centerline (m). */
+  exhaust?: { x: number; y: number; radius: number };
+  /** Boot/hatch shut line — mirrors FrontSpec.hood on the tail deck. */
+  deck?: { half: number; zFrom: number; zTo: number };
+};
+
+export type CarBodySpec = {
+  /** Belt-line silhouette, nose → tail. First/last stations are the caps. */
+  profile: ProfilePoint[];
+  /** Underside height, m — the body floor; wheels hang below it. */
+  floorY: number;
+  /** Belt line (widest point of the body side), m. */
+  beltY: number;
+  /** How much the flank tucks in below the belt (`rocker`) and above it
+   * (`shoulder`), as fractions of the belt half-width. The defaults give a
+   * softly rounded section; a boxy car wants both near 1, which is most of
+   * what separates a slab-sided hatch from a curvy coupe. */
+  side?: { rocker?: number; shoulder?: number };
+  wheelbase: number;
+  /** Shifts both axles toward the nose (+) or tail (−), m. */
+  axleShift?: number;
+  /** Lateral distance from centerline to each wheel's center, m. */
+  trackHalf: number;
+  wheelRadius: number;
+  wheelWidth: number;
+  wheelStyle?: WheelStyle;
+  /** Spokes per wheel face, overriding the style's own count. */
+  wheelSpokes?: number;
+  /** Wheel arch openings cut into the flank. Without this the body sides
+   * run straight down to the floor and the wheels read as bolted on. */
+  arches?: {
+    /** Opening radius, m. Bigger than wheelRadius leaves a visible gap. */
+    radius: number;
+    /** How far above the wheel center the arch is struck, m — raises the
+     * whole opening without making it rounder. */
+    lift?: number;
+    /** Plastic arch extension bolted around the opening. */
+    trim?: { width: number; drop: number; color?: number };
+  };
+  /** The glass house. roofPaint "accent" gives the rally two-tone roof. */
+  cabin: {
+    cowlZ: number;
+    roofFrontZ: number;
+    roofRearZ: number;
+    baseRearZ: number;
+    roofY: number;
+    roofHalf: number;
+    roofPaint?: "paint" | "accent";
+    /** Body-colored frame left around the glass, m. The cabin is built as
+     * a solid shell and the glass is cut into it, so these widths ARE the
+     * pillars: a/b/c are the windscreen, door and rear posts. */
+    pillars?: {
+      a?: number;
+      b?: number;
+      c?: number;
+      /** Metal under the side windows (the door top) and over them. */
+      sill?: number;
+      header?: number;
+      /** B-pillar position along the cabin, 0 at the cowl, 1 at the tail. */
+      split?: number;
+      /** Extra sill under the rear quarter window — the rally kick-up. */
+      quarterRise?: number;
+    };
+    pillarPaint?: "paint" | "accent";
+    /** Rain gutters along the roof edges — the detail that dates a car to
+     * the era both launch cars come from. Width in m. */
+    gutter?: { width: number; color?: number };
+    /** Wipers parked at the base of the screen. */
+    wipers?: boolean;
+    /** Black-out band around the glass openings, m. Reads as the rubber
+     * seal that separates a glass opening from a painted panel. */
+    seal?: number;
+  };
+  /** Fender flares: extra belt half-width over each axle, m. `smooth`
+   * swells to a peak over the axle and tapers away; `box` holds the full
+   * width across the whole length and steps off at each end, which is the
+   * bolted-on Group-4 look. */
+  flare?: { extra: number; length: number; kind?: "smooth" | "box" };
+  spoiler?: Spoiler;
+  /** Accent stripes laid on the hood/deck, offsets are x centers, m. */
+  stripes?: { offsets: number[]; width: number; zFrom: number; zTo: number; color?: number };
+  /** Panel shut lines cut into the flank, at these z positions (m). */
+  doorSeams?: number[];
+  /** Livery and trim bands on the flank, drawn in order. */
+  sideBands?: SideBand[];
+  /** A racing number on each door, drawn from a blocky 3x5 font. */
+  raceNumber?: {
+    text: string;
+    z: number;
+    y: number;
+    /** Height of a digit, m. */
+    size: number;
+    color?: number;
+    /** White (or accent) panel behind the digits — the door roundel. */
+    panel?: { width: number; height: number; color?: number };
+  };
+  front?: FrontSpec;
+  rear?: RearSpec;
+  mudflaps?: boolean;
+  mirrors?: boolean;
+  /** Door handles on the flank, one per door seam gap. */
+  handles?: { z: number[]; y: number };
+  colors: {
+    paint: number;
+    accent: number;
+    glass?: number;
+    trim?: number;
+    hub?: number;
+    bumper?: number;
+    /** Inside of the wheel arches and the underbody. */
+    shadow?: number;
+  };
+};

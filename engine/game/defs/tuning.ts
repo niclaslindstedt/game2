@@ -378,12 +378,17 @@ export const TUNING = {
 
   collision: {
     /** The body's collision box in the ground plane, m — half-length along
-     * the nose and half-width across it. One size fits both cars, and it is
-     * sized to CONTAIN the larger of the two drawn shells (the classic's
-     * tail and flares): a box smaller than the body is a car that visibly
-     * passes through trunks before anything happens, which reads as the
-     * whole contact model being broken. The margin the compact gets in
-     * exchange is a couple of centimetres of early scrape — invisible. */
+     * the nose and half-width across it. ONE box serves the whole catalog,
+     * and it has to CONTAIN every drawn shell: a body poking out of its
+     * collider is a car that visibly passes through trunks before anything
+     * happens, which reads as the whole contact model being broken. The
+     * length is measured to the BUMPER face, not the profile's end
+     * station, because that is what meets the tree. The longest cars sit
+     * exactly on 2.1 and the widest on 0.895, so a new car has almost no
+     * room in length — tests/car_geometry_test.ts holds both ends of this
+     * against pwa/src/game/car-styles.ts and fails if a spec outgrows it.
+     * What a smaller car gets in exchange is a couple of centimetres of
+     * early scrape, which is invisible. */
     halfLength: 2.1,
     halfWidth: 0.92,
     /** Fraction of the closing speed bounced back off a solid, 0..1 — low:
@@ -413,8 +418,10 @@ export const TUNING = {
      * is spent. A wreck is never teleported home on its own. */
     repairTo: 0.5,
     /** Zone crush that tears each part off its bolts, m. Mirrors pop off
-     * a brush; bumpers and the wing take a real hit. */
-    partAt: { mirror: 0.04, bumper: 0.12, spoiler: 0.1 },
+     * a brush; bumpers and the wing take a real hit; a bonnet or boot lid
+     * only lets go once the clip around it has folded far enough to pull
+     * its hinges, which is deeper than the bumper in front of it. */
+    partAt: { mirror: 0.04, bumper: 0.12, spoiler: 0.1, lid: 0.2 },
     /** The mass every other number here is written against, kg. A car's
      * own `mass` is read against this: heavier spins less off a clipped
      * tree, folds deeper for the same closing speed (the energy is real),

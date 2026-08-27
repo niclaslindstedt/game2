@@ -1681,6 +1681,14 @@ a.menu-version:focus-visible {
   color: var(--hud-good);
 }
 
+.car-pick-drive {
+  align-self: center;
+  margin-top: 0.15em;
+  font-size: clamp(0.55rem, 1.8vmin, 0.7rem);
+  letter-spacing: 0.22em;
+  opacity: 0.65;
+}
+
 /* ── Roam ────────────────────────────────────────────────────────────────
    A split view: the STAGE pane (a window onto the live map), the CAR on its
    stand, and the CONDITIONS. `.roam-map` deliberately paints NOTHING — the

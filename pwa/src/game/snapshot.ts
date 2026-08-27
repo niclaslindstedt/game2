@@ -74,6 +74,8 @@ function damageSnapshot(state: GameState): HudDamage {
       mirrorL: broken.includes("mirrorR"),
       mirrorR: broken.includes("mirrorL"),
       spoiler: broken.includes("spoiler"),
+      hood: broken.includes("hood"),
+      hatch: broken.includes("hatch"),
     },
   };
 }
