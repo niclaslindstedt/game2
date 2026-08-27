@@ -2272,8 +2272,8 @@ a.menu-version:focus-visible {
    cap is what keeps the crest off the title on a phone held sideways, the
    tightest surface in the app. */
 .splash-flags {
-  width: min(82vw, 62vh, 32rem);
-  aspect-ratio: 30 / 13;
+  width: min(82vw, 56vh, 30rem);
+  aspect-ratio: 13 / 8;
 }
 
 .splash-flag-svg {
