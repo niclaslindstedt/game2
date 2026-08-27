@@ -9,7 +9,13 @@
 // the top bar because the bar is a strip over the road, and every button on
 // it is a button in the way of the driving.
 
-import { DEFAULT_KNOBS, type StageKnobs, type StageLength, type TimeOfDay, type Weather } from "@engine";
+import {
+  DEFAULT_KNOBS,
+  type StageKnobs,
+  type StageLength,
+  type TimeOfDay,
+  type Weather,
+} from "@engine";
 
 export type RaceSettings = {
   timeOfDay: TimeOfDay;
