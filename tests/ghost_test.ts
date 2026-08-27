@@ -81,7 +81,11 @@ describe("ghost tape", () => {
     }
     expect(replayLine).toEqual(line);
     expect(replayTime).toBe(time);
-    expect(replay.phase).toBe("finished");
+    // The tape ends at the LINE, so both runs are wherever crossing it left
+    // them — coasting down R22's run-out on a generated stage. What a ghost
+    // has to prove is that the replay ended up in the same place as the run
+    // it recorded, not which place that is.
+    expect(replay.phase).toBe(game.phase);
     expect(replay.car.x).toBe(game.car.x);
     expect(replay.car.z).toBe(game.car.z);
     expect(replay.stats.driftCount).toBe(game.stats.driftCount);

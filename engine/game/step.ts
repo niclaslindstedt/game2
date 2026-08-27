@@ -288,8 +288,11 @@ function drown(state: GameState, events: GameEvent[], waterY: number): void {
   car.reversing = false;
   // A body arriving fast enough to reach the bed before it has floated at
   // all skips the whole beat, so the water is allowed to swallow only so
-  // much of a plunge.
-  car.vy = Math.max(car.vy, -T.crash.drown.plunge);
+  // much of a plunge — and none of a bounce. A car that arrives off a bank
+  // still RISING keeps that climb through the entry otherwise, and the
+  // buoyancy spring pays it straight back as a dip: the hull ducks under
+  // its own waterline on a moment the water should have taken.
+  car.vy = Math.min(0, Math.max(car.vy, -T.crash.drown.plunge));
 }
 
 /** One step of a car going down. Nothing else in the run advances while

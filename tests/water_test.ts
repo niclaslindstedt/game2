@@ -163,8 +163,16 @@ describe("going under (TUNING.crash.drown)", () => {
   /** Drive a run straight off the side until it finds water deep enough to
    * drown in, and hand back the state at the moment the water took it. The
    * lakeland dial is turned up so there IS water to find. */
+  /** Seeds to look for a lake in, in order. `driveIntoDeepWater` takes the
+   * FIRST one that drowns the car, so the order matters: these lead with
+   * seeds whose water is deep enough to submerge a car. `crash.deepWater`
+   * is a low bar — a car meets it in a puddle at a lakeshore, and settling
+   * on the bottom of a shallow tarn with the roof awash is a different
+   * (and correct) answer to the one these tests are asking about. */
+  const DROWNING_SEEDS = [34, 26, ...SEEDS];
+
   function driveIntoDeepWater(): { state: GameState; entry: GameEvent[] } {
-    for (const seed of SEEDS) {
+    for (const seed of DROWNING_SEEDS) {
       const state = createGame({ seed, length: "long", skipCountdown: true, knobs: { water: 1 } });
       // Hard lock and full throttle: off the road, across the verge, and
       // into whatever the seed put beside it.
@@ -184,8 +192,11 @@ describe("going under (TUNING.crash.drown)", () => {
     // the whole change: the run is lost, the car is still in the lake.
     expect(types).toContain("crash");
     expect(types).not.toContain("respawn");
-    const splash = entry.find((e) => e.type === "splash");
-    expect(splash?.deep).toBe(true);
+    // A car that wades in off a shore books the shallows' splash and the
+    // deep one on the SAME step, so the deep one is the one to look for
+    // rather than the first one in the list.
+    const splashes = entry.filter((e) => e.type === "splash");
+    expect(splashes.some((e) => e.deep)).toBe(true);
     expect(state.drowning).not.toBeNull();
   });
 
