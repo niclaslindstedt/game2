@@ -125,6 +125,66 @@ export const TUNING = {
     minSpeed: 9,
   },
 
+  /** THE SUSPENSION — the springs the body sits on, and the only reason
+   * the car reads as WEIGHING something. The wheels follow the ground
+   * exactly; the body does not, and every sudden change in what the wheels
+   * are doing (a dip flattening out, a landing, a bank stopping the nose)
+   * is a jolt the springs have to swallow and then give back. What the
+   * player sees is the body squatting, rebounding and settling over a beat
+   * or two — the difference between a car and a sprite sliding on a plane.
+   * The `collision` skill owns this group together with the contact model. */
+  suspension: {
+    /** Natural frequency of the body on its springs, Hz. Rally-soft: low
+     * enough that a landing visibly travels, high enough that the car is
+     * settled again before the next corner. Scaled per car by its mass
+     * (a heavier body on the same springs rides more slowly). */
+    freq: 1.35,
+    /** Damping ratio, 0..1. Under 1 on purpose — the body has to OVERSHOOT
+     * and come back, because a spring that just eases to rest reads as a
+     * cushion rather than as weight. Around 0.28 gives one clear rebound
+     * and a small second one. */
+    damping: 0.28,
+    /** Fraction of a sudden change in the wheels' vertical speed that the
+     * body refuses to follow, 0..1 — the jolt that loads the spring. */
+    absorb: 0.85,
+    /** Compression travel before the bump stops, m... */
+    travel: 0.2,
+    /** ...and droop travel before the springs top out, m. */
+    droop: 0.14,
+    /** How much stiffer the bump stops are than the springs (multiplier on
+     * the spring rate) — a slam is caught, not swallowed... */
+    stopRate: 16,
+    /** ...and the extra damping they add, 1/s, so the stop absorbs the slam
+     * instead of firing it straight back out. */
+    stopDamp: 26,
+    /** Hard limits on the body's offset, m — whatever the stops let through
+     * never puts the shell through the wheels or up off them. */
+    heaveMax: 0.3,
+    /** Cap on spring velocity, m/s. */
+    rateMax: 9,
+    /** Nose attitude the springs take per m/s² of longitudinal
+     * acceleration, rad — the dive under brakes and the squat on the
+     * power. A couple of degrees at full braking: enough to read at the
+     * chase cam, not enough to look like a boat. */
+    pitchPerAccel: 0.004,
+    /** How fast that load pitch answers, 1/s. */
+    pitchRate: 7,
+    /** Body heave a solid contact throws into the springs, m/s per m/s of
+     * closing speed — the car rocks on its springs after a hit... */
+    impactHeave: 0.22,
+    /** ...and the dive it throws in, rad per m/s of closing speed, signed
+     * by where on the body the hit landed (a nose hit pitches down, a
+     * rear-ender lifts the nose). */
+    impactPitch: 0.004,
+    /** Descent the springs can no longer swallow, m/s: past this the whole
+     * CHASSIS comes back off the ground instead... */
+    bounceSpeed: 9,
+    /** ...with this fraction of the excess as rebound speed... */
+    bounceKeep: 0.24,
+    /** ...capped here, m/s, so a slam is a bounce and never a second jump. */
+    bounceMax: 4.5,
+  },
+
   air: {
     /** Gravity, m/s². */
     gravity: 9.8 * 1.6, // arcade gravity: floatier hangs read as slow-motion
@@ -291,10 +351,14 @@ export const TUNING = {
 
   collision: {
     /** The body's collision box in the ground plane, m — half-length along
-     * the nose and half-width across it. One size fits both cars; the
-     * visual bodies differ by centimetres, not classes. */
-    halfLength: 1.9,
-    halfWidth: 0.85,
+     * the nose and half-width across it. One size fits both cars, and it is
+     * sized to CONTAIN the larger of the two drawn shells (the classic's
+     * tail and flares): a box smaller than the body is a car that visibly
+     * passes through trunks before anything happens, which reads as the
+     * whole contact model being broken. The margin the compact gets in
+     * exchange is a couple of centimetres of early scrape — invisible. */
+    halfLength: 2.1,
+    halfWidth: 0.92,
     /** Fraction of the closing speed bounced back off a solid, 0..1 — low:
      * a tree absorbs a rally car, it does not trampoline it. */
     restitution: 0.3,
@@ -324,6 +388,23 @@ export const TUNING = {
     /** Zone crush that tears each part off its bolts, m. Mirrors pop off
      * a brush; bumpers and the wing take a real hit. */
     partAt: { mirror: 0.04, bumper: 0.12, spoiler: 0.1 },
+    /** The mass every other number here is written against, kg. A car's
+     * own `mass` is read against this: heavier spins less off a clipped
+     * tree, folds deeper for the same closing speed (the energy is real),
+     * and rides its springs more slowly. */
+    refMass: 1200,
+    /** THE GROUND AS A SOLID. Grade (dy/dx) the wheels can still scrabble
+     * up: below it a rise is a hill the car climbs and the grade term
+     * pushes back on, above it the ground starts REFUSING the car. 0.7 is
+     * about 35°. */
+    climbLimit: 0.7,
+    /** ...and the grade at which it refuses entirely — a cliff face, hit
+     * at the full closing speed. 2.1 is about 65°. */
+    wallSlope: 2.1,
+    /** Baseline the struck face's gradient is read over, m — short, because
+     * what matters is the wall the bumper is against, not the shape of the
+     * mountain behind it. */
+    faceSpan: 1.5,
     /** Descent speed relative to the ground the suspension absorbs for
      * free, m/s — landing harder than this crushes the underside (or the
      * flank, on a car that came down on its side). Set just over what a

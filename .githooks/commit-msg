@@ -10,7 +10,9 @@ case "$subject" in
   Merge\ *|Revert\ *|fixup!\ *|squash!\ *) exit 0 ;;
 esac
 
-pattern='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9./-]+\))?!?: .+'
+# Comma-separated scopes are the repo's own convention for a change that
+# spans layers (`feat(engine,pwa): …`), so the class has to admit a comma.
+pattern='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9./,-]+\))?!?: .+'
 if ! printf '%s' "$subject" | grep -qE "$pattern"; then
   echo "commit-msg: subject is not a conventional commit:"
   echo "  $subject"

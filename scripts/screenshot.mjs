@@ -179,6 +179,41 @@ for (const [name, steer] of [
   );
 }
 
+// TOUCHDOWN: the frame just after a flight lands, while the springs are
+// still swallowing it. The body is squatted onto its stops and the wheels
+// and the shadow are flat on the road — the car having WEIGHT is visible
+// here or it is visible nowhere.
+await capture(
+  "shot-slam",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await racing(page);
+    await page.keyboard.down("ArrowUp");
+    try {
+      await page.waitForSelector(".hud-air", { timeout: 30000 });
+      await page.waitForSelector(".hud-air", { state: "hidden", timeout: 15000 });
+      // Well under the springs' own period: a shot a beat later catches a
+      // settled car, which proves nothing about the beat before it.
+      await page.waitForTimeout(90);
+    } catch {
+      console.log("  (shot-slam: never left the ground)");
+    }
+  },
+  { seed: "28" },
+);
+
+// Off the road and into the hillside. The ground is a solid like any trunk:
+// a face too steep to climb takes the pace, folds the nose and rocks the car
+// on its springs. The camera trails DOWN the slope behind it, which is where
+// a chase cam at roof height would otherwise be inside the hill.
+await capture("shot-bank", { width: 1280, height: 720 }, async (page) => {
+  await racing(page);
+  await page.keyboard.down("ArrowUp");
+  await page.waitForTimeout(2600);
+  await page.keyboard.down("ArrowLeft");
+  await page.waitForTimeout(2400);
+});
+
 // Portrait at speed (touch HUD hidden on desktop; portrait shows scale).
 await capture("shot-speed-portrait", { width: 390, height: 844 }, async (page) => {
   await racing(page);

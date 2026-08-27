@@ -13,6 +13,13 @@ export type CarSpec = {
   id: string;
   name: string;
   gearbox: GearboxMode;
+  /** Kerb mass, kg — what the car WEIGHS. Read against
+   * TUNING.collision.refMass: a heavier car is harder for a clipped tree
+   * to spin, folds deeper into what it hits, and rides its springs more
+   * slowly. It is deliberately not in the longitudinal model: gearAccel is
+   * already an acceleration, so making mass divide it twice would just
+   * make the heavy car slow. */
+  mass: number;
   /** Top speed of each gear, m/s — the last entry is the car's top speed. */
   gearTop: number[];
   /** Peak longitudinal acceleration per gear, m/s². */
@@ -44,6 +51,7 @@ export const CARS: CarSpec[] = [
     id: "compact",
     name: "Vireo GT (auto)",
     gearbox: "auto",
+    mass: 1120,
     gearTop: [13, 21, 30, 40, 52, 65],
     // gearAccel[4] holds clear headroom over drag at 0.94·gearTop[4], or
     // the auto box parks just under its own upshift threshold forever.
@@ -63,6 +71,7 @@ export const CARS: CarSpec[] = [
     id: "classic",
     name: "Sable 4WD (manual)",
     gearbox: "manual",
+    mass: 1310,
     gearTop: [12, 20, 29, 39, 52, 70],
     gearAccel: [13, 11, 9.2, 7.2, 5.4, 3.8],
     brake: 19,

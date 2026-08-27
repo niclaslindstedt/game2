@@ -62,7 +62,7 @@ describe("the impulse", () => {
     // The trunk dead ahead, just inside the nose.
     const tree = solid({ kind: "tree", z: car.z + TUNING.collision.halfLength + 0.5, x: car.x });
     const before = car.z;
-    collideCar(car, [tree], events, state.stats);
+    collideCar(state.spec, car, [tree], events, state.stats);
 
     expect(car.u).toBeLessThan(1); // restitution only bounces a fraction back
     expect(car.z).toBeLessThan(before); // pushed back out of the trunk
@@ -91,7 +91,7 @@ describe("the impulse", () => {
       z: car.z,
       radius: 0.4,
     });
-    collideCar(car, [tree], events, state.stats);
+    collideCar(state.spec, car, [tree], events, state.stats);
 
     expect(car.yawRate).not.toBe(0); // the lever arm turned the drag into spin
     expect(car.x).toBeLessThan(0); // pushed back off the trunk
@@ -113,7 +113,7 @@ describe("the impulse", () => {
       z: car.z,
       radius: 0.4,
     });
-    collideCar(car, [tree], events, state.stats);
+    collideCar(state.spec, car, [tree], events, state.stats);
 
     expect(car.damage.broken).toContain("mirrorR");
     expect(car.damage.broken).not.toContain("bumperF");
@@ -127,10 +127,10 @@ describe("the impulse", () => {
     const grid = car.z;
     const tree = solid({ kind: "tree", x: car.x, z: grid + TUNING.collision.halfLength + 0.5 });
     car.u = 30;
-    collideCar(car, [tree], events, state.stats);
+    collideCar(state.spec, car, [tree], events, state.stats);
     car.u = 30;
     car.z = grid;
-    collideCar(car, [tree], events, state.stats);
+    collideCar(state.spec, car, [tree], events, state.stats);
     expect(events.filter((e) => e.type === "partBreak" && e.part === "bumperF")).toHaveLength(1);
   });
 
@@ -142,7 +142,7 @@ describe("the impulse", () => {
     car.airborne = true;
     const events: GameEvent[] = [];
     const log = solid({ kind: "log", x: car.x, z: car.z + 1, height: 0.75 });
-    collideCar(car, [log], events, state.stats);
+    collideCar(state.spec, car, [log], events, state.stats);
     expect(car.u).toBe(30);
     expect(events).toHaveLength(0);
   });
@@ -153,7 +153,7 @@ describe("the impulse", () => {
     car.u = TUNING.collision.scuffSpeed - 0.5;
     const events: GameEvent[] = [];
     const rock = solid({ x: car.x, z: car.z + TUNING.collision.halfLength + 0.5 });
-    collideCar(car, [rock], events, state.stats);
+    collideCar(state.spec, car, [rock], events, state.stats);
     expect(car.damage.wear).toBe(0);
     expect(events).toHaveLength(0);
     expect(car.u).toBeLessThan(1);
@@ -170,7 +170,7 @@ describe("the wreck", () => {
     for (let i = 0; i < 3; i++) {
       car.u = 30;
       car.z = grid;
-      collideCar(car, [tree], [], state.stats);
+      collideCar(state.spec, car, [tree], [], state.stats);
     }
     expect(car.damage.wear).toBe(1);
 
@@ -189,7 +189,7 @@ describe("the internal systems", () => {
     const car = state.car;
     car.u = 30;
     const tree = solid({ kind: "tree", x: car.x, z: car.z + TUNING.collision.halfLength + 0.5 });
-    collideCar(car, [tree], [], state.stats);
+    collideCar(state.spec, car, [tree], [], state.stats);
     expect(car.damage.systems.engine).toBeGreaterThan(0.2); // nose → radiator
     expect(car.damage.systems.gearbox).toBe(0); // the back is untouched
   });

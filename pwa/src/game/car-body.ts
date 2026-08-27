@@ -100,6 +100,10 @@ export type CarBodySpec = {
 export type CarBodyParts = {
   /** The whole car, origin at ground level under the body center. */
   group: THREE.Group;
+  /** The SPRUNG mass — every panel, and nothing that touches the ground.
+   * The wheels hang off `group` instead, so the suspension can squat and
+   * rebound the body without pushing the tires through the gravel. */
+  chassis: THREE.Group;
   /** [FL, FR, RL, RR] — rotate .y for steering. */
   wheelGroups: THREE.Group[];
   /** Same order — rotate .x to spin with road speed. */
@@ -684,16 +688,18 @@ export function buildCarBody(spec: CarBodySpec): CarBodyParts {
   buildShell(b, spec, stations);
   buildGreenhouse(b, spec);
   buildDetails(b, spec, axles, part);
+  const chassis = new THREE.Group();
+  group.add(chassis);
   const bodyGeo = b.geometry();
   const body = new THREE.Mesh(bodyGeo, material);
-  group.add(body);
+  chassis.add(body);
 
   const breakables: Partial<Record<DamagePart, THREE.Mesh>> = {};
   const partGeos: THREE.BufferGeometry[] = [];
   for (const [name, builder] of partBuilders) {
     const geo = builder.geometry();
     const mesh = new THREE.Mesh(geo, material);
-    group.add(mesh);
+    chassis.add(mesh);
     breakables[name] = mesh;
     partGeos.push(geo);
   }
@@ -722,5 +728,5 @@ export function buildCarBody(spec: CarBodySpec): CarBodyParts {
     for (const g of wheelGeos) g.dispose();
     material.dispose();
   };
-  return { group, wheelGroups, wheelSpin, body, breakables, dispose };
+  return { group, chassis, wheelGroups, wheelSpin, body, breakables, dispose };
 }

@@ -21,12 +21,15 @@ STAND, and **`test-scenario`** for staging exact contacts.
 | Piece                                                                                                       | File                                                                    |
 | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | Contact model: OBB-vs-circle, impulse, yaw kick, crush, parts, systems, hard landings                       | `engine/game/collision.ts` (`collideCar`, `landingDamage`)              |
-| Every number: box size, restitution, crush rates, part bolts, system transfer + effects                     | `engine/game/defs/tuning.ts` → `TUNING.collision`                       |
+| The GROUND as a solid: a face too steep to climb, met at the bumper                                         | `engine/game/collision.ts` (`collideSlope`) + `car.ts` (`hitFace`)      |
+| The springs: heave, dive/squat, the landing bounce — the car's WEIGHT                                       | `engine/game/car.ts` (`stepSuspension`), `TUNING.suspension`            |
+| Every number: box size, restitution, crush rates, part bolts, system transfer + effects, the springs        | `engine/game/defs/tuning.ts` → `TUNING.collision`, `TUNING.suspension`  |
 | The ledger: `CarState.damage` (zones, belly, wear, systems, broken, version), impact/partBreak/crash events | `engine/game/state.ts`                                                  |
 | Damaged-handling effects (power, grip, shift cuts, steering, landing tolerance)                             | `engine/game/car.ts` — reads `car.damage.systems`, never writes         |
 | When collision runs, the wedge check that is the only way home, deep-water crash                            | `engine/game/step.ts`                                                   |
 | Solid trunks + grove quilt (`treesNear`, `groveAt`, `GROVES`); boulders/logs (`obstaclesNear`)              | `engine/mapgen/terrain.ts`                                              |
 | Bending the polygons, scuff darkening, debris                                                               | `pwa/src/game/car-damage.ts` (+ `car-body.ts` `breakables`)             |
+| Drawing the springs: the sprung-mass group the heave and dive move                                          | `pwa/src/game/car-body.ts` (`chassis`) + `car-mesh.ts`                  |
 | Drawing the engine's trunks as trees (species stays app-side)                                               | `pwa/src/game/world.ts` (`treePlacement`, `solidMix`)                   |
 | The HUD damage instrument                                                                                   | `pwa/src/game/hud.tsx` (`DamagePanel`) + `App.tsx` snapshot             |
 | Tests                                                                                                       | `tests/collision_test.ts` (+ the boulder scenario in `explore_test.ts`) |
@@ -62,6 +65,14 @@ STAND, and **`test-scenario`** for staging exact contacts.
 - **Damage degrades, never disables.** Every system effect is sized so a
   broken system cripples the car's feel without parking it — bots must
   still finish (`make sim`).
+- **The collision box must CONTAIN the larger drawn shell.** One box serves
+  both cars; size it off the longest/widest station in
+  `pwa/src/game/car-styles.ts`, not the average. A body poking out of its
+  collider reads as the whole contact model being broken.
+- **The springs are a readout, never an input.** `car.ride` and
+  `car.pitchLoad` are written by `stepSuspension` and drawn by the renderer;
+  nothing in the handling model reads them back. The renderer moves the
+  `chassis` group only — the wheels and the shadow stay on the ground.
 - **Synthetic terrain overrides must stub `treesNear` too** (see
   `flatWild` in explore_test.ts), or the scenario collides with the real
   forest invisibly.
@@ -103,3 +114,11 @@ STAND, and **`test-scenario`** for staging exact contacts.
   turns every brush into a spin.
 - `hardLandSpeed` sits just over a designed ramp jump's touchdown, so
   marks come from cliff plunges and botched flights, not from every lip.
+- The springs are `freq` × `damping`: the frequency is how long a landing
+  takes to settle, the damping ratio is how many times it comes back.
+  Under ~0.3 reads as weight; at 1 the car reads as a cushion. `heaveMax`
+  is a LOOK budget, not a physics number — past ~0.2 m the sills reach the
+  ground on a body whose floor sits at 0.33 m.
+- `climbLimit`/`wallSlope` decide where a hill stops being drivable and
+  starts being a crash. Widen the gap for a more forgiving landscape;
+  a narrow one turns every bank into a wall.

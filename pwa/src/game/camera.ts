@@ -55,6 +55,31 @@ const DRONE_SIDE = 26;
  * The map view solves its own, because a stage is kilometres wide. */
 const DRIVING_FAR = 900;
 
+/** Base chase height above the wheels, m — roof height, the Sega Rally read. */
+const CHASE_HEIGHT = 2.0;
+/** How far the chase camera RISES per unit of downhill gradient, m. Going
+ * down, the camera hangs above the road as it falls away, so the descent
+ * reads as dropping into it rather than as a flat road that happens to be
+ * tilted. */
+const CHASE_DROP_LIFT = 2.6;
+/** ...and how far it DUCKS per unit of uphill gradient, m. Less than it
+ * rises: climbing, the camera settling toward the road is what puts the
+ * brow of the hill high in the frame, but a camera under the roofline
+ * loses the car. */
+const CHASE_CLIMB_DUCK = 1.2;
+/** How much of the body's own suspension travel the camera shares, 0..1 —
+ * a touch, so a landing lands in the FRAME too and does not just happen to
+ * the car in front of it. */
+const CHASE_HEAVE = 0.4;
+/** Clearance the chase camera is never allowed under, m — over the ground
+ * AND over any water. The camera trails the car, so on any real descent the
+ * ground behind is higher than the ground under the wheels and a fixed
+ * roof-height camera is simply inside the hill; run along a shoreline and
+ * the same camera drops under the lake, which is the sheet of flat blue
+ * that swallows half the frame. Both are checked at the camera's own
+ * position, never the car's. */
+const CHASE_CLEARANCE = 1.3;
+
 /** Aspect ratio the fov numbers in this file are tuned against (landscape). */
 const REF_ASPECT = 16 / 9;
 /** Vertical fov ceiling on narrow viewports, deg — where hor+ stops before
@@ -135,8 +160,16 @@ export function createGameCamera(width: number, height: number): GameCamera {
     // does NOT change when the car leaves the ground: pulling back for a
     // jump makes the biggest moment in the stage read as small and safe,
     // and it is the one moment the camera should hold its nerve.
+    //
+    // The one thing that DOES move it is the gradient: grounded, vy/u is
+    // the slope under the wheels, and the camera rides high over a descent
+    // and settles toward the road on a climb. Both directions serve the
+    // same read — what is ahead of the car should own the frame, and on a
+    // hill that is either the drop or the brow.
+    const grade = clamp(car.vy / Math.max(8, car.u), -0.5, 0.5);
+    const gradeLift = car.airborne ? 0 : -grade * (grade < 0 ? CHASE_DROP_LIFT : CHASE_CLIMB_DUCK);
     const wantDist = 5.6 + car.u * 0.02;
-    const wantHeight = 2.0;
+    const wantHeight = CHASE_HEIGHT + gradeLift;
     dist += (wantDist - dist) * clamp(3 * dt, 0, 1);
     height_ += (wantHeight - height_) * clamp(3 * dt, 0, 1);
 
@@ -154,11 +187,19 @@ export function createGameCamera(width: number, height: number): GameCamera {
 
     const sx = (Math.random() - 0.5) * shake;
     const sy = (Math.random() - 0.5) * shake;
-    camera.position.set(
-      car.x - Math.sin(yaw) * dist + rightX * swing + sx,
-      car.y + height_ + sy,
-      car.z - Math.cos(yaw) * dist + rightZ * swing,
-    );
+    const camX = car.x - Math.sin(yaw) * dist + rightX * swing + sx;
+    const camZ = car.z - Math.cos(yaw) * dist + rightZ * swing;
+    // The floor is read where the CAMERA is: trailing a car down a hill
+    // puts it inside the slope it just came over, and no amount of height
+    // above the CAR fixes that. Water counts as ground here — a lake's
+    // surface is opaque from underneath, so dropping below one costs the
+    // whole frame. Never sink under either: a shot from too high still
+    // shows the game.
+    const surface = state.terrain.waterAt(camX, camZ);
+    const under = Math.max(state.terrain.groundAt(camX, camZ), surface ?? -Infinity);
+    const floor = under + CHASE_CLEARANCE;
+    const want = car.y + height_ + car.ride * CHASE_HEAVE + sy;
+    camera.position.set(camX, Math.max(want, floor), camZ);
     // Aim well down the road and low over the roof: the drop from camera
     // to aim point over ~14 m of run is the ~5° downward pitch of the
     // reference frame — car at the bottom, horizon high. On a slope the aim
@@ -183,9 +224,12 @@ export function createGameCamera(width: number, height: number): GameCamera {
     const sx = (Math.random() - 0.5) * shake * 0.6;
     const sy = (Math.random() - 0.5) * shake * 0.6;
     const climb = clamp(car.vy / Math.max(10, car.u), -0.4, 0.4);
+    // Bolted to the BODY, so it rides the springs with it: the hood cam
+    // squats through a landing and dives under the brakes because the thing
+    // it is mounted to does.
     camera.position.set(
       car.x + Math.sin(yaw) * 0.4 + sx,
-      car.y + 1.15 + sy,
+      car.y + 1.15 + car.ride + sy,
       car.z + Math.cos(yaw) * 0.4,
     );
     camera.lookAt(
