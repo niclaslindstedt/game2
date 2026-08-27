@@ -18,6 +18,7 @@ import {
   type VideoSettings,
 } from "./settings.ts";
 import { buildCar, type CarVisual } from "./car-mesh.ts";
+import { hoodEyeFor } from "./car-styles.ts";
 import {
   createDust,
   paceScale,
@@ -290,6 +291,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     scene.add(route.group);
     car = buildCar(state.spec);
     scene.add(car.group, car.shadow, car.debris);
+    chase.setHoodEye(hoodEyeFor(state.spec));
     environment.setLampSpread(car.lampSpread.front, car.lampSpread.rear);
     // A new stage is a new run: whoever wants a ghost on it says so after.
     dropGhost();
@@ -600,13 +602,13 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       applyAspect();
       applyRange();
     }
-    // The hood cam sits inside the car — hide the body so it doesn't fill
-    // the frame; the blob shadow stays for ground reference. The map view
-    // is looking at a stage, not a car, and at that range the car is a
-    // speck that only draws the eye away from the route.
+    // The map view is looking at a stage, not a car, and at that range the
+    // car is a speck that only draws the eye away from the route. Every
+    // driving view keeps the body — the hood cam included, because the
+    // bonnet under the lens is the whole point of that angle.
     if (route) route.group.visible = view === "map";
     if (car) {
-      car.group.visible = view !== "hood" && view !== "map";
+      car.group.visible = view !== "map";
       car.shadow.visible = view !== "map";
     }
     // The ghost is the one car the hood cam must keep: it is out there on

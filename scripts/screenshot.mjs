@@ -549,6 +549,20 @@ for (const angle of ["hood", "close", "chase", "far", "heli", "top"]) {
   );
 }
 
+// The hood cam on a phone held upright. Its own shot because hor+ opens the
+// frame vertically on a narrow viewport, and every degree of that opening
+// lands half of itself at the BOTTOM — which from the scuttle is bonnet.
+await capture(
+  "shot-cam-hood-portrait",
+  { width: 390, height: 844 },
+  async (page) => {
+    await racing(page);
+    await page.keyboard.down("ArrowUp");
+    await page.waitForTimeout(4500);
+  },
+  { camera: "hood" },
+);
+
 // The same three distant rigs mid-turn, which is where their sway lives:
 // the swing is sprung, so a committed turn should have thrown the camera
 // out to the OUTSIDE of it rather than leaving it square behind the car. A
