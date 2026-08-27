@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { UpdateToast, usePwaUpdate } from "@niclaslindstedt/oss-framework/pwa";
 import {
+  DAMAGE_ZONES,
   TUNING,
   carById,
   compileStage,
@@ -28,7 +29,13 @@ import { cacheIdForBase } from "./app-pwa.ts";
 import { connectOutput } from "./output-bridge.ts";
 import { createInput } from "./game/input.ts";
 import type { GameRenderer } from "./game/renderer.ts";
-import { Hud, type HudFlash, type HudPacenote, type HudSnapshot } from "./game/hud.tsx";
+import {
+  Hud,
+  type HudDamage,
+  type HudFlash,
+  type HudPacenote,
+  type HudSnapshot,
+} from "./game/hud.tsx";
 import {
   PreRaceMenu,
   STAGE_LENGTH_OPTIONS,
@@ -115,6 +122,33 @@ function tachometer(state: GameState): number {
   return Math.min(1, 0.18 + 0.82 * Math.max(0, state.car.u / top));
 }
 
+/** The damage ledger flipped into SCREEN space for the HUD's 2D car: the
+ * rendered world mirrors the engine's map view (the same one-flip rule as
+ * steering and the wind arrow), so the engine's right-side zones — and its
+ * right mirror — sit on the LEFT of the car the player sees. */
+function damageSnapshot(state: GameState): HudDamage {
+  const damage = state.car.damage;
+  const zoneMax = TUNING.collision.zoneMax;
+  const zones = Array.from(
+    { length: DAMAGE_ZONES },
+    (_, k) => damage.zones[(DAMAGE_ZONES - k) % DAMAGE_ZONES] / zoneMax,
+  );
+  const broken = damage.broken;
+  return {
+    zones,
+    belly: damage.belly / zoneMax,
+    wear: damage.wear,
+    systems: { ...damage.systems },
+    broken: {
+      bumperF: broken.includes("bumperF"),
+      bumperR: broken.includes("bumperR"),
+      mirrorL: broken.includes("mirrorR"),
+      mirrorR: broken.includes("mirrorL"),
+      spoiler: broken.includes("spoiler"),
+    },
+  };
+}
+
 function takeSnapshot(state: GameState, finishTime: number | null): HudSnapshot {
   const rpm = tachometer(state);
   // The rendered world is a mirror of the engine's map view, so the wind
@@ -149,6 +183,7 @@ function takeSnapshot(state: GameState, finishTime: number | null): HudSnapshot 
     boosting: state.car.boosting,
     windKmh,
     windScreenAngle,
+    damage: damageSnapshot(state),
   };
 }
 

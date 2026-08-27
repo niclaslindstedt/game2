@@ -15,8 +15,10 @@ import {
 import { carById } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 import { launch, stepAirborne, stepGrounded, type GroundContext } from "./car.ts";
+import { collideCar } from "./collision.ts";
 import { crossedLip, curvatureAt, locate, slopeAt } from "./track.ts";
 import {
+  DAMAGE_ZONES,
   type CarInput,
   type CarState,
   type GameEvent,
@@ -40,6 +42,7 @@ function freshStats(): RunStats {
     cleanLandings: 0,
     splashes: 0,
     offRoadTime: 0,
+    impacts: 0,
     crashes: 0,
     respawns: 0,
     topSpeed: 0,
@@ -69,6 +72,14 @@ function freshCar(): CarState {
     boosting: false,
     steer: 0,
     braking: false,
+    damage: {
+      zones: new Array(DAMAGE_ZONES).fill(0),
+      belly: 0,
+      wear: 0,
+      systems: { engine: 0, suspension: 0, gearbox: 0, steering: 0 },
+      broken: [],
+      version: 0,
+    },
   };
 }
 
@@ -173,7 +184,7 @@ function respawn(state: GameState, events: GameEvent[]): void {
   events.push({ type: "respawn" });
 }
 
-function crash(state: GameState, events: GameEvent[], into: "water" | "boulder" | "log"): boolean {
+function crash(state: GameState, events: GameEvent[], into: "water" | "wreck"): boolean {
   state.stats.crashes += 1;
   events.push({ type: "crash", into });
   respawn(state, events);
@@ -325,9 +336,10 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   }
   if (state.offRoad) state.stats.offRoadTime += T.dt;
 
-  // Crashes: deep water swallows the car, and the wild's solid props are
-  // really solid. Crash physics is a later chapter — for now a crash puts
-  // the car back on the track at its last progress.
+  // Solid contact: deep water still swallows the car whole, but the wild's
+  // props and the forest's trunks BEND it instead of ending it — impulse,
+  // crush and yaw kick live in collision.ts, and only a chassis worn to
+  // nothing wrecks (crash + respawn, patched to a drivable fraction).
   let crashed = false;
   if (fix.offRoad) {
     const water = terrain.waterAt(car.x, car.z);
@@ -341,23 +353,18 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
       crashed = crash(state, events, "water");
     }
     if (!crashed) {
-      for (const ob of terrain.obstaclesNear(car.x, car.z, 2)) {
-        const dx = car.x - ob.x;
-        const dz = car.z - ob.z;
-        const d = Math.hypot(dx, dz);
-        if (d > ob.radius || car.y > ob.y + ob.height) continue;
-        if (Math.hypot(car.u, car.w) > T.crash.obstacleSpeed) {
-          crashed = crash(state, events, ob.kind);
-        } else if (d > 1e-3 && !car.airborne) {
-          // A low-speed nudge: the prop does not move — the car stops.
-          car.x = ob.x + (dx / d) * ob.radius;
-          car.z = ob.z + (dz / d) * ob.radius;
-          car.u = 0;
-          car.w = 0;
-        }
-        break;
-      }
+      const solids = terrain.obstaclesNear(car.x, car.z, 2.5);
+      solids.push(...terrain.treesNear(car.x, car.z, 2.5));
+      if (solids.length > 0) collideCar(car, solids, events, state.stats);
     }
+  }
+  // Wear reaching 1 is the wreck, wherever the last of it came from — a
+  // trunk, a rock, or a landing the suspension could not take on the road
+  // itself. The respawn patches the chassis half-way back; the dents, the
+  // torn-off parts and the hurt systems all stay.
+  if (!crashed && car.damage.wear >= 1) {
+    crashed = crash(state, events, "wreck");
+    car.damage.wear = T.collision.repairTo;
   }
   if (input.reset && !crashed && state.phase === "racing") respawn(state, events);
 

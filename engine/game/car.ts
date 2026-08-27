@@ -12,7 +12,14 @@
 import { clamp } from "../lib/math.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
-import type { CarInput, CarState, GameEvent, RunStats } from "./state.ts";
+import {
+  updateSlip,
+  type CarInput,
+  type CarState,
+  type GameEvent,
+  type RunStats,
+} from "./state.ts";
+import { landingDamage } from "./collision.ts";
 import type { Rng } from "../lib/prng.ts";
 
 const T = TUNING;
@@ -47,29 +54,32 @@ function stepGearbox(
   events: GameEvent[],
 ): void {
   const maxGear = spec.gearTop.length - 1;
+  // A hurt gearbox shifts harsher: the auto box, seamless when sound, cuts
+  // throttle per shift as its damage grows; the manual's cut stretches.
+  const gearboxDamage = car.damage.systems.gearbox;
   if (spec.gearbox === "auto") {
+    const cut = T.collision.systems.autoCut * gearboxDamage;
     if (car.gear < maxGear && car.u > spec.gearTop[car.gear] * T.gearbox.upAt) {
       car.gear += 1;
+      car.shiftCutUntil = t + cut;
       events.push({ type: "shift", gear: car.gear });
     } else if (car.gear > 0 && car.u < spec.gearTop[car.gear - 1] * T.gearbox.downAt) {
       car.gear -= 1;
+      car.shiftCutUntil = t + cut;
       events.push({ type: "shift", gear: car.gear });
     }
     return;
   }
+  const cut = T.gearbox.shiftCut * (1 + T.collision.systems.shiftCut * gearboxDamage);
   if (input.shiftUp && car.gear < maxGear) {
     car.gear += 1;
-    car.shiftCutUntil = t + T.gearbox.shiftCut;
+    car.shiftCutUntil = t + cut;
     events.push({ type: "shift", gear: car.gear });
   } else if (input.shiftDown && car.gear > 0) {
     car.gear -= 1;
-    car.shiftCutUntil = t + T.gearbox.shiftCut;
+    car.shiftCutUntil = t + cut;
     events.push({ type: "shift", gear: car.gear });
   }
-}
-
-function updateSlip(car: CarState): void {
-  car.slip = Math.atan2(car.w, Math.max(1, Math.abs(car.u)));
 }
 
 /** How sideways the car is, 0..1 — the one number the whole drift is made
@@ -164,7 +174,9 @@ export function stepGrounded(
   // you catch it on the counter — both fading in with the slide so that
   // grip and slide are one continuous response, not two modes.
   const speedFactor = clamp(car.u / T.steering.deadSpeed, 0, 1);
-  const steerGain = (spec.steerRate / (1 + car.u / T.steering.fadeSpeed)) * speedFactor;
+  // A bent rack answers late and short: steering damage bleeds authority.
+  const rack = 1 - T.collision.systems.steerLoss * car.damage.systems.steering;
+  const steerGain = (spec.steerRate / (1 + car.u / T.steering.fadeSpeed)) * speedFactor * rack;
   // The slide SATURATES: past ~26° of slip the forces that deepen it fade
   // to nothing, so a breathed slide parks at a big, stable, movie drift
   // angle instead of spinning the car.
@@ -213,7 +225,10 @@ export function stepGrounded(
 
   // ── Longitudinal ─────────────────────────────────────────────────────────
   const shiftCut = ctx.t < car.shiftCutUntil ? 0 : 1;
-  const accel = engineAccel(spec, car) * input.throttle * surfacePower * shiftCut;
+  // A folded radiator starves the engine: power fades with engine damage —
+  // the car limps, it never parks.
+  const damagePower = 1 - T.collision.systems.powerLoss * car.damage.systems.engine;
+  const accel = engineAccel(spec, car) * input.throttle * surfacePower * shiftCut * damagePower;
   car.u += accel * dt;
   car.u -= spec.brake * input.brake * Math.sign(car.u) * dt;
   car.u -= surfaceDrag * car.u * dt;
@@ -267,8 +282,15 @@ export function stepGrounded(
   }
   const lift = 1 + T.grip.liftGrip * (1 - input.throttle) * slide;
   const handbrakeGrip = input.handbrake ? T.grip.handbrakeGrip : 1;
+  // Bent arms hold the tires at the wrong angles: suspension damage costs
+  // lateral grip across the board.
+  const arms = 1 - T.collision.systems.gripLoss * car.damage.systems.suspension;
   const latRate =
-    (spec.gripLat + (spec.driftLat - spec.gripLat) * slide) * surfaceGrip * lift * handbrakeGrip;
+    (spec.gripLat + (spec.driftLat - spec.gripLat) * slide) *
+    surfaceGrip *
+    lift *
+    handbrakeGrip *
+    arms;
   if (car.u > 1) {
     const swung = car.slip * Math.exp(-latRate * dt);
     const kept = Math.hypot(car.u, car.w) * Math.exp(-T.grip.scrub * Math.sin(car.slip) ** 2 * dt);
@@ -398,8 +420,13 @@ export function stepAirborne(
       stats.cleanLandings += 1;
     } else {
       car.u *= T.air.sloppyKeep;
-      car.yawRate += -Math.sign(car.slip) * T.air.sloppyWobble;
+      // Shot dampers let the whole car skip and hunt on a bad touchdown.
+      const wobble = 1 + T.collision.systems.wobble * car.damage.systems.suspension;
+      car.yawRate += -Math.sign(car.slip) * T.air.sloppyWobble * wobble;
     }
+    // The ground hits back: descent the suspension cannot absorb crushes
+    // the underside — or the flank the car came down on (collision.ts).
+    landingDamage(car, car.u * ctx.slope - car.vy, events, stats);
     // Pick the road's own vertical speed back up instead of zeroing: land on
     // a brow and the car may be off the ground again next step, and a stale
     // zero there is a bounce where there should be a flight.

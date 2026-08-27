@@ -210,14 +210,19 @@ export type WildObstacle = {
   z: number;
   /** Ground height under it (terrain.heightAt at its foot). */
   y: number;
-  kind: "boulder" | "log";
+  kind: "boulder" | "log" | "tree";
   /** Visual scale factor, ~0.8–1.8. */
   size: number;
   spin: number;
-  /** Collision radius in the ground plane, m. */
+  /** Collision radius in the ground plane, m — for a tree, the trunk. */
   radius: number;
   /** Height above its foot — a car flying higher clears it. */
   height: number;
+  /** Trees only: species roll (0–1) and grove index (into GROVES) — the
+   * renderer picks WHAT to draw from these; the engine only owns WHERE the
+   * trunk stands and how thick it is. */
+  roll?: number;
+  grove?: number;
 };
 
 /** One obstacle candidate per grid cell of this edge, m. */
@@ -226,6 +231,41 @@ const OB_CELL = 56;
 const OB_DENSITY = 0.45;
 /** Obstacles keep this far from the road centerline beyond the half-width. */
 const OB_ROAD_CLEAR = 10;
+
+// ── The grove quilt and the forest's trunks ───────────────────────────────
+
+/** One plant community's PLACEMENT data: its share of the landscape and how
+ * much of its ground carries a solid tree (0 open meadow, 1 closed forest).
+ * Species, colors and undergrowth are the renderer's business (the biome in
+ * the app maps these ids to flora) — the quilt and the trunks live here
+ * because the car collides with them, and collision and drawing must agree
+ * on the same seeded placement. */
+export type GroveCommunity = { id: string; weight: number; density: number };
+
+export const GROVES: readonly GroveCommunity[] = [
+  { id: "spruceWood", weight: 3, density: 1 },
+  { id: "pineHeath", weight: 2.5, density: 0.8 },
+  { id: "birchGrove", weight: 2, density: 0.9 },
+  { id: "oldGrowth", weight: 2, density: 1 },
+  { id: "broadleafGrove", weight: 1.5, density: 0.85 },
+  { id: "larchStand", weight: 1, density: 0.85 },
+  { id: "meadow", weight: 2.5, density: 0.06 },
+];
+
+/** Meters of grove-noise period — how big one community's patch is. */
+export const GROVE_SCALE = 150;
+
+/** One tree candidate per grid cell of this edge, m — the ceiling on how
+ * dense a closed forest gets (one trunk per ~100 m²). */
+const TREE_CELL = 10;
+/** Chance a cell's candidate stands, at community density 1. With the cell
+ * size this sets the closed forest at roughly a trunk per 500 m² — gaps a
+ * car can thread, walls it cannot ignore. */
+const TREE_DENSITY = 0.22;
+/** Trees keep this far from the road centerline beyond the half-width, m —
+ * tighter than the boulders: running wide brushes the verge, leaving the
+ * road properly finds the forest. */
+const TREE_ROAD_CLEAR = 5;
 
 // ── The field ─────────────────────────────────────────────────────────────
 
@@ -254,6 +294,14 @@ export type TerrainField = {
   /** Solid wild props near a point (within `r` of it), collision-checked
    * by the physics and drawn by the renderer. */
   obstaclesNear: (x: number, z: number, r: number) => WildObstacle[];
+  /** The forest's solid trunks near a point (within `r`) — same contract
+   * as obstaclesNear, kept separate because trees are far denser and the
+   * renderer draws them through the flora system rather than as props. */
+  treesNear: (x: number, z: number, r: number) => WildObstacle[];
+  /** Which grove community (index into GROVES) owns a patch of ground —
+   * the one quilt both the trunk placement above and the renderer's
+   * species/undergrowth choices read, so a meadow is open on both sides. */
+  groveAt: (x: number, z: number) => number;
   /** Catch the field up with the track: index new samples and cut new
    * stream valleys (endless stages stream road in); prune far behind
    * `carS` so an endless run's memory stays bounded. */
@@ -477,6 +525,90 @@ export function createTerrain(track: Track): TerrainField {
     return found;
   };
 
+  // ── The forest: one seeded trunk candidate per tree cell ───────────────
+  // The same quilt-then-roll placement the renderer used to run on its own;
+  // it lives here now so the trunks are solid. The wobbled grove lookup
+  // keeps community borders meandering instead of running cell-straight.
+  const groveSeed = (track.seed ^ 0x9e3779b9) >>> 0;
+  const groveWeight = GROVES.reduce((sum, g) => sum + g.weight, 0);
+  const groveAt = (x: number, z: number): number => {
+    const wx = x + (valueNoise(x, z, 47, groveSeed + 1) - 0.5) * 70;
+    const wz = z + (valueNoise(z, x, 53, groveSeed + 2) - 0.5) * 70;
+    let t = hash2(Math.floor(wx / GROVE_SCALE), Math.floor(wz / GROVE_SCALE), groveSeed);
+    t *= groveWeight;
+    for (let i = 0; i < GROVES.length; i++) {
+      t -= GROVES[i].weight;
+      if (t <= 0) return i;
+    }
+    return GROVES.length - 1;
+  };
+
+  const treeSeed = rng.int(1, 1 << 30);
+  let treeCache = new Map<string, WildObstacle | null>();
+
+  const treeInCell = (cx: number, cz: number): WildObstacle | null => {
+    const key = `${cx},${cz}`;
+    const hit = treeCache.get(key);
+    if (hit !== undefined) return hit;
+    if (treeCache.size > 16384) treeCache = new Map();
+    let tree: WildObstacle | null = null;
+    const x = (cx + 0.1 + hash2(cx, cz, treeSeed + 1) * 0.8) * TREE_CELL;
+    const z = (cz + 0.1 + hash2(cx, cz, treeSeed + 2) * 0.8) * TREE_CELL;
+    const grove = groveAt(x, z);
+    if (hash2(cx, cz, treeSeed) < TREE_DENSITY * GROVES[grove].density) {
+      const near = nearestSample(x, z);
+      const clear = !near || near.d > half + TREE_ROAD_CLEAR;
+      if (clear && !inStream(streams, x, z, 1.5)) {
+        // Feet on the RIDDEN lattice ground, same as the props: the trunk
+        // must stand exactly on the surface the car drives.
+        const y = groundAt(x, z);
+        if (y > LAKE_Y + 1.2) {
+          const size = 0.75 + hash2(cx, cz, treeSeed + 3) * 0.6;
+          tree = {
+            x,
+            z,
+            y,
+            kind: "tree",
+            size,
+            spin: hash2(cx, cz, treeSeed + 4) * Math.PI * 2,
+            // The trunk plus its lowest boughs — fat enough to punish a
+            // straight-through line, thin enough that gaps stay drivable.
+            radius: 0.3 + 0.25 * size,
+            // Tall enough that no jump clears a tree; only a real cliff
+            // flight sails over the forest.
+            height: 6 * size,
+            roll: hash2(cx, cz, treeSeed + 5),
+            grove,
+          };
+        }
+      }
+    }
+    treeCache.set(key, tree);
+    return tree;
+  };
+
+  const treesNear = (x: number, z: number, r: number): WildObstacle[] => {
+    const found: WildObstacle[] = [];
+    for (
+      let cx = Math.floor((x - r - 1) / TREE_CELL);
+      cx <= Math.floor((x + r + 1) / TREE_CELL);
+      cx++
+    ) {
+      for (
+        let cz = Math.floor((z - r - 1) / TREE_CELL);
+        cz <= Math.floor((z + r + 1) / TREE_CELL);
+        cz++
+      ) {
+        const tree = treeInCell(cx, cz);
+        if (!tree) continue;
+        const dx = tree.x - x;
+        const dz = tree.z - z;
+        if (dx * dx + dz * dz <= (r + tree.radius) * (r + tree.radius)) found.push(tree);
+      }
+    }
+    return found;
+  };
+
   let streamScan = 0;
 
   const sync = (carS: number): void => {
@@ -488,6 +620,7 @@ export function createTerrain(track: Track): TerrainField {
       // New road may have arrived where a prop stood — revalidate; fresh
       // stream valleys reshape the ground, so the lattice re-samples too.
       obCache = new Map();
+      treeCache = new Map();
       cornerCache = new Map();
     }
     if (!track.endless) return;
@@ -501,6 +634,7 @@ export function createTerrain(track: Track): TerrainField {
       indexSamples(firstIndexed, samples.length);
       while (streams.length > 0 && streams[0].centerS < floorS) streams.shift();
       obCache = new Map();
+      treeCache = new Map();
       cornerCache = new Map();
     }
   };
@@ -517,6 +651,8 @@ export function createTerrain(track: Track): TerrainField {
     roadDistanceAt,
     streams,
     obstaclesNear,
+    treesNear,
+    groveAt,
     sync,
   };
 }

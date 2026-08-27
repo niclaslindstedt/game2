@@ -57,6 +57,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | Stage generation rules or vocabulary               | `engine/mapgen/rules.ts` (data) / `generate.ts` (search)       |
 | Track geometry/compilation                         | `engine/mapgen/compile.ts`                                     |
 | Run orchestration (phases, respawn, events)        | `engine/game/step.ts`                                          |
+| Collision / damage (crush, parts, wreck, systems)  | `engine/game/collision.ts` — the `collision` skill             |
 | Bot behavior                                       | `engine/sim/bot.ts`                                            |
 | Anything drawn (meshes, textures, camera, effects) | `pwa/src/game/` (renderer.ts and friends)                      |
 | HUD / touch controls                               | `pwa/src/game/hud.tsx` + `pwa/src/styles.css`                  |
@@ -109,6 +110,9 @@ Skills live in `.agent/skills/` (`.claude/skills` symlinks there) — each a `SK
 
 - **`game-feel`** — how the game FEELS: the sensation of speed and the drift as drama. Owns the Sega Rally reference, the camera, and the cross-system levers (speed × stage scale × framing × FX). Load it whenever the acceptance test is "does it feel right".
 - **`engine-system`** — adding/changing a gameplay system, engine-first.
+- **`collision`** — the car hitting things: contact model, crush and bent
+  polygons, breaking parts, internal-system damage, the wreck, the solid
+  trunks, and the HUD damage instrument.
 - **`mapgen-improvement`** — the stage generator (rules/search/geometry, the R-rules).
 - **`bot-improvement`** — the bot driver in `engine/sim/bot.ts`.
 - **`simulate-run`** — measuring balance with `make sim`; owns reading the table.

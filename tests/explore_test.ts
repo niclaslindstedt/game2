@@ -50,6 +50,7 @@ function flatWild(state: GameState, heightAt: (x: number, z: number) => number):
     groundAt: heightAt,
     waterAt: () => null,
     obstaclesNear: () => [],
+    treesNear: () => [],
   };
 }
 
@@ -170,6 +171,7 @@ describe("crashes", () => {
       groundAt: shelf,
       waterAt: (x) => (Math.abs(x) < 40 ? null : LAKE_Y),
       obstaclesNear: () => [],
+      treesNear: () => [],
     };
     state.car.heading = Math.PI / 2; // straight off the road, toward the water
     state.car.u = 30;
@@ -183,7 +185,7 @@ describe("crashes", () => {
     expect(Math.abs(state.car.x)).toBeLessThan(1);
   });
 
-  it("a boulder at speed is a crash; at a crawl it just stops the car", () => {
+  it("a boulder at speed crushes and slows the car; a crawl is only a scuff", () => {
     const boulder = {
       x: 30,
       z: 250,
@@ -194,7 +196,7 @@ describe("crashes", () => {
       radius: 2,
       height: 2,
     };
-    const run = (speed: number): { events: GameEvent[]; state: GameState } => {
+    const run = (speed: number, throttle: number): { events: GameEvent[]; state: GameState } => {
       const state = createGame({
         seed: 3,
         skipCountdown: true,
@@ -207,25 +209,36 @@ describe("crashes", () => {
         waterAt: () => null,
         obstaclesNear: (x, z, r) =>
           Math.hypot(boulder.x - x, boulder.z - z) < r + boulder.radius ? [boulder] : [],
+        treesNear: () => [],
       };
       state.car.x = 30;
-      state.car.z = speed > 10 ? 200 : 244;
+      state.car.z = speed > 10 ? 200 : 246;
       state.car.y = -0.35;
       state.car.u = speed;
       const events: GameEvent[] = [];
       for (let i = 0; i < 120 * 5; i++) {
-        events.push(...step(state, { ...NEUTRAL_INPUT, throttle: speed > 10 ? 1 : 0.3 }));
+        events.push(...step(state, { ...NEUTRAL_INPUT, throttle }));
       }
       return { events, state };
     };
 
-    const fast = run(30);
-    expect(fast.events.find((e) => e.type === "crash")).toMatchObject({ into: "boulder" });
-    expect(fast.events.some((e) => e.type === "respawn")).toBe(true);
+    // Head-on at 30 m/s: no teleporting respawn — the nose folds, the
+    // front bumper tears off, and most of the pace is gone in the hit.
+    const fast = run(30, 0);
+    const impact = fast.events.find((e) => e.type === "impact");
+    expect(impact).toBeDefined();
+    if (impact?.type === "impact") expect(impact.speed).toBeGreaterThan(20);
+    expect(fast.state.stats.impacts).toBeGreaterThan(0);
+    expect(fast.state.car.damage.zones[0]).toBeGreaterThan(0.1);
+    expect(fast.state.car.damage.wear).toBeGreaterThan(0.3);
+    expect(fast.state.car.damage.broken).toContain("bumperF");
+    expect(fast.state.car.u).toBeLessThan(10);
 
-    const slow = run(4);
-    expect(slow.events.filter((e) => e.type === "crash")).toHaveLength(0);
-    expect(slow.state.car.u).toBeLessThan(4);
+    // A 2.5 m/s crawl into the rock: stopped by it, unmarked by it.
+    const slow = run(2.5, 0.2);
+    expect(slow.events.filter((e) => e.type === "impact")).toHaveLength(0);
+    expect(slow.state.car.damage.wear).toBe(0);
+    expect(slow.state.car.u).toBeLessThan(2.5);
     expect(Math.hypot(slow.state.car.x - boulder.x, slow.state.car.z - boulder.z)).toBeGreaterThan(
       boulder.radius - 0.1,
     );

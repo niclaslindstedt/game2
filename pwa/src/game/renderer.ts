@@ -82,13 +82,13 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
       world.dispose();
     }
     if (car) {
-      scene.remove(car.group, car.shadow);
+      scene.remove(car.group, car.shadow, car.debris);
       car.dispose();
     }
     world = buildWorld(state.track);
     scene.add(world.group);
     car = buildCar(state.spec);
-    scene.add(car.group, car.shadow);
+    scene.add(car.group, car.shadow, car.debris);
     setConditions(state);
   };
 
@@ -105,8 +105,23 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
         dust.spawn(c.x, c.y + 0.1, c.z, 0xb29268, 10, 3);
       } else if (ev.type === "respawn") {
         chase.kick(0.3);
+      } else if (ev.type === "impact") {
+        // The hit lands where the engine says it did: a debris-grey burst
+        // at that point on the body, and a camera jolt sized to the speed.
+        chase.kick(Math.min(0.9, 0.25 + ev.speed * 0.02));
+        const a = c.heading + ev.angle;
+        const reach = ev.belly ? 0 : 1.6;
+        dust.spawn(
+          c.x + Math.sin(a) * reach,
+          c.y + (ev.belly ? 0.1 : 0.5),
+          c.z + Math.cos(a) * reach,
+          0x8a8578,
+          Math.min(30, 8 + Math.round(ev.speed)),
+          3.5,
+        );
       }
     }
+    car?.onEvents(state, events);
   };
 
   const render = (state: GameState, dt: number): void => {

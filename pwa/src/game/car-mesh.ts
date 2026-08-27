@@ -8,9 +8,10 @@
 
 import * as THREE from "three";
 import { clamp } from "../lib/util.ts";
-import type { CarSpec, GameState } from "@engine";
+import type { CarSpec, GameEvent, GameState } from "@engine";
 
 import { buildCarBody } from "./car-body.ts";
+import { createCarDamage } from "./car-damage.ts";
 import { createCarDirt } from "./car-dirt.ts";
 import { bodySpecFor } from "./car-styles.ts";
 
@@ -25,7 +26,10 @@ const WHEEL_STEER_RATE = 14;
 export type CarVisual = {
   group: THREE.Group;
   shadow: THREE.Mesh;
+  /** World-anchored debris (torn-off parts) — scene sibling of the car. */
+  debris: THREE.Group;
   update: (state: GameState, dt: number) => void;
+  onEvents: (state: GameState, events: GameEvent[]) => void;
   dispose: () => void;
 };
 
@@ -35,6 +39,7 @@ export function buildCar(spec: CarSpec): CarVisual {
   const body = buildCarBody(bodySpec);
   group.add(body.group);
   const dirt = createCarDirt(body.group);
+  const damage = createCarDamage(body);
 
   const length = bodySpec.profile[0].z - bodySpec.profile[bodySpec.profile.length - 1].z;
   const shadow = new THREE.Mesh(
@@ -79,6 +84,7 @@ export function buildCar(spec: CarSpec): CarVisual {
     }
 
     dirt.update(state, dt);
+    damage.update(state, dt);
 
     // Blob shadow: pinned to the ground under the car, fading with height.
     const height = Math.max(0, car.y - groundYUnder(state));
@@ -89,12 +95,13 @@ export function buildCar(spec: CarSpec): CarVisual {
   };
 
   const dispose = (): void => {
+    damage.dispose();
     body.dispose();
     shadow.geometry.dispose();
     (shadow.material as THREE.MeshBasicMaterial).dispose();
   };
 
-  return { group, shadow, update, dispose };
+  return { group, shadow, debris: damage.debris, update, onEvents: damage.onEvents, dispose };
 }
 
 /** Road height under the car (the sample the physics last locked to). */
