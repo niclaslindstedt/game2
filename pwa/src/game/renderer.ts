@@ -88,6 +88,14 @@ export type GameRenderer = {
   /** Re-light an already-built stage (the pre-race menu flipping time of
    * day / weather) without rebuilding its geometry. */
   setConditions: (state: GameState) => void;
+  /** Put a ghost on the road — the best run on this stage, replaying its
+   * own game beside the player's. The renderer keeps the reference and
+   * draws whatever it says every frame; null takes it off again. */
+  setGhost: (state: GameState | null) => void;
+  /** The ghost's own events, spent on ITS body alone: it crumples and
+   * sheds parts the way the run did, and throws no dust, no camera kick
+   * and no sound, because none of that happened here. */
+  onGhostEvents: (state: GameState, events: GameEvent[]) => void;
   cycleCamera: () => CameraMode;
   render: (state: GameState, dt: number) => void;
   onEvents: (state: GameState, events: GameEvent[]) => void;
@@ -128,6 +136,8 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   let world: World | null = null;
   let route: MapRoute | null = null;
   let car: CarVisual | null = null;
+  let ghost: GameState | null = null;
+  let ghostCar: CarVisual | null = null;
   let game: GameState | null = null;
   /** True while the map view is up: it suspends the transient FX and pushes
    * the fog out past the whole stage. */
@@ -149,19 +159,23 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
    * own baked or vertex colors (the car, the particles). */
   const applyTint = (): void => {
     const tint = environment.carTint();
-    car?.group.traverse((obj) => {
-      if (obj instanceof THREE.Mesh || obj instanceof THREE.Points) {
-        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-        for (const mat of mats) {
-          if (mat instanceof THREE.MeshBasicMaterial || mat instanceof THREE.PointsMaterial) {
-            mat.color.copy(tint);
+    const paint = (visual: CarVisual | null): void =>
+      visual?.group.traverse((obj) => {
+        if (obj instanceof THREE.Mesh || obj instanceof THREE.Points) {
+          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+          for (const mat of mats) {
+            if (mat instanceof THREE.MeshBasicMaterial || mat instanceof THREE.PointsMaterial) {
+              mat.color.copy(tint);
+            }
           }
         }
-      }
-    });
+      });
+    paint(car);
+    paint(ghostCar);
     // A lamp is the one thing on the car the failing light makes BRIGHTER,
     // so it is switched, not tinted.
     car?.setLights(environment.lampsLit());
+    ghostCar?.setLights(environment.lampsLit());
     (dust.points.material as THREE.PointsMaterial).color.copy(tint);
     (smoke.points.material as THREE.PointsMaterial).color.copy(tint);
     (fumes.points.material as THREE.PointsMaterial).color.copy(tint);
@@ -224,6 +238,14 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     applyAspect();
   };
 
+  const dropGhost = (): void => {
+    ghost = null;
+    if (!ghostCar) return;
+    scene.remove(ghostCar.group, ghostCar.shadow, ghostCar.debris);
+    ghostCar.dispose();
+    ghostCar = null;
+  };
+
   const setGame = (state: GameState): void => {
     if (world) {
       scene.remove(world.group);
@@ -247,7 +269,18 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     car = buildCar(state.spec);
     scene.add(car.group, car.shadow, car.debris);
     environment.setLampSpread(car.lampSpread.front, car.lampSpread.rear);
+    // A new stage is a new run: whoever wants a ghost on it says so after.
+    dropGhost();
     setConditions(state);
+  };
+
+  const setGhost = (state: GameState | null): void => {
+    dropGhost();
+    if (!state) return;
+    ghost = state;
+    ghostCar = buildCar(state.spec, { ghost: true });
+    scene.add(ghostCar.group, ghostCar.shadow, ghostCar.debris);
+    applyTint();
   };
 
   /** What a wheel throws where. The road's is one tone of dry grit; the
@@ -304,6 +337,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       }
     }
     car?.onEvents(state, events);
+  };
+
+  const onGhostEvents = (state: GameState, events: GameEvent[]): void => {
+    ghostCar?.onEvents(state, events);
   };
 
   const render = (state: GameState, dt: number): void => {
@@ -431,6 +468,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     world?.sync(state);
     world?.update(dt);
     car?.update(state, dt);
+    if (ghost && ghostCar) ghostCar.update(ghost, dt);
     // The way home is a DRIVING aid, bolted to the camera. Under the menu's
     // drone and the map view there is nobody lost and nobody to point: left
     // running, it would hang a compass needle over the middle of the menu.
@@ -461,6 +499,12 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     if (car) {
       car.group.visible = view !== "hood" && view !== "map";
       car.shadow.visible = view !== "map";
+    }
+    // The ghost is the one car the hood cam must keep: it is out there on
+    // the road being chased, not wrapped around the camera.
+    if (ghostCar) {
+      ghostCar.group.visible = view !== "map";
+      ghostCar.shadow.visible = view !== "map";
     }
     drawScene();
   };
@@ -501,6 +545,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     world?.dispose();
     route?.dispose();
     car?.dispose();
+    ghostCar?.dispose();
     dust.dispose();
     smoke.dispose();
     fumes.dispose();
@@ -518,6 +563,8 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     setCamera,
     setMapRect,
     setConditions,
+    setGhost,
+    onGhostEvents,
     cycleCamera: () => chase.cycle(),
     render,
     onEvents,

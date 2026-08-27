@@ -80,7 +80,15 @@ function damageSnapshot(state: GameState): HudDamage {
   };
 }
 
-export function takeSnapshot(state: GameState, finishTime: number | null): HudSnapshot {
+/** How far the run is up the road on the ghost, and whether there is one
+ * to be up the road on. Both cars run the same stage, so the arc position
+ * they have each reached IS the gap, in the one unit that needs no lookup
+ * table and reads instantly at speed: metres of road. */
+export function takeSnapshot(
+  state: GameState,
+  finishTime: number | null,
+  ghostS: number | null = null,
+): HudSnapshot {
   const rpm = tachometer(state);
   // The rendered world is a mirror of the engine's map view, so the wind
   // arrow's screen angle is the NEGATED car-relative bearing (the same
@@ -115,5 +123,6 @@ export function takeSnapshot(state: GameState, finishTime: number | null): HudSn
     windKmh,
     windScreenAngle,
     damage: damageSnapshot(state),
+    ghostGap: ghostS === null ? null : state.progressS - ghostS,
   };
 }

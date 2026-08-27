@@ -28,6 +28,7 @@ import {
   status,
   step,
   type CarInput,
+  type FiniteStageLength,
   type GameEvent,
   type GameState,
   type StageKnobs,
@@ -62,6 +63,16 @@ import {
   type CampaignLevel,
   type CampaignProgress,
 } from "./game/campaign.ts";
+import {
+  createGhostRecorder,
+  ghostMatches,
+  loadGhost,
+  readGhost,
+  saveGhost,
+  type GhostRecorder,
+  type GhostStage,
+  type GhostTape,
+} from "./game/ghost.ts";
 import {
   PLAY_CAMERAS,
   loadSettings,
@@ -265,6 +276,15 @@ export function App() {
   const [paused, setPaused] = useState(false);
   const [flashes, setFlashes] = useState<HudFlash[]>([]);
   const finishTimeRef = useRef<number | null>(null);
+  /** The controls of the run being driven, written down step by step so a
+   * time worth keeping can be raced against later. Null on a stage that
+   * keeps no time — Roam, and the menu's demo. */
+  const recorderRef = useRef<GhostRecorder | null>(null);
+  /** The ghost being raced: its OWN game, stepped from the tape beside the
+   * player's, plus how far into the tape that game has got. Two games, one
+   * track, and nothing between them — the cars cannot touch, because
+   * neither one is in the other's world. */
+  const ghostRef = useRef<{ state: GameState; tape: GhostTape; at: number } | null>(null);
   const actionsRef = useRef<{ restart: () => void; menu: () => void; camera: () => void }>({
     restart: () => undefined,
     menu: () => undefined,
@@ -347,6 +367,48 @@ export function App() {
   const applyStageRef = useRef(applyStage);
   applyStageRef.current = applyStage;
 
+  /** Arm a run's ghost: a fresh recorder on any stage that keeps a time,
+   * and — in a time trial — the best run on it put back on the road as a
+   * second game stepped from its tape. Called on every start AND every
+   * restart, because a restart is a new attempt and a half-written tape
+   * would replay the first one's corners onto the second one's road.
+   *
+   * A ghost is only worth building on the finite, fixed-dial campaign
+   * stages a time belongs to; nothing here ever runs behind the menu. */
+  const armGhost = (spec: StageSpec, mode: PlayMode, levelId?: string): void => {
+    const renderer = rendererRef.current;
+    recorderRef.current = null;
+    ghostRef.current = null;
+    renderer?.setGhost(null);
+    if (!renderer || !trackRef.current || menuRef.current) return;
+    if (!levelId || spec.length === "endless") return;
+    recorderRef.current = createGhostRecorder();
+    if (mode !== "timetrial") return;
+    const stage: GhostStage = {
+      seed: spec.seed,
+      length: spec.length as FiniteStageLength,
+      knobs: spec.knobs,
+      timeOfDay: spec.timeOfDay,
+      weather: spec.weather,
+    };
+    const saved = loadGhost(levelId);
+    if (!saved || !ghostMatches(saved, stage)) return;
+    // The ghost's own game, on the SAME compiled track — the stage is read
+    // only, so there is nothing to build twice but the run itself.
+    const state = createGame({
+      seed: spec.seed,
+      carId: saved.carId,
+      track: trackRef.current.track,
+      skipCountdown: spec.skipCountdown,
+      env: { timeOfDay: spec.timeOfDay, weather: spec.weather },
+    });
+    ghostRef.current = { state, tape: readGhost(saved), at: 0 };
+    renderer.setGhost(state);
+    status(`Ghost: your ${saved.time.toFixed(2)} s in the ${carById(saved.carId).name}`);
+  };
+  const armGhostRef = useRef(armGhost);
+  armGhostRef.current = armGhost;
+
   /** Put the backdrop the current menu page asks for on screen. */
   const showBackdrop = (page: MenuPage): void => {
     const renderer = rendererRef.current;
@@ -358,9 +420,14 @@ export function App() {
   const showBackdropRef = useRef(showBackdrop);
   showBackdropRef.current = showBackdrop;
 
-  /** Leave whatever is on screen for the main menu, with its demo behind it. */
+  /** Leave whatever is on screen for the main menu, with its demo behind it.
+   * The run's tape and its ghost go with it: a stage abandoned halfway is
+   * not a time, and the demo behind the cards races nobody. */
   const goMainMenu = (): void => {
     setPaused(false);
+    recorderRef.current = null;
+    ghostRef.current = null;
+    rendererRef.current?.setGhost(null);
     setMenu({ page: "root" });
   };
 
@@ -375,6 +442,7 @@ export function App() {
     setMenu(null);
     menuRef.current = null;
     applyStage(spec, true);
+    armGhost(spec, mode, levelId);
     rendererRef.current?.setCamera(startCamera(optionsRef.current.camera));
   };
 
@@ -525,7 +593,10 @@ export function App() {
       const restart = (): void => {
         setPaused(false);
         const spec = stageRef.current;
-        if (spec) applyStageRef.current(spec, true);
+        if (!spec) return;
+        applyStageRef.current(spec, true);
+        const active = runRef.current;
+        armGhostRef.current(spec, active.mode, active.levelId);
       };
       const camera = (): void => {
         if (menuRef.current) return;
@@ -566,7 +637,38 @@ export function App() {
             const active = runRef.current;
             // Both modes post a time; only the campaign's clear opens the
             // next stage, and a time trial's level is cleared by definition.
-            if (active.levelId) setProgress(recordFinish(active.levelId, ev.time));
+            if (active.levelId) {
+              // A ghost IS the best time, so it is kept by the same rule and
+              // read before the new time overwrites the old one. Recorded on
+              // the campaign too: the board is shared, and a best set there
+              // is the run a time trial has to beat.
+              const beat = loadProgress().best[active.levelId];
+              const spec = stageRef.current;
+              const tape = recorderRef.current;
+              if (
+                tape &&
+                spec &&
+                spec.length !== "endless" &&
+                (beat === undefined || ev.time < beat)
+              ) {
+                saveGhost(
+                  active.levelId,
+                  tape.seal(
+                    {
+                      seed: spec.seed,
+                      length: spec.length as FiniteStageLength,
+                      knobs: spec.knobs,
+                      timeOfDay: spec.timeOfDay,
+                      weather: spec.weather,
+                    },
+                    spec.carId,
+                    ev.time,
+                  ),
+                );
+              }
+              recorderRef.current = null;
+              setProgress(recordFinish(active.levelId, ev.time));
+            }
             // A stage ends where it started: back to the menu, with the
             // result on screen long enough to read.
             nextStageTimer = setTimeout(goMainMenu, 4500);
@@ -616,8 +718,18 @@ export function App() {
           // never moves.
           const human = input.sample(TUNING.dt);
           if (autopilot && driving(human)) autopilot = false;
-          const events = step(state, page || autopilot ? botInput(state) : human);
+          const driven = page || autopilot ? botInput(state) : human;
+          const events = step(state, driven);
           if (events.length > 0) handleEvents(state, events);
+          if (page) continue;
+          // The tape is what the ENGINE was handed, so a replay drives the
+          // same road; the ghost's own game steps beside it off its own.
+          recorderRef.current?.record(driven);
+          const ghost = ghostRef.current;
+          if (ghost) {
+            const ghostEvents = step(ghost.state, ghost.tape.at(ghost.at++));
+            if (ghostEvents.length > 0) renderer.onGhostEvents(ghost.state, ghostEvents);
+          }
         }
         // The road bed belongs to a run the player is IN. Behind the menu the
         // stage is scenery under a theme, and an engine bed over the top of
@@ -627,7 +739,11 @@ export function App() {
         hudClock += dtFrame;
         if (hudClock > 0.08) {
           hudClock = 0;
-          if (!page) setSnap(takeSnapshot(state, finishTimeRef.current));
+          if (!page) {
+            setSnap(
+              takeSnapshot(state, finishTimeRef.current, ghostRef.current?.state.progressS ?? null),
+            );
+          }
         }
       };
       raf = requestAnimationFrame(frame);
