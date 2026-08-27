@@ -22,6 +22,11 @@ export type WayHome = {
   heading: number;
   /** Ground distance from the car to it, m. */
   distance: number;
+  /** Where it lies relative to the way the car is POINTING, radians: 0 dead
+   * ahead, ±π/2 straight out to the sides, ±π directly behind. The way home
+   * being BESIDE the car is a different situation from it being behind it —
+   * one is a car crossing a clearing, the other is a car leaving. */
+  bearing: number;
 };
 
 /** Progress is monotonic, so this is always the furthest the car has got —
@@ -36,13 +41,42 @@ export function wayHome(state: GameState): WayHome {
     : Math.min(state.progressIndex, Math.max(0, finishIndex(track) - HOME_BACKOFF));
   const s = track.samples[index];
   const car = state.car;
+  // The car's own axes: forward is (sin h, cos h) and its right is
+  // (cos h, -sin h) — the same frame the handling and the terrain reads use.
+  const dx = s.x - car.x;
+  const dz = s.z - car.z;
+  const sinH = Math.sin(car.heading);
+  const cosH = Math.cos(car.heading);
   return {
     x: s.x,
     y: s.elevation,
     z: s.z,
     heading: s.heading,
-    distance: Math.hypot(s.x - car.x, s.z - car.z),
+    distance: Math.hypot(dx, dz),
+    bearing: Math.atan2(dx * cosH - dz * sinH, dx * sinH + dz * cosH),
   };
+}
+
+/**
+ * IS THE PLAYER LOST — the one question the way-home guidance answers to.
+ *
+ * Off the road is not lost. Two wheels on the verge is off the road; so is a
+ * car cutting the inside of a hairpin, and so is one crossing a clearing
+ * with the stage running along beside it. What a driver actually needs
+ * telling is that they are LEAVING: far enough out that the road is not the
+ * next thing under the wheels, and pointed away from it rather than across
+ * it. Both tests carry hysteresis (TUNING.offTrack.guide), because a
+ * wandering car crosses either of them back and forth and an instrument that
+ * blinks is worse than one that is late.
+ */
+export function trackLost(state: GameState): boolean {
+  if (!state.offRoad) return false;
+  const guide = TUNING.offTrack.guide;
+  const home = wayHome(state);
+  const away = Math.abs(home.bearing);
+  return state.lost
+    ? home.distance > guide.nearClear && away > guide.awayClear
+    : home.distance > guide.near && away > guide.away;
 }
 
 export type TrackFix = {

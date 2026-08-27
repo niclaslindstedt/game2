@@ -602,8 +602,18 @@ export function App() {
         if (!state) return;
         const page = menuRef.current;
         // The pause card is a run that must not tick while the player is
-        // reading it; the Roam page is a stage nobody is driving.
-        if ((page === null && pausedRef.current) || page?.page === "roam") {
+        // reading it — and a paused run is a FROZEN one: rendered with no
+        // time passing, so the wheels stop turning, the dust hangs and the
+        // camera holds. A frame's worth of dt handed to the renderer over a
+        // state that is not moving is a car doing 120 km/h on stopped
+        // ground. The Roam page is different: nothing is driving there
+        // either, but the map camera is still turning, so it keeps its time.
+        if (page === null && pausedRef.current) {
+          acc = 0;
+          renderer.render(state, 0);
+          return;
+        }
+        if (page?.page === "roam") {
           acc = 0;
           renderer.render(state, dtFrame);
           return;

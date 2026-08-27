@@ -17,6 +17,7 @@ import {
   createGame,
   createTerrain,
   step,
+  trackLost,
   type CarInput,
   type GameEvent,
   type GameState,
@@ -351,6 +352,9 @@ describe("the attitude the ground puts in the body", () => {
       skipCountdown: true,
       track: compileTrack(3, LONG_STRAIGHT),
     });
+    // Above the drift's speed floor (TUNING.drift.slideFrom) — under it the
+    // car only steers, so a standing start would never go sideways at all.
+    level.car.u = 30;
     for (let i = 0; i < 120 * 2 && !level.offRoad; i++) step(level, drive({ steer: 1 }));
     expect(level.car.slide).toBeGreaterThan(0.5);
     const crown = Math.atan((2 * ROAD_CROSS.crown.gravel) / (level.track.width / 2));
@@ -395,5 +399,63 @@ describe("the terrain field", () => {
     // Far away the landscape is its own: finite and varied.
     const far = terrain.heightAt(s.x + 2000, s.z + 2000);
     expect(Number.isFinite(far)).toBe(true);
+  });
+});
+
+// WHEN THE PLAYER IS LOST, which is not the same question as whether they
+// are off the road. The way home is an ALERT, and an alert that fires every
+// time a wheel clips the verge — or every time the stage happens to run
+// alongside the field being crossed — is one the player learns to ignore.
+describe("knowing the player is lost", () => {
+  /** Park the car `metres` out to the right of the start line, pointed
+   * `turn` radians off the road's own heading. */
+  function strayed(metres: number, turn: number): GameState {
+    const state = createGame({
+      seed: 3,
+      skipCountdown: true,
+      track: compileTrack(3, LONG_STRAIGHT),
+    });
+    const home = state.track.samples[0];
+    // The road's right in world space is (cos h, -sin h).
+    state.car.x = home.x + metres * Math.cos(home.heading);
+    state.car.z = home.z - metres * Math.sin(home.heading);
+    state.car.heading = home.heading + turn;
+    state.offRoad = true;
+    return state;
+  }
+
+  /** Straight out to the right of the line: home is directly behind. */
+  const AWAY = Math.PI / 2;
+
+  it("says nothing while the car is still beside the road", () => {
+    expect(trackLost(strayed(12, AWAY))).toBe(false);
+  });
+
+  it("says nothing about a car crossing perpendicular to the road", () => {
+    // Pointed along the stage with the road out to one side: off it, well
+    // clear of it, and not going anywhere away from it.
+    expect(trackLost(strayed(60, 0))).toBe(false);
+  });
+
+  it("speaks up for a car well out and pointed away", () => {
+    expect(trackLost(strayed(60, AWAY))).toBe(true);
+  });
+
+  it("never speaks up for a car that is on the road at all", () => {
+    const state = strayed(60, AWAY);
+    state.offRoad = false;
+    expect(trackLost(state)).toBe(false);
+  });
+
+  it("holds on past the thresholds it came on at", () => {
+    // Already lost, now turned back to perpendicular and half the distance
+    // in: neither test has cleared, so the sign stays up rather than
+    // blinking at every twitch of the wheel.
+    const state = strayed(17, AWAY * 1.05);
+    state.lost = true;
+    expect(trackLost(state)).toBe(true);
+    // Nose round toward the road and it clears.
+    state.car.heading = state.track.samples[0].heading;
+    expect(trackLost(state)).toBe(false);
   });
 });

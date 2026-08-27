@@ -82,7 +82,12 @@ export function createWayHomeArrow(): WayHomeArrow {
   let bearing = 0;
 
   const update = (state: GameState, camera: THREE.PerspectiveCamera, dt: number): void => {
-    const want = state.offRoad && state.phase === "racing" ? 1 : 0;
+    // The same test the co-driver's strip runs off — pointing away from a
+    // road that is a long way behind, not merely off it. One rule, both
+    // halves of the guidance: the engine's `trackLost`, kept on the state as
+    // `lost`. (The TRACK button is not guidance; it stays offered for as
+    // long as the car is off the road at all.)
+    const want = state.lost && state.phase === "racing" ? 1 : 0;
     shown += (want - shown) * Math.min(1, FADE * dt);
     group.visible = shown > 0.01;
     if (!group.visible) return;

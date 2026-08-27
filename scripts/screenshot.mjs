@@ -194,15 +194,15 @@ await capture("shot-drift", { width: 1280, height: 720 }, async (page) => {
   await page.waitForTimeout(950);
 });
 
-/** Off the road and into the wild, and hold it there. The banner is the
+/** Off the road and into the wild, and hold it there. The reset chip is the
  * honest cursor: it says the engine agrees the car has left the track, so
- * what is behind the wheels is turf rather than grit. */
+ * what is behind the wheels is turf rather than grit. Not the RETURN TO
+ * TRACK strip — that one waits for the car to be LOST, which is a stricter
+ * thing than being off the road and a scene may never reach it. */
 async function inTheWild(page) {
-  await page.waitForFunction(
-    "document.querySelector('.hud-pace-text')?.textContent?.includes('RETURN TO TRACK')",
-    null,
-    { timeout: 120000 },
-  );
+  await page.waitForFunction("document.querySelector('.hud-mini-alert')", null, {
+    timeout: 120000,
+  });
 }
 
 // The wild's turf, at pace. Grass holds together where loose grit does not,

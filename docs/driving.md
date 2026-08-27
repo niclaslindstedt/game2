@@ -19,9 +19,17 @@ one continuous response rather than two modes.
   the car changes what it is doing — grip becomes slide without an event.
   What was asked a moment ago also has not fully let go (`release`), which
   carries one corner's angle into the next. Gentle steering never earns an
-  angle at any speed; a committed turn slides from about 70 km/h up. No
-  flick, no handbrake, no kick — nothing is ever injected into the car's
-  velocity.
+  angle at any speed. No flick, no handbrake, no kick — nothing is ever
+  injected into the car's velocity.
+- **The speed floor** — under **70 km/h** (`TUNING.drift.slideFrom`, read
+  off the GROUND speed the speedo shows) there is no slide at all: the whole
+  gate multiplies out to zero, so the wheel steers the car and does nothing
+  else. It closes over five km/h (`slideSpan`) rather than at a hard edge,
+  it caps a slide already running — a drift that runs out of speed is let go
+  by the floor rather than carried down to a standstill — and every lever
+  that takes the rear away passes through it, the handbrake included. A car
+  going sideways at walking pace is not this game's drama; it is a car that
+  will not go where it is pointed.
 - **The demand is what the wheel ASKS for**, never the yaw the car ended up
   with. The slide feeds extra yaw authority back into the car, so measuring
   it off the resulting yaw closes a positive feedback loop with no
@@ -88,12 +96,16 @@ one continuous response rather than two modes.
   unsticks the car; it does not teleport it sideways, and it does not slow it
   down. It works by lowering the grip ceiling, so the same lock asks far
   more of what is left. It is a flick, not a hold: with the power down and full lock, a held
-  handbrake takes the rear past any catch and spins the car around.
+  handbrake takes the rear past any catch and spins the car around. Below the
+  speed floor both halves of it — the yaw and the grip cut — are gone, and
+  the lever is a pair of locked wheels: it is not a way round the floor.
 
 `car.slide` and `car.drifting` are readouts for the dust, the HUD and the
 balance table — nothing in the model branches on them. `drifting` is read off
 the slip ANGLE, with hysteresis, because the angle is what a player sees and
-because it moves smoothly. Drift score accumulates as `|slip| × speed ×
+because it moves smoothly, AND off a slide that is actually open: below the
+speed floor a hard turn is understeer, which is not a drift and must not
+light the dust or the counter. Drift score accumulates as `|slip| × speed ×
 time` — sideways AND fast — purely as a measurement; nothing in the game
 rewards it, and no drift seconds are counted at the player.
 
@@ -253,9 +265,16 @@ not a mistake anymore; it is exploration:
   the B key / the HUD's TRACK button), and the **wedge check** — throttle
   held for `TUNING.offTrack.stuck.after` seconds without covering
   `stuck.radius` meters. A car pinned against a trunk is not driving out of
-  it; anything still making ground is left alone. While the car is off the
-  road the co-driver's strip reads RETURN TO TRACK with that distance, and
-  an arrow hangs over the car pointing at the spot itself.
+  it; anything still making ground is left alone. The TRACK button is there
+  the whole time the car is off the road — a driver two metres into a ditch
+  should not have to be lost first — but the ALERT waits for the car to
+  actually be lost (`trackLost`, `TUNING.offTrack.guide`): more than 20 m
+  out AND pointed more than 110° away from the way home, with hysteresis on
+  both so a wandering car does not blink it on and off. Two wheels on the
+  verge is not lost, and neither is a clearing crossed perpendicular with the
+  stage running alongside. Once it is, the co-driver's strip reads RETURN TO
+  TRACK with the distance, and an arrow hangs over the car pointing at the
+  spot itself.
 
 ## Weight: the springs
 
@@ -373,6 +392,16 @@ Nominal gear tops overshoot what surface drag lets a car hold; the flat-out
 speeds above are the real equilibria, and `tests/explore_test.ts` pins them.
 
 A manual shift cuts throttle briefly while it engages. The bot shifts by the same thresholds the auto box uses, so both cars are simulated fairly (see [simulation.md](simulation.md)).
+
+**Revs** (`CarState.rev`, 0 at idle and 1 at the redline) are gearing plus
+forward speed — there is no crank in the model, and reading them off the
+speed the gearbox itself shifts on is what keeps the tachometer, the shift
+light and the engine note from ever disagreeing. The one exception is the
+GRID: during the countdown nothing is geared (the HUD reads **N**) and the
+car is not moving, so the throttle drives the revs directly, up at
+`TUNING.revs.blip` and down at `settle`. Blipping it on the line is the only
+thing the player can do while they wait, and the needle and the engine both
+answer.
 
 ## Tuning etiquette
 

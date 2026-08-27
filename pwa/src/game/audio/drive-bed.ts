@@ -125,9 +125,11 @@ export function createDriveBed(synth: Synth): DriveBed {
     const topSpeed = spec.gearTop[spec.gearTop.length - 1];
     const speed = Math.hypot(car.u, car.w);
 
-    // Revs are gearing plus FORWARD speed, exactly as the tachometer reads
-    // them, so the needle, the shift light and the noise can never disagree.
-    const rev = Math.max(0, car.u) / spec.gearTop[car.gear];
+    // The engine's own revs, exactly as the tachometer reads them, so the
+    // needle, the shift light and the noise can never disagree — gearing plus
+    // forward speed on the move, and on the grid the throttle itself, which
+    // is what lets a car sitting on the line be revved.
+    const rev = car.rev;
     const rpm = rpmAt(rev);
     const hz = noteHz(rpm);
     // Glide to where the note is HEADED rather than to where it is: the three

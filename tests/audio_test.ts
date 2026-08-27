@@ -471,16 +471,28 @@ describe("the tyres", () => {
     }
   });
 
-  it("makes tarmac the quietest thing under the car", () => {
+  it("makes tarmac the quietest thing under the car, and a bass one", () => {
     // Rolling straight down a sealed road the player should be hearing the
-    // ENGINE. Anything else there is the bed talking over the only instrument
-    // that has something to say.
+    // ENGINE, and under it a dull bass drumming — not a quieter version of
+    // the dirt road, which is what a bright band with a crunch over it is.
     expect(rollingLevel({ surface: "asphalt" })).toBeLessThan(
-      rollingLevel({ surface: "gravel" }) * 0.6,
+      rollingLevel({ surface: "gravel" }) * 0.4,
     );
     expect(rollingLevel({ surface: "asphalt" })).toBeLessThan(
       rollingLevel({ surface: "nature" }) * 0.4,
     );
+    const rec = recorder();
+    playRoadGrain(rec, { ...ROLLING, surface: "asphalt" }, 0);
+    // No crunch: a sealed surface has no loose material to throw, so there is
+    // no highpass layer over the roar at all.
+    expect(
+      rec.noises.filter((n) => n.filter?.type === "highpass" && (n.volume ?? 0) > 0),
+    ).toHaveLength(
+      1, // the wind, and nothing else
+    );
+    // And the roar itself is DOWN there, where a tyre drums the body.
+    const roar = rec.noises.find((n) => n.filter?.type === "bandpass");
+    expect(roar?.filter?.frequency).toBeLessThan(200);
   });
 
   it("sings on tarmac from the cornering load alone, and digs only on a slide", () => {

@@ -112,9 +112,20 @@ type SlideState = {
   /** Whether the tires are sliding at all, held up by the angle the car is
    * already at — what grip, scrub, the dust and the readout run off. */
   sliding: number;
+  /** How much of a slide this speed allows at all, 0..1 — the speed floor,
+   * open above `slideFrom` and shut below it. Everything that puts the car
+   * sideways rather than round the corner has to pass through it. */
+  open: number;
 };
 
 function slideFactor(car: CarState, commandedYaw: number, ceiling: number): SlideState {
+  // THE SPEED FLOOR comes first, because under it there is no slide to
+  // shape. Read off GROUND speed — the number on the speedo — so the rule
+  // the player is told ("it will not drift under 70") is the rule the car
+  // obeys, and so a car already sideways loses the angle as it slows into
+  // the floor rather than carrying it down to a standstill.
+  const gate = clamp((Math.hypot(car.u, car.w) - D.slideFrom) / D.slideSpan, 0, 1);
+  const open = gate * gate * (3 - 2 * gate);
   const demand = Math.abs(car.u * commandedYaw) / ceiling;
   // SMOOTHSTEP, not a clamped line: the ramp has to leave zero and reach one
   // with no corner in it. A linear clamp puts a kink in the car's response
@@ -122,7 +133,7 @@ function slideFactor(car: CarState, commandedYaw: number, ceiling: number): Slid
   // the car "change into" a drift. Starting below the limit (`entryAt`) and
   // easing in means nothing happens AT the limit at all.
   const t = clamp((demand - D.entryAt) / D.entrySpread, 0, 1);
-  const asked = t * t * (3 - 2 * t);
+  const asked = t * t * (3 - 2 * t) * open;
   // A slide the wheel has stopped asking for lets go over a beat instead of
   // in a step: last step's slide decays, and the wheel can take it straight
   // back up. Holding it up on the ANGLE instead — which is the one thing a
@@ -130,7 +141,9 @@ function slideFactor(car: CarState, commandedYaw: number, ceiling: number): Slid
   // more slide is less lateral grip, and the car inflates its own drift well
   // past anything the driver asked for.
   const released = car.slide - D.release * T.dt;
-  return { asked, sliding: Math.max(asked, released) };
+  // The gate caps the CARRIED slide too: a drift that runs out of speed is
+  // let go by the floor closing on it, on the floor's own ramp.
+  return { asked, sliding: Math.min(open, Math.max(asked, released)), open };
 }
 
 /** Leave the ground. A car that launches crossed up trips over its outside
@@ -290,7 +303,7 @@ export function stepGrounded(
   // asking them for: the handbrake unsticks the rear by lowering the
   // ceiling, so the same lock asks far more of what is left.
   const gripCeiling = spec.gripAccel * surfaceGrip * (input.handbrake ? T.grip.handbrakeGrip : 1);
-  const { asked, sliding } = slideFactor(car, steer * steerGain, gripCeiling);
+  const { asked, sliding, open } = slideFactor(car, steer * steerGain, gripCeiling);
   // The wheel does not just unstick the car — it NAMES the angle. Every
   // force that deepens a slide fades as the slip approaches what this much
   // lock is asking for at this speed, and is gone once the car is past it.
@@ -319,8 +332,11 @@ export function stepGrounded(
   /** How much the wheel is steered INTO the slide, 0..1 — what gates the
    * power's oversteer off while the driver is still asking for the angle. */
   const intoSlide = clamp(steer * -Math.sign(car.slip), 0, 1);
+  // Through the speed floor like everything else that swings the tail: under
+  // it the handbrake is a pair of locked rear wheels and nothing more, which
+  // is what stops the lever from being a way round the floor at 30 km/h.
   const handbrakeYaw = input.handbrake
-    ? Math.sign(steer) * backwards * T.grip.handbrakeYaw * speedFactor
+    ? Math.sign(steer) * backwards * T.grip.handbrakeYaw * speedFactor * open
     : 0;
   // RWD power oversteer: the driven rear keeps feeding the slide — but only
   // once the wheel stops asking for the angle. Steered into the slide the
@@ -435,7 +451,10 @@ export function stepGrounded(
     updateSlip(car);
   }
   const lift = 1 + T.grip.liftGrip * (1 - input.throttle) * sliding;
-  const handbrakeGrip = input.handbrake ? T.grip.handbrakeGrip : 1;
+  // The lever comes in through the speed floor like everything else that
+  // takes the rear away: under it the handbrake stops the car and does not
+  // unstick it, so a yank at 40 km/h is a brake and nothing more.
+  const handbrakeGrip = input.handbrake ? 1 + (T.grip.handbrakeGrip - 1) * open : 1;
   // Bent arms hold the tires at the wrong angles: suspension damage costs
   // lateral grip across the board.
   const arms = 1 - T.collision.systems.gripLoss * car.damage.systems.suspension;
@@ -477,7 +496,11 @@ export function stepGrounded(
   // HUD and the balance table read off a car that happens to be sideways.
   car.slide = sliding;
   const angle = car.drifting ? T.drift.exitSlip : T.drift.enterSlip;
-  const drifting = Math.abs(car.slip) > angle && car.u > T.drift.minSpeed;
+  // A car has to be genuinely SLIDING to be drifting, not merely pointed a
+  // few degrees off its own line: below the speed floor the slide is shut
+  // and a hard turn is understeer, which is not a drift and must not light
+  // the dust, the HUD or the balance table's counter.
+  const drifting = Math.abs(car.slip) > angle && sliding > 0;
   if (drifting) {
     if (!car.drifting) stats.driftCount += 1;
     stats.driftTime += dt;

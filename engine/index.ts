@@ -46,6 +46,7 @@ export {
   finishIndex,
   gateHalfWidth,
   locate,
+  trackLost,
   wayHome,
   type TrackFix,
   type WayHome,

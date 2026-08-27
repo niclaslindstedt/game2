@@ -125,6 +125,22 @@ export const TUNING = {
      * eases to straight (low) or swings back through centre and asks for a
      * dab of opposite lock (high). */
     releaseSnap: 8,
+    /** THE FLOOR UNDER THE WHOLE SLIDE, m/s of ground speed. Below it the
+     * car does not drift at all — the wheel steers it and that is the only
+     * thing the wheel does. A slow car going sideways is not the drama this
+     * game is about: it is a car that will not go where it is pointed, and
+     * it is what a hairpin taken at walking pace, a scrabble out of a ditch
+     * and a nudge on the grid all turn into without a floor. 19.44 m/s is
+     * 70 km/h on the speedo the player is reading. */
+    slideFrom: 19.44,
+    /** ...and how much further up the speed range the slide takes to reach
+     * full authority, m/s. Not zero: a hard edge at the floor would be a
+     * car that changes what it is at one speed, which is the two-state
+     * response the smoothstep in `slideFactor` exists to avoid. Kept narrow
+     * — five km/h — because the floor is a RULE the player is told, and a
+     * wide ramp would quietly move it: 75 has to drift like 75, not like a
+     * car still half-gripped. */
+    slideSpan: 1.39,
     /** Slip angle at which the car READS as drifting — dust, HUD, stats.
      * Read off the ANGLE rather than the slide, because the angle is what a
      * player sees and because it moves smoothly: the slide tracks steering
@@ -134,8 +150,19 @@ export const TUNING = {
     /** ...and the angle it has to settle back under before that drift is
      * over. One corner is one drift, not thirty. */
     exitSlip: 0.09,
-    /** Minimum forward speed for the readout, m/s. */
-    minSpeed: 9,
+  },
+
+  /** THE REV COUNTER. There is no crank in this model: on the move the revs
+   * ARE gearing plus forward speed, which is why the needle, the shift light
+   * and the engine note can never disagree with each other. The one place
+   * that is not true is the GRID, where the car is not moving, no gear is
+   * selected, and the throttle is still the driver's to blip — there the
+   * revs are their own thing, and these are the rates they answer at. */
+  revs: {
+    /** How fast free revs climb toward the throttle on the grid, 1/s. */
+    blip: 7,
+    /** ...and fall away off it, 1/s — slower: a flywheel spinning down. */
+    settle: 3.4,
   },
 
   /** THE SUSPENSION — the springs the body sits on, and the only reason
@@ -366,6 +393,18 @@ export const TUNING = {
      * `radius` meters is that state — long enough that a slow scrabble up
      * a bank or a nudge off a rock is never mistaken for it. */
     stuck: { after: 2, radius: 1.5 },
+    /** WHEN THE PLAYER IS ACTUALLY LOST — what the co-driver's RETURN TO
+     * TRACK strip, the arrow over the car and the TRACK button all wait
+     * for. Two wheels on the verge is not lost, and neither is a car
+     * crossing a clearing with the road out to one side: the guidance owes
+     * the player the moment they are LEAVING, not a sign that lights every
+     * time the stage is briefly beside them rather than under them.
+     * Hysteresis, because both tests are things a wandering car crosses
+     * back and forth over, and an instrument that blinks is worse than one
+     * that is late. Angles are radians off the car's nose — `away` is past
+     * 110°, comfortably beyond the 90° of driving PERPENDICULAR to the
+     * road, and it clears again at 90° itself. */
+    guide: { near: 20, nearClear: 15, away: 1.92, awayClear: Math.PI / 2 },
   },
 
   crash: {

@@ -103,8 +103,11 @@ between a bed and a stutter:
 
 `RPM_PER_HZ = 30`, because a four-cylinder four-stroke fires twice per
 revolution: idle (900 rpm) is a 30 Hz chug and the limiter (7000) is 240 Hz.
-Revs come from gearing plus forward speed, exactly as the tachometer derives
-them, so the needle, the shift light and the note can never disagree. Over that
+Revs come from the engine's own `car.rev` — gearing plus forward speed on the
+move, exactly what the tachometer reads, so the needle, the shift light and
+the note can never disagree — and on the GRID, where nothing is geared and
+the car is not moving, from the throttle itself, so a driver waiting for the
+lights can blip it and hear the engine answer. Over that
 sit four layers with four different jobs — a HUM (how fast it is turning, the
 only layer whose pitch moves), a CLATTER (that it is machinery, one tick per
 crank revolution), a BASS bed (that it is a tonne of it), and an INTAKE rasp
@@ -115,8 +118,9 @@ how hard it is driven through the waveshaper.
 ### What the road is made of
 
 The tyre bed picks its colour, its band and its weight from the surface:
-tarmac is tight, high and quiet; gravel is a broad low rush with real crunch
-over it; forest floor is brown and muffled; water is a hiss with no crunch. The
+tarmac is a dull bass drumming with no crunch at all; gravel is a broad low
+rush with the stones over it; forest floor is brown and muffled; water is a
+hiss with no crunch. The
 wind is pink noise rising with the SQUARE of speed, and it is the only bed that
 keeps going in the air — the silence where the tyres were is what a jump sounds
 like.
@@ -125,10 +129,14 @@ like.
 a tyre being asked to turn the car, so every surface is written as a quiet
 cruise `level` plus a `corner` multiplier it reaches at full lateral load, and
 the multiplier lifts the crunch with the roar. Tarmac's cruise is close to
-silence — down a sealed straight the player should be hearing the engine and
-almost nothing else — and gravel's is a low rush rather than the roar it used
-to be. Off the road stays loud on the straight, because being off the road
-should sound like a mistake.
+silence — down a sealed straight the player should be hearing the engine and,
+under it, a dull bass rumble around 125 Hz and nothing else; a sealed surface
+has no loose material, so it carries no crunch layer at all. Gravel's cruise
+is half what it was, with the corner multiplier doubled to pay it back: a
+corner is exactly as loud as it always was and a straight is half as loud,
+which is the whole point of writing a bed as cruise-plus-corner. Off the road
+stays loud on the straight, because being off the road should sound like a
+mistake.
 
 The cornering signal is **lateral acceleration** (`car.u * car.yawRate`,
 against `LAT_LIMIT` in `drive-bed.ts`): zero on a straight at any speed, zero at
