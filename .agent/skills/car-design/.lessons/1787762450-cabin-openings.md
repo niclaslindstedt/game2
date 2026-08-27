@@ -1,7 +1,7 @@
 ---
 title: Frame glass by cutting windows out of a solid cabin, not by painting a canopy
 date: 2026-08-26
-scope: pwa/src/game/car-body.ts
+scope: pwa/src/game/car/greenhouse.ts
 concepts: [greenhouse, pillars, patches, silhouette]
 ---
 
