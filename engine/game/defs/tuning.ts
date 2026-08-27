@@ -49,7 +49,7 @@ export const TUNING = {
     /** Speed a sliding tire actually burns off, 1/s — scaled by sin²(slip),
      * so ordinary cornering costs nothing and even a big drift costs little.
      * This is the number that decides whether a drift is FELT as a brake. */
-    scrub: 0.5,
+    scrub: 0.36,
     /** How strongly slip self-rotates the car while sliding, rad/s per rad. */
     slipYaw: 1.6,
     /** RWD power oversteer: yaw the driven rear axle feeds the slide while
@@ -73,6 +73,28 @@ export const TUNING = {
     handbrakeYaw: 0.9,
     /** Extra lateral grip from lifting off mid-slide (weight transfer). */
     liftGrip: 0.6,
+    /** THE TRACTION CEILING, as a multiple of the car's own `gripAccel`:
+     * the most lateral acceleration the tires will actually deliver, however
+     * hard the geometry asks. It is what makes a corner's radius cost SPEED
+     * — the tightest line the car can hold grows as u², so a long sweeper is
+     * a flat-out drift and a hairpin has to be braked for or flicked round
+     * on the handbrake instead of pivoted at pace. Above 1 because this is
+     * an arcade rally car and not a tire model: `gripAccel` is where the
+     * slide starts easing in, this is where the tires are genuinely out. Set
+     * it near 1 and the car corners at its stated grip and feels heavy; take
+     * it much past 2.5 and speed stops costing radius at all — every corner
+     * is the same corner again, taken flat. */
+    latCeiling: 1.4,
+    /** ...and how much of the demand the tires still answer once they are
+     * past it, 0..1 — the residual slope of the saturation curve. Zero is a
+     * pure asymptote, and a pure asymptote is a cliff: the moment a corner
+     * asks for the ceiling there is nothing but slip angle left to answer
+     * more lock with, so the car steps from gripped to fully sideways
+     * between two notches of the wheel. A little give keeps the response
+     * monotone all the way up the throw — past the limit more lock still
+     * tightens the line, it just costs a great deal of angle to buy very
+     * little radius. */
+    latGive: 0.25,
   },
 
   /** THE DRIFT — every knob that shapes the slide itself: where it starts,
@@ -86,25 +108,25 @@ export const TUNING = {
      * nothing happens at the limit itself — there is no instant where the
      * car changes what it is doing. Lower = the drift lives in more of the
      * wheel's travel and ordinary corners start to move. */
-    entryAt: 0.45,
+    entryAt: 0.3,
     /** ...and how much further past that the slide takes to develop fully,
      * in the same units. Wider = a longer, gentler hand-over from grip to
      * slide; narrower = the angle arrives with less lock, at the cost of
      * the transition being something you can feel happen. */
-    entrySpread: 1.7,
+    entrySpread: 2.5,
     /** Slip angle a fully developed slide is asking for, rad. This is the
      * DEPTH of a committed drift: the setpoint every deepening force fades
      * toward, scaled by how far the slide has come in. It is what makes the
      * angle commanded rather than self-chosen — half the slide is half the
      * angle, and a centred wheel asks for zero, which is grip gathering the
      * car up. */
-    angleSpan: 0.45,
+    angleSpan: 0.65,
     /** How far past the asked angle the deepening forces take to fade to
      * nothing, rad. Wide enough that the drift is a slope to lean on rather
      * than a wall the car hits: it is the room the throttle, the lift and
      * the handbrake move the car around in. Narrower also means the car
      * sits closer to exactly the angle asked for. */
-    angleBand: 0.35,
+    angleBand: 0.5,
     /** How fast a slide the wheel has stopped asking for lets go, 1/s. The
      * only thing holding a slide up once the lock comes off, so it is what
      * carries one corner's angle into the next instead of snapping back to
@@ -310,7 +332,7 @@ export const TUNING = {
      * out, and overdoing it is a short, smoky snap rather than a rally
      * angle carried to the exit. This is the number that stops a paved
      * sweeper being taken at a gravel attitude and full pace. */
-    breakaway: { gravel: 1.0, asphalt: 0.55, water: 1.2, nature: 1.1 },
+    breakaway: { gravel: 1.0, asphalt: 0.35, water: 1.2, nature: 1.1 },
     /** Throttle effectiveness per surface. */
     power: { gravel: 1.0, asphalt: 1.08, water: 0.7, nature: 0.8 },
     /** Rough ground caps pace where gearing cannot: above this speed the

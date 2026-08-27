@@ -19,9 +19,10 @@ together. Asphalt at 0.55 dropped full-lock slip from 20.6° to 14.9° and yaw
 from 2.62 to 1.79 rad/s while gravel stayed byte-identical, because nothing on
 a gravel sample multiplies by anything but 1.
 
-Two things worth knowing next time: scale `angleSpan` and `angleBand`
+One thing worth knowing next time: scale `angleSpan` and `angleBand`
 together, or the paved drift gets a sharp-edged saturation wall instead of a
-small one; and the model has no traction circle at all — `gripAccel` gates the
-slide but never bounds the lateral acceleration the redirect delivers, which
-is why every car in the game corners at 3–7 g. That is an arcade choice, not
-an oversight, but it is the reason a surface fix has to work on the ANGLE.
+small one. (The other half of this lesson — that nothing bounded the lateral
+acceleration the redirect delivered, which is why every car cornered at 3–7 g
+— has since been fixed by `TUNING.grip.latCeiling`. A surface's breakaway is
+still an ANGLE knob, but the radius is now the ceiling's business, so
+re-measure a surface after touching either.)

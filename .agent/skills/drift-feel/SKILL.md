@@ -34,6 +34,15 @@ drama, the camera); this skill is the mechanism under it.
 | `releaseSnap`            | How hard the rear pulls the nose back to the travel direction on the way out     | …gather the car up faster, and (with `hang`) overshoot harder         |
 | `enterSlip` / `exitSlip` | The angle at which the car READS as drifting — dust, HUD, stats                  | …make the readout stingier about calling something a drift            |
 
+The RADIUS the car ends up holding is not in that group: it belongs to the
+traction ceiling in `TUNING.grip`. `latCeiling` is the most lateral
+acceleration the redirect will deliver, as a multiple of the car's own
+`gripAccel`, and `latGive` is the residual slope of the saturation curve past
+it. Together they are what makes speed cost radius — turn the ceiling down and
+every corner needs more braking; turn it up and the car pivots a hairpin at a
+straight's speed however sideways it looks. Reach for these when the complaint
+is about the LINE, and for the group above when it is about the ANGLE.
+
 Per car, in `cars.ts`: **`gripAccel`** is the grip ceiling the whole group is
 measured against (it is _only_ the slide threshold — lateral grip itself is
 `gripLat`/`driftLat`), and **`driftYaw`** is the extra steering authority a
@@ -105,9 +114,16 @@ slip.
 **Read the radius ratio between adjacent locks, not just the angle.** A
 gripped car's radii fall off as `1/lock`, so the ratio decays smoothly toward
 
-1. Any bump in that row is the drift arriving, and the size of the bump is
-   exactly how much a player feels the car "change into" something. The current
-   model keeps it under ~1.4 across the whole throw.
+1. Compare each ratio against that gripped baseline (1.5 for 0.2→0.3, 1.33 for
+   0.3→0.4, and so on down): the EXCESS over it is the drift arriving, and its
+   size is exactly how much a player feels the car "change into" something.
+
+Better still, read the sweep the other way round and report the slip the car
+carries while HOLDING a fixed radius (90, 60, 40, 25 m — the generator builds
+soft turns at 55–100 m, medium at 32–55, hard at 13–30). "It steers too much
+into the corner" and "it should slide more" are both claims about that table,
+and neither is visible in a lock sweep: two tunings with the same full-lock
+angle can put the car on completely different lines.
 
 For the exit, hold a lock, then centre the wheel and sample the **signed**
 slip every 0.08 s: `Math.min` of `slip × side` is how far past centre it
