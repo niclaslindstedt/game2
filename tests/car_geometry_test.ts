@@ -6,9 +6,8 @@
 // its collider is a car that visibly passes through trunks before anything
 // happens, which reads as the whole contact model being broken. Nothing
 // else checks that, because the two numbers live in different layers — so
-// this test reaches across, which is why it is the one test that imports
-// from pwa/. It can, because the specs and the geometry probes are pure
-// data and pure arithmetic: no three.js, no DOM.
+// this test reaches across into pwa/. It can, because the specs and the
+// geometry probes are pure data and pure arithmetic: no three.js, no DOM.
 
 import { describe, expect, it } from "vitest";
 

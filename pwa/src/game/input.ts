@@ -17,6 +17,7 @@
 
 import type { CarInput } from "@engine";
 
+import { snapPedal, snapSteer } from "./ghost.ts";
 import { DEFAULT_KEYS, type KeyAction, type KeyBindings } from "./settings.ts";
 
 /** The presses the app reacts to rather than the car: they leave, reload or
@@ -133,10 +134,16 @@ export function createInput(target: Window = window): InputManager {
     steer += (keyTarget - steer) * Math.min(1, rate * dt);
     if (Math.abs(steer) < KEY_STEER_SNAP && keyTarget === 0) steer = 0;
 
+    // Snapped onto the ghost tape's grid (ghost.ts) on the way out. A run
+    // is recorded as the controls it was driven on, and a replay only lands
+    // on the same road if what the engine receives is exactly what gets
+    // written down — so the wheel and the pedals have a fixed resolution,
+    // set once here at the one place they are produced. It is far finer
+    // than a thumb or a key ramp can resolve.
     const input: CarInput = {
-      steer: -(touch.steer !== 0 ? touch.steer : steer),
-      throttle: held.has("throttle") || touch.throttle ? 1 : 0,
-      brake: held.has("brake") || touch.brake ? 1 : 0,
+      steer: snapSteer(-(touch.steer !== 0 ? touch.steer : steer)),
+      throttle: snapPedal(held.has("throttle") || touch.throttle ? 1 : 0),
+      brake: snapPedal(held.has("brake") || touch.brake ? 1 : 0),
       handbrake: held.has("handbrake") || touch.handbrake,
       boost: held.has("boost") || touch.boost,
       shiftUp,

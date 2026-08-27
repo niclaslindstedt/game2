@@ -71,6 +71,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | Input mapping                                          | `pwa/src/game/input.ts` (bindings in `settings.ts`)                               |
 | Main menu pages / routing                              | `pwa/src/game/main-menu.tsx` (+ `menu-roam`, `menu-options`)                      |
 | Campaign stages, locations, unlocks                    | `pwa/src/game/campaign.ts`                                                        |
+| The time trial's ghost: recording, replay, storage     | `pwa/src/game/ghost.ts`                                                           |
 | A player option (HUD, video, controls)                 | `pwa/src/game/settings.ts`, then its reader                                       |
 | The studio card / boot cover                           | `pwa/src/game/splash.ts` (policy) + `splash-screen.tsx`                           |
 | App identity (name, palette, URLs)                     | `pwa/src/identity.ts` (single source)                                             |

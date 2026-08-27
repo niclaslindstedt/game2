@@ -67,6 +67,18 @@ export type CarVisual = {
   dispose: () => void;
 };
 
+/** How much of itself a ghost car shows, 0..1. Solid enough to hold its
+ * shape and its tail lamps at the few car lengths a chase is actually
+ * decided over, thin enough that the road runs visibly through it and it can
+ * never be taken for a car that is there — a ghost is a picture: it runs its
+ * own game, so there is nothing to touch and nothing to be hit by. */
+const GHOST_OPACITY = 0.46;
+
+export type CarOptions = {
+  /** Build the car as a ghost: see-through, and dimmer where it glows. */
+  ghost?: boolean;
+};
+
 /** How far off the centerline this car's beams hang, front and rear. */
 function lampSpread(bodySpec: Parameters<typeof frontLampAnchors>[0]): {
   front: number;
@@ -77,10 +89,20 @@ function lampSpread(bodySpec: Parameters<typeof frontLampAnchors>[0]): {
   return { front: off(frontLampAnchors(bodySpec)), rear: off(rearLampAnchors(bodySpec)) };
 }
 
-export function buildCar(spec: CarSpec): CarVisual {
+export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
   const group = new THREE.Group();
   const bodySpec = bodySpecFor(spec);
   const body = buildCarBody(bodySpec);
+  // Panels, parts and wheels share one material, so a ghost is one flag.
+  // Its own back faces still occlude its front ones (depth writing stays
+  // on): a car you can see through is a ghost, a car you can see the
+  // INSIDE of is a bag of polygons.
+  const fade = options.ghost ? GHOST_OPACITY : 1;
+  if (options.ghost) {
+    const shell = body.body.material as THREE.MeshBasicMaterial;
+    shell.transparent = true;
+    shell.opacity = GHOST_OPACITY;
+  }
   group.add(body.group);
   const dirt = createCarDirt(body.group, wheelSpray(bodySpec));
   const damage = createCarDamage(body);
@@ -92,7 +114,7 @@ export function buildCar(spec: CarSpec): CarVisual {
     map: lampMap,
     color: LAMP_GLOW,
     transparent: true,
-    opacity: LAMP_DAY,
+    opacity: LAMP_DAY * fade,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
@@ -112,13 +134,13 @@ export function buildCar(spec: CarSpec): CarVisual {
   };
   /** The bloom, dimmed by whatever the run has thrown at the lens. */
   const shineLamps = (): void => {
-    lampMat.opacity = (lit ? LAMP_NIGHT : LAMP_DAY) * (1 - LAMP_GRIME * dirt.level());
+    lampMat.opacity = (lit ? LAMP_NIGHT : LAMP_DAY) * (1 - LAMP_GRIME * dirt.level()) * fade;
   };
 
   const length = bodySpec.profile[0].z - bodySpec.profile[bodySpec.profile.length - 1].z;
   const blob = new THREE.Mesh(
     new THREE.CircleGeometry(length * 0.42, 16),
-    new THREE.MeshBasicMaterial({ color: "#000000", transparent: true, opacity: 0.28 }),
+    new THREE.MeshBasicMaterial({ color: "#000000", transparent: true, opacity: 0.28 * fade }),
   );
   // Laid flat, then lifted along whatever "up" its parents end up meaning —
   // the clearance has to leave the GROUND, not the world's y axis, or the
@@ -189,7 +211,7 @@ export function buildCar(spec: CarSpec): CarVisual {
     shadowTilt.rotation.x = -groundPitch;
     const s = clamp(1 - height * 0.12, 0.35, 1);
     shadow.scale.set(s, s, s);
-    (blob.material as THREE.MeshBasicMaterial).opacity = 0.28 * s;
+    (blob.material as THREE.MeshBasicMaterial).opacity = 0.28 * s * fade;
   };
 
   const dispose = (): void => {

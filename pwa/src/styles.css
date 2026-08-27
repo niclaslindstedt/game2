@@ -142,6 +142,21 @@ body {
   white-space: nowrap;
 }
 
+/* The gap to the ghost, beside the clock: metres of road, and which side of
+   it you are on told by color before the sign is even read. Green is up the
+   road on your best, red is behind it. The word under the number is what a
+   small phone drops — a signed distance in one of two colors next to a lap
+   timer needs no caption. */
+.hud-gap {
+  color: #6de37f;
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(0.9rem, 2.6vmin, 1.35rem);
+}
+
+.hud-gap-down {
+  color: var(--hud-bad);
+}
+
 .hud-actions {
   margin-left: auto;
   display: flex;
@@ -682,6 +697,10 @@ body {
 
   .hud-chip-sub {
     display: none;
+  }
+
+  .hud-gap {
+    font-size: 0.8rem;
   }
 
   .hud-chip {

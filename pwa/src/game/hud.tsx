@@ -67,6 +67,9 @@ export type HudSnapshot = {
   windKmh: number;
   windScreenAngle: number;
   damage: HudDamage;
+  /** Metres of road the run is ahead of (positive) or behind (negative)
+   * the ghost it is racing, or null when there is no ghost out there. */
+  ghostGap: number | null;
 };
 
 /** The damage readout, already flipped into SCREEN space by the snapshot
@@ -807,6 +810,18 @@ export function Hud({ snap, flashes, input, show, touchLayout, onPause, onCamera
           <span className="hud-chip-sub">{snap.carName}</span>
         </div>
         {show.timer && <div className="hud-chip hud-timer">{formatTime(snap.time)}</div>}
+        {/* The gap to the ghost is its own chip rather than a second line
+            under the clock: the clock's text is what the tooling reads the
+            run's progress off, and it holds nothing but the time. */}
+        {show.timer && snap.ghostGap !== null && (
+          <div
+            className={`hud-chip hud-gap ${snap.ghostGap < 0 ? "hud-gap-down" : ""}`}
+            aria-label="Gap to your best run"
+          >
+            {snap.ghostGap < 0 ? "−" : "+"}
+            {Math.abs(Math.round(snap.ghostGap))}m<span className="hud-chip-sub">GHOST</span>
+          </div>
+        )}
         <div className="hud-actions pointer-events-auto">
           <button
             type="button"
