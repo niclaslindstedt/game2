@@ -103,6 +103,11 @@ export type CarState = {
   slip: number;
   airborne: boolean;
   airTime: number;
+  /** True while the car is off the ground because it BOUNCED, not because
+   * it jumped — the rebound of a slam too hard for the springs. It flies
+   * the same way, but it is one landing continuing to happen, so it draws
+   * no turbulence and never counts as a flight of its own. */
+  settling: boolean;
   /** Body roll, radians — positive lifts the car's right side. The air puts
    * the tumble in; on the ground it settles onto the camber of whatever the
    * wheels are standing on, which off-road is the hillside itself. */
@@ -114,6 +119,20 @@ export type CarState = {
    * airborne it is the angle of the flight itself. Renderer readout: the
    * physics never reads it back. */
   pitch: number;
+  /** Suspension heave: how far the BODY sits from where the wheels put it,
+   * m — negative is compressed, positive is the springs topped out on the
+   * rebound. The wheels are always ON the ground (`y`); this is the sprung
+   * mass lagging behind them, and it is what a landing, a dip or a bank
+   * actually LOOKS like. Renderer readout: the physics never reads it back
+   * into the handling. */
+  ride: number;
+  /** ...and the speed it is travelling at, m/s. */
+  rideRate: number;
+  /** Load pitch, rad — the dive under brakes, the squat on the power and
+   * the nose-dip a hit throws in, positive lifting the nose. Kept apart
+   * from `pitch` (the ground's own attitude) because only the BODY takes
+   * it: the wheels stay on the ground and so does the shadow. */
+  pitchLoad: number;
   /** How sideways the car is this step, 0..1 — 0 gripping, 1 fully sliding
    * (renderer/HUD readout; the handling model computes it every step). */
   slide: number;

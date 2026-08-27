@@ -63,9 +63,13 @@ function freshCar(): CarState {
     slip: 0,
     airborne: false,
     airTime: 0,
+    settling: false,
     roll: 0,
     rollRate: 0,
     pitch: 0,
+    ride: 0,
+    rideRate: 0,
+    pitchLoad: 0,
     slide: 0,
     drifting: false,
     gear: 0,
@@ -200,9 +204,13 @@ function respawn(state: GameState, events: GameEvent[]): void {
   car.vy = 0;
   car.yawRate = 0;
   car.airborne = false;
+  car.settling = false;
   car.roll = 0;
   car.rollRate = 0;
   car.pitch = 0;
+  car.ride = 0;
+  car.rideRate = 0;
+  car.pitchLoad = 0;
   car.slide = 0;
   car.drifting = false;
   // The service crew get to a wreck the moment it is back at the road: the
@@ -335,7 +343,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   }
 
   if (car.airborne) {
-    stepAirborne(car, input, ctx, events, state.stats);
+    stepAirborne(state.spec, car, input, ctx, events, state.stats);
   } else {
     stepGrounded(state.spec, car, input, ctx, events, state.stats);
   }
@@ -410,7 +418,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     if (!crashed) {
       const solids = terrain.obstaclesNear(car.x, car.z, 2.5);
       solids.push(...terrain.treesNear(car.x, car.z, 2.5));
-      if (solids.length > 0) collideCar(car, solids, events, state.stats);
+      if (solids.length > 0) collideCar(state.spec, car, solids, events, state.stats);
     }
   }
   // A wreck is driven, not teleported: wear reaching 1 leaves a car with

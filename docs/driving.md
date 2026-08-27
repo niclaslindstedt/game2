@@ -97,7 +97,7 @@ rewards it, and no drift seconds are counted at the player.
 - **Takeoff** — jump segments ramp up to a lip; crossing it throws the car with vertical speed proportional to pace × ramp slope (`takeoff`). The ramp EASES IN, steepest right at the lip, because a ramp that flattens as it reaches the top hands the car no upward speed at the one moment that matters. A crest launches the car too, but only when the road's own curvature would pull it down harder than gravity can (`TUNING.air.crestSpan`, `crestPull`) — so a real brow throws you at pace and holds you at a crawl, while the rolling ground under every stage is just ridden over.
 - **The roll** — a car that leaves the ground crossed up trips over its outside wheels: the take-off puts roll in the body from the slide it was holding plus the rotation already in it, and nothing in the air takes it out. Straight and level flies flat; properly sideways goes a long way over; the unluckiest launches go all the way round. Landing on your side is never a clean landing. The ground unwinds the roll toward the nearest upright, and then onto the CAMBER under the wheels — level on the road, tipped with the hillside out in the wild.
 - **Airborne** — the velocity vector is committed. Gravity is arcade-heavy (floatier hangs read as slow motion), the nose answers only faintly, and a small seeded turbulence rolls the car — flying, slightly out of control, exactly as intended. No lateral grip: whatever attitude you took off with survives to the ground.
-- **Landing** — straight (slip inside the clean limit) keeps all your speed: `CLEAN AIR`. Landing sideways scrubs speed and wobbles the car. Line up before the lip.
+- **Landing** — straight (slip inside the clean limit) keeps all your speed: `CLEAN AIR`. Landing sideways scrubs speed and wobbles the car. Line up before the lip. Whatever the descent was, the springs take it (below), and a slam past what they can travel through bounces the whole chassis back off the ground for a beat — one landing still happening, not a second flight, so it draws no turbulence and never counts as a jump.
 
 ## The booster
 
@@ -208,11 +208,44 @@ not a mistake anymore; it is exploration:
   road the co-driver's strip reads RETURN TO TRACK with that distance, and
   an arrow hangs over the car pointing at the spot itself.
 
+## Weight: the springs
+
+The wheels track the ground exactly; the **body does not**. `TUNING.suspension`
+is a second-order spring the whole sprung mass rides on, deliberately
+under-damped so it OVERSHOOTS and settles rather than easing to rest — a body
+that just cushions reads as a sprite on a plane, and the rebound is what reads
+as mass. Two readouts come out of it, both written by the engine and only ever
+drawn by the renderer:
+
+- **`CarState.ride`** — how far the body sits from where the wheels put it, m
+  (negative is compressed). It is excited by one thing: a change in the
+  WHEELS' vertical speed. A dip flattening out at the bottom of a descent, a
+  landing, a bank that stops the nose — each arrives as a jolt the springs
+  swallow and give back. Past `travel`/`droop` the bump stops catch it, stiff
+  and heavily damped, so a slam is absorbed rather than pogoed. Heavier cars
+  ride the same springs more slowly (ω ∝ √(k/m)).
+- **`CarState.pitchLoad`** — the dive under the brakes, the squat on the power
+  and the nose-dip an impact throws in. Kept apart from `pitch` (the ground's
+  own attitude) because only the BODY takes it: the wheels stay on the ground,
+  and so does the shadow.
+
+The renderer draws both on a `chassis` group that holds every panel and no
+wheel (`pwa/src/game/car-body.ts`), and the chase and hood cameras share a
+little of the heave so a landing lands in the FRAME too.
+
+Each car's `mass` (kg, in `engine/game/defs/cars.ts`) is read against
+`TUNING.collision.refMass`: a heavier car is harder for a clipped tree to
+spin, folds deeper into what it hits (the energy is real), and rides its
+springs more slowly. It deliberately does NOT divide the longitudinal model —
+`gearAccel` is already an acceleration.
+
 ## Collision and damage
 
 The contact model lives in `engine/game/collision.ts`; every number is in
-`TUNING.collision`. The car is an oriented box in the ground plane, every
-solid a circle, and a hit does three things at once:
+`TUNING.collision`. The car is an oriented box in the ground plane — sized to
+CONTAIN the larger of the two drawn shells, because a box smaller than the
+body is a car that visibly passes through trunks before anything happens —
+every solid is a circle, and a hit does several things at once:
 
 - **The impulse.** Speed INTO the surface comes back at a low restitution
   (a tree absorbs a rally car, it does not trampoline it); speed ALONG it
@@ -229,7 +262,16 @@ solid a circle, and a hit does three things at once:
   mirrors, bumpers, the wing — as a `partBreak` event the renderer turns
   into tumbling debris. **Hard landings are impacts too**: descent the
   suspension cannot absorb (`hardLandSpeed`) crushes the underside (the
-  `belly`), or the flank the car came down on.
+  `belly`), or the flank the car came down on. **So is the ground itself**:
+  off the road, a face rising faster than `climbLimit` under the wheels stops
+  being a hill and starts refusing the car, at `wallSlope` completely. The
+  terrain's gradient at the bumper IS the contact normal, so a cliff met head
+  on takes the pace and folds the nose while one met at an angle deflects the
+  car along it — and the car is backed out of however much of the step the
+  face refused, which is why it never ends up inside a mountain.
+- **The springs.** Every contact also loads them (`TUNING.suspension`):
+  the wheels stop and the body does not, so the car rocks and the nose dips
+  for a beat afterwards. See [Weight: the springs](#weight-the-springs).
 - **The wear.** Every crush adds structural wear; wear 1 is the wreck — a
   car with nothing left to give, which keeps driving exactly where it is.
   Nothing recovers it: a wreck is driven home, and the chassis is patched

@@ -81,6 +81,14 @@ export function buildCar(spec: CarSpec): CarVisual {
     body.group.rotation.z = car.roll;
     body.group.rotation.x = -car.pitch;
 
+    // The springs, on the SPRUNG mass only: the body squats into a landing,
+    // rebounds out of it and dives under the brakes while the wheels stay
+    // exactly where the ground put them. This is the whole visible half of
+    // the car having weight — the engine decides how far, this just draws
+    // it (positive pitchLoad lifts the nose, so it rotates like `pitch`).
+    body.chassis.position.y = car.ride;
+    body.chassis.rotation.x = -car.pitchLoad;
+
     // Wheels: spin with road speed, front pair points where the driver
     // points them — counter-steer in a drift shows because the input does.
     const spin = (car.u * dt) / bodySpec.wheelRadius;

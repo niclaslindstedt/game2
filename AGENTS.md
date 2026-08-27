@@ -121,7 +121,8 @@ Skills live in `.agent/skills/` (`.claude/skills` symlinks there) — each a `SK
 - **`engine-system`** — adding/changing a gameplay system, engine-first.
 - **`collision`** — the car hitting things: contact model, crush and bent
   polygons, breaking parts, internal-system damage, the wreck, the solid
-  trunks, and the HUD damage instrument.
+  trunks, the ground as a solid, the springs the body rides on, and the HUD
+  damage instrument.
 - **`mapgen-improvement`** — the stage generator (rules/search/geometry, the R-rules).
 - **`bot-improvement`** — the bot driver in `engine/sim/bot.ts`.
 - **`simulate-run`** — measuring balance with `make sim`; owns reading the table.

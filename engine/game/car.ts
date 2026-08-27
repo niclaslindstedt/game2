@@ -6,7 +6,10 @@
 // is why going sideways costs pace but is never felt as a handbrake. The
 // other two moments: the jump (the lip throws you, the air is committed —
 // velocity is fixed, the nose barely answers) and the landing (aligned
-// keeps your speed, sideways scrubs it and wobbles). Numbers live in
+// keeps your speed, sideways scrubs it and wobbles). Under all three the
+// SPRINGS carry the body: the wheels track the ground exactly, the body
+// lags them, and every dip, landing and bank is a jolt it squats through
+// and rebounds out of — the car's weight, made visible. Numbers live in
 // defs/, not here.
 
 import { clamp } from "../lib/math.ts";
@@ -19,7 +22,7 @@ import {
   type GameEvent,
   type RunStats,
 } from "./state.ts";
-import { landingDamage } from "./collision.ts";
+import { collideSlope, landingDamage } from "./collision.ts";
 import type { Rng } from "../lib/prng.ts";
 import type { Surface } from "../mapgen/index.ts";
 
@@ -137,6 +140,7 @@ function slideFactor(car: CarState, commandedYaw: number, ceiling: number): Slid
  * all the way round. Physics decides — nothing here aims for it. */
 export function launch(car: CarState, vy: number, events: GameEvent[], stats: RunStats): void {
   car.airborne = true;
+  car.settling = false;
   car.airTime = 0;
   car.vy = vy;
   car.rollRate = -(car.w * T.air.rollFromSlide + car.yawRate * T.air.rollFromYaw);
@@ -150,6 +154,45 @@ export function launch(car: CarState, vy: number, events: GameEvent[], stats: Ru
 function settlePitch(car: CarState, target: number): void {
   const want = clamp(target, -T.attitude.pitchMax, T.attitude.pitchMax);
   car.pitch += (want - car.pitch) * clamp(T.attitude.settle * T.dt, 0, 1);
+}
+
+/** One step of the springs the body sits on. `jolt` is the change in the
+ * WHEELS' vertical speed this step, m/s — the ground moving out from under
+ * the body (or into it) is the only thing that ever excites the heave, so
+ * a flight, where wheels and body fall together, is quiet. `longAccel` is
+ * what the car is doing along its own axis, which is the dive and the
+ * squat.
+ *
+ * A second-order spring, deliberately under-damped: a body that eased to
+ * rest would read as a cushion, and it is the OVERSHOOT — squat, rebound,
+ * settle — that reads as mass. Heavier cars ride the same springs more
+ * slowly (ω ∝ √(k/m)). */
+function stepSuspension(spec: CarSpec, car: CarState, jolt: number, longAccel: number): void {
+  const S = T.suspension;
+  const dt = T.dt;
+  const w = 2 * Math.PI * S.freq * Math.sqrt(T.collision.refMass / spec.mass);
+  // The wheels changed their vertical speed; the body kept its own.
+  car.rideRate = clamp(car.rideRate - jolt * S.absorb, -S.rateMax, S.rateMax);
+  let accel = -w * w * car.ride - 2 * S.damping * w * car.rideRate;
+  // The bump stops: past the travel the springs are coil-bound. They are
+  // stiff AND heavily damped, so a slam is caught and absorbed rather than
+  // fired straight back out as a pogo.
+  const limit = car.ride < 0 ? S.travel : S.droop;
+  const over = Math.abs(car.ride) - limit;
+  if (over > 0) {
+    const dir = Math.sign(car.ride);
+    accel -= dir * over * w * w * S.stopRate;
+    accel -= car.rideRate * S.stopDamp;
+  }
+  car.rideRate = clamp(car.rideRate + accel * dt, -S.rateMax, S.rateMax);
+  car.ride = clamp(car.ride + car.rideRate * dt, -S.heaveMax, S.heaveMax);
+
+  // Dive and squat. First-order, because weight transfer settles onto the
+  // stops rather than ringing the way the heave does — and because an
+  // impact writes straight into this, and what should follow a nose-dip is
+  // the nose coming back up, not the tail going down next.
+  const want = clamp(longAccel * S.pitchPerAccel, -T.attitude.pitchMax, T.attitude.pitchMax);
+  car.pitchLoad += (want - car.pitchLoad) * clamp(S.pitchRate * dt, 0, 1);
 }
 
 export type GroundContext = {
@@ -194,6 +237,8 @@ export function stepGrounded(
   stats: RunStats,
 ): void {
   const dt = T.dt;
+  const prevVy = car.vy;
+  const prevU = car.u;
   const surfaceGrip = T.surfaces.grip[ctx.surface];
   const surfaceDrag = T.surfaces.drag[ctx.surface];
   const surfacePower = T.surfaces.power[ctx.surface];
@@ -394,6 +439,10 @@ export function stepGrounded(
   const sinH = Math.sin(car.heading);
   const cosH = Math.cos(car.heading);
   const carry = windCarry(car);
+  // Where the step started: what the ground has to be measured against to
+  // tell a hill the wheels climb from a wall that refuses them.
+  const fromX = car.x;
+  const fromZ = car.z;
   car.x += (sinH * car.u + cosH * car.w + ctx.windX * carry) * dt;
   car.z += (cosH * car.u - sinH * car.w + ctx.windZ * carry) * dt;
 
@@ -417,7 +466,16 @@ export function stepGrounded(
     if (car.u > T.air.crestSpeed && gy < car.y - T.air.edgeDrop) {
       launch(car, car.vy, events, stats);
     } else {
-      car.y = gy;
+      // The ground can also be a WALL. How far it rose over the ground the
+      // car just covered IS the face's grade, read exactly where the bumper
+      // is rather than over the wide baseline the grade term uses — a cliff
+      // is metres wide, and a smoothed slope would let the car drive up the
+      // side of a mountain at pace.
+      const run = Math.hypot(car.x - fromX, car.z - fromZ);
+      if (run > 1e-4 && gy - car.y > run * T.collision.climbLimit) {
+        hitFace(spec, car, ctx.groundAt, (gy - car.y) / run, fromX, fromZ, events, stats);
+      }
+      car.y = ctx.groundAt(car.x, car.z);
       // Attitude from the smoothed slope: the raw per-step height delta
       // would pitch-jitter the nose over every ripple of noise.
       car.vy = roadVy;
@@ -428,11 +486,48 @@ export function stepGrounded(
     car.y = ctx.groundY + roadVy * dt;
     car.vy = roadVy;
   }
+
+  // ── Suspension ───────────────────────────────────────────────────────────
+  // Whatever the ground just did to the wheels, the body has to catch up
+  // with. A dip flattening out, a crest falling away, a bank stopping the
+  // nose: all of it arrives here as one number.
+  stepSuspension(spec, car, car.airborne ? 0 : car.vy - prevVy, (car.u - prevU) / dt);
+}
+
+/** The car meeting a face it cannot climb. Reads the terrain's gradient at
+ * the bumper — that direction is the contact normal — hands the contact to
+ * collision.ts, and backs the car out of however much of the step the face
+ * refused. A wall gives the whole step back (the car stops against it and
+ * the wedge rule in step.ts eventually fetches it); a steep bank gives some
+ * of it back and the car scrabbles up the rest. */
+function hitFace(
+  spec: CarSpec,
+  car: CarState,
+  ground: (x: number, z: number) => number,
+  faceSlope: number,
+  fromX: number,
+  fromZ: number,
+  events: GameEvent[],
+  stats: RunStats,
+): void {
+  const span = T.collision.faceSpan;
+  const gradient = {
+    x: (ground(car.x + span, car.z) - ground(car.x - span, car.z)) / (2 * span),
+    z: (ground(car.x, car.z + span) - ground(car.x, car.z - span)) / (2 * span),
+  };
+  const bite = collideSlope(spec, car, faceSlope, gradient, events, stats);
+  if (bite <= 0) return;
+  car.x -= (car.x - fromX) * bite;
+  car.z -= (car.z - fromZ) * bite;
 }
 
 /** One airborne physics step. The velocity vector is committed; the nose
- * answers only faintly and turbulence rolls the car — flight is flight. */
+ * answers only faintly and turbulence rolls the car — flight is flight.
+ * The landing at the end of it is where the car's weight is loudest: the
+ * springs take what they can, the underside takes the rest, and a slam
+ * past what either can swallow throws the whole car back off the ground. */
 export function stepAirborne(
+  spec: CarSpec,
   car: CarState,
   input: CarInput,
   ctx: GroundContext,
@@ -440,17 +535,21 @@ export function stepAirborne(
   stats: RunStats,
 ): void {
   const dt = T.dt;
+  const descent = car.vy;
   car.airTime += dt;
-  stats.airTime += dt;
+  if (!car.settling) stats.airTime += dt;
   car.boosting = false; // no thrust in the air — the velocity is committed
   car.steer = input.steer;
   car.braking = false;
 
   car.yawRate += input.steer * T.air.yawAuthority * dt;
-  car.yawRate += (ctx.rng.next() - 0.5) * 2 * T.air.turbulence * dt;
+  // A bounce is not a flight: the car is settling onto the ground it has
+  // already hit, so the air's own hands stay off it.
+  const air = car.settling ? 0 : 1;
+  car.yawRate += (ctx.rng.next() - 0.5) * 2 * T.air.turbulence * air * dt;
   // The body keeps rolling the way the take-off sent it — the wheel does
   // nothing about it, which is the whole point of being in the air.
-  car.rollRate += (ctx.rng.next() - 0.5) * 2 * T.air.rollTurbulence * dt;
+  car.rollRate += (ctx.rng.next() - 0.5) * 2 * T.air.rollTurbulence * air * dt;
   car.rollRate *= Math.exp(-T.air.rollDamp * dt);
   car.roll += car.rollRate * dt;
   const delta = car.yawRate * dt;
@@ -490,7 +589,7 @@ export function stepAirborne(
       Math.abs(car.slip) <= T.air.cleanSlipLimit && Math.abs(car.roll) < T.air.rollLandLimit;
     if (clean) {
       car.u *= T.air.cleanKeep;
-      stats.cleanLandings += 1;
+      if (!car.settling) stats.cleanLandings += 1;
     } else {
       car.u *= T.air.sloppyKeep;
       // Shot dampers let the whole car skip and hunt on a bad touchdown.
@@ -499,12 +598,30 @@ export function stepAirborne(
     }
     // The ground hits back: descent the suspension cannot absorb crushes
     // the underside — or the flank the car came down on (collision.ts).
-    landingDamage(car, car.u * ctx.slope - car.vy, events, stats);
+    const slam = car.u * ctx.slope - car.vy;
+    landingDamage(spec, car, slam, events, stats);
     // Pick the road's own vertical speed back up instead of zeroing: land on
     // a brow and the car may be off the ground again next step, and a stale
     // zero there is a bounce where there should be a flight.
     car.vy = car.u * ctx.slope;
     events.push({ type: "landing", airTime: car.airTime, clean });
     car.airTime = 0;
+    // Past what the springs can travel through, the CHASSIS comes back off
+    // the ground — a real bounce, small and capped, that lands again a beat
+    // later. Each rebound is a fraction of the last, so a slam bounces once
+    // or twice and is done; it can never turn into a second jump.
+    const rebound = slam - T.suspension.bounceSpeed;
+    if (rebound > 0) {
+      car.airborne = true;
+      car.settling = true;
+      car.vy += Math.min(rebound * T.suspension.bounceKeep, T.suspension.bounceMax);
+    } else {
+      car.settling = false;
+    }
+    // The springs take the whole descent as one jolt whether the chassis
+    // came back up or not: this is the squat a landing travels through.
+    stepSuspension(spec, car, car.vy - descent, 0);
+    return;
   }
+  stepSuspension(spec, car, 0, 0);
 }
