@@ -41,6 +41,51 @@ export const NEUTRAL_INPUT: CarInput = {
   reset: false,
 };
 
+/** How many crush zones ring the body: zone 0 is dead ahead, indices grow
+ * clockwise in map view (matching the heading), 45° each — nose, front-right
+ * corner, right flank, rear-right corner, tail, and round the left side. */
+export const DAMAGE_ZONES = 8;
+
+/** The pieces an impact can tear off the body. The engine decides WHEN one
+ * breaks (zone crush past its bolt strength); the renderer owns what flies. */
+export type DamagePart = "bumperF" | "bumperR" | "mirrorL" | "mirrorR" | "spoiler";
+
+/** The machinery under the panels. Each system takes damage from the crush
+ * landing nearest to it and degrades ITS OWN job: the engine loses power,
+ * the suspension loses grip and landing tolerance, the gearbox shifts
+ * slower and harsher, the steering loses authority. */
+export type InternalSystem = "engine" | "suspension" | "gearbox" | "steering";
+
+export const INTERNAL_SYSTEMS: readonly InternalSystem[] = [
+  "engine",
+  "suspension",
+  "gearbox",
+  "steering",
+];
+
+/** The car's accumulated damage — the physics writes it, the renderer bends
+ * the body's polygons from it. Crashing never resets it: the dents are the
+ * run's history, and only a fresh game starts clean. */
+export type CarDamage = {
+  /** Crush depth per zone, m — how far that side's panels have folded in. */
+  zones: number[];
+  /** Underside crush from slammed landings, m — the floorpan taking the
+   * hit the suspension could not. The renderer sags and wrinkles the body
+   * from it rather than folding a flank. */
+  belly: number;
+  /** Structural wear, 0..1 — reaching 1 wrecks the car (crash + respawn,
+   * after which the wreck is patched back to a drivable fraction). */
+  wear: number;
+  /** Damage per internal system, 0 (sound) .. 1 (broken) — fed by where
+   * the crush lands, read back by the handling model. Never repaired. */
+  systems: Record<InternalSystem, number>;
+  /** Parts already torn off, in the order they went. */
+  broken: DamagePart[];
+  /** Bumped on every deformation change — the renderer re-bends the body
+   * when it moves, instead of re-reading nine numbers every frame. */
+  version: number;
+};
+
 export type CarState = {
   x: number;
   z: number;
@@ -79,7 +124,16 @@ export type CarState = {
   steer: number;
   /** True while the brakes bite this step (renderer readout: brake FX). */
   braking: boolean;
+  damage: CarDamage;
 };
+
+/** Refresh the slip angle after anything rewrites `u`/`w` directly — the
+ * grounded step's lateral-grip redirect rebuilds the velocity FROM this
+ * angle, so a stale slip silently erases the change (collision impulses
+ * included). This is the definition of `CarState.slip`, kept beside it. */
+export function updateSlip(car: CarState): void {
+  car.slip = Math.atan2(car.w, Math.max(1, Math.abs(car.u)));
+}
 
 /** When the stage is driven — presentation picks lighting from it; the
  * engine itself only cares about weather (which sets the wind). */
@@ -106,7 +160,14 @@ export type GameEvent =
   | { type: "boostStart" }
   | { type: "boostEmpty" }
   | { type: "offRoad"; off: boolean }
-  | { type: "crash"; into: "water" | "boulder" | "log" }
+  /** A contact hard enough to matter. `speed` is the closing speed into
+   * the surface, m/s; `angle` is where on the body it landed, radians in
+   * the car frame (0 = nose, positive toward the right side); `belly` marks
+   * a slammed landing taken on the underside, where no ring angle applies. */
+  | { type: "impact"; speed: number; angle: number; belly: boolean }
+  /** A piece of the body tearing off — the renderer sends it flying. */
+  | { type: "partBreak"; part: DamagePart }
+  | { type: "crash"; into: "water" | "wreck" }
   | { type: "respawn" }
   | { type: "finish"; time: number };
 
@@ -119,6 +180,8 @@ export type RunStats = {
   cleanLandings: number;
   splashes: number;
   offRoadTime: number;
+  /** Solid contacts that dealt damage (impact events past the scuff floor). */
+  impacts: number;
   crashes: number;
   respawns: number;
   topSpeed: number;

@@ -19,12 +19,13 @@ its generation, `mapgen-improvement`.
 
 ## The four files, one direction of flow
 
-| File                      | Owns                                                                                                                                                                     |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `pwa/src/game/biome.ts`   | Biomes AS DATA: the ground palette, the plant communities (weighted species mixes + density + ground cover), the contextual overrides (lakeshore, highland), grove scale |
-| `pwa/src/game/flora.ts`   | HOW each plant is shaped: the `GeoBuilder` merge helper, ~26 parametric variants, the two shared materials, the ground-cover sway shader                                 |
-| `pwa/src/game/terrain.ts` | The heightfield AND its paint: altitude bands, moss/heath/forest-floor noise patches, slope-revealed bedrock, the tiling detail speckle, the road-apron shelf            |
-| `pwa/src/game/world.ts`   | WHERE things stand: seeded placement, community lookup, road clearance, verge ground cover, boulders, cut-wall outcrop slabs, the rally gates and hay bales              |
+| File                       | Owns                                                                                                                                                                                                                                               |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pwa/src/game/biome.ts`    | Biomes AS DATA: the ground palette, the plant communities (weighted species mixes + density + ground cover), the contextual overrides (lakeshore, highland), grove scale                                                                           |
+| `pwa/src/game/flora.ts`    | HOW each plant is shaped: the `GeoBuilder` merge helper, ~26 parametric variants, the two shared materials, the ground-cover sway shader                                                                                                           |
+| `pwa/src/game/terrain.ts`  | The heightfield AND its paint: altitude bands, moss/heath/forest-floor noise patches, slope-revealed bedrock, the tiling detail speckle, the road-apron shelf                                                                                      |
+| `pwa/src/game/world.ts`    | WHERE the SOFT things stand (ground cover, stumps, shrubs), dressing engine trunks with species, road clearance, boulders' rock meshes, cut-wall outcrop slabs, the rally gates and hay bales                                                      |
+| `engine/mapgen/terrain.ts` | WHERE the SOLID things stand: the grove quilt (`GROVES`, `groveAt`) and every collidable trunk (`treesNear`) and prop (`obstaclesNear`) — the car crashes into these, so placement is the engine's (the `collision` skill owns the contact itself) |
 
 Biome → flora ids are strings on purpose: `biome.ts` imports nothing from
 `flora.ts`, and `buildFlora` throws on an unknown id, so a typo in a new
@@ -38,14 +39,22 @@ drawing from the same helpers or their patches stop lining up.
   A new biome is a new `Biome` row and a `biomeFor()` decision — no new
   systems. Today `biomeFor()` always returns `TAIGA`.
 - **Trees come in COMMUNITIES, not confetti.** A real forest is groves: a
-  spruce wood, a birch grove, a pine heath, an open meadow. `communityAt`
-  in `world.ts` hashes grove-scale cells (wobbled by noise so borders
-  meander) into the biome's weighted community list; each spot then draws
-  its species from THAT community's small mix. You should see one or two
-  species per stretch, all ~26 only across a whole stage.
-- **`density` is what makes meadows.** A community with near-zero density
-  is open land — its rare trees read as lone rowans, its `groundCover`
-  multiplier fills it with swaying tall grass instead.
+  spruce wood, a birch grove, a pine heath, an open meadow. The quilt
+  lives in the ENGINE (`terrain.groveAt` over the `GROVES` weight/density
+  rows — wobbled grove-scale cells, so borders meander), because the
+  trunks it places are solid; the biome's community rows in `biome.ts`
+  match those ids and supply the species mixes. Each engine trunk carries
+  a `roll` + `grove` and `world.ts` dresses it (`treePlacement`) from that
+  community's mix — filtered to species with real trunks (`solidMix`); the
+  soft rest (stumps, junipers, shrubs, `SOFT_FLORA`) stays app-placed and
+  drive-over. You should see one or two species per stretch, all ~26 only
+  across a whole stage.
+- **`density` is what makes meadows.** A grove row with near-zero density
+  is open land — its rare trees read as lone rowans, its community's
+  `groundCover` multiplier fills it with swaying tall grass instead.
+  Forest density itself is `TREE_CELL`/`TREE_DENSITY` in
+  `engine/mapgen/terrain.ts` (~1 trunk per 500 m² in a closed forest —
+  gaps a car threads, walls it cannot ignore).
 - **Context beats community.** Within ~4 m of the water table the
   lakeshore mix wins (willow, birch); above 26 m terrain altitude the
   highland mix wins (squat spruce, juniper, snags). Those bands mirror the

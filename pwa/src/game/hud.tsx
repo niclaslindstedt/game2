@@ -52,6 +52,29 @@ export type HudSnapshot = {
    * (degrees; 0 = blowing up-screen with the car). */
   windKmh: number;
   windScreenAngle: number;
+  damage: HudDamage;
+};
+
+/** The damage readout, already flipped into SCREEN space by the snapshot
+ * (like everything else in the app layer): zone 0 is the nose, indices grow
+ * toward the side the player SEES on the right, and `mirrorR` is the mirror
+ * on the right of their car on screen. All values 0 (sound) .. 1 (spent). */
+export type HudDamage = {
+  /** Ring crush per zone as a fraction of the max fold. */
+  zones: number[];
+  /** Underside crush fraction (slammed landings). */
+  belly: number;
+  /** Structural wear — 1 is the wreck. */
+  wear: number;
+  /** The internal systems' damage meters. */
+  systems: { engine: number; suspension: number; gearbox: number; steering: number };
+  broken: {
+    bumperF: boolean;
+    bumperR: boolean;
+    mirrorL: boolean;
+    mirrorR: boolean;
+    spoiler: boolean;
+  };
 };
 
 export type HudFlash = { id: number; text: string; tone: "good" | "bad" | "info" };
@@ -387,6 +410,115 @@ function Pacenotes({ notes }: { notes: HudPacenote[] }) {
   );
 }
 
+/** The eight zone indicators around the 2D car, in the panel's 60×100 user
+ * space: strokes hugging the outline, index 0 the nose, clockwise. */
+const DAMAGE_ZONE_PATHS = [
+  "M 22 3 Q 30 0.5 38 3", // nose
+  "M 41 4 Q 46 7 46.5 14", // front-right corner
+  "M 47 21 L 47 59", // right flank
+  "M 46.5 66 Q 46 89 41 94", // rear-right corner
+  "M 37 96.5 Q 30 99 23 96.5", // tail
+  "M 19 94 Q 14 89 13.5 66", // rear-left corner
+  "M 13 59 L 13 21", // left flank
+  "M 13.5 14 Q 14 7 19 4", // front-left corner
+];
+
+/** Crush color ramp: invisible while sound, then yellow folding to red. */
+function crushColor(v: number): string {
+  if (v <= 0.02) return "rgba(246, 243, 234, 0.14)";
+  return `hsl(${Math.round(50 - 45 * Math.min(1, v))} 95% 55%)`;
+}
+
+/** Meter color ramp: green health draining through amber to red. */
+function meterColor(damage: number): string {
+  return `hsl(${Math.round(120 * (1 - Math.min(1, damage)))} 80% 48%)`;
+}
+
+const SYSTEM_METERS = [
+  ["ENG", "engine"],
+  ["SUS", "suspension"],
+  ["GBX", "gearbox"],
+  ["STR", "steering"],
+] as const;
+
+/** The damage instrument: lives IN the bottom-left cluster, drawn with the
+ * tach's own materials — the navy face, the chunky white strokes, the red
+ * accent. A top-view car wears the crush where it happened, the breakables
+ * cross out red as they tear off, and the internal systems read as chunky
+ * bars beside it, boost-bar style. */
+function DamagePanel({ damage }: { damage: HudDamage }) {
+  const broken = damage.broken;
+  const part = (isBroken: boolean): string =>
+    `hud-dmg-part ${isBroken ? "hud-dmg-part-broken" : ""}`;
+  return (
+    <div className="hud-damage" aria-hidden="true">
+      <svg className="hud-dmg-car" viewBox="0 0 60 100">
+        {/* The instrument face — same plate the tach dial sits on. */}
+        <rect className="hud-dmg-face" x="1.5" y="1" width="57" height="98" rx="10" />
+        {/* The body, cabin, and the underside wash for belly crush. */}
+        <path
+          className="hud-dmg-body"
+          d="M 19 9 Q 19 4.5 30 4.5 Q 41 4.5 41 9 L 42 84 Q 42 95 30 95 Q 18 95 18 84 Z"
+        />
+        <rect
+          className="hud-dmg-belly"
+          x="20"
+          y="24"
+          width="20"
+          height="56"
+          rx="8"
+          style={{ opacity: (0.75 * damage.belly).toFixed(2) }}
+        />
+        <rect className="hud-dmg-cabin" x="22.5" y="30" width="15" height="26" rx="4" />
+        {/* The ring: crush painted where it happened. */}
+        {DAMAGE_ZONE_PATHS.map((d, i) => (
+          <path
+            key={d}
+            className="hud-dmg-zone"
+            d={d}
+            style={{ stroke: crushColor(damage.zones[i]) }}
+          />
+        ))}
+        {/* The breakables: solid while bolted on, crossed out when gone. */}
+        <rect className={part(broken.bumperF)} x="21" y="7" width="18" height="3.6" rx="1.6" />
+        <rect className={part(broken.bumperR)} x="21" y="89.5" width="18" height="3.6" rx="1.6" />
+        <rect className={part(broken.mirrorL)} x="9" y="29" width="4.5" height="7" rx="1.4" />
+        <rect className={part(broken.mirrorR)} x="46.5" y="29" width="4.5" height="7" rx="1.4" />
+        <rect className={part(broken.spoiler)} x="17" y="83.5" width="26" height="3.6" rx="1.6" />
+      </svg>
+      <div className="hud-dmg-meters">
+        {SYSTEM_METERS.map(([label, key]) => (
+          <span key={key} className="hud-dmg-meter">
+            <span className="hud-dmg-meter-label">{label}</span>
+            <span className="hud-dmg-meter-track">
+              <span
+                className="hud-dmg-meter-fill"
+                style={{
+                  width: `${((1 - damage.systems[key]) * 100).toFixed(0)}%`,
+                  background: meterColor(damage.systems[key]),
+                }}
+              />
+            </span>
+          </span>
+        ))}
+        {/* The chassis itself — the bar the wreck is called on. */}
+        <span className="hud-dmg-meter hud-dmg-wear">
+          <span className="hud-dmg-meter-label">CAR</span>
+          <span className="hud-dmg-meter-track">
+            <span
+              className="hud-dmg-meter-fill"
+              style={{
+                width: `${((1 - damage.wear) * 100).toFixed(0)}%`,
+                background: meterColor(damage.wear),
+              }}
+            />
+          </span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function TouchButton({
   label,
   className,
@@ -514,6 +646,7 @@ export function Hud({ snap, flashes, input, onMenu, onRestart, onCamera }: HudPr
             />
           </span>
         </span>
+        <DamagePanel damage={snap.damage} />
       </div>
 
       {/* Touch controls — the left half of the screen anchors a steering

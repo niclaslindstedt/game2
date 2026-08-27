@@ -22,11 +22,18 @@ export {
 
 // The simulation.
 export { createGame, step, type CreateGameOptions } from "./game/step.ts";
+export { collideCar, damageZoneAt, landingDamage } from "./game/collision.ts";
 export {
   NEUTRAL_INPUT,
+  DAMAGE_ZONES,
+  INTERNAL_SYSTEMS,
+  updateSlip,
+  type CarDamage,
   type CarInput,
   type CarState,
+  type DamagePart,
   type GameEvent,
+  type InternalSystem,
   type GamePhase,
   type GameState,
   type RaceEnv,
@@ -54,6 +61,9 @@ export {
   LAKE_Y,
   APRON,
   GROUND_CELL,
+  GROVES,
+  GROVE_SCALE,
+  type GroveCommunity,
   type TerrainField,
   type Stream,
   type WildObstacle,

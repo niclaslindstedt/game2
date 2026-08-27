@@ -12,6 +12,7 @@
 // distinct planes. The specs themselves live in car-styles.ts.
 
 import * as THREE from "three";
+import type { DamagePart } from "@engine";
 
 type V3 = readonly [number, number, number];
 
@@ -103,6 +104,11 @@ export type CarBodyParts = {
   wheelGroups: THREE.Group[];
   /** Same order — rotate .x to spin with road speed. */
   wheelSpin: THREE.Object3D[];
+  /** The bendable shell — the mesh the damage visual crumples. */
+  body: THREE.Mesh;
+  /** The pieces an impact can tear off, each its own mesh so the damage
+   * visual can detach one and send it flying (the engine names which). */
+  breakables: Partial<Record<DamagePart, THREE.Mesh>>;
   dispose: () => void;
 };
 
@@ -440,7 +446,14 @@ function buildGreenhouse(b: MeshBuilder, spec: CarBodySpec): void {
   }
 }
 
-function buildDetails(b: MeshBuilder, spec: CarBodySpec, axles: number[]): void {
+/** The fixed details plus the breakable ones — bumpers, mirrors and the
+ * spoiler go through `part` so each ends up its own detachable mesh. */
+function buildDetails(
+  b: MeshBuilder,
+  spec: CarBodySpec,
+  axles: number[],
+  part: (name: DamagePart) => MeshBuilder,
+): void {
   const c = spec.colors;
   const trim = c.trim ?? 0x14181f;
   const bumper = c.bumper ?? 0x23272e;
@@ -449,8 +462,8 @@ function buildDetails(b: MeshBuilder, spec: CarBodySpec, axles: number[]): void 
 
   // Bumpers: slabs a shade wider than the body, wrapped past the caps.
   const bumperY = spec.floorY + 0.06;
-  b.box(0, bumperY, nose.z - 0.04, nose.half * 2 + 0.12, 0.17, 0.34, bumper);
-  b.box(0, bumperY, tail.z + 0.04, tail.half * 2 + 0.12, 0.17, 0.34, bumper);
+  part("bumperF").box(0, bumperY, nose.z - 0.04, nose.half * 2 + 0.12, 0.17, 0.34, bumper);
+  part("bumperR").box(0, bumperY, tail.z + 0.04, tail.half * 2 + 0.12, 0.17, 0.34, bumper);
 
   // Headlights and grille ride proud of the nose cap.
   const lightY = spec.beltY + (nose.topY - spec.beltY) * 0.45;
@@ -467,7 +480,8 @@ function buildDetails(b: MeshBuilder, spec: CarBodySpec, axles: number[]): void 
   if (spec.mirrors !== false) {
     const cowl = sampleProfile(spec.profile, spec.cabin.cowlZ);
     for (const side of [-1, 1]) {
-      b.box(
+      // Local +x is the car's right — the engine's mirrorR lives there.
+      part(side > 0 ? "mirrorR" : "mirrorL").box(
         side * (cowl.half * SHOULDER + 0.05),
         cowl.topY + 0.02,
         spec.cabin.cowlZ + 0.08,
@@ -517,13 +531,14 @@ function buildDetails(b: MeshBuilder, spec: CarBodySpec, axles: number[]): void 
 
   const sp = spec.spoiler;
   if (sp && sp.kind === "wing") {
-    b.box(-sp.span * 0.32, (sp.y + tail.topY) / 2, sp.z, 0.07, sp.y - tail.topY, 0.16, trim);
-    b.box(sp.span * 0.32, (sp.y + tail.topY) / 2, sp.z, 0.07, sp.y - tail.topY, 0.16, trim);
-    b.box(0, sp.y, sp.z, sp.span, 0.05, sp.chord, c.accent);
-    b.box(-sp.span / 2, sp.y + 0.02, sp.z, 0.03, 0.12, sp.chord + 0.06, c.accent);
-    b.box(sp.span / 2, sp.y + 0.02, sp.z, 0.03, 0.12, sp.chord + 0.06, c.accent);
+    const wing = part("spoiler");
+    wing.box(-sp.span * 0.32, (sp.y + tail.topY) / 2, sp.z, 0.07, sp.y - tail.topY, 0.16, trim);
+    wing.box(sp.span * 0.32, (sp.y + tail.topY) / 2, sp.z, 0.07, sp.y - tail.topY, 0.16, trim);
+    wing.box(0, sp.y, sp.z, sp.span, 0.05, sp.chord, c.accent);
+    wing.box(-sp.span / 2, sp.y + 0.02, sp.z, 0.03, 0.12, sp.chord + 0.06, c.accent);
+    wing.box(sp.span / 2, sp.y + 0.02, sp.z, 0.03, 0.12, sp.chord + 0.06, c.accent);
   } else if (sp && sp.kind === "lip") {
-    b.box(0, sp.y, sp.z, sp.span, 0.06, 0.16, c.accent);
+    part("spoiler").box(0, sp.y, sp.z, sp.span, 0.06, 0.16, c.accent);
   }
 
   // Livery stripes hug the hood/deck by sampling the silhouette.
@@ -659,12 +674,29 @@ export function buildCarBody(spec: CarBodySpec): CarBodyParts {
   const axles = [spec.wheelbase / 2 + shift, -spec.wheelbase / 2 + shift];
 
   const b = new MeshBuilder();
+  const partBuilders = new Map<DamagePart, MeshBuilder>();
+  const part = (name: DamagePart): MeshBuilder => {
+    let builder = partBuilders.get(name);
+    if (!builder) partBuilders.set(name, (builder = new MeshBuilder()));
+    return builder;
+  };
   const stations = buildStations(spec, axles);
   buildShell(b, spec, stations);
   buildGreenhouse(b, spec);
-  buildDetails(b, spec, axles);
+  buildDetails(b, spec, axles, part);
   const bodyGeo = b.geometry();
-  group.add(new THREE.Mesh(bodyGeo, material));
+  const body = new THREE.Mesh(bodyGeo, material);
+  group.add(body);
+
+  const breakables: Partial<Record<DamagePart, THREE.Mesh>> = {};
+  const partGeos: THREE.BufferGeometry[] = [];
+  for (const [name, builder] of partBuilders) {
+    const geo = builder.geometry();
+    const mesh = new THREE.Mesh(geo, material);
+    group.add(mesh);
+    breakables[name] = mesh;
+    partGeos.push(geo);
+  }
 
   const wheelGroups: THREE.Group[] = [];
   const wheelSpin: THREE.Object3D[] = [];
@@ -686,8 +718,9 @@ export function buildCarBody(spec: CarBodySpec): CarBodyParts {
 
   const dispose = (): void => {
     bodyGeo.dispose();
+    for (const g of partGeos) g.dispose();
     for (const g of wheelGeos) g.dispose();
     material.dispose();
   };
-  return { group, wheelGroups, wheelSpin, dispose };
+  return { group, wheelGroups, wheelSpin, body, breakables, dispose };
 }

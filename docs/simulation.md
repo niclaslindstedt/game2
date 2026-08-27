@@ -17,7 +17,7 @@ Bot profiles are data (`BotProfile`); `RALLY_BOT` is the default. Slower/faster 
 
 ## The harness (`engine/sim/simulate.ts`)
 
-`simulateStage({ seed, carId, profile, length, maxTime })` runs a full stage (at a finite stage length band — default medium) and returns: finish state and time, the whole event log, the run stats (drift count/time/score, jumps, air time, clean landings, splashes, off-road time, crashes, respawns, top speed), and a **digest** — an FNV hash over sampled positions. Runs are deterministic: same seed + car + profile ⇒ same digest, which is exactly what `tests/simulation_test.ts` asserts.
+`simulateStage({ seed, carId, profile, length, maxTime })` runs a full stage (at a finite stage length band — default medium) and returns: finish state and time, the whole event log, the run stats (drift count/time/score, jumps, air time, clean landings, splashes, off-road time, impacts, crashes, respawns, top speed), and a **digest** — an FNV hash over sampled positions. Runs are deterministic: same seed + car + profile ⇒ same digest, which is exactly what `tests/simulation_test.ts` asserts.
 
 ## The CLI
 
@@ -31,7 +31,7 @@ npm run sim -- --weather storm        # race in rain/storm wind
 npm run sim -- --json report.json     # machine-readable dump
 ```
 
-The table columns: stage length, time, average pace, drifts / drift time / drift score, jumps / air time, fords, off-road time, respawns (crash respawns and bot resets both land here), top speed, finished. The footer aggregates. **The workflow rule: run it before and after every handling or generator change and paste both tables in the PR.** Exit code is non-zero if any run failed to finish, so CI's `simulate` job doubles as a smoke alarm.
+The table columns: stage length, time, average pace, drifts / drift time / drift score, jumps / air time, fords, off-road time, hits (damaging impacts — trees, boulders, slammed landings), respawns (crash respawns and bot resets both land here), top speed, finished. The footer aggregates. **The workflow rule: run it before and after every handling or generator change and paste both tables in the PR.** Exit code is non-zero if any run failed to finish, so CI's `simulate` job doubles as a smoke alarm.
 
 ## What the tests pin down
 

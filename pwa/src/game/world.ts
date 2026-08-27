@@ -11,9 +11,15 @@
 // and dropping them behind it.
 
 import * as THREE from "three";
-import { createRng, inStream, type GameState, type Track, type WildObstacle } from "@engine";
+import {
+  GROVES,
+  createRng,
+  inStream,
+  type GameState,
+  type Track,
+  type WildObstacle,
+} from "@engine";
 
-import { hash2, valueNoise } from "../lib/noise.ts";
 import { biomeFor, type Biome, type Community, type FloraMix } from "./biome.ts";
 import { buildFlora, type Flora, type FloraPlacement } from "./flora.ts";
 import { APRON, buildTerrain, LAKE_Y, type Terrain } from "./terrain.ts";
@@ -248,23 +254,50 @@ function buildFords(
   return { group, next };
 }
 
-/** Which plant community owns a patch of ground: a hash over grove-sized
- * cells (uniform, so the biome's weights hold exactly), the lookup wobbled
- * by noise so grove borders meander instead of running straight. Shared by
- * the road-band scenery and the wild — one seed, one quilt. */
-function communityPicker(seed: number, biome: Biome): (x: number, z: number) => Community {
-  const groveSeed = (seed ^ 0x9e3779b9) >>> 0;
-  const totalWeight = biome.communities.reduce((sum, c) => sum + c.weight, 0);
-  return (x: number, z: number): Community => {
-    const wx = x + (valueNoise(x, z, 47, groveSeed + 1) - 0.5) * 70;
-    const wz = z + (valueNoise(z, x, 53, groveSeed + 2) - 0.5) * 70;
-    let t = hash2(Math.floor(wx / biome.groveScale), Math.floor(wz / biome.groveScale), groveSeed);
-    t *= totalWeight;
-    for (const c of biome.communities) {
-      t -= c.weight;
-      if (t <= 0) return c;
-    }
-    return biome.communities[biome.communities.length - 1];
+/** The community a grove-quilt index names — the quilt itself lives in the
+ * ENGINE's terrain field now (terrain.field.groveAt), because the trunks it
+ * places are solid; the biome only supplies what grows in each patch. */
+function communityByGrove(biome: Biome, grove: number): Community {
+  const id = GROVES[grove]?.id;
+  return biome.communities.find((c) => c.id === id) ?? biome.communities[0];
+}
+
+/** Flora that never stands a solid trunk — the engine's tree field must not
+ * dress a collision circle as one of these, and conversely they are free to
+ * be planted app-side as drive-over dressing. */
+const SOFT_FLORA = new Set(["stump", "fallenLog", "heathShrub", "juniper", "willowShrub"]);
+
+/** A mix stripped to the species that read as solid trees (falls back to
+ * the whole mix if nothing tall grows there). */
+function solidMix(mix: FloraMix): FloraMix {
+  const out: FloraMix = {};
+  for (const id in mix) if (!SOFT_FLORA.has(id)) out[id] = mix[id];
+  return Object.keys(out).length > 0 ? out : mix;
+}
+
+/** ...and the complement: the low soft stuff of a community's tree mix. */
+function softMix(mix: FloraMix): FloraMix | null {
+  const out: FloraMix = {};
+  for (const id in mix) if (SOFT_FLORA.has(id)) out[id] = mix[id];
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+/** Dress one engine trunk as the tree the biome grows there. The engine
+ * owns WHERE a solid tree stands and how thick its trunk is; which species
+ * it IS stays the biome's call — with the same overrides as ever: willow
+ * and birch crowd the shores, only the tough survive the high bedrock. */
+function treePlacement(tree: WildObstacle, biome: Biome): FloraPlacement {
+  let mix: FloraMix;
+  if (tree.y < LAKE_Y + 4) mix = biome.lakeshoreTrees;
+  else if (tree.y > 26) mix = biome.highlandTrees;
+  else mix = communityByGrove(biome, tree.grove ?? 0).trees;
+  return {
+    id: pickFlora(solidMix(mix), tree.roll ?? 0),
+    x: tree.x,
+    y: tree.y,
+    z: tree.z,
+    scale: tree.size,
+    spin: tree.spin,
   };
 }
 
@@ -287,6 +320,9 @@ type SceneryChunk = {
   update: (dt: number) => void;
   /** Zero out any prop the newly built road now runs through. */
   clearNear: (track: Track, from: number, to: number) => void;
+  /** The engine trunks this chunk drew — released when the chunk drops so
+   * the ownership set stays bounded on an endless run. */
+  treeKeys: string[];
 };
 
 /** The living landscape for one chunk of road: the biome's forest scattered
@@ -303,6 +339,7 @@ function buildScenery(
   from: number,
   to: number,
   guard: Track["samples"],
+  drawnTrees: Set<string>,
 ): SceneryChunk {
   const group = new THREE.Group();
   const rng = createRng((track.seed ^ 0x5f356495 ^ Math.imul(from, 2246822519)) >>> 0);
@@ -310,8 +347,10 @@ function buildScenery(
   const half = track.width / 2;
   const clearance = half + 3.5;
   const heightAt = terrain.heightAt;
+  const field = terrain.field;
 
-  const communityAt = communityPicker(track.seed, biome);
+  const communityAt = (x: number, z: number): Community =>
+    communityByGrove(biome, field.groveAt(x, z));
 
   // Clearance checks walk the guard samples — the chunk's own road with
   // its aprons plus a margin of neighbours — so nothing grows on the road,
@@ -326,36 +365,52 @@ function buildScenery(
   };
 
   const flora: FloraPlacement[] = [];
+  const treeKeys: string[] = [];
 
-  // ── The forest: two bands, a treeline near the road and a spread
-  // climbing the hills. WHAT grows at a spot is the community's call —
-  // groves of a few species, meadows left open — with the shorelines and
-  // the high bedrock overriding: willow and birch crowd the water, only
-  // the tough survive up high.
-  for (let i = Math.max(4, from); i < to; i += 2) {
+  // ── The forest: the ENGINE's trunk field, drawn exactly where the
+  // physics collides — the band within 150 m of the road belongs to the
+  // road chunks, the deeper wild to the wild cells. Ownership over chunk
+  // seams is settled by the shared `drawnTrees` set.
+  const collectTrees = (x: number, z: number): void => {
+    for (const tree of field.treesNear(x, z, 190)) {
+      if (field.roadDistanceAt(tree.x, tree.z) >= 150) continue;
+      const key = `${tree.x.toFixed(1)},${tree.z.toFixed(1)}`;
+      if (drawnTrees.has(key)) continue;
+      drawnTrees.add(key);
+      treeKeys.push(key);
+      flora.push(treePlacement(tree, biome));
+    }
+  };
+  for (let i = Math.max(0, from); i < to; i += 50) collectTrees(samples[i].x, samples[i].z);
+  collectTrees(samples[to - 1].x, samples[to - 1].z);
+
+  // ── The soft small stuff between the trunks — stumps, junipers, willow
+  // shrubs: driven over, not into, so it stays an app-side scatter.
+  for (let i = Math.max(4, from); i < to; i += 6) {
     const s = samples[i];
     const r = rightOf(s.heading);
     const side = rng.chance(0.5) ? 1 : -1;
-    const offset = rng.chance(0.6) ? rng.range(clearance + 2, 46) : rng.range(46, 150);
+    const offset = rng.range(clearance + 1, 44);
     const jitter = rng.range(-3, 3);
     const x = s.x + r.x * offset * side + jitter;
     const z = s.z + r.z * offset * side + jitter;
     const roll = rng.next();
     const scale = rng.range(0.75, 1.35);
     const spin = rng.range(0, Math.PI * 2);
+    if (!rng.chance(0.4)) continue;
     if (!clearOfRoad(x, z, clearance)) continue;
-    if (inStream(terrain.field.streams, x, z, 1.5)) continue;
+    if (inStream(field.streams, x, z, 1.5)) continue;
     const y = heightAt(x, z);
     if (y < LAKE_Y + 1.2) continue;
-    let mix: FloraMix;
-    if (y < LAKE_Y + 4) mix = biome.lakeshoreTrees;
-    else if (y > 26) mix = biome.highlandTrees;
-    else {
-      const community = communityAt(x, z);
-      if (!rng.chance(community.density)) continue;
-      mix = community.trees;
-    }
-    flora.push({ id: pickFlora(mix, roll), x, y, z, scale, spin });
+    const soft = softMix(
+      y < LAKE_Y + 4
+        ? biome.lakeshoreTrees
+        : y > 26
+          ? biome.highlandTrees
+          : communityAt(x, z).trees,
+    );
+    if (!soft) continue;
+    flora.push({ id: pickFlora(soft, roll), x, y, z, scale, spin });
   }
 
   // ── Ground cover: a dense strip just past the shoulder (what the car
@@ -502,7 +557,7 @@ function buildScenery(
     }
   };
 
-  return { group, update: planted.update, clearNear };
+  return { group, update: planted.update, clearNear, treeKeys };
 }
 
 /** Warning cones flanking each jump lip in the range. */
@@ -629,7 +684,8 @@ type Wild = {
  * own instanced rock. Deterministic per seed and cell. */
 function buildWild(track: Track, biome: Biome, terrain: Terrain): Wild {
   const group = new THREE.Group();
-  const communityAt = communityPicker(track.seed, biome);
+  const communityAt = (x: number, z: number): Community =>
+    communityByGrove(biome, terrain.field.groveAt(x, z));
   const cells = new Map<string, WildCell>();
   const heightAt = terrain.heightAt;
   const field = terrain.field;
@@ -649,28 +705,40 @@ function buildWild(track: Track, biome: Biome, terrain: Terrain): Wild {
     const originZ = cz * WILD_CELL;
     const placements: FloraPlacement[] = [];
 
-    // The wild forest — same communities as the road bands, at about half
-    // density: this is scenery a car drives THROUGH now, so the gaps to
-    // thread matter as much as the trees.
-    for (let i = 0; i < 44; i++) {
+    // The wild forest — the same engine trunk field the physics collides
+    // with, each trunk drawn by the cell that OWNS its position. The road
+    // bands' scenery chunks own everything within 150 m of the road.
+    const treesHere = field
+      .treesNear(originX + WILD_CELL / 2, originZ + WILD_CELL / 2, WILD_CELL * 0.71)
+      .filter(
+        (t) =>
+          Math.floor(t.x / WILD_CELL) === cx &&
+          Math.floor(t.z / WILD_CELL) === cz &&
+          field.roadDistanceAt(t.x, t.z) >= 150,
+      );
+    for (const tree of treesHere) placements.push(treePlacement(tree, biome));
+
+    // The soft small stuff between the trunks — a light app-side scatter.
+    for (let i = 0; i < 14; i++) {
       const x = originX + rng.range(0, WILD_CELL);
       const z = originZ + rng.range(0, WILD_CELL);
       const roll = rng.next();
       const scale = rng.range(0.75, 1.35);
       const spin = rng.range(0, Math.PI * 2);
-      if (field.roadDistanceAt(x, z) < 150) continue; // the road bands own that ground
+      if (!rng.chance(0.5)) continue;
+      if (field.roadDistanceAt(x, z) < 150) continue;
       if (inStream(field.streams, x, z, 1.5)) continue;
       const y = heightAt(x, z);
       if (y < LAKE_Y + 1.2) continue;
-      let mix: FloraMix;
-      if (y < LAKE_Y + 4) mix = biome.lakeshoreTrees;
-      else if (y > 26) mix = biome.highlandTrees;
-      else {
-        const community = communityAt(x, z);
-        if (!rng.chance(community.density * 0.55)) continue;
-        mix = community.trees;
-      }
-      placements.push({ id: pickFlora(mix, roll), x, y, z, scale, spin });
+      const soft = softMix(
+        y < LAKE_Y + 4
+          ? biome.lakeshoreTrees
+          : y > 26
+            ? biome.highlandTrees
+            : communityAt(x, z).trees,
+      );
+      if (!soft) continue;
+      placements.push({ id: pickFlora(soft, roll), x, y, z, scale, spin });
     }
     // Ground cover barely reads at exploring pace — a light scatter.
     for (let i = 0; i < 20; i++) {
@@ -833,6 +901,9 @@ export function buildWorld(track: Track): World {
 
   type Chunk = { toS: number; group: THREE.Group; scenery: SceneryChunk };
   const chunks: Chunk[] = [];
+  /** Engine trunks already drawn by some scenery chunk — chunk queries
+   * overlap at the seams, and a tree drawn twice z-fights itself. */
+  const drawnTrees = new Set<string>();
   let builtIndex = 0;
   let fordScan = 0;
   let streamScanS = 0;
@@ -857,7 +928,7 @@ export function buildWorld(track: Track): World {
       ...track.samples.slice(Math.max(0, from - 120), Math.max(0, from - 1)),
       ...track.samples.slice(to, Math.min(track.samples.length, to + 120)),
     ];
-    const scenery = buildScenery(track, biome, terrain, from, to, guard);
+    const scenery = buildScenery(track, biome, terrain, from, to, guard, drawnTrees);
     chunkGroup.add(scenery.group);
     chunkGroup.add(buildCones(track, from, to));
     if (from === 0) chunkGroup.add(buildGate(track, 2, "start"));
@@ -889,6 +960,7 @@ export function buildWorld(track: Track): World {
     }
     while (chunks.length > 1 && chunks[0].toS < state.progressS - PRUNE_BEHIND) {
       const old = chunks.shift() as Chunk;
+      for (const key of old.scenery.treeKeys) drawnTrees.delete(key);
       group.remove(old.group);
       disposeGroup(old.group);
     }

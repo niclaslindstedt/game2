@@ -430,6 +430,129 @@ body {
   color: var(--hud-bad);
 }
 
+/* ── The damage instrument ──────────────────────────────────────────────
+   The cluster's fourth instrument, built from the tach's own materials:
+   the translucent navy face, the chunky white strokes, the red accent, the
+   boost bar's bordered tracks. The 2D car wears the crush where the hits
+   landed; the bars are the machinery — engine, suspension, gearbox,
+   steering — and the chassis itself. */
+.hud-damage {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 0.4rem;
+  margin-left: 0.5rem;
+  padding-bottom: 0.35rem;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 45%));
+}
+
+.hud-dmg-car {
+  width: clamp(2.2rem, 7vmin, 3.4rem);
+  overflow: visible;
+}
+
+.hud-dmg-face {
+  fill: rgb(9 24 52 / 45%);
+}
+
+.hud-dmg-body {
+  fill: rgb(9 24 52 / 55%);
+  stroke: rgb(255 255 255 / 70%);
+  stroke-width: 2;
+}
+
+.hud-dmg-cabin {
+  fill: rgb(255 255 255 / 30%);
+}
+
+.hud-dmg-belly {
+  fill: var(--hud-bad);
+}
+
+.hud-dmg-zone {
+  fill: none;
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+.hud-dmg-part {
+  fill: rgb(255 255 255 / 62%);
+}
+
+.hud-dmg-part-broken {
+  fill: rgb(255 90 78 / 25%);
+  stroke: var(--hud-bad);
+  stroke-width: 1.6;
+  stroke-dasharray: 2.2 1.8;
+}
+
+.hud-dmg-meters {
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+}
+
+.hud-dmg-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.hud-dmg-meter-label {
+  font-size: clamp(0.45rem, 1.5vmin, 0.6rem);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  width: 2.4em;
+}
+
+.hud-dmg-meter-track {
+  position: relative;
+  width: clamp(2.4rem, 8vmin, 3.8rem);
+  height: 0.42rem;
+  background: rgb(18 48 105 / 55%);
+  border: 2px solid rgb(255 255 255 / 70%);
+  border-radius: 0.4rem;
+  overflow: hidden;
+}
+
+.hud-dmg-meter-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  transition:
+    width 120ms linear,
+    background 120ms linear;
+}
+
+/* The chassis bar carries the wreck stake — set a hair apart. */
+.hud-dmg-wear {
+  margin-top: 0.14rem;
+}
+
+/* Portrait phones: the cluster row has no width left, so the damage
+   instrument docks in the opposite corner — the cluster's mirror image —
+   sized to clear the touch gear buttons above it. */
+@media (max-width: 560px) {
+  .hud-damage {
+    position: fixed;
+    right: max(0.8rem, env(safe-area-inset-right));
+    bottom: max(1rem, env(safe-area-inset-bottom));
+    margin-left: 0;
+    padding-bottom: 0;
+  }
+
+  .hud-dmg-car {
+    width: 1.9rem;
+  }
+
+  .hud-dmg-meter-track {
+    width: 2.1rem;
+  }
+
+  /* The manual gear taps step up over the docked instrument. */
+  .hud-gears {
+    bottom: max(6.4rem, calc(env(safe-area-inset-bottom) + 5.9rem));
+  }
+}
+
 .hud-build {
   position: absolute;
   right: max(0.5rem, env(safe-area-inset-right));

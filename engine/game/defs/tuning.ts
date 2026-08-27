@@ -235,9 +235,83 @@ export const TUNING = {
      * or the sea: splash, crash, back to the track. Stream fords stay
      * shallower than this and just slow the car. */
     deepWater: 0.9,
-    /** Ground speed above which contact with a wild prop (boulder, fallen
-     * trunk) is a crash, m/s; slower is a bump that stops the car. */
-    obstacleSpeed: 8,
+  },
+
+  collision: {
+    /** The body's collision box in the ground plane, m — half-length along
+     * the nose and half-width across it. One size fits both cars; the
+     * visual bodies differ by centimetres, not classes. */
+    halfLength: 1.9,
+    halfWidth: 0.85,
+    /** Fraction of the closing speed bounced back off a solid, 0..1 — low:
+     * a tree absorbs a rally car, it does not trampoline it. */
+    restitution: 0.3,
+    /** Fraction of the speed ALONG the surface kept through the contact —
+     * a glancing blow scrubs paint and carries on. */
+    tangentKeep: 0.82,
+    /** Yaw kicked into the body by an off-center hit, rad/s per (m/s of
+     * velocity change × m of lever arm) — what makes a clipped tree spin
+     * the car instead of politely stopping it. */
+    yawKick: 0.35,
+    /** Closing speed under which a contact is a scuff: no crush, no wear,
+     * no event — parking against a rock is not an accident, m/s. */
+    scuffSpeed: 3,
+    /** Panel crush per m/s of closing speed past the scuff floor, m. A
+     * 30 m/s head-on folds the nose ~0.3 m in. */
+    crushPerSpeed: 0.011,
+    /** A zone's panels can only fold this far, m — past it the cage holds
+     * and further hits only add wear. */
+    zoneMax: 0.4,
+    /** Structural wear per meter of crush dealt (wear reaching 1 is the
+     * wreck). ~1.1 lets a car survive several hard hits, not a dozen. */
+    wearPerCrush: 2.4,
+    /** Wear the wreck respawn patches the car back to — rally service on
+     * the spot: drivable, but half the car's life is spent. */
+    repairTo: 0.5,
+    /** Zone crush that tears each part off its bolts, m. Mirrors pop off
+     * a brush; bumpers and the wing take a real hit. */
+    partAt: { mirror: 0.04, bumper: 0.12, spoiler: 0.1 },
+    /** Descent speed relative to the ground the suspension absorbs for
+     * free, m/s — landing harder than this crushes the underside (or the
+     * flank, on a car that came down on its side). Set just over what a
+     * designed ramp jump comes down with, so the marks come from cliff
+     * plunges and botched flights, not from every lip on the stage. */
+    hardLandSpeed: 10,
+
+    /** The machinery under the panels: how crush becomes internal damage
+     * (per m of crush on the zones nearest each system), and how a damaged
+     * system degrades its own job. All damage is 0..1 and never repaired —
+     * every effect is sized so a broken system CRIPPLES, never parks. */
+    systems: {
+      /** Nose crush → engine (the radiator is the first thing to fold). */
+      engineFromNose: 1.6,
+      /** Flank crush → suspension (arms and uprights live in the arches). */
+      suspensionFromFlank: 1.5,
+      /** Rear crush → gearbox (the drivetrain hangs off the back). */
+      gearboxFromRear: 1.5,
+      /** Front-corner crush → steering (the rack's tie rods end there). */
+      steeringFromCorner: 1.0,
+      /** Belly crush → suspension, plus a share to the gearbox sump. */
+      suspensionFromBelly: 2.2,
+      gearboxFromBelly: 0.8,
+
+      /** Fraction of engine power gone at engine damage 1. */
+      powerLoss: 0.35,
+      /** Fraction of steering authority gone at steering damage 1. */
+      steerLoss: 0.35,
+      /** Fraction of lateral grip gone at suspension damage 1. */
+      gripLoss: 0.18,
+      /** Fraction of the hard-landing tolerance gone at suspension 1 —
+       * shot dampers turn ordinary jumps into underside hits. */
+      landTolerance: 0.45,
+      /** Extra sloppy-landing yaw wobble at suspension 1 (multiplier-1). */
+      wobble: 1.0,
+      /** Manual shift cut stretches by this factor at gearbox 1... */
+      shiftCut: 2.5,
+      /** ...and the auto box, seamless when sound, cuts this long per
+       * shift at gearbox 1, s. */
+      autoCut: 0.3,
+    },
   },
 
   gearbox: {

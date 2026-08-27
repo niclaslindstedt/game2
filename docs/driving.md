@@ -122,17 +122,60 @@ not a mistake anymore; it is exploration:
 - **Water** — the landscape floods below the water table
   (`terrain.LAKE_Y`): lakes, and whole sea basins. Shallows and streams
   slow the car and splash; **deep water is a crash** — splash, `crash`
-  event, and a respawn on the track at last progress. Crash physics proper
-  is a later chapter; for now a crash simply puts the car back.
-- **Solid props** — the wild scatters boulders and fallen trunks
-  (`terrain.obstaclesNear`), seeded, off-road only, drawn by the renderer
-  exactly where the physics collides with them. Contact above
-  `TUNING.crash.obstacleSpeed` is a crash; a crawl just stops the car. A
-  fallen trunk lies low enough to jump.
+  event, and a respawn on the track at last progress.
+- **Solid props and the forest** — the wild scatters boulders and fallen
+  trunks (`terrain.obstaclesNear`), and the forest's trees stand on solid
+  trunks of their own (`terrain.treesNear`, placed by the same engine-side
+  grove quilt the renderer picks species from) — everything seeded, kept
+  off the road, and drawn exactly where the physics collides with it.
+  Contact does not teleport the car anywhere: it bends it — see the
+  collision model below. A fallen trunk lies low enough to jump; a tree is
+  not.
 - **The way home** — exploring never times out and never teleports the car:
   the only ways back to the track are a crash or the **reset input**
   (`CarInput.reset`, the B key / the HUD's TRACK button), which respawns at
   the last on-road progress.
+
+## Collision and damage
+
+The contact model lives in `engine/game/collision.ts`; every number is in
+`TUNING.collision`. The car is an oriented box in the ground plane, every
+solid a circle, and a hit does three things at once:
+
+- **The impulse.** Speed INTO the surface comes back at a low restitution
+  (a tree absorbs a rally car, it does not trampoline it); speed ALONG it
+  mostly survives, so a glancing blow is a scrape that carries on. The
+  lever arm turns the velocity change into yaw — clipping a trunk with a
+  corner spins the car instead of politely stopping it. Below
+  `scuffSpeed`, contact is a scuff: the car stops against the rock,
+  unmarked.
+- **The crush.** Closing speed past the scuff floor folds the struck
+  panels in, permanently — eight zones ring the body (`CarState.damage`),
+  and the renderer bends the body's actual polygons from the ledger
+  (`pwa/src/game/car-damage.ts`): pulled inward, crumpled, scuffed darker.
+  Zone crush past a part's bolt strength (`partAt`) tears it off —
+  mirrors, bumpers, the wing — as a `partBreak` event the renderer turns
+  into tumbling debris. **Hard landings are impacts too**: descent the
+  suspension cannot absorb (`hardLandSpeed`) crushes the underside (the
+  `belly`), or the flank the car came down on.
+- **The wear.** Every crush adds structural wear; wear 1 is the wreck —
+  `crash` event, respawn at last progress, chassis patched back to
+  `repairTo`. The dents, the torn-off parts and the hurt systems all stay:
+  the run remembers.
+
+Under the panels live four **internal systems** (`damage.systems`), each
+fed by the crush landing nearest to it and each degrading its own job:
+
+| System     | Hurt by                     | Effect when damaged                                                |
+| ---------- | --------------------------- | ------------------------------------------------------------------ |
+| Engine     | Nose and front-corner crush | Power fades (up to `systems.powerLoss`) — the car limps            |
+| Suspension | Flank and belly crush       | Less lateral grip, narrower landing tolerance, wobblier touchdowns |
+| Gearbox    | Rear and belly crush        | Manual shift cuts stretch; the auto box starts cutting throttle    |
+| Steering   | Front-corner crush          | The rack loses authority (up to `systems.steerLoss`)               |
+
+Nothing repairs mid-run. The HUD's damage instrument (bottom cluster) shows
+the 2D car with its crush ring, the crossed-out breakables, and one meter
+per system plus the chassis bar the wreck is called on.
 
 ## Cars and gearboxes
 
