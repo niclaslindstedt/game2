@@ -348,3 +348,54 @@ export function bodySpecFor(car: CarSpec): CarBodySpec {
     colors: { ...COMPACT_BODY.colors, paint: car.color, accent: car.accent },
   };
 }
+
+/** Where the hood camera's eye sits on a given car, in body-local metres
+ * (+z the nose, +x its right side, y from the ground). */
+export type HoodEye = { x: number; y: number; z: number };
+
+/** How far the eye sits above the deck at the base of the windscreen, m,
+ * and how far ahead of that base. Together they are what makes this a view
+ * of the BONNET: high enough over the panel that its far corners fall
+ * inside the frame — a lens skimming the paint projects it as a wall with
+ * no shape to it — and ahead of the screen rather than behind it.
+ *
+ * Behind it is where a driver's eyes really are, and it is the wrong place
+ * for a body with no interior modelled: the near cowl and the screen's own
+ * glass then eat the bottom of the picture, which on a portrait phone (a
+ * frame that opens a long way down — see HEAD.wideAim) is a third of it,
+ * and any ray steeper than those finds a floor the shell does not draw from
+ * inside. Ahead of the screen every downward ray lands on bonnet. The
+ * head's own travel (camera.ts) is bounded well inside the rise, so no
+ * landing drops the eye into the panel. */
+const EYE_RISE = 0.38;
+const EYE_AHEAD = 0.06;
+/** How far the eye sits left of the centreline, m. A driver is not sat in
+ * the middle of the car, and that asymmetry is most of what separates a
+ * seat from a lens taped to the middle of the scuttle. Kept to a hint of
+ * the real seat offset, because the road still has to read as centred. */
+const EYE_SIDE = 0.16;
+
+/** The body's top surface at a point along the car, m — the loft the
+ * profile stations describe, sampled between the two that bracket `z`. */
+function deckAt(body: CarBodySpec, z: number): number {
+  const p = body.profile;
+  for (let i = 1; i < p.length; i += 1) {
+    // Stations run nose (+z) → tail (−z), so the bracket closes when the
+    // station's z drops below the sample.
+    if (p[i].z <= z) {
+      const span = p[i - 1].z - p[i].z;
+      const t = span > 0 ? (p[i - 1].z - z) / span : 0;
+      return p[i - 1].topY + (p[i].topY - p[i - 1].topY) * t;
+    }
+  }
+  return p[p.length - 1].topY;
+}
+
+/** The hood camera's mount on a catalog car — read off the car's own
+ * silhouette, so a low sedan seats the shot lower than an upright hatch
+ * does and each one shows its own bonnet. */
+export function hoodEyeFor(car: CarSpec): HoodEye {
+  const body = bodySpecFor(car);
+  const cowl = body.cabin.cowlZ;
+  return { x: -EYE_SIDE, y: deckAt(body, cowl) + EYE_RISE, z: cowl + EYE_AHEAD };
+}

@@ -17,7 +17,7 @@
 export type PlayCamera = "hood" | "close" | "chase" | "far" | "heli" | "top";
 
 export const PLAY_CAMERAS: { id: PlayCamera; label: string; hint: string }[] = [
-  { id: "hood", label: "HOOD", hint: "On the nose — the road rushes at you" },
+  { id: "hood", label: "HOOD", hint: "From the seat, over your own bonnet" },
   { id: "close", label: "CLOSE", hint: "Tight behind the bumper, low and fast" },
   { id: "chase", label: "CHASE", hint: "The arcade rally view: roof height, close behind" },
   { id: "far", label: "FAR", hint: "Stood back — more road, more warning" },
