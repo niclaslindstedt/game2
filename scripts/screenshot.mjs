@@ -383,6 +383,7 @@ await capture(
     await page.waitForTimeout(700);
   },
   {},
+  "load",
   { hasTouch: true, isMobile: true },
 );
 

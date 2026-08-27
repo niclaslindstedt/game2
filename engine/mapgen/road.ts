@@ -6,8 +6,16 @@
 // gravel they push aside piles at the edges, and the whole surface is
 // crowned so water runs off it. Asphalt is laid ON the ground rather than
 // cut into it, so the mat stands proud of the verge with its chippings
-// spilled down the edge — and past the shoulder, on both, a ditch takes
-// the water away.
+// spilled down the edge — and past the shoulder, on both, the ground
+// simply falls away into the country. No ditch: a trench ruled down each
+// side of the road reads as a scar cut by a machine, and it is a trap
+// that swallows a car the moment it puts a wheel wide.
+//
+// R19 — and where the road TURNS it is banked. The whole cross-section
+// rolls into the corner, outside edge proud of the inside, over a runoff
+// long enough that the car settles onto it rather than hitting it. The
+// tilt is applied to the corridor as a whole — mat, shoulder and the
+// ground beside it — because that is how a road is built.
 //
 // One module, three consumers, one shape: the renderer builds the ribbon
 // from these numbers, the terrain field beside the road reads the same
@@ -15,7 +23,7 @@
 // three move together — which is the whole reason it is not three sets of
 // numbers in three files.
 
-import type { Surface } from "./compile.ts";
+import type { BridgeDeck, Surface } from "./compile.ts";
 
 /** The cross-section, in meters unless noted. Lateral positions are given
  * as a fraction of the road's half-width (`t`, 0 at the centerline, 1 at
@@ -53,61 +61,101 @@ export const ROAD_CROSS = {
    * joint, not a step. */
   liftRamp: 14,
 
-  /** Beside the road: a flat shoulder, then the ditch, then the climb back
-   * to the landscape. Distances are from the road EDGE; `depth` is below
-   * the mat's own base. */
+  /** Beside the road: the strip of grubbed, gravel-dusted ground the
+   * traffic and the blade keep bare, then the ground tipping gently away
+   * into whatever the country was doing. Distances are from the road
+   * EDGE; `shoulder` is how far below the mat's own base the bare strip
+   * sits, and `drop` how much further the ground has leaned away by the
+   * time the landscape takes over — a slope a car can run out onto and get
+   * back off, which is the whole difference between a verge and a ditch. */
   verge: {
-    shoulder: 0.25,
-    ditchFrom: 1.4,
-    ditchAt: 3.6,
-    ditchTo: 6.6,
-    depth: 0.85,
+    shoulder: 0.14,
+    bareTo: 1.6,
+    /** Total drop from the shoulder to where the landscape takes over, m.
+     * Small on purpose: the ground lattice beside the road is pinned just
+     * under the ribbon's outer lip, so a verge that keeps falling drags a
+     * step of ground down with it and the tiles beside the road start
+     * showing as blocks. A road sits a little proud of its field; it does
+     * not stand on an embankment down both sides. */
+    drop: 0.24,
   },
 
   /** How far past the road edge the ribbon's own geometry reaches — the
-   * shoulder, the ditch and the outer lip belong to the ROAD mesh, which
+   * shoulder and the grassed slope past it belong to the ROAD mesh, which
    * is sampled every 2 m along the stage, not to the 14 m ground lattice
-   * that could never hold a ditch. Beyond it the landscape takes over. */
-  reach: 7,
+   * that could never hold a road's edge. Beyond it the landscape takes
+   * over. */
+  reach: 6.5,
 } as const;
 
 function sq(v: number): number {
   return v * v;
 }
 
+/** Everything about a piece of road that decides its shape ACROSS the
+ * width. Both the stage's samples and an abandoned branch's satisfy it, so
+ * the physics, the renderer and the preview tooling all ask the same
+ * question of the same object rather than unpacking it into five
+ * positional arguments each. */
+export type RoadShape = {
+  surface: Surface;
+  /** Set on a bridge deck — flat planks or concrete, not a graded road. */
+  deck?: BridgeDeck | null;
+  /** How proud of the ground beside it the mat stands, m. */
+  lift: number;
+  /** R19 — the corner's cross-fall, m per m, signed so the surface tilts
+   * by `-bank * lateral`: positive raises the LEFT edge, which is the
+   * outside of a right-hand turn. */
+  bank?: number;
+  /** R17 — how much of the cross-section is warped flat onto a junction
+   * platform, 0 (open road) to 1 (inside the junction). A junction is one
+   * graded plane: no crown, no camber, no wheel tracks, because two roads
+   * cannot each keep their own and still be one surface. */
+  flat?: number;
+};
+
 /** Which cross-section a sample wears. A ford is flat water and a bridge
  * deck is flat concrete or plank — neither is bladed, rutted, or crowned
  * like a road that gets graded. */
-function shapeOf(surface: Surface, bridge: boolean): "gravel" | "asphalt" | "deck" {
-  if (bridge || surface === "water") return "deck";
-  return surface === "asphalt" ? "asphalt" : "gravel";
+function shapeOf(shape: RoadShape): "gravel" | "asphalt" | "deck" {
+  if (shape.deck != null || shape.surface === "water") return "deck";
+  return shape.surface === "asphalt" ? "asphalt" : "gravel";
+}
+
+/** R19 — how much of the crown survives a bank. A banked corner is not a
+ * crowned road tipped over: the blade takes the crown out and lays the
+ * whole width on one plane, or the inside edge would be a gutter. */
+function crownScale(bank: number, kind: "gravel" | "asphalt" | "deck"): number {
+  const full = Math.max(ROAD_CROSS.crown[kind], 1e-6);
+  return Math.max(0, 1 - Math.abs(bank) / full);
 }
 
 /** Height of the DRIVEN surface at lateral offset `lateral` (m, signed
  * from the centerline), relative to the sample's own elevation — which is
  * the road's height on the crown, so this only ever falls away. Inside the
  * road only; past the edge, `vergeOffset` takes over. */
-export function crossOffset(
-  surface: Surface,
-  bridge: boolean,
-  lateral: number,
-  width: number,
-): number {
-  const shape = shapeOf(surface, bridge);
+export function crossOffset(shape: RoadShape, lateral: number, width: number): number {
+  const kind = shapeOf(shape);
+  const open = 1 - clamp01(shape.flat ?? 0);
+  const bank = (shape.bank ?? 0) * open;
   const half = width / 2;
   const t = Math.min(1, Math.abs(lateral) / half);
-  let y = -ROAD_CROSS.crown[shape] * t * t;
-  const depth = ROAD_CROSS.rut.depth[shape];
+  let y = -ROAD_CROSS.crown[kind] * crownScale(bank, kind) * open * t * t - bank * lateral;
+  const depth = ROAD_CROSS.rut.depth[kind] * open;
   if (depth > 0) {
     // Two tracks, each a soft trough — a hard-edged groove would be a rail
     // the car steers against instead of a line it settles into.
     const from = Math.abs(lateral) - ROAD_CROSS.rut.at * half;
     y -= depth * Math.exp(-sq(from / ROAD_CROSS.rut.width));
   }
-  if (shape === "gravel" && t > ROAD_CROSS.berm.from) {
-    y += ROAD_CROSS.berm.height * ((t - ROAD_CROSS.berm.from) / (1 - ROAD_CROSS.berm.from));
+  if (kind === "gravel" && t > ROAD_CROSS.berm.from) {
+    y += ROAD_CROSS.berm.height * open * ((t - ROAD_CROSS.berm.from) / (1 - ROAD_CROSS.berm.from));
   }
   return y;
+}
+
+function clamp01(v: number): number {
+  return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
 /** How worn the surface is at a lateral offset, 0 (untouched edge) to 1
@@ -126,9 +174,11 @@ export function wearAt(lateral: number, width: number): number {
 }
 
 /** The ground beside the road, relative to the sample's elevation: the
- * mat's edge, the shoulder, the ditch, and the lip where the landscape
- * takes over. `out` is meters past the road EDGE; `lift` is how proud the
- * mat stands there (0 on gravel, up to `asphaltLift` on a paved run). */
+ * mat's edge, the bare shoulder, and the grassed slope tipping away to
+ * where the landscape takes over. `out` is meters past the road EDGE;
+ * `lift` is how proud the mat stands there (0 on gravel, up to
+ * `asphaltLift` on a paved run). There is no ditch (R16) — past the
+ * shoulder the ground simply leans away. */
 export function vergeOffset(out: number, lift: number, edgeY: number): number {
   const v = ROAD_CROSS.verge;
   // Off the mat: the edge falls to the shoulder over the chamfer — a step
@@ -138,83 +188,117 @@ export function vergeOffset(out: number, lift: number, edgeY: number): number {
     const t = out / ROAD_CROSS.chamfer;
     return edgeY + (base - edgeY) * t * t * (3 - 2 * t);
   }
-  if (out <= v.ditchFrom) return base;
-  if (out <= v.ditchAt) {
-    const t = (out - v.ditchFrom) / (v.ditchAt - v.ditchFrom);
-    return base - (lift + v.depth) * (1 - Math.cos(t * Math.PI)) * 0.5;
-  }
-  if (out <= v.ditchTo) {
-    const t = (out - v.ditchAt) / (v.ditchTo - v.ditchAt);
-    const bottom = base - (lift + v.depth);
-    return bottom + (base - bottom) * (1 - Math.cos(t * Math.PI)) * 0.5;
-  }
-  return base;
+  if (out <= v.bareTo) return base;
+  // Past the bare strip the ground breaks over and then flattens into the
+  // field — steepest right off the shoulder, level again by the lip, which
+  // is the shape a graded verge actually settles into and the one that
+  // hands the landscape back a height it can carry on from.
+  const t = clamp01((out - v.bareTo) / (ROAD_CROSS.reach - v.bareTo));
+  return base - v.drop * (1 - (1 - t) * (1 - t));
 }
 
 /** The whole corridor profile in one call: inside the road it is the
  * driven surface, outside it the verge. Distance is SIGNED lateral so the
- * two halves of the road can differ; `width` is the full road width. */
-export function corridorOffset(
-  surface: Surface,
-  bridge: boolean,
-  lateral: number,
-  width: number,
-  lift: number,
-): number {
+ * two halves of the road can differ; `width` is the full road width. The
+ * bank keeps tilting past the edge, because the ground a banked corner is
+ * built on is banked with it. */
+export function corridorOffset(shape: RoadShape, lateral: number, width: number): number {
   const half = width / 2;
   const out = Math.abs(lateral) - half;
-  if (out <= 0) return crossOffset(surface, bridge, lateral, width);
+  if (out <= 0) return crossOffset(shape, lateral, width);
   // A deck has no verge at all — past the parapet is air, and the ground
   // under it is the channel the terrain carved.
-  if (bridge) return -lift - 0.4;
-  return vergeOffset(out, lift, crossOffset(surface, bridge, half, width));
+  if (shape.deck != null) return -shape.lift - 0.4;
+  const bank = (shape.bank ?? 0) * (1 - clamp01(shape.flat ?? 0));
+  const edge = Math.sign(lateral) * half;
+  return (
+    vergeOffset(out, shape.lift, crossOffset(shape, edge, width) + bank * edge) - bank * lateral
+  );
 }
 
-/** R17 — the THROAT of a junction: the flared mouth that joins a side
- * road's mat to the main road's, laid over the strip of verge both roads
- * would otherwise have kept between them. Returned as flat quads in the
- * ground plane (the caller puts them at the junction's grade), so the
- * renderer and the preview tooling draw the same shape.
+/** R17 — how far a point lies past the MAIN road's edge at a junction, m:
+ * negative on the main road's own mat, positive out past it, and null
+ * where the junction has nothing to say about the point.
  *
- * The flare is what makes a junction read as built rather than collided:
- * every side road on earth opens wider where it meets the road it joins,
- * because that is the shape a vehicle turning into it actually needs. */
-export function junctionThroat(junction: {
+ * This is the line every junction is built around. The main road — the
+ * sealed one, which runs straight through — keeps its full width, and the
+ * minor road it meets simply STOPS at that edge, cut at its angle. So the
+ * seam between tarmac and gravel is not a band ruled across the minor
+ * road: it is the main road's own edge, which is what it looks like from a
+ * car and from the air. */
+export function junctionMainEdge(
+  junction: { x: number; z: number; heading: number; width: number; reach: number },
+  x: number,
+  z: number,
+): number | null {
+  const dx = x - junction.x;
+  const dz = z - junction.z;
+  // Along the main road's line, measured BOTH ways: the main road runs
+  // through the junction, so its mat reaches back the way it came as far
+  // as it reaches on toward wherever the branch is going.
+  const along = dx * Math.sin(junction.heading) + dz * Math.cos(junction.heading);
+  if (Math.abs(along) > junction.reach) return null;
+  const across = dx * Math.cos(junction.heading) - dz * Math.sin(junction.heading);
+  return Math.abs(across) - junction.width / 2;
+}
+
+/** R17 — the junction PLATFORM, as a shape and as a plane.
+ *
+ * A built junction is one piece of graded ground: an area around the
+ * meeting point, elongated along the main road because that is the road
+ * that runs through, laid on the main road's own grade. Everything asks
+ * these two functions — the compiler warps the road onto it, the terrain
+ * field puts the ground under it, and the renderer stands the paving on
+ * it — so nothing anywhere near a junction is ever on a surface of its
+ * own invention. */
+export type JunctionPlatform = {
   x: number;
   z: number;
+  y: number;
+  grade: { x: number; z: number };
   heading: number;
-  mouth: number;
+  width: number;
   reach: number;
-}): [number, number][][] {
-  const bx = Math.sin(junction.heading);
-  const bz = Math.cos(junction.heading);
-  const nx = Math.cos(junction.heading);
-  const nz = -Math.sin(junction.heading);
-  // How far back INTO the main road the throat starts: past its
-  // centerline, so the two surfaces meet with no seam anywhere between
-  // them. (`reach` is the main road's half-width plus the flare, so this
-  // is a meter past the middle of it.)
-  const back = junction.reach - 5;
-  /** Half-width the throat has settled to by the time it is just the side
-   * road again. */
-  const settled = junction.mouth - 7;
-  const steps = 5;
-  const at = (t: number): { x: number; z: number; w: number } => {
-    const along = -back + (junction.reach + back) * t;
-    // Eased so the mouth opens as a curve, not a wedge.
-    const w = settled + (junction.mouth - settled) * (1 - t) * (1 - t);
-    return { x: junction.x + bx * along, z: junction.z + bz * along, w };
-  };
-  const quads: [number, number][][] = [];
-  for (let i = 0; i < steps; i++) {
-    const a = at(i / steps);
-    const b = at((i + 1) / steps);
-    quads.push([
-      [a.x + nx * a.w, a.z + nz * a.w],
-      [b.x + nx * b.w, b.z + nz * b.w],
-      [b.x - nx * b.w, b.z - nz * b.w],
-      [a.x - nx * a.w, a.z - nz * a.w],
-    ]);
-  }
-  return quads;
+};
+
+/** How much a point lies inside the platform, 1 in the middle of it to 0
+ * where the two roads have their own cross-sections back. The falloff is
+ * measured on an ellipse — down the main road, and the mat plus a little
+ * across it — so a junction is a place with a shape and not a disc stamped
+ * on the map. The shape is LOPSIDED on purpose: the minor road overlaps
+ * the main one only on the side it leaves toward, and flattening the
+ * camber out of the road for thirty meters in the direction nothing is
+ * happening is just thirty meters of bare road. */
+export function junctionFlat(platform: JunctionPlatform, x: number, z: number): number {
+  const dx = x - platform.x;
+  const dz = z - platform.z;
+  const along = dx * Math.sin(platform.heading) + dz * Math.cos(platform.heading);
+  const across = dx * Math.cos(platform.heading) - dz * Math.sin(platform.heading);
+  const reach = along >= 0 ? platform.reach : platform.reach * 0.42;
+  const d = Math.hypot(along / reach, across / (platform.width * 0.85));
+  // Full inside the core, then off over the last quarter: a junction has
+  // an edge in life too, and a blend that runs for a hundred meters is a
+  // road with no camber for a hundred meters. Hermite, not linear — the
+  // ground reads this, and a crease in the ground is a fan of shading
+  // radiating from the junction on any lit render.
+  const t = clamp01((d - 0.72) / 0.4);
+  return 1 - t * t * (3 - 2 * t);
+}
+
+/** R17 — the gravel DRAG-OUT: how much of the dirt road's surfacing has
+ * been carried onto the sealed one here, 0..1. Every car that turns out of
+ * an unsealed road drops what its tires picked up on the tarmac at the
+ * mouth, and in life that smear is the most obvious thing about a junction
+ * between the two. It belongs to the MOUTH, not to the whole platform —
+ * a tarmac road tan for sixty meters is not a junction, it is a mess. */
+export function junctionDust(platform: JunctionPlatform, x: number, z: number): number {
+  const d = Math.hypot(x - platform.x, z - platform.z) / (platform.width * 1.15);
+  if (d >= 1) return 0;
+  return (1 - d) * (1 - d);
+}
+
+/** The platform's own surface height at a point — the main road's grade,
+ * carried across the whole junction. */
+export function junctionPlatformY(platform: JunctionPlatform, x: number, z: number): number {
+  return platform.y + platform.grade.x * (x - platform.x) + platform.grade.z * (z - platform.z);
 }

@@ -12,7 +12,7 @@
 //   npm run sim -- --length long         # stage length band (default medium)
 //   npm run sim -- --weather storm       # race in rain/storm wind
 //   npm run sim -- --asphalt 0.8         # generator dials, each 0..1:
-//                                        # --elevation --water --trees --asphalt
+//                                        # --elevation --water --trees --asphalt --width
 //   npm run sim -- --json report.json    # machine-readable dump
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -34,7 +34,7 @@ const cars = flag("car") ? [flag("car")] : CARS.map((c) => c.id);
 const weather = flag("weather") ?? "clear";
 // The generator's dials — anything not passed keeps its default position.
 const knobs = {};
-for (const dial of ["elevation", "water", "trees", "asphalt"]) {
+for (const dial of ["elevation", "water", "trees", "asphalt", "width"]) {
   const value = flag(dial);
   if (value !== undefined) knobs[dial] = Number(value);
 }

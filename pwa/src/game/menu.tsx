@@ -75,6 +75,15 @@ export const STAGE_DIALS: {
       { id: "high", label: "HALF", value: 0.5 },
     ],
   },
+  {
+    key: "width",
+    label: "ROAD",
+    stops: [
+      { id: "low", label: "NARROW", value: 0.1 },
+      { id: "mid", label: "RALLY", value: 0.55 },
+      { id: "high", label: "WIDE", value: 1 },
+    ],
+  },
 ];
 
 /** Which stop a knob value sits on — the nearest one, so a value dialled in

@@ -12,8 +12,9 @@ import type { Crossing, SegmentPlan, StageKnobs, StageLength, TurnSeverity } fro
 import { STAGE_RULES as R, knobScale, resolveKnobs } from "./rules.ts";
 import { createStageStream, generateStage } from "./generate.ts";
 import { createRng } from "../lib/prng.ts";
-import { ROAD_CROSS } from "./road.ts";
-import { buildSpur, SPUR_WIDTH, type Spur } from "./spurs.ts";
+import { createLandField } from "./land.ts";
+import { junctionFlat, junctionPlatformY, ROAD_CROSS } from "./road.ts";
+import { buildSpur, type Spur } from "./spurs.ts";
 
 export type Surface = "gravel" | "asphalt" | "water";
 
@@ -21,27 +22,49 @@ export type Surface = "gravel" | "asphalt" | "water";
 export type BridgeDeck = Exclude<Crossing, "ford">;
 
 /** R17 — where the route meets the road it borrows. A junction is a PLACE,
- * not a seam: the two carriageways run into one paved apron, which is what
- * a junction looks like anywhere one has ever been built. */
+ * not a seam. It sits ON the route's centerline, at a corner: the sealed
+ * road — the MAIN road — runs straight through it, made of the route's own
+ * collinear arm on one side and the abandoned branch on the other, and the
+ * gravel road the route turns onto (or off) is the MINOR one, which simply
+ * stops at the main road's edge. Everything inside the platform is one
+ * graded plane, one surface, and no borders. */
 export type RoadJunction = {
-  /** The point the two roads' lines cross. */
+  /** The point on the route's centerline where the two roads meet — the
+   * tangent point of the corner, which is where a surveyor would have put
+   * the junction and where the branch leaves from. */
   x: number;
   z: number;
-  /** Road grade there, m. */
+  /** The platform's grade there, m, and the plane it lies on: the main
+   * road's own slope, carried across the whole junction so both roads and
+   * the ground between them agree to the millimeter. */
   y: number;
-  /** Heading of the branch leaving the junction, radians — the arm the
-   * route does not take. */
+  grade: { x: number; z: number };
+  /** Heading of the MAIN road through the junction, radians — the branch
+   * leaves along it and the route's collinear arm runs back down it. */
   heading: number;
-  /** Inside this distance of the junction, neither road has a verge, a
-   * ditch or an edge line: a junction is a hole cut in both roads' borders
-   * and paved over, which is what makes the two of them one surface. */
-  radius: number;
-  /** Half-width of the throat where it opens onto the main road, m — the
-   * flare a side road's mouth always has... */
-  mouth: number;
-  /** ...and how far along the branch it runs before it is just the branch
-   * again, m. */
+  /** Signed curvature of the MINOR road as it leaves the meeting point on
+   * that same tangent, 1/m. Positive turns toward the main road's right;
+   * the gore between the two opens on that side. */
+  curve: number;
+  /** Full width of both carriageways here, m. */
+  width: number;
+  /** How far along the main road the platform reaches, m. Inside it
+   * neither road has a verge, a camber, an edge line or a wheel track: a
+   * junction is a hole cut in both roads' borders, graded flat and paved
+   * over, which is what makes the two of them one surface. */
   reach: number;
+  /** ...and the radius inside which that flattening applies, m. */
+  radius: number;
+  /** R17 — the GORE NOSE: the pavement carried into the wedge between the
+   * two carriageways where they have just parted, as flat quads on the
+   * platform's plane. Two roads that leave a junction together part over
+   * a couple of dozen meters and leave a wedge of country between them;
+   * where that wedge is narrower than a car it is not an island but a
+   * seam, and a junction whose grass runs to a knife point is the tell
+   * that nobody planned it. Built from the road's OWN samples rather than
+   * from the corner's nominal arc — a stage corner is a run of segments,
+   * and after the first one it is no longer the circle it started as. */
+  gore: [number, number][][];
   /** Arc position on the stage (association / pruning). */
   s: number;
   /** True where the route JOINS the sealed road, false where it leaves. */
@@ -74,6 +97,14 @@ export type TrackSample = {
   /** Signed curvature (1/radius) of the plan the sample sits on, for the
    * bot and the pacenotes; positive means the heading is growing. */
   curvature: number;
+  /** R19 — the corner's cross-fall here, m per m: the road tilts by
+   * `-bank * lateral`, so a right-hand turn (curvature > 0) banks positive
+   * and stands its left, outer edge proud. Rolled in and out over
+   * `bank.runoff` so the car settles onto it. */
+  bank: number;
+  /** R17 — how much this sample is warped flat onto a junction platform,
+   * 0 (open road) to 1 (in the junction). */
+  flat: number;
 };
 
 /** One co-driver call: a turn (or a run of same-direction turns) with its
@@ -376,22 +407,33 @@ const STREAMED_ESCAPE = 460;
  * across two endless sections still merges into one call). */
 function createCompiler(track: Track, rolling: (s: number) => number, paving: Paving): Compiler {
   const cursor: Cursor = { x: 0, z: 0, heading: 0, s: 0, rollS: 0 };
+  /** The bare country the stage is laid across — the branches steer by it
+   * so none of them drives out into a lake (R17). */
+  const land = createLandField(track.seed, track.knobs);
   let openNote: Pacenote | null = null;
   /** Whether the road is sealed right now, and whether the paving field
    * has asked for that to change. The change does not happen where the
    * field asks: it waits for a CORNER to happen at (R17), because that is
    * where one road can meet another instead of merging into it. */
-  let pavedNow = false;
+  // A stage that is sealed from end to end has no junction to arrive
+  // through: it simply starts on the tarmac. Every other stage starts on
+  // gravel and meets its first junction where the field asks for one.
+  let pavedNow = paving.pavedAt(0);
   let flipWanted = false;
+
+  /** The road's PRISTINE heights, before any junction platform warped it
+   * (R17) — kept alongside the samples so a warp pass that overlaps an
+   * earlier one lands in exactly the same place instead of compounding. */
+  const rawY: number[] = [];
 
   /** Junctions found in this pass, waiting for their branches. The branch
    * has to run until it is clear of the stage's country (R17), and how big
    * that country is is only known once the road it belongs to is
    * compiled — so the junction is noted here and the road built below. */
   type Junction = {
-    /** Where the two roads actually MEET: the point the corner's entry and
-     * exit tangents cross, which is the junction a surveyor would have
-     * drawn before either road was built. */
+    /** Where the two roads MEET: a point on the route's own centerline,
+     * at the tangent end of the corner it turns off (or onto) the main
+     * road at. */
     x: number;
     z: number;
     elevation: number;
@@ -408,53 +450,157 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
 
   /** R17 — is this corner one a junction could sit at? A junction is where
    * a road MEETS another; that needs a real turn, neither a kink nor a
-   * hairpin. */
+   * hairpin, and one tight enough that the two carriageways actually PART
+   * rather than peel away from each other over fifty meters of tangent. */
   const isJunctionTurn = (plan: SegmentPlan): boolean => {
     if (plan.kind !== "turn" || !plan.radius || plan.feature !== "none") return false;
     const angle = plan.length / plan.radius;
-    return angle >= R.paving.junctionAngle.min && angle <= R.paving.junctionAngle.max;
+    if (angle < R.paving.junctionAngle.min || angle > R.paving.junctionAngle.max) return false;
+    return partedAt(plan.radius) <= R.paving.junctionParts * track.width;
+  };
+
+  /** How far along the main road the two carriageways still overlap: the
+   * arc the corner has to run before it has carried the route clear of the
+   * main road's mat. It is the length of the junction, and it is what says
+   * whether a corner is one at all. */
+  const partedAt = (radius: number): number => {
+    const cos = Math.max(-1, Math.min(1, 1 - track.width / radius));
+    return radius * Math.acos(cos);
+  };
+
+  /** ...and the platform built over it, clamped so a junction stays a
+   * junction and not a car park. */
+  const platformReach = (radius: number): number =>
+    Math.max(
+      R.junction.reach.min,
+      Math.min(R.junction.reach.max, partedAt(radius) * R.junction.platform),
+    );
+
+  /** How far into the corner the route's own centerline is still on the
+   * MAIN road's mat — which is where the surface changes, because that is
+   * where the car actually leaves the tarmac. */
+  const onMainRun = (radius: number): number => {
+    const half = track.width / 2;
+    const cos = Math.max(-1, Math.min(1, 1 - half / radius));
+    return radius * Math.acos(cos);
   };
 
   /** Note the junction a surface change happens at. The route arrives on
    * one road and turns onto the other; the arm it does NOT take carries
    * straight on through the crossing, and that is what the branch is: the
-   * sealed road's own line, continued. Joining the tarmac, that line runs
-   * BACK from the junction (the road the tarmac came from); leaving it,
-   * it runs ON (the road the route abandons). */
+   * MAIN road's own line, continued. The meeting point is the corner's
+   * tangent point — the START of the turn where the route leaves the
+   * sealed road, its END where the route joins one — so the junction sits
+   * ON the road rather than out at the intersection of two tangents, which
+   * on a sweeping corner is a hundred meters away in a field. */
   const noteJunction = (plan: SegmentPlan, at: Cursor, joining: boolean): void => {
     const radius = plan.radius ?? 1;
-    const angle = plan.length / radius;
-    // Tangents of a circular arc meet this far from either end of it.
-    const offset = Math.min(R.paving.maxJunctionOffset, radius * Math.tan(angle / 2));
-    const headingOut = at.heading + (plan.dir ?? 1) * angle;
-    const x = at.x + Math.sin(at.heading) * offset;
-    const z = at.z + Math.cos(at.heading) * offset;
+    const dir = plan.dir ?? 1;
+    // The main road's line: the tangent the route shares with the branch.
+    // Joining, that is the tangent at the END of the corner and it points
+    // BACK the way the tarmac came; leaving, the tangent at its start.
+    const heading = joining ? at.heading + Math.PI : at.heading;
     const y = rolling(at.rollS);
+    const slope = (rolling(at.rollS + 2) - rolling(at.rollS - 2)) / 4;
+    // The minor road leaves the meeting point on that same tangent and
+    // curves away. Traced from the junction OUTWARD, a corner the route
+    // drove backwards through bends the other way.
+    const curve = (joining ? -dir : dir) / radius;
+    const reach = platformReach(radius);
     junctions.push({
-      x,
-      z,
+      x: at.x,
+      z: at.z,
       elevation: y,
-      slope: 0,
-      heading: joining ? headingOut + Math.PI : at.heading,
+      slope: joining ? -slope : slope,
+      heading,
       joining,
       s: at.s,
     });
-    // The junction proper: the two roads' borders are cut away around the
-    // crossing and the gap between their mats is paved, so what meets is
-    // one piece of road with a flared mouth — not two ribbons that happen
-    // to touch, each still wearing its own kerb.
-    const reach = track.width / 2 + 6;
     track.junctions.push({
-      x,
-      z,
+      x: at.x,
+      z: at.z,
       y,
-      heading: joining ? headingOut + Math.PI : at.heading,
-      radius: reach + 5,
-      mouth: SPUR_WIDTH / 2 + 7,
+      // The platform lies on the MAIN road's grade, so both carriageways
+      // and the ground between them are one plane.
+      grade: {
+        x: Math.sin(heading) * slope * (joining ? -1 : 1),
+        z: Math.cos(heading) * slope * (joining ? -1 : 1),
+      },
+      heading,
+      curve,
+      width: track.width,
       reach,
+      radius: reach,
+      gore: [],
       s: at.s,
       joining,
     });
+  };
+
+  /** R17 — cut the gore nose for a junction, from the road that actually
+   * got built. Walks the MINOR road away from the meeting point, tracks
+   * its near edge against the main road's edge line, and paves the wedge
+   * between them from where they touch out to where the gap is wide
+   * enough to be an island. `step` is +1 where the minor road runs on from
+   * the junction and -1 where it runs back into it. */
+  const cutGore = (junction: RoadJunction, at: number, step: 1 | -1): void => {
+    const all = track.samples;
+    const turn = Math.sign(junction.curve);
+    const half = junction.width / 2;
+    const bx = Math.sin(junction.heading);
+    const bz = Math.cos(junction.heading);
+    const nx = Math.cos(junction.heading);
+    const nz = -Math.sin(junction.heading);
+    const edge = (i: number): { along: number; across: number } | null => {
+      const sample = all[i];
+      if (!sample) return null;
+      // The minor road's edge on the side the gore opens.
+      const rx = Math.cos(sample.heading);
+      const rz = -Math.sin(sample.heading);
+      const dx = sample.x - rx * half * turn - junction.x;
+      const dz = sample.z - rz * half * turn - junction.z;
+      return { along: dx * bx + dz * bz, across: (dx * nx + dz * nz) * turn };
+    };
+    const point = (along: number, across: number): [number, number] => [
+      junction.x + bx * along + nx * across * turn,
+      junction.z + bz * along + nz * across * turn,
+    ];
+    let prev: { along: number; across: number } | null = null;
+    const quads: [number, number][][] = [];
+    for (let k = 0; k < Math.ceil(R.junction.reach.max / SAMPLE_STEP); k++) {
+      const here = edge(at + k * step);
+      if (!here) break;
+      if (prev && prev.across < half && here.across >= half) {
+        // The touching point, interpolated — the gore has to start where
+        // the two edges actually cross, not at the next sample along.
+        const t = (half - prev.across) / (here.across - prev.across);
+        prev = {
+          along: prev.along + (here.along - prev.along) * t,
+          across: half,
+        };
+      }
+      if (prev && prev.across >= half) {
+        if (here.across - half > R.junction.goreNose) {
+          const t = (R.junction.goreNose + half - prev.across) / (here.across - prev.across);
+          const along = prev.along + (here.along - prev.along) * t;
+          quads.push([
+            point(prev.along, half),
+            point(prev.along, prev.across),
+            point(along, R.junction.goreNose + half),
+            point(along, half),
+          ]);
+          break;
+        }
+        quads.push([
+          point(prev.along, half),
+          point(prev.along, prev.across),
+          point(here.along, here.across),
+          point(here.along, half),
+        ]);
+      }
+      prev = here;
+    }
+    junction.gore = quads;
   };
 
   /** Build the branch every noted junction earns, now that the road they
@@ -484,10 +630,29 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
           junction.s,
           junction.joining ? "entry" : "exit",
           box,
+          land,
+          track.width,
         ),
       );
     }
     junctions.length = 0;
+    // R17 — and the first stretch of every branch lies on its junction's
+    // platform, exactly like the road it leaves: same plane, no crown, no
+    // border, so the two carriageways are one piece of ground.
+    for (const spur of track.spurs) {
+      const platform = track.junctions.find(
+        (j) => j.s === spur.atS && j.joining === (spur.end === "entry"),
+      );
+      if (!platform) continue;
+      for (const sample of spur.samples) {
+        if (sample.s > R.junction.reach.max * 1.5) break;
+        const flat = junctionFlat(platform, sample.x, sample.z);
+        if (flat <= 0) continue;
+        sample.flat = flat;
+        sample.elevation =
+          sample.elevation * (1 - flat) + junctionPlatformY(platform, sample.x, sample.z) * flat;
+      }
+    }
   };
 
   /** The mat's joints. A sealed section starts and ends with a lip of new
@@ -521,39 +686,129 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
     }
   };
 
+  /** R19 — the cross-fall a corner of this radius is built with, before
+   * the runoff smooths it. Zero on anything that is not a graded road: a
+   * bridge deck is level and a ford is standing water. */
+  const bankRate = (curvature: number, sample: TrackSample): number => {
+    if (sample.deck != null || sample.surface === "water") return 0;
+    const tightness = Math.abs(curvature) * R.bank.pivotRadius;
+    if (tightness <= 0) return 0;
+    const ceiling = R.bank.max[sample.surface === "asphalt" ? "asphalt" : "gravel"];
+    return Math.sign(curvature) * ceiling * (tightness / (1 + tightness));
+  };
+
+  /** R19 — roll the cross-fall in and out. A road does not change its
+   * cross-section in a step: the blade walks the bank up over a runoff and
+   * back down again, which is also what stops a short corner getting the
+   * full tilt it never had room to build. A triangular filter over the
+   * runoff is exactly that walk, and it costs one pass. */
+  const bankRunoff = (from: number): void => {
+    const all = track.samples;
+    const reach = Math.max(1, Math.round(R.bank.runoff / 2 / SAMPLE_STEP));
+    const start = Math.max(0, from - reach);
+    const raw = all.slice(start).map((sample) => sample.bank);
+    for (let i = start; i < all.length; i++) {
+      let sum = 0;
+      let weight = 0;
+      for (let k = -reach; k <= reach; k++) {
+        const at = i + k - start;
+        if (at < 0 || at >= raw.length) continue;
+        const w = 1 - Math.abs(k) / (reach + 1);
+        sum += raw[at] * w;
+        weight += w;
+      }
+      all[i].bank = weight > 0 ? sum / weight : 0;
+    }
+  };
+
+  /** R17 — warp the road onto its junctions' platforms. Inside a junction
+   * the two carriageways are one graded plane: the crown, the camber and
+   * the wheel tracks come out (`flat`) and the centerline eases onto the
+   * plane the main road's grade defines. Run off the PRISTINE heights, so
+   * a pass that overlaps an earlier one lands in the same place. */
+  const platformWarp = (from: number): void => {
+    if (track.junctions.length === 0) return;
+    const all = track.samples;
+    const reach = Math.ceil(R.junction.reach.max / SAMPLE_STEP) + 1;
+    const start = Math.max(0, from - reach);
+    for (let i = start; i < all.length; i++) {
+      const sample = all[i];
+      let flat = 0;
+      let plane = 0;
+      for (const junction of track.junctions) {
+        if (Math.abs(junction.s - sample.s) > R.junction.reach.max * 2) continue;
+        const w = junctionFlat(junction, sample.x, sample.z);
+        if (w <= flat) continue;
+        flat = w;
+        plane = junctionPlatformY(junction, sample.x, sample.z);
+      }
+      sample.flat = flat;
+      sample.elevation = rawY[i] * (1 - flat) + plane * flat;
+    }
+  };
+
   const append = (plans: SegmentPlan[]): void => {
     const b = track.bounds;
     const firstNew = track.samples.length;
     for (const plan of plans) {
-      track.segments.push(plan);
-      const steps = Math.max(1, Math.round(plan.length / SAMPLE_STEP));
-      const step = plan.length / steps;
-      const curvature = plan.kind === "turn" && plan.radius ? (plan.dir ?? 1) / plan.radius : 0;
       // R15/R17 — the paving field asks for a surface change; the change
-      // waits here for a corner to happen at.
+      // waits here for a corner to happen at (R17), and then falls at the
+      // JUNCTION's own edge — where the route's line actually leaves the
+      // main road's mat — rather than at the segment boundary.
       if (paving.pavedAt(cursor.s) !== pavedNow) flipWanted = true;
+      let flipAt = -1;
+      let joinAtEnd: SegmentPlan | null = null;
       if (flipWanted && isJunctionTurn(plan)) {
-        pavedNow = !pavedNow;
         flipWanted = false;
-        noteJunction(plan, cursor, pavedNow);
+        const onMain = Math.min(plan.length, onMainRun(plan.radius ?? 1));
+        if (pavedNow) {
+          // Turning OFF the sealed road: the junction is the corner's
+          // start, and the tarmac carries the route until its own line is
+          // clear of the main road's mat.
+          noteJunction(plan, cursor, false);
+          flipAt = onMain;
+        } else {
+          // Turning ONTO it: the route is on the tarmac from where its
+          // line first reaches the mat, and the junction is at the corner's
+          // end, which the cursor only knows once the corner is walked.
+          flipAt = plan.length - onMain;
+          joinAtEnd = plan;
+        }
       }
-      const lipAt = plan.feature === "jump" ? (plan.featureEnd ?? -1) : -1;
+      // R20 — a tarmac section is a public road the rally borrows, and
+      // nobody builds a launch ramp into one. A lip that would have landed
+      // on sealed road is simply not built, and the segment says so.
+      const sealedJump = plan.feature === "jump" && pavedNow && flipAt < 0;
+      const built: SegmentPlan = sealedJump
+        ? { ...plan, feature: "none", featureStart: undefined, featureEnd: undefined }
+        : plan;
+      track.segments.push(built);
+      const steps = Math.max(1, Math.round(built.length / SAMPLE_STEP));
+      const step = built.length / steps;
+      const curvature = built.kind === "turn" && built.radius ? (built.dir ?? 1) / built.radius : 0;
+      const lipAt = built.feature === "jump" ? (built.featureEnd ?? -1) : -1;
       const rollS0 = cursor.rollS;
 
       // The co-driver's book: a turn opens a call (or deepens the open one
       // when it continues in the same direction with no straight between);
       // a straight closes it.
-      if (plan.kind === "turn" && plan.dir && plan.radius) {
-        const angle = plan.length / plan.radius;
-        const severity = plan.severity ?? "soft";
-        if (openNote && openNote.dir === plan.dir) {
-          openNote.endS = cursor.s + plan.length;
+      if (built.kind === "turn" && built.dir && built.radius) {
+        const angle = built.length / built.radius;
+        const severity = built.severity ?? "soft";
+        if (openNote && openNote.dir === built.dir) {
+          openNote.endS = cursor.s + built.length;
           openNote.angle += angle;
           if (SEVERITY_RANK[severity] > SEVERITY_RANK[openNote.severity]) {
             openNote.severity = severity;
           }
         } else {
-          openNote = { s: cursor.s, endS: cursor.s + plan.length, dir: plan.dir, severity, angle };
+          openNote = {
+            s: cursor.s,
+            endS: cursor.s + built.length,
+            dir: built.dir,
+            severity,
+            angle,
+          };
           track.pacenotes.push(openNote);
         }
       } else {
@@ -563,6 +818,7 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
       for (let i = 0; i < steps; i++) {
         const uPrev = i * step;
         const u = uPrev + step;
+        if (flipAt >= 0 && uPrev < flipAt && u >= flipAt) pavedNow = !pavedNow;
         if (curvature !== 0) cursor.heading += curvature * step;
         cursor.x += Math.sin(cursor.heading) * step;
         cursor.z += Math.cos(cursor.heading) * step;
@@ -572,37 +828,54 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
         // leaves. That sample sits at full lip height; past it the road is
         // back at grade, which is the drop that throws the car.
         const jump = lipAt >= 0 && uPrev < lipAt && u >= lipAt;
-        const dip = fordDip(plan, u, rollS0, rolling);
-        const deckY = bridgeDeck(plan, u, rollS0, rolling);
+        const dip = fordDip(built, u, rollS0, rolling);
+        const deckY = bridgeDeck(built, u, rollS0, rolling);
         // A crossing is a ford OR a deck, never both: the wheels go through
         // the water or ride over it (R13).
-        const crossed = inCrossing(plan, u);
-        const bridge = crossed && isBridge(plan);
+        const crossed = inCrossing(built, u);
+        const bridge = crossed && isBridge(built);
         const ford = crossed && !bridge;
         const paved = !ford && pavedNow;
-        track.samples.push({
+        const sample: TrackSample = {
           x: cursor.x,
           z: cursor.z,
           heading: cursor.heading,
           elevation:
             dip ??
             deckY ??
-            rolling(cursor.rollS) + (jump ? (plan.lipHeight ?? 2) : segmentElevation(plan, u)),
+            rolling(cursor.rollS) + (jump ? (built.lipHeight ?? 2) : segmentElevation(built, u)),
           surface: ford ? "water" : paved ? "asphalt" : "gravel",
-          deck: bridge ? ((plan.crossing ?? "timber") as BridgeDeck) : null,
+          deck: bridge ? ((built.crossing ?? "timber") as BridgeDeck) : null,
           lift: 0,
           jump,
           s: cursor.s,
           curvature,
-        });
+          bank: 0,
+          flat: 0,
+        };
+        sample.bank = bankRate(curvature, sample);
+        track.samples.push(sample);
+        rawY.push(sample.elevation);
         if (cursor.x < b.minX) b.minX = cursor.x;
         if (cursor.x > b.maxX) b.maxX = cursor.x;
         if (cursor.z < b.minZ) b.minZ = cursor.z;
         if (cursor.z > b.maxZ) b.maxZ = cursor.z;
       }
+      if (joinAtEnd) noteJunction(joinAtEnd, cursor, true);
     }
     track.length = cursor.s;
     paveLift(firstNew);
+    bankRunoff(firstNew);
+    platformWarp(firstNew);
+    // The gore is cut from the road on BOTH sides of the meeting point, so
+    // it waits until the corner it belongs to has actually been walked.
+    const fromS = firstNew * SAMPLE_STEP - R.junction.reach.max;
+    for (const junction of track.junctions) {
+      if (junction.s < fromS) continue;
+      const at = Math.round(junction.s / SAMPLE_STEP) - 1;
+      if (at < 1 || at >= track.samples.length - 1) continue;
+      cutGore(junction, at, junction.joining ? -1 : 1);
+    }
     buildForks();
   };
 
@@ -616,7 +889,7 @@ function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs): Track {
     samples: [],
     step: SAMPLE_STEP,
     length: 0,
-    width: R.roadWidth,
+    width: knobScale(knobs.width, R.roadWidth),
     bounds: { minX: 0, maxX: 0, minZ: 0, maxZ: 0 },
     pacenotes: [],
     endless,

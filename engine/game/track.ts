@@ -55,8 +55,10 @@ export type TrackFix = {
   /** Road slope dy/ds under the car, interpolated the same way. */
   slope: number;
   /** Cross-slope under the car, dy per meter to its RIGHT: the camber that
-   * sheds a car toward the outside of the road, and the wheel track that
-   * holds it once it drops into one. */
+   * sheds a car toward the outside of the road, the wheel track that holds
+   * it once it drops into one, and R19's bank, which on a corner is the
+   * biggest of the three — a banked turn leans the car into the corner and
+   * pulls it away from the outside edge. */
   slopeLat: number;
 };
 
@@ -103,13 +105,12 @@ export function locate(track: Track, x: number, z: number, hint: number): TrackF
   // of the two tracks every car before it wore into the gravel. The verge
   // beyond the edge belongs to the terrain, so the shape is read at the
   // edge at furthest.
-  const bridge = s.deck !== null;
   const onRoad = Math.max(-halfRoad, Math.min(halfRoad, lateral));
-  const cross = crossOffset(s.surface, bridge, onRoad, track.width);
+  const cross = crossOffset(s, onRoad, track.width);
   const probe = 0.5;
   const slopeLat =
-    (crossOffset(s.surface, bridge, Math.min(halfRoad, onRoad + probe), track.width) -
-      crossOffset(s.surface, bridge, Math.max(-halfRoad, onRoad - probe), track.width)) /
+    (crossOffset(s, Math.min(halfRoad, onRoad + probe), track.width) -
+      crossOffset(s, Math.max(-halfRoad, onRoad - probe), track.width)) /
     (2 * probe);
   return {
     index: best,

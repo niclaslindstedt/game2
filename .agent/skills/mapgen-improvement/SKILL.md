@@ -73,6 +73,7 @@ and the sim are the units of judgement, not the plan JSON.**
    npm run track -- --count 12       # a wider look
    npm run track -- --water 1 --elevation 1   # what a dial actually does
    npm run track -- --only render    # skip the schematic
+   npm run track -- --zoom junctions --span 45   # one close-up per junction
    ```
 
    Two pictures, and they answer different questions:
@@ -120,9 +121,10 @@ read as country somebody laid a road across. The rules that carry that weight:
   from a kilometer up. Every branch runs off the map (R17); where it goes is
   the player's business.
 - **Roads MEET, they do not merge.** A junction is planned: it happens at a
-  corner, one road runs straight through it, the other turns onto it, both
-  borders are cut away and the gap is paved. Two ribbons that touch
-  tangentially read as a rendering accident, because that is what they are.
+  corner, ON the road, one road runs straight through it, the other turns
+  onto it, both borders are cut away and the whole crossing is one graded
+  plane. Two ribbons that touch tangentially read as a rendering accident,
+  because that is what they are.
 - **A corner has an inside.** If the grass across it is faster than the road
   around it, the corner does not exist (R14).
 
@@ -188,8 +190,9 @@ undoes it without knowing it was ever a rule.
   been wrong on the next seed more than once — and one that looked fine on the
   schematic has been wrong in the world more than once.
 - Zoom in on the things the whole-stage frame cannot resolve (a junction, a
-  bridge, a guarded hairpin): render with the bounds narrowed around one, and
-  LOOK at it at a few meters per pixel.
+  bridge, a guarded hairpin) and LOOK at them at a few meters per pixel.
+  `--zoom junctions` already does it for junctions; for anything else, pass
+  `renderStage` a track whose `bounds` you have narrowed around the feature.
 - `docs/track-generator.md` updated if any rule moved (the verbatim list).
 - Both `make sim` tables (before/after) in the PR — the `commit` skill's
   contract for generator changes.
