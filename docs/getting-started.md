@@ -18,7 +18,7 @@ The **car** is picked on any of those pages, turning on its stand. **Time of day
 | Key       | Action                        |
 | --------- | ----------------------------- |
 | ↑ / W     | Throttle                      |
-| ↓ / S     | Brake                         |
+| ↓ / S     | Brake — and reverse, stopped  |
 | ← → / A D | Steer                         |
 | Space     | Handbrake — unsticks the rear |
 | L. Shift  | Booster — finite, no refills  |
@@ -30,7 +30,7 @@ The **car** is picked on any of those pages, turning on its stand. **Time of day
 | B         | Back to the track (off-road)  |
 | R         | Restart stage                 |
 
-**Phone (touch):** one half of the screen is the wheel — touch anywhere and drag sideways to steer. The rim has weight — it turns toward your thumb rather than snapping to it, so a thumb wobble is not a slide and a slight steer is a real option, while a committed shove takes it to full lock in about a quarter second. A blue arc fills the rim from 12 o'clock to the marker, showing how much lock the car has. The other half is the pedal: touching it is GAS, drag up to BRAKE, drag down to burn the BOOSTER (finite — it never refills), drag right for the handbrake (DRIFT — unsticks the rear for tight curves). Which half steers, and which drag does what, are set in Options → Controls; each direction holds one action, so assigning a taken one swaps them. The manual car adds − / + gear buttons. Tap the **minimap** for the in-race menu (resume, restart, main menu). Works in portrait and landscape — the HUD re-flows, and in portrait the booster stands up beside the dials.
+**Phone (touch):** one half of the screen is the wheel — touch anywhere and drag sideways to steer. The rim has weight — it turns toward your thumb rather than snapping to it, so a thumb wobble is not a slide and a slight steer is a real option, while a committed shove takes it to full lock in about a quarter second. A blue arc fills the rim from 12 o'clock to the marker, showing how much lock the car has. The other half is the pedal: touching it is GAS, drag down to BRAKE, drag up to burn the BOOSTER (finite — it never refills), drag right for the handbrake (DRIFT — unsticks the rear for tight curves). Pulling the thumb back is the car being reined in, pushing it away is the car being sent — the gesture means what it looks like. Keep the brake held once the car has stopped and it backs up, so a nose in a tree is something you drive out of. Which half steers, and which drag does what, are set in Options → Controls; each direction holds one action, so assigning a taken one swaps them. The manual car adds − / + gear buttons. Tap the **minimap** for the in-race menu (resume, restart, main menu). Works in portrait and landscape — the HUD re-flows, and in portrait the booster stands up beside the dials.
 
 ### Options
 

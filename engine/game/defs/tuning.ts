@@ -13,6 +13,11 @@ export const TUNING = {
   /** Countdown before control is handed over, seconds. */
   countdown: 3,
 
+  /** Speed under which a coasting car counts as STOPPED and is snapped to
+   * rest, m/s. It is what keeps a parked car from creeping down a slope,
+   * and the threshold reverse hands the car back at. */
+  standstill: 0.05,
+
   steering: {
     /** Below this speed the wheel's authority ramps in from zero — you
      * cannot pivot a parked car, m/s. Lower = livelier launches. */
@@ -455,5 +460,28 @@ export const TUNING = {
     downAt: 0.55,
     /** Throttle cut while a manual shift engages, seconds. */
     shiftCut: 0.15,
+  },
+
+  /** Backing up. Reverse is a RECOVERY, not a way to drive the stage: it
+   * exists so a nose in a tree or a car parked across a ditch is something
+   * the player digs out of instead of waiting out a respawn. Deliberately
+   * slow — fast enough to be quick about it, far too slow to be a tactic. */
+  reverse: {
+    /** Top speed backwards, m/s (~29 km/h). */
+    top: 8,
+    /** Acceleration backwards, m/s². About a third of first gear: it takes
+     * a beat to get going, which is what keeps a mis-timed brake at a
+     * hairpin from becoming a reversal. */
+    accel: 3.5,
+    /** Forward speed at or below which a held brake stops slowing the car
+     * and starts backing it out, m/s. Above walking pace the pedal is
+     * unambiguously still the brake. */
+    engageBelow: 0.6,
+    /** How hard the drivetrain stops a car that is rolling BACKWARDS with
+     * nothing asking it to, m/s². Rolling drag alone is tuned for a car
+     * with an engine holding it up against it — released at reverse top
+     * speed it would coast backwards for the better part of a minute. At
+     * this rate the pedal coming up stops the car in about a second. */
+    coastStop: 6,
   },
 } as const;

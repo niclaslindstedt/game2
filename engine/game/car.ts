@@ -244,7 +244,22 @@ export function stepGrounded(
   const surfacePower = T.surfaces.power[ctx.surface];
 
   car.steer = input.steer;
-  car.braking = input.brake > 0.2 && Math.abs(car.u) > 3;
+  // Brake lights, so only a car being SLOWED lights them — a car backing out
+  // of a ditch is under power, not under the brake.
+  car.braking = input.brake > 0.2 && car.u > 3;
+  // Which of its two jobs the brake pedal is doing this tick: it slows a car
+  // that is still rolling forward, and once it has stopped one the same pedal
+  // backs it out. Throttle always wins — gas is the way out of reverse, with
+  // no gear to select first.
+  //
+  // The manoeuvre LATCHES, and stays latched through the pedal coming up
+  // until the car is back at a stop. That is what separates "the driver put
+  // this car in reverse" from "something threw it backwards": a rebound off a
+  // cliff face is also negative `u`, and it belongs to the collision, which
+  // gets to keep every bit of it.
+  car.reversing =
+    input.throttle === 0 &&
+    (input.brake > 0 ? car.u <= T.reverse.engageBelow : car.reversing && car.u < -T.standstill);
 
   stepGearbox(spec, car, input, ctx.t, events);
 
@@ -254,10 +269,17 @@ export function stepGrounded(
   // extra rotation and the slip itself turns the nose — the tail leads and
   // you catch it on the counter — both fading in with the slide so that
   // grip and slide are one continuous response, not two modes.
-  const speedFactor = clamp(car.u / T.steering.deadSpeed, 0, 1);
+  // Everything below reads the SPEED, not the signed velocity: a car rolling
+  // backwards — reversing out of a ditch, or sliding back down a climb it
+  // could not carry — is moving, and a wheel with no authority at all is how
+  // you get stuck twice. Going backwards it answers the other way round,
+  // which is `backwards` below, applied once to the lock.
+  const speed = Math.abs(car.u);
+  const backwards = car.u < 0 ? -1 : 1;
+  const speedFactor = clamp(speed / T.steering.deadSpeed, 0, 1);
   // A bent rack answers late and short: steering damage bleeds authority.
   const rack = 1 - T.collision.systems.steerLoss * car.damage.systems.steering;
-  const steerGain = (spec.steerRate / (1 + car.u / T.steering.fadeSpeed)) * speedFactor * rack;
+  const steerGain = (spec.steerRate / (1 + speed / T.steering.fadeSpeed)) * speedFactor * rack;
   // The lateral grip the tires have to spend, and the turn the wheel is
   // asking them for: the handbrake unsticks the rear by lowering the
   // ceiling, so the same lock asks far more of what is left.
@@ -272,7 +294,7 @@ export function stepGrounded(
   const askedSlip = D.angleSpan * asked;
   const sat = clamp(1 - (Math.abs(car.slip) - askedSlip) / D.angleBand, 0, 1);
   const deepening = Math.sign(input.steer) === -Math.sign(car.slip) && car.slip !== 0;
-  const steerTerm = input.steer * (steerGain + spec.driftYaw * speedFactor * asked);
+  const steerTerm = input.steer * backwards * (steerGain + spec.driftYaw * speedFactor * asked);
   // The slip's self-rotation scales with steering commitment, so holding
   // into the slide sustains it, releasing lets grip straighten the car, and
   // counter-steer exits fast. An unconditional slip term would be a
@@ -285,7 +307,7 @@ export function stepGrounded(
    * power's oversteer off while the driver is still asking for the angle. */
   const intoSlide = clamp(input.steer * -Math.sign(car.slip), 0, 1);
   const handbrakeYaw = input.handbrake
-    ? Math.sign(input.steer) * T.grip.handbrakeYaw * speedFactor
+    ? Math.sign(input.steer) * backwards * T.grip.handbrakeYaw * speedFactor
     : 0;
   // RWD power oversteer: the driven rear keeps feeding the slide — but only
   // once the wheel stops asking for the angle. Steered into the slide the
@@ -334,7 +356,19 @@ export function stepGrounded(
   const damagePower = 1 - T.collision.systems.powerLoss * car.damage.systems.engine;
   const accel = engineAccel(spec, car) * input.throttle * surfacePower * shiftCut * damagePower;
   car.u += accel * dt;
-  car.u -= spec.brake * input.brake * Math.sign(car.u) * dt;
+  if (car.reversing) {
+    // Backing out. The brake's own retardation is off while this runs, or the
+    // two would fight over the same pedal and the car would sit still. Once
+    // the pedal comes up the drivetrain gathers the car back to a stop —
+    // rolling drag alone is tuned for a car with an engine holding it up
+    // against it, and would let a released reverse coast on for a minute.
+    car.u =
+      input.brake > 0
+        ? Math.max(-T.reverse.top, car.u - T.reverse.accel * input.brake * dt)
+        : Math.min(0, car.u + T.reverse.coastStop * dt);
+  } else {
+    car.u -= spec.brake * input.brake * Math.sign(car.u) * dt;
+  }
   car.u -= surfaceDrag * car.u * dt;
   if (ctx.surface === "nature") {
     // The rough-ground cap: open nature is fast but never road-fast.
@@ -342,7 +376,10 @@ export function stepGrounded(
   }
   // Grade: gravity along the road — the hills push back (or push on).
   car.u -= 9.8 * T.hills.gravityAlong * ctx.slope * dt;
-  if (Math.abs(car.u) < 0.05 && input.throttle === 0) car.u = 0;
+  // The standstill snap, which is also what stops a car creeping on a slope.
+  // It has to stand down while the car is backing out, or reverse never gets
+  // past its own first tick.
+  if (Math.abs(car.u) < T.standstill && input.throttle === 0 && !car.reversing) car.u = 0;
 
   // ── Boost ────────────────────────────────────────────────────────────────
   // The finite booster: raw thrust on top of engine torque, ignoring gearing
@@ -541,6 +578,7 @@ export function stepAirborne(
   car.boosting = false; // no thrust in the air — the velocity is committed
   car.steer = input.steer;
   car.braking = false;
+  car.reversing = false; // nothing to back out of in the air
 
   car.yawRate += input.steer * T.air.yawAuthority * dt;
   // A bounce is not a flight: the car is settling onto the ground it has

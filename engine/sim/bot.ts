@@ -26,6 +26,15 @@ export type BotProfile = {
   hardCurvature: number;
   /** Margin over the corner speed that triggers braking, m/s. */
   brakeMargin: number;
+  /** Seconds pinned against something with the throttle buried before the
+   * bot stops pushing and backs out of it instead. Under the engine's own
+   * wedge rescue (TUNING.offTrack.stuck.after) on purpose: reversing is
+   * what a driver tries first, and the respawn is what happens when it
+   * turns out the car is pinned both ways. */
+  reverseAfter: number;
+  /** Reverse speed that ends the manoeuvre, m/s. Reached it, the car is off
+   * whatever it was against and has room for another run at the line. */
+  reverseSpeed: number;
 };
 
 /** The default rally brain: quick hands, plans ~3 s ahead, drifts hairpins. */
@@ -36,6 +45,8 @@ export const RALLY_BOT: BotProfile = {
   planHorizon: 3.0,
   hardCurvature: 1 / 30,
   brakeMargin: 2.5,
+  reverseAfter: 0.8,
+  reverseSpeed: 4,
 };
 
 /** Compute this step's input for the current state. Pure and stateless —
@@ -114,20 +125,39 @@ export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): Car
   let reset = false;
   if (state.offRoad) {
     // Out in the wild: cruise back toward the road at a pace the nature
-    // surface can steer at, and give up cleanly when the excursion is
-    // hopeless — wedged against something solid, or carried too far out
-    // for driving back to beat the reset.
+    // surface can steer at, and give up cleanly on an excursion that has
+    // carried the car too far out for driving back to beat the reset.
+    // Being WEDGED is no longer one of those — that is what reverse is for.
     throttle = car.u < 16 ? 0.8 : 0;
     brake = car.u > 22 ? 0.7 : 0;
-    const outFor = state.t - state.offRoadSince;
-    const wedged = car.u < 1.5 && outFor > 1.5;
-    reset = !car.airborne && (wedged || outFor > 8);
+    reset = !car.airborne && state.t - state.offRoadSince > 8;
   }
   if (car.airborne) {
     // Committed: line the nose up with the travel direction for the landing.
     steer = clamp(-car.slip * 2, -1, 1);
     throttle = 0;
     brake = 0;
+  }
+
+  // Wedged. A driver does not sit against a trunk with the throttle buried
+  // waiting to be rescued — they back off it and take another run at the
+  // line, and so does this one. The manoeuvre latches on the car's own
+  // reverse state so a single wedged tick cannot flicker it: once it is
+  // backing out it keeps backing out until the car is properly moving, by
+  // which point it is off the thing and has room to aim.
+  //
+  // The wheel stays straight. Getting OFF the obstacle is the whole job;
+  // where to point is the next run's problem, and it has the room to decide
+  // it by then. Reversing counts as asking to move (step.ts), so a car that
+  // is pinned backwards too still reaches the engine's rescue on time.
+  const wedgedFor = state.t - state.stuck.since;
+  const backingOut =
+    !car.airborne &&
+    (wedgedFor > profile.reverseAfter || (car.reversing && car.u > -profile.reverseSpeed));
+  if (backingOut) {
+    throttle = 0;
+    brake = 1;
+    steer = 0;
   }
 
   // Manual box: shift by the same speed thresholds the auto box uses.

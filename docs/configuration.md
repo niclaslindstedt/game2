@@ -19,7 +19,7 @@ Scandinavian Flick has no runtime configuration surface (no accounts, no server)
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `VITE_BASE`                        | Deploy base path: `/` (default), `/preview/`, `/branch/`. Drives the SW scope, the manifest identity, and every emitted URL.                                   |
 | `VITE_PWA_IGNORE_PATHS`            | Comma-separated absolute paths the built service worker must NOT claim. Only the root slot sets it (`/preview/,/branch/`) so nested slots own their own pages. |
-| `GITHUB_SHA` / `GITHUB_RUN_NUMBER` | Provided by CI; baked into the build label the HUD corner and the update toast show.                                                                           |
+| `GITHUB_SHA` / `GITHUB_RUN_NUMBER` | Provided by CI; baked into the build label the HUD corner and the new-build card show.                                                                         |
 
 ## The deploy slots
 

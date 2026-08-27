@@ -165,10 +165,13 @@ export type TouchSettings = {
   boost: PedalDir;
 };
 
+/** Brake is DOWN because that is what the gesture already means: a thumb
+ * pulled back toward the player is the car being reined in, the same way a
+ * thumb pushed away is the car sent forward. Boost takes the push. */
 export const DEFAULT_TOUCH: TouchSettings = {
   steerSide: "left",
-  brake: "up",
-  boost: "down",
+  brake: "down",
+  boost: "up",
   handbrake: "right",
 };
 
@@ -217,6 +220,19 @@ const SETTINGS_KEY = "scandi-flick-options";
 
 /** Merge stored options over the defaults one group at a time, so a build
  * that adds a toggle keeps every choice already made around it. */
+/** The pedal gestures shipped with brake on the push and boost on the pull,
+ * which is backwards: pulling the thumb back is what reining a car in feels
+ * like. Every player who has ever opened OPTIONS has the old pair stored,
+ * and they did not choose it — a default is not a preference. So exactly
+ * that pair, and only it, is turned round on load; any other arrangement is
+ * a real choice and is left alone. */
+function migratePedalDirs(touch: TouchSettings): void {
+  if (touch.brake === "up" && touch.boost === "down") {
+    touch.brake = "down";
+    touch.boost = "up";
+  }
+}
+
 export function loadSettings(): Settings {
   const settings: Settings = {
     hud: { ...DEFAULT_SETTINGS.hud },
@@ -235,6 +251,7 @@ export function loadSettings(): Settings {
     if (parsed.video) Object.assign(settings.video, parsed.video);
     if (parsed.keys) Object.assign(settings.keys, parsed.keys);
     if (parsed.touch) Object.assign(settings.touch, parsed.touch);
+    migratePedalDirs(settings.touch);
     if (parsed.developer === true) settings.developer = true;
   } catch {
     /* storage unavailable — the defaults are a perfectly good game */

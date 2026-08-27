@@ -78,6 +78,7 @@ function freshCar(): CarState {
     boosting: false,
     steer: 0,
     braking: false,
+    reversing: false,
     damage: {
       zones: new Array(DAMAGE_ZONES).fill(0),
       belly: 0,
@@ -238,7 +239,11 @@ function crash(state: GameState, events: GameEvent[]): boolean {
  * covers real ground, so only genuinely going nowhere accumulates. */
 function stepStuck(state: GameState, input: CarInput, events: GameEvent[]): void {
   const car = state.car;
-  const asking = input.throttle > 0.5 && !car.airborne;
+  // Backing out counts as asking. A car pinned against a trunk in front and
+  // a boulder behind is the wedge this rescue exists for, and a driver — or
+  // a bot — working the brake to get out of it must not stop the clock by
+  // trying: without this the reverse attempt is unbounded.
+  const asking = (input.throttle > 0.5 || car.reversing) && !car.airborne;
   const moved = Math.hypot(car.x - state.stuck.x, car.z - state.stuck.z);
   if (!asking || moved > T.offTrack.stuck.radius) {
     state.stuck.x = car.x;

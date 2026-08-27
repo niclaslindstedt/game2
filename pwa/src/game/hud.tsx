@@ -30,6 +30,8 @@ export type HudSnapshot = {
   time: number;
   speedKmh: number;
   gear: number;
+  /** True while the brake is backing the car out — the gear reads R. */
+  reversing: boolean;
   gearbox: "auto" | "manual";
   /** Tachometer reading, 0..1 of the redline. */
   rpm: number;
@@ -875,7 +877,7 @@ export function Hud({ snap, flashes, input, show, touchLayout, onPause, onCamera
         <div className="hud-cluster">
           {show.tachometer && <Tachometer rpm={snap.rpm} />}
           <div className={`hud-gearbox ${snap.shiftUp ? "hud-gearbox-shift" : ""}`}>
-            <span className="hud-gear">{snap.gear + 1}</span>
+            <span className="hud-gear">{snap.reversing ? "R" : snap.gear + 1}</span>
             <span className="hud-shiftlight">{snap.gearbox === "auto" ? "AUTO" : "SHIFT"}</span>
           </div>
           <span className="hud-speed-num">{Math.round(snap.speedKmh)}</span>

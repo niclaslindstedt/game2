@@ -387,6 +387,32 @@ await capture(
   { hasTouch: true, isMobile: true },
 );
 
+// The pedal thumb, held on the anchor: the three gesture hints around it are
+// the only place the player is ever told which drag does what, so the shot
+// exists to check they say the right words in the right directions.
+await capture(
+  "shot-touch-pedals",
+  { width: 390, height: 844 },
+  async (page) => {
+    await racing(page);
+    const zone = await page.locator(".hud-zone-right").boundingBox();
+    await page.mouse.move(zone.x + zone.width * 0.5, zone.y + zone.height * 0.55);
+    await page.mouse.down();
+    await page.waitForTimeout(400);
+  },
+  {},
+  "load",
+  { hasTouch: true, isMobile: true },
+);
+
+// Reverse: the brake held once the car has stopped, so the gear reads R and
+// the speedo is climbing again with the car going the other way.
+await capture("shot-reverse", { width: 1280, height: 720 }, async (page) => {
+  await racing(page);
+  await page.keyboard.down("ArrowDown");
+  await page.waitForTimeout(4000);
+});
+
 // Deep into a short stage, portrait: the minimap's route, the car on it, and
 // a gauge with a real fraction of the stage filled in.
 await capture(
@@ -560,6 +586,19 @@ for (const tab of ["HUD", "AUDIO", "VIDEO", "CONTROLS"]) {
       { menu: "1" },
     );
   }
+}
+
+// The new-build card, over the menu and over a run: it wears the menu's
+// chrome, and both are places it can turn up. `?update=1` stands it up —
+// a real waiting worker needs a deploy to land on a device that already had
+// the app, which no capture pass can arrange.
+for (const [name, viewport, params, script] of [
+  ["shot-update-card", { width: 1280, height: 720 }, { menu: "1" }, menuUp],
+  ["shot-update-card-portrait", { width: 390, height: 844 }, { menu: "1" }, menuUp],
+  ["shot-update-card-landscape", { width: 844, height: 390 }, { menu: "1" }, menuUp],
+  ["shot-update-card-race", { width: 1280, height: 720 }, {}, racing],
+]) {
+  await capture(name, viewport, script, { ...params, update: "1" });
 }
 
 // The developer menu, and the campaign with its ladder opened up.
