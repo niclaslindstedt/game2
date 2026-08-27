@@ -206,6 +206,10 @@ export type Environment = {
   setFogRange: (near: number, far: number) => void;
   /** Current tint for the car's baked vertex lighting. */
   carTint: () => THREE.Color;
+  /** Whether the run's light is gone and the car has its lights on. */
+  lampsLit: () => boolean;
+  /** How filthy the car is, 0..1 — both beams fade under a caked lens. */
+  setGrime: (level: number) => void;
   update: (state: GameState, camera: THREE.Camera, dt: number) => void;
   dispose: () => void;
 };
@@ -403,6 +407,29 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   headlight.visible = false;
   scene.add(headlight, headlight.target);
 
+  // ...and the tail lamps' own wash on the ground behind. A tail light is a
+  // MARKER, not a driving light — it exists to be seen, not to see by — so it
+  // is a fraction of the beam ahead and reaches a few car lengths at most:
+  // enough that the road behind a car at night is red, never enough to light
+  // the way out of a corner backwards. It comes on with the headlights,
+  // because that is the switch it is wired to.
+  const taillight = new THREE.SpotLight(0xff2814, 0, 18, 1, 0.85, 1.5);
+  taillight.visible = false;
+  scene.add(taillight, taillight.target);
+
+  /** How filthy the car is, 0..1 — pushed in by the renderer, which is where
+   * the dirt is accumulated. The lenses are under the same coat as the
+   * paint, so both beams fade as the stage goes on. */
+  let grime = 0;
+  /** What a fully caked lens costs each beam, 0..1. The tail lamp loses more
+   * of what little it has: the front is a deep reflector behind glass, the
+   * rear a flat lens right above the wheel that throws the gravel. */
+  const HEAD_GRIME = 0.45;
+  const TAIL_GRIME = 0.6;
+  const setGrime = (level: number): void => {
+    grime = level < 0 ? 0 : level > 1 ? 1 : level;
+  };
+
   // Lightning: a broad cold bloom high on the dome, plus a light surge.
   const boltMat = new THREE.MeshBasicMaterial({
     map: glowMap,
@@ -484,6 +511,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     haloMat.opacity = preset.haloOpacity;
     halo.visible = preset.haloOpacity > 0.01;
     headlight.visible = preset.headlights;
+    taillight.visible = preset.headlights;
     flash = 0;
     boltMat.opacity = 0;
     bolt.visible = false;
@@ -505,14 +533,17 @@ export function createEnvironment(scene: THREE.Scene): Environment {
       cloud.pivot.position.z = Math.cos(cloud.angle) * cloud.radius;
     }
 
-    // Headlights track the nose.
+    // Headlights track the nose, tail lamps the tail.
     if (preset.headlights) {
       const car = state.car;
       const fwdX = Math.sin(car.heading);
       const fwdZ = Math.cos(car.heading);
-      headlight.intensity = 260;
+      headlight.intensity = 260 * (1 - HEAD_GRIME * grime);
       headlight.position.set(car.x + fwdX * 1.4, car.y + 0.8, car.z + fwdZ * 1.4);
       headlight.target.position.set(car.x + fwdX * 32, car.y - 1.5, car.z + fwdZ * 32);
+      taillight.intensity = 34 * (1 - TAIL_GRIME * grime);
+      taillight.position.set(car.x - fwdX * 1.6, car.y + 0.55, car.z - fwdZ * 1.6);
+      taillight.target.position.set(car.x - fwdX * 8, car.y - 1, car.z - fwdZ * 8);
     }
 
     // Thunder: a storm builds toward a strike, the strike floods the light
@@ -558,6 +589,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     cloudMat.dispose();
     cloudBaseMat.dispose();
     headlight.dispose();
+    taillight.dispose();
     sunLight.dispose();
     hemi.dispose();
   };
@@ -568,6 +600,8 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     setRange,
     setFogRange,
     carTint: () => new THREE.Color(preset.carTint),
+    lampsLit: () => preset.headlights,
+    setGrime,
     update,
     dispose,
   };

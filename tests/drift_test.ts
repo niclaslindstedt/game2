@@ -20,10 +20,18 @@ import {
 
 const STRAIGHT: SegmentPlan[] = [{ kind: "straight", length: 1500, feature: "none" }];
 
-function game(carId = "compact"): GameState {
+function game(carId = "compact", surface?: "gravel" | "asphalt"): GameState {
   // A slide carries the car tens of meters sideways; widen the test road so
   // the handling is measured, not the off-road respawn.
-  const track = { ...compileTrack(0, STRAIGHT), width: 220 };
+  const base = compileTrack(0, STRAIGHT);
+  const track = {
+    ...base,
+    width: 220,
+    // The paving is the generator's to place, so a surface comparison has to
+    // seal the straight itself. The bank goes with it: a dead-flat road is
+    // the only one on which the two surfaces differ by nothing else.
+    samples: surface ? base.samples.map((s) => ({ ...s, surface, bank: 0 })) : base.samples,
+  };
   return createGame({ seed: 0, carId, skipCountdown: true, track });
 }
 
@@ -248,5 +256,39 @@ describe("rear-wheel drive", () => {
     run(state, {}, 1.2);
     expect(state.car.drifting).toBe(false);
     expect(Math.abs(state.car.slip)).toBeLessThan(0.15);
+  });
+});
+
+// The wheel is not a switch, and a surface is not one number. Both of these
+// are what a player means by "the steering feels wrong on tarmac": a lock
+// that arrives in a single tick, and a sealed road that lets the car hang
+// out at the same rally angle gravel does.
+describe("the wheel, and what the surface does with it", () => {
+  it("takes a beat to reach the lock the driver asked for", () => {
+    const state = game();
+    upToSpeed(state, 8);
+    // One tick of full lock is not full lock: the rack (and the hands on it)
+    // have weight, so turn-in builds instead of arriving.
+    run(state, { throttle: 1, steer: 1 }, TUNING.dt);
+    expect(state.car.steer).toBeGreaterThan(0);
+    expect(state.car.steer).toBeLessThan(0.2);
+    // ...and it does get all the way there, well inside a corner.
+    run(state, { throttle: 1, steer: 1 }, 0.6);
+    expect(state.car.steer).toBeGreaterThan(0.95);
+  });
+
+  it("breaks away at a smaller angle on tarmac than on gravel", () => {
+    const held = { throttle: 0.35, steer: 1 } as const;
+    const loose = game("compact", "gravel");
+    const sealed = game("compact", "asphalt");
+    for (const state of [loose, sealed]) {
+      upToSpeed(state, 10);
+      run(state, held, 2.5);
+    }
+    // Same car, same lock, same pace: the sealed road holds the nose in
+    // line where the loose one lets the tail come round.
+    expect(Math.abs(sealed.car.slip)).toBeLessThan(Math.abs(loose.car.slip) * 0.7);
+    // And it is not simply slower — the grip is spent carrying speed.
+    expect(sealed.car.u).toBeGreaterThan(loose.car.u);
   });
 });

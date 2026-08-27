@@ -81,6 +81,20 @@ export const TARMAC_SMOKE = {
   spread: 1.2,
 };
 
+/** A cloud made of TWO things. Ground thrown off a wheel is never one
+ * color: the wild's verge is grass torn up with the earth under it, and
+ * what sells it is that the grains are individually one or the other —
+ * mostly green with dark clods through it — rather than every grain being
+ * the average of the two, which is just a duller green. */
+export type DustTint = {
+  /** The tone most of the grains take. */
+  base: number;
+  /** The minority tone mixed in grain by grain. */
+  fleck: number;
+  /** What fraction of the grains take the fleck, 0..1. */
+  fleckMix: number;
+};
+
 export type Dust = {
   points: THREE.Points;
   /** `vx`/`vz` seed every particle with a base world velocity (the car's
@@ -89,7 +103,7 @@ export type Dust = {
     x: number,
     y: number,
     z: number,
-    color: number,
+    color: number | DustTint,
     count: number,
     spread: number,
     vx?: number,
@@ -126,14 +140,16 @@ export function createDust(style: DustStyle = GRAVEL_DUST): Dust {
     x: number,
     y: number,
     z: number,
-    color: number,
+    color: number | DustTint,
     count: number,
     spread: number,
     vx = 0,
     vz = 0,
   ): void => {
-    tint.set(color);
+    const mix = typeof color === "number" ? null : color;
+    if (!mix) tint.set(color as number);
     for (let n = 0; n < count; n++) {
+      if (mix) tint.set(Math.random() < mix.fleckMix ? mix.fleck : mix.base);
       const i = cursor;
       cursor = (cursor + 1) % POOL;
       positions[i * 3] = x + (Math.random() - 0.5) * 0.6;

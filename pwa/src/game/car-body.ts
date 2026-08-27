@@ -477,9 +477,9 @@ function buildDetails(
   b.box(0, lightY - 0.13, nose.z, nose.half * 1.05, 0.09, 0.06, trim);
 
   // Taillights: one red bar each side of the tail cap.
-  const tailY = tail.topY - 0.14;
-  b.box(-tail.half * 0.55, tailY, tail.z, tail.half * 0.6, 0.13, 0.07, 0xc4231b);
-  b.box(tail.half * 0.55, tailY, tail.z, tail.half * 0.6, 0.13, 0.07, 0xc4231b);
+  for (const lamp of tailLamps(spec)) {
+    b.box(lamp.x, lamp.y, lamp.z, lamp.width, lamp.height, 0.07, 0xc4231b);
+  }
 
   if (spec.mirrors !== false) {
     const cowl = sampleProfile(spec.profile, spec.cabin.cowlZ);
@@ -669,6 +669,23 @@ function buildWheel(spec: CarBodySpec): THREE.BufferGeometry[] {
     );
   }
   return geos;
+}
+
+/** Where the tail lamps sit in car space, one per side. The lens boxes and
+ * the glow laid over them (car-mesh.ts) read the SAME anchor, so a change to
+ * the tail's shape moves the lamp and its light together instead of leaving
+ * a red smudge floating off the corner of a restyled car. */
+export function tailLamps(
+  spec: CarBodySpec,
+): { x: number; y: number; z: number; width: number; height: number }[] {
+  const tail = spec.profile[spec.profile.length - 1];
+  return [-1, 1].map((side) => ({
+    x: side * tail.half * 0.55,
+    y: tail.topY - 0.14,
+    z: tail.z,
+    width: tail.half * 0.6,
+    height: 0.13,
+  }));
 }
 
 export function buildCarBody(spec: CarBodySpec): CarBodyParts {

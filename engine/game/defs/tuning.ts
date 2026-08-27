@@ -26,6 +26,14 @@ export const TUNING = {
      * steerRate / (1 + u / this), m/s. Higher = twitchier at speed,
      * lower = more straight-line stability. */
     fadeSpeed: 20,
+    /** How fast the LOCK ITSELF moves toward what the driver is asking for,
+     * 1/s. The rack has weight and so do the hands on it: a car whose front
+     * wheels snap to full lock in one tick answers a flick before the body
+     * has begun to lean, which reads as a cursor rather than a car. Small
+     * enough to be felt as turn-in taking a beat, large enough that a
+     * counter-steer still catches a slide. It is the LOCK that lags, not the
+     * yaw — the steady-state corner is exactly the one it always was. */
+    rackRate: 9,
     /** How much the slip's self-rotation acts with the wheel CENTRED,
      * 0..1, rising linearly to 1 at full lock. This is the "commitment"
      * that lets a held wheel sustain a slide, a centred wheel gather the
@@ -262,6 +270,20 @@ export const TUNING = {
      * rally car on a country road: ask hard enough and it goes sideways,
      * just on smoking rubber instead of flying gravel. */
     grip: { gravel: 1.0, asphalt: 1.35, water: 0.55, nature: 0.7 },
+    /** WHERE the tires let go, as a multiple of the slide's slip angles
+     * (`TUNING.drift.angleSpan` and its fade band). A surface is not one
+     * number: the peak force above says how HARD it holds, this says how
+     * far sideways it has to be pushed to give up, and the two run
+     * opposite ways. Loose gravel's breakaway sits a long way out — a rally
+     * car has to be properly sideways before the tires let go, and the big
+     * angle is what cuts down through the marbles to the firm surface
+     * under them. A sealed road peaks a few degrees off straight and falls
+     * away past it: it holds harder than gravel ever will and it hates
+     * being sideways, so the same corner is DRIVEN round rather than hung
+     * out, and overdoing it is a short, smoky snap rather than a rally
+     * angle carried to the exit. This is the number that stops a paved
+     * sweeper being taken at a gravel attitude and full pace. */
+    breakaway: { gravel: 1.0, asphalt: 0.55, water: 1.2, nature: 1.1 },
     /** Throttle effectiveness per surface. */
     power: { gravel: 1.0, asphalt: 1.08, water: 0.7, nature: 0.8 },
     /** Rough ground caps pace where gearing cannot: above this speed the

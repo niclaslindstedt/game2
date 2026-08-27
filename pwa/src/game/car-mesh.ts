@@ -10,10 +10,28 @@ import * as THREE from "three";
 import { clamp } from "../lib/util.ts";
 import type { CarSpec, GameEvent, GameState } from "@engine";
 
-import { buildCarBody } from "./car-body.ts";
+import { buildCarBody, tailLamps } from "./car-body.ts";
 import { createCarDamage } from "./car-damage.ts";
 import { createCarDirt } from "./car-dirt.ts";
 import { bodySpecFor } from "./car-styles.ts";
+import { glowTexture } from "./textures.ts";
+
+/** The tail lamps' own light: a red bloom laid over each lens so the lamp
+ * reads as SWITCHED ON rather than as a red panel. The car is fullbright and
+ * takes the time of day as a tint (renderer.ts), which is right for paint and
+ * wrong for a lamp — a lamp is the one thing on the body that gets brighter
+ * as the light goes, not darker. Additive, so it survives the tint underneath
+ * it. */
+const LAMP_GLOW = 0xff2a14;
+/** How far the bloom spreads past the lens, as a multiple of the lens size. */
+const LAMP_SPREAD = 3.4;
+/** Bloom strength with the lights off (daylight) and on (dusk, night). */
+const LAMP_DAY = 0.22;
+const LAMP_NIGHT = 0.85;
+/** How much of the bloom a fully caked lens swallows, 0..1. A stage's worth
+ * of gravel on the glass is the reason rally cars carry lamp pods and
+ * somebody wipes them at every service. */
+const LAMP_GRIME = 0.6;
 
 /** Front-wheel visual steer: radians of wheel angle at full lock... */
 const WHEEL_STEER_LOCK = 0.55;
@@ -32,6 +50,12 @@ export type CarVisual = {
   debris: THREE.Group;
   update: (state: GameState, dt: number) => void;
   onEvents: (state: GameState, events: GameEvent[]) => void;
+  /** Whether the run's light is gone — the tail lamps burn harder when it
+   * is. Pushed from the environment, which owns that decision. */
+  setLights: (on: boolean) => void;
+  /** How filthy the car has got, 0..1 — the environment dims its beams by
+   * it, because the dirt is on the glass too. */
+  grime: () => number;
   dispose: () => void;
 };
 
@@ -42,6 +66,36 @@ export function buildCar(spec: CarSpec): CarVisual {
   group.add(body.group);
   const dirt = createCarDirt(body.group);
   const damage = createCarDamage(body);
+
+  // The lamp blooms ride the SPRUNG body, so they squat and rebound with the
+  // panel they are stuck to instead of hovering where the tail used to be.
+  const lampMap = glowTexture();
+  const lampMat = new THREE.MeshBasicMaterial({
+    map: lampMap,
+    color: LAMP_GLOW,
+    transparent: true,
+    opacity: LAMP_DAY,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const lampGeos: THREE.BufferGeometry[] = [];
+  for (const lamp of tailLamps(bodySpec)) {
+    const geo = new THREE.PlaneGeometry(lamp.width * LAMP_SPREAD, lamp.height * LAMP_SPREAD * 1.5);
+    const glow = new THREE.Mesh(geo, lampMat);
+    // The tail cap faces −z in car space; the bloom sits just off the lens.
+    glow.position.set(lamp.x, lamp.y, lamp.z - 0.05);
+    glow.rotation.y = Math.PI;
+    body.chassis.add(glow);
+    lampGeos.push(geo);
+  }
+  let lit = false;
+  const setLights = (on: boolean): void => {
+    lit = on;
+  };
+  /** The bloom, dimmed by whatever the run has thrown at the lens. */
+  const shineLamps = (): void => {
+    lampMat.opacity = (lit ? LAMP_NIGHT : LAMP_DAY) * (1 - LAMP_GRIME * dirt.level());
+  };
 
   const length = bodySpec.profile[0].z - bodySpec.profile[bodySpec.profile.length - 1].z;
   const blob = new THREE.Mesh(
@@ -100,6 +154,7 @@ export function buildCar(spec: CarSpec): CarVisual {
     }
 
     dirt.update(state, dt);
+    shineLamps();
     damage.update(state, dt);
 
     // Blob shadow: pinned to the ground under the car, lying on its slope,
@@ -124,9 +179,21 @@ export function buildCar(spec: CarSpec): CarVisual {
     body.dispose();
     blob.geometry.dispose();
     (blob.material as THREE.MeshBasicMaterial).dispose();
+    for (const geo of lampGeos) geo.dispose();
+    lampMat.dispose();
+    lampMap.dispose();
   };
 
-  return { group, shadow, debris: damage.debris, update, onEvents: damage.onEvents, dispose };
+  return {
+    group,
+    shadow,
+    debris: damage.debris,
+    update,
+    onEvents: damage.onEvents,
+    setLights,
+    grime: dirt.level,
+    dispose,
+  };
 }
 
 /** Ground height under the car. Out in the wild the road sample the car is

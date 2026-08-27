@@ -25,6 +25,10 @@ type DirtTarget = {
 
 export type CarDirt = {
   update: (state: GameState, dt: number) => void;
+  /** How filthy the car is, 0..1 — read by anything that has to answer to
+   * the state of the paint rather than just draw it (the lamps dim under a
+   * caked lens). */
+  level: () => number;
 };
 
 // Dried gravel-dust tan rather than dark wet mud: against the saturated
@@ -98,5 +102,5 @@ export function createCarDirt(root: THREE.Group): CarDirt {
     }
   };
 
-  return { update };
+  return { update, level: () => dirt };
 }

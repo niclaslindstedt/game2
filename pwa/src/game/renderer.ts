@@ -18,7 +18,8 @@ import {
   type VideoSettings,
 } from "./settings.ts";
 import { buildCar, type CarVisual } from "./car-mesh.ts";
-import { createDust, TARMAC_SMOKE, TIRE_SMOKE } from "./dust.ts";
+import { createDust, TARMAC_SMOKE, TIRE_SMOKE, type DustTint } from "./dust.ts";
+import { biomeFor } from "./biome.ts";
 import { createEnvironment } from "./environment.ts";
 import { createFumes } from "./fumes.ts";
 import { createRain } from "./rain.ts";
@@ -32,6 +33,25 @@ import { buildWorld, type World } from "./world.ts";
  * instead of ending the world on a visible straight line. */
 const MAP_FOG_NEAR = 0.85;
 const MAP_FOG_FAR = 1.75;
+
+/** Dry grit: the loose stuff lying on top of a graded road. */
+const GRIT = 0xb29268;
+/** Water, thrown as a blue sheet. */
+const SPRAY = 0x4fa0f0;
+/** Tire smoke — boiled off the rubber, so it is the one cloud in the game
+ * that has nothing to do with the ground under the car. */
+const SMOKE = 0xd8d5cf;
+/** Off the road there is turf on top of the earth, and a wheel brings up
+ * both: mostly torn grass with dark clods of the dirt under it. The green
+ * is the biome's own meadow taken a shade down — a blade in the air is not
+ * lit like the field it came out of — and the clods are earth, the one tone
+ * the ground palette has no name for, because nothing is that color until
+ * something digs it up. */
+const WILD_DUST: DustTint = {
+  base: new THREE.Color(biomeFor().ground.grass).multiplyScalar(0.86).getHex(),
+  fleck: 0x4a3520,
+  fleckMix: 0.28,
+};
 
 export type GameRenderer = {
   setGame: (state: GameState) => void;
@@ -115,6 +135,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         }
       }
     });
+    // A lamp is the one thing on the car the failing light makes BRIGHTER,
+    // so it is switched, not tinted.
+    car?.setLights(environment.lampsLit());
     (dust.points.material as THREE.PointsMaterial).color.copy(tint);
     (smoke.points.material as THREE.PointsMaterial).color.copy(tint);
     (fumes.points.material as THREE.PointsMaterial).color.copy(tint);
@@ -202,18 +225,35 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     setConditions(state);
   };
 
+  /** What a wheel throws where, by the surface the engine says it is on.
+   * The road's is one tone of dry grit; the WILD's is two, because a verge
+   * is grass with earth under it — the wheel tears the turf and both come
+   * up together, mostly green with dark clods through it. */
+  const groundDust = (surface: GameState["surface"]): number | DustTint => {
+    if (surface === "water") return SPRAY;
+    if (surface === "nature") return WILD_DUST;
+    return GRIT;
+  };
+
   const onEvents = (state: GameState, events: GameEvent[]): void => {
     const c = state.car;
     const fx = fxScale();
     for (const ev of events) {
       if (ev.type === "landing") {
         chase.kick(ev.clean ? 0.25 : 0.5);
-        dust.spawn(c.x, c.y + 0.2, c.z, 0xb29268, Math.round((ev.clean ? 14 : 26) * fx), 4);
+        dust.spawn(
+          c.x,
+          c.y + 0.2,
+          c.z,
+          groundDust(state.surface),
+          Math.round((ev.clean ? 14 : 26) * fx),
+          4,
+        );
       } else if (ev.type === "splash") {
         chase.kick(0.2);
-        dust.spawn(c.x, c.y + 0.3, c.z, 0x4fa0f0, Math.round(30 * fx), 5);
+        dust.spawn(c.x, c.y + 0.3, c.z, SPRAY, Math.round(30 * fx), 5);
       } else if (ev.type === "takeoff") {
-        dust.spawn(c.x, c.y + 0.1, c.z, 0xb29268, Math.round(10 * fx), 3);
+        dust.spawn(c.x, c.y + 0.1, c.z, groundDust(state.surface), Math.round(10 * fx), 3);
       } else if (ev.type === "respawn") {
         chase.kick(0.3);
       } else if (ev.type === "impact") {
@@ -264,7 +304,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     if (fx > 0 && !c.airborne && dustClock > (sealed ? TARMAC_SMOKE.every : 0.03)) {
       dustClock = 0;
       const cloud = sealed ? smoke : dust;
-      const color = state.surface === "water" ? 0x4fa0f0 : sealed ? 0xd8d5cf : 0xb29268;
+      const color = sealed ? SMOKE : groundDust(state.surface);
       // Smoke is boiled off the tire and left behind; grit is thrown by it.
       // So the wake it inherits is gentler, and it spreads instead of arcing.
       const wake = sealed ? 0.12 : 0.35;
@@ -353,6 +393,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     wayHomeArrow.group.visible = driving;
     if (driving) wayHomeArrow.update(state, chase.camera, dt);
     chase.update(state, dt);
+    environment.setGrime(car?.grime() ?? 0);
     environment.update(state, chase.camera, dt);
     const cam = chase.camera.position;
     if (fx > 0) {

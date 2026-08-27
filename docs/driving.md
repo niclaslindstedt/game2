@@ -32,9 +32,16 @@ one continuous response rather than two modes.
   (`driftYaw`) and the slip starts turning the nose itself — sustained by
   steering INTO the slide, so releasing the wheel stops feeding it and
   counter-steer both cuts the deepening and steers the catch.
+- **The lock has weight.** The wheel is not a switch: the commanded lock
+  eases toward what the driver is asking for at `TUNING.steering.rackRate`,
+  and everything above reads that, not the raw input. Turn-in builds over a
+  beat instead of arriving in a tick — the steady-state corner is exactly
+  the one it always was, but the car answers like something with mass on
+  the front axle rather than a cursor.
 - **The wheel commands the angle.** Every force that deepens a slide fades
   as the slip approaches the angle this much lock is asking for
-  (`angleSpan × slide`, over a band `angleBand` wide). The setpoint moves
+  (`angleSpan × breakaway × slide`, over a band `angleBand` wide, both
+  scaled by the surface — see below). The setpoint moves
   with the wheel, so full lock is a deep drift, half lock a shallower one,
   and a centred wheel hands the car back. At 119 km/h the compact answers
   a lock sweep like this — no step in it anywhere:
@@ -125,26 +132,36 @@ Time of day is presentation only; weather is the lever that reaches the physics 
 
 ## Hills
 
-Generated stages roll (`STAGE_RULES.elevation` — long climbs, medium rollers, surface bumps; grades live on straights and flatten through corners). Gravity acts along the grade (`TUNING.hills.gravityAlong`): climbs cost speed, descents give it back, and a crest taken flat-out can go light. Ground height under the car interpolates between centerline samples, so grades stay smooth at any speed.
+Generated stages roll (`STAGE_RULES.elevation` — long climbs, medium rollers, surface bumps; grades live on straights and flatten through corners). Gravity acts along the grade (`TUNING.hills.gravityAlong`): climbs cost speed, descents give it back, and a crest taken flat-out can go light. Ground height under the car interpolates between centerline samples, so grades stay smooth at any speed — and ACROSS the road it is the same corridor profile the road mesh is drawn from (R16 in [track-generator.md](track-generator.md)), carried out past the mat into the shoulder and the ground leaning away from it, so a car putting two wheels wide rides the verge it can see instead of hovering over it.
 
 ## Surfaces
 
-| Surface     | Effect                                                                                                                                                                                                     |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Gravel      | The baseline: full power, honest grip, dust off the rear when sideways                                                                                                                                     |
-| **Asphalt** | A third more lateral grip: the corner that needed a slide can be driven round, the line tightens, the drift has to be ASKED for — and it throws nothing at all until a tire is overwhelmed, then smokes it |
-| Water       | Fords and shallows: a splash on entry, heavy drag, reduced grip and power                                                                                                                                  |
-| Nature      | The open landscape off the road: loose grip, fast — up to ~150 km/h                                                                                                                                        |
+| Surface     | Effect                                                                                                                                                                                                                                         |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Gravel      | The baseline: full power, honest grip, dust off the rear when sideways                                                                                                                                                                         |
+| **Asphalt** | A third more lateral grip and half the breakaway angle: the corner that needed a slide is driven round, the drift has to be ASKED for and stays small when it comes — and it throws nothing at all until a tire is overwhelmed, then smokes it |
+| Water       | Fords and shallows: a splash on entry, heavy drag, reduced grip and power                                                                                                                                                                      |
+| Nature      | The open landscape off the road: loose grip, fast — up to ~150 km/h                                                                                                                                                                            |
 
-Asphalt (`TUNING.surfaces.grip.asphalt`) is not a different handling model,
-because there isn't one: the same grip ceiling that decides how sideways
-the car is on gravel just sits higher, so everything follows from it. The
-slide starts later and settles faster, the line through a corner is
-tighter, and the drifts that DO happen are the ones you committed to —
-entered hot, flicked, or pulled on the handbrake. The tarmac sections are
-laid as long runs joined to the stage at planned junctions (R15/R17 in
-[track-generator.md](track-generator.md)), so a stretch of grip is an
-event in the stage rather than a texture swap.
+Asphalt is not a different handling model, because there isn't one: it is
+two numbers on the same one, and they pull opposite ways.
+`TUNING.surfaces.grip` is how HARD a surface holds — the sealed road's
+ceiling sits a third higher, so the slide starts later and the car carries
+more speed through the corner. `TUNING.surfaces.breakaway` is how far
+sideways it has to be pushed before it gives up, and there the sealed road
+is the small one. That is the real difference between the two surfaces and
+not a scalar friction: loose gravel's breakaway is a long way out, which is
+why a rally car has to be properly sideways before the tires let go, and
+the big angle is what digs down through the loose stuff to the firm surface
+under it. Tarmac peaks a few degrees off straight and falls away past it —
+it holds harder than gravel ever will and it hates being sideways.
+
+So a paved corner is DRIVEN round, and the drifts that do happen are the
+ones you committed to — entered hot, flicked, or pulled on the handbrake —
+and they are short and smoky rather than a rally angle carried to the exit.
+The tarmac sections are laid as long runs joined to the stage at planned
+junctions (R15/R17 in [track-generator.md](track-generator.md)), so a
+stretch of grip is an event in the stage rather than a texture swap.
 
 A sealed road has nothing lying on it to pick up, so it is also the one
 surface that throws nothing for ordinary driving, however hard it is being
@@ -344,4 +361,4 @@ A manual shift cuts throttle briefly while it engages. The bot shifts by the sam
 
 ## Tuning etiquette
 
-Numbers live in `engine/game/defs/tuning.ts` (global feel) and `cars.ts` (per car) — never inline in the model. **`TUNING.drift` is the group that shapes the slide itself** — where it starts, how it comes in, how deep it goes, how it lets go, and when it reads as a drift — and the [`drift-feel`](../.agent/skills/drift-feel/SKILL.md) skill is the map to it: read that before touching any of it. `TUNING.steering` holds the wheel's own response (low-speed ramp-in, high-speed fade, the centred-wheel commitment floor, the tail-torque chatter guard), and `TUNING.grip` what is left of the tires (scrub, the slip's self-rotation, power oversteer, the handbrake, lift-to-tighten). Any change here must run `make sim` before and after, and keep `tests/drift_test.ts` / `tests/jump_test.ts` honest: those tests encode the moments this document describes.
+Numbers live in `engine/game/defs/tuning.ts` (global feel) and `cars.ts` (per car) — never inline in the model. **`TUNING.drift` is the group that shapes the slide itself** — where it starts, how it comes in, how deep it goes, how it lets go, and when it reads as a drift — and the [`drift-feel`](../.agent/skills/drift-feel/SKILL.md) skill is the map to it: read that before touching any of it. `TUNING.steering` holds the wheel's own response (the rack's rate, the low-speed ramp-in, the high-speed fade, the centred-wheel commitment floor, the tail-torque chatter guard), and `TUNING.grip` what is left of the tires (scrub, the slip's self-rotation, power oversteer, the handbrake, lift-to-tighten). Any change here must run `make sim` before and after, and keep `tests/drift_test.ts` / `tests/jump_test.ts` honest: those tests encode the moments this document describes.

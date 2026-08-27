@@ -10,13 +10,16 @@ import {
   DEFAULT_KNOBS,
   ROAD_CROSS,
   STAGE_RULES as R,
+  TUNING,
   compileStage,
+  corridorOffset,
   createLandField,
   createTerrain,
   crossOffset,
   junctionFlat,
   junctionMainEdge,
   knobScale,
+  locate,
   vergeOffset,
   wearAt,
 } from "@engine";
@@ -248,5 +251,76 @@ describe("junctions (R17)", () => {
     // Well off it, the wild is the wild again.
     const r = { x: Math.cos(on.heading), z: -Math.sin(on.heading) };
     expect(terrain.spurSurfaceAt(on.x + r.x * 40, on.z + r.z * 40)).toBeNull();
+  });
+});
+
+// The ground the physics rides and the ground the renderer draws are one
+// surface or they are nothing: every disagreement between them is a car
+// hovering over its own verge, or sunk into it. Both are read from the same
+// corridor profile above, so these assert that neither reader has lost the
+// SIGN of where it is standing — the corridor is not symmetric, and a bank
+// is the asymmetry that gives it away.
+describe("one ground under the car and the picture of it", () => {
+  /** The most banked piece of open road on a stage, and which way it tilts.
+   * The index comes back with it: `locate` searches a window around a hint,
+   * so a sample deep in the stage is invisible to a hint of 0. */
+  function bankedSample(track: ReturnType<typeof compileStage>) {
+    let at = 0;
+    track.samples.forEach((s, i) => {
+      if (s.deck != null || (s.flat ?? 0) > 0) return;
+      if (Math.abs(s.bank ?? 0) > Math.abs(track.samples[at].bank ?? 0)) at = i;
+    });
+    return { sample: track.samples[at], index: at };
+  }
+
+  it("banks the ground beside a corner the way it banks the road", () => {
+    const track = compileStage(3, "medium");
+    const terrain = createTerrain(track);
+    const { sample: s } = bankedSample(track);
+    expect(Math.abs(s.bank ?? 0)).toBeGreaterThan(0.02);
+    // A point the same distance out on each side of the road. The bank
+    // raises one and lowers the other, by `bank * lateral` apiece — read
+    // them as an unsigned DISTANCE and both verges tilt the same way, which
+    // puts one of them a metre from where the road mesh drew it.
+    const out = track.width / 2 + 2;
+    const right = { x: Math.cos(s.heading), z: -Math.sin(s.heading) };
+    const at = (side: number): number =>
+      terrain.groundAt(s.x + right.x * out * side, s.z + right.z * out * side);
+    const tilt = at(-1) - at(1);
+    // Positive bank raises the LEFT edge (road.ts), so the left verge is the
+    // high one, and the gap between them is the cross-fall across 2*out.
+    expect(Math.sign(tilt)).toBe(Math.sign(s.bank ?? 0));
+    expect(Math.abs(tilt)).toBeGreaterThan(Math.abs((s.bank ?? 0) * out));
+  });
+
+  it("hands the car the drawn ribbon on both sides of a banked corner", () => {
+    const track = compileStage(3, "medium");
+    const terrain = createTerrain(track);
+    const { sample: s } = bankedSample(track);
+    const right = { x: Math.cos(s.heading), z: -Math.sin(s.heading) };
+    for (const lateral of [-track.width / 2 - 2, track.width / 2 + 2]) {
+      const drawn = s.elevation + corridorOffset(s, lateral, track.width);
+      const ridden = terrain.groundAt(s.x + right.x * lateral, s.z + right.z * lateral);
+      expect(Math.abs(ridden - drawn)).toBeLessThan(0.4);
+    }
+  });
+
+  it("carries the road's own ground out to the verge, with no step off the mat", () => {
+    const track = compileStage(3, "medium");
+    const terrain = createTerrain(track);
+    const { sample: s, index } = bankedSample(track);
+    const right = { x: Math.cos(s.heading), z: -Math.sin(s.heading) };
+    const half = track.width / 2;
+    // Either side of the line where the car stops counting as on the road:
+    // the fix answers on one side, the terrain on the other, and a car
+    // crossing it must not drop through the ground it was just standing on.
+    for (const side of [1, -1]) {
+      const inside = side * (half + TUNING.offTrack.verge - 0.1);
+      const outside = side * (half + TUNING.offTrack.verge + 0.1);
+      const on = locate(track, s.x + right.x * inside, s.z + right.z * inside, index);
+      expect(on.offRoad).toBe(false);
+      const off = terrain.groundAt(s.x + right.x * outside, s.z + right.z * outside);
+      expect(Math.abs(on.elevation - off)).toBeLessThan(0.25);
+    }
   });
 });
