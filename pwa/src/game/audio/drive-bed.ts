@@ -24,10 +24,37 @@ import { playRoadGrain } from "./road-grain.ts";
  * parameters a grain is built from are still roughly true when it sounds. */
 const LOOKAHEAD_S = 0.24;
 
-/** …and how far behind the clock the scheduler may fall before it gives up on
- * catching up and re-anchors. A tab that was backgrounded for a minute must
- * not book six hundred grains at once trying to fill the gap. */
-const RESYNC_S = 0.5;
+/** Where the anchor is put down when the bed re-times itself, seconds ahead of
+ * the clock. Far enough that the first grain is still in the future by the time
+ * the browser has built it. */
+const ANCHOR_S = 0.05;
+
+/**
+ * HOW HARD THE TYRES ARE BEING ASKED TO TURN THE CAR, as a lateral
+ * acceleration, m/s² — the point at which they are working flat out.
+ *
+ * Lateral acceleration (`u * yawRate`) is the honest signal for cornering and
+ * it costs a multiply: it is zero on a straight at any speed, zero at a
+ * standstill with the wheel on full lock, and largest exactly where a tyre is
+ * loudest. Measured over bot-driven stages, a stage's straights sit under
+ * 1.5 m/s² and its corners run 8–15, so this is where "at the limit" is.
+ */
+const LAT_LIMIT = 14;
+
+/** How quickly the smoothed signals follow, as time constants in seconds.
+ * Written as taus rather than as per-frame fractions because a fraction is
+ * only true at the frame rate it was tuned at — the same engine would pick up
+ * load twice as fast on a 120 Hz display as on a phone at 40. */
+const RISE_TAU = 0.039;
+const FALL_TAU = 0.13;
+
+/** One step of an asymmetric one-pole filter: quick to rise, slower to fall.
+ * A tyre loads up the instant the car turns in and unloads over the following
+ * moment, and an engine picks up load the instant the throttle opens. */
+function follow(previous: number, target: number, dt: number): number {
+  const tau = target > previous ? RISE_TAU : FALL_TAU;
+  return previous + (target - previous) * (1 - Math.exp(-dt / tau));
+}
 
 /** The bed's own memory between grains. */
 type BedState = {
@@ -40,6 +67,10 @@ type BedState = {
   lastHz: number;
   /** Smoothed engine load, 0..1 — see `loadFrom`. */
   load: number;
+  /** Smoothed lateral work, 0..1 — see `LAT_LIMIT`. Smoothed because the raw
+   * yaw rate twitches over every rut, and a bed whose level twitches with it
+   * is the flutter this whole module exists to avoid. */
+  corner: number;
   /** The countdown second last announced, so each light sounds once. */
   lastLight: number;
 };
@@ -66,22 +97,25 @@ export type DriveBed = {
  * for all three and it is available. Braking forces it to nothing outright,
  * because a car on the brakes is never under load however fast it is going.
  *
- * SMOOTHED, because the raw number is noisy enough to make the engine flutter
- * over every bump. The filter is deliberately slower to fall than to rise: an
- * engine picks up load the instant the throttle opens and lets go of it over
- * the following moment, which is also what stops a shift's speed dip from
- * reading as a lift.
+ * SMOOTHED through `follow`, because the raw number is noisy enough to make the
+ * engine flutter over every bump — and its slower fall is also what stops a
+ * shift's speed dip from reading as a lift.
  */
-function loadFrom(previous: number, accel: number, braking: boolean, boosting: boolean): number {
+function loadFrom(
+  previous: number,
+  accel: number,
+  braking: boolean,
+  boosting: boolean,
+  dt: number,
+): number {
   const target = braking
     ? 0.05
     : Math.min(1, Math.max(0.12, 0.2 + accel * 0.35) + (boosting ? 0.3 : 0));
-  const rate = target > previous ? 0.35 : 0.12;
-  return previous + (target - previous) * rate;
+  return follow(previous, target, dt);
 }
 
 export function createDriveBed(synth: Synth): DriveBed {
-  const bed: BedState = { nextAt: 0, tickMs: 0, lastHz: 0, load: 0.2, lastLight: -1 };
+  const bed: BedState = { nextAt: 0, tickMs: 0, lastHz: 0, load: 0.2, corner: 0, lastLight: -1 };
   let lastU = 0;
 
   /** Book one grain of every bed at absolute time `at`. */
@@ -116,6 +150,7 @@ export function createDriveBed(synth: Synth): DriveBed {
         speed,
         air: Math.min(1, speed / topSpeed),
         surface: state.surface,
+        corner: bed.corner,
         slide: car.slide,
         sideways: car.w,
         airborne: car.airborne,
@@ -153,11 +188,23 @@ export function createDriveBed(synth: Synth): DriveBed {
       // Measured over the FRAME rather than over a step: several simulation
       // steps happen between two calls, so a step-sized divisor would read
       // every frame's speed change as five times the acceleration it was.
-      const accel = (state.car.u - lastU) / Math.max(1 / 240, Math.min(0.1, dt));
+      const frame = Math.max(1 / 240, Math.min(0.1, dt));
+      const accel = (state.car.u - lastU) / frame;
       lastU = state.car.u;
-      bed.load = loadFrom(bed.load, accel, state.car.braking, state.car.boosting);
+      bed.load = loadFrom(bed.load, accel, state.car.braking, state.car.boosting, frame);
+      bed.corner = follow(
+        bed.corner,
+        Math.min(1, Math.abs(state.car.u * state.car.yawRate) / LAT_LIMIT),
+        frame,
+      );
 
-      if (bed.nextAt === 0 || bed.nextAt < now - RESYNC_S) bed.nextAt = now + 0.05;
+      // A GRAIN BOOKED IN THE PAST DOES NOT WAIT. WebAudio starts a source
+      // whose time has already gone the instant it is handed over, so a stall
+      // that pushes the anchor behind the clock does not merely delay the bed:
+      // every missed grain fires at once, on top of the next one, and what
+      // comes out is a lurch. Re-anchor the moment the bed is late — its phase
+      // means nothing and its regularity is everything.
+      if (bed.nextAt < now) bed.nextAt = now + ANCHOR_S;
       while (bed.nextAt < now + LOOKAHEAD_S) {
         grain(state, bed.nextAt);
         bed.nextAt += GRAIN_MS / 1000;
@@ -169,6 +216,7 @@ export function createDriveBed(synth: Synth): DriveBed {
       bed.tickMs = 0;
       bed.lastHz = 0;
       bed.load = 0.2;
+      bed.corner = 0;
       bed.lastLight = -1;
       lastU = 0;
     },

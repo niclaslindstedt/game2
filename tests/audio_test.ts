@@ -26,6 +26,7 @@ import { TUNING, createGame, step, type GameEvent } from "@engine";
 
 import { RUN_BANK } from "../pwa/src/game/audio/bank.ts";
 import { createDriveBed } from "../pwa/src/game/audio/drive-bed.ts";
+import { playRoadGrain, type RoadVoice } from "../pwa/src/game/audio/road-grain.ts";
 import { GRAIN_MS, noteHz, rpmAt } from "../pwa/src/game/audio/engine-bed.ts";
 import { playDef } from "../pwa/src/game/audio/play.ts";
 import { soundForEvent } from "../pwa/src/game/audio/route.ts";
@@ -350,6 +351,28 @@ describe("the road bed", () => {
     expect(hum?.holdMs ?? 0).toBeGreaterThan(GRAIN_MS * 1.5);
   });
 
+  it("re-anchors after a stall rather than booking grains in the past", () => {
+    // THE JITTER GUARD. WebAudio starts a source whose time has already gone
+    // the instant it is handed over, so a stall that leaves the anchor behind
+    // the clock fires every missed grain at once, stacked on the next one.
+    // What the player hears is a lurch, and the only fix is to give up on the
+    // missed grains — the bed's phase means nothing, its regularity is all.
+    const rec = recorder();
+    const bed = createDriveBed(rec);
+    const state = rolling();
+    bed.update(state, 1 / 60);
+    rec.tones.length = 0;
+    rec.noises.length = 0;
+    // A stall SHORT of a full re-sync is the dangerous one: long enough to
+    // strand the anchor behind the clock, short enough that a scheduler
+    // watching only for a catastrophic gap keeps calmly booking into the past.
+    rec.clock += 0.4;
+    bed.update(state, 1 / 60);
+    const booked = [...rec.tones, ...rec.noises].map((v) => v.at ?? 0);
+    expect(booked.length).toBeGreaterThan(0);
+    expect(Math.min(...booked)).toBeGreaterThanOrEqual(rec.clock);
+  });
+
   it("says nothing while the audio clock is locked", () => {
     const rec = recorder();
     const bed = createDriveBed(rec);
@@ -408,5 +431,71 @@ describe("the engine's own arithmetic", () => {
     expect(rpmAt(0)).toBe(900);
     expect(rpmAt(1)).toBe(7000);
     expect(rpmAt(-5)).toBe(900); // a car rolling backwards still idles
+  });
+});
+
+describe("the tyres", () => {
+  const ROLLING: RoadVoice = {
+    speed: 30,
+    air: 0.8,
+    surface: "gravel",
+    corner: 0,
+    slide: 0,
+    sideways: 0,
+    airborne: false,
+  };
+
+  /** The summed level of the ROLLING bed — the surface's roar (a still
+   * bandpass) and its crunch (a highpass well above the wind's). The wind sits
+   * under 2 kHz and the scrub sweeps, so neither is counted here. */
+  function rollingLevel(voice: Partial<RoadVoice>): number {
+    const rec = recorder();
+    playRoadGrain(rec, { ...ROLLING, ...voice }, 0);
+    return rec.noises
+      .filter((n) => n.filter?.to === undefined)
+      .filter((n) => n.filter?.type === "bandpass" || (n.filter?.frequency ?? 0) > 2000)
+      .reduce((sum, n) => sum + (n.volume ?? 0), 0);
+  }
+
+  it("keeps a straight quiet and makes the corner the event", () => {
+    // The bed is what the player hears for the whole run, so a constant hiss
+    // is a constant hiss — it says nothing about what the car is doing and it
+    // is the loudest thing in the mix while saying it. Loose or sealed, the
+    // noise a tyre makes is the noise of being asked to turn the car.
+    for (const surface of ["gravel", "asphalt"]) {
+      const straight = rollingLevel({ surface });
+      const turning = rollingLevel({ surface, corner: 1 });
+      expect(turning, `${surface} sounds the same through a corner`).toBeGreaterThan(
+        straight * 2.5,
+      );
+    }
+  });
+
+  it("makes tarmac the quietest thing under the car", () => {
+    // Rolling straight down a sealed road the player should be hearing the
+    // ENGINE. Anything else there is the bed talking over the only instrument
+    // that has something to say.
+    expect(rollingLevel({ surface: "asphalt" })).toBeLessThan(
+      rollingLevel({ surface: "gravel" }) * 0.6,
+    );
+    expect(rollingLevel({ surface: "asphalt" })).toBeLessThan(
+      rollingLevel({ surface: "nature" }) * 0.4,
+    );
+  });
+
+  it("sings on tarmac from the cornering load alone, and digs only on a slide", () => {
+    // A tyre protests while it is still winning; a loose surface has nothing
+    // to protest WITH and only makes its second noise once the car has gone.
+    const scrub = (voice: Partial<RoadVoice>): number => {
+      const rec = recorder();
+      playRoadGrain(rec, { ...ROLLING, ...voice }, 0);
+      const sing = rec.noises.filter((n) => (n.filter?.q ?? 0) > 5);
+      const dig = rec.noises.filter((n) => n.filter?.to !== undefined);
+      return [...sing, ...dig, ...rec.tones].reduce((sum, v) => sum + (v.volume ?? 0), 0);
+    };
+    expect(scrub({ surface: "asphalt", corner: 1 })).toBeGreaterThan(0);
+    expect(scrub({ surface: "asphalt", corner: 0 })).toBe(0);
+    expect(scrub({ surface: "gravel", corner: 1 })).toBe(0);
+    expect(scrub({ surface: "gravel", corner: 1, slide: 0.8 })).toBeGreaterThan(0);
   });
 });

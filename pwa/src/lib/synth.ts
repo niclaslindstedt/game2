@@ -67,6 +67,24 @@ const ZOMBIE_PROBE_MS = 350;
  * where the steps are audible on any of these waveforms. */
 const SHAPER_STEPS = 1024;
 
+/**
+ * HOW MUCH NOISE IS KEPT PER COLOUR, seconds — and this number is the reason
+ * the game does not stutter after ten minutes.
+ *
+ * The road bed alone asks for about twenty SECONDS of noise per second of
+ * play: five overlapping grains, nine times a second, half a second each.
+ * Synthesising that per voice meant four megabytes of `Float32Array` churned
+ * every second on the same thread as the renderer — which the collector
+ * eventually answers with a pause long enough to push the bed's next grain
+ * behind the clock, and a grain behind the clock is a grain that fires late.
+ * That is what "the sound goes jittery after a while" IS.
+ *
+ * So noise is generated ONCE per colour and every voice reads a random window
+ * of it. Four seconds is long enough that two overlapping grains never land
+ * on the same stretch, and costs under a megabyte per colour.
+ */
+const NOISE_POOL_S = 4;
+
 /** Is the page in the background right now? Treated as visible wherever there
  * is no document (a test, a headless host) so nothing is silenced by
  * accident. */
@@ -93,8 +111,7 @@ function shaperCurve(drive: number): Float32Array<ArrayBuffer> {
 }
 
 /**
- * Fill `data` with noise of the given colour, with a linear fade-out baked in
- * over the last `fadeFrom`..1 of the buffer.
+ * Fill `data` with noise of the given colour.
  *
  * Pink and brown are one-pole filters over white rather than the textbook
  * multi-pole approximations: the spectral slope is what the ear reads, and one
@@ -102,8 +119,12 @@ function shaperCurve(drive: number): Float32Array<ArrayBuffer> {
  * a car sliding sideways. Both are re-normalised, because an unnormalised
  * brown is roughly a tenth of white's level and every volume in the bank would
  * have to know which colour it was written for.
+ *
+ * Called once per colour per context — see `noisePool`. The shape of a burst
+ * is the GAIN node's business; nothing is baked into the samples, because
+ * samples that carry an envelope cannot be shared.
  */
-function fillNoise(data: Float32Array, color: NoiseColor, fadeFrom: number): void {
+function fillNoise(data: Float32Array, color: NoiseColor): void {
   const n = data.length;
   if (color === "white") {
     for (let i = 0; i < n; i++) data[i] = Math.random() * 2 - 1;
@@ -124,11 +145,6 @@ function fillNoise(data: Float32Array, color: NoiseColor, fadeFrom: number): voi
       data[i] = last * 11;
     }
   }
-  // The tail fade lives in the buffer rather than in the gain node so a
-  // one-shot burst always ends at zero, whatever envelope is over it.
-  const fadeStart = Math.floor(n * fadeFrom);
-  const fadeLen = Math.max(1, n - fadeStart);
-  for (let i = fadeStart; i < n; i++) data[i] *= 1 - (i - fadeStart) / fadeLen;
 }
 
 export function createSynth(): Synth {
@@ -142,6 +158,9 @@ export function createSynth(): Synth {
   /** Shaper curves are shared by drive, quantised — a curve per voice would
    * be a kilobyte of Float32 per grain of an engine bed. */
   const curves = new Map<number, Float32Array<ArrayBuffer>>();
+  /** One long buffer of each colour, read at a random offset by every noise
+   * voice. Cleared with the context that owns them. */
+  const pools = new Map<NoiseColor, AudioBuffer>();
 
   // iOS puts the context into a non-standard "interrupted" state on app
   // switch / lock; treat anything that isn't running or closed as resumable.
@@ -180,6 +199,7 @@ export function createSynth(): Synth {
     ctx = null;
     master = null;
     echoInput = null;
+    pools.clear(); // an AudioBuffer belongs to the context that made it
     if (probeTimer !== null) {
       clearTimeout(probeTimer);
       probeTimer = null;
@@ -384,6 +404,17 @@ export function createSynth(): Synth {
     return node;
   };
 
+  /** This context's noise of a given colour, generated on first use. */
+  const noisePool = (c: AudioContext, color: NoiseColor): AudioBuffer => {
+    let pool = pools.get(color);
+    if (!pool || pool.sampleRate !== c.sampleRate) {
+      pool = c.createBuffer(1, Math.ceil(c.sampleRate * NOISE_POOL_S), c.sampleRate);
+      fillNoise(pool.getChannelData(0), color);
+      pools.set(color, pool);
+    }
+    return pool;
+  };
+
   /** The shaper for this drive, or null when the voice is clean. */
   const shaper = (c: AudioContext, drive: number): WaveShaperNode | null => {
     if (drive <= 0 || typeof c.createWaveShaper !== "function") return null;
@@ -568,26 +599,37 @@ export function createSynth(): Synth {
       }
       const t0 = at ?? c.currentTime + delayMs / 1000;
       const t1 = t0 + durationMs / 1000;
-      const length = Math.max(1, Math.floor((c.sampleRate * durationMs) / 1000));
 
       // TWO SHAPES, and asking for an envelope is what picks between them. A
-      // bare burst fades LINEARLY across the whole buffer: that is a hit, and
-      // it is the shape that ends cleanly at full duration. A voice that asked
-      // for an attack or a hold is a GRAIN of a bed instead, so the gain node
-      // does the shaping and the buffer stays flat until its last breath —
-      // a baked fade under a hold would eat exactly the sustain it is for.
+      // bare burst fades LINEARLY to nothing across its whole length: that is
+      // a hit. A voice that asked for an attack or a hold is a GRAIN of a bed
+      // instead, and gets the shared envelope so a pitched bed and a noise bed
+      // tile the same way.
       const shaped = attackMs > 0 || holdMs > 0;
-      const buffer = c.createBuffer(1, length, c.sampleRate);
-      fillNoise(buffer.getChannelData(0), color, shaped ? 0.92 : 0);
+      const gain = c.createGain();
+      if (shaped) {
+        envelope(gain, volume, t0, t1, attackMs, holdMs);
+      } else {
+        gain.gain.setValueAtTime(volume, t0);
+        gain.gain.linearRampToValueAtTime(0, t1);
+      }
 
+      // A WINDOW ONTO THE SHARED POOL, not a buffer of this voice's own — see
+      // NOISE_POOL_S. The offset is random so no two grains read the same
+      // stretch (identical noise twice over is a comb filter, and an ear hears
+      // it as a pitch); the loop is only there so a sound longer than the pool
+      // still has samples to play.
+      const buffer = noisePool(c, color);
       const source = c.createBufferSource();
       source.buffer = buffer;
-      const gain = c.createGain();
-      if (shaped) envelope(gain, volume, t0, t1, attackMs, holdMs);
-      else gain.gain.setValueAtTime(volume, t0);
+      source.loop = true;
+      const offset = Math.random() * buffer.duration;
       applyFilter(c, source, filter, t0, t1).connect(gain);
       output(c, gain, pan, echo);
-      source.start(t0);
+      source.start(t0, offset);
+      // The pool never runs out, so the voice has to be told where to end —
+      // without this every grain of every bed would play until the tab closed.
+      source.stop(t1);
     },
   };
 }
