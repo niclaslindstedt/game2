@@ -255,6 +255,35 @@ await capture("shot-crawl-dust", { width: 1280, height: 720 }, async (page) => {
   await page.keyboard.up("ArrowDown");
 });
 
+// The mountain, which is the wild's OTHER ground. Above the meadow and on
+// the steep flanks there is no turf to tear, so the acceptance test is the
+// color of the cloud: a car scrabbling up bare rock must throw stone, not
+// grass. Seed 55 stands a 47 m flank 60 m off the road inside the first 50 m
+// of the stage — a ~38° face, which is steep enough that the terrain paints
+// it bedrock and shallow enough that a car with a run-up can climb it. The
+// run-up is the whole trick: this shot is the car ON the rock with the
+// wheels still driving, and a car that arrives at the foot slowly just
+// stops there.
+await capture(
+  "shot-rock-dust",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await racing(page);
+    await page.keyboard.down("ArrowUp");
+    await atStageTime(page, 4);
+    await page.keyboard.down("ArrowRight");
+    await inTheWild(page);
+    await page.keyboard.up("ArrowRight");
+    // Straightened up and climbing: the plume wants the wheels loaded and
+    // the car pointing UP the flank, not sliding along the foot of it. The
+    // turf runs a good way up the foot, so the frame that lands ON the rock
+    // is several seconds past the verge.
+    const off = await stageTime(page);
+    await atStageTime(page, off + 5);
+  },
+  { seed: "55" },
+);
+
 // Tarmac, where the ground-contact FX are a different question: a sealed
 // road has nothing lying on it to throw, so the acceptance test for these
 // three is as much what is ABSENT as what is there. Flat out must be clean

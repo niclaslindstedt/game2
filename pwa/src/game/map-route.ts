@@ -12,7 +12,7 @@
 // route. Built with the world, shown only while the map camera is up.
 
 import * as THREE from "three";
-import type { Track } from "@engine";
+import { finishIndex, type Track } from "@engine";
 
 /** Ribbon width as a fraction of the stage's own span, so the route reads
  * the same on a 1.8 km sprint and an 11 km epic — both are framed to fill
@@ -110,12 +110,14 @@ export function buildMapRoute(track: Track): MapRoute {
   group.add(ribbon);
 
   const first = samples[0];
-  const last = samples[samples.length - 1];
   const radius = half * MARKER_SCALE;
   group.add(marker(first.x, first.elevation + LIFT, first.z, radius, 0x7cbf3f));
   // An endless stage has no finish to mark — the road simply keeps going.
+  // A finite one is marked at the GATE, which is where the run actually
+  // ends, not at the last sample of run-off road past it.
   if (!track.endless) {
-    group.add(marker(last.x, last.elevation + LIFT, last.z, radius, 0xe23c2c));
+    const line = samples[finishIndex(track)];
+    group.add(marker(line.x, line.elevation + LIFT, line.z, radius, 0xe23c2c));
   }
 
   return {

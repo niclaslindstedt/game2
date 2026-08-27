@@ -18,7 +18,7 @@ import { carById } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 import { launch, stepAirborne, stepGrounded, type GroundContext } from "./car.ts";
 import { collideCar } from "./collision.ts";
-import { crossedLip, curvatureAt, locate, slopeAt, wayHome } from "./track.ts";
+import { crossedFinish, crossedLip, curvatureAt, locate, slopeAt, wayHome } from "./track.ts";
 import {
   DAMAGE_ZONES,
   type CarInput,
@@ -288,6 +288,8 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   const track = state.track;
   const terrain = state.terrain;
   const prevIndex = state.progressIndex;
+  const prevX = car.x;
+  const prevZ = car.z;
 
   // Locate against the centerline BEFORE the move to know the ground ahead;
   // the fix after the move drives progress, lip detection, and respawn.
@@ -359,6 +361,10 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   }
 
   const fix = locate(track, car.x, car.z, state.progressIndex);
+  // The finish is a LINE across the road, and the move just made is what
+  // either crossed it or did not. Asked here rather than at the end of the
+  // step, so a respawn cannot teleport the car over the gate and win.
+  const finished = !track.endless && crossedFinish(track, prevX, prevZ, car.x, car.z);
   state.progressIndex = Math.max(state.progressIndex, fix.index);
   state.progressS = track.samples[state.progressIndex].s;
   state.lateral = fix.lateral;
@@ -437,9 +443,9 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   if (input.reset && !crashed) respawn(state, events);
   else if (!crashed) stepStuck(state, input, events);
 
-  // The finish line is the last sample. An endless stage has none — the
-  // stream above always keeps road ahead of the car.
-  if (!track.endless && state.progressIndex >= track.samples.length - 1) {
+  // Through the gate: the run is over. An endless stage has no finish —
+  // the stream above always keeps road ahead of the car.
+  if (finished) {
     state.phase = "finished";
     events.push({ type: "finish", time: state.raceTime });
     status(`Finished stage ${state.seed} in ${state.raceTime.toFixed(2)} s`);

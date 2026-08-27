@@ -48,6 +48,32 @@ function clamp01(t: number): number {
   return t < 0 ? 0 : t > 1 ? 1 : t;
 }
 
+/** Where the meadow gives out and the mountain starts, m of altitude: the
+ * ground goes over to bedrock across this band. */
+const ROCK_LINE = { from: 26, to: 52 };
+/** The normal's Y where a slope starts showing bare rock, and the width of
+ * that band — a flank steeper than about 45° is rock all the way. */
+const ROCK_SLOPE = { from: 0.88, band: 0.18 };
+
+/** How much bare rock the ground shows, 0..1: steep flanks first (mountain
+ * sides, the cut walls beside the road), then sheer altitude. The tile paint
+ * lays the biome's bedrock over the meadow by exactly this much, and the
+ * renderer asks the same question of the ground under the wheels — what a
+ * tire throws has to be what it is standing on. */
+function bareRock(y: number, normalY: number): number {
+  const steep = clamp01((ROCK_SLOPE.from - normalY) / ROCK_SLOPE.band);
+  return steep + (1 - steep) * clamp01((y - ROCK_LINE.from) / (ROCK_LINE.to - ROCK_LINE.from));
+}
+
+/** The paint rule above, asked at a world position off the RIDDEN ground
+ * lattice (the surface the physics uses), so anything reading the ground the
+ * car is on agrees with what is drawn under it. */
+export function rockAt(groundAt: (x: number, z: number) => number, x: number, z: number): number {
+  const dx = (groundAt(x - CELL, z) - groundAt(x + CELL, z)) / (2 * CELL);
+  const dz = (groundAt(x, z - CELL) - groundAt(x, z + CELL)) / (2 * CELL);
+  return bareRock(groundAt(x, z), 1 / Math.hypot(dx, 1, dz));
+}
+
 export type Terrain = {
   group: THREE.Group;
   /** The engine's terrain field this ground is drawn from — heights,
@@ -166,11 +192,11 @@ export function buildTerrain(track: Track, biome: Biome, waterTexture: THREE.Tex
           if (h > 0.64) c.lerp(heath, clamp01((h - 0.64) / 0.36) * 0.8);
           const f = valueNoise(x, z, 55, noiseSeed + 43);
           if (f > 0.68) c.lerp(floor, clamp01((f - 0.68) / 0.32) * 0.6);
-          c.lerp(rock, clamp01((y - 26) / 26));
+          c.lerp(rock, clamp01((y - ROCK_LINE.from) / (ROCK_LINE.to - ROCK_LINE.from)));
         }
         // Bedrock breaks through wherever the ground is steep — mountain
         // flanks, and the cut walls where the road runs between high rock.
-        const steep = clamp01((0.88 - normals[v * 3 + 1]) / 0.18);
+        const steep = clamp01((ROCK_SLOPE.from - normals[v * 3 + 1]) / ROCK_SLOPE.band);
         if (steep > 0) {
           const band = valueNoise(x, z, 18, noiseSeed + 47);
           c.lerp(band > 0.5 ? rock : rockDark, steep);
