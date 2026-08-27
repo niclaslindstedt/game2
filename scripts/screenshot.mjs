@@ -135,7 +135,10 @@ await capture("shot-drift", { width: 1280, height: 720 }, async (page) => {
   await page.keyboard.down("ArrowUp");
   await page.waitForTimeout(4000);
   await page.keyboard.down("ArrowRight");
-  await page.waitForTimeout(520);
+  // Long enough for the slide to reach the angle the lock is asking for —
+  // the angle builds with commitment rather than arriving with the input,
+  // so a short hold captures a car that has only started to move.
+  await page.waitForTimeout(950);
 });
 
 // In the air, straight and crossed up. Seed 28 opens with a long straight

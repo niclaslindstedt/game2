@@ -103,8 +103,10 @@ function capturePointer(e: { currentTarget: EventTarget | null; pointerId: numbe
 const WHEEL_REACH_PX = 70;
 /** The throw is shaped `travel ** this`, so the first centimetre of thumb
  * buys less lock than the last. A slight steer is then a target a thumb can
- * actually hit instead of the twitch either side of centre. */
-const WHEEL_THROW_CURVE = 1.6;
+ * actually hit instead of the twitch either side of centre — but only just
+ * past linear: the car's own response carries the rest, and a stronger curve
+ * here only makes the top of the throw feel like a cliff of its own. */
+const WHEEL_THROW_CURVE = 1.15;
 /** The rim has weight: it never teleports to the thumb, it turns toward it.
  * This is the floor rate in lock/second — what a fingertip nudge earns... */
 const WHEEL_TURN_FLOOR = 1.4;
