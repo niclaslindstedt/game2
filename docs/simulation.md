@@ -7,23 +7,23 @@ Handling and generator changes in this repo are **measured**, not eyeballed. The
 A deterministic player stand-in that reads the same `GameState` the HUD reads and produces the same `CarInput` a thumb produces — it must never reach into physics internals. Its brain, in order:
 
 1. **Aim** — a lookahead point on the centerline, speed-scaled; steering is proportional to the angle error.
-2. **Corner-speed plan** — scans the curvature ahead; each corner caps speed at `√(a_lat/κ)`, distance-discounted by braking capability. `a_lat` is a FRACTION of the car's own lateral grip (`latFraction × gripAccel`), not a fixed number, so the same brain plans honestly in either car — and because the slide comes in relative to that same ceiling, this one knob is what decides whether the bot ever drifts a corner or only ever flicks the handbrake at one. Hard corners are planned HOT (a few m/s over the cap) — rally style: the drift scrubs the excess.
+2. **Corner-speed plan** — scans the curvature ahead; each corner caps speed at `√(a_lat/κ)`, distance-discounted by braking capability. `a_lat` is a FRACTION of the car's own lateral grip (`latFraction × gripAccel`), not a fixed number, so the same brain plans honestly in any car — and because the slide comes in relative to that same ceiling, this one knob is what decides whether the bot ever drifts a corner or only ever flicks the handbrake at one. It is scaled by the grip the car will actually HAVE at that corner: the surface AHEAD times the rubber this car is on, exactly as `car.ts` reads it. Without that the plan is blind to the whole surface half of a car's character, and no tire in the catalog ever shows up as pace. Hard corners are planned HOT — rally style, the drift scrubs the excess — by `hotEntry` m/s scaled by how freely the car rotates (`driftYaw` against the profile's `rotationRef`): the slide is what brings the nose round in there, so a car that rotates can carry more in than one that pushes.
 3. **The flick** — arriving hot at a hard corner pulls the handbrake once, unsticking the rear. So bots drift hairpins the way players do, and drift regressions show up in bot stats.
 4. **Drift management** — power through the slide, breathe when the angle gets deep, and steer where the car is GOING rather than where its nose is pointing: sideways, holding the nose on the lookahead puts the velocity off the road by exactly the slip angle, so the aim error is measured against the direction of travel. Counter-steer damps the rotation only once the nose is nearly where it should be (damping earlier is what runs a drift wide).
 5. **Recovery** — out in the wild: cruise back toward the road at a pace the nature surface can steer at, and fire the reset input when the excursion is hopeless (out too long), like a player would.
 6. **Backing out** — pinned against something with the throttle buried for `reverseAfter`, the bot stops pushing and reverses off it, wheel straight, until the car is properly moving (`reverseSpeed`); then it takes another run at the line. Being WEDGED is no longer a reason to reset: a driver backs off the trunk first, and the respawn is what happens when that fails too. The manoeuvre latches on the car's own `reversing` state so a single wedged tick cannot flicker it, and reversing counts as asking to move (`stepStuck`), so a car pinned both ways still reaches the engine's wedge rescue on time instead of braking forever.
-7. **Gears** — shifts the manual by the same thresholds the auto box uses, so both cars simulate fairly.
+7. **Gears** — reads `car.gearbox` (the run's box, not the car's) and shifts a manual by the same thresholds the auto box uses, so both simulate fairly.
 
 Bot profiles are data (`BotProfile`); `RALLY_BOT` is the default. Slower/faster brains are new profiles, not code forks.
 
 ## The harness (`engine/sim/simulate.ts`)
 
-`simulateStage({ seed, carId, profile, length, shape, laps, maxTime })` runs a full stage (at a finite stage length band — default medium) and returns: finish state and time, the laps raced and each lap's time, one lap of road (`trackLength`) and the ground the race actually covered (`raceLength`), the whole event log, the run stats (drift count/time/score, jumps, air time, clean landings, splashes, off-road time, impacts, crashes, respawns, top speed), and a **digest** — an FNV hash over sampled positions. Runs are deterministic: same seed + car + profile ⇒ same digest, which is exactly what `tests/simulation_test.ts` asserts. `shape: "circuit"` races a closed lap over three of them (R22); a sprint is one lap of a road that never comes back, and asking for more laps of one does nothing.
+`simulateStage({ seed, carId, gearbox, profile, length, shape, laps, maxTime })` runs a full stage (at a finite stage length band — default medium) and returns: finish state and time, the laps raced and each lap's time, one lap of road (`trackLength`) and the ground the race actually covered (`raceLength`), the whole event log, the run stats (drift count/time/score, jumps, air time, clean landings, splashes, off-road time, impacts, crashes, respawns, top speed), and a **digest** — an FNV hash over sampled positions. Runs are deterministic: same seed + car + profile ⇒ same digest, which is exactly what `tests/simulation_test.ts` asserts. `shape: "circuit"` races a closed lap over three of them (R22); a sprint is one lap of a road that never comes back, and asking for more laps of one does nothing.
 
 ## The CLI
 
 ```sh
-make sim                              # seeds 1..8, both cars, the balance table
+make sim                              # seeds 1..8, every car, the balance table
 npm run sim -- --seeds 42,99          # specific seeds
 npm run sim -- --car classic          # one car
 npm run sim -- --count 20             # a wider sweep
@@ -31,14 +31,37 @@ npm run sim -- --length long          # stage length band (default medium)
 npm run sim -- --shape circuit        # race a closed lap circuit (R22)
 npm run sim -- --shape circuit --laps 5
 npm run sim -- --weather storm        # race in rain/storm wind
+npm run sim -- --gearbox manual       # drive the bot with a manual box
 npm run sim -- --asphalt 0.8          # the generator's dials, each 0..1:
                                       # --elevation --water --trees --asphalt
+npm run sim -- --sweep                # the ROSTER BALANCE table (see below)
 npm run sim -- --json report.json     # machine-readable dump
 ```
 
 The dials change what the stage IS, so they change the table: tarmac buys pace and costs drift time (that is what it is FOR), water and hills cost both. Sweep one at a time — a dial moved with a handling change makes the diff unreadable.
 
 The table columns: the ground covered (one RACED lap × the laps on a circuit — the road up to the finish line, never R25's run-out past it), time, average pace, drifts / drift time / drift score, jumps / air time, fords, off-road time, hits (damaging impacts — trees, boulders, slammed landings), respawns (crash respawns and bot resets both land here), top speed, finished. The footer aggregates. **The workflow rule: run it before and after every handling or generator change and paste both tables in the PR.** Exit code is non-zero if any run failed to finish, so CI's `simulate` job doubles as a smoke alarm.
+
+## The roster balance table (`--sweep`)
+
+The default table races one set of dials over one pool of seeds, so it ranks
+the cars exactly once — and one car being fastest on every stage in the game
+is invisible to it. `--sweep` races the whole roster over five stage
+ARCHETYPES and ranks them per archetype, with a loud warning if a single car
+takes all five.
+
+An archetype is two things. The generator's dials say what the road is
+surfaced and shaped like; the SEED says how twisty it is, and no dial moves
+that — so an archetype asking for `tight` or `flowing` stages measures the
+whole seed pool's mean curvature and races only the matching end of it.
+Nothing here is a special stage type: the generator builds all of them from
+the same rules.
+
+The five: `tarmac` (fully sealed, flowing), `mountain` (a sealed pass, steep),
+`mixed` (half and half), `wet` (loose and forded), `gravel` (loose, dry,
+flat). A healthy roster has every car winning at least one, the specialists
+winning their home ground by more than the all-rounder wins the middle, and
+nobody worst everywhere. **Any change to `cars.ts` owes this table.**
 
 ## What the tests pin down
 

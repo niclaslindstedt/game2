@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// The two launch cars and their gearboxes: the auto shifts itself through
-// the whole box, the manual only moves on the driver's command (and cuts
-// throttle while the shift engages).
+// The gearbox is the DRIVER's, not the car's: every car in the roster can
+// be handed over either way. The auto shifts itself through the whole box,
+// the manual only moves on command (and cuts throttle while the shift
+// engages), and the same car does both depending on what it was created
+// with.
 import { describe, expect, it } from "vitest";
 
 import {
@@ -14,15 +16,17 @@ import {
   step,
   type GameEvent,
   type GameState,
+  type GearboxMode,
   type SegmentPlan,
 } from "@engine";
 
 const STRAIGHT: SegmentPlan[] = [{ kind: "straight", length: 1900, feature: "none" }];
 
-function game(carId: string): GameState {
+function game(carId: string, gearbox: GearboxMode = "manual"): GameState {
   return createGame({
     seed: 0,
     carId,
+    gearbox,
     skipCountdown: true,
     track: compileTrack(0, STRAIGHT),
   });
@@ -39,19 +43,23 @@ function flatOut(state: GameState, seconds: number, shift = false): GameEvent[] 
 }
 
 describe("cars and gearboxes", () => {
-  it("ships one automatic starter and two manuals, each with a drivetrain", () => {
+  it("ships one car of each drivetrain and no gearbox baked into any of them", () => {
     expect(CARS).toHaveLength(3);
-    expect(CARS.filter((c) => c.gearbox === "auto")).toHaveLength(1);
-    expect(carById("compact").gearbox).toBe("auto");
-    expect(carById("classic").gearbox).toBe("manual");
-    expect(carById("coupe").gearbox).toBe("manual");
-    // `drive` is a label today, but every car owes one: the roster reads
-    // it, and a drivetrain-aware handling model would too.
-    for (const car of CARS) expect(["fwd", "rwd", "awd"]).toContain(car.drive);
+    expect(CARS.map((c) => c.drive).sort()).toEqual(["awd", "fwd", "rwd"]);
+    // The box is a run setting; nothing in the catalog may carry one.
+    for (const car of CARS) expect(car).not.toHaveProperty("gearbox");
+    expect(carById("compact").drive).toBe("fwd");
+    expect(carById("classic").drive).toBe("rwd");
+    expect(carById("coupe").drive).toBe("awd");
+  });
+
+  it("defaults to the automatic when the run does not ask for a box", () => {
+    const state = createGame({ seed: 0, carId: "coupe", track: compileTrack(0, STRAIGHT) });
+    expect(state.car.gearbox).toBe("auto");
   });
 
   it("the auto shifts itself up through the box on a long straight", () => {
-    const state = game("compact");
+    const state = game("compact", "auto");
     const events = flatOut(state, 25);
     const shifts = events.filter((e) => e.type === "shift");
     expect(shifts.length).toBeGreaterThanOrEqual(3);
@@ -78,6 +86,15 @@ describe("cars and gearboxes", () => {
     expect(state.car.gear).toBe(before + 1);
     expect(events.some((e) => e.type === "shift")).toBe(true);
     expect(state.car.shiftCutUntil).toBeGreaterThan(state.t);
+  });
+
+  it("every car takes either box — the hatch drives itself, the 4WD does not", () => {
+    const manualStarter = game("compact", "manual");
+    flatOut(manualStarter, 15, false);
+    expect(manualStarter.car.gear).toBe(0);
+    const autoFourWheel = game("coupe", "auto");
+    flatOut(autoFourWheel, 15, false);
+    expect(autoFourWheel.car.gear).toBeGreaterThanOrEqual(3);
   });
 
   it("a manual driver who shifts beats one who does not", () => {

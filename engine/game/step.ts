@@ -16,7 +16,7 @@ import {
   type StageShape,
   type Surface,
 } from "../mapgen/index.ts";
-import { carById } from "./defs/cars.ts";
+import { carById, type GearboxMode } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 import { launch, stepAirborne, stepGrounded, type GroundContext } from "./car.ts";
 import { collideCar } from "./collision.ts";
@@ -85,8 +85,11 @@ function freshCar(): CarState {
     pitchLoad: 0,
     slide: 0,
     drifting: false,
+    flick: 0,
+    flickDir: 1,
     gear: 0,
     rev: 0,
+    gearbox: "auto",
     shiftCutUntil: 0,
     boostLeft: T.boost.capacity,
     boosting: false,
@@ -107,6 +110,10 @@ function freshCar(): CarState {
 export type CreateGameOptions = {
   seed: number;
   carId?: string;
+  /** Which box to hand the driver, for any car. Defaults to the automatic:
+   * a player who has not chosen has not asked to be given something to
+   * manage. */
+  gearbox?: GearboxMode;
   /** Menu stage length (finite band or endless); defaults to medium. */
   length?: StageLength;
   /** R22 — sprint (default) or circuit. Ignored when a pre-compiled
@@ -177,6 +184,7 @@ export function createGame(options: CreateGameOptions): GameState {
   car.z = grid.z;
   car.y = grid.elevation;
   car.heading = grid.heading;
+  car.gearbox = options.gearbox ?? "auto";
   const env = buildEnv(
     options.seed,
     options.env?.timeOfDay ?? "day",

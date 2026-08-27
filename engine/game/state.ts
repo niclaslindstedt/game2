@@ -6,7 +6,7 @@
 // sideways speed along the car's right axis, so negative `w` means the car
 // slides out to the left of its nose — a drift out of a clockwise turn.
 
-import type { CarSpec } from "./defs/cars.ts";
+import type { CarSpec, GearboxMode } from "./defs/cars.ts";
 import type { Surface, TerrainField, Track } from "../mapgen/index.ts";
 import type { Rng } from "../lib/prng.ts";
 
@@ -139,6 +139,17 @@ export type CarState = {
   slide: number;
   /** True while `slide` reads as a drift at pace — dust, HUD, stats. */
   drifting: boolean;
+  /** How much weight is currently thrown across the car by a flick, 0..1.
+   * The hands are only over the other side for a few frames; the LOAD they
+   * threw is what the tires feel for the next half second, so it is held
+   * and decayed here rather than read off the rack every step. Set by the
+   * grounded step, read by nothing else. */
+  flick: number;
+  /** ...and which way that weight was sent, -1 or 1. Latched with the load
+   * above: by the time the tires feel the throw the rack has arrived on
+   * the new lock, and reading the sign off the wheel then would throw the
+   * car back the way it came. */
+  flickDir: number;
   gear: number;
   /** Engine revs, 0 at idle and 1 at the redline (a shade over is the
    * limiter). On the move it is gearing plus forward speed — there is no
@@ -149,6 +160,10 @@ export type CarState = {
    * tachometer and the engine bed read it here. HUD and audio readout — the
    * handling never reads it back. */
   rev: number;
+  /** Which box this car is being driven with for the run. A player SETTING,
+   * not a property of the car: every car in the roster can be handed over
+   * either way, and the choice belongs to whoever is driving it. */
+  gearbox: GearboxMode;
   /** Sim time until which throttle is cut by an engaging shift. */
   shiftCutUntil: number;
   /** Boost seconds left in the tank — finite for the whole run. */

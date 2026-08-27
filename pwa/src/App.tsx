@@ -389,6 +389,10 @@ export function App() {
     const state = createGame({
       seed: spec.seed,
       carId: spec.carId,
+      // The box is a player option rather than part of the stage: it is
+      // read fresh here so a change in OPTIONS is in the car the next time
+      // one is built, and never mid-run.
+      gearbox: optionsRef.current.gearbox,
       track: trackRef.current.track,
       laps: spec.laps,
       skipCountdown: spec.skipCountdown,

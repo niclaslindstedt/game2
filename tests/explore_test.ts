@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   APRON,
+  CARS,
   LAKE_Y,
   NEUTRAL_INPUT,
   ROAD_CROSS,
@@ -36,7 +37,7 @@ const drive = (overrides: Partial<CarInput> = {}): CarInput => ({
 /** Step with the auto-shift the manual box needs to reach its top end. */
 function stepShifting(state: GameState, input: CarInput): GameEvent[] {
   const shiftUp =
-    state.spec.gearbox === "manual" &&
+    state.car.gearbox === "manual" &&
     state.car.gear < state.spec.gearTop.length - 1 &&
     state.car.u > state.spec.gearTop[state.car.gear] * TUNING.gearbox.upAt;
   return step(state, { ...input, shiftUp });
@@ -58,28 +59,36 @@ function flatWild(state: GameState, heightAt: (x: number, z: number) => number):
 }
 
 describe("top speed", () => {
-  it("the classic holds about 230 km/h flat out on gravel", () => {
+  /** Flat out down the long straight until the car stops gaining, km/h. */
+  function flatOutTop(carId: string): number {
     const state = createGame({
       seed: 3,
-      carId: "classic",
-      skipCountdown: true,
-      track: compileTrack(3, LONG_STRAIGHT),
-    });
-    for (let i = 0; i < 120 * 120; i++) stepShifting(state, drive());
-    expect(state.stats.topSpeed * 3.6).toBeGreaterThan(224);
-    expect(state.stats.topSpeed * 3.6).toBeLessThan(238);
-  });
-
-  it("the compact's auto box reaches its top gear and ~215 km/h", () => {
-    const state = createGame({
-      seed: 3,
-      carId: "compact",
+      carId,
       skipCountdown: true,
       track: compileTrack(3, LONG_STRAIGHT),
     });
     for (let i = 0; i < 120 * 120; i++) step(state, drive());
     expect(state.car.gear).toBe(state.spec.gearTop.length - 1);
-    expect(state.stats.topSpeed * 3.6).toBeGreaterThan(205);
+    return state.stats.topSpeed * 3.6;
+  }
+
+  it("every car reaches its top gear on the auto box and settles under its ceiling", () => {
+    for (const car of CARS) {
+      const top = flatOutTop(car.id);
+      // Drag always wins in the end: the nominal gear ceiling is a number
+      // the car approaches, never one it holds (see cars.ts).
+      expect(top).toBeLessThan(car.gearTop[car.gearTop.length - 1] * 3.6);
+      expect(top).toBeGreaterThan(car.gearTop[car.gearTop.length - 1] * 3.6 * 0.78);
+    }
+  });
+
+  it("the roster's top speeds rank by its gearing — the 4WD fastest, the saloon slowest", () => {
+    const tops = Object.fromEntries(CARS.map((c) => [c.id, flatOutTop(c.id)]));
+    expect(tops.coupe).toBeGreaterThan(tops.compact);
+    expect(tops.compact).toBeGreaterThan(tops.classic);
+    // The spread is worth having: a car whose top end is 20% off the
+    // fastest is a real trade for what it is given in exchange.
+    expect(tops.coupe / tops.classic).toBeGreaterThan(1.15);
   });
 
   it("open nature allows about 150 km/h — fast, but not road pace", () => {

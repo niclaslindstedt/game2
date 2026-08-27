@@ -11,9 +11,10 @@
 //   VIDEO    — the levers that buy frames on a weak device (resolution,
 //              draw distance, the effects budget, how thickly the world is
 //              planted).
-//   CONTROLS — only what the device can actually use. A desktop rebinds
-//              keys; a touch device chooses which thumb steers and what
-//              each drag off the pedal anchor does. A laptop with a
+//   CONTROLS — the gearbox, which every car in the roster will take either
+//              way, plus only what the device can actually use: a desktop
+//              rebinds keys; a touch device chooses which thumb steers and
+//              what each drag off the pedal anchor does. A laptop with a
 //              touchscreen reports both and is offered both.
 //
 // Every change applies the moment it is made and is persisted by the app;
@@ -350,12 +351,38 @@ function TouchSection({ settings, onSettings }: Pick<OptionsProps, "settings" | 
   );
 }
 
+/** The gearbox, offered for every car in the roster rather than baked into
+ * one of them. It is the one control choice that changes what the CAR does
+ * rather than what a button does, so it sits at the top of the tab and on
+ * its own, above the bindings. */
+function GearboxSection({ settings, onSettings }: Pick<OptionsProps, "settings" | "onSettings">) {
+  return (
+    <div className="opt-section">
+      <div className="opt-section-title">GEARBOX</div>
+      <OptionRow
+        label="SHIFTING"
+        options={[
+          { id: "auto", label: "AUTO" },
+          { id: "manual", label: "MANUAL" },
+        ]}
+        value={settings.gearbox}
+        onPick={(gearbox) => onSettings({ ...settings, gearbox })}
+      />
+      <div className="opt-note">
+        Manual holds the gear you chose — quicker in hands that keep the engine on song, and one
+        more thing to get wrong. Applies to every car, from the next stage you start.
+      </div>
+    </div>
+  );
+}
+
 function ControlsTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "onSettings">) {
   // Probed once per mount: a device does not grow a keyboard while the
   // options page is open, and re-probing on every render would churn.
   const [device] = useState(deviceControls);
   return (
     <div className="opt-list">
+      <GearboxSection settings={settings} onSettings={onSettings} />
       {device.keyboard && <KeyboardSection settings={settings} onSettings={onSettings} />}
       {device.touch && <TouchSection settings={settings} onSettings={onSettings} />}
     </div>
