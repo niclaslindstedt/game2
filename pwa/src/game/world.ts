@@ -17,6 +17,8 @@ import {
   STAGE_RULES,
   corridorOffset,
   createRng,
+  finishIndex,
+  gateHalfWidth,
   inStream,
   junctionDust,
   junctionFlat,
@@ -1140,7 +1142,9 @@ function buildCones(track: Track, from: number, to: number): THREE.Group {
  * approaching car reads, and hay bales lining the road below. */
 function buildGate(track: Track, index: number, label: "start" | "finish"): THREE.Group {
   const group = new THREE.Group();
-  const half = track.width / 2;
+  // The posts stand at the ends of the LINE the engine watches, so what the
+  // player aims between is exactly what the timer counts as crossed.
+  const half = gateHalfWidth(track);
   const s = track.samples[index];
   const r = rightOf(s.heading);
   const red = new THREE.MeshLambertMaterial({ color: "#e23c2c" });
@@ -1151,11 +1155,7 @@ function buildGate(track: Track, index: number, label: "start" | "finish"): THRE
   for (const side of [-1, 1]) {
     for (let k = 0; k < 5; k++) {
       const seg = new THREE.Mesh(stripeGeo, k % 2 === 0 ? red : white);
-      seg.position.set(
-        s.x + r.x * (half + 1) * side,
-        s.elevation + k + 0.5,
-        s.z + r.z * (half + 1) * side,
-      );
+      seg.position.set(s.x + r.x * half * side, s.elevation + k + 0.5, s.z + r.z * half * side);
       seg.rotation.y = s.heading;
       group.add(seg);
     }
@@ -1164,7 +1164,7 @@ function buildGate(track: Track, index: number, label: "start" | "finish"): THRE
       const along =
         track.samples[Math.max(0, Math.min(track.samples.length - 1, index + (k - 1) * 2))];
       const bale = new THREE.Mesh(baleGeo, baleMat);
-      const lat = (half + 1.9) * side;
+      const lat = (half + 0.9) * side;
       const top = k === 3;
       const b = top ? track.samples[index] : along;
       bale.position.set(
@@ -1182,7 +1182,7 @@ function buildGate(track: Track, index: number, label: "start" | "finish"): THRE
   });
   // BoxGeometry face order is +x,-x,+y,-y,+z,-z; with rotation.y set to
   // the heading, -z is the face looking back down the road at the car.
-  const banner = new THREE.Mesh(new THREE.BoxGeometry(track.width + 2, 1.3, 0.3), [
+  const banner = new THREE.Mesh(new THREE.BoxGeometry(half * 2, 1.3, 0.3), [
     white,
     white,
     white,
@@ -1503,7 +1503,7 @@ export function buildWorld(track: Track, density = 1): World {
     chunkGroup.add(buildCones(track, from, to));
     if (from === 0) chunkGroup.add(buildGate(track, 2, "start"));
     if (!track.endless && to === track.samples.length) {
-      chunkGroup.add(buildGate(track, to - 2, "finish"));
+      chunkGroup.add(buildGate(track, finishIndex(track), "finish"));
     }
     group.add(chunkGroup);
     chunks.push({ toS, group: chunkGroup, scenery });

@@ -32,6 +32,7 @@ import { createFumes } from "./fumes.ts";
 import { createRain } from "./rain.ts";
 import { createWayHomeArrow } from "./way-home.ts";
 import { buildMapRoute, type MapRoute } from "./map-route.ts";
+import { rockAt } from "./terrain.ts";
 import { buildWorld, type World } from "./world.ts";
 
 /** The map view's fog, as fractions of the camera's standoff distance. The
@@ -58,6 +59,17 @@ const WILD_DUST: DustTint = {
   base: new THREE.Color(biomeFor().ground.grass).multiplyScalar(0.86).getHex(),
   fleck: 0x4a3520,
   fleckMix: 0.28,
+};
+
+/** What a mountain gives instead. Above the tree line and on the steep
+ * flanks there is no turf to tear — a wheel scrabbles on bedrock and throws
+ * the stone itself, the biome's own rock with the darker shade of it
+ * through the cloud. Lighter than the rock face it comes off, because
+ * shattered grit catches the sky where a flat face does not. */
+const STONE_DUST: DustTint = {
+  base: new THREE.Color(biomeFor().ground.bedrock).multiplyScalar(1.06).getHex(),
+  fleck: biomeFor().ground.bedrockDark,
+  fleckMix: 0.32,
 };
 
 export type GameRenderer = {
@@ -238,14 +250,20 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     setConditions(state);
   };
 
-  /** What a wheel throws where, by the surface the engine says it is on.
-   * The road's is one tone of dry grit; the WILD's is two, because a verge
-   * is grass with earth under it — the wheel tears the turf and both come
-   * up together, mostly green with dark clods through it. */
-  const groundDust = (surface: GameState["surface"]): number | DustTint => {
-    if (surface === "water") return SPRAY;
-    if (surface === "nature") return WILD_DUST;
-    return GRIT;
+  /** What a wheel throws where. The road's is one tone of dry grit; the
+   * WILD's is two, because a verge is grass with earth under it — the wheel
+   * tears the turf and both come up together, mostly green with dark clods
+   * through it. But the wild is not one ground: a mountain flank has no turf
+   * on it, and green grit coming off bare rock is the tell. So off the road
+   * the cloud is chosen from the ground the car is actually standing on, by
+   * the same rule the terrain is PAINTED with, and a burst at a time rather
+   * than blended — a hillside going over to rock throws some of each, which
+   * reads as the ground changing instead of the effect switching. */
+  const groundDust = (state: GameState): number | DustTint => {
+    if (state.surface === "water") return SPRAY;
+    if (state.surface !== "nature") return GRIT;
+    const rock = rockAt(state.terrain.groundAt, state.car.x, state.car.z);
+    return Math.random() < rock ? STONE_DUST : WILD_DUST;
   };
 
   const onEvents = (state: GameState, events: GameEvent[]): void => {
@@ -258,7 +276,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
           c.x,
           c.y + 0.2,
           c.z,
-          groundDust(state.surface),
+          groundDust(state),
           Math.round((ev.clean ? 14 : 26) * fx),
           4,
         );
@@ -266,7 +284,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         chase.kick(0.2);
         dust.spawn(c.x, c.y + 0.3, c.z, SPRAY, Math.round(30 * fx), 5);
       } else if (ev.type === "takeoff") {
-        dust.spawn(c.x, c.y + 0.1, c.z, groundDust(state.surface), Math.round(10 * fx), 3);
+        dust.spawn(c.x, c.y + 0.1, c.z, groundDust(state), Math.round(10 * fx), 3);
       } else if (ev.type === "respawn") {
         chase.kick(0.3);
       } else if (ev.type === "impact") {
@@ -317,7 +335,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     if (fx > 0 && !c.airborne && dustClock > (sealed ? TARMAC_SMOKE.every : 0.03)) {
       dustClock = 0;
       const cloud = sealed ? smoke : dust;
-      const color = sealed ? SMOKE : groundDust(state.surface);
+      const color = sealed ? SMOKE : groundDust(state);
       // Smoke is boiled off the tire and left behind; grit is thrown by it.
       // So the wake it inherits is gentler, and it spreads instead of arcing.
       const wake = sealed ? 0.12 : 0.35;

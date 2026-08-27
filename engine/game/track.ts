@@ -26,9 +26,15 @@ export type WayHome = {
 
 /** Progress is monotonic, so this is always the furthest the car has got —
  * a car that doubles back is sent forward to where it earned, not to the
- * nearest piece of road behind it. */
+ * nearest piece of road behind it. The one place it stops short is the
+ * finish: a run ends by driving THROUGH the gate, so the way home may never
+ * drop the car on the far side of a line it still has to cross. */
 export function wayHome(state: GameState): WayHome {
-  const s = state.track.samples[state.progressIndex];
+  const track = state.track;
+  const index = track.endless
+    ? state.progressIndex
+    : Math.min(state.progressIndex, Math.max(0, finishIndex(track) - HOME_BACKOFF));
+  const s = track.samples[index];
   const car = state.car;
   return {
     x: s.x,
@@ -61,6 +67,54 @@ export type TrackFix = {
    * pulls it away from the outside edge. */
   slopeLat: number;
 };
+
+/** Samples a respawn lands short of the finish gate by (2 m each), so the
+ * car comes back with road left to cross the line with rather than being
+ * dropped onto it. */
+const HOME_BACKOFF = 2;
+
+/** The sample the finish gate stands on: the second to last, so the closing
+ * straight still runs on past the line and a flying finish has somewhere to
+ * land. The renderer builds the gate here too — the line the timer watches
+ * is the line the player sees. */
+export function finishIndex(track: Track): number {
+  return Math.max(0, track.samples.length - 2);
+}
+
+/** Half the width of a start/finish gate, m: the road plus the verge that
+ * still counts as being on it. The posts stand at its ends. */
+export function gateHalfWidth(track: Track): number {
+  return track.width / 2 + TUNING.offTrack.verge;
+}
+
+/** True when the move from (x0,z0) to (x1,z1) took the car through the
+ * finish gate, forwards. Progress alone does not end a run: progress is the
+ * nearest sample, and a car climbing the mountain beside the closing
+ * straight passes every one of them without ever crossing the line. The
+ * test is the LINE — the plane across the road at the gate, entered between
+ * its posts, in the direction of travel — so it counts a car airborne over
+ * it and refuses one that drove around it. */
+export function crossedFinish(
+  track: Track,
+  x0: number,
+  z0: number,
+  x1: number,
+  z1: number,
+): boolean {
+  const s = track.samples[finishIndex(track)];
+  const fwdX = Math.sin(s.heading);
+  const fwdZ = Math.cos(s.heading);
+  const before = (x0 - s.x) * fwdX + (z0 - s.z) * fwdZ;
+  const after = (x1 - s.x) * fwdX + (z1 - s.z) * fwdZ;
+  if (before >= 0 || after < 0) return false;
+  // Where on the line it crossed: the step is a fraction of a meter at rally
+  // pace, so the segment is straight enough to interpolate.
+  const t = after === before ? 0 : -before / (after - before);
+  const cx = x0 + (x1 - x0) * t;
+  const cz = z0 + (z1 - z0) * t;
+  const lateral = (cx - s.x) * Math.cos(s.heading) + (cz - s.z) * -Math.sin(s.heading);
+  return Math.abs(lateral) <= gateHalfWidth(track);
+}
 
 /** Locate the car against the centerline, searching near `hint`. */
 export function locate(track: Track, x: number, z: number, hint: number): TrackFix {

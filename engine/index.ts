@@ -41,7 +41,15 @@ export {
   type TimeOfDay,
   type Weather,
 } from "./game/state.ts";
-export { locate, wayHome, type TrackFix, type WayHome } from "./game/track.ts";
+export {
+  crossedFinish,
+  finishIndex,
+  gateHalfWidth,
+  locate,
+  wayHome,
+  type TrackFix,
+  type WayHome,
+} from "./game/track.ts";
 export {
   CARS,
   carById,
