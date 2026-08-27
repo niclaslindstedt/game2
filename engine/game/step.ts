@@ -12,6 +12,7 @@ import {
   STAGE_RULES,
   type StageKnobs,
   type StageLength,
+  type Surface,
 } from "../mapgen/index.ts";
 import { carById } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
@@ -187,10 +188,14 @@ export function createGame(options: CreateGameOptions): GameState {
 }
 
 /** What the car is driving on when it is not on the stage road: water it
- * has waded into, the mat of an abandoned asphalt branch, or plain nature. */
-function offRoadSurface(state: GameState, x: number, z: number): "water" | "nature" | "asphalt" {
+ * has waded into, one of the branches the route abandons at its junctions
+ * (R17), or plain nature. A spur is a REAL road, sealed or graded, and it
+ * keeps its own surface here: collapsing a gravel branch into `nature`
+ * gives a car driving down a drawn gravel road a field's grip, a field's
+ * speed cap, and a rooster tail of torn grass. */
+function offRoadSurface(state: GameState, x: number, z: number): Surface | "nature" {
   if (state.terrain.waterAt(x, z) !== null) return "water";
-  return state.terrain.spurSurfaceAt(x, z) === "asphalt" ? "asphalt" : "nature";
+  return state.terrain.spurSurfaceAt(x, z) ?? "nature";
 }
 
 function respawn(state: GameState, events: GameEvent[]): void {

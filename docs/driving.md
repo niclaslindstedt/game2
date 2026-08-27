@@ -232,11 +232,12 @@ not a mistake anymore; it is exploration:
   last progress. Nothing solid ever crashes the car. The channel under a
   bridge is cut deep enough to qualify, so going over a parapet is a
   drowning, not a shortcut.
-- **Other people's roads** — the asphalt branch the route abandons at each
-  junction is real road: the terrain flattens its shelf, the forest keeps
-  off it, and a car that drives past the tape gets tarmac grip on it
-  (`terrain.spurSurfaceAt`). It runs off the map; where it goes is between
-  the player and the horizon.
+- **Other people's roads** — the branch the route abandons at each junction
+  is real road: the terrain flattens its shelf, the forest keeps off it,
+  and a car that drives past the tape drives on the surface that branch is
+  actually made of (`terrain.spurSurfaceAt`) — tarmac grip on a sealed one,
+  gravel on a graded one, and neither of them the rough ground's cap. It
+  runs off the map; where it goes is between the player and the horizon.
 - **Solid props and the forest** — the wild scatters boulders and fallen
   trunks (`terrain.obstaclesNear`), and the forest's trees stand on solid
   trunks of their own (`terrain.treesNear`, placed by the same engine-side

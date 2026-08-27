@@ -150,8 +150,10 @@ export function patchAt(q: Patch, u: number, v: number): V3 {
   return mix3(mix3(q[0], q[1], u), mix3(q[3], q[2], u), v);
 }
 
-/** Outward normal from the diagonals — stable on the warped side panels,
- * and on a mirrored patch it comes out mirrored too, i.e. still outward. */
+/** Normal from the diagonals — stable on the warped side panels. It points
+ * OUTWARD only for a patch wound counter-clockwise from outside; a patch
+ * mirrored across x is wound the other way and gets the inward one, which
+ * is why `patchQuad` flips it for those. */
 export function patchNormal(q: Patch): V3 {
   const d1: V3 = [q[2][0] - q[0][0], q[2][1] - q[0][1], q[2][2] - q[0][2]];
   const d2: V3 = [q[3][0] - q[1][0], q[3][1] - q[1][1], q[3][2] - q[1][2]];
@@ -174,8 +176,14 @@ export function patchSpan(q: Patch): { u: number; v: number } {
 }
 
 /** One sub-rectangle of a patch, lifted along its normal so glass sits
- * proud of the metal it is cut into. `mirrored` patches are wound the
- * other way round; their normal is already correct. */
+ * proud of the metal it is cut into.
+ *
+ * `mirrored` says the patch is the x-mirror of one built on the car's right,
+ * which reverses BOTH the winding and the normal: the cross product of two
+ * mirrored vectors is the mirror negated, so the diagonals hand back a
+ * normal pointing into the cabin. Left unflipped it buries every window on
+ * that flank inside its own panel — the glass is drawn, and the metal is in
+ * front of it. */
 export function patchQuad(
   b: MeshBuilder,
   q: Patch,
@@ -186,9 +194,10 @@ export function patchQuad(
 ): void {
   if (rect.u1 - rect.u0 < 1e-3 || rect.v1 - rect.v0 < 1e-3) return;
   const n = patchNormal(q);
+  const out = mirrored ? -lift : lift;
   const p = (u: number, v: number): V3 => {
     const q0 = patchAt(q, u, v);
-    return [q0[0] + n[0] * lift, q0[1] + n[1] * lift, q0[2] + n[2] * lift];
+    return [q0[0] + n[0] * out, q0[1] + n[1] * out, q0[2] + n[2] * out];
   };
   const c = [p(rect.u0, rect.v0), p(rect.u1, rect.v0), p(rect.u1, rect.v1), p(rect.u0, rect.v1)];
   if (mirrored) b.quad(c[3], c[2], c[1], c[0], color);

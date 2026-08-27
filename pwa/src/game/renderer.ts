@@ -18,7 +18,14 @@ import {
   type VideoSettings,
 } from "./settings.ts";
 import { buildCar, type CarVisual } from "./car-mesh.ts";
-import { createDust, TARMAC_SMOKE, TIRE_SMOKE, type DustTint } from "./dust.ts";
+import {
+  createDust,
+  paceScale,
+  TARMAC_SMOKE,
+  TIRE_SMOKE,
+  WILD_THROW,
+  type DustTint,
+} from "./dust.ts";
 import { biomeFor } from "./biome.ts";
 import { createEnvironment } from "./environment.ts";
 import { createFumes } from "./fumes.ts";
@@ -116,6 +123,11 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   /** The map pane, CSS pixels from the canvas' top-left. */
   let mapRect: { x: number; y: number; width: number; height: number } | null = null;
   let dustClock = 0;
+  /** Grains owed but not yet thrown. Pace and the surface thin a cloud's
+   * count into a fraction, and rounding each spawn on its own turns a thin
+   * trickle into silence — a tenth of a grain per spawn has to come out as
+   * one grain every ten spawns, not zero forever. */
+  let grainDebt = 0;
   /** Last frame's forward speed — the launch's wheelspin is read off the
    * change in it. */
   let lastSpeed = 0;
@@ -315,14 +327,26 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       // number, so the plume comes up the instant the car is asked for more
       // grip than it has, not once the angle has already developed.
       const sideways = c.slide > 0.15 && c.u > 6;
+      // How much ground this wheel is actually moving: pace decides the
+      // size of any thrown cloud, and the wild gives up far less of itself
+      // than the road does. Neither applies to smoke, which is made of the
+      // tire rather than the ground.
+      const pace = sealed ? 1 : paceScale(c.u);
+      const thrown = sealed ? 1 : pace * (state.surface === "nature" ? WILD_THROW : 1);
+      const grains = (count: number): number => {
+        grainDebt += count * fx * thrown;
+        const whole = Math.floor(grainDebt);
+        grainDebt -= whole;
+        return whole;
+      };
       const rear = (side: number, count: number, spread: number): void =>
         cloud.spawn(
           c.x - fwdX * 1.5 + rightX * side * 0.8,
           c.y + 0.15,
           c.z - fwdZ * 1.5 + rightZ * side * 0.8,
           color,
-          Math.round(count * fx),
-          spread,
+          grains(count),
+          spread * pace,
           wakeX,
           wakeZ,
         );
@@ -340,18 +364,20 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
           // can SEE and not for every corner that leans on the tires. A
           // sliding tire on tarmac makes a few big puffs where gravel
           // throws grains, and they hang where they were made.
-          const thrown = T.drift.puffs + Math.round(c.slide * 3);
-          rear(-1, thrown, T.spread);
-          rear(1, thrown, T.spread);
+          const puffs = T.drift.puffs + Math.round(c.slide * 3);
+          rear(-1, puffs, T.spread);
+          rear(1, puffs, T.spread);
         } else if (c.braking && c.u > T.brake.speed) {
           rear(Math.random() < 0.5 ? -1 : 1, T.brake.puffs, T.spread);
         }
-      } else if (sideways || state.offRoad) {
+      } else if (sideways || (state.offRoad && c.u > 6)) {
         // The drift plume also blows toward the slide, off the outside
-        // wheels, and thickens as the slide deepens.
-        const thrown = 4 + Math.round(c.slide * 5);
-        rear(-1, thrown, 3.5);
-        rear(1, thrown, 3.5);
+        // wheels, and thickens as the slide deepens. Off-road earns it at
+        // the same speed a slide does — a car picking its way back to the
+        // track at walking pace is not excavating anything.
+        const perWheel = 4 + Math.round(c.slide * 5);
+        rear(-1, perWheel, 3.5);
+        rear(1, perWheel, 3.5);
       } else if (c.braking && c.u > 8) {
         rear(-1, 4, 2.5);
         rear(1, 4, 2.5);

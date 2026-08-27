@@ -121,11 +121,14 @@ const WHEEL_REACH_PX = 70;
 const WHEEL_THROW_CURVE = 1.15;
 /** The rim has weight: it never teleports to the thumb, it turns toward it.
  * This is the floor rate in lock/second — what a fingertip nudge earns... */
-const WHEEL_TURN_FLOOR = 1.4;
+const WHEEL_TURN_FLOOR = 1.8;
 /** ...and this is what each unit of gap between thumb and rim adds on top,
- * so a committed shove reaches full lock in about a quarter second while a
- * wobble that is corrected before the rim catches up barely steers at all. */
-const WHEEL_TURN_GAIN = 8;
+ * so a committed shove reaches full lock in about a sixth of a second while
+ * a wobble that is corrected before the rim catches up barely steers at all.
+ * The engine's own rack (TUNING.steering.rackRate) lags again behind this,
+ * and the two delays STACK: what the thumb feels is the sum, so neither can
+ * be tuned for weight on its own. */
+const WHEEL_TURN_GAIN = 12;
 /** Rim rotation at full lock, degrees — also the fill arc's full sweep. */
 const WHEEL_LOCK_DEG = 120;
 /** Drag (px) from the anchor before a pedal gesture beats plain gas. */

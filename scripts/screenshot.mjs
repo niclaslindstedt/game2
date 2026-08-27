@@ -193,6 +193,68 @@ await capture("shot-drift", { width: 1280, height: 720 }, async (page) => {
   await page.waitForTimeout(950);
 });
 
+/** Off the road and into the wild, and hold it there. The banner is the
+ * honest cursor: it says the engine agrees the car has left the track, so
+ * what is behind the wheels is turf rather than grit. */
+async function inTheWild(page) {
+  await page.waitForFunction(
+    "document.querySelector('.hud-pace-text')?.textContent?.includes('RETURN TO TRACK')",
+    null,
+    { timeout: 120000 },
+  );
+}
+
+// The wild's turf, at pace. Grass holds together where loose grit does not,
+// so the acceptance test is that the plume off a car crossing a field is
+// visibly THINNER than the one the same car throws on gravel — clods and
+// blades you can count, not a green screen.
+await capture("shot-wild-dust", { width: 1280, height: 720 }, async (page) => {
+  await racing(page);
+  await page.keyboard.down("ArrowUp");
+  // Stage seconds, not wall seconds: under software rendering the sim runs
+  // at a fraction of wall time, and a timeout long enough to build pace on
+  // this machine catches the car at walking speed on the next one — which
+  // is the one thing a cloud-at-pace shot cannot afford to get wrong.
+  await atStageTime(page, 8);
+  // The lock stays ON and the throttle comes OFF at the verge. Both matter:
+  // a car crossing a field in a straight line puts its plume behind the
+  // camera, and at 120 km/h the wake carries the grains past it inside half
+  // a second whatever the car is doing. What a player actually looks at is
+  // the tail off the outside wheels of a car sliding on turf at a pace the
+  // wild allows, which is where this lands after a second of its drag.
+  await page.keyboard.down("ArrowLeft");
+  await inTheWild(page);
+  await page.keyboard.up("ArrowUp");
+  const off = await stageTime(page);
+  await atStageTime(page, off + 1.4);
+});
+
+// The same ground at a crawl, which is the other half of the same test: a
+// car picking its way back to the road disturbs the ground, it does not
+// excavate it, so the cloud has to be a scatter at the wheels rather than
+// the plume above.
+await capture("shot-crawl-dust", { width: 1280, height: 720 }, async (page) => {
+  await racing(page);
+  await page.keyboard.down("ArrowUp");
+  await atStageTime(page, 8);
+  await page.keyboard.down("ArrowLeft");
+  await inTheWild(page);
+  await page.keyboard.up("ArrowLeft");
+  await page.keyboard.up("ArrowUp");
+  // A fixed brake, not a target speed. Waiting for the HUD to read a chosen
+  // number cannot land the frame: the readout repaints every 80 ms and one
+  // software-rendered frame advances the sim well past it, so the shutter
+  // finds the car either back up to speed on this hillside or already
+  // reversing out under the same pedal. A fixed stage-time brake lands on
+  // ONE deterministic frame instead — the same one on every build, which is
+  // what makes a before/after of the cloud a comparison rather than two
+  // pictures of different moments.
+  await page.keyboard.down("ArrowDown");
+  const off = await stageTime(page);
+  await atStageTime(page, off + 1.9);
+  await page.keyboard.up("ArrowDown");
+});
+
 // Tarmac, where the ground-contact FX are a different question: a sealed
 // road has nothing lying on it to throw, so the acceptance test for these
 // three is as much what is ABSENT as what is there. Flat out must be clean

@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_KNOBS,
+  NEUTRAL_INPUT,
   ROAD_CROSS,
   STAGE_RULES as R,
   TUNING,
@@ -17,9 +18,11 @@ import {
   createTerrain,
   crossOffset,
   junctionFlat,
+  createGame,
   junctionMainEdge,
   knobScale,
   locate,
+  step,
   vergeOffset,
   wearAt,
 } from "@engine";
@@ -251,6 +254,44 @@ describe("junctions (R17)", () => {
     // Well off it, the wild is the wild again.
     const r = { x: Math.cos(on.heading), z: -Math.sin(on.heading) };
     expect(terrain.spurSurfaceAt(on.x + r.x * 40, on.z + r.z * 40)).toBeNull();
+  });
+
+  // A branch is a real road whatever it is PAVED with, and the run state is
+  // where that has to show up: `state.surface` is what the grip, the drag,
+  // the speed cap and the renderer's thrown dust all read. A graded branch
+  // reported as `nature` gives a car on a drawn gravel road a field's
+  // physics and a rooster tail of torn grass.
+  /** How far out along a branch the stage road stops claiming the ground:
+   * the widest junction's reach plus the road's own half-width and verge. */
+  function junctionReach(track: ReturnType<typeof compileStage>): number {
+    const widest = Math.max(...track.junctions.map((j) => j.reach + j.width));
+    return widest + track.width / 2 + TUNING.offTrack.verge;
+  }
+
+  it("a car out on a branch drives on the surface that branch is made of", () => {
+    const track = compileStage(3, "medium", { asphalt: 0.5 });
+    const spur = track.spurs[0];
+    // A branch is sealed for its first stretch and graded past that, so one
+    // of them carries both surfaces — and both must reach `state.surface`.
+    // Sampled well out along it: the head of a branch sits INSIDE its
+    // junction, which is still the stage road.
+    for (const surface of ["asphalt", "gravel"] as const) {
+      const on = spur.samples.find(
+        (sample) => sample.surface === surface && sample.s > junctionReach(track),
+      );
+      expect(on, `branch carries no ${surface} clear of its junction`).toBeDefined();
+      const state = createGame({ seed: 3, carId: "compact", track, skipCountdown: true });
+      state.car.x = on!.x;
+      state.car.z = on!.z;
+      // ON the branch, not dropped onto it from the start line's height:
+      // both `offRoad` and `surface` are frozen while the car is airborne.
+      state.car.y = state.terrain.groundAt(on!.x, on!.z);
+      state.car.heading = on!.heading;
+      for (let i = 0; i < 30; i++) step(state, NEUTRAL_INPUT);
+      expect(state.car.airborne).toBe(false);
+      expect(state.offRoad).toBe(true);
+      expect(state.surface).toBe(surface);
+    }
   });
 });
 
