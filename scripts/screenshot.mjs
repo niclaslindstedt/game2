@@ -265,8 +265,16 @@ await capture(
     await racing(page);
     await atStageTime(page, ON_TARMAC);
     await page.keyboard.down("ArrowDown");
+    // THE BRAKE DOES NOT PARK THE CAR. Once it has stopped, the same pedal
+    // backs it out (`CarState.reversing`), so the readout leaves zero and
+    // climbs again — and the HUD only repaints every 80 ms, so waiting for the
+    // literal "0" waits for a repaint to land inside that one narrow window.
+    // It usually never does, and the shot hangs for the full two minutes.
+    // A standstill OR the reverse gear is the honest condition: both mean the
+    // car has finished going forwards, which is all a launch needs.
     await page.waitForFunction(
-      "document.querySelector('.hud-speed-num')?.textContent === '0'",
+      `Number(document.querySelector('.hud-speed-num')?.textContent) <= 1
+       || document.querySelector('.hud-gear')?.textContent === 'R'`,
       null,
       {
         timeout: 120000,
