@@ -12,9 +12,10 @@
 //   THE SCORES the menu and stage themes, played by the real sequencer, with
 //              a per-voice mute so a mix can actually be picked apart.
 //   THE ROAD   the continuous bed under sliders — revs, load, speed, surface,
-//              how sideways, in the air. The engine, the tyres, the wind and
-//              the drift are functions of those numbers and there is no other
-//              honest way to hear them than to move them.
+//              how hard it is cornering, how sideways it has gone, in the air.
+//              The engine, the tyres, the wind and the drift are functions of
+//              those numbers and there is no other honest way to hear them
+//              than to move them.
 //
 // The page carries no scripts of its own beyond the wiring: the audio code is
 // the repo's own TypeScript, compiled by `tsc` and inlined, so this can never
@@ -421,6 +422,7 @@ const CONTROLS = [
   ["rev", "Revs", 0.5],
   ["load", "Load", 0.7],
   ["air", "Speed", 0.5],
+  ["corner", "Cornering", 0],
   ["slide", "Sideways", 0],
   ["wear", "Damage", 0],
 ];
@@ -498,6 +500,7 @@ roadBtn.addEventListener("click", () => {
           speed: value.air * 60,
           air: value.air,
           surface: value.surface,
+          corner: value.corner,
           slide: value.slide,
           sideways: -value.slide * 10,
           airborne: value.airborne,

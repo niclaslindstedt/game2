@@ -94,6 +94,15 @@ Noise beds want a DEEPER stack than pitched ones (five grains against three):
 uncorrelated noise sums in power rather than in level, so a broadband bed
 flutters where a pitched one is already smooth.
 
+**AND A BED IS EXPENSIVE, so count what it asks for.** Five overlapping grains
+nine times a second is twenty SECONDS of audio per second of play. Nothing on
+that path may synthesise samples per voice — `synth.ts` keeps one long buffer
+per noise colour and every grain reads a random window of it, because the
+alternative was four megabytes of `Float32Array` a second on the renderer's own
+thread, and the collector answers that with a pause long enough to push the
+next grain behind the clock. A bed that is cheap for one grain and run ten
+times a second is not cheap.
+
 ## Sound design vocabulary
 
 A starting grammar — tweak from here, do not treat as law:
@@ -114,6 +123,14 @@ A starting grammar — tweak from here, do not treat as law:
   transient (the contact) over a low sine (the body it happened in). A menu
   that beeps is a menu from a different game.
 - **A refusal has no contact click** — the switch did not move.
+- **A BED THAT IS CONSTANT SAYS NOTHING, and says it for the whole run.** The
+  tyres are the trap: a tyre rolling straight ahead barely makes a noise, and
+  what makes the noise is a tyre being asked to TURN the car. Write a
+  continuous surface as a quiet cruise level plus a multiplier it reaches under
+  load, never as one level — otherwise the loudest thing in the mix is also the
+  thing carrying the least information. The honest cornering signal is lateral
+  acceleration (`car.u * car.yawRate`): zero on a straight at any speed, zero at
+  a standstill on full lock, largest where a tyre is loudest.
 
 Mixing rules, and they are enforced by test:
 

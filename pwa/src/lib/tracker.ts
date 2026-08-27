@@ -261,12 +261,18 @@ export function createTrackPlayer(synth: Synth): TrackPlayer {
       synth.resume();
       return;
     }
-    // (Re)anchor after unlock, a long stall, or a clock that jumped BACKWARDS
-    // — a rebuilt AudioContext (the iOS zombie recovery) starts its clock near
+    // (Re)anchor after unlock, a stall, or a clock that jumped BACKWARDS — a
+    // rebuilt AudioContext (the iOS zombie recovery) starts its clock near
     // zero, stranding the old nextStepTime unreachably far ahead. Legitimate
     // scheduling never books past now + LOOKAHEAD_S + one step, so anything
     // two seconds out is a stale clock rather than a plan.
-    if (nextStepTime === 0 || nextStepTime < now - 0.5 || nextStepTime > now + 2) {
+    //
+    // ANY lateness counts, not just a catastrophic one: a step booked in the
+    // past does not wait its turn, it sounds the moment it is handed over. A
+    // scheduler that crawls back up from behind one step at a time therefore
+    // empties its whole backlog into a single instant — half a bar as one
+    // chord — where re-anchoring costs nothing but a beat arriving late.
+    if (nextStepTime === 0 || nextStepTime < now || nextStepTime > now + 2) {
       nextStepTime = now + 0.05;
     }
     const stepS = 60 / bpm / stepsPerBeat;
