@@ -279,8 +279,10 @@ drawn by the renderer:
   and so does the shadow.
 
 The renderer draws both on a `chassis` group that holds every panel and no
-wheel (`pwa/src/game/car-body.ts`), and the chase and hood cameras share a
-little of the heave so a landing lands in the FRAME too.
+wheel (`pwa/src/game/car-body.ts`). The hood cam is bolted to the body and
+rides all of it; the cameras close behind share a little of the heave so a
+landing lands in the FRAME too, and the ones flown high above the car share
+none.
 
 Each car's `mass` (kg, in `engine/game/defs/cars.ts`) is read against
 `TUNING.collision.refMass`: a heavier car is harder for a clipped tree to

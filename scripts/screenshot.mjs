@@ -12,7 +12,8 @@
 //                                              # contains one of these
 //
 // The app boots to the STUDIO CARD and then the main menu; driving captures
-// pass ?start=1 (plus ?seed=, ?tod=, ?weather=) to pin a run and skip both.
+// pass ?start=1 (plus ?seed=, ?tod=, ?weather=, ?camera=) to pin a run and
+// skip both.
 // The menu captures pass ?menu=1 to force the menu back, and ?splash=1 to
 // see the card itself.
 import { mkdirSync } from "node:fs";
@@ -496,13 +497,42 @@ await capture(
   { length: "short" },
 );
 
-// Hood cam at speed.
-await capture("shot-hood", { width: 1280, height: 720 }, async (page) => {
-  await page.keyboard.press("KeyV");
-  await racing(page);
-  await page.keyboard.down("ArrowUp");
-  await page.waitForTimeout(4500);
-});
+// The camera ladder, one shot per angle, all at the same pace on the same
+// stretch so the proportions can be compared side by side: how big the car
+// is in frame, where it sits vertically, and how much road each one gives
+// the driver. `?camera=` pins the angle rather than counting KeyV presses —
+// a press count silently shoots the wrong camera the day the ladder grows.
+for (const angle of ["hood", "close", "chase", "far", "heli", "top"]) {
+  await capture(
+    `shot-cam-${angle}`,
+    { width: 1280, height: 720 },
+    async (page) => {
+      await racing(page);
+      await page.keyboard.down("ArrowUp");
+      await page.waitForTimeout(4500);
+    },
+    { camera: angle },
+  );
+}
+
+// The same three distant rigs mid-turn, which is where their sway lives:
+// the swing is sprung, so a committed turn should have thrown the camera
+// out to the OUTSIDE of it rather than leaving it square behind the car. A
+// still cannot show the settle, but it can show that the offset is there.
+for (const angle of ["far", "heli", "top"]) {
+  await capture(
+    `shot-cam-${angle}-turn`,
+    { width: 1280, height: 720 },
+    async (page) => {
+      await racing(page);
+      await page.keyboard.down("ArrowUp");
+      await page.waitForTimeout(4000);
+      await page.keyboard.down("ArrowRight");
+      await page.waitForTimeout(950);
+    },
+    { camera: angle },
+  );
+}
 
 // The in-race menu, opened the way a player opens it — by tapping the
 // minimap — in both orientations, since the card is the same width in each.

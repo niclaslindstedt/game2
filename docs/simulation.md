@@ -51,7 +51,7 @@ If a tuning change breaks one of these, the change is wrong or the test's world 
 
 ## Screenshots close the loop
 
-Numbers say whether the game is _sound_; pictures say whether it _looks and reads_ right. `make screenshots` (scripts/screenshot.mjs) serves the built app, drives it with scripted keyboard input, and captures the grid, full speed, a drift, the first jump reached, the sealed-road trio, the hood cam, and portrait framing into `previews/`. Pass scene-name fragments on the command line to shoot only those. Iterate: change → `make sim` → `make screenshots` → look.
+Numbers say whether the game is _sound_; pictures say whether it _looks and reads_ right. `make screenshots` (scripts/screenshot.mjs) serves the built app, drives it with scripted keyboard input, and captures the grid, full speed, a drift, the first jump reached, the sealed-road trio, every camera angle (plus the distant three mid-turn, where their sway shows), and portrait framing into `previews/`. Pass scene-name fragments on the command line to shoot only those. Iterate: change → `make sim` → `make screenshots` → look.
 
 Two habits keep a scene pointed at what it is for rather than at the harness:
 

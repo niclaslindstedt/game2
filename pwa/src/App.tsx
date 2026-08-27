@@ -62,7 +62,13 @@ import {
   type CampaignLevel,
   type CampaignProgress,
 } from "./game/campaign.ts";
-import { loadSettings, saveSettings, type Settings } from "./game/settings.ts";
+import {
+  PLAY_CAMERAS,
+  loadSettings,
+  saveSettings,
+  type PlayCamera,
+  type Settings,
+} from "./game/settings.ts";
 import { setAudioVolumes, unlockAudio } from "./game/audio/bus.ts";
 import { playUi } from "./game/audio/ui.ts";
 import { armMenuMusic, pauseMusic, playMusic, resumeMusic, stopMusic } from "./game/audio/music.ts";
@@ -207,6 +213,15 @@ function backdropFor(page: MenuPage, race: RaceSettings, seed: number, demoSeed:
     };
   }
   return { camera: "drone" as CameraMode, stage: demoStage(race, demoSeed), driven: true };
+}
+
+/** The camera a run opens on: the player's own choice from OPTIONS, unless
+ * the tooling pins one with `?camera=` the way it pins the seed — a shot of
+ * a given angle should not depend on what is in the screenshot machine's
+ * local storage. */
+function startCamera(chosen: PlayCamera): PlayCamera {
+  const param = new URLSearchParams(location.search).get("camera");
+  return PLAY_CAMERAS.some((cam) => cam.id === param) ? (param as PlayCamera) : chosen;
 }
 
 let flashId = 0;
@@ -360,7 +375,7 @@ export function App() {
     setMenu(null);
     menuRef.current = null;
     applyStage(spec, true);
-    rendererRef.current?.setCamera("chase");
+    rendererRef.current?.setCamera(startCamera(optionsRef.current.camera));
   };
 
   const playLevel = (level: CampaignLevel, mode: PlayMode): void => {
@@ -504,6 +519,7 @@ export function App() {
           },
           true,
         );
+        renderer.setCamera(startCamera(optionsRef.current.camera));
       }
 
       const restart = (): void => {
@@ -514,7 +530,7 @@ export function App() {
       const camera = (): void => {
         if (menuRef.current) return;
         const mode = renderer.cycleCamera();
-        flash(mode === "hood" ? "HOOD CAM" : "CHASE CAM", "info");
+        flash(`${PLAY_CAMERAS.find((cam) => cam.id === mode)?.label ?? "CHASE"} CAM`, "info");
       };
       actionsRef.current = { restart, menu: goMainMenu, camera };
       input.onAction((action) => {

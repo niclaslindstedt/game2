@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Options, in four tabs:
 //
-//   HUD      — which instruments are on screen. Speed, gear and the
-//              countdown are not offered: those are the game.
+//   HUD      — which camera a run opens on, and which instruments are on
+//              screen. Speed, gear and the countdown are not offered:
+//              those are the game.
 //   AUDIO    — the two faders, in five steps rather than as a continuous
 //              slider: every other control on this screen is a row of
 //              choices, and a volume nobody can quite reproduce is worse
@@ -28,11 +29,13 @@ import {
   HUD_TOGGLES,
   KEY_ACTIONS,
   PEDAL_DIRS,
+  PLAY_CAMERAS,
   assignPedalDir,
   deviceControls,
   keyLabel,
   type KeyAction,
   type PedalDir,
+  type PlayCamera,
   type Settings,
 } from "./settings.ts";
 
@@ -110,9 +113,20 @@ function ToggleRow({
 }
 
 function HudTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "onSettings">) {
+  const camera = PLAY_CAMERAS.find((cam) => cam.id === settings.camera) ?? PLAY_CAMERAS[0];
   return (
     <div className="opt-list">
-      <div className="menu-sub">Switch off what you do not need on screen</div>
+      <div className="menu-sub">Where you watch from, and what is on screen</div>
+      <OptionRow
+        label="CAMERA"
+        options={PLAY_CAMERAS}
+        value={settings.camera}
+        onPick={(id: PlayCamera) => onSettings({ ...settings, camera: id })}
+      />
+      <div className="opt-note">
+        {camera.hint} — every stage starts here, and the camera key still walks the whole ladder
+        from wherever you set it.
+      </div>
       <div className="opt-toggles">
         {HUD_TOGGLES.map((toggle) => (
           <ToggleRow
