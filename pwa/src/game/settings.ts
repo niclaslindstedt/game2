@@ -3,10 +3,14 @@
 // and how the car is driven — in one persisted blob, plus the device probe
 // that decides which control sections are worth showing at all.
 //
-// Everything here is SCREEN-space and app-side: the engine neither knows
-// nor cares. The renderer reads `VideoSettings`, the HUD reads
+// Almost everything here is SCREEN-space and app-side: the engine neither
+// knows nor cares. The one exception is the gearbox, which the engine does
+// read — it is a choice about how the car is DRIVEN rather than how it is
+// drawn, and it is offered for every car in the roster. The renderer reads `VideoSettings`, the HUD reads
 // `HudSettings`, input.ts reads the key bindings, and the audio bus reads
 // `AudioSettings`.
+
+import type { GearboxMode } from "@engine";
 
 /** Where the camera watches the car from, inside out. This is both the
  * order the camera key walks and the order the options screen lists, and
@@ -203,6 +207,10 @@ export type Settings = {
   video: VideoSettings;
   keys: KeyBindings;
   touch: TouchSettings;
+  /** Which box the driver wants, for EVERY car. It is a preference about
+   * how much of the car you want to be responsible for, not a property of
+   * any one of them, so it lives here rather than in the catalog. */
+  gearbox: GearboxMode;
   /** True once the developer menu has been let out — see DEV_TAPS. It stays
    * out: a player who found it deliberately does not want to find it again
    * every time they open the game. */
@@ -229,6 +237,9 @@ export const DEFAULT_SETTINGS: Settings = {
   video: { resolution: "medium", drawDistance: "normal", effects: "full", flora: "normal" },
   keys: DEFAULT_KEYS,
   touch: DEFAULT_TOUCH,
+  // The automatic: a player who has not chosen has not asked to be given
+  // something else to manage while the road is coming at them.
+  gearbox: "auto",
   developer: false,
 };
 
@@ -264,6 +275,7 @@ export function loadSettings(): Settings {
     video: { ...DEFAULT_SETTINGS.video },
     keys: { ...DEFAULT_SETTINGS.keys },
     touch: { ...DEFAULT_SETTINGS.touch },
+    gearbox: DEFAULT_SETTINGS.gearbox,
     developer: false,
   };
   try {
@@ -282,6 +294,7 @@ export function loadSettings(): Settings {
     if (parsed.keys) Object.assign(settings.keys, parsed.keys);
     if (parsed.touch) Object.assign(settings.touch, parsed.touch);
     migratePedalDirs(settings.touch);
+    if (parsed.gearbox === "manual") settings.gearbox = "manual";
     if (parsed.developer === true) settings.developer = true;
   } catch {
     /* storage unavailable — the defaults are a perfectly good game */

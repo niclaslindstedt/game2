@@ -178,9 +178,11 @@ describe("turning at pace", () => {
     expect(state.car.drifting).toBe(true);
     // ...and HOLDING it with the power down and full lock takes the rear
     // far past the saturation band — deeper than any drift the wheel can
-    // catch, well beyond where the slide parks without it.
+    // catch, well beyond where the slide parks without it. Stated against
+    // the angle a fully developed slide asks for, because that is what
+    // "past the band" means; a bare number would only be this car's.
     run(state, { throttle: 1, steer: 1, handbrake: true }, 0.7);
-    expect(Math.abs(state.car.slip)).toBeGreaterThan(0.9);
+    expect(Math.abs(state.car.slip)).toBeGreaterThan(TUNING.drift.angleSpan * 1.4);
   });
 
   it("stays gripped below the speed where turning outruns the tires", () => {
@@ -201,7 +203,12 @@ describe("turning at pace", () => {
   });
 });
 
+// Power oversteer is the REAR-DRIVEN car's, and only its: these run on the
+// roster's rear-driver, because a front-driven car answers the throttle by
+// pulling itself straight (see the drivetrain block below).
 describe("rear-wheel drive", () => {
+  const rwd = (): GameState => game("classic");
+
   /** Build speed, then hold a full-lock power slide for a second. */
   function enterDrift(state: GameState): void {
     upToSpeed(state, 8);
@@ -210,7 +217,7 @@ describe("rear-wheel drive", () => {
   }
 
   it("centering the wheel lets the slide linger, then hands the car back", () => {
-    const state = game();
+    const state = rwd();
     enterDrift(state);
     const entrySign = Math.sign(state.car.slip);
     // Wheel straight, power still down: the driven rear keeps the tail out
@@ -227,7 +234,7 @@ describe("rear-wheel drive", () => {
   });
 
   it("lifting the throttle calms the car without any counter-steer", () => {
-    const state = game();
+    const state = rwd();
     enterDrift(state);
     run(state, {}, 1.5);
     expect(state.car.drifting).toBe(false);
@@ -235,7 +242,7 @@ describe("rear-wheel drive", () => {
   });
 
   it("over-holding the counter swings the pendulum into an opposite drift", () => {
-    const state = game();
+    const state = rwd();
     enterDrift(state);
     const entrySign = Math.sign(state.car.slip);
     // Full counter-lock held straight through the catch: the body's yaw
@@ -248,7 +255,7 @@ describe("rear-wheel drive", () => {
   });
 
   it("a timed counter-and-release settles the car back to straight", () => {
-    const state = game();
+    const state = rwd();
     enterDrift(state);
     // Counter until the nose is nearly back, then breathe everything —
     // the skilled exit: no pendulum, pace kept.

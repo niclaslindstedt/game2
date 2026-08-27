@@ -41,7 +41,16 @@ function rotateFrame(car: CarState, delta: number): void {
   car.w = w;
 }
 
-function engineAccel(spec: CarSpec, car: CarState): number {
+/** Where inside the current gear the engine is, 0 at the bottom and 1 at
+ * the top. Both halves of `spec.torque` run off it — the curve that decides
+ * where the shove lives, and the wheelspin that decides how much of it ever
+ * reaches the ground — because both are at their most extreme where there
+ * is most torque and least speed. */
+function revs(spec: CarSpec, car: CarState, speed: number): number {
+  return clamp(speed / spec.gearTop[car.gear], 0, 1);
+}
+
+function engineAccel(spec: CarSpec, car: CarState, surfaceGrip: number): number {
   // Full torque through most of the gear, smoothly tapering to zero at the
   // gear's top speed. The taper starts late (last ~18%) so the equilibrium
   // against rolling drag sits close to gearTop and the shift-up threshold
@@ -49,7 +58,21 @@ function engineAccel(spec: CarSpec, car: CarState): number {
   const top = spec.gearTop[car.gear];
   const headroom = clamp((top - car.u) / (top * 0.18), 0, 1);
   const taper = headroom * headroom * (3 - 2 * headroom);
-  return spec.gearAccel[car.gear] * taper;
+  const rev = revs(spec, car, car.u);
+  // The torque curve, pivoting around mid-gear: a torquey engine shoves off
+  // the bottom and runs out of puff, a peaky one wants revs. Area-neutral by
+  // construction, so `torque` moves the pull around inside the gear without
+  // ever adding any — two cars with the same gearing reach the same place by
+  // different routes, and which route suits the stage is the point.
+  const curve = clamp(1 + T.engine.torqueSpan * (spec.torque - 1) * (1 - 2 * rev), 0.2, 2);
+  // ...and how much of it reaches the ground. One driven axle carrying all
+  // the torque on a loose surface spins where four driven wheels hook up and
+  // go, and it spins worst exactly where the torque is highest: the bottom
+  // of the gear. This is the whole cost of a rear-drive launch on gravel,
+  // and it is gone by the time the gear runs out.
+  const bite = clamp(spec.traction * T.drivetrain[spec.drive].bite * surfaceGrip, 0, 1);
+  const spin = (1 - bite) * T.engine.wheelspin * spec.torque * (1 - rev);
+  return spec.gearAccel[car.gear] * taper * curve * (1 - spin);
 }
 
 function stepGearbox(
@@ -63,7 +86,7 @@ function stepGearbox(
   // A hurt gearbox shifts harsher: the auto box, seamless when sound, cuts
   // throttle per shift as its damage grows; the manual's cut stretches.
   const gearboxDamage = car.damage.systems.gearbox;
-  if (spec.gearbox === "auto") {
+  if (car.gearbox === "auto") {
     const cut = T.collision.systems.autoCut * gearboxDamage;
     if (car.gear < maxGear && car.u > spec.gearTop[car.gear] * T.gearbox.upAt) {
       car.gear += 1;
@@ -95,7 +118,8 @@ function stepGearbox(
  * the transition between two corners one continuous motion.
  *
  * Demand is the turn the WHEEL commands — speed times the gripping steer
- * gain — never the yaw the car ended up with. That distinction is the whole
+ * gain, plus whatever the driven axle is spinning up on its own — never the
+ * yaw the car ended up with. That distinction is the whole
  * shape of the control. The slide feeds extra yaw authority (`driftYaw`)
  * back into the car, so a demand measured off the resulting yaw closes a
  * positive loop of gain `u · steer · driftYaw / (ceiling · entrySpread)`,
@@ -118,21 +142,30 @@ type SlideState = {
   open: number;
 };
 
-function slideFactor(car: CarState, commandedYaw: number, ceiling: number): SlideState {
+/** The three numbers the DRIVETRAIN moves in the slide: where the floor
+ * under it sits, where it starts once past that floor, and how fast it lets
+ * go again (TUNING.drivetrain). */
+type SlideLimits = { floor: number; entryAt: number; release: number };
+
+function slideFactor(car: CarState, demand: number, limits: SlideLimits): SlideState {
   // THE SPEED FLOOR comes first, because under it there is no slide to
   // shape. Read off GROUND speed — the number on the speedo — so the rule
-  // the player is told ("it will not drift under 70") is the rule the car
-  // obeys, and so a car already sideways loses the angle as it slows into
-  // the floor rather than carrying it down to a standstill.
-  const gate = clamp((Math.hypot(car.u, car.w) - D.slideFrom) / D.slideSpan, 0, 1);
+  // the player is told is the rule the car obeys, and so a car already
+  // sideways loses the angle as it slows into the floor rather than
+  // carrying it down to a standstill. WHERE the floor sits is the
+  // drivetrain's: a rear axle with torque under it steps the tail out at
+  // walking pace, which is a real thing a rear-driver does and no
+  // front-driver ever does.
+  const gate = clamp((Math.hypot(car.u, car.w) - limits.floor) / D.slideSpan, 0, 1);
   const open = gate * gate * (3 - 2 * gate);
-  const demand = Math.abs(car.u * commandedYaw) / ceiling;
   // SMOOTHSTEP, not a clamped line: the ramp has to leave zero and reach one
   // with no corner in it. A linear clamp puts a kink in the car's response
   // exactly at the limit, and a kink is an event — the moment a player feels
   // the car "change into" a drift. Starting below the limit (`entryAt`) and
-  // easing in means nothing happens AT the limit at all.
-  const t = clamp((demand - D.entryAt) / D.entrySpread, 0, 1);
+  // easing in means nothing happens AT the limit at all. Where that entry
+  // sits is the DRIVETRAIN's too: a front-driver understeers past the limit
+  // before it steps out, a rear-driver has gone before it gets there.
+  const t = clamp((demand - limits.entryAt) / D.entrySpread, 0, 1);
   const asked = t * t * (3 - 2 * t) * open;
   // A slide the wheel has stopped asking for lets go over a beat instead of
   // in a step: last step's slide decays, and the wheel can take it straight
@@ -140,7 +173,7 @@ function slideFactor(car: CarState, commandedYaw: number, ceiling: number): Slid
   // sideways car always has — is a feedback loop: more angle is more slide,
   // more slide is less lateral grip, and the car inflates its own drift well
   // past anything the driver asked for.
-  const released = car.slide - D.release * T.dt;
+  const released = car.slide - limits.release * T.dt;
   // The gate caps the CARRIED slide too: a drift that runs out of speed is
   // let go by the floor closing on it, on the floor's own ramp.
   return { asked, sliding: Math.min(open, Math.max(asked, released)), open };
@@ -252,15 +285,38 @@ export function stepGrounded(
   const dt = T.dt;
   const prevVy = car.vy;
   const prevU = car.u;
-  const surfaceGrip = T.surfaces.grip[ctx.surface];
+  // The surface's grip and the car's own rubber MULTIPLY: a road tire holds
+  // more on tarmac and skates over gravel, a loose-surface tire is the other
+  // way round, and neither is simply better. Everything downstream — the
+  // slide's ceiling, the lateral rate, and how much torque the driven axle
+  // can put down — reads this one number, so the tires are felt in all three.
+  const tyre = ctx.surface === "asphalt" ? spec.tyres.sealed : spec.tyres.loose;
+  const surfaceGrip = T.surfaces.grip[ctx.surface] * tyre;
   const surfaceDrag = T.surfaces.drag[ctx.surface];
   const surfacePower = T.surfaces.power[ctx.surface];
+  /** Which wheels this car drives — the row every line below reads. */
+  const DR = T.drivetrain[spec.drive];
 
   // The rack, and the hands on it, have weight: the lock EASES toward what
   // the driver is asking for instead of arriving in one tick. Everything
   // below reads `car.steer` rather than the raw input — the lag has to be
   // upstream of the whole model, or the slide would be commanded off a lock
   // the front wheels have not reached yet.
+  // The rack's own SPEED — how fast the hands are moving, which is a
+  // different thing from where they have got to, and the only thing a
+  // flick is made of. Read BEFORE the lock moves: the throw belongs to the
+  // wheel crossing the car, not to where it ends up.
+  const rackVel = (input.steer - car.steer) * T.steering.rackRate;
+  const crossing = clamp(-(input.steer * car.steer) / T.steering.flickCross, 0, 1);
+  const thrown = crossing * clamp(Math.abs(rackVel) / T.steering.flickRate, 0, 1);
+  // The throw takes time to cross the car and time to come back, so it is
+  // HELD rather than read off the rack each step — see flickSettle.
+  car.flick = Math.max(thrown, car.flick - T.steering.flickSettle * dt);
+  const flick = car.flick;
+  // Which way the mass was sent. Latched with the load: by the time the
+  // tires feel it the rack has long since arrived, and the lock's own sign
+  // would throw the car back the way it came.
+  if (thrown > 0) car.flickDir = Math.sign(rackVel);
   car.steer += (input.steer - car.steer) * clamp(T.steering.rackRate * dt, 0, 1);
   const steer = car.steer;
   // Brake lights, so only a car being SLOWED lights them — a car backing out
@@ -298,12 +354,53 @@ export function stepGrounded(
   const speedFactor = clamp(speed / T.steering.deadSpeed, 0, 1);
   // A bent rack answers late and short: steering damage bleeds authority.
   const rack = 1 - T.collision.systems.steerLoss * car.damage.systems.steering;
-  const steerGain = (spec.steerRate / (1 + speed / T.steering.fadeSpeed)) * speedFactor * rack;
+  // ...and how fast that authority bleeds off with speed is the car's own
+  // composure: a stable car calms down at pace and is lazy to turn in with
+  // it, a nervous one stays sharp and stays nervous. It is why a stage of
+  // long fast sweepers and a stage of hairpins want different cars.
+  const fadeSpeed = T.steering.fadeSpeed / spec.stability;
+  const steerGain = (spec.steerRate / (1 + speed / fadeSpeed)) * speedFactor * rack;
+  const rev = revs(spec, car, speed);
   // The lateral grip the tires have to spend, and the turn the wheel is
   // asking them for: the handbrake unsticks the rear by lowering the
   // ceiling, so the same lock asks far more of what is left.
   const gripCeiling = spec.gripAccel * surfaceGrip * (input.handbrake ? T.grip.handbrakeGrip : 1);
-  const { asked, sliding, open } = slideFactor(car, steer * steerGain, gripCeiling);
+  // Speed is not the only way to unstick a driven axle. At the bottom of the
+  // gear a rear axle with real torque under it spins up under power and the
+  // tail steps out at walking pace, where the wheel's own lateral ask is
+  // almost nothing — which is how a rear-driver is drifted at 10 km/h and
+  // why a front-driver, whose axle simply goes straight on when it lets go,
+  // cannot be. It enters the SAME demand the wheel does, so the slow slide
+  // IS the fast one: one model, one readout, one plume of dust.
+  // ...and it is a LOW-SPEED effect, faded out by the same floor the slide
+  // itself starts at: below that speed torque is the only thing that can
+  // unstick an axle, above it the wheel's own lateral ask has long taken
+  // over and a car still being thrown sideways by its own throttle in fifth
+  // is not a rear-driver, it is a car nobody can keep on the road. Without
+  // this the term fires at the bottom of EVERY gear, fifth included.
+  const slow = clamp(1 - speed / D.slideFrom, 0, 1);
+  const spinDemand =
+    (T.grip.torqueSpin *
+      DR.spin *
+      spec.torque *
+      input.throttle *
+      Math.abs(steer) *
+      (1 - rev) *
+      slow *
+      slow) /
+    Math.max(0.5, surfaceGrip);
+  // ...and the weight a FLICK throws across the car, which unsticks it with
+  // no driven axle involved at all. It is a SPIKE — the hands are only
+  // crossing for an instant — and the slide's own release is what carries
+  // it through the corner afterwards, which is exactly how the move works:
+  // the flick sets the angle up, the wheel then drives it.
+  const flickDemand = flick * T.grip.flickThrow * DR.flick * speedFactor;
+  const demand = Math.abs(car.u * steer * steerGain) / gripCeiling + spinDemand + flickDemand;
+  const { asked, sliding, open } = slideFactor(car, demand, {
+    floor: D.slideFrom * DR.driftFloor,
+    entryAt: D.entryAt * DR.entry,
+    release: D.release * DR.release,
+  });
   // The wheel does not just unstick the car — it NAMES the angle. Every
   // force that deepens a slide fades as the slip approaches what this much
   // lock is asking for at this speed, and is gone once the car is past it.
@@ -338,6 +435,10 @@ export function stepGrounded(
   const handbrakeYaw = input.handbrake
     ? Math.sign(steer) * backwards * T.grip.handbrakeYaw * speedFactor * open
     : 0;
+  // The weight throw itself. Signed by the direction the RACK IS MOVING,
+  // which is the way the mass is being sent — during the crossing the lock
+  // itself is still on the old side and would throw the car backwards.
+  const flickYaw = car.flickDir * backwards * T.grip.flickYaw * DR.flick * flick * speedFactor;
   // RWD power oversteer: the driven rear keeps feeding the slide — but only
   // once the wheel stops asking for the angle. Steered into the slide the
   // corner behaves classically (saturation parks it); released after the
@@ -346,26 +447,70 @@ export function stepGrounded(
   // term from chattering through the instant the slip crosses centre.
   const tailDir = clamp(-car.slip / T.steering.tailSoftSlip, -1, 1);
   const powerYaw =
-    tailDir * T.grip.powerYaw * input.throttle * sliding * speedFactor * (1 - intoSlide);
+    tailDir *
+    T.grip.powerYaw *
+    DR.powerYaw *
+    spec.torque *
+    input.throttle *
+    sliding *
+    speedFactor *
+    (1 - intoSlide);
+  // The front axle's opposite number. Driven front wheels pull the car
+  // toward where they POINT, so on a front-driver the throttle is the way
+  // OUT of a slide and never into one — ungated by the wheel, because
+  // power-on understeer is exactly what is felt while still asking for the
+  // corner. The pedals swap jobs between the two layouts, which is the
+  // single thing a player has to relearn moving between them.
+  const pullStraight =
+    car.slip *
+    T.grip.pullStraight *
+    DR.pullStraight *
+    spec.torque *
+    input.throttle *
+    sliding *
+    speedFactor;
+  // ...and the same pull TIGHTENING a slow corner: the front-driver's
+  // turn-in bite, strongest at the bottom of the gear and gone by the top
+  // of it. Nothing at all on a rear-driver, which is why one is quick out
+  // of a hairpin and the other is quick into it.
+  const pullIn =
+    steer *
+    backwards *
+    T.grip.pullIn *
+    DR.pullIn *
+    spec.torque *
+    input.throttle *
+    (1 - rev) *
+    speedFactor;
+  // A LIFT swings the tail: the weight comes off the driven axle and the
+  // car rotates. `T.grip.liftGrip` is the other half of the same lift — one
+  // tightens the line, this one swings the nose — and together they are how
+  // a front-driver rotates at all without pulling the handbrake.
   // The rotation does not stop when the hands do. While the slide is letting
   // go, the yaw answers its target more slowly, so the nose keeps swinging
   // for a beat after the lock comes off and can carry a little PAST centre —
   // which is the dab of opposite lock on the way out of a big drift. It is
   // exactly zero while the wheel is still asking for the angle it has.
+  const liftYaw =
+    tailDir * T.grip.liftYaw * DR.liftYaw * (1 - input.throttle) * sliding * speedFactor;
   const releasing = clamp(sliding - asked, 0, 1);
   // ...and as it lets go the rear bites again and WEATHERVANES the car:
   // a torque pulling the nose back toward the direction the car is actually
   // travelling. That, against the yaw's own lag above, is a spring with
   // damping — which is what lets the nose swing back through centre and a
   // little past it instead of easing to zero and stopping there.
-  const straighten = car.slip * D.releaseSnap * releasing * speedFactor;
+  const straighten = car.slip * D.releaseSnap * DR.snap * releasing * speedFactor;
   // Saturation gates EVERYTHING that deepens the slide except the power's
   // own oversteer; counter-steer keeps full authority, because it always
   // has somewhere to go.
   const yawTarget =
     (deepening ? steerTerm * sat : steerTerm) +
     handbrakeYaw +
+    flickYaw +
+    pullIn +
     powerYaw +
+    liftYaw * sat +
+    pullStraight +
     straighten -
     car.slip * T.grip.slipYaw * commitment * sat * sliding;
   const yawResponse =
@@ -383,7 +528,8 @@ export function stepGrounded(
   // A folded radiator starves the engine: power fades with engine damage —
   // the car limps, it never parks.
   const damagePower = 1 - T.collision.systems.powerLoss * car.damage.systems.engine;
-  const accel = engineAccel(spec, car) * input.throttle * surfacePower * shiftCut * damagePower;
+  const accel =
+    engineAccel(spec, car, surfaceGrip) * input.throttle * surfacePower * shiftCut * damagePower;
   car.u += accel * dt;
   if (car.reversing) {
     // Backing out. The brake's own retardation is off while this runs, or the
@@ -513,9 +659,9 @@ export function stepGrounded(
   car.slide = sliding;
   const angle = car.drifting ? T.drift.exitSlip : T.drift.enterSlip;
   // A car has to be genuinely SLIDING to be drifting, not merely pointed a
-  // few degrees off its own line: below the speed floor the slide is shut
-  // and a hard turn is understeer, which is not a drift and must not light
-  // the dust, the HUD or the balance table's counter.
+  // few degrees off its own line: below the layout's speed floor the slide
+  // is shut and a hard turn is understeer, which is not a drift and must not
+  // light the dust, the HUD or the balance table's counter.
   const drifting = Math.abs(car.slip) > angle && sliding > 0;
   if (drifting) {
     if (!car.drifting) stats.driftCount += 1;
@@ -623,6 +769,10 @@ export function stepAirborne(
   events: GameEvent[],
   stats: RunStats,
 ): void {
+  // Nothing is thrown across a car whose wheels are off the ground: the
+  // flick's load settles out in the air rather than waiting to be spent on
+  // whatever the landing finds.
+  car.flick = Math.max(0, car.flick - T.steering.flickSettle * T.dt);
   const dt = T.dt;
   const descent = car.vy;
   car.airTime += dt;

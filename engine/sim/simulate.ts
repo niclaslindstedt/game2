@@ -16,10 +16,14 @@ import {
 } from "../mapgen/index.ts";
 import { botInput, RALLY_BOT, type BotProfile } from "./bot.ts";
 import { TUNING } from "../game/defs/tuning.ts";
+import type { GearboxMode } from "../game/defs/cars.ts";
 
 export type SimOptions = {
   seed: number;
   carId?: string;
+  /** Which box the bot drives with. Defaults to the automatic, so a sweep
+   * compares CARS rather than gearboxes. */
+  gearbox?: GearboxMode;
   profile?: BotProfile;
   /** Stage length band to race (finite only — an endless stage has no
    * finish for a sim run to reach). Defaults to medium. */
@@ -66,6 +70,7 @@ export function simulateStage(options: SimOptions): SimResult {
   const state = createGame({
     seed: options.seed,
     carId,
+    gearbox: options.gearbox,
     length: options.length,
     shape: options.shape,
     laps: options.laps,

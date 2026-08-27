@@ -120,7 +120,7 @@ export function takeSnapshot(
     speedKmh: Math.max(0, Math.hypot(state.car.u, state.car.w) * 3.6),
     gear: state.car.gear,
     reversing: state.car.reversing,
-    gearbox: state.spec.gearbox,
+    gearbox: state.car.gearbox,
     rpm,
     // Nothing to shift on the grid, however hard the driver leans on it.
     shiftUp:

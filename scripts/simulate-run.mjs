@@ -15,14 +15,19 @@
 //   npm run sim -- --weather storm       # race in rain/storm wind
 //   npm run sim -- --asphalt 0.8         # generator dials, each 0..1:
 //                                        # --elevation --water --trees --asphalt --width
-//   npm run sim -- --json report.json    # machine-readable dump
+//   npm run sim -- --gearbox manual      # drive the bot with a manual box
+//   npm run sim -- --sweep               # the ROSTER BALANCE table: every
+//                                        # car over five stage archetypes,
+//                                        # ranked per archetype
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const { simulateStage, CARS, STAGE_RULES } = await import(join(root, "engine/index.ts"));
+const { simulateStage, compileStage, CARS, STAGE_RULES } = await import(
+  join(root, "engine/index.ts")
+);
 
 const args = process.argv.slice(2);
 function flag(name) {
@@ -40,6 +45,7 @@ for (const dial of ["elevation", "water", "trees", "asphalt", "width"]) {
   const value = flag(dial);
   if (value !== undefined) knobs[dial] = Number(value);
 }
+const gearbox = flag("gearbox") ?? "auto";
 const length = flag("length") ?? "medium";
 const shape = flag("shape") ?? "sprint";
 const laps = flag("laps") ? Number(flag("laps")) : undefined;
@@ -80,7 +86,7 @@ console.log(
 );
 for (const seed of seeds) {
   for (const carId of cars) {
-    const r = simulateStage({ seed, carId, length, shape, laps, maxTime, weather, knobs });
+    const r = simulateStage({ seed, carId, gearbox, length, shape, laps, maxTime, weather, knobs });
     rows.push(r);
     console.log(
       [
@@ -125,6 +131,112 @@ console.log(
     `avg air time ${avg((r) => r.stats.airTime).toFixed(1)} s · ` +
     `respawns ${rows.reduce((a, r) => a + r.stats.respawns, 0)}`,
 );
+
+/** THE ROSTER BALANCE TABLE. One car being fastest on every stage in the
+ * game is the failure this exists to catch, and the default sweep above
+ * cannot see it: it races one set of dials over one pool of seeds, so it
+ * ranks the cars exactly once. A roster is balanced when each car OWNS a
+ * kind of stage — which means measuring over the KINDS.
+ *
+ * An archetype is two things. The generator's dials say what the road is
+ * SURFACED and shaped like (rules.ts); the seed says how twisty it is, and
+ * no dial moves that — so a `pick` of "tight" or "flowing" measures the
+ * whole seed pool's mean curvature and races only the end of it that
+ * matches. Nothing here is a special stage type: the generator builds all
+ * of them from the same rules. */
+const ARCHETYPES = [
+  { id: "tarmac", label: "fully sealed", pick: "flowing", knobs: { asphalt: 1, elevation: 0.3 } },
+  {
+    id: "mountain",
+    label: "sealed pass, steep",
+    pick: "all",
+    knobs: { asphalt: 0.45, elevation: 1 },
+  },
+  { id: "mixed", label: "half and half", pick: "all", knobs: { asphalt: 0.5, elevation: 0.4 } },
+  {
+    id: "wet",
+    label: "loose, forded",
+    pick: "all",
+    knobs: { asphalt: 0.25, water: 1, trees: 0.9 },
+  },
+  { id: "gravel", label: "loose, dry, flat", pick: "all", knobs: { asphalt: 0, elevation: 0.15 } },
+];
+
+/** Mean |curvature| over a compiled stage — how twisty the seed built it. */
+function twistiness(seed, stageKnobs) {
+  const track = compileStage(seed, length, stageKnobs);
+  let sum = 0;
+  for (const sample of track.samples) sum += Math.abs(sample.curvature);
+  return sum / track.samples.length;
+}
+
+if (args.includes("--sweep")) {
+  // Half the pool, so "tight" and "flowing" are genuinely different roads
+  // and neither is one lucky seed.
+  const half = Math.max(1, Math.floor(seeds.length / 2));
+  console.log(
+    `\nROSTER BALANCE — ${length} stages, ${gearbox} box, ` +
+      `${seeds.length} seeds (the ${half} tightest/most flowing where an archetype asks)`,
+  );
+  const wins = new Map(cars.map((c) => [c, 0]));
+  for (const arch of ARCHETYPES) {
+    const stageKnobs = { ...knobs, ...arch.knobs };
+    let pool = seeds;
+    if (arch.pick !== "all") {
+      const ranked = [...seeds].sort(
+        (a, b) => twistiness(a, stageKnobs) - twistiness(b, stageKnobs),
+      );
+      pool = arch.pick === "tight" ? ranked.slice(-half) : ranked.slice(0, half);
+    }
+    const paces = new Map();
+    const drifts = new Map();
+    for (const carId of cars) {
+      let pace = 0;
+      let drift = 0;
+      let dnf = 0;
+      for (const seed of pool) {
+        const r = simulateStage({
+          seed,
+          carId,
+          gearbox,
+          length,
+          maxTime,
+          weather,
+          knobs: stageKnobs,
+        });
+        // Pace, not time: the seeds in a pool build stages of different
+        // lengths, and times across them cannot be added up.
+        pace += (r.trackLength / r.time) * 3.6;
+        drift += r.stats.driftTime;
+        if (!r.finished) dnf += 1;
+      }
+      paces.set(carId, pace / pool.length);
+      drifts.set(carId, drift / pool.length);
+      if (dnf) console.log(`  !! ${carId} failed to finish ${dnf} ${arch.id} stage(s)`);
+    }
+    const ranked = [...paces.entries()].sort((a, b) => b[1] - a[1]);
+    wins.set(ranked[0][0], wins.get(ranked[0][0]) + 1);
+    const best = ranked[0][1];
+    console.log(
+      `\n  ${arch.id.padEnd(9)} ${arch.label.padEnd(17)} ` +
+        ranked
+          .map(
+            ([carId, pace]) =>
+              `${carId.padEnd(8)} ${pace.toFixed(1)}km/h ` +
+              `${(pace === best ? "  —  " : `${(((pace - best) / best) * 100).toFixed(1)}%`).padStart(6)}` +
+              ` d${drifts.get(carId).toFixed(0)}s`,
+          )
+          .join("   "),
+    );
+  }
+  console.log(
+    `\narchetypes won: ${[...wins.entries()].map(([carId, n]) => `${carId} ${n}`).join(" · ")}`,
+  );
+  // A roster where one car takes every archetype is the thing this table is
+  // for. Say so loudly rather than leaving it to be read out of the numbers.
+  const hog = [...wins.entries()].find(([, n]) => n === ARCHETYPES.length);
+  if (hog) console.log(`  !! ${hog[0]} is fastest on EVERY archetype — the roster is not balanced`);
+}
 
 const jsonOut = flag("json");
 if (jsonOut) {

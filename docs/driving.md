@@ -65,13 +65,15 @@ one continuous response rather than two modes.
   direction of travel (`releaseSnap`). A spring with light damping — so a
   deep drift swings back through centre by a degree or two and asks for a
   dab of opposite lock, while a moderate one just gathers up.
-- **Power oversteer** — these are rear-wheel-drive cars, and the EXIT is
-  where it shows: steered into the slide the corner behaves classically,
+- **Power oversteer** — for the car with a driven REAR axle, and the EXIT
+  is where it shows: steered into the slide the corner behaves classically,
   but once the wheel stops asking for the angle the driven axle keeps
   feeding it for a beat (`TUNING.grip.powerYaw`, ungated by saturation,
   faded by steering into the slide). So a centred wheel on the power lets
   the slide LINGER before grip gathers the car up — and a counter-steer
-  settles it faster still. The catch carries yaw momentum
+  settles it faster still. A front-driven car does the opposite on the same
+  pedal, and a four-wheel-drive sits between them; see **The drivetrain**
+  below. The catch carries yaw momentum
   (`yawResponse.slide` sits a touch under the grip-matched rate), so an
   over-held counter swings the pendulum: the slip crosses centre into a
   second drift the other way, which needs its own counter. Balancing that
@@ -463,23 +465,108 @@ of it (`TUNING.collision.partAt.lid`), so it only lets go once the clip around
 it has folded far enough to pull its hinges — and what is left showing is the
 dark bay the panel was covering.
 
+## The drivetrain
+
+Which wheels a car drives is real physics, not a badge. `spec.drive` selects
+a row of `TUNING.drivetrain`, and that row scales the magnitudes in
+`TUNING.grip` and `TUNING.drift`. Nothing branches per CAR — the model reads
+the layout's row and the car's own numbers, and that is the whole difference
+between the three in the roster.
+
+What the layout decides:
+
+- **What the throttle does mid-slide.** A driven rear axle feeds the slide
+  (`powerYaw`). Driven front wheels pull the car toward where they point, so
+  the throttle pulls it STRAIGHT out of one (`pullStraight`) — ungated by
+  the wheel, because power-on understeer is exactly what is felt while you
+  are still asking for the corner. Four-wheel-drive sits between the two.
+- **What a LIFT does.** Taking the weight off the driven axle swings the
+  tail (`liftYaw`). It is what a front-driver has instead of power
+  oversteer: it is rotated on the pedal, not on the wheel.
+- **Whether torque alone can unstick it.** A rear axle with real torque
+  under it spins up at the bottom of the gear and steps the tail out at
+  walking pace (`torqueSpin` × `spec.torque` × the layout's `spin`). That is
+  why the rear-driver can be drifted at 10 km/h and the front-driver — whose
+  axle just goes straight on when it lets go — cannot be drifted at all.
+- **Where the slide starts and how fast it lets go** (`entry`, `release`):
+  a front-driver understeers up to the limit and gathers itself up quickly;
+  a rear-driver has gone before it gets there and hangs on afterwards.
+- **How much torque reaches the ground** (`bite` × `spec.traction` × the
+  surface's grip). One driven axle on a loose surface spins where four
+  driven wheels hook up, worst at the bottom of the gear and gone by the top
+  of it. It is the four-wheel-drive's whole case and the rear-driver's whole
+  cost — a standing start through water keeps well under half its dry pace.
+- **How hard the rear weathervanes the nose straight** (`snap` ×
+  `TUNING.drift.releaseSnap`) — which is what decides how long a slide
+  LINGERS once the wheel is centred. Not `release`: a slower release holds
+  the slide up and the weathervane scales with exactly that, so the two
+  cancel. A rear axle still under power resists being pulled straight; an
+  undriven one, dragging, does the pulling.
+- **Where the speed floor under the whole slide sits** (`driftFloor` ×
+  `TUNING.drift.slideFrom`). The floor is what stops a hairpin at walking
+  pace, a scrabble out of a ditch and a nudge on the grid all reading as
+  drifts, and it is a rule the player is told (it will not drift under 70).
+  The rear-driver is its ONE exception, down at walking pace — that is what
+  makes its tail-out register at all, and it is the whole reason the floor is
+  a per-layout number.
+
+### The flick
+
+The move the game is named after. Wind the wheel away from the corner and
+snap it back: the weight thrown across the car takes the rear wide with no
+driven axle involved at all, which is how a FRONT-driven car gets sideways
+in the first place. It reads the rack's SPEED rather than its position (a
+wheel held at full lock throws nothing) and only counts hands that are
+CROSSING the car rather than chasing it, so winding on more lock mid-corner
+is not a flick and neither is catching a slide.
+
+The throw both takes grip away (`grip.flickThrow`, into the same demand the
+wheel's own lateral ask feeds) and puts yaw in (`grip.flickYaw`). The load
+is held on `car.flick` and settles over the better part of half a second
+(`steering.flickSettle`) — the hands are only over the other side for about
+fifty milliseconds, and a torque that lived only that long would do nothing.
+At 25 m/s the front-driver settles at about 8° of slip on a lock it turns
+straight in on, and around 15° on the same lock flicked.
+
 ## Cars and gearboxes
 
-Cars are data rows (`engine/game/defs/cars.ts`) — the model never branches per car:
+Cars are data rows (`engine/game/defs/cars.ts`), and the roster is three
+ANSWERS to the same stage rather than three points on one scale:
 
-- **Vireo GT (auto, FWD)** — shifts itself, quicker off the line, grippier, softer top end (~215 km/h flat out). The phone-first car.
-- **Sable 4WD (manual, AWD)** — six gears on the driver, taller top (~230 km/h flat out), less grip to lean on so it slides earlier and further. Per-gear torque tapers near each gear's ceiling, so holding a gear too long stops pulling — shifting is part of the pace.
-- **Kestrel RS (manual, FWD)** — the lightest of the three and the shortest geared. More lateral grip than the Sable and less yaw once loose: quicker where the stage flows, harder work where it does not.
+- **Vireo GT (FWD)** — an upright two-box hatch on road rubber. The most
+  lateral grip in the roster on a sealed surface and the sharpest turn-in,
+  a peaky engine that has to be kept in the band, and the second-shortest
+  gearing. It understeers up to the limit and straightens itself on the
+  power, so it is rotated on the lift or on a flick. Owns the tarmac stage;
+  worst of the three on loose.
+- **Sable 1600 (RWD)** — a light three-box saloon on gravel rubber. The
+  least powerful and lowest-geared car here, with the most low-gear shove
+  and the most rotation: it will hang its tail out at 10 km/h and it turns a
+  loose stage into a series of drifts. It spins its wheels off the line on
+  anything slippery and has nothing to lean on when the road is sealed.
+  Owns dry gravel; worst of the three on tarmac.
+- **Kestrel RS (AWD)** — a flared two-door with a turbocharged four and
+  drive to all of it. Heaviest, most powerful, tallest-geared, and the only
+  one that puts its torque down whatever it is standing on. Lazy to turn in
+  and never as playful as the other two — and quicker than both wherever the
+  surface is mixed, the road climbs, or there is water in it. Never worst at
+  anything.
 
-Each row also carries a `drive` layout (`fwd`/`rwd`/`awd`). Today it is a
-LABEL — the handling model treats every car the same and the grip and yaw
-numbers are what actually separate them. It exists so the roster can say
-what a car is, and so a drivetrain-aware model has something to read.
+Nominal gear tops overshoot what surface drag lets a car hold; the real
+equilibria rank the same way the gearing does, and `tests/explore_test.ts`
+pins both the ranking and the spread.
 
-Nominal gear tops overshoot what surface drag lets a car hold; the flat-out
-speeds above are the real equilibria, and `tests/explore_test.ts` pins them.
+**The gearbox is the driver's, not the car's.** Every car in the roster takes
+either box; which one is a player setting (OPTIONS → CONTROLS), carried for
+the run on `CarState.gearbox` and defaulting to the automatic. A manual
+shift cuts throttle briefly while it engages. The bot shifts by the same
+thresholds the auto box uses, so both are simulated fairly (see
+[simulation.md](simulation.md)).
 
-A manual shift cuts throttle briefly while it engages. The bot shifts by the same thresholds the auto box uses, so both cars are simulated fairly (see [simulation.md](simulation.md)).
+**Balance is measured, not asserted.** `npm run sim -- --sweep` races the
+whole roster over five stage archetypes and ranks them per archetype; one
+car being fastest on all five is the failure it exists to catch. Any change
+to these numbers owes that table.
 
 **Revs** (`CarState.rev`, 0 at idle and 1 at the redline) are gearing plus
 forward speed — there is no crank in the model, and reading them off the
@@ -493,4 +580,4 @@ answer.
 
 ## Tuning etiquette
 
-Numbers live in `engine/game/defs/tuning.ts` (global feel) and `cars.ts` (per car) — never inline in the model. **`TUNING.drift` is the group that shapes the slide itself** — where it starts, how it comes in, how deep it goes, how it lets go, and when it reads as a drift — and the [`drift-feel`](../.agent/skills/drift-feel/SKILL.md) skill is the map to it: read that before touching any of it. `TUNING.steering` holds the wheel's own response (the rack's rate, the low-speed ramp-in, the high-speed fade, the centred-wheel commitment floor, the tail-torque chatter guard), and `TUNING.grip` what is left of the tires (scrub, the slip's self-rotation, power oversteer, the handbrake, lift-to-tighten). Any change here must run `make sim` before and after, and keep `tests/drift_test.ts` / `tests/jump_test.ts` honest: those tests encode the moments this document describes.
+Numbers live in `engine/game/defs/tuning.ts` (global feel) and `cars.ts` (per car) — never inline in the model. **`TUNING.drift` is the group that shapes the slide itself** — where it starts, how it comes in, how deep it goes, how it lets go, and when it reads as a drift — and the [`drift-feel`](../.agent/skills/drift-feel/SKILL.md) skill is the map to it: read that before touching any of it. `TUNING.steering` holds the wheel's own response (the rack's rate, the low-speed ramp-in, the high-speed fade, the centred-wheel commitment floor, the tail-torque chatter guard), `TUNING.grip` what is left of the tires (scrub, the slip's self-rotation, power oversteer, the front axle's pull, the lift, the flick, the handbrake), `TUNING.engine` how a car's torque arrives inside a gear and how much of it reaches the ground, and `TUNING.drivetrain` what all of that is worth to each layout. Any change here must run `make sim` before and after, and keep `tests/drift_test.ts` / `tests/jump_test.ts` honest: those tests encode the moments this document describes.

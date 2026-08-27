@@ -163,26 +163,58 @@ describe("going under (TUNING.crash.drown)", () => {
   /** Drive a run straight off the side until it finds water deep enough to
    * drown in, and hand back the state at the moment the water took it. The
    * lakeland dial is turned up so there IS water to find. */
-  /** Seeds to look for a lake in, in order. `driveIntoDeepWater` takes the
-   * FIRST one that drowns the car, so the order matters: these lead with
-   * seeds whose water is deep enough to submerge a car. `crash.deepWater`
-   * is a low bar — a car meets it in a puddle at a lakeshore, and settling
-   * on the bottom of a shallow tarn with the roof awash is a different
-   * (and correct) answer to the one these tests are asking about. */
+  /** Seeds to look for a lake in, in order — these lead with ones whose
+   * water is known to be deep enough to submerge a car, so the search below
+   * usually stops at the first. It is an ORDER and not a guarantee:
+   * `crash.deepWater` is a low bar a car meets in a puddle at a lakeshore,
+   * and which shelf it ends up on is decided by the handling that carried
+   * it there. `swallows` is what actually holds the scenario still. */
   const DROWNING_SEEDS = [34, 26, ...SEEDS];
 
-  function driveIntoDeepWater(): { state: GameState; entry: GameEvent[] } {
-    for (const seed of DROWNING_SEEDS) {
-      const state = createGame({ seed, length: "long", skipCountdown: true, knobs: { water: 1 } });
-      // Hard lock and full throttle: off the road, across the verge, and
-      // into whatever the seed put beside it.
-      const input = { ...NEUTRAL_INPUT, throttle: 1, steer: 1 };
-      for (let i = 0; i < 120 * 60; i++) {
-        const events = step(state, input);
-        if (state.drowning) return { state, entry: events };
-      }
+  /** Off the road under full throttle and hard lock, until the car is in
+   * water deep enough to be drowning in it. Returns the step that put it
+   * there. */
+  function plunge(seed: number): { state: GameState; entry: GameEvent[] } | null {
+    const state = createGame({ seed, length: "long", skipCountdown: true, knobs: { water: 1 } });
+    // Hard lock and full throttle: off the road, across the verge, and
+    // into whatever the seed put beside it.
+    const input = { ...NEUTRAL_INPUT, throttle: 1, steer: 1 };
+    for (let i = 0; i < 120 * 60; i++) {
+      const entry = step(state, input);
+      if (state.drowning) return { state, entry };
     }
-    throw new Error("no seed put drownable water within reach of the road");
+    return null;
+  }
+
+  /** ...and does that water actually close over the roof? The car sinks to
+   * the BED (step.ts), so a shelf shallower than the roof leaves it settled
+   * with its cabin in the air — a real outcome, and not the one these tests
+   * are about. WHICH shelf it ends up on is decided by the handling that
+   * carried it in there, so a scenario that does not check this silently
+   * becomes a different scenario every time the car's cornering changes,
+   * and "it went under, roof and all" starts failing on a car sitting in a
+   * puddle. Run on a throwaway state; the drive is deterministic, so the
+   * real one replays it exactly. */
+  function swallows(seed: number): boolean {
+    const attempt = plunge(seed);
+    if (!attempt) return false;
+    const { state } = attempt;
+    for (let i = 0; i < Math.round(TUNING.crash.drown.duration / TUNING.dt); i++) {
+      if (state.drowning?.under) return true;
+      step(state, NEUTRAL_INPUT);
+    }
+    return false;
+  }
+
+  /** Found once and reused — the answer cannot change within a run. */
+  let deepSeed: number | undefined;
+
+  function driveIntoDeepWater(): { state: GameState; entry: GameEvent[] } {
+    deepSeed ??= DROWNING_SEEDS.find(swallows);
+    if (deepSeed === undefined) throw new Error("no seed put deep enough water beside the road");
+    const attempt = plunge(deepSeed);
+    if (!attempt) throw new Error(`seed ${deepSeed} no longer drowns the car`);
+    return attempt;
   }
 
   it("holds the car in the water instead of teleporting it off the lake", () => {

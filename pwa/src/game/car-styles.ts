@@ -23,7 +23,7 @@
 import type { CarSpec } from "@engine";
 import type { CarBodySpec } from "./car-body.ts";
 
-/** The starter: a short, tall, slab-sided two-box hatch. Stubby nose, near
+/** The front-driver: a short, tall, slab-sided two-box hatch. Stubby nose, near
  * vertical screen, a long flat roof over a steep tailgate, and heavy
  * plastic everywhere — bumpers, arch trim, rubbing strip. Reads small,
  * upright and eager. */
@@ -119,8 +119,8 @@ export const COMPACT_BODY: CarBodySpec = {
   },
 };
 
-/** The reward: a low three-box race sedan on chrome blades and a red air
- * dam. Long flat hood, notchback roof over a short high boot, four-spoke
+/** The rear-driver: a low three-box race sedan on chrome blades and a red
+ * air dam. Long flat hood, notchback roof over a short high boot, four-spoke
  * wheels under lip flares, and a full circuit livery — red roof and nose,
  * raked fender stripes, a blue rocker band and a door number. */
 export const CLASSIC_BODY: CarBodySpec = {
@@ -222,7 +222,7 @@ export const CLASSIC_BODY: CarBodySpec = {
   },
 };
 
-/** The homologation special: a two-door coupe standing on box flares, with
+/** The four-wheel-drive: a homologation two-door standing on box flares, with
  * a quad-lamp black grille panel, a deep air dam and red wheels. Red over
  * a white flank, so it never gets confused with the two white cars. */
 export const COUPE_BODY: CarBodySpec = {

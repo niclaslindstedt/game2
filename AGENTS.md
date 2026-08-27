@@ -54,7 +54,8 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
 | Handling/feel (drift, jump, grip, gearbox)             | `engine/game/car.ts`; numbers in `engine/game/defs/`                                                                      |
 | How a turn becomes a drift, and how it lets go         | `TUNING.drift` in `engine/game/defs/tuning.ts` — the `drift-feel` skill                                                   |
-| A new car                                              | A data row in `engine/game/defs/cars.ts`                                                                                  |
+| A new car                                              | A data row in `engine/game/defs/cars.ts` — the `car-tuning` skill                                                         |
+| What separates one CAR from another                    | `cars.ts` + `TUNING.drivetrain` — the `car-tuning` skill                                                                  |
 | A car's LOOK (silhouette, panels, wheels, livery)      | `pwa/src/game/car-styles.ts` (specs); generator in `pwa/src/game/car/`                                                    |
 | A new PART on the car (a light pod, a snorkel, a vent) | a builder in `pwa/src/game/car/`, driven by an optional `spec.ts` field                                                   |
 | How dirty the car gets, and where                      | `pwa/src/game/car-dirt.ts`                                                                                                |
@@ -142,6 +143,9 @@ Skills live in `.agent/skills/` (`.claude/skills` symlinks there) — each a `SK
   scrub). Everything is synthesized; the target register is PSX, not chip.
 - **`soundtrack`** — the music: tracker scores for the menu and the stage, and
   the listen-with-the-voices-muted loop that is the only way to judge one.
+- **`car-tuning`** — what separates one CAR from another: the catalog, the
+  drivetrain and engine tables, and the roster-balance sweep that proves no
+  car is best everywhere.
 - **`car-design`** — how the cars LOOK: the parametric body builder, the per-car specs, and the `make cars` render-compare-iterate loop.
 - **`nature`** — the biomes, trees and flora, ground cover, terrain paint, and the rally-gate dressing: the world the road runs through.
 

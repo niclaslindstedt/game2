@@ -43,6 +43,25 @@ export const TUNING = {
      * sign as the slip crosses centre, rad — the chatter guard that keeps
      * the drift's push from flip-flopping at tiny angles. */
     tailSoftSlip: 0.08,
+    /** THE FLICK, first half: the rack speed a full weight throw takes,
+     * lock per second. Read against `rackRate` above — a wheel slammed
+     * from one side to the other tops this out, an ordinary correction
+     * comes nowhere near it. It is the rack's SPEED that throws the car,
+     * never its position: a wheel held at full lock throws nothing,
+     * however much lock it is holding. */
+    flickRate: 12,
+    /** ...second half: how far onto the OTHER side of centre the hands
+     * have to have crossed for that throw to count fully, in lock². The
+     * hands have to be crossing the car, not chasing it — unwinding out of
+     * a corner is not a flick, and neither is catching a slide. */
+    flickCross: 0.25,
+    /** ...and how fast the load that throw put across the car settles back,
+     * 1/s. This is the whole reason a flick is a MOVE and not a twitch: the
+     * hands are over the other side for about fifty milliseconds, and a
+     * torque that lived only that long would do nothing at all. What the
+     * tires feel is the weight, and the weight takes the better part of
+     * half a second to cross the car and come back. */
+    flickSettle: 2.2,
   },
 
   grip: {
@@ -95,6 +114,156 @@ export const TUNING = {
      * tightens the line, it just costs a great deal of angle to buy very
      * little radius. */
     latGive: 0.25,
+    /** ...and the ROTATION the same lift feeds a slide, rad/s at full slide
+     * and pace. Lifting takes the weight off the driven axle and swings the
+     * tail: it is what a front-driven car has instead of power oversteer,
+     * and the reason one is rotated on the pedal rather than on the wheel.
+     * `liftGrip` tightens the line, this swings the nose — one lift, both. */
+    liftYaw: 0.5,
+    /** Driven FRONT wheels pull the car toward where they POINT, so the
+     * throttle is a front-driver's way OUT of a slide, rad/s per rad of slip
+     * at full throttle, full slide and pace. The exact mirror of `powerYaw`
+     * above, which is why the two layouts want opposite pedals mid-corner. */
+    pullStraight: 2.2,
+    /** ...and how hard that same pull TIGHTENS a slow corner, rad/s at full
+     * lock and full throttle. It fades out as the gear runs out of torque,
+     * so it is the front-driver's low-speed turn-in bite and nothing at all
+     * on the straight. */
+    pullIn: 0.55,
+    /** THE SCANDINAVIAN FLICK, second half: the yaw that weight throw
+     * actually puts into the car, rad/s at a full throw and pace. The
+     * demand below only opens the door — it takes the grip away — and this
+     * is what walks the car through it; without it a front-driver's flick
+     * is a slide with nothing to rotate it, which is no flick at all. Kept
+     * near the handbrake's own yaw: both are ways of asking the rear to let
+     * go, and neither may out-argue the wheel. */
+    flickYaw: 3.2,
+    /** ...and first half: how much of a full slide one weight throw
+     * asks for, 0..1 of a full slide. Wind the wheel away from the corner,
+     * snap it back, and the mass crossing the car takes the rear wide —
+     * no driven rear axle required, which is why it is the one way a
+     * front-driver gets a slide started, and why the game is named after
+     * it. It arrives as a SPIKE of demand and the slide's own release
+     * (`drift.release`) is what carries it through the corner after the
+     * hands have stopped, so the flick sets the angle up and the wheel
+     * then drives it. */
+    flickThrow: 1.25,
+    /** How much of a full slide TORQUE alone can ask for, at the bottom of
+     * the gear with the wheel turned, 0..1. Speed is not the only way to
+     * unstick a driven axle: a rear axle with real torque under it spins up
+     * and steps the tail out at walking pace, which is why a rear-driver
+     * can be drifted at 10 km/h and a front-driver cannot be drifted at
+     * all. It enters the same demand the wheel's lateral ask does, so the
+     * slow slide IS the fast one — one model, one readout, one plume. */
+    torqueSpin: 1.35,
+  },
+
+  /** THE ENGINE — how the torque a car's `gearAccel` promises actually
+   * arrives inside a gear, and how much of it ever reaches the ground. */
+  engine: {
+    /** How far a car's `torque` tilts the in-gear curve, as a fraction at
+     * each end of the gear. The curve PIVOTS around mid-gear, so torque
+     * says where the shove lives and never how much of it there is —
+     * `gearAccel` owns that. A torquey engine shoves off the bottom and
+     * runs out of puff; a peaky one wants revs and rewards a driver who
+     * keeps it in the band. */
+    torqueSpan: 0.55,
+    /** How much of the torque an axle with no bite left simply spins away,
+     * 0..1 at zero bite. Worst at the bottom of the gear, where the torque
+     * is highest and there is least speed to hide behind, and gone by the
+     * top of it — which is why the loose-surface launch is where a
+     * one-axle car loses to a four-wheel-drive and nowhere else. */
+    wheelspin: 0.5,
+  },
+
+  /** THE DRIVETRAIN — what changes about a car when the power goes to a
+   * different pair of wheels. Each entry is a SHAPE the layout HAS; the
+   * catalog's own `torque` and `traction` say how much of it a given car
+   * has, and the magnitudes live in `grip` and `drift` above. Between them
+   * they are the whole difference between the three cars in the roster:
+   * a front-driver that understeers to the limit and rotates on a lift, a
+   * rear-driver that steps out on the throttle at any speed at all, and a
+   * four-wheel-drive that simply goes. */
+  drivetrain: {
+    fwd: {
+      /** Power oversteer from the driven axle, ×`grip.powerYaw`. A car with
+       * no driven rear has none: what it gets instead is the two lines
+       * below. */
+      powerYaw: 0,
+      /** The throttle pulling the car straight out of a slide,
+       * ×`grip.pullStraight`. The front-driver's whole exit. */
+      pullStraight: 1,
+      /** ...and pulling it INTO a slow corner, ×`grip.pullIn`. */
+      pullIn: 1,
+      /** Rotation from lifting mid-slide, ×`grip.liftYaw`. The only way a
+       * front-driver rotates without the handbrake. */
+      liftYaw: 1,
+      /** Slide the driven axle can spin up from torque alone, ×
+       * `grip.torqueSpin`. Almost nothing: a front axle that runs out of
+       * grip goes STRAIGHT ON, it does not step out. */
+      spin: 0.1,
+      /** Where the slide starts, ×`drift.entryAt`. Over 1: a front-driver
+       * understeers up to the limit and has to be provoked past it. */
+      entry: 1.2,
+      /** How fast a slide the wheel has stopped asking for lets go,
+       * ×`drift.release`. Fast — it gathers itself up. */
+      release: 1.5,
+      /** ...and how hard the rear weathervanes the nose back toward the
+       * direction of travel while it does, ×`drift.releaseSnap`. THIS is
+       * what decides whether a slide lingers once the wheel is centred, not
+       * `release` above: a slower release holds the slide up, and the
+       * weathervane scales with exactly that, so the two cancel. A rear
+       * axle still under power resists being pulled straight; an undriven
+       * one, dragging, does the pulling. */
+      snap: 1.15,
+      /** Forward bite: how much torque reaches the ground, ×the car's own
+       * `traction`, against the surface's grip. Two driven wheels with the
+       * engine sat on top of them hook up well. */
+      bite: 0.95,
+      /** THE SPEED FLOOR under the whole slide, ×`drift.slideFrom`. The
+       * game's floor is a rule the player is told — it will not drift under
+       * 70 — so a layout only moves off 1 when it genuinely behaves
+       * differently down there. A front axle that runs out of grip goes
+       * STRAIGHT ON at any speed, so this one does not. */
+      driftFloor: 1,
+      /** Weight thrown by a flick, ×`grip.flickThrow`. A nose-heavy car
+       * with an unloaded rear throws the most, and needs to: with no
+       * driven rear and a throttle that only ever pulls it straight, the
+       * flick is the front-driver's ENTIRE way into a slide. */
+      flick: 1,
+    },
+    rwd: {
+      powerYaw: 0.95,
+      pullStraight: 0,
+      pullIn: 0,
+      liftYaw: 0.25,
+      spin: 1.9,
+      entry: 0.82,
+      release: 0.75,
+      snap: 0.7,
+      bite: 0.7,
+      // THE ONE EXCEPTION to the game's 70 km/h floor, and the reason it is
+      // a per-layout number at all: a rear axle with torque under it steps
+      // the tail out at walking pace, which is a real thing a rear-driver
+      // does and neither of the others can. 0.06 of the floor is 1.2 m/s,
+      // far enough below the ramp (`slideSpan`) that the slide is properly
+      // open by 10 km/h rather than 1% open at it.
+      driftFloor: 0.06,
+      flick: 0.75,
+    },
+    awd: {
+      powerYaw: 0.5,
+      pullStraight: 0.3,
+      pullIn: 0.45,
+      liftYaw: 0.5,
+      spin: 0.4,
+      entry: 1,
+      release: 1,
+      snap: 1,
+      bite: 1.2,
+      driftFloor: 1,
+      flick: 0.85,
+    },
   },
 
   /** THE DRIFT — every knob that shapes the slide itself: where it starts,

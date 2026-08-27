@@ -13,7 +13,7 @@
 
 Scandinavian Flick is an arcade rally game — no account, no download. Pick your stage length (one minute to seven — or endless), your conditions (dawn, day, dusk, or night; clear, rain, or storm), and START. The feel is the point: drifts that are simply what happens when you turn at speed, jumps where the air is committed and slightly out of control, water fords that explode, tarmac sections where the grip suddenly holds and the tires smoke instead of the gravel flying, a seeded wind that leans on the car and rips the exhaust fumes sideways. Stages are generated fresh from a seeded rules engine that respects rally reality — point-to-point sprints, or **circuits**: a closed lap that comes back to its own start line, raced over three of them with the lap board running: braking zones before hairpins, run-ups before jumps, one river per valley with fords where it is shallow and timber or concrete bridges where it is not, public roads the stage joins at proper junctions and leaves again (the arm it abandons taped off — and still drivable, if you want to see where it goes), grades that climb on the straights and flatten through corners — rolling through a landscape of hillsides, mountains, and lakes that glitter in the sun. And the landscape is not a backdrop: leave the road and drive it — forests, cliff edges that launch the car, streams, boulders and fallen trunks that are really there, all the way to the open sea. Up to ~150 km/h in the wild, ~230 km/h flat out on the road; crash and you're set back on the track. A co-driver strip calls every corner before it arrives — EASY LEFT, LONG HARD RIGHT — the way rally games always have. The endless stage just keeps generating road from the seed until you stop. Four dials say what kind of country you want it built in — hills, water, forest, tarmac. Everyone gets the same stage on a given day; every finish rolls into the next one.
 
-Three cars ship: the **Vireo GT** (automatic — quick, forgiving), the **Sable 4WD** (manual — taller gears, looser rear, faster in good hands) and the **Kestrel RS** (manual — light, grippy, short-geared). Every one is generated from a data spec rather than modelled, and picks up dirt as the stage goes on.
+Three cars ship, and which wheels they drive is real physics rather than a badge: the **Vireo GT** (front-wheel drive — the most grip on tarmac, the sharpest turn-in, and it straightens itself the moment you touch the throttle, so you rotate it on the lift or on a flick), the **Sable 1600** (rear-wheel drive — least power, most rotation, and it will hang its tail out at 10 km/h; the drift car, and the gravel car) and the **Kestrel RS** (four-wheel drive — heaviest, fastest, puts its torque down on anything, and far too lazy for a hairpin). Each owns a kind of stage and none of them owns all of them. Automatic or manual is your choice on any of them, in Options. Every car is generated from a data spec rather than modelled, and picks up dirt as the stage goes on.
 
 ## Why
 
@@ -45,24 +45,24 @@ If the install fails on `@niclaslindstedt/oss-framework`, add a GitHub Packages 
 npm run dev
 ```
 
-Open the printed URL. The game opens on the main menu, over a stage a bot is driving under a drone camera: **Campaign** works through Taiga's six stages, each unlocked by the one before it — the last two are three-lap circuits; **Time trial** re-runs the ones you have opened, for the clock, with your best run out on the road beside you as a see-through ghost; **Roam** picks any seed at all and shows you the map it builds — spinning, with the route drawn on it — before you commit; **Options** covers the camera and the HUD, the renderer and the controls. Pick a stage and you drop into a 3-2-1 countdown. Keyboard (all rebindable in Options): arrows/WASD drive, Space is the handbrake (unsticks the rear), Left Shift burns the finite booster, Q/E shift the manual car, C returns to the main menu, V cycles the camera through six angles (hood, close, chase, far, heli, top — the default is yours to set in Options → HUD), B resets a lost car back to the track, R restarts the stage.
+Open the printed URL. The game opens on the main menu, over a stage a bot is driving under a drone camera: **Campaign** works through Taiga's six stages, each unlocked by the one before it — the last two are three-lap circuits; **Time trial** re-runs the ones you have opened, for the clock, with your best run out on the road beside you as a see-through ghost; **Roam** picks any seed at all and shows you the map it builds — spinning, with the route drawn on it — before you commit; **Options** covers the camera and the HUD, the renderer and the controls. Pick a stage and you drop into a 3-2-1 countdown. Keyboard (all rebindable in Options): arrows/WASD drive, Space is the handbrake (unsticks the rear), Left Shift burns the finite booster, Q/E shift when you have chosen the manual box, C returns to the main menu, V cycles the camera through six angles (hood, close, chase, far, heli, top — the default is yours to set in Options → HUD), B resets a lost car back to the track, R restarts the stage.
 
 ## Usage
 
-| Command            | What it does                                                                            |
-| ------------------ | --------------------------------------------------------------------------------------- |
-| `npm run dev`      | Dev server (no service worker)                                                          |
-| `make build`       | Typecheck + production build to `pwa/dist/`                                             |
-| `make test`        | Full test suite (generator rules, drift/jump physics, bot sims)                         |
-| `make lint`        | ESLint + typecheck across engine, app, tests, and tooling                               |
-| `make sim`         | Headless balance sweep: bots drive stages, prints the pace table                        |
-| `make track`       | Render generated stages: a schematic map AND a shaded view of the place, to `previews/` |
-| `make cars`        | Render the car models to a contact sheet (`previews/cars.png`)                          |
-| `make audition`    | Build the audio review page (`previews/audition.html`): every sound, both scores, live  |
-| `make screenshots` | Drive the built app headlessly and screenshot the key moments                           |
-| `make icons`       | Regenerate PWA icons, favicon, and the OG image from the app mark                       |
-| `make check-seo`   | Build + structural SEO/PWA/bundle-budget assertions                                     |
-| `make hooks`       | Install the pre-commit / commit-msg git hooks                                           |
+| Command            | What it does                                                                                                      |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`      | Dev server (no service worker)                                                                                    |
+| `make build`       | Typecheck + production build to `pwa/dist/`                                                                       |
+| `make test`        | Full test suite (generator rules, drift/jump physics, bot sims)                                                   |
+| `make lint`        | ESLint + typecheck across engine, app, tests, and tooling                                                         |
+| `make sim`         | Headless balance sweep: bots drive stages, prints the pace table (`--sweep` ranks the roster per stage archetype) |
+| `make track`       | Render generated stages: a schematic map AND a shaded view of the place, to `previews/`                           |
+| `make cars`        | Render the car models to a contact sheet (`previews/cars.png`)                                                    |
+| `make audition`    | Build the audio review page (`previews/audition.html`): every sound, both scores, live                            |
+| `make screenshots` | Drive the built app headlessly and screenshot the key moments                                                     |
+| `make icons`       | Regenerate PWA icons, favicon, and the OG image from the app mark                                                 |
+| `make check-seo`   | Build + structural SEO/PWA/bundle-budget assertions                                                               |
+| `make hooks`       | Install the pre-commit / commit-msg git hooks                                                                     |
 
 **On the phone:** the game is an installable PWA — open [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/), then "Add to Home Screen" (iOS Safari: Share → Add to Home Screen). It launches fullscreen, works offline, plays in portrait or landscape, and prompts in-app when a new build ships. Touch controls: one half of the screen anchors a steering wheel under your thumb (drag sideways to turn — the rim has weight, so a nudge is a small correction and a shove is full lock, with a blue arc showing how far it is turned); the other half is the pedal — touch for gas, drag down to brake (held at a standstill it reverses), up to boost, right for the handbrake. Which half steers, and which drag does what, are yours to set in Options → Controls, which only ever offers what the device you are on can actually use.
 

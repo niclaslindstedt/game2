@@ -70,6 +70,19 @@ CONTRIBUTING.md and the PR template. A change that makes bots stop finishing
 or stop drifting is a regression until argued otherwise — and the argument
 happens in the PR, over the two tables, explicitly.
 
+## The roster balance table (`npm run sim -- --sweep`)
+
+`make sim` races ONE set of dials over one pool of seeds, so it ranks the
+cars exactly once — and one car being fastest on every stage in the game is
+invisible to it. `--sweep` races the whole roster over five stage archetypes
+(`tarmac`, `mountain`, `mixed`, `wet`, `gravel`) and ranks them per
+archetype, warning loudly if a single car takes all five.
+
+**Any change to `engine/game/defs/cars.ts` owes this table**, before and
+after, in the PR beside the plain one. Read it for three things: every car
+winning at least one archetype, the specialists winning their home ground by
+MORE than the all-rounder wins the middle, and nobody worst everywhere.
+
 ## The knob loop
 
 1. **Baseline**: `make sim` on the clean tree (or `--json baseline.json` for a

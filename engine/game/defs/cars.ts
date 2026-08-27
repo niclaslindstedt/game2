@@ -1,25 +1,52 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The car catalog. Content is authored as data so new cars are rows here,
 // not physics edits: the handling model in car.ts reads these numbers and
-// nothing else differs between the catalog's cars except them (and the
-// gearbox mode). Speeds are m/s, accelerations m/s², angles radians.
+// nothing else differs between the catalog's cars except them. Speeds are
+// m/s, accelerations m/s², angles radians.
+//
+// The roster is three ANSWERS to the same stage, not three points on one
+// scale — which is the whole reason the drivetrain became real physics
+// (TUNING.drivetrain) instead of a label. A front-driver that hooks up out
+// of slow corners, holds the most grip on tarmac and hates being sideways;
+// a rear-driver that steps its tail out on the throttle from walking pace
+// and pays for it with grip, gearing and every loose-surface launch; a
+// four-wheel-drive that puts its torque down wherever it is pointed, runs
+// the tall gear, and is far too heavy for a hairpin. Each one owns a KIND
+// of stage and none of them owns all three — `npm run sim -- --sweep` is
+// what proves it, and it is what any change to these numbers owes.
+//
 // Nominal gear tops overshoot what drag lets a car actually hold: against
-// TUNING.surfaces.drag the classic levels out around 64 m/s (230 km/h)
-// and the compact around 59 m/s (214 km/h) on flat gravel.
+// TUNING.surfaces.drag every car levels out a few m/s under its final
+// gear's ceiling on flat gravel.
 
+/** Which box the driver is being handed. Not a property of the CAR: every
+ * car in the roster can be driven either way, and which one is a player
+ * setting carried on `CarState.gearbox` for the run. */
 export type GearboxMode = "auto" | "manual";
 
-/** Which wheels the engine drives. Today this is a LABEL: the handling
- * model treats every car the same, and the catalog's grip and yaw numbers
- * are what actually separate them. It is here so the roster can say what a
- * car IS, and so a drivetrain-aware model has something to read when one
- * is written. */
+/** Which wheels the engine drives — real physics, not a label. It selects a
+ * row of TUNING.drivetrain, and that row decides whether the throttle
+ * deepens a slide or pulls the car straight out of it, whether a lift
+ * rotates the car, how readily torque alone breaks traction, where the
+ * slide starts, how fast it lets go, and how much of the engine reaches
+ * the ground on a loose surface. */
 export type DriveLayout = "fwd" | "rwd" | "awd";
+
+/** The tire compound the car sits on, as grip multipliers against the
+ * surface's own. A sealed-road tire holds more on tarmac and skates over
+ * gravel; a loose-surface tire is the other way round. The two multiply, so
+ * the wrong car on the wrong surface is a genuine handicap and neither is
+ * ever simply better. */
+export type TyreSpec = {
+  /** On asphalt. */
+  sealed: number;
+  /** On gravel, open nature, and through water. */
+  loose: number;
+};
 
 export type CarSpec = {
   id: string;
   name: string;
-  gearbox: GearboxMode;
   drive: DriveLayout;
   /** Kerb mass, kg — what the car WEIGHS. Read against
    * TUNING.collision.refMass: a heavier car is harder for a clipped tree
@@ -32,14 +59,34 @@ export type CarSpec = {
   gearTop: number[];
   /** Peak longitudinal acceleration per gear, m/s². */
   gearAccel: number[];
+  /** WHERE inside each gear that acceleration lives. Over 1 is a torquey
+   * engine that shoves off the bottom of the gear and runs out of puff
+   * near the top; under 1 is peaky and wants revs. The curve pivots around
+   * mid-gear (TUNING.engine.torqueSpan), so this moves the pull around
+   * without adding any — and it is the same number that decides how hard
+   * the driven axle can spin itself up, which is how a torquey rear-driver
+   * gets sideways at walking pace. */
+  torque: number;
+  /** How well the driven wheels put that torque DOWN, against the surface
+   * and the layout's own bite (TUNING.drivetrain[drive].bite). Under 1 and
+   * a loose-surface launch is wheelspin; over 1 and the car simply goes. */
+  traction: number;
   /** Braking deceleration, m/s². */
   brake: number;
   /** Base steering yaw authority at low speed, rad/s. */
   steerRate: number;
+  /** How quickly that authority bleeds off with SPEED — straight-line
+   * composure. Over 1 is a car that calms down at pace (and is lazy to
+   * turn in with it); under 1 stays sharp and stays nervous. This is the
+   * knob that decides whether a stage of long fast sweepers suits a car or
+   * frightens it. */
+  stability: number;
   /** Lateral acceleration the tires can hold before the car starts to
    * slide, m/s² — the whole drift-entry threshold, since a slide is just a
    * turn the tires cannot pay for. */
   gripAccel: number;
+  /** The rubber that holds it, per surface family. */
+  tyres: TyreSpec;
   /** Lateral grip while gripping: how fast the velocity swings back behind
    * the nose, 1/s. */
   gripLat: number;
@@ -54,63 +101,91 @@ export type CarSpec = {
 
 export const CARS: CarSpec[] = [
   {
-    // The forgiving starter: automatic box, quick off the line, softer top
-    // end, grippier — the car you hand someone on a phone.
+    // THE HATCH — an upright late-70s two-box, front-driven, on road
+    // rubber. Small peaky engine that makes everything it has at the top of
+    // the gear: keep it in the band and it flies, bog it out of a hairpin
+    // and it is nowhere. The shortest gearing and nearly the lowest top
+    // speed in the roster, paid back as the most lateral grip on a sealed
+    // surface and the sharpest turn-in of the three. It understeers up to
+    // the limit and pulls itself straight again the moment the power goes
+    // down, so it is rotated on the LIFT, never on the throttle. The
+    // tarmac stage is its day out; a loose, open, fast one is not.
     id: "compact",
-    name: "Vireo GT (auto)",
-    gearbox: "auto",
+    name: "Vireo GT",
     drive: "fwd",
-    mass: 1120,
-    gearTop: [13, 21, 30, 40, 52, 65],
+    mass: 1020,
+    gearTop: [12, 20, 28, 38, 49, 62],
     // gearAccel[4] holds clear headroom over drag at 0.94·gearTop[4], or
     // the auto box parks just under its own upshift threshold forever.
-    gearAccel: [11.5, 10, 8.4, 6.6, 5.6, 3.6],
-    brake: 18,
-    steerRate: 2.6,
-    gripAccel: 16,
-    gripLat: 8.5,
-    driftLat: 2.2,
-    driftYaw: 2.4,
+    gearAccel: [11.8, 10.4, 8.8, 6.8, 5.2, 3.2],
+    torque: 0.85,
+    traction: 1.05,
+    brake: 19.5,
+    steerRate: 2.75,
+    stability: 1.0,
+    gripAccel: 16.4,
+    tyres: { sealed: 1.16, loose: 0.9 },
+    gripLat: 8.6,
+    driftLat: 2.6,
+    driftYaw: 2.2,
     color: 0x1f6fde,
     accent: 0xffffff,
   },
   {
-    // The reward car: manual box, taller gearing, less grip to lean on —
-    // faster in hands that can keep it flowing and keep it in gear.
+    // THE SALOON — a light three-box 1600 from the end of the sixties,
+    // rear-driven, on skinny tires. The least powerful and the lowest-geared
+    // car here, and it does not care: the engine is flexible enough to
+    // light the rear axle up at walking pace, so it is the one car that
+    // will hang its tail out at 10 km/h and the one that turns a tight
+    // gravel stage into a series of drifts. What it pays is grip and
+    // composure — it has the least of both, it spins its wheels off the
+    // line on anything loose, and a fast open stage exposes every bit of
+    // that.
     id: "classic",
-    name: "Sable 4WD (manual)",
-    gearbox: "manual",
-    drive: "awd",
-    mass: 1310,
-    gearTop: [12, 20, 29, 39, 52, 70],
-    gearAccel: [13, 11, 9.2, 7.2, 5.4, 3.8],
-    brake: 19,
-    steerRate: 2.5,
-    gripAccel: 14,
-    gripLat: 7.5,
-    driftLat: 1.9,
-    driftYaw: 2.7,
+    name: "Sable 1600",
+    drive: "rwd",
+    mass: 1080,
+    gearTop: [11, 18, 26, 35, 45, 57],
+    gearAccel: [15.0, 13.0, 11.0, 9.2, 6.2, 3.0],
+    torque: 1.12,
+    traction: 0.85,
+    brake: 18.5,
+    steerRate: 2.7,
+    stability: 0.9,
+    gripAccel: 16.4,
+    tyres: { sealed: 0.94, loose: 1.04 },
+    gripLat: 8.4,
+    driftLat: 1.85,
+    driftYaw: 2.85,
     color: 0xd8342c,
     accent: 0xf4e9d0,
   },
   {
-    // The homologation coupe: front-driven, light, and the shortest geared
-    // of the three. It holds more lateral grip than the classic and rotates
-    // less freely once loose, so it is quick where the stage flows and hard
-    // work where it does not.
+    // THE HOMOLOGATION SPECIAL — a flared two-door with a turbocharged four
+    // and drive to all of it. Heaviest, most powerful, tallest-geared and
+    // the only car that puts its torque down whatever it is standing on, so
+    // the long open stage, the climb and the wet one are all its. What it
+    // pays is agility: the mass and the composure that keep it calm at
+    // 230 km/h make it lazy to turn in, and a stage of hairpins belongs to
+    // the two lighter cars. It slides neutrally when asked and gathers
+    // itself up on its own — never as playful as the rear-driver, never as
+    // pointy as the hatch, and quicker than both wherever the road opens.
     id: "coupe",
-    name: "Kestrel RS (manual)",
-    gearbox: "manual",
-    drive: "fwd",
-    mass: 1050,
-    gearTop: [12, 20, 28, 37, 49, 66],
-    gearAccel: [13.5, 11.5, 9.6, 7.4, 5.6, 3.7],
-    brake: 19.5,
-    steerRate: 2.7,
-    gripAccel: 17,
-    gripLat: 9,
-    driftLat: 2.4,
-    driftYaw: 2.3,
+    name: "Kestrel RS",
+    drive: "awd",
+    mass: 1300,
+    gearTop: [13, 22, 31, 42, 55, 72],
+    gearAccel: [10.8, 9.4, 9.4, 9.6, 8.2, 5.6],
+    torque: 0.9,
+    traction: 1.12,
+    brake: 20,
+    steerRate: 2.45,
+    stability: 1.08,
+    gripAccel: 15.6,
+    tyres: { sealed: 1.03, loose: 1.02 },
+    gripLat: 8.0,
+    driftLat: 2.15,
+    driftYaw: 2.45,
     color: 0xc8352b,
     accent: 0xf2efe6,
   },

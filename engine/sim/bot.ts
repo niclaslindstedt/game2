@@ -10,6 +10,7 @@ import { angleDiff, clamp } from "../lib/math.ts";
 import { TUNING } from "../game/defs/tuning.ts";
 import type { Track } from "../mapgen/index.ts";
 import type { CarInput, GameState } from "../game/state.ts";
+import type { Surface } from "../mapgen/index.ts";
 
 /** The sample `ahead` steps down the road. On a CIRCUIT (R22) the road runs
  * on past its last sample into its first, so the lookahead runs on with it
@@ -37,6 +38,13 @@ export type BotProfile = {
   planHorizon: number;
   /** Curvature (1/m) above which an approach earns a handbrake flick. */
   hardCurvature: number;
+  /** How much over the geometric corner speed a hard corner is entered at,
+   * m/s — scaled by how freely the car rotates (see `rotationRef`). */
+  hotEntry: number;
+  /** The rotational authority (`spec.driftYaw`) that `hotEntry` is quoted
+   * at. A car that rotates more than this is trusted with proportionally
+   * more of it, one that rotates less with less. */
+  rotationRef: number;
   /** Margin over the corner speed that triggers braking, m/s. */
   brakeMargin: number;
   /** Seconds pinned against something with the throttle buried before the
@@ -57,15 +65,28 @@ export const RALLY_BOT: BotProfile = {
   lookahead: 0.65,
   planHorizon: 3.0,
   hardCurvature: 1 / 30,
+  hotEntry: 2.5,
+  rotationRef: 2.5,
   brakeMargin: 2.5,
   reverseAfter: 0.8,
   reverseSpeed: 4,
 };
 
+/** The lateral grip multiplier this car has on that surface — the
+ * surface's own times the rubber the car sits on, exactly as the handling
+ * model reads it (car.ts). The bot plans corners off this, so the catalog's
+ * tires are felt as PACE and not merely as a number nobody drives. */
+function surfaceGrip(state: GameState, surface: Surface): number {
+  const tyres = state.spec.tyres;
+  return TUNING.surfaces.grip[surface] * (surface === "asphalt" ? tyres.sealed : tyres.loose);
+}
+
 /** Compute this step's input for the current state. Pure and stateless —
  * everything the bot knows is in the GameState. */
 export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): CarInput {
   const { car, track } = state;
+  /** How freely this car rotates, against the profile's reference. */
+  const rotation = state.spec.driftYaw / profile.rotationRef;
   const samples = track.samples;
   const step = track.step;
 
@@ -91,7 +112,13 @@ export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): Car
     const i = aheadOf(track, state.progressIndex, ahead);
     const k = Math.abs(samples[i].curvature);
     if (k < 1e-4) continue;
-    const cap = Math.sqrt(latAccel / k);
+    // The grip the car will actually HAVE at that corner, not the number on
+    // its spec sheet: the surface it is paved with and the rubber this car
+    // is on both scale it, and a driver reads the road ahead. Without this
+    // the plan is blind to the whole surface half of a car's character — a
+    // road-tired car would brake for a sealed corner as if it were gravel,
+    // and no amount of tire in the catalog would ever show up as pace.
+    const cap = Math.sqrt((latAccel * surfaceGrip(state, samples[i].surface)) / k);
     // Arc distance to it — round the lap on a circuit, where a sample the
     // bot is planning for can sit at a smaller `s` than the car does.
     const distance =
@@ -100,9 +127,12 @@ export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): Car
     // carries extra speed there and the drift scrubs it, instead of braking
     // down to the geometric cap like a grip line would.
     const hard = k > profile.hardCurvature;
-    // Hot entry is ADDITIVE: +3.5 m/s over the geometric cap. A ratio would
-    // overcook exactly the tightest hairpins, where the cap is smallest.
-    const planCap = hard ? cap + 2.5 : cap;
+    // Hot entry is ADDITIVE: a fixed margin over the geometric cap. A ratio
+    // would overcook exactly the tightest hairpins, where the cap is
+    // smallest. How much of it a car is trusted with is its ROTATION: the
+    // slide is what brings the nose round in there, so a car that rotates
+    // freely can carry more in than one that pushes.
+    const planCap = hard ? cap + profile.hotEntry * rotation : cap;
     // Distance-discounted: a far corner allows more speed now than a near one.
     const allowed = Math.sqrt(
       planCap * planCap + 2 * state.spec.brake * 0.7 * Math.max(0, distance - 10),
@@ -183,7 +213,7 @@ export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): Car
   // Manual box: shift by the same speed thresholds the auto box uses.
   let shiftUp = false;
   let shiftDown = false;
-  if (state.spec.gearbox === "manual") {
+  if (car.gearbox === "manual") {
     const top = state.spec.gearTop;
     if (car.gear < top.length - 1 && car.u > top[car.gear] * TUNING.gearbox.upAt) shiftUp = true;
     else if (car.gear > 0 && car.u < top[car.gear - 1] * TUNING.gearbox.downAt) shiftDown = true;
