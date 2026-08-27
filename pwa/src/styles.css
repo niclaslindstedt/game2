@@ -2161,10 +2161,12 @@ a.menu-version:focus-visible {
   }
 }
 
-/* ── The studio card ─────────────────────────────────────────────────────
+/* ── The attract screen ──────────────────────────────────────────────────
    The app opens on it, and the whole menu — render stack, world builder, a
    stage's worth of terrain — arrives behind it. Painted in the brand sky so
-   the card lifting reads as the menu arriving, not as a screen change. */
+   the card lifting reads as the menu arriving, not as a screen change. It
+   plays in two beats: the house's name while that is happening, then the
+   title under its finish flags with the prompt blinking under both. */
 
 .splash {
   position: fixed;
@@ -2174,7 +2176,7 @@ a.menu-version:focus-visible {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: clamp(1.4rem, 6vmin, 3rem);
+  gap: clamp(0.9rem, 3.6vmin, 2rem);
   padding: 1.5rem;
   background: linear-gradient(#1f7fe0 0%, #3fa9f5 55%, #bfe3ff 100%);
   color: #ffffff;
@@ -2209,7 +2211,7 @@ a.menu-version:focus-visible {
 }
 
 .splash-publisher {
-  font-size: clamp(1.3rem, 6vmin, 2.4rem);
+  font-size: clamp(1.1rem, 5vmin, 2rem);
   letter-spacing: 0.1em;
   line-height: 1;
   text-shadow:
@@ -2218,7 +2220,7 @@ a.menu-version:focus-visible {
 }
 
 .splash-presents {
-  font-size: clamp(0.62rem, 2.3vmin, 0.95rem);
+  font-size: clamp(0.58rem, 2.1vmin, 0.9rem);
   font-style: normal;
   font-weight: 600;
   letter-spacing: 0.5em;
@@ -2228,8 +2230,36 @@ a.menu-version:focus-visible {
   opacity: 0.85;
 }
 
-/* The game's name, held apart from the card so the house lands first and the
-   title arrives under it, the way a title card plays. */
+/* Beat two: the flags and the game's name, mounted the moment the game behind
+   the card is standing. */
+.splash-title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(0.4rem, 1.8vmin, 1rem);
+  animation: splash-crest 620ms ease-out both;
+}
+
+/* The flags' box. The ratio is the SVG's own viewBox, restated here so the
+   space is reserved before a single flag has been hung in it — and the height
+   cap is what keeps the crest off the title on a phone held sideways, the
+   tightest surface in the app. */
+.splash-flags {
+  width: min(82vw, 62vh, 32rem);
+  aspect-ratio: 30 / 13;
+}
+
+.splash-flag-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* The cloth swings past its own viewBox at the top of a flap. */
+  overflow: visible;
+  /* The same hard offset shadow every drawn thing on the HUD wears — a soft
+     blur would be the one un-arcade edge on the screen. */
+  filter: drop-shadow(3px 4px 0 rgb(18 48 105 / 40%));
+}
+
 .splash-game {
   max-width: 14ch;
   font-size: clamp(1.8rem, 8vmin, 3.2rem);
@@ -2241,7 +2271,32 @@ a.menu-version:focus-visible {
   text-shadow:
     3px 3px 0 var(--hud-shadow),
     -1px -1px 0 var(--hud-shadow);
-  animation: splash-title 520ms 380ms ease-out both;
+}
+
+/* The name rises into place a beat after the flags, so the two read as one
+   move rather than one appearance. */
+.splash-title .splash-game {
+  animation: splash-name 520ms 220ms ease-out both;
+}
+
+/* What the card is doing, and then what it wants. One slot, so the invitation
+   lands exactly where the player was already looking. */
+.splash-prompt {
+  font-size: clamp(0.68rem, 2.5vmin, 1rem);
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  text-indent: 0.32em;
+  text-align: center;
+  color: var(--hud-ink);
+  text-shadow: 2px 2px 0 var(--hud-shadow);
+  animation: splash-loading 1.5s ease-in-out infinite;
+}
+
+/* The arcade blink: a hard on/off. A fade would read as a notification. */
+.splash-prompt.ready {
+  color: var(--hud-good);
+  animation: splash-blink 1.05s linear 520ms infinite both;
 }
 
 @keyframes splash-in {
@@ -2256,7 +2311,19 @@ a.menu-version:focus-visible {
   }
 }
 
-@keyframes splash-title {
+@keyframes splash-crest {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes splash-name {
   from {
     opacity: 0;
     transform: translateY(0.8rem);
@@ -2268,13 +2335,45 @@ a.menu-version:focus-visible {
   }
 }
 
+@keyframes splash-loading {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+
+  50% {
+    opacity: 0.75;
+  }
+}
+
+@keyframes splash-blink {
+  0%,
+  56% {
+    opacity: 1;
+  }
+
+  57%,
+  100% {
+    opacity: 0;
+  }
+}
+
 /* Reduced motion: the card still shows and still fades away (an instant cut
-   to the menu is the harsher of the two), but it stops sliding in — that
-   part is pure flourish. */
+   to the menu is the harsher of the two), but it stops sliding in and the
+   flags stop flapping — that part is pure flourish, and `finish-flag.ts`
+   draws them at rest instead. The prompt stops blinking and stays LIT: a card
+   that waits for a press has to keep the invitation on screen. */
 @media (prefers-reduced-motion: reduce) {
   .splash-card,
-  .splash-game {
+  .splash-title,
+  .splash-title .splash-game,
+  .splash-prompt,
+  .splash-prompt.ready {
     animation: none;
+  }
+
+  .splash-prompt {
+    opacity: 1;
   }
 }
 

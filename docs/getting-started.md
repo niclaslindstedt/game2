@@ -2,7 +2,7 @@
 
 ## Playing
 
-Open [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/). After the studio card the game opens on the **main menu**, which is not a still: a bot is driving a real stage behind it, seen from a drone, and it keeps going while you decide. Four ways in:
+Open [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/). The app opens on an attract screen: the studio card while the game loads, then the title under two crossed finish flags and **press any key to start** (tap, on a phone). It waits for you — the press is also what lets the browser turn the sound on. Behind it the game is already running, and clearing the card drops you on the **main menu**, which is not a still: a bot is driving a real stage behind it, seen from a drone, and it keeps going while you decide. Four ways in:
 
 - **Campaign** — a location (Taiga, for now) and its four stages, each one unlocked by finishing the one before it. Locked stages wear a grey border and a padlock; open ones wear green. The ladder climbs in both length and difficulty, from a 1-minute forest road to seven minutes of hairpins and jumps in a night storm.
 - **Time trial** — the same stages, gated by the same unlocks, with your best time on each: a time is something you chase on a road you have already driven.

@@ -241,9 +241,10 @@ export function App() {
    * is, so a finish can record the clear. */
   const [run, setRun] = useState<{ mode: PlayMode; levelId?: string }>({ mode: "roam" });
   const [snap, setSnap] = useState<HudSnapshot | null>(null);
-  /** The studio card is up until it lifts; `booted` is the moment the render
-   * stack has landed and the first stage is standing, which is what the card
-   * is covering. Tooling runs pass ?start=1 and never see it. */
+  /** The attract card is up until a press clears it; `booted` is the moment
+   * the render stack has landed and the first stage is standing, which is what
+   * the card is covering — and what it waits for before it puts its title up
+   * and asks for that press. Tooling runs pass ?start=1 and never see it. */
   const [splashUp, setSplashUp] = useState(() => !splashSkipped(location.search));
   const [booted, setBooted] = useState(false);
   const [paused, setPaused] = useState(false);

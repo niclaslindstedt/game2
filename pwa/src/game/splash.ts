@@ -1,57 +1,57 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE STUDIO CARD — the policy behind `splash-screen.tsx`: how long the card
-// is held, and when the app is being driven by something that must not see a
-// card at all.
+// THE ATTRACT SCREEN — the policy behind `splash-screen.tsx`: when the title
+// may appear, when a press may clear the card, and when the app is being
+// driven by something that must not see a card at all.
 //
 // The card is not decoration. The app opens onto the main menu, and that menu
 // is a LIVE STAGE: the render stack's chunk has to come down the wire, the
 // world builder has to lay a whole stage's terrain, forest and lakes, and the
-// bot has to start driving it. All of that is spent BEHIND the card — the menu
-// mounts under it and is running by the time it lifts.
+// bot has to start driving it. All of that is spent BEHIND the card.
+//
+// It plays like an arcade cabinet, in two beats. First the house's name over
+// an empty sky while the world is built. Then, the moment the game is
+// standing, the title and its finish flags arrive and the card asks for a
+// press — and waits, however long that takes. Nothing lifts the card on a
+// timer: the press is the point, and it buys two things a timer cannot. The
+// player enters the menu when THEY are ready, and the gesture that enters is
+// also the one the browser wants before it will let the game make a sound.
 //
 // Kept apart from the component so the timing rules are testable without a
 // renderer (see `tests/splash_test.ts`), which is also why this module takes
 // the query string as an argument instead of reading `location` itself.
 
 /**
- * How long the card is held before ANY press can clear it. Short enough not to
- * stand between a player and the menu, long enough that the name is read
- * rather than glimpsed — and it doubles as the guard against the press that
- * launched the app (a tap that opened the PWA) arriving as the press that
- * dismisses the card.
+ * How long the card is held before ANY press can clear it, and before the
+ * title may arrive. Short enough not to stand between a player and the menu,
+ * long enough that the house's name is read rather than glimpsed — and it
+ * doubles as the guard against the press that launched the app (a tap that
+ * opened the PWA) arriving as the press that dismisses the card.
  */
 export const SPLASH_MIN_MS = 1000;
 
-/** …and when the card clears itself, for a player who touches nothing. */
-export const SPLASH_AUTO_MS = 2800;
+/**
+ * The dead man's handle. Past this, the card opens up whether or not the game
+ * ever reported itself ready — a boot that has taken this long has gone wrong
+ * in a way the card cannot fix (a render chunk that never landed, a context
+ * the GPU refused), and trapping the player on a screen that will never invite
+ * them in is worse than letting them through to a menu that may be half-built.
+ */
+export const SPLASH_STUCK_MS = 20000;
 
 /**
- * Where the card is in its life:
+ * True once the card may show the title and take a press, given how long it
+ * has been up and whether the game behind it is `warm` — the render stack
+ * landed, the first stage standing, the loop turning.
  *
- * - `holding` — inside {@link SPLASH_MIN_MS}. Presses are swallowed.
- * - `skippable` — the minimum is served: the next press clears it.
- * - `done` — it is leaving, either because a press cleared it or because
- *   {@link SPLASH_AUTO_MS} came and went on a game that is ready.
+ * **THE READY STATE WAITS FOR THE LOAD.** A card that invited a press while
+ * the world was still being built would hand the player exactly the empty blue
+ * screen it was added to hide, so a slow device stays on the house's name
+ * instead. That is the whole reason the card exists — and it is why nothing
+ * here can be answered by the clock alone, {@link SPLASH_STUCK_MS} aside.
  */
-export type SplashPhase = "holding" | "skippable" | "done";
-
-/**
- * The phase for a card that has been up `elapsedMs` with the game `warm` or
- * not. The two clocks answer to `warm` differently, and the difference is the
- * difference between a player who is waiting and a player who is not:
- *
- * - **THE AUTO-DISMISS WAITS FOR THE LOAD.** A card that lifted itself while
- *   the world was still being built would hand a player who touched nothing
- *   exactly the empty blue screen it was added to hide, so a slow device holds
- *   it past {@link SPLASH_AUTO_MS} instead. That is the whole reason the card
- *   exists.
- * - **A PRESS DOES NOT.** The player has told us they are done reading, and a
- *   card that answers by ignoring them reads as a hung app. Only the minimum
- *   is still enforced, and that one is not about the load at all.
- */
-export function splashPhase(elapsedMs: number, warm: boolean): SplashPhase {
-  if (elapsedMs < SPLASH_MIN_MS) return "holding";
-  return warm && elapsedMs >= SPLASH_AUTO_MS ? "done" : "skippable";
+export function splashReady(elapsedMs: number, warm: boolean): boolean {
+  if (elapsedMs < SPLASH_MIN_MS) return false;
+  return warm || elapsedMs >= SPLASH_STUCK_MS;
 }
 
 /**
