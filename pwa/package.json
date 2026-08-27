@@ -2,7 +2,7 @@
   "name": "pwa",
   "version": "0.1.0",
   "private": true,
-  "description": "Browser/PWA shell for Sideways: the Vite app that renders the engine in 3D and ships as an installable, offline-capable web app.",
+  "description": "Browser/PWA shell for Scandinavian Flick: the Vite app that renders the engine in 3D and ships as an installable, offline-capable web app.",
   "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
   "scripts": {

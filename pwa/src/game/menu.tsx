@@ -1,25 +1,15 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// The two menus, both wearing the same arcade card.
-//
-// PreRaceMenu is the one you start from: pick when you race (time of day),
-// what the sky does (weather), and what you drive — then START. It floats
-// over the live scene, so switching a setting re-lights the stage behind it
-// immediately; the countdown holds until START is pressed.
+// The in-race pause card, and the option vocabulary every menu surface
+// shares: the stage-length bands, the times of day, the weathers, and the
+// segmented `OptionRow` they are all picked with.
 //
 // PauseMenu is the one you reach mid-stage, by tapping the minimap: the run
-// holds where it stands, and it carries the two ways on — run this stage
-// again, or go back and change the race. They live here rather than in the
-// top bar because the bar is a strip over the road, and every button on it
-// is a button in the way of the driving.
+// holds where it stands, and it carries the three ways on — run this stage
+// again, leave for the main menu, or resume. It lives here rather than in
+// the top bar because the bar is a strip over the road, and every button on
+// it is a button in the way of the driving.
 
-import {
-  CARS,
-  DEFAULT_KNOBS,
-  type StageKnobs,
-  type StageLength,
-  type TimeOfDay,
-  type Weather,
-} from "@engine";
+import { DEFAULT_KNOBS, type StageKnobs, type StageLength, type TimeOfDay, type Weather } from "@engine";
 
 export type RaceSettings = {
   timeOfDay: TimeOfDay;
@@ -91,13 +81,14 @@ export function dialStop(stops: DialStop[], value: number): string {
 
 export const DEFAULT_STAGE_KNOBS: StageKnobs = { ...DEFAULT_KNOBS };
 
-/** The menu's stage lengths — minutes of driving at rally pace, or the
- * endless stream that keeps generating road off the seed forever. */
+/** The stage lengths, in the order Roam's slider walks them — minutes of
+ * driving at rally pace, ending in the endless stream that keeps generating
+ * road off the seed for as long as the run lasts. */
 export const STAGE_LENGTH_OPTIONS: { id: StageLength; label: string }[] = [
-  { id: "short", label: "SHORT 1′" },
-  { id: "medium", label: "MEDIUM 3′" },
-  { id: "long", label: "LONG 5′" },
-  { id: "xlong", label: "X-LONG 7′" },
+  { id: "short", label: "SHORT" },
+  { id: "medium", label: "MEDIUM" },
+  { id: "long", label: "LONG" },
+  { id: "xlong", label: "X-LONG" },
   { id: "endless", label: "ENDLESS" },
 ];
 
@@ -114,14 +105,7 @@ export const WEATHERS: { id: Weather; label: string }[] = [
   { id: "storm", label: "STORM" },
 ];
 
-type MenuProps = {
-  seed: number;
-  settings: RaceSettings;
-  onChange: (settings: RaceSettings) => void;
-  onStart: () => void;
-};
-
-function OptionRow<T extends string>({
+export function OptionRow<T extends string>({
   label,
   options,
   value,
@@ -133,14 +117,14 @@ function OptionRow<T extends string>({
   onPick: (id: T) => void;
 }) {
   return (
-    <div className="hud-menu-row">
-      <span className="hud-menu-label">{label}</span>
-      <div className="hud-menu-opts">
+    <div className="menu-row">
+      <span className="menu-label">{label}</span>
+      <div className="menu-opts">
         {options.map((opt) => (
           <button
             key={opt.id}
             type="button"
-            className={`hud-opt ${opt.id === value ? "hud-opt-active" : ""}`}
+            className={`menu-opt ${opt.id === value ? "menu-opt-active" : ""}`}
             onClick={() => onPick(opt.id)}
           >
             {opt.label}
@@ -151,67 +135,17 @@ function OptionRow<T extends string>({
   );
 }
 
-export function PreRaceMenu({ seed, settings, onChange, onStart }: MenuProps) {
-  return (
-    <div className="hud-menu-wrap pointer-events-auto">
-      <div className="hud-menu">
-        <div className="hud-menu-title">STAGE {seed}</div>
-        <OptionRow
-          label="LENGTH"
-          options={STAGE_LENGTH_OPTIONS}
-          value={settings.length}
-          onPick={(length) => onChange({ ...settings, length })}
-        />
-        {STAGE_DIALS.map((dial) => (
-          <OptionRow
-            key={dial.key}
-            label={dial.label}
-            options={dial.stops}
-            value={dialStop(dial.stops, settings.knobs[dial.key])}
-            onPick={(id) => {
-              const stop = dial.stops.find((s) => s.id === id);
-              if (!stop) return;
-              onChange({ ...settings, knobs: { ...settings.knobs, [dial.key]: stop.value } });
-            }}
-          />
-        ))}
-        <OptionRow
-          label="TIME"
-          options={TIMES_OF_DAY}
-          value={settings.timeOfDay}
-          onPick={(timeOfDay) => onChange({ ...settings, timeOfDay })}
-        />
-        <OptionRow
-          label="WEATHER"
-          options={WEATHERS}
-          value={settings.weather}
-          onPick={(weather) => onChange({ ...settings, weather })}
-        />
-        <OptionRow
-          label="CAR"
-          options={CARS.map((c) => ({ id: c.id, label: c.name.toUpperCase() }))}
-          value={settings.carId}
-          onPick={(carId) => onChange({ ...settings, carId })}
-        />
-        <button type="button" className="hud-start" onClick={onStart}>
-          START
-        </button>
-      </div>
-    </div>
-  );
-}
-
 type PauseProps = {
   seed: number;
   carName: string;
   onResume: () => void;
   onRestart: () => void;
-  onSetup: () => void;
+  onMainMenu: () => void;
 };
 
 /** The in-race menu, opened by tapping the minimap. The backdrop resumes:
  * a menu you opened by mis-aiming for the map must cost one tap to leave. */
-export function PauseMenu({ seed, carName, onResume, onRestart, onSetup }: PauseProps) {
+export function PauseMenu({ seed, carName, onResume, onRestart, onMainMenu }: PauseProps) {
   return (
     <div className="hud-menu-wrap pointer-events-auto" onPointerDown={onResume} role="presentation">
       <div className="hud-menu hud-pause" onPointerDown={(e) => e.stopPropagation()}>
@@ -225,8 +159,8 @@ export function PauseMenu({ seed, carName, onResume, onRestart, onSetup }: Pause
         <button type="button" className="hud-pause-act" onClick={onRestart}>
           RESTART STAGE
         </button>
-        <button type="button" className="hud-pause-act" onClick={onSetup}>
-          RACE SETUP
+        <button type="button" className="hud-pause-act" onClick={onMainMenu}>
+          MAIN MENU
         </button>
       </div>
     </div>

@@ -10,6 +10,7 @@ import type { TurnSeverity } from "@engine";
 
 import type { InputManager } from "./input.ts";
 import { Minimap, type HudMinimap } from "./minimap.tsx";
+import type { HudSettings, PedalDir, TouchSettings } from "./settings.ts";
 import { clamp, formatTime } from "../lib/util.ts";
 
 /** One co-driver call, already flipped into SCREEN space by the snapshot
@@ -86,6 +87,10 @@ type HudProps = {
   snap: HudSnapshot;
   flashes: HudFlash[];
   input: InputManager;
+  /** Which instruments the player has left switched on. */
+  show: HudSettings;
+  /** Which thumb steers, and what each drag off the pedal anchor does. */
+  touchLayout: TouchSettings;
   onPause: () => void;
   onCamera: () => void;
 };
@@ -122,6 +127,16 @@ const WHEEL_LOCK_DEG = 120;
 /** Drag (px) from the anchor before a pedal gesture beats plain gas. */
 const PEDAL_DEAD_PX = 28;
 
+/** The directions a hint arrow can be drawn in, and what each bound action
+ * is called on it — "DRIFT" rather than "HANDBRAKE", because that is what
+ * the player is reaching for it to do. */
+const PEDAL_HINT_DIRS: PedalDir[] = ["up", "down", "left", "right"];
+const PEDAL_HINT_WORD: Record<Exclude<PedalMode, "gas">, string> = {
+  brake: "BRAKE",
+  boost: "BOOST",
+  handbrake: "DRIFT",
+};
+
 /** The left thumb: touching anywhere anchors a steering wheel under the
  * finger; dragging sideways turns it and releasing recenters. The rim does
  * not snap to the thumb — it chases it at a rate set by the gap between the
@@ -132,7 +147,7 @@ const PEDAL_DEAD_PX = 28;
  * Written straight into the input manager and the wheel's DOM from the
  * pointer events and one rAF loop; the 12 Hz HUD re-render never touches
  * these styles. */
-function SteerZone({ touch }: { touch: InputManager["touch"] }) {
+function SteerZone({ touch, side }: { touch: InputManager["touch"]; side: "left" | "right" }) {
   const wheelRef = useRef<HTMLDivElement>(null);
   const fillRef = useRef<SVGCircleElement>(null);
   const pointerRef = useRef<number | null>(null);
@@ -186,7 +201,7 @@ function SteerZone({ touch }: { touch: InputManager["touch"] }) {
 
   return (
     <div
-      className="hud-zone hud-zone-left"
+      className={`hud-zone hud-zone-${side}`}
       onPointerDown={(e) => {
         // The first finger owns the wheel; a second touch on this half is
         // ignored rather than re-anchoring the steering under the first.
@@ -254,12 +269,28 @@ function SteerZone({ touch }: { touch: InputManager["touch"] }) {
 
 type PedalMode = "gas" | "brake" | "boost" | "handbrake";
 
-/** The right thumb: touching anywhere is GAS; dragging up from the anchor
- * brakes, down burns the booster, right pulls the handbrake (gas stays on
- * through boost and handbrake — that is what makes the handbrake a drift
- * tool). Sliding back inside the deadzone returns to plain gas; releasing
- * lets everything go. Three anchored hint arrows light the active gesture. */
-function PedalZone({ touch }: { touch: InputManager["touch"] }) {
+/** The pedal thumb: touching anywhere is GAS; dragging off the anchor does
+ * whatever the player has bound to that direction (gas stays on through
+ * boost and handbrake — that is what makes the handbrake a drift tool).
+ * Sliding back inside the deadzone returns to plain gas; releasing lets
+ * everything go. Three anchored hint arrows light the active gesture. */
+function PedalZone({
+  touch,
+  layout,
+  side,
+}: {
+  touch: InputManager["touch"];
+  layout: TouchSettings;
+  side: "left" | "right";
+}) {
+  /** The player's direction map, inverted: which action each drag means.
+   * Plain gas is never in here — it is what a drag that lands on the one
+   * unbound direction falls back to. */
+  const byDir: Partial<Record<PedalDir, Exclude<PedalMode, "gas">>> = {
+    [layout.brake]: "brake",
+    [layout.handbrake]: "handbrake",
+    [layout.boost]: "boost",
+  };
   const hintRef = useRef<HTMLDivElement>(null);
   const pointerRef = useRef<number | null>(null);
   const originRef = useRef({ x: 0, y: 0 });
@@ -281,7 +312,7 @@ function PedalZone({ touch }: { touch: InputManager["touch"] }) {
 
   return (
     <div
-      className="hud-zone hud-zone-right"
+      className={`hud-zone hud-zone-${side}`}
       onPointerDown={(e) => {
         if (pointerRef.current !== null) return;
         pointerRef.current = e.pointerId;
@@ -300,12 +331,13 @@ function PedalZone({ touch }: { touch: InputManager["touch"] }) {
         if (e.pointerId !== pointerRef.current) return;
         const dx = e.clientX - originRef.current.x;
         const dy = e.clientY - originRef.current.y;
-        // Dominant axis picks the gesture; a drag left means nothing and
-        // stays gas, so a sloppy thumb never brakes by accident.
+        // Dominant axis picks the direction; the one direction nothing is
+        // bound to stays gas, so a sloppy thumb never brakes by accident.
         let mode: PedalMode = "gas";
         if (Math.max(Math.abs(dx), Math.abs(dy)) >= PEDAL_DEAD_PX) {
-          if (Math.abs(dy) >= Math.abs(dx)) mode = dy < 0 ? "brake" : "boost";
-          else if (dx > 0) mode = "handbrake";
+          const dir: PedalDir =
+            Math.abs(dy) >= Math.abs(dx) ? (dy < 0 ? "up" : "down") : dx > 0 ? "right" : "left";
+          mode = byDir[dir] ?? "gas";
         }
         setMode(mode);
       }}
@@ -314,18 +346,16 @@ function PedalZone({ touch }: { touch: InputManager["touch"] }) {
       onContextMenu={(e) => e.preventDefault()}
     >
       <div ref={hintRef} className="hud-pedal-hint" aria-hidden="true">
-        <span className="hud-hint hud-hint-up">
-          <i className="hud-hint-arrow hud-hint-arrow-up" />
-          BRAKE
-        </span>
-        <span className="hud-hint hud-hint-down">
-          <i className="hud-hint-arrow hud-hint-arrow-down" />
-          BOOST
-        </span>
-        <span className="hud-hint hud-hint-right">
-          <i className="hud-hint-arrow hud-hint-arrow-right" />
-          DRIFT
-        </span>
+        {PEDAL_HINT_DIRS.map((dir) => {
+          const mode = byDir[dir];
+          if (!mode) return null;
+          return (
+            <span key={dir} className={`hud-hint hud-hint-${dir}`}>
+              <i className={`hud-hint-arrow hud-hint-arrow-${dir}`} />
+              {PEDAL_HINT_WORD[mode]}
+            </span>
+          );
+        })}
       </div>
     </div>
   );
@@ -498,16 +528,22 @@ function WayHomeCall({ distance }: { distance: number }) {
 }
 
 /** The co-driver strip: the current call big, the following call small —
- * "HARD LEFT … into easy right", the way a crew reads a stage. */
-function Pacenotes({ notes }: { notes: HudPacenote[] }) {
+ * "HARD LEFT … into easy right", the way a crew reads a stage.
+ *
+ * With the words switched off it is the ARROWS alone. The arrow already
+ * carries severity in its shape and direction in its mirroring, so nothing
+ * about the call is lost — what goes is the READING, which at rally pace is
+ * the expensive part. The distance stays: it is a number glanced at, not a
+ * phrase parsed, and there is no glyph that says "in 200 m". */
+function Pacenotes({ notes, words }: { notes: HudPacenote[]; words: boolean }) {
   const now = notes[0];
   const next = notes[1];
   return (
-    <div className="hud-pace">
+    <div className={`hud-pace ${words ? "" : "hud-pace-glyphs"}`}>
       <div className={`hud-pace-call hud-pace-${now.severity}`}>
         <PacenoteArrow severity={now.severity} dir={now.dir} />
         <span className="hud-pace-text">
-          {pacenoteText(now)}
+          {words && pacenoteText(now)}
           {now.distance >= 45 && (
             <span className="hud-pace-dist">{Math.round(now.distance / 10) * 10}m</span>
           )}
@@ -516,7 +552,7 @@ function Pacenotes({ notes }: { notes: HudPacenote[] }) {
       {next && (
         <div className={`hud-pace-call hud-pace-next hud-pace-${next.severity}`}>
           <PacenoteArrow severity={next.severity} dir={next.dir} />
-          <span className="hud-pace-text">{pacenoteText(next)}</span>
+          {words && <span className="hud-pace-text">{pacenoteText(next)}</span>}
         </div>
       )}
     </div>
@@ -715,8 +751,9 @@ function TouchButton({
   );
 }
 
-export function Hud({ snap, flashes, input, onPause, onCamera }: HudProps) {
+export function Hud({ snap, flashes, input, show, touchLayout, onPause, onCamera }: HudProps) {
   const { touch } = input;
+  const pedalSide = touchLayout.steerSide === "left" ? "right" : "left";
   return (
     <div className="hud pointer-events-none absolute inset-0 select-none">
       {/* Top bar: stage + timer, and the two presses that belong on the road
@@ -727,7 +764,7 @@ export function Hud({ snap, flashes, input, onPause, onCamera }: HudProps) {
           STAGE {snap.seed}
           <span className="hud-chip-sub">{snap.carName}</span>
         </div>
-        <div className="hud-chip hud-timer">{formatTime(snap.time)}</div>
+        {show.timer && <div className="hud-chip hud-timer">{formatTime(snap.time)}</div>}
         <div className="hud-actions pointer-events-auto">
           <button
             type="button"
@@ -739,26 +776,42 @@ export function Hud({ snap, flashes, input, onPause, onCamera }: HudProps) {
             <CameraGlyph />
           </button>
         </div>
-        {/* Hung off the bar's bottom edge rather than pinned to a screen
-            corner: every corner is spoken for by an instrument, and the one
-            it used to sit in is the booster's in portrait. Anchored to the
-            bar means it tracks the chip's height instead of guessing it. */}
-        <div className="hud-build">{__BUILD_LABEL__}</div>
       </div>
 
       {/* The minimap owns the top-right corner: the route, the car on it, and
-          the run's progress read off the frame. Tap it for the race menu. */}
-      <div className="hud-minimap-dock pointer-events-auto">
-        <Minimap map={snap.minimap} onOpen={onPause} />
-      </div>
+          the run's progress read off the frame. Tap it for the race menu.
+          Switched off, the pause card is still one tap away — the chip in
+          its place keeps that door open. */}
+      {show.minimap ? (
+        <div className="hud-minimap-dock pointer-events-auto">
+          <Minimap map={snap.minimap} onOpen={onPause} />
+        </div>
+      ) : (
+        <div className="hud-actions hud-actions-solo pointer-events-auto">
+          <button
+            type="button"
+            className="hud-mini"
+            onClick={onPause}
+            title="Pause"
+            aria-label="Pause"
+          >
+            ‖
+          </button>
+        </div>
+      )}
 
       {/* The co-driver's slot: corner calls while there is a road to call,
-          the way back the moment there isn't. */}
+          the way back the moment there isn't. The way home is not behind the
+          pacenote toggle — switching off the corner calls is a driver saying
+          they know the stage, not one who wants to stay lost. */}
       {snap.phase === "racing" &&
         (snap.offRoad ? (
           <WayHomeCall distance={snap.homeDistance} />
         ) : (
-          snap.pacenotes.length > 0 && <Pacenotes notes={snap.pacenotes} />
+          show.pacenotes &&
+          snap.pacenotes.length > 0 && (
+            <Pacenotes notes={snap.pacenotes} words={show.pacenoteText} />
+          )
         ))}
 
       {/* Center: countdown / finish / event flashes. */}
@@ -793,7 +846,7 @@ export function Hud({ snap, flashes, input, onPause, onCamera }: HudProps) {
           the clock and the camera, and nothing that appears mid-run. */}
       <div className="hud-speed">
         <div className="hud-status">
-          <DamagePanel damage={snap.damage} />
+          {show.damage && <DamagePanel damage={snap.damage} />}
           {/* Off the road the co-driver's strip says WHERE the road is and
               the arrow over the car says which way; all this row owes is the
               button that takes you there. */}
@@ -807,7 +860,7 @@ export function Hud({ snap, flashes, input, onPause, onCamera }: HudProps) {
               TRACK
             </button>
           )}
-          {snap.windKmh >= 4 && (
+          {show.wind && snap.windKmh >= 4 && (
             <span className="hud-wind" title="Wind">
               <span
                 className="hud-wind-arrow"
@@ -820,7 +873,7 @@ export function Hud({ snap, flashes, input, onPause, onCamera }: HudProps) {
           )}
         </div>
         <div className="hud-cluster">
-          <Tachometer rpm={snap.rpm} />
+          {show.tachometer && <Tachometer rpm={snap.rpm} />}
           <div className={`hud-gearbox ${snap.shiftUp ? "hud-gearbox-shift" : ""}`}>
             <span className="hud-gear">{snap.gear + 1}</span>
             <span className="hud-shiftlight">{snap.gearbox === "auto" ? "AUTO" : "SHIFT"}</span>
@@ -830,29 +883,31 @@ export function Hud({ snap, flashes, input, onPause, onCamera }: HudProps) {
           {/* The booster tank. `--fill` drives the bar in whichever direction
               the layout runs — a width in landscape, a height in portrait,
               where the cluster has no room left sideways. */}
-          <span className={`hud-boostbar ${snap.boosting ? "hud-boostbar-hot" : ""}`}>
-            <span className="hud-boostbar-label">BOOST</span>
-            <span className="hud-boostbar-track">
-              <span
-                className="hud-boostbar-fill"
-                style={
-                  {
-                    "--fill": `${((snap.boostLeft / snap.boostMax) * 100).toFixed(1)}%`,
-                  } as CSSProperties
-                }
-              />
+          {show.boost && (
+            <span className={`hud-boostbar ${snap.boosting ? "hud-boostbar-hot" : ""}`}>
+              <span className="hud-boostbar-label">BOOST</span>
+              <span className="hud-boostbar-track">
+                <span
+                  className="hud-boostbar-fill"
+                  style={
+                    {
+                      "--fill": `${((snap.boostLeft / snap.boostMax) * 100).toFixed(1)}%`,
+                    } as CSSProperties
+                  }
+                />
+              </span>
             </span>
-          </span>
+          )}
         </div>
       </div>
 
-      {/* Touch controls — the left half of the screen anchors a steering
-          wheel under the thumb, the right half is the gesture pedal (gas /
-          brake / boost / handbrake). Manual gear taps float above the
-          pedal zone. */}
+      {/* Touch controls — one half of the screen anchors a steering wheel
+          under the thumb, the other is the gesture pedal (gas / brake /
+          boost / handbrake). Which half is which is the player's choice.
+          Manual gear taps float above the pedal zone. */}
       <div className="hud-touch">
-        <SteerZone touch={touch} />
-        <PedalZone touch={touch} />
+        <SteerZone touch={touch} side={touchLayout.steerSide} />
+        <PedalZone touch={touch} layout={touchLayout} side={pedalSide} />
         {snap.gearbox === "manual" && (
           <div className="hud-gears">
             <TouchButton

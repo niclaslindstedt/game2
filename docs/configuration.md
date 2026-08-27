@@ -1,6 +1,6 @@
 # Configuration
 
-Sideways has no runtime configuration surface (no accounts, no server); everything below is build-time or repo plumbing.
+Scandinavian Flick has no runtime configuration surface (no accounts, no server); everything below is build-time or repo plumbing.
 
 ## GitHub Packages auth (required to install)
 

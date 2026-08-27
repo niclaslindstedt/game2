@@ -196,6 +196,14 @@ function sunDir(el: number): THREE.Vector3 {
 export type Environment = {
   /** Re-color the whole atmosphere for the run's conditions. */
   apply: (env: RaceEnv) => void;
+  /** Scale how far the fog lets the player see, as a multiple of the
+   * preset's own distances — the video options pull it in on a weak device. */
+  setRange: (scale: number) => void;
+  /** Set the fog distances outright, in meters. The map view frames a whole
+   * stage from kilometres away, where a multiple of the driving preset is
+   * meaningless; what it needs is ground that dissolves just before the
+   * built terrain runs out, instead of ending on a visible edge. */
+  setFogRange: (near: number, far: number) => void;
   /** Current tint for the car's baked vertex lighting. */
   carTint: () => THREE.Color;
   update: (state: GameState, camera: THREE.Camera, dt: number) => void;
@@ -416,6 +424,25 @@ export function createEnvironment(scene: THREE.Scene): Environment {
 
   let preset: Preset = PRESETS.day;
   let stormy = false;
+  let rangeScale = 1;
+  /** Set while a view drives the fog in meters instead of by preset. */
+  let absolute: { near: number; far: number } | null = null;
+
+  const applyRange = (): void => {
+    fog.near = absolute ? absolute.near : preset.fogNear * rangeScale;
+    fog.far = absolute ? absolute.far : preset.fogFar * rangeScale;
+  };
+
+  const setRange = (scale: number): void => {
+    rangeScale = scale;
+    absolute = null;
+    applyRange();
+  };
+
+  const setFogRange = (near: number, far: number): void => {
+    absolute = { near, far };
+    applyRange();
+  };
 
   const apply = (env: RaceEnv): void => {
     preset = weathered(env.timeOfDay, env.weather);
@@ -423,8 +450,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     paintDome(preset);
     background.set(preset.zenith);
     fog.color.set(preset.fog);
-    fog.near = preset.fogNear;
-    fog.far = preset.fogFar;
+    applyRange();
     hemi.color.set(preset.hemiSky);
     hemi.groundColor.set(preset.hemiGround);
     hemi.intensity = preset.hemiIntensity;
@@ -537,5 +563,12 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   };
 
   apply({ timeOfDay: "day", weather: "clear", windDir: 0, windSpeed: 0, gustPhase: 0 });
-  return { apply, carTint: () => new THREE.Color(preset.carTint), update, dispose };
+  return {
+    apply,
+    setRange,
+    setFogRange,
+    carTint: () => new THREE.Color(preset.carTint),
+    update,
+    dispose,
+  };
 }

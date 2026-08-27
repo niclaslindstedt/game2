@@ -4,6 +4,10 @@
 // to full lock; release snaps back faster), touch steering is a direct
 // axis. Shifts are edge-triggered and consumed by the step they arrive in.
 //
+// Which key does what is the player's to change: the manager holds a
+// code → action index built from the bindings in settings.ts, so a rebind
+// is a call to `setKeys` and nothing here knows about any particular key.
+//
 // SIGN BOUNDARY: everything in this file is SCREEN-space — positive steer
 // means "turn right as seen through the chase cam". The engine's positive
 // steer is clockwise in MAP view (+z toward +x), and the renderer maps
@@ -12,6 +16,12 @@
 // negation lives in sample(); flip it anywhere else and left/right invert.
 
 import type { CarInput } from "@engine";
+
+import { DEFAULT_KEYS, type KeyAction, type KeyBindings } from "./settings.ts";
+
+/** The presses the app reacts to rather than the car: they leave, reload or
+ * reframe the run instead of driving it. */
+export type InputAction = "restart" | "menu" | "camera" | "pause";
 
 export type InputManager = {
   /** Produce this step's input; advances steering smoothing by `dt`. */
@@ -24,13 +34,15 @@ export type InputManager = {
     handbrake: boolean;
     boost: boolean;
   };
+  /** Re-point every key at its action; unbound actions simply go unpressed. */
+  setKeys: (bindings: KeyBindings) => void;
   requestShift: (dir: 1 | -1) => void;
-  /** Queue a reset-to-track (B key / HUD button) — edge-triggered into the
-   * engine, which respawns the car at its last on-road progress. */
+  /** Queue a reset-to-track (the bound key / HUD button) — edge-triggered
+   * into the engine, which respawns the car at its last on-road progress. */
   requestReset: () => void;
-  /** Fired on R (restart) / C (race setup) / V (camera) / Esc (the in-race
-   * menu) so the app can react. */
-  onAction: (handler: (action: "restart" | "swap" | "camera" | "pause") => void) => void;
+  /** Fired on the keys bound to restart / main menu / camera / pause so the
+   * app can react. */
+  onAction: (handler: (action: InputAction) => void) => void;
   dispose: () => void;
 };
 
@@ -43,54 +55,90 @@ const KEY_STEER_RELEASE = 9;
 /** Below this the centred keyboard axis snaps to exactly zero. */
 const KEY_STEER_SNAP = 0.02;
 
+/** Actions the browser must not also act on: the arrows and space scroll
+ * the page, which on a keyboard-driven game means the whole shell jumps. */
+const SWALLOWED: KeyAction[] = ["left", "right", "throttle", "brake", "handbrake"];
+
 export function createInput(target: Window = window): InputManager {
-  const down = new Set<string>();
+  /** Every bound code, mapped to the actions it fires. A code can serve
+   * more than one action — nothing stops a player binding it twice. */
+  let byCode = new Map<string, KeyAction[]>();
+  /** Which actions are held down right now, by action rather than by code,
+   * so a two-key alias (arrows AND WASD) reads as one press. */
+  const held = new Set<KeyAction>();
+  const downCodes = new Set<string>();
   let steer = 0;
   let shiftUp = false;
   let shiftDown = false;
   let reset = false;
-  let actionHandler: ((action: "restart" | "swap" | "camera" | "pause") => void) | null = null;
+  let actionHandler: ((action: InputAction) => void) | null = null;
 
   const touch = { steer: 0, throttle: false, brake: false, handbrake: false, boost: false };
 
+  const setKeys = (bindings: KeyBindings): void => {
+    const next = new Map<string, KeyAction[]>();
+    for (const [action, codes] of Object.entries(bindings) as [KeyAction, string[]][]) {
+      for (const code of codes) {
+        const list = next.get(code);
+        if (list) list.push(action);
+        else next.set(code, [action]);
+      }
+    }
+    byCode = next;
+    // A rebind while a key is down would otherwise leave its old action
+    // stuck on with no keyup ever coming for it.
+    held.clear();
+    downCodes.clear();
+  };
+  setKeys(DEFAULT_KEYS);
+
   const onKeyDown = (e: KeyboardEvent): void => {
     if (e.repeat) return;
-    down.add(e.code);
-    if (e.code === "KeyE" || e.code === "KeyX" || e.code === "ShiftRight") shiftUp = true;
-    if (e.code === "KeyQ" || e.code === "KeyZ" || e.code === "ControlRight") shiftDown = true;
-    if (e.code === "KeyB") reset = true;
-    if (e.code === "KeyR") actionHandler?.("restart");
-    if (e.code === "KeyC") actionHandler?.("swap");
-    if (e.code === "KeyV") actionHandler?.("camera");
-    if (e.code === "Escape") actionHandler?.("pause");
-    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(e.code)) {
-      e.preventDefault();
+    const actions = byCode.get(e.code);
+    if (!actions) return;
+    downCodes.add(e.code);
+    for (const action of actions) {
+      held.add(action);
+      if (action === "shiftUp") shiftUp = true;
+      else if (action === "shiftDown") shiftDown = true;
+      else if (action === "reset") reset = true;
+      else if (action === "restart" || action === "camera" || action === "pause") {
+        actionHandler?.(action);
+      } else if (action === "menu") actionHandler?.("menu");
+      if (SWALLOWED.includes(action)) e.preventDefault();
     }
   };
   const onKeyUp = (e: KeyboardEvent): void => {
-    down.delete(e.code);
+    if (!downCodes.delete(e.code)) return;
+    // An action stays held while ANY other code still bound to it is down.
+    for (const action of byCode.get(e.code) ?? []) {
+      const stillDown = [...downCodes].some((code) => byCode.get(code)?.includes(action));
+      if (!stillDown) held.delete(action);
+    }
   };
-  const onBlur = (): void => down.clear();
+  const onBlur = (): void => {
+    held.clear();
+    downCodes.clear();
+  };
 
   target.addEventListener("keydown", onKeyDown);
   target.addEventListener("keyup", onKeyUp);
   target.addEventListener("blur", onBlur);
 
   const sample = (dt: number): CarInput => {
-    const left = down.has("ArrowLeft") || down.has("KeyA");
-    const right = down.has("ArrowRight") || down.has("KeyD");
-    // Screen-space: the right arrow is +1 here, negated below for the engine.
-    const keyTarget = (right ? 1 : 0) - (left ? 1 : 0);
+    // Screen-space: the right-steer key is +1 here, negated below for the
+    // engine.
+    const keyTarget = (held.has("right") ? 1 : 0) - (held.has("left") ? 1 : 0);
     const rate = keyTarget === 0 ? KEY_STEER_RELEASE : KEY_STEER_ATTACK;
     steer += (keyTarget - steer) * Math.min(1, rate * dt);
     if (Math.abs(steer) < KEY_STEER_SNAP && keyTarget === 0) steer = 0;
 
     const input: CarInput = {
       steer: -(touch.steer !== 0 ? touch.steer : steer),
-      throttle: down.has("ArrowUp") || down.has("KeyW") || touch.throttle ? 1 : 0,
-      brake: down.has("ArrowDown") || down.has("KeyS") || touch.brake ? 1 : 0,
-      handbrake: down.has("Space") || touch.handbrake,
-      boost: down.has("ShiftLeft") || touch.boost,
+      throttle: held.has("throttle") || touch.throttle ? 1 : 0,
+      brake: held.has("brake") || touch.brake ? 1 : 0,
+      handbrake: held.has("handbrake") || touch.handbrake,
+      boost: held.has("boost") || touch.boost,
       shiftUp,
       shiftDown,
       reset,
@@ -104,6 +152,7 @@ export function createInput(target: Window = window): InputManager {
   return {
     sample,
     touch,
+    setKeys,
     requestShift: (dir) => {
       if (dir === 1) shiftUp = true;
       else shiftDown = true;

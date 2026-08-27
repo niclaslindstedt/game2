@@ -1,6 +1,6 @@
 # Platforms
 
-The repository is structured after its sibling game repo, which ships one product through many shells: web/PWA, desktop (Electron and Tauri, including Steam), and native mobile (App Store / Play Store). Sideways adopts the same shape deliberately — the engine is already headless and shell-agnostic — but the horizontal slice ships **one real shell**: the web.
+The repository is structured after its sibling game repo, which ships one product through many shells: web/PWA, desktop (Electron and Tauri, including Steam), and native mobile (App Store / Play Store). Scandinavian Flick adopts the same shape deliberately — the engine is already headless and shell-agnostic — but the horizontal slice ships **one real shell**: the web.
 
 ## Today: web / PWA (`pwa/`)
 
@@ -21,7 +21,7 @@ The plan mirrors the sibling repo, where both shells wrap the identical built si
 - **`electron/`** — the shipping desktop wrapper: packaged archives for Windows/macOS/Linux, attached to GitHub Releases by the release workflow; the Steam build is this shell with the Steam capabilities stamped in.
 - **`tauri/`** — the comparison shell (install size, cold start), packaged from the same product so the numbers stay honest.
 
-What Sideways needs first: gamepad input in `pwa/src/game/input.ts` (the engine's `CarInput` is already controller-shaped), and a pause surface. The engine needs nothing — it has no DOM or renderer dependencies today.
+What Scandinavian Flick needs first: gamepad input in `pwa/src/game/input.ts` (the engine's `CarInput` is already controller-shaped), and a pause surface. The engine needs nothing — it has no DOM or renderer dependencies today.
 
 ## Later: native mobile (App Store / Play Store)
 
@@ -29,7 +29,7 @@ A `native/` capacitor-style wrapper around the same site, as in the sibling repo
 
 ## Deliberate differences from the sibling repo
 
-- **No modding seam.** The sibling ships a data-authored mod SDK; Sideways keeps content as typed data in `engine/game/defs/` for now. If content authoring outgrows TypeScript rows, the path is the sibling's: YAML catalogs in `content/` compiled by a script — the defs modules are already the seam.
+- **No modding seam.** The sibling ships a data-authored mod SDK; Scandinavian Flick keeps content as typed data in `engine/game/defs/` for now. If content authoring outgrows TypeScript rows, the path is the sibling's: YAML catalogs in `content/` compiled by a script — the defs modules are already the seam.
 - **No multiplayer/server.** Stages are deterministic by seed, so the natural first social feature is asynchronous: shared daily seed (already in), then ghost times — no server shell until then.
 
 When a shell lands, it gets its own top-level directory, its packaging jobs slot into `release.yml` between `release` and a `publish` flag-flip (the sibling's release workflow is the template), and this document stops calling it "next".

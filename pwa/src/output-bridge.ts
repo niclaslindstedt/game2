@@ -7,7 +7,7 @@
 import { createLogStore } from "@niclaslindstedt/oss-framework/logging";
 import { setDebugEnabled, setOutputSink, type OutputLevel } from "@engine";
 
-export const logStore = createLogStore({ logsKey: "sideways:logs" });
+export const logStore = createLogStore({ logsKey: "scandi-flick:logs" });
 logStore.setEnabled(true);
 logStore.setCaptureEnabled(true);
 

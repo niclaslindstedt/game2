@@ -10,16 +10,42 @@ import type { GameEvent, GameState } from "@engine";
 
 import { createAmbientLife } from "./ambient-life.ts";
 import { createGameCamera, type CameraMode } from "./camera.ts";
+import {
+  DRAW_DISTANCE_SCALE,
+  EFFECTS_SCALE,
+  FLORA_SCALE,
+  RESOLUTION_SCALE,
+  type VideoSettings,
+} from "./settings.ts";
 import { buildCar, type CarVisual } from "./car-mesh.ts";
 import { createDust, TIRE_SMOKE } from "./dust.ts";
 import { createEnvironment } from "./environment.ts";
 import { createFumes } from "./fumes.ts";
 import { createRain } from "./rain.ts";
 import { createWayHomeArrow } from "./way-home.ts";
+import { buildMapRoute, type MapRoute } from "./map-route.ts";
 import { buildWorld, type World } from "./world.ts";
+
+/** The map view's fog, as fractions of the camera's standoff distance. The
+ * ground is only built ~640 m past the road, so it HAS an edge; hanging the
+ * fog off the framing distance is what dissolves that edge into the sky
+ * instead of ending the world on a visible straight line. */
+const MAP_FOG_NEAR = 0.85;
+const MAP_FOG_FAR = 1.75;
 
 export type GameRenderer = {
   setGame: (state: GameState) => void;
+  /** Apply the player's video options. Resolution, draw distance and the
+   * effects budget take hold immediately; flora density is baked into the
+   * geometry, so it lands on the next stage built. */
+  setVideo: (video: VideoSettings) => void;
+  /** Place the camera: the two play modes come from the camera key, the
+   * drone and map views are placed by the menu behind it. */
+  setCamera: (mode: CameraMode) => void;
+  /** Confine the map view to a rectangle of the canvas, in CSS pixels from
+   * its top-left — the Roam page's map pane. The rest of the canvas is left
+   * as flat sky for the DOM cards to sit on. Null draws full-bleed. */
+  setMapRect: (rect: { x: number; y: number; width: number; height: number } | null) => void;
   /** Re-light an already-built stage (the pre-race menu flipping time of
    * day / weather) without rebuilding its geometry. */
   setConditions: (state: GameState) => void;
@@ -30,9 +56,13 @@ export type GameRenderer = {
   dispose: () => void;
 };
 
-export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
+export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings): GameRenderer {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  let quality = video;
+  const applyResolution = (): void => {
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, RESOLUTION_SCALE[quality.resolution]));
+  };
+  applyResolution();
 
   const scene = new THREE.Scene();
   const environment = createEnvironment(scene);
@@ -57,7 +87,14 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
   chase.camera.add(wayHomeArrow.group);
 
   let world: World | null = null;
+  let route: MapRoute | null = null;
   let car: CarVisual | null = null;
+  let game: GameState | null = null;
+  /** True while the map view is up: it suspends the transient FX and pushes
+   * the fog out past the whole stage. */
+  let mapView = false;
+  /** The map pane, CSS pixels from the canvas' top-left. */
+  let mapRect: { x: number; y: number; width: number; height: number } | null = null;
   let dustClock = 0;
   let fumeClock = 0;
 
@@ -81,10 +118,60 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
     life.setTint(tint);
   };
 
+  /** How thick the transient FX are right now: the effects budget, and
+   * nothing at all under the map view, where a gravel particle a metre
+   * across is invisible and still costs a draw. */
+  const fxScale = (): number => (mapView ? 0 : EFFECTS_SCALE[quality.effects]);
+
+  const applyRange = (): void => {
+    if (!mapView) {
+      environment.setRange(DRAW_DISTANCE_SCALE[quality.drawDistance]);
+      return;
+    }
+    // Until the map camera has framed a stage it has no distance to hang the
+    // fog off; the first frame sets it, and render() keeps it in step.
+    const range = chase.mapRange();
+    if (range > 0) environment.setFogRange(range * MAP_FOG_NEAR, range * MAP_FOG_FAR);
+  };
+
   const setConditions = (state: GameState): void => {
     environment.apply(state.env);
-    rain.setIntensity(state.env.weather === "storm" ? 1 : state.env.weather === "rain" ? 0.55 : 0);
+    const wet = state.env.weather === "storm" ? 1 : state.env.weather === "rain" ? 0.55 : 0;
+    rain.setIntensity(fxScale() > 0 ? wet : 0);
+    applyRange();
     applyTint();
+  };
+
+  const setVideo = (next: VideoSettings): void => {
+    quality = next;
+    applyResolution();
+    if (game) setConditions(game);
+    else applyRange();
+  };
+
+  /** The camera frames whatever it is actually being drawn into: the map
+   * pane while the map view is confined to one, the whole canvas otherwise.
+   * Getting this wrong stretches the map rather than merely misplacing it. */
+  const applyAspect = (): void => {
+    const w = canvas.clientWidth || 1;
+    const h = canvas.clientHeight || 1;
+    if (mapView && mapRect) chase.resize(mapRect.width || 1, mapRect.height || 1);
+    else chase.resize(w, h);
+  };
+
+  const setCamera = (mode: CameraMode): void => {
+    const wasMap = mapView;
+    chase.setMode(mode);
+    mapView = mode === "map";
+    applyAspect();
+    if (mapView === wasMap) return;
+    if (game) setConditions(game);
+    else applyRange();
+  };
+
+  const setMapRect = (rect: typeof mapRect): void => {
+    mapRect = rect;
+    applyAspect();
   };
 
   const setGame = (state: GameState): void => {
@@ -92,12 +179,20 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
       scene.remove(world.group);
       world.dispose();
     }
+    if (route) {
+      scene.remove(route.group);
+      route.dispose();
+    }
     if (car) {
       scene.remove(car.group, car.shadow, car.debris);
       car.dispose();
     }
-    world = buildWorld(state.track);
+    game = state;
+    world = buildWorld(state.track, FLORA_SCALE[quality.flora]);
     scene.add(world.group);
+    route = buildMapRoute(state.track);
+    route.group.visible = mapView;
+    scene.add(route.group);
     car = buildCar(state.spec);
     scene.add(car.group, car.shadow, car.debris);
     setConditions(state);
@@ -105,15 +200,16 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
 
   const onEvents = (state: GameState, events: GameEvent[]): void => {
     const c = state.car;
+    const fx = fxScale();
     for (const ev of events) {
       if (ev.type === "landing") {
         chase.kick(ev.clean ? 0.25 : 0.5);
-        dust.spawn(c.x, c.y + 0.2, c.z, 0xb29268, ev.clean ? 14 : 26, 4);
+        dust.spawn(c.x, c.y + 0.2, c.z, 0xb29268, Math.round((ev.clean ? 14 : 26) * fx), 4);
       } else if (ev.type === "splash") {
         chase.kick(0.2);
-        dust.spawn(c.x, c.y + 0.3, c.z, 0x4fa0f0, 30, 5);
+        dust.spawn(c.x, c.y + 0.3, c.z, 0x4fa0f0, Math.round(30 * fx), 5);
       } else if (ev.type === "takeoff") {
-        dust.spawn(c.x, c.y + 0.1, c.z, 0xb29268, 10, 3);
+        dust.spawn(c.x, c.y + 0.1, c.z, 0xb29268, Math.round(10 * fx), 3);
       } else if (ev.type === "respawn") {
         chase.kick(0.3);
       } else if (ev.type === "impact") {
@@ -127,7 +223,7 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
           c.y + (ev.belly ? 0.1 : 0.5),
           c.z + Math.cos(a) * reach,
           0x8a8578,
-          Math.min(30, 8 + Math.round(ev.speed)),
+          Math.round(Math.min(30, 8 + ev.speed) * fx),
           3.5,
         );
       }
@@ -137,6 +233,7 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
 
   const render = (state: GameState, dt: number): void => {
     const c = state.car;
+    const view = chase.mode();
     const fwdX = Math.sin(c.heading);
     const fwdZ = Math.cos(c.heading);
     const rightX = Math.cos(c.heading);
@@ -147,8 +244,9 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
     // rooster tail, the braking plume, and the plain rolling kickup that
     // rides with pace. Particles inherit part of the car's wake plus the
     // wind, so every cloud streams backward and leans downwind.
+    const fx = fxScale();
     dustClock += dt;
-    if (!c.airborne && dustClock > 0.03) {
+    if (fx > 0 && !c.airborne && dustClock > 0.03) {
       dustClock = 0;
       // The engine tracks the driven surface — road fords AND the wild's
       // lakes and streams throw the blue spray, and the stage's sealed
@@ -171,7 +269,7 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
           c.y + 0.15,
           c.z - fwdZ * 1.5 + rightZ * side * 0.8,
           color,
-          count,
+          Math.round(count * fx),
           spread,
           wakeX,
           wakeZ,
@@ -196,8 +294,8 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
     // Exhaust: puffs off the tailpipe, faster and sootier on throttle and
     // boost, handed to the wind the moment they leave the pipe.
     fumeClock += dt;
-    const fumeEvery = c.boosting ? 0.02 : c.u > 1 ? 0.045 : 0.12;
-    if (!c.airborne && fumeClock > fumeEvery) {
+    const fumeEvery = (c.boosting ? 0.02 : c.u > 1 ? 0.045 : 0.12) / Math.max(0.2, fx);
+    if (fx > 0 && !c.airborne && fumeClock > fumeEvery) {
       fumeClock = 0;
       const shade = c.boosting ? 0.9 : 0.35 + 0.4 * Math.min(1, c.u / 30);
       fumes.spawn(
@@ -218,27 +316,74 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
     world?.sync(state);
     world?.update(dt);
     car?.update(state, dt);
-    wayHomeArrow.update(state, chase.camera, dt);
+    // The way home is a DRIVING aid, bolted to the camera. Under the menu's
+    // drone and the map view there is nobody lost and nobody to point: left
+    // running, it would hang a compass needle over the middle of the menu.
+    const driving = view === "chase" || view === "hood";
+    wayHomeArrow.group.visible = driving;
+    if (driving) wayHomeArrow.update(state, chase.camera, dt);
     chase.update(state, dt);
     environment.update(state, chase.camera, dt);
     const cam = chase.camera.position;
-    rain.update(cam.x, cam.y, cam.z, state.wind.x, state.wind.z, dt);
-    life.update(cam.x, cam.z, state.wind.x, state.wind.z, dt);
+    if (fx > 0) {
+      rain.update(cam.x, cam.y, cam.z, state.wind.x, state.wind.z, dt);
+      life.update(cam.x, cam.z, state.wind.x, state.wind.z, dt);
+    }
+    life.group.visible = fx > 0;
+    rain.lines.visible = fx > 0;
+    // The map framing changes with the stage and the pane, and the fog rides
+    // it — see MAP_FOG_NEAR.
+    if (mapView) {
+      applyAspect();
+      applyRange();
+    }
     // The hood cam sits inside the car — hide the body so it doesn't fill
-    // the frame; the blob shadow stays for ground reference.
-    if (car) car.group.visible = chase.mode() !== "hood";
+    // the frame; the blob shadow stays for ground reference. The map view
+    // is looking at a stage, not a car, and at that range the car is a
+    // speck that only draws the eye away from the route.
+    if (route) route.group.visible = view === "map";
+    if (car) {
+      car.group.visible = view !== "hood" && view !== "map";
+      car.shadow.visible = view !== "map";
+    }
+    drawScene();
+  };
+
+  /** One frame, into the whole canvas or into the map pane. Scissoring the
+   * pane leaves the rest of the canvas painted flat sky, which is what the
+   * Roam page's cards sit on. */
+  const drawScene = (): void => {
+    const w = canvas.clientWidth || 1;
+    const h = canvas.clientHeight || 1;
+    if (!mapView || !mapRect) {
+      renderer.setScissorTest(false);
+      renderer.setViewport(0, 0, w, h);
+      renderer.render(scene, chase.camera);
+      return;
+    }
+    // Clear the whole canvas first, then draw only inside the pane. WebGL's
+    // origin is the BOTTOM-left; the rect arrives measured from the top.
+    renderer.setScissorTest(false);
+    renderer.setViewport(0, 0, w, h);
+    renderer.clear();
+    const y = h - mapRect.y - mapRect.height;
+    renderer.setViewport(mapRect.x, y, mapRect.width, mapRect.height);
+    renderer.setScissor(mapRect.x, y, mapRect.width, mapRect.height);
+    renderer.setScissorTest(true);
     renderer.render(scene, chase.camera);
+    renderer.setScissorTest(false);
   };
 
   const resize = (): void => {
     const w = canvas.clientWidth || 1;
     const h = canvas.clientHeight || 1;
     renderer.setSize(w, h, false);
-    chase.resize(w, h);
+    applyAspect();
   };
 
   const dispose = (): void => {
     world?.dispose();
+    route?.dispose();
     car?.dispose();
     dust.dispose();
     smoke.dispose();
@@ -253,6 +398,9 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
   resize();
   return {
     setGame,
+    setVideo,
+    setCamera,
+    setMapRect,
     setConditions,
     cycleCamera: () => chase.cycle(),
     render,

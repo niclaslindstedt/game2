@@ -1,27 +1,35 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// The app shell: boots to the pre-race menu over a live view of today's
-// stage — pick time of day, weather, and car, then START. Owns the fixed-
-// timestep game loop (engine at 120 Hz, render per frame; the loop idles
-// while the menu is up), the daily-seed stage rotation, and the PWA update
-// toast. The heavy state lives in refs; the HUD re-renders from a ~12 Hz
-// snapshot. URL params (?seed=, ?tod=, ?weather=, ?car=, ?length=, the four
-// generator dials ?elevation= ?water= ?trees= ?asphalt=, and ?start=1) pin a
-// run for tooling and screenshots.
+// The app shell. The game LAUNCHES INTO THE MAIN MENU, and the menu is not
+// a still: a bot drives a real stage behind it under a drone camera, dimmed
+// by a scrim so the cards stay the thing you are reading. The Roam page
+// swaps that backdrop for the stage seen from the sky, turning.
+//
+// So the loop has three gears, all over one canvas and one GameState:
+//
+//   menu, demo pages → the engine steps on BOT input, drone camera
+//   menu, Roam page  → the engine holds, map camera turning over the stage
+//   playing          → the engine steps on the player's input, chase camera
+//
+// The pause card holds the run where it stands. The heavy state lives in
+// refs; the HUD re-renders from a ~12 Hz snapshot. URL params (?seed=,
+// ?tod=, ?weather=, ?car=, ?length=, the four generator dials ?elevation=
+// ?water= ?trees= ?asphalt=, and ?start=1) pin a run for tooling and
+// screenshots.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { UpdateToast, usePwaUpdate } from "@niclaslindstedt/oss-framework/pwa";
 import {
-  DAMAGE_ZONES,
   TUNING,
+  botInput,
   carById,
   compileStage,
   createGame,
   resolveKnobs,
   status,
   step,
-  wayHome,
   type GameEvent,
   type GameState,
+  type StageKnobs,
   type StageLength,
   type TimeOfDay,
   type Track,
@@ -31,40 +39,47 @@ import {
 import { cacheIdForBase } from "./app-pwa.ts";
 import { connectOutput } from "./output-bridge.ts";
 import { createInput } from "./game/input.ts";
+import type { CameraMode } from "./game/camera.ts";
 import type { GameRenderer } from "./game/renderer.ts";
-import {
-  Hud,
-  type HudDamage,
-  type HudFlash,
-  type HudPacenote,
-  type HudSnapshot,
-} from "./game/hud.tsx";
-import { buildMinimap } from "./game/minimap.tsx";
+import { Hud, type HudFlash, type HudSnapshot } from "./game/hud.tsx";
+import { takeSnapshot } from "./game/snapshot.ts";
 import {
   DEFAULT_STAGE_KNOBS,
   PauseMenu,
-  PreRaceMenu,
   STAGE_DIALS,
   STAGE_LENGTH_OPTIONS,
   TIMES_OF_DAY,
   WEATHERS,
   type RaceSettings,
 } from "./game/menu.tsx";
+import { MainMenu, type MenuPage, type PlayMode } from "./game/main-menu.tsx";
+import type { MapRect } from "./game/menu-roam.tsx";
+import {
+  loadProgress,
+  recordFinish,
+  unlockEverything,
+  type CampaignLevel,
+  type CampaignProgress,
+} from "./game/campaign.ts";
+import { loadSettings, saveSettings, type Settings } from "./game/settings.ts";
+import { splashSkipped } from "./game/splash.ts";
+import { SplashScreen } from "./game/splash-screen.tsx";
 
 connectOutput();
 
-/** Everyone gets the same opening stage on a given day; every finished
- * stage advances to the next seed. */
+/** Everyone gets the same opening stage on a given day; the menu's demo
+ * rolls on from it, and Roam starts there. */
 function dailySeed(): number {
   return Math.floor(Date.now() / 86_400_000);
 }
 
-const SETTINGS_KEY = "sideways-race-settings";
+const RACE_KEY = "scandi-flick-race-settings";
 
-/** Initial settings: URL params (tooling) beat the stored choice beats the
- * defaults. Storage can be unavailable (private mode) — defaults are fine. */
-function initialSettings(): RaceSettings {
-  const settings: RaceSettings = {
+/** Initial race settings: URL params (tooling) beat the stored choice beats
+ * the defaults. Storage can be unavailable (private mode) — defaults are
+ * fine. */
+function initialRace(): RaceSettings {
+  const race: RaceSettings = {
     timeOfDay: "day",
     weather: "clear",
     carId: "compact",
@@ -72,134 +87,92 @@ function initialSettings(): RaceSettings {
     knobs: { ...DEFAULT_STAGE_KNOBS },
   };
   try {
-    const stored = localStorage.getItem(SETTINGS_KEY);
-    if (stored) Object.assign(settings, JSON.parse(stored));
+    const stored = localStorage.getItem(RACE_KEY);
+    if (stored) Object.assign(race, JSON.parse(stored));
   } catch {
     /* storage unavailable — keep defaults */
   }
-  if (!STAGE_LENGTH_OPTIONS.some((l) => l.id === settings.length)) settings.length = "medium";
+  if (!STAGE_LENGTH_OPTIONS.some((l) => l.id === race.length)) race.length = "medium";
   const params = new URLSearchParams(location.search);
   const tod = params.get("tod");
-  if (TIMES_OF_DAY.some((t) => t.id === tod)) settings.timeOfDay = tod as TimeOfDay;
+  if (TIMES_OF_DAY.some((t) => t.id === tod)) race.timeOfDay = tod as TimeOfDay;
   const weather = params.get("weather");
-  if (WEATHERS.some((w) => w.id === weather)) settings.weather = weather as Weather;
+  if (WEATHERS.some((w) => w.id === weather)) race.weather = weather as Weather;
   const car = params.get("car");
-  if (car === "compact" || car === "classic") settings.carId = car;
+  if (car === "compact" || car === "classic") race.carId = car;
   const length = params.get("length");
-  if (STAGE_LENGTH_OPTIONS.some((l) => l.id === length)) settings.length = length as StageLength;
+  if (STAGE_LENGTH_OPTIONS.some((l) => l.id === length)) race.length = length as StageLength;
   // The generator's dials, each 0..1 — the tooling pins a stage's character
   // the same way it pins its seed.
-  settings.knobs = resolveKnobs(settings.knobs);
+  race.knobs = resolveKnobs(race.knobs);
   for (const dial of STAGE_DIALS) {
-    const raw = Number(params.get(dial.key));
-    if (Number.isFinite(raw) && params.get(dial.key) !== null) settings.knobs[dial.key] = raw;
+    const raw = params.get(dial.key);
+    if (raw !== null && Number.isFinite(Number(raw))) race.knobs[dial.key] = Number(raw);
   }
-  settings.knobs = resolveKnobs(settings.knobs);
-  return settings;
+  race.knobs = resolveKnobs(race.knobs);
+  return race;
 }
 
-/** How far ahead the co-driver calls, meters — four seconds at pace, with a
- * floor so slow corners still get called and a ceiling so a long straight
- * is not spent staring at the far end's turn. */
-function callDistance(u: number): number {
-  return Math.min(320, Math.max(150, u * 4));
-}
+/** Everything that decides WHICH stage is standing: change any of it and
+ * the run is rebuilt. */
+type StageSpec = {
+  seed: number;
+  length: StageLength;
+  /** The generator's dials — what KIND of country the seed is built in. */
+  knobs: StageKnobs;
+  carId: string;
+  timeOfDay: TimeOfDay;
+  weather: Weather;
+  /** The menu's demo has no grid to sit on — nobody is waiting for it. */
+  skipCountdown: boolean;
+};
 
-/** Turn angle past which a call earns the LONG modifier, radians (~100°). */
-const LONG_NOTE_ANGLE = 1.75;
-
-/** The next co-driver calls: the note under or ahead of the car plus the
- * one after it (so combinations read as "hard left INTO easy right"). The
- * engine's positive dir grows the heading, which the mirrored screen shows
- * as a LEFT turn — the same one-flip rule input.ts applies to steering. */
-function upcomingPacenotes(state: GameState): HudPacenote[] {
-  const out: HudPacenote[] = [];
-  for (const note of state.track.pacenotes) {
-    if (note.endS <= state.progressS) continue;
-    if (note.s - state.progressS > callDistance(state.car.u)) break;
-    out.push({
-      dir: note.dir > 0 ? "left" : "right",
-      severity: note.severity,
-      long: note.angle > LONG_NOTE_ANGLE,
-      distance: Math.max(0, note.s - state.progressS),
-    });
-    if (out.length >= 2) break;
-  }
-  return out;
-}
-
-/** Tach reading, 0..1 of the redline: how far up the current gear the car
- * is, over an idle floor so the needle never falls off the dial. The engine
- * has no rev model — gearing plus FORWARD speed is the rev counter, and
- * forward speed is what the gearbox shifts on, so the needle and the shift
- * light always agree with the gear. */
-function tachometer(state: GameState): number {
-  const top = state.spec.gearTop[state.car.gear];
-  return Math.min(1, 0.18 + 0.82 * Math.max(0, state.car.u / top));
-}
-
-/** The damage ledger flipped into SCREEN space for the HUD's 2D car: the
- * rendered world mirrors the engine's map view (the same one-flip rule as
- * steering and the wind arrow), so the engine's right-side zones — and its
- * right mirror — sit on the LEFT of the car the player sees. */
-function damageSnapshot(state: GameState): HudDamage {
-  const damage = state.car.damage;
-  const zoneMax = TUNING.collision.zoneMax;
-  const zones = Array.from(
-    { length: DAMAGE_ZONES },
-    (_, k) => damage.zones[(DAMAGE_ZONES - k) % DAMAGE_ZONES] / zoneMax,
+function sameStage(a: StageSpec | null, b: StageSpec): boolean {
+  return (
+    a !== null &&
+    a.seed === b.seed &&
+    a.length === b.length &&
+    STAGE_DIALS.every((dial) => a.knobs[dial.key] === b.knobs[dial.key]) &&
+    a.carId === b.carId &&
+    a.timeOfDay === b.timeOfDay &&
+    a.weather === b.weather &&
+    a.skipCountdown === b.skipCountdown
   );
-  const broken = damage.broken;
+}
+
+/** The stage the menu's demo is driving. Medium is the length that shows
+ * the most road in the least time; the conditions are the player's own, so
+ * the menu previews the weather they last chose to race in. */
+function demoStage(race: RaceSettings, seed: number): StageSpec {
   return {
-    zones,
-    belly: damage.belly / zoneMax,
-    wear: damage.wear,
-    systems: { ...damage.systems },
-    broken: {
-      bumperF: broken.includes("bumperF"),
-      bumperR: broken.includes("bumperR"),
-      mirrorL: broken.includes("mirrorR"),
-      mirrorR: broken.includes("mirrorL"),
-      spoiler: broken.includes("spoiler"),
-    },
+    seed,
+    length: "medium",
+    knobs: race.knobs,
+    carId: race.carId,
+    timeOfDay: race.timeOfDay,
+    weather: race.weather,
+    skipCountdown: true,
   };
 }
 
-function takeSnapshot(state: GameState, finishTime: number | null): HudSnapshot {
-  const rpm = tachometer(state);
-  // The rendered world is a mirror of the engine's map view, so the wind
-  // arrow's screen angle is the NEGATED car-relative bearing (the same
-  // one-flip rule input.ts applies to steering).
-  const windKmh = Math.hypot(state.wind.x, state.wind.z) * 3.6;
-  const windScreenAngle =
-    -(Math.atan2(state.wind.x, state.wind.z) - state.car.heading) * (180 / Math.PI);
-  return {
-    phase: state.phase,
-    countdown: Math.max(0, TUNING.countdown - state.t),
-    time: state.raceTime,
-    // The speedo reads GROUND speed, not forward speed: a car crossed up
-    // at 140 km/h is doing 140 km/h, and a needle that dips every time the
-    // nose swings would tell the player the slide is costing them.
-    speedKmh: Math.max(0, Math.hypot(state.car.u, state.car.w) * 3.6),
-    gear: state.car.gear,
-    gearbox: state.spec.gearbox,
-    rpm,
-    shiftUp: rpm > 0.83 && state.car.gear < state.spec.gearTop.length - 1,
-    airborne: state.car.airborne,
-    minimap: buildMinimap(state),
-    pacenotes: state.phase === "racing" ? upcomingPacenotes(state) : [],
-    seed: state.seed,
-    carName: state.spec.name,
-    offRoad: state.offRoad,
-    homeDistance: state.offRoad ? wayHome(state).distance : 0,
-    finishTime,
-    boostLeft: state.car.boostLeft,
-    boostMax: TUNING.boost.capacity,
-    boosting: state.car.boosting,
-    windKmh,
-    windScreenAngle,
-    damage: damageSnapshot(state),
-  };
+/** What a menu page wants standing behind it, and how it is framed. */
+function backdropFor(page: MenuPage, race: RaceSettings, seed: number, demoSeed: number) {
+  if (page.page === "roam") {
+    return {
+      camera: "map" as CameraMode,
+      stage: {
+        seed,
+        length: race.length,
+        knobs: race.knobs,
+        carId: race.carId,
+        timeOfDay: race.timeOfDay,
+        weather: race.weather,
+        skipCountdown: true,
+      } satisfies StageSpec,
+      driven: false,
+    };
+  }
+  return { camera: "drone" as CameraMode, stage: demoStage(race, demoSeed), driven: true };
 }
 
 let flashId = 0;
@@ -214,17 +187,31 @@ export function App() {
   const rendererRef = useRef<GameRenderer | null>(null);
   const gameRef = useRef<GameState | null>(null);
   const input = useMemo(() => createInput(), []);
-  const [settings, setSettings] = useState<RaceSettings>(initialSettings);
-  const [menuOpen, setMenuOpen] = useState(() => {
+  const [race, setRace] = useState<RaceSettings>(initialRace);
+  const [options, setOptions] = useState<Settings>(loadSettings);
+  const [progress, setProgress] = useState<CampaignProgress>(loadProgress);
+  const [menu, setMenu] = useState<MenuPage | null>(() => {
+    // ?start=1 launches straight into a run (tooling); everyone else gets
+    // the main menu.
     const params = new URLSearchParams(location.search);
-    // ?start=1 skips the menu (tooling); ?menu=1 forces it back open.
-    return params.get("menu") === "1" || params.get("start") !== "1";
+    return params.get("start") === "1" && params.get("menu") !== "1" ? null : { page: "root" };
   });
   const [seed, setSeed] = useState(() => {
     const fromUrl = Number(new URLSearchParams(location.search).get("seed"));
     return Number.isFinite(fromUrl) && fromUrl > 0 ? fromUrl : dailySeed();
   });
+  /** Which stage the menu's demo is on. It rolls forward every time the bot
+   * finishes one, so a menu left open keeps showing new road. */
+  const [demoSeed, setDemoSeed] = useState(() => dailySeed());
+  /** The run in progress: how it was entered, and which campaign level it
+   * is, so a finish can record the clear. */
+  const [run, setRun] = useState<{ mode: PlayMode; levelId?: string }>({ mode: "roam" });
   const [snap, setSnap] = useState<HudSnapshot | null>(null);
+  /** The studio card is up until it lifts; `booted` is the moment the render
+   * stack has landed and the first stage is standing, which is what the card
+   * is covering. Tooling runs pass ?start=1 and never see it. */
+  const [splashUp, setSplashUp] = useState(() => !splashSkipped(location.search));
+  const [booted, setBooted] = useState(false);
   const [paused, setPaused] = useState(false);
   const [flashes, setFlashes] = useState<HudFlash[]>([]);
   const finishTimeRef = useRef<number | null>(null);
@@ -233,17 +220,30 @@ export function App() {
     menu: () => undefined,
     camera: () => undefined,
   });
-  const settingsRef = useRef(settings);
-  settingsRef.current = settings;
+
+  // The loop reads these through refs: it is created once, and every menu
+  // press, option change and restart flows in without rebuilding it.
+  const raceRef = useRef(race);
+  raceRef.current = race;
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+  const menuRef = useRef(menu);
+  menuRef.current = menu;
   const seedRef = useRef(seed);
   seedRef.current = seed;
-  const menuOpenRef = useRef(menuOpen);
-  menuOpenRef.current = menuOpen;
+  const demoSeedRef = useRef(demoSeed);
+  demoSeedRef.current = demoSeed;
+  const runRef = useRef(run);
+  runRef.current = run;
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
   /** The compiled stage, cached under everything that decides what it IS:
    * the seed, the length band, and the dials. */
   const trackRef = useRef<{ key: string; track: Track } | null>(null);
+  const stageRef = useRef<StageSpec | null>(null);
+  /** Roam's map pane, held here so a renderer that finishes loading after
+   * the pane has already measured itself still learns where to draw. */
+  const mapRectRef = useRef<MapRect | null>(null);
 
   const pwa = usePwaUpdate({
     base: import.meta.env.BASE_URL,
@@ -257,91 +257,194 @@ export function App() {
     setTimeout(() => setFlashes((prev) => prev.filter((f) => f.id !== id)), 1800);
   };
 
-  /** (Re)build the run for the current seed and settings. The compiled
-   * track is cached per seed and length, so menu tweaks re-light instantly. */
-  const newGame = (nextSeed: number, rebuildWorld: boolean): void => {
+  /** (Re)build the run for a stage spec, unless that exact stage is already
+   * standing. The compiled track is cached per seed and length, so changing
+   * only the light re-lights instead of rebuilding the world. */
+  const applyStage = (spec: StageSpec, force = false): void => {
     const renderer = rendererRef.current;
     if (!renderer) return;
-    const s = settingsRef.current;
+    if (!force && sameStage(stageRef.current, spec)) return;
+    stageRef.current = spec;
     // An endless track is never reused: a restart must begin from a fresh
     // opening window, not from however far the last run streamed (the
     // renderer has long since dropped the world around the start).
-    const key = `${nextSeed}/${s.length}/${STAGE_DIALS.map((d) => s.knobs[d.key]).join(",")}`;
-    if (trackRef.current?.key !== key || s.length === "endless") {
-      trackRef.current = { key, track: compileStage(nextSeed, s.length, s.knobs) };
+    const key = `${spec.seed}/${spec.length}/${STAGE_DIALS.map((d) => spec.knobs[d.key]).join(",")}`;
+    if (trackRef.current?.key !== key || spec.length === "endless") {
+      trackRef.current = { key, track: compileStage(spec.seed, spec.length, spec.knobs) };
     }
     finishTimeRef.current = null;
     const state = createGame({
-      seed: nextSeed,
-      carId: s.carId,
+      seed: spec.seed,
+      carId: spec.carId,
       track: trackRef.current.track,
-      env: { timeOfDay: s.timeOfDay, weather: s.weather },
+      skipCountdown: spec.skipCountdown,
+      env: { timeOfDay: spec.timeOfDay, weather: spec.weather },
     });
     const previous = gameRef.current;
     gameRef.current = state;
     // A different track object (new seed OR new length) is a different
     // world; only same-track tweaks get away with a re-light.
-    if (
-      rebuildWorld ||
-      !previous ||
-      previous.track !== state.track ||
-      previous.spec.id !== s.carId
-    ) {
+    if (!previous || previous.track !== state.track || previous.spec.id !== spec.carId) {
       renderer.setGame(state);
     } else {
       renderer.setConditions(state);
     }
     setSnap(takeSnapshot(state, null));
   };
-  const newGameRef = useRef(newGame);
-  newGameRef.current = newGame;
+  const applyStageRef = useRef(applyStage);
+  applyStageRef.current = applyStage;
 
-  const applySettings = (next: RaceSettings): void => {
-    setSettings(next);
+  /** Put the backdrop the current menu page asks for on screen. */
+  const showBackdrop = (page: MenuPage): void => {
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    const backdrop = backdropFor(page, raceRef.current, seedRef.current, demoSeedRef.current);
+    applyStageRef.current(backdrop.stage);
+    renderer.setCamera(backdrop.camera);
+  };
+  const showBackdropRef = useRef(showBackdrop);
+  showBackdropRef.current = showBackdrop;
+
+  /** Leave whatever is on screen for the main menu, with its demo behind it. */
+  const goMainMenu = (): void => {
+    setPaused(false);
+    setMenu({ page: "root" });
+  };
+
+  const startStage = (spec: StageSpec, mode: PlayMode, levelId?: string): void => {
+    setPaused(false);
+    setRun({ mode, levelId });
+    runRef.current = { mode, levelId };
+    setMenu(null);
+    menuRef.current = null;
+    applyStage(spec, true);
+    rendererRef.current?.setCamera("chase");
+  };
+
+  const playLevel = (level: CampaignLevel, mode: PlayMode): void => {
+    status(`${mode === "timetrial" ? "Time trial" : "Campaign"} — ${level.name}`);
+    startStage(
+      {
+        seed: level.seed,
+        length: level.length,
+        // A campaign stage is the same country for everybody: the dials are
+        // Roam's to play with, not the campaign's to inherit.
+        knobs: DEFAULT_STAGE_KNOBS,
+        carId: raceRef.current.carId,
+        timeOfDay: level.timeOfDay,
+        weather: level.weather,
+        skipCountdown: false,
+      },
+      mode,
+      level.id,
+    );
+  };
+
+  const playRoam = (): void => {
+    const r = raceRef.current;
+    status(`Roaming stage ${seedRef.current} — ${carById(r.carId).name}`);
+    startStage(
+      {
+        seed: seedRef.current,
+        length: r.length,
+        knobs: r.knobs,
+        carId: r.carId,
+        timeOfDay: r.timeOfDay,
+        weather: r.weather,
+        skipCountdown: false,
+      },
+      "roam",
+    );
+  };
+
+  const applyRace = (next: RaceSettings): void => {
+    setRace(next);
+    raceRef.current = next;
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+      localStorage.setItem(RACE_KEY, JSON.stringify(next));
     } catch {
       /* storage unavailable — the choice still applies to this session */
     }
-    settingsRef.current = next;
-    newGame(seedRef.current, false);
+    if (menuRef.current) showBackdropRef.current(menuRef.current);
   };
+
+  const setMapRect = (rect: MapRect | null): void => {
+    mapRectRef.current = rect;
+    rendererRef.current?.setMapRect(rect);
+  };
+
+  /** The chassis secret, found. It sticks: a player who drummed seven times
+   * on purpose does not want to do it again next launch. */
+  const revealDeveloper = (): void => {
+    if (optionsRef.current.developer) return;
+    status("Developer menu unlocked");
+    applyOptions({ ...optionsRef.current, developer: true });
+  };
+
+  const applyOptions = (next: Settings): void => {
+    setOptions(next);
+    optionsRef.current = next;
+    saveSettings(next);
+    input.setKeys(next.keys);
+    rendererRef.current?.setVideo(next.video);
+  };
+
+  // The menu's backdrop follows the page, the seed and the demo's roll.
+  useEffect(() => {
+    if (menu) showBackdropRef.current(menu);
+  }, [menu, seed, demoSeed]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     let disposed = false;
     const cleanups: (() => void)[] = [];
+    input.setKeys(optionsRef.current.keys);
     // The render stack — three.js and the whole world builder — loads as
     // its own chunk, keeping the entry script inside the §11.3.9
     // critical-path budget: the shell parses and paints at once, the world
     // follows a breath later (from the service-worker cache once installed).
     void import("./game/renderer.ts").then(({ createRenderer }) => {
       if (disposed) return;
-      const renderer = createRenderer(canvas);
+      const renderer = createRenderer(canvas, optionsRef.current.video);
       rendererRef.current = renderer;
+      renderer.setMapRect(mapRectRef.current);
       cleanups.push(() => renderer.dispose());
-      newGameRef.current(seedRef.current, true);
+      const page = menuRef.current;
+      if (page) showBackdropRef.current(page);
+      else {
+        const r = raceRef.current;
+        applyStageRef.current(
+          {
+            seed: seedRef.current,
+            length: r.length,
+            knobs: r.knobs,
+            carId: r.carId,
+            timeOfDay: r.timeOfDay,
+            weather: r.weather,
+            skipCountdown: false,
+          },
+          true,
+        );
+      }
 
       const restart = (): void => {
         setPaused(false);
-        newGameRef.current(seedRef.current, false);
-      };
-      const menu = (): void => {
-        setPaused(false);
-        newGameRef.current(seedRef.current, false);
-        setMenuOpen(true);
+        const spec = stageRef.current;
+        if (spec) applyStageRef.current(spec, true);
       };
       const camera = (): void => {
+        if (menuRef.current) return;
         const mode = renderer.cycleCamera();
         flash(mode === "hood" ? "HOOD CAM" : "CHASE CAM", "info");
       };
-      actionsRef.current = { restart, menu, camera };
+      actionsRef.current = { restart, menu: goMainMenu, camera };
       input.onAction((action) => {
         if (action === "restart") restart();
-        else if (action === "swap") menu();
-        else if (action === "pause") setPaused((was) => !was);
-        else camera();
+        else if (action === "menu") goMainMenu();
+        else if (action === "pause") {
+          if (!menuRef.current) setPaused((was) => !was);
+        } else camera();
       });
 
       let nextStageTimer: ReturnType<typeof setTimeout> | null = null;
@@ -350,7 +453,26 @@ export function App() {
       });
       const handleEvents = (state: GameState, events: GameEvent[]): void => {
         renderer.onEvents(state, events);
+        // The demo is scenery: it gets no flashes and no "next stage"
+        // countdown, only a roll onto fresh road when the bot finishes.
+        const demo = menuRef.current !== null;
         for (const ev of events) {
+          if (ev.type === "finish") {
+            if (demo) {
+              setDemoSeed((s) => s + 1);
+              continue;
+            }
+            finishTimeRef.current = ev.time;
+            const active = runRef.current;
+            // Both modes post a time; only the campaign's clear opens the
+            // next stage, and a time trial's level is cleared by definition.
+            if (active.levelId) setProgress(recordFinish(active.levelId, ev.time));
+            // A stage ends where it started: back to the menu, with the
+            // result on screen long enough to read.
+            nextStageTimer = setTimeout(goMainMenu, 4500);
+            continue;
+          }
+          if (demo) continue;
           // The banner is for what the player CANNOT see: how long that jump
           // hung, and the moment the tank runs dry. Splashes, crashes,
           // landings and respawns all announce themselves on screen already
@@ -359,21 +481,14 @@ export function App() {
             flash(`CLEAN AIR ${ev.airTime.toFixed(1)}s`, "good");
           } else if (ev.type === "boostEmpty") {
             flash("BOOSTER SPENT", "bad");
-          } else if (ev.type === "finish") {
-            finishTimeRef.current = ev.time;
-            nextStageTimer = setTimeout(() => {
-              const next = seedRef.current + 1;
-              seedRef.current = next;
-              setSeed(next);
-              newGameRef.current(next, true);
-            }, 4000);
           }
         }
       };
 
       // Fixed-timestep driver: engine steps at TUNING.dt regardless of frame
-      // rate; a hitching tab clamps the backlog instead of spiraling. While
-      // the menu is up the engine holds and only the scene breathes.
+      // rate; a hitching tab clamps the backlog instead of spiraling. Behind
+      // the menu the BOT is at the wheel; on the Roam page nothing drives at
+      // all and only the map camera turns.
       let raf = 0;
       let last = performance.now();
       let acc = 0;
@@ -384,10 +499,10 @@ export function App() {
         last = now;
         const state = gameRef.current;
         if (!state) return;
-        // Either card holds the engine: the pre-race menu is a stage that has
-        // not started, the pause card is a run that must not tick while the
-        // player is reading it. The scene still breathes behind both.
-        if (menuOpenRef.current || pausedRef.current) {
+        const page = menuRef.current;
+        // The pause card is a run that must not tick while the player is
+        // reading it; the Roam page is a stage nobody is driving.
+        if ((page === null && pausedRef.current) || page?.page === "roam") {
           acc = 0;
           renderer.render(state, dtFrame);
           return;
@@ -395,18 +510,21 @@ export function App() {
         acc += dtFrame;
         while (acc >= TUNING.dt) {
           acc -= TUNING.dt;
-          const events = step(state, input.sample(TUNING.dt));
+          const events = step(state, page ? botInput(state) : input.sample(TUNING.dt));
           if (events.length > 0) handleEvents(state, events);
         }
         renderer.render(state, dtFrame);
         hudClock += dtFrame;
         if (hudClock > 0.08) {
           hudClock = 0;
-          setSnap(takeSnapshot(state, finishTimeRef.current));
+          if (!page) setSnap(takeSnapshot(state, finishTimeRef.current));
         }
       };
       raf = requestAnimationFrame(frame);
       cleanups.push(() => cancelAnimationFrame(raf));
+      // The world is built and the loop is turning: everything the studio
+      // card was covering has landed.
+      setBooted(true);
 
       const onResize = (): void => renderer.resize();
       window.addEventListener("resize", onResize);
@@ -423,44 +541,52 @@ export function App() {
       for (const fn of cleanups.reverse()) fn();
       input.dispose();
     };
-    // The loop is created once; menu, settings, and restarts flow through refs.
+    // The loop is created once; menu, options, and restarts flow through refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <div className="app-root">
       <canvas ref={canvasRef} className="game-canvas" />
-      {snap && !menuOpen && (
+      {snap && !menu && (
         <Hud
           snap={snap}
           flashes={flashes}
           input={input}
+          show={options.hud}
+          touchLayout={options.touch}
           onPause={() => setPaused(true)}
           onCamera={() => actionsRef.current.camera()}
         />
       )}
-      {paused && !menuOpen && (
+      {paused && !menu && (
         <PauseMenu
-          seed={seed}
-          carName={carById(settings.carId).name}
+          seed={stageRef.current?.seed ?? seed}
+          carName={carById(race.carId).name}
           onResume={() => setPaused(false)}
           onRestart={() => actionsRef.current.restart()}
-          onSetup={() => actionsRef.current.menu()}
+          onMainMenu={goMainMenu}
         />
       )}
-      {menuOpen && (
-        <PreRaceMenu
+      {menu && (
+        <MainMenu
+          page={menu}
+          onNavigate={setMenu}
+          progress={progress}
+          onPlayLevel={playLevel}
+          race={race}
+          onRace={applyRace}
           seed={seed}
-          settings={settings}
-          onChange={applySettings}
-          onStart={() => {
-            status(
-              `Racing ${carById(settings.carId).name} — ${settings.timeOfDay}, ${settings.weather}`,
-            );
-            setMenuOpen(false);
-          }}
+          onSeed={setSeed}
+          onPlayRoam={playRoam}
+          settings={options}
+          onSettings={applyOptions}
+          onDeveloper={revealDeveloper}
+          onUnlockEverything={() => setProgress(unlockEverything())}
+          onMapRect={setMapRect}
         />
       )}
+      {splashUp && <SplashScreen warm={booted} onDone={() => setSplashUp(false)} />}
       <UpdateToast
         needRefresh={pwa.needRefresh}
         incomingVersion={pwa.incomingVersion}

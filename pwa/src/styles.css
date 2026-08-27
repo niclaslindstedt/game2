@@ -230,6 +230,21 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Words off: the call is the arrow, so the plate shrinks to it rather than
+   leaving a pill of empty background where the text used to be. */
+.hud-pace-glyphs .hud-pace-call {
+  padding: 0.25rem 0.45rem;
+  gap: 0.25rem;
+}
+
+.hud-pace-glyphs .hud-pace-text:empty {
+  display: none;
+}
+
+.hud-pace-glyphs .hud-pace-dist {
+  font-size: clamp(0.75rem, 2.8vmin, 1.2rem);
+}
+
 .hud-pace-next {
   transform: scale(0.58);
   transform-origin: top center;
@@ -716,22 +731,6 @@ body {
   }
 }
 
-/* The build stamp, hung under the top bar. It rides `.hud-top`'s bottom edge
-   (top: 100%), so it follows the chip's height at every font scale and can
-   never be pushed out of frame by a safe-area inset — and it stays out of the
-   bottom corners, both of which belong to instruments. */
-.hud-build {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  margin-top: 0.1rem;
-  font-size: 0.55rem;
-  font-style: normal;
-  font-weight: 500;
-  opacity: 0.55;
-  text-shadow: none;
-}
-
 /* ── Touch controls ─────────────────────────────────────────────────────── */
 
 .hud-touch {
@@ -981,7 +980,7 @@ body {
   transition: transform 160ms linear;
 }
 
-/* The pre-race menu: a chunky arcade card floating over the live stage. */
+/* The in-race pause card: chunky arcade chrome over the held run. */
 .hud-menu-wrap {
   position: absolute;
   inset: 0;
@@ -1064,8 +1063,7 @@ body {
   transform: translateY(1px);
 }
 
-/* The in-race menu: the pre-race card with the stage swapped for the run.
-   RESUME is the primary press (it wears the START button's chrome); the two
+/* RESUME is the primary press (it wears the START button's chrome); the two
    ways on sit under it, the width of the card so a thumb cannot miss. */
 .hud-pause {
   align-items: stretch;
@@ -1096,4 +1094,1051 @@ body {
 .hud-pause-act:active {
   background: rgb(255 210 62 / 75%);
   color: var(--hud-shadow);
+}
+
+/* ── The main menu ───────────────────────────────────────────────────────
+   The menu is a layer over the live canvas: a scrim knocks the bot demo
+   back so the cards read, and the cards themselves wear the same arcade
+   chrome as the HUD. Everything here is namespaced `.menu-*` / `.opt-*` /
+   `.car-pick-*` / `.roam-*`; the in-race pause card keeps `.hud-menu-*`.
+
+   Written at the END of the stylesheet on purpose: a media-query override
+   placed EARLIER than its base rule silently loses the cascade. */
+
+.menu {
+  position: absolute;
+  inset: 0;
+  color: var(--hud-ink);
+  font-weight: 800;
+  font-style: italic;
+  overflow: hidden;
+}
+
+/* The scrim. Strong enough that white text over a sunlit stage is always
+   legible, light enough that the drone shot behind it still reads as a
+   game running — that balance IS the menu's aliveness. Darkest at the top
+   and bottom, where the cards and the version stamp sit. */
+.menu-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(rgb(9 24 56 / 72%), rgb(9 24 56 / 48%) 45%, rgb(9 24 56 / 78%)),
+    rgb(9 24 56 / 18%);
+  pointer-events: none;
+}
+
+/* Roam is the map itself; it only wants the edges knocked back, not the
+   middle, so the stage stays the brightest thing on screen. */
+.menu-open .menu-scrim {
+  background: radial-gradient(
+    ellipse at 50% 42%,
+    rgb(9 24 56 / 6%),
+    rgb(9 24 56 / 30%) 55%,
+    rgb(9 24 56 / 82%)
+  );
+}
+
+.menu-body {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(0.9rem, env(safe-area-inset-top)) max(0.9rem, env(safe-area-inset-right))
+    max(0.9rem, env(safe-area-inset-bottom)) max(0.9rem, env(safe-area-inset-left));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.menu-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: min(30rem, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: rgb(18 48 105 / 78%);
+  border: 3px solid rgb(255 255 255 / 55%);
+  border-radius: 1rem;
+  padding: clamp(0.9rem, 3vmin, 1.5rem);
+  backdrop-filter: blur(3px);
+}
+
+.menu-card-wide {
+  width: min(52rem, 100%);
+}
+
+.menu-card-root {
+  background: rgb(18 48 105 / 62%);
+  gap: 1.1rem;
+}
+
+.menu-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.menu-brand-name {
+  font-size: clamp(1.7rem, 7.5vmin, 3rem);
+  letter-spacing: 0.04em;
+  line-height: 0.94;
+  text-align: center;
+  text-wrap: balance;
+  color: var(--hud-good);
+  text-shadow:
+    3px 3px 0 var(--hud-shadow),
+    -1px -1px 0 var(--hud-shadow);
+}
+
+.menu-brand-tag {
+  font-size: clamp(0.6rem, 2.2vmin, 0.85rem);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  opacity: 0.8;
+  font-weight: 600;
+}
+
+.menu-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.12rem;
+  font: inherit;
+  font-size: clamp(1.1rem, 4.2vmin, 1.6rem);
+  letter-spacing: 0.1em;
+  text-align: left;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 10%);
+  border: 2px solid rgb(255 255 255 / 40%);
+  border-left: 6px solid var(--hud-good);
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.9rem;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.menu-item:hover,
+.menu-item:focus-visible {
+  background: rgb(255 210 62 / 22%);
+  border-color: var(--hud-good);
+  border-left-color: var(--hud-good);
+}
+
+.menu-item:active {
+  transform: translateY(1px);
+}
+
+.menu-item-quiet {
+  border-left-color: rgb(255 255 255 / 45%);
+}
+
+.menu-item-sub {
+  font-size: clamp(0.6rem, 2vmin, 0.78rem);
+  font-style: normal;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  opacity: 0.72;
+}
+
+.menu-title {
+  font-size: clamp(1.3rem, 5.5vmin, 2.1rem);
+  letter-spacing: 0.06em;
+  color: var(--hud-good);
+}
+
+.menu-sub {
+  font-size: clamp(0.62rem, 2.1vmin, 0.85rem);
+  font-style: normal;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  opacity: 0.75;
+  margin-top: -0.5rem;
+}
+
+.menu-back {
+  align-self: flex-start;
+  font: inherit;
+  font-size: clamp(0.62rem, 2.1vmin, 0.82rem);
+  letter-spacing: 0.14em;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 10%);
+  border: 2px solid rgb(255 255 255 / 35%);
+  border-radius: 0.5rem;
+  padding: 0.28rem 0.7rem;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.menu-back:hover,
+.menu-back:focus-visible {
+  background: rgb(255 255 255 / 20%);
+}
+
+.menu-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.menu-section-title,
+.opt-section-title {
+  font-size: clamp(0.62rem, 2.1vmin, 0.82rem);
+  letter-spacing: 0.2em;
+  color: var(--hud-good);
+}
+
+/* ── Locations and stage boxes ───────────────────────────────────────── */
+
+.menu-locations {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.menu-location {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  font: inherit;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 10%);
+  border: 3px solid rgb(124 191 63 / 85%);
+  border-radius: 0.7rem;
+  padding: 0.8rem 1rem;
+  cursor: pointer;
+  text-align: left;
+  text-shadow: none;
+}
+
+.menu-location:hover,
+.menu-location:focus-visible {
+  background: rgb(124 191 63 / 22%);
+}
+
+.menu-location-name {
+  font-size: clamp(1.1rem, 4vmin, 1.5rem);
+  letter-spacing: 0.08em;
+}
+
+.menu-location-blurb {
+  font-size: clamp(0.6rem, 2vmin, 0.8rem);
+  font-style: normal;
+  font-weight: 500;
+  opacity: 0.75;
+}
+
+.menu-location-progress {
+  font-size: clamp(0.58rem, 1.9vmin, 0.74rem);
+  letter-spacing: 0.14em;
+  color: var(--hud-good);
+  margin-top: 0.2rem;
+}
+
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+  gap: 0.6rem;
+}
+
+/* A stage box. The BORDER carries the state — green and open, grey and
+   shut — because at a glance across four boxes the frame is what the eye
+   counts, not the text inside it. */
+.menu-level {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-height: 7.5rem;
+  font: inherit;
+  color: var(--hud-ink);
+  border-radius: 0.7rem;
+  padding: 0.65rem 0.75rem;
+  text-align: left;
+  text-shadow: none;
+}
+
+.menu-level-open {
+  background: rgb(124 191 63 / 14%);
+  border: 3px solid rgb(124 191 63 / 90%);
+  cursor: pointer;
+}
+
+.menu-level-open:hover,
+.menu-level-open:focus-visible {
+  background: rgb(124 191 63 / 28%);
+}
+
+.menu-level-open:active {
+  transform: translateY(1px);
+}
+
+.menu-level-locked {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: rgb(255 255 255 / 5%);
+  border: 3px solid rgb(190 198 210 / 45%);
+  color: rgb(224 232 244 / 55%);
+}
+
+.menu-level-no {
+  font-size: clamp(0.6rem, 2vmin, 0.78rem);
+  letter-spacing: 0.2em;
+  color: var(--hud-good);
+  opacity: 0.9;
+}
+
+.menu-level-locked .menu-level-no {
+  color: inherit;
+  opacity: 0.7;
+}
+
+.menu-lock {
+  width: clamp(1.6rem, 6vmin, 2.3rem);
+  height: clamp(1.6rem, 6vmin, 2.3rem);
+  color: rgb(214 224 238 / 70%);
+  margin: 0.25rem 0;
+}
+
+.menu-level-hint {
+  font-size: clamp(0.52rem, 1.7vmin, 0.66rem);
+  font-style: normal;
+  font-weight: 500;
+  line-height: 1.25;
+  opacity: 0.8;
+}
+
+.menu-level-name {
+  font-size: clamp(0.9rem, 3.2vmin, 1.15rem);
+  line-height: 1.1;
+}
+
+.menu-level-meta {
+  font-size: clamp(0.54rem, 1.8vmin, 0.68rem);
+  letter-spacing: 0.12em;
+  opacity: 0.72;
+}
+
+.menu-level-blurb {
+  font-size: clamp(0.56rem, 1.9vmin, 0.72rem);
+  font-style: normal;
+  font-weight: 500;
+  opacity: 0.8;
+  line-height: 1.25;
+}
+
+.menu-level-best {
+  margin-top: auto;
+  font-size: clamp(0.56rem, 1.9vmin, 0.72rem);
+  letter-spacing: 0.12em;
+  color: var(--hud-good);
+}
+
+/* ── Option rows, shared by every menu surface ───────────────────────── */
+
+.menu-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.menu-label {
+  font-size: clamp(0.58rem, 1.9vmin, 0.76rem);
+  letter-spacing: 0.16em;
+  opacity: 0.82;
+}
+
+.menu-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.menu-opt {
+  font: inherit;
+  font-size: clamp(0.6rem, 2vmin, 0.82rem);
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 12%);
+  border: 2px solid rgb(255 255 255 / 40%);
+  border-radius: 0.5rem;
+  padding: 0.32rem 0.65rem;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.menu-opt-active {
+  background: var(--hud-good);
+  border-color: var(--hud-ink);
+  color: var(--hud-shadow);
+}
+
+.menu-start {
+  font: inherit;
+  font-size: clamp(1rem, 4vmin, 1.5rem);
+  letter-spacing: 0.12em;
+  color: var(--hud-shadow);
+  background: var(--hud-good);
+  border: 3px solid var(--hud-ink);
+  border-radius: 0.7rem;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+
+.menu-start:active {
+  transform: translateY(1px);
+}
+
+/* ── The version stamp ───────────────────────────────────────────────── */
+
+.menu-version {
+  position: absolute;
+  right: max(0.7rem, env(safe-area-inset-right));
+  bottom: max(0.6rem, env(safe-area-inset-bottom));
+  font-size: clamp(0.55rem, 1.8vmin, 0.72rem);
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--hud-ink);
+  opacity: 0.6;
+  text-decoration: none;
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.35rem;
+}
+
+a.menu-version:hover,
+a.menu-version:focus-visible {
+  opacity: 1;
+  background: rgb(255 255 255 / 14%);
+  text-decoration: underline;
+}
+
+.menu-version-dev {
+  cursor: default;
+}
+
+/* ── The car turntable ───────────────────────────────────────────────── */
+
+.car-pick-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.car-pick {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+.car-pick-stage {
+  flex: 1;
+  height: clamp(6rem, 22vmin, 9.5rem);
+  border-radius: 0.7rem;
+  background: linear-gradient(rgb(63 169 245 / 22%), rgb(9 24 56 / 30%));
+  border: 2px solid rgb(255 255 255 / 25%);
+  overflow: hidden;
+}
+
+.car-pick-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.car-pick-step {
+  font: inherit;
+  font-size: clamp(1.2rem, 4.5vmin, 1.8rem);
+  line-height: 1;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 12%);
+  border: 2px solid rgb(255 255 255 / 40%);
+  border-radius: 0.5rem;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.car-pick-step:hover,
+.car-pick-step:focus-visible {
+  background: rgb(255 210 62 / 25%);
+}
+
+.car-pick-name {
+  align-self: center;
+  font-size: clamp(0.72rem, 2.5vmin, 0.95rem);
+  letter-spacing: 0.16em;
+  color: var(--hud-good);
+}
+
+/* ── Roam ────────────────────────────────────────────────────────────────
+   A split view: the STAGE pane (a window onto the live map), the CAR on its
+   stand, and the CONDITIONS. `.roam-map` deliberately paints NOTHING — the
+   game canvas is behind it, and the renderer scissors the map view into
+   exactly that rectangle (setMapRect), so the pane is a hole rather than a
+   picture. Give it a background and the map disappears. */
+
+.roam {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: max(0.7rem, env(safe-area-inset-top)) max(0.7rem, env(safe-area-inset-right))
+    max(0.7rem, env(safe-area-inset-bottom)) max(0.7rem, env(safe-area-inset-left));
+  pointer-events: none;
+}
+
+.roam > * {
+  pointer-events: auto;
+}
+
+.roam-head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex: 0 0 auto;
+}
+
+.roam-title {
+  font-size: clamp(0.9rem, 3.4vmin, 1.4rem);
+  letter-spacing: 0.16em;
+  color: var(--hud-good);
+}
+
+.roam-split {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.roam-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.roam-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  background: rgb(18 48 105 / 80%);
+  border: 3px solid rgb(255 255 255 / 45%);
+  border-radius: 0.9rem;
+  padding: clamp(0.5rem, 2vmin, 0.85rem);
+  backdrop-filter: blur(3px);
+}
+
+/* The stage pane FRAMES the map hole, so it paints nothing across it: a
+   background here — even a translucent one — sits between the viewer and
+   the canvas and drains every colour out of the landscape, and a
+   backdrop-filter frosts the very thing the pane is a window onto. Its own
+   text sits on the flat sky the renderer leaves around the map, which is
+   why the labels carry the HUD's shadow. */
+.roam-pane-stage {
+  flex: 1;
+  min-height: 0;
+  background: none;
+  backdrop-filter: none;
+  text-shadow:
+    2px 2px 0 var(--hud-shadow),
+    -1px -1px 0 var(--hud-shadow);
+}
+
+.roam-pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.roam-pane-title {
+  font-size: clamp(0.58rem, 1.9vmin, 0.76rem);
+  letter-spacing: 0.2em;
+  color: var(--hud-good);
+}
+
+/* The hole. Transparent by design — see the block comment above. */
+.roam-map {
+  flex: 1;
+  min-height: clamp(9rem, 30vh, 22rem);
+  border-radius: 0.6rem;
+  border: 2px solid rgb(255 255 255 / 22%);
+}
+
+.roam-seed {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.roam-step {
+  font: inherit;
+  font-size: clamp(1rem, 3.4vmin, 1.4rem);
+  line-height: 1;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 12%);
+  border: 2px solid rgb(255 255 255 / 35%);
+  border-radius: 0.45rem;
+  padding: 0.1rem 0.5rem;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.roam-step:hover,
+.roam-step:focus-visible {
+  background: rgb(255 210 62 / 25%);
+}
+
+.roam-seed-value {
+  min-width: 4rem;
+  text-align: center;
+  font-size: clamp(0.9rem, 3.2vmin, 1.25rem);
+  line-height: 1.05;
+  color: var(--hud-good);
+  font-variant-numeric: tabular-nums;
+}
+
+.roam-length {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 0 0 auto;
+}
+
+.roam-slider {
+  width: 100%;
+  accent-color: #ffd23e;
+  cursor: pointer;
+}
+
+.roam-length-read {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  font-size: clamp(0.56rem, 1.9vmin, 0.74rem);
+  font-style: normal;
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+.roam-length-read b {
+  font-style: italic;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--hud-good);
+  opacity: 1;
+}
+
+/* The generator's dials, under the map they change. Tighter than the
+   conditions rows: four of them share the pane with the map, and the map
+   is the thing worth the space. */
+.roam-dials {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 0 0 auto;
+}
+
+.roam-dials .menu-row {
+  gap: 0.4rem;
+}
+
+.roam-dials .menu-label {
+  font-size: clamp(0.5rem, 1.6vmin, 0.64rem);
+}
+
+.roam-dials .menu-opt {
+  padding: 0.2rem 0.4rem;
+  font-size: clamp(0.48rem, 1.5vmin, 0.6rem);
+}
+
+/* ── Options ─────────────────────────────────────────────────────────── */
+
+.opt-tabs {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.opt-tab {
+  flex: 1;
+  font: inherit;
+  font-size: clamp(0.66rem, 2.3vmin, 0.9rem);
+  letter-spacing: 0.16em;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 10%);
+  border: 2px solid rgb(255 255 255 / 35%);
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.opt-tab-active {
+  background: var(--hud-good);
+  border-color: var(--hud-ink);
+  color: var(--hud-shadow);
+}
+
+.opt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.opt-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 0.3rem;
+}
+
+.opt-note {
+  font-size: clamp(0.54rem, 1.8vmin, 0.7rem);
+  font-style: normal;
+  font-weight: 500;
+  line-height: 1.35;
+  opacity: 0.7;
+}
+
+/* A toggle row: the whole row is the hit target, and the switch on the
+   right is the state. */
+.opt-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  font: inherit;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 8%);
+  border: 2px solid rgb(255 255 255 / 28%);
+  border-radius: 0.55rem;
+  padding: 0.45rem 0.7rem;
+  cursor: pointer;
+  text-align: left;
+  text-shadow: none;
+}
+
+.opt-toggle-on {
+  border-color: rgb(124 191 63 / 85%);
+  background: rgb(124 191 63 / 14%);
+}
+
+.opt-toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+}
+
+.opt-toggle-text b {
+  font-size: clamp(0.7rem, 2.4vmin, 0.92rem);
+  letter-spacing: 0.12em;
+}
+
+.opt-toggle-hint {
+  font-size: clamp(0.52rem, 1.75vmin, 0.68rem);
+  font-style: normal;
+  font-weight: 500;
+  opacity: 0.7;
+}
+
+.opt-switch {
+  flex: none;
+  position: relative;
+  width: 2.6rem;
+  height: 1.35rem;
+  border-radius: 1rem;
+  background: rgb(255 255 255 / 14%);
+  border: 2px solid rgb(255 255 255 / 35%);
+  transition: background 140ms ease;
+}
+
+.opt-toggle-on .opt-switch {
+  background: var(--hud-good);
+  border-color: var(--hud-ink);
+}
+
+.opt-switch-knob {
+  position: absolute;
+  top: 0.1rem;
+  left: 0.1rem;
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 50%;
+  background: var(--hud-ink);
+  transition: transform 140ms ease;
+}
+
+.opt-toggle-on .opt-switch-knob {
+  transform: translateX(1.15rem);
+  background: var(--hud-shadow);
+}
+
+/* ── Key bindings ────────────────────────────────────────────────────── */
+
+.opt-keys {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.35rem;
+}
+
+.opt-key {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  background: rgb(255 255 255 / 7%);
+  border-radius: 0.5rem;
+  padding: 0.28rem 0.35rem 0.28rem 0.6rem;
+}
+
+.opt-key-label {
+  font-size: clamp(0.56rem, 1.9vmin, 0.74rem);
+  letter-spacing: 0.12em;
+  opacity: 0.85;
+}
+
+.opt-key-bind {
+  font: inherit;
+  font-size: clamp(0.54rem, 1.8vmin, 0.7rem);
+  font-style: normal;
+  letter-spacing: 0.08em;
+  min-width: 6.5rem;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 12%);
+  border: 2px solid rgb(255 255 255 / 35%);
+  border-radius: 0.4rem;
+  padding: 0.22rem 0.45rem;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.opt-key-listening {
+  background: var(--hud-good);
+  border-color: var(--hud-ink);
+  color: var(--hud-shadow);
+}
+
+.opt-reset {
+  align-self: flex-start;
+  font: inherit;
+  font-size: clamp(0.56rem, 1.9vmin, 0.74rem);
+  letter-spacing: 0.14em;
+  color: var(--hud-ink);
+  background: rgb(255 90 78 / 20%);
+  border: 2px solid rgb(255 90 78 / 60%);
+  border-radius: 0.45rem;
+  padding: 0.28rem 0.7rem;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.opt-reset:hover,
+.opt-reset:focus-visible {
+  background: rgb(255 90 78 / 35%);
+}
+
+/* Portrait: the stage grid drops to two columns rather than one, so all
+   four boxes stay countable in a glance without scrolling. */
+@media (orientation: portrait) {
+  .menu-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .menu-level {
+    min-height: 6.5rem;
+  }
+
+  .opt-keys {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── The studio card ─────────────────────────────────────────────────────
+   The app opens on it, and the whole menu — render stack, world builder, a
+   stage's worth of terrain — arrives behind it. Painted in the brand sky so
+   the card lifting reads as the menu arriving, not as a screen change. */
+
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(1.4rem, 6vmin, 3rem);
+  padding: 1.5rem;
+  background: linear-gradient(#1f7fe0 0%, #3fa9f5 55%, #bfe3ff 100%);
+  color: #ffffff;
+  font-weight: 800;
+  font-style: italic;
+  opacity: 1;
+  transition: opacity 340ms ease-out;
+  /* An opening card is not a document: nothing on it is selectable and no
+     long-press menu belongs on it. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Cleared — fade out of the way. The duration must match FADE_MS in
+   splash-screen.tsx, which is what times the unmount behind it.
+
+   NO `pointer-events: none` here, and that is not an omission: a tap is
+   three events and only the FIRST dismisses the card, so letting the fading
+   card stop taking presses hands the `click` that follows its own
+   `pointerdown` straight to the menu coming up underneath. */
+.splash.leaving {
+  opacity: 0;
+}
+
+.splash-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  animation: splash-in 460ms ease-out both;
+}
+
+.splash-publisher {
+  font-size: clamp(1.3rem, 6vmin, 2.4rem);
+  letter-spacing: 0.1em;
+  line-height: 1;
+  text-shadow:
+    3px 3px 0 var(--hud-shadow),
+    -1px -1px 0 var(--hud-shadow);
+}
+
+.splash-presents {
+  font-size: clamp(0.62rem, 2.3vmin, 0.95rem);
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0.5em;
+  /* The tracking is applied to the RIGHT of every glyph, the last one
+     included, so without this the word sits visibly left of centre. */
+  text-indent: 0.5em;
+  opacity: 0.85;
+}
+
+/* The game's name, held apart from the card so the house lands first and the
+   title arrives under it, the way a title card plays. */
+.splash-game {
+  max-width: 14ch;
+  font-size: clamp(1.8rem, 8vmin, 3.2rem);
+  letter-spacing: 0.04em;
+  line-height: 0.94;
+  text-align: center;
+  text-wrap: balance;
+  color: var(--hud-good);
+  text-shadow:
+    3px 3px 0 var(--hud-shadow),
+    -1px -1px 0 var(--hud-shadow);
+  animation: splash-title 520ms 380ms ease-out both;
+}
+
+@keyframes splash-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.6rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes splash-title {
+  from {
+    opacity: 0;
+    transform: translateY(0.8rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Reduced motion: the card still shows and still fades away (an instant cut
+   to the menu is the harsher of the two), but it stops sliding in — that
+   part is pure flourish. */
+@media (prefers-reduced-motion: reduce) {
+  .splash-card,
+  .splash-game {
+    animation: none;
+  }
+}
+
+/* The developer menu wears a different colour from everything a player is
+   meant to find, so a screenshot never leaves any doubt about which one is
+   on screen. */
+.menu-item-dev {
+  border-left-color: var(--hud-bad);
+}
+
+.menu-item-dev:hover,
+.menu-item-dev:focus-visible {
+  background: rgb(255 90 78 / 20%);
+  border-color: var(--hud-bad);
+  border-left-color: var(--hud-bad);
+}
+
+.menu-item-dev:disabled {
+  cursor: default;
+  opacity: 0.5;
+  border-left-color: rgb(255 255 255 / 35%);
+}
+
+.menu-item-dev:disabled:hover {
+  background: rgb(255 255 255 / 10%);
+  border-color: rgb(255 255 255 / 40%);
+  border-left-color: rgb(255 255 255 / 35%);
+}
+
+.menu-title-dev {
+  color: var(--hud-bad);
+}
+
+/* The chassis is a control, not a picture: it takes the developer secret. */
+.car-pick-stage {
+  cursor: pointer;
+}
+
+/* Roam in landscape: the stage pane takes the room and the knobs stack in a
+   column beside it. Written AFTER the base `.roam-*` rules on purpose — a
+   media-query override placed earlier than the rule it overrides silently
+   loses the cascade. */
+@media (min-aspect-ratio: 5 / 4) {
+  .roam-split {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  .roam-column {
+    flex: 0 0 auto;
+    width: min(20rem, 38vw);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .roam-pane-stage {
+    flex: 1;
+    min-width: 0;
+  }
 }
