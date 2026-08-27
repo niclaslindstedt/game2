@@ -140,6 +140,15 @@ export type CarState = {
   /** True while `slide` reads as a drift at pace — dust, HUD, stats. */
   drifting: boolean;
   gear: number;
+  /** Engine revs, 0 at idle and 1 at the redline (a shade over is the
+   * limiter). On the move it is gearing plus forward speed — there is no
+   * crank in this model, and that is what keeps the needle, the shift light
+   * and the engine note from ever disagreeing. On the GRID, where the car
+   * is not moving and no gear is selected yet, the throttle blips it
+   * directly: a driver waiting for the lights revs the engine, and both the
+   * tachometer and the engine bed read it here. HUD and audio readout — the
+   * handling never reads it back. */
+  rev: number;
   /** Sim time until which throttle is cut by an engaging shift. */
   shiftCutUntil: number;
   /** Boost seconds left in the tank — finite for the whole run. */
@@ -244,6 +253,12 @@ export type GameState = {
   lateral: number;
   offRoad: boolean;
   offRoadSince: number;
+  /** True while the car is LOST — off the road, far enough from it, and
+   * pointed away rather than merely beside it (TUNING.offTrack.guide). It
+   * is what the way-home guidance waits for: two wheels on the verge and a
+   * clearing crossed perpendicular to the stage are both off the road and
+   * neither is a driver who needs telling where the road went. */
+  lost: boolean;
   /** Where and when the car last actually got somewhere. A car pinned
    * against a trunk with the throttle buried never leaves this anchor, and
    * that is what puts it back on the road (TUNING.offTrack.stuck). */

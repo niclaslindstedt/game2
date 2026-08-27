@@ -60,10 +60,11 @@ const SING_FLOOR = 0.4;
 /**
  * What a surface sounds like under a rolling tyre.
  *
- * `hz` is where the roar sits and `q` how narrow it is: asphalt is a tight,
- * high, almost pitched hum (a tread pattern arriving at a regular interval),
- * gravel is a broad low rush (a thousand stones a second at no interval at
- * all). `grain` is the crunch over the roar and `level` the bed's weight.
+ * `hz` is where the roar sits and `q` how narrow it is: asphalt is a dull
+ * bass drumming felt through the body, gravel a broad low rush (a thousand
+ * stones a second at no interval at all), water a bright hiss. `grain` is the
+ * crunch of loose material over the roar — a sealed surface has none — and
+ * `level` the bed's weight.
  */
 type SurfaceVoice = {
   color: NoiseColor;
@@ -80,14 +81,23 @@ type SurfaceVoice = {
 };
 
 export const SURFACES: Record<string, SurfaceVoice> = {
-  // Tarmac: tight, high and almost tonal. On a straight it is very nearly
-  // nothing — a sealed surface under a rolling tyre is the quietest a car ever
-  // is, and the engine is meant to be the whole sound. What tarmac HAS is the
-  // corner, where the same tyre goes from silent to singing.
-  asphalt: { color: "pink", hz: 620, q: 1.6, level: 0.005, corner: 3.6, grain: 0.0016 },
-  // Graded gravel: the game's home surface. Broad and busy, but a rush rather
+  // Tarmac: a DULL BASS RUMBLE and nothing else. A sealed surface under a
+  // tyre rolling straight ahead is the quietest a car ever is — there is
+  // nothing being thrown and nothing being crushed, only the tread drumming
+  // the body, which is felt more than heard and lives below everything else
+  // in the mix. So: brown noise down where the engine's own bottom end is,
+  // no crunch at all, and a level that leaves the straight to the engine.
+  // What tarmac HAS is the corner — the singing tyre further down, which is
+  // where all of this surface's drama is kept.
+  asphalt: { color: "brown", hz: 125, q: 0.7, level: 0.0026, corner: 2.4, grain: 0 },
+  // Graded gravel: the game's home surface. Broad and busy, but a RUSH rather
   // than a roar until the car turns — then it is the surface being thrown.
-  gravel: { color: "pink", hz: 340, q: 0.8, level: 0.011, corner: 3.4, grain: 0.006 },
+  // The cruise is deliberately half of what it once was and the corner twice
+  // the multiplier, which leaves a corner exactly as loud as it was and a
+  // straight half as loud: the bed has to say something by CHANGING, and a
+  // dirt road that is as busy pointed straight as it is sideways says
+  // nothing for the whole run.
+  gravel: { color: "pink", hz: 340, q: 0.8, level: 0.0055, corner: 6.8, grain: 0.003 },
   // Water: a hiss with weight behind it and no crunch at all. Barely cares
   // which way the car is pointing — a ford is loud because it is being ploughed
   // through, not because it is being cornered on.

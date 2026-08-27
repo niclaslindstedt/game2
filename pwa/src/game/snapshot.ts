@@ -41,14 +41,13 @@ function upcomingPacenotes(state: GameState): HudPacenote[] {
   return out;
 }
 
-/** Tach reading, 0..1 of the redline: how far up the current gear the car
- * is, over an idle floor so the needle never falls off the dial. The engine
- * has no rev model — gearing plus FORWARD speed is the rev counter, and
- * forward speed is what the gearbox shifts on, so the needle and the shift
- * light always agree with the gear. */
+/** Tach reading, 0..1 of the dial: the engine's own revs over an idle floor
+ * so the needle never falls off the bottom. The revs themselves are the
+ * engine's (`car.rev`) — gearing plus forward speed on the move, and the
+ * throttle itself on the grid, where a driver waiting for the lights can
+ * still blip it. */
 function tachometer(state: GameState): number {
-  const top = state.spec.gearTop[state.car.gear];
-  return Math.min(1, 0.18 + 0.82 * Math.max(0, state.car.u / top));
+  return Math.min(1, 0.18 + 0.82 * state.car.rev);
 }
 
 /** The damage ledger flipped into SCREEN space for the HUD's 2D car: the
@@ -100,14 +99,17 @@ export function takeSnapshot(state: GameState, finishTime: number | null): HudSn
     reversing: state.car.reversing,
     gearbox: state.spec.gearbox,
     rpm,
-    shiftUp: rpm > 0.83 && state.car.gear < state.spec.gearTop.length - 1,
+    // Nothing to shift on the grid, however hard the driver leans on it.
+    shiftUp:
+      state.phase === "racing" && rpm > 0.83 && state.car.gear < state.spec.gearTop.length - 1,
     airborne: state.car.airborne,
     minimap: buildMinimap(state),
     pacenotes: state.phase === "racing" ? upcomingPacenotes(state) : [],
     seed: state.seed,
     carName: state.spec.name,
     offRoad: state.offRoad,
-    homeDistance: state.offRoad ? wayHome(state).distance : 0,
+    lost: state.lost,
+    homeDistance: state.lost ? wayHome(state).distance : 0,
     finishTime,
     boostLeft: state.car.boostLeft,
     boostMax: TUNING.boost.capacity,

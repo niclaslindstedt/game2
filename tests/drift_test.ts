@@ -186,7 +186,7 @@ describe("turning at pace", () => {
   it("stays gripped below the speed where turning outruns the tires", () => {
     const state = game();
     run(state, { throttle: 0.2 }, 0.5);
-    expect(state.car.u).toBeLessThan(TUNING.drift.minSpeed);
+    expect(state.car.u).toBeLessThan(TUNING.drift.slideFrom);
     run(state, { throttle: 0.2, steer: 1 }, 0.5);
     expect(state.car.drifting).toBe(false);
   });
@@ -290,5 +290,60 @@ describe("the wheel, and what the surface does with it", () => {
     expect(Math.abs(sealed.car.slip)).toBeLessThan(Math.abs(loose.car.slip) * 0.7);
     // And it is not simply slower — the grip is spent carrying speed.
     expect(sealed.car.u).toBeGreaterThan(loose.car.u);
+  });
+});
+
+// THE SPEED FLOOR. A drift is the drama this game is made of, and drama at
+// walking pace is not drama — it is a car that will not go where it is
+// pointed. Under TUNING.drift.slideFrom the wheel does one thing and one
+// thing only, and no lever on the car is a way round that.
+describe("the floor under the slide", () => {
+  /** Park the car at a chosen ground speed on the test straight. */
+  function at(kmh: number, carId = "compact"): GameState {
+    const state = game(carId);
+    state.car.u = kmh / 3.6;
+    return state;
+  }
+
+  it("will not go sideways below the floor, however hard the wheel is turned", () => {
+    const state = at(60);
+    run(state, { steer: 1 }, 1.2);
+    expect(Math.hypot(state.car.u, state.car.w)).toBeLessThan(TUNING.drift.slideFrom);
+    expect(state.car.slide).toBe(0);
+    expect(state.car.drifting).toBe(false);
+    // It still STEERS: the whole point of the floor is that the wheel keeps
+    // its ordinary job under it.
+    expect(Math.abs(state.car.yawRate)).toBeGreaterThan(0.1);
+  });
+
+  it("gives the handbrake nothing to work with down there either", () => {
+    const plain = at(60);
+    const yanked = at(60);
+    run(plain, { steer: 1 }, 1.2);
+    run(yanked, { steer: 1, handbrake: true }, 1.2);
+    expect(yanked.car.slide).toBe(0);
+    expect(yanked.car.drifting).toBe(false);
+    // The lever is a pair of locked rear wheels down here and nothing else:
+    // it must not buy any more angle than the wheel alone already had.
+    expect(Math.abs(yanked.car.slip)).toBeLessThanOrEqual(Math.abs(plain.car.slip) * 1.05);
+  });
+
+  it("but the same lock at pace is a drift", () => {
+    const state = at(110);
+    run(state, { throttle: 1, steer: 1 }, 1);
+    expect(state.car.slide).toBeGreaterThan(0.5);
+    expect(state.car.drifting).toBe(true);
+  });
+
+  it("lets a slide go as the car slows into the floor", () => {
+    const state = at(110);
+    run(state, { throttle: 1, steer: 1 }, 1);
+    expect(state.car.slide).toBeGreaterThan(0.5);
+    // Off the power and hard on the brakes, still on full lock: the angle
+    // has to be gone by the time the car is under the floor, not carried
+    // down to a standstill.
+    run(state, { brake: 1, steer: 1 }, 4);
+    expect(Math.hypot(state.car.u, state.car.w) * 3.6).toBeLessThan(70);
+    expect(state.car.slide).toBe(0);
   });
 });

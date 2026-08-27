@@ -10,7 +10,7 @@ import type { TurnSeverity } from "@engine";
 
 import type { InputManager } from "./input.ts";
 import { Minimap, type HudMinimap } from "./minimap.tsx";
-import type { HudSettings, PedalDir, TouchSettings } from "./settings.ts";
+import { deviceControls, type HudSettings, type PedalDir, type TouchSettings } from "./settings.ts";
 import { clamp, formatTime } from "../lib/util.ts";
 
 /** One co-driver call, already flipped into SCREEN space by the snapshot
@@ -45,9 +45,17 @@ export type HudSnapshot = {
   pacenotes: HudPacenote[];
   seed: number;
   carName: string;
+  /** Two wheels past the verge — what the reset button offers itself for. */
   offRoad: boolean;
+  /** True while the car is LOST — off the road, well away from it and
+   * pointed away rather than merely beside it. The co-driver's way-home
+   * strip waits for this rather than for `offRoad`: a sign that fires every
+   * time a wheel clips the verge is one the player stops reading. The
+   * BUTTON does not wait for it — a driver who wants out of the ditch they
+   * are two metres into should not have to be lost first. */
+  lost: boolean;
   /** Ground distance back to the point the reset would put the car, m —
-   * only meaningful while `offRoad`. */
+   * only meaningful while `lost`. */
   homeDistance: number;
   finishTime: number | null;
   /** Booster tank readout, seconds left / full tank. */
@@ -781,6 +789,13 @@ function TouchButton({
 export function Hud({ snap, flashes, input, show, touchLayout, onPause, onCamera }: HudProps) {
   const { touch } = input;
   const pedalSide = touchLayout.steerSide === "left" ? "right" : "left";
+  // The thumb zones exist only where there are thumbs. CSS already hides
+  // them on a pointer-fine display, but hidden is not the same as absent:
+  // the pedal zone's whole default is GAS, so anything that can still reach
+  // it — a stylus, a hybrid laptop, a browser that reports its pointers
+  // oddly — is a way for the car to be given throttle nobody asked for. On a
+  // desktop the throttle key is the only throttle there is.
+  const thumbs = deviceControls().touch;
   return (
     <div className="hud pointer-events-none absolute inset-0 select-none">
       {/* Top bar: stage + timer, and the two presses that belong on the road
@@ -832,7 +847,7 @@ export function Hud({ snap, flashes, input, show, touchLayout, onPause, onCamera
           pacenote toggle — switching off the corner calls is a driver saying
           they know the stage, not one who wants to stay lost. */}
       {snap.phase === "racing" &&
-        (snap.offRoad ? (
+        (snap.lost ? (
           <WayHomeCall distance={snap.homeDistance} />
         ) : (
           show.pacenotes &&
@@ -902,7 +917,12 @@ export function Hud({ snap, flashes, input, show, touchLayout, onPause, onCamera
         <div className="hud-cluster">
           {show.tachometer && <Tachometer rpm={snap.rpm} />}
           <div className={`hud-gearbox ${snap.shiftUp ? "hud-gearbox-shift" : ""}`}>
-            <span className="hud-gear">{snap.reversing ? "R" : snap.gear + 1}</span>
+            {/* NEUTRAL ON THE GRID: nothing has been geared yet, and a box
+                reading first before the lights have gone is the instrument
+                telling the player the run has started when it has not. */}
+            <span className="hud-gear">
+              {snap.reversing ? "R" : snap.phase === "countdown" ? "N" : snap.gear + 1}
+            </span>
             <span className="hud-shiftlight">{snap.gearbox === "auto" ? "AUTO" : "SHIFT"}</span>
           </div>
           <span className="hud-speed-num">{Math.round(snap.speedKmh)}</span>
@@ -933,9 +953,9 @@ export function Hud({ snap, flashes, input, show, touchLayout, onPause, onCamera
           boost / handbrake). Which half is which is the player's choice.
           Manual gear taps float above the pedal zone. */}
       <div className="hud-touch">
-        <SteerZone touch={touch} side={touchLayout.steerSide} />
-        <PedalZone touch={touch} layout={touchLayout} side={pedalSide} />
-        {snap.gearbox === "manual" && (
+        {thumbs && <SteerZone touch={touch} side={touchLayout.steerSide} />}
+        {thumbs && <PedalZone touch={touch} layout={touchLayout} side={pedalSide} />}
+        {thumbs && snap.gearbox === "manual" && (
           <div className="hud-gears">
             <TouchButton
               label="−"

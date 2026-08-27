@@ -4,6 +4,7 @@
 // step emitted. The app's render loop and the headless simulator drive this
 // same function — there is no other way to advance a run.
 
+import { clamp } from "../lib/math.ts";
 import { createRng } from "../lib/prng.ts";
 import {
   compileStage,
@@ -18,7 +19,15 @@ import { carById } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 import { launch, stepAirborne, stepGrounded, type GroundContext } from "./car.ts";
 import { collideCar } from "./collision.ts";
-import { crossedFinish, crossedLip, curvatureAt, locate, slopeAt, wayHome } from "./track.ts";
+import {
+  crossedFinish,
+  crossedLip,
+  curvatureAt,
+  locate,
+  slopeAt,
+  trackLost,
+  wayHome,
+} from "./track.ts";
 import {
   DAMAGE_ZONES,
   type CarInput,
@@ -74,6 +83,7 @@ function freshCar(): CarState {
     slide: 0,
     drifting: false,
     gear: 0,
+    rev: 0,
     shiftCutUntil: 0,
     boostLeft: T.boost.capacity,
     boosting: false,
@@ -178,6 +188,7 @@ export function createGame(options: CreateGameOptions): GameState {
     lateral: 0,
     offRoad: false,
     offRoadSince: 0,
+    lost: false,
     stuck: { x: car.x, z: car.z, since: 0 },
     surface: "gravel",
     env,
@@ -278,6 +289,16 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     // The grid: steering wiggles are allowed, the car does not move — and
     // a throttle held through the lights is revving, not being wedged, so
     // the wedge clock only starts when the flag drops.
+    //
+    // REVVING IS THE ONE THING THE GRID DOES. Nothing is geared yet and the
+    // road speed the revs are normally read off is zero, so here they are
+    // their own state: the throttle blips them up and the flywheel lets
+    // them fall. It is the only thing the player can do while they wait,
+    // and both the tachometer and the engine note answer it.
+    const grid = state.car;
+    const revTarget = clamp(input.throttle, 0, 1);
+    const revRate = revTarget > grid.rev ? T.revs.blip : T.revs.settle;
+    grid.rev += (revTarget - grid.rev) * clamp(revRate * T.dt, 0, 1);
     state.stuck.since = state.t;
     return events;
   }
@@ -369,6 +390,11 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   state.progressS = track.samples[state.progressIndex].s;
   state.lateral = fix.lateral;
   state.stats.topSpeed = Math.max(state.stats.topSpeed, car.u);
+  // Revs on the move: how far up the current gear the car is. The gearbox
+  // shifts on the same forward speed, so the needle and the shift light can
+  // never disagree with the gear. A shade past the redline is the limiter —
+  // the booster can push a gear past its own top.
+  car.rev = clamp(Math.max(0, car.u) / state.spec.gearTop[car.gear], 0, 1.06);
 
   // An endless stage keeps the road materialized well past the horizon —
   // the bot's plan, the pacenotes, and the renderer all read ahead of the
@@ -414,6 +440,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     events.push({ type: "offRoad", off: fix.offRoad });
   }
   if (state.offRoad) state.stats.offRoadTime += T.dt;
+  state.lost = trackLost(state);
 
   // Solid contact: deep water still swallows the car whole, but the wild's
   // props and the forest's trunks BEND it instead of ending it — impulse,
