@@ -80,6 +80,8 @@ export type HudDamage = {
     mirrorL: boolean;
     mirrorR: boolean;
     spoiler: boolean;
+    hood: boolean;
+    hatch: boolean;
   };
 };
 
@@ -700,7 +702,27 @@ function DamagePanel({ damage }: { damage: HudDamage }) {
             style={{ stroke: crushColor(damage.zones[i]) }}
           />
         ))}
-        {/* The breakables: solid while bolted on, crossed out when gone. */}
+        {/* The breakables: solid while bolted on, crossed out when gone.
+            The two lids are outlines over the bay they cover, so a missing
+            bonnet reads as an open engine bay rather than a missing bar. */}
+        <rect
+          className={part(broken.hood)}
+          x="22"
+          y="10.5"
+          width="16"
+          height="10"
+          rx="2"
+          fill="none"
+        />
+        <rect
+          className={part(broken.hatch)}
+          x="22"
+          y="79"
+          width="16"
+          height="8"
+          rx="2"
+          fill="none"
+        />
         <rect className={part(broken.bumperF)} x="21" y="6" width="18" height="3.2" rx="1.5" />
         <rect className={part(broken.bumperR)} x="21" y="89.5" width="18" height="3.2" rx="1.5" />
         <rect className={part(broken.mirrorL)} x="9" y="29" width="4.5" height="7" rx="1.4" />

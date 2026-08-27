@@ -50,30 +50,32 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 
 ## Where new code goes
 
-| Kind of change                                      | Where it goes                                                                     |
-| --------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Handling/feel (drift, jump, grip, gearbox)          | `engine/game/car.ts`; numbers in `engine/game/defs/`                              |
-| How a turn becomes a drift, and how it lets go      | `TUNING.drift` in `engine/game/defs/tuning.ts` — the `drift-feel` skill           |
-| A new car                                           | A data row in `engine/game/defs/cars.ts`                                          |
-| A car's LOOK (silhouette, panels, wheels, livery)   | `pwa/src/game/car-styles.ts` (specs); builder in `car-body.ts`                    |
-| Stage generation rules or vocabulary                | `engine/mapgen/rules.ts` (data) / `generate.ts` (search)                          |
-| Track geometry/compilation                          | `engine/mapgen/compile.ts`                                                        |
-| Run orchestration (phases, respawn, events)         | `engine/game/step.ts`                                                             |
-| Collision / damage (crush, parts, wreck, systems)   | `engine/game/collision.ts` — the `collision` skill                                |
-| Bot behavior                                        | `engine/sim/bot.ts`                                                               |
-| Anything drawn (meshes, textures, camera, effects)  | `pwa/src/game/` (renderer.ts and friends)                                         |
-| Anything HEARD (a hit, a landing, a menu click)     | `pwa/src/game/audio/bank.ts` (+ a rung in `route.ts`) — the `sound-effects` skill |
-| A continuous sound (engine, tyres, wind, the slide) | `engine-bed.ts` / `road-grain.ts` in `pwa/src/game/audio/`                        |
-| A piece of MUSIC                                    | `pwa/src/game/audio/scores/` — the `soundtrack` skill                             |
-| HUD / touch controls                                | `pwa/src/game/hud.tsx` + `pwa/src/styles.css`                                     |
-| Input mapping                                       | `pwa/src/game/input.ts` (bindings in `settings.ts`)                               |
-| Main menu pages / routing                           | `pwa/src/game/main-menu.tsx` (+ `menu-roam`, `menu-options`)                      |
-| Campaign stages, locations, unlocks                 | `pwa/src/game/campaign.ts`                                                        |
-| A player option (HUD, video, controls)              | `pwa/src/game/settings.ts`, then its reader                                       |
-| The studio card / boot cover                        | `pwa/src/game/splash.ts` (policy) + `splash-screen.tsx`                           |
-| App identity (name, palette, URLs)                  | `pwa/src/identity.ts` (single source)                                             |
-| New CLI tooling                                     | `scripts/*.mjs` (Node, no deps beyond `scripts/lib/`)                             |
-| Engine tests                                        | `tests/<topic>_test.ts`                                                           |
+| Kind of change                                         | Where it goes                                                                     |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| Handling/feel (drift, jump, grip, gearbox)             | `engine/game/car.ts`; numbers in `engine/game/defs/`                              |
+| How a turn becomes a drift, and how it lets go         | `TUNING.drift` in `engine/game/defs/tuning.ts` — the `drift-feel` skill           |
+| A new car                                              | A data row in `engine/game/defs/cars.ts`                                          |
+| A car's LOOK (silhouette, panels, wheels, livery)      | `pwa/src/game/car-styles.ts` (specs); generator in `pwa/src/game/car/`            |
+| A new PART on the car (a light pod, a snorkel, a vent) | a builder in `pwa/src/game/car/`, driven by an optional `spec.ts` field           |
+| How dirty the car gets, and where                      | `pwa/src/game/car-dirt.ts`                                                        |
+| Stage generation rules or vocabulary                   | `engine/mapgen/rules.ts` (data) / `generate.ts` (search)                          |
+| Track geometry/compilation                             | `engine/mapgen/compile.ts`                                                        |
+| Run orchestration (phases, respawn, events)            | `engine/game/step.ts`                                                             |
+| Collision / damage (crush, parts, wreck, systems)      | `engine/game/collision.ts` — the `collision` skill                                |
+| Bot behavior                                           | `engine/sim/bot.ts`                                                               |
+| Anything drawn (meshes, textures, camera, effects)     | `pwa/src/game/` (renderer.ts and friends)                                         |
+| Anything HEARD (a hit, a landing, a menu click)        | `pwa/src/game/audio/bank.ts` (+ a rung in `route.ts`) — the `sound-effects` skill |
+| A continuous sound (engine, tyres, wind, the slide)    | `engine-bed.ts` / `road-grain.ts` in `pwa/src/game/audio/`                        |
+| A piece of MUSIC                                       | `pwa/src/game/audio/scores/` — the `soundtrack` skill                             |
+| HUD / touch controls                                   | `pwa/src/game/hud.tsx` + `pwa/src/styles.css`                                     |
+| Input mapping                                          | `pwa/src/game/input.ts` (bindings in `settings.ts`)                               |
+| Main menu pages / routing                              | `pwa/src/game/main-menu.tsx` (+ `menu-roam`, `menu-options`)                      |
+| Campaign stages, locations, unlocks                    | `pwa/src/game/campaign.ts`                                                        |
+| A player option (HUD, video, controls)                 | `pwa/src/game/settings.ts`, then its reader                                       |
+| The studio card / boot cover                           | `pwa/src/game/splash.ts` (policy) + `splash-screen.tsx`                           |
+| App identity (name, palette, URLs)                     | `pwa/src/identity.ts` (single source)                                             |
+| New CLI tooling                                        | `scripts/*.mjs` (Node, no deps beyond `scripts/lib/`)                             |
+| Engine tests                                           | `tests/<topic>_test.ts`                                                           |
 
 **Hard rules:** the engine never imports three.js, Preact, or anything from `pwa/`; the renderer never mutates `GameState`; engine randomness only via the state's seeded RNG (determinism is test-enforced); source files stay under 1000 lines. **The game ships no audio files** — every sound and every note is synthesized from authored parameters, and `pwa/src/lib/synth.ts` is the only module that touches WebAudio (everything that merely DESCRIBES a sound imports `lib/voice.ts`, which is DOM-free so the bank and the tests can read it).
 

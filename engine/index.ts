@@ -42,7 +42,13 @@ export {
   type Weather,
 } from "./game/state.ts";
 export { locate, wayHome, type TrackFix, type WayHome } from "./game/track.ts";
-export { CARS, carById, type CarSpec, type GearboxMode } from "./game/defs/cars.ts";
+export {
+  CARS,
+  carById,
+  type CarSpec,
+  type DriveLayout,
+  type GearboxMode,
+} from "./game/defs/cars.ts";
 export { TUNING } from "./game/defs/tuning.ts";
 
 // The stage generator.
