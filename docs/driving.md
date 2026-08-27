@@ -93,11 +93,43 @@ Generated stages roll (`STAGE_RULES.elevation` — long climbs, medium rollers, 
 
 ## Surfaces
 
-| Surface | Effect                                                                    |
-| ------- | ------------------------------------------------------------------------- |
-| Gravel  | The baseline: full power, honest grip, dust off the rear when sideways    |
-| Water   | Fords and shallows: a splash on entry, heavy drag, reduced grip and power |
-| Nature  | The open landscape off the road: loose grip, fast — up to ~150 km/h       |
+| Surface     | Effect                                                                                                                                                                           |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Gravel      | The baseline: full power, honest grip, dust off the rear when sideways                                                                                                           |
+| **Asphalt** | A third more lateral grip: the corner that needed a slide can be driven round, the line tightens, the drift has to be ASKED for — and it smokes tires instead of throwing gravel |
+| Water       | Fords and shallows: a splash on entry, heavy drag, reduced grip and power                                                                                                        |
+| Nature      | The open landscape off the road: loose grip, fast — up to ~150 km/h                                                                                                              |
+
+Asphalt (`TUNING.surfaces.grip.asphalt`) is not a different handling model,
+because there isn't one: the same grip ceiling that decides how sideways
+the car is on gravel just sits higher, so everything follows from it. The
+slide starts later and settles faster, the line through a corner is
+tighter, and the drifts that DO happen are the ones you committed to —
+entered hot, flicked, or pulled on the handbrake. The tarmac sections are
+laid as long runs joined to the stage at planned junctions (R15/R17 in
+[track-generator.md](track-generator.md)), so a stretch of grip is an
+event in the stage rather than a texture swap.
+
+## The road's cross-section
+
+A rally road is not a flat carpet ruled onto the landscape, and the car
+feels the difference (`engine/mapgen/road.ts`, R16 — one module the drawn
+ribbon, the terrain's verge and the physics all read):
+
+- **Camber.** The road is crowned so water runs off it; the further out
+  you run, the more the ground falls away under you and the more the car
+  is shed toward the outside.
+- **The worn line.** Two tracks run down every gravel road where every car
+  before you put its wheels: a little lower than the road beside them, so
+  the car settles into them and has to be steered out. Asphalt polishes
+  rather than ruts.
+- **The mat.** Asphalt is laid ON the ground: the mat stands proud of the
+  verge with its edge chippings spilled down the side, and the joint at
+  each end of a sealed run ramps rather than steps.
+- **The ditch.** Past the shoulder the ground drops, then climbs back to
+  the landscape. Running wide is no longer a scare — it is a wheel in a
+  ditch, and the ditch is drawn by the road ribbon (sampled every 2 m)
+  rather than the 14 m ground lattice, which could not hold one.
 
 ## The open world
 
@@ -120,9 +152,16 @@ not a mistake anymore; it is exploration:
   ground caps pace around 150 km/h (`TUNING.surfaces.natureTop`); the road
   is faster, always.
 - **Water** — the landscape floods below the water table
-  (`terrain.LAKE_Y`): lakes, and whole sea basins. Shallows and streams
-  slow the car and splash; **deep water is a crash** — splash, `crash`
-  event, and a respawn on the track at last progress.
+  (`terrain.LAKE_Y`): lakes, sea basins, and the rivers that run into them
+  (R18). Shallows and fords slow the car and splash; **deep water is a
+  crash** — splash, `crash` event, and a respawn on the track at last
+  progress. The channel under a bridge is cut deep enough to qualify, so
+  going over a parapet is a drowning, not a shortcut.
+- **Other people's roads** — the asphalt branch the route abandons at each
+  junction is real road: the terrain flattens its shelf, the forest keeps
+  off it, and a car that drives past the tape gets tarmac grip on it
+  (`terrain.spurSurfaceAt`). It runs off the map; where it goes is between
+  the player and the horizon.
 - **Solid props and the forest** — the wild scatters boulders and fallen
   trunks (`terrain.obstaclesNear`), and the forest's trees stand on solid
   trunks of their own (`terrain.treesNear`, placed by the same engine-side

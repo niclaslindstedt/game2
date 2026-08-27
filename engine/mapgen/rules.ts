@@ -32,9 +32,75 @@
 //   R12 A ford sits in a dip: the road eases down to FLAT water and climbs
 //       back out. Water never stands on a rise — it collects at a local low
 //       point, fed by the stream that crosses the road there.
+//   R13 A water crossing too wide to wade carries a BRIDGE instead of a
+//       ford: the road stays level across it, the water runs in a ravine
+//       below, and the deck is timber up to `bridge.timberMax` — past that
+//       only concrete spans it.
+//   R14 The inside of a sharp corner is GUARDED: a turn (or a combination)
+//       that bends past `guard.angle` gets the ground between its entry and
+//       its exit filled with a steep mound or a dense grove, so cutting
+//       across the grass costs more than the corner does.
+//   R15 Asphalt comes in RUNS, never a chequerboard: the paving field lays
+//       the road down in sections hundreds of meters long, and the knobs'
+//       `asphalt` is the share of the stage that comes out paved.
 
 export type TurnSeverity = "soft" | "medium" | "hard";
 export type SegmentFeature = "none" | "jump" | "water" | "crest";
+/** How a stage crosses water: wade through it, or span it. */
+export type Crossing = "ford" | "timber" | "concrete";
+
+/** The generator's DIALS — four numbers, each 0..1, that a player (or the
+ * tooling) turns to ask for a different kind of stage. They never break a
+ * rule: they move the ranges the rules draw from, and 0.5 on every dial is
+ * the stage this generator built before they existed. */
+export type StageKnobs = {
+  /** How hilly: the rolling road profile's amplitude and the landscape's
+   * relief around it. 0 is a plain, 1 is mountain country. */
+  elevation: number;
+  /** How wet: how often water crosses the road (and how wide, which is
+   * what decides ford vs bridge), and how much of the nature is lake. */
+  water: number;
+  /** How forested: the density of the solid trunk field the car crashes
+   * into. 0 is open heath, 1 is closed forest. */
+  trees: number;
+  /** The share of the road that is asphalt, 0..1 — grip, tighter lines,
+   * and tire smoke instead of a gravel plume. */
+  asphalt: number;
+};
+
+/** The default dial positions — the stage the rules built before the knobs
+ * existed, so an un-knobbed call keeps its old character. */
+export const DEFAULT_KNOBS: StageKnobs = {
+  elevation: 0.5,
+  water: 0.5,
+  trees: 0.5,
+  // Sealed road is a guest on a rally stage, not the host: a quarter of it
+  // is enough for the tarmac sections to be an event, and the sim says
+  // that is about what the stage's drift time can pay for.
+  asphalt: 0.25,
+};
+
+function clamp01(v: number): number {
+  return v < 0 ? 0 : v > 1 ? 1 : Number.isFinite(v) ? v : 0;
+}
+
+/** Fill in and clamp a partial set of dials. Every entry point takes
+ * `Partial<StageKnobs>` and runs it through here, so a knob is always a
+ * number in 0..1 by the time any rule reads it. */
+export function resolveKnobs(knobs?: Partial<StageKnobs>): StageKnobs {
+  return {
+    elevation: clamp01(knobs?.elevation ?? DEFAULT_KNOBS.elevation),
+    water: clamp01(knobs?.water ?? DEFAULT_KNOBS.water),
+    trees: clamp01(knobs?.trees ?? DEFAULT_KNOBS.trees),
+    asphalt: clamp01(knobs?.asphalt ?? DEFAULT_KNOBS.asphalt),
+  };
+}
+
+/** Read a knob onto a `{ min, max }` band — the one way a dial ever
+ * reaches a rule. */
+export function knobScale(knob: number, band: { min: number; max: number }): number {
+  return band.min + (band.max - band.min) * knob;
+}
 
 /** The menu's stage lengths. The finite ones map to a length band sized for
  * the target minutes at measured bot pace; `endless` streams new sections
@@ -153,6 +219,10 @@ export const STAGE_RULES = {
      * wave the gentler its grade — that is what keeps the road rolling
      * rather than rippling. */
     roughness: { min: 0.28, max: 0.38 },
+    /** The `elevation` knob multiplies the amplitude by this band — a flat
+     * dial still rolls a little (a billiard table is not a rally stage),
+     * a full one doubles the hills the road climbs. */
+    knob: { min: 0.4, max: 2 },
   },
 
   /** R6 — jump placement. */
@@ -174,9 +244,94 @@ export const STAGE_RULES = {
   water: {
     minStraight: 100,
     length: { min: 8, max: 16 },
+    /** Widest water the wheels may go THROUGH, meters (R13). Anything
+     * wider is a river, and a river gets a deck over it — this is the one
+     * number that decides which. */
+    fordMax: 16,
     clearAfterJump: 50, // meters past a lip before water may start
     apron: 30,
     bedDepth: 0.5,
+  },
+
+  /** R13 — the crossings a car cannot wade. A ford is water the wheels go
+   * THROUGH; past `fordMax` the water is a river, and a river gets a deck
+   * over it. The span decides the architecture: a timber deck is two
+   * trunks and a plank floor, which only reaches so far — a wider gap
+   * needs concrete piers. The road stays level across the whole deck (a
+   * bridge is the one place the rolling profile is switched off) and the
+   * water runs `clearance` below it, deep enough to drown a car that
+   * misses the parapet. */
+  bridge: {
+    minStraight: 120,
+    /** Span band, meters. The `water` knob decides where in it a crossing
+     * lands, so a wet stage gets the big concrete spans. */
+    span: { min: 18, max: 52 },
+    /** Widest span a timber deck carries; past it, concrete. */
+    timberMax: 28,
+    /** Level road each side of the deck, meters — the run-on that keeps
+     * the approach readable and the deck out of the segment's ends. */
+    margin: 20,
+    /** Water surface below the deck, meters, per deck kind. */
+    clearance: { timber: 3.2, concrete: 5.5 },
+    /** How deep the channel is cut below its own surface, m — deeper than
+     * TUNING.crash.deepWater, so going over the side is a sinking. */
+    depth: 1.8,
+    /** Meters past a jump's lip before a deck may start. */
+    clearAfterJump: 70,
+  },
+
+  /** R14 — the corner guard. A sharp corner whose inside is open grass is
+   * not a corner at all: the fast line is straight across it. Every turn
+   * combination that bends past `angle` gets its inside filled — a steep
+   * mound where there is room for one, a dense grove where there is not.
+   * Neither is a wall: a mound can be climbed and a grove threaded, but
+   * both cost more than the corner they replace, which is the point. */
+  guard: {
+    /** Total bend that makes a combination worth cutting, radians. */
+    angle: 1.5,
+    /** Spacing of guard patches along the shortcut, meters. */
+    spacing: 10,
+    /** Widest one patch gets, meters. */
+    maxRadius: 15,
+    /** Clearance a grove keeps from the road EDGE, meters... */
+    groveClear: 4,
+    /** ...and the wider berth a mound keeps, since its slope reaches out
+     * past its crown and must never lift the road's own shelf. */
+    moundClear: 9,
+    /** Under this radius a patch is not worth building at all, and under
+     * `minMoundRadius` it can only ever be a grove, m. */
+    minRadius: 2.5,
+    minMoundRadius: 7,
+    /** Mound height per meter of its radius, and the ceiling — a mound is
+     * always steep enough that climbing it beats nothing. */
+    rise: 0.9,
+    maxHeight: 18,
+  },
+
+  /** R15 — the paving field. The stage ALTERNATES: a run of gravel, a run
+   * of asphalt, a run of gravel. `run` is how long one sealed section is,
+   * meters — long, because what the tarmac has to read as is a road the
+   * rally borrows for a while (R17) and not a chequerboard — and the
+   * gravel between two of them is stretched to whatever makes
+   * `knobs.asphalt` the share of the stage that comes out sealed, inside
+   * `gap`. Under `floor` the dial means none at all: one short section of
+   * tarmac in a seven-kilometer stage is not a feature, it is a mistake. */
+  paving: {
+    run: { min: 350, max: 800 },
+    gap: { min: 260, max: 6000 },
+    floor: 0.03,
+    /** R17 — a surface change is a JUNCTION, and a junction is a place
+     * where one road meets another, not a place where two roads dissolve
+     * into each other. So the change only ever happens at a CORNER inside
+     * this angle band: the route arrives on one road, turns onto the
+     * other, and the road it turned off carries straight on past the
+     * junction (taped shut). Too shallow a corner and the two roads merge
+     * at a glance instead of meeting; too tight and the junction is a
+     * hairpin, which is not how roads are laid out either. */
+    junctionAngle: { min: Math.PI / 3, max: Math.PI * 0.62 },
+    /** How far the tangents of that corner run before they meet, capped —
+     * the junction proper sits at their intersection, m. */
+    maxJunctionOffset: 60,
   },
 
   /** R8 — crest placement. A blind brow is a long, gentle rise that hides
@@ -199,8 +354,28 @@ export const STAGE_RULES = {
   /** R10 — minimum distance between non-adjacent centerline points. */
   minSelfDistance: 30,
 
-  /** Feature probabilities per eligible straight. */
+  /** Feature probabilities per eligible straight. The water entry is the
+   * chance of ANY crossing; the `water` knob scales it and splits it into
+   * fords and bridges. */
   featureChance: { jump: 0.4, water: 0.35, crest: 0.3 },
+
+  /** Everything the `water` knob reaches. */
+  wet: {
+    /** Multiplier on `featureChance.water`: a dry stage fords the odd
+     * stream, a wet one meets water every other straight. */
+    crossingChance: { min: 0.3, max: 1.8 },
+    /** Share of crossings too wide to wade — the ones that get a deck. */
+    bridgeShare: { min: 0.15, max: 0.7 },
+    /** How far up the bridge span band a stage reaches, 0..1: the dial is
+     * what decides whether its rivers need concrete. */
+    spanReach: { min: 0.3, max: 1 },
+    /** How much of the far landscape sinks under the water table into
+     * ponds and lakes — the water the road runs PAST rather than over. */
+    ponds: { min: 0, max: 1 },
+  },
+
+  /** The `trees` knob multiplies the solid trunk field's density. */
+  forest: { density: { min: 0.2, max: 2 } },
 
   /** Chance the next segment is a turn rather than a straight. */
   turnChance: 0.72,
@@ -226,4 +401,6 @@ export type SegmentPlan = {
   lipHeight?: number;
   /** Crest-only: brow height in meters. */
   crestHeight?: number;
+  /** Water-only (R13): how the road gets across — waded, or on a deck. */
+  crossing?: Crossing;
 };

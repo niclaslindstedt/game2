@@ -10,6 +10,7 @@ import {
   compileTrack,
   createTerrain,
   STAGE_RULES,
+  type StageKnobs,
   type StageLength,
 } from "../mapgen/index.ts";
 import { carById } from "./defs/cars.ts";
@@ -96,6 +97,10 @@ export type CreateGameOptions = {
   /** Race conditions. Time of day is presentation-only; weather sets the
    * wind band (TUNING.wind.speed). Defaults: day, clear. */
   env?: { timeOfDay?: TimeOfDay; weather?: Weather };
+  /** The generator's dials (rules.ts) for the stage this run compiles.
+   * Ignored when a pre-compiled `track` is handed in — that track carries
+   * the dials it was built with. */
+  knobs?: Partial<StageKnobs>;
 };
 
 /** Wind direction, mean speed, and gust phase are seeded on their own
@@ -128,7 +133,8 @@ function windAt(env: RaceEnv, t: number): { x: number; z: number } {
 
 export function createGame(options: CreateGameOptions): GameState {
   const spec = carById(options.carId ?? "compact");
-  const track = options.track ?? compileStage(options.seed, options.length ?? "medium");
+  const track =
+    options.track ?? compileStage(options.seed, options.length ?? "medium", options.knobs);
   const env = buildEnv(
     options.seed,
     options.env?.timeOfDay ?? "day",
@@ -161,6 +167,13 @@ export function createGame(options: CreateGameOptions): GameState {
     stats: freshStats(),
     rng: createRng((options.seed ^ 0x9e3779b9) >>> 0),
   };
+}
+
+/** What the car is driving on when it is not on the stage road: water it
+ * has waded into, the mat of an abandoned asphalt branch, or plain nature. */
+function offRoadSurface(state: GameState, x: number, z: number): "water" | "nature" | "asphalt" {
+  if (state.terrain.waterAt(x, z) !== null) return "water";
+  return state.terrain.spurSurfaceAt(x, z) === "asphalt" ? "asphalt" : "nature";
 }
 
 function respawn(state: GameState, events: GameEvent[]): void {
@@ -246,7 +259,10 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     const right = ground(car.x + cosH * grade, car.z - sinH * grade);
     const left = ground(car.x - cosH * grade, car.z + sinH * grade);
     ctx = {
-      surface: terrain.waterAt(car.x, car.z) !== null ? "water" : "nature",
+      // Off the stage is not always off the ROAD: the asphalt branches the
+      // route abandons at its junctions (R17) are real tarmac, and a car
+      // exploring one gets tarmac grip on it.
+      surface: offRoadSurface(state, car.x, car.z),
       groundY: here,
       slope: (ahead - behind) / (2 * grade),
       slopeLat: (right - left) / (2 * grade),
@@ -269,6 +285,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
       surface: preFix.surface,
       groundY: preFix.elevation,
       slope: preFix.slope,
+      slopeLat: preFix.slopeLat,
       roadCurve: lipNear ? 0 : curvatureAt(track, preFix.index, T.air.crestSpan),
       windX: state.wind.x,
       windZ: state.wind.z,
@@ -317,9 +334,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   const nowSurface = car.airborne
     ? state.surface
     : fix.offRoad
-      ? terrain.waterAt(car.x, car.z) !== null
-        ? "water"
-        : "nature"
+      ? offRoadSurface(state, car.x, car.z)
       : track.samples[fix.index].surface;
   if (!car.airborne && nowSurface === "water" && state.surface !== "water") {
     events.push({ type: "splash" });

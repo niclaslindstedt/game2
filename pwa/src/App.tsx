@@ -4,7 +4,8 @@
 // timestep game loop (engine at 120 Hz, render per frame; the loop idles
 // while the menu is up), the daily-seed stage rotation, and the PWA update
 // toast. The heavy state lives in refs; the HUD re-renders from a ~12 Hz
-// snapshot. URL params (?seed=, ?tod=, ?weather=, ?car=, ?start=1) pin a
+// snapshot. URL params (?seed=, ?tod=, ?weather=, ?car=, ?length=, the four
+// generator dials ?elevation= ?water= ?trees= ?asphalt=, and ?start=1) pin a
 // run for tooling and screenshots.
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -15,6 +16,7 @@ import {
   carById,
   compileStage,
   createGame,
+  resolveKnobs,
   status,
   step,
   type GameEvent,
@@ -38,8 +40,10 @@ import {
 } from "./game/hud.tsx";
 import { buildMinimap } from "./game/minimap.tsx";
 import {
+  DEFAULT_STAGE_KNOBS,
   PauseMenu,
   PreRaceMenu,
+  STAGE_DIALS,
   STAGE_LENGTH_OPTIONS,
   TIMES_OF_DAY,
   WEATHERS,
@@ -64,6 +68,7 @@ function initialSettings(): RaceSettings {
     weather: "clear",
     carId: "compact",
     length: "medium",
+    knobs: { ...DEFAULT_STAGE_KNOBS },
   };
   try {
     const stored = localStorage.getItem(SETTINGS_KEY);
@@ -81,6 +86,14 @@ function initialSettings(): RaceSettings {
   if (car === "compact" || car === "classic") settings.carId = car;
   const length = params.get("length");
   if (STAGE_LENGTH_OPTIONS.some((l) => l.id === length)) settings.length = length as StageLength;
+  // The generator's dials, each 0..1 — the tooling pins a stage's character
+  // the same way it pins its seed.
+  settings.knobs = resolveKnobs(settings.knobs);
+  for (const dial of STAGE_DIALS) {
+    const raw = Number(params.get(dial.key));
+    if (Number.isFinite(raw) && params.get(dial.key) !== null) settings.knobs[dial.key] = raw;
+  }
+  settings.knobs = resolveKnobs(settings.knobs);
   return settings;
 }
 
@@ -221,7 +234,9 @@ export function App() {
   menuOpenRef.current = menuOpen;
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
-  const trackRef = useRef<{ seed: number; length: StageLength; track: Track } | null>(null);
+  /** The compiled stage, cached under everything that decides what it IS:
+   * the seed, the length band, and the dials. */
+  const trackRef = useRef<{ key: string; track: Track } | null>(null);
 
   const pwa = usePwaUpdate({
     base: import.meta.env.BASE_URL,
@@ -244,16 +259,9 @@ export function App() {
     // An endless track is never reused: a restart must begin from a fresh
     // opening window, not from however far the last run streamed (the
     // renderer has long since dropped the world around the start).
-    if (
-      trackRef.current?.seed !== nextSeed ||
-      trackRef.current.length !== s.length ||
-      s.length === "endless"
-    ) {
-      trackRef.current = {
-        seed: nextSeed,
-        length: s.length,
-        track: compileStage(nextSeed, s.length),
-      };
+    const key = `${nextSeed}/${s.length}/${STAGE_DIALS.map((d) => s.knobs[d.key]).join(",")}`;
+    if (trackRef.current?.key !== key || s.length === "endless") {
+      trackRef.current = { key, track: compileStage(nextSeed, s.length, s.knobs) };
     }
     finishTimeRef.current = null;
     const state = createGame({

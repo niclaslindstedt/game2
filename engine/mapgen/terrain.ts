@@ -13,7 +13,12 @@
 
 import { createRng } from "../lib/prng.ts";
 import { hash2, smooth, valueNoise } from "../lib/noise.ts";
-import type { Track } from "./compile.ts";
+import type { BridgeDeck, Surface, Track, TrackSample } from "./compile.ts";
+import { createGuardField, type CornerGuard, type GuardField } from "./guards.ts";
+import { traceRivers, type River, type RiverAnchor } from "./river.ts";
+import { corridorOffset, ROAD_CROSS } from "./road.ts";
+import { STAGE_RULES as R, knobScale } from "./rules.ts";
+import { createSpurIndex, type SpurIndex } from "./spurs.ts";
 
 /** The water table: ground below this floods into lakes and seas, m. */
 export const LAKE_Y = -11;
@@ -33,11 +38,21 @@ function clamp01(t: number): number {
 // ── Streams ───────────────────────────────────────────────────────────────
 
 export type Stream = {
-  /** Water surface centerline, world space, source first. */
-  points: { x: number; z: number; y: number }[];
-  /** Water surface half-width, meters. */
+  /** Water surface centerline, world space, source first — each point
+   * carrying the half-width of the water there, because a river is not the
+   * same size along its length (R18). */
+  points: { x: number; z: number; y: number; w: number }[];
+  /** Widest half-width in this piece, meters — what the bounding box is
+   * padded by and what a cheap rejection tests against. */
   halfWidth: number;
-  /** Arc position of the ford it crosses (chunk association / pruning). */
+  /** How far below its surface the bed is cut, m — a ford's is ankle-deep
+   * and a bridged river's is over the roof (R13). */
+  depth: number;
+  /** True when the road crosses this water on a DECK rather than through
+   * it: the renderer spans it, and the water runs well below the road. */
+  bridged: boolean;
+  /** Arc position of the crossing this piece belongs to (chunk
+   * association / pruning). */
   centerS: number;
   /** Loose bounding box (bed + banks), for cheap carve rejection. */
   minX: number;
@@ -46,102 +61,118 @@ export type Stream = {
   maxZ: number;
 };
 
-/** How far the stream runs out from the road on each side, meters. */
-const REACH = 130;
-/** Polyline spacing along the stream, meters. */
-const STEP = 12;
-/** How far below the water surface the bed is carved, meters. */
+/** How far below the water surface a ford's bed is carved, meters. */
 const BED_DEPTH = 0.45;
 /** Bank blend distance from the water's edge back to the landscape, m. */
 const BANK = 9;
-/** Water grade away from the ford: up toward the source, down the outflow. */
-const SOURCE_RISE = 0.035;
-const OUTFLOW_FALL = 0.03;
+/** Points per sliced piece of river — enough that a bounding box is worth
+ * testing, few enough that a test which passes has little left to walk. */
+const RIVER_CHUNK = 8;
 
-/** Build stream descriptors for every complete water run in
- * `samples[fromIndex..)`. `farHeight` samples the landscape's far field so
- * the stream can tell its uphill side from its downhill side — water comes
- * FROM the high ground, never out of nowhere. Deterministic in the track
- * seed and the ford's position. */
-export function computeStreams(
-  track: Track,
-  fromIndex: number,
-  farHeight: (x: number, z: number) => number,
-): Stream[] {
-  const samples = track.samples;
-  const streams: Stream[] = [];
-  let i = Math.max(0, fromIndex);
-  // Never split a run: back up to its start if we landed inside one.
-  while (i > 0 && samples[i - 1].surface === "water") i--;
-  for (; i < samples.length; i++) {
-    if (samples[i].surface !== "water") continue;
-    let j = i;
-    while (j < samples.length && samples[j].surface === "water") j++;
-    const mid = samples[Math.floor((i + j - 1) / 2)];
-    const runLength = samples[j - 1].s - samples[i].s + track.step;
-    const rng = createRng((track.seed ^ (Math.round(mid.s) * 2654435761)) >>> 0);
-
-    // The road's right axis is the stream's line of travel.
-    const rx = Math.cos(mid.heading);
-    const rz = -Math.sin(mid.heading);
-    // Uphill side = the side whose far field stands higher.
-    const highRight =
-      farHeight(mid.x + rx * REACH * 0.7, mid.z + rz * REACH * 0.7) >=
-      farHeight(mid.x - rx * REACH * 0.7, mid.z - rz * REACH * 0.7);
-    const sourceSign = highRight ? 1 : -1;
-
-    const meander = rng.range(6, 14);
-    const phase = rng.range(0, Math.PI * 2);
-    const wave = rng.range(0.35, 0.6);
-    const points: Stream["points"] = [];
-    const n = Math.round(REACH / STEP);
-    // Walk source → outflow so `points` always descends.
-    for (let k = n; k >= -n; k--) {
-      const dist = k * STEP; // positive toward the source
-      const abs = Math.abs(dist);
-      // The meander sways along the ROAD direction and dies out at the
-      // crossing, so under the road the stream runs straight at the ford.
-      const sway = meander * Math.sin(k * wave + phase) * smooth((abs - 14) / 40);
-      const fx = mid.x + rx * dist * sourceSign + Math.sin(mid.heading) * sway;
-      const fz = mid.z + rz * dist * sourceSign + Math.cos(mid.heading) * sway;
-      let y = mid.elevation + (dist > 0 ? dist * SOURCE_RISE : dist * OUTFLOW_FALL);
-      // The far ends duck under the landscape, so the water is born from
-      // the ground and sinks back into it instead of stopping mid-air.
-      if (abs > REACH - STEP * 1.5) y -= 2.2;
-      points.push({ x: fx, z: fz, y });
-    }
-
-    const halfWidth = Math.min(8, Math.max(3.5, runLength / 2.6));
+/** Cut one traced river into the pieces every consumer actually queries:
+ * a short polyline with its own bounding box. Consecutive pieces overlap
+ * by a point, so the water is continuous across the seam. */
+function sliceRiver(river: River): Stream[] {
+  const out: Stream[] = [];
+  const points = river.points;
+  for (let i = 0; i + 1 < points.length; i += RIVER_CHUNK - 1) {
+    const slice = points.slice(i, i + RIVER_CHUNK);
+    if (slice.length < 2) break;
     let minX = Infinity;
     let maxX = -Infinity;
     let minZ = Infinity;
     let maxZ = -Infinity;
-    for (const p of points) {
+    let halfWidth = 0;
+    let bestAnchor = river.anchors[0];
+    let bestD = Infinity;
+    for (const p of slice) {
       if (p.x < minX) minX = p.x;
       if (p.x > maxX) maxX = p.x;
       if (p.z < minZ) minZ = p.z;
       if (p.z > maxZ) maxZ = p.z;
+      if (p.halfWidth > halfWidth) halfWidth = p.halfWidth;
+      for (const anchor of river.anchors) {
+        const d = Math.hypot(anchor.x - p.x, anchor.z - p.z);
+        if (d < bestD) {
+          bestD = d;
+          bestAnchor = anchor;
+        }
+      }
     }
     const pad = halfWidth + BANK;
-    streams.push({
-      points,
+    out.push({
+      points: slice.map((p) => ({ x: p.x, z: p.z, y: p.y, w: p.halfWidth })),
       halfWidth,
-      centerS: mid.s,
+      depth: river.depth,
+      bridged: river.bridged,
+      centerS: bestAnchor.s,
       minX: minX - pad,
       maxX: maxX + pad,
       minZ: minZ - pad,
       maxZ: maxZ + pad,
     });
-    i = j;
   }
-  return streams;
+  return out;
 }
 
-/** Distance from a point to the stream's centerline, plus the water height
- * at the closest spot. */
-function nearestOnStream(s: Stream, x: number, z: number): { d: number; waterY: number } {
+/** Collect the road's water crossings in `samples[fromIndex..)` as river
+ * anchors (R18): where the road meets water, at what level, how wide, and
+ * whether it wades or spans. The WATER itself is then traced through them
+ * — the road says where it crosses, the landscape says where the river
+ * runs. */
+export function collectAnchors(track: Track, fromIndex: number): RiverAnchor[] {
+  const samples = track.samples;
+  const anchors: RiverAnchor[] = [];
+  const wet = (s: TrackSample): boolean => s.surface === "water" || s.deck !== null;
+  let i = Math.max(0, fromIndex);
+  // Never split a run: back up to its start if we landed inside one.
+  while (i > 0 && wet(samples[i - 1])) i--;
+  for (; i < samples.length; i++) {
+    if (!wet(samples[i])) continue;
+    let j = i;
+    while (j < samples.length && wet(samples[j])) j++;
+    const mid = samples[Math.floor((i + j - 1) / 2)];
+    const runLength = samples[j - 1].s - samples[i].s + track.step;
+    const deck = mid.deck;
+    anchors.push({
+      x: mid.x,
+      z: mid.z,
+      // A ford's water lies at the road; a deck stands its clearance above
+      // it, and the channel below is cut deep enough to drown a car.
+      waterY: mid.elevation - (deck ? R.bridge.clearance[deck] : 0),
+      halfWidth: deck
+        ? Math.max(6, runLength / 2 - 1.5)
+        : Math.min(8, Math.max(3.5, runLength / 2.6)),
+      depth: deck ? R.bridge.depth : BED_DEPTH,
+      bridged: deck !== null,
+      s: mid.s,
+    });
+    i = j;
+  }
+  return anchors;
+}
+
+/** Trace the watercourses a batch of crossings implies and cut them into
+ * queryable pieces — the one entry point the terrain field uses. */
+export function computeStreams(
+  seed: number,
+  anchors: RiverAnchor[],
+  farHeight: (x: number, z: number) => number,
+): Stream[] {
+  return traceRivers(seed, anchors, farHeight, LAKE_Y).flatMap(sliceRiver);
+}
+
+/** Distance from a point to the water's centerline, plus the surface
+ * height and the half-width THERE — a river narrows and widens along its
+ * length, so every query has to answer with the local size. */
+function nearestOnStream(
+  s: Stream,
+  x: number,
+  z: number,
+): { d: number; waterY: number; width: number } {
   let bestD2 = Infinity;
   let waterY = 0;
+  let width = s.halfWidth;
   for (let i = 0; i < s.points.length - 1; i++) {
     const a = s.points[i];
     const b = s.points[i + 1];
@@ -157,9 +188,10 @@ function nearestOnStream(s: Stream, x: number, z: number): { d: number; waterY: 
     if (d2 < bestD2) {
       bestD2 = d2;
       waterY = a.y + (b.y - a.y) * t;
+      width = a.w + (b.w - a.w) * t;
     }
   }
-  return { d: Math.sqrt(bestD2), waterY };
+  return { d: Math.sqrt(bestD2), waterY, width };
 }
 
 /** Carve the stream valley into a landscape height: inside the water line
@@ -169,10 +201,10 @@ export function carveGround(streams: Stream[], x: number, z: number, base: numbe
   let ground = base;
   for (const s of streams) {
     if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) continue;
-    const { d, waterY } = nearestOnStream(s, x, z);
-    if (d > s.halfWidth + BANK) continue;
-    const bed = waterY - BED_DEPTH;
-    const target = bed + smooth((d - s.halfWidth) / BANK) * Math.max(0, base - bed);
+    const { d, waterY, width } = nearestOnStream(s, x, z);
+    if (d > width + BANK) continue;
+    const bed = waterY - s.depth;
+    const target = bed + smooth(clamp01((d - width) / BANK)) * Math.max(0, base - bed);
     if (target < ground) ground = target;
   }
   return ground;
@@ -185,7 +217,8 @@ export function inStream(streams: Stream[], x: number, z: number, margin: number
     if (x < s.minX - margin || x > s.maxX + margin || z < s.minZ - margin || z > s.maxZ + margin) {
       continue;
     }
-    if (nearestOnStream(s, x, z).d < s.halfWidth + BANK + margin) return true;
+    const near = nearestOnStream(s, x, z);
+    if (near.d < near.width + BANK + margin) return true;
   }
   return false;
 }
@@ -193,12 +226,21 @@ export function inStream(streams: Stream[], x: number, z: number, margin: number
 /** Water surface height of a stream at a point, or null when the point is
  * not over stream water. */
 function streamWaterAt(streams: Stream[], x: number, z: number): number | null {
+  let best: number | null = null;
+  let bestD = Infinity;
   for (const s of streams) {
     if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) continue;
-    const { d, waterY } = nearestOnStream(s, x, z);
-    if (d < s.halfWidth) return waterY;
+    const { d, waterY, width } = nearestOnStream(s, x, z);
+    // The NEAREST water wins, not the first found: two reaches of the same
+    // course (or two courses) can both cover a point, and answering with
+    // whichever happened to be indexed first puts the surface at the wrong
+    // height — under a bridge, that is metres of clearance out.
+    if (d < width && d < bestD) {
+      bestD = d;
+      best = waterY;
+    }
   }
-  return null;
+  return best;
 }
 
 // ── Wild props ────────────────────────────────────────────────────────────
@@ -262,10 +304,10 @@ const TREE_CELL = 10;
  * size this sets the closed forest at roughly a trunk per 500 m² — gaps a
  * car can thread, walls it cannot ignore. */
 const TREE_DENSITY = 0.22;
-/** Trees keep this far from the road centerline beyond the half-width, m —
- * tighter than the boulders: running wide brushes the verge, leaving the
- * road properly finds the forest. */
-const TREE_ROAD_CLEAR = 5;
+/** Trees keep this far from the road EDGE, m — just past the corridor the
+ * road ribbon draws (its shoulder and ditch), so running wide brushes the
+ * verge and leaving the road properly finds the forest. */
+const TREE_ROAD_CLEAR = ROAD_CROSS.reach + 1;
 
 // ── The field ─────────────────────────────────────────────────────────────
 
@@ -289,8 +331,16 @@ export type TerrainField = {
   /** Distance to the road centerline, m — Infinity out of corridor range
    * (beyond ~240 m). What placement code asks before planting near road. */
   roadDistanceAt: (x: number, z: number) => number;
+  /** The surface of any road OTHER than the stage at a point: the mat of
+   * an abandoned asphalt branch (R17), or null on open ground. The stage's
+   * own surface comes from the track samples — this is what tells the
+   * physics that a car exploring a spur is on tarmac, not in a field. */
+  spurSurfaceAt: (x: number, z: number) => Surface | null;
   /** The stream valleys cut so far (the renderer draws their water). */
   streams: Stream[];
+  /** The corner guards placed so far (R14) — the renderer reads them to
+   * dress the mounds, the tooling to draw them on a preview. */
+  guards: CornerGuard[];
   /** Solid wild props near a point (within `r` of it), collision-checked
    * by the physics and drawn by the renderer. */
   obstaclesNear: (x: number, z: number, r: number) => WildObstacle[];
@@ -375,6 +425,13 @@ export function createTerrain(track: Track): TerrainField {
   // picks where they stand, ridged noise gives them spines and saddles.
   // Sea basins: another slow mask sinks whole regions far under the water
   // table, so the rolling coast runs out into open water.
+  // How hard the landscape's own relief is turned up, and how much of it
+  // stands under water — the `elevation` and `water` dials reach the world
+  // beside the road here, exactly as they reach the road itself in the
+  // compiler's rolling profile.
+  const relief = knobScale(track.knobs.elevation, R.elevation.knob);
+  const ponds = knobScale(track.knobs.water, R.wet.ponds);
+
   const farField = (x: number, z: number): number => {
     const rolling =
       (valueNoise(x, z, 430, noiseSeed) - 0.5) * 52 +
@@ -382,12 +439,30 @@ export function createTerrain(track: Track): TerrainField {
       (valueNoise(x, z, 46, noiseSeed + 13) - 0.5) * 4;
     const mountainMask = smooth(clamp01((valueNoise(x, z, 1150, noiseSeed + 17) - 0.58) / 0.42));
     const ridge = 1 - Math.abs(2 * valueNoise(x, z, 300, noiseSeed + 19) - 1);
-    const seaMask = smooth(clamp01((valueNoise(x, z, 1600, noiseSeed + 23) - 0.6) / 0.4));
+    // The sea basins answer the `water` dial too — a DRY stage that still
+    // ran between lakes would make the dial a liar. Half a dial reproduces
+    // the threshold and depth the world had before it existed.
+    const seaMask = smooth(
+      clamp01((valueNoise(x, z, 1600, noiseSeed + 23) - (0.86 - ponds * 0.3)) / 0.34),
+    );
     // Escarpments: a wandering fault line where the ground steps down a
     // dozen meters over a few — the cliff edges the wild's spontaneous
     // jumps launch off. Recentered so the water table stays put.
     const esc = smooth(clamp01((valueNoise(x, z, 520, noiseSeed + 29) - 0.52) / 0.05));
-    return rolling + mountainMask * ridge * ridge * 70 - seaMask * 48 + esc * 13 - 6;
+    // Ponds: hollows on a tighter scale than the sea basins, sunk just far
+    // enough under the water table to fill. They are what puts water IN the
+    // nature — a lake the road runs past, a tarn behind the treeline, water
+    // to be driven into and drowned in, rather than only crossed.
+    const pond =
+      ponds > 0
+        ? smooth(clamp01((valueNoise(x, z, 340, noiseSeed + 31) - (0.9 - ponds * 0.14)) / 0.1))
+        : 0;
+    return (
+      (rolling + mountainMask * ridge * ridge * 70 + esc * 13) * relief -
+      seaMask * (30 + ponds * 26) -
+      pond * (10 + ponds * 8) -
+      6
+    );
   };
 
   // Per-side embankment grade along the stage, m per m of distance from the
@@ -399,31 +474,151 @@ export function createTerrain(track: Track): TerrainField {
   };
 
   const half = track.width / 2;
-  const shelfEnd = half + 7; // flat-ish shoulder past the rumble strips
+  const shelfEnd = half + ROAD_CROSS.reach; // the ribbon's own outer edge
+  /** How far from the road the corridor still shapes the ground, m — see
+   * rawHeight; inside the sample grid's own search reach on purpose. */
+  const CORRIDOR_RANGE = 140;
+  /** R14 — the mounds and groves that shut the inside of a sharp corner.
+   * Built here, from the corner geometry, because the ground they raise
+   * and the trunks they stand are both this field's to report. */
+  const guards: GuardField = createGuardField(track);
+
+  /** How far under the drawn ribbon the ground TILES are pinned, m. The
+   * road mesh draws the whole corridor — mat, shoulder, ditch, lip (R16) —
+   * on a 2 m sample spacing the 14 m ground lattice could never hold, so
+   * the lattice ducks below all of it and lets the ribbon be the surface
+   * anyone sees there. `groundAt` puts the physics back on the ribbon. */
+  const TILE_SINK = 0.35;
+
+  /** How far past an apron's edge it blends back into the roads it joins,
+   * m — short, because a junction has an edge in real life too. */
+  const APRON_RIM = 4;
+
+  /** How far past a branch's own corridor its shelf blends back into the
+   * landscape, m — inside the branch index's search reach, or the blend
+   * would end at a cell boundary instead of where it means to. */
+  const SPUR_BLEND = 30;
 
   const streams: Stream[] = [];
+  const spurs: SpurIndex = createSpurIndex();
+  /** How many of `track.spurs` are in the index — an ingest cursor, so it
+   * never rewinds when an endless run prunes the branches behind it. */
+  let spurCount = 0;
+
+  /** Anything with a road's cross-section: a stage sample or a branch's
+   * (the branch has no bridges, so its deck is simply absent). */
+  type RibbonSample = {
+    elevation: number;
+    surface: Surface;
+    deck?: BridgeDeck | null;
+    lift: number;
+  };
+
+  /** The corridor's own cross-section at a distance from a road's center:
+   * the mat's crown and wheel tracks inside the edge, its shoulder, ditch
+   * and lip outside it (road.ts). One function for the stage road and for
+   * an abandoned branch — they are the same kind of thing. */
+  const ribbonY = (s: RibbonSample, d: number, width: number): number =>
+    s.elevation + corridorOffset(s.surface, s.deck != null, d, width, s.lift);
+
+  /** R17 — the junction aprons, as ground: inside one the corridor is flat
+   * paved road at the junction's grade, whichever road's verge would
+   * otherwise have run through it. Returns the apron height and how much
+   * of it applies (1 in the middle, fading over the rim), or null. */
+  const apronAt = (x: number, z: number): { y: number; weight: number } | null => {
+    let best: { y: number; weight: number } | null = null;
+    for (const junction of track.junctions) {
+      const d = Math.hypot(junction.x - x, junction.z - z);
+      if (d > junction.radius + APRON_RIM) continue;
+      const weight = 1 - smooth(clamp01((d - junction.radius) / APRON_RIM));
+      if (best && best.weight >= weight) continue;
+      best = { y: junction.y, weight };
+    }
+    return best;
+  };
 
   /** The landscape before any stream is cut through it. */
   const rawHeight = (x: number, z: number): number => {
     const far = farField(x, z);
     const near = nearestSample(x, z);
-    if (!near || near.d > 240) return far;
-    const s = samples[near.index];
-    if (near.d < shelfEnd) {
-      // Under and beside the road: a shelf pinned just below road grade so
-      // the ribbon and its skirts always sit proud of the landscape — the
-      // shoulder's texture noise stays below grade too.
-      return s.elevation - 0.35 + (near.d > half ? valueNoise(x, z, 9, noiseSeed + 3) * 0.25 : 0);
+    let base: number;
+    // Past CORRIDOR_RANGE the road has no say. It is set to where the
+    // sample grid's own search actually reaches: a range beyond the search
+    // does not extend the road's influence, it just moves the point where
+    // the influence stops being found — and a blend that has not finished
+    // by then leaves a seam ruled along the search grid, which a shaded
+    // relief render shows up as a hairline running across the country.
+    if (!near || near.d > CORRIDOR_RANGE) {
+      base = far;
+    } else {
+      const s = samples[near.index];
+      const corridorY = ribbonY(s, Math.min(near.d, shelfEnd), track.width) - TILE_SINK;
+      if (near.d < shelfEnd) {
+        base = corridorY;
+      } else {
+        const grade = sideGrade(s.s, near.lateral >= 0 ? 1 : -1);
+        const embankment = s.elevation + (near.d - shelfEnd) * grade;
+        const toFar = smooth(clamp01((near.d - shelfEnd) / 110));
+        const shaped = embankment * (1 - toFar) + far * toFar;
+        const off = smooth(clamp01((near.d - shelfEnd) / 26));
+        base = corridorY * (1 - off) + shaped * off;
+      }
     }
-    const grade = sideGrade(s.s, near.lateral >= 0 ? 1 : -1);
-    const embankment = s.elevation + (near.d - shelfEnd) * grade;
-    const toFar = smooth(clamp01((near.d - shelfEnd) / 150));
-    const shaped = embankment * (1 - toFar) + far * toFar;
-    const off = smooth(clamp01((near.d - shelfEnd) / 26));
-    return (s.elevation - 0.35) * (1 - off) + shaped * off;
+    // A branch flattens its own shelf through whatever the landscape was
+    // doing there — it is a road, and roads are built, not draped. But a
+    // branch never reshapes the ground under the road it LEFT: the two run
+    // side by side for a hundred meters after a junction, and the stage
+    // road owns everything it is nearer to.
+    const spur = spurs.spurs.length > 0 ? spurs.nearest(x, z) : null;
+    if (spur) {
+      const edge = spur.spur.width / 2 + ROAD_CROSS.reach;
+      const roadD = near ? near.d : Infinity;
+      if (spur.d < edge + SPUR_BLEND && spur.d < roadD) {
+        const shelf = ribbonY(spur.sample, Math.min(spur.d, edge), spur.spur.width) - TILE_SINK;
+        const reach = 1 - smooth(clamp01((spur.d - edge) / SPUR_BLEND));
+        const mine = smooth(clamp01((roadD - spur.d) / 12));
+        const t = reach * mine;
+        base = shelf * t + base * (1 - t);
+      }
+    }
+    const apron = apronAt(x, z);
+    if (apron) {
+      const flat = apron.y - TILE_SINK;
+      base = flat * apron.weight + base * (1 - apron.weight);
+    }
+    return base + guards.riseAt(x, z);
   };
 
   const heightAt = (x: number, z: number): number => carveGround(streams, x, z, rawHeight(x, z));
+
+  /** The DRAWN corridor surface at a point — the ribbon the road mesh
+   * builds, with no tile sink under it — plus how much of it applies (1 on
+   * the road, fading to 0 where the ground lattice takes over). Null when
+   * the point is nowhere near a road. */
+  const corridorGround = (x: number, z: number): { y: number; weight: number } | null => {
+    let best: { y: number; weight: number } | null = null;
+    const consider = (s: RibbonSample, d: number, width: number): void => {
+      const edge = width / 2 + ROAD_CROSS.reach;
+      if (d > edge + 3) return;
+      const weight = 1 - smooth(clamp01((d - edge) / 3));
+      if (best && best.weight >= weight) return;
+      best = { y: ribbonY(s, Math.min(d, edge), width), weight };
+    };
+    const near = nearestSample(x, z);
+    if (near && near.d < shelfEnd + 3) consider(samples[near.index], near.d, track.width);
+    const spur = spurs.spurs.length > 0 ? spurs.nearest(x, z) : null;
+    if (spur) consider(spur.sample, spur.d, spur.spur.width);
+    // The apron wins over both: at a junction the ground IS the junction.
+    const apron = apronAt(x, z);
+    if (apron && apron.weight > 0) {
+      const under: { y: number; weight: number } = best ?? { y: apron.y, weight: apron.weight };
+      return {
+        y: apron.y * apron.weight + under.y * (1 - apron.weight),
+        weight: Math.max(apron.weight, under.weight),
+      };
+    }
+    return best;
+  };
 
   // Lattice corners are hot (every off-road step reads several), so they
   // are cached; the cache clears whenever the field itself changes shape
@@ -449,14 +644,22 @@ export function createTerrain(track: Track): TerrainField {
     const j = Math.floor(gz);
     const fx = gx - i;
     const fz = gz - j;
+    let lattice: number;
     if (fx + fz <= 1) {
       const h00 = cornerHeight(i, j);
-      return h00 + fx * (cornerHeight(i + 1, j) - h00) + fz * (cornerHeight(i, j + 1) - h00);
+      lattice = h00 + fx * (cornerHeight(i + 1, j) - h00) + fz * (cornerHeight(i, j + 1) - h00);
+    } else {
+      const h11 = cornerHeight(i + 1, j + 1);
+      lattice =
+        h11 + (1 - fx) * (cornerHeight(i, j + 1) - h11) + (1 - fz) * (cornerHeight(i + 1, j) - h11);
     }
-    const h11 = cornerHeight(i + 1, j + 1);
-    return (
-      h11 + (1 - fx) * (cornerHeight(i, j + 1) - h11) + (1 - fz) * (cornerHeight(i + 1, j) - h11)
-    );
+    // Beside a road the DRAWN surface is the ribbon, not the tile under it
+    // — its shoulder, its ditch, the lip past it (R16). The lattice is 14 m
+    // between corners and could not hold a ditch if it tried, so within the
+    // corridor the physics rides the ribbon and blends out to the tiles.
+    const corridor = corridorGround(x, z);
+    if (!corridor) return lattice;
+    return corridor.y * corridor.weight + lattice * (1 - corridor.weight);
   };
 
   const waterAt = (x: number, z: number): number | null => {
@@ -473,6 +676,22 @@ export function createTerrain(track: Track): TerrainField {
   const obSeed = rng.int(1, 1 << 30);
   let obCache = new Map<string, WildObstacle | null>();
 
+  /** Distance from a point to the nearest ABANDONED BRANCH's mat edge, or
+   * Infinity when there is none near — nothing is planted on a road, and a
+   * spur is as much a road as the stage is (R17). */
+  const spurClearance = (x: number, z: number): number => {
+    if (spurs.spurs.length === 0) return Infinity;
+    const spur = spurs.nearest(x, z);
+    return spur ? spur.d - spur.spur.width / 2 : Infinity;
+  };
+
+  const spurSurfaceAt = (x: number, z: number): Surface | null => {
+    if (spurs.spurs.length === 0) return null;
+    const spur = spurs.nearest(x, z);
+    if (!spur || spur.d > spur.spur.width / 2) return null;
+    return spur.sample.surface;
+  };
+
   const obstacleInCell = (cx: number, cz: number): WildObstacle | null => {
     const key = `${cx},${cz}`;
     const hit = obCache.get(key);
@@ -483,7 +702,7 @@ export function createTerrain(track: Track): TerrainField {
       const x = (cx + 0.12 + hash2(cx, cz, obSeed + 1) * 0.76) * OB_CELL;
       const z = (cz + 0.12 + hash2(cx, cz, obSeed + 2) * 0.76) * OB_CELL;
       const near = nearestSample(x, z);
-      const clear = !near || near.d > half + OB_ROAD_CLEAR;
+      const clear = (!near || near.d > half + OB_ROAD_CLEAR) && spurClearance(x, z) > OB_ROAD_CLEAR;
       if (clear && !inStream(streams, x, z, 1)) {
         // Feet on the RIDDEN ground: the car collides against `y`, so a
         // prop planted on the analytic field could hover a step above the
@@ -544,6 +763,8 @@ export function createTerrain(track: Track): TerrainField {
   };
 
   const treeSeed = rng.int(1, 1 << 30);
+  /** The `trees` dial, straight onto the forest's density. */
+  const forestScale = knobScale(track.knobs.trees, R.forest.density);
   let treeCache = new Map<string, WildObstacle | null>();
 
   const treeInCell = (cx: number, cz: number): WildObstacle | null => {
@@ -555,9 +776,10 @@ export function createTerrain(track: Track): TerrainField {
     const x = (cx + 0.1 + hash2(cx, cz, treeSeed + 1) * 0.8) * TREE_CELL;
     const z = (cz + 0.1 + hash2(cx, cz, treeSeed + 2) * 0.8) * TREE_CELL;
     const grove = groveAt(x, z);
-    if (hash2(cx, cz, treeSeed) < TREE_DENSITY * GROVES[grove].density) {
+    if (hash2(cx, cz, treeSeed) < TREE_DENSITY * forestScale * GROVES[grove].density) {
       const near = nearestSample(x, z);
-      const clear = !near || near.d > half + TREE_ROAD_CLEAR;
+      const clear =
+        (!near || near.d > half + TREE_ROAD_CLEAR) && spurClearance(x, z) > TREE_ROAD_CLEAR;
       if (clear && !inStream(streams, x, z, 1.5)) {
         // Feet on the RIDDEN lattice ground, same as the props: the trunk
         // must stand exactly on the surface the car drives.
@@ -587,6 +809,36 @@ export function createTerrain(track: Track): TerrainField {
     return tree;
   };
 
+  // The guard groves' trunks (R14): the same solid trees the forest field
+  // stands, but placed by the corner they shut rather than by the quilt —
+  // and never thinned by the `trees` dial, because a corner with an open
+  // inside is a broken corner however sparse the stage's woods are.
+  const guardTrees = new Map<CornerGuard, WildObstacle[]>();
+
+  const treesOfGuard = (guard: CornerGuard): WildObstacle[] => {
+    const cached = guardTrees.get(guard);
+    if (cached) return cached;
+    const grown: WildObstacle[] = [];
+    for (const sapling of guard.saplings) {
+      const y = groundAt(sapling.x, sapling.z);
+      if (y < LAKE_Y + 1.2) continue;
+      grown.push({
+        x: sapling.x,
+        z: sapling.z,
+        y,
+        kind: "tree",
+        size: sapling.size,
+        spin: sapling.spin,
+        radius: 0.3 + 0.25 * sapling.size,
+        height: 6 * sapling.size,
+        roll: sapling.roll,
+        grove: groveAt(sapling.x, sapling.z),
+      });
+    }
+    guardTrees.set(guard, grown);
+    return grown;
+  };
+
   const treesNear = (x: number, z: number, r: number): WildObstacle[] => {
     const found: WildObstacle[] = [];
     for (
@@ -606,22 +858,48 @@ export function createTerrain(track: Track): TerrainField {
         if (dx * dx + dz * dz <= (r + tree.radius) * (r + tree.radius)) found.push(tree);
       }
     }
+    for (const guard of guards.near(x, z, r)) {
+      if (guard.kind !== "grove") continue;
+      for (const tree of treesOfGuard(guard)) {
+        const dx = tree.x - x;
+        const dz = tree.z - z;
+        if (dx * dx + dz * dz <= (r + tree.radius) * (r + tree.radius)) found.push(tree);
+      }
+    }
     return found;
   };
 
   let streamScan = 0;
 
   const sync = (carS: number): void => {
-    if (samples.length > indexed) {
+    if (samples.length > indexed || spurCount < track.spurs.length) {
       indexSamples(indexed, samples.length);
       indexed = samples.length;
-      streams.push(...computeStreams(track, streamScan, farField));
+      // The water: every crossing this stretch of road added, traced as
+      // one river through them (R18) — born on the high ground, gathering
+      // as it runs, ending in the lowest water it can find.
+      // The river reads the ground the ROAD sits in (corridor shelf and
+      // all), not the bare far field: a watercourse routed against a
+      // landscape the road does not stand on would refuse every reach
+      // between two crossings that the road itself made possible.
+      streams.push(...computeStreams(track.seed, collectAnchors(track, streamScan), rawHeight));
       streamScan = samples.length;
+      // The branches the compiler forked off at the paving junctions (R17),
+      // and the guards that shut the corners the road has now committed
+      // (R14) — placed against the road as it stands, so a guard never
+      // lands on the stage and never on a stream or a branch.
+      for (; spurCount < track.spurs.length; spurCount++) spurs.add(track.spurs[spurCount]);
+      guards.extend(
+        samples[samples.length - 1].s - (track.endless ? 250 : 0),
+        (x, z) => nearestSample(x, z)?.d ?? Infinity,
+        (x, z) => inStream(streams, x, z, 4) || spurClearance(x, z) < R.guard.moundClear,
+      );
       // New road may have arrived where a prop stood — revalidate; fresh
       // stream valleys reshape the ground, so the lattice re-samples too.
       obCache = new Map();
       treeCache = new Map();
       cornerCache = new Map();
+      guardTrees.clear();
     }
     if (!track.endless) return;
     // Forget road the run has left behind: the sample grid re-anchors to
@@ -633,9 +911,12 @@ export function createTerrain(track: Track): TerrainField {
       grid = new Map();
       indexSamples(firstIndexed, samples.length);
       while (streams.length > 0 && streams[0].centerS < floorS) streams.shift();
+      guards.pruneBefore(floorS);
+      spurs.pruneBefore(floorS);
       obCache = new Map();
       treeCache = new Map();
       cornerCache = new Map();
+      guardTrees.clear();
     }
   };
 
@@ -649,7 +930,9 @@ export function createTerrain(track: Track): TerrainField {
     farHeightAt: farField,
     waterAt,
     roadDistanceAt,
+    spurSurfaceAt,
     streams,
+    guards: guards.guards,
     obstaclesNear,
     treesNear,
     groveAt,

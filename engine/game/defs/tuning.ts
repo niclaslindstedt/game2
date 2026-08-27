@@ -158,12 +158,18 @@ export const TUNING = {
   surfaces: {
     /** Longitudinal drag per surface, 1/s. `nature` is the open landscape
      * off the road — loose but fast: the wild is a place to DRIVE, not a
-     * wall of molasses at the verge. */
-    drag: { gravel: 0.028, water: 0.5, nature: 0.032 },
-    /** Lateral grip multiplier per surface. */
-    grip: { gravel: 1.0, water: 0.55, nature: 0.7 },
+     * wall of molasses at the verge. Sealed road rolls easiest of all. */
+    drag: { gravel: 0.028, asphalt: 0.022, water: 0.5, nature: 0.032 },
+    /** Lateral grip multiplier per surface. Asphalt is the outlier the
+     * stage's paved sections are FOR: the tires hold a third again as
+     * much, so the corner that needed a slide on gravel can be driven
+     * round, the line tightens, and a drift there has to be asked for —
+     * committed entry, handbrake, or plain too much speed. It is still a
+     * rally car on a country road: ask hard enough and it goes sideways,
+     * just on smoking rubber instead of flying gravel. */
+    grip: { gravel: 1.0, asphalt: 1.35, water: 0.55, nature: 0.7 },
     /** Throttle effectiveness per surface. */
-    power: { gravel: 1.0, water: 0.7, nature: 0.8 },
+    power: { gravel: 1.0, asphalt: 1.08, water: 0.7, nature: 0.8 },
     /** Rough ground caps pace where gearing cannot: above this speed the
      * nature surface pulls the car back hard (about 150 km/h) — a linear
      * per-surface drag would instead stall the box under its own upshift

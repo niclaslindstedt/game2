@@ -13,10 +13,17 @@
 import * as THREE from "three";
 import {
   GROVES,
+  ROAD_CROSS,
+  STAGE_RULES,
+  corridorOffset,
   createRng,
   inStream,
+  junctionThroat,
+  wearAt,
   type GameState,
+  type Spur,
   type Track,
+  type TrackSample,
   type WildObstacle,
 } from "@engine";
 
@@ -24,7 +31,7 @@ import { biomeFor, type Biome, type Community, type FloraMix } from "./biome.ts"
 import { buildFlora, type Flora, type FloraPlacement } from "./flora.ts";
 import { APRON, buildTerrain, LAKE_Y, type Terrain } from "./terrain.ts";
 import { buildStreamMeshes } from "./streams.ts";
-import { bannerTexture, gravelTexture, waterTexture } from "./textures.ts";
+import { bannerTexture, chevronTexture, gravelTexture, waterTexture } from "./textures.ts";
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -37,6 +44,73 @@ const PRUNE_BEHIND = 450;
 
 function rightOf(heading: number): { x: number; z: number } {
   return { x: Math.cos(heading), z: -Math.sin(heading) };
+}
+
+/** Anything with a road's cross-section: the stage's own samples, or an
+ * abandoned branch's (R17). The ribbon builder does not care which. */
+type Ribbon = {
+  x: number;
+  z: number;
+  heading: number;
+  elevation: number;
+  s: number;
+  surface: TrackSample["surface"];
+  lift: number;
+  deck?: TrackSample["deck"];
+};
+
+/** The road's palette. Gravel is graded dirt, worn to hardpack down the two
+ * tracks every car before you drove in, loose and pale at the edges;
+ * asphalt is bitumen, polished lighter where the tires have burnished it
+ * and grey-black between. */
+const ROAD_PAINT = {
+  gravel: { loose: "#d2b489", worn: "#8a7046" },
+  asphalt: { loose: "#3a3b40", worn: "#54555c" },
+  water: { loose: "#8fa6c6", worn: "#8fa6c6" },
+  deck: { loose: "#b7b3a8", worn: "#a4a096" },
+  shoulder: "#8a734f",
+  ditch: "#6f6a45",
+};
+
+/** Where the ribbon puts a vertex across the road, as a fraction of the
+ * half-width: dense around the wheel tracks (0.44) so the worn line has a
+ * shape, sparser between. Mirrored for the far side. */
+const MAT_STATIONS = [0, 0.18, 0.32, 0.38, 0.44, 0.5, 0.6, 0.75, 0.88, 1];
+/** ...and past the edge, in meters out from it: the mat's chamfer, the
+ * shoulder, the ditch, and the lip where the landscape takes over. */
+const VERGE_STATIONS = [
+  ROAD_CROSS.chamfer,
+  ROAD_CROSS.verge.ditchFrom,
+  (ROAD_CROSS.verge.ditchFrom + ROAD_CROSS.verge.ditchAt) / 2,
+  ROAD_CROSS.verge.ditchAt,
+  (ROAD_CROSS.verge.ditchAt + ROAD_CROSS.verge.ditchTo) / 2,
+  ROAD_CROSS.verge.ditchTo,
+  ROAD_CROSS.reach,
+];
+
+/** R17 — inside a junction, neither road wears a border: no shoulder, no
+ * ditch, no edge line. The ribbon builders drop those stations here and
+ * the junction throat pays the gap back as road. */
+function junctionAt(track: Track, x: number, z: number): number {
+  for (const junction of track.junctions) {
+    const d = Math.hypot(junction.x - x, junction.z - z);
+    if (d < junction.radius) return 1 - d / junction.radius;
+  }
+  return 0;
+}
+
+/** Signed lateral offsets of every vertex across the corridor, left to
+ * right: verge, mat, verge. */
+function stations(width: number): number[] {
+  const half = width / 2;
+  const mat = MAT_STATIONS.map((t) => t * half);
+  const out = VERGE_STATIONS.map((d) => half + d);
+  return [
+    ...out.map((d) => -d).reverse(),
+    ...mat.map((v) => -v).reverse(),
+    ...mat.slice(1),
+    ...out,
+  ];
 }
 
 /** A chunk's samples for ribbon building: the range overlapped one sample
@@ -58,6 +132,8 @@ function chunkSamples(track: Track, from: number, to: number): Track["samples"] 
         z: first.z - Math.cos(first.heading) * track.step * i,
         s: first.s - track.step * i,
         surface: "gravel",
+        deck: null,
+        lift: 0,
         jump: false,
       });
     }
@@ -72,6 +148,8 @@ function chunkSamples(track: Track, from: number, to: number): Track["samples"] 
         z: last.z + Math.cos(last.heading) * track.step * i,
         s: last.s + track.step * i,
         surface: "gravel",
+        deck: null,
+        lift: 0,
         jump: false,
       });
     }
@@ -79,32 +157,80 @@ function chunkSamples(track: Track, from: number, to: number): Track["samples"] 
   return base;
 }
 
-/** The road surface: a triangulated ribbon along the samples. */
-function buildRoad(samples: Track["samples"], width: number): THREE.Mesh {
+/** The road, across its whole width and a little past it: the mat with its
+ * camber and its two worn wheel tracks, the chamfered edge, the shoulder,
+ * the ditch, and the lip where the landscape takes over (R16). The SHAPE
+ * comes from the engine (road.ts) — the same profile the physics rides and
+ * the terrain field hangs its shelf off — so what the car climbs out of is
+ * exactly what the player sees it climb out of.
+ *
+ * The paint is this module's: gravel worn to hardpack down the tracks and
+ * loose at the edges, asphalt burnished where the tires polish it, a
+ * shoulder of spilled dirt, and a ditch that greens over. */
+function buildRoad(track: Track, samples: Ribbon[], width: number): THREE.Mesh {
   const half = width / 2;
+  const lat = stations(width);
+  const matOnly = lat.filter((l) => Math.abs(l) <= half);
   const positions: number[] = [];
   const uvs: number[] = [];
   const colors: number[] = [];
   const indices: number[] = [];
+  const paint = new THREE.Color();
+  const shoulder = new THREE.Color(ROAD_PAINT.shoulder);
+  const ditch = new THREE.Color(ROAD_PAINT.ditch);
 
-  const dry = new THREE.Color("#ffffff");
-  const wet = new THREE.Color("#9db4d8");
-
+  let lastCount = -1;
+  let run = 0;
   for (let i = 0; i < samples.length; i++) {
     const s = samples[i];
     const r = rightOf(s.heading);
-    const y = s.elevation + 0.02;
-    positions.push(s.x - r.x * half, y, s.z - r.z * half, s.x + r.x * half, y, s.z + r.z * half);
-    const v = s.s / 6;
-    uvs.push(0, v, 1.8, v);
-    const tint = s.surface === "water" ? wet : dry;
-    colors.push(tint.r, tint.g, tint.b, tint.r, tint.g, tint.b);
-    if (i > 0) {
+    const bridge = s.deck != null;
+    // Inside a junction the road is mat and nothing else — its border is
+    // cut away and the throat below pays the gap back as road surface.
+    const cross = junctionAt(track, s.x, s.z) > 0 ? matOnly : lat;
+    // The strip has to restart wherever the station count changes: the two
+    // cross-sections cannot be woven into each other.
+    if (cross.length !== lastCount) {
+      lastCount = cross.length;
+      run = 0;
+    }
+    const kind = bridge
+      ? "deck"
+      : s.surface === "water"
+        ? "water"
+        : s.surface === "asphalt"
+          ? "asphalt"
+          : "gravel";
+    const loose = new THREE.Color(ROAD_PAINT[kind].loose);
+    const worn = new THREE.Color(ROAD_PAINT[kind].worn);
+    for (const l of cross) {
+      const out = Math.abs(l) - half;
+      const y = s.elevation + corridorOffset(s.surface, bridge, l, width, s.lift) + 0.02;
+      positions.push(s.x + r.x * l, y, s.z + r.z * l);
+      // UVs run meters along and across, so the grain is the same size
+      // whatever the road does and never stretches through a corner.
+      uvs.push(l / 3.5, s.s / 3.5);
+      if (out <= 0) {
+        // On the mat: the wear map decides the mix. The bridge deck is
+        // planks or concrete, worn the same way but never bermed.
+        paint.copy(loose).lerp(worn, wearAt(l, width));
+      } else if (out < ROAD_CROSS.verge.ditchFrom) {
+        paint.copy(shoulder);
+      } else {
+        paint.copy(ditch).lerp(shoulder, out > ROAD_CROSS.verge.ditchTo ? 0.5 : 0);
+      }
+      colors.push(paint.r, paint.g, paint.b);
+    }
+    if (run > 0) {
       // Wound so the face normals point up — the road is drawn single-sided
       // and a downward winding would cull the whole surface from above.
-      const a = (i - 1) * 2;
-      indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+      const b = positions.length / 3 - cross.length;
+      const a = b - cross.length;
+      for (let k = 0; k < cross.length - 1; k++) {
+        indices.push(a + k, b + k, a + k + 1, a + k + 1, b + k, b + k + 1);
+      }
     }
+    run += 1;
   }
 
   const geo = new THREE.BufferGeometry();
@@ -117,27 +243,39 @@ function buildRoad(samples: Track["samples"], width: number): THREE.Mesh {
   return new THREE.Mesh(geo, mat);
 }
 
-/** Dirt skirts: close the gap between a raised road (ramps, crests) and the
- * ground so lips read as solid landforms, not floating carpet. */
-function buildSkirts(samples: Track["samples"], width: number): THREE.Mesh {
+/** Dirt skirts: close the gap between the ribbon's outer lip and the ground
+ * lattice under it, so a raised road (ramps, crests, an asphalt mat) reads
+ * as a solid landform and never as floating carpet. A bridge deck gets
+ * none — there is nothing under a bridge but air and water. */
+function buildSkirts(samples: Ribbon[], width: number): THREE.Mesh {
   const half = width / 2;
+  const edge = half + ROAD_CROSS.reach;
   const positions: number[] = [];
   const indices: number[] = [];
   for (const side of [-1, 1]) {
-    const start = positions.length / 3;
+    let start = positions.length / 3;
+    let run = 0;
     for (let i = 0; i < samples.length; i++) {
       const s = samples[i];
+      if (s.deck != null) {
+        // Break the strip: the next stretch of ground starts its own.
+        start = positions.length / 3;
+        run = 0;
+        continue;
+      }
       const r = rightOf(s.heading);
-      const ex = s.x + r.x * half * side;
-      const ez = s.z + r.z * half * side;
+      const ex = s.x + r.x * edge * side;
+      const ez = s.z + r.z * edge * side;
+      const top = s.elevation + corridorOffset(s.surface, false, edge * side, width, s.lift);
       // The skirt drops a few meters below grade — deep enough to meet the
       // terrain shelf under every roll of the road.
-      positions.push(ex, s.elevation + 0.02, ez, ex, s.elevation - 5, ez);
-      if (i > 0) {
-        const a = start + (i - 1) * 2;
+      positions.push(ex, top, ez, ex, top - 5, ez);
+      if (run > 0) {
+        const a = start + (run - 1) * 2;
         if (side > 0) indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
         else indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
       }
+      run += 1;
     }
   }
   const geo = new THREE.BufferGeometry();
@@ -148,42 +286,92 @@ function buildSkirts(samples: Track["samples"], width: number): THREE.Mesh {
   return new THREE.Mesh(geo, mat);
 }
 
-/** Red/white rumble strips along both edges, alternating every few meters.
- * Strips run the stage proper, never the aprons — pass the bare range. */
-function buildRumble(samples: Track["samples"], width: number): THREE.Mesh {
+/** The road's markings, both edges and the middle. Which markings depends
+ * on what the road IS: a rally gravel road is edged with the red and white
+ * strips the stage's tape and boards are made of, a public asphalt road
+ * with a solid white edge line and a dashed centre — which is most of what
+ * makes the tarmac sections read as a road the rally borrowed rather than
+ * a differently-colored stripe. Fords and bridge decks carry neither.
+ * Markings run the stage proper, never the aprons — pass the bare range. */
+function buildMarkings(track: Track, samples: Ribbon[], width: number): THREE.Mesh {
   const half = width / 2;
-  const stripW = 0.9;
   const positions: number[] = [];
   const colors: number[] = [];
   const indices: number[] = [];
   const red = new THREE.Color("#e23c2c");
   const white = new THREE.Color("#f6f3ea");
+  const paint = new THREE.Color("#e6e2d2");
 
-  for (const side of [-1, 1]) {
-    const start = positions.length / 3;
-    for (let i = 0; i < samples.length; i++) {
-      const s = samples[i];
+  /** One strip of paint along the road: a band between two lateral offsets
+   * that only exists where `on` says it does. */
+  const strip = (
+    from: (s: Ribbon) => number,
+    to: (s: Ribbon) => number,
+    on: (s: Ribbon) => boolean,
+    color: (s: Ribbon) => THREE.Color | null,
+    flip: boolean,
+  ): void => {
+    let start = positions.length / 3;
+    let run = 0;
+    for (const s of samples) {
+      const tint = on(s) ? color(s) : null;
+      if (!tint) {
+        start = positions.length / 3;
+        run = 0;
+        continue;
+      }
       const r = rightOf(s.heading);
-      const y = s.elevation + 0.03;
-      const inner = half * side;
-      const outer = (half + stripW) * side;
+      const inner = from(s);
+      const outer = to(s);
+      const yIn = s.elevation + corridorOffset(s.surface, false, inner, width, s.lift) + 0.035;
+      const yOut = s.elevation + corridorOffset(s.surface, false, outer, width, s.lift) + 0.035;
       positions.push(
         s.x + r.x * inner,
-        y,
+        yIn,
         s.z + r.z * inner,
         s.x + r.x * outer,
-        y,
+        yOut,
         s.z + r.z * outer,
       );
-      const c = Math.floor(s.s / 4) % 2 === 0 ? red : white;
-      colors.push(c.r, c.g, c.b, c.r, c.g, c.b);
-      if (i > 0) {
-        const a = start + (i - 1) * 2;
-        if (side > 0) indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+      colors.push(tint.r, tint.g, tint.b, tint.r, tint.g, tint.b);
+      if (run > 0) {
+        const a = start + (run - 1) * 2;
+        if (flip) indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
         else indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
       }
+      run += 1;
     }
+  };
+
+  const plain = (s: Ribbon): boolean =>
+    s.surface !== "water" && s.deck == null && junctionAt(track, s.x, s.z) === 0;
+  for (const side of [-1, 1]) {
+    // Gravel: the rally's own red-and-white edging, alternating every few
+    // meters, sat on the outer band of the mat.
+    strip(
+      () => (half - 0.9) * side,
+      () => half * side,
+      (s) => plain(s) && s.surface !== "asphalt",
+      (s) => (Math.floor(s.s / 4) % 2 === 0 ? red : white),
+      side > 0,
+    );
+    // Asphalt: a solid white edge line, a hand's width inside the kerb.
+    strip(
+      () => (half - 0.65) * side,
+      () => (half - 0.3) * side,
+      (s) => plain(s) && s.surface === "asphalt",
+      () => paint,
+      side > 0,
+    );
   }
+  // ...and the broken centre line, 3 m of paint every 9.
+  strip(
+    () => -0.16,
+    () => 0.16,
+    (s) => plain(s) && s.surface === "asphalt" && s.s % 9 < 3,
+    () => paint,
+    false,
+  );
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
@@ -191,6 +379,54 @@ function buildRumble(samples: Track["samples"], width: number): THREE.Mesh {
   geo.computeVertexNormals();
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
   return new THREE.Mesh(geo, mat);
+}
+
+/** The chippings that spill down an asphalt mat's edge. Asphalt is LAID —
+ * a mat built up on the ground with nothing holding its sides — so its
+ * edge is always a scatter of loose stone rather than a clean line, and
+ * that scatter is most of what tells you the road stands proud. */
+function buildChippings(
+  track: Track,
+  samples: Ribbon[],
+  width: number,
+): THREE.InstancedMesh | null {
+  const half = width / 2;
+  const stones: { x: number; y: number; z: number; s: number; spin: number }[] = [];
+  for (let i = 0; i < samples.length; i += 1) {
+    const s = samples[i];
+    if (s.surface !== "asphalt" || s.deck != null) continue;
+    if (junctionAt(track, s.x, s.z) > 0) continue;
+    const r = rightOf(s.heading);
+    for (const side of [-1, 1]) {
+      // Two rows per side, jittered off the sample index so the scatter
+      // never lines up into a rail.
+      const jitter = ((i * 2654435761) % 1000) / 1000;
+      const out = half + ROAD_CROSS.chamfer * (0.4 + jitter * 0.9);
+      const x = s.x + r.x * out * side;
+      const z = s.z + r.z * out * side;
+      stones.push({
+        x,
+        y: s.elevation + corridorOffset(s.surface, false, out * side, width, s.lift),
+        z,
+        s: 0.1 + jitter * 0.22,
+        spin: jitter * Math.PI * 2,
+      });
+    }
+  }
+  if (stones.length === 0) return null;
+  const geo = new THREE.DodecahedronGeometry(1);
+  const mat = new THREE.MeshLambertMaterial({ color: "#7f7a70" });
+  const mesh = new THREE.InstancedMesh(geo, mat, stones.length);
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const v = new THREE.Vector3();
+  const sc = new THREE.Vector3();
+  stones.forEach((p, i) => {
+    q.setFromAxisAngle(UP, p.spin);
+    m.compose(v.set(p.x, p.y + p.s * 0.3, p.z), q, sc.set(p.s, p.s * 0.7, p.s));
+    mesh.setMatrixAt(i, m);
+  });
+  return mesh;
 }
 
 /** Ford overlays: a wider translucent water sheet over each water run.
@@ -560,6 +796,213 @@ function buildScenery(
   return { group, update: planted.update, clearNear, treeKeys };
 }
 
+/** Everything that carries a bridge deck over its water (R13): the parapet
+ * you must not go over, and — since the whole point of a bridge is that
+ * there is a hole under it — the structure that holds it up. A timber
+ * crossing is two trunks and a plank floor on pile bents; a concrete one
+ * is a slab on piers. Which you get was decided by the span back in the
+ * generator; this only builds what that decision implies. */
+function buildBridges(track: Track, from: number, to: number): THREE.Group {
+  const group = new THREE.Group();
+  const samples = track.samples;
+  const half = track.width / 2;
+  const timber = new THREE.MeshLambertMaterial({ color: "#6b4f33" });
+  const timberDark = new THREE.MeshLambertMaterial({ color: "#523c26" });
+  const concrete = new THREE.MeshLambertMaterial({ color: "#b3b0a6" });
+  const concreteDark = new THREE.MeshLambertMaterial({ color: "#8f8c83" });
+
+  const box = (
+    w: number,
+    h: number,
+    d: number,
+    x: number,
+    y: number,
+    z: number,
+    spin: number,
+    mat: THREE.Material,
+  ): void => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    mesh.position.set(x, y, z);
+    mesh.rotation.y = spin;
+    group.add(mesh);
+  };
+
+  let i = Math.max(1, from);
+  while (i < to) {
+    if (samples[i].deck == null) {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < samples.length && samples[j].deck !== null) j++;
+    if (j >= to && to < samples.length) break; // straddles the frontier — defer
+    const kind = samples[i].deck;
+    const rail = kind === "concrete" ? concrete : timber;
+    const under = kind === "concrete" ? concreteDark : timberDark;
+    const deckY = samples[Math.floor((i + j) / 2)].elevation;
+    const waterY = deckY - STAGE_RULES.bridge.clearance[kind ?? "timber"];
+    // The parapet: a solid concrete wall, or a timber rail on posts.
+    for (const side of [-1, 1]) {
+      for (let k = i; k < j; k++) {
+        const s = samples[k];
+        const r = rightOf(s.heading);
+        const lat = (half + 0.35) * side;
+        const x = s.x + r.x * lat;
+        const z = s.z + r.z * lat;
+        if (kind === "concrete") {
+          if (k % 2 !== 0) continue;
+          box(0.4, 0.9, 4.2, x, s.elevation + 0.45, z, s.heading, rail);
+        } else {
+          if (k % 3 === 0) box(0.22, 1.1, 0.22, x, s.elevation + 0.55, z, s.heading, under);
+          if (k % 2 === 0) box(0.16, 0.16, 4.2, x, s.elevation + 0.95, z, s.heading, rail);
+        }
+      }
+    }
+    // What holds it up. The deck itself is the road ribbon; this is the
+    // beam under it, the piers down into the water, and the abutments the
+    // banks carry.
+    const mid = samples[Math.floor((i + j) / 2)];
+    const span = samples[j - 1].s - samples[i].s;
+    for (const end of [i, j - 1]) {
+      const s = samples[end];
+      box(track.width + 1.6, 1.6, 3, s.x, s.elevation - 0.9, s.z, s.heading, under);
+    }
+    if (kind === "concrete") {
+      for (let k = i; k < j; k += 2) {
+        const s = samples[k];
+        box(track.width + 0.6, 0.55, 4.2, s.x, s.elevation - 0.3, s.z, s.heading, under);
+      }
+      const piers = Math.max(1, Math.round(span / 22));
+      for (let p = 1; p <= piers; p++) {
+        const s = samples[Math.round(i + ((j - i) * p) / (piers + 1))];
+        const drop = s.elevation - waterY + 1.6;
+        box(2.4, drop, 1.4, s.x, s.elevation - drop / 2 - 0.5, s.z, s.heading, concreteDark);
+      }
+    } else {
+      // Two trunks the length of the span, and a pile bent under the middle.
+      for (const side of [-1, 1]) {
+        const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, span, 7), under);
+        const r = rightOf(mid.heading);
+        beam.position.set(
+          mid.x + r.x * half * 0.55 * side,
+          mid.elevation - 0.55,
+          mid.z + r.z * half * 0.55 * side,
+        );
+        // A cylinder stands on +Y; tip it onto +Z, then swing it round to
+        // the road's heading (YXZ applies the swing last).
+        beam.rotation.order = "YXZ";
+        beam.rotation.set(Math.PI / 2, mid.heading, 0);
+        group.add(beam);
+      }
+      const drop = mid.elevation - waterY + 1.4;
+      for (const side of [-1, 1]) {
+        const r = rightOf(mid.heading);
+        box(
+          0.4,
+          drop,
+          0.4,
+          mid.x + r.x * half * 0.5 * side,
+          mid.elevation - drop / 2 - 0.7,
+          mid.z + r.z * half * 0.5 * side,
+          mid.heading,
+          under,
+        );
+      }
+    }
+    i = j;
+  }
+  return group;
+}
+
+/** An abandoned branch (R17), drawn like any other road — and the junction
+ * dressing that says the stage does not go this way: a line of cones, tape
+ * between two posts, and a chevron board facing whoever arrives. Nothing
+ * here is solid. A player who wants to see where the road goes is allowed
+ * to find out; the tape is a statement, not a wall. */
+function buildSpur(track: Track, spur: Spur): THREE.Group {
+  const group = new THREE.Group();
+  group.add(buildSkirts(spur.samples, spur.width));
+  group.add(buildRoad(track, spur.samples, spur.width));
+  group.add(buildMarkings(track, spur.samples, spur.width));
+  const chippings = buildChippings(track, spur.samples, spur.width);
+  if (chippings) group.add(chippings);
+
+  // The block, a few meters up the branch so it reads from the stage road.
+  const at = spur.samples[Math.min(spur.samples.length - 1, 3)];
+  const r = rightOf(at.heading);
+  const half = spur.width / 2;
+  const coneGeo = new THREE.ConeGeometry(0.42, 1, 6);
+  const coneMat = new THREE.MeshLambertMaterial({ color: "#ff7d1f" });
+  for (let k = -2; k <= 2; k++) {
+    const lat = (k / 2.4) * half;
+    const cone = new THREE.Mesh(coneGeo, coneMat);
+    cone.position.set(at.x + r.x * lat, at.elevation + 0.5, at.z + r.z * lat);
+    group.add(cone);
+  }
+  const postMat = new THREE.MeshLambertMaterial({ color: "#f6f3ea" });
+  const tapeMat = new THREE.MeshLambertMaterial({ color: "#e23c2c" });
+  for (const side of [-1, 1]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.6, 0.18), postMat);
+    post.position.set(at.x + r.x * half * side, at.elevation + 0.8, at.z + r.z * half * side);
+    group.add(post);
+  }
+  const tape = new THREE.Mesh(new THREE.BoxGeometry(spur.width, 0.18, 0.06), tapeMat);
+  tape.position.set(at.x, at.elevation + 1.25, at.z);
+  tape.rotation.y = at.heading;
+  group.add(tape);
+  // The board: chevrons pointing back the way the stage actually goes.
+  const board = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.9, 0.12), [
+    postMat,
+    postMat,
+    postMat,
+    postMat,
+    new THREE.MeshLambertMaterial({ map: chevronTexture(), color: "#ffffff" }),
+    new THREE.MeshLambertMaterial({ map: chevronTexture(), color: "#ffffff" }),
+  ]);
+  board.position.set(at.x, at.elevation + 1.9, at.z);
+  board.rotation.y = at.heading;
+  group.add(board);
+  for (const side of [-1, 1]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.9, 0.14), postMat);
+    leg.position.set(at.x + r.x * side, at.elevation + 0.95, at.z + r.z * side);
+    group.add(leg);
+  }
+  return group;
+}
+
+/** R17 — the junction aprons: the paved circle that makes two roads MEET
+ * rather than merely touch. The engine plans them (track.junctions) and the
+ * terrain field flattens the ground under them; this lays the surface on
+ * top, over both carriageways' edges and whatever verge ran between them. */
+function buildJunctions(track: Track, from: number, to: number): THREE.Group {
+  const group = new THREE.Group();
+  const fromS = from === 0 ? -Infinity : track.samples[from].s;
+  const toS = track.samples[to - 1].s;
+  const mat = new THREE.MeshLambertMaterial({
+    map: gravelTexture(),
+    color: new THREE.Color(ROAD_PAINT.asphalt.worn),
+    side: THREE.DoubleSide,
+  });
+  for (const junction of track.junctions) {
+    if (junction.s < fromS || junction.s > toS) continue;
+    for (const quad of junctionThroat(junction)) {
+      const positions: number[] = [];
+      const uvs: number[] = [];
+      for (const [x, z] of quad) {
+        positions.push(x, junction.y + 0.04, z);
+        uvs.push(x / 3.5, z / 3.5);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex([0, 1, 2, 0, 2, 3]);
+      geo.computeVertexNormals();
+      group.add(new THREE.Mesh(geo, mat));
+    }
+  }
+  return group;
+}
+
 /** Warning cones flanking each jump lip in the range. */
 function buildCones(track: Track, from: number, to: number): THREE.Group {
   const group = new THREE.Group();
@@ -907,13 +1350,25 @@ export function buildWorld(track: Track): World {
   let builtIndex = 0;
   let fordScan = 0;
   let streamScanS = 0;
+  let spurScan = 0;
 
   const buildChunk = (from: number, to: number): void => {
     const chunkGroup = new THREE.Group();
     const ribbon = chunkSamples(track, from, to);
+    const bare = track.samples.slice(Math.max(0, from - 1), to);
     chunkGroup.add(buildSkirts(ribbon, track.width));
-    chunkGroup.add(buildRoad(ribbon, track.width));
-    chunkGroup.add(buildRumble(track.samples.slice(Math.max(0, from - 1), to), track.width));
+    chunkGroup.add(buildRoad(track, ribbon, track.width));
+    chunkGroup.add(buildMarkings(track, bare, track.width));
+    const chippings = buildChippings(track, bare, track.width);
+    if (chippings) chunkGroup.add(chippings);
+    chunkGroup.add(buildBridges(track, from, to));
+    chunkGroup.add(buildJunctions(track, from, to));
+    // The branches this stretch of road forks off at its paving junctions.
+    for (; spurScan < track.spurs.length; spurScan++) {
+      const spur = track.spurs[spurScan];
+      if (spur.atS > track.samples[to - 1].s) break;
+      chunkGroup.add(buildSpur(track, spur));
+    }
     const fords = buildFords(track, fordScan, to, waterTex);
     fordScan = fords.next;
     chunkGroup.add(fords.group);

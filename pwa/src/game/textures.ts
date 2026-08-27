@@ -108,6 +108,37 @@ export function bannerTexture(text: string): THREE.CanvasTexture {
   return tex;
 }
 
+/** The board at a taped-off junction: black chevrons on rally yellow,
+ * pointing back at the way the stage actually goes. */
+export function chevronTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 96;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("2d context unavailable");
+  ctx.fillStyle = "#f2c318";
+  ctx.fillRect(0, 0, 256, 96);
+  ctx.fillStyle = "#1c1e22";
+  ctx.lineWidth = 0;
+  for (let k = 0; k < 4; k++) {
+    const x = 16 + k * 60;
+    ctx.beginPath();
+    ctx.moveTo(x, 12);
+    ctx.lineTo(x + 34, 48);
+    ctx.lineTo(x, 84);
+    ctx.lineTo(x + 14, 84);
+    ctx.lineTo(x + 48, 48);
+    ctx.lineTo(x + 14, 12);
+    ctx.closePath();
+    ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 /** A soft radial glow (white core fading to transparent) — the sun's halo,
  * the moon's veil, a lightning bloom. Tint via the material's color. */
 export function glowTexture(): THREE.CanvasTexture {

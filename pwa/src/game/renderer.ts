@@ -11,7 +11,7 @@ import type { GameEvent, GameState } from "@engine";
 import { createAmbientLife } from "./ambient-life.ts";
 import { createGameCamera, type CameraMode } from "./camera.ts";
 import { buildCar, type CarVisual } from "./car-mesh.ts";
-import { createDust } from "./dust.ts";
+import { createDust, TIRE_SMOKE } from "./dust.ts";
 import { createEnvironment } from "./environment.ts";
 import { createFumes } from "./fumes.ts";
 import { createRain } from "./rain.ts";
@@ -39,6 +39,10 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
   const chase = createGameCamera(canvas.clientWidth || 1, canvas.clientHeight || 1);
   const dust = createDust();
   scene.add(dust.points);
+  // The tarmac's own cloud: what the tires give up when the road holds
+  // them instead of letting go under them.
+  const smoke = createDust(TIRE_SMOKE);
+  scene.add(smoke.points);
   const fumes = createFumes();
   scene.add(fumes.points);
   const rain = createRain();
@@ -66,6 +70,7 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
       }
     });
     (dust.points.material as THREE.PointsMaterial).color.copy(tint);
+    (smoke.points.material as THREE.PointsMaterial).color.copy(tint);
     (fumes.points.material as THREE.PointsMaterial).color.copy(tint);
     life.setTint(tint);
   };
@@ -140,16 +145,22 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
     if (!c.airborne && dustClock > 0.03) {
       dustClock = 0;
       // The engine tracks the driven surface — road fords AND the wild's
-      // lakes and streams throw the blue spray.
-      const color = state.surface === "water" ? 0x4fa0f0 : 0xb29268;
-      const wakeX = -fwdX * c.u * 0.35 + state.wind.x * 0.6;
-      const wakeZ = -fwdZ * c.u * 0.35 + state.wind.z * 0.6;
+      // lakes and streams throw the blue spray, and the stage's sealed
+      // sections throw nothing at all until the tires start smoking.
+      const sealed = state.surface === "asphalt";
+      const cloud = sealed ? smoke : dust;
+      const color = state.surface === "water" ? 0x4fa0f0 : sealed ? 0xd8d5cf : 0xb29268;
+      // Smoke is boiled off the tire and left behind; grit is thrown by it.
+      // So the wake it inherits is gentler, and it spreads instead of arcing.
+      const wake = sealed ? 0.12 : 0.35;
+      const wakeX = -fwdX * c.u * wake + state.wind.x * 0.6;
+      const wakeZ = -fwdZ * c.u * wake + state.wind.z * 0.6;
       // The tires letting go is what throws gravel — `slide` is that
       // number, so the plume comes up the instant the car is asked for more
       // grip than it has, not once the angle has already developed.
       const sideways = c.slide > 0.15 && c.u > 6;
       const rear = (side: number, count: number, spread: number): void =>
-        dust.spawn(
+        cloud.spawn(
           c.x - fwdX * 1.5 + rightX * side * 0.8,
           c.y + 0.15,
           c.z - fwdZ * 1.5 + rightZ * side * 0.8,
@@ -161,14 +172,17 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
         );
       if (sideways || state.offRoad) {
         // The drift plume also blows toward the slide, off the outside
-        // wheels, and thickens as the slide deepens.
-        const thrown = 4 + Math.round(c.slide * 5);
-        rear(-1, thrown, 3.5);
-        rear(1, thrown, 3.5);
+        // wheels, and thickens as the slide deepens. A sliding tire on
+        // tarmac makes fewer, bigger puffs than gravel throws grains.
+        const thrown = sealed ? 2 + Math.round(c.slide * 2) : 4 + Math.round(c.slide * 5);
+        rear(-1, thrown, sealed ? 1.4 : 3.5);
+        rear(1, thrown, sealed ? 1.4 : 3.5);
       } else if (c.braking && c.u > 8) {
-        rear(-1, 4, 2.5);
-        rear(1, 4, 2.5);
-      } else if (c.u > 15) {
+        rear(-1, sealed ? 2 : 4, sealed ? 1.2 : 2.5);
+        rear(1, sealed ? 2 : 4, sealed ? 1.2 : 2.5);
+      } else if (c.u > 15 && !sealed) {
+        // Rolling kickup is loose-surface only: a sealed road has nothing
+        // lying on it to pick up.
         rear(Math.random() < 0.5 ? -1 : 1, 2, 1.6);
       }
     }
@@ -191,6 +205,7 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
     }
 
     dust.update(dt);
+    smoke.update(dt);
     fumes.update(dt);
     // An endless run streams its world: the road chunks and terrain tiles
     // ahead get built here, the ones far behind get dropped.
@@ -219,6 +234,7 @@ export function createRenderer(canvas: HTMLCanvasElement): GameRenderer {
     world?.dispose();
     car?.dispose();
     dust.dispose();
+    smoke.dispose();
     fumes.dispose();
     rain.dispose();
     life.dispose();

@@ -109,15 +109,84 @@ describe("stage generator", () => {
     }
   });
 
-  it("R7 — fords sit on straights only, an apron clear of the ends", () => {
+  it("R7/R13 — crossings sit on straights, clear of the ends by their own margin", () => {
     for (const seed of SEEDS) {
       for (const plan of generateStage(seed)) {
         if (plan.feature !== "water") continue;
         expect(plan.kind).toBe("straight");
-        expect(plan.featureStart ?? 0).toBeGreaterThanOrEqual(R.water.apron);
-        expect(plan.length - (plan.featureEnd ?? 0)).toBeGreaterThanOrEqual(R.water.apron);
+        // A ford needs its dip's aprons; a deck needs its level run-on.
+        const margin = plan.crossing === "ford" ? R.water.apron : R.bridge.margin;
+        expect(plan.featureStart ?? 0).toBeGreaterThanOrEqual(margin);
+        expect(plan.length - (plan.featureEnd ?? 0)).toBeGreaterThanOrEqual(margin);
       }
     }
+  });
+
+  it("R13 — the span decides the architecture: wade it, plank it, or pour it", () => {
+    let fords = 0;
+    let timber = 0;
+    let concrete = 0;
+    for (const seed of SEEDS) {
+      for (const plan of generateStage(seed, "long", { water: 0.85 })) {
+        if (plan.feature !== "water") continue;
+        const span = (plan.featureEnd ?? 0) - (plan.featureStart ?? 0);
+        if (plan.crossing === "ford") {
+          fords += 1;
+          expect(span).toBeLessThanOrEqual(R.water.fordMax);
+        } else if (plan.crossing === "timber") {
+          timber += 1;
+          expect(span).toBeGreaterThan(R.water.fordMax);
+          expect(span).toBeLessThanOrEqual(R.bridge.timberMax);
+        } else {
+          concrete += 1;
+          expect(span).toBeGreaterThan(R.bridge.timberMax);
+        }
+      }
+    }
+    // A wet stage band has to actually produce all three, or the rule is
+    // only theory.
+    expect(fords).toBeGreaterThan(0);
+    expect(timber).toBeGreaterThan(0);
+    expect(concrete).toBeGreaterThan(0);
+  });
+
+  it("R15 — the asphalt dial is the share of the stage that comes out sealed", () => {
+    const share = (asphalt: number): number => {
+      let paved = 0;
+      let total = 0;
+      for (const seed of SEEDS.slice(0, 8)) {
+        const track = compileStage(seed, "long", { asphalt });
+        paved += track.samples.filter((s) => s.surface === "asphalt").length;
+        total += track.samples.length;
+      }
+      return paved / total;
+    };
+    expect(share(0)).toBe(0);
+    // Every sealed run is hundreds of meters long, so a single stage lands
+    // near the dial rather than on it; across eight it should be close.
+    expect(share(0.25)).toBeGreaterThan(0.15);
+    expect(share(0.25)).toBeLessThan(0.36);
+    expect(share(0.5)).toBeGreaterThan(share(0.25));
+    expect(share(1)).toBeGreaterThan(0.95);
+  });
+
+  it("the dials are deterministic, and different dials build different stages", () => {
+    const dials = { elevation: 0.8, water: 0.2, trees: 0.9, asphalt: 0.4 };
+    expect(compileStage(7, "medium", dials).samples).toEqual(
+      compileStage(7, "medium", dials).samples,
+    );
+    expect(compileStage(7, "medium", dials).samples).not.toEqual(
+      compileStage(7, "medium", { ...dials, elevation: 0.1 }).samples,
+    );
+  });
+
+  it("the elevation dial is the road's own relief", () => {
+    const swing = (elevation: number): number => {
+      const ys = compileStage(4, "medium", { elevation }).samples.map((s) => s.elevation);
+      return Math.max(...ys) - Math.min(...ys);
+    };
+    expect(swing(0)).toBeLessThan(swing(0.5));
+    expect(swing(0.5)).toBeLessThan(swing(1));
   });
 
   it("R9 — the centerline stays inside each length's world bounds", () => {

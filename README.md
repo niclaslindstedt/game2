@@ -11,7 +11,7 @@
 
 ## What
 
-Sideways is an arcade rally game — no account, no download. Pick your stage length (one minute to seven — or endless), your conditions (dawn, day, dusk, or night; clear, rain, or storm), and START. The feel is the point: drifts that are simply what happens when you turn at speed, jumps where the air is committed and slightly out of control, water fords that explode, a seeded wind that leans on the car and rips the exhaust fumes sideways. Stages are point-to-point and generated fresh from a seeded rules engine that respects rally reality: braking zones before hairpins, run-ups before jumps, fords sitting in real dips where a stream crosses the road, grades that climb on the straights and flatten through corners — rolling through a landscape of hillsides, mountains, and lakes that glitter in the sun. And the landscape is not a backdrop: leave the road and drive it — forests, cliff edges that launch the car, streams, boulders and fallen trunks that are really there, all the way to the open sea. Up to ~150 km/h in the wild, ~230 km/h flat out on the road; crash and you're set back on the track. A co-driver strip calls every corner before it arrives — EASY LEFT, LONG HARD RIGHT — the way rally games always have. The endless stage just keeps generating road from the seed until you stop. Everyone gets the same stage on a given day; every finish rolls into the next one.
+Sideways is an arcade rally game — no account, no download. Pick your stage length (one minute to seven — or endless), your conditions (dawn, day, dusk, or night; clear, rain, or storm), and START. The feel is the point: drifts that are simply what happens when you turn at speed, jumps where the air is committed and slightly out of control, water fords that explode, tarmac sections where the grip suddenly holds and the tires smoke instead of the gravel flying, a seeded wind that leans on the car and rips the exhaust fumes sideways. Stages are point-to-point and generated fresh from a seeded rules engine that respects rally reality: braking zones before hairpins, run-ups before jumps, one river per valley with fords where it is shallow and timber or concrete bridges where it is not, public roads the stage joins at proper junctions and leaves again (the arm it abandons taped off — and still drivable, if you want to see where it goes), grades that climb on the straights and flatten through corners — rolling through a landscape of hillsides, mountains, and lakes that glitter in the sun. And the landscape is not a backdrop: leave the road and drive it — forests, cliff edges that launch the car, streams, boulders and fallen trunks that are really there, all the way to the open sea. Up to ~150 km/h in the wild, ~230 km/h flat out on the road; crash and you're set back on the track. A co-driver strip calls every corner before it arrives — EASY LEFT, LONG HARD RIGHT — the way rally games always have. The endless stage just keeps generating road from the seed until you stop. Four dials in the menu say what kind of country you want it built in — hills, water, forest, tarmac. Everyone gets the same stage on a given day; every finish rolls into the next one.
 
 Two cars ship at launch: the **Vireo GT** (automatic — quick, forgiving) and the **Sable 4WD** (manual — taller gears, looser rear, faster in good hands).
 
@@ -49,19 +49,19 @@ Open the printed URL — pick stage length, time of day, weather, and car on the
 
 ## Usage
 
-| Command            | What it does                                                      |
-| ------------------ | ----------------------------------------------------------------- |
-| `npm run dev`      | Dev server (no service worker)                                    |
-| `make build`       | Typecheck + production build to `pwa/dist/`                       |
-| `make test`        | Full test suite (generator rules, drift/jump physics, bot sims)   |
-| `make lint`        | ESLint + typecheck across engine, app, tests, and tooling         |
-| `make sim`         | Headless balance sweep: bots drive stages, prints the pace table  |
-| `make track`       | Render generated stages to `previews/track-<seed>.png`            |
-| `make cars`        | Render the car models to a contact sheet (`previews/cars.png`)    |
-| `make screenshots` | Drive the built app headlessly and screenshot the key moments     |
-| `make icons`       | Regenerate PWA icons, favicon, and the OG image from the app mark |
-| `make check-seo`   | Build + structural SEO/PWA/bundle-budget assertions               |
-| `make hooks`       | Install the pre-commit / commit-msg git hooks                     |
+| Command            | What it does                                                                            |
+| ------------------ | --------------------------------------------------------------------------------------- |
+| `npm run dev`      | Dev server (no service worker)                                                          |
+| `make build`       | Typecheck + production build to `pwa/dist/`                                             |
+| `make test`        | Full test suite (generator rules, drift/jump physics, bot sims)                         |
+| `make lint`        | ESLint + typecheck across engine, app, tests, and tooling                               |
+| `make sim`         | Headless balance sweep: bots drive stages, prints the pace table                        |
+| `make track`       | Render generated stages: a schematic map AND a shaded view of the place, to `previews/` |
+| `make cars`        | Render the car models to a contact sheet (`previews/cars.png`)                          |
+| `make screenshots` | Drive the built app headlessly and screenshot the key moments                           |
+| `make icons`       | Regenerate PWA icons, favicon, and the OG image from the app mark                       |
+| `make check-seo`   | Build + structural SEO/PWA/bundle-budget assertions                                     |
+| `make hooks`       | Install the pre-commit / commit-msg git hooks                                           |
 
 **On the phone:** the game is an installable PWA — open [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/), then "Add to Home Screen" (iOS Safari: Share → Add to Home Screen). It launches fullscreen, works offline, plays in portrait or landscape, and prompts in-app when a new build ships. Touch controls: the left half of the screen anchors a steering wheel under your thumb (drag sideways to turn); the right half is the pedal — touch for gas, drag up to brake, down to boost, right for the handbrake.
 
