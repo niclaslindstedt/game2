@@ -1,29 +1,48 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// The camera — where a lot of the FEEL lives. Cameras are MODES; four ship:
+// The camera — where a lot of the FEEL lives. Cameras are MODES. Six can be
+// driven from, and they are one ladder from inside the car to high above it
+// (the ids and the order are PLAY_CAMERAS in settings.ts):
 //
+//   hood  — in-car/bumper: the road rushes, the nose barely leads the slide.
+//   close — the same rig as chase pulled in tight behind the bumper.
 //   chase — the classic arcade rally view: low, tight behind the car,
 //           tracking a blend of nose and travel direction so a drift swings
 //           the car across the frame while the road keeps flowing.
-//   hood  — in-car/bumper: the road rushes, the nose barely leads the slide.
+//   far   — stood back and a little higher: less drama, more warning.
+//   heli  — high and behind, the shot a chase helicopter would fly.
+//   top   — over the roof, tilted just far enough forward to show the road
+//           the car is about to be on.
+//
+// Two more are placed by the app and never cycled into, because neither one
+// can be driven from:
+//
 //   drone — high overhead, trailing and slowly circling: the menu's living
-//           backdrop, where a bot is driving and nobody is watching the
-//           apex. Not in the play cycle — you cannot drive from up there.
+//           backdrop, where a bot is driving and nobody is watching the apex.
 //   map   — the whole stage framed from the sky, turning: the Roam page's
 //           look at what a seed actually builds.
 //
-// In the air chase and hood go loose and pull wide, which reads as flying.
-// Landings and splashes kick a decaying shake.
+// Every mode but the hood cam is the SAME rig with different proportions —
+// one table of numbers (CHASE_RIGS), one update function — so an angle is a
+// row rather than another camera to maintain. What separates them is not
+// only where they stand but how HEAVY they are: the far rigs answer the car
+// slowly and their swing is a sprung mass that overshoots a turn and settles
+// back into it, so a camera at a distance reads as something being flown
+// rather than something bolted on. In the air the framing goes loose and
+// pulls wide, which reads as flying. Landings and splashes kick a decaying
+// shake.
 
 import * as THREE from "three";
 import { angleLerp, clamp } from "../lib/angles.ts";
 import type { GameState } from "@engine";
 
+import { PLAY_CAMERAS, type PlayCamera } from "./settings.ts";
 import { GROUND_REACH } from "./terrain.ts";
 
-export type CameraMode = "chase" | "hood" | "drone" | "map";
-/** The modes the camera key walks. Drone and map are placed by the app,
- * never cycled into — neither one can be driven from. */
-export const PLAY_MODES: CameraMode[] = ["chase", "hood"];
+export type CameraMode = PlayCamera | "drone" | "map";
+/** The modes the camera key walks, in the order it walks them — the same
+ * inside-out ladder the options screen lists, so the key and the setting
+ * never disagree about what "the next camera" means. */
+export const PLAY_MODES: CameraMode[] = PLAY_CAMERAS.map((cam) => cam.id);
 
 /** The map view's design fov, deg — tight enough that the stage reads as a
  * model on a table rather than a fisheyed globe. */
@@ -55,23 +74,213 @@ const DRONE_SIDE = 26;
  * The map view solves its own, because a stage is kilometres wide. */
 const DRIVING_FAR = 900;
 
-/** Base chase height above the wheels, m — roof height, the Sega Rally read. */
-const CHASE_HEIGHT = 2.0;
-/** How far the chase camera RISES per unit of downhill gradient, m. Going
- * down, the camera hangs above the road as it falls away, so the descent
- * reads as dropping into it rather than as a flat road that happens to be
- * tilted. */
-const CHASE_DROP_LIFT = 2.6;
-/** ...and how far it DUCKS per unit of uphill gradient, m. Less than it
- * rises: climbing, the camera settling toward the road is what puts the
- * brow of the hill high in the frame, but a camera under the roofline
- * loses the car. */
-const CHASE_CLIMB_DUCK = 1.2;
-/** How much of the body's own suspension travel the camera shares, 0..1 —
- * a touch, so a landing lands in the FRAME too and does not just happen to
- * the car in front of it. */
-const CHASE_HEAVE = 0.4;
-/** Clearance the chase camera is never allowed under, m — over the ground
+/** A camera behind the car, as a set of numbers. The distance and height
+ * decide how big the car is in frame; the aim point decides the PITCH, and
+ * the pitch is what a shot is really made of — where the car sits
+ * vertically and how much sky is left over the horizon. */
+type ChaseRig = {
+  /** Standoff behind the car at a standstill, m, and the metres added per
+   * m/s of pace — the "straining ahead" cue. */
+  dist: number;
+  distPerSpeed: number;
+  /** Height over the car's own y, m. */
+  height: number;
+  /** How much of the drift's slip angle the framing carries, 0..1. At 1 the
+   * camera aims down the car's TRAVEL and the whole slide shows across the
+   * frame; at 0 it follows the nose and the drift is invisible. */
+  driftWeight: number;
+  /** How briskly the camera answers the car, 1/s — the one knob for how
+   * HEAVY the rig is, because a camera that snaps to everything the car
+   * does has no weight at all. The nose-follow uses it directly; the drift
+   * offset winds on at that rate and unwinds at DRIFT_SETTLE of it, and the
+   * standoff and height ease at RIG_EASE of it. A camera bolted to a boom
+   * behind the bumper is brisk; something with mass flying above the trees
+   * is not. */
+  followRate: number;
+  /** Design fov at a standstill, deg, what a m/s of pace adds, and the
+   * ceiling before the world turns into a tunnel. */
+  fov: number;
+  fovPerSpeed: number;
+  fovMax: number;
+  /** How far down the road the aim point sits, m, how high over the car's
+   * own y, and how far the road's gradient lifts it — a ramp should show
+   * the sky over the brow instead of burying the aim in the hillside. */
+  aimAhead: number;
+  aimHeight: number;
+  aimClimb: number;
+  /** How far the camera RISES per unit of downhill gradient, m. Going down,
+   * a camera that hangs above the road as it falls away reads as dropping
+   * into the descent rather than as a flat road that happens to be tilted.
+   * ...and how far it DUCKS per unit of uphill, which is less: climbing,
+   * the camera settling toward the road puts the brow high in the frame,
+   * but a camera under the roofline loses the car. Both are 0 for the
+   * cameras that already fly well over the terrain. */
+  dropLift: number;
+  climbDuck: number;
+  /** Lateral swing toward the outside of the turn, m per rad/s of yaw rate,
+   * so a turn reads in the framing before the drift angle develops, and the
+   * most of it a turn can ever buy, m. */
+  swing: number;
+  swingMax: number;
+  /** The swing is sprung rather than eased: natural frequency in rad/s, and
+   * the damping ratio. Under 1 the camera OVERSHOOTS the new framing and
+   * settles back into it, which is what reads as a heavy thing being swung
+   * around — a first-order ease just arrives, and arriving is what makes a
+   * distant camera look bolted to the car. Close in, near-critical and
+   * quick: at four metres an overshoot is a lurch, not a sway. */
+  swingFreq: number;
+  swingDamp: number;
+  /** Share of the body's suspension travel the camera rides, 0..1 — a
+   * touch, so a landing lands in the FRAME too and does not just happen to
+   * the car in front of it. */
+  heave: number;
+  /** Scale on the impact shake. Distance is its own damping: a hit that
+   * rattles a bumper cam is barely a wobble from a hundred feet up. */
+  shake: number;
+};
+
+/** The ladder, in numbers. `chase` is the reference frame — proportions read
+ * off Sega Rally: roof-height camera pitched a few degrees down, close
+ * behind, so the car anchors the BOTTOM of the frame and the horizon rides
+ * high. `close` and `far` are that same shot pulled in and stood back;
+ * `heli` and `top` trade the drama for what the driver cannot otherwise
+ * see, which is the road past the next crest.
+ *
+ * The frame does NOT change when the car leaves the ground: pulling back
+ * for a jump makes the biggest moment in the stage read as small and safe,
+ * and it is the one moment the camera should hold its nerve. */
+const CHASE_RIGS: Record<Exclude<PlayCamera, "hood">, ChaseRig> = {
+  close: {
+    dist: 3.9,
+    distPerSpeed: 0.014,
+    height: 1.6,
+    driftWeight: 0.85,
+    followRate: 5,
+    fov: 60,
+    fovPerSpeed: 0.4,
+    fovMax: 88,
+    aimAhead: 7,
+    aimHeight: 0.65,
+    aimClimb: 5,
+    dropLift: 2.2,
+    climbDuck: 1,
+    swing: 0.4,
+    swingMax: 1.2,
+    swingFreq: 6.5,
+    swingDamp: 1,
+    heave: 0.45,
+    shake: 1.15,
+  },
+  chase: {
+    dist: 5.6,
+    distPerSpeed: 0.02,
+    height: 2,
+    driftWeight: 0.8,
+    followRate: 4.5,
+    fov: 58,
+    fovPerSpeed: 0.38,
+    fovMax: 86,
+    aimAhead: 8,
+    aimHeight: 0.8,
+    aimClimb: 6,
+    dropLift: 2.6,
+    climbDuck: 1.2,
+    swing: 0.45,
+    swingMax: 1.3,
+    swingFreq: 6,
+    swingDamp: 0.95,
+    heave: 0.4,
+    shake: 1,
+  },
+  far: {
+    dist: 9.8,
+    distPerSpeed: 0.03,
+    height: 3.3,
+    driftWeight: 0.75,
+    followRate: 3.8,
+    fov: 56,
+    fovPerSpeed: 0.3,
+    fovMax: 80,
+    aimAhead: 11,
+    aimHeight: 1,
+    aimClimb: 7,
+    dropLift: 3.2,
+    climbDuck: 1.5,
+    swing: 1.1,
+    swingMax: 2.4,
+    swingFreq: 3.2,
+    swingDamp: 0.72,
+    heave: 0.3,
+    shake: 0.85,
+  },
+  // Standoff and aim are a pair: 10 m up and 18 m back puts the car 29°
+  // below the horizontal, and an aim 12 m ahead pitches the shot 17° down,
+  // so the car sits three quarters of the way down the frame — the arcade
+  // read, flown — with the horizon still inside the top third.
+  heli: {
+    dist: 18,
+    distPerSpeed: 0.07,
+    height: 10,
+    driftWeight: 0.9,
+    followRate: 2.4,
+    fov: 50,
+    fovPerSpeed: 0.16,
+    fovMax: 62,
+    aimAhead: 12,
+    aimHeight: 1.05,
+    aimClimb: 4,
+    dropLift: 0,
+    climbDuck: 0,
+    swing: 3.4,
+    swingMax: 4.5,
+    swingFreq: 1.7,
+    swingDamp: 0.5,
+    heave: 0,
+    shake: 0.35,
+  },
+  // Over the roof, tilted only far enough to see what is coming. The wide
+  // fov is what buys that tilt: with the camera almost directly above the
+  // car, the car sits ~76° below the horizontal, so a narrow frame has to
+  // point nearly straight down to hold it — and straight down is a map,
+  // which gives a driver no warning at all. Opening the frame to ~70°
+  // lets the shot pitch back to ~57° and still keep the car three quarters
+  // down it, which reaches some 45 m of road past the nose.
+  top: {
+    dist: 4,
+    distPerSpeed: 0.05,
+    height: 20,
+    driftWeight: 1,
+    followRate: 2.8,
+    fov: 68,
+    fovPerSpeed: 0.12,
+    fovMax: 78,
+    aimAhead: 8,
+    aimHeight: 0,
+    aimClimb: 0,
+    dropLift: 0,
+    climbDuck: 0,
+    swing: 3.8,
+    swingMax: 5,
+    swingFreq: 1.5,
+    swingDamp: 0.45,
+    heave: 0,
+    shake: 0.3,
+  },
+};
+
+/** How the two other easings are geared off a rig's `followRate`. The drift
+ * offset winds ON fast and unwinds SLOWLY — a camera that re-centres the
+ * instant a slide ends reads as the game grabbing the wheel — and the
+ * standoff and height follow a little behind the yaw. The chase rig's 4.5
+ * puts them at 1.6 and 3.0, which is the frame the other five are judged
+ * against. */
+const DRIFT_SETTLE = 0.36;
+const RIG_EASE = 0.67;
+
+/** Longest step the swing spring is integrated over, s. */
+const SPRING_STEP = 1 / 90;
+
+/** Clearance a chase camera is never allowed under, m — over the ground
  * AND over any water. The camera trails the car, so on any real descent the
  * ground behind is higher than the ground under the wheels and a fixed
  * roof-height camera is simply inside the hill; run along a shoreline and
@@ -124,8 +333,11 @@ export function createGameCamera(width: number, height: number): GameCamera {
   let height_ = 2.0;
   let shake = 0;
   let fov = 60;
-  /** Lateral camera offset toward the outside of the current turn, m. */
+  /** Lateral camera offset toward the outside of the current turn, m, and
+   * the speed it is moving at — the swing is a sprung mass, so it carries
+   * momentum through the moment the wheel comes back. */
   let swing = 0;
+  let swingVel = 0;
   /** Seconds the camera has been alive — the drone's circling and the map
    * view's azimuth both walk off it, so neither depends on frame rate. */
   let orbit = 0;
@@ -133,15 +345,15 @@ export function createGameCamera(width: number, height: number): GameCamera {
    * the fog off it so the built ground always dissolves before its edge. */
   let mapRange = 0;
 
-  const updateChase = (state: GameState, dt: number): void => {
+  const updateChase = (rig: ChaseRig, state: GameState, dt: number): void => {
     const car = state.car;
     const speed = Math.hypot(car.u, car.w);
-    // Grounded: 20% nose, 80% travel — the Sega Rally read: the camera
-    // follows the ROAD, so a drift swings the car across the frame while
-    // the road keeps flowing to the vanishing point. Airborne: follow the
-    // travel direction fully; the nose is doing its own thing.
+    // The Sega Rally read: the camera follows the ROAD, so a drift swings
+    // the car across the frame while the road keeps flowing to the
+    // vanishing point. Airborne it follows the travel direction fully; the
+    // nose is doing its own thing.
     const slip = speed > 3 ? Math.atan2(car.w, Math.max(0.001, car.u)) : 0;
-    const wantOff = slip * (car.airborne ? 1 : 0.8);
+    const wantOff = slip * (car.airborne ? 1 : rig.driftWeight);
     // The drift arrives in the frame at full speed, but once the car has
     // settled the leftover angle unwinds gently: a camera that snaps back
     // to centre the instant the slide ends reads as the game grabbing the
@@ -150,43 +362,49 @@ export function createGameCamera(width: number, height: number): GameCamera {
     const developing =
       Math.abs(wantOff) > Math.abs(driftOff) ||
       (Math.sign(wantOff) !== Math.sign(driftOff) && Math.abs(wantOff) > 0.05);
-    driftOff += (wantOff - driftOff) * clamp((developing ? 4.5 : 1.6) * dt, 0, 1);
-    headYaw = angleLerp(headYaw, car.heading, clamp((car.airborne ? 2.2 : 4.5) * dt, 0, 1));
+    const driftRate = rig.followRate * (developing ? 1 : DRIFT_SETTLE);
+    driftOff += (wantOff - driftOff) * clamp(driftRate * dt, 0, 1);
+    // Half the follow rate in the air: the framing goes loose while the car
+    // is ballistic, which is what reads as flying rather than as a camera
+    // welded to a boom.
+    const follow = car.airborne ? rig.followRate * 0.5 : rig.followRate;
+    headYaw = angleLerp(headYaw, car.heading, clamp(follow * dt, 0, 1));
     yaw = headYaw + driftOff;
 
-    // Proportions read off the Sega Rally chase cam: roof-height camera
-    // (~2 m) pitched only a few degrees down, close behind, so the car
-    // anchors the BOTTOM of the frame and the horizon rides high. The frame
-    // does NOT change when the car leaves the ground: pulling back for a
-    // jump makes the biggest moment in the stage read as small and safe,
-    // and it is the one moment the camera should hold its nerve.
-    //
-    // The one thing that DOES move it is the gradient: grounded, vy/u is
-    // the slope under the wheels, and the camera rides high over a descent
-    // and settles toward the road on a climb. Both directions serve the
-    // same read — what is ahead of the car should own the frame, and on a
-    // hill that is either the drop or the brow.
+    // Grounded, vy/u is the slope under the wheels, and the camera rides
+    // high over a descent and settles toward the road on a climb. Both
+    // directions serve the same read — what is ahead of the car should own
+    // the frame, and on a hill that is either the drop or the brow.
     const grade = clamp(car.vy / Math.max(8, car.u), -0.5, 0.5);
-    const gradeLift = car.airborne ? 0 : -grade * (grade < 0 ? CHASE_DROP_LIFT : CHASE_CLIMB_DUCK);
-    const wantDist = 5.6 + car.u * 0.02;
-    const wantHeight = CHASE_HEIGHT + gradeLift;
-    dist += (wantDist - dist) * clamp(3 * dt, 0, 1);
-    height_ += (wantHeight - height_) * clamp(3 * dt, 0, 1);
+    const gradeLift = car.airborne ? 0 : -grade * (grade < 0 ? rig.dropLift : rig.climbDuck);
+    const wantDist = rig.dist + car.u * rig.distPerSpeed;
+    const wantHeight = rig.height + gradeLift;
+    const ease = clamp(rig.followRate * RIG_EASE * dt, 0, 1);
+    dist += (wantDist - dist) * ease;
+    height_ += (wantHeight - height_) * ease;
 
     // Speed lives in the FOV: it stretches hard with pace (capped before
     // the boost overrun turns the world into a tunnel).
-    const wantFov = Math.min(86, 58 + car.u * 0.38);
+    const wantFov = Math.min(rig.fovMax, rig.fov + car.u * rig.fovPerSpeed);
     fov += (wantFov - fov) * clamp(4 * dt, 0, 1);
 
-    // Turning swings the camera toward the OUTSIDE of the corner, so a
-    // turn reads in the framing even before the drift angle does.
-    const wantSwing = clamp(-car.yawRate * 0.45, -1.3, 1.3);
-    swing += (wantSwing - swing) * clamp(4 * dt, 0, 1);
+    const wantSwing = clamp(-car.yawRate * rig.swing, -rig.swingMax, rig.swingMax);
+    // Integrated in bounded substeps rather than over the whole frame: a
+    // stiff spring stepped at a hitching tab's dt rings or blows up, and
+    // clamping the step instead would make the sway run slow on a weak
+    // machine — the sway would then be a frame-rate reading.
+    const w2 = rig.swingFreq * rig.swingFreq;
+    const damp = 2 * rig.swingDamp * rig.swingFreq;
+    for (let left = dt; left > 0; left -= SPRING_STEP) {
+      const h = Math.min(left, SPRING_STEP);
+      swingVel += (w2 * (wantSwing - swing) - damp * swingVel) * h;
+      swing += swingVel * h;
+    }
     const rightX = Math.cos(yaw);
     const rightZ = -Math.sin(yaw);
 
-    const sx = (Math.random() - 0.5) * shake;
-    const sy = (Math.random() - 0.5) * shake;
+    const sx = (Math.random() - 0.5) * shake * rig.shake;
+    const sy = (Math.random() - 0.5) * shake * rig.shake;
     const camX = car.x - Math.sin(yaw) * dist + rightX * swing + sx;
     const camZ = car.z - Math.cos(yaw) * dist + rightZ * swing;
     // The floor is read where the CAMERA is: trailing a car down a hill
@@ -198,19 +416,17 @@ export function createGameCamera(width: number, height: number): GameCamera {
     const surface = state.terrain.waterAt(camX, camZ);
     const under = Math.max(state.terrain.groundAt(camX, camZ), surface ?? -Infinity);
     const floor = under + CHASE_CLEARANCE;
-    const want = car.y + height_ + car.ride * CHASE_HEAVE + sy;
+    const want = car.y + height_ + car.ride * rig.heave + sy;
     camera.position.set(camX, Math.max(want, floor), camZ);
-    // Aim well down the road and low over the roof: the drop from camera
-    // to aim point over ~14 m of run is the ~5° downward pitch of the
-    // reference frame — car at the bottom, horizon high. On a slope the aim
-    // rides the climb (vy/u is the road's gradient while grounded), so a
-    // ramp shows the sky over the brow instead of the camera burying its
-    // aim in the hillside.
+    // The drop from camera to aim point over the run between them IS the
+    // pitch of the shot — a few degrees for the chase rigs, most of a right
+    // angle for the one over the roof. On a slope the aim rides the climb
+    // (vy/u is the road's gradient while grounded).
     const climb = clamp(car.vy / Math.max(10, car.u), -0.4, 0.4);
     camera.lookAt(
-      car.x + Math.sin(yaw) * 8,
-      car.y + 0.8 + climb * 6 + sy * 0.5,
-      car.z + Math.cos(yaw) * 8,
+      car.x + Math.sin(yaw) * rig.aimAhead,
+      car.y + rig.aimHeight + climb * rig.aimClimb + sy * 0.5,
+      car.z + Math.cos(yaw) * rig.aimAhead,
     );
   };
 
@@ -322,7 +538,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
     if (mode === "hood") updateHood(state, dt);
     else if (mode === "drone") updateDrone(state, dt);
     else if (mode === "map") updateMap(state);
-    else updateChase(state, dt);
+    else updateChase(CHASE_RIGS[mode], state, dt);
     camera.fov = verticalFovFor(fov, camera.aspect);
     camera.updateProjectionMatrix();
   };
@@ -335,7 +551,11 @@ export function createGameCamera(width: number, height: number): GameCamera {
       mode = next;
     },
     cycle: () => {
+      // Genuinely a no-op from the overhead views: the drone and the map are
+      // the menu's own framing, and walking them onto a driving camera would
+      // leave a menu page standing over a shot nobody asked for.
       const at = PLAY_MODES.indexOf(mode);
+      if (at < 0) return mode;
       mode = PLAY_MODES[(at + 1) % PLAY_MODES.length];
       return mode;
     },

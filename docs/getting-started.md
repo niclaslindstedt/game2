@@ -26,7 +26,7 @@ The **car** is picked on any of those pages, turning on its stand. **Time of day
 | Q / Z     | Shift down (manual car)       |
 | Esc       | In-race menu (pause)          |
 | C         | Back to the main menu         |
-| V         | Camera: chase ↔ hood          |
+| V         | Camera: next of six angles    |
 | B         | Back to the track (off-road)  |
 | R         | Restart stage                 |
 

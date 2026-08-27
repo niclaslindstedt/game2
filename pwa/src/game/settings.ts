@@ -8,6 +8,23 @@
 // `HudSettings`, input.ts reads the key bindings, and the audio bus reads
 // `AudioSettings`.
 
+/** Where the camera watches the car from, inside out. This is both the
+ * order the camera key walks and the order the options screen lists, and
+ * every entry is a mode the car can be DRIVEN from — the menu's drone and
+ * the Roam map are placed by the app and are not offered here. The
+ * geometry behind each name lives in camera.ts; this is the vocabulary the
+ * player picks from. */
+export type PlayCamera = "hood" | "close" | "chase" | "far" | "heli" | "top";
+
+export const PLAY_CAMERAS: { id: PlayCamera; label: string; hint: string }[] = [
+  { id: "hood", label: "HOOD", hint: "On the nose — the road rushes at you" },
+  { id: "close", label: "CLOSE", hint: "Tight behind the bumper, low and fast" },
+  { id: "chase", label: "CHASE", hint: "The arcade rally view: roof height, close behind" },
+  { id: "far", label: "FAR", hint: "Stood back — more road, more warning" },
+  { id: "heli", label: "HELI", hint: "High and behind, as if flown from a drone" },
+  { id: "top", label: "TOP", hint: "Straight over the roof, tilted down the road" },
+];
+
 export type HudToggle =
   "minimap" | "pacenotes" | "pacenoteText" | "damage" | "tachometer" | "wind" | "boost" | "timer";
 
@@ -177,6 +194,11 @@ export const DEFAULT_TOUCH: TouchSettings = {
 
 export type Settings = {
   hud: HudSettings;
+  /** The camera a run OPENS on. The camera key still walks the whole
+   * ladder from wherever the run started; this only decides where it
+   * starts, because a player who drives from the hood should not have to
+   * press V four times at every start line. */
+  camera: PlayCamera;
   audio: AudioSettings;
   video: VideoSettings;
   keys: KeyBindings;
@@ -198,6 +220,7 @@ export const DEFAULT_SETTINGS: Settings = {
     boost: true,
     timer: true,
   },
+  camera: "chase",
   // Defaults with headroom on both: the engine bed and the score sum into
   // one limiter, and a game that arrives at full scale has nowhere to go but
   // down. Music sits under the effects, because the effects are what the
@@ -236,6 +259,7 @@ function migratePedalDirs(touch: TouchSettings): void {
 export function loadSettings(): Settings {
   const settings: Settings = {
     hud: { ...DEFAULT_SETTINGS.hud },
+    camera: DEFAULT_SETTINGS.camera,
     audio: { ...DEFAULT_SETTINGS.audio },
     video: { ...DEFAULT_SETTINGS.video },
     keys: { ...DEFAULT_SETTINGS.keys },
@@ -247,6 +271,12 @@ export function loadSettings(): Settings {
     if (!stored) return settings;
     const parsed = JSON.parse(stored) as Partial<Settings>;
     if (parsed.hud) Object.assign(settings.hud, parsed.hud);
+    // Checked against the list rather than merged: a build that renames or
+    // drops an angle must not leave the player pointed at one that no
+    // longer exists, which would be a run with no camera at all.
+    if (PLAY_CAMERAS.some((cam) => cam.id === parsed.camera)) {
+      settings.camera = parsed.camera as PlayCamera;
+    }
     if (parsed.audio) Object.assign(settings.audio, parsed.audio);
     if (parsed.video) Object.assign(settings.video, parsed.video);
     if (parsed.keys) Object.assign(settings.keys, parsed.keys);
