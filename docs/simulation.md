@@ -50,4 +50,9 @@ If a tuning change breaks one of these, the change is wrong or the test's world 
 
 ## Screenshots close the loop
 
-Numbers say whether the game is _sound_; pictures say whether it _looks and reads_ right. `make screenshots` (scripts/screenshot.mjs) serves the built app, drives it with scripted keyboard input, and captures the grid, full speed, a drift, the first jump reached, the hood cam, and portrait framing into `previews/`. Iterate: change → `make sim` → `make screenshots` → look.
+Numbers say whether the game is _sound_; pictures say whether it _looks and reads_ right. `make screenshots` (scripts/screenshot.mjs) serves the built app, drives it with scripted keyboard input, and captures the grid, full speed, a drift, the first jump reached, the sealed-road trio, the hood cam, and portrait framing into `previews/`. Pass scene-name fragments on the command line to shoot only those. Iterate: change → `make sim` → `make screenshots` → look.
+
+Two habits keep a scene pointed at what it is for rather than at the harness:
+
+- **Drive by the run's clock, not the wall clock.** Under software rendering the engine advances at a fraction of real time, so a `waitForTimeout` lands somewhere different on the stage on every machine. The scene helpers read the HUD instead — the timer, the speed, the co-driver's call and its distance — so "out on the sealed road", "on open road", "stopped" and "at the turn-in" mean what they say.
+- **`?bot=1` rides out, the script takes the wheel.** Blind key presses only ever reach the first corner, and anything the generator places further in (a sealed section, a ford, a jump) is unreachable that way. With `?bot=1` the bot drives until a control is touched and then hands over for good, so a scene can be carried to a PLACE on the stage and do its one thing there.

@@ -18,7 +18,7 @@ import {
   type VideoSettings,
 } from "./settings.ts";
 import { buildCar, type CarVisual } from "./car-mesh.ts";
-import { createDust, TIRE_SMOKE } from "./dust.ts";
+import { createDust, TARMAC_SMOKE, TIRE_SMOKE } from "./dust.ts";
 import { createEnvironment } from "./environment.ts";
 import { createFumes } from "./fumes.ts";
 import { createRain } from "./rain.ts";
@@ -96,6 +96,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   /** The map pane, CSS pixels from the canvas' top-left. */
   let mapRect: { x: number; y: number; width: number; height: number } | null = null;
   let dustClock = 0;
+  /** Last frame's forward speed — the launch's wheelspin is read off the
+   * change in it. */
+  let lastSpeed = 0;
   let fumeClock = 0;
 
   /** The environment's light tint, pushed onto everything that carries its
@@ -188,6 +191,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       car.dispose();
     }
     game = state;
+    lastSpeed = state.car.u;
     world = buildWorld(state.track, FLORA_SCALE[quality.flora]);
     scene.add(world.group);
     route = buildMapRoute(state.track);
@@ -240,18 +244,25 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     const rightZ = -Math.sin(c.heading);
 
     // Gravel kicked up at the wheels — the ground-contact half of the speed
-    // feel. Three overlapping sources, strongest first: the drift/off-road
-    // rooster tail, the braking plume, and the plain rolling kickup that
-    // rides with pace. Particles inherit part of the car's wake plus the
-    // wind, so every cloud streams backward and leans downwind.
+    // feel. On a loose surface three overlapping sources, strongest first:
+    // the drift/off-road rooster tail, the braking plume, and the plain
+    // rolling kickup that rides with pace. A sealed road has none of them
+    // and answers on its own terms (TARMAC_SMOKE). Particles inherit part
+    // of the car's wake plus the wind, so every cloud streams backward and
+    // leans downwind.
     const fx = fxScale();
+    // The engine tracks the driven surface — road fords AND the wild's
+    // lakes and streams throw the blue spray, and the stage's sealed
+    // sections throw nothing at all until the tires start smoking.
+    const sealed = state.surface === "asphalt";
+    // How hard the car is gathering speed. Nothing in `GameState` carries
+    // it, and the launch is the one moment that can only be recognised from
+    // it, so the renderer differentiates the speed it is handed anyway.
+    const accel = dt > 0 ? (c.u - lastSpeed) / dt : 0;
+    lastSpeed = c.u;
     dustClock += dt;
-    if (fx > 0 && !c.airborne && dustClock > 0.03) {
+    if (fx > 0 && !c.airborne && dustClock > (sealed ? TARMAC_SMOKE.every : 0.03)) {
       dustClock = 0;
-      // The engine tracks the driven surface — road fords AND the wild's
-      // lakes and streams throw the blue spray, and the stage's sealed
-      // sections throw nothing at all until the tires start smoking.
-      const sealed = state.surface === "asphalt";
       const cloud = sealed ? smoke : dust;
       const color = state.surface === "water" ? 0x4fa0f0 : sealed ? 0xd8d5cf : 0xb29268;
       // Smoke is boiled off the tire and left behind; grit is thrown by it.
@@ -274,17 +285,36 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
           wakeX,
           wakeZ,
         );
-      if (sideways || state.offRoad) {
+      if (sealed) {
+        const T = TARMAC_SMOKE;
+        if (c.u < T.launch.speed && accel > T.launch.accel) {
+          // Off the line: the driven wheels are ahead of the car for a
+          // moment, and that is the whole of it — it stops the instant
+          // they hook up.
+          rear(-1, T.launch.puffs, T.spread);
+          rear(1, T.launch.puffs, T.spread);
+        } else if (c.drifting) {
+          // `drifting`, not `slide`: the readout is the settled ANGLE with
+          // hysteresis behind it, so smoke comes up for the drift a player
+          // can SEE and not for every corner that leans on the tires. A
+          // sliding tire on tarmac makes a few big puffs where gravel
+          // throws grains, and they hang where they were made.
+          const thrown = T.drift.puffs + Math.round(c.slide * 3);
+          rear(-1, thrown, T.spread);
+          rear(1, thrown, T.spread);
+        } else if (c.braking && c.u > T.brake.speed) {
+          rear(Math.random() < 0.5 ? -1 : 1, T.brake.puffs, T.spread);
+        }
+      } else if (sideways || state.offRoad) {
         // The drift plume also blows toward the slide, off the outside
-        // wheels, and thickens as the slide deepens. A sliding tire on
-        // tarmac makes fewer, bigger puffs than gravel throws grains.
-        const thrown = sealed ? 2 + Math.round(c.slide * 2) : 4 + Math.round(c.slide * 5);
-        rear(-1, thrown, sealed ? 1.4 : 3.5);
-        rear(1, thrown, sealed ? 1.4 : 3.5);
+        // wheels, and thickens as the slide deepens.
+        const thrown = 4 + Math.round(c.slide * 5);
+        rear(-1, thrown, 3.5);
+        rear(1, thrown, 3.5);
       } else if (c.braking && c.u > 8) {
-        rear(-1, sealed ? 2 : 4, sealed ? 1.2 : 2.5);
-        rear(1, sealed ? 2 : 4, sealed ? 1.2 : 2.5);
-      } else if (c.u > 15 && !sealed) {
+        rear(-1, 4, 2.5);
+        rear(1, 4, 2.5);
+      } else if (c.u > 15) {
         // Rolling kickup is loose-surface only: a sealed road has nothing
         // lying on it to pick up.
         rear(Math.random() < 0.5 ? -1 : 1, 2, 1.6);

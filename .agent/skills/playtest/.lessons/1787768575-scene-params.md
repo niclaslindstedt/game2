@@ -14,4 +14,6 @@ the shot renders fine, it is just of the wrong stage, so check the HUD's
 STAGE number in the PNG before trusting a seed-pinned scene. Pinning a seed
 is what makes a scene stageable at all — a scene that needs the car at a
 specific feature ("in the air") should pin a seed whose opening straight
-carries that feature and drive to it on a timer.
+carries that feature. Do NOT reach it on a wall-clock timer, and do not
+expect blind key presses to get past the first corner: see the `?bot=1`
+lesson.

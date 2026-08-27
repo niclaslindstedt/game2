@@ -154,3 +154,54 @@ export function glowTexture(): THREE.CanvasTexture {
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
+
+/** A tire-smoke puff, chunky rather than misty: three steps of a lumpy blob
+ * on a tiny canvas, nearest-filtered so its edge is made of visible pixels.
+ * A bare point sprite is a screen-aligned SQUARE, and a square big enough to
+ * read as smoke reads as a rectangle stuck to the lens instead — this is
+ * what a particle has to wear to be allowed to be big. */
+export function puffTexture(): THREE.CanvasTexture {
+  const size = 16;
+  const { canvas, ctx } = makeCanvas(size);
+  ctx.clearRect(0, 0, size, size);
+  // Each ring is a cluster of overlapping discs rather than one circle, so
+  // the silhouette comes out lumpy the way a puff is.
+  const rings: { alpha: number; blobs: [number, number, number][] }[] = [
+    {
+      alpha: 0.3,
+      blobs: [
+        [7.5, 7.5, 7],
+        [10, 6, 5],
+        [5.5, 10, 4.6],
+      ],
+    },
+    {
+      alpha: 0.55,
+      blobs: [
+        [7, 7.5, 4.6],
+        [10, 6.5, 3.2],
+        [6, 10, 3],
+      ],
+    },
+    {
+      alpha: 1,
+      blobs: [
+        [7.5, 7.5, 2.6],
+        [9.5, 6.5, 1.8],
+      ],
+    },
+  ];
+  for (const ring of rings) {
+    ctx.fillStyle = `rgba(255,255,255,${ring.alpha})`;
+    for (const [cx, cy, r] of ring.blobs) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}

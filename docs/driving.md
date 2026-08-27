@@ -119,12 +119,12 @@ Generated stages roll (`STAGE_RULES.elevation` — long climbs, medium rollers, 
 
 ## Surfaces
 
-| Surface     | Effect                                                                                                                                                                           |
-| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Gravel      | The baseline: full power, honest grip, dust off the rear when sideways                                                                                                           |
-| **Asphalt** | A third more lateral grip: the corner that needed a slide can be driven round, the line tightens, the drift has to be ASKED for — and it smokes tires instead of throwing gravel |
-| Water       | Fords and shallows: a splash on entry, heavy drag, reduced grip and power                                                                                                        |
-| Nature      | The open landscape off the road: loose grip, fast — up to ~150 km/h                                                                                                              |
+| Surface     | Effect                                                                                                                                                                                                     |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Gravel      | The baseline: full power, honest grip, dust off the rear when sideways                                                                                                                                     |
+| **Asphalt** | A third more lateral grip: the corner that needed a slide can be driven round, the line tightens, the drift has to be ASKED for — and it throws nothing at all until a tire is overwhelmed, then smokes it |
+| Water       | Fords and shallows: a splash on entry, heavy drag, reduced grip and power                                                                                                                                  |
+| Nature      | The open landscape off the road: loose grip, fast — up to ~150 km/h                                                                                                                                        |
 
 Asphalt (`TUNING.surfaces.grip.asphalt`) is not a different handling model,
 because there isn't one: the same grip ceiling that decides how sideways
@@ -135,6 +135,16 @@ entered hot, flicked, or pulled on the handbrake. The tarmac sections are
 laid as long runs joined to the stage at planned junctions (R15/R17 in
 [track-generator.md](track-generator.md)), so a stretch of grip is an
 event in the stage rather than a texture swap.
+
+A sealed road has nothing lying on it to pick up, so it is also the one
+surface that throws nothing for ordinary driving, however hard it is being
+driven. What it gives instead is TIRE SMOKE, and only at the three moments a
+tire is genuinely overwhelmed: the wheels spinning up off the line, a
+committed drift (`car.drifting`, the settled angle — not `car.slide`, which
+moves in every corner), and braking hard from real speed. Sparingly at each
+— the policy is `TARMAC_SMOKE` in `pwa/src/game/dust.ts`, and the three
+`shot-tarmac-*` screenshot scenes are its acceptance test, one of which
+exists to show that flat out on tarmac leaves nothing behind the car.
 
 ## The road's cross-section
 

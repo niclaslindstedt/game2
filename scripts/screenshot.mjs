@@ -84,6 +84,54 @@ async function racing(page) {
   );
 }
 
+/** Wait until the RUN's own clock has passed `seconds`. Under software
+ * rendering the sim advances at a fraction of wall time, so a fixed
+ * `waitForTimeout` lands at a different place on the stage on every machine;
+ * the HUD timer is the only honest cursor into how far the drive has got. */
+async function atStageTime(page, seconds) {
+  await page.waitForFunction(
+    `(() => {
+      const t = document.querySelector('.hud-timer')?.textContent;
+      if (!t) return false;
+      const [m, s] = t.split(':');
+      return Number(m) * 60 + Number(s) >= ${seconds};
+    })()`,
+    null,
+    { timeout: 180000 },
+  );
+}
+
+/** The run's own clock, seconds. */
+async function stageTime(page) {
+  return await page.evaluate(
+    `(() => {
+      const t = document.querySelector('.hud-timer')?.textContent ?? '0:00.0';
+      const [m, s] = t.split(':');
+      return Number(m) * 60 + Number(s);
+    })()`,
+  );
+}
+
+/** Wait until the co-driver's current call is at least `metres` away — i.e.
+ * the car is out on open road with room to do something in — and say which
+ * way that call goes. The stage the bot happens to be on decides where that
+ * lands, so a scene that needs elbow room asks for it instead of counting
+ * seconds, and turns the way the road is going rather than across it. */
+async function atOpenRoad(page, metres) {
+  const handle = await page.waitForFunction(
+    `(() => {
+      const call = document.querySelector('.hud-pace-call');
+      const dist = call?.querySelector('.hud-pace-dist');
+      if (!dist || Number.parseInt(dist.textContent, 10) < ${metres}) return false;
+      const text = call.querySelector('.hud-pace-text')?.textContent ?? '';
+      return text.includes('LEFT') ? 'ArrowLeft' : text.includes('RIGHT') ? 'ArrowRight' : false;
+    })()`,
+    null,
+    { timeout: 180000 },
+  );
+  return await handle.jsonValue();
+}
+
 async function capture(name, viewport, script, params = {}, waitUntil = "load", pageOptions = {}) {
   if (only.length > 0 && !only.some((f) => name.includes(f))) return;
   const page = await browser.newPage({ viewport, ...pageOptions });
@@ -144,6 +192,100 @@ await capture("shot-drift", { width: 1280, height: 720 }, async (page) => {
   // so a short hold captures a car that has only started to move.
   await page.waitForTimeout(950);
 });
+
+// Tarmac, where the ground-contact FX are a different question: a sealed
+// road has nothing lying on it to throw, so the acceptance test for these
+// three is as much what is ABSENT as what is there. Flat out must be clean
+// air behind the car; the line and the drift are the two moments the tires
+// are allowed to give something up.
+//
+// `asphalt=1` seals the stage, but the paving only ever changes at a
+// JUNCTION, so every stage still opens on a couple of hundred metres of
+// gravel behind a real corner — which no blind key press gets around. So
+// these three ride out on `bot=1` and take the wheel once the road is
+// sealed under them.
+const TARMAC = { asphalt: "1", bot: "1" };
+/** How far into the run the bot has the car out on the sealed road, stage
+ * seconds — it drives the opening gravel and the junction off it. */
+const ON_TARMAC = 16;
+
+// The bot keeps driving through this one: nothing is pressed, so there is
+// nothing to see behind the car, which is the whole point of the shot.
+await capture(
+  "shot-tarmac-speed",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await racing(page);
+    await atStageTime(page, ON_TARMAC);
+  },
+  TARMAC,
+);
+await capture(
+  "shot-tarmac-drift",
+  { width: 1280, height: 720 },
+  async (page) => {
+    // The bot rides out to the sealed road and finds a straight with room in
+    // it; the flick itself is scripted, because a bot with 1.35x of grip
+    // under it has no reason to hang the car out and simply drives round
+    // every corner.
+    //
+    // Both halves of the entry are about the eight metres of road the slide
+    // has to live inside: braked back to a rally pace first, and flicked the
+    // way the co-driver says the road goes rather than across it. At 120
+    // km/h and a guessed direction the car is in the trees before the smoke
+    // has finished coming up — and a car in the trees is a picture of GRAVEL
+    // dust, which is the opposite of what this shot is for.
+    await racing(page);
+    await atStageTime(page, ON_TARMAC);
+    const turn = await atOpenRoad(page, 150);
+    await page.keyboard.down("ArrowDown");
+    await page.waitForFunction(
+      "Number(document.querySelector('.hud-speed-num')?.textContent) <= 55",
+      null,
+      { timeout: 60000 },
+    );
+    await page.keyboard.up("ArrowDown");
+    const flick = await stageTime(page);
+    await page.keyboard.down(turn);
+    await page.keyboard.down("Space");
+    await atStageTime(page, flick + 0.3);
+    await page.keyboard.up("Space");
+    // Caught with the angle up and the car still on its own side of the
+    // road — a slide held any longer is a picture of the scenery.
+    await atStageTime(page, flick + 0.45);
+  },
+  TARMAC,
+);
+await capture(
+  "shot-tarmac-launch",
+  { width: 1280, height: 720 },
+  async (page) => {
+    // Every stage starts on gravel, so the launch has to be made out on the
+    // sealed road: stop the car dead there, then floor it.
+    await racing(page);
+    await atStageTime(page, ON_TARMAC);
+    await page.keyboard.down("ArrowDown");
+    await page.waitForFunction(
+      "document.querySelector('.hud-speed-num')?.textContent === '0'",
+      null,
+      {
+        timeout: 120000,
+      },
+    );
+    await page.keyboard.up("ArrowDown");
+    await page.keyboard.down("ArrowUp");
+    // Caught while the driven wheels are still ahead of the car — the puff
+    // is gone the moment they hook up.
+    await page.waitForFunction(
+      "Number(document.querySelector('.hud-speed-num')?.textContent) >= 12",
+      null,
+      {
+        timeout: 60000,
+      },
+    );
+  },
+  TARMAC,
+);
 
 // In the air, straight and crossed up. Seed 28 opens with a long straight
 // into a lip, so both are a matter of holding the throttle; the sideways one

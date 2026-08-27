@@ -7,6 +7,8 @@
 
 import * as THREE from "three";
 
+import { puffTexture } from "./textures.ts";
+
 const POOL = 768;
 
 /** What a cloud is MADE of. The two styles are opposites on purpose: a
@@ -23,6 +25,10 @@ export type DustStyle = {
   gravity: number;
   /** Lifetime band, seconds. */
   life: { min: number; max: number };
+  /** A cloud made of PUFFS rather than grains: its points wear a blob mask
+   * instead of the sprite's bare square, which is the only way a particle
+   * gets to be big enough to read as smoke. */
+  puffy?: boolean;
 };
 
 /** Gravel: fine grit, and a lot of it. The grains are deliberately SMALL —
@@ -38,13 +44,41 @@ export const GRAVEL_DUST: DustStyle = {
 
 /** Tire smoke: what a sealed road gives you instead. Big soft puffs that
  * hang where they were made and drift off with the car's wake, so a drift
- * on tarmac leaves a wall behind it rather than a rooster tail. */
+ * on tarmac leaves a wall behind it rather than a rooster tail. Big is only
+ * available to it because it is `puffy`: the chase cam sits a couple of
+ * metres behind the tires that make these, and at that range a bare sprite
+ * this size is a grey rectangle stuck to the lens. */
 export const TIRE_SMOKE: DustStyle = {
-  size: 0.62,
-  opacity: 0.3,
+  size: 0.55,
+  opacity: 0.26,
   rise: 0.7,
   gravity: 0.4,
   life: { min: 1, max: 1.9 },
+  puffy: true,
+};
+
+/** WHEN a sealed road smokes — the policy that goes with the style above.
+ * Tarmac has nothing lying on it to throw, so unlike gravel it gives up
+ * nothing at all for ordinary driving, however hard it is being driven.
+ * Smoke is what a tire gives when it is genuinely overwhelmed, and there
+ * are only three moments that qualify: spinning up on the line, a committed
+ * drift, and a real stop from real speed. Each of them leaves a little. */
+export const TARMAC_SMOKE = {
+  /** Seconds between puffs — a quarter of the loose surface's rate, so a
+   * drift leaves a haze hanging in the corner rather than a bank of fog. */
+  every: 0.12,
+  /** Pulling away: forward acceleration in m/s² under `speed` m/s that
+   * reads as the driven wheels spinning up before they hook up. */
+  launch: { accel: 4.5, speed: 7, puffs: 3 },
+  /** A committed drift: `puffs` per outside wheel, plus a little for how
+   * deep the slide has gone. */
+  drift: { puffs: 2 },
+  /** Braking: `puffs` off ONE wheel, and only from a speed worth losing
+   * (m/s) — a dab into a corner does not lock anything up. */
+  brake: { speed: 24, puffs: 2 },
+  /** Smoke boils off the tire rather than being thrown by it, so it spreads
+   * gently instead of arcing away, m/s. */
+  spread: 1.2,
 };
 
 export type Dust = {
@@ -75,8 +109,10 @@ export function createDust(style: DustStyle = GRAVEL_DUST): Dust {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  const map = style.puffy ? puffTexture() : null;
   const mat = new THREE.PointsMaterial({
     size: style.size,
+    map,
     vertexColors: true,
     transparent: true,
     opacity: style.opacity,
@@ -130,6 +166,7 @@ export function createDust(style: DustStyle = GRAVEL_DUST): Dust {
   const dispose = (): void => {
     geo.dispose();
     mat.dispose();
+    map?.dispose();
   };
 
   // Park the whole pool out of sight until first use.
