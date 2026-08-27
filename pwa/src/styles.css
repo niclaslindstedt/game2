@@ -21,6 +21,7 @@
   --hud-good: #ffd23e;
   --hud-bad: #ff5a4e;
   --hud-info: #9fd8ff;
+  --hud-steer: #2f7bff;
 }
 
 html,
@@ -777,8 +778,20 @@ body {
   height: 120px;
   color: var(--hud-ink);
   opacity: 0.85;
-  transform: rotate(var(--turn, 0deg));
   filter: drop-shadow(2px 2px 0 rgb(18 48 105 / 60%));
+}
+
+/* Only the spokes, hub and marker turn — the rim below them is a circle,
+   and it has to hold still for the fill arc to measure against. */
+.hud-wheel-spokes {
+  transform: rotate(var(--turn, 0deg));
+}
+
+/* How far the wheel is off centre, painted onto the rim from 12 o'clock to
+   the marker. The dash is written in degrees from the pointer handler
+   (pathLength=360), so the arc lands exactly under the marker. */
+.hud-wheel-fill {
+  stroke: var(--hud-steer);
 }
 
 @keyframes hud-anchor-in {
