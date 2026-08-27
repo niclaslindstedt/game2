@@ -58,9 +58,9 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | A car's LOOK (silhouette, panels, wheels, livery)      | `pwa/src/game/car-styles.ts` (specs); generator in `pwa/src/game/car/`            |
 | A new PART on the car (a light pod, a snorkel, a vent) | a builder in `pwa/src/game/car/`, driven by an optional `spec.ts` field           |
 | How dirty the car gets, and where                      | `pwa/src/game/car-dirt.ts`                                                        |
-| Stage generation rules or vocabulary                   | `engine/mapgen/rules.ts` (data) / `generate.ts` (search)                          |
+| Stage generation rules or vocabulary                   | `engine/mapgen/rules.ts` (data); the searches in `generate.ts` (sprint, endless) and `circuit.ts` (R22), over `search.ts` |
 | Track geometry/compilation                             | `engine/mapgen/compile.ts`                                                        |
-| Run orchestration (phases, respawn, events)            | `engine/game/step.ts`                                                             |
+| Run orchestration (phases, laps, respawn, events)      | `engine/game/step.ts`                                                             |
 | Collision / damage (crush, parts, wreck, systems)      | `engine/game/collision.ts` — the `collision` skill                                |
 | Bot behavior                                           | `engine/sim/bot.ts`                                                               |
 | Anything drawn (meshes, textures, camera, effects)     | `pwa/src/game/` (renderer.ts and friends)                                         |

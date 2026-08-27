@@ -61,8 +61,26 @@
 //       the rally borrows; nobody builds a launch ramp into one.
 //   R21 The road's WIDTH is a dial: `knobs.width` runs from a narrow lane
 //       the trees crowd to a broad boulevard with room to place the car.
+//   R22 A stage is SHAPED as a sprint or as a CIRCUIT. A circuit's last
+//       sample lands back on its first, on the same heading, so the start
+//       line is also the finish line and the stage can be raced over laps:
+//       the line leaves the grid, is steered around a ring by a bearing
+//       that turns once through a full circle over the target lap, and is
+//       closed onto the grid exactly by a solved turn-straight-turn.
+//       Everything else — the vocabulary, R3 through R8, R10's
+//       self-distance (measured cyclically), the features — is the sprint's.
+
+/** Sample spacing along the compiled centerline, meters. It lives here
+ * because it is not only the compiler's business: a search that has to land
+ * a road exactly on a point (R22's closure) must walk it the way the
+ * compiler will, step for step. */
+export const SAMPLE_STEP = 2;
 
 export type TurnSeverity = "soft" | "medium" | "hard";
+/** R22 — how a stage is laid out: a sprint runs from a start line to a
+ * finish somewhere else; a circuit comes back to where it started, which is
+ * what makes laps possible. */
+export type StageShape = "sprint" | "circuit";
 export type SegmentFeature = "none" | "jump" | "water" | "crest";
 /** How a stage crosses water: wade through it, or span it. */
 export type Crossing = "ford" | "timber" | "concrete";
@@ -174,6 +192,46 @@ export const STAGE_RULES = {
      * stream may still backtrack out of a pocket, exactly like the finite
      * search — the one escape hatch an infinite road cannot live without. */
     commitLag: 900,
+  },
+
+  /** R22 — the circuit. A lap is the stage length's band divided by the
+   * laps a circuit is raced over, so "medium" means the same three minutes
+   * of driving whichever shape it is built in — with a floor, because a
+   * ring shorter than that is a roundabout and not a race track.
+   *
+   * The search steers the line around a ring by a bearing that turns once
+   * through a full circle over `target` meters (radius `target / 2π`), then
+   * CLOSES it: from `closeFrom` of the way round, every iteration tries to
+   * solve a turn-straight-turn back onto the grid's own pose. The solve is
+   * exact — it lands on the start line to the millimeter — so the only
+   * question is whether the corners it asks for are ones this generator
+   * would have drawn anyway, which is what `closeRadii` and R3's own angle
+   * bands decide. */
+  circuit: {
+    /** Laps a circuit is raced over, and the divisor the lap band uses. */
+    laps: 3,
+    /** Shortest lap worth building, m. */
+    minLap: 1150,
+    /** How far round the ring before the line stops following the ring
+     * bearing and starts being steered at the grid itself. The CLOSURE is
+     * not gated on this — it is tried wherever one could land inside the
+     * band — but a line that never turns for home rarely gives it the
+     * chance. */
+    homeFrom: 0.7,
+    /** How many radii per severity the closure is solved at. The radii
+     * themselves come out of `turn` — a closing corner is drawn from the
+     * same vocabulary as every other corner (R3), and the solve's job is
+     * to find a place on the lap where one of them fits. */
+    closeRadii: 3,
+    /** The straight between the closure's two arcs. The ceiling is where a
+     * circuit gets its MAIN STRAIGHT from — a lap wants one long enough to
+     * pull top gear down before the line — and it is also what decides how
+     * far from the grid a closure can be solved at all, so it is the one
+     * number that says how often a lap manages to shut. Long enough to read
+     * as a straight,
+     * short enough that the closure is a corner combination and not a
+     * runway bolted onto the end of the lap. */
+    closeStraight: { min: 25, max: 380 },
   },
 
   /** R1/R2 — opening and closing straights, meters. */
@@ -459,6 +517,16 @@ export const STAGE_RULES = {
   /** Chance the next segment is a turn rather than a straight. */
   turnChance: 0.72,
 } as const;
+
+/** R22 — the band ONE LAP of a circuit is searched inside: the sprint band
+ * for the same stage length divided by the laps it is raced over, so a
+ * "medium" circuit is the same three minutes of driving a medium sprint is.
+ * The floor is what stops the short band collapsing into a roundabout. */
+export function circuitLapBand(length: FiniteStageLength): { min: number; max: number } {
+  const band = STAGE_RULES.stageLengths[length].band;
+  const { laps, minLap } = STAGE_RULES.circuit;
+  return { min: Math.max(minLap, band.min / laps), max: Math.max(minLap * 1.3, band.max / laps) };
+}
 
 export type SegmentPlan = {
   kind: "straight" | "turn";

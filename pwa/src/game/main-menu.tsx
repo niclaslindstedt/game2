@@ -20,6 +20,7 @@ import { APP_NAME, REPO_URL } from "../identity.ts";
 import { formatTime } from "../lib/util.ts";
 import {
   LOCATIONS,
+  levelLaps,
   levelUnlocked,
   locationById,
   type CampaignLevel,
@@ -113,10 +114,13 @@ function LockGlyph() {
   );
 }
 
-/** A stage's billing without compiling it: the band's name and the minutes
- * it is sized for. */
+/** A stage's billing without compiling it: the band's name, the minutes it
+ * is sized for, and — on a circuit — the laps it is cut into, which is the
+ * one thing about a level a player has to know before pressing it. */
 function lengthLabel(level: CampaignLevel): string {
-  return `${level.length.toUpperCase()} · ${STAGE_RULES.stageLengths[level.length].minutes} MIN`;
+  const laps = levelLaps(level);
+  const shape = laps > 1 ? `${laps} LAPS` : level.length.toUpperCase();
+  return `${shape} · ${STAGE_RULES.stageLengths[level.length].minutes} MIN`;
 }
 
 type LevelBoxProps = {

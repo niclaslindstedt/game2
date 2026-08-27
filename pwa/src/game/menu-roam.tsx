@@ -11,13 +11,14 @@
 // geometry upward so the renderer knows where to put it.
 
 import { useEffect, useRef } from "react";
-import { STAGE_RULES, type StageLength } from "@engine";
+import { STAGE_RULES, circuitLapBand, type StageLength, type StageShape } from "@engine";
 
 import { CarPicker } from "./car-picker.tsx";
 import {
   OptionRow,
   STAGE_DIALS,
   STAGE_LENGTH_OPTIONS,
+  STAGE_SHAPES,
   TIMES_OF_DAY,
   WEATHERS,
   dialStop,
@@ -40,10 +41,17 @@ type RoamProps = {
 };
 
 /** What a length band promises, for the slider's readout. An endless stage
- * has no band to quote — it keeps generating for as long as the run does. */
-function lengthBilling(length: StageLength): string {
+ * has no band to quote — it keeps generating for as long as the run does,
+ * and it is the one length a circuit cannot be built in. A circuit quotes
+ * its LAP: the same minutes of driving, cut into three of them. */
+function lengthBilling(length: StageLength, shape: StageShape): string {
   if (length === "endless") return "generates forever";
   const band = STAGE_RULES.stageLengths[length];
+  if (shape === "circuit") {
+    const lap = circuitLapBand(length);
+    const laps = STAGE_RULES.circuit.laps;
+    return `~${band.minutes} min · ${laps} × ${(lap.min / 1000).toFixed(1)}–${(lap.max / 1000).toFixed(1)} km`;
+  }
   const { min, max } = band.band;
   return `~${band.minutes} min · ${(min / 1000).toFixed(1)}–${(max / 1000).toFixed(1)} km`;
 }
@@ -143,22 +151,38 @@ export function RoamPage({
               step={1}
               value={lengthIndex}
               aria-label="Stage length"
-              onInput={(e) =>
+              onInput={(e) => {
+                const length =
+                  STAGE_LENGTH_OPTIONS[Number((e.target as HTMLInputElement).value)].id;
                 onRace({
                   ...race,
-                  length: STAGE_LENGTH_OPTIONS[Number((e.target as HTMLInputElement).value)].id,
-                })
-              }
+                  length,
+                  shape: length === "endless" ? "sprint" : race.shape,
+                });
+              }}
             />
             <span className="roam-length-read">
               <b>{STAGE_LENGTH_OPTIONS[lengthIndex].label}</b>
-              {lengthBilling(race.length)}
+              {lengthBilling(race.length, race.shape)}
             </span>
           </div>
-          {/* The generator's dials belong in the STAGE pane and nowhere
-              else: they say what the seed BUILDS, and the map above shows
-              it the moment one moves. */}
+          {/* SHAPE sits with the dials, because it is one: it says what the
+              seed BUILDS. Picking a circuit off ENDLESS moves the length
+              too — a road that never comes back cannot be lapped, and a
+              setup that half-means something is worse than one that moves. */}
           <div className="roam-dials">
+            <OptionRow
+              label="SHAPE"
+              options={STAGE_SHAPES}
+              value={race.shape}
+              onPick={(shape) =>
+                onRace({
+                  ...race,
+                  shape,
+                  length: shape === "circuit" && race.length === "endless" ? "medium" : race.length,
+                })
+              }
+            />
             {STAGE_DIALS.map((dial) => (
               <OptionRow
                 key={dial.key}

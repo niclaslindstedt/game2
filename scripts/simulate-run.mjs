@@ -10,6 +10,8 @@
 //   npm run sim -- --car classic         # one car
 //   npm run sim -- --count 20            # seeds 1..20
 //   npm run sim -- --length long         # stage length band (default medium)
+//   npm run sim -- --shape circuit       # race a closed lap circuit (R22)
+//   npm run sim -- --shape circuit --laps 5
 //   npm run sim -- --weather storm       # race in rain/storm wind
 //   npm run sim -- --asphalt 0.8         # generator dials, each 0..1:
 //                                        # --elevation --water --trees --asphalt --width
@@ -39,6 +41,12 @@ for (const dial of ["elevation", "water", "trees", "asphalt", "width"]) {
   if (value !== undefined) knobs[dial] = Number(value);
 }
 const length = flag("length") ?? "medium";
+const shape = flag("shape") ?? "sprint";
+const laps = flag("laps") ? Number(flag("laps")) : undefined;
+if (shape !== "sprint" && shape !== "circuit") {
+  console.error(`unknown shape "${shape}" (sprint, circuit)`);
+  process.exit(1);
+}
 if (!(length in STAGE_RULES.stageLengths)) {
   console.error(
     `unknown length "${length}" (finite lengths: ${Object.keys(STAGE_RULES.stageLengths).join(", ")})`,
@@ -72,15 +80,15 @@ console.log(
 );
 for (const seed of seeds) {
   for (const carId of cars) {
-    const r = simulateStage({ seed, carId, length, maxTime, weather, knobs });
+    const r = simulateStage({ seed, carId, length, shape, laps, maxTime, weather, knobs });
     rows.push(r);
     console.log(
       [
         pad(seed, 6),
         carId.padEnd(8),
-        pad(r.trackLength.toFixed(0), 6),
+        pad(r.raceLength.toFixed(0), 6),
         pad(r.time.toFixed(1), 7),
-        pad(((r.trackLength / r.time) * 3.6).toFixed(0) + "km/h", 8),
+        pad(((r.raceLength / r.time) * 3.6).toFixed(0) + "km/h", 8),
         pad(r.stats.driftCount, 6),
         pad(r.stats.driftTime.toFixed(1), 6),
         pad(r.stats.driftScore.toFixed(0), 6),
@@ -97,6 +105,13 @@ for (const seed of seeds) {
   }
 }
 
+if (shape === "circuit") {
+  console.log(
+    `\ncircuit: ${rows[0].laps} laps of ${(rows[0].trackLength / 1000).toFixed(2)} km — ` +
+      `best laps ${rows.map((r) => Math.min(...r.lapTimes).toFixed(1)).join(", ")} s`,
+  );
+}
+
 const dials = Object.entries(knobs)
   .map(([k, v]) => `${k} ${v}`)
   .join(", ");
@@ -105,7 +120,7 @@ if (dials) console.log(`\ndials: ${dials}`);
 const finished = rows.filter((r) => r.finished).length;
 const avg = (f) => rows.reduce((a, r) => a + f(r), 0) / rows.length;
 console.log(
-  `\n${finished}/${rows.length} finished · avg pace ${avg((r) => (r.trackLength / r.time) * 3.6).toFixed(0)} km/h · ` +
+  `\n${finished}/${rows.length} finished · avg pace ${avg((r) => (r.raceLength / r.time) * 3.6).toFixed(0)} km/h · ` +
     `avg drift time ${avg((r) => r.stats.driftTime).toFixed(1)} s · ` +
     `avg air time ${avg((r) => r.stats.airTime).toFixed(1)} s · ` +
     `respawns ${rows.reduce((a, r) => a + r.stats.respawns, 0)}`,

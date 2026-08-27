@@ -11,8 +11,11 @@ export {
   type StageKnobs,
   type StageLength,
   type FiniteStageLength,
+  type StageShape,
+  circuitLapBand,
 } from "./rules.ts";
 export { generateStage, createStageStream, type StageStream } from "./generate.ts";
+export { generateCircuit } from "./circuit.ts";
 export { createLandField, type LandField } from "./land.ts";
 export {
   ROAD_CROSS,

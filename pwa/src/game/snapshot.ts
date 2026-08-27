@@ -79,14 +79,23 @@ function damageSnapshot(state: GameState): HudDamage {
   };
 }
 
-/** How far the run is up the road on the ghost, and whether there is one
- * to be up the road on. Both cars run the same stage, so the arc position
- * they have each reached IS the gap, in the one unit that needs no lookup
- * table and reads instantly at speed: metres of road. */
+/** Whether this run is being TIMED against anything — campaign and time
+ * trial keep a book on every stage, Roam keeps none — and, if it is, the
+ * record standing in it before this run started. Passed in rather than read
+ * here because progress is the app's to own, not the engine's. Null is a
+ * run nobody is keeping score of, which is not the same as a stage nobody
+ * has set a time on yet (`{ best: null }`). */
+export type RunBook = { best: number | null };
+
+/** `ghostS` is how far the run is up the road on the ghost, and whether
+ * there is one to be up the road on. Both cars run the same stage, so the
+ * arc position they have each reached IS the gap, in the one unit that
+ * needs no lookup table and reads instantly at speed: metres of road. */
 export function takeSnapshot(
   state: GameState,
   finishTime: number | null,
   ghostS: number | null = null,
+  book: RunBook | null = null,
 ): HudSnapshot {
   const rpm = tachometer(state);
   // The rendered world is a mirror of the engine's map view, so the wind
@@ -99,6 +108,11 @@ export function takeSnapshot(
     phase: state.phase,
     countdown: Math.max(0, TUNING.countdown - state.t),
     time: state.raceTime,
+    lap: state.lap,
+    laps: state.laps,
+    lapTime: state.raceTime - state.lapStart,
+    lapTimes: state.lapTimes,
+    bestTime: book?.best ?? null,
     // The speedo reads GROUND speed, not forward speed: a car crossed up
     // at 140 km/h is doing 140 km/h, and a needle that dips every time the
     // nose swings would tell the player the slide is costing them.
@@ -126,6 +140,7 @@ export function takeSnapshot(
     lost: state.lost && !state.drowning,
     homeDistance: state.lost && !state.drowning ? wayHome(state).distance : 0,
     finishTime,
+    record: book !== null && finishTime !== null && (book.best === null || finishTime < book.best),
     boostLeft: state.car.boostLeft,
     boostMax: TUNING.boost.capacity,
     boosting: state.car.boosting,

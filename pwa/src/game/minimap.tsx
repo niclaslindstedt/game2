@@ -45,9 +45,11 @@ export type HudMinimap = {
    * kilometre on an endless one. */
   progress: number;
   /** The readout on the frame's bottom edge — distance on an endless stage,
-   * which has no finish for the gauge to be a fraction of. Empty otherwise:
-   * the ring already says how far in the run is, and a percentage beside it
-   * is the same sentence twice over the route. */
+   * which has no finish for the gauge to be a fraction of, and the lap
+   * counter on a circuit, where the ring fills once per lap and on its own
+   * cannot say which lap that is. Empty otherwise: the ring already says
+   * how far in the run is, and a percentage beside it is the same sentence
+   * twice over the route. */
   label: string;
 };
 
@@ -132,7 +134,11 @@ export function buildMinimap(state: GameState): HudMinimap {
     // so the icon's clockwise rotation is the negated heading.
     car: { x, y, angle: -state.car.heading * (180 / Math.PI) },
     progress: endless ? km - Math.floor(km) : Math.min(1, state.progressS / state.track.length),
-    label: endless ? `${km.toFixed(1)} KM` : "",
+    label: endless
+      ? `${km.toFixed(1)} KM`
+      : state.laps > 1
+        ? `LAP ${Math.min(state.lap, state.laps)}/${state.laps}`
+        : "",
   };
 }
 

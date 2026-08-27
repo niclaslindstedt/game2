@@ -3,7 +3,9 @@
 Stages are built by a rules engine (`engine/mapgen/`), not authored by hand. The design splits into three files with three jobs:
 
 - **`rules.ts` — the rule book.** Every constraint and every vocabulary number lives here as data: what a soft, medium, or hard turn may be, how long straights run, where jumps, crossings, and crests may sit, the length bands and their world bounds, the self-distance floor, the five dials (below). Tuning the generator means editing this file.
-- **`generate.ts` — the search.** Draws candidate segments from the seeded RNG, validates each against the rules, retries a bounded number of times, backtracks when boxed in, and rejects a whole attempt (retrying with a derived sub-seed) rather than ever shipping a violation. `generateStage(seed, length)` is a pure function of its inputs. `createStageStream(seed)` is the endless variant: the same vocabulary, streamed forever.
+- **`search.ts` — the machinery every search shares.** The walking cursor, the spatially hashed point field that answers R9 and R10, the draws that turn the vocabulary into a candidate segment, and the feature assignment that decides what a straight carries. What differs between the three searches is only where the line is being steered.
+- **`generate.ts` — the search.** Draws candidate segments from the seeded RNG, validates each against the rules, retries a bounded number of times, backtracks when boxed in, and rejects a whole attempt (retrying with a derived sub-seed) rather than ever shipping a violation. `generateStage(seed, length, knobs, shape)` is a pure function of its inputs. `createStageStream(seed)` is the endless variant: the same vocabulary, streamed forever.
+- **`circuit.ts` — the closed lap (R22).** The same vocabulary steered around a RING — a bearing that turns once through a full circle over the target lap — and then CLOSED onto the grid's own pose by a solved turn-straight-turn. See [The circuit](#the-circuit).
 - **`road.ts` — the cross-section.** What a road looks like ACROSS its width: the camber, the corner's bank, the two worn wheel tracks, the asphalt mat standing proud of the ground, the shoulder falling away into the field. One module read by three consumers — the renderer builds the ribbon from it, the terrain field hangs its verge off it, and the physics rides it — so the shape the car climbs out of is exactly the shape the player sees.
 - **`land.ts` — the bare country.** The landscape before anybody laid a road across it: rises, hills, mountain chains, and the basins that fill to lakes. The terrain field shapes itself around the road from it, and the branch builder steers by it — a road has to know where the water is before it drives into it.
 - **`spurs.ts` / `guards.ts` / `river.ts` — the country around the route.** The abandoned branches at every junction, the mounds and groves that shut the inside of a sharp corner, and the watercourses the road crosses.
@@ -34,6 +36,7 @@ The generator respects rally reality. Verbatim from the rule book, each enforced
 - **R19** Turns are BANKED. A road built through a corner is superelevated: the cross-fall rolls out of the crown and into the turn over a runoff, tops out at a rate read off the corner's radius, and rolls back out again. Never a wall of a bank — the ceiling is a road a car could be parked on, and gravel takes more of it than tarmac because a bladed corner always does.
 - **R20** A JUMP never sits on sealed road. A tarmac section is a public road the rally borrows; nobody builds a launch ramp into one.
 - **R21** The road's WIDTH is a dial, from a narrow lane the trees crowd to a broad boulevard with room to place the car.
+- **R22** A stage is SHAPED as a sprint or as a CIRCUIT. A circuit's last sample lands back on its first, on the same heading, so the start line is also the finish line and the stage can be raced over laps. Everything else — the vocabulary, R3 through R8, the world bound, the features — is the sprint's; R10's self-distance is measured cyclically, because on a ring the road running back into the start line is that line's neighbour and not a crossing of it.
 
 ## The dials
 
@@ -61,12 +64,34 @@ The pre-race menu picks a length; each finite one maps to a band in `STAGE_RULES
 | Extra long | ~7 min  | 10.4–11.8 km |
 | Endless    | forever | streamed     |
 
+A circuit is the same minutes of driving, cut into laps: its LAP band is the sprint band for that length divided by `STAGE_RULES.circuit.laps` (three), floored at `circuit.minLap` so a short circuit is a race track and not a roundabout. So a medium circuit is three laps of ~1.5–1.7 km, and it takes about the three minutes a medium sprint does.
+
+| Menu       | Lap band     | Race (3 laps) |
+| ---------- | ------------ | ------------- |
+| Short      | 1.15–1.5 km  | 3.5–4.5 km    |
+| Medium     | 1.47–1.73 km | 4.4–5.2 km    |
+| Long       | 2.47–2.8 km  | 7.4–8.4 km    |
+| Extra long | 3.47–3.93 km | 10.4–11.8 km  |
+
 ## The endless stage
 
 `compileStage(seed, "endless")` builds the opening stretch and hands back a track that extends itself: the engine's `step()` keeps `STAGE_RULES.endless.horizon` meters of road materialized ahead of the car, and the renderer streams world chunks and terrain tiles in around it (and drops them behind). Two mechanisms replace the finite search's whole-attempt reject:
 
 - **A course.** The stream is point-to-point: it follows a slowly drifting bearing and keeps the road's heading within an error budget of it, so an endless run reads as a journey rather than a scribble — and the walk never curls back into its own tail.
 - **A commit lag.** The search runs `endless.commitLag` meters ahead of the road it hands out; inside that lag it may still backtrack out of a pocket. The freeze boundary follows the generation high-water mark, so what a seed produces is independent of how the extends are chunked — the same seed always streams the same road.
+
+## The circuit
+
+`compileStage(seed, length, knobs, "circuit")` builds a stage that comes back to where it started. The search is the sprint's, with one thing added at each end:
+
+- **A ring course.** Instead of the finite search's turn-back-at-the-boundary, the line follows a bearing that turns once through a full circle over the target lap length (a ring of radius `lap / 2π`), and a drawn turn whose exit strays past the error budget is redrawn. That is what makes the line go ROUND rather than wander; the budget is wide enough that what comes out is a lap and not a roundabout.
+- **A solved closure.** Wherever a closure could still land inside the lap band, the search tries to solve a turn-straight-turn (a Dubins CSC path) from where the road stands back onto the grid's own pose. Both corners are drawn from the turn vocabulary's own radii, and the sweep each one takes has to fall inside that severity's angle band (R3) — so a closing corner is a corner this generator would have drawn anyway. The straight between them is where a circuit gets its MAIN straight.
+
+The solve is exact on ideal arcs, but the compiler walks an arc in 2 m steps and lands a little off the circle it was drawn from. So the closure is solved against the road AS BUILT: solve for a goal, walk what that produced the way the compiler will, move the goal by whatever the walk missed by, repeat. Headings need no such treatment (a segment's total turn is its curvature times its length however finely it is stepped), which leaves two numbers converging in a handful of passes. The result closes to within a few centimetres — well inside one sample, so the road runs into its own grid with no seam to see or drive over.
+
+An attempt that boxes itself in is abandoned quickly and restarted on a derived sub-seed rather than unpicked at length: most of the cost is walking the same ground twice, so many short attempts beat a few long ones. A circuit compiles in the same handful of milliseconds a sprint does.
+
+`track.circuit` says which shape a compiled stage is, and the run does the rest: `createGame({ shape, laps })` races a circuit over `STAGE_RULES.circuit.laps` by default, crossing the line books a `lap` event and sends progress back to the grid, and only the last crossing finishes.
 
 ## Pacenotes
 
@@ -86,6 +111,7 @@ Generated stages are genuinely 3D: under the feature ramps, `compileStage` sums 
 make track                                  # previews/track-1..6.png (medium)
 npm run track -- --seeds 42,99              # specific seeds
 npm run track -- --length xlong             # a stage length band
+npm run track -- --shape circuit            # a closed lap circuit (R22)
 npm run track -- --length endless --km 8    # a streamed endless stretch
 npm run track -- --zoom junctions           # one close-up per junction
 npm run track -- --zoom junctions --span 45 # ...and how much country around it
