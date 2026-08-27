@@ -8,7 +8,10 @@ concepts: [harness, scenes, tooling, hud]
 Waiting on the HUD is the right way to reach a moment, but `textContent ===
 '0'` is not a wait, it is a bet. `App.tsx` refreshes the HUD snapshot only when
 `hudClock > 0.08`, so any value the car passes THROUGH between two repaints is
-never painted, and the wait spins to its timeout.
+never painted, and the wait spins to its timeout. (The race CLOCK is the one
+exception — it and the start lights read a per-frame `LiveRun` instead, see
+`hud-clock.tsx` — and an inequality is still the right shape for it, because
+the frame rate decides which hundredths ever get painted.)
 
 `shot-tarmac-launch` lost this bet for months: it braked and waited for a
 literal `'0'`, but the brake does not park the car — once stopped, the same

@@ -160,9 +160,9 @@ export const DEFAULT_KEYS: KeyBindings = {
   shiftUp: ["KeyE", "KeyX", "ShiftRight"],
   shiftDown: ["KeyQ", "KeyZ", "ControlRight"],
   reset: ["KeyB"],
-  camera: ["KeyV"],
+  camera: ["KeyC", "KeyV"],
   restart: ["KeyR"],
-  menu: ["KeyC"],
+  menu: ["KeyM"],
   pause: ["Escape"],
 };
 
@@ -267,6 +267,19 @@ function migratePedalDirs(touch: TouchSettings): void {
   }
 }
 
+/** C used to be the way OUT of a run and V the way round the cameras, which
+ * had the letter that names the thing sitting on the thing it does not do.
+ * The camera moved onto C (V still works) and the menu onto M. As with the
+ * pedals, a default is not a preference: exactly the old pair, and only it,
+ * is moved across on load — a player who bound either key themselves keeps
+ * what they chose. */
+function migrateCameraKey(keys: KeyBindings): void {
+  const only = (codes: string[], code: string): boolean => codes.length === 1 && codes[0] === code;
+  if (!only(keys.camera, "KeyV") || !only(keys.menu, "KeyC")) return;
+  keys.camera = [...DEFAULT_KEYS.camera];
+  keys.menu = [...DEFAULT_KEYS.menu];
+}
+
 export function loadSettings(): Settings {
   const settings: Settings = {
     hud: { ...DEFAULT_SETTINGS.hud },
@@ -293,6 +306,7 @@ export function loadSettings(): Settings {
     if (parsed.video) Object.assign(settings.video, parsed.video);
     if (parsed.keys) Object.assign(settings.keys, parsed.keys);
     if (parsed.touch) Object.assign(settings.touch, parsed.touch);
+    migrateCameraKey(settings.keys);
     migratePedalDirs(settings.touch);
     if (parsed.gearbox === "manual") settings.gearbox = "manual";
     if (parsed.developer === true) settings.developer = true;

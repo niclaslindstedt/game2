@@ -30,7 +30,8 @@ const CELEBRATE_TURNS = 3;
 const CELEBRATE_SECONDS = 1.9;
 
 export type CarTurntable = {
-  /** Swap the car on the stand; the spin carries on from where it was. */
+  /** Swap the car on the stand; the spin carries on from where it was. The
+   * body is built on the next frame, not inside this call. */
   setCar: (spec: CarSpec) => void;
   /** Whip the car around three times and settle — the acknowledgement that
    * a secret on the chassis has been found. */
@@ -77,8 +78,20 @@ export function createCarTurntable(canvas: HTMLCanvasElement): CarTurntable {
     body = null;
   };
 
+  /** The car the stand has been asked for but has not built yet. */
+  let pending: CarSpec | null = null;
+
+  /** A pick does not build anything — it names the car and lets the next
+   * frame build it. Two things follow. The press itself paints first (the
+   * arrow's own state, the name under the stand) instead of waiting behind
+   * a body's worth of geometry, so the menu answers the click. And a player
+   * rowing through the arrows builds only the car they STOP on rather than
+   * every one they went past. */
   const setCar = (spec: CarSpec): void => {
-    if (carId === spec.id) return;
+    pending = carId === spec.id ? null : spec;
+  };
+
+  const fitCar = (spec: CarSpec): void => {
     carId = spec.id;
     clearBody();
     body = buildCarBody(bodySpecFor(spec));
@@ -107,6 +120,11 @@ export function createCarTurntable(canvas: HTMLCanvasElement): CarTurntable {
 
   const frame = (now: number): void => {
     raf = requestAnimationFrame(frame);
+    if (pending) {
+      const spec = pending;
+      pending = null;
+      fitCar(spec);
+    }
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     angle += dt * ((Math.PI * 2) / SPIN_PERIOD);

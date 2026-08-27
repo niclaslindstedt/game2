@@ -12,6 +12,41 @@ import { buildMinimap } from "./minimap.tsx";
 import { classify } from "./standings.ts";
 import type { HudDamage, HudPacenote, HudSnapshot } from "./hud.tsx";
 
+/** The two instruments the ~12 Hz snapshot cannot carry, and why they are
+ * their own channel:
+ *
+ *   the CLOCK, whose hundredths digit is the entire point of it — read off
+ *   a 12 Hz snapshot it steps in jumps of eight or more, which reads as a
+ *   clock that has stopped rather than one that is running;
+ *
+ *   the START LIGHTS, which have to change on the same frame as the sound
+ *   that goes with them, and the sound is on the frame loop.
+ *
+ * One object, rewritten IN PLACE by the frame loop and read by those two
+ * components on their own animation frame, so a 60 Hz instrument costs a
+ * text node instead of a re-render of every dial on the screen. */
+export type LiveRun = {
+  phase: GameState["phase"];
+  /** Seconds left before the off; 0 once the lights are out. */
+  countdown: number;
+  /** Total race time and the current lap's, seconds. */
+  time: number;
+  lapTime: number;
+};
+
+export function createLive(): LiveRun {
+  return { phase: "countdown", countdown: TUNING.countdown, time: 0, lapTime: 0 };
+}
+
+/** Re-read the live face from the run. In place, every frame: the object's
+ * identity is what the HUD holds on to. */
+export function readLive(live: LiveRun, state: GameState): void {
+  live.phase = state.phase;
+  live.countdown = Math.max(0, TUNING.countdown - state.t);
+  live.time = state.raceTime;
+  live.lapTime = state.raceTime - state.lapStart;
+}
+
 /** How far ahead the co-driver calls, meters — four seconds at pace, with a
  * floor so slow corners still get called and a ceiling so a long straight
  * is not spent staring at the far end's turn. */
@@ -107,7 +142,6 @@ export function takeSnapshot(
     -(Math.atan2(state.wind.x, state.wind.z) - state.car.heading) * (180 / Math.PI);
   return {
     phase: state.phase,
-    countdown: Math.max(0, TUNING.countdown - state.t),
     time: state.raceTime,
     lap: state.lap,
     laps: state.laps,
