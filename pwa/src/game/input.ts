@@ -28,8 +28,9 @@ export type InputManager = {
   /** Queue a reset-to-track (B key / HUD button) — edge-triggered into the
    * engine, which respawns the car at its last on-road progress. */
   requestReset: () => void;
-  /** Fired on R (restart) / C (race setup) / V (camera) so the app can react. */
-  onAction: (handler: (action: "restart" | "swap" | "camera") => void) => void;
+  /** Fired on R (restart) / C (race setup) / V (camera) / Esc (the in-race
+   * menu) so the app can react. */
+  onAction: (handler: (action: "restart" | "swap" | "camera" | "pause") => void) => void;
   dispose: () => void;
 };
 
@@ -48,7 +49,7 @@ export function createInput(target: Window = window): InputManager {
   let shiftUp = false;
   let shiftDown = false;
   let reset = false;
-  let actionHandler: ((action: "restart" | "swap" | "camera") => void) | null = null;
+  let actionHandler: ((action: "restart" | "swap" | "camera" | "pause") => void) | null = null;
 
   const touch = { steer: 0, throttle: false, brake: false, handbrake: false, boost: false };
 
@@ -61,6 +62,7 @@ export function createInput(target: Window = window): InputManager {
     if (e.code === "KeyR") actionHandler?.("restart");
     if (e.code === "KeyC") actionHandler?.("swap");
     if (e.code === "KeyV") actionHandler?.("camera");
+    if (e.code === "Escape") actionHandler?.("pause");
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(e.code)) {
       e.preventDefault();
     }

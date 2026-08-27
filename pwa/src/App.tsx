@@ -36,7 +36,9 @@ import {
   type HudPacenote,
   type HudSnapshot,
 } from "./game/hud.tsx";
+import { buildMinimap } from "./game/minimap.tsx";
 import {
+  PauseMenu,
   PreRaceMenu,
   STAGE_LENGTH_OPTIONS,
   TIMES_OF_DAY,
@@ -170,9 +172,7 @@ function takeSnapshot(state: GameState, finishTime: number | null): HudSnapshot 
     rpm,
     shiftUp: rpm > 0.83 && state.car.gear < state.spec.gearTop.length - 1,
     airborne: state.car.airborne,
-    progress: state.track.endless ? 0 : Math.min(1, state.progressS / state.track.length),
-    endless: state.track.endless,
-    distanceKm: state.progressS / 1000,
+    minimap: buildMinimap(state),
     pacenotes: state.phase === "racing" ? upcomingPacenotes(state) : [],
     seed: state.seed,
     carName: state.spec.name,
@@ -205,6 +205,7 @@ export function App() {
     return Number.isFinite(fromUrl) && fromUrl > 0 ? fromUrl : dailySeed();
   });
   const [snap, setSnap] = useState<HudSnapshot | null>(null);
+  const [paused, setPaused] = useState(false);
   const [flashes, setFlashes] = useState<HudFlash[]>([]);
   const finishTimeRef = useRef<number | null>(null);
   const actionsRef = useRef<{ restart: () => void; menu: () => void; camera: () => void }>({
@@ -218,6 +219,8 @@ export function App() {
   seedRef.current = seed;
   const menuOpenRef = useRef(menuOpen);
   menuOpenRef.current = menuOpen;
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
   const trackRef = useRef<{ seed: number; length: StageLength; track: Track } | null>(null);
 
   const pwa = usePwaUpdate({
@@ -305,8 +308,12 @@ export function App() {
       cleanups.push(() => renderer.dispose());
       newGameRef.current(seedRef.current, true);
 
-      const restart = (): void => newGameRef.current(seedRef.current, false);
+      const restart = (): void => {
+        setPaused(false);
+        newGameRef.current(seedRef.current, false);
+      };
       const menu = (): void => {
+        setPaused(false);
         newGameRef.current(seedRef.current, false);
         setMenuOpen(true);
       };
@@ -318,6 +325,7 @@ export function App() {
       input.onAction((action) => {
         if (action === "restart") restart();
         else if (action === "swap") menu();
+        else if (action === "pause") setPaused((was) => !was);
         else camera();
       });
 
@@ -366,7 +374,10 @@ export function App() {
         last = now;
         const state = gameRef.current;
         if (!state) return;
-        if (menuOpenRef.current) {
+        // Either card holds the engine: the pre-race menu is a stage that has
+        // not started, the pause card is a run that must not tick while the
+        // player is reading it. The scene still breathes behind both.
+        if (menuOpenRef.current || pausedRef.current) {
           acc = 0;
           renderer.render(state, dtFrame);
           return;
@@ -414,9 +425,17 @@ export function App() {
           snap={snap}
           flashes={flashes}
           input={input}
-          onMenu={() => actionsRef.current.menu()}
-          onRestart={() => actionsRef.current.restart()}
+          onPause={() => setPaused(true)}
           onCamera={() => actionsRef.current.camera()}
+        />
+      )}
+      {paused && !menuOpen && (
+        <PauseMenu
+          seed={seed}
+          carName={carById(settings.carId).name}
+          onResume={() => setPaused(false)}
+          onRestart={() => actionsRef.current.restart()}
+          onSetup={() => actionsRef.current.menu()}
         />
       )}
       {menuOpen && (

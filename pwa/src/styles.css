@@ -43,6 +43,48 @@ body {
   inset: 0;
 }
 
+/* iOS edge-to-edge. A fixed, non-scrollable shell laid out with `inset: 0`
+   stops at the LAYOUT viewport, which on iOS leaves a dead band along the
+   bottom of the screen — the game paints down to the layout edge and the
+   system paints the rest black. Percentage heights (`height: 100%`) do the
+   same thing for the same reason: the document stops at the letterboxed
+   viewport instead of extending under the home indicator. Giving the shell an
+   explicit viewport height is what lets it reach the physical bottom; the HUD
+   stays reachable because every pinned element is anchored with
+   `env(safe-area-inset-*)`.
+
+   INSTALLED vs BROWSER TAB is the whole subtlety. `100vh` is the LARGE
+   viewport — the screen as it would be with the toolbars retracted. That is
+   exactly right in an installed PWA, which has no toolbars, and exactly wrong
+   in Safari proper, where the toolbar is ON SCREEN: sized that way the shell
+   hangs past the bottom edge and takes the instrument cluster, the touch
+   pedals and the version stamp with it. So a browser tab — and only a browser
+   tab — gets the DYNAMIC viewport (`100dvh`), which is by definition the part
+   visible right now. Matching on `browser` rather than `standalone` is
+   deliberate: an installed app's effective display mode is not reliably
+   `standalone`, and a missed match there would hand it a height it never asked
+   for. Scoped to iOS via the -webkit-touch-callout probe (no other engine
+   supports it), so Android and desktop keep the plain viewport-tracking shell;
+   Safari without `dvh` support drops the declaration and falls back to it. */
+@supports (-webkit-touch-callout: none) {
+  :root {
+    --shell-height: 100vh;
+  }
+
+  @media (display-mode: browser) {
+    :root {
+      --shell-height: 100dvh;
+    }
+  }
+
+  html,
+  body,
+  #root,
+  .app-root {
+    height: var(--shell-height);
+  }
+}
+
 .game-canvas {
   position: absolute;
   inset: 0;
@@ -54,6 +96,8 @@ body {
 /* ── HUD chrome ─────────────────────────────────────────────────────────── */
 
 .hud {
+  /* The minimap's edge length — the top bar reserves it, the dock spends it. */
+  --hud-map: clamp(4.8rem, 16vmin, 7.5rem);
   color: var(--hud-ink);
   font-weight: 800;
   font-style: italic;
@@ -68,18 +112,23 @@ body {
   position: absolute;
   top: max(0.6rem, env(safe-area-inset-top));
   left: max(0.8rem, env(safe-area-inset-left));
-  right: max(0.8rem, env(safe-area-inset-right));
+  /* Stops short of the minimap dock rather than running under it. */
+  right: calc(max(0.8rem, env(safe-area-inset-right)) + var(--hud-map) + 0.55rem);
   display: flex;
   align-items: center;
   gap: 0.75rem;
 }
 
+/* The top bar's readouts never wrap: a five-digit stage number broken over
+   two lines is a worse answer than a tighter row, and the narrow-portrait
+   rules further down are where the row gets tight. */
 .hud-chip {
   font-size: clamp(0.9rem, 2.5vmin, 1.3rem);
   letter-spacing: 0.04em;
   display: flex;
   flex-direction: column;
   line-height: 1.05;
+  white-space: nowrap;
 }
 
 .hud-chip-sub {
@@ -90,25 +139,14 @@ body {
 .hud-timer {
   font-variant-numeric: tabular-nums;
   font-size: clamp(1.1rem, 3.2vmin, 1.7rem);
-}
-
-.hud-progress {
-  flex: 1;
-  height: 0.55rem;
-  border: 2px solid var(--hud-shadow);
-  background: rgb(255 255 255 / 35%);
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.hud-progress-fill {
-  height: 100%;
-  background: var(--hud-good);
+  white-space: nowrap;
 }
 
 .hud-actions {
+  margin-left: auto;
   display: flex;
   gap: 0.4rem;
+  flex: none;
 }
 
 .hud-mini {
@@ -121,9 +159,27 @@ body {
   padding: 0.25rem 0.5rem;
   cursor: pointer;
   text-shadow: none;
+  /* A button that squashes turns its glyph into a smear. */
+  flex: none;
 }
 
-/* The way home from the wild: appears beside the minis while off-road. */
+/* A glyph button is square around its icon rather than padded around text. */
+.hud-mini-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem 0.3rem;
+}
+
+.hud-glyph {
+  width: clamp(1rem, 3vmin, 1.4rem);
+  height: clamp(1rem, 3vmin, 1.4rem);
+  fill: currentcolor;
+  display: block;
+}
+
+/* The way home from the wild: appears in the condition row, beside the OFF
+   ROAD flag that calls for it. */
 .hud-mini-alert {
   background: rgb(160 60 20 / 80%);
   border-color: rgb(255 210 160 / 80%);
@@ -191,18 +247,6 @@ body {
 
 .hud-pace-hard {
   color: #ff5a4e;
-}
-
-.hud-progress-km {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: auto;
-  background: none;
-  border: none;
-  font-size: clamp(0.9rem, 2.5vmin, 1.3rem);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.04em;
 }
 
 .hud-center {
@@ -277,10 +321,29 @@ body {
   color: var(--hud-info);
 }
 
+/* The bottom-left corner is one instrument panel in two rows: the damage
+   glyph sits on top, the dial row under it. */
 .hud-speed {
   position: absolute;
   left: max(1rem, env(safe-area-inset-left));
   bottom: max(1rem, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+}
+
+/* The condition row: the damage glyph plus whatever the situation has to
+   say. It is allowed to grow — nothing in it is sized to fit. */
+.hud-status {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+/* The dial row: revs, gear, speed, booster. Fixed cast — every phone width
+   has to hold all four, so nothing conditional is ever added here. */
+.hud-cluster {
   display: flex;
   align-items: flex-end;
   gap: 0.5rem;
@@ -407,8 +470,11 @@ body {
 .hud-boostbar-fill {
   position: absolute;
   inset: 0 auto 0 0;
+  width: var(--fill, 0%);
   background: var(--hud-good);
-  transition: width 120ms linear;
+  transition:
+    width 120ms linear,
+    height 120ms linear;
 }
 
 .hud-boostbar-hot .hud-boostbar-fill {
@@ -431,46 +497,70 @@ body {
 }
 
 /* ── The damage instrument ──────────────────────────────────────────────
-   The cluster's fourth instrument, built from the tach's own materials:
-   the translucent navy face, the chunky white strokes, the red accent, the
-   boost bar's bordered tracks. The 2D car wears the crush where the hits
-   landed; the bars are the machinery — engine, suspension, gearbox,
-   steering — and the chassis itself. */
+   One glyph over the tach, built from the tach's own materials: the
+   translucent navy face, the chunky white strokes, the red accent. The car
+   IS the readout — crush on the outline where the hits landed, color on the
+   parts as the machinery underneath gives out. */
 .hud-damage {
   display: inline-flex;
-  align-items: flex-end;
-  gap: 0.4rem;
-  margin-left: 0.5rem;
-  padding-bottom: 0.35rem;
   filter: drop-shadow(0 2px 3px rgb(0 0 0 / 45%));
 }
 
 .hud-dmg-car {
-  width: clamp(2.2rem, 7vmin, 3.4rem);
+  /* Landscape-ish and wide enough that the four systems stay separable; the
+     glyph is the whole instrument now, so it can afford the width the bars
+     used to take beside it. */
+  width: clamp(2.4rem, 8vmin, 3.8rem);
   overflow: visible;
 }
 
 .hud-dmg-face {
   fill: rgb(9 24 52 / 45%);
+  stroke: rgb(255 255 255 / 35%);
+  stroke-width: 1.4;
 }
 
+/* The shell. Its STROKE is the chassis gauge — set from the wear ramp in
+   hud.tsx — so the outline itself reddens on the way to the wreck. */
 .hud-dmg-body {
   fill: rgb(9 24 52 / 55%);
-  stroke: rgb(255 255 255 / 70%);
   stroke-width: 2;
 }
 
-.hud-dmg-cabin {
-  fill: rgb(255 255 255 / 30%);
+/* The four internal systems, each drawn as the part it is. Color comes from
+   the ramp in hud.tsx; the outline keeps them legible over the dark face. */
+.hud-dmg-sys {
+  /* A hard dark edge on every part. Four neighbouring shapes all hurt at
+     once are all the same yellow, and without the edge they merge into one
+     blob that says "something" instead of "the front axle". */
+  stroke: #0a1c3a;
+  stroke-width: 1.5;
 }
 
+/* The glass is context, not information, so it is an outline and not a mass.
+   That keeps the glyph's one rule legible at a glance — every SOLID shape
+   inside the shell is a system that can fail, and its color is its health —
+   and it stops the cabin from merging with the gearbox block behind it into
+   one dark slab. */
+.hud-dmg-cabin {
+  fill: none;
+  stroke: rgb(255 255 255 / 24%);
+  stroke-width: 1.2;
+}
+
+/* Underside crush. hud.tsx paints it from the same ramp the crush ring uses,
+   so a slammed belly reads as the damage it is instead of a dark slab; the
+   fill here is the floor that ramp starts from. */
 .hud-dmg-belly {
   fill: var(--hud-bad);
 }
 
+/* The crush ring hugs the shell just outside it. Thin enough to leave the
+   wheels their own space, dim enough while sound to read as a ring rather
+   than a readout. */
 .hud-dmg-zone {
   fill: none;
-  stroke-width: 5;
+  stroke-width: 4.2;
   stroke-linecap: round;
 }
 
@@ -485,78 +575,154 @@ body {
   stroke-dasharray: 2.2 1.8;
 }
 
-.hud-dmg-meters {
-  display: flex;
-  flex-direction: column;
-  gap: 0.22rem;
-}
+/* ── The minimap ────────────────────────────────────────────────────────
+   The stage as a route in the top-right corner, and the run's progress read
+   off the FRAME: the border is the gauge, filling clockwise from twelve
+   o'clock. The whole plate is the button that opens the in-race menu.
 
-.hud-dmg-meter {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-}
-
-.hud-dmg-meter-label {
-  font-size: clamp(0.45rem, 1.5vmin, 0.6rem);
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  width: 2.4em;
-}
-
-.hud-dmg-meter-track {
-  position: relative;
-  width: clamp(2.4rem, 8vmin, 3.8rem);
-  height: 0.42rem;
-  background: rgb(18 48 105 / 55%);
-  border: 2px solid rgb(255 255 255 / 70%);
-  border-radius: 0.4rem;
-  overflow: hidden;
-}
-
-.hud-dmg-meter-fill {
+   The corner radius is derived from the ring's own geometry in minimap.tsx
+   (RING_R + RING_SW / 2, over a 100-unit box) so the chassis and the gauge
+   share one corner at every screen scale — change the constants there and
+   this number moves with them. */
+.hud-minimap-dock {
   position: absolute;
-  inset: 0 auto 0 0;
-  transition:
-    width 120ms linear,
-    background 120ms linear;
+  top: max(0.6rem, env(safe-area-inset-top));
+  right: max(0.8rem, env(safe-area-inset-right));
 }
 
-/* The chassis bar carries the wreck stake — set a hair apart. */
-.hud-dmg-wear {
-  margin-top: 0.14rem;
+.hud-minimap {
+  position: relative;
+  display: block;
+  width: var(--hud-map);
+  height: var(--hud-map);
+  padding: 0;
+  background: rgb(9 24 52 / 55%);
+  border: none;
+  border-radius: calc(var(--hud-map) * 0.175);
+  cursor: pointer;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 45%));
 }
 
-/* Portrait phones: the cluster row has no width left, so the damage
-   instrument docks in the opposite corner — the cluster's mirror image —
-   sized to clear the touch gear buttons above it. */
-@media (max-width: 560px) {
-  .hud-damage {
-    position: fixed;
+.hud-minimap-face,
+.hud-minimap-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.hud-minimap-route {
+  fill: none;
+  stroke: rgb(255 255 255 / 72%);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hud-minimap-car {
+  fill: var(--hud-bad);
+  stroke: rgb(9 24 52 / 85%);
+  stroke-width: 1.4;
+  /* Tweened between the HUD's 12 Hz snapshots, like the tach needle, so the
+     icon slides and swings instead of stepping. */
+  transition: transform 120ms linear;
+}
+
+.hud-minimap-ring-track {
+  fill: none;
+  stroke: rgb(255 255 255 / 22%);
+}
+
+.hud-minimap-ring-fill {
+  fill: none;
+  stroke: var(--hud-good);
+  stroke-linecap: round;
+  transition: stroke-dasharray 160ms linear;
+}
+
+/* The readout rides the frame's bottom edge, inside the gauge. */
+.hud-minimap-read {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6%;
+  font-size: clamp(0.5rem, 1.7vmin, 0.72rem);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* ── Small phones ───────────────────────────────────────────────────────
+   The top bar has to hold the stage number and the clock in the strip left
+   of the minimap, and on the SE class that is not enough room at full size.
+   The car's name goes first: it is the one thing up there that the pause
+   card also carries. */
+@media (orientation: portrait) and (max-width: 380px) {
+  .hud-top {
+    gap: 0.45rem;
+  }
+
+  .hud-chip-sub {
+    display: none;
+  }
+
+  .hud-chip {
+    font-size: 0.8rem;
+  }
+
+  .hud-timer {
+    font-size: 1rem;
+  }
+}
+
+/* ── Portrait ───────────────────────────────────────────────────────────
+   The dial row has no width left lying down, so the booster stands up. */
+@media (orientation: portrait) {
+  /* Below the minimap, always: a percentage top clears the dock on a tall
+     phone and slides under it on a short one. */
+  .hud-pace {
+    top: calc(max(0.6rem, env(safe-area-inset-top)) + var(--hud-map) + 0.55rem);
+  }
+
+  .hud-speed {
     right: max(0.8rem, env(safe-area-inset-right));
-    bottom: max(1rem, env(safe-area-inset-bottom));
-    margin-left: 0;
+  }
+
+  .hud-cluster {
+    width: 100%;
+  }
+
+  .hud-boostbar {
+    margin-left: auto;
+    flex-direction: column-reverse;
+    align-items: center;
+    gap: 0.2rem;
     padding-bottom: 0;
   }
 
-  .hud-dmg-car {
-    width: 1.9rem;
+  .hud-boostbar-track {
+    width: 0.55rem;
+    height: clamp(3rem, 11vmin, 4.6rem);
   }
 
-  .hud-dmg-meter-track {
-    width: 2.1rem;
-  }
-
-  /* The manual gear taps step up over the docked instrument. */
-  .hud-gears {
-    bottom: max(6.4rem, calc(env(safe-area-inset-bottom) + 5.9rem));
+  .hud-boostbar-fill {
+    inset: auto 0 0 0;
+    width: auto;
+    height: var(--fill, 0%);
   }
 }
 
+/* The build stamp, hung under the top bar. It rides `.hud-top`'s bottom edge
+   (top: 100%), so it follows the chip's height at every font scale and can
+   never be pushed out of frame by a safe-area inset — and it stays out of the
+   bottom corners, both of which belong to instruments. */
 .hud-build {
   position: absolute;
-  right: max(0.5rem, env(safe-area-inset-right));
-  bottom: 0.2rem;
+  top: 100%;
+  left: 0;
+  margin-top: 0.1rem;
   font-size: 0.55rem;
   font-style: normal;
   font-weight: 500;
@@ -729,6 +895,17 @@ body {
   pointer-events: none;
 }
 
+/* Portrait puts the booster upright in this same corner, so the taps step up
+   over it. Measured from the CLUSTER's anchor rather than the screen's, so a
+   safe-area inset moves the booster and these together. This rule has to sit
+   after the base one above: a media query adds no specificity, so an override
+   written earlier in the file simply loses. */
+@media (orientation: portrait) {
+  .hud-gears {
+    bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 4.4rem);
+  }
+}
+
 .hud-shift {
   width: clamp(2.6rem, 9vmin, 3.6rem);
   height: clamp(2.6rem, 9vmin, 3.6rem);
@@ -871,4 +1048,38 @@ body {
 
 .hud-start:active {
   transform: translateY(1px);
+}
+
+/* The in-race menu: the pre-race card with the stage swapped for the run.
+   RESUME is the primary press (it wears the START button's chrome); the two
+   ways on sit under it, the width of the card so a thumb cannot miss. */
+.hud-pause {
+  align-items: stretch;
+  text-align: center;
+  min-width: min(18rem, 80vw);
+}
+
+.hud-pause-sub {
+  font-size: clamp(0.65rem, 2.2vmin, 0.9rem);
+  letter-spacing: 0.1em;
+  opacity: 0.85;
+  margin-top: -0.4rem;
+}
+
+.hud-pause-act {
+  font: inherit;
+  font-size: clamp(0.8rem, 3vmin, 1.1rem);
+  letter-spacing: 0.1em;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 12%);
+  border: 2px solid rgb(255 255 255 / 45%);
+  border-radius: 0.6rem;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.hud-pause-act:active {
+  background: rgb(255 210 62 / 75%);
+  color: var(--hud-shadow);
 }

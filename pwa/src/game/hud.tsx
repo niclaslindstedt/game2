@@ -4,11 +4,12 @@
 // is not), and owns the touch controls, which write straight into the
 // input manager between snapshots.
 
-import { useRef } from "react";
+import { useRef, type CSSProperties } from "react";
 
 import type { TurnSeverity } from "@engine";
 
 import type { InputManager } from "./input.ts";
+import { Minimap, type HudMinimap } from "./minimap.tsx";
 import { clamp, formatTime } from "../lib/util.ts";
 
 /** One co-driver call, already flipped into SCREEN space by the snapshot
@@ -34,10 +35,9 @@ export type HudSnapshot = {
   /** True while a higher gear is available and the revs are in the red. */
   shiftUp: boolean;
   airborne: boolean;
-  progress: number;
-  /** Endless run: no finish, so the top bar reads distance, not progress. */
-  endless: boolean;
-  distanceKm: number;
+  /** The route, the car on it, and how far through the stage the run is —
+   * the top bar has no progress pill; the minimap's frame is the gauge. */
+  minimap: HudMinimap;
   /** The co-driver's next calls (current turn first), screen-space. */
   pacenotes: HudPacenote[];
   seed: number;
@@ -83,8 +83,7 @@ type HudProps = {
   snap: HudSnapshot;
   flashes: HudFlash[];
   input: InputManager;
-  onMenu: () => void;
-  onRestart: () => void;
+  onPause: () => void;
   onCamera: () => void;
 };
 
@@ -423,42 +422,59 @@ const DAMAGE_ZONE_PATHS = [
   "M 13.5 14 Q 14 7 19 4", // front-left corner
 ];
 
-/** Crush color ramp: invisible while sound, then yellow folding to red. */
+/** The color a part wears while it is SOUND. Deliberately COOL: the ramp
+ * below runs yellow to red, and a warm "neutral" — cream, bone, off-white —
+ * sits close enough to the low end of that ramp, over this instrument's navy
+ * plate, to read as a car that is already hurt. Steel blue cannot be
+ * mistaken for any value on the ramp. */
+function soundTint(alpha: number): string {
+  return `rgba(150, 178, 214, ${alpha})`;
+}
+
+/** Crush color ramp: quiet steel while sound, then yellow folding to red. */
 function crushColor(v: number): string {
-  if (v <= 0.02) return "rgba(246, 243, 234, 0.14)";
+  if (v <= 0.02) return soundTint(0.3);
   return `hsl(${Math.round(50 - 45 * Math.min(1, v))} 95% 55%)`;
 }
 
-/** Meter color ramp: green health draining through amber to red. */
-function meterColor(damage: number): string {
-  return `hsl(${Math.round(120 * (1 - Math.min(1, damage)))} 80% 48%)`;
+/** System color ramp: a part that is SOUND reads as quiet steel, and only a
+ * hurt one takes color — yellow folding to red as it gives out. Painting
+ * every healthy part bright green makes five lights that shout nothing; this
+ * instrument stays silent until it has news, so a glance mid-corner finds the
+ * one part that is wrong instead of scanning a row of bars. */
+function systemColor(damage: number): string {
+  if (damage <= 0.04) return soundTint(0.62);
+  return `hsl(${Math.round(52 - 48 * Math.min(1, damage))} 92% 55%)`;
 }
 
-const SYSTEM_METERS = [
-  ["ENG", "engine"],
-  ["SUS", "suspension"],
-  ["GBX", "gearbox"],
-  ["STR", "steering"],
-] as const;
-
-/** The damage instrument: lives IN the bottom-left cluster, drawn with the
- * tach's own materials — the navy face, the chunky white strokes, the red
- * accent. A top-view car wears the crush where it happened, the breakables
- * cross out red as they tear off, and the internal systems read as chunky
- * bars beside it, boost-bar style. */
+/** The damage instrument: ONE glyph, no bars. A top-view car wears the crush
+ * on its outline where the hits landed, the breakables cross out red as they
+ * tear off, and the four internal systems are the parts themselves — the
+ * engine block under the bonnet, the rack across the front axle, the gearbox
+ * down the tunnel, the suspension at the four wheels — each taking color as
+ * it fails. The shell's own outline is the chassis, the bar the wreck is
+ * called on. Drawn in the tach's materials so the cluster reads as one
+ * instrument panel; sits above the tach, where the eye already is. */
 function DamagePanel({ damage }: { damage: HudDamage }) {
   const broken = damage.broken;
   const part = (isBroken: boolean): string =>
     `hud-dmg-part ${isBroken ? "hud-dmg-part-broken" : ""}`;
+  const sys = damage.systems;
   return (
-    <div className="hud-damage" aria-hidden="true">
+    <div
+      className="hud-damage"
+      title="Damage — engine, steering, gearbox, suspension, chassis"
+      aria-hidden="true"
+    >
       <svg className="hud-dmg-car" viewBox="0 0 60 100">
         {/* The instrument face — same plate the tach dial sits on. */}
         <rect className="hud-dmg-face" x="1.5" y="1" width="57" height="98" rx="10" />
-        {/* The body, cabin, and the underside wash for belly crush. */}
+        {/* The shell: its outline is the chassis gauge, and the crush strokes
+            below bloom over it where the car actually took the hit. */}
         <path
           className="hud-dmg-body"
           d="M 19 9 Q 19 4.5 30 4.5 Q 41 4.5 41 9 L 42 84 Q 42 95 30 95 Q 18 95 18 84 Z"
+          style={{ stroke: systemColor(damage.wear) }}
         />
         <rect
           className="hud-dmg-belly"
@@ -467,9 +483,62 @@ function DamagePanel({ damage }: { damage: HudDamage }) {
           width="20"
           height="56"
           rx="8"
-          style={{ opacity: (0.75 * damage.belly).toFixed(2) }}
+          style={{
+            fill: crushColor(damage.belly),
+            opacity: Math.min(0.8, damage.belly * 1.6).toFixed(2),
+          }}
         />
-        <rect className="hud-dmg-cabin" x="22.5" y="30" width="15" height="26" rx="4" />
+        {/* ENGINE: the block filling the bonnet. */}
+        <rect
+          className="hud-dmg-sys"
+          x="21.5"
+          y="10"
+          width="17"
+          height="11"
+          rx="2.5"
+          style={{ fill: systemColor(sys.engine) }}
+        />
+        {/* STEERING: the rack across the front axle, drawn under the wheels
+            it turns, so the two read as one assembly. */}
+        <rect
+          className="hud-dmg-sys"
+          x="15"
+          y="25"
+          width="30"
+          height="3.4"
+          rx="1.7"
+          style={{ fill: systemColor(sys.steering) }}
+        />
+        {/* GEARBOX: the tunnel running back from the cabin. */}
+        <rect
+          className="hud-dmg-sys"
+          x="26.5"
+          y="58"
+          width="7"
+          height="26"
+          rx="3"
+          style={{ fill: systemColor(sys.gearbox) }}
+        />
+        <rect className="hud-dmg-cabin" x="22.5" y="32" width="15" height="24" rx="4" />
+        {/* SUSPENSION: the four corners it holds up. The front pair straddles
+            the rack above — an axle, not two loose blocks. */}
+        {[
+          [15.5, 22.5],
+          [39.5, 22.5],
+          [15.5, 68],
+          [39.5, 68],
+        ].map(([x, y]) => (
+          <rect
+            key={`${x},${y}`}
+            className="hud-dmg-sys"
+            x={x}
+            y={y}
+            width="5"
+            height="12"
+            rx="1.8"
+            style={{ fill: systemColor(sys.suspension) }}
+          />
+        ))}
         {/* The ring: crush painted where it happened. */}
         {DAMAGE_ZONE_PATHS.map((d, i) => (
           <path
@@ -480,42 +549,27 @@ function DamagePanel({ damage }: { damage: HudDamage }) {
           />
         ))}
         {/* The breakables: solid while bolted on, crossed out when gone. */}
-        <rect className={part(broken.bumperF)} x="21" y="7" width="18" height="3.6" rx="1.6" />
-        <rect className={part(broken.bumperR)} x="21" y="89.5" width="18" height="3.6" rx="1.6" />
+        <rect className={part(broken.bumperF)} x="21" y="6" width="18" height="3.2" rx="1.5" />
+        <rect className={part(broken.bumperR)} x="21" y="89.5" width="18" height="3.2" rx="1.5" />
         <rect className={part(broken.mirrorL)} x="9" y="29" width="4.5" height="7" rx="1.4" />
         <rect className={part(broken.mirrorR)} x="46.5" y="29" width="4.5" height="7" rx="1.4" />
-        <rect className={part(broken.spoiler)} x="17" y="83.5" width="26" height="3.6" rx="1.6" />
+        <rect className={part(broken.spoiler)} x="17" y="84.5" width="26" height="3.2" rx="1.5" />
       </svg>
-      <div className="hud-dmg-meters">
-        {SYSTEM_METERS.map(([label, key]) => (
-          <span key={key} className="hud-dmg-meter">
-            <span className="hud-dmg-meter-label">{label}</span>
-            <span className="hud-dmg-meter-track">
-              <span
-                className="hud-dmg-meter-fill"
-                style={{
-                  width: `${((1 - damage.systems[key]) * 100).toFixed(0)}%`,
-                  background: meterColor(damage.systems[key]),
-                }}
-              />
-            </span>
-          </span>
-        ))}
-        {/* The chassis itself — the bar the wreck is called on. */}
-        <span className="hud-dmg-meter hud-dmg-wear">
-          <span className="hud-dmg-meter-label">CAR</span>
-          <span className="hud-dmg-meter-track">
-            <span
-              className="hud-dmg-meter-fill"
-              style={{
-                width: `${((1 - damage.wear) * 100).toFixed(0)}%`,
-                background: meterColor(damage.wear),
-              }}
-            />
-          </span>
-        </span>
-      </div>
     </div>
+  );
+}
+
+/** The camera button's glyph: a movie camera — body, lens cone, and the two
+ * film reels on top. Drawn rather than lettered because the top bar is the
+ * one strip that has to stay out of the way of the road. */
+function CameraGlyph() {
+  return (
+    <svg className="hud-glyph" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="8" cy="5" r="3.1" />
+      <circle cx="15" cy="5" r="3.1" />
+      <rect x="2" y="9" width="14" height="10.5" rx="2" />
+      <path d="M 16.6 12.6 L 22 9.6 L 22 18.9 L 16.6 15.9 Z" />
+    </svg>
   );
 }
 
@@ -547,48 +601,41 @@ function TouchButton({
   );
 }
 
-export function Hud({ snap, flashes, input, onMenu, onRestart, onCamera }: HudProps) {
+export function Hud({ snap, flashes, input, onPause, onCamera }: HudProps) {
   const { touch } = input;
   return (
     <div className="hud pointer-events-none absolute inset-0 select-none">
-      {/* Top bar: stage + timer + progress. */}
+      {/* Top bar: stage + timer, and the two presses that belong on the road
+          — the way home from the wild, and the camera. Restart and race setup
+          live behind the minimap now, one tap away and out of the sky. */}
       <div className="hud-top">
         <div className="hud-chip">
           STAGE {snap.seed}
           <span className="hud-chip-sub">{snap.carName}</span>
         </div>
         <div className="hud-chip hud-timer">{formatTime(snap.time)}</div>
-        {snap.endless ? (
-          <div className="hud-progress hud-progress-km">{snap.distanceKm.toFixed(1)} KM</div>
-        ) : (
-          <div className="hud-progress">
-            <div
-              className="hud-progress-fill"
-              style={{ width: `${(snap.progress * 100).toFixed(1)}%` }}
-            />
-          </div>
-        )}
         <div className="hud-actions pointer-events-auto">
-          {snap.offRoad && (
-            <button
-              type="button"
-              className="hud-mini hud-mini-alert"
-              onClick={() => input.requestReset()}
-              title="Back to track (B)"
-            >
-              TRACK
-            </button>
-          )}
-          <button type="button" className="hud-mini" onClick={onCamera} title="Camera (V)">
-            CAM
-          </button>
-          <button type="button" className="hud-mini" onClick={onMenu} title="Race setup (C)">
-            SETUP
-          </button>
-          <button type="button" className="hud-mini" onClick={onRestart} title="Restart stage (R)">
-            RESTART
+          <button
+            type="button"
+            className="hud-mini hud-mini-icon"
+            onClick={onCamera}
+            title="Camera (V)"
+            aria-label="Camera"
+          >
+            <CameraGlyph />
           </button>
         </div>
+        {/* Hung off the bar's bottom edge rather than pinned to a screen
+            corner: every corner is spoken for by an instrument, and the one
+            it used to sit in is the booster's in portrait. Anchored to the
+            bar means it tracks the chip's height instead of guessing it. */}
+        <div className="hud-build">{__BUILD_LABEL__}</div>
+      </div>
+
+      {/* The minimap owns the top-right corner: the route, the car on it, and
+          the run's progress read off the frame. Tap it for the race menu. */}
+      <div className="hud-minimap-dock pointer-events-auto">
+        <Minimap map={snap.minimap} onOpen={onPause} />
       </div>
 
       {/* The co-driver: upcoming corner calls, front and center. */}
@@ -616,37 +663,67 @@ export function Hud({ snap, flashes, input, onMenu, onRestart, onCamera }: HudPr
         </div>
       </div>
 
-      {/* Bottom-left: the instrument cluster — revs, gear, speed. */}
+      {/* Bottom-left: the instrument panel, in two rows. The top row is the
+          car's CONDITION — the damage glyph, and everything that comes and
+          goes with the situation, the way back onto the road included.
+          Keeping those out of the dial row is what stops a phone from losing
+          the booster off the right edge the moment the car puts two wheels in
+          the grass: a row that grows with the situation cannot also be a row
+          sized to fit. The top bar is the same bargain — it holds the stage,
+          the clock and the camera, and nothing that appears mid-run. */}
       <div className="hud-speed">
-        <Tachometer rpm={snap.rpm} />
-        <div className={`hud-gearbox ${snap.shiftUp ? "hud-gearbox-shift" : ""}`}>
-          <span className="hud-gear">{snap.gear + 1}</span>
-          <span className="hud-shiftlight">{snap.gearbox === "auto" ? "AUTO" : "SHIFT"}</span>
-        </div>
-        <span className="hud-speed-num">{Math.round(snap.speedKmh)}</span>
-        <span className="hud-speed-unit">km/h</span>
-        {snap.offRoad && <span className="hud-off">OFF ROAD</span>}
-        {snap.windKmh >= 4 && (
-          <span className="hud-wind" title="Wind">
-            <span
-              className="hud-wind-arrow"
-              style={{ transform: `rotate(${snap.windScreenAngle.toFixed(0)}deg)` }}
-            >
-              ↑
+        <div className="hud-status">
+          <DamagePanel damage={snap.damage} />
+          {snap.offRoad && (
+            <>
+              <span className="hud-off">OFF ROAD</span>
+              <button
+                type="button"
+                className="hud-mini hud-mini-alert pointer-events-auto"
+                onClick={() => input.requestReset()}
+                title="Back to track (B)"
+              >
+                TRACK
+              </button>
+            </>
+          )}
+          {snap.windKmh >= 4 && (
+            <span className="hud-wind" title="Wind">
+              <span
+                className="hud-wind-arrow"
+                style={{ transform: `rotate(${snap.windScreenAngle.toFixed(0)}deg)` }}
+              >
+                ↑
+              </span>
+              {Math.round(snap.windKmh)}
             </span>
-            {Math.round(snap.windKmh)}
+          )}
+        </div>
+        <div className="hud-cluster">
+          <Tachometer rpm={snap.rpm} />
+          <div className={`hud-gearbox ${snap.shiftUp ? "hud-gearbox-shift" : ""}`}>
+            <span className="hud-gear">{snap.gear + 1}</span>
+            <span className="hud-shiftlight">{snap.gearbox === "auto" ? "AUTO" : "SHIFT"}</span>
+          </div>
+          <span className="hud-speed-num">{Math.round(snap.speedKmh)}</span>
+          <span className="hud-speed-unit">km/h</span>
+          {/* The booster tank. `--fill` drives the bar in whichever direction
+              the layout runs — a width in landscape, a height in portrait,
+              where the cluster has no room left sideways. */}
+          <span className={`hud-boostbar ${snap.boosting ? "hud-boostbar-hot" : ""}`}>
+            <span className="hud-boostbar-label">BOOST</span>
+            <span className="hud-boostbar-track">
+              <span
+                className="hud-boostbar-fill"
+                style={
+                  {
+                    "--fill": `${((snap.boostLeft / snap.boostMax) * 100).toFixed(1)}%`,
+                  } as CSSProperties
+                }
+              />
+            </span>
           </span>
-        )}
-        <span className={`hud-boostbar ${snap.boosting ? "hud-boostbar-hot" : ""}`}>
-          <span className="hud-boostbar-label">BOOST</span>
-          <span className="hud-boostbar-track">
-            <span
-              className="hud-boostbar-fill"
-              style={{ width: `${((snap.boostLeft / snap.boostMax) * 100).toFixed(1)}%` }}
-            />
-          </span>
-        </span>
-        <DamagePanel damage={snap.damage} />
+        </div>
       </div>
 
       {/* Touch controls — the left half of the screen anchors a steering
@@ -673,8 +750,6 @@ export function Hud({ snap, flashes, input, onMenu, onRestart, onCamera }: HudPr
           </div>
         )}
       </div>
-
-      <div className="hud-build">{__BUILD_LABEL__}</div>
     </div>
   );
 }
