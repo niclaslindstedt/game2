@@ -19,23 +19,23 @@ skill for any code change.
 
 ## Where everything lives
 
-| Piece                          | Role                                                                                                     |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| `pwa/src/game/car-body.ts`     | The assembly line: builds the parts, packages the meshes, names the breakables                          |
-| `pwa/src/game/car/spec.ts`     | The whole `CarBodySpec` vocabulary. Pure types — a new part starts with an optional field here          |
-| `pwa/src/game/car/builder.ts`  | `MeshBuilder` (baked-sun triangles), `bakeShading`, the bilinear-patch helpers                           |
-| `pwa/src/game/car/shell.ts`    | The chassis loft: stations, the ring, wheel-arch openings, shut-line grooves, `flankX`, `sideBand`       |
-| `pwa/src/game/car/greenhouse.ts` | Windows cut out of a solid cabin; gutters, wipers                                                      |
-| `pwa/src/game/car/fascia.ts`   | Nose and tail: grille, lamps, bumpers, air dam, plate, exhaust, the detachable bonnet and boot lid       |
-| `pwa/src/game/car/trim.ts`     | Arch extensions, mirrors, handles, mud flaps, livery bands, door numbers, spoilers                       |
-| `pwa/src/game/car/wheels.ts`   | The tire and three rim styles                                                                            |
-| `pwa/src/game/car-styles.ts`   | The specs — one `CarBodySpec` per catalog id. **Pure data, no three.js import** (Node tooling loads it)  |
-| `pwa/src/game/car-dirt.ts`     | The grime a stage puts on it. Its painter is what the preview's `dirty` column calls                    |
-| `tests/car_geometry_test.ts`   | Holds every spec inside `TUNING.collision`'s box and inside real-car dimensions                          |
-| `pwa/src/game/car-mesh.ts`     | Scene wrapper: attitude (drift roll / air pitch), wheel spin + steer, blob shadow                        |
-| `pwa/src/tools/car-preview.ts` | The harness page the preview tool drives (contact-sheet renderer)                                        |
-| `scripts/car-preview.mjs`      | The tool: `make cars` / `npm run cars`; `--variants`, `--cars`, `--out`, `--skip-build`                  |
-| `engine/game/defs/cars.ts`     | NOT this skill's file — handling numbers and the catalog. Only `color`/`accent` feed the default look    |
+| Piece                            | Role                                                                                                    |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `pwa/src/game/car-body.ts`       | The assembly line: builds the parts, packages the meshes, names the breakables                          |
+| `pwa/src/game/car/spec.ts`       | The whole `CarBodySpec` vocabulary. Pure types — a new part starts with an optional field here          |
+| `pwa/src/game/car/builder.ts`    | `MeshBuilder` (baked-sun triangles), `bakeShading`, the bilinear-patch helpers                          |
+| `pwa/src/game/car/shell.ts`      | The chassis loft: stations, the ring, wheel-arch openings, shut-line grooves, `flankX`, `sideBand`      |
+| `pwa/src/game/car/greenhouse.ts` | Windows cut out of a solid cabin; gutters, wipers                                                       |
+| `pwa/src/game/car/fascia.ts`     | Nose and tail: grille, lamps, bumpers, air dam, plate, exhaust, the detachable bonnet and boot lid      |
+| `pwa/src/game/car/trim.ts`       | Arch extensions, mirrors, handles, mud flaps, livery bands, door numbers, spoilers                      |
+| `pwa/src/game/car/wheels.ts`     | The tire and three rim styles                                                                           |
+| `pwa/src/game/car-styles.ts`     | The specs — one `CarBodySpec` per catalog id. **Pure data, no three.js import** (Node tooling loads it) |
+| `pwa/src/game/car-dirt.ts`       | The grime a stage puts on it. Its painter is what the preview's `dirty` column calls                    |
+| `tests/car_geometry_test.ts`     | Holds every spec inside `TUNING.collision`'s box and inside real-car dimensions                         |
+| `pwa/src/game/car-mesh.ts`       | Scene wrapper: attitude (drift roll / air pitch), wheel spin + steer, blob shadow                       |
+| `pwa/src/tools/car-preview.ts`   | The harness page the preview tool drives (contact-sheet renderer)                                       |
+| `scripts/car-preview.mjs`        | The tool: `make cars` / `npm run cars`; `--variants`, `--cars`, `--out`, `--skip-build`                 |
+| `engine/game/defs/cars.ts`       | NOT this skill's file — handling numbers and the catalog. Only `color`/`accent` feed the default look   |
 
 ## The loop: generate → render → LOOK → iterate
 
