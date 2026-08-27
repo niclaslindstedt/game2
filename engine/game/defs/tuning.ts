@@ -33,7 +33,7 @@ export const TUNING = {
      * enough to be felt as turn-in taking a beat, large enough that a
      * counter-steer still catches a slide. It is the LOCK that lags, not the
      * yaw — the steady-state corner is exactly the one it always was. */
-    rackRate: 9,
+    rackRate: 13,
     /** How much the slip's self-rotation acts with the wheel CENTRED,
      * 0..1, rising linearly to 1 at full lock. This is the "commitment"
      * that lets a held wheel sustain a slide, a centred wheel gather the

@@ -81,6 +81,43 @@ export const TARMAC_SMOKE = {
   spread: 1.2,
 };
 
+/** How big a thrown cloud is at a given PACE, 0..1. A wheel at walking
+ * speed disturbs the ground; a wheel at rally pace excavates it, and a
+ * cloud that ignores the difference buries a car crawling out of a ditch
+ * in the same plume it earns at 120 km/h. Both the grain COUNT and the
+ * SPREAD ride on it, so a slow cloud is fewer grains and a tighter one —
+ * scaling only the count would keep the same wide skirt with holes in it.
+ * Smoke is exempt: an overwhelmed tire is overwhelmed at any speed. */
+export const PACE = {
+  /** At or below this the cloud sits at its floor, m/s. */
+  from: 7,
+  /** At or above this it is full size, m/s. */
+  to: 28,
+  /** What is left of it at a crawl, 0..1. */
+  floor: 0.12,
+};
+
+export function paceScale(u: number): number {
+  const t = Math.min(1, Math.max(0, (u - PACE.from) / (PACE.to - PACE.from)));
+  return PACE.floor + (1 - PACE.floor) * t;
+}
+
+/** What the WILD throws, as a fraction of what the road throws. Turf holds
+ * together where loose grit does not: a wheel off the road tears out clods
+ * and blades, it does not lift a screen of dust the way a graded surface
+ * with nothing binding it does. The road is the loud surface here, and the
+ * grass beside it is the quiet one.
+ *
+ * It is deliberately a MILD cut, and `PACE` above is the deep one. They
+ * answer different questions — how loud is turf, and how loud is a walking
+ * pace — and compounding both into this one number would take the wild's
+ * cloud out entirely at the speeds where it is most on screen. At pace the
+ * car's own wake carries the grains behind the chase camera within a
+ * fraction of a second, so this number is judged at the speeds a player
+ * actually looks at the ground: crawling out of a field, and sliding
+ * across one. */
+export const WILD_THROW = 0.45;
+
 /** A cloud made of TWO things. Ground thrown off a wheel is never one
  * color: the wild's verge is grass torn up with the earth under it, and
  * what sells it is that the grains are individually one or the other —
