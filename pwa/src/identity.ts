@@ -4,14 +4,22 @@
 // generator, check-seo), so a rename or a palette change happens here once.
 // Keep this file free of browser- and Node-only imports.
 
-export const APP_NAME = "Sideways";
-export const APP_TITLE = "Sideways — arcade rally drifting in your browser";
-export const APP_SHORT_NAME = "Sideways";
+export const APP_NAME = "Scandinavian Flick";
+/** The house, on the studio card the app opens on. Drawn upper-cased, so
+ * write it however it is written everywhere else. */
+export const PUBLISHER = "Agilator Games";
+export const APP_TITLE = "Scandinavian Flick — arcade rally drifting in your browser";
+/** The home-screen name: a launcher gives it about twelve characters, and
+ * the flick is the half of the name that means anything on its own. */
+export const APP_SHORT_NAME = "Flick";
 export const APP_DESCRIPTION =
   "A drift-first arcade rally game that runs in your browser. Low-poly 3D stages " +
   "generated fresh every day — hairpins, jumps, fords — playable on your phone " +
   "or desktop, offline once loaded. No account, no download.";
 export const SITE_URL = "https://game2.niclaslindstedt.se";
+/** Where the source lives — the main menu's version stamp links a build's
+ * commit here, so the running app can always say exactly what it is. */
+export const REPO_URL = "https://github.com/niclaslindstedt/game2";
 
 /** The arcade palette: a sunlit blue sky over saturated green and gravel. */
 export const PALETTE = {

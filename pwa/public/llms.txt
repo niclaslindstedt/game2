@@ -1,4 +1,4 @@
-# Sideways
+# Scandinavian Flick
 
 > A drift-first arcade rally game that runs in the browser: low-poly 3D
 > stages generated fresh every day — hairpins, jumps, fords — playable on
@@ -12,7 +12,7 @@ straights — so every seed is drivable flat out.
 
 ## Play
 
-- [Play Sideways](https://game2.niclaslindstedt.se/): the game itself.
+- [Play Scandinavian Flick](https://game2.niclaslindstedt.se/): the game itself.
 
 ## Source
 

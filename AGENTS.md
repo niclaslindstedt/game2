@@ -1,4 +1,4 @@
-# Agent guidance for Sideways (game2)
+# Agent guidance for Scandinavian Flick (game2)
 
 This file is the canonical source of truth for AI coding agents working in this repo. `CLAUDE.md`, `.cursorrules`, `.windsurfrules`, `GEMINI.md`, and `.github/copilot-instructions.md` are symlinks to this file.
 
@@ -62,7 +62,11 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | Bot behavior                                       | `engine/sim/bot.ts`                                                     |
 | Anything drawn (meshes, textures, camera, effects) | `pwa/src/game/` (renderer.ts and friends)                               |
 | HUD / touch controls                               | `pwa/src/game/hud.tsx` + `pwa/src/styles.css`                           |
-| Input mapping                                      | `pwa/src/game/input.ts`                                                 |
+| Input mapping                                      | `pwa/src/game/input.ts` (bindings in `settings.ts`)                     |
+| Main menu pages / routing                          | `pwa/src/game/main-menu.tsx` (+ `menu-roam`, `menu-options`)            |
+| Campaign stages, locations, unlocks                | `pwa/src/game/campaign.ts`                                              |
+| A player option (HUD, video, controls)             | `pwa/src/game/settings.ts`, then its reader                             |
+| The studio card / boot cover                       | `pwa/src/game/splash.ts` (policy) + `splash-screen.tsx`                 |
 | App identity (name, palette, URLs)                 | `pwa/src/identity.ts` (single source)                                   |
 | New CLI tooling                                    | `scripts/*.mjs` (Node, no deps beyond `scripts/lib/`)                   |
 | Engine tests                                       | `tests/<topic>_test.ts`                                                 |
@@ -92,6 +96,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 ## Parity and cross-cutting rules
 
 - `pwa/src/identity.ts` is the identity source of truth; `pwa/public/icons/icon.svg` and `scripts/generate-icons.mjs` encode the same mark geometry — change one, change both, then `make icons`.
+- The menu's backdrop is the real game: `App.tsx` steps the engine on `botInput` under the drone camera while a menu page is up, and holds it under the map camera on Roam. A menu that stops driving is a bug, not a saving.
 - `engine/version.ts`, root and workspace `package.json` versions move together — only via `scripts/update-versions.sh` (the release workflow runs it).
 - The service worker contract (cache id, emitted files) is shared between `pwa/pwa-plugin.ts` and `pwa/src/app-pwa.ts` — keep them agreeing.
 - The deployed site IS the product (§11.2-as-webapp): there is no separate `website/` tree. SEO copy lives in `pwa/index.html` + `pwa/public/`; keep it in sync with identity.ts, and treat a stale deployed site after identity/feature changes as a bug.

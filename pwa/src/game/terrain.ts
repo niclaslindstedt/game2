@@ -34,8 +34,10 @@ const CELL = GROUND_CELL;
 const CELLS = 16;
 const TILE = CELL * CELLS;
 /** Tiles exist within this range of the road, m — past the fog ceiling
- * (520 m), so the world never visibly ends. */
-const FAR = 640;
+ * (520 m), so the world never visibly ends. Exported because it is also how
+ * far the LAND reaches: the map view frames the whole of it. */
+export const GROUND_REACH = 640;
+const FAR = GROUND_REACH;
 /** Tiles kept alive around the CAR when it roams off the corridor, m. */
 const CAR_FAR = 560;
 /** Freshly needed car-window tiles built per sync at most — an excursion

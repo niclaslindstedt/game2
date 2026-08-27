@@ -7,7 +7,7 @@ description: "Use when README.md may be stale. Discovers commits since the last 
 
 **Governing spec sections:** §3 (`README.md` — required sections and content), §21.5 (this skill is mandated because `README.md` is a drift-prone artifact).
 
-`README.md` is the primary user-facing documentation for Sideways. Per §3 of `OSS_SPEC.md` it must keep its twelve sections (What / Why / Prerequisites / Install / Quick start / Usage / Configuration / Examples / Troubleshooting / Documentation / Contributing / License) accurate. It goes stale whenever a command, a car, a control, a URL, or the install story changes without a matching edit.
+`README.md` is the primary user-facing documentation for Scandinavian Flick. Per §3 of `OSS_SPEC.md` it must keep its twelve sections (What / Why / Prerequisites / Install / Quick start / Usage / Configuration / Examples / Troubleshooting / Documentation / Contributing / License) accurate. It goes stale whenever a command, a car, a control, a URL, or the install story changes without a matching edit.
 
 ## Tracking mechanism
 

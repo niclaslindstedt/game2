@@ -10,5 +10,5 @@
 /** Per-deploy-base precache cache id, derived from the bundler `base`. */
 export function cacheIdForBase(base: string): string {
   const slug = base.replace(/^\/+|\/+$/g, "").replace(/\W+/g, "-");
-  return slug ? `sideways-${slug}` : "sideways";
+  return slug ? `scandi-flick-${slug}` : "scandi-flick";
 }
