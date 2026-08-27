@@ -45,7 +45,7 @@ import { createInput } from "./game/input.ts";
 import type { CameraMode } from "./game/camera.ts";
 import type { GameRenderer } from "./game/renderer.ts";
 import { Hud, type HudFlash, type HudSnapshot } from "./game/hud.tsx";
-import { takeSnapshot, type RunBook } from "./game/snapshot.ts";
+import { createLive, readLive, takeSnapshot, type RunBook } from "./game/snapshot.ts";
 import {
   DEFAULT_STAGE_KNOBS,
   PauseMenu,
@@ -300,6 +300,10 @@ export function App() {
    * is, so a finish can record the clear. */
   const [run, setRun] = useState<{ mode: PlayMode; levelId?: string }>({ mode: "roam" });
   const [snap, setSnap] = useState<HudSnapshot | null>(null);
+  /** The clock and the start lights, at frame rate. One object for the life
+   * of the app, rewritten in place — the HUD holds its identity and reads it
+   * on its own animation frame, so neither instrument waits for a snapshot. */
+  const liveRef = useRef(createLive());
   /** The attract card is up until a press clears it; `booted` is the moment
    * the render stack has landed and the first stage is standing, which is what
    * the card is covering — and what it waits for before it puts its title up
@@ -401,12 +405,12 @@ export function App() {
     const previous = gameRef.current;
     gameRef.current = state;
     // A different track object (new seed OR new length) is a different
-    // world; only same-track tweaks get away with a re-light.
-    if (!previous || previous.track !== state.track || previous.spec.id !== spec.carId) {
-      renderer.setGame(state);
-    } else {
-      renderer.setConditions(state);
-    }
+    // world, and the only thing worth rebuilding one for. A different car on
+    // the same road is a body swap, and everything else — the light, the
+    // weather — is a re-light.
+    if (!previous || previous.track !== state.track) renderer.setGame(state);
+    else if (previous.spec.id !== spec.carId) renderer.setCar(state);
+    else renderer.setConditions(state);
     setSnap(takeSnapshot(state, null, null, bookRef.current));
   };
   const applyStageRef = useRef(applyStage);
@@ -836,6 +840,10 @@ export function App() {
         // that is two pieces of music at once.
         if (!page) audioRef.current?.frame(state, dtFrame);
         renderer.render(state, dtFrame);
+        // Every frame, ahead of the throttled snapshot: the clock's
+        // hundredths and the start lights are the two things a run cannot
+        // read at 12 Hz.
+        if (!page) readLive(liveRef.current, state);
         hudClock += dtFrame;
         if (hudClock > 0.08) {
           hudClock = 0;
@@ -882,6 +890,7 @@ export function App() {
       {snap && !menu && (
         <Hud
           snap={snap}
+          live={liveRef.current}
           flashes={flashes}
           input={input}
           show={options.hud}

@@ -40,7 +40,7 @@ and hold instead of just stopping), filters SWEEP, and oscillators DISTORT.
 | `pwa/src/game/audio/route.ts`      | Which sound a `GameEvent` makes, and how big.                                                                                                                                                         |
 | `pwa/src/game/audio/engine-bed.ts` | The engine, as overlapping grains.                                                                                                                                                                    |
 | `pwa/src/game/audio/road-grain.ts` | The tyres, the wind and the drift's scrub.                                                                                                                                                            |
-| `pwa/src/game/audio/drive-bed.ts`  | The scheduler, and the countdown lights.                                                                                                                                                              |
+| `pwa/src/game/audio/drive-bed.ts`  | The scheduler, and the start lights' ticks.                                                                                                                                                           |
 | `pwa/src/game/audio/music.ts`      | The single player: which theme is up, and the per-track dynamic import.                                                                                                                               |
 | `pwa/src/game/audio/scores/`       | The scores themselves.                                                                                                                                                                                |
 

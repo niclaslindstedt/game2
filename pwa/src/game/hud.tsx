@@ -13,6 +13,8 @@ import { Minimap, type HudMinimap } from "./minimap.tsx";
 import { deviceControls, type HudSettings, type PedalDir, type TouchSettings } from "./settings.ts";
 import type { Standing } from "./standings.ts";
 import { clamp, formatTime } from "../lib/util.ts";
+import { RaceClock, StartLights } from "./hud-clock.tsx";
+import type { LiveRun } from "./snapshot.ts";
 
 /** One co-driver call, already flipped into SCREEN space by the snapshot
  * (left means the road bends left through the windshield). */
@@ -27,7 +29,6 @@ export type HudPacenote = {
 
 export type HudSnapshot = {
   phase: GamePhase;
-  countdown: number;
   /** Total race time, seconds — the clock that never resets. */
   time: number;
   /** R22 — which lap the run is on and how many it is raced over, the time
@@ -123,6 +124,9 @@ type HudProps = {
   show: HudSettings;
   /** Which thumb steers, and what each drag off the pedal anchor does. */
   touchLayout: TouchSettings;
+  /** The clock and the start lights read this every frame instead of
+   * waiting for the next snapshot. */
+  live: LiveRun;
   onPause: () => void;
   onCamera: () => void;
 };
@@ -806,55 +810,6 @@ function TouchButton({
   );
 }
 
-/** The race clock — the loudest instrument on the screen, because in a
- * racing game the clock IS the opponent. Total time reads biggest; under it
- * the lap clock and the lap counter, on a stage that has laps; under that
- * the times to measure against — the laps already set this run, and the
- * record the stage is holding. */
-function RaceClock({ snap }: { snap: HudSnapshot }) {
-  const lapped = snap.laps > 1;
-  const bestLap = snap.lapTimes.length > 0 ? Math.min(...snap.lapTimes) : null;
-  return (
-    <div className="hud-clock">
-      <div className="hud-clock-row">
-        <span className="hud-clock-label">TOTAL TIME</span>
-      </div>
-      <div className="hud-clock-total">{formatTime(snap.time)}</div>
-      {lapped && (
-        <>
-          <div className="hud-clock-row">
-            <span className="hud-clock-label hud-clock-label-lap">LAP TIME</span>
-            <span className="hud-lap-count">
-              {Math.min(snap.lap, snap.laps)}
-              <span className="hud-lap-of">/{snap.laps}</span>
-            </span>
-          </div>
-          <div className="hud-clock-lap">{formatTime(snap.lapTime)}</div>
-        </>
-      )}
-      {(snap.bestTime !== null || bestLap !== null) && (
-        <div className="hud-clock-marks">
-          {snap.lapTimes.map((t, i) => (
-            <span
-              key={i}
-              className={`hud-clock-mark ${t === bestLap ? "hud-clock-mark-best" : ""}`}
-            >
-              <span className="hud-clock-mark-label">L{i + 1}</span>
-              {formatTime(t)}
-            </span>
-          ))}
-          {snap.bestTime !== null && (
-            <span className="hud-clock-mark hud-clock-mark-record">
-              <span className="hud-clock-mark-label">BEST</span>
-              {formatTime(snap.bestTime)}
-            </span>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /** "1st", "2nd", "3rd", "4th"… A placing reads as a placing or it reads as
  * a number, and the whole point of the finish card is that third place and
  * fourth are different things. */
@@ -864,7 +819,16 @@ function ordinal(place: number): string {
   return `${place}${["th", "st", "nd", "rd"][place % 10] ?? "th"}`;
 }
 
-export function Hud({ snap, flashes, input, show, touchLayout, onPause, onCamera }: HudProps) {
+export function Hud({
+  snap,
+  live,
+  flashes,
+  input,
+  show,
+  touchLayout,
+  onPause,
+  onCamera,
+}: HudProps) {
   const { touch } = input;
   const pedalSide = touchLayout.steerSide === "left" ? "right" : "left";
   // The thumb zones exist only where there are thumbs. CSS already hides
@@ -883,7 +847,7 @@ export function Hud({ snap, flashes, input, show, touchLayout, onPause, onCamera
           minimap, one tap away and out of the sky. */}
       <div className="hud-top">
         <div className="hud-topleft">
-          {show.timer && <RaceClock snap={snap} />}
+          {show.timer && <RaceClock face={snap} live={live} />}
           {/* The gap to the ghost is its own chip rather than a line inside
               the clock: the clock's text is what the tooling reads the run's
               progress off, and it holds nothing but the time. */}
@@ -956,9 +920,7 @@ export function Hud({ snap, flashes, input, show, touchLayout, onPause, onCamera
 
       {/* Center: countdown / finish / event flashes. */}
       <div className="hud-center">
-        {snap.phase === "countdown" && (
-          <div className="hud-count">{Math.ceil(snap.countdown) || "GO"}</div>
-        )}
+        <StartLights live={live} />
         {/* The card comes up the instant the line is crossed, not when the
             car stops: the clock has stopped, and the roll-out past the gate
             (R22) is the celebration, not a wait for one. */}

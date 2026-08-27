@@ -91,6 +91,9 @@ const STONE_DUST: DustTint = {
 
 export type GameRenderer = {
   setGame: (state: GameState) => void;
+  /** Swap the car under an already-built stage, leaving the world standing:
+   * what the menu does when the player picks a different one. */
+  setCar: (state: GameState) => void;
   /** Apply the player's video options. Resolution, draw distance and the
    * effects budget take hold immediately; flora density is baked into the
    * geometry, so it lands on the next stage built. */
@@ -316,6 +319,20 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     ghostCar = null;
   };
 
+  /** Put this state's car on the road, taking the old one off first. The
+   * body carries the hood eye and the reach of its own lamps, so both are
+   * re-read here rather than only where a whole stage is built. */
+  const fitCar = (state: GameState): void => {
+    if (car) {
+      scene.remove(car.group, car.shadow, car.debris);
+      car.dispose();
+    }
+    car = buildCar(state.spec);
+    scene.add(car.group, car.shadow, car.debris);
+    chase.setHoodEye(hoodEyeFor(state.spec));
+    environment.setLampSpread(car.lampSpread.front, car.lampSpread.rear);
+  };
+
   const setGame = (state: GameState): void => {
     if (world) {
       scene.remove(world.group);
@@ -325,10 +342,6 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       scene.remove(route.group);
       route.dispose();
     }
-    if (car) {
-      scene.remove(car.group, car.shadow, car.debris);
-      car.dispose();
-    }
     game = state;
     lastSpeed = state.car.u;
     world = buildWorld(state.track, FLORA_SCALE[quality.flora]);
@@ -336,12 +349,26 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     route = buildMapRoute(state.track);
     route.group.visible = mapView;
     scene.add(route.group);
-    car = buildCar(state.spec);
-    scene.add(car.group, car.shadow, car.debris);
-    chase.setHoodEye(hoodEyeFor(state.spec));
-    environment.setLampSpread(car.lampSpread.front, car.lampSpread.rear);
+    fitCar(state);
     // A new stage is a new run: whoever wants a ghost on it says so after.
     dropGhost();
+    applyIsland();
+    setConditions(state);
+  };
+
+  /** Swap the CAR under a stage that is already standing. The world is by
+   * far the most expensive thing the renderer builds — terrain and every
+   * tree on it — and none of it depends on which car is parked in it, so
+   * picking a different one in the menu has no business tearing it down and
+   * building it again. */
+  const setCar = (state: GameState): void => {
+    game = state;
+    lastSpeed = state.car.u;
+    fitCar(state);
+    // The island is solved from `game`, and `game` was just rebound. The
+    // planes come out the same — a car swap only happens over a stage whose
+    // track is unchanged — but re-solving them is what keeps that a fact
+    // about this function rather than a promise the caller has to keep.
     applyIsland();
     setConditions(state);
   };
@@ -729,6 +756,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   resize();
   return {
     setGame,
+    setCar,
     setVideo,
     setCamera,
     setMapRect,

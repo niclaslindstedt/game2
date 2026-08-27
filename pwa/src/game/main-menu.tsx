@@ -3,23 +3,25 @@
 // bot-driven stage seen from a drone. Everything the player can reach
 // before a run starts hangs off here:
 //
-//   Campaign   → a location (Taiga) → four stages, each unlocked by the one
+//   Campaign   → a location (Taiga) → its stages, each unlocked by the one
 //                before it.
-//   Time trial → the same stages, gated by the same unlocks: a time is
-//                something you chase on a road you have already driven.
+//   Time trial → the same stages, behind a stricter gate: a stage opens
+//                here once it has been FINISHED, because a time is something
+//                you chase on a road you have already driven to the end.
 //   Roam       → any seed at all, previewed as the map itself (menu-roam).
 //   Options    → HUD, video and controls (menu-options).
 //
 // The pages are a plain tagged union rather than a router: there is no URL
 // to keep in step, and the whole menu is one component tree over one canvas.
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { STAGE_RULES } from "@engine";
 
 import { APP_NAME, REPO_URL } from "../identity.ts";
 import { formatTime } from "../lib/util.ts";
 import {
   LOCATIONS,
+  levelCompleted,
   levelLaps,
   levelUnlocked,
   locationById,
@@ -129,19 +131,23 @@ type LevelBoxProps = {
   level: CampaignLevel;
   index: number;
   unlocked: boolean;
+  /** What a locked box asks for — the two pages lock a stage for different
+   * reasons, and a padlock with no reason on it is just a wall. */
+  hint: string;
   best: number | undefined;
   onPlay: () => void;
 };
 
-/** One stage box. Locked boxes wear a grey border and a padlock and cannot
- * be pressed; open ones wear green and say what they are. */
-function LevelBox({ level, index, unlocked, best, onPlay }: LevelBoxProps) {
+/** One stage box. Locked boxes wear a grey border and a padlock, name
+ * nothing about the stage behind them and cannot be pressed; open ones wear
+ * green and say what they are. */
+function LevelBox({ level, index, unlocked, hint, best, onPlay }: LevelBoxProps) {
   if (!unlocked) {
     return (
       <div className="menu-level menu-level-locked" aria-label={`Stage ${index + 1}, locked`}>
         <span className="menu-level-no">{index + 1}</span>
         <LockGlyph />
-        <span className="menu-level-hint">Finish the stage before this one</span>
+        <span className="menu-level-hint">{hint}</span>
       </div>
     );
   }
@@ -156,13 +162,20 @@ function LevelBox({ level, index, unlocked, best, onPlay }: LevelBoxProps) {
   );
 }
 
+/** The same grid serves both pages, so which stages it opens is passed in
+ * rather than assumed: the campaign opens the next stage up the ladder, the
+ * time trial only stages already driven to the end. */
 function LevelGrid({
   location,
   progress,
+  open,
+  hint,
   onPlay,
 }: {
   location: CampaignLocation;
   progress: CampaignProgress;
+  open: (level: CampaignLevel, index: number) => boolean;
+  hint: string;
   onPlay: (level: CampaignLevel, index: number) => void;
 }) {
   return (
@@ -172,7 +185,8 @@ function LevelGrid({
           key={level.id}
           level={level}
           index={index}
-          unlocked={levelUnlocked(location, index, progress)}
+          unlocked={open(level, index)}
+          hint={hint}
           best={progress.best[level.id]}
           onPlay={() => onPlay(level, index)}
         />
@@ -276,7 +290,7 @@ function RootPage({
           onClick={() => onNavigate({ page: "timetrial" })}
         >
           TIME TRIAL
-          <span className="menu-item-sub">Chase the clock on stages you have unlocked</span>
+          <span className="menu-item-sub">Chase the clock on stages you have finished</span>
         </button>
         <button type="button" className="menu-item" onClick={() => onNavigate({ page: "roam" })}>
           ROAM
@@ -366,6 +380,8 @@ function LocationPage({
       <LevelGrid
         location={location}
         progress={progress}
+        open={(_level, index) => levelUnlocked(location, index, progress)}
+        hint="Finish the stage before this one"
         onPlay={(level) => onPlayLevel(level, "campaign")}
       />
       <CarRow race={race} onRace={onRace} onDeveloper={onDeveloper} />
@@ -392,13 +408,15 @@ function TimeTrialPage({
     <div className="menu-card menu-card-wide">
       <BackButton label="MAIN MENU" onClick={() => onNavigate({ page: "root" })} />
       <div className="menu-title">TIME TRIAL</div>
-      <div className="menu-sub">Unlock a stage in the campaign to run it here</div>
+      <div className="menu-sub">Finish a stage in the campaign to run it here</div>
       {LOCATIONS.map((location) => (
         <div key={location.id} className="menu-section">
           <div className="menu-section-title">{location.name.toUpperCase()}</div>
           <LevelGrid
             location={location}
             progress={progress}
+            open={(level) => levelCompleted(level, progress)}
+            hint="Finish this stage in the campaign"
             onPlay={(level) => onPlayLevel(level, "timetrial")}
           />
         </div>
@@ -420,6 +438,15 @@ const DEPTH: Record<MenuPage["page"], number> = {
   developer: 1,
   location: 2,
 };
+
+/** Where BACK goes from a page — the same step that page's own back button
+ * takes, so the button and the key can never disagree. Null on the root,
+ * which has nowhere further out to go. */
+function parentOf(page: MenuPage): MenuPage | null {
+  if (page.page === "root") return null;
+  if (page.page === "location") return { page: "campaign" };
+  return { page: "root" };
+}
 
 export function MainMenu(props: MainMenuProps) {
   const { page, onNavigate } = props;
@@ -450,6 +477,31 @@ export function MainMenu(props: MainMenuProps) {
     unlockAudio();
     if ((e.target as HTMLElement | null)?.closest(".menu-level-locked")) playUi("deny");
   };
+  /** ESCAPE — whatever the player has bound PAUSE to — steps back out of a
+   * page. In a run that key opens the pause card; in the menu there is no
+   * run to pause, so it is the way out, and a menu that can only be left
+   * with the mouse is a menu ignoring the keyboard it just described.
+   *
+   * Held in a ref and hung off ONE listener: the handler has to see the
+   * page the menu is on right now, and re-subscribing a window listener on
+   * every render of the menu is a listener leak waiting to happen. The
+   * rebind rows in OPTIONS listen in the CAPTURE phase and stop the event
+   * there, so arming a binding and pressing Escape cancels the binding
+   * rather than also walking out of the page. */
+  const onEscape = useRef<(e: KeyboardEvent) => void>(() => undefined);
+  onEscape.current = (e) => {
+    if (!props.settings.keys.pause.includes(e.code)) return;
+    const back = parentOf(page);
+    if (!back) return;
+    e.preventDefault();
+    navigate(back);
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => onEscape.current(e);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // Roam is the one page that is not a card over a backdrop — the map IS
   // the page — so it paints its own scrim and skips the shared one.
   const roam = page.page === "roam";

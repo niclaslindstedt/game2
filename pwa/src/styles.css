@@ -399,9 +399,48 @@ body {
   pointer-events: none;
 }
 
-.hud-count {
-  font-size: clamp(4rem, 18vmin, 9rem);
-  animation: hud-pop 1s infinite;
+/* The start gantry: a black bar of lamps on the stage line, the way a rally
+   start is actually signalled. Sized off the viewport's short side so it
+   reads the same on a phone held up as on a desktop. */
+.hud-lights {
+  display: flex;
+  gap: clamp(0.5rem, 2.2vmin, 1.3rem);
+  padding: clamp(0.5rem, 2vmin, 1.1rem) clamp(0.7rem, 2.6vmin, 1.5rem);
+  border: 0.15rem solid rgb(255 255 255 / 14%);
+  border-radius: 999px;
+  background: rgb(6 12 24 / 82%);
+}
+
+/* An unlit lamp is a dead bulb behind glass, not a hole: it has to be
+   visible for the lit ones to read as a COUNT rather than as a row that
+   keeps growing. */
+.hud-lamp {
+  width: clamp(1.4rem, 6vmin, 3rem);
+  height: clamp(1.4rem, 6vmin, 3rem);
+  border-radius: 50%;
+  background: #17233b;
+  box-shadow: inset 0 0 0 0.12rem rgb(255 255 255 / 12%);
+}
+
+.hud-lamp-red {
+  background: #ff3b2f;
+  box-shadow:
+    inset 0 0 0 0.12rem rgb(255 255 255 / 22%),
+    0 0 1.4rem rgb(255 59 47 / 75%);
+}
+
+.hud-lamp-green {
+  background: #37e06a;
+  box-shadow:
+    inset 0 0 0 0.12rem rgb(255 255 255 / 28%),
+    0 0 1.8rem rgb(55 224 106 / 85%);
+}
+
+/* Lights out is a single event, so it gets a single pulse rather than the
+   repeating throb the countdown numerals used to have — a green that keeps
+   flashing is a green nobody has left yet. */
+.hud-lights-go {
+  animation: hud-pop 0.42s ease-out 1;
 }
 
 .hud-air {

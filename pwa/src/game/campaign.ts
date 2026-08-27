@@ -5,9 +5,9 @@
 // rules engine builds it, and it comes out identical for every player.
 //
 // Progress lives in localStorage: which levels have been cleared (that is
-// what unlocks the next one, in the campaign AND in time trial) and the
-// best time on each. Storage can be unavailable (private mode); a run
-// simply does not persist rather than failing.
+// what unlocks the next one in the campaign, and what opens a stage at all
+// in time trial) and the best time on each. Storage can be unavailable
+// (private mode); a run simply does not persist rather than failing.
 
 import {
   STAGE_RULES,
@@ -201,9 +201,8 @@ export function unlockEverything(): CampaignProgress {
   return next;
 }
 
-/** A level opens once the one before it has been cleared; the first one is
- * always open. The same gate governs time trial — a stage you have not
- * driven in the campaign is not one you can chase a time on. */
+/** A level opens in the CAMPAIGN once the one before it has been cleared;
+ * the first one is always open. */
 export function levelUnlocked(
   location: CampaignLocation,
   index: number,
@@ -211,6 +210,15 @@ export function levelUnlocked(
 ): boolean {
   if (index <= 0) return true;
   return progress.cleared.includes(location.levels[index - 1].id);
+}
+
+/** The TIME TRIAL's gate, which is a stricter one: a stage opens there once
+ * it has been finished, not once it has been reached. A time is something
+ * you chase on a road you have already driven to the end — being handed the
+ * clock on a stage you have never seen the finish of is the campaign again
+ * with the ladder taken away. */
+export function levelCompleted(level: CampaignLevel, progress: CampaignProgress): boolean {
+  return progress.cleared.includes(level.id);
 }
 
 /** Where a level id sits, for the finish handler that has only the id. */

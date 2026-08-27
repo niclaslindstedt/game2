@@ -551,8 +551,9 @@ await capture(
 // The camera ladder, one shot per angle, all at the same pace on the same
 // stretch so the proportions can be compared side by side: how big the car
 // is in frame, where it sits vertically, and how much road each one gives
-// the driver. `?camera=` pins the angle rather than counting KeyV presses —
-// a press count silently shoots the wrong camera the day the ladder grows.
+// the driver. `?camera=` pins the angle rather than counting presses of the
+// camera key — a press count silently shoots the wrong camera the day the
+// ladder grows.
 for (const angle of ["hood", "close", "chase", "far", "heli", "top"]) {
   await capture(
     `shot-cam-${angle}`,
