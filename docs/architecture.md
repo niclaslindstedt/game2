@@ -40,6 +40,7 @@ A Vite + Preact app that renders the engine and ships it as an installable PWA:
 - `src/game/car-body.ts` / `car-styles.ts` / `car-mesh.ts` — the car: a parametric builder that lofts a low-poly body (hood, greenhouse, fender flares, bumpers, lights, wheels, spoilers) from a JSON-friendly `CarBodySpec`, with a fixed fake sun baked into vertex colors; the per-car specs (keyed by catalog id); and the scene wrapper that pitches the body to the road and the flight, spins and steers the wheels, and adds the jump-selling blob shadow. `car-damage.ts` bends the body's polygons from the engine's damage ledger and tumbles torn-off parts as debris. Iterate on looks with `make cars` (see the `car-design` skill).
 - `src/game/camera.ts` — camera **modes** (`chase`, `hood`), built to grow more. The chase cam tracks a blend of nose and travel direction so drift angle reads on screen.
 - `src/game/input.ts` / `hud.tsx` — keyboard + touch, and the arcade HUD (also the touch control surface). `minimap.tsx` builds the top-right map from the compiled track and draws it: the route, the car's arrowhead, and the run's progress as a gauge on the frame's own border; tapping it opens the in-race menu (`menu.tsx`, which also holds the pre-race card).
+- `src/lib/synth.ts` / `src/lib/tracker.ts` / `src/game/audio/` — the sound. A small WebAudio synth (the only module in the tree that touches an `AudioContext`), a tracker sequencer, the sound bank as data, the event router, and the continuous road bed the engine/tyres/wind/drift are made of. Nothing is a file: every effect and every note is synthesized from parameters — see [audio.md](audio.md), and hear it with `make audition`.
 - `src/App.tsx` — the fixed-timestep loop (engine at 120 Hz regardless of frame rate), the daily-seed stage rotation, car swap, and the framework's PWA update toast.
 - `pwa-plugin.ts` — hand-rolled service worker + manifest emission per deploy slot (the same pattern as the sibling contacts app); `src/app-pwa.ts` holds the cache-id contract both sides share.
 - `src/identity.ts` — the single source for name, copy, palette, and URLs.
@@ -49,7 +50,7 @@ The [oss-framework](https://github.com/niclaslindstedt/oss-framework) supplies t
 
 ## `tests/` and `scripts/`
 
-Root-level vitest suites cover the generator's R-rules, the drift and jump moment by moment, the gearboxes, and full bot simulations (see [simulation.md](simulation.md)). `scripts/` holds Node tooling: the sim CLI, track previews, headless screenshots, the icon/OG generator (pure-Node PNG encoder in `scripts/lib/png.mjs` — no native image deps), the SEO checker, and the release plumbing (`scripts/release/`, changeset fragments → CHANGELOG).
+Root-level vitest suites cover the generator's R-rules, the drift and jump moment by moment, the gearboxes, and full bot simulations (see [simulation.md](simulation.md)). `scripts/` holds Node tooling: the sim CLI, track previews, the audio audition page, headless screenshots, the icon/OG generator (pure-Node PNG encoder in `scripts/lib/png.mjs` — no native image deps), the SEO checker, and the release plumbing (`scripts/release/`, changeset fragments → CHANGELOG).
 
 ## Deployment
 

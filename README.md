@@ -58,6 +58,7 @@ Open the printed URL. The game opens on the main menu, over a stage a bot is dri
 | `make sim`         | Headless balance sweep: bots drive stages, prints the pace table                        |
 | `make track`       | Render generated stages: a schematic map AND a shaded view of the place, to `previews/` |
 | `make cars`        | Render the car models to a contact sheet (`previews/cars.png`)                          |
+| `make audition`    | Build the audio review page (`previews/audition.html`): every sound, both scores, live  |
 | `make screenshots` | Drive the built app headlessly and screenshot the key moments                           |
 | `make icons`       | Regenerate PWA icons, favicon, and the OG image from the app mark                       |
 | `make check-seo`   | Build + structural SEO/PWA/bundle-budget assertions                                     |
@@ -106,6 +107,7 @@ More in [docs/troubleshooting.md](docs/troubleshooting.md).
 - [Architecture](docs/architecture.md) — engine / renderer / shell layering
 - [Driving model](docs/driving.md) — the drift, the jump, the surfaces
 - [Track generator](docs/track-generator.md) — the rules engine and its R-rules
+- [Audio](docs/audio.md) — the synth, the sound bank, the beds, and the two scores
 - [Simulation & bots](docs/simulation.md) — the headless harness and the balance workflow
 - [Platforms](docs/platforms.md) — web today; desktop (Steam) and native (App Store) roadmap
 - [Configuration](docs/configuration.md) · [Troubleshooting](docs/troubleshooting.md)
