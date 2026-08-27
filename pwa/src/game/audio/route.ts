@@ -48,6 +48,12 @@ export function soundForEvent(
     case "finish":
       return { id: "finish" };
 
+    // R22 — a lap in the book. A quicker one than any before it says so by
+    // arriving higher: the same voice, lifted, which is a scale and not a
+    // second sound.
+    case "lap":
+      return { id: "lap", shape: event.best ? { pitch: 1.18, gain: 1.15 } : undefined };
+
     case "shift":
       return { id: event.gear > lastGear ? "shift_up" : "shift_down" };
 

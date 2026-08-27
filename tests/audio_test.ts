@@ -122,6 +122,8 @@ describe("event routing", () => {
     { type: "crash" },
     { type: "sink" },
     { type: "respawn" },
+    { type: "lap", lap: 1, time: 62, best: true },
+    { type: "lap", lap: 2, time: 64, best: false },
     { type: "finish", time: 120 },
   ];
 

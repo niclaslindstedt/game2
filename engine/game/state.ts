@@ -219,6 +219,10 @@ export type GameEvent =
    * way through it — the gulp, not the entry. */
   | { type: "sink" }
   | { type: "respawn" }
+  /** R22 — a lap of a circuit is in the book. `lap` is the lap that was
+   * just completed (1-based), `time` how long it took, and `best` says it
+   * is the quickest of the run so far. */
+  | { type: "lap"; lap: number; time: number; best: boolean }
   | { type: "finish"; time: number };
 
 export type RunStats = {
@@ -272,6 +276,16 @@ export type GameState = {
   t: number;
   /** Time spent racing (excludes countdown), seconds. */
   raceTime: number;
+  /** R22 — which lap the run is on, 1-based, and how many it is raced
+   * over. A sprint is one lap of a road that never comes back, so it sits
+   * at 1 of 1 and the lap clock and the total clock read the same. */
+  lap: number;
+  laps: number;
+  /** The laps already in the book, seconds, in the order they were set. */
+  lapTimes: number[];
+  /** Race time the current lap started at, seconds — the lap clock is
+   * `raceTime - lapStart`, so there is only ever one clock running. */
+  lapStart: number;
   /** Index into track.samples the car is nearest to. */
   progressIndex: number;
   /** Arc position along the stage, meters. */

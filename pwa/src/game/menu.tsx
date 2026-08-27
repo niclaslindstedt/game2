@@ -11,8 +11,10 @@
 
 import {
   DEFAULT_KNOBS,
+  STAGE_RULES,
   type StageKnobs,
   type StageLength,
+  type StageShape,
   type TimeOfDay,
   type Weather,
 } from "@engine";
@@ -24,9 +26,24 @@ export type RaceSettings = {
   weather: Weather;
   carId: string;
   length: StageLength;
+  /** R22 — a sprint from a start to a finish, or a circuit raced over laps. */
+  shape: StageShape;
   /** The generator's dials — what KIND of stage the seed builds. */
   knobs: StageKnobs;
 };
+
+/** R22 — the two shapes a stage comes in. A circuit is the same minutes of
+ * driving as the sprint band it is named for, cut into laps: the road is
+ * short enough to learn, which is what makes a lap time worth chasing. */
+export const STAGE_SHAPES: { id: StageShape; label: string }[] = [
+  { id: "sprint", label: "SPRINT" },
+  { id: "circuit", label: "CIRCUIT" },
+];
+
+/** How many laps a race setup is run over — one, unless it is a circuit. */
+export function raceLaps(race: RaceSettings): number {
+  return race.shape === "circuit" && race.length !== "endless" ? STAGE_RULES.circuit.laps : 1;
+}
 
 /** The dials, as the menu offers them: three positions each, because a
  * slider on a phone during a pre-race screen is a fiddle and what a player

@@ -12,7 +12,7 @@
 //
 // The pause card holds the run where it stands. The heavy state lives in
 // refs; the HUD re-renders from a ~12 Hz snapshot. URL params (?seed=,
-// ?tod=, ?weather=, ?car=, ?length=, the four generator dials ?elevation=
+// ?tod=, ?weather=, ?car=, ?length=, ?shape=, ?laps=, the four generator dials ?elevation=
 // ?water= ?trees= ?asphalt=, ?start=1 and ?bot=1) pin a run for tooling and
 // screenshots.
 
@@ -33,6 +33,7 @@ import {
   type GameState,
   type StageKnobs,
   type StageLength,
+  type StageShape,
   type TimeOfDay,
   type Track,
   type Weather,
@@ -44,19 +45,22 @@ import { createInput } from "./game/input.ts";
 import type { CameraMode } from "./game/camera.ts";
 import type { GameRenderer } from "./game/renderer.ts";
 import { Hud, type HudFlash, type HudSnapshot } from "./game/hud.tsx";
-import { takeSnapshot } from "./game/snapshot.ts";
+import { takeSnapshot, type RunBook } from "./game/snapshot.ts";
 import {
   DEFAULT_STAGE_KNOBS,
   PauseMenu,
   STAGE_DIALS,
   STAGE_LENGTH_OPTIONS,
+  STAGE_SHAPES,
   TIMES_OF_DAY,
   WEATHERS,
+  raceLaps,
   type RaceSettings,
 } from "./game/menu.tsx";
 import { MainMenu, type MenuPage, type PlayMode } from "./game/main-menu.tsx";
 import type { MapRect } from "./game/menu-roam.tsx";
 import {
+  levelLaps,
   loadProgress,
   recordFinish,
   unlockEverything,
@@ -80,6 +84,7 @@ import {
   type PlayCamera,
   type Settings,
 } from "./game/settings.ts";
+import { formatTime } from "./lib/util.ts";
 import { setAudioVolumes, unlockAudio } from "./game/audio/bus.ts";
 import { playUi } from "./game/audio/ui.ts";
 import { armMenuMusic, pauseMusic, playMusic, resumeMusic, stopMusic } from "./game/audio/music.ts";
@@ -115,6 +120,14 @@ function updateCardForced(): boolean {
   return new URLSearchParams(location.search).get("update") === "1";
 }
 
+/** ?laps=N (tooling): race a circuit over this many laps instead of the
+ * rule book's three. A scripted pass has to REACH a finish to photograph
+ * one, and three laps of anything is a long time to hold a browser open. */
+function lapsOverride(): number | null {
+  const raw = Number(new URLSearchParams(location.search).get("laps"));
+  return Number.isFinite(raw) && raw >= 1 ? Math.round(raw) : null;
+}
+
 /** Whether the player is actually asking for anything this step. */
 function driving(input: CarInput): boolean {
   return (
@@ -135,6 +148,7 @@ function initialRace(): RaceSettings {
     weather: "clear",
     carId: "compact",
     length: "medium",
+    shape: "sprint",
     knobs: { ...DEFAULT_STAGE_KNOBS },
   };
   try {
@@ -144,6 +158,7 @@ function initialRace(): RaceSettings {
     /* storage unavailable — keep defaults */
   }
   if (!STAGE_LENGTH_OPTIONS.some((l) => l.id === race.length)) race.length = "medium";
+  if (!STAGE_SHAPES.some((s) => s.id === race.shape)) race.shape = "sprint";
   const params = new URLSearchParams(location.search);
   const tod = params.get("tod");
   if (TIMES_OF_DAY.some((t) => t.id === tod)) race.timeOfDay = tod as TimeOfDay;
@@ -153,6 +168,8 @@ function initialRace(): RaceSettings {
   if (car === "compact" || car === "classic") race.carId = car;
   const length = params.get("length");
   if (STAGE_LENGTH_OPTIONS.some((l) => l.id === length)) race.length = length as StageLength;
+  const shape = params.get("shape");
+  if (STAGE_SHAPES.some((s) => s.id === shape)) race.shape = shape as StageShape;
   // The generator's dials, each 0..1 — the tooling pins a stage's character
   // the same way it pins its seed.
   race.knobs = resolveKnobs(race.knobs);
@@ -169,6 +186,10 @@ function initialRace(): RaceSettings {
 type StageSpec = {
   seed: number;
   length: StageLength;
+  /** R22 — a sprint from a start to a finish, or a circuit raced over laps. */
+  shape: StageShape;
+  /** Laps a circuit is raced over; 1 on anything that does not come back. */
+  laps: number;
   /** The generator's dials — what KIND of country the seed is built in. */
   knobs: StageKnobs;
   carId: string;
@@ -183,6 +204,8 @@ function sameStage(a: StageSpec | null, b: StageSpec): boolean {
     a !== null &&
     a.seed === b.seed &&
     a.length === b.length &&
+    a.shape === b.shape &&
+    a.laps === b.laps &&
     STAGE_DIALS.every((dial) => a.knobs[dial.key] === b.knobs[dial.key]) &&
     a.carId === b.carId &&
     a.timeOfDay === b.timeOfDay &&
@@ -198,6 +221,8 @@ function demoStage(race: RaceSettings, seed: number): StageSpec {
   return {
     seed,
     length: "medium",
+    shape: "sprint",
+    laps: 1,
     knobs: race.knobs,
     carId: race.carId,
     timeOfDay: race.timeOfDay,
@@ -214,6 +239,8 @@ function backdropFor(page: MenuPage, race: RaceSettings, seed: number, demoSeed:
       stage: {
         seed,
         length: race.length,
+        shape: race.shape,
+        laps: lapsOverride() ?? raceLaps(race),
         knobs: race.knobs,
         carId: race.carId,
         timeOfDay: race.timeOfDay,
@@ -285,6 +312,10 @@ export function App() {
    * track, and nothing between them — the cars cannot touch, because
    * neither one is in the other's world. */
   const ghostRef = useRef<{ state: GameState; tape: GhostTape; at: number } | null>(null);
+  /** The book this run is being timed against — null on Roam and behind the
+   * menu, where nobody is keeping score. The HUD's clock reads it, and so
+   * does the results card's NEW RECORD. */
+  const bookRef = useRef<RunBook | null>(null);
   const actionsRef = useRef<{ restart: () => void; menu: () => void; camera: () => void }>({
     restart: () => undefined,
     menu: () => undefined,
@@ -341,15 +372,19 @@ export function App() {
     // An endless track is never reused: a restart must begin from a fresh
     // opening window, not from however far the last run streamed (the
     // renderer has long since dropped the world around the start).
-    const key = `${spec.seed}/${spec.length}/${STAGE_DIALS.map((d) => spec.knobs[d.key]).join(",")}`;
+    const key = `${spec.seed}/${spec.length}/${spec.shape}/${STAGE_DIALS.map((d) => spec.knobs[d.key]).join(",")}`;
     if (trackRef.current?.key !== key || spec.length === "endless") {
-      trackRef.current = { key, track: compileStage(spec.seed, spec.length, spec.knobs) };
+      trackRef.current = {
+        key,
+        track: compileStage(spec.seed, spec.length, spec.knobs, spec.shape),
+      };
     }
     finishTimeRef.current = null;
     const state = createGame({
       seed: spec.seed,
       carId: spec.carId,
       track: trackRef.current.track,
+      laps: spec.laps,
       skipCountdown: spec.skipCountdown,
       env: { timeOfDay: spec.timeOfDay, weather: spec.weather },
     });
@@ -362,7 +397,7 @@ export function App() {
     } else {
       renderer.setConditions(state);
     }
-    setSnap(takeSnapshot(state, null));
+    setSnap(takeSnapshot(state, null, null, bookRef.current));
   };
   const applyStageRef = useRef(applyStage);
   applyStageRef.current = applyStage;
@@ -433,6 +468,11 @@ export function App() {
 
   const startStage = (spec: StageSpec, mode: PlayMode, levelId?: string): void => {
     playUi("start");
+    // The time to beat comes out of the book before the run starts, not
+    // after: a clock with nothing to chase is only a stopwatch, and a
+    // record read back after the finish has already been written is one
+    // every run beats.
+    bookRef.current = levelId ? { best: loadProgress().best[levelId] ?? null } : null;
     // A new run inherits nothing from the last one: the engine's note would
     // otherwise glide from wherever the previous car left it.
     audioRef.current?.reset();
@@ -452,6 +492,8 @@ export function App() {
       {
         seed: level.seed,
         length: level.length,
+        shape: level.shape ?? "sprint",
+        laps: lapsOverride() ?? levelLaps(level),
         // A campaign stage is the same country for everybody: the dials are
         // Roam's to play with, not the campaign's to inherit.
         knobs: DEFAULT_STAGE_KNOBS,
@@ -472,6 +514,8 @@ export function App() {
       {
         seed: seedRef.current,
         length: r.length,
+        shape: r.shape,
+        laps: lapsOverride() ?? raceLaps(r),
         knobs: r.knobs,
         carId: r.carId,
         timeOfDay: r.timeOfDay,
@@ -579,6 +623,8 @@ export function App() {
           {
             seed: seedRef.current,
             length: r.length,
+            shape: r.shape,
+            laps: lapsOverride() ?? raceLaps(r),
             knobs: r.knobs,
             carId: r.carId,
             timeOfDay: r.timeOfDay,
@@ -679,7 +725,12 @@ export function App() {
           // hung, and the moment the tank runs dry. Splashes, crashes,
           // landings and respawns all announce themselves on screen already
           // — captioning them is noise over the top of the game.
-          if (ev.type === "landing" && ev.clean && ev.airTime >= REAL_AIR) {
+          if (ev.type === "lap") {
+            flash(
+              `LAP ${ev.lap} — ${formatTime(ev.time)}${ev.best ? " BEST" : ""}`,
+              ev.best ? "good" : "info",
+            );
+          } else if (ev.type === "landing" && ev.clean && ev.airTime >= REAL_AIR) {
             flash(`CLEAN AIR ${ev.airTime.toFixed(1)}s`, "good");
           } else if (ev.type === "boostEmpty") {
             flash("BOOSTER SPENT", "bad");
@@ -751,7 +802,12 @@ export function App() {
           hudClock = 0;
           if (!page) {
             setSnap(
-              takeSnapshot(state, finishTimeRef.current, ghostRef.current?.state.progressS ?? null),
+              takeSnapshot(
+                state,
+                finishTimeRef.current,
+                ghostRef.current?.state.progressS ?? null,
+                bookRef.current,
+              ),
             );
           }
         }

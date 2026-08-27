@@ -134,11 +134,40 @@ git commit -m "type(scope): summary in imperative mood"
 Scopes are lowercase, comma-separated if multiple: `feat(engine,pwa): …`.
 Never skip hooks (`--no-verify`) — fix the underlying issue instead.
 
-## Step 6: Push
+## Step 6: Fetch main and rebase, THEN push
+
+**`main` moves while a task is being done, and a branch is only mergeable
+against the `main` that exists when it is pushed.** So the last thing before
+every push is a fresh fetch and a rebase onto it — not the one from the start
+of the session, which is stale by however long the work took:
+
+```sh
+git fetch origin main
+git rev-list --left-right --count origin/main...HEAD   # left > 0 ⇒ main moved
+```
+
+Left side zero: push.
 
 ```sh
 git push -u origin HEAD
 ```
+
+Left side non-zero: **load the `conflict` skill and sync before pushing** — it
+owns the backup branch, the fetch-immediately-before rule, and how to resolve
+honestly (the answer to two people adding a row to the same table is BOTH
+rows, never one). Then re-run the gates **on the rebased tree**, because that
+combination is what CI will actually run, and push:
+
+```sh
+git push --force-with-lease   # a rebase rewrote history; plain push after a merge
+```
+
+Doing this here rather than after CI goes red is the whole point: a conflict
+found locally is a resolution, and the same conflict found on the PR is a
+resolution plus a round-trip. It is also the only place a semantic conflict
+gets caught — two branches that merge cleanly and still disagree (a signature
+that grew a parameter on both sides, a rule main rewrote under the feature
+being built on it) only show up when the gates run on the combined tree.
 
 ## Step 7: Create or Update the PR
 

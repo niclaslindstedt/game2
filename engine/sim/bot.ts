@@ -8,7 +8,20 @@
 
 import { angleDiff, clamp } from "../lib/math.ts";
 import { TUNING } from "../game/defs/tuning.ts";
+import type { Track } from "../mapgen/index.ts";
 import type { CarInput, GameState } from "../game/state.ts";
+
+/** The sample `ahead` steps down the road. On a CIRCUIT (R22) the road runs
+ * on past its last sample into its first, so the lookahead runs on with it
+ * — a bot that clamped at the finish line would brake for a wall that is
+ * really the next lap's start straight. On a sprint the clamp is right:
+ * past the finish there is nothing to plan for. */
+function aheadOf(track: Track, index: number, ahead: number): number {
+  const at = index + ahead;
+  const last = track.samples.length - 1;
+  if (!track.circuit) return Math.min(last, at);
+  return at % track.samples.length;
+}
 
 export type BotProfile = {
   /** How much of the car's OWN lateral grip the bot plans corners around.
@@ -58,11 +71,7 @@ export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): Car
 
   // Aim point: a speed-scaled distance down the centerline.
   const aheadMeters = Math.max(8, car.u * profile.lookahead);
-  const aimIndex = Math.min(
-    samples.length - 1,
-    state.progressIndex + Math.round(aheadMeters / step),
-  );
-  const aim = samples[aimIndex];
+  const aim = samples[aheadOf(track, state.progressIndex, Math.round(aheadMeters / step))];
   const desired = Math.atan2(aim.x - car.x, aim.z - car.z);
   const error = angleDiff(car.heading, desired);
   let steer = clamp(error * profile.steerGain, -1, 1);
@@ -70,19 +79,23 @@ export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): Car
   // Corner-speed plan: the tightest curvature over the horizon caps speed at
   // sqrt(a_lat / κ); the nearest cap that requires braking wins.
   const horizonMeters = Math.max(20, car.u * profile.planHorizon);
-  const endIndex = Math.min(
-    samples.length - 1,
-    state.progressIndex + Math.round(horizonMeters / step),
+  const scan = Math.min(
+    Math.round(horizonMeters / step),
+    track.circuit ? samples.length - 1 : samples.length - 1 - state.progressIndex,
   );
   const latAccel = state.spec.gripAccel * profile.latFraction;
   let targetSpeed = state.spec.gearTop[state.spec.gearTop.length - 1];
   let hardDistance = Infinity;
   let hardCap = 0;
-  for (let i = state.progressIndex + 1; i <= endIndex; i++) {
+  for (let ahead = 1; ahead <= scan; ahead++) {
+    const i = aheadOf(track, state.progressIndex, ahead);
     const k = Math.abs(samples[i].curvature);
     if (k < 1e-4) continue;
     const cap = Math.sqrt(latAccel / k);
-    const distance = samples[i].s - state.progressS;
+    // Arc distance to it — round the lap on a circuit, where a sample the
+    // bot is planning for can sit at a smaller `s` than the car does.
+    const distance =
+      samples[i].s - state.progressS + (samples[i].s < state.progressS ? track.length : 0);
     // Rally style: a hard corner is entered HOT — the plan deliberately
     // carries extra speed there and the drift scrubs it, instead of braking
     // down to the geometric cap like a grip line would.

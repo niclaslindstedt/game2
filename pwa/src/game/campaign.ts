@@ -1,26 +1,44 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The campaign: authored stages, in order, behind locks. Everything a
-// generated stage needs is a seed plus a length band, so a "level" here is
-// just that pair with conditions and a name pinned to it — the same rules
-// engine builds it, and it comes out identical for every player.
+// generated stage needs is a seed, a length band and a shape, so a "level"
+// here is just those with conditions and a name pinned to them — the same
+// rules engine builds it, and it comes out identical for every player.
 //
 // Progress lives in localStorage: which levels have been cleared (that is
 // what unlocks the next one, in the campaign AND in time trial) and the
 // best time on each. Storage can be unavailable (private mode); a run
 // simply does not persist rather than failing.
 
-import type { FiniteStageLength, TimeOfDay, Weather } from "@engine";
+import {
+  STAGE_RULES,
+  type FiniteStageLength,
+  type StageShape,
+  type TimeOfDay,
+  type Weather,
+} from "@engine";
 
 export type CampaignLevel = {
   id: string;
   name: string;
   seed: number;
   length: FiniteStageLength;
+  /** R22 — sprint (a stage from a start to a finish) or circuit (a closed
+   * lap, raced over `laps`). Defaults to sprint. */
+  shape?: StageShape;
+  /** Laps a circuit level is raced over; defaults to the rule book's. */
+  laps?: number;
   timeOfDay: TimeOfDay;
   weather: Weather;
   /** One line of billing on the level's box. */
   blurb: string;
 };
+
+/** How many laps a level is raced over — one, unless it comes back to its
+ * own start line. */
+export function levelLaps(level: CampaignLevel): number {
+  if (level.shape !== "circuit") return 1;
+  return level.laps ?? STAGE_RULES.circuit.laps;
+}
 
 export type CampaignLocation = {
   id: string;
@@ -41,7 +59,17 @@ export type CampaignLocation = {
  *   seed  5 xlong 11.5 km  450 s   94 km/h   96 drifts   9.4 s air   6 hits
  *
  * Conditions darken down the ladder for the same reason the geometry
- * tightens: the last stage should ask for everything at once. */
+ * tightens: the last stage should ask for everything at once.
+ *
+ * The last two are a different discipline: CIRCUITS (R22), raced over three
+ * laps of a road that comes back to its own start line, where the stage is
+ * learnable and the clock is the whole opponent. Their seeds were picked
+ * the same way — scored on hairpins and features, then confirmed with the
+ * bot sim over the full three laps:
+ *
+ *   seed 3 medium circuit 1.59 km × 3  179 s  15 turns (4 hard)  1 jump, 1 crest, 57% tarmac
+ *   seed 6 long   circuit 2.67 km × 3  316 s  26 turns (6 hard)  2 jumps, 1 crest
+ */
 const TAIGA: CampaignLocation = {
   id: "taiga",
   name: "Taiga",
@@ -82,6 +110,26 @@ const TAIGA: CampaignLocation = {
       timeOfDay: "night",
       weather: "storm",
       blurb: "Everything, in the dark",
+    },
+    {
+      id: "taiga-5",
+      name: "Spruce Ring",
+      seed: 3,
+      length: "medium",
+      shape: "circuit",
+      timeOfDay: "dawn",
+      weather: "clear",
+      blurb: "Three laps, gravel into tarmac",
+    },
+    {
+      id: "taiga-6",
+      name: "Wolverine Loop",
+      seed: 6,
+      length: "long",
+      shape: "circuit",
+      timeOfDay: "dusk",
+      weather: "rain",
+      blurb: "Three laps, two jumps, no rest",
     },
   ],
 };

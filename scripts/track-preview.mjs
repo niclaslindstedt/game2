@@ -21,6 +21,7 @@
 //   npm run track -- --seeds 42,99     # specific seeds
 //   npm run track -- --count 12        # seeds 1..12
 //   npm run track -- --length xlong    # a stage length band
+//   npm run track -- --shape circuit   # a closed lap circuit (R22)
 //   npm run track -- --length endless --km 8   # a streamed endless stretch
 //   npm run track -- --asphalt 0.6 --water 0.9 --elevation 1 --trees 0.2 --width 0.2
 //   npm run track -- --only render     # skip the other picture
@@ -53,6 +54,7 @@ const seeds = flag("seeds")
   ? flag("seeds").split(",").map(Number)
   : Array.from({ length: Number(flag("count") ?? 6) }, (_, i) => i + 1);
 const length = flag("length") ?? "medium";
+const shape = flag("shape") ?? "sprint";
 const endlessKm = Number(flag("km") ?? 6);
 const only = flag("only");
 const zoom = flag("zoom");
@@ -138,7 +140,7 @@ function schematic(track, terrain) {
 }
 
 for (const seed of seeds) {
-  const track = compileStage(seed, length, knobs);
+  const track = compileStage(seed, length, knobs, shape);
   if (track.endless) track.extend(endlessKm * 1000);
   const terrain = createTerrain(track);
   terrain.sync(track.length);

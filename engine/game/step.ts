@@ -13,6 +13,7 @@ import {
   STAGE_RULES,
   type StageKnobs,
   type StageLength,
+  type StageShape,
   type Surface,
 } from "../mapgen/index.ts";
 import { carById } from "./defs/cars.ts";
@@ -107,6 +108,13 @@ export type CreateGameOptions = {
   carId?: string;
   /** Menu stage length (finite band or endless); defaults to medium. */
   length?: StageLength;
+  /** R22 — sprint (default) or circuit. Ignored when a pre-compiled
+   * `track` is handed in: that track already knows which it is. */
+  shape?: StageShape;
+  /** How many laps of a CIRCUIT the run is raced over; defaults to
+   * `STAGE_RULES.circuit.laps`. A stage that does not come back to its own
+   * start line is always a single lap, whatever is asked for here. */
+  laps?: number;
   /** Skip the countdown (sim runs start racing immediately). */
   skipCountdown?: boolean;
   /** Inject a pre-compiled track (tests and tooling); defaults to the
@@ -152,7 +160,12 @@ function windAt(env: RaceEnv, t: number): { x: number; z: number } {
 export function createGame(options: CreateGameOptions): GameState {
   const spec = carById(options.carId ?? "compact");
   const track =
-    options.track ?? compileStage(options.seed, options.length ?? "medium", options.knobs);
+    options.track ??
+    compileStage(options.seed, options.length ?? "medium", options.knobs, options.shape);
+  // R22 — only a road that comes back to its own start line can be lapped.
+  const laps = track.circuit
+    ? Math.max(1, Math.round(options.laps ?? STAGE_RULES.circuit.laps))
+    : 1;
   // The start grid is the first sample, not the world origin: the stage's
   // rolling elevation puts the road metres above or below zero right from
   // the line, and a car left at zero spends the countdown buried in the
@@ -171,7 +184,8 @@ export function createGame(options: CreateGameOptions): GameState {
   status(
     track.endless
       ? `Stage ${options.seed}: endless — ${spec.name}`
-      : `Stage ${options.seed}: ${(track.length / 1000).toFixed(1)} km, ` +
+      : `Stage ${options.seed}: ${(track.length / 1000).toFixed(1)} km` +
+          `${laps > 1 ? ` × ${laps} laps` : ""}, ` +
           `${track.segments.filter((p) => p.kind === "turn").length} turns, ` +
           `${track.segments.filter((p) => p.feature === "jump").length} jumps — ${spec.name}`,
   );
@@ -184,6 +198,10 @@ export function createGame(options: CreateGameOptions): GameState {
     phase: options.skipCountdown ? "racing" : "countdown",
     t: 0,
     raceTime: 0,
+    lap: 1,
+    laps,
+    lapTimes: [],
+    lapStart: 0,
     progressIndex: 0,
     progressS: 0,
     lateral: 0,
@@ -576,12 +594,30 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   if (input.reset && !crashed) respawn(state, events);
   else if (!crashed) stepStuck(state, input, events);
 
-  // Through the gate: the run is over. An endless stage has no finish —
-  // the stream above always keeps road ahead of the car.
+  // Through the gate. On a sprint that is the finish; on a circuit (R22) it
+  // is the same line the run started on, so crossing it books a lap and —
+  // until the last one — puts the car back at the top of the road it is
+  // already standing on. An endless stage has no gate at all: the stream
+  // above always keeps road ahead of the car.
   if (finished) {
-    state.phase = "finished";
-    events.push({ type: "finish", time: state.raceTime });
-    status(`Finished stage ${state.seed} in ${state.raceTime.toFixed(2)} s`);
+    const lapTime = state.raceTime - state.lapStart;
+    const best = state.lapTimes.every((t) => lapTime < t);
+    state.lapTimes.push(lapTime);
+    if (state.lap < state.laps) {
+      events.push({ type: "lap", lap: state.lap, time: lapTime, best });
+      status(`Lap ${state.lap} of stage ${state.seed} in ${lapTime.toFixed(2)} s`);
+      state.lap += 1;
+      state.lapStart = state.raceTime;
+      // The road carries straight on into its own opening straight, so
+      // progress starts again from the grid — which is where the car
+      // physically is.
+      state.progressIndex = 0;
+      state.progressS = track.samples[0].s;
+    } else {
+      state.phase = "finished";
+      events.push({ type: "finish", time: state.raceTime });
+      status(`Finished stage ${state.seed} in ${state.raceTime.toFixed(2)} s`);
+    }
   }
 
   return events;

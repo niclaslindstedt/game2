@@ -98,6 +98,9 @@ body {
 .hud {
   /* The minimap's edge length — the top bar reserves it, the dock spends it. */
   --hud-map: clamp(4.8rem, 16vmin, 7.5rem);
+  /* Room the stage chip takes under the map — the pacenote strip clears it
+     in portrait, where everything is stacked down the same column. */
+  --hud-stage: 2.3rem;
   color: var(--hud-ink);
   font-weight: 800;
   font-style: italic;
@@ -115,8 +118,18 @@ body {
   /* Stops short of the minimap dock rather than running under it. */
   right: calc(max(0.8rem, env(safe-area-inset-right)) + var(--hud-map) + 0.55rem);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.75rem;
+}
+
+/* The top-left column. It holds the clock and nothing else — everything
+   that used to share the corner with it now hangs off the minimap. */
+.hud-topleft {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  min-width: 0;
 }
 
 /* The top bar's readouts never wrap: a five-digit stage number broken over
@@ -136,17 +149,107 @@ body {
   opacity: 0.9;
 }
 
-.hud-timer {
-  font-variant-numeric: tabular-nums;
-  font-size: clamp(1.1rem, 3.2vmin, 1.7rem);
+/* Which stage, and in what: under the minimap, right-aligned to hang off
+   its edge. It is read once at the start of a run, so it sits where a
+   label is looked FOR rather than in the corner the clock has earned. */
+.hud-stage {
+  position: absolute;
+  top: calc(max(0.6rem, env(safe-area-inset-top)) + var(--hud-map) + 0.3rem);
+  right: max(0.8rem, env(safe-area-inset-right));
+  align-items: flex-end;
+  text-align: right;
+  font-size: clamp(0.7rem, 2vmin, 1rem);
+}
+
+/* With the minimap switched off there is no map to hang under, so the chip
+   takes the dock's own place under the top bar's button row. */
+.hud-stage-nomap {
+  top: calc(max(0.6rem, env(safe-area-inset-top)) + 2.1rem);
+}
+
+/* ── The race clock ─────────────────────────────────────────────────────
+   In a racing game the clock is the opponent, so it is sized like one: the
+   total time is the biggest type on the screen bar the speedo, the lap
+   clock sits under it in its own colour, and the times to measure against
+   run underneath in a quiet row. Everything is tabular so the digits do not
+   dance as they tick. */
+.hud-clock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1;
   white-space: nowrap;
 }
 
-/* The gap to the ghost, beside the clock: metres of road, and which side of
+.hud-clock-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin-top: 0.12rem;
+}
+
+.hud-clock-label {
+  font-size: clamp(0.55rem, 1.7vmin, 0.8rem);
+  letter-spacing: 0.12em;
+  color: var(--hud-good);
+}
+
+.hud-clock-label-lap {
+  color: var(--hud-bad);
+}
+
+.hud-lap-count {
+  font-size: clamp(0.7rem, 2.1vmin, 1rem);
+  font-variant-numeric: tabular-nums;
+  background: rgb(18 48 105 / 82%);
+  border-radius: 0.25rem;
+  padding: 0 0.3rem;
+}
+
+.hud-lap-of {
+  font-size: 0.72em;
+  opacity: 0.85;
+}
+
+.hud-clock-total {
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(1.7rem, 5.6vmin, 3.1rem);
+  letter-spacing: -0.01em;
+}
+
+.hud-clock-lap {
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(1.15rem, 3.8vmin, 2.1rem);
+}
+
+.hud-clock-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.6rem;
+  margin-top: 0.2rem;
+  font-size: clamp(0.55rem, 1.7vmin, 0.82rem);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.9;
+}
+
+.hud-clock-mark-label {
+  color: var(--hud-good);
+  margin-right: 0.25rem;
+}
+
+.hud-clock-mark-best {
+  color: var(--hud-info);
+}
+
+.hud-clock-mark-record .hud-clock-mark-label {
+  color: var(--hud-bad);
+}
+
+/* The gap to the ghost, under the clock: metres of road, and which side of
    it you are on told by color before the sign is even read. Green is up the
    road on your best, red is behind it. The word under the number is what a
-   small phone drops — a signed distance in one of two colors next to a lap
-   timer needs no caption. */
+   small phone drops — a signed distance in one of two colors below a race
+   clock needs no caption. */
 .hud-gap {
   color: #6de37f;
   font-variant-numeric: tabular-nums;
@@ -321,9 +424,37 @@ body {
   color: var(--hud-good);
 }
 
+.hud-finish-label {
+  font-size: clamp(0.6rem, 2vmin, 0.9rem);
+  letter-spacing: 0.14em;
+  color: var(--hud-good);
+}
+
 .hud-finish-time {
-  font-size: clamp(1.4rem, 6vmin, 2.6rem);
+  font-size: clamp(1.8rem, 7.5vmin, 3.4rem);
   font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+}
+
+.hud-finish-record {
+  font-size: clamp(0.8rem, 2.8vmin, 1.2rem);
+  color: var(--hud-good);
+  animation: hud-pop 0.8s infinite;
+}
+
+.hud-finish-laps {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.9rem;
+  margin-top: 0.35rem;
+  font-size: clamp(0.65rem, 2.2vmin, 0.95rem);
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-finish-lap-label {
+  color: var(--hud-good);
+  margin-right: 0.3rem;
 }
 
 .hud-finish-sub {
@@ -707,8 +838,24 @@ body {
     font-size: 0.8rem;
   }
 
-  .hud-timer {
-    font-size: 1rem;
+  /* One line instead of two under the map, so the pacenote strip climbs
+     back up with it. */
+  .hud {
+    --hud-stage: 1.2rem;
+  }
+
+  .hud-clock-total {
+    font-size: 1.5rem;
+  }
+
+  .hud-clock-lap {
+    font-size: 1.05rem;
+  }
+
+  /* On the smallest screens the marks row is the first thing to go: the two
+     running clocks are the instrument, the reference times are a luxury. */
+  .hud-clock-marks {
+    display: none;
   }
 }
 
@@ -718,7 +865,7 @@ body {
   /* Below the minimap, always: a percentage top clears the dock on a tall
      phone and slides under it on a short one. */
   .hud-pace {
-    top: calc(max(0.6rem, env(safe-area-inset-top)) + var(--hud-map) + 0.55rem);
+    top: calc(max(0.6rem, env(safe-area-inset-top)) + var(--hud-map) + var(--hud-stage) + 0.55rem);
   }
 
   .hud-speed {

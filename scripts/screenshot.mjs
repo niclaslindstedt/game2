@@ -72,22 +72,28 @@ const SCENE_DEFAULTS = { seed: "42", start: "1" };
  * surface only ever needs to look at that surface again. */
 const only = process.argv.slice(2);
 
+/** The race clock, read off the HUD and parsed back out of `M\'SS"CC` —
+ * the only honest cursor into how far a drive has actually got. Written as
+ * a source string because every use of it runs inside the page. */
+const READ_CLOCK = `(() => {
+  const t = document.querySelector(".hud-clock-total")?.textContent;
+  if (!t) return null;
+  const m = /^(\\d+)'(\\d\\d)"(\\d\\d)$/.exec(t);
+  return m ? Number(m[1]) * 60 + Number(m[2]) + Number(m[3]) / 100 : null;
+})()`;
+
 /** Wait until the run is actually ticking — every driving scene starts here
  * rather than with a fixed countdown wait. Building the world takes several
  * seconds under software rendering, and the loop does not start until it is
  * done — a bare timeout from page load spends most of itself on the loading
  * screen and captures the start line however long it waits. */
 async function racing(page) {
-  // The HUD is not in the DOM at all while the world builds, and an
-  // absent timer must not read as a started run: `undefined !== '0:00.0'`
-  // is true, so the optional chain alone hands every driving scene a page
-  // with no game on it and lets the script start pressing keys at the
-  // loading screen. Default the read to the stopped clock instead.
-  await page.waitForFunction(
-    "(document.querySelector('.hud-timer')?.textContent ?? '0:00.0') !== '0:00.0'",
-    null,
-    { timeout: 60000 },
-  );
+  // The HUD is not in the DOM at all while the world builds, and an absent
+  // clock must not read as a started run — which is why READ_CLOCK answers
+  // null there rather than parsing an optional chain's `undefined` into a
+  // number: `null > 0` is false, so the scene waits instead of starting to
+  // press keys at the loading screen.
+  await page.waitForFunction(`${READ_CLOCK} > 0`, null, { timeout: 60000 });
 }
 
 /** Wait until the RUN's own clock has passed `seconds`. Under software
@@ -95,27 +101,12 @@ async function racing(page) {
  * `waitForTimeout` lands at a different place on the stage on every machine;
  * the HUD timer is the only honest cursor into how far the drive has got. */
 async function atStageTime(page, seconds) {
-  await page.waitForFunction(
-    `(() => {
-      const t = document.querySelector('.hud-timer')?.textContent;
-      if (!t) return false;
-      const [m, s] = t.split(':');
-      return Number(m) * 60 + Number(s) >= ${seconds};
-    })()`,
-    null,
-    { timeout: 180000 },
-  );
+  await page.waitForFunction(`${READ_CLOCK} >= ${seconds}`, null, { timeout: 180000 });
 }
 
 /** The run's own clock, seconds. */
 async function stageTime(page) {
-  return await page.evaluate(
-    `(() => {
-      const t = document.querySelector('.hud-timer')?.textContent ?? '0:00.0';
-      const [m, s] = t.split(':');
-      return Number(m) * 60 + Number(s);
-    })()`,
-  );
+  return (await page.evaluate(`${READ_CLOCK} ?? 0`)) ?? 0;
 }
 
 /** Wait until the co-driver's current call is at least `metres` away — i.e.
@@ -841,6 +832,62 @@ await capture(
     await page.waitForTimeout(4000);
   },
   { tod: "night" },
+);
+
+// The lap clock: a circuit (R22) driven by the bot until it has crossed the
+// line once, so the shot has a lap in the book, a lap counter reading 2 of
+// 3, and both clocks running — which is the whole instrument and cannot be
+// seen on a sprint, where the lap time and the total time are one number.
+await capture(
+  "shot-laps",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await racing(page);
+    await page.waitForFunction("document.querySelectorAll('.hud-clock-mark').length > 0", null, {
+      timeout: 180000,
+    });
+    await page.waitForTimeout(2500);
+  },
+  { shape: "circuit", length: "medium", seed: "3", bot: "1" },
+);
+await capture(
+  "shot-laps-portrait",
+  { width: 390, height: 844 },
+  async (page) => {
+    await racing(page);
+    await page.waitForFunction("document.querySelectorAll('.hud-clock-mark').length > 0", null, {
+      timeout: 180000,
+    });
+    await page.waitForTimeout(2500);
+  },
+  { shape: "circuit", length: "medium", seed: "3", bot: "1" },
+);
+// The results card, with the lap board on it. Two laps rather than three:
+// a scripted pass has to DRIVE to a finish to photograph one, and what the
+// card has to prove is that the laps read as a board — which two of them
+// say as well as three.
+await capture(
+  "shot-finish",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await racing(page);
+    await page.waitForSelector(".hud-finish", { timeout: 240000 });
+    await page.waitForTimeout(400);
+  },
+  { shape: "circuit", length: "short", seed: "3", laps: "2", bot: "1" },
+);
+
+await captureElement(
+  "shot-clock",
+  ".hud-topleft",
+  async (page) => {
+    await racing(page);
+    await page.waitForFunction("document.querySelectorAll('.hud-clock-mark').length > 0", null, {
+      timeout: 180000,
+    });
+    await page.waitForTimeout(2000);
+  },
+  { shape: "circuit", length: "medium", seed: "3", bot: "1" },
 );
 
 await browser.close();

@@ -27,7 +27,18 @@ export type HudPacenote = {
 export type HudSnapshot = {
   phase: "countdown" | "racing" | "finished";
   countdown: number;
+  /** Total race time, seconds — the clock that never resets. */
   time: number;
+  /** R22 — which lap the run is on and how many it is raced over, the time
+   * the current one has taken so far, and the ones already in the book. A
+   * sprint sits at 1 of 1, and the lap clock is the total clock. */
+  lap: number;
+  laps: number;
+  lapTime: number;
+  lapTimes: number[];
+  /** The time to beat on this stage — the player's own record, or null on
+   * a stage nobody has set one on (and on Roam, which keeps no book). */
+  bestTime: number | null;
   speedKmh: number;
   gear: number;
   /** True while the brake is backing the car out — the gear reads R. */
@@ -58,6 +69,8 @@ export type HudSnapshot = {
    * only meaningful while `lost`. */
   homeDistance: number;
   finishTime: number | null;
+  /** Set on the finish overlay when the run beat the stored record. */
+  record: boolean;
   /** Booster tank readout, seconds left / full tank. */
   boostLeft: number;
   boostMax: number;
@@ -789,6 +802,55 @@ function TouchButton({
   );
 }
 
+/** The race clock — the loudest instrument on the screen, because in a
+ * racing game the clock IS the opponent. Total time reads biggest; under it
+ * the lap clock and the lap counter, on a stage that has laps; under that
+ * the times to measure against — the laps already set this run, and the
+ * record the stage is holding. */
+function RaceClock({ snap }: { snap: HudSnapshot }) {
+  const lapped = snap.laps > 1;
+  const bestLap = snap.lapTimes.length > 0 ? Math.min(...snap.lapTimes) : null;
+  return (
+    <div className="hud-clock">
+      <div className="hud-clock-row">
+        <span className="hud-clock-label">TOTAL TIME</span>
+      </div>
+      <div className="hud-clock-total">{formatTime(snap.time)}</div>
+      {lapped && (
+        <>
+          <div className="hud-clock-row">
+            <span className="hud-clock-label hud-clock-label-lap">LAP TIME</span>
+            <span className="hud-lap-count">
+              {Math.min(snap.lap, snap.laps)}
+              <span className="hud-lap-of">/{snap.laps}</span>
+            </span>
+          </div>
+          <div className="hud-clock-lap">{formatTime(snap.lapTime)}</div>
+        </>
+      )}
+      {(snap.bestTime !== null || bestLap !== null) && (
+        <div className="hud-clock-marks">
+          {snap.lapTimes.map((t, i) => (
+            <span
+              key={i}
+              className={`hud-clock-mark ${t === bestLap ? "hud-clock-mark-best" : ""}`}
+            >
+              <span className="hud-clock-mark-label">L{i + 1}</span>
+              {formatTime(t)}
+            </span>
+          ))}
+          {snap.bestTime !== null && (
+            <span className="hud-clock-mark hud-clock-mark-record">
+              <span className="hud-clock-mark-label">BEST</span>
+              {formatTime(snap.bestTime)}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Hud({ snap, flashes, input, show, touchLayout, onPause, onCamera }: HudProps) {
   const { touch } = input;
   const pedalSide = touchLayout.steerSide === "left" ? "right" : "left";
@@ -801,27 +863,27 @@ export function Hud({ snap, flashes, input, show, touchLayout, onPause, onCamera
   const thumbs = deviceControls().touch;
   return (
     <div className="hud pointer-events-none absolute inset-0 select-none">
-      {/* Top bar: stage + timer, and the two presses that belong on the road
-          — the way home from the wild, and the camera. Restart and race setup
-          live behind the minimap now, one tap away and out of the sky. */}
+      {/* Top bar: the CLOCK, and the one press that belongs on the road —
+          the camera. Which stage this is rides under the minimap instead:
+          the top-left corner belongs to the time, because the time is what
+          the driver is racing. Restart and race setup live behind the
+          minimap, one tap away and out of the sky. */}
       <div className="hud-top">
-        <div className="hud-chip">
-          STAGE {snap.seed}
-          <span className="hud-chip-sub">{snap.carName}</span>
+        <div className="hud-topleft">
+          {show.timer && <RaceClock snap={snap} />}
+          {/* The gap to the ghost is its own chip rather than a line inside
+              the clock: the clock's text is what the tooling reads the run's
+              progress off, and it holds nothing but the time. */}
+          {show.timer && snap.ghostGap !== null && (
+            <div
+              className={`hud-chip hud-gap ${snap.ghostGap < 0 ? "hud-gap-down" : ""}`}
+              aria-label="Gap to your best run"
+            >
+              {snap.ghostGap < 0 ? "−" : "+"}
+              {Math.abs(Math.round(snap.ghostGap))}m<span className="hud-chip-sub">GHOST</span>
+            </div>
+          )}
         </div>
-        {show.timer && <div className="hud-chip hud-timer">{formatTime(snap.time)}</div>}
-        {/* The gap to the ghost is its own chip rather than a second line
-            under the clock: the clock's text is what the tooling reads the
-            run's progress off, and it holds nothing but the time. */}
-        {show.timer && snap.ghostGap !== null && (
-          <div
-            className={`hud-chip hud-gap ${snap.ghostGap < 0 ? "hud-gap-down" : ""}`}
-            aria-label="Gap to your best run"
-          >
-            {snap.ghostGap < 0 ? "−" : "+"}
-            {Math.abs(Math.round(snap.ghostGap))}m<span className="hud-chip-sub">GHOST</span>
-          </div>
-        )}
         <div className="hud-actions pointer-events-auto">
           <button
             type="button"
@@ -857,6 +919,14 @@ export function Hud({ snap, flashes, input, show, touchLayout, onPause, onCamera
         </div>
       )}
 
+      {/* Which stage, and in what — hung off the bottom edge of the map (or
+          of the row that stands in for it), where a label the player reads
+          once a run belongs. */}
+      <div className={`hud-chip hud-stage ${show.minimap ? "" : "hud-stage-nomap"}`}>
+        STAGE {snap.seed}
+        <span className="hud-chip-sub">{snap.carName}</span>
+      </div>
+
       {/* The co-driver's slot: corner calls while there is a road to call,
           the way back the moment there isn't. The way home is not behind the
           pacenote toggle — switching off the corner calls is a driver saying
@@ -879,7 +949,19 @@ export function Hud({ snap, flashes, input, show, touchLayout, onPause, onCamera
         {snap.phase === "finished" && snap.finishTime !== null && (
           <div className="hud-finish">
             <div className="hud-finish-title">STAGE CLEAR</div>
+            <div className="hud-finish-label">TOTAL TIME</div>
             <div className="hud-finish-time">{formatTime(snap.finishTime)}</div>
+            {snap.record && <div className="hud-finish-record">NEW RECORD</div>}
+            {snap.laps > 1 && (
+              <div className="hud-finish-laps">
+                {snap.lapTimes.map((t, i) => (
+                  <span key={i} className="hud-finish-lap">
+                    <span className="hud-finish-lap-label">LAP {i + 1}</span>
+                    {formatTime(t)}
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="hud-finish-sub">next stage rolling in…</div>
           </div>
         )}

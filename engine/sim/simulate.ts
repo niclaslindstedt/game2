@@ -8,7 +8,7 @@
 
 import { createGame, step } from "../game/step.ts";
 import type { GameEvent, GameState, Weather } from "../game/state.ts";
-import type { FiniteStageLength, StageKnobs } from "../mapgen/index.ts";
+import type { FiniteStageLength, StageKnobs, StageShape } from "../mapgen/index.ts";
 import { botInput, RALLY_BOT, type BotProfile } from "./bot.ts";
 import { TUNING } from "../game/defs/tuning.ts";
 
@@ -19,6 +19,10 @@ export type SimOptions = {
   /** Stage length band to race (finite only — an endless stage has no
    * finish for a sim run to reach). Defaults to medium. */
   length?: FiniteStageLength;
+  /** R22 — sprint (default) or circuit. */
+  shape?: StageShape;
+  /** Laps to race a circuit over; defaults to the rule book's. */
+  laps?: number;
   /** Give up after this much simulated race time, seconds. */
   maxTime?: number;
   /** Weather to race in (sets the wind band). Defaults to clear. */
@@ -34,7 +38,13 @@ export type SimResult = {
   finished: boolean;
   /** Race time at finish (or at the timeout), seconds. */
   time: number;
+  /** R22 — the laps raced, and the time each of them took, seconds. */
+  laps: number;
+  lapTimes: number[];
+  /** One lap of the road, meters. */
   trackLength: number;
+  /** Ground actually covered by the race: the lap times the laps. */
+  raceLength: number;
   stats: GameState["stats"];
   events: GameEvent[];
   /** FNV-1a hash over sampled car positions — the determinism fingerprint. */
@@ -50,6 +60,8 @@ export function simulateStage(options: SimOptions): SimResult {
     seed: options.seed,
     carId,
     length: options.length,
+    shape: options.shape,
+    laps: options.laps,
     skipCountdown: true,
     env: { weather: options.weather ?? "clear" },
     knobs: options.knobs,
@@ -80,7 +92,10 @@ export function simulateStage(options: SimOptions): SimResult {
     carId,
     finished: state.phase === "finished",
     time: state.raceTime,
+    laps: state.laps,
+    lapTimes: state.lapTimes,
     trackLength: state.track.length,
+    raceLength: state.track.length * state.laps,
     stats: state.stats,
     events,
     digest: hash.toString(16).padStart(8, "0"),

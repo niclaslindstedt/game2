@@ -5,9 +5,15 @@ export function clamp(v: number, min: number, max: number): number {
   return v < min ? min : v > max ? max : v;
 }
 
-/** Format seconds as m:ss.t for the stage timer. */
+/** Format seconds the way a race clock reads them: minutes, seconds and
+ * HUNDREDTHS, punctuated the way an arcade timer punctuates them —
+ * `2'46"85`. Hundredths and not tenths because a hundredth is the unit a
+ * lap record is actually won by, and a clock that cannot show the margin
+ * is a clock nobody chases. */
 export function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds - m * 60;
-  return `${m}:${s.toFixed(1).padStart(4, "0")}`;
+  const clamped = Math.max(0, seconds);
+  const m = Math.floor(clamped / 60);
+  const s = Math.floor(clamped - m * 60);
+  const cs = Math.floor((clamped - m * 60 - s) * 100);
+  return `${m}'${String(s).padStart(2, "0")}"${String(cs).padStart(2, "0")}`;
 }

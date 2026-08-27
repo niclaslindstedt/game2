@@ -18,7 +18,7 @@ Bot profiles are data (`BotProfile`); `RALLY_BOT` is the default. Slower/faster 
 
 ## The harness (`engine/sim/simulate.ts`)
 
-`simulateStage({ seed, carId, profile, length, maxTime })` runs a full stage (at a finite stage length band — default medium) and returns: finish state and time, the whole event log, the run stats (drift count/time/score, jumps, air time, clean landings, splashes, off-road time, impacts, crashes, respawns, top speed), and a **digest** — an FNV hash over sampled positions. Runs are deterministic: same seed + car + profile ⇒ same digest, which is exactly what `tests/simulation_test.ts` asserts.
+`simulateStage({ seed, carId, profile, length, shape, laps, maxTime })` runs a full stage (at a finite stage length band — default medium) and returns: finish state and time, the laps raced and each lap's time, one lap of road (`trackLength`) and the ground the race actually covered (`raceLength`), the whole event log, the run stats (drift count/time/score, jumps, air time, clean landings, splashes, off-road time, impacts, crashes, respawns, top speed), and a **digest** — an FNV hash over sampled positions. Runs are deterministic: same seed + car + profile ⇒ same digest, which is exactly what `tests/simulation_test.ts` asserts. `shape: "circuit"` races a closed lap over three of them (R22); a sprint is one lap of a road that never comes back, and asking for more laps of one does nothing.
 
 ## The CLI
 
@@ -28,6 +28,8 @@ npm run sim -- --seeds 42,99          # specific seeds
 npm run sim -- --car classic          # one car
 npm run sim -- --count 20             # a wider sweep
 npm run sim -- --length long          # stage length band (default medium)
+npm run sim -- --shape circuit        # race a closed lap circuit (R22)
+npm run sim -- --shape circuit --laps 5
 npm run sim -- --weather storm        # race in rain/storm wind
 npm run sim -- --asphalt 0.8          # the generator's dials, each 0..1:
                                       # --elevation --water --trees --asphalt
@@ -36,7 +38,7 @@ npm run sim -- --json report.json     # machine-readable dump
 
 The dials change what the stage IS, so they change the table: tarmac buys pace and costs drift time (that is what it is FOR), water and hills cost both. Sweep one at a time — a dial moved with a handling change makes the diff unreadable.
 
-The table columns: stage length, time, average pace, drifts / drift time / drift score, jumps / air time, fords, off-road time, hits (damaging impacts — trees, boulders, slammed landings), respawns (crash respawns and bot resets both land here), top speed, finished. The footer aggregates. **The workflow rule: run it before and after every handling or generator change and paste both tables in the PR.** Exit code is non-zero if any run failed to finish, so CI's `simulate` job doubles as a smoke alarm.
+The table columns: the ground covered (one lap × the laps on a circuit), time, average pace, drifts / drift time / drift score, jumps / air time, fords, off-road time, hits (damaging impacts — trees, boulders, slammed landings), respawns (crash respawns and bot resets both land here), top speed, finished. The footer aggregates. **The workflow rule: run it before and after every handling or generator change and paste both tables in the PR.** Exit code is non-zero if any run failed to finish, so CI's `simulate` job doubles as a smoke alarm.
 
 ## What the tests pin down
 
@@ -51,9 +53,10 @@ If a tuning change breaks one of these, the change is wrong or the test's world 
 
 ## Screenshots close the loop
 
-Numbers say whether the game is _sound_; pictures say whether it _looks and reads_ right. `make screenshots` (scripts/screenshot.mjs) serves the built app, drives it with scripted keyboard input, and captures the grid, full speed, a drift, the first jump reached, the sealed-road trio, every camera angle (plus the distant three mid-turn, where their sway shows), and portrait framing into `previews/`. Pass scene-name fragments on the command line to shoot only those. Iterate: change → `make sim` → `make screenshots` → look.
+Numbers say whether the game is _sound_; pictures say whether it _looks and reads_ right. `make screenshots` (scripts/screenshot.mjs) serves the built app, drives it with scripted keyboard input, and captures the grid, full speed, a drift, the first jump reached, the sealed-road trio, every camera angle (plus the distant three mid-turn, where their sway shows), the lap clock mid-circuit, the results card, and portrait framing into `previews/`. Pass scene-name fragments on the command line to shoot only those. Iterate: change → `make sim` → `make screenshots` → look.
 
 Two habits keep a scene pointed at what it is for rather than at the harness:
 
 - **Drive by the run's clock, not the wall clock.** Under software rendering the engine advances at a fraction of real time, so a `waitForTimeout` lands somewhere different on the stage on every machine. The scene helpers read the HUD instead — the timer, the speed, the co-driver's call and its distance — so "out on the sealed road", "on open road", "stopped" and "at the turn-in" mean what they say.
+- **A circuit is how a scene reaches a lap board.** `?shape=circuit&laps=2` (with `?bot=1` driving) puts a run past its own start line inside a screenshot's patience, which is the only way to photograph the lap clock or a results card with laps on it.
 - **`?bot=1` rides out, the script takes the wheel.** Blind key presses only ever reach the first corner, and anything the generator places further in (a sealed section, a ford, a jump) is unreachable that way. With `?bot=1` the bot drives until a control is touched and then hands over for good, so a scene can be carried to a PLACE on the stage and do its one thing there.

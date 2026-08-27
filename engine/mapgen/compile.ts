@@ -8,8 +8,15 @@
 // endless stage keeps appending to the same track as its stream produces
 // new sections.
 
-import type { Crossing, SegmentPlan, StageKnobs, StageLength, TurnSeverity } from "./rules.ts";
-import { STAGE_RULES as R, knobScale, resolveKnobs } from "./rules.ts";
+import type {
+  Crossing,
+  SegmentPlan,
+  StageKnobs,
+  StageLength,
+  StageShape,
+  TurnSeverity,
+} from "./rules.ts";
+import { SAMPLE_STEP, STAGE_RULES as R, knobScale, resolveKnobs } from "./rules.ts";
 import { createStageStream, generateStage } from "./generate.ts";
 import { createRng } from "../lib/prng.ts";
 import { createLandField } from "./land.ts";
@@ -138,6 +145,10 @@ export type Track = {
   pacenotes: Pacenote[];
   /** True when the stage streams forever instead of finishing. */
   endless: boolean;
+  /** R22 — true when the stage is a CIRCUIT: the last sample lands back on
+   * the first, on the same heading, so the start line is also the finish
+   * line and the run can be raced over laps. */
+  circuit: boolean;
   /** The dials this stage was generated with — carried on the track so the
    * terrain field, the renderer and the tooling all shape themselves from
    * the same set without being handed it separately. */
@@ -155,8 +166,7 @@ export type Track = {
   extend?: (upToS: number) => boolean;
 };
 
-/** Sample spacing along the centerline, meters. */
-export const SAMPLE_STEP = 2;
+export { SAMPLE_STEP };
 
 const SEVERITY_RANK: Record<TurnSeverity, number> = { soft: 0, medium: 1, hard: 2 };
 
@@ -882,7 +892,7 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
   return { append };
 }
 
-function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs): Track {
+function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs, circuit = false): Track {
   return {
     seed,
     segments: [],
@@ -893,6 +903,7 @@ function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs): Track {
     bounds: { minX: 0, maxX: 0, minZ: 0, maxZ: 0 },
     pacenotes: [],
     endless,
+    circuit,
     knobs,
     spurs: [],
     junctions: [],
@@ -903,18 +914,21 @@ function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs): Track {
  * build the whole stage; `endless` builds the opening stretch and hands
  * back a track that extends itself (track.extend) as the run progresses.
  * `knobs` are the generator's dials (rules.ts) — omitted, a stage comes out
- * at the default positions. */
+ * at the default positions. `shape` (R22) picks between a sprint and a
+ * circuit; an endless stage has no shape to pick — it never closes. */
 export function compileStage(
   seed: number,
   length: StageLength = "medium",
   knobs?: Partial<StageKnobs>,
+  shape: StageShape = "sprint",
 ): Track {
   const dials = resolveKnobs(knobs);
   const rolling = buildRolling(seed, dials);
   const paving = buildPaving(seed, dials.asphalt);
   if (length !== "endless") {
-    const track = emptyTrack(seed, false, dials);
-    createCompiler(track, rolling, paving).append(generateStage(seed, length, dials));
+    const circuit = shape === "circuit";
+    const track = emptyTrack(seed, false, dials, circuit);
+    createCompiler(track, rolling, paving).append(generateStage(seed, length, dials, shape));
     return track;
   }
   const track = emptyTrack(seed, true, dials);

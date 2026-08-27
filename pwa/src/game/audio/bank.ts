@@ -79,6 +79,38 @@ export const RUN_BANK: SoundBank = {
     ],
   },
 
+  lap: {
+    description:
+      "Across the line with laps still to run. The finish's brass stab on its " +
+      "own, a fifth lower and half as long, with no swell of crowd under it — " +
+      "the same voice saying 'again' instead of 'done', so the finish still " +
+      "arrives as something the lap board was only counting toward.",
+    voices: [
+      {
+        call: "tone",
+        type: "sawtooth",
+        from: 262,
+        to: 392,
+        durationMs: 220,
+        volume: 0.03,
+        attackMs: 10,
+        holdMs: 110,
+        detuneCents: 8,
+        drive: 0.22,
+        echo: 0.18,
+        filter: { type: "lowpass", frequency: 2400 },
+      },
+      {
+        call: "noise",
+        durationMs: 90,
+        volume: 0.016,
+        color: "pink",
+        attackMs: 8,
+        filter: { type: "bandpass", frequency: 1600, q: 1.2 },
+      },
+    ],
+  },
+
   finish: {
     description:
       "Through the flying finish. A rising two-note brass stab over a swell of " +
