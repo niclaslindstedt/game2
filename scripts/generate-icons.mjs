@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Generates the PWA install icons, the favicon, and the social-preview
-// image from the same geometry as pwa/public/icons/icon.svg — a red car
-// caught mid-drift with two tire arcs sweeping behind it on the game's sky
-// blue. Pure Node (the shared lib/png.mjs encoder), so the pipeline needs
-// no native image dependencies. Rerun with `npm run icons` / `make icons`
-// after changing the mark, and keep icon.svg in lockstep.
+// image from the same geometry as pwa/public/icons/icon.svg — a white car
+// at the head of the flick itself: two yellow tyre tracks swinging out one
+// way and whipping back the other, an S drawn on Swedish blue. Pure Node
+// (the shared lib/png.mjs encoder), so the pipeline needs no native image
+// dependencies. Rerun with `npm run icons` / `make icons` after changing the
+// mark, and keep icon.svg in lockstep.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,21 +18,46 @@ const iconsDir = join(root, "pwa", "public", "icons");
 mkdirSync(iconsDir, { recursive: true });
 
 // Palette — mirrors PALETTE in pwa/src/identity.ts and the SVG's stops.
-const SKY_TOP = [31, 127, 224]; // #1f7fe0
-const SKY_BOT = [63, 169, 245]; // #3fa9f5
-const CHALK = [246, 243, 234]; // #f6f3ea
-const RED = [226, 60, 44]; // #e23c2c
-const INK = [18, 48, 105]; // #123069
+const SKY_TOP = [18, 48, 105]; // #123069 hudShadow
+const SKY_BOT = [31, 127, 224]; // #1f7fe0 skyHigh
+const CHALK = [246, 243, 234]; // #f6f3ea rumbleWhite
+const SUN = [255, 210, 62]; // #ffd23e sun
+const INK = [18, 48, 105]; // #123069 hudShadow
+const CAR_EDGE = 9; // how wide the car's ink outline draws
 
 // --- geometry in the SVG's 512-unit space -----------------------------------
-// Tire arcs: circles centered at the arc centers implied by the SVG paths.
-// `M 96 512 A 300 300 0 0 1 396 212` — center at (96+300, 512) = (396, 512).
+// The flick is a pendulum, so the mark is two circular arcs joined tangentially
+// at (216.94, 355.72): the car is thrown away from the corner, then whipped back into
+// it. Each arc carries a pair of tracks at a constant radial offset — the inner
+// track of the first sweep stays the inner track of the second, so the pair runs
+// continuously through the inflection instead of crossing over.
+const TRACK_GAP = 40; // radial offset of each track from the arc's spine
+const TRACK_W = 13; // half width of one track
+// The second centre is not free: it sits on the first arc's radial through the
+// joint, at R1 + R2 from the first centre, or the tracks meet with a step.
 const ARCS = [
-  { cx: 396, cy: 512, r: 300, w: 15 },
-  { cx: 400, cy: 512, r: 220, w: 15 },
+  { cx: 233.5, cy: 545, r: 190, from: 206, to: 267, out: +1 },
+  { cx: 201.688, cy: 181.389, r: 175, from: 5, to: 87, out: -1 },
 ];
-// The car slab: center, rotation, half extents, matching the SVG transform.
-const CAR = { cx: 352, cy: 168, angle: (52 * Math.PI) / 180, hw: 88, hh: 52, stripe: 30, edge: 10 };
+// The tail dissolves into the sky along this axis (the SVG's fade gradient).
+// Kept short: yellow lerped a long way into blue passes through mud.
+const FADE = { x1: 78, y1: 462, x2: 168, y2: 408 };
+
+// The car, as rounded boxes in its own frame (+x is the nose, +y is its right).
+// Drawn at the head of the swoosh, yawed out of its line of travel — and the
+// front wheels are on opposite lock, which is what a driver does next.
+const CAR = { cx: 356, cy: 222, angle: (-35 * Math.PI) / 180 };
+const LOCK = (-22 * Math.PI) / 180;
+const BODY = { x: 0, y: 0, hw: 96, hh: 46, r: 18, a: 0 };
+// One cabin, not a windscreen and a rear screen: at a launcher's icon size two
+// dark bands read as a domino, where a single greenhouse still reads as a car.
+const GLASS = [{ x: -8, y: 0, hw: 32, hh: 29, r: 11, a: 0 }];
+const WHEELS = [
+  { x: 56, y: -50, hw: 22, hh: 10, r: 5, a: LOCK },
+  { x: 56, y: 50, hw: 22, hh: 10, r: 5, a: LOCK },
+  { x: -58, y: -50, hw: 22, hh: 10, r: 5, a: 0 },
+  { x: -58, y: 50, hw: 22, hh: 10, r: 5, a: 0 },
+];
 
 function skyAt(v) {
   const t = Math.max(0, Math.min(1, v));
@@ -42,25 +68,58 @@ function skyAt(v) {
   ];
 }
 
+/** How opaque the tracks are at (x, y) — 0 at the tail, 1 past the fade axis. */
+function trackAlpha(x, y) {
+  const ax = FADE.x2 - FADE.x1;
+  const ay = FADE.y2 - FADE.y1;
+  const t = ((x - FADE.x1) * ax + (y - FADE.y1) * ay) / (ax * ax + ay * ay);
+  return Math.max(0, Math.min(1, t));
+}
+
+/** Signed distance from car-frame point (lx, ly) to one rounded box part. */
+function boxSdf(part, lx, ly) {
+  const dx = lx - part.x;
+  const dy = ly - part.y;
+  const cos = Math.cos(-part.a);
+  const sin = Math.sin(-part.a);
+  const px = Math.abs(dx * cos - dy * sin) - (part.hw - part.r);
+  const py = Math.abs(dx * sin + dy * cos) - (part.hh - part.r);
+  return Math.hypot(Math.max(px, 0), Math.max(py, 0)) + Math.min(Math.max(px, py), 0) - part.r;
+}
+
 /** Color of the mark at 512-space point (x, y), or null for background. */
 function markAt(x, y) {
-  // Car first (it sits on top of the arcs).
+  // Car first (it sits on top of the tracks).
   const dx = x - CAR.cx;
   const dy = y - CAR.cy;
   const cos = Math.cos(-CAR.angle);
   const sin = Math.sin(-CAR.angle);
   const lx = dx * cos - dy * sin;
   const ly = dx * sin + dy * cos;
-  if (Math.abs(lx) <= CAR.hw && Math.abs(ly) <= CAR.hh) {
-    const edge = Math.abs(lx) > CAR.hw - CAR.edge || Math.abs(ly) > CAR.hh - CAR.edge;
-    if (edge) return INK;
-    if (Math.abs(lx) <= CAR.stripe) return CHALK;
-    return RED;
+  const body = boxSdf(BODY, lx, ly);
+  if (body <= 0) {
+    if (body > -CAR_EDGE) return INK;
+    if (GLASS.some((g) => boxSdf(g, lx, ly) <= 0)) return INK;
+    return CHALK;
   }
-  // Tire arcs: annulus bands, only above their centers (the sweep).
+  if (WHEELS.some((w) => boxSdf(w, lx, ly) <= 0)) return INK;
+  // Tracks: annulus bands either side of each arc's spine, clipped to its sweep.
   for (const arc of ARCS) {
-    const d = Math.hypot(x - arc.cx, y - arc.cy);
-    if (Math.abs(d - arc.r) <= arc.w && y <= arc.cy) return CHALK;
+    const r = Math.hypot(x - arc.cx, y - arc.cy);
+    let deg = (Math.atan2(y - arc.cy, x - arc.cx) * 180) / Math.PI;
+    if (deg < 0) deg += 360;
+    if (deg < arc.from || deg > arc.to) continue;
+    for (const side of [+1, -1]) {
+      if (Math.abs(r - (arc.r + side * arc.out * TRACK_GAP)) <= TRACK_W) {
+        const a = trackAlpha(x, y);
+        const sky = skyAt(y / 512);
+        return [
+          sky[0] + (SUN[0] - sky[0]) * a,
+          sky[1] + (SUN[1] - sky[1]) * a,
+          sky[2] + (SUN[2] - sky[2]) * a,
+        ];
+      }
+    }
   }
   return null;
 }
@@ -109,11 +168,18 @@ function renderOg(width, height) {
     for (let x = 0; x < width; x++) {
       const v = y / height;
       let c = skyAt(v);
-      // Horizontal chalk speed stripes streaking toward the mark.
-      const stripeRow = Math.floor(y / 36);
-      const phase = (stripeRow * 137) % 400;
-      const streakEnd = markX + 60 - phase;
-      if (stripeRow % 3 === 1 && x > streakEnd - 220 && x < streakEnd) c = CHALK;
+      // Speed streaks: run in off the left edge and stop short of the mark at
+      // ragged lengths, fading up out of the sky so they read as motion rather
+      // than as a row of bars.
+      const stripeRow = Math.floor(y / 20);
+      // A scrambled length, not a linear one: `row * k % n` climbs in steps and
+      // stacks into a bar chart.
+      const streakEnd = 120 + ((Math.imul(stripeRow + 1, 2654435761) >>> 8) % 420);
+      if (stripeRow % 4 === 1 && x < streakEnd) {
+        // A short ramp: yellow lerped a long way into blue passes through mud.
+        const t = Math.min(1, x / 110);
+        c = [c[0] + (SUN[0] - c[0]) * t, c[1] + (SUN[1] - c[1]) * t, c[2] + (SUN[2] - c[2]) * t];
+      }
       if (x >= markX) {
         const mark = markAt(((x - markX) / markSize) * 512, (y / markSize) * 512);
         if (mark) c = mark;
