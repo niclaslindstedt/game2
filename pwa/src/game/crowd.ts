@@ -106,8 +106,20 @@ type Part = {
   kind: "body" | "armL" | "armR";
 };
 
+/** One body part's geometry.
+ *
+ * The white `color` attribute is load-bearing, not decoration. A figure's
+ * colour is per-INSTANCE (`InstancedMesh.instanceColor`), and three.js only
+ * multiplies that into the fragment when the material sets `vertexColors` —
+ * which in turn makes the shader read a per-vertex `color` attribute. A box
+ * has none, so the two together render a crowd of silhouettes in pure
+ * black. White here is the identity: the instance colour comes through
+ * unchanged. */
 function box(w: number, h: number, d: number): THREE.BufferGeometry {
-  return new THREE.BoxGeometry(w, h, d);
+  const geo = new THREE.BoxGeometry(w, h, d);
+  const white = new Float32Array(geo.attributes.position.count * 3).fill(1);
+  geo.setAttribute("color", new THREE.BufferAttribute(white, 3));
+  return geo;
 }
 
 /** Lay the people out inside a stand's rectangle: rows behind rows, jittered

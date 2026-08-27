@@ -426,11 +426,15 @@ const CHASE_CLEARANCE = 1.3;
 const FINISH = {
   /** Seconds the plant takes to complete. */
   settle: 1.1,
-  /** How far the camera rises onto its rostrum, m. */
-  lift: 2.4,
-  /** ...and how far back off the line it drifts while it does, m — enough
-   * that the gate itself comes into the shot behind the car. */
-  back: 3,
+  /** How far the camera rises onto its rostrum, m. Deliberately modest: the
+   * gate's banner hangs at 4.7 m, and a camera that climbs to meet it turns
+   * the arch into a wall ruled across the middle of the frame. Staying
+   * under it leaves the gate where it belongs — an arch over the top third,
+   * with the road and the departing car running away beneath it. */
+  lift: 1,
+  /** ...and how far back off the line it drifts while it does, m. A nudge,
+   * not a retreat: the whole point of the shot is that the camera STAYS. */
+  back: 1.5,
   /** The long lens it settles to, degrees. */
   fov: 46,
   /** How fast the aim follows the car, 1/s. Loose: a planted camera pans,
