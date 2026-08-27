@@ -475,12 +475,24 @@ export function createTerrain(track: Track): TerrainField {
    * (the branch has no bridges, so its deck is simply absent). */
   type RibbonSample = RoadShape & { elevation: number };
 
-  /** The corridor's own cross-section at a distance from a road's center:
-   * the mat's crown and wheel tracks inside the edge, its shoulder, ditch
-   * and lip outside it (road.ts). One function for the stage road and for
-   * an abandoned branch — they are the same kind of thing. */
-  const ribbonY = (s: RibbonSample, d: number, width: number): number =>
-    s.elevation + corridorOffset(s, d, width);
+  /** The corridor's own cross-section at a SIGNED lateral offset from a
+   * road's center: the mat's crown and wheel tracks inside the edge, its
+   * shoulder and the ground leaning away outside it (road.ts). One function
+   * for the stage road and for an abandoned branch — they are the same kind
+   * of thing.
+   *
+   * The offset is signed because the corridor is not symmetric: a banked
+   * corner (R19) tilts the whole cross-section by `-bank * lateral`, so the
+   * outside of the turn rides metres proud of the inside. Handing this an
+   * unsigned DISTANCE banks both verges the same way, and then one side of
+   * every corner is drawn a metre away from where the physics rides it —
+   * which is a car that sinks into the ground beside the road. */
+  const ribbonY = (s: RibbonSample, lateral: number, width: number): number =>
+    s.elevation + corridorOffset(s, lateral, width);
+
+  /** Which side of a road a point is on, never 0 — `Math.sign` would
+   * collapse a dead-centre point's offset to zero along with its sign. */
+  const sideOf = (lateral: number): number => (lateral < 0 ? -1 : 1);
 
   /** R17 — the junction platforms, as ground: inside one the corridor is a
    * single graded plane on the MAIN road's own slope, whichever road's
@@ -515,7 +527,8 @@ export function createTerrain(track: Track): TerrainField {
       base = far;
     } else {
       const s = samples[near.index];
-      const corridorY = ribbonY(s, Math.min(near.d, shelfEnd), track.width) - TILE_SINK;
+      const corridorY =
+        ribbonY(s, sideOf(near.lateral) * Math.min(near.d, shelfEnd), track.width) - TILE_SINK;
       if (near.d < shelfEnd) {
         base = corridorY;
       } else {
@@ -537,6 +550,9 @@ export function createTerrain(track: Track): TerrainField {
       const edge = spur.spur.width / 2 + ROAD_CROSS.reach;
       const roadD = near ? near.d : Infinity;
       if (spur.d < edge + SPUR_BLEND && spur.d < roadD) {
+        // A branch is never banked, so its cross-section is symmetric and
+        // the unsigned distance is the whole story (the index does not carry
+        // a signed lateral).
         const shelf = ribbonY(spur.sample, Math.min(spur.d, edge), spur.spur.width) - TILE_SINK;
         const reach = 1 - smooth(clamp01((spur.d - edge) / SPUR_BLEND));
         const mine = smooth(clamp01((roadD - spur.d) / 12));
@@ -560,17 +576,18 @@ export function createTerrain(track: Track): TerrainField {
    * the point is nowhere near a road. */
   const corridorGround = (x: number, z: number): { y: number; weight: number } | null => {
     let best: { y: number; weight: number } | null = null;
-    const consider = (s: RibbonSample, d: number, width: number): void => {
+    const consider = (s: RibbonSample, d: number, side: number, width: number): void => {
       const edge = width / 2 + ROAD_CROSS.reach;
       if (d > edge + 3) return;
       const weight = 1 - smooth(clamp01((d - edge) / 3));
       if (best && best.weight >= weight) return;
-      best = { y: ribbonY(s, Math.min(d, edge), width), weight };
+      best = { y: ribbonY(s, side * Math.min(d, edge), width), weight };
     };
     const near = nearestSample(x, z);
-    if (near && near.d < shelfEnd + 3) consider(samples[near.index], near.d, track.width);
+    if (near && near.d < shelfEnd + 3)
+      consider(samples[near.index], near.d, sideOf(near.lateral), track.width);
     const spur = spurs.spurs.length > 0 ? spurs.nearest(x, z) : null;
-    if (spur) consider(spur.sample, spur.d, spur.spur.width);
+    if (spur) consider(spur.sample, spur.d, 1, spur.spur.width);
     // The apron wins over both: at a junction the ground IS the junction.
     const apron = apronAt(x, z);
     if (apron && apron.weight > 0) {

@@ -31,6 +31,7 @@ export type {
   WheelStyle,
 } from "./car/spec.ts";
 export { bodyHalfLength, bodyHalfWidth } from "./car/shell.ts";
+export { frontLampAnchors, rearLampAnchors, type LampAnchor } from "./car/fascia.ts";
 
 import type { CarBodySpec } from "./car/spec.ts";
 

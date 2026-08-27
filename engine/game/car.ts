@@ -243,7 +243,13 @@ export function stepGrounded(
   const surfaceDrag = T.surfaces.drag[ctx.surface];
   const surfacePower = T.surfaces.power[ctx.surface];
 
-  car.steer = input.steer;
+  // The rack, and the hands on it, have weight: the lock EASES toward what
+  // the driver is asking for instead of arriving in one tick. Everything
+  // below reads `car.steer` rather than the raw input — the lag has to be
+  // upstream of the whole model, or the slide would be commanded off a lock
+  // the front wheels have not reached yet.
+  car.steer += (input.steer - car.steer) * clamp(T.steering.rackRate * dt, 0, 1);
+  const steer = car.steer;
   // Brake lights, so only a car being SLOWED lights them — a car backing out
   // of a ditch is under power, not under the brake.
   car.braking = input.brake > 0.2 && car.u > 3;
@@ -284,17 +290,24 @@ export function stepGrounded(
   // asking them for: the handbrake unsticks the rear by lowering the
   // ceiling, so the same lock asks far more of what is left.
   const gripCeiling = spec.gripAccel * surfaceGrip * (input.handbrake ? T.grip.handbrakeGrip : 1);
-  const { asked, sliding } = slideFactor(car, input.steer * steerGain, gripCeiling);
+  const { asked, sliding } = slideFactor(car, steer * steerGain, gripCeiling);
   // The wheel does not just unstick the car — it NAMES the angle. Every
   // force that deepens a slide fades as the slip approaches what this much
   // lock is asking for at this speed, and is gone once the car is past it.
   // The setpoint has to MOVE with the wheel: a fade band at a fixed angle
   // leaves the deepening forces with no equilibrium below it, which is the
   // same two-state car the commanded demand above exists to avoid.
-  const askedSlip = D.angleSpan * asked;
-  const sat = clamp(1 - (Math.abs(car.slip) - askedSlip) / D.angleBand, 0, 1);
-  const deepening = Math.sign(input.steer) === -Math.sign(car.slip) && car.slip !== 0;
-  const steerTerm = input.steer * backwards * (steerGain + spec.driftYaw * speedFactor * asked);
+  // How far sideways THIS surface lets the car go: gravel's breakaway is a
+  // long way out, a sealed road's is a few degrees off straight. It scales
+  // the angle the slide asks for and the band it fades over together — one
+  // is the setpoint and the other is the room around it, and stretching one
+  // without the other would make the paved car's drift sharp-edged instead
+  // of small.
+  const breakaway = T.surfaces.breakaway[ctx.surface];
+  const askedSlip = D.angleSpan * breakaway * asked;
+  const sat = clamp(1 - (Math.abs(car.slip) - askedSlip) / (D.angleBand * breakaway), 0, 1);
+  const deepening = Math.sign(steer) === -Math.sign(car.slip) && car.slip !== 0;
+  const steerTerm = steer * backwards * (steerGain + spec.driftYaw * speedFactor * asked);
   // The slip's self-rotation scales with steering commitment, so holding
   // into the slide sustains it, releasing lets grip straighten the car, and
   // counter-steer exits fast. An unconditional slip term would be a
@@ -302,12 +315,12 @@ export function stepGrounded(
   // Full commitment on the counter too: it damps the catch, which is what
   // keeps the exit a gather-up instead of a twitch.
   const commitment =
-    T.steering.commitmentFloor + (1 - T.steering.commitmentFloor) * Math.abs(input.steer);
+    T.steering.commitmentFloor + (1 - T.steering.commitmentFloor) * Math.abs(steer);
   /** How much the wheel is steered INTO the slide, 0..1 — what gates the
    * power's oversteer off while the driver is still asking for the angle. */
-  const intoSlide = clamp(input.steer * -Math.sign(car.slip), 0, 1);
+  const intoSlide = clamp(steer * -Math.sign(car.slip), 0, 1);
   const handbrakeYaw = input.handbrake
-    ? Math.sign(input.steer) * backwards * T.grip.handbrakeYaw * speedFactor
+    ? Math.sign(steer) * backwards * T.grip.handbrakeYaw * speedFactor
     : 0;
   // RWD power oversteer: the driven rear keeps feeding the slide — but only
   // once the wheel stops asking for the angle. Steered into the slide the
@@ -576,11 +589,11 @@ export function stepAirborne(
   car.airTime += dt;
   if (!car.settling) stats.airTime += dt;
   car.boosting = false; // no thrust in the air — the velocity is committed
-  car.steer = input.steer;
+  car.steer += (input.steer - car.steer) * clamp(T.steering.rackRate * dt, 0, 1);
   car.braking = false;
   car.reversing = false; // nothing to back out of in the air
 
-  car.yawRate += input.steer * T.air.yawAuthority * dt;
+  car.yawRate += car.steer * T.air.yawAuthority * dt;
   // A bounce is not a flight: the car is settling onto the ground it has
   // already hit, so the air's own hands stay off it.
   const air = car.settling ? 0 : 1;

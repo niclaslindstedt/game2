@@ -74,15 +74,33 @@ of the throw and then one step to the maximum.
 
 ## Measure it — never tune this by feel alone
 
-Write a throwaway `tests/zzprobe_test.ts`, run it with
-`npx vitest run tests/zzprobe_test.ts`, and delete it. `console.log` is
-swallowed by the runner — collect lines and `writeFileSync` them to a file.
+Write a throwaway node script and delete it. Node runs the engine's
+TypeScript directly, the same way `scripts/simulate-run.mjs` does, so a probe
+is one file and its output goes straight to the terminal:
+
+```sh
+node --experimental-strip-types --disable-warning=ExperimentalWarning probe.mjs
+# inside: const { NEUTRAL_INPUT, TUNING, compileTrack, createGame, step } =
+#           await import("<repo>/engine/index.ts");
+```
+
+A vitest probe works too but costs you the output: `console.log` is swallowed
+by the runner, so a `tests/zzprobe_test.ts` has to collect lines and
+`writeFileSync` them to a file. Only reach for it when the probe needs a test
+helper it would otherwise have to duplicate.
 
 Drive a synthetic straight (`compileTrack(0, [{ kind: "straight", length:
 8000, feature: "none" }])` with a widened `width`), accelerate to a fixed
 entry speed, hold a lock for ~2.5 s, and record the settled slip and the
 cornering radius (`u / |yawRate|`). Sweep the lock in 0.05 steps at two or
 three speeds.
+
+Sweep the SURFACE too when the complaint names one. A stage sample carries
+its surface, so `base.samples.map((s) => ({ ...s, surface, bank: 0 }))` on a
+compiled straight is a controlled A/B — and the numbers to print beside the
+angle are the cornering radius and the lateral g (`u · |yawRate| / 9.81`),
+because "the steering is too tight" is a statement about those, not about
+slip.
 
 **Read the radius ratio between adjacent locks, not just the angle.** A
 gripped car's radii fall off as `1/lock`, so the ratio decays smoothly toward

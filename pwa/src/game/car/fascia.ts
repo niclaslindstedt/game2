@@ -43,6 +43,45 @@ function disc(
   }
 }
 
+/** One lamp cluster's place on the car, in car space. */
+export type LampAnchor = { x: number; y: number; z: number; width: number; height: number };
+
+/** Where a car's lamp clusters sit, one per side — the same numbers the
+ * lenses below are laid on. The glow over the tail pair (car-mesh.ts) and
+ * the beams both ends throw (environment.ts) read these, so restyling a
+ * face moves a lamp and its light together instead of leaving a bloom
+ * floating off the corner. Empty where a spec has no lamps at that end.
+ *
+ * On a quad-headlight face the anchor is the cluster's optical CENTRE, not
+ * whichever of the pair was authored first: one beam belongs to the pair. */
+export function frontLampAnchors(spec: CarBodySpec): LampAnchor[] {
+  const l = spec.front?.lights;
+  if (!l) return [];
+  const outer = l.pairGap === undefined ? l.x : l.x + l.pairGap;
+  const outerSize = l.pairGap === undefined ? l.size : (l.pairSize ?? l.size);
+  const span = Math.abs(outer - l.x) + l.size + outerSize;
+  return [-1, 1].map((side) => ({
+    x: (side * (l.x + outer)) / 2,
+    y: l.y,
+    z: spec.profile[0].z,
+    width: span,
+    height: (l.kind === "round" ? l.size : (l.height ?? l.size)) * 2,
+  }));
+}
+
+/** ...and the clusters at the other end, where `x` already IS the centre. */
+export function rearLampAnchors(spec: CarBodySpec): LampAnchor[] {
+  const l = spec.rear?.lights;
+  if (!l) return [];
+  return [-1, 1].map((side) => ({
+    x: side * l.x,
+    y: l.y,
+    z: spec.profile[spec.profile.length - 1].z,
+    width: l.width,
+    height: l.height,
+  }));
+}
+
 function buildLights(b: MeshBuilder, lights: Lights, z: number, facing: number): void {
   const lens = lights.color ?? 0xf7f2dc;
   const bezel = lights.bezel ?? 0;

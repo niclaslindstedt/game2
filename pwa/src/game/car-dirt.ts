@@ -37,6 +37,10 @@ type DirtTarget = {
 
 export type CarDirt = {
   update: (state: GameState, dt: number) => void;
+  /** How filthy the car is, 0..1 — read by anything that has to answer to
+   * the state of the paint rather than just draw it (the lamps dim under a
+   * caked lens). */
+  level: () => number;
 };
 
 /** How much of each coat is on the car, 0 (clean) .. 1 (as filthy as it
@@ -231,7 +235,10 @@ export function createCarDirt(root: THREE.Group, spray: readonly SprayPoint[] = 
     }
   };
 
-  return { update };
+  // Both coats sit on the glass as well as the paint, and the thicker of
+  // the two is what a lens is looking through — the same reading the
+  // painter takes of how filthy the car is.
+  return { update, level: () => Math.max(dust, mud) };
 }
 
 /** The wheel centers of a built car, in car space — what the painter wants

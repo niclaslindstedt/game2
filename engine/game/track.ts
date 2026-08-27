@@ -6,7 +6,7 @@
 // — a car that leaves the road keeps its last on-road progress for respawn.
 
 import type { Surface, Track } from "../mapgen/index.ts";
-import { crossOffset } from "../mapgen/road.ts";
+import { corridorOffset, crossOffset } from "../mapgen/road.ts";
 import { TUNING } from "./defs/tuning.ts";
 import type { GameState } from "./state.ts";
 
@@ -102,11 +102,21 @@ export function locate(track: Track, x: number, z: number, hint: number): TrackF
   const slope = slopeAt(track, best) + (slopeAt(track, next) - slopeAt(track, best)) * f;
   // Across the road: the sample's elevation is the CROWN, and where the car
   // actually sits depends on how far out it is — down the camber, or in one
-  // of the two tracks every car before it wore into the gravel. The verge
-  // beyond the edge belongs to the terrain, so the shape is read at the
-  // edge at furthest.
+  // of the two tracks every car before it wore into the gravel. Past the mat
+  // the ribbon carries on into the shoulder and the ground leaning away from
+  // it, and the HEIGHT follows it out there: the same corridor profile the
+  // road mesh is drawn from and that `terrain.groundAt` hands the car the
+  // moment it counts as off the road. Reading the mat's edge instead left
+  // the car floating over its own verge and dropping a step onto the ground
+  // at the boundary. A bridge is the exception — past a deck's edge is air,
+  // not a verge, and a car with two wheels on the parapet is still on the
+  // deck.
   const onRoad = Math.max(-halfRoad, Math.min(halfRoad, lateral));
-  const cross = crossOffset(s, onRoad, track.width);
+  const cross =
+    s.deck != null ? crossOffset(s, onRoad, track.width) : corridorOffset(s, lateral, track.width);
+  // The camber the car SITS on is the mat's, read at the edge at furthest:
+  // the chamfer off a paved edge is a curb, and rolling the body onto it
+  // would tip the car over a step a few centimeters wide.
   const probe = 0.5;
   const slopeLat =
     (crossOffset(s, Math.min(halfRoad, onRoad + probe), track.width) -
