@@ -56,9 +56,58 @@ describe("turning at pace", () => {
     const state = game();
     upToSpeed(state, 8);
     run(state, { throttle: 1, steer: 0.25 }, 1.5);
-    expect(state.car.slide).toBe(0);
+    // The slide is a continuous quantity, not a mode, so a gentle turn is
+    // allowed a hair of it — the hand-over from grip to slide starts before
+    // the tires are truly out of grip precisely so that nothing happens AT
+    // the limit. What a gentle turn is not allowed is an ANGLE.
+    expect(state.car.slide).toBeLessThan(0.05);
     expect(state.car.drifting).toBe(false);
-    expect(Math.abs(state.car.slip)).toBeLessThan(0.1);
+    expect(Math.abs(state.car.slip)).toBeLessThan(0.05);
+  });
+
+  it("the angle moves WITH the wheel — no lock is a cliff", () => {
+    // The one thing the handling must not do: turn a small change of lock
+    // into a large change of angle. Sweep the throw and check both that the
+    // angle rises all the way up it and that no step is a jump.
+    const locks = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
+    const angles = locks.map((lock) => {
+      const state = game();
+      upToSpeed(state, 8);
+      run(state, { throttle: 1, steer: lock }, 2.5);
+      return Math.abs(state.car.slip);
+    });
+    for (let i = 1; i < angles.length; i++) {
+      expect(angles[i]).toBeGreaterThan(angles[i - 1]);
+      // A tenth of the throw is worth at most ~9° more angle. The model this
+      // replaced put 30° into one such step, which is what made a drift feel
+      // like a mode the car switched into rather than something asked for.
+      expect(angles[i] - angles[i - 1]).toBeLessThan(0.16);
+    }
+    // ...and the whole throw is worth a real spread, not a hair either side
+    // of one angle: half lock is a shallower drift than full lock.
+    expect(angles[0]).toBeLessThan(0.1);
+    expect(angles[angles.length - 1]).toBeGreaterThan(0.4);
+  });
+
+  it("the exit overshoots a tad from a deep drift and gathers clean from a shallow one", () => {
+    // Unwinding out of a big slide, the rotation outlives the lock and
+    // carries the nose a little past centre — the dab of opposite lock. A
+    // moderate slide has nothing to catch.
+    const past = (lock: number): number => {
+      const state = game();
+      upToSpeed(state, 8);
+      run(state, { throttle: 1, steer: lock }, 2.5);
+      const side = Math.sign(state.car.slip);
+      let crossed = 0;
+      for (let i = 0; i < 24; i++) {
+        run(state, { throttle: 1, steer: 0 }, 0.08);
+        crossed = Math.min(crossed, state.car.slip * side);
+      }
+      return -crossed;
+    };
+    expect(past(1)).toBeGreaterThan(0.005);
+    expect(past(1)).toBeLessThan(0.12);
+    expect(past(0.6)).toBeLessThan(0.01);
   });
 
   it("the angle builds over tenths of a second, it does not snap out", () => {

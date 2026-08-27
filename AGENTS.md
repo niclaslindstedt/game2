@@ -49,22 +49,23 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 
 ## Where new code goes
 
-| Kind of change                                     | Where it goes                                                  |
-| -------------------------------------------------- | -------------------------------------------------------------- |
-| Handling/feel (drift, jump, grip, gearbox)         | `engine/game/car.ts`; numbers in `engine/game/defs/`           |
-| A new car                                          | A data row in `engine/game/defs/cars.ts`                       |
-| A car's LOOK (silhouette, panels, wheels, livery)  | `pwa/src/game/car-styles.ts` (specs); builder in `car-body.ts` |
-| Stage generation rules or vocabulary               | `engine/mapgen/rules.ts` (data) / `generate.ts` (search)       |
-| Track geometry/compilation                         | `engine/mapgen/compile.ts`                                     |
-| Run orchestration (phases, respawn, events)        | `engine/game/step.ts`                                          |
-| Collision / damage (crush, parts, wreck, systems)  | `engine/game/collision.ts` — the `collision` skill             |
-| Bot behavior                                       | `engine/sim/bot.ts`                                            |
-| Anything drawn (meshes, textures, camera, effects) | `pwa/src/game/` (renderer.ts and friends)                      |
-| HUD / touch controls                               | `pwa/src/game/hud.tsx` + `pwa/src/styles.css`                  |
-| Input mapping                                      | `pwa/src/game/input.ts`                                        |
-| App identity (name, palette, URLs)                 | `pwa/src/identity.ts` (single source)                          |
-| New CLI tooling                                    | `scripts/*.mjs` (Node, no deps beyond `scripts/lib/`)          |
-| Engine tests                                       | `tests/<topic>_test.ts`                                        |
+| Kind of change                                     | Where it goes                                                           |
+| -------------------------------------------------- | ----------------------------------------------------------------------- |
+| Handling/feel (drift, jump, grip, gearbox)         | `engine/game/car.ts`; numbers in `engine/game/defs/`                    |
+| How a turn becomes a drift, and how it lets go     | `TUNING.drift` in `engine/game/defs/tuning.ts` — the `drift-feel` skill |
+| A new car                                          | A data row in `engine/game/defs/cars.ts`                                |
+| A car's LOOK (silhouette, panels, wheels, livery)  | `pwa/src/game/car-styles.ts` (specs); builder in `car-body.ts`          |
+| Stage generation rules or vocabulary               | `engine/mapgen/rules.ts` (data) / `generate.ts` (search)                |
+| Track geometry/compilation                         | `engine/mapgen/compile.ts`                                              |
+| Run orchestration (phases, respawn, events)        | `engine/game/step.ts`                                                   |
+| Collision / damage (crush, parts, wreck, systems)  | `engine/game/collision.ts` — the `collision` skill                      |
+| Bot behavior                                       | `engine/sim/bot.ts`                                                     |
+| Anything drawn (meshes, textures, camera, effects) | `pwa/src/game/` (renderer.ts and friends)                               |
+| HUD / touch controls                               | `pwa/src/game/hud.tsx` + `pwa/src/styles.css`                           |
+| Input mapping                                      | `pwa/src/game/input.ts`                                                 |
+| App identity (name, palette, URLs)                 | `pwa/src/identity.ts` (single source)                                   |
+| New CLI tooling                                    | `scripts/*.mjs` (Node, no deps beyond `scripts/lib/`)                   |
+| Engine tests                                       | `tests/<topic>_test.ts`                                                 |
 
 **Hard rules:** the engine never imports three.js, Preact, or anything from `pwa/`; the renderer never mutates `GameState`; engine randomness only via the state's seeded RNG (determinism is test-enforced); source files stay under 1000 lines.
 
@@ -109,6 +110,9 @@ Skills live in `.agent/skills/` (`.claude/skills` symlinks there) — each a `SK
 **Craft** (the subject owners):
 
 - **`game-feel`** — how the game FEELS: the sensation of speed and the drift as drama. Owns the Sega Rally reference, the camera, and the cross-system levers (speed × stage scale × framing × FX). Load it whenever the acceptance test is "does it feel right".
+- **`drift-feel`** — how the car turns and slides: the hand-over from a
+  gripped turn into a drift, how deep a given lock goes, and how a slide lets
+  go. Owns the `TUNING.drift` knob group and the response-curve probe.
 - **`engine-system`** — adding/changing a gameplay system, engine-first.
 - **`collision`** — the car hitting things: contact model, crush and bent
   polygons, breaking parts, internal-system damage, the wreck, the solid

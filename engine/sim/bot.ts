@@ -11,8 +11,11 @@ import { TUNING } from "../game/defs/tuning.ts";
 import type { CarInput, GameState } from "../game/state.ts";
 
 export type BotProfile = {
-  /** Peak lateral acceleration the bot plans corners around, m/s². */
-  latAccel: number;
+  /** How much of the car's OWN lateral grip the bot plans corners around.
+   * Over 1 on purpose: a rally driver arrives past what the tires can hold
+   * and lets the slide carry the nose round, so a bot that plans under the
+   * ceiling never drifts a corner — it only ever flicks the handbrake. */
+  latFraction: number;
   /** Steering proportional gain on the lookahead angle error. */
   steerGain: number;
   /** Lookahead time toward the aim point, seconds. */
@@ -27,7 +30,7 @@ export type BotProfile = {
 
 /** The default rally brain: quick hands, plans ~3 s ahead, drifts hairpins. */
 export const RALLY_BOT: BotProfile = {
-  latAccel: 11,
+  latFraction: 0.7,
   steerGain: 2.2,
   lookahead: 0.65,
   planHorizon: 3.0,
@@ -60,13 +63,14 @@ export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): Car
     samples.length - 1,
     state.progressIndex + Math.round(horizonMeters / step),
   );
+  const latAccel = state.spec.gripAccel * profile.latFraction;
   let targetSpeed = state.spec.gearTop[state.spec.gearTop.length - 1];
   let hardDistance = Infinity;
   let hardCap = 0;
   for (let i = state.progressIndex + 1; i <= endIndex; i++) {
     const k = Math.abs(samples[i].curvature);
     if (k < 1e-4) continue;
-    const cap = Math.sqrt(profile.latAccel / k);
+    const cap = Math.sqrt(latAccel / k);
     const distance = samples[i].s - state.progressS;
     // Rally style: a hard corner is entered HOT — the plan deliberately
     // carries extra speed there and the drift scrubs it, instead of braking

@@ -10,21 +10,46 @@ tires can pay for.** One number, the **slide** (0..1), carries the whole
 thing, and every force below fades in and out with it, so grip and slide are
 one continuous response rather than two modes.
 
-- **The slide** — the turn being asked for costs `u × yawRate` of lateral
-  acceleration; the car has `gripAccel` to spend. Past that ceiling the slide
-  opens up (`TUNING.grip.slideRange`), and an angle already established keeps
-  it alive on its own (`slideSlip`) so the car does not snap back to grip in
-  the instant the wheel passes centre. Gentle steering never slides at any
-  speed; a committed turn slides from about 70 km/h up. No flick, no
-  handbrake, no kick — nothing is ever injected into the car's velocity.
+- **The slide** — the turn being asked for costs lateral acceleration; the
+  car has `gripAccel` to spend. The slide (0..1) is how far past that
+  ceiling the WHEEL is asking, eased in with a smoothstep that starts a
+  little before the limit (`TUNING.drift.entryAt`) and finishes well past
+  it (`entrySpread`). Both ends of that ramp are flat on purpose: there is
+  no corner in the car's response anywhere, so there is no instant at which
+  the car changes what it is doing — grip becomes slide without an event.
+  What was asked a moment ago also has not fully let go (`release`), which
+  carries one corner's angle into the next. Gentle steering never earns an
+  angle at any speed; a committed turn slides from about 70 km/h up. No
+  flick, no handbrake, no kick — nothing is ever injected into the car's
+  velocity.
+- **The demand is what the wheel ASKS for**, never the yaw the car ended up
+  with. The slide feeds extra yaw authority back into the car, so measuring
+  it off the resulting yaw closes a positive feedback loop with no
+  equilibrium in the middle — the car would have exactly two states,
+  gripped or fully sideways, a notch of wheel apart. Commanded demand is
+  what makes the angle a continuous function of lock and speed.
 - **The rotation** — as the slide opens, the car gains yaw authority
   (`driftYaw`) and the slip starts turning the nose itself — sustained by
   steering INTO the slide, so releasing the wheel stops feeding it and
   counter-steer both cuts the deepening and steers the catch.
-- **The wheel commands the angle.** The drift never steers itself: the
-  self-feeding forces are kept well under the wheel's authority, so full
-  lock is a deep drift, half lock a shallower one, and a centred wheel
-  hands the car back. What the front wheels show is what the car does.
+- **The wheel commands the angle.** Every force that deepens a slide fades
+  as the slip approaches the angle this much lock is asking for
+  (`angleSpan × slide`, over a band `angleBand` wide). The setpoint moves
+  with the wheel, so full lock is a deep drift, half lock a shallower one,
+  and a centred wheel hands the car back. At 119 km/h the compact answers
+  a lock sweep like this — no step in it anywhere:
+
+  | lock     | 0.2 | 0.3 | 0.4 | 0.5 | 0.6  | 0.7  | 0.8  | 0.9  | 1.0  |
+  | -------- | --- | --- | --- | --- | ---- | ---- | ---- | ---- | ---- |
+  | slip°    | 1.1 | 1.9 | 3.9 | 7.7 | 13.6 | 21.0 | 27.4 | 31.9 | 35.3 |
+  | radius m | 248 | 143 | 73  | 41  | 27   | 21   | 18   | 16   | 15   |
+
+- **The exit overshoots a tad.** Unwinding the lock does not stop the car
+  rotating: while the slide lets go, the yaw answers its target more slowly
+  (`releaseHang`) and the rear weathervanes the nose back toward the
+  direction of travel (`releaseSnap`). A spring with light damping — so a
+  deep drift swings back through centre by a degree or two and asks for a
+  dab of opposite lock, while a moderate one just gathers up.
 - **Power oversteer** — these are rear-wheel-drive cars, and the EXIT is
   where it shows: steered into the slide the corner behaves classically,
   but once the wheel stops asking for the angle the driven axle keeps
@@ -37,12 +62,11 @@ one continuous response rather than two modes.
   second drift the other way, which needs its own counter. Balancing that
   on the wheel is the game.
 - Two stabilizers keep it a dance instead of an instant spin:
-  - **Saturation** — from ~17° of slip everything that deepens the slide
-    fades, reaching zero around 43° (`satAt` + `satWidth`), except the
-    power's own oversteer. The fade is deliberately WIDE: a narrow band
-    would park every steer past a third of lock at the same angle, while
-    the wide one moves the parked angle with the wheel. Only counter-steer
-    keeps full authority.
+  - **Saturation** — everything that deepens a slide fades as the car
+    reaches the angle the wheel is asking for and is gone once it is past,
+    except the power's own oversteer. The band (`angleBand`) is wide enough
+    that the drift is a slope to lean on rather than a wall the car hits.
+    Only counter-steer keeps full authority.
   - **Lift-to-tighten** — lateral grip scales up as the throttle lifts
     (arcade weight transfer). On the power the slide runs; breathe and the
     car both tightens its line and calms its tail. This is the tool against
@@ -55,7 +79,8 @@ one continuous response rather than two modes.
   brake; that is the whole point.
 - **The handbrake** — cuts rear grip and adds some yaw while it is held. It
   unsticks the car; it does not teleport it sideways, and it does not slow it
-  down. It is a flick, not a hold: with the power down and full lock, a held
+  down. It works by lowering the grip ceiling, so the same lock asks far
+  more of what is left. It is a flick, not a hold: with the power down and full lock, a held
   handbrake takes the rear past any catch and spins the car around.
 
 `car.slide` and `car.drifting` are readouts for the dust, the HUD and the
@@ -197,4 +222,4 @@ A manual shift cuts throttle briefly while it engages. The bot shifts by the sam
 
 ## Tuning etiquette
 
-Numbers live in `engine/game/defs/tuning.ts` (global feel) and `cars.ts` (per car) — never inline in the model. The steering response has its own knob group (`TUNING.steering`: low-speed ramp-in, high-speed fade, the centred-wheel commitment floor, the tail-torque chatter guard) beside the grip/drift group (`TUNING.grip`). Any change here must run `make sim` before and after, and keep `tests/drift_test.ts` / `tests/jump_test.ts` honest: those tests encode the moments this document describes.
+Numbers live in `engine/game/defs/tuning.ts` (global feel) and `cars.ts` (per car) — never inline in the model. **`TUNING.drift` is the group that shapes the slide itself** — where it starts, how it comes in, how deep it goes, how it lets go, and when it reads as a drift — and the [`drift-feel`](../.agent/skills/drift-feel/SKILL.md) skill is the map to it: read that before touching any of it. `TUNING.steering` holds the wheel's own response (low-speed ramp-in, high-speed fade, the centred-wheel commitment floor, the tail-torque chatter guard), and `TUNING.grip` what is left of the tires (scrub, the slip's self-rotation, power oversteer, the handbrake, lift-to-tighten). Any change here must run `make sim` before and after, and keep `tests/drift_test.ts` / `tests/jump_test.ts` honest: those tests encode the moments this document describes.

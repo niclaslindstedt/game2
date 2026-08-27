@@ -33,32 +33,12 @@ export const TUNING = {
   },
 
   grip: {
-    /** The slide, 0..1, is how far past the tires' lateral limit the car is
-     * being asked to turn: demand (u·yawRate) over the car's grip ceiling,
-     * minus 1, divided by this range. Turn gently and it stays 0 — turn hard
-     * at pace and it reaches 1, which is all "drifting" means here. */
-    slideRange: 0.75,
-    /** A slide that is already established stays alive on slip angle alone,
-     * from this angle... */
-    slideSlip: 0.12,
-    /** ...up to this much more, so the car does not snap back to grip in the
-     * instant the wheel passes centre. Radians. */
-    slipRange: 0.3,
     /** Speed a sliding tire actually burns off, 1/s — scaled by sin²(slip),
      * so ordinary cornering costs nothing and even a big drift costs little.
      * This is the number that decides whether a drift is FELT as a brake. */
     scrub: 0.5,
     /** How strongly slip self-rotates the car while sliding, rad/s per rad. */
     slipYaw: 1.6,
-    /** Slip angle where the forces that DEEPEN a slide begin to fade... */
-    satAt: 0.3,
-    /** ...and the range over which they fade to nothing, rad. Together these
-     * park a breathed-throttle slide at a stable angle instead of spinning
-     * the car. The fade is deliberately WIDE: a narrow band is a cliff that
-     * parks every steer past a third of lock at the same angle — spread out,
-     * the equilibrium moves with the wheel, so half lock is a shallower
-     * drift than full lock and the angle is COMMANDED, not self-chosen. */
-    satWidth: 0.45,
     /** RWD power oversteer: yaw the driven rear axle feeds the slide while
      * the power is down and the wheel is NOT steered into it, rad/s at full
      * throttle, full slide and pace. Ungated by the saturation band, so a
@@ -82,7 +62,56 @@ export const TUNING = {
     liftGrip: 0.6,
   },
 
+  /** THE DRIFT — every knob that shapes the slide itself: where it starts,
+   * how it comes in, how deep it goes, how it lets go, and when it READS as
+   * a drift. The `drift-feel` skill is the map to this group; change these
+   * before reaching for anything in `grip`. */
   drift: {
+    /** Where the slide begins to come in, as a fraction of the lateral grip
+     * the tires actually have (`gripAccel`). Under 1 on purpose: the slide
+     * starts easing in just BEFORE the tires are truly out of grip, so
+     * nothing happens at the limit itself — there is no instant where the
+     * car changes what it is doing. Lower = the drift lives in more of the
+     * wheel's travel and ordinary corners start to move. */
+    entryAt: 0.45,
+    /** ...and how much further past that the slide takes to develop fully,
+     * in the same units. Wider = a longer, gentler hand-over from grip to
+     * slide; narrower = the angle arrives with less lock, at the cost of
+     * the transition being something you can feel happen. */
+    entrySpread: 1.7,
+    /** Slip angle a fully developed slide is asking for, rad. This is the
+     * DEPTH of a committed drift: the setpoint every deepening force fades
+     * toward, scaled by how far the slide has come in. It is what makes the
+     * angle commanded rather than self-chosen — half the slide is half the
+     * angle, and a centred wheel asks for zero, which is grip gathering the
+     * car up. */
+    angleSpan: 0.45,
+    /** How far past the asked angle the deepening forces take to fade to
+     * nothing, rad. Wide enough that the drift is a slope to lean on rather
+     * than a wall the car hits: it is the room the throttle, the lift and
+     * the handbrake move the car around in. Narrower also means the car
+     * sits closer to exactly the angle asked for. */
+    angleBand: 0.35,
+    /** How fast a slide the wheel has stopped asking for lets go, 1/s. The
+     * only thing holding a slide up once the lock comes off, so it is what
+     * carries one corner's angle into the next instead of snapping back to
+     * grip the instant the wheel passes centre. */
+    release: 0.4,
+    /** THE OVERSHOOT on the way out, 0..1. How much the car's rotation
+     * outlives the lock that made it: while the slide is letting go, the
+     * yaw answers its target this much more slowly, so the nose keeps
+     * swinging after the hands have stopped and carries a little past
+     * centre — which is what makes a big drift's exit ask for a dab of
+     * opposite lock. Zero is a clean gather-up with nothing to catch; a TAD
+     * is the point, and past ~0.8 the exit becomes a second drift the other
+     * way that has to be caught properly. */
+    releaseHang: 0.75,
+    /** ...and how hard the rear pulls the nose back toward the direction of
+     * travel while it does, rad/s per rad of slip. This is the SPRING and
+     * `releaseHang` is its damping: together they decide whether the exit
+     * eases to straight (low) or swings back through centre and asks for a
+     * dab of opposite lock (high). */
+    releaseSnap: 8,
     /** Slip angle at which the car READS as drifting — dust, HUD, stats.
      * Read off the ANGLE rather than the slide, because the angle is what a
      * player sees and because it moves smoothly: the slide tracks steering
