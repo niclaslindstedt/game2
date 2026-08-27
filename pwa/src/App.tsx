@@ -17,7 +17,7 @@
 // screenshots.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { UpdateToast, usePwaUpdate } from "@niclaslindstedt/oss-framework/pwa";
+import { usePwaUpdate } from "@niclaslindstedt/oss-framework/pwa";
 import {
   TUNING,
   botInput,
@@ -69,6 +69,7 @@ import { armMenuMusic, pauseMusic, playMusic, resumeMusic, stopMusic } from "./g
 import type { RunAudio } from "./game/audio/index.ts";
 import { splashSkipped } from "./game/splash.ts";
 import { SplashScreen } from "./game/splash-screen.tsx";
+import { UpdateCard } from "./game/update-card.tsx";
 
 connectOutput();
 
@@ -86,6 +87,15 @@ const RACE_KEY = "scandi-flick-race-settings";
  * stage — a sealed section, a ford, a jump — and takes over there. */
 function autopilotRequested(): boolean {
   return new URLSearchParams(location.search).get("bot") === "1";
+}
+
+/** ?update=1 (tooling): show the new-build card as if a worker were waiting.
+ * A real one only appears after a deploy has actually landed on a device
+ * that already had the app, which is not a state a screenshot pass can
+ * reach — and an interface nobody can look at is an interface nobody
+ * maintains. RESTART still reloads, so the escape hatch is honest. */
+function updateCardForced(): boolean {
+  return new URLSearchParams(location.search).get("update") === "1";
 }
 
 /** Whether the player is actually asking for anything this step. */
@@ -275,6 +285,8 @@ export function App() {
     cacheId: cacheIdForBase(import.meta.env.BASE_URL),
     enabled: !import.meta.env.DEV,
   });
+  const forcedUpdate = useMemo(() => updateCardForced(), []);
+  const [updateDismissed, setUpdateDismissed] = useState(false);
 
   const flash = (text: string, tone: HudFlash["tone"]): void => {
     const id = ++flashId;
@@ -668,11 +680,14 @@ export function App() {
         />
       )}
       {splashUp && <SplashScreen warm={booted} onDone={() => setSplashUp(false)} />}
-      <UpdateToast
-        needRefresh={pwa.needRefresh}
-        incomingVersion={pwa.incomingVersion}
+      <UpdateCard
+        needRefresh={(pwa.needRefresh || forcedUpdate) && !updateDismissed}
+        incomingVersion={pwa.incomingVersion ?? (forcedUpdate ? __APP_VERSION__ : null)}
         onReload={pwa.reload}
-        onDismiss={pwa.dismiss}
+        onDismiss={() => {
+          setUpdateDismissed(true);
+          pwa.dismiss();
+        }}
       />
     </div>
   );

@@ -150,6 +150,10 @@ export type CarState = {
   steer: number;
   /** True while the brakes bite this step (renderer readout: brake FX). */
   braking: boolean;
+  /** True while the brake pedal is backing the car out rather than slowing
+   * it — the car has stopped (or is already rolling back) and the pedal is
+   * still down. The HUD reads it for the reverse gear. */
+  reversing: boolean;
   damage: CarDamage;
 };
 

@@ -95,6 +95,7 @@ export function takeSnapshot(state: GameState, finishTime: number | null): HudSn
     // nose swings would tell the player the slide is costing them.
     speedKmh: Math.max(0, Math.hypot(state.car.u, state.car.w) * 3.6),
     gear: state.car.gear,
+    reversing: state.car.reversing,
     gearbox: state.spec.gearbox,
     rpm,
     shiftUp: rpm > 0.83 && state.car.gear < state.spec.gearTop.length - 1,
