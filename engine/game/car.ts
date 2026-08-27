@@ -439,19 +439,35 @@ export function stepGrounded(
   // Bent arms hold the tires at the wrong angles: suspension damage costs
   // lateral grip across the board.
   const arms = 1 - T.collision.systems.gripLoss * car.damage.systems.suspension;
-  const latRate =
-    (spec.gripLat + (spec.driftLat - spec.gripLat) * sliding) *
-    surfaceGrip *
-    lift *
-    handbrakeGrip *
-    arms;
+  const grip = surfaceGrip * lift * handbrakeGrip * arms;
+  const latRate = (spec.gripLat + (spec.driftLat - spec.gripLat) * sliding) * grip;
+  // THE TRACTION CEILING. The redirect is a RATE, and a rate times a speed
+  // is a force the tires have to find: unbounded, the car pulls whatever
+  // lateral acceleration the geometry asks for, which is how it ends up
+  // carrying a hairpin's radius at a straight's speed. Capped at what the
+  // tires hold, speed costs radius instead — the line a car can hold flat
+  // out grows as u², so a sweeper is a drift at pace and a hairpin has to be
+  // braked for. Past the ceiling the velocity stops catching the nose up and
+  // the car runs WIDE at a bigger angle, which is the point of a drift.
+  // It saturates rather than clipping, because a hard min() is a cliff: one
+  // notch of lock either side of it would separate a gripped car from a
+  // sideways one. `tanh` rolls off the way a tire does, and `latGive` is the
+  // bite it never loses — without that residual slope the angle runs away
+  // the instant the demand touches the ceiling, since nothing but slip is
+  // left to answer more lock with.
+  const travel = Math.hypot(car.u, car.w);
+  const ceiling = spec.gripAccel * T.grip.latCeiling * grip;
+  const demanded = travel * latRate * Math.abs(car.slip);
+  const over = demanded / ceiling;
+  const held = ceiling * (T.grip.latGive * over + (1 - T.grip.latGive) * Math.tanh(over));
+  const heldRate = demanded > 1e-6 ? (latRate * held) / demanded : latRate;
   if (car.u > 1) {
-    const swung = car.slip * Math.exp(-latRate * dt);
+    const swung = car.slip * Math.exp(-heldRate * dt);
     const kept = Math.hypot(car.u, car.w) * Math.exp(-T.grip.scrub * Math.sin(car.slip) ** 2 * dt);
     car.u = kept * Math.cos(swung);
     car.w = kept * Math.sin(swung);
   } else {
-    car.w *= Math.exp(-latRate * dt);
+    car.w *= Math.exp(-heldRate * dt);
   }
   updateSlip(car);
 

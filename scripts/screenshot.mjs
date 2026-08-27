@@ -182,16 +182,29 @@ await capture("shot-speed", { width: 1280, height: 720 }, async (page) => {
 
 // The drift: no flick, no handbrake — just a committed turn at pace, which
 // is the whole entry now. Held on the power so the slide is at its angle.
-await capture("shot-drift", { width: 1280, height: 720 }, async (page) => {
-  await racing(page);
-  await page.keyboard.down("ArrowUp");
-  await page.waitForTimeout(4000);
-  await page.keyboard.down("ArrowRight");
-  // Long enough for the slide to reach the angle the lock is asking for —
-  // the angle builds with commitment rather than arriving with the input,
-  // so a short hold captures a car that has only started to move.
-  await page.waitForTimeout(950);
-});
+//
+// The bot drives the opening out to a corner with room in it, the same way
+// the tarmac scenes do, and the turn goes the way the co-driver says the
+// road goes. Driven blind off the grid instead, the shot is a picture of
+// the first corner's scenery — and the waits are on the RUN's clock, never
+// wall time: under software rendering a fixed `waitForTimeout` catches the
+// car a fraction of a second in, still gripped and still in second gear.
+await capture(
+  "shot-drift",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await racing(page);
+    await atStageTime(page, 10);
+    const turn = await atOpenRoad(page, 150);
+    const entry = await stageTime(page);
+    await page.keyboard.down("ArrowUp");
+    await page.keyboard.down(turn);
+    // Long enough for the slide to reach the angle the lock is asking for:
+    // the angle builds with commitment rather than arriving with the input.
+    await atStageTime(page, entry + 0.7);
+  },
+  { bot: "1" },
+);
 
 /** Off the road and into the wild, and hold it there. The banner is the
  * honest cursor: it says the engine agrees the car has left the track, so

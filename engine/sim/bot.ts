@@ -120,7 +120,14 @@ export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): Car
     // mid-hairpin the aim error is huge and the car needs every bit of
     // rotation; damping there is what runs a drift wide.
     const counterWeight = clamp(1 - Math.abs(error) / 0.6, 0, 1);
-    steer = clamp(error * profile.steerGain + car.slip * 0.9 * counterWeight, -1, 1);
+    // Sideways, the aim is where the car is GOING, not where its nose is
+    // pointing: hold the nose on the lookahead through a slide and the
+    // velocity leaves the road by exactly the slip angle. Steering the
+    // TRAVEL direction is what puts the nose the necessary few degrees
+    // further into the corner — the counter-steer above still damps the
+    // rotation once the nose is nearly back on line.
+    const pathError = angleDiff(car.heading + car.slip, desired);
+    steer = clamp(pathError * profile.steerGain + car.slip * 0.9 * counterWeight, -1, 1);
   }
   let reset = false;
   if (state.offRoad) {

@@ -352,7 +352,10 @@ describe("the attitude the ground puts in the body", () => {
       track: compileTrack(3, LONG_STRAIGHT),
     });
     for (let i = 0; i < 120 * 2 && !level.offRoad; i++) step(level, drive({ steer: 1 }));
-    expect(level.car.slide).toBeGreaterThan(0.5);
+    // Sideways is an ANGLE, not a slide fraction: `slide` is where the car
+    // sits in the hand-over from grip, so widening that band moves it
+    // without the car being any less crossed up.
+    expect(Math.abs(level.car.slip)).toBeGreaterThan(TUNING.drift.enterSlip);
     const crown = Math.atan((2 * ROAD_CROSS.crown.gravel) / (level.track.width / 2));
     expect(Math.abs(level.car.roll)).toBeLessThan(crown);
   });

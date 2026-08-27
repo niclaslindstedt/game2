@@ -48,8 +48,8 @@ one continuous response rather than two modes.
 
   | lock     | 0.2 | 0.3 | 0.4 | 0.5 | 0.6  | 0.7  | 0.8  | 0.9  | 1.0  |
   | -------- | --- | --- | --- | --- | ---- | ---- | ---- | ---- | ---- |
-  | slip°    | 1.1 | 1.9 | 3.9 | 7.7 | 13.6 | 21.0 | 27.4 | 31.9 | 35.3 |
-  | radius m | 248 | 143 | 73  | 41  | 27   | 21   | 18   | 16   | 15   |
+  | slip°    | 1.3 | 2.2 | 4.0 | 7.6 | 14.2 | 23.1 | 29.0 | 33.9 | 37.8 |
+  | radius m | 173 | 104 | 65  | 44  | 32   | 27   | 21   | 17   | 15   |
 
 - **The exit overshoots a tad.** Unwinding the lock does not stop the car
   rotating: while the slide lets go, the yaw answers its target more slowly
@@ -78,6 +78,20 @@ one continuous response rather than two modes.
     (arcade weight transfer). On the power the slide runs; breathe and the
     car both tightens its line and calms its tail. This is the tool against
     running wide and the no-hands way out of a drift.
+- **Speed costs radius.** The redirect is a rate, and a rate times a speed
+  is a force the tires have to find: left unbounded it lets the car hold a
+  hairpin's radius at a straight's speed, which is what makes a car feel
+  like it steers into a corner rather than driving round one. The lateral
+  acceleration is therefore capped at what the tires actually hold
+  (`TUNING.grip.latCeiling`, a multiple of the car's own `gripAccel`), and
+  it saturates rather than clipping — `tanh`, so the tires roll off their
+  peak instead of falling off a cliff, with a residual slope
+  (`latGive`) that keeps more lock worth something all the way up the
+  throw. What it buys is the shape of the whole stage: the tightest line
+  the car can hold grows as u², so a long sweeper is a flat-out drift and a
+  hairpin has to be braked for or flicked round on the handbrake. Over the
+  ceiling the velocity simply stops catching the nose up — the car runs
+  WIDE at a bigger angle, which is the drift doing what a drift is for.
 - **The cost** — the tires **redirect** the car instead of braking it: the
   velocity swings back in behind the nose while its magnitude is kept, so a
   corner taken sideways comes out at pace. Only `TUNING.grip.scrub × sin²
@@ -136,12 +150,12 @@ Generated stages roll (`STAGE_RULES.elevation` — long climbs, medium rollers, 
 
 ## Surfaces
 
-| Surface     | Effect                                                                                                                                                                                                                                         |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Gravel      | The baseline: full power, honest grip, dust off the rear when sideways                                                                                                                                                                         |
-| **Asphalt** | A third more lateral grip and half the breakaway angle: the corner that needed a slide is driven round, the drift has to be ASKED for and stays small when it comes — and it throws nothing at all until a tire is overwhelmed, then smokes it |
-| Water       | Fords and shallows: a splash on entry, heavy drag, reduced grip and power                                                                                                                                                                      |
-| Nature      | The open landscape off the road: loose grip, fast — up to ~150 km/h                                                                                                                                                                            |
+| Surface     | Effect                                                                                                                                                                                                                                               |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Gravel      | The baseline: full power, honest grip, dust off the rear when sideways                                                                                                                                                                               |
+| **Asphalt** | A third more lateral grip and a third of the breakaway angle: the corner that needed a slide is driven round, the drift has to be ASKED for and stays small when it comes — and it throws nothing at all until a tire is overwhelmed, then smokes it |
+| Water       | Fords and shallows: a splash on entry, heavy drag, reduced grip and power                                                                                                                                                                            |
+| Nature      | The open landscape off the road: loose grip, fast — up to ~150 km/h                                                                                                                                                                                  |
 
 Asphalt is not a different handling model, because there isn't one: it is
 two numbers on the same one, and they pull opposite ways.
