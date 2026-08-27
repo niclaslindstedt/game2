@@ -1,8 +1,16 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// The pre-race menu: pick when you race (time of day), what the sky does
-// (weather), and what you drive — then START. It floats over the live
-// scene, so switching a setting re-lights the stage behind it immediately;
-// the countdown holds until START is pressed.
+// The two menus, both wearing the same arcade card.
+//
+// PreRaceMenu is the one you start from: pick when you race (time of day),
+// what the sky does (weather), and what you drive — then START. It floats
+// over the live scene, so switching a setting re-lights the stage behind it
+// immediately; the countdown holds until START is pressed.
+//
+// PauseMenu is the one you reach mid-stage, by tapping the minimap: the run
+// holds where it stands, and it carries the two ways on — run this stage
+// again, or go back and change the race. They live here rather than in the
+// top bar because the bar is a strip over the road, and every button on it
+// is a button in the way of the driving.
 
 import { CARS, type StageLength, type TimeOfDay, type Weather } from "@engine";
 
@@ -104,6 +112,38 @@ export function PreRaceMenu({ seed, settings, onChange, onStart }: MenuProps) {
         />
         <button type="button" className="hud-start" onClick={onStart}>
           START
+        </button>
+      </div>
+    </div>
+  );
+}
+
+type PauseProps = {
+  seed: number;
+  carName: string;
+  onResume: () => void;
+  onRestart: () => void;
+  onSetup: () => void;
+};
+
+/** The in-race menu, opened by tapping the minimap. The backdrop resumes:
+ * a menu you opened by mis-aiming for the map must cost one tap to leave. */
+export function PauseMenu({ seed, carName, onResume, onRestart, onSetup }: PauseProps) {
+  return (
+    <div className="hud-menu-wrap pointer-events-auto" onPointerDown={onResume} role="presentation">
+      <div className="hud-menu hud-pause" onPointerDown={(e) => e.stopPropagation()}>
+        <div className="hud-menu-title">PAUSED</div>
+        <div className="hud-pause-sub">
+          STAGE {seed} — {carName}
+        </div>
+        <button type="button" className="hud-start" onClick={onResume}>
+          RESUME
+        </button>
+        <button type="button" className="hud-pause-act" onClick={onRestart}>
+          RESTART STAGE
+        </button>
+        <button type="button" className="hud-pause-act" onClick={onSetup}>
+          RACE SETUP
         </button>
       </div>
     </div>

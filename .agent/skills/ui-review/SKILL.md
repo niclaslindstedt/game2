@@ -66,6 +66,13 @@ settles (that is the `skill-reflection` promotion path).
 8. **The PWA surfaces count too.** The update toast and install flow are UI —
    capture them when they change (the toast can be forced by temporarily
    wiring a URL-param check into the update state; revert before committing).
+9. **An instrument's IDLE color never sits on its own alert ramp.** A gauge
+   that ramps yellow-to-red must read as something cool and inert when the
+   thing it watches is fine; a warm "neutral" — cream, bone, off-white — lands
+   close enough to the low end of that ramp, over a dark plate, that a healthy
+   car looks like a hurt one. The other half of the same rule: a readout that
+   paints every healthy part bright green is a row of lights shouting nothing.
+   Quiet when there is no news is what makes the news findable at speed.
 
 ## Process
 

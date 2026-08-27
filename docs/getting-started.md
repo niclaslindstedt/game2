@@ -17,12 +17,13 @@ Open [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/). The game boo
 | L. Shift  | Booster — finite, no refills    |
 | E / X     | Shift up (manual car)           |
 | Q / Z     | Shift down (manual car)         |
+| Esc       | In-race menu (pause)            |
 | C         | Race setup (time, weather, car) |
 | V         | Camera: chase ↔ hood            |
 | B         | Back to the track (off-road)    |
 | R         | Restart stage                   |
 
-**Phone (touch):** the left half of the screen is the wheel — touch anywhere and drag sideways to steer; the wheel turns as far as you push it. The right half is the pedal: touching it is GAS, drag up to BRAKE, drag down to burn the BOOSTER (finite — it never refills), drag right for the handbrake (DRIFT — unsticks the rear for tight curves). The manual car adds − / + gear buttons. Works in portrait and landscape — the HUD re-flows.
+**Phone (touch):** the left half of the screen is the wheel — touch anywhere and drag sideways to steer; the wheel turns as far as you push it. The right half is the pedal: touching it is GAS, drag up to BRAKE, drag down to burn the BOOSTER (finite — it never refills), drag right for the handbrake (DRIFT — unsticks the rear for tight curves). The manual car adds − / + gear buttons. Tap the **minimap** for the in-race menu (resume, restart, race setup). Works in portrait and landscape — the HUD re-flows, and in portrait the booster stands up beside the dials.
 
 ### Installing on your phone
 
@@ -30,7 +31,9 @@ The game is a PWA. iOS Safari: Share → **Add to Home Screen**. Android Chrome:
 
 ### How a run works
 
-Stages are point-to-point: start gate to finish gate. The cluster in the bottom-left is the instrument panel: rev counter, gear (with a shift light), and speed. The stage number in the HUD is the seed — everyone gets the same stage on a given day, and every finish rolls into the next seed after a few seconds.
+Stages are point-to-point: start gate to finish gate. The cluster in the bottom-left is the instrument panel: the car's condition on top (the damage glyph, plus whatever the moment has to say), then rev counter, gear with a shift light, speed, and the booster.
+
+The **minimap** sits top-right: the whole stage drawn as a route, the car riding it as an arrowhead, and the run's progress read off the frame — the border fills clockwise from the top as you get further in (an endless run has no finish to fill toward, so it reads the distance covered instead). Tap or click it for the in-race menu. The stage number in the HUD is the seed — everyone gets the same stage on a given day, and every finish rolls into the next seed after a few seconds.
 
 **Off the road is a real place.** The landscape around every stage is driveable — forests, hills, mountains, streams, lakes and open sea — and the car rides it fast (up to ~150 km/h in the wild; ~230 km/h flat out on the road). Cliff edges and banks throw the car if you hit them with pace; boulders and fallen trunks are genuinely solid, and deep water swallows the car whole. A crash puts you back on the track where you left it. There is no off-road timer: explore as long as you like, and press **B** (or the HUD's TRACK button) when you want back.
 

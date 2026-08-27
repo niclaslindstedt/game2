@@ -173,9 +173,15 @@ fed by the crush landing nearest to it and each degrading its own job:
 | Gearbox    | Rear and belly crush        | Manual shift cuts stretch; the auto box starts cutting throttle    |
 | Steering   | Front-corner crush          | The rack loses authority (up to `systems.steerLoss`)               |
 
-Nothing repairs mid-run. The HUD's damage instrument (bottom cluster) shows
-the 2D car with its crush ring, the crossed-out breakables, and one meter
-per system plus the chassis bar the wreck is called on.
+Nothing repairs mid-run. The HUD's damage instrument (top of the bottom-left
+cluster, over the rev counter) is a single top-view car: the crush ring wears
+the folds where the hits landed, the breakables cross out red as they tear
+off, the shell's own outline is the chassis the wreck is called on, and each
+system is drawn as the part it is — the engine block under the bonnet, the
+rack across the front axle, the gearbox down the tunnel, the suspension at
+the four wheels. A sound part reads as quiet steel; a hurt one takes color,
+yellow folding to red as it gives out, so a glance finds the one part that is
+wrong instead of scanning a row of bars.
 
 ## Cars and gearboxes
 
