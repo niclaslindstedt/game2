@@ -4,7 +4,7 @@
 // is not), and owns the touch controls, which write straight into the
 // input manager between snapshots.
 
-import { useRef, type CSSProperties } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 
 import type { TurnSeverity } from "@engine";
 
@@ -43,6 +43,9 @@ export type HudSnapshot = {
   seed: number;
   carName: string;
   offRoad: boolean;
+  /** Ground distance back to the point the reset would put the car, m —
+   * only meaningful while `offRoad`. */
+  homeDistance: number;
   finishTime: number | null;
   /** Booster tank readout, seconds left / full tank. */
   boostLeft: number;
@@ -101,27 +104,82 @@ function capturePointer(e: { currentTarget: EventTarget | null; pointerId: numbe
 /** Thumb travel (px) from the anchor for full steering lock — the wheel's
  * whole throw. Long enough that holding a line is a push, not a switch. */
 const WHEEL_REACH_PX = 70;
+/** The throw is shaped `travel ** this`, so the first centimetre of thumb
+ * buys less lock than the last. A slight steer is then a target a thumb can
+ * actually hit instead of the twitch either side of centre — but only just
+ * past linear: the car's own response carries the rest, and a stronger curve
+ * here only makes the top of the throw feel like a cliff of its own. */
+const WHEEL_THROW_CURVE = 1.15;
+/** The rim has weight: it never teleports to the thumb, it turns toward it.
+ * This is the floor rate in lock/second — what a fingertip nudge earns... */
+const WHEEL_TURN_FLOOR = 1.4;
+/** ...and this is what each unit of gap between thumb and rim adds on top,
+ * so a committed shove reaches full lock in about a quarter second while a
+ * wobble that is corrected before the rim catches up barely steers at all. */
+const WHEEL_TURN_GAIN = 8;
+/** Rim rotation at full lock, degrees — also the fill arc's full sweep. */
+const WHEEL_LOCK_DEG = 120;
 /** Drag (px) from the anchor before a pedal gesture beats plain gas. */
 const PEDAL_DEAD_PX = 28;
 
 /** The left thumb: touching anywhere anchors a steering wheel under the
- * finger; dragging sideways turns it — rotation tracks the drag, so a small
- * push is a small steer — and releasing recenters. Screen-space: right = +1
- * (input.ts flips the sign for the engine once). Written straight into the
- * input manager and the wheel's DOM from the pointer events; the 12 Hz HUD
- * re-render never touches these styles. */
+ * finger; dragging sideways turns it and releasing recenters. The rim does
+ * not snap to the thumb — it chases it at a rate set by the gap between the
+ * two, which is what makes a small drag a small steer and a hard one
+ * unambiguous. A blue arc fills the rim from 12 o'clock to the marker, so
+ * the lock actually commanded is readable at a glance mid-drift.
+ * Screen-space: right = +1 (input.ts flips the sign for the engine once).
+ * Written straight into the input manager and the wheel's DOM from the
+ * pointer events and one rAF loop; the 12 Hz HUD re-render never touches
+ * these styles. */
 function SteerZone({ touch }: { touch: InputManager["touch"] }) {
   const wheelRef = useRef<HTMLDivElement>(null);
+  const fillRef = useRef<SVGCircleElement>(null);
   const pointerRef = useRef<number | null>(null);
   const originRef = useRef(0);
+  /** Where the thumb is asking the rim to be, and where the rim has got to. */
+  const targetRef = useRef(0);
+  const steerRef = useRef(0);
+  const frameRef = useRef(0);
+  const lastRef = useRef(0);
 
   const setSteer = (value: number): void => {
+    steerRef.current = value;
     touch.steer = value;
-    wheelRef.current?.style.setProperty("--turn", `${(value * 120).toFixed(1)}deg`);
+    const deg = value * WHEEL_LOCK_DEG;
+    wheelRef.current?.style.setProperty("--turn", `${deg.toFixed(1)}deg`);
+    const fill = fillRef.current;
+    if (fill) {
+      // pathLength=360 makes the dash units degrees. SVG's zero is 3
+      // o'clock and sweeps clockwise, so a right turn starts a -90° arc at
+      // 12; a left turn starts where the marker now is and sweeps back up
+      // to 12, which paints the same wedge on the other side.
+      fill.setAttribute("transform", `rotate(${(deg < 0 ? -90 + deg : -90).toFixed(1)} 50 50)`);
+      fill.setAttribute("stroke-dasharray", `${Math.abs(deg).toFixed(1)} 360`);
+    }
   };
+
+  /** Turn the rim toward the thumb. Runs only while a finger is down — the
+   * thumb can hold still, so pointer events alone would stall the chase. */
+  const spin = (now: number): void => {
+    frameRef.current = requestAnimationFrame(spin);
+    const dt = Math.min(0.05, (now - lastRef.current) / 1000);
+    lastRef.current = now;
+    const gap = targetRef.current - steerRef.current;
+    const step = (WHEEL_TURN_FLOOR + WHEEL_TURN_GAIN * Math.abs(gap)) * dt;
+    setSteer(Math.abs(gap) <= step ? targetRef.current : steerRef.current + Math.sign(gap) * step);
+  };
+  const stopSpin = (): void => {
+    cancelAnimationFrame(frameRef.current);
+    frameRef.current = 0;
+  };
+  useEffect(() => stopSpin, []);
+
   const release = (e: { pointerId: number }): void => {
     if (e.pointerId !== pointerRef.current) return;
     pointerRef.current = null;
+    stopSpin();
+    targetRef.current = 0;
     setSteer(0);
     if (wheelRef.current) wheelRef.current.style.display = "none";
   };
@@ -143,21 +201,45 @@ function SteerZone({ touch }: { touch: InputManager["touch"] }) {
           wheel.style.top = `${e.clientY - box.top}px`;
           wheel.style.display = "block";
         }
+        targetRef.current = 0;
         setSteer(0);
+        lastRef.current = performance.now();
+        if (!frameRef.current) frameRef.current = requestAnimationFrame(spin);
       }}
       onPointerMove={(e) => {
         if (e.pointerId !== pointerRef.current) return;
-        setSteer(clamp((e.clientX - originRef.current) / WHEEL_REACH_PX, -1, 1));
+        const travel = clamp((e.clientX - originRef.current) / WHEEL_REACH_PX, -1, 1);
+        targetRef.current = Math.sign(travel) * Math.abs(travel) ** WHEEL_THROW_CURVE;
       }}
       onPointerUp={release}
       onPointerCancel={release}
       onContextMenu={(e) => e.preventDefault()}
     >
       <div ref={wheelRef} className="hud-wheel" aria-hidden="true">
+        {/* The rim is a circle: rotating it would show nothing, so it stays
+            in the still layer and carries the fill arc, which measures from
+            a fixed 12 o'clock. Only the spokes and the marker turn. */}
         <svg className="hud-wheel-svg" viewBox="0 0 100 100">
           <circle cx="50" cy="50" r="43" fill="none" stroke="currentColor" strokeWidth="11" />
+          <circle
+            ref={fillRef}
+            className="hud-wheel-fill"
+            cx="50"
+            cy="50"
+            r="43"
+            fill="none"
+            strokeWidth="11"
+            pathLength={360}
+            strokeDasharray="0 360"
+            transform="rotate(-90 50 50)"
+          />
+        </svg>
+        <svg className="hud-wheel-svg hud-wheel-spokes" viewBox="0 0 100 100">
+          {/* Three spokes in a T: the bar across 9–3 and the stem down to
+              6, the way a flat-bottom sport wheel is built. It leaves the
+              top of the rim clear, which is where the fill arc starts. */}
           <path
-            d="M50 50 L50 89 M50 50 L16 32 M50 50 L84 32"
+            d="M11 50 L89 50 M50 50 L50 89"
             stroke="currentColor"
             strokeWidth="9"
             strokeLinecap="round"
@@ -381,6 +463,38 @@ const SEVERITY_WORD: Record<TurnSeverity, string> = {
 
 function pacenoteText(note: HudPacenote): string {
   return `${note.long ? "LONG " : ""}${SEVERITY_WORD[note.severity]} ${note.dir.toUpperCase()}`;
+}
+
+/** The way home, in the co-driver's own slot. Off the road there is no next
+ * corner to call — the road itself is the thing that has to be found again —
+ * so the strip stops reading the stage and starts reading the way back. The
+ * metres are the distance to the exact point the arrow over the car points
+ * at, and that the TRACK button hands you directly. */
+function WayHomeCall({ distance }: { distance: number }) {
+  return (
+    <div className="hud-pace">
+      <div className="hud-pace-call hud-pace-home">
+        {/* A warning triangle, drawn in the co-driver strip's own hand —
+            chunky rounded strokes, one color — so it reads as the same
+            instrument as the corner calls it stands in for. */}
+        <svg className="hud-pace-arrow" viewBox="0 0 100 100" aria-hidden="true">
+          <path
+            d="M 50 17 L 89 83 L 11 83 Z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="11"
+            strokeLinejoin="round"
+          />
+          <path d="M 50 41 L 50 60" stroke="currentColor" strokeWidth="11" strokeLinecap="round" />
+          <circle cx="50" cy="72" r="6" fill="currentColor" />
+        </svg>
+        <span className="hud-pace-text">
+          RETURN TO TRACK
+          <span className="hud-pace-dist">{Math.round(distance)}m</span>
+        </span>
+      </div>
+    </div>
+  );
 }
 
 /** The co-driver strip: the current call big, the following call small —
@@ -638,8 +752,14 @@ export function Hud({ snap, flashes, input, onPause, onCamera }: HudProps) {
         <Minimap map={snap.minimap} onOpen={onPause} />
       </div>
 
-      {/* The co-driver: upcoming corner calls, front and center. */}
-      {snap.phase === "racing" && snap.pacenotes.length > 0 && <Pacenotes notes={snap.pacenotes} />}
+      {/* The co-driver's slot: corner calls while there is a road to call,
+          the way back the moment there isn't. */}
+      {snap.phase === "racing" &&
+        (snap.offRoad ? (
+          <WayHomeCall distance={snap.homeDistance} />
+        ) : (
+          snap.pacenotes.length > 0 && <Pacenotes notes={snap.pacenotes} />
+        ))}
 
       {/* Center: countdown / finish / event flashes. */}
       <div className="hud-center">
@@ -674,18 +794,18 @@ export function Hud({ snap, flashes, input, onPause, onCamera }: HudProps) {
       <div className="hud-speed">
         <div className="hud-status">
           <DamagePanel damage={snap.damage} />
+          {/* Off the road the co-driver's strip says WHERE the road is and
+              the arrow over the car says which way; all this row owes is the
+              button that takes you there. */}
           {snap.offRoad && (
-            <>
-              <span className="hud-off">OFF ROAD</span>
-              <button
-                type="button"
-                className="hud-mini hud-mini-alert pointer-events-auto"
-                onClick={() => input.requestReset()}
-                title="Back to track (B)"
-              >
-                TRACK
-              </button>
-            </>
+            <button
+              type="button"
+              className="hud-mini hud-mini-alert pointer-events-auto"
+              onClick={() => input.requestReset()}
+              title="Back to track (B)"
+            >
+              TRACK
+            </button>
           )}
           {snap.windKmh >= 4 && (
             <span className="hud-wind" title="Wind">

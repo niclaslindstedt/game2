@@ -24,6 +24,8 @@ import type { Rng } from "../lib/prng.ts";
 import type { Surface } from "../mapgen/index.ts";
 
 const T = TUNING;
+/** The drift group, used on nearly every line below. */
+const D = TUNING.drift;
 
 /** Rotate the car-frame velocity when the nose turns by `delta`. The world
  * velocity is unchanged — this is what makes yawing at speed build slip. */
@@ -84,22 +86,48 @@ function stepGearbox(
 }
 
 /** How sideways the car is, 0..1 — the one number the whole drift is made
- * of. Two ways to be sliding: the turn being asked for costs more lateral
- * grip than the tires have (`u·yawRate` past the ceiling), or the car is
- * already at an angle and has not settled back yet. The second keeps a
- * slide alive through the instant the wheel passes centre, which is what
- * makes the transition between two corners one continuous motion. */
-function slideFactor(
-  spec: CarSpec,
-  car: CarState,
-  surfaceGrip: number,
-  handbrake: boolean,
-): number {
-  const ceiling = spec.gripAccel * surfaceGrip * (handbrake ? T.grip.handbrakeGrip : 1);
-  const demand = Math.abs(car.u * car.yawRate) / ceiling;
-  const forced = clamp((demand - 1) / T.grip.slideRange, 0, 1);
-  const held = clamp((Math.abs(car.slip) - T.grip.slideSlip) / T.grip.slipRange, 0, 1);
-  return Math.max(forced, held);
+ * of. The turn being ASKED for costs more lateral grip than the tires have,
+ * and what was asked a moment ago has not fully let go yet, which is what
+ * keeps a slide alive through the instant the wheel passes centre and makes
+ * the transition between two corners one continuous motion.
+ *
+ * Demand is the turn the WHEEL commands — speed times the gripping steer
+ * gain — never the yaw the car ended up with. That distinction is the whole
+ * shape of the control. The slide feeds extra yaw authority (`driftYaw`)
+ * back into the car, so a demand measured off the resulting yaw closes a
+ * positive loop of gain `u · steer · driftYaw / (ceiling · entrySpread)`,
+ * which is well above 1 at any real corner speed. Such a loop has no
+ * equilibrium in the middle: every lock either stays gripped at a couple of
+ * degrees or runs away to the same deep drift, a notch of wheel apart.
+ * Commanded demand keeps the slide a monotone function of speed and lock,
+ * so the angle moves WITH the wheel. Do not be tempted back to `car.yawRate`
+ * here — it reads more physical and it costs the car its whole mid-range. */
+type SlideState = {
+  /** What the WHEEL is asking for past the limit — the only thing allowed to
+   * DEEPEN a slide, so that the angle answers to the driver. */
+  asked: number;
+  /** Whether the tires are sliding at all, held up by the angle the car is
+   * already at — what grip, scrub, the dust and the readout run off. */
+  sliding: number;
+};
+
+function slideFactor(car: CarState, commandedYaw: number, ceiling: number): SlideState {
+  const demand = Math.abs(car.u * commandedYaw) / ceiling;
+  // SMOOTHSTEP, not a clamped line: the ramp has to leave zero and reach one
+  // with no corner in it. A linear clamp puts a kink in the car's response
+  // exactly at the limit, and a kink is an event — the moment a player feels
+  // the car "change into" a drift. Starting below the limit (`entryAt`) and
+  // easing in means nothing happens AT the limit at all.
+  const t = clamp((demand - D.entryAt) / D.entrySpread, 0, 1);
+  const asked = t * t * (3 - 2 * t);
+  // A slide the wheel has stopped asking for lets go over a beat instead of
+  // in a step: last step's slide decays, and the wheel can take it straight
+  // back up. Holding it up on the ANGLE instead — which is the one thing a
+  // sideways car always has — is a feedback loop: more angle is more slide,
+  // more slide is less lateral grip, and the car inflates its own drift well
+  // past anything the driver asked for.
+  const released = car.slide - D.release * T.dt;
+  return { asked, sliding: Math.max(asked, released) };
 }
 
 /** Leave the ground. A car that launches crossed up trips over its outside
@@ -114,6 +142,14 @@ export function launch(car: CarState, vy: number, events: GameEvent[], stats: Ru
   car.rollRate = -(car.w * T.air.rollFromSlide + car.yawRate * T.air.rollFromYaw);
   events.push({ type: "takeoff", vy });
   stats.jumps += 1;
+}
+
+/** Ease the nose toward the attitude the ground (or the flight) asks for.
+ * Snapping it would strobe the body over every ripple of terrain noise; the
+ * lag IS the suspension travel a landing settles through. */
+function settlePitch(car: CarState, target: number): void {
+  const want = clamp(target, -T.attitude.pitchMax, T.attitude.pitchMax);
+  car.pitch += (want - car.pitch) * clamp(T.attitude.settle * T.dt, 0, 1);
 }
 
 export type GroundContext = {
@@ -167,8 +203,6 @@ export function stepGrounded(
 
   stepGearbox(spec, car, input, ctx.t, events);
 
-  const slide = slideFactor(spec, car, surfaceGrip, input.handbrake);
-
   // ── Yaw ──────────────────────────────────────────────────────────────────
   // Steering authority fades with speed (stability) and with standstill
   // (you cannot pivot a parked car). Once the tires give up, the car gets
@@ -179,12 +213,21 @@ export function stepGrounded(
   // A bent rack answers late and short: steering damage bleeds authority.
   const rack = 1 - T.collision.systems.steerLoss * car.damage.systems.steering;
   const steerGain = (spec.steerRate / (1 + car.u / T.steering.fadeSpeed)) * speedFactor * rack;
-  // The slide SATURATES: past ~26° of slip the forces that deepen it fade
-  // to nothing, so a breathed slide parks at a big, stable, movie drift
-  // angle instead of spinning the car.
-  const sat = clamp(1 - (Math.abs(car.slip) - T.grip.satAt) / T.grip.satWidth, 0, 1);
+  // The lateral grip the tires have to spend, and the turn the wheel is
+  // asking them for: the handbrake unsticks the rear by lowering the
+  // ceiling, so the same lock asks far more of what is left.
+  const gripCeiling = spec.gripAccel * surfaceGrip * (input.handbrake ? T.grip.handbrakeGrip : 1);
+  const { asked, sliding } = slideFactor(car, input.steer * steerGain, gripCeiling);
+  // The wheel does not just unstick the car — it NAMES the angle. Every
+  // force that deepens a slide fades as the slip approaches what this much
+  // lock is asking for at this speed, and is gone once the car is past it.
+  // The setpoint has to MOVE with the wheel: a fade band at a fixed angle
+  // leaves the deepening forces with no equilibrium below it, which is the
+  // same two-state car the commanded demand above exists to avoid.
+  const askedSlip = D.angleSpan * asked;
+  const sat = clamp(1 - (Math.abs(car.slip) - askedSlip) / D.angleBand, 0, 1);
   const deepening = Math.sign(input.steer) === -Math.sign(car.slip) && car.slip !== 0;
-  const steerTerm = input.steer * (steerGain + spec.driftYaw * speedFactor * slide);
+  const steerTerm = input.steer * (steerGain + spec.driftYaw * speedFactor * asked);
   // The slip's self-rotation scales with steering commitment, so holding
   // into the slide sustains it, releasing lets grip straighten the car, and
   // counter-steer exits fast. An unconditional slip term would be a
@@ -207,17 +250,31 @@ export function stepGrounded(
   // term from chattering through the instant the slip crosses centre.
   const tailDir = clamp(-car.slip / T.steering.tailSoftSlip, -1, 1);
   const powerYaw =
-    tailDir * T.grip.powerYaw * input.throttle * slide * speedFactor * (1 - intoSlide);
+    tailDir * T.grip.powerYaw * input.throttle * sliding * speedFactor * (1 - intoSlide);
+  // The rotation does not stop when the hands do. While the slide is letting
+  // go, the yaw answers its target more slowly, so the nose keeps swinging
+  // for a beat after the lock comes off and can carry a little PAST centre —
+  // which is the dab of opposite lock on the way out of a big drift. It is
+  // exactly zero while the wheel is still asking for the angle it has.
+  const releasing = clamp(sliding - asked, 0, 1);
+  // ...and as it lets go the rear bites again and WEATHERVANES the car:
+  // a torque pulling the nose back toward the direction the car is actually
+  // travelling. That, against the yaw's own lag above, is a spring with
+  // damping — which is what lets the nose swing back through centre and a
+  // little past it instead of easing to zero and stopping there.
+  const straighten = car.slip * D.releaseSnap * releasing * speedFactor;
   // Saturation gates EVERYTHING that deepens the slide except the power's
   // own oversteer; counter-steer keeps full authority, because it always
   // has somewhere to go.
   const yawTarget =
     (deepening ? steerTerm * sat : steerTerm) +
     handbrakeYaw +
-    powerYaw -
-    car.slip * T.grip.slipYaw * commitment * sat * slide;
+    powerYaw +
+    straighten -
+    car.slip * T.grip.slipYaw * commitment * sat * sliding;
   const yawResponse =
-    T.grip.yawResponse.grip + (T.grip.yawResponse.slide - T.grip.yawResponse.grip) * slide;
+    (T.grip.yawResponse.grip + (T.grip.yawResponse.slide - T.grip.yawResponse.grip) * sliding) *
+    (1 - D.releaseHang * releasing);
   car.yawRate += (yawTarget - car.yawRate) * clamp(yawResponse * dt, 0, 1);
 
   const delta = car.yawRate * dt;
@@ -282,13 +339,13 @@ export function stepGrounded(
     car.w -= 9.8 * T.hills.gravityAlong * ctx.slopeLat * dt;
     updateSlip(car);
   }
-  const lift = 1 + T.grip.liftGrip * (1 - input.throttle) * slide;
+  const lift = 1 + T.grip.liftGrip * (1 - input.throttle) * sliding;
   const handbrakeGrip = input.handbrake ? T.grip.handbrakeGrip : 1;
   // Bent arms hold the tires at the wrong angles: suspension damage costs
   // lateral grip across the board.
   const arms = 1 - T.collision.systems.gripLoss * car.damage.systems.suspension;
   const latRate =
-    (spec.gripLat + (spec.driftLat - spec.gripLat) * slide) *
+    (spec.gripLat + (spec.driftLat - spec.gripLat) * sliding) *
     surfaceGrip *
     lift *
     handbrakeGrip *
@@ -303,17 +360,27 @@ export function stepGrounded(
   }
   updateSlip(car);
 
-  // The ground unwinds whatever roll the last flight left, toward the
-  // NEAREST upright — a car most of the way over finishes the roll instead
-  // of rewinding it.
+  // ── Attitude: the body sits on the ground it is standing on ─────────────
+  // The wheels are what the car's attitude is made of, so both angles come
+  // from the ground under them and neither feeds back into the handling.
+  // Roll unwinds whatever the last flight left toward the NEAREST upright —
+  // a car most of the way over finishes the roll instead of rewinding it —
+  // and then settles onto the CAMBER: out in the wild a hillside tips the
+  // car the way the hillside goes, which is the same cross-slope that is
+  // already pulling it downhill. On the road it is the road's OWN camber
+  // (R16 — the crown it sheds water off, the wheel track it drops into):
+  // a fraction of a degree where a hillside is tens of them, and never the
+  // drift's, which contributes nothing to how level the car sits.
   car.rollRate = 0;
   const upright = Math.round(car.roll / (Math.PI * 2)) * Math.PI * 2;
-  car.roll += (upright - car.roll) * clamp(T.air.rollRecover * dt, 0, 1);
+  const camber = ctx.slopeLat ? Math.atan(ctx.slopeLat) : 0;
+  car.roll += (upright + camber - car.roll) * clamp(T.air.rollRecover * dt, 0, 1);
+  settlePitch(car, Math.atan(ctx.slope));
 
   // ── Drift readout ────────────────────────────────────────────────────────
   // Nothing in the model above branches on this: it is what the dust, the
   // HUD and the balance table read off a car that happens to be sideways.
-  car.slide = slide;
+  car.slide = sliding;
   const angle = car.drifting ? T.drift.exitSlip : T.drift.enterSlip;
   const drifting = Math.abs(car.slip) > angle && car.u > T.drift.minSpeed;
   if (drifting) {
@@ -399,6 +466,10 @@ export function stepAirborne(
   car.z += (cosH * car.u - sinH * car.w + ctx.windZ * carry) * dt;
   car.vy -= T.air.gravity * dt;
   car.y += car.vy * dt;
+  // In the air the nose follows the arc: up over the launch, down into the
+  // landing. The speed floor keeps a near-vertical plunge from reading as a
+  // right angle when the forward speed has all but gone.
+  settlePitch(car, Math.atan2(car.vy, Math.max(6, Math.hypot(car.u, car.w))));
 
   // The ground under where the car has just moved TO. Off the road the
   // terrain answers directly; on the road, `ctx.groundY` is where the step

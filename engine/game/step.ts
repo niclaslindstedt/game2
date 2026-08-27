@@ -17,7 +17,7 @@ import { carById } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 import { launch, stepAirborne, stepGrounded, type GroundContext } from "./car.ts";
 import { collideCar } from "./collision.ts";
-import { crossedLip, curvatureAt, locate, slopeAt } from "./track.ts";
+import { crossedLip, curvatureAt, locate, slopeAt, wayHome } from "./track.ts";
 import {
   DAMAGE_ZONES,
   type CarInput,
@@ -65,6 +65,7 @@ function freshCar(): CarState {
     airTime: 0,
     roll: 0,
     rollRate: 0,
+    pitch: 0,
     slide: 0,
     drifting: false,
     gear: 0,
@@ -135,6 +136,16 @@ export function createGame(options: CreateGameOptions): GameState {
   const spec = carById(options.carId ?? "compact");
   const track =
     options.track ?? compileStage(options.seed, options.length ?? "medium", options.knobs);
+  // The start grid is the first sample, not the world origin: the stage's
+  // rolling elevation puts the road metres above or below zero right from
+  // the line, and a car left at zero spends the countdown buried in the
+  // gravel (or hovering over it) until the first step snaps it onto the road.
+  const grid = track.samples[0];
+  const car = freshCar();
+  car.x = grid.x;
+  car.z = grid.z;
+  car.y = grid.elevation;
+  car.heading = grid.heading;
   const env = buildEnv(
     options.seed,
     options.env?.timeOfDay ?? "day",
@@ -152,7 +163,7 @@ export function createGame(options: CreateGameOptions): GameState {
     spec,
     track,
     terrain: createTerrain(track),
-    car: freshCar(),
+    car,
     phase: options.skipCountdown ? "racing" : "countdown",
     t: 0,
     raceTime: 0,
@@ -161,6 +172,7 @@ export function createGame(options: CreateGameOptions): GameState {
     lateral: 0,
     offRoad: false,
     offRoadSince: 0,
+    stuck: { x: car.x, z: car.z, since: 0 },
     surface: "gravel",
     env,
     wind: windAt(env, 0),
@@ -177,12 +189,12 @@ function offRoadSurface(state: GameState, x: number, z: number): "water" | "natu
 }
 
 function respawn(state: GameState, events: GameEvent[]): void {
-  const sample = state.track.samples[state.progressIndex];
+  const home = wayHome(state);
   const car = state.car;
-  car.x = sample.x;
-  car.z = sample.z;
-  car.y = sample.elevation;
-  car.heading = sample.heading;
+  car.x = home.x;
+  car.z = home.z;
+  car.y = home.y;
+  car.heading = home.heading;
   car.u = T.offTrack.respawnSpeed;
   car.w = 0;
   car.vy = 0;
@@ -190,18 +202,43 @@ function respawn(state: GameState, events: GameEvent[]): void {
   car.airborne = false;
   car.roll = 0;
   car.rollRate = 0;
+  car.pitch = 0;
   car.slide = 0;
   car.drifting = false;
+  // The service crew get to a wreck the moment it is back at the road: the
+  // chassis is patched to a drivable fraction, and the dents, the torn-off
+  // parts and the hurt systems all stay.
+  if (car.damage.wear >= 1) car.damage.wear = T.collision.repairTo;
   state.offRoad = false;
+  state.stuck.x = car.x;
+  state.stuck.z = car.z;
+  state.stuck.since = state.t;
   state.stats.respawns += 1;
   events.push({ type: "respawn" });
 }
 
-function crash(state: GameState, events: GameEvent[], into: "water" | "wreck"): boolean {
+function crash(state: GameState, events: GameEvent[]): boolean {
   state.stats.crashes += 1;
-  events.push({ type: "crash", into });
+  events.push({ type: "crash" });
   respawn(state, events);
   return true;
+}
+
+/** The wedge check: a car pinned against a trunk with the throttle buried
+ * is not driving out of it, and since nothing else brings a car home any
+ * more, this is the one thing that does. The anchor moves whenever the car
+ * covers real ground, so only genuinely going nowhere accumulates. */
+function stepStuck(state: GameState, input: CarInput, events: GameEvent[]): void {
+  const car = state.car;
+  const asking = input.throttle > 0.5 && !car.airborne;
+  const moved = Math.hypot(car.x - state.stuck.x, car.z - state.stuck.z);
+  if (!asking || moved > T.offTrack.stuck.radius) {
+    state.stuck.x = car.x;
+    state.stuck.z = car.z;
+    state.stuck.since = state.t;
+  } else if (state.t - state.stuck.since >= T.offTrack.stuck.after) {
+    respawn(state, events);
+  }
 }
 
 /** Advance the run by one fixed timestep. Returns the events it emitted. */
@@ -220,7 +257,10 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
       state.phase = "racing";
       events.push({ type: "go" });
     }
-    // The grid: steering wiggles are allowed, the car does not move.
+    // The grid: steering wiggles are allowed, the car does not move — and
+    // a throttle held through the lights is revving, not being wedged, so
+    // the wedge clock only starts when the flag drops.
+    state.stuck.since = state.t;
     return events;
   }
   if (state.phase === "finished") return events;
@@ -353,8 +393,8 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
 
   // Solid contact: deep water still swallows the car whole, but the wild's
   // props and the forest's trunks BEND it instead of ending it — impulse,
-  // crush and yaw kick live in collision.ts, and only a chassis worn to
-  // nothing wrecks (crash + respawn, patched to a drivable fraction).
+  // crush and yaw kick live in collision.ts, and no amount of it ever ends
+  // the excursion. Keep hitting things until the car cannot move.
   let crashed = false;
   if (fix.offRoad) {
     const water = terrain.waterAt(car.x, car.z);
@@ -365,7 +405,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
         events.push({ type: "splash" });
         state.stats.splashes += 1;
       }
-      crashed = crash(state, events, "water");
+      crashed = crash(state, events);
     }
     if (!crashed) {
       const solids = terrain.obstaclesNear(car.x, car.z, 2.5);
@@ -373,15 +413,11 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
       if (solids.length > 0) collideCar(car, solids, events, state.stats);
     }
   }
-  // Wear reaching 1 is the wreck, wherever the last of it came from — a
-  // trunk, a rock, or a landing the suspension could not take on the road
-  // itself. The respawn patches the chassis half-way back; the dents, the
-  // torn-off parts and the hurt systems all stay.
-  if (!crashed && car.damage.wear >= 1) {
-    crashed = crash(state, events, "wreck");
-    car.damage.wear = T.collision.repairTo;
-  }
-  if (input.reset && !crashed && state.phase === "racing") respawn(state, events);
+  // A wreck is driven, not teleported: wear reaching 1 leaves a car with
+  // nothing left to give still sitting where it stopped. Only the wedge
+  // check below, or the reset input, ever brings it home.
+  if (input.reset && !crashed) respawn(state, events);
+  else if (!crashed) stepStuck(state, input, events);
 
   // The finish line is the last sample. An endless stage has none — the
   // stream above always keeps road ahead of the car.

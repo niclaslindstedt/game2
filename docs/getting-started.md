@@ -23,7 +23,7 @@ Open [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/). The game boo
 | B         | Back to the track (off-road)    |
 | R         | Restart stage                   |
 
-**Phone (touch):** the left half of the screen is the wheel — touch anywhere and drag sideways to steer; the wheel turns as far as you push it. The right half is the pedal: touching it is GAS, drag up to BRAKE, drag down to burn the BOOSTER (finite — it never refills), drag right for the handbrake (DRIFT — unsticks the rear for tight curves). The manual car adds − / + gear buttons. Tap the **minimap** for the in-race menu (resume, restart, race setup). Works in portrait and landscape — the HUD re-flows, and in portrait the booster stands up beside the dials.
+**Phone (touch):** the left half of the screen is the wheel — touch anywhere and drag sideways to steer. The rim has weight — it turns toward your thumb rather than snapping to it, so a thumb wobble is not a slide and a slight steer is a real option, while a committed shove takes it to full lock in about a quarter second. A blue arc fills the rim from 12 o'clock to the marker, showing how much lock the car has. The right half is the pedal: touching it is GAS, drag up to BRAKE, drag down to burn the BOOSTER (finite — it never refills), drag right for the handbrake (DRIFT — unsticks the rear for tight curves). The manual car adds − / + gear buttons. Tap the **minimap** for the in-race menu (resume, restart, race setup). Works in portrait and landscape — the HUD re-flows, and in portrait the booster stands up beside the dials.
 
 ### Installing on your phone
 

@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The open world: the terrain the car rides once it leaves the road, the
-// speeds the surfaces allow, the crashes that end an excursion (deep water,
-// the wild's solid props), and the reset that is the only other way home —
-// exploring never times out on its own. Terrain scenarios that need an
-// exact landscape override the state's terrain field with a synthetic one;
-// the determinism and clearance checks run against the real field.
+// speeds the surfaces allow, the attitude the ground puts in the body, the
+// one crash left (deep water), and the two ways home — the reset input and
+// the wedge check, since exploring never times out on its own. Terrain
+// scenarios that need an exact landscape override the state's terrain field
+// with a synthetic one; determinism and clearance run against the real field.
 
 import { describe, expect, it } from "vitest";
 
 import {
   LAKE_Y,
   NEUTRAL_INPUT,
+  ROAD_CROSS,
   TUNING,
   compileTrack,
   createGame,
@@ -117,6 +118,66 @@ describe("exploring", () => {
     expect(state.stats.offRoadTime).toBeGreaterThan(5);
   });
 
+  it("wedged against a rock with the throttle buried: back on the road in 2 s", () => {
+    const state = createGame({
+      seed: 3,
+      skipCountdown: true,
+      track: compileTrack(3, LONG_STRAIGHT),
+    });
+    const boulder = {
+      x: 30,
+      z: 250,
+      y: -0.35,
+      kind: "boulder" as const,
+      size: 1,
+      spin: 0,
+      radius: 2,
+      height: 2,
+    };
+    state.terrain = {
+      ...state.terrain,
+      heightAt: () => -0.35,
+      groundAt: () => -0.35,
+      waterAt: () => null,
+      obstaclesNear: (x, z, r) =>
+        Math.hypot(boulder.x - x, boulder.z - z) < r + boulder.radius ? [boulder] : [],
+      treesNear: () => [],
+    };
+    state.car.x = 30;
+    state.car.z = 244;
+    state.car.y = -0.35;
+    state.car.u = 4; // a nudge into it, so the wedge is what stops the car
+    // Chassis already spent: the service on the way home is what patches it.
+    state.car.damage.wear = 1;
+
+    let respawnAt = -1;
+    for (let i = 0; i < 120 * 8 && respawnAt < 0; i++) {
+      if (step(state, drive()).some((e) => e.type === "respawn")) respawnAt = state.t;
+    }
+    expect(respawnAt).toBeGreaterThan(TUNING.offTrack.stuck.after);
+    expect(Math.abs(state.car.x)).toBeLessThan(1);
+    expect(state.offRoad).toBe(false);
+    expect(state.stats.crashes).toBe(0);
+    expect(state.car.damage.wear).toBe(TUNING.collision.repairTo);
+  });
+
+  it("a car that is still covering ground is never called stuck", () => {
+    const state = createGame({
+      seed: 3,
+      skipCountdown: true,
+      track: compileTrack(3, LONG_STRAIGHT),
+    });
+    // A slope steep enough to crawl up at walking pace but never wedge on.
+    flatWild(state, (_x, z) => -0.35 + Math.max(0, z - 260) * 0.5);
+    state.car.x = 60;
+    state.car.z = 240;
+    state.car.y = -0.35;
+    const events: GameEvent[] = [];
+    for (let i = 0; i < 120 * 12; i++) events.push(...step(state, drive()));
+    expect(state.offRoad).toBe(true);
+    expect(events.filter((e) => e.type === "respawn")).toHaveLength(0);
+  });
+
   it("the reset input is the way home: back on the track at last progress", () => {
     const state = createGame({
       seed: 3,
@@ -177,8 +238,7 @@ describe("crashes", () => {
     state.car.u = 30;
     const events: GameEvent[] = [];
     for (let i = 0; i < 120 * 8; i++) events.push(...step(state, drive()));
-    const crash = events.find((e) => e.type === "crash");
-    expect(crash).toMatchObject({ type: "crash", into: "water" });
+    expect(events.some((e) => e.type === "crash")).toBe(true);
     expect(events.some((e) => e.type === "splash")).toBe(true);
     expect(events.some((e) => e.type === "respawn")).toBe(true);
     expect(state.stats.crashes).toBeGreaterThan(0);
@@ -242,6 +302,59 @@ describe("crashes", () => {
     expect(Math.hypot(slow.state.car.x - boulder.x, slow.state.car.z - boulder.z)).toBeGreaterThan(
       boulder.radius - 0.1,
     );
+  });
+});
+
+describe("the attitude the ground puts in the body", () => {
+  it("a climb lifts the nose and a descent drops it", () => {
+    const state = createGame({
+      seed: 3,
+      skipCountdown: true,
+      track: compileTrack(3, LONG_STRAIGHT),
+    });
+    // A 1-in-5 ramp running away down +z, out beside the road.
+    flatWild(state, (_x, z) => z * 0.2);
+    state.car.x = 60;
+    state.car.z = 200;
+    state.car.y = 40;
+    state.car.u = 12;
+    for (let i = 0; i < 120 * 3; i++) step(state, drive());
+    expect(state.car.pitch).toBeGreaterThan(0.15); // nose up the ramp
+
+    state.car.heading = Math.PI; // turn round and point down it
+    state.car.u = 12;
+    for (let i = 0; i < 120 * 3; i++) step(state, drive());
+    expect(state.car.pitch).toBeLessThan(-0.15);
+  });
+
+  it("a hillside banks the car the way the hillside goes", () => {
+    const state = createGame({
+      seed: 3,
+      skipCountdown: true,
+      track: compileTrack(3, LONG_STRAIGHT),
+    });
+    // Ground rising toward +x; heading 0 puts that rise on the car's right.
+    flatWild(state, (x) => x * 0.25);
+    state.car.x = 60;
+    state.car.z = 200;
+    state.car.y = 15;
+    state.car.u = 10;
+    for (let i = 0; i < 120 * 2; i++) step(state, drive());
+    // Right side up, and by roughly the angle of the slope itself.
+    expect(state.car.roll).toBeCloseTo(Math.atan(0.25), 1);
+    // The camber is the GROUND's, never the drift's: a car thrown fully
+    // sideways on the road leans by the road's own cross-section (R16 —
+    // the crown, the wheel tracks) and by nothing else. That is a fraction
+    // of a degree, where the hillside above banks it by fourteen.
+    const level = createGame({
+      seed: 3,
+      skipCountdown: true,
+      track: compileTrack(3, LONG_STRAIGHT),
+    });
+    for (let i = 0; i < 120 * 2 && !level.offRoad; i++) step(level, drive({ steer: 1 }));
+    expect(level.car.slide).toBeGreaterThan(0.5);
+    const crown = Math.atan((2 * ROAD_CROSS.crown.gravel) / (level.track.width / 2));
+    expect(Math.abs(level.car.roll)).toBeLessThan(crown);
   });
 });
 

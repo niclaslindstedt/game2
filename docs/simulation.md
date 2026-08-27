@@ -7,7 +7,7 @@ Handling and generator changes in this repo are **measured**, not eyeballed. The
 A deterministic player stand-in that reads the same `GameState` the HUD reads and produces the same `CarInput` a thumb produces — it must never reach into physics internals. Its brain, in order:
 
 1. **Aim** — a lookahead point on the centerline, speed-scaled; steering is proportional to the angle error.
-2. **Corner-speed plan** — scans the curvature ahead; each corner caps speed at `√(a_lat/κ)`, distance-discounted by braking capability. Hard corners are planned HOT (a few m/s over the cap) — rally style: the drift scrubs the excess.
+2. **Corner-speed plan** — scans the curvature ahead; each corner caps speed at `√(a_lat/κ)`, distance-discounted by braking capability. `a_lat` is a FRACTION of the car's own lateral grip (`latFraction × gripAccel`), not a fixed number, so the same brain plans honestly in either car — and because the slide comes in relative to that same ceiling, this one knob is what decides whether the bot ever drifts a corner or only ever flicks the handbrake at one. Hard corners are planned HOT (a few m/s over the cap) — rally style: the drift scrubs the excess.
 3. **The flick** — arriving hot at a hard corner pulls the handbrake once, unsticking the rear. So bots drift hairpins the way players do, and drift regressions show up in bot stats.
 4. **Drift management** — power through the slide, breathe when the angle gets deep, counter-steer only once the nose is nearly where it should be (damping earlier is what runs a drift wide).
 5. **Recovery** — out in the wild: cruise back toward the road at a pace the nature surface can steer at; when the excursion is hopeless (wedged on a prop, or out too long) it fires the reset input, like a player would.

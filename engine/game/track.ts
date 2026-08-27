@@ -8,6 +8,36 @@
 import type { Surface, Track } from "../mapgen/index.ts";
 import { crossOffset } from "../mapgen/road.ts";
 import { TUNING } from "./defs/tuning.ts";
+import type { GameState } from "./state.ts";
+
+/** The way back onto the road: the exact pose a respawn puts the car in,
+ * and how far it is from where the car has wandered to. Guidance and the
+ * reset read the SAME point — an arrow that pointed anywhere else would be
+ * lying about where the button takes you. */
+export type WayHome = {
+  x: number;
+  /** Road elevation at that point, m. */
+  y: number;
+  z: number;
+  heading: number;
+  /** Ground distance from the car to it, m. */
+  distance: number;
+};
+
+/** Progress is monotonic, so this is always the furthest the car has got —
+ * a car that doubles back is sent forward to where it earned, not to the
+ * nearest piece of road behind it. */
+export function wayHome(state: GameState): WayHome {
+  const s = state.track.samples[state.progressIndex];
+  const car = state.car;
+  return {
+    x: s.x,
+    y: s.elevation,
+    z: s.z,
+    heading: s.heading,
+    distance: Math.hypot(s.x - car.x, s.z - car.z),
+  };
+}
 
 export type TrackFix = {
   index: number;
