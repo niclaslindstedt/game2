@@ -36,7 +36,7 @@ The **car** is picked on any of those pages, turning on its stand. **Time of day
 
 **HUD** switches off anything you do not need on screen — minimap, pacenotes (and separately their WORDS, leaving just the corner arrows to read at a glance), damage glyph, tachometer, boost tank, wind, stage clock. Speed, gear and the countdown stay: those are the game.
 
-**Video** is the set of levers that buy frames on a weak device: **resolution** (the pixel-ratio ceiling, and the biggest single win), **draw distance** (how far the fog lets you see), **effects** (dust, spray, exhaust, rain and the ambient life), and **forest** density, which applies to the next stage you start because it is baked into the geometry.
+**Video** is the set of levers that buy frames on a weak device: **resolution** (the pixel-ratio ceiling, and the biggest single win), **draw distance** (how far the fog lets you see), **effects** (dust, spray, exhaust, rain and the ambient life), and **undergrowth** — the grass, shrubs and stumps scattered between the trees, which applies to the next stage you start because it is baked into the geometry. Undergrowth is a picture setting and nothing more: the trees you can HIT are always drawn whatever it says, so turning it down never makes a stage easier. How thickly the forest itself stands is a stage dial, set per run in Roam.
 
 **Controls** only ever offers what the device you are on can use: a desktop gets the key bindings, a touch device gets the thumb layout, and a laptop with a touchscreen gets both.
 

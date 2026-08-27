@@ -48,7 +48,10 @@ export type VideoSettings = {
   drawDistance: "near" | "normal" | "far";
   /** Particles, rain and the ambient life — the transient FX budget. */
   effects: "off" | "low" | "full";
-  /** How thickly the world is planted. Applies to the NEXT stage built. */
+  /** How thickly the world is planted with the SOFT stuff — undergrowth,
+   * shrubs, stumps. Applies to the NEXT stage built. Named UNDERGROWTH in
+   * the menu, not FOREST: the forest's own density is a generator dial the
+   * player sets per stage, and this one never touches it. */
   flora: "sparse" | "normal" | "lush";
 };
 
