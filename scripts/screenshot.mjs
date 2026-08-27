@@ -494,26 +494,35 @@ await capture(
   "commit",
 );
 
+// The root menu at all three shapes it has to hold. The phone LANDSCAPE one
+// is the tightest surface in the whole app — very wide, barely 390px tall —
+// and the one screen that must never need a scroll to reach OPTIONS.
 for (const [name, viewport] of [
   ["shot-menu", { width: 1280, height: 720 }],
   ["shot-menu-portrait", { width: 390, height: 844 }],
+  ["shot-menu-landscape", { width: 844, height: 390 }],
 ]) {
   await capture(name, viewport, menuUp, { menu: "1" });
 }
 
 // Campaign: the location, then its four stages with the ladder still locked.
-await capture(
-  "shot-menu-campaign",
-  { width: 1280, height: 720 },
-  async (page) => {
-    await menuUp(page);
-    await page.getByText("CAMPAIGN", { exact: false }).first().click();
-    await page.waitForTimeout(300);
-    await page.locator(".menu-location").first().click();
-    await page.waitForTimeout(2500);
-  },
-  { menu: "1" },
-);
+for (const [name, viewport] of [
+  ["shot-menu-campaign", { width: 1280, height: 720 }],
+  ["shot-menu-campaign-landscape", { width: 844, height: 390 }],
+]) {
+  await capture(
+    name,
+    viewport,
+    async (page) => {
+      await menuUp(page);
+      await page.getByText("CAMPAIGN", { exact: false }).first().click();
+      await page.waitForTimeout(300);
+      await page.locator(".menu-location").first().click();
+      await page.waitForTimeout(2500);
+    },
+    { menu: "1" },
+  );
+}
 
 // Roam: the split view, with the stage drawn into its own pane.
 for (const [name, viewport] of [
@@ -532,19 +541,24 @@ for (const [name, viewport] of [
   );
 }
 
-for (const tab of ["HUD", "VIDEO", "CONTROLS"]) {
-  await capture(
-    `shot-menu-options-${tab.toLowerCase()}`,
-    { width: 1280, height: 720 },
-    async (page) => {
-      await menuUp(page);
-      await page.getByText("OPTIONS", { exact: false }).first().click();
-      await page.waitForTimeout(300);
-      await page.locator(".opt-tab", { hasText: tab }).click();
-      await page.waitForTimeout(500);
-    },
-    { menu: "1" },
-  );
+for (const tab of ["HUD", "AUDIO", "VIDEO", "CONTROLS"]) {
+  for (const [suffix, viewport] of [
+    ["", { width: 1280, height: 720 }],
+    ["-landscape", { width: 844, height: 390 }],
+  ]) {
+    await capture(
+      `shot-menu-options-${tab.toLowerCase()}${suffix}`,
+      viewport,
+      async (page) => {
+        await menuUp(page);
+        await page.getByText("OPTIONS", { exact: false }).first().click();
+        await page.waitForTimeout(300);
+        await page.locator(".opt-tab", { hasText: tab }).click();
+        await page.waitForTimeout(500);
+      },
+      { menu: "1" },
+    );
+  }
 }
 
 // The developer menu, and the campaign with its ladder opened up.

@@ -22,6 +22,14 @@ that component's own section, even when it means a second `@media` block with
 the same condition as one already in the file. Two blocks that work beat one
 that reads better and does nothing.
 
+**A `@media` block holding SEVERAL selectors has to clear the last of them.**
+Grouping the overrides for `.opt-keys`, `.opt-key` and `.opt-key-bind` in one
+block placed after `.opt-keys` looks right and is half dead: the other two are
+declared below it, so the grid override applied and the padding and min-width
+did nothing. It measured as a partial improvement, which is the worst outcome
+— an obvious no-op gets investigated, a partial one gets accepted. Split the
+block, or put it after the LAST base rule it touches.
+
 And when a CSS fix produces no change in a measurement, suspect the cascade
 before suspecting the measurement — an override that never applied and a fix
 that did not help look identical from the outside.

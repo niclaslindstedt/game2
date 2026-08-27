@@ -1169,6 +1169,17 @@ body {
   width: min(52rem, 100%);
 }
 
+/* Landscape on a phone: the card's own chrome — padding and the gaps
+   between its rows — is the one cost that buys nothing on a screen this
+   short, so it comes off first, before anything the player reads or taps
+   is made smaller. */
+@media (orientation: landscape) and (max-height: 34rem) {
+  .menu-card {
+    gap: 0.55rem;
+    padding: clamp(0.55rem, 2.4vh, 1.5rem) clamp(0.7rem, 2vw, 1.5rem);
+  }
+}
+
 .menu-card-root {
   background: rgb(18 48 105 / 62%);
   gap: 1.1rem;
@@ -1249,6 +1260,59 @@ body {
   opacity: 0.72;
 }
 
+/* A phone held sideways: wide and very short. The root menu is the ONE
+   screen that must never scroll — a player who cannot see OPTIONS without
+   dragging the front door has not found the game yet — so the column
+   becomes a 2x2 block and the brand lays its tagline out beside the name
+   instead of under it. Everything sizes off the WIDTH here: `vmin` is the
+   height on this shape, and the height is exactly what is scarce.
+
+   Written immediately after the rules it overrides. A `@media` block adds
+   no specificity, so one placed earlier in this file than its base rule is
+   in the stylesheet and does nothing. */
+@media (orientation: landscape) and (max-height: 34rem) {
+  .menu-card-root {
+    width: min(46rem, 100%);
+    gap: clamp(0.6rem, 3vh, 1.1rem);
+  }
+
+  .menu-brand {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: center;
+    gap: 0.8rem;
+  }
+
+  .menu-brand-name {
+    font-size: clamp(1.6rem, 4.4vw, 3rem);
+  }
+
+  .menu-brand-tag {
+    font-size: clamp(0.55rem, 1.3vw, 0.85rem);
+    letter-spacing: 0.2em;
+  }
+
+  .menu-items {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  /* An odd count (the developer entry is out) leaves a hole in the grid;
+     the last one takes the whole row rather than sitting beside it. */
+  .menu-items > .menu-item:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  .menu-item {
+    font-size: clamp(1rem, 2.4vw, 1.6rem);
+  }
+
+  .menu-item-sub {
+    font-size: clamp(0.58rem, 1.2vw, 0.78rem);
+  }
+}
+
 .menu-title {
   font-size: clamp(1.3rem, 5.5vmin, 2.1rem);
   letter-spacing: 0.06em;
@@ -1312,7 +1376,8 @@ body {
   font: inherit;
   color: var(--hud-ink);
   background: rgb(255 255 255 / 10%);
-  border: 3px solid rgb(124 191 63 / 85%);
+  border: 2px solid rgb(255 255 255 / 40%);
+  border-left: 6px solid var(--hud-good);
   border-radius: 0.7rem;
   padding: 0.8rem 1rem;
   cursor: pointer;
@@ -1322,7 +1387,9 @@ body {
 
 .menu-location:hover,
 .menu-location:focus-visible {
-  background: rgb(124 191 63 / 22%);
+  background: rgb(255 210 62 / 22%);
+  border-color: var(--hud-good);
+  border-left-color: var(--hud-good);
 }
 
 .menu-location-name {
@@ -1350,9 +1417,20 @@ body {
   gap: 0.6rem;
 }
 
-/* A stage box. The BORDER carries the state — green and open, grey and
-   shut — because at a glance across four boxes the frame is what the eye
-   counts, not the text inside it. */
+/* Landscape on a phone: narrower boxes so a location's four stages stay on
+   ONE row. A second row of boxes costs more height than the width it saves
+   is worth on a screen this short. */
+@media (orientation: landscape) and (max-height: 34rem) {
+  .menu-grid {
+    grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  }
+}
+
+/* A stage box. The BORDER carries the state — lit and open, grey and shut —
+   because at a glance across four boxes the frame is what the eye counts,
+   not the text inside it. The lit one is the menu's yellow: the whole shell
+   runs on white frames with a yellow accent, and a third hue for "open"
+   read as a different UI rather than a state of this one. */
 .menu-level {
   position: relative;
   display: flex;
@@ -1368,14 +1446,14 @@ body {
 }
 
 .menu-level-open {
-  background: rgb(124 191 63 / 14%);
-  border: 3px solid rgb(124 191 63 / 90%);
+  background: rgb(255 210 62 / 12%);
+  border: 3px solid rgb(255 210 62 / 85%);
   cursor: pointer;
 }
 
 .menu-level-open:hover,
 .menu-level-open:focus-visible {
-  background: rgb(124 191 63 / 28%);
+  background: rgb(255 210 62 / 26%);
 }
 
 .menu-level-open:active {
@@ -1442,6 +1520,14 @@ body {
   font-size: clamp(0.56rem, 1.9vmin, 0.72rem);
   letter-spacing: 0.12em;
   color: var(--hud-good);
+}
+
+/* Landscape on a phone: four boxes already sit side by side across the wide
+   card, so the box height is pure cost. */
+@media (orientation: landscape) and (max-height: 34rem) {
+  .menu-level {
+    min-height: 5.5rem;
+  }
 }
 
 /* ── Option rows, shared by every menu surface ───────────────────────── */
@@ -1548,6 +1634,21 @@ a.menu-version:focus-visible {
   background: linear-gradient(rgb(63 169 245 / 22%), rgb(9 24 56 / 30%));
   border: 2px solid rgb(255 255 255 / 25%);
   overflow: hidden;
+}
+
+/* Landscape on a phone: `vmin` is the height here, so the stand would take
+   the same slice of a 390px screen that it takes of an 844px one. It is
+   also reined in sideways — stretched the full width of the card at this
+   height it is a letterbox with a speck of car in the middle. */
+@media (orientation: landscape) and (max-height: 34rem) {
+  .car-pick {
+    max-width: 32rem;
+    margin-inline: auto;
+  }
+
+  .car-pick-stage {
+    height: clamp(4.5rem, 20vh, 6rem);
+  }
 }
 
 .car-pick-canvas {
@@ -1794,10 +1895,22 @@ a.menu-version:focus-visible {
   color: var(--hud-shadow);
 }
 
+@media (orientation: landscape) and (max-height: 34rem) {
+  .opt-tab {
+    padding: 0.25rem 0.5rem;
+  }
+}
+
 .opt-list {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+@media (orientation: landscape) and (max-height: 34rem) {
+  .opt-list {
+    gap: 0.35rem;
+  }
 }
 
 .opt-section {
@@ -1805,6 +1918,29 @@ a.menu-version:focus-visible {
   flex-direction: column;
   gap: 0.5rem;
   padding-top: 0.3rem;
+}
+
+/* Landscape on a phone: an option row stops stacking its buttons under its
+   label and sits on one line beside it — the card has width to spare and
+   nothing but height to lose. Scoped to `.opt-list` so the CAR row (whose
+   control is a turntable, not a button strip) and Roam's dials (which live
+   in a narrow column) keep stacking. */
+@media (orientation: landscape) and (max-height: 34rem) {
+  .opt-section {
+    gap: 0.35rem;
+    padding-top: 0;
+  }
+
+  .opt-list .menu-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+  }
+
+  .opt-list .menu-opts {
+    justify-content: flex-end;
+  }
 }
 
 .opt-note {
@@ -1815,8 +1951,26 @@ a.menu-version:focus-visible {
   opacity: 0.7;
 }
 
+/* The HUD switches. Eight of them stacked in one column outrun any screen
+   that is not a tall phone, so they flow into as many columns as the card
+   is wide enough for — one on a portrait phone, three on a desktop card. */
+.opt-toggles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.5rem;
+}
+
+@media (orientation: landscape) and (max-height: 34rem) {
+  .opt-toggles {
+    gap: 0.4rem;
+  }
+}
+
 /* A toggle row: the whole row is the hit target, and the switch on the
-   right is the state. */
+   right is the state. Framed exactly like a main-menu item — white edge,
+   yellow accent down the left when it is on — because the menu runs on one
+   palette and a switched-on instrument is not a different kind of thing
+   from a menu entry. */
 .opt-toggle {
   display: flex;
   align-items: center;
@@ -1826,6 +1980,7 @@ a.menu-version:focus-visible {
   color: var(--hud-ink);
   background: rgb(255 255 255 / 8%);
   border: 2px solid rgb(255 255 255 / 28%);
+  border-left: 6px solid rgb(255 255 255 / 28%);
   border-radius: 0.55rem;
   padding: 0.45rem 0.7rem;
   cursor: pointer;
@@ -1833,9 +1988,24 @@ a.menu-version:focus-visible {
   text-shadow: none;
 }
 
+.opt-toggle:hover,
+.opt-toggle:focus-visible {
+  background: rgb(255 210 62 / 18%);
+}
+
 .opt-toggle-on {
-  border-color: rgb(124 191 63 / 85%);
-  background: rgb(124 191 63 / 14%);
+  border-color: rgb(255 255 255 / 45%);
+  border-left-color: var(--hud-good);
+  background: rgb(255 210 62 / 12%);
+}
+
+/* Landscape on a phone: eight rows, so the padding comes off each of them.
+   Held at 0.3rem — the row still clears 40px tall with its two lines of
+   text, which is the floor for a thumb. */
+@media (orientation: landscape) and (max-height: 34rem) {
+  .opt-toggle {
+    padding: 0.3rem 0.6rem;
+  }
 }
 
 .opt-toggle-text {
@@ -1896,6 +2066,15 @@ a.menu-version:focus-visible {
   gap: 0.35rem;
 }
 
+/* Landscape on a phone: thirteen bindings, and every row of them is height
+   this screen does not have. Narrower columns fit four across. */
+@media (orientation: landscape) and (max-height: 34rem) {
+  .opt-keys {
+    grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+    gap: 0.3rem;
+  }
+}
+
 .opt-key {
   display: flex;
   align-items: center;
@@ -1931,6 +2110,21 @@ a.menu-version:focus-visible {
   background: var(--hud-good);
   border-color: var(--hud-ink);
   color: var(--hud-shadow);
+}
+
+/* Landscape on a phone: the binding rows carry their own padding and the
+   bind button its own floor width, and both are height and width the
+   four-across grid above needs back. Written here rather than beside the
+   `.opt-keys` block above — these two rules are declared BELOW that block,
+   and a `@media` adds no specificity to beat them with. */
+@media (orientation: landscape) and (max-height: 34rem) {
+  .opt-key {
+    padding: 0.14rem 0.3rem 0.14rem 0.5rem;
+  }
+
+  .opt-key-bind {
+    min-width: 5rem;
+  }
 }
 
 .opt-reset {

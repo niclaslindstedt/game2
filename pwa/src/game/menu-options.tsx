@@ -113,20 +113,22 @@ function HudTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "onSet
   return (
     <div className="opt-list">
       <div className="menu-sub">Switch off what you do not need on screen</div>
-      {HUD_TOGGLES.map((toggle) => (
-        <ToggleRow
-          key={toggle.id}
-          label={toggle.label}
-          hint={toggle.hint}
-          on={settings.hud[toggle.id]}
-          onToggle={() =>
-            onSettings({
-              ...settings,
-              hud: { ...settings.hud, [toggle.id]: !settings.hud[toggle.id] },
-            })
-          }
-        />
-      ))}
+      <div className="opt-toggles">
+        {HUD_TOGGLES.map((toggle) => (
+          <ToggleRow
+            key={toggle.id}
+            label={toggle.label}
+            hint={toggle.hint}
+            on={settings.hud[toggle.id]}
+            onToggle={() =>
+              onSettings({
+                ...settings,
+                hud: { ...settings.hud, [toggle.id]: !settings.hud[toggle.id] },
+              })
+            }
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -196,7 +198,7 @@ function VideoTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "onS
         onPick={(effects) => set({ effects })}
       />
       <OptionRow
-        label="FOREST"
+        label="UNDERGROWTH"
         options={[
           { id: "sparse", label: "SPARSE" },
           { id: "normal", label: "NORMAL" },
@@ -205,7 +207,11 @@ function VideoTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "onS
         value={video.flora}
         onPick={(flora) => set({ flora })}
       />
-      <div className="opt-note">Forest density applies to the next stage you start.</div>
+      <div className="opt-note">
+        Grass, shrubs and stumps between the trees — the cheapest frames on this page. The trees you
+        can HIT are always drawn, so this never makes a stage easier; how thickly the forest itself
+        stands is Roam&apos;s FOREST dial. Applies to the next stage you start.
+      </div>
     </div>
   );
 }
