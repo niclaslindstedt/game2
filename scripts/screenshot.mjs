@@ -508,18 +508,39 @@ const drumChassis = (page) =>
     }
   })()`);
 
-// The studio card. Shot on `commit` rather than `load`: the card's own clock
-// starts at first paint and can be spent before every chunk has landed.
-await capture(
-  "shot-splash",
-  { width: 1280, height: 720 },
-  async (page) => {
-    await page.waitForSelector(".splash", { timeout: 20000 });
-    await page.waitForTimeout(800);
-  },
-  { splash: "1", start: "" },
-  "commit",
-);
+// The attract card on its READY beat — the flags flapping, the title up and
+// the prompt asking for a press. Shot on `commit` rather than `load`, because
+// the card's own clock starts at first paint and can be spent before every
+// chunk has landed, and then held until the game behind it is actually
+// standing: nothing is on screen to look at before that.
+async function attractReady(page) {
+  // The world builder is what the card is waiting for, and under software
+  // rendering it takes as long as it takes.
+  await page.waitForSelector(".splash-title", { timeout: 180000 });
+  // Long enough for the reveal to finish and the cloth to get into its flap
+  // rather than being caught at rest on its first frame.
+  await page.waitForTimeout(1300);
+  // The prompt blinks, and spends nearly half its cycle invisible — a shutter
+  // racing it would come back empty as often as not. Hold it lit; a still
+  // cannot show a blink either way.
+  await page.evaluate("document.querySelector('.splash-prompt').style.animation = 'none'");
+}
+
+// The card at the three shapes its crest has to hold — the phone held
+// sideways being the one that has barely any height to hang it in.
+for (const [suffix, viewport] of [
+  ["", { width: 1280, height: 720 }],
+  ["-portrait", { width: 390, height: 844 }],
+  ["-landscape", { width: 844, height: 390 }],
+]) {
+  await capture(
+    `shot-splash${suffix}`,
+    viewport,
+    attractReady,
+    { splash: "1", start: "" },
+    "commit",
+  );
+}
 
 // The root menu at all three shapes it has to hold. The phone LANDSCAPE one
 // is the tightest surface in the whole app — very wide, barely 390px tall —

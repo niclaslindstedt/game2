@@ -1,57 +1,54 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE STUDIO CARD's timing and its suppression rules — the two halves of
-// `pwa/src/game/splash.ts` a renderer is not needed to check, and the two
+// THE ATTRACT SCREEN's readiness rule and its suppression rules — the halves
+// of `pwa/src/game/splash.ts` a renderer is not needed to check, and the ones
 // that are easiest to get wrong in a way nobody notices until a release.
 //
-// The timing half is a policy with three inputs and one trap: the LOAD wins
-// over both clocks. A card that lifted on its auto-dismiss while a stage's
-// terrain was still being built would hand the player exactly the empty blue
-// screen it was added to hide.
+// Readiness is a policy with three inputs and one trap: the LOAD wins over the
+// clock. A card that invited a press while a stage's terrain was still being
+// built would hand the player exactly the empty blue screen it was added to
+// hide — and since nothing lifts the card on a timer any more, a rule that let
+// the clock alone open it up would be the only way back to that bug.
 //
 // The suppression half is worth a test because it is the difference between
-// the screenshot harness capturing the game and it capturing three seconds
-// of a publisher's name.
+// the screenshot harness capturing the game and it capturing a card that waits
+// forever for a keypress nobody is there to give it.
 
 import { describe, expect, it } from "vitest";
 
 import {
-  SPLASH_AUTO_MS,
   SPLASH_MIN_MS,
-  splashPhase,
+  SPLASH_STUCK_MS,
+  splashReady,
   splashSkipped,
 } from "../pwa/src/game/splash.ts";
 
-describe("splashPhase", () => {
-  it("never lifts ITSELF while the game is still loading", () => {
-    // Past the auto-dismiss and still not warm: the card does not clear on
-    // its own. This is the whole reason it exists.
-    expect(splashPhase(SPLASH_AUTO_MS, false)).not.toBe("done");
-    expect(splashPhase(SPLASH_AUTO_MS * 10, false)).not.toBe("done");
+describe("splashReady", () => {
+  it("holds every launch for the minimum, so the house's name is read", () => {
+    expect(splashReady(0, true)).toBe(false);
+    expect(splashReady(SPLASH_MIN_MS - 1, true)).toBe(false);
+    expect(splashReady(0, false)).toBe(false);
   });
 
-  it("holds every launch for the minimum, so the name is read", () => {
-    expect(splashPhase(0, true)).toBe("holding");
-    expect(splashPhase(SPLASH_MIN_MS - 1, true)).toBe("holding");
-    expect(splashPhase(0, false)).toBe("holding");
+  it("opens up the moment the game is standing", () => {
+    expect(splashReady(SPLASH_MIN_MS, true)).toBe(true);
+    expect(splashReady(SPLASH_MIN_MS * 4, true)).toBe(true);
   });
 
-  it("takes a press at the minimum whether or not the game is ready", () => {
-    // A press is the player saying they are done reading; making them wait
-    // on the world builder reads as a hung app.
-    expect(splashPhase(SPLASH_MIN_MS, true)).toBe("skippable");
-    expect(splashPhase(SPLASH_MIN_MS, false)).toBe("skippable");
-    expect(splashPhase(SPLASH_AUTO_MS * 4, false)).toBe("skippable");
+  it("keeps waiting while the game is still loading", () => {
+    // The whole reason the card exists: no amount of elapsed time short of the
+    // dead man's handle invites a press onto a half-built menu.
+    expect(splashReady(SPLASH_MIN_MS, false)).toBe(false);
+    expect(splashReady(SPLASH_STUCK_MS - 1, false)).toBe(false);
   });
 
-  it("clears itself once the game is ready and the auto-dismiss is served", () => {
-    expect(splashPhase(SPLASH_AUTO_MS, true)).toBe("done");
-    expect(splashPhase(SPLASH_AUTO_MS + 1, true)).toBe("done");
+  it("lets the player through on a boot that never reported in", () => {
+    expect(splashReady(SPLASH_STUCK_MS, false)).toBe(true);
+    expect(splashReady(SPLASH_STUCK_MS * 10, false)).toBe(true);
   });
 
-  it("keeps the minimum inside the auto-dismiss", () => {
-    // Inverted, the card would be unskippable right up to the moment it
-    // vanished on its own.
-    expect(SPLASH_MIN_MS).toBeLessThan(SPLASH_AUTO_MS);
+  it("keeps the minimum inside the dead man's handle", () => {
+    // Inverted, the card would open up before it had held its own minimum.
+    expect(SPLASH_MIN_MS).toBeLessThan(SPLASH_STUCK_MS);
   });
 });
 
