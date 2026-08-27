@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// Options, in three tabs:
+// Options, in four tabs:
 //
 //   HUD      — which instruments are on screen. Speed, gear and the
 //              countdown are not offered: those are the game.
+//   AUDIO    — the two faders, in five steps rather than as a continuous
+//              slider: every other control on this screen is a row of
+//              choices, and a volume nobody can quite reproduce is worse
+//              than one they can name.
 //   VIDEO    — the levers that buy frames on a weak device (resolution,
 //              draw distance, the effects budget, how thickly the world is
 //              planted).
@@ -16,6 +20,7 @@
 
 import { useEffect, useState } from "react";
 
+import { playToggle } from "./audio/ui.ts";
 import { OptionRow } from "./menu.tsx";
 import {
   DEFAULT_KEYS,
@@ -31,13 +36,35 @@ import {
   type Settings,
 } from "./settings.ts";
 
-export type OptionsTab = "hud" | "video" | "controls";
+export type OptionsTab = "hud" | "audio" | "video" | "controls";
 
 const TABS: { id: OptionsTab; label: string }[] = [
   { id: "hud", label: "HUD" },
+  { id: "audio", label: "AUDIO" },
   { id: "video", label: "VIDEO" },
   { id: "controls", label: "CONTROLS" },
 ];
+
+/** The fader's stops. Five is enough to mix with and few enough to hit with
+ * a thumb; OFF is a real stop rather than the bottom of a ramp, because
+ * "no music" is a thing people want and not a very quiet thing. */
+const LEVELS: { id: string; label: string }[] = [
+  { id: "0", label: "OFF" },
+  { id: "0.25", label: "25" },
+  { id: "0.5", label: "50" },
+  { id: "0.75", label: "75" },
+  { id: "1", label: "100" },
+];
+
+/** The nearest stop to a stored value — a build that changes the ladder must
+ * still show something sensible for a volume set on the old one. */
+function nearestLevel(value: number): string {
+  let best = LEVELS[0];
+  for (const level of LEVELS) {
+    if (Math.abs(Number(level.id) - value) < Math.abs(Number(best.id) - value)) best = level;
+  }
+  return best.id;
+}
 
 type OptionsProps = {
   tab: OptionsTab;
@@ -62,7 +89,13 @@ function ToggleRow({
     <button
       type="button"
       className={`opt-toggle ${on ? "opt-toggle-on" : ""}`}
-      onClick={onToggle}
+      onClick={() => {
+        // The switch sounds like what it is about to BECOME, which is the
+        // whole reason the pitch moves: a toggle whose two states sound the
+        // same tells the player nothing they could not already see.
+        playToggle(!on);
+        onToggle();
+      }}
       aria-pressed={on}
     >
       <span className="opt-toggle-text">
@@ -94,6 +127,33 @@ function HudTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "onSet
           }
         />
       ))}
+    </div>
+  );
+}
+
+function AudioTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "onSettings">) {
+  const audio = settings.audio;
+  const set = (patch: Partial<Settings["audio"]>): void =>
+    onSettings({ ...settings, audio: { ...audio, ...patch } });
+  return (
+    <div className="opt-list">
+      <div className="menu-sub">Everything is synthesized — the game ships no audio files</div>
+      <OptionRow
+        label="EFFECTS"
+        options={LEVELS}
+        value={nearestLevel(audio.sfx)}
+        onPick={(id) => set({ sfx: Number(id) })}
+      />
+      <OptionRow
+        label="MUSIC"
+        options={LEVELS}
+        value={nearestLevel(audio.music)}
+        onPick={(id) => set({ music: Number(id) })}
+      />
+      <div className="opt-note">
+        The engine, the tyres, the wind and the slide are all effects — turning them off leaves the
+        stage silent apart from the score.
+      </div>
     </div>
   );
 }
@@ -302,6 +362,7 @@ export function OptionsPage({ tab, onTab, settings, onSettings, onBack }: Option
         ))}
       </div>
       {tab === "hud" && <HudTab settings={settings} onSettings={onSettings} />}
+      {tab === "audio" && <AudioTab settings={settings} onSettings={onSettings} />}
       {tab === "video" && <VideoTab settings={settings} onSettings={onSettings} />}
       {tab === "controls" && <ControlsTab settings={settings} onSettings={onSettings} />}
     </div>

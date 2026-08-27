@@ -62,6 +62,10 @@ import {
   type CampaignProgress,
 } from "./game/campaign.ts";
 import { loadSettings, saveSettings, type Settings } from "./game/settings.ts";
+import { setAudioVolumes, unlockAudio } from "./game/audio/bus.ts";
+import { playUi } from "./game/audio/ui.ts";
+import { armMenuMusic, pauseMusic, playMusic, resumeMusic, stopMusic } from "./game/audio/music.ts";
+import type { RunAudio } from "./game/audio/index.ts";
 import { splashSkipped } from "./game/splash.ts";
 import { SplashScreen } from "./game/splash-screen.tsx";
 
@@ -239,6 +243,7 @@ export function App() {
   pausedRef.current = paused;
   /** The compiled stage, cached under everything that decides what it IS:
    * the seed, the length band, and the dials. */
+  const audioRef = useRef<RunAudio | null>(null);
   const trackRef = useRef<{ key: string; track: Track } | null>(null);
   const stageRef = useRef<StageSpec | null>(null);
   /** Roam's map pane, held here so a renderer that finishes loading after
@@ -312,6 +317,10 @@ export function App() {
   };
 
   const startStage = (spec: StageSpec, mode: PlayMode, levelId?: string): void => {
+    playUi("start");
+    // A new run inherits nothing from the last one: the engine's note would
+    // otherwise glide from wherever the previous car left it.
+    audioRef.current?.reset();
     setPaused(false);
     setRun({ mode, levelId });
     runRef.current = { mode, levelId };
@@ -385,6 +394,7 @@ export function App() {
     setOptions(next);
     optionsRef.current = next;
     saveSettings(next);
+    setAudioVolumes(next.audio);
     input.setKeys(next.keys);
     rendererRef.current?.setVideo(next.video);
   };
@@ -393,6 +403,33 @@ export function App() {
   useEffect(() => {
     if (menu) showBackdropRef.current(menu);
   }, [menu, seed, demoSeed]);
+
+  // The volumes the player last chose, applied before anything can make a
+  // noise — including the theme the menu arms on its very first paint.
+  useEffect(() => {
+    setAudioVolumes(optionsRef.current.audio);
+  }, []);
+
+  // WHICH THEME IS PLAYING IS A FUNCTION OF WHERE THE PLAYER IS, and nothing
+  // else. Keyed on whether a menu is up rather than on which page, so walking
+  // from the root to Options to Roam never restarts the music. `armMenuMusic`
+  // also owns the unlock: it claims the arrangement immediately and starts it
+  // on the first gesture anywhere, so the theme belongs to the menu opening
+  // rather than to whichever row the player happens to press first.
+  const inMenu = menu !== null;
+  useEffect(() => {
+    if (inMenu) return armMenuMusic();
+    playMusic("taiga");
+    return undefined;
+  }, [inMenu]);
+
+  // The pause card freezes the score where it stands rather than stopping it:
+  // a theme that restarted every time somebody checked the map would be a
+  // reason not to check the map.
+  useEffect(() => {
+    if (paused) pauseMusic();
+    else resumeMusic();
+  }, [paused]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -404,6 +441,14 @@ export function App() {
     // its own chunk, keeping the entry script inside the §11.3.9
     // critical-path budget: the shell parses and paints at once, the world
     // follows a breath later (from the service-worker cache once installed).
+    // The RUN's audio is not startup either, so it loads on its own chunk
+    // beside the renderer. The frame loop and the event handler both go
+    // through `audioRef`, so the game is simply silent until it lands — which
+    // is a breath at most, and never longer than the world takes to build.
+    // The menu's own sounds (`audio/ui.ts`) are the only audio in the entry.
+    void import("./game/audio/index.ts").then(({ createRunAudio }) => {
+      if (!disposed) audioRef.current = createRunAudio();
+    });
     void import("./game/renderer.ts").then(({ createRenderer }) => {
       if (disposed) return;
       const renderer = createRenderer(canvas, optionsRef.current.video);
@@ -453,9 +498,11 @@ export function App() {
       });
       const handleEvents = (state: GameState, events: GameEvent[]): void => {
         renderer.onEvents(state, events);
-        // The demo is scenery: it gets no flashes and no "next stage"
-        // countdown, only a roll onto fresh road when the bot finishes.
+        // The demo is scenery: it gets no flashes, no "next stage" countdown
+        // and NO SOUND — the menu has a theme of its own, and a bot crashing
+        // behind the card would be the loudest thing in it.
         const demo = menuRef.current !== null;
+        if (!demo) audioRef.current?.events(events);
         for (const ev of events) {
           if (ev.type === "finish") {
             if (demo) {
@@ -463,6 +510,10 @@ export function App() {
               continue;
             }
             finishTimeRef.current = ev.time;
+            // The finish sting is the loudest musical moment in the game and
+            // has to land in quiet; the menu re-arms its own theme when the
+            // results card times out.
+            stopMusic();
             const active = runRef.current;
             // Both modes post a time; only the campaign's clear opens the
             // next stage, and a time trial's level is cleared by definition.
@@ -513,6 +564,10 @@ export function App() {
           const events = step(state, page ? botInput(state) : input.sample(TUNING.dt));
           if (events.length > 0) handleEvents(state, events);
         }
+        // The road bed belongs to a run the player is IN. Behind the menu the
+        // stage is scenery under a theme, and an engine bed over the top of
+        // that is two pieces of music at once.
+        if (!page) audioRef.current?.frame(state, dtFrame);
         renderer.render(state, dtFrame);
         hudClock += dtFrame;
         if (hudClock > 0.08) {
@@ -547,7 +602,7 @@ export function App() {
 
   return (
     <div className="app-root">
-      <canvas ref={canvasRef} className="game-canvas" />
+      <canvas ref={canvasRef} className="game-canvas" onPointerDown={unlockAudio} />
       {snap && !menu && (
         <Hud
           snap={snap}

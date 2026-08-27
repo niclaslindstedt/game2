@@ -5,7 +5,8 @@
 //
 // Everything here is SCREEN-space and app-side: the engine neither knows
 // nor cares. The renderer reads `VideoSettings`, the HUD reads
-// `HudSettings`, and input.ts reads `ControlSettings`.
+// `HudSettings`, input.ts reads the key bindings, and the audio bus reads
+// `AudioSettings`.
 
 export type HudToggle =
   "minimap" | "pacenotes" | "pacenoteText" | "damage" | "tachometer" | "wind" | "boost" | "timer";
@@ -29,6 +30,16 @@ export const HUD_TOGGLES: { id: HudToggle; label: string; hint: string }[] = [
   { id: "wind", label: "WIND", hint: "Strength and bearing" },
   { id: "timer", label: "STAGE CLOCK", hint: "Running time on the top bar" },
 ];
+
+/** The two faders. Kept apart because they are two different jobs: the
+ * effects are information the player needs to drive, and the music is the
+ * room it happens in — plenty of people want one without the other. */
+export type AudioSettings = {
+  /** 0–1 master for the score. */
+  music: number;
+  /** 0–1 master for every sound effect, the engine bed included. */
+  sfx: number;
+};
 
 export type VideoSettings = {
   /** Pixel-ratio ceiling — the single biggest lever on a weak GPU. */
@@ -160,6 +171,7 @@ export const DEFAULT_TOUCH: TouchSettings = {
 
 export type Settings = {
   hud: HudSettings;
+  audio: AudioSettings;
   video: VideoSettings;
   keys: KeyBindings;
   touch: TouchSettings;
@@ -180,6 +192,11 @@ export const DEFAULT_SETTINGS: Settings = {
     boost: true,
     timer: true,
   },
+  // Defaults with headroom on both: the engine bed and the score sum into
+  // one limiter, and a game that arrives at full scale has nowhere to go but
+  // down. Music sits under the effects, because the effects are what the
+  // player is actually driving on.
+  audio: { music: 0.7, sfx: 0.9 },
   video: { resolution: "medium", drawDistance: "normal", effects: "full", flora: "normal" },
   keys: DEFAULT_KEYS,
   touch: DEFAULT_TOUCH,
@@ -200,6 +217,7 @@ const SETTINGS_KEY = "scandi-flick-options";
 export function loadSettings(): Settings {
   const settings: Settings = {
     hud: { ...DEFAULT_SETTINGS.hud },
+    audio: { ...DEFAULT_SETTINGS.audio },
     video: { ...DEFAULT_SETTINGS.video },
     keys: { ...DEFAULT_SETTINGS.keys },
     touch: { ...DEFAULT_SETTINGS.touch },
@@ -210,6 +228,7 @@ export function loadSettings(): Settings {
     if (!stored) return settings;
     const parsed = JSON.parse(stored) as Partial<Settings>;
     if (parsed.hud) Object.assign(settings.hud, parsed.hud);
+    if (parsed.audio) Object.assign(settings.audio, parsed.audio);
     if (parsed.video) Object.assign(settings.video, parsed.video);
     if (parsed.keys) Object.assign(settings.keys, parsed.keys);
     if (parsed.touch) Object.assign(settings.touch, parsed.touch);

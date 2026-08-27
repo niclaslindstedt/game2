@@ -13,6 +13,7 @@
 // The pages are a plain tagged union rather than a router: there is no URL
 // to keep in step, and the whole menu is one component tree over one canvas.
 
+import { useRef } from "react";
 import { STAGE_RULES } from "@engine";
 
 import { APP_NAME, REPO_URL } from "../identity.ts";
@@ -28,6 +29,8 @@ import {
 import { CarPicker } from "./car-picker.tsx";
 import type { RaceSettings } from "./menu.tsx";
 import { OptionsPage, type OptionsTab } from "./menu-options.tsx";
+import { unlockAudio } from "./audio/bus.ts";
+import { playUi } from "./audio/ui.ts";
 import { RoamPage, type MapRect } from "./menu-roam.tsx";
 import type { Settings } from "./settings.ts";
 
@@ -399,20 +402,64 @@ function TimeTrialPage({
   );
 }
 
+/** How deep in the menu each page sits, so a navigation can tell whether it
+ * is going IN or coming BACK — the two make different noises, and a menu
+ * where they do not is a menu that gives no feedback about where you are. */
+const DEPTH: Record<MenuPage["page"], number> = {
+  root: 0,
+  campaign: 1,
+  timetrial: 1,
+  roam: 1,
+  options: 1,
+  developer: 1,
+  location: 2,
+};
+
 export function MainMenu(props: MainMenuProps) {
   const { page, onNavigate } = props;
+  /** Every navigation in the menu passes through here, so the interface's
+   * sounds are wired in ONE place rather than on forty buttons. */
+  const navigate = (next: MenuPage): void => {
+    if (next.page === page.page && next.page === "options") playUi("page");
+    else if (DEPTH[next.page] < DEPTH[page.page]) playUi("back");
+    else playUi("select");
+    onNavigate(next);
+  };
+  /** The cursor arriving on a row. Delegated rather than hung off each
+   * button: the pages are plain markup, and forty `onPointerEnter`s is forty
+   * chances to forget one. Rate-limited inside `playUi`, so a pointer dragged
+   * across the card is a run of ticks rather than a buzz. */
+  const hovered = useRef<Element | null>(null);
+  const onPointerOver = (e: { target: EventTarget | null }): void => {
+    const row = (e.target as HTMLElement | null)?.closest("button:not([disabled])") ?? null;
+    if (!row || row === hovered.current) return;
+    hovered.current = row;
+    playUi("move");
+  };
+  /** A real gesture anywhere in the menu. Two jobs: it is the moment a browser
+   * will let audio start, and it is where a press on a stage that is not open
+   * yet is caught — a locked box is a `div` rather than a button, because
+   * there is nothing to press. */
+  const onPointerDown = (e: { target: EventTarget | null }): void => {
+    unlockAudio();
+    if ((e.target as HTMLElement | null)?.closest(".menu-level-locked")) playUi("deny");
+  };
   // Roam is the one page that is not a card over a backdrop — the map IS
   // the page — so it paints its own scrim and skips the shared one.
   const roam = page.page === "roam";
   return (
-    <div className={`menu ${roam ? "menu-open" : ""} pointer-events-auto`}>
+    <div
+      className={`menu ${roam ? "menu-open" : ""} pointer-events-auto`}
+      onPointerOver={onPointerOver}
+      onPointerDown={onPointerDown}
+    >
       <div className="menu-scrim" aria-hidden="true" />
       <div className="menu-body">
         {page.page === "root" && (
-          <RootPage developer={props.settings.developer} onNavigate={onNavigate} />
+          <RootPage developer={props.settings.developer} onNavigate={navigate} />
         )}
         {page.page === "campaign" && (
-          <CampaignPage progress={props.progress} onNavigate={onNavigate} />
+          <CampaignPage progress={props.progress} onNavigate={navigate} />
         )}
         {page.page === "location" && (
           <LocationPage
@@ -420,7 +467,7 @@ export function MainMenu(props: MainMenuProps) {
             progress={props.progress}
             race={props.race}
             onRace={props.onRace}
-            onNavigate={onNavigate}
+            onNavigate={navigate}
             onPlayLevel={props.onPlayLevel}
             onDeveloper={props.onDeveloper}
           />
@@ -430,7 +477,7 @@ export function MainMenu(props: MainMenuProps) {
             progress={props.progress}
             race={props.race}
             onRace={props.onRace}
-            onNavigate={onNavigate}
+            onNavigate={navigate}
             onPlayLevel={props.onPlayLevel}
             onDeveloper={props.onDeveloper}
           />
@@ -442,7 +489,7 @@ export function MainMenu(props: MainMenuProps) {
             seed={props.seed}
             onSeed={props.onSeed}
             onStart={props.onPlayRoam}
-            onBack={() => onNavigate({ page: "root" })}
+            onBack={() => navigate({ page: "root" })}
             onDeveloper={props.onDeveloper}
             onMapRect={props.onMapRect}
           />
@@ -451,16 +498,16 @@ export function MainMenu(props: MainMenuProps) {
           <DeveloperPage
             progress={props.progress}
             onUnlockEverything={props.onUnlockEverything}
-            onNavigate={onNavigate}
+            onNavigate={navigate}
           />
         )}
         {page.page === "options" && (
           <OptionsPage
             tab={page.tab}
-            onTab={(tab) => onNavigate({ page: "options", tab })}
+            onTab={(tab) => navigate({ page: "options", tab })}
             settings={props.settings}
             onSettings={props.onSettings}
-            onBack={() => onNavigate({ page: "root" })}
+            onBack={() => navigate({ page: "root" })}
           />
         )}
       </div>

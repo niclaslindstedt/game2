@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim track cars screenshots shellcheck actionlint changelog bump hooks docs
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim track cars audition screenshots shellcheck actionlint changelog bump hooks docs
 
 build:
 	npm run build
@@ -47,6 +47,13 @@ track:
 # iteration loop. Same Chromium requirements as `screenshots`.
 cars:
 	npm run cars
+
+# Build the audio review page: every sound in the bank on a button, both
+# scores under the real sequencer with per-voice mutes, and the continuous
+# road bed under sliders. Self-contained HTML — open it, or publish it so
+# somebody else can hear what changed.
+audition:
+	npm run audition
 
 # Drive the built app headlessly and screenshot the moments that matter
 # (grid, speed, drift, hood cam, portrait). Needs `npm i --no-save

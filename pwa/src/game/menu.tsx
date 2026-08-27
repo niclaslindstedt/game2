@@ -17,6 +17,8 @@ import {
   type Weather,
 } from "@engine";
 
+import { playToggle, playUi } from "./audio/ui.ts";
+
 export type RaceSettings = {
   timeOfDay: TimeOfDay;
   weather: Weather;
@@ -131,7 +133,10 @@ export function OptionRow<T extends string>({
             key={opt.id}
             type="button"
             className={`menu-opt ${opt.id === value ? "menu-opt-active" : ""}`}
-            onClick={() => onPick(opt.id)}
+            onClick={() => {
+              playToggle(true);
+              onPick(opt.id);
+            }}
           >
             {opt.label}
           </button>
@@ -159,13 +164,34 @@ export function PauseMenu({ seed, carName, onResume, onRestart, onMainMenu }: Pa
         <div className="hud-pause-sub">
           STAGE {seed} — {carName}
         </div>
-        <button type="button" className="hud-start" onClick={onResume}>
+        <button
+          type="button"
+          className="hud-start"
+          onClick={() => {
+            playUi("back");
+            onResume();
+          }}
+        >
           RESUME
         </button>
-        <button type="button" className="hud-pause-act" onClick={onRestart}>
+        <button
+          type="button"
+          className="hud-pause-act"
+          onClick={() => {
+            playUi("start");
+            onRestart();
+          }}
+        >
           RESTART STAGE
         </button>
-        <button type="button" className="hud-pause-act" onClick={onMainMenu}>
+        <button
+          type="button"
+          className="hud-pause-act"
+          onClick={() => {
+            playUi("select");
+            onMainMenu();
+          }}
+        >
           MAIN MENU
         </button>
       </div>
