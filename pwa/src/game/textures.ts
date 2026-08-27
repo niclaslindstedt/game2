@@ -100,7 +100,9 @@ export function bannerTexture(text: string): THREE.CanvasTexture {
   ctx.font = "bold 58px system-ui, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(text, 256, 50);
+  // A long label (a circuit's START/FINISH) is squeezed to fit rather than
+  // allowed to run off the cloth.
+  ctx.fillText(text, 256, 50, 480);
   const tex = new THREE.CanvasTexture(canvas);
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;

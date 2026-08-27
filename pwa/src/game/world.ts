@@ -1140,7 +1140,10 @@ function buildCones(track: Track, from: number, to: number): THREE.Group {
 /** A rally gate over the road at a sample, after the real thing: red/white
  * candy-striped legs, a white banner with its word on the face the
  * approaching car reads, and hay bales lining the road below. */
-function buildGate(track: Track, index: number, label: "start" | "finish"): THREE.Group {
+/** A gantry over the road, posts standing on the line the engine watches.
+ * On a CIRCUIT (R22) the start line and the finish line are the same line,
+ * so it gets ONE gate saying so rather than two ten metres apart. */
+function buildGate(track: Track, index: number, label: string): THREE.Group {
   const group = new THREE.Group();
   // The posts stand at the ends of the LINE the engine watches, so what the
   // player aims between is exactly what the timer counts as crossed.
@@ -1178,7 +1181,7 @@ function buildGate(track: Track, index: number, label: "start" | "finish"): THRE
   }
   const text = new THREE.MeshLambertMaterial({
     color: "#ffffff",
-    map: bannerTexture(label.toUpperCase()),
+    map: bannerTexture(label),
   });
   // BoxGeometry face order is +x,-x,+y,-y,+z,-z; with rotation.y set to
   // the heading, -z is the face looking back down the road at the car.
@@ -1501,9 +1504,11 @@ export function buildWorld(track: Track, density = 1): World {
     const scenery = buildScenery(track, biome, terrain, from, to, guard, drawnTrees, density);
     chunkGroup.add(scenery.group);
     chunkGroup.add(buildCones(track, from, to));
-    if (from === 0) chunkGroup.add(buildGate(track, 2, "start"));
+    if (from === 0 && !track.circuit) chunkGroup.add(buildGate(track, 2, "START"));
     if (!track.endless && to === track.samples.length) {
-      chunkGroup.add(buildGate(track, finishIndex(track), "finish"));
+      chunkGroup.add(
+        buildGate(track, finishIndex(track), track.circuit ? "START/FINISH" : "FINISH"),
+      );
     }
     group.add(chunkGroup);
     chunks.push({ toS, group: chunkGroup, scenery });

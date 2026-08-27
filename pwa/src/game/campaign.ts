@@ -67,8 +67,8 @@ export type CampaignLocation = {
  * the same way — scored on hairpins and features, then confirmed with the
  * bot sim over the full three laps:
  *
- *   seed 3 medium circuit 1.59 km × 3  173 s  15 turns (4 hard)  27 drifts  1 jump, 57% tarmac
- *   seed 6 long   circuit 2.67 km × 3  305 s  26 turns (6 hard)  50 drifts  2 jumps, 1 crest
+ *   seed 3 medium circuit 1.59 km × 3  179 s  15 turns (4 hard)  1 jump, 1 crest, 57% tarmac
+ *   seed 6 long   circuit 2.67 km × 3  316 s  26 turns (6 hard)  2 jumps, 1 crest
  */
 const TAIGA: CampaignLocation = {
   id: "taiga",
