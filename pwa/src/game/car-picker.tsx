@@ -118,6 +118,9 @@ export function CarPicker({
         </button>
       </div>
       <span className="car-pick-name">{spec.name.toUpperCase()}</span>
+      {/* The drivetrain is a label, not a handling difference — but it is
+          the one thing about a rally car a player expects to be told. */}
+      <span className="car-pick-drive">{spec.drive.toUpperCase()}</span>
     </div>
   );
 }

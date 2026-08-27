@@ -39,11 +39,15 @@ function flatOut(state: GameState, seconds: number, shift = false): GameEvent[] 
 }
 
 describe("cars and gearboxes", () => {
-  it("ships exactly the two launch cars — one auto, one manual", () => {
-    expect(CARS).toHaveLength(2);
-    expect(CARS.map((c) => c.gearbox).sort()).toEqual(["auto", "manual"]);
+  it("ships one automatic starter and two manuals, each with a drivetrain", () => {
+    expect(CARS).toHaveLength(3);
+    expect(CARS.filter((c) => c.gearbox === "auto")).toHaveLength(1);
     expect(carById("compact").gearbox).toBe("auto");
     expect(carById("classic").gearbox).toBe("manual");
+    expect(carById("coupe").gearbox).toBe("manual");
+    // `drive` is a label today, but every car owes one: the roster reads
+    // it, and a drivetrain-aware handling model would too.
+    for (const car of CARS) expect(["fwd", "rwd", "awd"]).toContain(car.drive);
   });
 
   it("the auto shifts itself up through the box on a long straight", () => {

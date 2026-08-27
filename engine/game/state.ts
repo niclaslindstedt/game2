@@ -48,7 +48,8 @@ export const DAMAGE_ZONES = 8;
 
 /** The pieces an impact can tear off the body. The engine decides WHEN one
  * breaks (zone crush past its bolt strength); the renderer owns what flies. */
-export type DamagePart = "bumperF" | "bumperR" | "mirrorL" | "mirrorR" | "spoiler";
+export type DamagePart =
+  "bumperF" | "bumperR" | "mirrorL" | "mirrorR" | "spoiler" | "hood" | "hatch";
 
 /** The machinery under the panels. Each system takes damage from the crush
  * landing nearest to it and degrades ITS OWN job: the engine loses power,

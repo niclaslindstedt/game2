@@ -12,7 +12,7 @@ import type { CarSpec, GameEvent, GameState } from "@engine";
 
 import { buildCarBody } from "./car-body.ts";
 import { createCarDamage } from "./car-damage.ts";
-import { createCarDirt } from "./car-dirt.ts";
+import { createCarDirt, wheelSpray } from "./car-dirt.ts";
 import { bodySpecFor } from "./car-styles.ts";
 
 /** Front-wheel visual steer: radians of wheel angle at full lock... */
@@ -40,7 +40,7 @@ export function buildCar(spec: CarSpec): CarVisual {
   const bodySpec = bodySpecFor(spec);
   const body = buildCarBody(bodySpec);
   group.add(body.group);
-  const dirt = createCarDirt(body.group);
+  const dirt = createCarDirt(body.group, wheelSpray(bodySpec));
   const damage = createCarDamage(body);
 
   const length = bodySpec.profile[0].z - bodySpec.profile[bodySpec.profile.length - 1].z;
