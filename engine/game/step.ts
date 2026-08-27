@@ -212,26 +212,39 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   const preFix = locate(track, car.x, car.z, state.progressIndex);
   let ctx: GroundContext;
   if (preFix.offRoad) {
-    // The wild: the terrain owns the ground. Slope and brow are read along
-    // the heading over the same baseline the road uses, so the crest check
-    // fires off a mountain shoulder exactly like it fires off a lip — this
-    // is where the spontaneous cliff jumps come from.
+    // The wild: the terrain owns the ground — the RIDDEN lattice surface
+    // (terrain.groundAt), which is the exact ground the renderer draws.
+    // The brow is read along the heading over the same wide baseline the
+    // road uses, so the crest check fires off a mountain shoulder exactly
+    // like it fires off a lip — this is where the spontaneous cliff jumps
+    // come from. The grade the car stands on is read over its own short
+    // baseline, along the heading AND across it: the along slope pitches
+    // the nose and pushes back on a climb, the lateral slope pulls the car
+    // toward the hillside's downhill side.
+    const ground = terrain.groundAt;
     const span = T.air.crestSpan;
+    const grade = T.hills.gradeSpan;
     const sinH = Math.sin(car.heading);
     const cosH = Math.cos(car.heading);
-    const here = terrain.heightAt(car.x, car.z);
-    const fwd = terrain.heightAt(car.x + sinH * span, car.z + cosH * span);
-    const back = terrain.heightAt(car.x - sinH * span, car.z - cosH * span);
+    const here = ground(car.x, car.z);
+    const fwd = ground(car.x + sinH * span, car.z + cosH * span);
+    const back = ground(car.x - sinH * span, car.z - cosH * span);
+    const ahead = ground(car.x + sinH * grade, car.z + cosH * grade);
+    const behind = ground(car.x - sinH * grade, car.z - cosH * grade);
+    // The car's right axis in world space is (cos h, -sin h).
+    const right = ground(car.x + cosH * grade, car.z - sinH * grade);
+    const left = ground(car.x - cosH * grade, car.z + sinH * grade);
     ctx = {
       surface: terrain.waterAt(car.x, car.z) !== null ? "water" : "nature",
       groundY: here,
-      slope: (fwd - back) / (2 * span),
+      slope: (ahead - behind) / (2 * grade),
+      slopeLat: (right - left) / (2 * grade),
       roadCurve: (fwd + back - 2 * here) / (span * span),
       windX: state.wind.x,
       windZ: state.wind.z,
       t: state.t,
       rng: state.rng,
-      groundAt: terrain.heightAt,
+      groundAt: ground,
     };
   } else {
     // How sharply the road brows under the car — what decides whether it

@@ -42,9 +42,12 @@ function stepShifting(state: GameState, input: CarInput): GameEvent[] {
 /** A run on a flat, dry, empty landscape — terrain scenarios override the
  * field so the scenario is exactly what the test says it is. */
 function flatWild(state: GameState, heightAt: (x: number, z: number) => number): void {
+  // groundAt is the surface the physics rides — a synthetic scenario must
+  // override it too, or the car stays on the real field's lattice.
   state.terrain = {
     ...state.terrain,
     heightAt,
+    groundAt: heightAt,
     waterAt: () => null,
     obstaclesNear: () => [],
   };
@@ -160,9 +163,11 @@ describe("crashes", () => {
       track: compileTrack(3, LONG_STRAIGHT),
     });
     // Dry shelf out to x = 40, then the seabed far under the water table.
+    const shelf = (x: number): number => (Math.abs(x) < 40 ? -0.35 : LAKE_Y - 6);
     state.terrain = {
       ...state.terrain,
-      heightAt: (x) => (Math.abs(x) < 40 ? -0.35 : LAKE_Y - 6),
+      heightAt: shelf,
+      groundAt: shelf,
       waterAt: (x) => (Math.abs(x) < 40 ? null : LAKE_Y),
       obstaclesNear: () => [],
     };
@@ -198,6 +203,7 @@ describe("crashes", () => {
       state.terrain = {
         ...state.terrain,
         heightAt: () => -0.35,
+        groundAt: () => -0.35,
         waterAt: () => null,
         obstaclesNear: (x, z, r) =>
           Math.hypot(boulder.x - x, boulder.z - z) < r + boulder.radius ? [boulder] : [],

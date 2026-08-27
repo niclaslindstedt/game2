@@ -12,6 +12,7 @@
 import * as THREE from "three";
 import {
   APRON,
+  GROUND_CELL,
   LAKE_Y,
   createRng,
   createTerrain,
@@ -26,10 +27,12 @@ import { detailTexture } from "./textures.ts";
 
 export { APRON, LAKE_Y };
 
-/** Tile edge length, m — 16 cells of 14 m. */
-const TILE = 224;
+/** The tile lattice is the engine's ground lattice: the physics rides
+ * exactly the triangles drawn here (TerrainField.groundAt), so the cell
+ * size comes from the engine — 16 cells of 14 m per tile. */
+const CELL = GROUND_CELL;
 const CELLS = 16;
-const CELL = TILE / CELLS;
+const TILE = CELL * CELLS;
 /** Tiles exist within this range of the road, m — past the fog ceiling
  * (520 m), so the world never visibly ends. */
 const FAR = 640;

@@ -111,6 +111,10 @@ export type GroundContext = {
   groundY: number;
   /** Road slope dy/ds under the car... */
   slope: number;
+  /** Off the road only: ground slope ACROSS the heading, positive when the
+   * ground rises to the car's right — what pulls a car on a hillside
+   * toward the downhill side. Absent (on the road) means flat. */
+  slopeLat?: number;
   /** Vertical curvature of the road under the car, 1/m — negative over a
    * brow. Zero anywhere a jump lip owns the launch. */
   roadCurve: number;
@@ -159,8 +163,8 @@ export function stepGrounded(
   // extra rotation and the slip itself turns the nose — the tail leads and
   // you catch it on the counter — both fading in with the slide so that
   // grip and slide are one continuous response, not two modes.
-  const speedFactor = clamp(car.u / 6, 0, 1);
-  const steerGain = (spec.steerRate / (1 + car.u / 20)) * speedFactor;
+  const speedFactor = clamp(car.u / T.steering.deadSpeed, 0, 1);
+  const steerGain = (spec.steerRate / (1 + car.u / T.steering.fadeSpeed)) * speedFactor;
   // The slide SATURATES: past ~26° of slip the forces that deepen it fade
   // to nothing, so a breathed slide parks at a big, stable, movie drift
   // angle instead of spinning the car.
@@ -173,7 +177,8 @@ export function stepGrounded(
   // positive feedback loop — a car that never stops rotating once sideways.
   // Full commitment on the counter too: it damps the catch, which is what
   // keeps the exit a gather-up instead of a twitch.
-  const commitment = 0.25 + 0.75 * Math.abs(input.steer);
+  const commitment =
+    T.steering.commitmentFloor + (1 - T.steering.commitmentFloor) * Math.abs(input.steer);
   /** How much the wheel is steered INTO the slide, 0..1 — what gates the
    * power's oversteer off while the driver is still asking for the angle. */
   const intoSlide = clamp(input.steer * -Math.sign(car.slip), 0, 1);
@@ -182,11 +187,11 @@ export function stepGrounded(
     : 0;
   // RWD power oversteer: the driven rear keeps feeding the slide — but only
   // once the wheel stops asking for the angle. Steered into the slide the
-  // corner behaves classically (saturation parks it); released or countered
-  // after the turn, the tail keeps pushing, so settling back to driving
-  // straight takes a real counter-steer. The soft sign keeps the term from
-  // chattering through the instant the slip crosses centre.
-  const tailDir = clamp(-car.slip / 0.08, -1, 1);
+  // corner behaves classically (saturation parks it); released after the
+  // turn, the tail lingers out for a beat before grip gathers the car up —
+  // and a counter-steer settles it faster still. The soft sign keeps the
+  // term from chattering through the instant the slip crosses centre.
+  const tailDir = clamp(-car.slip / T.steering.tailSoftSlip, -1, 1);
   const powerYaw =
     tailDir * T.grip.powerYaw * input.throttle * slide * speedFactor * (1 - intoSlide);
   // Saturation gates EVERYTHING that deepens the slide except the power's
@@ -250,6 +255,16 @@ export function stepGrounded(
   // nothing at all. Weight transfer is the player's tool against running
   // wide: staying on the power keeps the rear loose, lifting tightens the
   // line — and the bot breathes the throttle the same way.
+  // Across the grade (off-road): a hillside pulls the car toward its
+  // downhill side. Applied HERE, with the slip refreshed, so the redirect
+  // below sees the deflection and the tires get to fight it — a gentle
+  // slope is a lean, a steep one a slide, and the ground answers back
+  // instead of reading as a tilted carpet. (Before the slip update the
+  // redirect would rebuild `w` from the stale angle and erase the pull.)
+  if (ctx.slopeLat) {
+    car.w -= 9.8 * T.hills.gravityAlong * ctx.slopeLat * dt;
+    updateSlip(car);
+  }
   const lift = 1 + T.grip.liftGrip * (1 - input.throttle) * slide;
   const handbrakeGrip = input.handbrake ? T.grip.handbrakeGrip : 1;
   const latRate =

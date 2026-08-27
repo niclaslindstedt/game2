@@ -53,6 +53,7 @@ export {
   inStream,
   LAKE_Y,
   APRON,
+  GROUND_CELL,
   type TerrainField,
   type Stream,
   type WildObstacle,
