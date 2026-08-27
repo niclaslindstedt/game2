@@ -1,4 +1,4 @@
-# Contributing to Sideways
+# Contributing to Scandinavian Flick
 
 Thanks for wanting to make the drifting better. This document covers everything from a clean checkout to a merged PR. By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md); security problems go through [SECURITY.md](SECURITY.md), never public issues.
 

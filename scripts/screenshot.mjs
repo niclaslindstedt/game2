@@ -11,8 +11,10 @@
 //   node scripts/screenshot.mjs pause map      # only scenes whose name
 //                                              # contains one of these
 //
-// The app boots to the pre-race menu; captures pass ?start=1 (plus ?seed=,
-// ?tod=, ?weather=) to pin a run and skip the menu.
+// The app boots to the STUDIO CARD and then the main menu; driving captures
+// pass ?start=1 (plus ?seed=, ?tod=, ?weather=) to pin a run and skip both.
+// The menu captures pass ?menu=1 to force the menu back, and ?splash=1 to
+// see the card itself.
 import { mkdirSync } from "node:fs";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -82,12 +84,14 @@ async function racing(page) {
   );
 }
 
-async function capture(name, viewport, script, params = {}, pageOptions = {}) {
+async function capture(name, viewport, script, params = {}, waitUntil = "load", pageOptions = {}) {
   if (only.length > 0 && !only.some((f) => name.includes(f))) return;
   const page = await browser.newPage({ viewport, ...pageOptions });
   page.on("pageerror", (err) => console.error(`[pageerror] ${err.message}`));
-  await page.goto(`${url}?${new URLSearchParams({ ...SCENE_DEFAULTS, ...params })}`);
-  await page.waitForSelector("canvas.game-canvas");
+  await page.goto(`${url}?${new URLSearchParams({ ...SCENE_DEFAULTS, ...params })}`, {
+    waitUntil,
+  });
+  if (waitUntil === "load") await page.waitForSelector("canvas.game-canvas");
   await script(page);
   await page.screenshot({ path: join(outDir, `${name}.png`) });
   console.log(`previews/${name}.png`);
@@ -272,13 +276,113 @@ await captureElement("shot-instrument-damage", ".hud-damage", async (page) => {
   await page.waitForTimeout(500);
 });
 
-// The pre-race menu itself, over the live stage.
+// ── The menu surfaces. The main menu runs a live bot demo under a drone
+// camera, so these want a few seconds on screen before the shutter: a
+// backdrop caught mid-build is not what a player sees.
+
+/** The menu is up and its stage has had time to start moving. */
+async function menuUp(page) {
+  await page.waitForSelector(".menu-card, .roam", { timeout: 90000 });
+  await page.waitForTimeout(5000);
+}
+
+/** Playwright's per-click actionability checks outlast the chassis secret's
+ * own window while a stage is being built, so the developer drum is
+ * dispatched in one go. What is under test here is the menu, not the
+ * pointer plumbing. Passed as SOURCE rather than a function, like the
+ * `waitForFunction` calls above: this file lints as Node, where `document`
+ * and `PointerEvent` do not exist. */
+const drumChassis = (page) =>
+  page.evaluate(`(() => {
+    const el = document.querySelector(".car-pick-stage");
+    const box = el.getBoundingClientRect();
+    for (let i = 0; i < 7; i++) {
+      el.dispatchEvent(new PointerEvent("pointerdown", {
+        bubbles: true, composed: true, pointerId: 1,
+        clientX: box.left + 100, clientY: box.top + 50,
+      }));
+    }
+  })()`);
+
+// The studio card. Shot on `commit` rather than `load`: the card's own clock
+// starts at first paint and can be spent before every chunk has landed.
 await capture(
-  "shot-menu",
+  "shot-splash",
   { width: 1280, height: 720 },
   async (page) => {
-    await page.waitForSelector(".hud-menu");
+    await page.waitForSelector(".splash", { timeout: 20000 });
     await page.waitForTimeout(800);
+  },
+  { splash: "1", start: "" },
+  "commit",
+);
+
+for (const [name, viewport] of [
+  ["shot-menu", { width: 1280, height: 720 }],
+  ["shot-menu-portrait", { width: 390, height: 844 }],
+]) {
+  await capture(name, viewport, menuUp, { menu: "1" });
+}
+
+// Campaign: the location, then its four stages with the ladder still locked.
+await capture(
+  "shot-menu-campaign",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await menuUp(page);
+    await page.getByText("CAMPAIGN", { exact: false }).first().click();
+    await page.waitForTimeout(300);
+    await page.locator(".menu-location").first().click();
+    await page.waitForTimeout(2500);
+  },
+  { menu: "1" },
+);
+
+// Roam: the split view, with the stage drawn into its own pane.
+for (const [name, viewport] of [
+  ["shot-menu-roam", { width: 1280, height: 720 }],
+  ["shot-menu-roam-portrait", { width: 390, height: 844 }],
+]) {
+  await capture(
+    name,
+    viewport,
+    async (page) => {
+      await menuUp(page);
+      await page.getByText("ROAM", { exact: false }).first().click();
+      await page.waitForTimeout(14000);
+    },
+    { menu: "1" },
+  );
+}
+
+for (const tab of ["HUD", "VIDEO", "CONTROLS"]) {
+  await capture(
+    `shot-menu-options-${tab.toLowerCase()}`,
+    { width: 1280, height: 720 },
+    async (page) => {
+      await menuUp(page);
+      await page.getByText("OPTIONS", { exact: false }).first().click();
+      await page.waitForTimeout(300);
+      await page.locator(".opt-tab", { hasText: tab }).click();
+      await page.waitForTimeout(500);
+    },
+    { menu: "1" },
+  );
+}
+
+// The developer menu, and the campaign with its ladder opened up.
+await capture(
+  "shot-menu-developer",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await menuUp(page);
+    await page.getByText("ROAM", { exact: false }).first().click();
+    await page.waitForTimeout(3000);
+    await drumChassis(page);
+    await page.locator(".menu-back").click();
+    await page.waitForTimeout(600);
+    await page.locator(".menu-item-dev").click();
+    await page.waitForTimeout(400);
   },
   { menu: "1" },
 );

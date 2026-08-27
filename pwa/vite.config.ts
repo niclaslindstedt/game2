@@ -54,6 +54,7 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
     __BUILD_LABEL__: JSON.stringify(buildLabel),
+    __COMMIT_SHA__: JSON.stringify(commit),
   },
   // `appPwa` only applies on build, so dev keeps registering no worker (the
   // app passes `enabled: !import.meta.env.DEV` to `usePwaUpdate`).

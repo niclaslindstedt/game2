@@ -340,6 +340,7 @@ function buildScenery(
   to: number,
   guard: Track["samples"],
   drawnTrees: Set<string>,
+  density: number,
 ): SceneryChunk {
   const group = new THREE.Group();
   const rng = createRng((track.seed ^ 0x5f356495 ^ Math.imul(from, 2246822519)) >>> 0);
@@ -397,7 +398,7 @@ function buildScenery(
     const roll = rng.next();
     const scale = rng.range(0.75, 1.35);
     const spin = rng.range(0, Math.PI * 2);
-    if (!rng.chance(0.4)) continue;
+    if (!rng.chance(0.4 * density)) continue;
     if (!clearOfRoad(x, z, clearance)) continue;
     if (inStream(field.streams, x, z, 1.5)) continue;
     const y = heightAt(x, z);
@@ -430,7 +431,7 @@ function buildScenery(
       const scale = rng.range(0.7, 1.3);
       const spin = rng.range(0, Math.PI * 2);
       const community = communityAt(x, z);
-      const chance = (biome.undergrowthDensity / 2) * (community.groundCover ?? 1);
+      const chance = (biome.undergrowthDensity / 2) * (community.groundCover ?? 1) * density;
       if (!rng.chance(chance)) continue;
       if (!clearOfRoad(x, z, half + 1.2)) continue;
       if (inStream(terrain.field.streams, x, z, 0.5)) continue;
@@ -682,7 +683,7 @@ type Wild = {
  * engine terrain's solid props, drawn exactly where the physics collides
  * with them: fallen trunks join the flora instancing, boulders get their
  * own instanced rock. Deterministic per seed and cell. */
-function buildWild(track: Track, biome: Biome, terrain: Terrain): Wild {
+function buildWild(track: Track, biome: Biome, terrain: Terrain, density: number): Wild {
   const group = new THREE.Group();
   const communityAt = (x: number, z: number): Community =>
     communityByGrove(biome, terrain.field.groveAt(x, z));
@@ -725,7 +726,7 @@ function buildWild(track: Track, biome: Biome, terrain: Terrain): Wild {
       const roll = rng.next();
       const scale = rng.range(0.75, 1.35);
       const spin = rng.range(0, Math.PI * 2);
-      if (!rng.chance(0.5)) continue;
+      if (!rng.chance(0.5 * density)) continue;
       if (field.roadDistanceAt(x, z) < 150) continue;
       if (inStream(field.streams, x, z, 1.5)) continue;
       const y = heightAt(x, z);
@@ -748,7 +749,9 @@ function buildWild(track: Track, biome: Biome, terrain: Terrain): Wild {
       const scale = rng.range(0.7, 1.3);
       const spin = rng.range(0, Math.PI * 2);
       const community = communityAt(x, z);
-      if (!rng.chance((biome.undergrowthDensity / 3) * (community.groundCover ?? 1))) continue;
+      if (!rng.chance((biome.undergrowthDensity / 3) * (community.groundCover ?? 1) * density)) {
+        continue;
+      }
       if (field.roadDistanceAt(x, z) < 150) continue;
       if (inStream(field.streams, x, z, 0.5)) continue;
       const y = heightAt(x, z);
@@ -888,14 +891,18 @@ function disposeGroup(group: THREE.Group): void {
   });
 }
 
-export function buildWorld(track: Track): World {
+/** How thickly the world is planted, as a multiple of the biome's own
+ * scatter chances. The video options set it; the ENGINE's trunk field is
+ * never thinned by it, because those trees are solid and one you can hit
+ * but cannot see is worse than any frame it would buy. */
+export function buildWorld(track: Track, density = 1): World {
   const group = new THREE.Group();
   const biome = biomeFor();
   const waterTex = waterTexture();
   const terrain = buildTerrain(track, biome, waterTex);
   group.add(terrain.group);
   terrain.sync(track, 0, track.samples[0].x, track.samples[0].z);
-  const wild = buildWild(track, biome, terrain);
+  const wild = buildWild(track, biome, terrain, density);
   group.add(wild.group);
   wild.sync(track.samples[0].x, track.samples[0].z);
 
@@ -928,7 +935,7 @@ export function buildWorld(track: Track): World {
       ...track.samples.slice(Math.max(0, from - 120), Math.max(0, from - 1)),
       ...track.samples.slice(to, Math.min(track.samples.length, to + 120)),
     ];
-    const scenery = buildScenery(track, biome, terrain, from, to, guard, drawnTrees);
+    const scenery = buildScenery(track, biome, terrain, from, to, guard, drawnTrees, density);
     chunkGroup.add(scenery.group);
     chunkGroup.add(buildCones(track, from, to));
     if (from === 0) chunkGroup.add(buildGate(track, 2, "start"));

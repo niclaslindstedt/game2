@@ -2,28 +2,43 @@
 
 ## Playing
 
-Open [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/). The game boots to the pre-race screen over a live view of today's stage: pick the **stage length** (short ≈1 minute, medium ≈3, long ≈5, extra long ≈7 — or **endless**, which streams new road from the seed for as long as you drive), the **time of day** (dawn, day, dusk, night — the stage re-lights as you tap), the **weather** (clear, rain, storm — weather sets the wind, and the wind leans on the car), and the **car**, then START — a 3-2-1 countdown and you're driving.
+Open [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/). After the studio card the game opens on the **main menu**, which is not a still: a bot is driving a real stage behind it, seen from a drone, and it keeps going while you decide. Four ways in:
+
+- **Campaign** — a location (Taiga, for now) and its four stages, each one unlocked by finishing the one before it. Locked stages wear a grey border and a padlock; open ones wear green. The ladder climbs in both length and difficulty, from a 1-minute forest road to seven minutes of hairpins and jumps in a night storm.
+- **Time trial** — the same stages, gated by the same unlocks, with your best time on each: a time is something you chase on a road you have already driven.
+- **Roam** — any seed at all. The stage pane shows the map that seed builds, turning slowly, with its lakes, hills and forest standing and the **route drawn on it in yellow** (green marks the start, red the finish), so you choose by looking rather than by reading a number. Previous/next walk the seed; the slider walks the length band (short ≈1 minute, medium ≈3, long ≈5, extra long ≈7 — or **endless**, which streams new road from the seed for as long as you drive).
+- **Options** — the HUD, the renderer, and the controls. See below.
+
+The **car** is picked on any of those pages, turning on its stand. **Time of day** (dawn, day, dusk, night) and **weather** (clear, rain, storm — weather sets the wind, and the wind leans on the car) are yours on Roam and authored into each campaign stage. Pick a stage and you drop into a 3-2-1 countdown.
 
 ### Controls
 
-**Desktop (keyboard):**
+**Desktop (keyboard).** Every one of these is rebindable in Options → Controls — click a binding, press the key you want.
 
-| Key       | Action                          |
-| --------- | ------------------------------- |
-| ↑ / W     | Throttle                        |
-| ↓ / S     | Brake                           |
-| ← → / A D | Steer                           |
-| Space     | Handbrake — unsticks the rear   |
-| L. Shift  | Booster — finite, no refills    |
-| E / X     | Shift up (manual car)           |
-| Q / Z     | Shift down (manual car)         |
-| Esc       | In-race menu (pause)            |
-| C         | Race setup (time, weather, car) |
-| V         | Camera: chase ↔ hood            |
-| B         | Back to the track (off-road)    |
-| R         | Restart stage                   |
+| Key       | Action                        |
+| --------- | ----------------------------- |
+| ↑ / W     | Throttle                      |
+| ↓ / S     | Brake                         |
+| ← → / A D | Steer                         |
+| Space     | Handbrake — unsticks the rear |
+| L. Shift  | Booster — finite, no refills  |
+| E / X     | Shift up (manual car)         |
+| Q / Z     | Shift down (manual car)       |
+| Esc       | In-race menu (pause)          |
+| C         | Back to the main menu         |
+| V         | Camera: chase ↔ hood          |
+| B         | Back to the track (off-road)  |
+| R         | Restart stage                 |
 
-**Phone (touch):** the left half of the screen is the wheel — touch anywhere and drag sideways to steer. The rim has weight — it turns toward your thumb rather than snapping to it, so a thumb wobble is not a slide and a slight steer is a real option, while a committed shove takes it to full lock in about a quarter second. A blue arc fills the rim from 12 o'clock to the marker, showing how much lock the car has. The right half is the pedal: touching it is GAS, drag up to BRAKE, drag down to burn the BOOSTER (finite — it never refills), drag right for the handbrake (DRIFT — unsticks the rear for tight curves). The manual car adds − / + gear buttons. Tap the **minimap** for the in-race menu (resume, restart, race setup). Works in portrait and landscape — the HUD re-flows, and in portrait the booster stands up beside the dials.
+**Phone (touch):** one half of the screen is the wheel — touch anywhere and drag sideways to steer. The rim has weight — it turns toward your thumb rather than snapping to it, so a thumb wobble is not a slide and a slight steer is a real option, while a committed shove takes it to full lock in about a quarter second. A blue arc fills the rim from 12 o'clock to the marker, showing how much lock the car has. The other half is the pedal: touching it is GAS, drag up to BRAKE, drag down to burn the BOOSTER (finite — it never refills), drag right for the handbrake (DRIFT — unsticks the rear for tight curves). Which half steers, and which drag does what, are set in Options → Controls; each direction holds one action, so assigning a taken one swaps them. The manual car adds − / + gear buttons. Tap the **minimap** for the in-race menu (resume, restart, main menu). Works in portrait and landscape — the HUD re-flows, and in portrait the booster stands up beside the dials.
+
+### Options
+
+**HUD** switches off anything you do not need on screen — minimap, pacenotes (and separately their WORDS, leaving just the corner arrows to read at a glance), damage glyph, tachometer, boost tank, wind, stage clock. Speed, gear and the countdown stay: those are the game.
+
+**Video** is the set of levers that buy frames on a weak device: **resolution** (the pixel-ratio ceiling, and the biggest single win), **draw distance** (how far the fog lets you see), **effects** (dust, spray, exhaust, rain and the ambient life), and **forest** density, which applies to the next stage you start because it is baked into the geometry.
+
+**Controls** only ever offers what the device you are on can use: a desktop gets the key bindings, a touch device gets the thumb layout, and a laptop with a touchscreen gets both.
 
 ### Installing on your phone
 
@@ -33,7 +48,7 @@ The game is a PWA. iOS Safari: Share → **Add to Home Screen**. Android Chrome:
 
 Stages are point-to-point: start gate to finish gate. The cluster in the bottom-left is the instrument panel: the car's condition on top (the damage glyph, plus whatever the moment has to say), then rev counter, gear with a shift light, speed, and the booster.
 
-The **minimap** sits top-right: the whole stage drawn as a route, the car riding it as an arrowhead, and the run's progress read off the frame — the border fills clockwise from the top as you get further in (an endless run has no finish to fill toward, so it reads the distance covered instead). Tap or click it for the in-race menu. The stage number in the HUD is the seed — everyone gets the same stage on a given day, and every finish rolls into the next seed after a few seconds.
+The **minimap** sits top-right: the whole stage drawn as a route, the car riding it as an arrowhead, and the run's progress read off the frame — the border fills clockwise from the top as you get further in (an endless run has no finish to fill toward, so it reads the distance covered instead). Tap or click it for the in-race menu — resume, restart, or back to the main menu. The stage number in the HUD is the seed. Finishing takes you back to the menu with your time on screen; a campaign stage records the clear, which is what opens the next one.
 
 **Off the road is a real place.** The landscape around every stage is driveable — forests, hills, mountains, streams, lakes and open sea — and the car rides it fast (up to ~150 km/h in the wild; ~230 km/h flat out on the road). Cliff edges and banks throw the car if you hit them with pace; boulders and fallen trunks are genuinely solid, and deep water swallows the car whole. A crash puts you back on the track where you left it. There is no off-road timer: explore as long as you like, and press **B** (or the HUD's TRACK button) when you want back.
 
