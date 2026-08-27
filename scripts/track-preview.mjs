@@ -10,7 +10,7 @@
 //                            at a glance while judging the rules
 //   track-<seed>-render.png  the PLACE — the shaded landscape with its
 //                            water and its forest, and the road drawn
-//                            across its full width: wheel tracks, ditches,
+//                            across its full width: wheel tracks, verges,
 //                            markings, bridges, and the branches the route
 //                            abandons. What the stage will look like.
 //
@@ -22,8 +22,16 @@
 //   npm run track -- --count 12        # seeds 1..12
 //   npm run track -- --length xlong    # a stage length band
 //   npm run track -- --length endless --km 8   # a streamed endless stretch
-//   npm run track -- --asphalt 0.6 --water 0.9 --elevation 1 --trees 0.2
+//   npm run track -- --asphalt 0.6 --water 0.9 --elevation 1 --trees 0.2 --width 0.2
 //   npm run track -- --only render     # skip the other picture
+//   npm run track -- --zoom junctions  # one close-up per junction, and
+//   npm run track -- --zoom junctions --span 70   # ...how much country
+//
+// The whole-stage frame resolves a junction, a bridge or a guarded hairpin
+// as a few dozen pixels, which is not enough to tell a built place from a
+// collision of two ribbons. `--zoom junctions` re-frames the SAME renderer
+// tightly around each junction the seed produced, which is the loop for
+// working on them: change a number, re-render, LOOK.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -47,8 +55,10 @@ const seeds = flag("seeds")
 const length = flag("length") ?? "medium";
 const endlessKm = Number(flag("km") ?? 6);
 const only = flag("only");
+const zoom = flag("zoom");
+const zoomSpan = Number(flag("span") ?? 80);
 const knobs = {};
-for (const dial of ["elevation", "water", "trees", "asphalt"]) {
+for (const dial of ["elevation", "water", "trees", "asphalt", "width"]) {
   const value = flag(dial);
   if (value !== undefined) knobs[dial] = Number(value);
 }
@@ -134,6 +144,29 @@ for (const seed of seeds) {
   terrain.sync(track.length);
 
   const written = [];
+  if (zoom === "junctions") {
+    // Close up on each junction, using the same renderer with the frame
+    // narrowed around it — a junction is 40 m of a 5 km picture.
+    track.junctions.forEach((junction, k) => {
+      const framed = {
+        ...track,
+        bounds: {
+          minX: junction.x - zoomSpan,
+          maxX: junction.x + zoomSpan,
+          minZ: junction.z - zoomSpan,
+          maxZ: junction.z + zoomSpan,
+        },
+      };
+      const file = join(outDir, `junction-${seed}-${k}.png`);
+      writeFileSync(
+        file,
+        renderStage({ track: framed, terrain, engine, width: 900, height: 900 }).toPng(),
+      );
+      written.push(file);
+    });
+    console.log(`${written.join("  ")}\n  seed ${seed}: ${track.junctions.length} junctions`);
+    continue;
+  }
   if (only !== "render") {
     const file = join(outDir, `track-${seed}.png`);
     writeFileSync(file, schematic(track, terrain).toPng());

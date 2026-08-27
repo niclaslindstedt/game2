@@ -13,13 +13,18 @@ export {
   type FiniteStageLength,
 } from "./rules.ts";
 export { generateStage, createStageStream, type StageStream } from "./generate.ts";
+export { createLandField, type LandField } from "./land.ts";
 export {
   ROAD_CROSS,
   corridorOffset,
   crossOffset,
   vergeOffset,
   wearAt,
-  junctionThroat,
+  junctionDust,
+  junctionFlat,
+  junctionMainEdge,
+  junctionPlatformY,
+  type RoadShape,
 } from "./road.ts";
 export { buildSpur, spurReach, type Spur, type SpurSample } from "./spurs.ts";
 export { createGuardField, type CornerGuard, type GuardField } from "./guards.ts";

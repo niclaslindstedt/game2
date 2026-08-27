@@ -155,6 +155,15 @@ ribbon, the terrain's verge and the physics all read):
 - **Camber.** The road is crowned so water runs off it; the further out
   you run, the more the ground falls away under you and the more the car
   is shed toward the outside.
+- **The bank.** Where the road TURNS it is superelevated (R19): the whole
+  cross-section rolls into the corner, outside edge proud of the inside,
+  over a runoff long enough that the car settles onto it rather than hits
+  it. The tighter the corner the harder it banks, up to a ceiling that is
+  a road's and not a speedway's. The crown comes out as the bank goes in —
+  a banked corner is one plane, or the inside edge would be a gutter — and
+  the physics gets it for free, because the cross-slope under the wheels
+  is the same lateral pull a hillside gives. On a corner it is the biggest
+  of the three, and it is what makes a turn something you can lean on.
 - **The worn line.** Two tracks run down every gravel road where every car
   before you put its wheels: a little lower than the road beside them, so
   the car settles into them and has to be steered out. Asphalt polishes
@@ -162,10 +171,12 @@ ribbon, the terrain's verge and the physics all read):
 - **The mat.** Asphalt is laid ON the ground: the mat stands proud of the
   verge with its edge chippings spilled down the side, and the joint at
   each end of a sealed run ramps rather than steps.
-- **The ditch.** Past the shoulder the ground drops, then climbs back to
-  the landscape. Running wide is no longer a scare — it is a wheel in a
-  ditch, and the ditch is drawn by the road ribbon (sampled every 2 m)
-  rather than the 14 m ground lattice, which could not hold one.
+- **The verge.** Past the shoulder the ground breaks over and leans away
+  into the field — a slope a car can run out onto and get back off, drawn
+  by the road ribbon (sampled every 2 m) rather than the 14 m ground
+  lattice, which could not hold an edge. There is no ditch: a trench ruled
+  down both sides of a rally road reads as a scar cut by a machine, and it
+  swallows a car the moment it puts a wheel wide.
 
 ## The open world
 

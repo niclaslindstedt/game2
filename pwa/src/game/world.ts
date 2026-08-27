@@ -18,12 +18,15 @@ import {
   corridorOffset,
   createRng,
   inStream,
-  junctionThroat,
+  junctionDust,
+  junctionFlat,
+  junctionMainEdge,
+  junctionPlatformY,
+  type RoadShape,
   wearAt,
   type GameState,
   type Spur,
   type Track,
-  type TrackSample,
   type WildObstacle,
 } from "@engine";
 
@@ -48,15 +51,12 @@ function rightOf(heading: number): { x: number; z: number } {
 
 /** Anything with a road's cross-section: the stage's own samples, or an
  * abandoned branch's (R17). The ribbon builder does not care which. */
-type Ribbon = {
+type Ribbon = RoadShape & {
   x: number;
   z: number;
   heading: number;
   elevation: number;
   s: number;
-  surface: TrackSample["surface"];
-  lift: number;
-  deck?: TrackSample["deck"];
 };
 
 /** The road's palette. Gravel is graded dirt, worn to hardpack down the two
@@ -69,7 +69,9 @@ const ROAD_PAINT = {
   water: { loose: "#8fa6c6", worn: "#8fa6c6" },
   deck: { loose: "#b7b3a8", worn: "#a4a096" },
   shoulder: "#8a734f",
-  ditch: "#6f6a45",
+  /** Past the bare shoulder the verge greens over and meets the terrain's
+   * own grass — there is no ditch to color (R16). */
+  verge: "#6f8f3e",
 };
 
 /** Where the ribbon puts a vertex across the road, as a fraction of the
@@ -77,26 +79,72 @@ const ROAD_PAINT = {
  * shape, sparser between. Mirrored for the far side. */
 const MAT_STATIONS = [0, 0.18, 0.32, 0.38, 0.44, 0.5, 0.6, 0.75, 0.88, 1];
 /** ...and past the edge, in meters out from it: the mat's chamfer, the
- * shoulder, the ditch, and the lip where the landscape takes over. */
+ * bare shoulder, and the grassed slope tipping away to where the landscape
+ * takes over (R16 — no ditch). */
 const VERGE_STATIONS = [
   ROAD_CROSS.chamfer,
-  ROAD_CROSS.verge.ditchFrom,
-  (ROAD_CROSS.verge.ditchFrom + ROAD_CROSS.verge.ditchAt) / 2,
-  ROAD_CROSS.verge.ditchAt,
-  (ROAD_CROSS.verge.ditchAt + ROAD_CROSS.verge.ditchTo) / 2,
-  ROAD_CROSS.verge.ditchTo,
+  ROAD_CROSS.verge.bareTo,
+  ROAD_CROSS.verge.bareTo + (ROAD_CROSS.reach - ROAD_CROSS.verge.bareTo) * 0.45,
   ROAD_CROSS.reach,
 ];
 
 /** R17 — inside a junction, neither road wears a border: no shoulder, no
- * ditch, no edge line. The ribbon builders drop those stations here and
- * the junction throat pays the gap back as road. */
+ * edge line, no camber. The ribbon builders drop those stations here, and
+ * the engine has already warped both carriageways onto the junction's own
+ * plane, so what is left is one paved area with two roads leaving it. */
 function junctionAt(track: Track, x: number, z: number): number {
+  let best = 0;
   for (const junction of track.junctions) {
-    const d = Math.hypot(junction.x - x, junction.z - z);
-    if (d < junction.radius) return 1 - d / junction.radius;
+    const flat = junctionFlat(junction, x, z);
+    if (flat > best) best = flat;
   }
-  return 0;
+  return best;
+}
+
+/** R17 — how far a point is past the MAIN road's edge at the junction it
+ * is nearest to, m; null where no junction reaches it. The seam between
+ * the tarmac and the gravel road that meets it runs along that edge, at
+ * that angle, because that is where one road's surfacing stops and the
+ * other's begins. */
+function mainEdgeAt(track: Track, x: number, z: number): number | null {
+  let best: number | null = null;
+  for (const junction of track.junctions) {
+    const out = junctionMainEdge(junction, x, z);
+    if (out === null) continue;
+    if (best === null || out < best) best = out;
+  }
+  return best;
+}
+
+/** How far past the main road's edge gravel is still dragged out onto the
+ * tarmac, m — the smear of stones every car turning out of a dirt road
+ * carries with it, which in life is the most obvious thing about a
+ * junction between a sealed road and an unsealed one. */
+const DRAG_OUT = 13;
+/** ...and how much of the tarmac's own color the smear takes at the mouth
+ * of the junction, where every car turning off the dirt road drops what it
+ * carried onto the seal. */
+const DRAG_ON = 0.42;
+
+/** R17 — how much gravel the tarmac wears here, dragged out of the dirt
+ * road by every car that has turned off it. */
+function dustAt(track: Track, x: number, z: number): number {
+  let best = 0;
+  for (const junction of track.junctions) {
+    const dust = junctionDust(junction, x, z);
+    if (dust > best) best = dust;
+  }
+  return best;
+}
+
+/** R17 — is this piece of road standing on the MAIN road's mat? A minor
+ * road has no border where it crosses the road it meets: its shoulder and
+ * its edge line stop at that edge, which is the whole reason a junction
+ * looks built. Wider than the mat by a margin, so the border comes back
+ * once the corner is properly clear of it and not a meter after. */
+function onMainMat(track: Track, x: number, z: number): boolean {
+  const out = mainEdgeAt(track, x, z);
+  return out !== null && out < 1.5;
 }
 
 /** Signed lateral offsets of every vertex across the corridor, left to
@@ -167,7 +215,7 @@ function chunkSamples(track: Track, from: number, to: number): Track["samples"] 
  * The paint is this module's: gravel worn to hardpack down the tracks and
  * loose at the edges, asphalt burnished where the tires polish it, a
  * shoulder of spilled dirt, and a ditch that greens over. */
-function buildRoad(track: Track, samples: Ribbon[], width: number): THREE.Mesh {
+function buildRoad(track: Track, samples: Ribbon[], width: number, bias = 0.02): THREE.Mesh {
   const half = width / 2;
   const lat = stations(width);
   const matOnly = lat.filter((l) => Math.abs(l) <= half);
@@ -177,7 +225,15 @@ function buildRoad(track: Track, samples: Ribbon[], width: number): THREE.Mesh {
   const indices: number[] = [];
   const paint = new THREE.Color();
   const shoulder = new THREE.Color(ROAD_PAINT.shoulder);
-  const ditch = new THREE.Color(ROAD_PAINT.ditch);
+  const verge = new THREE.Color(ROAD_PAINT.verge);
+  const loose = new THREE.Color();
+  const worn = new THREE.Color();
+  const sealedLoose = new THREE.Color(ROAD_PAINT.asphalt.loose);
+  const sealedWorn = new THREE.Color(ROAD_PAINT.asphalt.worn);
+  const sealed = new THREE.Color();
+  const gravelDust = new THREE.Color();
+  const looseGravel = new THREE.Color(ROAD_PAINT.gravel.loose);
+  const wornGravel = new THREE.Color(ROAD_PAINT.gravel.worn);
 
   let lastCount = -1;
   let run = 0;
@@ -187,7 +243,10 @@ function buildRoad(track: Track, samples: Ribbon[], width: number): THREE.Mesh {
     const bridge = s.deck != null;
     // Inside a junction the road is mat and nothing else — its border is
     // cut away and the throat below pays the gap back as road surface.
-    const cross = junctionAt(track, s.x, s.z) > 0 ? matOnly : lat;
+    // Only the mouth loses its border, not the whole platform: a junction
+    // cuts a hole in both roads' edges, it does not delete a hundred
+    // meters of them.
+    const cross = junctionAt(track, s.x, s.z) > 0.25 || onMainMat(track, s.x, s.z) ? matOnly : lat;
     // The strip has to restart wherever the station count changes: the two
     // cross-sections cannot be woven into each other.
     if (cross.length !== lastCount) {
@@ -201,23 +260,61 @@ function buildRoad(track: Track, samples: Ribbon[], width: number): THREE.Mesh {
         : s.surface === "asphalt"
           ? "asphalt"
           : "gravel";
-    const loose = new THREE.Color(ROAD_PAINT[kind].loose);
-    const worn = new THREE.Color(ROAD_PAINT[kind].worn);
+    loose.set(ROAD_PAINT[kind].loose);
+    worn.set(ROAD_PAINT[kind].worn);
     for (const l of cross) {
       const out = Math.abs(l) - half;
-      const y = s.elevation + corridorOffset(s.surface, bridge, l, width, s.lift) + 0.02;
-      positions.push(s.x + r.x * l, y, s.z + r.z * l);
+      const px = s.x + r.x * l;
+      const pz = s.z + r.z * l;
+      const y = s.elevation + corridorOffset(s, l, width) + bias;
+      positions.push(px, y, pz);
       // UVs run meters along and across, so the grain is the same size
       // whatever the road does and never stretches through a corner.
       uvs.push(l / 3.5, s.s / 3.5);
       if (out <= 0) {
         // On the mat: the wear map decides the mix. The bridge deck is
-        // planks or concrete, worn the same way but never bermed.
-        paint.copy(loose).lerp(worn, wearAt(l, width));
-      } else if (out < ROAD_CROSS.verge.ditchFrom) {
+        // planks or concrete, worn the same way but never bermed. Inside a
+        // junction the wear FLATTENS: two roads' wheel tracks crossing each
+        // other is the tell that two ribbons were laid over one another,
+        // and a real crossing is scuffed evenly all over anyway.
+        const flat = s.flat ?? 0;
+        paint.copy(loose).lerp(worn, wearAt(l, width) * (1 - flat) + 0.55 * flat);
+        // R17 — and at a junction the surfacing changes along the MAIN
+        // road's edge, not across the minor road: the tarmac is laid to
+        // its own edge line and the gravel starts there, smeared out over
+        // the drag-out every car turning off it leaves behind. Read per
+        // vertex, so the seam is that edge, at that angle.
+        if (kind === "gravel") {
+          const past = mainEdgeAt(track, px, pz);
+          if (past !== null && past < DRAG_OUT) {
+            const t = Math.max(0, past) / DRAG_OUT;
+            sealed.copy(sealedLoose).lerp(sealedWorn, 0.55);
+            paint.lerp(sealed, 1 - t * t * (3 - 2 * t));
+          }
+        } else if (kind === "asphalt") {
+          // ...and the other way: every car that turns out of the dirt
+          // road carries stones onto the tarmac, so the sealed side of a
+          // junction wears a smear of gravel too. In life it is the most
+          // obvious thing about a junction between a sealed road and an
+          // unsealed one.
+          const dust = dustAt(track, px, pz);
+          if (dust > 0) {
+            gravelDust.copy(looseGravel).lerp(wornGravel, 0.5);
+            paint.lerp(gravelDust, dust * DRAG_ON);
+          }
+        }
+      } else if (out < ROAD_CROSS.verge.bareTo) {
         paint.copy(shoulder);
       } else {
-        paint.copy(ditch).lerp(shoulder, out > ROAD_CROSS.verge.ditchTo ? 0.5 : 0);
+        paint
+          .copy(shoulder)
+          .lerp(
+            verge,
+            Math.min(
+              1,
+              (out - ROAD_CROSS.verge.bareTo) / (ROAD_CROSS.reach - ROAD_CROSS.verge.bareTo),
+            ),
+          );
       }
       colors.push(paint.r, paint.g, paint.b);
     }
@@ -266,7 +363,7 @@ function buildSkirts(samples: Ribbon[], width: number): THREE.Mesh {
       const r = rightOf(s.heading);
       const ex = s.x + r.x * edge * side;
       const ez = s.z + r.z * edge * side;
-      const top = s.elevation + corridorOffset(s.surface, false, edge * side, width, s.lift);
+      const top = s.elevation + corridorOffset(s, edge * side, width);
       // The skirt drops a few meters below grade — deep enough to meet the
       // terrain shelf under every roll of the road.
       positions.push(ex, top, ez, ex, top - 5, ez);
@@ -323,8 +420,8 @@ function buildMarkings(track: Track, samples: Ribbon[], width: number): THREE.Me
       const r = rightOf(s.heading);
       const inner = from(s);
       const outer = to(s);
-      const yIn = s.elevation + corridorOffset(s.surface, false, inner, width, s.lift) + 0.035;
-      const yOut = s.elevation + corridorOffset(s.surface, false, outer, width, s.lift) + 0.035;
+      const yIn = s.elevation + corridorOffset(s, inner, width) + 0.035;
+      const yOut = s.elevation + corridorOffset(s, outer, width) + 0.035;
       positions.push(
         s.x + r.x * inner,
         yIn,
@@ -344,7 +441,10 @@ function buildMarkings(track: Track, samples: Ribbon[], width: number): THREE.Me
   };
 
   const plain = (s: Ribbon): boolean =>
-    s.surface !== "water" && s.deck == null && junctionAt(track, s.x, s.z) === 0;
+    s.surface !== "water" &&
+    s.deck == null &&
+    junctionAt(track, s.x, s.z) < 0.4 &&
+    !onMainMat(track, s.x, s.z);
   for (const side of [-1, 1]) {
     // Gravel: the rally's own red-and-white edging, alternating every few
     // meters, sat on the outer band of the mat.
@@ -395,7 +495,7 @@ function buildChippings(
   for (let i = 0; i < samples.length; i += 1) {
     const s = samples[i];
     if (s.surface !== "asphalt" || s.deck != null) continue;
-    if (junctionAt(track, s.x, s.z) > 0) continue;
+    if (junctionAt(track, s.x, s.z) > 0.25 || onMainMat(track, s.x, s.z)) continue;
     const r = rightOf(s.heading);
     for (const side of [-1, 1]) {
       // Two rows per side, jittered off the sample index so the scatter
@@ -406,7 +506,7 @@ function buildChippings(
       const z = s.z + r.z * out * side;
       stones.push({
         x,
-        y: s.elevation + corridorOffset(s.surface, false, out * side, width, s.lift),
+        y: s.elevation + corridorOffset(s, out * side, width),
         z,
         s: 0.1 + jitter * 0.22,
         spin: jitter * Math.PI * 2,
@@ -923,13 +1023,18 @@ function buildBridges(track: Track, from: number, to: number): THREE.Group {
 function buildSpur(track: Track, spur: Spur): THREE.Group {
   const group = new THREE.Group();
   group.add(buildSkirts(spur.samples, spur.width));
-  group.add(buildRoad(track, spur.samples, spur.width));
+  // A hair under the stage's own mat: inside a junction the two are warped
+  // onto the SAME plane (R17), and two coplanar meshes tear each other
+  // apart in the depth buffer.
+  group.add(buildRoad(track, spur.samples, spur.width, 0.012));
   group.add(buildMarkings(track, spur.samples, spur.width));
   const chippings = buildChippings(track, spur.samples, spur.width);
   if (chippings) group.add(chippings);
 
-  // The block, a few meters up the branch so it reads from the stage road.
-  const at = spur.samples[Math.min(spur.samples.length - 1, 3)];
+  // The block, standing just clear of the junction's own platform — where
+  // a marshal would put it, and where it is not buried under the crossing.
+  const at =
+    spur.samples.find((sample) => sample.flat <= 0) ?? spur.samples[spur.samples.length - 1];
   const r = rightOf(at.heading);
   const half = spur.width / 2;
   const coneGeo = new THREE.ConeGeometry(0.42, 1, 6);
@@ -971,10 +1076,13 @@ function buildSpur(track: Track, spur: Spur): THREE.Group {
   return group;
 }
 
-/** R17 — the junction aprons: the paved circle that makes two roads MEET
- * rather than merely touch. The engine plans them (track.junctions) and the
- * terrain field flattens the ground under them; this lays the surface on
- * top, over both carriageways' edges and whatever verge ran between them. */
+/** R17 — the junction paving. The two carriageways already cover the
+ * ground where they overlap; what they cannot cover is the wedge between
+ * them where the corner has just pulled them apart, and a junction that
+ * ends in a knife edge of grass driven to a point is the tell that nobody
+ * planned it. So this lays the gore nose: pavement carried out to where
+ * the gap has opened enough to be an island, on the junction's own graded
+ * plane, and no further. */
 function buildJunctions(track: Track, from: number, to: number): THREE.Group {
   const group = new THREE.Group();
   const fromS = from === 0 ? -Infinity : track.samples[from].s;
@@ -986,11 +1094,11 @@ function buildJunctions(track: Track, from: number, to: number): THREE.Group {
   });
   for (const junction of track.junctions) {
     if (junction.s < fromS || junction.s > toS) continue;
-    for (const quad of junctionThroat(junction)) {
+    for (const quad of junction.gore) {
       const positions: number[] = [];
       const uvs: number[] = [];
       for (const [x, z] of quad) {
-        positions.push(x, junction.y + 0.04, z);
+        positions.push(x, junctionPlatformY(junction, x, z) + 0.03, z);
         uvs.push(x / 3.5, z / 3.5);
       }
       const geo = new THREE.BufferGeometry();

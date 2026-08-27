@@ -7,65 +7,99 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  DEFAULT_KNOBS,
   ROAD_CROSS,
   STAGE_RULES as R,
   compileStage,
+  createLandField,
   createTerrain,
   crossOffset,
-  junctionThroat,
+  junctionFlat,
+  junctionMainEdge,
+  knobScale,
   vergeOffset,
   wearAt,
 } from "@engine";
 
-const WIDTH = R.roadWidth;
+const WIDTH = knobScale(DEFAULT_KNOBS.width, R.roadWidth);
 const HALF = WIDTH / 2;
+const gravel = { surface: "gravel", lift: 0 } as const;
+const asphalt = { surface: "asphalt", lift: 0 } as const;
 
 describe("the road's cross-section (R16)", () => {
   it("crowns the road: the middle is the highest line across it", () => {
-    const crown = crossOffset("gravel", false, 0, WIDTH);
+    const crown = crossOffset(gravel, 0, WIDTH);
     for (const lateral of [2, 4, 6, HALF]) {
-      expect(crossOffset("gravel", false, lateral, WIDTH)).toBeLessThan(crown);
-      expect(crossOffset("gravel", false, -lateral, WIDTH)).toBeLessThan(crown);
+      expect(crossOffset(gravel, lateral, WIDTH)).toBeLessThan(crown);
+      expect(crossOffset(gravel, -lateral, WIDTH)).toBeLessThan(crown);
     }
   });
 
   it("wears two tracks into the gravel where every car has driven", () => {
     const rut = ROAD_CROSS.rut.at * HALF;
     // The wheel track is lower than the road a meter either side of it...
-    expect(crossOffset("gravel", false, rut, WIDTH)).toBeLessThan(
-      crossOffset("gravel", false, rut - 1.6, WIDTH),
-    );
+    expect(crossOffset(gravel, rut, WIDTH)).toBeLessThan(crossOffset(gravel, rut - 1.6, WIDTH));
     // ...and it is the most worn part of the surface.
     expect(wearAt(rut, WIDTH)).toBeGreaterThan(wearAt(HALF, WIDTH));
     expect(wearAt(rut, WIDTH)).toBeCloseTo(1, 1);
     // Both sides, because a car has two wheels on an axle.
-    expect(crossOffset("gravel", false, -rut, WIDTH)).toBeCloseTo(
-      crossOffset("gravel", false, rut, WIDTH),
-      6,
-    );
+    expect(crossOffset(gravel, -rut, WIDTH)).toBeCloseTo(crossOffset(gravel, rut, WIDTH), 6);
   });
 
   it("polishes asphalt rather than rutting it, and lays it flatter", () => {
     const rut = ROAD_CROSS.rut.at * HALF;
-    const sealedRut =
-      crossOffset("asphalt", false, 0, WIDTH) - crossOffset("asphalt", false, rut, WIDTH);
-    const looseRut =
-      crossOffset("gravel", false, 0, WIDTH) - crossOffset("gravel", false, rut, WIDTH);
+    const sealedRut = crossOffset(asphalt, 0, WIDTH) - crossOffset(asphalt, rut, WIDTH);
+    const looseRut = crossOffset(gravel, 0, WIDTH) - crossOffset(gravel, rut, WIDTH);
     expect(sealedRut).toBeLessThan(looseRut);
     expect(ROAD_CROSS.crown.asphalt).toBeLessThan(ROAD_CROSS.crown.gravel);
   });
 
-  it("digs a ditch beside the road, and climbs back out of it", () => {
-    const shoulder = vergeOffset(ROAD_CROSS.verge.shoulder, 0, 0);
-    const bottom = vergeOffset(ROAD_CROSS.verge.ditchAt, 0, 0);
-    const lip = vergeOffset(ROAD_CROSS.reach, 0, 0);
-    expect(bottom).toBeLessThan(shoulder - 0.5);
-    expect(lip).toBeGreaterThan(bottom);
+  it("leans the verge away without ever digging a ditch beside the road", () => {
+    // R16 — past the shoulder the ground falls, and keeps falling: there
+    // is no low point anywhere out there for a car to drop into.
+    let previous = vergeOffset(ROAD_CROSS.chamfer, 0, 0);
+    for (let out = ROAD_CROSS.chamfer; out <= ROAD_CROSS.reach; out += 0.1) {
+      const here = vergeOffset(out, 0, 0);
+      expect(here).toBeLessThanOrEqual(previous + 1e-9);
+      previous = here;
+    }
+    // ...and the whole fall is a step a car can drive back up, not a
+    // trench that swallows it.
+    expect(vergeOffset(ROAD_CROSS.reach, 0, 0)).toBeGreaterThan(-0.6);
+  });
+
+  it("banks a turn into itself, and takes the crown out when it does (R19)", () => {
+    const banked = { ...gravel, bank: R.bank.max.gravel };
+    // Positive bank stands the LEFT edge proud — the outside of a
+    // right-hand turn, which is what positive curvature is.
+    expect(crossOffset(banked, -HALF, WIDTH)).toBeGreaterThan(crossOffset(banked, HALF, WIDTH));
+    // The fall runs one way across the whole width: no crown left to make
+    // the inside edge a gutter.
+    let previous = crossOffset(banked, -HALF, WIDTH);
+    for (let l = -HALF; l <= HALF; l += 0.5) {
+      const here = crossOffset(banked, l, WIDTH);
+      expect(here).toBeLessThanOrEqual(previous + 1e-6);
+      previous = here;
+    }
+    // And it is a road, not a speedway: the cross-fall stays inside the
+    // rate a car can be parked on.
+    const drop = crossOffset(banked, -HALF, WIDTH) - crossOffset(banked, HALF, WIDTH);
+    expect(drop / WIDTH).toBeLessThanOrEqual(R.bank.max.gravel + 1e-6);
+    expect(R.bank.max.asphalt).toBeLessThan(R.bank.max.gravel);
+  });
+
+  it("warps the cross-section flat inside a junction (R17)", () => {
+    const shaped = { ...gravel, bank: 0.06 };
+    const flat = { ...shaped, flat: 1 };
+    for (const l of [-HALF, -3, 0, 3, HALF]) {
+      expect(crossOffset(flat, l, WIDTH)).toBeCloseTo(0, 6);
+    }
+    expect(crossOffset(shaped, HALF, WIDTH)).not.toBeCloseTo(0, 3);
   });
 
   it("stands an asphalt mat proud of the ground beside it", () => {
     const lift = ROAD_CROSS.asphaltLift;
-    const edge = crossOffset("asphalt", false, HALF, WIDTH);
+    const edge = crossOffset(asphalt, HALF, WIDTH);
     // Off the mat's edge the ground drops by the lift plus the shoulder.
     expect(vergeOffset(ROAD_CROSS.chamfer + 0.1, lift, edge)).toBeLessThan(edge - lift * 0.8);
     // Unsealed road has no such step.
@@ -88,10 +122,11 @@ describe("junctions (R17)", () => {
         if (before.surface === after.surface) continue;
         if (before.surface === "water" || after.surface === "water") continue;
         changes += 1;
-        // Every surface change has a junction within a corner's reach of
-        // it — the two roads MEET there, at a place a surveyor picked.
+        // Every surface change happens at the edge of a junction's own
+        // platform — the two roads MEET there, and the seal stops where
+        // the main road's mat does, not at a segment boundary.
         const near = track.junctions.some(
-          (j) => Math.hypot(j.x - after.x, j.z - after.z) < R.paving.maxJunctionOffset + 20,
+          (j) => Math.hypot(j.x - after.x, j.z - after.z) < j.reach + WIDTH,
         );
         expect(near).toBe(true);
       }
@@ -120,9 +155,10 @@ describe("junctions (R17)", () => {
     }
   });
 
-  it("runs every branch off the map instead of ending it in a field", () => {
+  it("runs every branch off the map, or to the water that stopped it", () => {
     for (const seed of seeds) {
       const track = compileStage(seed, "medium", { asphalt: 0.4 });
+      const land = createLandField(seed, track.knobs);
       for (const spur of track.spurs) {
         const end = spur.samples[spur.samples.length - 1];
         const out =
@@ -130,7 +166,14 @@ describe("junctions (R17)", () => {
           end.x > track.bounds.maxX ||
           end.z < track.bounds.minZ ||
           end.z > track.bounds.maxZ;
-        expect(out).toBe(true);
+        // A branch leads somewhere: off the edge of the world, or to the
+        // shore of the lake that stopped it. Never into open country, and
+        // never out ACROSS the water on an embankment.
+        expect(out || spur.endsAt === "water").toBe(true);
+        // ...and wherever it stops, it stops on dry ground: a road ending
+        // in mid-air over open water is the one thing worse than a road
+        // ending in a field.
+        expect(land.flooded(end.x, end.z)).toBe(false);
         // ...and it is a real road while it lasts: sealed, then degrading
         // to gravel as it leaves the world.
         expect(spur.samples[0].surface).toBe("asphalt");
@@ -139,21 +182,60 @@ describe("junctions (R17)", () => {
     }
   });
 
-  it("paves the throat so the two mats are one surface", () => {
+  it("puts the junction ON the road, at a corner tight enough to be one", () => {
+    for (const seed of seeds) {
+      const track = compileStage(seed, "medium", { asphalt: 0.4 });
+      for (const junction of track.junctions) {
+        // The meeting point sits on the route's own centerline — not out
+        // at the intersection of two tangents, which on a sweeping corner
+        // is a hundred meters away in a field.
+        const onRoute = track.samples.some(
+          (sample) => Math.hypot(sample.x - junction.x, sample.z - junction.z) < 0.01,
+        );
+        expect(onRoute).toBe(true);
+        // ...and the corner it sits at turns hard enough that the two
+        // carriageways actually PART instead of peeling slowly apart over
+        // a slip road's worth of tangent.
+        const radius = 1 / Math.abs(junction.curve);
+        const parted = radius * Math.acos(Math.max(-1, 1 - track.width / radius));
+        expect(parted).toBeLessThanOrEqual(R.paving.junctionParts * track.width + 1e-6);
+      }
+    }
+  });
+
+  it("warps both carriageways onto one plane and cuts their borders away", () => {
     const track = compileStage(3, "medium", { asphalt: 0.5 });
     expect(track.junctions.length).toBeGreaterThan(0);
     for (const junction of track.junctions) {
-      const quads = junctionThroat(junction);
-      expect(quads.length).toBeGreaterThan(0);
-      // The throat starts INSIDE the main road's mat (so there is no seam)
-      // and opens wider at that end than where it becomes the branch.
-      const first = quads[0];
-      const last = quads[quads.length - 1];
-      const widthOf = (q: [number, number][]): number =>
-        Math.hypot(q[0][0] - q[3][0], q[0][1] - q[3][1]);
-      expect(widthOf(first)).toBeGreaterThan(widthOf(last));
-      const back = Math.hypot(first[0][0] - junction.x, first[0][1] - junction.z);
-      expect(back).toBeLessThan(junction.radius);
+      expect(junctionFlat(junction, junction.x, junction.z)).toBeCloseTo(1, 6);
+      // The main road's mat is the line the minor road stops at.
+      expect(junctionMainEdge(junction, junction.x, junction.z)).toBeCloseTo(
+        -junction.width / 2,
+        6,
+      );
+      // Both roads are flattened where they overlap...
+      const at = track.samples.find((sample) => sample.s === junction.s);
+      expect(at?.flat).toBeCloseTo(1, 2);
+      const spur = track.spurs.find((s) => s.atS === junction.s);
+      expect(spur?.samples[0].flat).toBeCloseTo(1, 2);
+      // ...and the branch is the main road CONTINUED, so it is exactly as
+      // wide as the carriageway the route was on.
+      expect(spur?.width).toBe(track.width);
+    }
+  });
+
+  it("paves the gore so the grass between two parting roads is an island", () => {
+    const track = compileStage(3, "medium", { asphalt: 0.5 });
+    for (const junction of track.junctions) {
+      expect(junction.gore.length).toBeGreaterThan(0);
+      for (const quad of junction.gore) {
+        for (const [x, z] of quad) {
+          // Every scrap of it is inside the junction it belongs to.
+          expect(Math.hypot(x - junction.x, z - junction.z)).toBeLessThan(
+            junction.reach + R.junction.goreNose + junction.width,
+          );
+        }
+      }
     }
   });
 

@@ -13,15 +13,21 @@
 
 import { createRng } from "../lib/prng.ts";
 import { hash2, smooth, valueNoise } from "../lib/noise.ts";
-import type { BridgeDeck, Surface, Track, TrackSample } from "./compile.ts";
+import type { Surface, Track, TrackSample } from "./compile.ts";
 import { createGuardField, type CornerGuard, type GuardField } from "./guards.ts";
 import { traceRivers, type River, type RiverAnchor } from "./river.ts";
-import { corridorOffset, ROAD_CROSS } from "./road.ts";
+import {
+  corridorOffset,
+  junctionFlat,
+  junctionPlatformY,
+  ROAD_CROSS,
+  type RoadShape,
+} from "./road.ts";
+import { createLandField, LAKE_Y } from "./land.ts";
 import { STAGE_RULES as R, knobScale } from "./rules.ts";
 import { createSpurIndex, type SpurIndex } from "./spurs.ts";
 
-/** The water table: ground below this floods into lakes and seas, m. */
-export const LAKE_Y = -11;
+export { LAKE_Y } from "./land.ts";
 /** Edge length of the ground lattice the physics rides and the renderer
  * triangulates its ground tiles on, m. The two must agree — see groundAt. */
 export const GROUND_CELL = 14;
@@ -363,7 +369,10 @@ export type TerrainField = {
 export function createTerrain(track: Track): TerrainField {
   const seed = (track.seed ^ 0x1b873593) >>> 0;
   const rng = createRng(seed);
-  const noiseSeed = rng.int(1, 1 << 30);
+  // The bare landscape draws the first of these for itself (land.ts); it
+  // is still taken from the stream here so everything after it keeps the
+  // seed it has always had.
+  rng.int(1, 1 << 30);
   const sideSeed = rng.int(1, 1 << 30);
 
   // ── Corridor queries: a spatial hash over the road samples ─────────────
@@ -420,50 +429,11 @@ export function createTerrain(track: Track): TerrainField {
     return { d, index: best, lateral };
   };
 
-  // The rolling far field, m: broad rises, medium hills, close texture —
-  // then the drama the open world is for. Mountain chains: a slow mask
-  // picks where they stand, ridged noise gives them spines and saddles.
-  // Sea basins: another slow mask sinks whole regions far under the water
-  // table, so the rolling coast runs out into open water.
-  // How hard the landscape's own relief is turned up, and how much of it
-  // stands under water — the `elevation` and `water` dials reach the world
-  // beside the road here, exactly as they reach the road itself in the
-  // compiler's rolling profile.
-  const relief = knobScale(track.knobs.elevation, R.elevation.knob);
-  const ponds = knobScale(track.knobs.water, R.wet.ponds);
-
-  const farField = (x: number, z: number): number => {
-    const rolling =
-      (valueNoise(x, z, 430, noiseSeed) - 0.5) * 52 +
-      (valueNoise(x, z, 150, noiseSeed + 7) - 0.5) * 16 +
-      (valueNoise(x, z, 46, noiseSeed + 13) - 0.5) * 4;
-    const mountainMask = smooth(clamp01((valueNoise(x, z, 1150, noiseSeed + 17) - 0.58) / 0.42));
-    const ridge = 1 - Math.abs(2 * valueNoise(x, z, 300, noiseSeed + 19) - 1);
-    // The sea basins answer the `water` dial too — a DRY stage that still
-    // ran between lakes would make the dial a liar. Half a dial reproduces
-    // the threshold and depth the world had before it existed.
-    const seaMask = smooth(
-      clamp01((valueNoise(x, z, 1600, noiseSeed + 23) - (0.86 - ponds * 0.3)) / 0.34),
-    );
-    // Escarpments: a wandering fault line where the ground steps down a
-    // dozen meters over a few — the cliff edges the wild's spontaneous
-    // jumps launch off. Recentered so the water table stays put.
-    const esc = smooth(clamp01((valueNoise(x, z, 520, noiseSeed + 29) - 0.52) / 0.05));
-    // Ponds: hollows on a tighter scale than the sea basins, sunk just far
-    // enough under the water table to fill. They are what puts water IN the
-    // nature — a lake the road runs past, a tarn behind the treeline, water
-    // to be driven into and drowned in, rather than only crossed.
-    const pond =
-      ponds > 0
-        ? smooth(clamp01((valueNoise(x, z, 340, noiseSeed + 31) - (0.9 - ponds * 0.14)) / 0.1))
-        : 0;
-    return (
-      (rolling + mountainMask * ridge * ridge * 70 + esc * 13) * relief -
-      seaMask * (30 + ponds * 26) -
-      pond * (10 + ponds * 8) -
-      6
-    );
-  };
+  // The bare landscape the road was laid across (land.ts) — the same
+  // country the branch builder steered by, so nothing here can disagree
+  // with where the water is.
+  const land = createLandField(track.seed, track.knobs);
+  const farField = land.heightAt;
 
   // Per-side embankment grade along the stage, m per m of distance from the
   // shoulder: positive climbs into a hillside wall, negative drops toward a
@@ -490,10 +460,6 @@ export function createTerrain(track: Track): TerrainField {
    * anyone sees there. `groundAt` puts the physics back on the ribbon. */
   const TILE_SINK = 0.35;
 
-  /** How far past an apron's edge it blends back into the roads it joins,
-   * m — short, because a junction has an edge in real life too. */
-  const APRON_RIM = 4;
-
   /** How far past a branch's own corridor its shelf blends back into the
    * landscape, m — inside the branch index's search reach, or the blend
    * would end at a cell boundary instead of where it means to. */
@@ -507,32 +473,29 @@ export function createTerrain(track: Track): TerrainField {
 
   /** Anything with a road's cross-section: a stage sample or a branch's
    * (the branch has no bridges, so its deck is simply absent). */
-  type RibbonSample = {
-    elevation: number;
-    surface: Surface;
-    deck?: BridgeDeck | null;
-    lift: number;
-  };
+  type RibbonSample = RoadShape & { elevation: number };
 
   /** The corridor's own cross-section at a distance from a road's center:
    * the mat's crown and wheel tracks inside the edge, its shoulder, ditch
    * and lip outside it (road.ts). One function for the stage road and for
    * an abandoned branch — they are the same kind of thing. */
   const ribbonY = (s: RibbonSample, d: number, width: number): number =>
-    s.elevation + corridorOffset(s.surface, s.deck != null, d, width, s.lift);
+    s.elevation + corridorOffset(s, d, width);
 
-  /** R17 — the junction aprons, as ground: inside one the corridor is flat
-   * paved road at the junction's grade, whichever road's verge would
-   * otherwise have run through it. Returns the apron height and how much
-   * of it applies (1 in the middle, fading over the rim), or null. */
+  /** R17 — the junction platforms, as ground: inside one the corridor is a
+   * single graded plane on the MAIN road's own slope, whichever road's
+   * verge would otherwise have run through it. Returns the plane's height
+   * there and how much of it applies (1 in the middle, fading over the
+   * platform's rim), or null. Both carriageways were warped onto this same
+   * plane when they were compiled, so nothing has to be reconciled here —
+   * the ground simply agrees with the roads standing on it. */
   const apronAt = (x: number, z: number): { y: number; weight: number } | null => {
     let best: { y: number; weight: number } | null = null;
     for (const junction of track.junctions) {
-      const d = Math.hypot(junction.x - x, junction.z - z);
-      if (d > junction.radius + APRON_RIM) continue;
-      const weight = 1 - smooth(clamp01((d - junction.radius) / APRON_RIM));
+      const weight = junctionFlat(junction, x, z);
+      if (weight <= 0) continue;
       if (best && best.weight >= weight) continue;
-      best = { y: junction.y, weight };
+      best = { y: junctionPlatformY(junction, x, z), weight };
     }
     return best;
   };

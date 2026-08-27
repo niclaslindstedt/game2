@@ -2,7 +2,7 @@
 // Renders a generated stage as a picture of the PLACE rather than a
 // diagram of it: the landscape shaded by its own slope, the lakes and the
 // streams, the forest, and the road drawn across its full width — the worn
-// wheel tracks, the shoulder, the ditch, the tarmac sections with their
+// wheel tracks, the shoulder, the tarmac sections with their
 // markings, the bridges, and the branches the route abandons at its
 // junctions. Everything is read from the same engine field the game builds
 // its world from, so what shows up here is what the player will drive
@@ -36,7 +36,7 @@ const ROAD = {
   water: { loose: [0x8f, 0xa6, 0xc6], worn: [0x8f, 0xa6, 0xc6] },
   deck: { loose: [0xb7, 0xb3, 0xa8], worn: [0xa4, 0xa0, 0x96] },
   shoulder: [0x8a, 0x73, 0x4f],
-  ditch: [0x6f, 0x6a, 0x45],
+  verge: [0x6f, 0x8f, 0x3e],
   marking: [0xe6, 0xe2, 0xd2],
   rumbleRed: [0xe2, 0x3c, 0x2c],
   rumbleWhite: [0xf6, 0xf3, 0xea],
@@ -81,7 +81,15 @@ function shade(color, light) {
  * @param {number} opts.height   image height, px
  */
 export function renderStage({ track, terrain, engine, width = 1280, height = 800 }) {
-  const { LAKE_Y, ROAD_CROSS, corridorOffset, wearAt, junctionThroat } = engine;
+  const {
+    LAKE_Y,
+    ROAD_CROSS,
+    corridorOffset,
+    wearAt,
+    junctionDust,
+    junctionFlat,
+    junctionMainEdge,
+  } = engine;
   const canvas = createCanvas(width, height, GROUND.grass);
 
   // ── Frame: the road, then as much country as the picture has room for ──
@@ -177,15 +185,14 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
   // ── The roads ──────────────────────────────────────────────────────────
   /** Lateral stations across a road, in meters from its centerline: the
    * mat sampled finely enough for the wheel tracks to show, then the
-   * shoulder, the ditch and the outer lip. */
+   * shoulder and the grassed slope past it (R16 — no ditch). */
   const stationsOf = (roadWidth) => {
     const half = roadWidth / 2;
     const mat = [0, 0.2, 0.34, 0.44, 0.54, 0.7, 0.86, 1].map((t) => t * half);
     const out = [
       ROAD_CROSS.chamfer,
-      ROAD_CROSS.verge.ditchFrom,
-      ROAD_CROSS.verge.ditchAt,
-      ROAD_CROSS.verge.ditchTo,
+      ROAD_CROSS.verge.bareTo,
+      (ROAD_CROSS.verge.bareTo + ROAD_CROSS.reach) / 2,
       ROAD_CROSS.reach,
     ].map((d) => half + d);
     return [
@@ -196,12 +203,33 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
     ];
   };
 
-  /** R17 — inside a junction neither road wears a border: the shoulder,
-   * the ditch and the edge lines are cut away and the throat below is
-   * paved over the gap. */
-  const inJunction = (x, z) => track.junctions.some((j) => Math.hypot(j.x - x, j.z - z) < j.radius);
+  /** R17 — how far past the MAIN road's edge a point lies at the nearest
+   * junction, m; null where none reaches it. The tarmac stops at that
+   * line, and the gravel road that meets it starts there. */
+  const pastMainEdge = (x, z) => {
+    let best = null;
+    for (const j of track.junctions) {
+      const out = junctionMainEdge(j, x, z);
+      if (out === null) continue;
+      if (best === null || out < best) best = out;
+    }
+    return best;
+  };
+  /** Meters of tarmac the gravel is still dragged out over. */
+  const DRAG_OUT = 13;
+  /** ...and how much gravel the tarmac wears at the mouth in return. */
+  const DRAG_ON = 0.42;
 
-  const bandColor = (sample, lat, roadWidth) => {
+  /** R17 — inside a junction neither road wears a border: the shoulder and
+   * the edge lines are cut away, and a minor road has none at all where it
+   * stands on the mat of the road it meets. */
+  const inJunction = (x, z) => {
+    if (track.junctions.some((j) => junctionFlat(j, x, z) > 0.25)) return true;
+    const past = pastMainEdge(x, z);
+    return past !== null && past < 1.5;
+  };
+
+  const bandColor = (sample, lat, roadWidth, x, z) => {
     const half = roadWidth / 2;
     const out = Math.abs(lat) - half;
     const bridge = sample.deck != null;
@@ -212,11 +240,33 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
         : sample.surface === "asphalt"
           ? "asphalt"
           : "gravel";
-    if (out <= 0) return mix(ROAD[kind].loose, ROAD[kind].worn, wearAt(lat, roadWidth));
+    if (out <= 0) {
+      // Inside a junction the wear flattens: two roads' wheel tracks
+      // crossing is the tell that two ribbons were laid over one another.
+      const flat = sample.flat ?? 0;
+      const wear = wearAt(lat, roadWidth) * (1 - flat) + 0.55 * flat;
+      const own = mix(ROAD[kind].loose, ROAD[kind].worn, wear);
+      if (kind === "asphalt") {
+        // The gravel every car drags onto the seal as it turns out.
+        const dust = Math.max(0, ...track.junctions.map((j) => junctionDust(j, x, z)));
+        if (dust <= 0) return own;
+        return mix(own, mix(ROAD.gravel.loose, ROAD.gravel.worn, 0.5), dust * DRAG_ON);
+      }
+      if (kind !== "gravel") return own;
+      // R17 — the seam runs along the main road's own edge, at its angle.
+      const past = pastMainEdge(x, z);
+      if (past === null || past >= DRAG_OUT) return own;
+      const t = Math.max(0, past) / DRAG_OUT;
+      return mix(own, mix(ROAD.asphalt.loose, ROAD.asphalt.worn, 0.55), 1 - t * t * (3 - 2 * t));
+    }
     if (bridge) return null; // nothing beside a deck but the drop
     if (inJunction(sample.x, sample.z)) return null; // the junction is all road
-    if (out < ROAD_CROSS.verge.ditchFrom) return ROAD.shoulder;
-    return ROAD.ditch;
+    if (out < ROAD_CROSS.verge.bareTo) return ROAD.shoulder;
+    return mix(
+      ROAD.shoulder,
+      ROAD.verge,
+      Math.min(1, (out - ROAD_CROSS.verge.bareTo) / (ROAD_CROSS.reach - ROAD_CROSS.verge.bareTo)),
+    );
   };
 
   const drawRoad = (samples, roadWidth) => {
@@ -229,13 +279,12 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
       for (let k = 0; k < lat.length - 1; k++) {
         const l0 = lat[k];
         const l1 = lat[k + 1];
-        const color = bandColor(c, (l0 + l1) / 2, roadWidth);
+        const lm = (l0 + l1) / 2;
+        const color = bandColor(c, lm, roadWidth, c.x + cr.x * lm, c.z + cr.z * lm);
         if (!color) continue;
-        // Shade the band by its own cross-fall, so the crown and the ruts
-        // are visible as SHAPE and not only as color.
-        const fall =
-          corridorOffset(c.surface, c.deck != null, l1, roadWidth, c.lift) -
-          corridorOffset(c.surface, c.deck != null, l0, roadWidth, c.lift);
+        // Shade the band by its own cross-fall, so the crown, the ruts and
+        // the corner's bank are visible as SHAPE and not only as color.
+        const fall = corridorOffset(c, l1, roadWidth) - corridorOffset(c, l0, roadWidth);
         const light = 1 + Math.max(-0.28, Math.min(0.28, fall * 1.6));
         canvas.poly(
           [
@@ -286,11 +335,30 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
   for (const spur of track.spurs) {
     drawRoad(spur.samples, spur.width);
     drawMarkings(spur.samples, spur.width);
-    // The tape and cones across it: the stage does not go this way. Drawn
-    // deliberately over-scale — at a whole stage's zoom a real traffic cone
-    // is a fifth of a pixel, and what this picture has to answer is "which
-    // way does the route go", not "how big is a cone".
-    const at = spur.samples[Math.min(spur.samples.length - 1, 3)];
+  }
+  drawRoad(track.samples, track.width);
+  drawMarkings(track.samples, track.width);
+  // The junction gore noses: the pavement carried out to where the two
+  // carriageways have parted enough for the grass between them to be an
+  // island rather than a knife edge (R17).
+  for (const junction of track.junctions) {
+    for (const quad of junction.gore) {
+      canvas.poly(
+        quad.map(([x, z]) => [px(x), pz(z)]),
+        ROAD.asphalt.worn,
+      );
+    }
+  }
+  // The tape and cones across every abandoned branch: the stage does not
+  // go this way. Drawn LAST, because a closure the road is painted over is
+  // no closure at all — and set past the junction's own platform, where a
+  // marshal would actually stand it rather than in the middle of the
+  // crossing. Deliberately over-scale: at a whole stage's zoom a real
+  // traffic cone is a fifth of a pixel, and what this picture has to
+  // answer is "which way does the route go", not "how big is a cone".
+  for (const spur of track.spurs) {
+    const at =
+      spur.samples.find((sample) => sample.flat <= 0) ?? spur.samples[spur.samples.length - 1];
     const r = { x: Math.cos(at.heading), z: -Math.sin(at.heading) };
     const arm = spur.width / 2 + 1;
     canvas.poly(
@@ -311,18 +379,6 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
     for (let k = -2; k <= 2; k++) {
       const l = (k / 2.4) * (spur.width / 2);
       canvas.disk(px(at.x + r.x * l), pz(at.z + r.z * l), Math.max(2, scale * 1.4), ROAD.cone);
-    }
-  }
-  drawRoad(track.samples, track.width);
-  drawMarkings(track.samples, track.width);
-  // The junction throats: the flared mouth that joins a branch's mat to
-  // the road it leaves, over the strip of verge both cut away (R17).
-  for (const junction of track.junctions) {
-    for (const quad of junctionThroat(junction)) {
-      canvas.poly(
-        quad.map(([x, z]) => [px(x), pz(z)]),
-        ROAD.asphalt.worn,
-      );
     }
   }
 

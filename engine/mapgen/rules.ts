@@ -43,6 +43,24 @@
 //   R15 Asphalt comes in RUNS, never a chequerboard: the paving field lays
 //       the road down in sections hundreds of meters long, and the knobs'
 //       `asphalt` is the share of the stage that comes out paved.
+//   R16 The road has a CROSS-SECTION: a crown it sheds water off, two worn
+//       wheel tracks, a berm of pushed gravel at its edges, and a shoulder
+//       that falls gently away to the landscape. No ditch — a trench beside
+//       a rally road is a trap the eye reads as a scar, not as drainage.
+//   R17 Roads MEET at a planned junction, ON the centerline: the route turns
+//       off (or onto) the road at a real corner, the arm it abandons carries
+//       straight on along the corner's tangent and runs off the map, and the
+//       ground where the two carriageways overlap is one graded platform —
+//       no borders, no markings, one surface, one plane.
+//   R19 Turns are BANKED. A road built through a corner is superelevated so
+//       water and cars both stay on it: the cross-fall rolls from the crown
+//       into the turn over a runoff, tops out at `bank.max` for the
+//       surface, and rolls back out again. Never a wall of a bank — this is
+//       a country road, not a speedway.
+//   R20 A JUMP never sits on sealed road. A tarmac section is a public road
+//       the rally borrows; nobody builds a launch ramp into one.
+//   R21 The road's WIDTH is a dial: `knobs.width` runs from a narrow lane
+//       the trees crowd to a broad boulevard with room to place the car.
 
 export type TurnSeverity = "soft" | "medium" | "hard";
 export type SegmentFeature = "none" | "jump" | "water" | "crest";
@@ -66,6 +84,11 @@ export type StageKnobs = {
   /** The share of the road that is asphalt, 0..1 — grip, tighter lines,
    * and tire smoke instead of a gravel plume. */
   asphalt: number;
+  /** R21 — how wide the road is, 0..1 across `roadWidth`'s band. 0 is a
+   * narrow lane where the line is the only line there is; 1 is a broad
+   * boulevard with room to throw the car at a corner and still be on the
+   * road when it lands. */
+  width: number;
 };
 
 /** The default dial positions — the stage the rules built before the knobs
@@ -78,6 +101,9 @@ export const DEFAULT_KNOBS: StageKnobs = {
   // is enough for the tarmac sections to be an event, and the sim says
   // that is about what the stage's drift time can pay for.
   asphalt: 0.25,
+  // The width the stage vocabulary — turn radii, the bot's line, the drift
+  // tuning — was measured against.
+  width: 0.55,
 };
 
 function clamp01(v: number): number {
@@ -93,6 +119,7 @@ export function resolveKnobs(knobs?: Partial<StageKnobs>): StageKnobs {
     water: clamp01(knobs?.water ?? DEFAULT_KNOBS.water),
     trees: clamp01(knobs?.trees ?? DEFAULT_KNOBS.trees),
     asphalt: clamp01(knobs?.asphalt ?? DEFAULT_KNOBS.asphalt),
+    width: clamp01(knobs?.width ?? DEFAULT_KNOBS.width),
   };
 }
 
@@ -194,9 +221,14 @@ export const STAGE_RULES = {
   maxSameDirectionTurns: 2,
   maxSameDirectionAngle: Math.PI * 1.15,
 
-  /** Road width, meters (full width, centerline to edge is half). Broad,
-   * Sega Rally style — the road is a boulevard through the landscape. */
-  roadWidth: 16,
+  /** R21 — road width, meters (full width; centerline to edge is half).
+   * The `width` dial reads this band: the low end is a real country lane,
+   * where the road is the only line and a corner is a commitment; the high
+   * end is an arcade boulevard with room to place the car sideways and
+   * still land on tarmac. The default position (0.55) is the width the
+   * turn vocabulary and the drift tuning were measured against, so moving
+   * the dial changes the stage's character and not its rules. */
+  roadWidth: { min: 9, max: 22 },
 
   /** Rolling elevation, laid under the feature ramps: seeded value NOISE
    * summed over a few octaves along arc length, so no two hills on a stage
@@ -328,10 +360,57 @@ export const STAGE_RULES = {
      * junction (taped shut). Too shallow a corner and the two roads merge
      * at a glance instead of meeting; too tight and the junction is a
      * hairpin, which is not how roads are laid out either. */
-    junctionAngle: { min: Math.PI / 3, max: Math.PI * 0.62 },
-    /** How far the tangents of that corner run before they meet, capped —
-     * the junction proper sits at their intersection, m. */
-    maxJunctionOffset: 60,
+    junctionAngle: { min: Math.PI / 2.8, max: Math.PI * 0.62 },
+    /** ...and only at a corner tight enough that the two carriageways
+     * actually PART. The route's corner and the arm it abandons share a
+     * tangent at the meeting point, so they run over the same ground until
+     * the corner has swung the route clear of the main road's mat. Let
+     * that take long enough and what the picture shows is two ribbons
+     * peeling slowly away from each other — a slip road, not a junction.
+     * Measured in road WIDTHS, because how a junction reads is a matter of
+     * proportion: a narrow lane may part in fifteen meters and a boulevard
+     * take forty, and both look like the same place. */
+    junctionParts: 2.4,
+  },
+
+  /** R17 — the junction PLATFORM: the graded area where the two roads
+   * overlap and become one piece of ground. */
+  junction: {
+    /** How far from the meeting point the platform reaches, as a multiple
+     * of the separation distance the two carriageways need — the whole
+     * region where their mats overlap, plus a little. Inside it neither
+     * road wears a border, a marking or a camber, and the ground is one
+     * plane on the through road's own grade. */
+    platform: 0.95,
+    /** ...clamped, m, so a junction is a junction and not a car park. */
+    reach: { min: 20, max: 40 },
+    /** Where the two carriageways have parted by this much, the paving
+     * stops and the grass gore between them starts, m. Below it the gap is
+     * a seam, not an island, and paving over it is what keeps a junction
+     * from ending in a knife edge of grass. */
+    goreNose: 7,
+  },
+
+  /** R19 — SUPERELEVATION: how far a turn is banked into itself. A road
+   * built through a corner is tilted so the outside edge stands proud of
+   * the inside; it is what stops the water — and the cars — running off
+   * the outside. The rate is read off the turn's radius against
+   * `pivotRadius` (a corner twice as tight banks twice as hard, up to the
+   * ceiling), and the ceiling itself is a real road's, not a speedway's:
+   * a rally car has to be able to stop on it, and a road nobody could park
+   * on is a road nobody built. Gravel takes more than tarmac — a graded
+   * surface is shaped by the blade every season, and a bladed corner is
+   * always banked harder than a paved one. */
+  bank: {
+    /** Cross-fall ceiling, m per m of road width, per surface. */
+    max: { gravel: 0.085, asphalt: 0.055 },
+    /** The radius that earns half the ceiling, m — tighter corners bank
+     * harder, and the curve flattens off rather than running away. */
+    pivotRadius: 42,
+    /** Meters of road the cross-fall rolls in and out over. A road does not
+     * change its cross-section in a step; the runoff is what makes a banked
+     * corner something the car settles into instead of hits. */
+    runoff: 34,
   },
 
   /** R8 — crest placement. A blind brow is a long, gentle rise that hides
