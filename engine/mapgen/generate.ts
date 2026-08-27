@@ -2,8 +2,9 @@
 // The stage generator's search loops: a rules engine that assembles a stage
 // from the segment vocabulary in rules.ts while enforcing every R-rule.
 // Candidate segments are drawn from the seeded RNG and validated against the
-// world bounds (R9) and the self-distance rule (R10); a candidate that fails
-// is re-drawn a bounded number of times, then the generator backtracks one
+// world bounds (R9), the self-distance rule (R10/R23) and the start zone
+// (R24); a candidate that fails is re-drawn a bounded number of times, then
+// the generator backtracks one
 // segment rather than shipping a violation. The result is a deterministic
 // function of the seed. Endless stages use the same vocabulary through
 // `createStageStream`, which appends sections forever instead of closing;
@@ -20,13 +21,15 @@ import {
   type StageKnobs,
   type StageShape,
 } from "./rules.ts";
-import { resolveKnobs } from "./rules.ts";
+import { knobScale, resolveKnobs } from "./rules.ts";
 import { generateCircuit } from "./circuit.ts";
+import { roadClearance } from "./road.ts";
 import {
   PROBE_STEP,
   assignFeature,
   createPointField,
   drawTurn,
+  entersStart,
   inBounds,
   probePoints,
   recomputeSameDirRun,
@@ -67,7 +70,10 @@ function tryGenerateStage(
   const spec = R.stageLengths[length];
   const rng = createRng(seed);
   const plans: SegmentPlan[] = [];
-  const field = createPointField();
+  // R23 — the whole search is measured in the road's own clearance, which
+  // is what the width dial makes of it.
+  const clear = roadClearance(knobScale(knobs.width, R.roadWidth));
+  const field = createPointField(clear);
   let cursor: Cursor = { x: 0, z: 0, heading: 0, arc: 0 };
   let total = 0;
   let sLastLipEnd = -Infinity;
@@ -145,7 +151,7 @@ function tryGenerateStage(
 
       const { points, end } = probePoints(cursor, plan);
       if (!points.every((p) => inBounds(p, spec.worldBound))) continue;
-      if (points.some((p) => field.blocked(p))) continue;
+      if (points.some((p) => field.blocked(p) || entersStart(p, clear))) continue;
       commit(plan, points, end);
       placed = true;
     }
@@ -172,12 +178,24 @@ function tryGenerateStage(
   // (R10) or leave the world (R9) sheds tail segments until it fits, and a
   // stage that cannot fit a legal finish above the minimum length is
   // rejected so the caller retries with a sub-seed.
+  //
+  // Validated with the RUN-OFF on the end of it (R24): the apron past the
+  // flying finish is drawn road with a terrain shelf under it, so a stage
+  // that closes across its own line leaves that road hanging in the air
+  // just as surely as one that closes across the line itself.
   const closing: SegmentPlan = { kind: "straight", length: R.closingStraight, feature: "none" };
+  const runOff: SegmentPlan = { kind: "straight", length: R.startZone.apron, feature: "none" };
   for (;;) {
     const { points, end } = probePoints(cursor, closing);
+    // The run-off is checked for clearance but not for BOUNDS: the world
+    // bound is the box the search folds the line inside, not a wall, and a
+    // finish placed legally near it may run its apron over the edge.
+    const past = probePoints(end, runOff).points;
+    const clearOfEverything = (p: Cursor): boolean => !field.blocked(p) && !entersStart(p, clear);
     if (
       points.every((p) => inBounds(p, spec.worldBound)) &&
-      !points.some((p) => field.blocked(p))
+      points.every(clearOfEverything) &&
+      past.every(clearOfEverything)
     ) {
       commit(closing, points, end);
       return total >= spec.band.min ? plans : null;
@@ -220,7 +238,8 @@ export type StageStream = {
 export function createStageStream(seed: number, knobs?: Partial<StageKnobs>): StageStream {
   const dials = resolveKnobs(knobs);
   const rng = createRng(seed);
-  const field = createPointField();
+  const clear = roadClearance(knobScale(dials.width, R.roadWidth));
+  const field = createPointField(clear);
   let cursor: Cursor = { x: 0, z: 0, heading: 0, arc: 0 };
   let total = 0;
   /** Generation high-water mark — never rewound by a backtrack, so the
@@ -284,7 +303,7 @@ export function createStageStream(seed: number, knobs?: Partial<StageKnobs>): St
       // error budget is redrawn (a turn's heading is monotonic, so checking
       // the exit covers the whole arc).
       if (Math.abs(angleDiff(end.heading, course)) > R.endless.maxCourseError) continue;
-      if (points.some((p) => field.blocked(p))) continue;
+      if (points.some((p) => field.blocked(p) || entersStart(p, clear))) continue;
       commit(plan, points, end);
       return true;
     }

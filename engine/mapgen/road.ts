@@ -24,6 +24,7 @@
 // numbers in three files.
 
 import type { BridgeDeck, Surface } from "./compile.ts";
+import { STAGE_RULES as R } from "./rules.ts";
 
 /** The cross-section, in meters unless noted. Lateral positions are given
  * as a fraction of the road's half-width (`t`, 0 at the centerline, 1 at
@@ -87,6 +88,18 @@ export const ROAD_CROSS = {
    * over. */
   reach: 6.5,
 } as const;
+
+/** R23 — the room a road of `width` keeps to itself, m, measured
+ * CENTERLINE to centerline: both corridors' full reach (mat plus the verge
+ * the ribbon draws beside it) plus the bare country between them. The
+ * terrain can only lay its shelf under one road, so two corridors closer
+ * than this leave one of them hanging over the country with nothing under
+ * it. It has to scale with the `width` dial: a fixed number that clears two
+ * lane-wide roads is inside the mats of two boulevard-wide ones. */
+export function roadClearance(width: number): number {
+  const corridor = width / 2 + ROAD_CROSS.reach;
+  return Math.max(R.minSelfDistance, 2 * corridor + R.roadClear.margin);
+}
 
 function sq(v: number): number {
   return v * v;

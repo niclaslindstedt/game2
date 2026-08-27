@@ -412,6 +412,19 @@ type Compiler = {
  * leave the neighbourhood (well past the fog ceiling). */
 const STREAMED_ESCAPE = 460;
 
+/** How far a branch's keep-out query resolves, m; past this it answers
+ * exactly "this far and no nearer". It has to cover the branch's own
+ * look-ahead plus the widest clearance a road can earn (R23), because the
+ * branch treats the answer as a PROMISE about the next few steps and a
+ * capped distance it walked past would be a promise the query never made. */
+const ROAD_DISTANCE_REACH = 220;
+
+/** Arc either side of a junction where the route IS the branch's own road,
+ * m: inside it the two carriageways are one, so the branch is not measured
+ * against them. Wide enough to cover the corner the junction sits on and
+ * the run out of it. */
+const SPUR_JUNCTION_WINDOW = 240;
+
 /** The incremental heart: walks plans into samples, bounds, and pacenotes,
  * carrying the cursor (and the open pacenote, so a turn combination split
  * across two endless sections still merges into one call). */
@@ -613,11 +626,100 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
     junction.gore = quads;
   };
 
+  /** R23/R24 — the ground a branch has to keep off, as a distance query:
+   * the stage's own centerline and the aprons its start and finish stand
+   * on. The road around the branch's OWN junction is excluded — the two
+   * carriageways are one road there, which is the whole point of a
+   * junction — so the exclusion is an arc window either side of it.
+   *
+   * Sampled through a spatial hash: a branch asks this a few thousand times
+   * while it walks, and a scan of an xlong stage's samples per ask is
+   * seconds of work per stage. */
+  const roadDistanceField = () => {
+    const CELL = 48;
+    // Numeric cell keys: a branch asks this tens of thousands of times, and
+    // a template string per probe is a string allocated per probe. Cell
+    // indices are bounded by the world (a few dozen either way), so packing
+    // two of them into one integer cannot collide.
+    const key = (ix: number, iz: number): number => ix * 8192 + iz;
+    const grid = new Map<number, TrackSample[]>();
+    const rings = Math.ceil(ROAD_DISTANCE_REACH / CELL);
+    // ...and the same cells DILATED by the query's reach: a cell in here is
+    // one from which road might be visible at all. Most of a branch's walk
+    // happens outside every one of them, and out there the whole query is a
+    // single set lookup instead of a hundred-cell probe.
+    const inReach = new Set<number>();
+    // One sample in eight is enough resolution for a question whose answer
+    // is compared against a clearance in the tens of meters — and an eighth
+    // of the points to walk. The slack it introduces is half the coarsened
+    // spacing, subtracted off the answer so this can only ever under-report
+    // the distance, never claim room the branch does not have.
+    const STRIDE = 8;
+    const slack = (STRIDE * SAMPLE_STEP) / 2;
+    for (let i = 0; i < track.samples.length; i += STRIDE) {
+      const sample = track.samples[i];
+      const ix = Math.floor(sample.x / CELL);
+      const iz = Math.floor(sample.z / CELL);
+      const at = key(ix, iz);
+      const bucket = grid.get(at);
+      if (bucket) {
+        bucket.push(sample);
+        continue;
+      }
+      grid.set(at, [sample]);
+      for (let dx = -rings - 1; dx <= rings + 1; dx++) {
+        for (let dz = -rings - 1; dz <= rings + 1; dz++) inReach.add(key(ix + dx, iz + dz));
+      }
+    }
+    /** Distance to the apron running back from `sample` against its heading
+     * (the start's run-up) or forward along it (the finish's run-off). */
+    const apronDistance = (sample: TrackSample, sign: 1 | -1, x: number, z: number): number => {
+      const along =
+        ((x - sample.x) * Math.sin(sample.heading) + (z - sample.z) * Math.cos(sample.heading)) *
+        sign;
+      const lateral =
+        (x - sample.x) * Math.cos(sample.heading) - (z - sample.z) * Math.sin(sample.heading);
+      return Math.hypot(lateral, along <= 0 ? -along : Math.max(0, along - R.startZone.apron));
+    };
+    const first = track.samples[0];
+    const last = track.samples[track.samples.length - 1];
+    return (ignoreFrom: number, ignoreTo: number) =>
+      (x: number, z: number): number => {
+        let best = apronDistance(first, -1, x, z);
+        if (!track.endless) best = Math.min(best, apronDistance(last, 1, x, z));
+        const cx = Math.floor(x / CELL);
+        const cz = Math.floor(z / CELL);
+        if (!inReach.has(key(cx, cz))) return Math.min(best, ROAD_DISTANCE_REACH);
+
+        // Ring by ring out from the query, so the first road found bounds
+        // the search: nothing in a cell `n` rings out can be nearer than
+        // (n − 1) cells, so once that beats `best` there is nothing left to
+        // find and the outer rings are never walked at all.
+        for (let ring = 0; ring <= rings; ring++) {
+          if ((ring - 1) * CELL >= best) break;
+          for (let dx = -ring; dx <= ring; dx++) {
+            const edge = Math.abs(dx) === ring;
+            for (let dz = -ring; dz <= ring; dz++) {
+              if (!edge && Math.abs(dz) !== ring) continue;
+              for (const sample of grid.get(key(cx + dx, cz + dz)) ?? []) {
+                if (sample.s > ignoreFrom && sample.s < ignoreTo) continue;
+                const d = Math.hypot(sample.x - x, sample.z - z);
+                if (d < best) best = d;
+              }
+            }
+          }
+        }
+        return Math.min(Math.max(0, best - slack), ROAD_DISTANCE_REACH);
+      };
+  };
+
   /** Build the branch every noted junction earns, now that the road they
    * hang off is compiled. A finite stage hands each branch the stage's own
    * bounding box to escape; a streamed one has no box, so the branch just
    * has to get out of the junction's neighbourhood. */
   const buildForks = (): void => {
+    if (junctions.length === 0) return;
+    const roadDistance = roadDistanceField();
     for (const junction of junctions) {
       const box = track.endless
         ? {
@@ -642,6 +744,7 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
           box,
           land,
           track.width,
+          roadDistance(junction.s - SPUR_JUNCTION_WINDOW, junction.s + SPUR_JUNCTION_WINDOW),
         ),
       );
     }

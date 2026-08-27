@@ -34,8 +34,9 @@ export const GROUND_CELL = 14;
 /** Plain dirt road extrapolated straight past each stage end, m — the
  * rally start's run-up before the gate, and run-off past the flying
  * finish. The terrain keeps its shelf flat under the same corridor so the
- * apron never floats or drowns. */
-export const APRON = 30;
+ * apron never floats or drowns, the physics rides it, and R24 keeps every
+ * other road off it. One number, stated in the rule book. */
+export const APRON = R.startZone.apron;
 
 function clamp01(t: number): number {
   return t < 0 ? 0 : t > 1 ? 1 : t;

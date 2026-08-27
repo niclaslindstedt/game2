@@ -20,9 +20,11 @@ import { glowTexture } from "./textures.ts";
  * reads as SWITCHED ON rather than as a red panel. The car is fullbright and
  * takes the time of day as a tint (renderer.ts), which is right for paint and
  * wrong for a lamp — a lamp is the one thing on the body that gets brighter
- * as the light goes, not darker. Additive, so it survives the tint underneath
- * it. */
+ * as the light goes, not darker. Additive over the lens, and exempt from the
+ * tint by name, so the failing light cannot bleach the red out of it. */
 const LAMP_GLOW = 0xff2a14;
+/** The name that exempts it — matched in the renderer's `applyTint`. */
+export const LAMP_MATERIAL = "car-lamp";
 /** How far the bloom spreads past the lens, as a multiple of the lens size. */
 const LAMP_SPREAD = 3.4;
 /** Bloom strength with the lights off (daylight) and on (dusk, night). */
@@ -111,6 +113,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
   // panel they are stuck to instead of hovering where the tail used to be.
   const lampMap = glowTexture();
   const lampMat = new THREE.MeshBasicMaterial({
+    name: LAMP_MATERIAL,
     map: lampMap,
     color: LAMP_GLOW,
     transparent: true,

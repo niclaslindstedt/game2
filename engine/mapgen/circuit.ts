@@ -20,10 +20,12 @@
 
 import { angleDiff } from "../lib/math.ts";
 import { createRng } from "../lib/prng.ts";
+import { roadClearance } from "./road.ts";
 import {
   SAMPLE_STEP,
   STAGE_RULES as R,
   circuitLapBand,
+  knobScale,
   type FiniteStageLength,
   type SegmentPlan,
   type StageKnobs,
@@ -321,7 +323,11 @@ function tryCircuit(
   // Which way round the lap runs — the ring bearing's sense.
   const ringDir: 1 | -1 = rng.chance(0.5) ? 1 : -1;
   const plans: SegmentPlan[] = [];
-  const field = createPointField();
+  // R23 — a ring keeps a road's clearance from itself exactly as a sprint
+  // does. What it does NOT get is R24: closing onto its own start line is
+  // the whole shape of a circuit, and the closure lies along the start's
+  // apron rather than across it.
+  const field = createPointField(roadClearance(knobScale(knobs.width, R.roadWidth)));
   let cursor: Cursor = { x: 0, z: 0, heading: 0, arc: 0 };
   // Where the ROAD stands, walked the compiler's way — the pose the closure
   // has to solve from. `builtStack` carries one entry per committed segment

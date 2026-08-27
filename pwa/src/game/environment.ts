@@ -45,8 +45,6 @@ type Preset = {
   stars: number;
   cloud: number;
   cloudOpacity: number;
-  /** Multiplied into the car's baked vertex lighting. */
-  carTint: number;
   headlights: boolean;
 };
 
@@ -77,7 +75,6 @@ const PRESETS: Record<TimeOfDay, Preset> = {
     stars: 0,
     cloud: 0xffd9c0,
     cloudOpacity: 1,
-    carTint: 0xf6e4d2,
     headlights: false,
   },
   day: {
@@ -102,7 +99,6 @@ const PRESETS: Record<TimeOfDay, Preset> = {
     stars: 0,
     cloud: 0xffffff,
     cloudOpacity: 1,
-    carTint: 0xffffff,
     headlights: false,
   },
   dusk: {
@@ -127,7 +123,6 @@ const PRESETS: Record<TimeOfDay, Preset> = {
     stars: 0.15,
     cloud: 0xd86a8a,
     cloudOpacity: 1,
-    carTint: 0xf2d8c4,
     headlights: true,
   },
   night: {
@@ -152,7 +147,6 @@ const PRESETS: Record<TimeOfDay, Preset> = {
     stars: 1,
     cloud: 0x2b3a5a,
     cloudOpacity: 0.85,
-    carTint: 0xa8b8d8,
     headlights: true,
   },
 };
@@ -183,8 +177,40 @@ function weathered(time: TimeOfDay, weather: Weather): Preset {
   p.discSize = weather === "rain" ? p.discSize * 0.7 : 0;
   p.stars *= weather === "rain" ? 0.2 : 0;
   p.cloud = toward(p.cloud);
-  p.carTint = new THREE.Color(p.carTint).multiplyScalar(weather === "rain" ? 0.92 : 0.85).getHex();
   return p;
+}
+
+/** How dark the car is ever allowed to get, as a fraction of its daylight
+ * paint. Everything else in the world is lit by the scene's own lights and
+ * simply goes where they go; the car cannot, and past this it stops reading
+ * as a car and starts reading as a silhouette with tail lamps. */
+const CAR_FLOOR = 0.2;
+
+/** The light a preset actually puts on a horizontal surface: the sky half
+ * of the hemisphere plus what is left of the sun at its elevation. Linear
+ * light, because that is the space three.js multiplies colors in. */
+function keyLight(p: Preset): THREE.Color {
+  const sky = new THREE.Color(p.hemiSky).multiplyScalar(p.hemiIntensity);
+  const sun = new THREE.Color(p.sun).multiplyScalar(
+    p.sunIntensity * Math.max(0, Math.sin(p.sunElevation)),
+  );
+  return sky.add(sun);
+}
+
+/** What the failing light does to the CAR. The body is fullbright — its
+ * shading is baked into vertex colors so the arcade look never pops — which
+ * means no light in the scene can reach it: at dusk the whole world goes
+ * down and the car alone stays at noon, sitting on the landscape like a
+ * sticker. This is the light put back on it: the preset's OWN key, measured
+ * against the day preset's, so the car is as dark as the ground it stands
+ * on and any retune of the lighting (or of the weather that dims it) is
+ * carried onto the paint for free. */
+function carTintFor(p: Preset): THREE.Color {
+  const here = keyLight(p);
+  const noon = keyLight(PRESETS.day);
+  const ratio = (a: number, b: number): number =>
+    CAR_FLOOR + (1 - CAR_FLOOR) * Math.min(1, b > 0 ? a / b : 1);
+  return new THREE.Color(ratio(here.r, noon.r), ratio(here.g, noon.g), ratio(here.b, noon.b));
 }
 
 /** Direction from the origin toward the sun for elevation `el`. */
@@ -668,7 +694,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     apply,
     setRange,
     setFogRange,
-    carTint: () => new THREE.Color(preset.carTint),
+    carTint: () => carTintFor(preset),
     lampsLit: () => preset.headlights,
     setGrime,
     setLampSpread,

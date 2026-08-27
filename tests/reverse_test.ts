@@ -28,8 +28,25 @@ import {
 
 const STRAIGHT: SegmentPlan[] = [{ kind: "straight", length: 900, feature: "none" }];
 
+/** A car on the straight with road BEHIND it as well as ahead. Reversing
+ * from the start line runs out of stage in thirty meters — past the apron
+ * the terrain owns the ground (R24), and these scenarios are about the
+ * pedal, not about what the country does to a car backing off the map. */
 function game(carId = "compact"): GameState {
-  return createGame({ seed: 0, carId, skipCountdown: true, track: compileTrack(0, STRAIGHT) });
+  const state = createGame({
+    seed: 0,
+    carId,
+    skipCountdown: true,
+    track: compileTrack(0, STRAIGHT),
+  });
+  const grid = state.track.samples[Math.round(400 / state.track.step)];
+  state.car.x = grid.x;
+  state.car.y = grid.elevation;
+  state.car.z = grid.z;
+  state.car.heading = grid.heading;
+  state.progressIndex = Math.round(400 / state.track.step);
+  state.progressS = grid.s;
+  return state;
 }
 
 function hold(state: GameState, input: Partial<CarInput>, seconds: number): void {
