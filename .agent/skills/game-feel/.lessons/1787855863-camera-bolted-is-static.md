@@ -21,7 +21,7 @@ straight.
 The road's own buzz is the second layer, and it must be applied as
 DISPLACEMENT, not as a force into that spring: a ~2 Hz mass-spring answers a
 10 Hz forcing with roughly (2/10)² of it, so a rumble shaken into the neck
-disappears. Drive it from time-based oscillators (4–12 Hz, incommensurate)
+disappears. Drive it from time-based oscillators (3–8 Hz, incommensurate)
 scaled by pace and surface, not from distance — a wavelength short enough to
 read as vibration aliases against the frame rate once the car is quick.
 

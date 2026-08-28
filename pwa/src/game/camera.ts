@@ -25,13 +25,17 @@
 // The five outside cameras are the SAME rig with different proportions —
 // one table of numbers (CHASE_RIGS), one update function — so an angle is a
 // row rather than another camera to maintain. What separates them is not
-// only where they stand but how HEAVY they are: the far rigs answer the car
-// slowly and their swing is a sprung mass that overshoots a turn and settles
-// back into it, so a camera at a distance reads as something being flown
-// rather than something bolted on. In the air the framing goes loose and
-// pulls wide, which reads as flying. Landings and splashes kick a decaying
-// shake. Over a CLIFF they stay up at the top and let the car fall away
-// below them, which is the one thing a chase rig must not follow.
+// only where they stand but how HEAVY they are: from `far` outwards they
+// answer the car slowly and their swing is a sprung mass that overshoots a
+// turn and settles back into it, so a camera at a distance reads as
+// something being flown rather than something bolted on. The two the game
+// is actually driven from — `close` and `chase` — share one steady
+// character and differ only in where they stand: a boom is answered
+// briskly and settles without overshooting, at either length.
+// In the air the framing goes loose and pulls wide, which reads as flying.
+// Landings and splashes kick a decaying shake. Over a CLIFF they stay up at
+// the top and let the car fall away below them, which is the one thing a
+// chase rig must not follow.
 //
 // The hood cam is the one that is not a rig, because it is not standing
 // anywhere: it is sat in the car, and what makes it worth driving from is
@@ -61,7 +65,7 @@ import {
 } from "./camera-free.ts";
 import { createStartCamera } from "./camera-start.ts";
 import { ISLAND_MARGIN } from "./map-island.ts";
-import { PLAY_CAMERAS, type PlayCamera } from "./settings.ts";
+import { DEFAULT_SETTINGS, PLAY_CAMERAS, type PlayCamera } from "./settings.ts";
 
 /** `free` is god mode: the developer tool that takes the lens off the car
  * and flies it (camera-free.ts). It is not on the ladder the camera key
@@ -157,10 +161,14 @@ const HEAD = {
   stiffVert: 12,
   /** Damping ratio per axis, 0..1. Under 1 the head overshoots and settles,
    * and one visible rebound off a bump IS the effect; far under 0.4 and it
-   * rings like a spring toy for the rest of the straight. */
+   * rings like a spring toy for the rest of the straight. Vertical is the
+   * best damped, because vertical is the axis the road feeds continuously:
+   * a neck that rings at every rut adds a second bump to every bump the car
+   * actually hit, and the rebounds pile up into a shot that never sits
+   * still. Lean and brace are one-off gestures and can afford to swing. */
   dampLong: 0.62,
   dampLat: 0.58,
-  dampVert: 0.44,
+  dampVert: 0.58,
   /** How far the head is allowed off the mount, m. The vertical limit stays
    * well inside the eye's clearance over the bonnet (EYE_RISE in
    * car-styles.ts), so no landing drops the lens into the panel. */
@@ -204,6 +212,16 @@ const HEAD = {
   snap: 4,
 } as const;
 
+/** A ceiling something approaches instead of hitting: linear well under it
+ * (`tanh x ≈ x`), never quite at it. Both of the hood camera's limits are
+ * this shape, and for the same reason — a clamp is a WALL, and arriving at
+ * a wall is a step. The neck's travel clamped is a landing that throws the
+ * head into the end of its reach and stops it dead inside one frame, which
+ * is the single biggest jolt the view has and reads as the picture breaking
+ * rather than as the car landing; the grain's drive clamped is a surface
+ * that gets rougher and rougher until abruptly it does not. */
+const soften = (v: number, lim: number): number => lim * Math.tanh(v / lim);
+
 /** The road buzzing up through the seat. The stage's ground is a smooth
  * loft — it has grades, crests and dips, but no GRAIN — so a lens bolted to
  * the bodyshell sits perfectly still on a straight, and the bonnet in front
@@ -219,22 +237,41 @@ const GRAIN = {
    * chatter, and a fine buzz on top. Deliberately incommensurate, so the
    * pattern never settles into a hum, and in TIME rather than in distance —
    * a wavelength short enough to read as vibration aliases against the
-   * frame rate the moment the car is quick. */
-  freq: [4.7, 7.9, 11.3],
+   * frame rate the moment the car is quick.
+   *
+   * The top one is the ceiling, and what sets it is the SLOWEST frame rate
+   * the game is played at, not how fine a buzz would be nice. 8 Hz gets
+   * seven samples a period on a desktop's 60 and nearly four on a phone's
+   * 30, which is still a wave. Much past that the picture stops resolving
+   * the wave and starts resolving the sampling: the eye is thrown a
+   * different distance every frame with no shape between the throws, which
+   * is not a rougher road, it is a rougher PICTURE. */
+  freq: [3.3, 5.5, 7.9],
   /** How far the head travels and how far the gaze wobbles at the reference
    * pace on gravel — m and rad. */
-  heave: 0.016,
-  sway: 0.008,
-  nod: 0.0075,
-  tilt: 0.006,
+  heave: 0.013,
+  sway: 0.0065,
+  nod: 0.0055,
+  tilt: 0.0042,
   /** The pace those are quoted at, m/s (~110 km/h), and the ceiling the
    * grain keeps growing to. Below the reference it fades out linearly: a
-   * car being crawled back onto the road does not shake. */
+   * car being crawled back onto the road does not shake. Above it the
+   * growth is SOFT, because there are springs in the way: the road hits the
+   * tyres, the suspension takes most of it, and only the residue reaches
+   * the seat. A rougher surface or a quicker pace works those springs
+   * harder too, so twice the road is nowhere near twice the shake — the
+   * drive saturates toward the ceiling instead of running at it. (What the
+   * springs DID pass on is not modelled here at all: it is `car.ride`,
+   * which the neck already rides.) */
   pace: 30,
   paceMax: 1.5,
   /** What each surface does to it. Asphalt is the smooth one and open
-   * country is punishing; a ford's bed is somewhere between. */
-  surface: { gravel: 1, asphalt: 0.42, nature: 1.9, water: 1.2 },
+   * country is the rough one; a ford's bed is somewhere between. The spread
+   * is what makes leaving the road READ, so the rough end has to stay a
+   * clear step above gravel without becoming a picture nobody can drive
+   * from — the moment a surface is unreadable the grain has stopped
+   * describing it. */
+  surface: { gravel: 1, asphalt: 0.4, nature: 1.6, water: 1.15 },
   /** How fast the grain follows the wheels leaving and finding the ground,
    * 1/s. In the air the road stops arriving, and the silence is most of
    * what makes a jump read as flight from inside the car. */
@@ -318,6 +355,15 @@ type ChaseRig = {
  * `heli` and `top` trade the drama for what the driver cannot otherwise
  * see, which is the road past the next crest.
  *
+ * `close` and `chase` carry IDENTICAL steadying numbers — the follow rate,
+ * the swing spring, the hill lift and duck, the aim's climb. A boom is a
+ * boom whatever length it is run out to, and a longer one that also answers
+ * more slowly turns the same yaw lag into more metres of lateral travel: the
+ * world sloshes across the frame, which is what a player reads as the shot
+ * being unsteady rather than as the camera having weight. The heaviness that
+ * makes a distant camera read as FLOWN starts at `far`, where the standoff
+ * is long enough that the sway is legible as a gesture of its own.
+ *
  * The frame does NOT change when the car leaves the ground: pulling back
  * for a jump makes the biggest moment in the stage read as small and safe,
  * and it is the one moment the camera should hold its nerve. */
@@ -349,19 +395,19 @@ const CHASE_RIGS: Record<Exclude<PlayCamera, "hood">, ChaseRig> = {
     distPerSpeed: 0.02,
     height: 2,
     driftWeight: 0.8,
-    followRate: 4.5,
+    followRate: 5,
     fov: 58,
     fovPerSpeed: 0.38,
     fovMax: 86,
     aimAhead: 8,
     aimHeight: 0.8,
-    aimClimb: 6,
-    dropLift: 2.6,
-    climbDuck: 1.2,
-    swing: 0.45,
-    swingMax: 1.3,
-    swingFreq: 6,
-    swingDamp: 0.95,
+    aimClimb: 5,
+    dropLift: 2.2,
+    climbDuck: 1,
+    swing: 0.4,
+    swingMax: 1.2,
+    swingFreq: 6.5,
+    swingDamp: 1,
     heave: 0.4,
     shake: 1,
     cliff: 1,
@@ -631,7 +677,7 @@ export type GameCamera = {
 export function createGameCamera(width: number, height: number): GameCamera {
   const camera = new THREE.PerspectiveCamera(60, width / height, DRIVING_NEAR, DRIVING_FAR);
   const startShot = createStartCamera();
-  let mode: CameraMode = "chase";
+  let mode: CameraMode = DEFAULT_SETTINGS.camera;
   let yaw = 0;
   /** Chase yaw, decomposed: the part that follows the nose... */
   let headYaw = 0;
@@ -915,17 +961,9 @@ export function createGameCamera(width: number, height: number): GameCamera {
       rvz *= k;
       headVel.set(svx + rvx, svy + rvy, svz + rvz);
     }
-    const offLong = clamp(
-      (head.x - seat.x) * fwdX + (head.z - seat.z) * fwdZ,
-      -HEAD.limLong,
-      HEAD.limLong,
-    );
-    const offLat = clamp(
-      (head.x - seat.x) * rightX + (head.z - seat.z) * rightZ,
-      -HEAD.limLat,
-      HEAD.limLat,
-    );
-    const offUp = clamp(head.y - seat.y, -HEAD.limVert, HEAD.limVert);
+    const offLong = soften((head.x - seat.x) * fwdX + (head.z - seat.z) * fwdZ, HEAD.limLong);
+    const offLat = soften((head.x - seat.x) * rightX + (head.z - seat.z) * rightZ, HEAD.limLat);
+    const offUp = soften(head.y - seat.y, HEAD.limVert);
     head.set(
       seat.x + offLong * fwdX + offLat * rightX,
       seat.y + offUp,
@@ -940,7 +978,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
     // The road's own grain, on top of everything the neck did with the big
     // motions: the surface underfoot at the pace it is passing.
     const surface = car.airborne ? 0 : GRAIN.surface[state.surface];
-    const wantGrain = Math.min(speed / GRAIN.pace, GRAIN.paceMax) * surface;
+    const wantGrain = soften((speed / GRAIN.pace) * surface, GRAIN.paceMax);
     grain += (wantGrain - grain) * clamp(GRAIN.rate * dt, 0, 1);
     const phase = orbit * Math.PI * 2;
     const g1 = Math.sin(phase * GRAIN.freq[0]);
