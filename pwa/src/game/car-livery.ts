@@ -92,6 +92,40 @@ const PALETTES: Palette[] = [
   { paint: 0x9fb2c8, accent: 0xc4211d, detail: 0x21356b, hub: 0x2a2e34 },
 ];
 
+/** The palettes by name, so a crew's scheme below reads as a COLOUR rather
+ * than as a row number — and so re-ordering the table cannot silently
+ * repaint the whole field. */
+const PALETTE = {
+  /** Deep blue under a hard yellow: the loud works bruiser. */
+  works: 0,
+  /** White, red and navy — clean to the point of clinical. */
+  clinic: 1,
+  /** Forest green with lime through it. The colour of being in the trees. */
+  forest: 2,
+  /** Grey and orange: plant machinery, and the colour of cut stone. */
+  quarry: 3,
+  /** Maroon, cream and gold — the coachline on an old man's car. */
+  veteran: 4,
+  /** Teal and coral over a white belly: a sea bird. */
+  cormorant: 5,
+  /** Bright yellow on navy, and it is one degree off boiling. */
+  kettle: 6,
+  /** Burnt orange: heat, and something with teeth. */
+  ember: 7,
+  /** Slate, mustard and rust — oil, and a thing that has been hit a lot. */
+  foundry: 8,
+  /** Purple under acid green. Nobody paints a car this by accident. */
+  carnival: 9,
+  /** Electric blue with a pink line through it: quick, and pleased about it. */
+  neon: 10,
+  /** Bone, brown and amber — bark. */
+  birchbark: 11,
+  /** Green, white and red: the tidiest, least remarkable car in the paddock. */
+  clubman: 12,
+  /** Pale steel over red and navy. Frost on a windscreen. */
+  frost: 13,
+} as const;
+
 const PATTERNS: PaintPattern[] = [
   "sweep",
   "split",
@@ -172,6 +206,93 @@ export function liveryFor(slot: number): Livery {
     number: NUMBERS[(h >>> 8) % NUMBERS.length],
   };
 }
+
+/** R29 — WHAT EACH CREW IS PAINTED, AND WHY.
+ *
+ * A start list of fourteen is fourteen strangers. The colour is the only
+ * thing about a rival the player can ever learn at a glance — before a name
+ * means anything, before the notes in `rivals.ts` are shown anywhere — so it
+ * is authored to say something true about how that crew DRIVES rather than
+ * handed out by index. The car that comes past you sideways in purple and
+ * acid green is telling you what it is about to do.
+ *
+ * Every crew has a palette nobody else has: fourteen crews, fourteen
+ * palettes, no collisions to reason about at 30 px in fog. Patterns repeat —
+ * there are nine — and that is fine, because a pattern is the second thing
+ * read and the colour is the first. Where two crews share one they are
+ * always at opposite ends of the palette table.
+ *
+ * The door roundel is the crew's START NUMBER rather than a number out of a
+ * hat: this is a real start list now, and the car that left first is car 1.
+ */
+type RivalScheme = {
+  palette: (typeof PALETTE)[keyof typeof PALETTE];
+  pattern: PaintPattern;
+  /** Whether the roof takes the accent. It is the one livery cue that
+   * survives being seen from directly behind — which is where a chased car
+   * is seen from — so the patterns that leave the flank plain (`solid`,
+   * `duotone`) always take it. */
+  roof: "paint" | "accent";
+};
+
+const RIVAL_SCHEMES: Record<string, RivalScheme> = {
+  // Frost, and a seam you could set a watch by. Nothing about her is warm
+  // and nothing about her is improvised.
+  frostbite: { palette: PALETTE.frost, pattern: "split", roof: "paint" },
+  // Electric blue with a pink line, and the stripe runs the length of the
+  // car: all hands, all speed, and no interest in what is coming.
+  blink: { palette: PALETTE.neon, pattern: "bands", roof: "accent" },
+  // Burnt orange with a run of teeth along the rocker. She attacks it and
+  // she gets out of it.
+  wolverine: { palette: PALETTE.ember, pattern: "chequer", roof: "accent" },
+  // Three fine lines, evenly spaced, on the cleanest paint in the field.
+  metronome: { palette: PALETTE.clinic, pattern: "pinstripe", roof: "paint" },
+  // The cormorant: dark back, pale belly, and it holds that line for miles.
+  skarv: { palette: PALETTE.cormorant, pattern: "duotone", roof: "accent" },
+  // A crescent down the flank — the shape a car draws when it is sideways,
+  // which is where this one lives — in a colour nobody chose quietly.
+  sanna: { palette: PALETTE.carnival, pattern: "sweep", roof: "paint" },
+  // Cut stone, blocked front and rear with the door left bare. It does not
+  // move and it does not rotate.
+  granite: { palette: PALETTE.quarry, pattern: "blocks", roof: "paint" },
+  // A works bruiser: a contrasting bonnet and a slashed quarter, like a
+  // plate that has been struck.
+  anvil: { palette: PALETTE.works, pattern: "panel", roof: "paint" },
+  // Bright yellow, one degree off boiling, wearing the drifter's crescent
+  // she does not quite have the car control to justify.
+  kettle: { palette: PALETTE.kettle, pattern: "sweep", roof: "paint" },
+  // Oil and rust, split front to rear on a working seam. It hauls.
+  diesel: { palette: PALETTE.foundry, pattern: "split", roof: "paint" },
+  // Maroon and gold coachlines. The oldest-looking car in the field, and
+  // that is the point.
+  oldsnow: { palette: PALETTE.veteran, pattern: "pinstripe", roof: "accent" },
+  // Bark: bone with brown lenticels stepped along the rocker. Tidy, quiet,
+  // and never anywhere near the limit.
+  birch: { palette: PALETTE.birchbark, pattern: "chequer", roof: "paint" },
+  // Forest green over lime, belly-up — she spends half the stage in there.
+  moth: { palette: PALETTE.forest, pattern: "duotone", roof: "accent" },
+  // The plainest car on the entry list, in the plainest colours, with no
+  // pattern at all. A little of everything and not enough of anything.
+  sprat: { palette: PALETTE.clubman, pattern: "solid", roof: "accent" },
+};
+
+/** The livery a named crew runs, with their start number on the door.
+ * Total, like `liveryFor`: a crew with no scheme authored yet still gets
+ * painted rather than turning up in the catalog car's colours. */
+export function liveryForCrew(crewId: string, startNumber: number): Livery {
+  const scheme = RIVAL_SCHEMES[crewId];
+  if (!scheme) return liveryFor(startNumber);
+  return {
+    ...PALETTES[scheme.palette],
+    roof: scheme.roof,
+    pattern: scheme.pattern,
+    number: String(Math.max(1, Math.trunc(startNumber))),
+  };
+}
+
+/** Every crew the schemes above name — for the test that holds this table
+ * and the roster in `engine/sim/rivals.ts` to the same fourteen. */
+export const SCHEMED_CREWS = Object.keys(RIVAL_SCHEMES);
 
 /** The measurements every pattern is authored against, read off whichever
  * body is being painted — the patterns have to land on a short upright

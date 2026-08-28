@@ -14,10 +14,16 @@
 
 import { describe, expect, it } from "vitest";
 
-import { CARS, TUNING } from "@engine";
+import { CARS, RIVALS, TUNING, rivalField } from "@engine";
 
 import { bodyHalfLength, bodyHalfWidth } from "../pwa/src/game/car/shell.ts";
-import { LIVERY_COUNT, applyLivery, liveryFor } from "../pwa/src/game/car-livery.ts";
+import {
+  LIVERY_COUNT,
+  SCHEMED_CREWS,
+  applyLivery,
+  liveryFor,
+  liveryForCrew,
+} from "../pwa/src/game/car-livery.ts";
 import { CAR_BODIES, bodySpecFor } from "../pwa/src/game/car-styles.ts";
 
 const bodies = Object.entries(CAR_BODIES);
@@ -71,6 +77,76 @@ describe("picking a livery for a slot on the start list", () => {
       expect(l.accent).not.toBe(l.paint);
       expect(l.detail).not.toBe(l.paint);
       expect(l.detail).not.toBe(l.accent);
+    }
+  });
+});
+
+describe("the campaign field's own paint", () => {
+  const entries = rivalField("medium");
+
+  it("paints every crew on the roster, and nobody who is not on it", () => {
+    // A crew with no scheme still gets a livery (`liveryForCrew` is total),
+    // which is exactly why this has to be asserted rather than looked at:
+    // the fallback is silent, and a new rival would quietly turn up in a
+    // scheme somebody else is already wearing.
+    expect([...SCHEMED_CREWS].sort()).toEqual(RIVALS.map((crew) => crew.id).sort());
+  });
+
+  it("gives every crew a colour nobody else in the field has", () => {
+    const paints = new Set(entries.map((e) => liveryForCrew(e.crew.id, e.number).paint));
+    expect(paints.size).toBe(RIVALS.length);
+  });
+
+  it("puts the crew's start number on the door", () => {
+    for (const entry of entries) {
+      expect(liveryForCrew(entry.crew.id, entry.number).number).toBe(String(entry.number));
+    }
+    // …and the roundel font is 3x5, so it has to stay inside two digits for
+    // any field this roster can produce.
+    for (const entry of entries) {
+      expect(liveryForCrew(entry.crew.id, entry.number).number).toMatch(/^\d{1,2}$/);
+    }
+  });
+
+  it("gives a contrasting roof to the schemes that leave the flank plain", () => {
+    // `solid` and `duotone` draw nothing on the side, so the roof is the
+    // only cue left from directly behind — which is where a chased car is
+    // seen from.
+    for (const entry of entries) {
+      const livery = liveryForCrew(entry.crew.id, entry.number);
+      if (livery.pattern === "solid" || livery.pattern === "duotone") {
+        expect(livery.roof).toBe("accent");
+      }
+    }
+  });
+
+  it("never draws a crew's pattern in their own body colour", () => {
+    for (const entry of entries) {
+      const livery = liveryForCrew(entry.crew.id, entry.number);
+      expect(livery.accent).not.toBe(livery.paint);
+      expect(livery.detail).not.toBe(livery.paint);
+    }
+  });
+
+  it("is the same scheme at every difficulty — the budget does not repaint a crew", () => {
+    // A crew is a character, and the difficulty only decides how good they
+    // are at it. The number on the door is the one thing allowed to move,
+    // and it does not: the seeding order is the standing, which is fixed.
+    const paint = new Map(entries.map((e) => [e.crew.id, liveryForCrew(e.crew.id, e.number)]));
+    for (const difficulty of ["easy", "medium", "hard"] as const) {
+      for (const entry of rivalField(difficulty)) {
+        expect(liveryForCrew(entry.crew.id, entry.number)).toEqual(paint.get(entry.crew.id));
+      }
+    }
+  });
+
+  it("repaints each crew's own car without touching the catalog", () => {
+    for (const entry of entries) {
+      const base = CAR_BODIES[entry.crew.carId];
+      const before = JSON.stringify(base);
+      const painted = applyLivery(base, liveryForCrew(entry.crew.id, entry.number));
+      expect(JSON.stringify(base)).toBe(before);
+      expect(painted.colors.paint).toBe(liveryForCrew(entry.crew.id, entry.number).paint);
     }
   });
 });

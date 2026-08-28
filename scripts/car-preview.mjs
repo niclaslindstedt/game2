@@ -12,6 +12,9 @@
 //   ... car-preview.mjs --cars classic
 //   ... car-preview.mjs --liveries compact --out liveries
 //     # the same body in the field's paint schemes, one row each
+//   ... car-preview.mjs --field --out field
+//     # R29 — the campaign's fourteen rivals, each in their OWN car and
+//     # their own paint, labelled by start number and alias
 //   ... car-preview.mjs --variants my-candidates.json --out candidates
 //     # candidates: { "cars": [{ "id": "...", "spec": { CarBodySpec } }] }
 //   ... car-preview.mjs --skip-build
@@ -41,7 +44,21 @@ const variantsPath = flag("variants");
 const liveryCar = flag("liveries");
 
 let variants;
-if (variantsPath) {
+if (has("field")) {
+  // R29 — THE ACTUAL START LIST. `--liveries` answers "do these schemes read
+  // apart on one body"; this answers the question that decides whether the
+  // field works: does the car you are chasing say WHOSE it is, across three
+  // different silhouettes, in the order they left the start control.
+  const { CAR_BODIES } = await import("../pwa/src/game/car-styles.ts");
+  const { applyLivery, liveryForCrew } = await import("../pwa/src/game/car-livery.ts");
+  const { rivalField } = await import("../engine/index.ts");
+  variants = {
+    cars: rivalField(flag("difficulty") ?? "medium").map((entry) => ({
+      id: `${entry.number} ${entry.crew.alias}`,
+      spec: applyLivery(CAR_BODIES[entry.crew.carId], liveryForCrew(entry.crew.id, entry.number)),
+    })),
+  };
+} else if (variantsPath) {
   variants = JSON.parse(await readFile(resolve(variantsPath), "utf8"));
   if (Array.isArray(variants)) variants = { cars: variants };
 } else if (liveryCar !== null) {
