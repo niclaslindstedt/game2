@@ -30,7 +30,16 @@ export const PLAY_CAMERAS: { id: PlayCamera; label: string; hint: string }[] = [
 ];
 
 export type HudToggle =
-  "minimap" | "pacenotes" | "pacenoteText" | "damage" | "tachometer" | "wind" | "boost" | "timer";
+  | "minimap"
+  | "mirror"
+  | "cameraButton"
+  | "pacenotes"
+  | "pacenoteText"
+  | "damage"
+  | "tachometer"
+  | "wind"
+  | "boost"
+  | "timer";
 
 export type HudSettings = Record<HudToggle, boolean>;
 
@@ -39,6 +48,12 @@ export type HudSettings = Record<HudToggle, boolean>;
  * is a different game, and the countdown is the start line itself. */
 export const HUD_TOGGLES: { id: HudToggle; label: string; hint: string }[] = [
   { id: "minimap", label: "MINIMAP", hint: "Route, position and progress" },
+  { id: "mirror", label: "REAR VIEW", hint: "The road behind, from the car, in every view" },
+  {
+    id: "cameraButton",
+    label: "CAMERA BUTTON",
+    hint: "The on-screen view switch (the key still works)",
+  },
   { id: "pacenotes", label: "PACENOTES", hint: "The co-driver's corner calls" },
   {
     id: "pacenoteText",
@@ -242,6 +257,8 @@ export type DevSettings = {
 export const DEFAULT_SETTINGS: Settings = {
   hud: {
     minimap: true,
+    mirror: true,
+    cameraButton: true,
     pacenotes: true,
     pacenoteText: true,
     damage: true,

@@ -335,6 +335,28 @@ body {
   border-color: rgb(255 210 160 / 80%);
 }
 
+/* ── The rear-view mirror's box ─────────────────────────────────────────── */
+
+/* PARITY with pwa/src/game/mirror.ts: the glass is a canvas pass, so these
+   are the same three numbers that module places it by, restated here for the
+   one thing the DOM has to know — where its bottom edge falls, so the
+   co-driver's calls can hang under it instead of across it. Change one,
+   change both. The canvas is full-bleed under the HUD, so a fraction of the
+   canvas and a fraction of the viewport are the same fraction. */
+.hud {
+  --glass-width: 21vw;
+  --glass-top: 2.2vh;
+  --glass-aspect: 3.2;
+  --glass-bottom: calc(var(--glass-top) + var(--glass-width) / var(--glass-aspect));
+}
+
+@media (orientation: portrait) {
+  .hud {
+    --glass-width: 52vw;
+    --glass-top: 13.5vh;
+  }
+}
+
 /* ── The co-driver: pacenote calls under the top bar ────────────────────── */
 
 .hud-pace {
@@ -377,6 +399,13 @@ body {
   opacity: 0.9;
   color: var(--hud-ink);
   font-variant-numeric: tabular-nums;
+}
+
+/* With the mirror up, the co-driver drops below the glass. A corner call is
+   the one thing on this screen that may never be covered up, and the glass is
+   the one thing that would cover it: they share the top of the frame. */
+.hud-pace-under-glass {
+  top: calc(var(--glass-bottom) + 1.4vh);
 }
 
 /* Words off: the call is the arrow, so the plate shrinks to it rather than

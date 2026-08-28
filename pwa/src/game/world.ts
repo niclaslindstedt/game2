@@ -611,7 +611,7 @@ export type World = {
    * is dropped could not have been seen. The frustum does the other half,
    * for the open country, which is pooled into meshes three cannot cull
    * because the camera stands inside every one of them. */
-  cull: (camera: THREE.Camera, range: number) => void;
+  cull: (camera: THREE.Camera, range: number, also?: THREE.Camera | null) => void;
   /** A solid the engine has taken OUT of the world (`solidBreak`): stop
    * drawing it standing wherever it was drawn, and throw the piece it left
    * along the velocity the contact gave it. */
@@ -864,19 +864,30 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer")
     }
   };
 
-  const frustum = new THREE.Frustum();
+  const frustums = [new THREE.Frustum(), new THREE.Frustum()];
+  const seen: THREE.Frustum[] = [];
   const view = new THREE.Matrix4();
-  const cull = (camera: THREE.Camera, range: number): void => {
+  const frustumOf = (camera: THREE.Camera, into: THREE.Frustum): THREE.Frustum => {
+    camera.updateMatrixWorld();
+    return into.setFromProjectionMatrix(
+      view.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse),
+    );
+  };
+  /** `also` is a second view of the same frame — the rear-view mirror's.
+   * The chunk pass does not care about it: both cameras stand on the car,
+   * so they agree about what is within reach. The frustum pass does, and
+   * missing it is what leaves the mirror looking at bare ground where the
+   * open country's trees should be. */
+  const cull = (camera: THREE.Camera, range: number, also?: THREE.Camera | null): void => {
     const at = camera.position;
     const reach = range + SCENERY_REACH;
     for (const chunk of chunks) {
       chunk.group.visible = traceWithin(chunk.trace, at.x, at.z, reach);
     }
-    camera.updateMatrixWorld();
-    frustum.setFromProjectionMatrix(
-      view.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse),
-    );
-    wild.cull(frustum);
+    seen.length = 0;
+    seen.push(frustumOf(camera, frustums[0]));
+    if (also) seen.push(frustumOf(also, frustums[1]));
+    wild.cull(seen);
   };
 
   /** A solid the engine took out of the world: stop drawing it standing,

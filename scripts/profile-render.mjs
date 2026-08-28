@@ -63,10 +63,19 @@ const executablePath = process.env.CHROMIUM_PATH;
 const browser = await chromium.launch(executablePath ? { executablePath } : undefined);
 
 /** Counts every draw the page makes, installed before any page script runs
- * so it catches the context three.js creates. `clear` is the frame cursor:
- * three clears once per `render()`, which no other code in the app does —
- * counting requestAnimationFrame callbacks instead would count the HUD's
- * own loops as frames and divide the cost by three. */
+ * so it catches the context three.js creates.
+ *
+ * A FRAME is an animation callback that drew something.
+ *
+ * Not a `gl.clear`: three clears once per `render()`, and a frame is not one
+ * render — the map view draws its pane over a cleared canvas, the rear-view
+ * mirror fills its own target first, and the driving frame already issued
+ * two before either of those existed. Every one of those counts as a frame
+ * of its own, which halves every per-frame number in the table and DOUBLES
+ * the reported fps. Not a bare animation callback either: the app has loops
+ * (the clock, the tachometer needle) that never touch the GL context, and
+ * counting those would divide the cost of a frame by the number of things
+ * that happened alongside it. */
 const METER = `
 window.__meter = { draws: 0, tris: 0, frames: 0, programs: 0, textures: 0, cpu: 0 };
 // Cumulative since page load, never reset between windows: what BUILDING
@@ -84,8 +93,6 @@ const patch = (proto) => {
   wrap("drawArrays", (a) => a[2] / 3);
   wrap("drawElementsInstanced", (a) => (a[1] / 3) * a[4]);
   wrap("drawArraysInstanced", (a) => (a[2] / 3) * a[3]);
-  const clear = proto.clear;
-  proto.clear = function (...a) { m.frames++; return clear.apply(this, a); };
   const useProgram = proto.useProgram;
   proto.useProgram = function (...a) { m.programs++; return useProgram.apply(this, a); };
   const bindTexture = proto.bindTexture;
@@ -109,9 +116,14 @@ patch(window.WebGL2RenderingContext && window.WebGL2RenderingContext.prototype);
 patch(window.WebGLRenderingContext && window.WebGLRenderingContext.prototype);
 const raf = window.requestAnimationFrame.bind(window);
 window.requestAnimationFrame = (cb) => raf((t) => {
+  const m = window.__meter;
+  const drawn = m.draws;
   const t0 = performance.now();
   cb(t);
-  window.__meter.cpu += performance.now() - t0;
+  const spent = performance.now() - t0;
+  if (m.draws === drawn) return;
+  m.frames++;
+  m.cpu += spent;
 });
 `;
 

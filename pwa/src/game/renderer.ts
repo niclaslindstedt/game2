@@ -8,8 +8,6 @@
 import * as THREE from "three";
 import { TUNING, isWooden, type GameEvent, type GameState, type Season } from "@engine";
 
-import { createAmbientLife } from "./ambient-life.ts";
-import { createCelebration } from "./celebration.ts";
 import { createGameCamera, type CameraMode } from "./camera.ts";
 import type { FreeFlyMove, FreeFlyPose } from "./camera-free.ts";
 import {
@@ -23,31 +21,25 @@ import { LAMP_MATERIAL, buildCar, type CarVisual } from "./car-mesh.ts";
 import { hoodEyeFor } from "./car-styles.ts";
 import {
   AXLE,
-  createDust,
-  MUD,
   WET_THROW,
   LAUNCH,
   launchThrow,
   paceScale,
-  SPLASH_WATER,
   TARMAC_SMOKE,
-  TIRE_SMOKE,
-  WATER_FOAM,
   WILD_THROW,
-  type Dust,
   type DustTint,
 } from "./dust.ts";
-import { groundTint, SOOT, sootySmoke, STONE_DUST } from "./ground-tint.ts";
-import { createPlume } from "./plume.ts";
+import { SOOT, sootySmoke, STONE_DUST } from "./ground-tint.ts";
+import { createCarFx } from "./car-fx.ts";
 import { createEnvironment } from "./environment.ts";
 import type { Clap } from "./weather.ts";
 import { TRUNK_COLOR } from "./flora.ts";
-import { createFumes, EXHAUST } from "./fumes.ts";
+import { EXHAUST } from "./fumes.ts";
 import { createWayHomeArrow } from "./way-home.ts";
 import { islandPlanes } from "./map-island.ts";
+import { createMirror, MIRROR_RANGE } from "./mirror.ts";
 import { buildMapRoute, type MapRoute } from "./map-route.ts";
 import { classify } from "./standings.ts";
-import { rockAt } from "./terrain.ts";
 import { buildWorld, type World } from "./world.ts";
 
 /** The map view's fog, as fractions of the camera's standoff distance. The
@@ -85,6 +77,9 @@ export type GameRenderer = {
   /** Place the camera: the two play modes come from the camera key, the
    * drone and map views are placed by the menu behind it. */
   setCamera: (mode: CameraMode) => void;
+  /** Show or hide the rear-view mirror — the player's HUD option. Off is
+   * a whole render pass the frame does not pay for. */
+  setMirror: (on: boolean) => void;
   /** Confine the map view to a rectangle of the canvas, in CSS pixels from
    * its top-left — the Roam page's map pane. The rest of the canvas is left
    * as flat sky for the DOM cards to sit on. Null draws full-bleed. */
@@ -146,36 +141,21 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   const environment = createEnvironment(scene);
 
   const chase = createGameCamera(canvas.clientWidth || 1, canvas.clientHeight || 1);
-  const dust = createDust();
-  scene.add(dust.points);
-  // The tarmac's own cloud: what the tires give up when the road holds
-  // them instead of letting go under them.
-  const smoke = createDust(TIRE_SMOKE);
-  scene.add(smoke.points);
-  // The towed cloud, and the wet road's answer to it. Exactly one of the
-  // two is ever shown on a given stage — the weather decides which when
-  // the conditions are set — so the pair costs one draw call, not two.
-  const plume = createPlume();
-  scene.add(plume.points);
-  const mud = createDust(MUD);
-  mud.points.visible = false;
-  scene.add(mud.points);
-  // Water the CAR throws, which is a different cloud from the sheet a
-  // rolling wheel sprays: the column an entry displaces, and the froth it
-  // leaves working on the surface afterwards.
-  const spray = createDust(SPLASH_WATER);
-  scene.add(spray.points);
-  const foam = createDust(WATER_FOAM);
-  scene.add(foam.points);
-  const fumes = createFumes();
-  scene.add(fumes.points);
-  const life = createAmbientLife();
-  scene.add(life.group);
-  // The finish's salute. Its clouds live in the scene for the whole run and
-  // are empty until the line is crossed — a particle pool costs nothing
-  // while it is parked.
-  const celebration = createCelebration();
-  for (const cloud of celebration.clouds) scene.add(cloud);
+  const mirror = createMirror();
+  /** The player's option, and whether this frame is one the glass belongs
+   * in — the two are kept apart so `drawScene` can be asked the question
+   * once, after `render` has decided it against the state and the view. */
+  let mirrorOption = true;
+  let mirrorUp = false;
+  /** The driver's eye height on the car now on the road, body-local m. The
+   * mirror hangs off it so a tall body's glass clears a tall body's roof. */
+  let driverEyeY = 1.21;
+  // Every pool the car's contact with the world spawns into, built and hung
+  // in the scene together (car-fx.ts). The renderer keeps the decisions —
+  // what is thrown, when, and how much of it — and none of the plumbing.
+  const carFx = createCarFx(scene);
+  const { dust, mud, smoke, plume, spray, foam, fumes, life, celebration } = carFx;
+  const { atWheels } = carFx;
   const wayHomeArrow = createWayHomeArrow();
   // The arrow lives in camera space, and a camera only draws its children
   // when it is itself part of the scene being rendered.
@@ -253,12 +233,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // so it is switched, not tinted.
     car?.setLights(environment.lampsLit());
     ghostCar?.setLights(environment.lampsLit());
-    (dust.points.material as THREE.PointsMaterial).color.copy(tint);
-    (smoke.points.material as THREE.PointsMaterial).color.copy(tint);
-    (plume.points.material as THREE.PointsMaterial).color.copy(tint);
-    (mud.points.material as THREE.PointsMaterial).color.copy(tint);
-    (fumes.points.material as THREE.PointsMaterial).color.copy(tint);
-    life.setTint(tint);
+    carFx.setTint(tint);
   };
 
   /** How thick the transient FX are right now: the effects budget, and
@@ -400,7 +375,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     }
     car = buildCar(state.spec);
     scene.add(car.group, car.shadow, car.debris);
-    chase.setHoodEye(hoodEyeFor(state.spec));
+    const eye = hoodEyeFor(state.spec);
+    chase.setHoodEye(eye);
+    driverEyeY = eye.y;
     environment.setLampSpread(car.lampSpread.front, car.lampSpread.rear);
   };
 
@@ -459,44 +436,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     applyTint();
   };
 
-  /** The ground under the car right now, as the tint anything thrown off
-   * it takes. The rock test is deferred: it is a terrain lookup, and only
-   * one of the branches ever asks for it. */
-  const groundDust = (state: GameState): number | DustTint =>
-    groundTint(state.surface, wetGround, () =>
-      rockAt(state.terrain.groundAt, state.car.x, state.car.z),
-    );
-
-  /** A burst off ALL FOUR contact patches at once — which is what a
-   * landing and a take-off are: four tyres meeting or leaving the ground
-   * together, not one event in the middle of the car. `total` is the whole
-   * burst and each wheel takes a quarter of it, so the count means the
-   * same thing it did when this came out of a single point. */
-  const atWheels = (
-    cloud: Dust,
-    state: GameState,
-    color: number | DustTint,
-    total: number,
-    spread: number,
-  ): void => {
-    const c = state.car;
-    const fwdX = Math.sin(c.heading);
-    const fwdZ = Math.cos(c.heading);
-    const rightX = Math.cos(c.heading);
-    const rightZ = -Math.sin(c.heading);
-    const each = Math.round(total / 4);
-    if (each <= 0) return;
-    for (const along of [AXLE.front, -AXLE.rear])
-      for (const side of [-AXLE.side, AXLE.side])
-        cloud.spawn(
-          c.x + fwdX * along + rightX * side,
-          c.y + AXLE.height,
-          c.z + fwdZ * along + rightZ * side,
-          color,
-          each,
-          spread,
-        );
-  };
+  /** The tint anything thrown off the ground under the car takes. The wet
+   * road is the renderer's own read of the conditions, so it is handed in
+   * rather than asked for. */
+  const groundDust = (state: GameState): number | DustTint => carFx.groundDust(state, wetGround);
 
   const onEvents = (state: GameState, events: GameEvent[]): void => {
     const c = state.car;
@@ -813,12 +756,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       }
     }
 
-    dust.update(dt);
-    mud.update(dt);
-    smoke.update(dt);
-    spray.update(dt);
-    foam.update(dt);
-    fumes.update(dt);
+    carFx.step(dt);
     // An endless run streams its world: the road chunks and terrain tiles
     // ahead get built here, the ones far behind get dropped.
     world?.sync(state, dt);
@@ -872,12 +810,20 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       ghostCar.group.visible = view !== "map";
       ghostCar.shadow.visible = view !== "map";
     }
+    // The mirror is bolted to the CAR, so it is aimed from the state rather
+    // than from whatever the camera did with it — which is what lets the
+    // same strip of glass answer the same question under every view. It
+    // hangs on the same rule as the way home above: the views nobody drives
+    // from have nothing behind them worth showing, and neither does a run
+    // the water has already taken or a car being paraded past the line.
+    mirrorUp = mirrorOption && driving && state.phase !== "finished";
+    if (mirrorUp) mirror.aim(state, driverEyeY, environment.fogFar() * MIRROR_RANGE);
     // The road and its scenery are built for the WHOLE stage; the frame
     // only pays for the part the air is still clear enough to show. Last,
     // because the map view sets its fog from the framing it just solved —
     // culling ahead of that would measure the stage against a driving fog
     // and blank the entire map for the frame the view opens on.
-    world?.cull(chase.camera, environment.fogFar());
+    world?.cull(chase.camera, environment.fogFar(), mirrorUp ? mirror.camera : null);
     drawScene();
   };
 
@@ -923,6 +869,17 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       renderer.setScissorTest(false);
       renderer.setViewport(0, 0, w, h);
       renderer.render(scene, chase.camera);
+      if (mirrorUp) {
+        // The way home is parented to the FORWARD camera, so in the mirror
+        // pass it would hang in mid-air beside the car with its needle
+        // pointing at nothing. Nothing else in the scene is camera-bound.
+        const arrow = wayHomeArrow.group.visible;
+        wayHomeArrow.group.visible = false;
+        // The air comes in with the far plane, so the world leaves the
+        // mirror's frustum where it had already gone solid — see withHaze.
+        environment.withHaze(MIRROR_RANGE, () => mirror.draw(renderer, scene, w, h));
+        wayHomeArrow.group.visible = arrow;
+      }
       return;
     }
     // Clear the whole canvas first, then draw only inside the pane. WebGL's
@@ -947,16 +904,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     route?.dispose();
     car?.dispose();
     ghostCar?.dispose();
-    dust.dispose();
-    smoke.dispose();
-    plume.dispose();
-    mud.dispose();
-    spray.dispose();
-    foam.dispose();
-    fumes.dispose();
-    life.dispose();
-    celebration.dispose();
+    carFx.dispose();
     wayHomeArrow.dispose();
+    mirror.dispose();
     environment.dispose();
     renderer.dispose();
   };
@@ -967,6 +917,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     setCar,
     setVideo,
     setCamera,
+    setMirror: (on) => {
+      mirrorOption = on;
+    },
     setMapRect,
     nudgeMap: (dAz, dPitch, zoomBy) => chase.nudgeMap(dAz, dPitch, zoomBy),
     resetMap: () => chase.resetMap(),

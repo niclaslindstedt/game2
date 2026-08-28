@@ -603,9 +603,9 @@ function pacenoteText(note: HudPacenote): string {
  * so the strip stops reading the stage and starts reading the way back. The
  * metres are the distance to the exact point the arrow over the car points
  * at, and that the TRACK button hands you directly. */
-function WayHomeCall({ distance }: { distance: number }) {
+function WayHomeCall({ distance, belowMirror }: { distance: number; belowMirror: boolean }) {
   return (
-    <div className="hud-pace">
+    <div className={`hud-pace ${belowMirror ? "hud-pace-under-glass" : ""}`}>
       <div className="hud-pace-call hud-pace-home">
         {/* A warning triangle, drawn in the co-driver strip's own hand —
             chunky rounded strokes, one color — so it reads as the same
@@ -679,11 +679,23 @@ function SplitBoard({ split }: { split: HudSplit }) {
  * about the call is lost — what goes is the READING, which at rally pace is
  * the expensive part. The distance stays: it is a number glanced at, not a
  * phrase parsed, and there is no glyph that says "in 200 m". */
-function Pacenotes({ notes, words }: { notes: HudPacenote[]; words: boolean }) {
+function Pacenotes({
+  notes,
+  words,
+  belowMirror,
+}: {
+  notes: HudPacenote[];
+  words: boolean;
+  belowMirror: boolean;
+}) {
   const now = notes[0];
   const next = notes[1];
   return (
-    <div className={`hud-pace ${words ? "" : "hud-pace-glyphs"}`}>
+    <div
+      className={`hud-pace ${words ? "" : "hud-pace-glyphs"} ${
+        belowMirror ? "hud-pace-under-glass" : ""
+      }`}
+    >
       <div className={`hud-pace-call hud-pace-${now.severity}`}>
         <PacenoteArrow severity={now.severity} dir={now.dir} />
         <span className="hud-pace-text">
@@ -985,15 +997,17 @@ export function Hud({
           {show.timer && split && snap.phase === "racing" && <SplitBoard split={split} />}
         </div>
         <div className="hud-actions pointer-events-auto">
-          <button
-            type="button"
-            className="hud-mini hud-mini-icon"
-            onClick={onCamera}
-            title="Camera (V)"
-            aria-label="Camera"
-          >
-            <CameraGlyph />
-          </button>
+          {show.cameraButton && (
+            <button
+              type="button"
+              className="hud-mini hud-mini-icon"
+              onClick={onCamera}
+              title="Camera (V)"
+              aria-label="Camera"
+            >
+              <CameraGlyph />
+            </button>
+          )}
           {/* R29 — the position board, between the camera and the map. It is
               the last thing on the row, which puts it hard against the
               minimap: place and route are the two things a driver glances
@@ -1038,11 +1052,11 @@ export function Hud({
           they know the stage, not one who wants to stay lost. */}
       {snap.phase === "racing" &&
         (snap.lost ? (
-          <WayHomeCall distance={snap.homeDistance} />
+          <WayHomeCall distance={snap.homeDistance} belowMirror={show.mirror} />
         ) : (
           show.pacenotes &&
           snap.pacenotes.length > 0 && (
-            <Pacenotes notes={snap.pacenotes} words={show.pacenoteText} />
+            <Pacenotes notes={snap.pacenotes} words={show.pacenoteText} belowMirror={show.mirror} />
           )
         ))}
 

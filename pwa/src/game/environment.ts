@@ -50,6 +50,19 @@ export type Environment = {
    * meaningless; what it needs is ground that dissolves just before the
    * built terrain runs out, instead of ending on a visible edge. */
   setFogRange: (near: number, far: number) => void;
+  /** Draw one pass with the air pulled in — both fog distances scaled by
+   * `by` for the duration of `draw`, and put back the moment it returns.
+   *
+   * The rear-view mirror is what needs this. It is a strip a few hundred
+   * pixels wide showing a view the player never steers by, so it has no use
+   * for the kilometre of clear air the forward view is given, and drawing
+   * the whole of it a second time is what a mirror would otherwise cost.
+   * Pulling the fog in rather than simply shortening the mirror camera's far
+   * plane is what keeps the saving invisible: geometry leaves the frustum
+   * where the air is already solid, instead of being cut off in mid-view.
+   * The SKY takes no fog at all (`fog: false` on every shell), so the
+   * mirror keeps its horizon, its ridges and its clouds. */
+  withHaze: (by: number, draw: () => void) => void;
   /** Show or hide the SKY — the dome and everything pinned inside it: the
    * stars, the sun's disc and halo, the clouds, the ridge rings.
    *
@@ -459,6 +472,19 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     applyRange();
   };
 
+  const withHaze = (by: number, draw: () => void): void => {
+    const near = fog.near;
+    const far = fog.far;
+    fog.near = near * by;
+    fog.far = far * by;
+    try {
+      draw();
+    } finally {
+      fog.near = near;
+      fog.far = far;
+    }
+  };
+
   const setSky = (show: boolean): void => {
     dome.visible = show;
     stars.visible = show;
@@ -525,9 +551,9 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     const windSpeed = Math.hypot(state.wind.x, state.wind.z);
     if (clouds.group.visible) clouds.update(windSpeed, dt, camera, group.position);
 
-    // Headlights track the nose, tail lamps the tail. Each pair's beams carry
-    // half of what the single light used to, so the road ahead is as bright
-    // as it was — it is just lit by two lamps instead of one.
+    // Headlights track the nose, tail lamps the tail. Each lamp of a pair
+    // carries half the intensity the pair is worth, so the road ahead is lit
+    // by two beams rather than by twice as much light.
     if (preset.headlights) {
       const car = state.car;
       const fwd = { x: Math.sin(car.heading), z: Math.cos(car.heading) };
@@ -611,6 +637,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     setRange,
     fogFar: () => fog.far,
     setFogRange,
+    withHaze,
     setSky,
     carTint: () => carTintFor(preset),
     lampsLit: () => preset.headlights,

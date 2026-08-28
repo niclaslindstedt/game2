@@ -825,6 +825,7 @@ export function App() {
     setAudioVolumes(next.audio);
     input.setKeys(next.keys);
     rendererRef.current?.setVideo(next.video);
+    rendererRef.current?.setMirror(next.hud.mirror);
   };
 
   /** The debug snapshot the overlay renders and the log quotes. Null before
@@ -948,6 +949,7 @@ export function App() {
       if (disposed) return;
       const renderer = createRenderer(canvas, optionsRef.current.video);
       rendererRef.current = renderer;
+      renderer.setMirror(optionsRef.current.hud.mirror);
       renderer.setMapRect(mapRectRef.current);
       // Thunder arrives seconds after the flash that made it (storm.ts), so
       // the renderer decides WHEN and the bank decides what it sounds like.

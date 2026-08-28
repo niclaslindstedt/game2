@@ -38,7 +38,9 @@ The **car** is picked on any of those pages, turning on its stand. **Time of day
 
 ### Options
 
-**HUD** switches off anything you do not need on screen — minimap, pacenotes (and separately their WORDS, leaving just the corner arrows to read at a glance), damage glyph, tachometer, boost tank, wind, stage clock. Speed, gear and the start lights stay: those are the game.
+**HUD** switches off anything you do not need on screen — minimap, the rear-view mirror, the on-screen camera button, pacenotes (and separately their WORDS, leaving just the corner arrows to read at a glance), damage glyph, tachometer, boost tank, wind, stage clock. Speed, gear and the start lights stay: those are the game.
+
+The **rear view** is a strip of glass at the top of the frame showing the road behind, from the car, left-for-right the way a mirror does — and from the CAR whichever angle you are watching from, so switching to the helicopter view does not turn the mirror round with it. It is a second pass over the stage and the most expensive thing on this list, so it is also the first one to switch off on a device that is struggling. The **camera button** is only the on-screen one; the camera key (C or V) keeps working with it hidden.
 
 **Video** is the set of levers that buy frames on a weak device: **resolution** (the pixel-ratio ceiling, and the biggest single win), **draw distance** (how far the fog lets you see), **effects** (dust, spray, exhaust, rain and the ambient life), and **undergrowth** — the grass, shrubs and stumps scattered between the trees, which applies to the next stage you start because it is baked into the geometry. Undergrowth is a picture setting and nothing more: the trees you can HIT are always drawn whatever it says, so turning it down never makes a stage easier. How thickly the forest itself stands is a stage dial, set per run in Roam.
 
