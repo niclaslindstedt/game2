@@ -58,6 +58,11 @@ for (const dial of ["elevation", "water", "trees", "asphalt", "width"]) {
   if (value !== undefined) knobs[dial] = Number(value);
 }
 const gearbox = flag("gearbox") ?? "auto";
+// The CAMPAIGN FIELD drives the box each crew actually drives (`gearboxFor`
+// — the crews with the hands take their own gears), because that is the
+// field the player meets. `--gearbox` still overrides it, for the question
+// "what would this field be worth in one box".
+const gearboxAsked = flag("gearbox") !== undefined;
 const length = flag("length") ?? "medium";
 const shape = flag("shape") ?? "sprint";
 const laps = flag("laps") ? Number(flag("laps")) : undefined;
@@ -289,7 +294,7 @@ if (args.includes("--field")) {
         const r = simulateStage({
           seed,
           carId: entry.crew.carId,
-          gearbox,
+          gearbox: gearboxAsked ? gearbox : entry.gearbox,
           length,
           maxTime,
           weather,

@@ -12,7 +12,7 @@
 // authors the conditions and the rivals, and the player brings a car and a
 // gearbox to them.
 
-import { carById, type CarSpec } from "@engine";
+import { carById, type CarSpec, type GearboxMode } from "@engine";
 
 import { formatTime } from "../lib/util.ts";
 import type { CampaignLevel, CampaignLocation, CampaignProgress } from "./campaign.ts";
@@ -24,13 +24,17 @@ import type { Settings } from "./settings.ts";
 /** The spec sheet. The bars compare the car to the REST OF THE ROSTER
  * rather than to zero (see car-stats.ts) — three cars within a few percent
  * of each other on an absolute scale are three identical full bars, which
- * is a picture of nothing. */
-function CarSpecPanel({ spec }: { spec: CarSpec }) {
+ * is a picture of nothing.
+ *
+ * The FIGURES are quoted through the box the transmission row below is set
+ * to, so choosing the manual visibly moves the top speed and the sprint on
+ * the same card the choice is made on. */
+function CarSpecPanel({ spec, gearbox }: { spec: CarSpec; gearbox: GearboxMode }) {
   return (
     <div className="car-spec">
       <div className="car-spec-blurb">{spec.blurb}</div>
       <div className="car-spec-facts">
-        {carFacts(spec).map((fact) => (
+        {carFacts(spec, gearbox).map((fact) => (
           <div key={fact.key} className="car-spec-fact">
             <span className="car-spec-fact-label">{fact.label}</span>
             <span className="car-spec-fact-value">{fact.value}</span>
@@ -103,7 +107,7 @@ export function CarSetupPage({
           onPick={(carId) => onRace({ ...race, carId })}
           onDeveloper={onDeveloper}
         />
-        <CarSpecPanel spec={spec} />
+        <CarSpecPanel spec={spec} gearbox={settings.gearbox} />
       </div>
       <GearboxRow
         label="TRANSMISSION"

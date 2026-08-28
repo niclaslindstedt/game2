@@ -1109,8 +1109,45 @@ export const TUNING = {
     upAt: 0.94,
     /** ...and down below this fraction of the previous gear's top. */
     downAt: 0.55,
-    /** Throttle cut while a manual shift engages, seconds. */
-    shiftCut: 0.15,
+    /** Throttle cut while a manual shift engages, seconds. Short enough to
+     * be a snap the driver hears rather than a pause they wait out — the
+     * manual's cost is the beat and the gear they have to pick, not a lost
+     * second. Long enough that shifting into the wrong gear is felt. */
+    shiftCut: 0.1,
+
+    /** What each box is WORTH, keyed by the mode the run was created with.
+     * The box is a TRADE, not a difficulty setting: the automatic takes
+     * every gear for you and never fluffs one, and the manual is the
+     * racing set — taller ratios and less of the engine lost on the way to
+     * the road — that only pays if the driver actually takes the gears.
+     *
+     * `gearedSpec` (defs/cars.ts) folds these into the run's `spec`, so
+     * everything downstream — the shift points, the bot's target speed, the
+     * boost's overrun cap, the rev counter, the engine note, the card's
+     * spec sheet — reads the box the player chose without knowing there is
+     * a box at all. Both are multipliers on the catalog row, so no car is
+     * handed a different box from any other: the spread stays the roster's.
+     */
+    set: {
+      auto: {
+        /** Ratio on every gear's ceiling — the catalog IS the road box. */
+        gearing: 1,
+        /** Share of the catalog's acceleration that reaches the road. */
+        power: 1,
+      },
+      manual: {
+        /** 6% taller everywhere: the same engine pulls each gear further,
+         * which is where the top end comes from. It is paid for at the
+         * bottom of every gear, and by `shiftCut` on each of the five
+         * shifts a driver now has to take themselves. */
+        gearing: 1.06,
+        /** ...and 5% more of it arrives, with no converter slurring the
+         * bottom of the gear away. Slightly under the gearing so the
+         * headroom over drag at `upAt × gearTop` (see cars.ts) is the
+         * catalog's, less a percent, rather than a new floor. */
+        power: 1.05,
+      },
+    },
   },
 
   /** Backing up. Reverse is a RECOVERY, not a way to drive the stage: it

@@ -39,7 +39,9 @@ import {
   budgetFor,
   compileStage,
   profileFor,
+  gearboxFor,
   rivalField,
+  MANUAL_HANDS,
   simulateStage,
   skillPoints,
   spend,
@@ -188,6 +190,25 @@ describe("the roster", () => {
     expect(entries.map((e) => e.number)).toEqual(entries.map((_, i) => i + 1));
     for (let i = 1; i < entries.length; i++) {
       expect(entries[i].crew.standing).toBeLessThan(entries[i - 1].crew.standing);
+    }
+  });
+
+  it("hands the gearbox to the crews with the hands, and only as it climbs", () => {
+    const boxes = DIFFICULTY_IDS.map(
+      (id) => rivalField(id).filter((entry) => entry.gearbox === "manual").length,
+    );
+    // Nobody on easy takes their own gears; the field's best hands do as the
+    // difficulty climbs, and never all of it — a crew who spent their points
+    // on eyes and nerve leaves the box alone however quick they are.
+    expect(boxes[0]).toBe(0);
+    expect(boxes[1]).toBeGreaterThan(0);
+    expect(boxes[2]).toBeGreaterThan(boxes[1]);
+    expect(boxes[2]).toBeLessThan(RIVALS.length);
+    for (const id of DIFFICULTY_IDS) {
+      for (const entry of rivalField(id)) {
+        expect(entry.gearbox).toBe(entry.skill.hands >= MANUAL_HANDS ? "manual" : "auto");
+        expect(gearboxFor(entry.skill)).toBe(entry.gearbox);
+      }
     }
   });
 

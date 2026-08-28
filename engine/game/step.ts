@@ -16,7 +16,7 @@ import {
   type StageShape,
   type Surface,
 } from "../mapgen/index.ts";
-import { carById, type GearboxMode } from "./defs/cars.ts";
+import { carById, gearedSpec, type GearboxMode } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 import { launch, stepAirborne, stepGrounded, type GroundContext } from "./car.ts";
 import { collideCar } from "./collision.ts";
@@ -194,7 +194,11 @@ function blowWind(env: RaceEnv, t: number, into: { x: number; z: number }): void
 }
 
 export function createGame(options: CreateGameOptions): GameState {
-  const spec = carById(options.carId ?? "compact");
+  // The box is folded into the spec once, here: everything that reads
+  // `state.spec` — the shift points, the bot, the boost cap, the rev
+  // counter, the engine note — then drives the gears the player chose.
+  const gearbox = options.gearbox ?? "auto";
+  const spec = gearedSpec(carById(options.carId ?? "compact"), gearbox);
   const track =
     options.track ??
     compileStage(options.seed, options.length ?? "medium", options.knobs, options.shape);
@@ -217,7 +221,7 @@ export function createGame(options: CreateGameOptions): GameState {
   car.z = grid.z - Math.sin(grid.heading) * slot;
   car.y = grid.elevation;
   car.heading = grid.heading;
-  car.gearbox = options.gearbox ?? "auto";
+  car.gearbox = gearbox;
   const env = buildEnv(
     options.seed,
     options.env?.timeOfDay ?? "day",

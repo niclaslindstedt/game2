@@ -13,6 +13,7 @@ import {
   carById,
   compileTrack,
   createGame,
+  gearedSpec,
   step,
   type GameEvent,
   type GameState,
@@ -21,15 +22,38 @@ import {
 } from "@engine";
 
 const STRAIGHT: SegmentPlan[] = [{ kind: "straight", length: 1900, feature: "none" }];
+/** Long enough that a car flat out in top gear settles against drag on it
+ * rather than running out of road first. */
+const RUNWAY: SegmentPlan[] = [{ kind: "straight", length: 12000, feature: "none" }];
 
-function game(carId: string, gearbox: GearboxMode = "manual"): GameState {
+function game(
+  carId: string,
+  gearbox: GearboxMode = "manual",
+  segments: SegmentPlan[] = STRAIGHT,
+): GameState {
   return createGame({
     seed: 0,
     carId,
     gearbox,
     skipCountdown: true,
-    track: compileTrack(0, STRAIGHT),
+    track: compileTrack(0, segments),
   });
+}
+
+/** The fastest the car ever went on a flat-out run, m/s — with the manual
+ * shifted at the same point the auto would have taken the gear. */
+function peakSpeed(carId: string, gearbox: GearboxMode, seconds: number): number {
+  const state = game(carId, gearbox, RUNWAY);
+  let peak = 0;
+  for (let i = 0; i < Math.round(seconds / TUNING.dt); i++) {
+    const wantUp =
+      gearbox === "manual" &&
+      state.car.gear < state.spec.gearTop.length - 1 &&
+      state.car.u > state.spec.gearTop[state.car.gear] * TUNING.gearbox.upAt;
+    step(state, { ...NEUTRAL_INPUT, throttle: 1, shiftUp: wantUp });
+    peak = Math.max(peak, state.car.u);
+  }
+  return peak;
 }
 
 function flatOut(state: GameState, seconds: number, shift = false): GameEvent[] {
@@ -95,6 +119,40 @@ describe("cars and gearboxes", () => {
     const autoFourWheel = game("coupe", "auto");
     flatOut(autoFourWheel, 15, false);
     expect(autoFourWheel.car.gear).toBeGreaterThanOrEqual(3);
+  });
+
+  it("the manual is the taller set — the same car goes faster in it", () => {
+    const box = TUNING.gearbox.set;
+    for (const car of CARS) {
+      const geared = gearedSpec(car, "manual");
+      // Every gear is taller and pulls harder; nothing else about the car
+      // moves, so the roster's spread is the roster's.
+      expect(geared.gearTop).toEqual(car.gearTop.map((top) => top * box.manual.gearing));
+      expect(geared.gearAccel).toEqual(car.gearAccel.map((a) => a * box.manual.power));
+      expect(geared.gripAccel).toBe(car.gripAccel);
+      expect(geared.brake).toBe(car.brake);
+      // The automatic drives the catalog as authored.
+      expect(gearedSpec(car, "auto")).toBe(car);
+    }
+  });
+
+  it("the run drives the box it was created with", () => {
+    for (const gearbox of ["auto", "manual"] as GearboxMode[]) {
+      const state = game("coupe", gearbox);
+      expect(state.spec.gearTop).toEqual(gearedSpec(carById("coupe"), gearbox).gearTop);
+    }
+  });
+
+  it("a driver who takes the gears themselves is rewarded with real speed", () => {
+    // 35 s flat out down a runway: long enough for either box to settle
+    // against drag in its top gear. The manual's whole payment — a cut at
+    // every shift — is inside the same run.
+    for (const car of CARS) {
+      const auto = peakSpeed(car.id, "auto", 35);
+      const manual = peakSpeed(car.id, "manual", 35);
+      expect(manual).toBeGreaterThan(auto * 1.04);
+      expect(manual).toBeLessThan(auto * 1.09);
+    }
   });
 
   it("a manual driver who shifts beats one who does not", () => {

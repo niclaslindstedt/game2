@@ -12,7 +12,7 @@ A deterministic player stand-in that reads the same `GameState` the HUD reads an
 4. **Drift management** — power through the slide, breathe when the angle gets deep, and steer where the car is GOING rather than where its nose is pointing: sideways, holding the nose on the lookahead puts the velocity off the road by exactly the slip angle, so the aim error is measured against the direction of travel. Counter-steer damps the rotation only once the nose is nearly where it should be (damping earlier is what runs a drift wide).
 5. **Recovery** — out in the wild: cruise back toward the road at a pace the nature surface can steer at, and fire the reset input when the excursion is hopeless (out too long), like a player would.
 6. **Backing out** — pinned against something with the throttle buried for `reverseAfter`, the bot stops pushing and reverses off it, wheel straight, until the car is properly moving (`reverseSpeed`); then it takes another run at the line. Being WEDGED is no longer a reason to reset: a driver backs off the trunk first, and the respawn is what happens when that fails too. The manoeuvre latches on the car's own `reversing` state so a single wedged tick cannot flicker it, and reversing counts as asking to move (`stepStuck`), so a car pinned both ways still reaches the engine's wedge rescue on time instead of braking forever.
-7. **Gears** — reads `car.gearbox` (the run's box, not the car's) and shifts a manual by the same thresholds the auto box uses, so both simulate fairly.
+7. **Gears** — reads `car.gearbox` (the run's box, not the car's) and shifts a manual by the same thresholds the auto box uses, so both simulate fairly. The box's own ratios are already in `state.spec` (`gearedSpec`), so a crew on a manual plans and shifts around the taller gears without the bot knowing there is a box.
 
 Two of the knobs are estimates the driver makes rather than reflexes: `brakeUse` is how much of the car's braking the corner plan assumes it will get (a driver who trusts the brakes stays on the throttle later), and `offRoadGiveUp` is how long an excursion runs before the bot accepts the reset instead of ploughing on.
 
@@ -43,13 +43,15 @@ Skill is spent on six **axes**, each worth up to `AXIS_MAX` (10) points, and eac
 
 R29 — the campaign is raced against **fourteen crews**, and the player is the fifteenth and last car out, `START_INTERVAL` seconds behind the one in front. Each crew is data: an alias, a car, a `standing` (where they sit in the field's budget band) and a set of weights (how they spend what they are given), plus notes describing what they are good at and what lets them down. The shape is fixed and the budget is not, so the field keeps its characters at every difficulty: Blink is always the one with the hands and no eyes, Metronome always the one who never makes a mistake and never makes a move.
 
+Points buy more than a profile: a crew whose `hands` reach `MANUAL_HANDS` (5.5 of 10) drives the **manual box**, with the taller ratios and the top end that come with it (see [driving.md](driving.md)). Nobody on easy has the hands for it, two crews do on medium, and six of the fourteen do on hard — so the head of a hard field is quicker than its plan alone says, and the box is a character (Blink and Metronome, the two who bought hands) before it is a rank.
+
 A difficulty is one number — the points the middle of the field gets — plus a spread:
 
 | Setting  | Budget | Spread | P3 pace, as a ratio to `RALLY_BOT`            |
 | -------- | ------ | ------ | --------------------------------------------- |
-| `easy`   | 11     | ±7.5   | ≈ 1.16 (the podium is 16% off reference pace) |
-| `medium` | 19     | ±8.5   | ≈ 1.04                                        |
-| `hard`   | 28     | ±8     | ≈ 0.93                                        |
+| `easy`   | 11     | ±7.5   | ≈ 1.22 (the podium is 22% off reference pace) |
+| `medium` | 19     | ±8.5   | ≈ 1.08                                        |
+| `hard`   | 28     | ±8     | ≈ 0.97                                        |
 
 The bands overlap: the quickest EASY crew is about as good as the slowest MEDIUM one, which is what makes stepping up a difficulty feel like the field closing in rather than a different game.
 

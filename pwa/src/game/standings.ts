@@ -128,6 +128,9 @@ export function createField(track: Track, difficulty: Difficulty, stage: FieldSt
     state: createGame({
       seed: stage.seed,
       carId: entry.crew.carId,
+      // The crews with the hands take their own gears (`gearboxFor`), which
+      // is where the head of a hard field finds its top end.
+      gearbox: entry.gearbox,
       track,
       laps: stage.laps,
       skipCountdown: true,
