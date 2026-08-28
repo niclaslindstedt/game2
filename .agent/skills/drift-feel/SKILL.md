@@ -44,9 +44,19 @@ straight's speed however sideways it looks. Reach for these when the complaint
 is about the LINE, and for the group above when it is about the ANGLE.
 
 Per car, in `cars.ts`: **`gripAccel`** is the grip ceiling the whole group is
-measured against (it is _only_ the slide threshold — lateral grip itself is
-`gripLat`/`driftLat`), and **`driftYaw`** is the extra steering authority a
-developed slide hands the wheel.
+measured against, and **`driftYaw`** is the extra steering authority a
+developed slide hands the wheel. `gripAccel` is TWO things at once — the slide
+threshold above _and_ the base of the traction ceiling (`gripAccel ×
+latCeiling × grip` in `car.ts`) — so moving it changes how hard the car
+corners as well as when it lets go. When you want only one of those, reach for
+`TUNING.drivetrain`'s `entry`/`depth` (per layout) or `gripLat`/`driftLat`
+(per car) instead.
+
+Per LAYOUT, in `TUNING.drivetrain`: **`entry`** is where the slide starts and
+**`depth`** is how far it develops once past there — different questions, both
+needed. `depth` is 0..1 against the rear-driver's fully developed slide and
+must never exceed 1: `releasing = clamp(sliding - asked, 0, 1)` pins at zero
+if it does, and the exit stops existing.
 
 `releaseHang` and `releaseSnap` are a **spring and its damping**: `snap` is
 how hard the nose is pulled back to straight, `hang` is how slow the yaw is

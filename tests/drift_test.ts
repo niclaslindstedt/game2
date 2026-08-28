@@ -109,6 +109,10 @@ describe("turning at pace", () => {
       let crossed = 0;
       for (let i = 0; i < 24; i++) {
         run(state, { throttle: 1, steer: 0 }, 0.08);
+        // Stop at the verge. A drift this big ends a long way out on a road
+        // this wide, and the car carries on out there on the throttle: keep
+        // sampling and what gets measured is a tree, not the exit.
+        if (state.offRoad) break;
         crossed = Math.min(crossed, state.car.slip * side);
       }
       return -crossed;
@@ -162,6 +166,12 @@ describe("turning at pace", () => {
     const sideways = Math.abs(state.car.slip);
     run(state, { throttle: 1, steer: -0.4 }, 1);
     expect(Math.abs(state.car.slip)).toBeLessThan(sideways * 0.5);
+    // The slide itself is all but gone. What angle is left belongs to the
+    // turn the counter-steer is now itself asking for — a held 0.4 of lock
+    // at this speed is a real corner — so the readout is asked once the
+    // hands come back to centre rather than while they are still steering.
+    expect(state.car.slide).toBeLessThan(0.2);
+    run(state, { throttle: 1, steer: 0 }, 0.4);
     expect(state.car.drifting).toBe(false);
   });
 
@@ -176,13 +186,21 @@ describe("turning at pace", () => {
     // A FLICK provokes the drift within a few tenths...
     run(state, { throttle: 1, steer: 1, handbrake: true }, 0.3);
     expect(state.car.drifting).toBe(true);
-    // ...and HOLDING it with the power down and full lock takes the rear
-    // far past the saturation band — deeper than any drift the wheel can
-    // catch, well beyond where the slide parks without it. Stated against
-    // the angle a fully developed slide asks for, because that is what
-    // "past the band" means; a bare number would only be this car's.
+    // ...and HOLDING it with the power down and full lock takes the rear far
+    // past the saturation band. Stated against the SAME car on the same lock
+    // without the lever, because that is the claim — the handbrake reaches an
+    // angle the wheel alone cannot — and because how deep the wheel alone
+    // goes is now a property of the drivetrain (`TUNING.drivetrain[].depth`).
+    // A front-driver washes wide where a rear-driver comes round, and the
+    // lever is exactly how the front-driver gets there anyway.
     run(state, { throttle: 1, steer: 1, handbrake: true }, 0.7);
-    expect(Math.abs(state.car.slip)).toBeGreaterThan(TUNING.drift.angleSpan * 1.4);
+    const withLever = Math.abs(state.car.slip);
+
+    const wheelOnly = game();
+    upToSpeed(wheelOnly, 5);
+    run(wheelOnly, { throttle: 1, steer: 1 }, 1.05);
+    expect(withLever).toBeGreaterThan(Math.abs(wheelOnly.car.slip) * 1.4);
+    expect(withLever).toBeGreaterThan(TUNING.drift.angleSpan);
   });
 
   it("stays gripped below the speed where turning outruns the tires", () => {

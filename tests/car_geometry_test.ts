@@ -54,6 +54,36 @@ describe("the solid bar against the hoods it was written from", () => {
   });
 });
 
+describe("the springs against the wheel arches", () => {
+  // The renderer draws the whole sprung mass at `car.ride` on a chassis group
+  // and leaves the wheels on the ground (car-mesh.ts), so the suspension's
+  // travel is a BODYWORK measurement: past the gap between the arch and the
+  // tire the shell is visibly sliding off its own wheels, which is what "the
+  // suspension is broken" looks like from the chase cam. The engine number
+  // and the arch that has to hide it live in different layers, so nothing but
+  // this holds them together.
+  // A body with no arch opening runs its flank straight down to the floor
+  // with the wheels bolted outside it, so what stops the drop there is the
+  // sill reaching the ground rather than the tire reaching the arch.
+  const archGap = (spec: (typeof CAR_BODIES)[string]): number =>
+    spec.arches ? spec.arches.radius - spec.wheelRadius : spec.floorY;
+
+  it.each(bodies)("%s can hide the springs' whole travel", (_id, spec) => {
+    expect(TUNING.suspension.heaveMax).toBeLessThanOrEqual(archGap(spec) + 0.02);
+  });
+
+  it("the bump stops and the hard limit sit inside that gap, in order", () => {
+    const tightest = Math.min(...bodies.map(([, spec]) => archGap(spec)));
+    const S = TUNING.suspension;
+    // Compression before the stops, then droop, then the hard limit — each
+    // inside the next, and all of them inside the tightest arch on the
+    // roster. A hard limit the arches cannot cover is not a limit at all.
+    expect(S.travel).toBeLessThan(S.heaveMax);
+    expect(S.droop).toBeLessThan(S.heaveMax);
+    expect(S.heaveMax).toBeLessThanOrEqual(tightest + 0.02);
+  });
+});
+
 describe("the catalog and the body specs", () => {
   it("every car in the catalog has a body of its own", () => {
     for (const car of CARS) expect(CAR_BODIES[car.id]).toBeDefined();

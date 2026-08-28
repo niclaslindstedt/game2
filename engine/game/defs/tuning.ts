@@ -205,6 +205,22 @@ export const TUNING = {
       /** Where the slide starts, ×`drift.entryAt`. Over 1: a front-driver
        * understeers up to the limit and has to be provoked past it. */
       entry: 1.2,
+      /** ...and HOW FAR it develops once past it, 0..1 against a fully
+       * developed slide — the rear-driver's, which is what every other knob
+       * in the group is calibrated against. NEVER over 1: `asked` above the
+       * carried `sliding` leaves `releasing` (car.ts) pinned at zero, and the
+       * exit stops existing.
+       *
+       * Well under 1 here, and this is the number that makes a front-driver a
+       * front-driver: when the fronts give up the car WASHES WIDE. It still
+       * slides — a provoked hatch is a lovely thing — but the angle it holds
+       * is a fraction of a lit-up rear axle's, and reaching it costs a flick,
+       * a lift or the handbrake rather than just the wheel. `entry` alone
+       * cannot say any of that: it moves where the slide begins and nothing
+       * about how deep it goes, so on the loose — where the front-driver's
+       * rubber is the first to give up — the hatch used to hang exactly the
+       * same tail out as the saloon, only earlier. */
+      depth: 0.6,
       /** How fast a slide the wheel has stopped asking for lets go,
        * ×`drift.release`. Fast — it gathers itself up. */
       release: 1.5,
@@ -239,6 +255,12 @@ export const TUNING = {
       liftYaw: 0.25,
       spin: 1.9,
       entry: 0.82,
+      // THE REFERENCE, and the reason to drive this car: a rear axle with
+      // torque under it does not wash wide, it comes round, and it sits at an
+      // angle neither other layout reaches. Every knob in the slide is
+      // calibrated against a fully developed one, so this is the row that
+      // stays at 1 — the other two are what a layout gives away.
+      depth: 1,
       release: 0.75,
       snap: 0.7,
       bite: 0.7,
@@ -258,6 +280,9 @@ export const TUNING = {
       liftYaw: 0.5,
       spin: 0.4,
       entry: 1,
+      // Between the two, as everything about this car is: it slides when
+      // asked and it is never the one hanging furthest out.
+      depth: 0.85,
       release: 1,
       snap: 1,
       bite: 1.2,
@@ -365,23 +390,37 @@ export const TUNING = {
    * or two — the difference between a car and a sprite sliding on a plane.
    * The `collision` skill owns this group together with the contact model. */
   suspension: {
-    /** Natural frequency of the body on its springs, Hz. Rally-soft: low
-     * enough that a landing visibly travels, high enough that the car is
-     * settled again before the next corner. Scaled per car by its mass
-     * (a heavier body on the same springs rides more slowly). */
-    freq: 1.35,
+    /** Natural frequency of the body on its springs, Hz. Rally-soft, but
+     * only so soft: the whole travel below is smaller than a wheel arch, so
+     * a spring that took a second to answer would spend the whole stage on
+     * its stops. Scaled per car by its mass (a heavier body on the same
+     * springs rides more slowly). */
+    freq: 1.9,
     /** Damping ratio, 0..1. Under 1 on purpose — the body has to OVERSHOOT
      * and come back, because a spring that just eases to rest reads as a
-     * cushion rather than as weight. Around 0.28 gives one clear rebound
-     * and a small second one. */
-    damping: 0.28,
+     * cushion rather than as weight. Around 0.45 gives one clear rebound and
+     * a trace of a second; much under that and the body never stops moving,
+     * which reads as a broken car rather than a heavy one. */
+    damping: 0.45,
     /** Fraction of a sudden change in the wheels' vertical speed that the
      * body refuses to follow, 0..1 — the jolt that loads the spring. */
     absorb: 0.85,
-    /** Compression travel before the bump stops, m... */
-    travel: 0.2,
-    /** ...and droop travel before the springs top out, m. */
-    droop: 0.14,
+    /** Ground acceleration the springs can pass to the body, m/s². A valley
+     * floor at pace is several g held for a fifth of a second, and no spring
+     * this soft holds a body against that inside a wheel arch — past this the
+     * dampers are out of authority and the whole car rides the ground up,
+     * which is what a bottomed suspension does. Only the ground-follow jolt
+     * is capped: a landing and an impact are velocity steps of their own. */
+    joltMax: 13,
+    /** THE TRAVEL IS A BODYWORK MEASUREMENT, not a spring one: the arches
+     * clear the tires by 0.08–0.11 m (car-styles.ts), and past that the
+     * chassis is visibly sliding off its own wheels. Compression before the
+     * bump stops, m... */
+    travel: 0.075,
+    /** ...and droop travel before the springs top out, m. Shorter than the
+     * compression, as it is on the car: the wheel hanging out of the arch
+     * reads wrong sooner than the arch swallowing it. */
+    droop: 0.055,
     /** How much stiffer the bump stops are than the springs (multiplier on
      * the spring rate) — a slam is caught, not swallowed... */
     stopRate: 16,
@@ -389,10 +428,13 @@ export const TUNING = {
      * instead of firing it straight back out. */
     stopDamp: 26,
     /** Hard limits on the body's offset, m — whatever the stops let through
-     * never puts the shell through the wheels or up off them. */
-    heaveMax: 0.3,
-    /** Cap on spring velocity, m/s. */
-    rateMax: 9,
+     * never puts the shell through the wheels or up off them. Held at the
+     * tightest arch gap on the roster, so the worst landing in the game still
+     * draws as a car on its bump stops. */
+    heaveMax: 0.1,
+    /** Cap on spring velocity, m/s. Sized to the travel above: the springs
+     * cross their whole compression in about a tenth of a second. */
+    rateMax: 3,
     /** Nose attitude the springs take per m/s² of longitudinal
      * acceleration, rad — the dive under brakes and the squat on the
      * power. A couple of degrees at full braking: enough to read at the
@@ -402,7 +444,7 @@ export const TUNING = {
     pitchRate: 7,
     /** Body heave a solid contact throws into the springs, m/s per m/s of
      * closing speed — the car rocks on its springs after a hit... */
-    impactHeave: 0.22,
+    impactHeave: 0.09,
     /** ...and the dive it throws in, rad per m/s of closing speed, signed
      * by where on the body the hit landed (a nose hit pitches down, a
      * rear-ender lifts the nose). */
