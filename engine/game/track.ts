@@ -65,18 +65,22 @@ export function wayHome(state: GameState): WayHome {
  * with the stage running along beside it. What a driver actually needs
  * telling is that they are LEAVING: far enough out that the road is not the
  * next thing under the wheels, and pointed away from it rather than across
- * it. Both tests carry hysteresis (TUNING.offTrack.guide), because a
- * wandering car crosses either of them back and forth and an instrument that
- * blinks is worse than one that is late.
+ * it (TUNING.offTrack.guide).
+ *
+ * Coming ON is the interesting half; going OFF is not a threshold at all.
+ * RETURN TO TRACK is an instruction, and the only thing that carries it out
+ * is the track being under the wheels again — so once it is up, the car
+ * being back on the road is the one thing that takes it down. Nearing the
+ * road is not reaching it and neither is aiming at it: a sign that cleared
+ * on the approach would go dark with the last stretch of scrub still to
+ * pick through, and come back on the first steer that wandered.
  */
 export function trackLost(state: GameState): boolean {
   if (!state.offRoad) return false;
+  if (state.lost) return true;
   const guide = TUNING.offTrack.guide;
   const home = wayHome(state);
-  const away = Math.abs(home.bearing);
-  return state.lost
-    ? home.distance > guide.nearClear && away > guide.awayClear
-    : home.distance > guide.near && away > guide.away;
+  return home.distance > guide.near && Math.abs(home.bearing) > guide.away;
 }
 
 export type TrackFix = {

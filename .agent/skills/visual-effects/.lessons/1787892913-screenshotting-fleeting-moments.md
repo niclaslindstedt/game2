@@ -1,12 +1,11 @@
 ---
-title: A screenshot cannot race a CSS animation or a load-time beat — freeze the one, throttle into the other
+title: A screenshot cannot race an animation, a load-time beat, or a sim-time one — freeze, throttle, or take the first frame that qualifies
 date: 2026-08-27
 scope: scripts/screenshot.mjs, pwa/src/styles.css
-concepts: [harness, css, hud, preview, tooling]
+concepts: [harness, css, hud, preview, tooling, particles]
 ---
 
-Two ways a scene of a CSS-layer effect lies, both found capturing the attract
-card:
+Three ways a scene of an effect lies:
 
 **A blinking element.** Waiting for its lit half
 (`waitForFunction` on computed `opacity`) still loses: the shutter fires
@@ -24,3 +23,11 @@ the beat by holding its dependency back rather than by timing —
 parks the app on it for as long as you like. If a scene cannot be made
 deterministic that way, do not ship it: a scene that names one state and
 captures another is worse than no scene.
+
+**A beat that is over in a few tenths of SIM time** — a standing start, a
+landing. `atStageTime` is the honest cursor for anything a second or more
+in, but under software rendering ONE frame can carry most of a second of
+sim, so it overshoots badly down there: a 0.35 s wait for the launch came
+out at 0.81 s and 32 km/h, past the moment. Ask instead for the first frame
+that qualifies at all (`.hud-speed-num > 0`) — the earliest frame the
+predicate can see is the closest a still can get to the instant.

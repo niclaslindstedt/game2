@@ -183,6 +183,48 @@ await capture("shot-grid-portrait", { width: 390, height: 844 }, async (page) =>
   await page.waitForTimeout(800);
 });
 
+/** Wait until the start gantry has `lamps` reds lit — the only cursor into
+ * the countdown, whose own clock has not started yet. One lamp fills per
+ * second, so the last one is the last second before green. */
+async function atLamps(page, lamps) {
+  await page.waitForSelector(".hud-lights", { timeout: 120000 });
+  await page.waitForFunction(
+    `document.querySelectorAll('.hud-lamp-red').length >= ${lamps}`,
+    null,
+    { timeout: 120000 },
+  );
+}
+
+// Revving on the grid — the one thing there is to do while the lights fill.
+// A blipped engine against a car that cannot move turns none of its fuel
+// into road speed, so the acceptance test is the PIPE: a black cloud
+// building behind a stationary car, thicker than the same car makes at
+// pace. Throttle down from the first lamp and held through the shutter.
+await capture("shot-grid-revving", { width: 1280, height: 720 }, async (page) => {
+  await atLamps(page, 1);
+  await page.keyboard.down("ArrowUp");
+  await atLamps(page, 3);
+});
+
+// Off the line. The driven wheels are spinning under a car that has barely
+// moved, so the acceptance test is a plume off BOTH rear wheels at a road
+// speed where the rolling kickup throws nothing at all — and that it has
+// thinned out by the time the car is up and running.
+await capture("shot-launch-dust", { width: 1280, height: 720 }, async (page) => {
+  await atLamps(page, 1);
+  await page.keyboard.down("ArrowUp");
+  // The first frame the car has MOVED on. Under software rendering one
+  // frame carries a good fraction of a second of sim, so any later cursor —
+  // a stage time, a chosen speed — lands past the moment: a 0.35 s wait
+  // came out at 0.81 s and 32 km/h on this machine, with the launch already
+  // half handed over to the rolling kickup.
+  await page.waitForFunction(
+    "Number.parseInt(document.querySelector('.hud-speed-num')?.textContent ?? '0', 10) > 0",
+    null,
+    { timeout: 180000 },
+  );
+});
+
 // Flat out down the opening straight.
 await capture("shot-speed", { width: 1280, height: 720 }, async (page) => {
   await racing(page);

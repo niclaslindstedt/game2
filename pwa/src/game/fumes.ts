@@ -6,7 +6,40 @@
 
 import * as THREE from "three";
 
-const POOL = 192;
+import { puffTexture } from "./textures.ts";
+
+/** Big enough to hold a full second of the hardest the pipe ever works —
+ * the grid's redline burst — without recycling a puff that is still on
+ * screen, which would show up as the cloud tearing holes in itself at
+ * exactly the moment it is thickest. */
+const POOL = 384;
+
+/**
+ * WHAT THE PIPE DOES WITH THE THROTTLE. Fuel burned is fumes made, so the
+ * exhaust answers the ENGINE and not the speedometer — which is why the
+ * grid, where the car is going nowhere at all, is not the quietest place on
+ * the stage.
+ */
+export const EXHAUST = {
+  /** Seconds between puffs: sitting at idle, rolling, and on the boost —
+   * the richest the engine ever runs. */
+  every: { idle: 0.12, rolling: 0.045, boost: 0.02 },
+  /** How sooty the cloud is, 0 pale .. 1 black. `base` is a cold idle,
+   * darkening by `pace` as road speed comes up to `paceAt` m/s. */
+  shade: { base: 0.35, pace: 0.4, paceAt: 30, boost: 0.9 },
+  /** REVVING ON THE GRID: the throttle blipped against a car that cannot
+   * move. None of the fuel it drinks becomes road speed, so all of it
+   * leaves through the pipe — the one moment the exhaust is the loudest
+   * thing on screen. Below `from` on the rev counter the engine is merely
+   * idling and none of this applies; at the redline the puffs come `every`
+   * seconds (quicker than the boost's), `puffs` at a time so a blip reads
+   * as a BURST rather than a tick, at `shade` soot. `blast` is what pushes
+   * them out of the pipe, m/s, in place of a car pulling away from them:
+   * gentle, because a stationary car's cloud has to BILLOW and hang around
+   * the back of it — anything jetted hard streams straight past the chase
+   * camera and leaves the start line looking clean. */
+  rev: { from: 0.12, every: 0.016, puffs: 4, shade: 0.85, blast: 1.4 },
+};
 
 export type Fumes = {
   points: THREE.Points;
@@ -27,10 +60,16 @@ export function createFumes(): Fumes {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-  // Small grains, like dust.ts: near the low chase cam a big point sprite
-  // reads as a glitchy square, not smoke.
+  // Exhaust is SMOKE, not grit, so it takes the same answer tire smoke does
+  // to the low chase cam: a puff big enough to read gets a lumpy MASK
+  // (textures.ts) rather than being shrunk into a speck. Shrinking is what
+  // grains want; a smoke sprite made small enough not to look like a square
+  // just stops looking like smoke, and a whole pipe's worth of them
+  // disappears against the road.
+  const map = puffTexture();
   const mat = new THREE.PointsMaterial({
-    size: 0.16,
+    size: 0.55,
+    map,
     vertexColors: true,
     transparent: true,
     opacity: 0.45,
@@ -48,9 +87,11 @@ export function createFumes(): Fumes {
     positions[i * 3] = x + (Math.random() - 0.5) * 0.2;
     positions[i * 3 + 1] = y + (Math.random() - 0.5) * 0.15;
     positions[i * 3 + 2] = z + (Math.random() - 0.5) * 0.2;
-    velocities[i * 3] = vx + (Math.random() - 0.5) * 0.5;
-    velocities[i * 3 + 1] = 0.6 + Math.random() * 0.5; // warm smoke rises
-    velocities[i * 3 + 2] = vz + (Math.random() - 0.5) * 0.5;
+    // A wide scatter, so a burst of puffs made in the same millisecond at
+    // the same pipe FANS rather than travelling out as one rope.
+    velocities[i * 3] = vx + (Math.random() - 0.5) * 0.9;
+    velocities[i * 3 + 1] = 0.6 + Math.random() * 0.6; // warm smoke rises
+    velocities[i * 3 + 2] = vz + (Math.random() - 0.5) * 0.9;
     tint.copy(pale).lerp(soot, shade);
     const v = 0.85 + Math.random() * 0.3;
     colors[i * 3] = tint.r * v;
@@ -78,6 +119,7 @@ export function createFumes(): Fumes {
   const dispose = (): void => {
     geo.dispose();
     mat.dispose();
+    map.dispose();
   };
 
   for (let i = 0; i < POOL; i++) positions[i * 3 + 1] = -50;

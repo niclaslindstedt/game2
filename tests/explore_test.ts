@@ -491,15 +491,19 @@ describe("knowing the player is lost", () => {
     expect(trackLost(state)).toBe(false);
   });
 
-  it("holds on past the thresholds it came on at", () => {
-    // Already lost, now turned back to perpendicular and half the distance
-    // in: neither test has cleared, so the sign stays up rather than
-    // blinking at every twitch of the wheel.
-    const state = strayed(17, AWAY * 1.05);
+  it("holds on all the way back, and clears only on the road itself", () => {
+    // Already lost, now nosed straight at the road and a few metres from
+    // it: both of the tests that brought the sign ON have cleared, and it
+    // stays up anyway. RETURN TO TRACK is an instruction, and driving
+    // toward the track is not the same as being on it.
+    const state = strayed(60, AWAY);
     state.lost = true;
+    state.car.x = state.track.samples[0].x + 4 * Math.cos(state.track.samples[0].heading);
+    state.car.z = state.track.samples[0].z - 4 * Math.sin(state.track.samples[0].heading);
+    state.car.heading = state.track.samples[0].heading - AWAY;
     expect(trackLost(state)).toBe(true);
-    // Nose round toward the road and it clears.
-    state.car.heading = state.track.samples[0].heading;
+    // Back on the road, and only then, it goes.
+    state.offRoad = false;
     expect(trackLost(state)).toBe(false);
   });
 });

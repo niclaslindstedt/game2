@@ -152,6 +152,43 @@ export function paceScale(u: number): number {
   return PACE.floor + (1 - PACE.floor) * t;
 }
 
+/** OFF THE LINE — the one exception to `PACE` above, and the reason it is
+ * an exception rather than a hole in it. A wheel pulling away from a stop
+ * is SPINNING, not rolling: it is moving far more ground than its road
+ * speed suggests, so the cloud has to come from the slip under the tire
+ * instead of from the speedometer, or the most dramatic moment of the run
+ * is the one where the car throws almost nothing. It fades out as the
+ * wheels hook up and hands the plume straight over to the rolling kickup
+ * that owns it from there. */
+export const LAUNCH = {
+  /** Forward acceleration that reads as wheelspin rather than as a car
+   * merely gathering speed, m/s²... */
+  from: 2.5,
+  /** ...and where the wheels are lit up properly, m/s². */
+  to: 6,
+  /** Road speed the tires have found the ground by, m/s — 50 km/h, which
+   * is also where the rolling kickup comes in, so the two meet rather than
+   * leaving a gap with no cloud in it. */
+  settle: 13.9,
+  /** How hard a lit-up wheel throws what it digs out, m/s backward. A
+   * standing car has no wake to hand its grains to — without a kick of
+   * their own they drop where they were made and the launch reads as a
+   * puff under the car instead of a rooster tail behind it. */
+  push: 6,
+};
+
+/** How hard the driven wheels are digging off the line, 0..1: full at a
+ * standstill under wheelspin, nothing once the car is up and running. The
+ * road-speed term falls off as a SQUARE rather than a straight line — a
+ * tire loses its slip late and then all at once, and a linear ramp spends
+ * the launch's whole budget in the first tenth of a second, where the car
+ * is still under the start gantry and the player is watching the lights. */
+export function launchThrow(u: number, accel: number): number {
+  const spin = Math.min(1, Math.max(0, (accel - LAUNCH.from) / (LAUNCH.to - LAUNCH.from)));
+  const hooked = Math.min(1, Math.max(0, u / LAUNCH.settle));
+  return spin * (1 - hooked * hooked);
+}
+
 /** What the WILD throws, as a fraction of what the road throws. Turf holds
  * together where loose grit does not: a wheel off the road tears out clods
  * and blades, it does not lift a screen of dust the way a graded surface
