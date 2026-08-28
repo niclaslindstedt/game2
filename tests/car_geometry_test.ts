@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { CARS, TUNING } from "@engine";
+import { CARS, SOLID_PROP_HEIGHT, TUNING } from "@engine";
 
 import { bodyHalfLength, bodyHalfWidth } from "../pwa/src/game/car/shell.ts";
 import { CAR_BODIES, bodySpecFor } from "../pwa/src/game/car-styles.ts";
@@ -37,6 +37,20 @@ describe("the drawn cars against the collision box", () => {
     const widest = Math.max(...bodies.map(([, spec]) => bodyHalfWidth(spec, axlesOf(spec))));
     expect(TUNING.collision.halfLength - longest).toBeLessThan(0.5);
     expect(TUNING.collision.halfWidth - widest).toBeLessThan(0.2);
+  });
+});
+
+describe("the solid bar against the hoods it was written from", () => {
+  it("SOLID_PROP_HEIGHT is the middle of the lowest hood", () => {
+    // The engine plants a prop as a solid when it stands over the middle
+    // of the bonnet, and scatters it as drive-over litter when it does
+    // not. That bar is a number in mapgen with no compile-time link to the
+    // cars — this is the link. The hood is the profile's FRONT station:
+    // the flat the driver looks over, ahead of the cowl.
+    const hoods = bodies.map(([, spec]) => spec.profile[0].topY);
+    const lowest = Math.min(...hoods);
+    expect(SOLID_PROP_HEIGHT).toBeGreaterThan(lowest * 0.45);
+    expect(SOLID_PROP_HEIGHT).toBeLessThan(lowest * 0.6);
   });
 });
 

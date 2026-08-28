@@ -260,8 +260,10 @@ export type WildObstacle = {
   z: number;
   /** Ground height under it (terrain.heightAt at its foot). */
   y: number;
-  kind: "boulder" | "log" | "tree";
-  /** Visual scale factor, ~0.8–1.8. */
+  kind: "boulder" | "log" | "tree" | "rock" | "slab" | "stump";
+  /** Visual scale factor — how big this prop is drawn, in the units its
+   * own kind is authored in (~0.4–2.1 for a rock, ~0.8–1.8 for a boulder
+   * or a fallen trunk, ~1.6 up for an outcrop). */
   size: number;
   spin: number;
   /** Collision radius in the ground plane, m — for a tree, the trunk. */
@@ -281,6 +283,55 @@ const OB_CELL = 56;
 const OB_DENSITY = 0.45;
 /** Obstacles keep this far from the road centerline beyond the half-width. */
 const OB_ROAD_CLEAR = 10;
+
+/** A prop standing this tall over its foot is SOLID — the car hits it.
+ * The catalog's bonnets sit about 0.87 m over the ground, so this is the
+ * MIDDLE OF THE HOOD: a rock reaching above it meets the body and stops
+ * the car, one below it is litter the wheels ride over and the renderer
+ * scatters for itself. Everything the field below places clears this bar;
+ * nothing the renderer plants on its own may. */
+export const SOLID_PROP_HEIGHT = 0.45;
+
+/** One loose-rock candidate per grid cell of this edge, m, and the share
+ * of cells that hold one — the open ground's rock litter, a field of its
+ * own because it runs much closer to the road than the deep-wild props
+ * above and because most of the landscape carries some. */
+const ROCK_CELL = 30;
+const ROCK_DENSITY = 0.55;
+/** How big a loose rock gets, as the radius of the lump before it is
+ * squashed: the small end is pebble litter the field drops (see
+ * SOLID_PROP_HEIGHT), the big end is a boulder that ends a run. */
+const ROCK_SIZE_MIN = 0.3;
+const ROCK_SIZE_MAX = 2.1;
+/** Share of the litter under a WOODED grove that is a cut stump rather
+ * than a rock, and the size band one comes in. A stump is a round solid a
+ * collision circle describes exactly, which is why the litter field grows
+ * these and leaves the long fallen trunks to the deep wild. */
+const STUMP_SHARE = 0.3;
+const STUMP_SIZE_MIN = 0.75;
+const STUMP_SIZE_MAX = 1.35;
+/** Grove density at or above which the ground counts as wooded — a meadow
+ * has nothing to have been felled. */
+const STUMP_GROVE_DENSITY = 0.5;
+
+/** One bedrock-outcrop candidate per grid cell of this edge, m — a fine
+ * grid, because a slab only ever stands in the narrow band beside the
+ * road where the ground is climbing out of a cut. */
+const SLAB_CELL = 16;
+/** ...and the share of those that stand up where the ground allows one. */
+const SLAB_CHANCE = 0.7;
+/** How far out from the road the wall is measured, and how far it has to
+ * have climbed over the road there, m: the cut an outcrop belongs to. */
+const SLAB_WALL_SPAN = 16;
+const SLAB_WALL_RISE = 6;
+/** How far past the road edge an outcrop's foot may sit, m. */
+const SLAB_BAND = 10;
+
+/** Solid props keep this far from the road EDGE, m, measured to their own
+ * rim rather than their center — the ribbon draws its shoulder and ditch
+ * out to `reach`, and nothing the car can hit may stand on that. Past it
+ * the forest already stands, so past it is where a rock is honest. */
+const PROP_ROAD_CLEAR = ROAD_CROSS.reach;
 
 // ── The grove quilt and the forest's trunks ───────────────────────────────
 
@@ -716,18 +767,154 @@ export function createTerrain(track: Track): TerrainField {
     return ob;
   };
 
-  const obstaclesNear = (x: number, z: number, r: number): WildObstacle[] => {
-    const found: WildObstacle[] = [];
-    const lo = OB_CELL;
-    for (let cx = Math.floor((x - r - 3) / lo); cx <= Math.floor((x + r + 3) / lo); cx++) {
-      for (let cz = Math.floor((z - r - 3) / lo); cz <= Math.floor((z + r + 3) / lo); cz++) {
-        const ob = obstacleInCell(cx, cz);
+  // ── Litter and bedrock outcrops ───────────────────────────────────────
+  // The small stuff standing between the trunks: loose rocks over the open
+  // ground, cut stumps under the woods, and the angular slabs that
+  // shoulder out of a cut wall right beside the road. All of it used to be
+  // an app-side scatter the car drove straight through; it is placed here
+  // now, because anything the player can SEE standing over the ground has
+  // to be something the player can HIT — down to the middle of the hood,
+  // below which it is litter and not an obstacle (SOLID_PROP_HEIGHT).
+
+  /** True when a prop of `radius` standing here leaves the road ribbon —
+   * mat, shoulder and ditch — entirely to itself. */
+  const offEveryRoad = (x: number, z: number, radius: number): boolean => {
+    const near = nearestSample(x, z);
+    if (near && near.d - radius < half + PROP_ROAD_CLEAR) return false;
+    return spurClearance(x, z) - radius > PROP_ROAD_CLEAR;
+  };
+
+  // Derived from the track seed rather than drawn from the stream, so
+  // adding these fields left every stage's road, forest and water exactly
+  // where they already were.
+  const rockSeed = (track.seed ^ 0x517cc1b7) >>> 0;
+  let rockCache = new Map<string, WildObstacle | null>();
+
+  const litterInCell = (cx: number, cz: number): WildObstacle | null => {
+    const key = `${cx},${cz}`;
+    const hit = rockCache.get(key);
+    if (hit !== undefined) return hit;
+    if (rockCache.size > 8192) rockCache = new Map();
+    let litter: WildObstacle | null = null;
+    if (hash2(cx, cz, rockSeed) < ROCK_DENSITY) {
+      const x = (cx + 0.1 + hash2(cx, cz, rockSeed + 1) * 0.8) * ROCK_CELL;
+      const z = (cz + 0.1 + hash2(cx, cz, rockSeed + 2) * 0.8) * ROCK_CELL;
+      const roll = hash2(cx, cz, rockSeed + 3);
+      const stump =
+        hash2(cx, cz, rockSeed + 5) < STUMP_SHARE &&
+        GROVES[groveAt(x, z)].density >= STUMP_GROVE_DENSITY;
+      const size = stump
+        ? STUMP_SIZE_MIN + roll * (STUMP_SIZE_MAX - STUMP_SIZE_MIN)
+        : ROCK_SIZE_MIN + roll * (ROCK_SIZE_MAX - ROCK_SIZE_MIN);
+      // A rock sits a third of itself in the ground and is squashed
+      // flat-ish; a stump is its bole plus the saw cut on top. Either
+      // way this is what stands proud of the dirt.
+      const height = stump ? 0.98 * size : 1.05 * size;
+      const radius = stump ? 0.55 * size : 0.85 * size;
+      // Under the middle of the hood it is not an obstacle at all: the
+      // renderer scatters that litter itself and the car rides over it.
+      if (
+        height >= SOLID_PROP_HEIGHT &&
+        offEveryRoad(x, z, radius) &&
+        !inStream(streams, x, z, radius)
+      ) {
+        const y = groundAt(x, z);
+        if (y > LAKE_Y + 1) {
+          litter = {
+            x,
+            z,
+            y,
+            kind: stump ? "stump" : "rock",
+            size,
+            spin: hash2(cx, cz, rockSeed + 4) * Math.PI * 2,
+            radius,
+            height,
+          };
+        }
+      }
+    }
+    rockCache.set(key, litter);
+    return litter;
+  };
+
+  const slabSeed = (track.seed ^ 0x2545f491) >>> 0;
+  let slabCache = new Map<string, WildObstacle | null>();
+
+  const slabInCell = (cx: number, cz: number): WildObstacle | null => {
+    const key = `${cx},${cz}`;
+    const hit = slabCache.get(key);
+    if (hit !== undefined) return hit;
+    if (slabCache.size > 8192) slabCache = new Map();
+    let slab: WildObstacle | null = null;
+    if (hash2(cx, cz, slabSeed) < SLAB_CHANCE) {
+      const x = (cx + 0.15 + hash2(cx, cz, slabSeed + 1) * 0.7) * SLAB_CELL;
+      const z = (cz + 0.15 + hash2(cx, cz, slabSeed + 2) * 0.7) * SLAB_CELL;
+      const near = nearestSample(x, z);
+      const edge = near ? near.d - half : Infinity;
+      // Only in the band beside the road, and only where the ground out
+      // there is still climbing hard — an outcrop is the cut wall showing
+      // through, not a rock dropped in a meadow.
+      if (near && edge > PROP_ROAD_CLEAR && edge < PROP_ROAD_CLEAR + SLAB_BAND) {
+        const s = samples[near.index];
+        const dd = Math.hypot(x - s.x, z - s.z) || 1;
+        const outX = (x - s.x) / dd;
+        const outZ = (z - s.z) / dd;
+        const wall = groundAt(x + outX * SLAB_WALL_SPAN, z + outZ * SLAB_WALL_SPAN) - s.elevation;
+        if (wall >= SLAB_WALL_RISE) {
+          // Big where the wall is big — but never so big that the slab
+          // reaches back over the ribbon it stands beside.
+          const grow = 1.6 + hash2(cx, cz, slabSeed + 3) * (1.8 + Math.min(wall, 14) * 0.12);
+          const size = Math.min(grow, (edge - PROP_ROAD_CLEAR) / 0.85);
+          const radius = 0.85 * size;
+          if (size > 1 && offEveryRoad(x, z, radius) && !inStream(streams, x, z, radius)) {
+            const y = groundAt(x, z);
+            if (y > LAKE_Y + 1) {
+              slab = {
+                x,
+                z,
+                y,
+                kind: "slab",
+                size,
+                spin: hash2(cx, cz, slabSeed + 4) * Math.PI * 2,
+                radius,
+                // Sunk near half its depth, stretched tall: a face of
+                // rock nothing but a cliff flight gets over.
+                height: 1.8 * size,
+              };
+            }
+          }
+        }
+      }
+    }
+    slabCache.set(key, slab);
+    return slab;
+  };
+
+  /** Collect one cell field's props within `r` of a point. */
+  const gather = (
+    found: WildObstacle[],
+    cell: number,
+    inCell: (cx: number, cz: number) => WildObstacle | null,
+    x: number,
+    z: number,
+    r: number,
+  ): void => {
+    for (let cx = Math.floor((x - r - 3) / cell); cx <= Math.floor((x + r + 3) / cell); cx++) {
+      for (let cz = Math.floor((z - r - 3) / cell); cz <= Math.floor((z + r + 3) / cell); cz++) {
+        const ob = inCell(cx, cz);
         if (!ob) continue;
         const dx = ob.x - x;
         const dz = ob.z - z;
         if (dx * dx + dz * dz <= (r + ob.radius) * (r + ob.radius)) found.push(ob);
       }
     }
+  };
+
+  const obstaclesNear = (x: number, z: number, r: number): WildObstacle[] => {
+    const found: WildObstacle[] = [];
+    gather(found, OB_CELL, obstacleInCell, x, z, r);
+    gather(found, ROCK_CELL, litterInCell, x, z, r);
+    gather(found, SLAB_CELL, slabInCell, x, z, r);
     return found;
   };
 
@@ -898,6 +1085,8 @@ export function createTerrain(track: Track): TerrainField {
       // New road may have arrived where a prop stood — revalidate; fresh
       // stream valleys reshape the ground, so the lattice re-samples too.
       obCache = new Map();
+      rockCache = new Map();
+      slabCache = new Map();
       treeCache = new Map();
       cornerCache = new Map();
       guardTrees.clear();
@@ -916,6 +1105,8 @@ export function createTerrain(track: Track): TerrainField {
       stands.pruneBefore(floorS);
       spurs.pruneBefore(floorS);
       obCache = new Map();
+      rockCache = new Map();
+      slabCache = new Map();
       treeCache = new Map();
       cornerCache = new Map();
       guardTrees.clear();

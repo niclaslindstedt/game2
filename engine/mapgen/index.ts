@@ -46,6 +46,7 @@ export {
   GROUND_CELL,
   GROVES,
   GROVE_SCALE,
+  SOLID_PROP_HEIGHT,
   type GroveCommunity,
   type TerrainField,
   type Stream,
