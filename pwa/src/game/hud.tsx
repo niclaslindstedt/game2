@@ -10,7 +10,7 @@ import type { GamePhase, TurnSeverity } from "@engine";
 
 import { deviceControls, type InputManager } from "./input.ts";
 import { createThumbGuard } from "./thumb-guard.ts";
-import { FinishCard, type NextStage } from "./hud-finish.tsx";
+import { FinishCard, type FinishScores, type NextStage } from "./hud-finish.tsx";
 import { Minimap, type HudMinimap } from "./minimap.tsx";
 import type { HudSettings, PedalDir, TouchSettings } from "./settings.ts";
 import type { Standing } from "./standings.ts";
@@ -136,6 +136,9 @@ type HudProps = {
   nextStage: NextStage | null;
   /** Leave the run for the main menu — the results card's own way out. */
   onRetire: () => void;
+  /** The time trial's board, and the initials it is still waiting on. Null
+   * on every other kind of run. */
+  scores: FinishScores | null;
 };
 
 /** Capture the pointer so a drag that leaves the zone keeps steering; a
@@ -847,6 +850,7 @@ export function Hud({
   onCamera,
   nextStage,
   onRetire,
+  scores,
 }: HudProps) {
   const { touch } = input;
   const pedalSide = touchLayout.steerSide === "left" ? "right" : "left";
@@ -949,6 +953,7 @@ export function Hud({
             lapTimes={snap.lapTimes}
             nextStage={nextStage}
             onRetire={onRetire}
+            scores={scores}
           />
         )}
         {snap.airborne && snap.phase === "racing" && <div className="hud-air">AIRBORNE</div>}

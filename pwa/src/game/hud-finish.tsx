@@ -13,6 +13,9 @@
 
 import type { Standing } from "./standings.ts";
 import { playUi } from "./audio/ui.ts";
+import { InitialsEntry } from "./hud-initials.tsx";
+import { ScoreBoard } from "./score-board.tsx";
+import type { ScoreEntry } from "./scores.ts";
 import { formatTime } from "../lib/util.ts";
 
 /** "1st", "2nd", "3rd", "4th"… A placing reads as a placing or it reads as
@@ -28,6 +31,19 @@ function ordinal(place: number): string {
  * rung. Null on Roam, in a time trial, and at the end of a location. */
 export type NextStage = { name: string; go: () => void };
 
+/** The time trial's high score table, as the card needs it. Null on every
+ * other kind of run — the ladder and Roam keep no board. */
+export type FinishScores = {
+  /** The stage's board as it stands right now. */
+  board: readonly ScoreEntry[];
+  /** Where this run placed on it, 1-based; 0 when it did not make the ten. */
+  place: number;
+  /** Set while the three letters are still to be entered. The card holds the
+   * ways ON back until they are: an arcade does not let you walk away from
+   * the board with your initials half typed. */
+  entering: { initial: string; onDone: (who: string) => void } | null;
+};
+
 export type FinishCardProps = {
   /** Total time, seconds. */
   time: number;
@@ -40,6 +56,7 @@ export type FinishCardProps = {
   lapTimes: number[];
   nextStage: NextStage | null;
   onRetire: () => void;
+  scores: FinishScores | null;
 };
 
 export function FinishCard({
@@ -50,6 +67,7 @@ export function FinishCard({
   lapTimes,
   nextStage,
   onRetire,
+  scores,
 }: FinishCardProps) {
   return (
     <div className="hud-finish">
@@ -78,30 +96,39 @@ export function FinishCard({
           ))}
         </div>
       )}
-      <div className="hud-finish-acts pointer-events-auto">
-        {nextStage && (
+      {scores && !scores.entering && <ScoreBoard entries={scores.board} highlight={scores.place} />}
+      {scores?.entering ? (
+        <InitialsEntry
+          place={scores.place}
+          initial={scores.entering.initial}
+          onDone={scores.entering.onDone}
+        />
+      ) : (
+        <div className="hud-finish-acts pointer-events-auto">
+          {nextStage && (
+            <button
+              type="button"
+              className="hud-start hud-finish-next"
+              onClick={() => {
+                playUi("start");
+                nextStage.go();
+              }}
+            >
+              NEXT: {nextStage.name.toUpperCase()}
+            </button>
+          )}
           <button
             type="button"
-            className="hud-start hud-finish-next"
+            className="hud-pause-act"
             onClick={() => {
-              playUi("start");
-              nextStage.go();
+              playUi("select");
+              onRetire();
             }}
           >
-            NEXT: {nextStage.name.toUpperCase()}
+            RETIRE
           </button>
-        )}
-        <button
-          type="button"
-          className="hud-pause-act"
-          onClick={() => {
-            playUi("select");
-            onRetire();
-          }}
-        >
-          RETIRE
-        </button>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

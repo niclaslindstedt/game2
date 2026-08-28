@@ -40,6 +40,17 @@ export type InputManager = {
   };
   /** Re-point every key at its action; unbound actions simply go unpressed. */
   setKeys: (bindings: KeyBindings) => void;
+  /**
+   * Hand the keyboard over to something that is being TYPED INTO, and take it
+   * back afterwards. While it is handed over the bindings do not exist: no
+   * pedal, no gear, no restart.
+   *
+   * Nothing else can do this job. Both listeners sit on the same target, so a
+   * `preventDefault` in the typing surface's own handler does not stop this
+   * one — and the bindings are letters, so typing `RM` into the high score
+   * board would otherwise restart the run and then walk out to the main menu.
+   */
+  setTyping: (typing: boolean) => void;
   requestShift: (dir: 1 | -1) => void;
   /** Queue a reset-to-track (the bound key / HUD button) — edge-triggered
    * into the engine, which respawns the car at its last on-road progress. */
@@ -145,6 +156,8 @@ export function createInput(target: Window = window): InputManager {
    * so a two-key alias (arrows AND WASD) reads as one press. */
   const held = new Set<KeyAction>();
   const downCodes = new Set<string>();
+  /** The keyboard is somebody else's — see `setTyping`. */
+  let typing = false;
   let steer = 0;
   let shiftUp = false;
   let shiftDown = false;
@@ -180,6 +193,10 @@ export function createInput(target: Window = window): InputManager {
   setKeys(DEFAULT_KEYS);
 
   const onKeyDown = (e: KeyboardEvent): void => {
+    // Nothing on the keyboard is this manager's while something is being
+    // typed into — not the pedals, not the free camera, and not the ALT
+    // that hides the HUD out from under the surface asking for the keys.
+    if (typing) return;
     // ALT is a HOLD, not a press: it hides the HUD for as long as it is
     // down. Swallowed so the browser does not take the keystroke off to its
     // own menu bar and leave the key stuck down with no keyup coming.
@@ -214,8 +231,11 @@ export function createInput(target: Window = window): InputManager {
     }
   };
   const onKeyUp = (e: KeyboardEvent): void => {
+    // The releases land either way: a key that went down before the keyboard
+    // was handed over still has to be let go of.
     if (!e.altKey) altHeld = false;
     flyDown.delete(e.code);
+    if (typing) return;
     if (!downCodes.delete(e.code)) return;
     // An action stays held while ANY other code still bound to it is down.
     for (const action of byCode.get(e.code) ?? []) {
@@ -248,6 +268,19 @@ export function createInput(target: Window = window): InputManager {
     if (!flying || e.deltaY === 0) return;
     e.preventDefault();
     speedSteps -= Math.sign(e.deltaY);
+  };
+
+  /** Hand the keyboard over, or take it back. Whatever was down when it went
+   * is released: a key held at the moment the card came up has no keyup
+   * coming that this listener will see. */
+  const setTyping = (on: boolean): void => {
+    typing = on;
+    held.clear();
+    downCodes.clear();
+    // Same reason `onBlur` does it: a key that was down when the keyboard
+    // changed hands has no release this manager will act on.
+    flyDown.clear();
+    altHeld = false;
   };
 
   target.addEventListener("keydown", onKeyDown);
@@ -299,6 +332,7 @@ export function createInput(target: Window = window): InputManager {
     sample,
     touch,
     setKeys,
+    setTyping,
     requestShift: (dir) => {
       if (dir === 1) shiftUp = true;
       else shiftDown = true;

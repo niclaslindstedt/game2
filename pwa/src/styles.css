@@ -464,6 +464,23 @@ body {
   background: rgb(18 48 105 / 78%);
   border-radius: 1rem;
   padding: 0.85rem 1.8rem;
+  /* The card grew a ten-row board and two buttons, and a phone held sideways
+     is 390 px tall: it has to be able to scroll rather than run off the
+     bottom edge with the way out below the fold. Pointer events come with
+     that — nothing under the card is being driven anyway, since the run-out
+     drives itself (R25). */
+  max-height: 86%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  pointer-events: auto;
+}
+
+/* …and the board scrolls INSIDE it, so the ways on never leave the frame
+   however deep the table is. */
+.hud-finish .score-board {
+  max-height: min(13rem, 32vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .hud-finish-title {
@@ -531,6 +548,131 @@ body {
 .hud-finish-lap-label {
   color: var(--hud-good);
   margin-right: 0.3rem;
+}
+
+/* ── The high score board ─────────────────────────────────────────────────
+   One layout, two homes: the results card the moment a run lands on it, and
+   the menu page a player reads before choosing what to beat. Monospaced
+   numerals and a fixed rank column so ten rows read as a TABLE — a board
+   whose columns wander is a list, and a list is not something you scan. */
+
+.score-board {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: clamp(0.7rem, 2.4vmin, 0.95rem);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+}
+
+.score-row {
+  display: grid;
+  grid-template-columns: 1.6em 1fr auto;
+  gap: 0.6em;
+  align-items: baseline;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.3rem;
+}
+
+.score-rank {
+  text-align: right;
+  opacity: 0.75;
+}
+
+.score-who {
+  letter-spacing: 0.24em;
+}
+
+/* An empty row is a place going spare, drawn as one — see score-board.tsx. */
+.score-row.is-empty {
+  opacity: 0.4;
+}
+
+/* The run that has just landed. Loud on purpose: finding your own row is the
+   only thing anybody does with a board they are already looking at. */
+.score-row.is-you {
+  background: rgb(255 210 62 / 88%);
+  color: var(--hud-shadow);
+  text-shadow: none;
+  opacity: 1;
+}
+
+/* ── Entering your initials ───────────────────────────────────────────────
+   Three big slots with a chevron over and under each: on a phone the
+   chevrons ARE the control, so they are sized as targets rather than as
+   decoration. The caret slot is the one the keyboard writes into. */
+
+.hud-initials {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.6rem;
+}
+
+.hud-initials-title {
+  font-size: clamp(0.85rem, 3vmin, 1.2rem);
+  color: var(--hud-good);
+}
+
+.hud-initials-sub,
+.hud-initials-hint {
+  font-size: clamp(0.6rem, 2vmin, 0.85rem);
+  letter-spacing: 0.12em;
+  opacity: 0.8;
+}
+
+.hud-initials-slots {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.15rem 0;
+}
+
+.hud-initial {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.hud-initial-step,
+.hud-initial-letter {
+  font: inherit;
+  color: var(--hud-ink);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.hud-initial-step {
+  font-size: clamp(0.9rem, 3vmin, 1.2rem);
+  line-height: 1;
+  opacity: 0.6;
+  padding: 0.35rem 0.7rem; /* a thumb target, not a glyph */
+}
+
+.hud-initial-step:active {
+  opacity: 1;
+}
+
+.hud-initial-letter {
+  font-size: clamp(1.8rem, 7vmin, 3rem);
+  line-height: 1.05;
+  min-width: 1.1em;
+  border-bottom: 3px solid rgb(255 255 255 / 35%);
+}
+
+.hud-initial.is-caret .hud-initial-letter {
+  color: var(--hud-good);
+  border-bottom-color: var(--hud-good);
+  animation: hud-pop 0.9s infinite;
+}
+
+.hud-initials-done {
+  margin-top: 0.25rem;
 }
 
 /* The ways on off the results card. Stacked rather than side by side so the
@@ -3128,4 +3270,36 @@ a.menu-version:focus-visible {
     width: min(100%, 21rem);
     max-height: calc(100% - 6rem);
   }
+}
+
+/* The high scores page: one board per finished stage, side by side where the
+   card is wide enough and stacked where it is not. */
+.score-stages {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.9rem 2rem;
+}
+
+/* A board is a narrow thing however wide the card is: stretched across a
+   desktop card the rank and the time end up at opposite edges and the eye
+   has to travel to read one row. */
+.score-stage {
+  max-width: 22rem;
+}
+
+.score-stage-name {
+  font-size: clamp(0.8rem, 2.6vmin, 1rem);
+  color: var(--hud-good);
+}
+
+.score-stage-where {
+  font-size: clamp(0.6rem, 2vmin, 0.8rem);
+  opacity: 0.7;
+  letter-spacing: 0.1em;
+}
+
+.menu-empty {
+  font-size: clamp(0.7rem, 2.4vmin, 0.95rem);
+  opacity: 0.8;
+  font-style: italic;
 }
