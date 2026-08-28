@@ -765,6 +765,16 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // crush and yaw kick live in collision.ts, and no amount of it ever ends
   // the excursion. Keep hitting things until the car cannot move.
   let crashed = false;
+  // R13 — the parapet, and it is checked whether or not the car is off the
+  // road. It stands ON the deck's edge: the car it exists for is the one
+  // that has only just put a wheel wide, and by the time the road is
+  // willing to call that car off-road it is already through the wall and
+  // into the river. Nothing to pay where there are no bridges near — the
+  // field answers an empty list off one lookup.
+  const parapets = terrain.parapetsNear(car.x, car.z, 2.5);
+  if (parapets.length > 0) {
+    collideCar(state.spec, car, parapets, events, state.stats, terrain.fell);
+  }
   if (fix.offRoad) {
     const water = terrain.waterAt(car.x, car.z);
     if (water !== null && water - car.y > T.crash.deepWater) {

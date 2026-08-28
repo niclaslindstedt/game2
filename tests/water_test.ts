@@ -9,6 +9,10 @@ import { describe, expect, it } from "vitest";
 import {
   LAKE_Y,
   NEUTRAL_INPUT,
+  PARAPET_BAY,
+  PARAPET_GAP,
+  PARAPET_OUT,
+  SOLID_PROP_HEIGHT,
   STAGE_RULES as R,
   TUNING,
   collectAnchors,
@@ -63,6 +67,72 @@ describe("crossings (R13)", () => {
         expect(anchor.depth).toBeGreaterThan(0.9); // TUNING.crash.deepWater
       }
     }
+  });
+
+  it("R13 — walls a concrete deck with a parapet, unbroken and SOLID", () => {
+    for (const seed of SEEDS) {
+      const track = compileStage(seed, "long", { water: 0.8 });
+      const terrain = createTerrain(track);
+      const lat = track.width / 2 + PARAPET_OUT;
+      for (const s of track.samples) {
+        if (s.deck !== "concrete") continue;
+        const right = { x: Math.cos(s.heading), z: -Math.sin(s.heading) };
+        for (const side of [-1, 1]) {
+          const x = s.x + right.x * lat * side;
+          const z = s.z + right.z * lat * side;
+          // A bay stands within one bay's length of every point down both
+          // edges — no gap a nose could find, because behind this one is
+          // the river.
+          const bays = terrain.parapetsNear(x, z, PARAPET_BAY / 2);
+          expect(bays.length).toBeGreaterThan(0);
+          // And it is a wall, not scenery: bedded into the deck it is cast
+          // onto, nothing a car carries breaks it, and it stands well over
+          // the bar that separates a solid from litter.
+          expect(bays[0].rooted).toBe(1);
+          expect(bays[0].snap).toBe(Infinity);
+          expect(bays[0].height).toBeGreaterThan(SOLID_PROP_HEIGHT);
+        }
+      }
+      // ...and nothing stands along a road that is not a deck.
+      const open = track.samples.find((s) => s.deck === null);
+      if (open) expect(terrain.parapetsNear(open.x, open.z, 10)).toHaveLength(0);
+    }
+  });
+
+  it("R13 — a car sliding wide on a bridge stops AT the wall, not through it", () => {
+    // The one wall on a stage that is there on purpose. Everywhere else R31
+    // cuts the ground back to something the car can climb; here it must not
+    // be climbable, because over the side is a drowning. And it is checked
+    // on the deck rather than off the road: by the time a car this far
+    // sideways counts as off-road it would already be in the river.
+    const track = compileStage(5, "medium", { water: 0.9 });
+    const deck = track.samples.findIndex((s) => s.deck === "concrete");
+    expect(deck).toBeGreaterThan(0);
+    const s = track.samples[deck + 6];
+    const right = { x: Math.cos(s.heading), z: -Math.sin(s.heading) };
+    const state = createGame({ seed: 5, skipCountdown: true, track });
+    // Halfway to the edge, thrown at the parapet at 25 m/s of pure slide.
+    state.car.x = s.x + right.x * 5;
+    state.car.z = s.z + right.z * 5;
+    state.car.y = s.elevation;
+    state.car.heading = s.heading;
+    state.car.u = 2;
+    state.car.w = 25;
+    const events: GameEvent[] = [];
+    let flank = -Infinity;
+    for (let i = 0; i < 120; i++) {
+      events.push(...step(state, NEUTRAL_INPUT));
+      const out = (state.car.x - s.x) * right.x + (state.car.z - s.z) * right.z;
+      flank = Math.max(flank, out + TUNING.collision.halfWidth);
+    }
+    // Never past the concrete's own inner face...
+    expect(flank).toBeLessThanOrEqual(track.width / 2 + PARAPET_GAP + 0.02);
+    // ...and it cost something: this is a wall, not a kerb.
+    expect(state.stats.impacts).toBeGreaterThan(0);
+    expect(state.car.damage.wear).toBeGreaterThan(0);
+    expect(events.some((e) => e.type === "impact")).toBe(true);
+    // Still on the bridge rather than in the water under it.
+    expect(state.stats.crashes).toBe(0);
   });
 });
 

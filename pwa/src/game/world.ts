@@ -14,8 +14,11 @@
 
 import * as THREE from "three";
 import {
+  PARAPET_BAY,
+  PARAPET_INSET,
+  PARAPET_THICK,
   ROAD_CROSS,
-  STAGE_RULES,
+  bridgeParapets,
   createRng,
   inStream,
   junctionPlatformY,
@@ -386,7 +389,17 @@ function buildScenery(
  * crossing is two trunks and a plank floor on pile bents; a concrete one
  * is a slab on piers. Which you get was decided by the span back in the
  * generator; this only builds what that decision implies. */
-function buildBridges(track: Track, from: number, to: number): THREE.Group {
+/** How far apart a bridge's legs stand, m. Short enough that no span of
+ * open deck reads as unsupported from the bank — which is the whole tell of
+ * a bridge that was drawn rather than built. */
+const PIER_SPACING = 14;
+
+function buildBridges(
+  track: Track,
+  from: number,
+  to: number,
+  groundAt: (x: number, z: number) => number,
+): THREE.Group {
   const group = new THREE.Group();
   const samples = track.samples;
   const half = track.width / 2;
@@ -423,44 +436,126 @@ function buildBridges(track: Track, from: number, to: number): THREE.Group {
     const kind = samples[i].deck;
     const rail = kind === "concrete" ? concrete : timber;
     const under = kind === "concrete" ? concreteDark : timberDark;
-    const deckY = samples[Math.floor((i + j) / 2)].elevation;
-    const waterY = deckY - STAGE_RULES.bridge.clearance[kind ?? "timber"];
-    // The parapet: a solid concrete wall, or a timber rail on posts.
-    for (const side of [-1, 1]) {
-      for (let k = i; k < j; k++) {
-        const s = samples[k];
-        const r = rightOf(s.heading);
-        const lat = (half + 0.35) * side;
-        const x = s.x + r.x * lat;
-        const z = s.z + r.z * lat;
-        if (kind === "concrete") {
-          if (k % 2 !== 0) continue;
-          box(0.4, 0.9, 4.2, x, s.elevation + 0.45, z, s.heading, rail);
-        } else {
+    // The parapet. A concrete deck's wall is DRAWN WHERE THE ENGINE PUTS
+    // IT: `bridgeParapets` is the one statement of where the bays stand,
+    // and the car stops against them, so a wall drawn anywhere else would
+    // be a wall the car hits a metre before it looks like it should. A
+    // timber deck's rail is posts and a rail, and a car goes through it.
+    if (kind === "concrete") {
+      // One bay per metre is a lot of boxes for a wall nobody looks at
+      // twice, so the whole run is ONE instanced mesh: a bridge's parapet
+      // costs a single draw call, which is fewer than the four-metre
+      // sections it replaced.
+      const bays = bridgeParapets(samples, track.width, i, j);
+      if (bays.length > 0) {
+        const wall = new THREE.InstancedMesh(
+          new THREE.BoxGeometry(PARAPET_THICK, bays[0].height, PARAPET_BAY * 1.04),
+          rail,
+          bays.length,
+        );
+        const at = new THREE.Matrix4();
+        const spin = new THREE.Quaternion();
+        const where = new THREE.Vector3();
+        const one = new THREE.Vector3(1, 1, 1);
+        for (let b = 0; b < bays.length; b++) {
+          const bay = bays[b];
+          // Drawn against the bay's INNER face rather than on its centre:
+          // the collision circle is fatter than the concrete so the run
+          // leaves no gap, and lining the two up on that face is what makes
+          // the car stop exactly where the wall looks like it is. A bay's
+          // own spin faces OUT of the road (solids.ts), so inward is one
+          // subtraction wherever it stands.
+          const r = rightOf(bay.spin);
+          where.set(
+            bay.x - r.x * PARAPET_INSET,
+            bay.y + bay.height / 2,
+            bay.z - r.z * PARAPET_INSET,
+          );
+          spin.setFromAxisAngle(UP, bay.spin);
+          wall.setMatrixAt(b, at.compose(where, spin, one));
+        }
+        wall.instanceMatrix.needsUpdate = true;
+        wall.computeBoundingSphere();
+        group.add(wall);
+      }
+    } else {
+      for (const side of [-1, 1]) {
+        for (let k = i; k < j; k++) {
+          const s = samples[k];
+          const r = rightOf(s.heading);
+          const lat = (half + 0.35) * side;
+          const x = s.x + r.x * lat;
+          const z = s.z + r.z * lat;
           if (k % 3 === 0) box(0.22, 1.1, 0.22, x, s.elevation + 0.55, z, s.heading, under);
           if (k % 2 === 0) box(0.16, 0.16, 4.2, x, s.elevation + 0.95, z, s.heading, rail);
         }
       }
     }
     // What holds it up. The deck itself is the road ribbon; this is the
-    // beam under it, the piers down into the water, and the abutments the
-    // banks carry.
+    // beam under it, the piers, and the abutments the banks carry.
+    //
+    // Every leg of it is founded on the GROUND under its own foot, read off
+    // the terrain field — the same ravine the water runs in. Standing them
+    // on a nominal water level instead leaves them short of the bed by
+    // however deep the channel was cut, which reads from the bank as a
+    // bridge held up by nothing: brown ground, then a gap, then a pier
+    // hanging in the air a third of the way across.
     const mid = samples[Math.floor((i + j) / 2)];
     const span = samples[j - 1].s - samples[i].s;
+    /** Stand a leg from the deck down to whatever is under it, m. */
+    const footing = (s: (typeof samples)[number], top: number): number =>
+      Math.max(1.2, s.elevation - top - groundAt(s.x, s.z));
     for (const end of [i, j - 1]) {
       const s = samples[end];
       box(track.width + 1.6, 1.6, 3, s.x, s.elevation - 0.9, s.z, s.heading, under);
+      // The abutment WALL: what the bank actually carries the deck on,
+      // down to the ground rather than a beam floating over the cut.
+      const drop = footing(s, 1.7);
+      box(
+        track.width + 1.2,
+        drop,
+        1.8,
+        s.x,
+        s.elevation - 1.7 - drop / 2,
+        s.z,
+        s.heading,
+        kind === "concrete" ? concreteDark : timberDark,
+      );
     }
     if (kind === "concrete") {
       for (let k = i; k < j; k += 2) {
         const s = samples[k];
         box(track.width + 0.6, 0.55, 4.2, s.x, s.elevation - 0.3, s.z, s.heading, under);
       }
-      const piers = Math.max(1, Math.round(span / 22));
+      // A pier every PIER_SPACING or so, and never a span of open deck
+      // longer than that: the eye counts them, and a slab bridge with one
+      // leg under the middle reads as a plank.
+      const piers = Math.max(1, Math.round(span / PIER_SPACING) - 1);
       for (let p = 1; p <= piers; p++) {
         const s = samples[Math.round(i + ((j - i) * p) / (piers + 1))];
-        const drop = s.elevation - waterY + 1.6;
-        box(2.4, drop, 1.4, s.x, s.elevation - drop / 2 - 0.5, s.z, s.heading, concreteDark);
+        const drop = footing(s, 0.6);
+        // A pier is a WALL across the deck standing on a spread footing,
+        // not a post: it is holding a concrete slab up.
+        box(
+          track.width * 0.62,
+          drop,
+          1.6,
+          s.x,
+          s.elevation - 0.6 - drop / 2,
+          s.z,
+          s.heading,
+          concreteDark,
+        );
+        box(
+          track.width * 0.62 + 1.4,
+          0.7,
+          3,
+          s.x,
+          s.elevation - 0.6 - drop + 0.35,
+          s.z,
+          s.heading,
+          concreteDark,
+        );
       }
     } else {
       // Two trunks the length of the span, and a pile bent under the middle.
@@ -478,19 +573,24 @@ function buildBridges(track: Track, from: number, to: number): THREE.Group {
         beam.rotation.set(Math.PI / 2, mid.heading, 0);
         group.add(beam);
       }
-      const drop = mid.elevation - waterY + 1.4;
-      for (const side of [-1, 1]) {
-        const r = rightOf(mid.heading);
-        box(
-          0.4,
-          drop,
-          0.4,
-          mid.x + r.x * half * 0.5 * side,
-          mid.elevation - drop / 2 - 0.7,
-          mid.z + r.z * half * 0.5 * side,
-          mid.heading,
-          under,
-        );
+      // Pile bents down to the bed, as many as the span asks for.
+      const bents = Math.max(1, Math.round(span / PIER_SPACING) - 1);
+      for (let p = 1; p <= bents; p++) {
+        const s = samples[Math.round(i + ((j - i) * p) / (bents + 1))];
+        const drop = footing(s, 0.7);
+        for (const side of [-1, 1]) {
+          const r = rightOf(s.heading);
+          box(
+            0.4,
+            drop,
+            0.4,
+            s.x + r.x * half * 0.5 * side,
+            s.elevation - 0.7 - drop / 2,
+            s.z + r.z * half * 0.5 * side,
+            s.heading,
+            under,
+          );
+        }
       }
     }
     i = j;
@@ -746,7 +846,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer")
     chunkGroup.add(buildKerbing(track, bare, track.width));
     const chippings = buildChippings(track, bare, track.width);
     if (chippings) chunkGroup.add(chippings);
-    chunkGroup.add(buildBridges(track, from, to));
+    chunkGroup.add(buildBridges(track, from, to, terrain.heightAt));
     chunkGroup.add(buildJunctions(track, from, to));
     // The branches this stretch of road forks off at its paving junctions.
     for (; spurScan < track.spurs.length; spurScan++) {

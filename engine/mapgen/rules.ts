@@ -35,7 +35,11 @@
 //   R13 A water crossing too wide to wade carries a BRIDGE instead of a
 //       ford: the road stays level across it, the water runs in a ravine
 //       below, and the deck is timber up to `bridge.timberMax` — past that
-//       only concrete spans it.
+//       only concrete spans it. A concrete deck is WALLED: its parapet is
+//       an unbroken run of solids down both edges, cast into the deck and
+//       immovable, and it is the one wall on a stage that is there on
+//       purpose — R31 cuts every other one away. A timber deck's rail is
+//       posts and a rail, and a car goes through it.
 //   R14 The inside of a sharp corner is GUARDED: a turn (or a combination)
 //       that bends past `guard.angle` gets the ground between its entry and
 //       its exit filled with a steep mound or a dense grove, so cutting

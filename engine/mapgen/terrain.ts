@@ -32,7 +32,7 @@ import { createLandField, LAKE_Y } from "./land.ts";
 import { STAGE_RULES as R, knobScale } from "./rules.ts";
 import { createSpurIndex, type SpurIndex } from "./spurs.ts";
 import { createPropField } from "./props.ts";
-import { type WildObstacle } from "./solids.ts";
+import { bridgeParapets, type WildObstacle } from "./solids.ts";
 
 export { LAKE_Y } from "./land.ts";
 export {
@@ -310,6 +310,11 @@ export type TerrainField = {
    * as obstaclesNear, kept separate because trees are far denser and the
    * renderer draws them through the flora system rather than as props. */
   treesNear: (x: number, z: number, r: number) => WildObstacle[];
+  /** R13 — the bays of a concrete bridge's PARAPET near a point (within
+   * `r`). Its own query rather than part of `obstaclesNear`: these are not
+   * wild props scattered on the ground, they are a wall on a road, and the
+   * renderer draws them as part of the bridge rather than as scenery. */
+  parapetsNear: (x: number, z: number, r: number) => WildObstacle[];
   /** Take a solid OUT of the world: a trunk the car snapped, a rock it
    * knocked flying. The field stops standing it, so nothing collides with
    * it again and nothing draws it — the piece that is left is a loose body
@@ -838,12 +843,52 @@ export function createTerrain(track: Track): TerrainField {
     guards,
   });
 
+  // R13 — the parapets, built once off the deck runs the track already
+  // carries and bucketed for the contact model to ask about. An endless
+  // stage streams road in, so the build has a cursor of its own; a whole
+  // stage's bridges are a few hundred bays, which is a rounding error
+  // beside the forest.
+  const parapets: WildObstacle[] = [];
+  const parapetGrid = new Map<number, WildObstacle[]>();
+  const PARAPET_CELL = 24;
+  let parapetScan = 0;
+  const indexParapets = (): void => {
+    for (const bay of bridgeParapets(samples, track.width, parapetScan, samples.length)) {
+      parapets.push(bay);
+      const key = cellKey(Math.floor(bay.x / PARAPET_CELL), Math.floor(bay.z / PARAPET_CELL));
+      const bucket = parapetGrid.get(key);
+      if (bucket) bucket.push(bay);
+      else parapetGrid.set(key, [bay]);
+    }
+    parapetScan = samples.length;
+  };
+
+  const parapetsNear = (x: number, z: number, r: number): WildObstacle[] => {
+    if (parapets.length === 0) return [];
+    const found: WildObstacle[] = [];
+    const reach = Math.ceil((r + 1) / PARAPET_CELL);
+    const cx = Math.floor(x / PARAPET_CELL);
+    const cz = Math.floor(z / PARAPET_CELL);
+    for (let dx = -reach; dx <= reach; dx++) {
+      for (let dz = -reach; dz <= reach; dz++) {
+        for (const bay of parapetGrid.get(cellKey(cx + dx, cz + dz)) ?? []) {
+          const ddx = bay.x - x;
+          const ddz = bay.z - z;
+          const hit = r + bay.radius;
+          if (ddx * ddx + ddz * ddz <= hit * hit) found.push(bay);
+        }
+      }
+    }
+    return found;
+  };
+
   let streamScan = 0;
 
   const sync = (carS: number): void => {
     if (samples.length > indexed || spurCount < track.spurs.length) {
       indexSamples(indexed, samples.length);
       indexed = samples.length;
+      indexParapets();
       // The water: every crossing this stretch of road added, traced as
       // one river through them (R18) — born on the high ground, gathering
       // as it runs, ending in the lowest water it can find.
@@ -918,6 +963,7 @@ export function createTerrain(track: Track): TerrainField {
     guards: guards.guards,
     stands: stands.stands,
     obstaclesNear: props.obstaclesNear,
+    parapetsNear,
     treesNear: props.treesNear,
     fell: props.fell,
     groveAt: props.groveAt,
