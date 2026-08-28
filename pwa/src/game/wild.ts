@@ -96,10 +96,12 @@ function propKey(x: number, z: number): string {
 export type Wild = {
   group: THREE.Group;
   sync: (carX: number, carZ: number) => void;
-  /** Draw only the cells the camera is pointed at. The wild is pooled into
+  /** Draw only the cells a camera is pointed at. The wild is pooled into
    * one mesh per variant, so this is the only frustum culling it gets —
-   * and it needs some: half the country a car stands in is behind it. */
-  cull: (frustum: THREE.Frustum) => void;
+   * and it needs some: half the country a car stands in is behind it. A
+   * cell wanted by ANY of the frame's views is kept, which is how the
+   * rear-view mirror gets to see the half the forward camera does not. */
+  cull: (frustums: readonly THREE.Frustum[]) => void;
   /** Retire wild props that newly built road now runs through. */
   clearNear: (t: Track, from: number, to: number) => void;
   /** Stop drawing the one thing standing at a world point — the engine has
@@ -337,7 +339,7 @@ export function buildWild(
   };
 
   /** Draw only the cells the camera is pointed at. */
-  const cull = (frustum: THREE.Frustum): void => {
+  const cull = (frustums: readonly THREE.Frustum[]): void => {
     const visible = new Set<string>();
     for (const key of cells.keys()) {
       const [cx, cz] = key.split(",").map(Number);
@@ -345,7 +347,7 @@ export function buildWild(
       // the forest on it rather than being cut off at the ground.
       seen.center.set((cx + 0.5) * WILD_CELL, 8, (cz + 0.5) * WILD_CELL);
       seen.radius = onScreen.has(key) ? CELL_BOUND + CELL_HOLD : CELL_BOUND;
-      if (frustum.intersectsSphere(seen)) visible.add(key);
+      if (frustums.some((frustum) => frustum.intersectsSphere(seen))) visible.add(key);
     }
     const signature = [...visible].sort().join(";");
     if (signature === shown) return;

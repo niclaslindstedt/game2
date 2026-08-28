@@ -81,6 +81,8 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | What is IN the sky (cumulus, the overcast deck, scud)       | `pwa/src/game/clouds.ts`                                                                                                  |
 | Lightning and the thunder behind it                         | `pwa/src/game/storm.ts` (drawn) + `thunder_*` in `audio/bank.ts` (heard)                                                  |
 | How heavy the weather is, and how hard it is coming down    | `pwa/src/game/weather.ts` — read off the wind, and DOM-free so the road bed shares it                                     |
+| The rear-view mirror: where the glass sits, how it aims     | `pwa/src/game/mirror.ts` (its box is restated in `styles.css` — see the parity rules)                                     |
+| A particle pool the car throws off, and how it is tinted    | `pwa/src/game/car-fx.ts`; WHEN it is thrown stays in `renderer.ts`                                                        |
 | Things the car knocks loose (cones, torn-off parts)         | `pwa/src/game/cones.ts`, `car-damage.ts`, over `tumble.ts` — renderer-side; the engine knows nothing of them              |
 | Anything HEARD (a hit, a landing, a menu click)             | `pwa/src/game/audio/bank.ts` (+ a rung in `route.ts`) — the `sound-effects` skill                                         |
 | A continuous sound (engine, tyres, wind, the slide)         | `engine-bed.ts` / `road-grain.ts` in `pwa/src/game/audio/`                                                                |
@@ -132,6 +134,8 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 - The menu's backdrop is the real game: `App.tsx` steps the engine on `botInput` under the drone camera while a menu page is up, and holds it under the map camera on Roam. A menu that stops driving is a bug, not a saving.
 - `engine/version.ts`, root and workspace `package.json` versions move together — only via `scripts/update-versions.sh` (the release workflow runs it).
 - The service worker contract (cache id, emitted files) is shared between `pwa/pwa-plugin.ts` and `pwa/src/app-pwa.ts` — keep them agreeing.
+- `pwa/src/game/mirror.ts` places the rear-view glass from a width, a top offset and an aspect; `.hud` in `pwa/src/styles.css` restates the same three so the co-driver's calls hang under the glass instead of across it. The strip is a canvas pass and the calls are DOM, so there is no shared measurement to read — change one, change both.
+- `make profile` counts a FRAME as an animation callback that drew something, not as a `gl.clear`. A frame is not one three.js `render()`: the driving frame issues two, the map view draws its pane over a cleared canvas, and the mirror fills its own target first. Anything that adds a pass must not go back to counting clears, or every per-frame number in the table halves and the fps doubles.
 - The deployed site IS the product (§11.2-as-webapp): there is no separate `website/` tree. SEO copy lives in `pwa/index.html` + `pwa/public/`; keep it in sync with identity.ts, and treat a stale deployed site after identity/feature changes as a bug.
 
 ## Skills
