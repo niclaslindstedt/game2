@@ -122,17 +122,26 @@ async function stageTime(page) {
   return (await page.evaluate(`${READ_CLOCK} ?? 0`)) ?? 0;
 }
 
-/** Wait until the co-driver's current call is at least `metres` away — i.e.
- * the car is out on open road with room to do something in — and say which
- * way that call goes. The stage the bot happens to be on decides where that
- * lands, so a scene that needs elbow room asks for it instead of counting
- * seconds, and turns the way the road is going rather than across it. */
-async function atOpenRoad(page, metres) {
+/** Wait until the co-driver has nothing to say — no corner inside the call's
+ * lead, which is the harness's definition of OPEN ROAD: room ahead to brake
+ * in, or to get the car straight before a scene asks something of it. The
+ * stage the bot happens to be on decides where that lands, so a scene that
+ * needs elbow room asks for it instead of counting seconds. */
+async function atOpenRoad(page) {
+  await page.waitForFunction("!document.querySelector('.hud-pace-call')", null, {
+    timeout: 180000,
+  });
+}
+
+/** Wait until the co-driver CALLS the next corner, and say which way it
+ * goes. The call goes up a couple of seconds out, so this is the turn-in
+ * itself — a scene that turns on it turns the way the road is going rather
+ * than across it. Returns at once if a call is already up. */
+async function atNextCall(page) {
   const handle = await page.waitForFunction(
     `(() => {
       const call = document.querySelector('.hud-pace-call');
-      const dist = call?.querySelector('.hud-pace-dist');
-      if (!dist || Number.parseInt(dist.textContent, 10) < ${metres}) return false;
+      if (!call) return false;
       const text = call.querySelector('.hud-pace-text')?.textContent ?? '';
       return text.includes('LEFT') ? 'ArrowLeft' : text.includes('RIGHT') ? 'ArrowRight' : false;
     })()`,
@@ -247,7 +256,8 @@ await capture(
   async (page) => {
     await racing(page);
     await atStageTime(page, 10);
-    const turn = await atOpenRoad(page, 150);
+    await atOpenRoad(page);
+    const turn = await atNextCall(page);
     const entry = await stageTime(page);
     await page.keyboard.down("ArrowUp");
     await page.keyboard.down(turn);
@@ -386,14 +396,16 @@ await capture(
     // every corner.
     //
     // Both halves of the entry are about the eight metres of road the slide
-    // has to live inside: braked back to a rally pace first, and flicked the
-    // way the co-driver says the road goes rather than across it. At 120
+    // has to live inside: the corner is taken as the co-driver calls it —
+    // braked back to a rally pace on the way in, then flicked the way the
+    // road is going rather than across it. Waiting for open road first would
+    // strand a coasting car short of the next corner. At 120
     // km/h and a guessed direction the car is in the trees before the smoke
     // has finished coming up — and a car in the trees is a picture of GRAVEL
     // dust, which is the opposite of what this shot is for.
     await racing(page);
     await atStageTime(page, ON_TARMAC);
-    const turn = await atOpenRoad(page, 150);
+    const turn = await atNextCall(page);
     await page.keyboard.down("ArrowDown");
     await page.waitForFunction(
       "Number(document.querySelector('.hud-speed-num')?.textContent) <= 55",
