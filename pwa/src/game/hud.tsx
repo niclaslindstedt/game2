@@ -8,9 +8,9 @@ import { useEffect, useRef, type CSSProperties } from "react";
 
 import type { GamePhase, TurnSeverity } from "@engine";
 
-import type { InputManager } from "./input.ts";
+import { deviceControls, type InputManager } from "./input.ts";
 import { Minimap, type HudMinimap } from "./minimap.tsx";
-import { deviceControls, type HudSettings, type PedalDir, type TouchSettings } from "./settings.ts";
+import type { HudSettings, PedalDir, TouchSettings } from "./settings.ts";
 import type { Standing } from "./standings.ts";
 import { clamp, formatTime } from "../lib/util.ts";
 import { RaceClock, StartLights } from "./hud-clock.tsx";

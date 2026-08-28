@@ -23,6 +23,7 @@
 import { useEffect, useState } from "react";
 
 import { playToggle } from "./audio/ui.ts";
+import { deviceControls } from "./input.ts";
 import { OptionRow } from "./menu.tsx";
 import {
   DEFAULT_KEYS,
@@ -32,7 +33,6 @@ import {
   PEDAL_DIRS,
   PLAY_CAMERAS,
   assignPedalDir,
-  deviceControls,
   keyLabel,
   type KeyAction,
   type PedalDir,
