@@ -272,7 +272,16 @@ not a mistake anymore; it is exploration:
   the DRAWN terrain: the physics samples the same triangle lattice the
   renderer builds its ground tiles from (`TerrainField.groundAt`,
   `GROUND_CELL`), so the car sits on the slope on screen instead of
-  sinking into it where the analytic field and the mesh disagree. The
+  sinking into it where the analytic field and the mesh disagree. It
+  rides that ground on its whole FOOTPRINT rather than on the one point
+  under its middle: the body's four corners are sampled and the car is
+  seated on the highest of them, so ground the body's own attitude cannot
+  follow — a face steeper than `TUNING.attitude.pitchMax`, the crease
+  where two lattice triangles meet, the foot of a cut bank — no longer
+  buries one end of it. A corner over ground rising harder than
+  `TUNING.collision.climbLimit` is against a WALL rather than standing on
+  a slope, so its claim is capped there and the contact model takes over.
+  The
   grade under the wheels is read over a wheelbase-scale baseline
   (`TUNING.hills.gradeSpan`) along the heading AND across it: banks push
   back the moment the wheels touch them, the nose pitches with the local

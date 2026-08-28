@@ -21,3 +21,12 @@ reader in an otherwise DOM-free file. The fix is to MOVE the DOM reader to a
 module that already owns the DOM (it went to `input.ts`, which is where asking
 the browser about input belongs anyway) — not to widen the root `lib`, which
 would let `document` into the engine and pass.
+
+Hit again by `pwa/src/lib/synth.ts`, and the same fix applied: the part worth
+testing (the gain curve) moved into the DOM-free `voice.ts` as
+`envelopeShape()`, leaving `synth.ts` to write it onto a real node.
+
+The rule is about the DOM, not about "pwa modules": **three.js typechecks
+fine** under the root project, so a renderer module that only uses three's
+scene graph and maths — `pwa/src/game/cones.ts`, `tumble.ts` — is testable from
+`tests/` and runs on plain Node.

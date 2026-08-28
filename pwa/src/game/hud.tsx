@@ -8,13 +8,13 @@ import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 
 import type { GamePhase, TurnSeverity } from "@engine";
 
-import { playUi } from "./audio/ui.ts";
 import { deviceControls, type InputManager } from "./input.ts";
 import { createThumbGuard } from "./thumb-guard.ts";
+import { FinishCard, type NextStage } from "./hud-finish.tsx";
 import { Minimap, type HudMinimap } from "./minimap.tsx";
 import type { HudSettings, PedalDir, TouchSettings } from "./settings.ts";
 import type { Standing } from "./standings.ts";
-import { clamp, formatTime } from "../lib/util.ts";
+import { clamp } from "../lib/util.ts";
 import { RaceClock, StartLights } from "./hud-clock.tsx";
 import type { LiveRun } from "./snapshot.ts";
 
@@ -133,10 +133,8 @@ type HudProps = {
   onCamera: () => void;
   /** The stage after this one, once this one is over — null on a run with
    * nowhere to go on to (Roam, and the end of the ladder). */
-  nextStage: { name: string; go: () => void } | null;
-  /** Leave the run for the main menu. The results card never times out: a
-   * time is read for as long as the player wants to read it, and the way on
-   * is a press rather than a countdown. */
+  nextStage: NextStage | null;
+  /** Leave the run for the main menu — the results card's own way out. */
   onRetire: () => void;
 };
 
@@ -838,15 +836,6 @@ function TouchButton({
   );
 }
 
-/** "1st", "2nd", "3rd", "4th"… A placing reads as a placing or it reads as
- * a number, and the whole point of the finish card is that third place and
- * fourth are different things. */
-function ordinal(place: number): string {
-  const tens = place % 100;
-  if (tens >= 11 && tens <= 13) return `${place}th`;
-  return `${place}${["th", "st", "nd", "rd"][place % 10] ?? "th"}`;
-}
-
 export function Hud({
   snap,
   live,
@@ -951,66 +940,16 @@ export function Hud({
       {/* Center: countdown / finish / event flashes. */}
       <div className="hud-center">
         <StartLights live={live} />
-        {/* The card comes up the instant the line is crossed, not when the
-            car stops: the clock has stopped, and the roll-out past the gate
-            (R22) is the celebration, not a wait for one. */}
         {(snap.phase === "rollout" || snap.phase === "finished") && snap.finishTime !== null && (
-          <div className="hud-finish">
-            <div className="hud-finish-title">STAGE CLEAR</div>
-            <div className="hud-finish-label">TOTAL TIME</div>
-            <div className="hud-finish-time">{formatTime(snap.finishTime)}</div>
-            {snap.record && <div className="hud-finish-record">NEW RECORD</div>}
-            {snap.standing && (
-              <div className="hud-finish-place">
-                <span className={`hud-place${snap.standing.place <= 3 ? " is-podium" : ""}`}>
-                  {ordinal(snap.standing.place)}
-                </span>
-                <span className="hud-finish-of">of {snap.standing.of}</span>
-                {snap.standing.target !== null && (
-                  <span className="hud-finish-gap">
-                    +{formatTime(snap.finishTime - snap.standing.target)}
-                  </span>
-                )}
-              </div>
-            )}
-            {snap.laps > 1 && (
-              <div className="hud-finish-laps">
-                {snap.lapTimes.map((t, i) => (
-                  <span key={i} className="hud-finish-lap">
-                    <span className="hud-finish-lap-label">LAP {i + 1}</span>
-                    {formatTime(t)}
-                  </span>
-                ))}
-              </div>
-            )}
-            {/* The two ways on. They come up with the card — during the
-                run-out, while the car is still coasting past the gate — so a
-                player who is done reading never waits on the celebration. */}
-            <div className="hud-finish-acts pointer-events-auto">
-              {nextStage && (
-                <button
-                  type="button"
-                  className="hud-start hud-finish-next"
-                  onClick={() => {
-                    playUi("start");
-                    nextStage.go();
-                  }}
-                >
-                  NEXT: {nextStage.name.toUpperCase()}
-                </button>
-              )}
-              <button
-                type="button"
-                className="hud-pause-act"
-                onClick={() => {
-                  playUi("select");
-                  onRetire();
-                }}
-              >
-                RETIRE
-              </button>
-            </div>
-          </div>
+          <FinishCard
+            time={snap.finishTime}
+            record={snap.record}
+            standing={snap.standing}
+            laps={snap.laps}
+            lapTimes={snap.lapTimes}
+            nextStage={nextStage}
+            onRetire={onRetire}
+          />
         )}
         {snap.airborne && snap.phase === "racing" && <div className="hud-air">AIRBORNE</div>}
         <div className="hud-flashes">
