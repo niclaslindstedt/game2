@@ -41,6 +41,14 @@ const BUILD_RANGE = 420;
  * saying somebody is up there than the car is. */
 const DRAW_RANGE = 340;
 
+/** The beats the field is worth drawing in. Past the line the player's own
+ * run is over and the rest of the entry list is a classification being
+ * settled at thousands of steps a frame (R30's `settleField`) — a car moving
+ * that fast is a streak across the country, not a rival. */
+function onScreen(phase: GameState["phase"]): boolean {
+  return phase !== "rollout" && phase !== "finished";
+}
+
 /** ...and how near is TOO near, m: half a car length between two centres is
  * one body standing inside another, which happens in exactly one place —
  * the start control, where the whole field is built on the same grid sample
@@ -129,7 +137,8 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
           show(fresh, false);
           continue;
         }
-        const near = shown && range <= DRAW_RANGE && range > IN_THE_CONTROL;
+        const near =
+          shown && onScreen(viewer.phase) && range <= DRAW_RANGE && range > IN_THE_CONTROL;
         show(visual, near);
         if (!near) continue;
         drawn += 1;
