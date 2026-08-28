@@ -130,6 +130,18 @@ export type Pacenote = {
   angle: number;
 };
 
+/** R28 — a CHECKPOINT: a place on the stage the run is timed through, and
+ * the place a car that drowned, wedged itself or gave up is put back on the
+ * road. Only the sample it stands on is recorded — the pose is read off
+ * `track.samples[index]`, whose grade the compiler's later passes (paving
+ * lift, bank runoff, junction platforms) are still free to rewrite. */
+export type Checkpoint = {
+  /** Arc position along the stage, meters — `samples[index].s`, which no
+   * later pass moves. */
+  s: number;
+  index: number;
+};
+
 export type Track = {
   seed: number;
   segments: SegmentPlan[];
@@ -144,6 +156,9 @@ export type Track = {
   /** Co-driver calls, in stage order. On an endless stage the tail note can
    * still grow while its turn combination is at the streaming frontier. */
   pacenotes: Pacenote[];
+  /** R28 — the split boards, in stage order. Every one stands just past a
+   * corner's exit, roughly `checkpoint.spacing` seconds of driving apart. */
+  checkpoints: Checkpoint[];
   /** True when the stage streams forever instead of finishing. */
   endless: boolean;
   /** R22 — true when the stage is a CIRCUIT: the last sample lands back on
@@ -443,6 +458,13 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
    * so none of them drives out into a lake (R17). */
   const land = createLandField(track.seed, track.knobs);
   let openNote: Pacenote | null = null;
+  /** R28 — where the last board actually STANDS, meters (the gap the rule
+   * is quoted in is board to board, not corner to corner), and the arc
+   * position the next one is waiting to be written at (-1 when none is
+   * owed). The start line is the zeroth board: a stage measures its first
+   * gap from the grid. */
+  let checkpointS = 0;
+  let checkpointDue = -1;
   /** Whether the road is sealed right now, and whether the paving field
    * has asked for that to change. The change does not happen where the
    * field asks: it waits for a CORNER to happen at (R17), because that is
@@ -938,6 +960,31 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
       const lipAt = built.feature === "jump" ? (built.featureEnd ?? -1) : -1;
       const rollS0 = cursor.rollS;
 
+      // R28 — the checkpoint a corner earns. Asked HERE, at the top of the
+      // segment that follows it, because only the next segment says whether
+      // the corner is actually over: a turn carrying straight on in the
+      // same direction is one corner still happening, and a board in the
+      // middle of a combination marks nothing. `openNote` is that corner —
+      // it holds the whole combination and its hardest severity — and its
+      // `endS` is the exit the cursor is standing on.
+      if (openNote !== null && checkpointDue < 0) {
+        const linked = built.kind === "turn" && openNote.dir === built.dir;
+        const C = R.checkpoint;
+        const gap = C.spacing * C.pace;
+        const since = openNote.endS - checkpointS;
+        // The bar drops the longer the road goes without a board, so a
+        // hairpin is taken over the soft bend 200 m later and the split
+        // still lands roughly on the clock.
+        const bar = since >= gap * C.late ? 0 : since >= gap ? 1 : 2;
+        if (!linked && since >= gap * C.early && SEVERITY_RANK[openNote.severity] >= bar) {
+          // The run-out is capped by the road that carries it, so the board
+          // always falls inside this segment: a corner followed by another
+          // corner takes its board on the exit itself.
+          checkpointDue =
+            cursor.s + (built.kind === "turn" ? 0 : Math.min(C.runOut, built.length * 0.6));
+        }
+      }
+
       // The co-driver's book: a turn opens a call (or deepens the open one
       // when it continues in the same direction with no straight between);
       // a straight closes it.
@@ -1005,6 +1052,12 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
         sample.bank = bankRate(curvature, sample);
         track.samples.push(sample);
         rawY.push(sample.elevation);
+        if (checkpointDue >= 0 && cursor.s >= checkpointDue) {
+          track.checkpoints.push({ s: cursor.s, index: track.samples.length - 1 });
+          checkpointS = cursor.s;
+          checkpointDue = -1;
+        }
+
         if (cursor.x < b.minX) b.minX = cursor.x;
         if (cursor.x > b.maxX) b.maxX = cursor.x;
         if (cursor.z < b.minZ) b.minZ = cursor.z;
@@ -1013,6 +1066,23 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
       if (joinAtEnd) noteJunction(joinAtEnd, cursor, true);
     }
     track.length = cursor.s;
+    // R28 — a board too close to the finish gate says nothing the line is
+    // not about to say properly. The gate is only known once the segment
+    // carrying the run-out has been walked, so the trim happens here rather
+    // than at placement. An endless stage has no gate and never trims.
+    // A circuit and a synthetic rig have no run-out: their line is the last
+    // sample they own (`finishAt`), which on a circuit is the start line the
+    // lap comes back to.
+    const gate = track.endless ? null : (track.finishS ?? cursor.s);
+    if (gate !== null) {
+      const clear = gate - R.checkpoint.finishClear;
+      while (
+        track.checkpoints.length > 0 &&
+        track.checkpoints[track.checkpoints.length - 1].s > clear
+      ) {
+        track.checkpoints.pop();
+      }
+    }
     paveLift(firstNew);
     bankRunoff(firstNew);
     platformWarp(firstNew);
@@ -1041,6 +1111,7 @@ function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs, circuit =
     width: knobScale(knobs.width, R.roadWidth),
     bounds: { minX: 0, maxX: 0, minZ: 0, maxZ: 0 },
     pacenotes: [],
+    checkpoints: [],
     endless,
     circuit,
     finishS: null,

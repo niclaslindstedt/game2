@@ -2,8 +2,11 @@
 // Car-to-track queries: progress tracking along the sampled centerline,
 // signed lateral offset, and the driving surface under the car. Progress is
 // found by a bounded local search around the last known sample, so the cost
-// per step is constant and progress can only creep forward or slightly back
-// — a car that leaves the road keeps its last on-road progress for respawn.
+// per step is constant and progress only ever creeps forward while the run
+// is being driven — a car that leaves the road keeps its last on-road
+// progress. The one thing that moves it back is a respawn, which puts the
+// car at a checkpoint (R28) and hands it the road since that board to drive
+// again.
 
 import { STAGE_RULES, finishIndex, type Surface, type Track } from "../mapgen/index.ts";
 import { flatTrack, GROUP, GROUP_SHIFT, type FlatTrack } from "../mapgen/flat.ts";
@@ -11,16 +14,21 @@ import { corridorOffset, crossOffset } from "../mapgen/road.ts";
 import { TUNING } from "./defs/tuning.ts";
 import type { GameState } from "./state.ts";
 
-/** The way back onto the road: the exact pose a respawn puts the car in,
- * and how far it is from where the car has wandered to. Guidance and the
- * reset read the SAME point — an arrow that pointed anywhere else would be
- * lying about where the button takes you. */
+/** A place on the road, with the way to it from where the car is standing.
+ * Two of them matter, and they are DIFFERENT places: `wayHome` is the
+ * nearest road at the car's own progress — where the co-driver points a
+ * driver who is picking their way back — and `lastCheckpoint` is the board
+ * a respawn puts the car back at, which is behind that and costs the road
+ * in between. */
 export type WayHome = {
   x: number;
   /** Road elevation at that point, m. */
   y: number;
   z: number;
   heading: number;
+  /** Index of the sample it stands on — what a respawn winds progress back
+   * to, so the run is not credited with road it is about to drive again. */
+  index: number;
   /** Ground distance from the car to it, m. */
   distance: number;
   /** Where it lies relative to the way the car is POINTING, radians: 0 dead
@@ -30,17 +38,36 @@ export type WayHome = {
   bearing: number;
 };
 
-/** Progress is monotonic, so this is always the furthest the car has got —
- * a car that doubles back is sent forward to where it earned, not to the
- * nearest piece of road behind it. The one place it stops short is the
- * finish: a run ends by driving THROUGH the gate, so the way home may never
- * drop the car on the far side of a line it still has to cross. */
+/** WHERE THE ROAD IS from here: the car's own progress on it, which is the
+ * furthest it has got — a car that doubles back is pointed forward to where
+ * it earned, not at the nearest piece of road behind it. The one place it
+ * stops short is the finish: a run ends by driving THROUGH the gate, so it
+ * never points at a line the car still has to cross.
+ *
+ * This is the co-driver's call and nothing else. Where the RESET button
+ * takes the car is `lastCheckpoint`. */
 export function wayHome(state: GameState): WayHome {
   const track = state.track;
   const index = track.endless
     ? state.progressIndex
     : Math.min(state.progressIndex, Math.max(0, finishIndex(track) - HOME_BACKOFF));
-  const s = track.samples[index];
+  return poseAt(state, index);
+}
+
+/** R28 — WHERE A RESPAWN PUTS THE CAR: the last split board it drove
+ * through this lap, or the start line while it has passed none. A car that
+ * drowned, wedged itself or gave up loses the road since that board and
+ * drives it again — which is the whole reason the boards sit just past the
+ * corners that are worth being sent back through. */
+export function lastCheckpoint(state: GameState): WayHome {
+  const passed = state.checkpointsPassed;
+  const board = passed > 0 ? state.track.checkpoints[passed - 1] : undefined;
+  return poseAt(state, board?.index ?? 0);
+}
+
+/** The pose of a centerline sample, with the way to it from the car. */
+function poseAt(state: GameState, index: number): WayHome {
+  const s = state.track.samples[index];
   const car = state.car;
   // The car's own axes: forward is (sin h, cos h) and its right is
   // (cos h, -sin h) — the same frame the handling and the terrain reads use.
@@ -53,6 +80,7 @@ export function wayHome(state: GameState): WayHome {
     y: s.elevation,
     z: s.z,
     heading: s.heading,
+    index,
     distance: Math.hypot(dx, dz),
     bearing: Math.atan2(dx * cosH - dz * sinH, dx * sinH + dz * cosH),
   };

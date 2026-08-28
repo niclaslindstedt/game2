@@ -102,6 +102,13 @@
 //       gathers — at the finish, and at the corners worth standing at — on
 //       ground clear of the road, on the OUTSIDE of the bend where nothing
 //       leaving the road is coming at them.
+//   R28 A stage is SPLIT INTO CHECKPOINTS, roughly a quarter-minute of
+//       driving apart, and every one of them stands just past the EXIT of a
+//       corner — the tighter the better. A checkpoint is both a split
+//       (where the run is measured against whoever it is racing) and the
+//       place a lost, drowned or crashed car is put back on the road, so it
+//       belongs where the road has just asked the driver a question rather
+//       than in the middle of a straight where it would cost nothing.
 
 /** Sample spacing along the compiled centerline, meters. It lives here
  * because it is not only the compiler's business: a search that has to land
@@ -468,6 +475,40 @@ export const STAGE_RULES = {
   /** R27 — the crowd. Spectators stand where a rally crowd stands: at the
    * finish, and on the outside of the corners worth watching, back far
    * enough that a car losing it does not arrive among them. */
+  /** R28 — the checkpoints. `spacing` is the target gap in SECONDS of
+   * driving, which is what a split is actually measured in; it becomes
+   * meters through `pace`, the same measured bot pace the length bands are
+   * sized from (~95 km/h). Boards are placed at corner EXITS only, and the
+   * severity a corner must reach to earn one relaxes the longer the stage
+   * goes without a board: nothing but a hairpin will do inside `early` of
+   * the last one, a real corner will do past the target gap, and past
+   * `late` any bend at all is taken rather than let the split drift. That
+   * ordering is the "prefer tight corners" rule — a board just past the
+   * exit of a hairpin is one a driver has to earn, and one they will feel
+   * being sent back to. */
+  checkpoint: {
+    /** Target gap between boards, seconds of driving. */
+    spacing: 15,
+    /** ...at this pace, m/s — `stageLengths` is sized from the same number
+     * (`make sim` measures it). Seconds × pace is the gap in meters. */
+    pace: 26,
+    /** Fractions of that gap at which the severity bar drops: inside
+     * `early` no corner is close enough to the last board to earn one,
+     * from `early` only a hard one does, from 1 a medium will do, and past
+     * `late` any turn is taken. */
+    early: 0.55,
+    late: 1.7,
+    /** How far past a corner's exit the board stands, m — far enough that
+     * it reads as the corner's reward rather than part of the corner, and
+     * capped by the road that follows so it never lands in the next bend
+     * (a turn takes its board on the exit itself). */
+    runOut: 30,
+    /** No board within this much road of the finish gate, m: a split
+     * measured a few car lengths before the line says nothing the line is
+     * not about to say properly. */
+    finishClear: 150,
+  },
+
   crowd: {
     /** A corner earns a stand once it bends this far, radians — the same
      * corners worth marking are the ones worth watching, a shade looser. */

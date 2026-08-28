@@ -73,6 +73,7 @@ export {
   type BridgeDeck,
   type RoadJunction,
   type Pacenote,
+  type Checkpoint,
 } from "./compile.ts";
 export { traceRivers, type River, type RiverAnchor, type RiverPoint } from "./river.ts";
 export { flatTrack, SURFACES, type FlatTrack } from "./flat.ts";

@@ -39,6 +39,11 @@ const MIN_SPAN = 60;
 export type HudMinimap = {
   /** The route as an SVG path in the `VIEW`-square user space. */
   path: string;
+  /** R28 — the split boards on that route, in stage order: where each one
+   * sits in the same space, and whether the run has been through it. A
+   * board is the only landmark on the map a driver can plan against, so it
+   * is drawn as a tick across the route rather than as a dot beside it. */
+  checkpoints: { x: number; y: number; passed: boolean }[];
   /** The car in that space; `angle` is degrees clockwise for the icon. */
   car: { x: number; y: number; angle: number };
   /** Gauge fill, 0..1 — the finish line on a staged run, the next whole
@@ -128,8 +133,20 @@ export function buildMinimap(state: GameState): HudMinimap {
   const [x, y] = project(-state.car.x, -state.car.z);
   const km = state.progressS / 1000;
   const endless = state.track.endless;
+  const samples = state.track.samples;
+  // An endless stage's map is a window travelling with the car, and its
+  // list of boards only grows — so the ticks are filtered to what is
+  // actually on the face rather than drawn and clipped.
+  const checkpoints: HudMinimap["checkpoints"] = [];
+  for (let i = 0; i < state.track.checkpoints.length; i++) {
+    const at = samples[state.track.checkpoints[i].index];
+    const [cx, cy] = project(-at.x, -at.z);
+    if (cx < 0 || cx > VIEW || cy < 0 || cy > VIEW) continue;
+    checkpoints.push({ x: cx, y: cy, passed: i < state.checkpointsPassed });
+  }
   return {
     path,
+    checkpoints,
     // Screen space runs the heading backwards (see the sign boundary above),
     // so the icon's clockwise rotation is the negated heading.
     car: { x, y, angle: -state.car.heading * (180 / Math.PI) },
@@ -174,6 +191,15 @@ export function Minimap({ map, onOpen }: { map: HudMinimap; onOpen: () => void }
     <button type="button" className="hud-minimap" onClick={onOpen} aria-label="Race menu">
       <svg className="hud-minimap-face" viewBox={`0 0 ${VIEW} ${VIEW}`} aria-hidden="true">
         <path className="hud-minimap-route" d={map.path} />
+        {map.checkpoints.map((cp, i) => (
+          <circle
+            key={i}
+            className={`hud-minimap-cp ${cp.passed ? "hud-minimap-cp-passed" : ""}`}
+            cx={cp.x}
+            cy={cp.y}
+            r={2.6}
+          />
+        ))}
         <g
           className="hud-minimap-car"
           style={{

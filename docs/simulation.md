@@ -40,7 +40,7 @@ npm run sim -- --json report.json     # machine-readable dump
 
 The dials change what the stage IS, so they change the table: tarmac buys pace and costs drift time (that is what it is FOR), water and hills cost both. Sweep one at a time — a dial moved with a handling change makes the diff unreadable.
 
-The table columns: the ground covered (one RACED lap × the laps on a circuit — the road up to the finish line, never R25's run-out past it), time, average pace, drifts / drift time / drift score, jumps / air time, fords, off-road time, hits (damaging impacts — trees, boulders, slammed landings), respawns (crash respawns and bot resets both land here), top speed, finished. The footer aggregates. **The workflow rule: run it before and after every handling or generator change and paste both tables in the PR.** Exit code is non-zero if any run failed to finish, so CI's `simulate` job doubles as a smoke alarm.
+The table columns: the ground covered (one RACED lap × the laps on a circuit — the road up to the finish line, never R25's run-out past it), time, average pace, drifts / drift time / drift score, jumps / air time, fords, off-road time, hits (damaging impacts — trees, boulders, slammed landings), respawns (crash respawns and bot resets both land here — and both now cost the road back to the last checkpoint, R28, so this column is time as well as a count), top speed, finished. The footer aggregates. **The workflow rule: run it before and after every handling or generator change and paste both tables in the PR.** Exit code is non-zero if any run failed to finish, so CI's `simulate` job doubles as a smoke alarm.
 
 ## The roster balance table (`--sweep`)
 

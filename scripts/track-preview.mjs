@@ -6,8 +6,9 @@
 // previews/ dir:
 //
 //   track-<seed>.png         the SCHEMATIC — the route as a map: surfaces,
-//                            features, junctions and corner guards, read
-//                            at a glance while judging the rules
+//                            features, junctions, corner guards and the
+//                            split boards, read at a glance while judging
+//                            the rules
 //   track-<seed>-render.png  the PLACE — the shaded landscape with its
 //                            water and its forest, and the road drawn
 //                            across its full width: wheel tracks, verges,
@@ -80,6 +81,8 @@ const COLORS = {
   grove: [46, 96, 44],
   start: [40, 168, 76],
   finish: [30, 30, 34],
+  checkpoint: [255, 255, 255],
+  checkpointRing: [22, 60, 140],
 };
 
 const outDir = join(root, "previews");
@@ -131,6 +134,14 @@ function schematic(track, terrain) {
     else if (s.elevation > 0.4 && s.surface !== "water") {
       canvas.disk(px(s.x), pz(s.z), 2, COLORS.crest);
     }
+  }
+  // R28 — the split boards, over the road and under the start/finish marks:
+  // this picture is where the placement rule is judged, and a board is only
+  // right if it is sitting just past a corner rather than out on a straight.
+  for (const board of track.checkpoints) {
+    const at = track.samples[board.index];
+    canvas.disk(px(at.x), pz(at.z), roadR + 3, COLORS.checkpointRing);
+    canvas.disk(px(at.x), pz(at.z), Math.max(1.5, roadR), COLORS.checkpoint);
   }
   const first = track.samples[0];
   const last = track.samples[track.samples.length - 1];

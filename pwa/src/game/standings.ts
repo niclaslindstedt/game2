@@ -32,6 +32,25 @@
 
 import { createRng, finishAt, type Track } from "@engine";
 
+/** R28 — THE SPLITS A CAMPAIGN RUN IS MEASURED AGAINST: the race clock the
+ * car it is racing had at each checkpoint. Null while the campaign has
+ * nobody on the road — which is today, so the HUD falls back to the ghost.
+ *
+ * TODO: fill this in when the campaign gets real opponents. The rule is the
+ * one every rally broadcast uses: the gap shown is to the LEADER, except
+ * when the player IS the leader, where it is to whoever is second — the
+ * number a driver needs is always the one that says how much of the stage
+ * is theirs to lose. That makes this a function of the opponents' split
+ * times, so it takes the field once there is one to take.
+ *
+ * The field itself belongs here beside `startList`, which is already the
+ * derived-opponents module; nothing else in the app needs to change to
+ * light the splits up — App.tsx prefers this over the ghost's the moment it
+ * returns something. */
+export function rivalSplits(_track: Track): number[] | null {
+  return null;
+}
+
 /** Crews on the start list, INCLUDING the player. Big enough that a placing
  * is a real position rather than a coin toss, small enough to read as a
  * club rally's entry rather than a championship round. */

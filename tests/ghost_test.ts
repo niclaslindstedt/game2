@@ -68,9 +68,14 @@ describe("ghost tape", () => {
     expect(time).not.toBeNull();
     expect(recorder.steps()).toBe(Math.round(game.t / TUNING.dt));
 
-    const run = recorder.seal(STAGE, "compact", time as number);
+    const run = recorder.seal(STAGE, "compact", time as number, game.checkpointTimes);
     const tape = readGhost(run);
     expect(tape.steps).toBe(recorder.steps());
+    // R28 — the splits ride on the tape rather than being read back off the
+    // replay: a run is measured against them from the first board, long
+    // before the ghost's own car has reached it.
+    expect(run.splits).toEqual(game.checkpointTimes);
+    expect(run.splits.length).toBe(track.checkpoints.length);
 
     const replay = createGame({ seed: STAGE.seed, carId: "compact", track });
     const replayLine: number[] = [];
@@ -101,7 +106,9 @@ describe("ghost tape", () => {
       recorder.record(input);
       if (step(game, input).some((ev) => ev.type === "finish")) break;
     }
-    const sealed = JSON.stringify(recorder.seal(STAGE, "compact", game.raceTime));
+    const sealed = JSON.stringify(
+      recorder.seal(STAGE, "compact", game.raceTime, game.checkpointTimes),
+    );
     // Four ghosts share one localStorage origin (~5 MB at two bytes a char),
     // and the ladder's longest stage is about seven times this one, so a
     // whole board has to live inside a couple of characters per step. A
@@ -130,7 +137,7 @@ describe("ghost tape", () => {
       driven.push(input);
       recorder.record(input);
     }
-    const tape = readGhost(recorder.seal(STAGE, "compact", 12.5));
+    const tape = readGhost(recorder.seal(STAGE, "compact", 12.5, []));
     expect(tape.steps).toBe(driven.length);
     for (let i = 0; i < driven.length; i++) {
       expect({ ...tape.at(i) }).toEqual(driven[i]);
@@ -138,7 +145,7 @@ describe("ghost tape", () => {
   });
 
   it("refuses a run recorded on a stage that is no longer this one", () => {
-    const run = createGhostRecorder().seal(STAGE, "compact", 30);
+    const run = createGhostRecorder().seal(STAGE, "compact", 30, []);
     expect(ghostMatches(run, STAGE)).toBe(true);
     expect(ghostMatches(run, { ...STAGE, seed: STAGE.seed + 1 })).toBe(false);
     expect(ghostMatches(run, { ...STAGE, length: "long" })).toBe(false);

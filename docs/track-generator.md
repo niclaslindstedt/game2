@@ -42,6 +42,7 @@ The generator respects rally reality. Verbatim from the rule book, each enforced
 - **R25** A SPRINT's finish line is not the end of its road. It carries on past the gate for a RUN-OUT (`runOut`, 220 m) — road the car coasts down after the clock has stopped, so the finish is a line drawn across a road rather than the cliff edge of a world that ran out of budget. The run-out is NOT part of the raced stage: R11's length band measures the road up to the line, and `track.finishS` is where that line is. Crossing it puts the run into its `rollout` phase, and the car is driven home from there (`TUNING.rollOut`) with the camera planted at the gate. A circuit needs none — its finish is its own start line, with a whole lap of road already the other side of it — so it finishes at the line the way it always has.
 - **R26** Red-and-white KERBING goes where a driver needs it and nowhere else. See [the placement guide](#kerb-placement-r26) below.
 - **R27** A stage is WATCHED. Spectators gather where a rally crowd actually gathers — at the finish, and at the corners worth standing at — on ground clear of the road, on the OUTSIDE of the bend where nothing leaving the road is coming at them. Driving past a stand at pace is heard (`cheer`).
+- **R28** A stage is SPLIT INTO CHECKPOINTS, roughly a quarter-minute of driving apart, and every one of them stands just past the EXIT of a corner — the tighter the better. A checkpoint is both a split (where the run is measured against whoever it is racing) and the place a lost, drowned or crashed car is put back on the road, so it belongs where the road has just asked the driver a question rather than in the middle of a straight where it would cost nothing. See [checkpoint placement](#checkpoint-placement-r28) below.
 
 ## The dials
 
@@ -101,6 +102,44 @@ An attempt that boxes itself in is abandoned quickly and restarted on a derived 
 ## Pacenotes
 
 The compiler emits one co-driver call per turn — contiguous same-direction turns merge into a single call — carrying direction, the tightest severity in the run, and the summed angle (`track.pacenotes`). The HUD reads them ahead of the car and shows the rally-style calls (EASY/MEDIUM/HARD LEFT/RIGHT, LONG past ~100°); the engine's positive direction reads as a LEFT turn on screen (the rendered world mirrors the engine's map view — the same one-flip rule as steering).
+
+## Checkpoint placement (R28)
+
+The boards are placed in the compiler's own segment walk
+(`engine/mapgen/compile.ts`), from `STAGE_RULES.checkpoint`:
+
+| Knob           | What it decides                                                                        |
+| -------------- | -------------------------------------------------------------------------------------- |
+| `spacing`      | the target gap between boards, in SECONDS of driving — 15 s, because a split is a time |
+| `pace`         | ...at this pace (m/s), the same measured bot pace the length bands are sized from      |
+| `early` `late` | fractions of that gap at which the severity bar drops                                  |
+| `runOut`       | how far past the corner's exit the board stands, capped by the road that carries it    |
+| `finishClear`  | how much road before the finish gate no board may stand in                             |
+
+A candidate is judged at the START of the segment AFTER a corner, because
+only the next segment says whether the corner is over: a turn carrying
+straight on in the same direction is one corner still happening, and a board
+in the middle of a combination marks nothing. That makes the candidate the
+whole co-driver call (`openNote`), with the combination's hardest severity.
+
+The bar then relaxes with distance, which is the "prefer tight corners"
+rule stated as an algorithm:
+
+| Road since the last board | What earns a board |
+| ------------------------- | ------------------ |
+| under `early` × gap       | nothing            |
+| `early` × gap to the gap  | a HARD corner      |
+| the gap to `late` × gap   | hard or medium     |
+| past `late` × gap         | any turn at all    |
+
+In practice that puts a board after a medium or hard corner more than nine
+times in ten, at a mean gap a little over the target — a stage would rather
+carry an extra hundred metres than mark a bend nobody had to think about.
+`make track` draws them on the schematic, which is how the placement is
+judged.
+
+An endless stage places them the same way as it streams; a circuit's boards
+belong to the LAP and are driven through again on each one.
 
 ## Kerb placement (R26)
 
