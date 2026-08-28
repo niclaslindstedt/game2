@@ -441,6 +441,13 @@ body {
   justify-content: center;
   gap: 0.5rem;
   pointer-events: none;
+  /* ABOVE THE THUMB ZONES. The touch layer is painted after this one and
+     claims the bottom four fifths of a phone screen, so without this the
+     results card's own presses — RETIRE, the next stage, the result sheet —
+     land on the steering zone instead of on the card. The layer itself
+     passes every pointer through; only what it holds is pressable, and
+     nothing it holds is on screen while the car is being driven. */
+  z-index: 3;
 }
 
 /* The start gantry: a black bar of lamps on the stage line, the way a rally
@@ -3503,4 +3510,250 @@ a.menu-version:focus-visible {
   font-size: clamp(0.7rem, 2.4vmin, 0.95rem);
   opacity: 0.8;
   font-style: italic;
+}
+
+/* ── R30: the result sheet ────────────────────────────────────────────────
+   Fifteen rows of place, crew, time and points — the stage's classification
+   on the results card, and the location's championship table in the menu.
+   One layout for both, because they are the same table asked at two
+   different moments, and a player who has learned to read one has learned
+   to read the other.
+
+   Monospaced numerals and fixed columns: a table whose figures wander is a
+   list, and nobody scans a list for their own row. */
+
+.results-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  width: 100%;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: clamp(0.62rem, 2.1vmin, 0.9rem);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.results-row {
+  display: grid;
+  grid-template-columns: 1.8em 1fr 4.4em 2.4em 3.6em;
+  gap: 0.5em;
+  align-items: baseline;
+  padding: 0.12rem 0.35rem;
+  border-radius: 0.3rem;
+}
+
+/* Without a stage in view there are no times and no stage points — only what
+   everybody has. */
+.results-table.is-season .results-row {
+  grid-template-columns: 1.8em 1fr 3.6em;
+}
+
+.results-pos {
+  text-align: right;
+  opacity: 0.75;
+}
+
+.results-who {
+  letter-spacing: 0.16em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.results-time,
+.results-points,
+.results-total {
+  text-align: right;
+}
+
+.results-points {
+  color: var(--hud-good);
+}
+
+/* The heading is a label, not a row: it never lights up and it never scores. */
+.results-head {
+  font-size: 0.8em;
+  letter-spacing: 0.04em;
+  opacity: 0.6;
+  position: sticky;
+  top: 0;
+  background: rgb(18 48 105 / 92%);
+}
+
+.results-head .results-points {
+  color: inherit;
+}
+
+/* Your own row. Loud on purpose: finding it is the only thing anybody does
+   with a table they are already looking at. */
+.results-row.is-you {
+  background: rgb(255 210 62 / 88%);
+  color: var(--hud-shadow);
+  text-shadow: none;
+}
+
+.results-row.is-you .results-points {
+  color: inherit;
+}
+
+/* ── …and the modal it is shown in ──────────────────────────────────────
+   Over the top of whatever opened it, with one way out. Fifteen rows is
+   more than a results card can hold, which is exactly why this is a
+   deliberate look rather than another block on the card. */
+
+.hud-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgb(6 14 32 / 72%);
+}
+
+.hud-modal-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(30rem, 100%);
+  max-height: 100%;
+  padding: 0.9rem 1.1rem;
+  border-radius: 1rem;
+  background: rgb(18 48 105 / 96%);
+  text-align: center;
+}
+
+.hud-modal-title {
+  font-size: clamp(1rem, 4vmin, 1.5rem);
+  color: var(--hud-good);
+}
+
+.hud-modal-sub {
+  font-size: clamp(0.58rem, 1.9vmin, 0.76rem);
+  letter-spacing: 0.1em;
+  opacity: 0.8;
+}
+
+.hud-modal-card .hud-pause-act {
+  margin-top: 0.7rem;
+}
+
+/* ── R30: the points, on the results card ────────────────────────────────
+   Directly under the place, because it is the same sentence: third is one
+   point, and fourth is the reason the podium matters at all. */
+
+.hud-finish-points {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.35rem;
+  line-height: 1.05;
+}
+
+.hud-finish-pts {
+  font-size: clamp(1.1rem, 4.4vmin, 2rem);
+  font-variant-numeric: tabular-nums;
+  color: var(--hud-good);
+}
+
+.hud-finish-pts-label {
+  font-size: clamp(0.58rem, 2vmin, 0.85rem);
+  letter-spacing: 0.14em;
+  opacity: 0.8;
+}
+
+.hud-finish-slow .hud-finish-pts {
+  color: var(--hud-bad);
+}
+
+/* …and the season those points went into. */
+.hud-finish-season {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+
+.hud-finish-season-line {
+  font-size: clamp(0.6rem, 2vmin, 0.85rem);
+  letter-spacing: 0.1em;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-finish-sheet:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ── R30: the season panel on a location page ───────────────────────────
+   What the player is actually playing for once the stages are open: where
+   the table stands, the way back into it, and the way to start it again. */
+
+.menu-season {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.6rem 0.8rem;
+  border: 2px solid rgb(255 255 255 / 30%);
+  border-left: 6px solid var(--hud-good);
+  border-radius: 0.6rem;
+  background: rgb(255 255 255 / 8%);
+}
+
+.menu-season-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.menu-season-place {
+  font-size: clamp(0.85rem, 3vmin, 1.2rem);
+  letter-spacing: 0.08em;
+}
+
+.menu-season-won {
+  color: var(--hud-good);
+}
+
+.menu-season-points {
+  font-size: clamp(0.85rem, 3vmin, 1.2rem);
+  color: var(--hud-good);
+}
+
+.menu-season-run {
+  margin-left: auto;
+  font-size: clamp(0.55rem, 1.8vmin, 0.72rem);
+  letter-spacing: 0.12em;
+  opacity: 0.72;
+}
+
+.menu-season-hint {
+  font-size: clamp(0.55rem, 1.8vmin, 0.72rem);
+  letter-spacing: 0.1em;
+  opacity: 0.75;
+}
+
+.menu-season-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.menu-season-go {
+  border-color: var(--hud-good);
+  color: var(--hud-good);
+}
+
+/* A country still behind its championship: the tile is a wall with the
+   reason written on it, not a button. */
+.menu-location-locked {
+  cursor: default;
 }

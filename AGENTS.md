@@ -89,6 +89,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | Input mapping                                               | `pwa/src/game/input.ts` (bindings in `settings.ts`)                                                                       |
 | Main menu pages / routing                                   | `pwa/src/game/main-menu.tsx` (+ `menu-roam`, `menu-options`)                                                              |
 | Campaign stages, locations, unlocks                         | `pwa/src/game/campaign.ts`                                                                                                |
+| The points a stage pays, and what opens the next location   | `pwa/src/game/championship.ts`; the sheet is drawn by `results-table.tsx`                                                 |
 | The time trial's high score board and its initials          | `pwa/src/game/scores.ts` (storage) + `score-board.tsx` / `hud-initials.tsx`                                               |
 | The time trial's ghost: recording, replay, storage          | `pwa/src/game/ghost.ts`                                                                                                   |
 | Where the split boards stand on a stage (R28)               | `STAGE_RULES.checkpoint` + the placement in `engine/mapgen/compile.ts` — the `mapgen-improvement` skill                   |

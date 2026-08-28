@@ -53,16 +53,32 @@ import { stageQuery, traceLine, type DebugContext } from "./game/debug-info.ts";
 import { debugLogging, log as debugLog, logRunStart, setDebugLogging } from "./game/debug-log.ts";
 import type { GameRenderer } from "./game/renderer.ts";
 import { Hud, type HudFlash, type HudSnapshot, type HudSplit } from "./game/hud.tsx";
-import type { FinishScores } from "./game/hud-finish.tsx";
+import type { FinishChampionship, FinishScores } from "./game/hud-finish.tsx";
 import {
   createField,
+  fieldResults,
   placeAtFinish,
   placeAtSplit,
+  settleField,
   splitLeader,
   stepField,
   stopField,
+  PLAYER_ID,
+  type ClassRow,
   type RivalField,
 } from "./game/standings.ts";
+import {
+  championshipWon,
+  ladderAfter,
+  loadChampionship,
+  pointsFor,
+  recordStage,
+  resetSeason,
+  stageScores,
+  standings,
+  winEverything,
+  type Championship,
+} from "./game/championship.ts";
 import {
   lastInitials,
   loadBoard,
@@ -95,9 +111,9 @@ import { MainMenu, type MenuPage, type PlayMode } from "./game/main-menu.tsx";
 import type { MapRect, MapView } from "./game/menu-roam.tsx";
 import {
   PODIUM,
+  findLevel,
   levelLaps,
   loadProgress,
-  nextLevel,
   recordFinish,
   unlockEverything,
   type CampaignLevel,
@@ -381,6 +397,20 @@ let flashId = 0;
  * is keeping up. */
 const SPLIT_HOLD = 3.6;
 
+/** R30 — how much of the results card's frame the stragglers may have:
+ * physics steps per frame, spread over whoever is still on the road. A
+ * hundred and twenty of them is a second of one car's racing, so a rival a
+ * minute behind is home in a couple of seconds of card — and the card is
+ * rendering a run-out, not a race, so the budget is spare. */
+const SETTLE_STEPS = 800;
+
+/** …and how long anybody is given before they are retired where they stand:
+ * this many times the player's own stage time, plus a grace. A bot wedged
+ * against a trunk is a car that is never coming home, and the classification
+ * cannot wait for it. */
+const SETTLE_SLACK = 1.8;
+const SETTLE_GRACE = 45;
+
 /** Air time under which a landing is not worth a banner, s — every ripple
  * and curb technically leaves the ground, and "CLEAN AIR 0.0s" three times
  * in a row is the HUD talking over the game. */
@@ -394,6 +424,14 @@ export function App() {
   const [race, setRace] = useState<RaceSettings>(initialRace);
   const [options, setOptions] = useState<Settings>(initialSettings);
   const [progress, setProgress] = useState<CampaignProgress>(loadProgress);
+  /** R30 — the points every location's season has paid out so far. Read once
+   * and carried in state: the results card and the campaign menu both render
+   * off it, and neither should be a storage read. */
+  const [season, setSeason] = useState<Championship>(loadChampionship);
+  /** The stage just finished, classified — every crew's time in finishing
+   * order, which only exists once the last car is home. Null until then, and
+   * again the moment the next run starts. */
+  const [result, setResult] = useState<{ levelId: string; rows: ClassRow[] } | null>(null);
   const [menu, setMenu] = useState<MenuPage | null>(() => {
     // ?start=1 launches straight into a run (tooling); everyone else gets
     // the main menu.
@@ -459,6 +497,20 @@ export function App() {
    * the player's. Null on every run with nobody entered (Roam, time trial,
    * the menu's demo). */
   const fieldRef = useRef<RivalField | null>(null);
+  /** R30 — the field being RUN HOME behind the results card. The player is
+   * across the line, but the crews still out there have places worth points
+   * to somebody, so they are driven to the finish off the card's own frames
+   * (see `settleField`) and the classification is booked when the last one
+   * lands. */
+  const settleRef = useRef<{
+    field: RivalField;
+    locationId: string;
+    levelId: string;
+    time: number;
+    carId: string;
+    /** Race time at which anybody still going is retired where they stand. */
+    limit: number;
+  } | null>(null);
   /** Where the run stands, as of the last board it went through. Held in a
    * ref because the HUD reads it off the snapshot the frame loop takes, and
    * mirrored into state only so the results card re-renders on the finish. */
@@ -627,6 +679,10 @@ export function App() {
   const armField = (spec: StageSpec, mode: PlayMode): void => {
     fieldRef.current = null;
     standingRef.current = null;
+    // Whatever the last attempt was still running home is over: those cars
+    // are on a road nobody is driving any more.
+    settleRef.current = null;
+    setResult(null);
     rendererRef.current?.setStanding(null);
     if (!trackRef.current || menuRef.current) return;
     if (mode !== "campaign" || spec.length === "endless") return;
@@ -707,6 +763,8 @@ export function App() {
     ghostRef.current = null;
     fieldRef.current = null;
     standingRef.current = null;
+    settleRef.current = null;
+    setResult(null);
     rendererRef.current?.setGhost(null);
     setMenu({ page: "root" });
   };
@@ -1028,12 +1086,31 @@ export function App() {
         // fires it off the finish event itself — so the field's verdict has
         // to be in before the events are handed over, not after.
         const field = fieldRef.current;
-        if (field && events.some((ev) => ev.type === "finish") && menuRef.current === null) {
+        let home: number | null = null;
+        for (const ev of events) if (ev.type === "finish") home = ev.time;
+        if (field && home !== null && menuRef.current === null) {
           standingRef.current = { place: placeAtFinish(field), of: field.of };
           renderer.setStanding(standingRef.current.place);
-          // The player is home; anybody still out there is behind them, and
-          // stepping the field on would only cost the results card frames.
-          stopField(field);
+          const active = runRef.current;
+          const where =
+            active.mode === "campaign" && active.levelId ? findLevel(active.levelId) : null;
+          if (where) {
+            // R30 — the player is home, but the two places BEHIND them are
+            // worth two points and one to somebody, so the crews still out
+            // there are run home off the card's frames rather than abandoned.
+            settleRef.current = {
+              field,
+              locationId: where.location.id,
+              levelId: where.level.id,
+              time: home,
+              carId: stageRef.current?.carId ?? "",
+              limit: home * SETTLE_SLACK + SETTLE_GRACE,
+            };
+          } else {
+            // Nobody is keeping points: anybody still out there is behind the
+            // player, and stepping them on would only cost the card frames.
+            stopField(field);
+          }
         }
         renderer.onEvents(state, events);
         if (debugLogging() && menuRef.current === null) {
@@ -1268,6 +1345,20 @@ export function App() {
             if (ghostEvents.length > 0) renderer.onGhostEvents(ghost.state, ghostEvents);
           }
         }
+        // R30 — the stragglers, driven home behind the results card. A
+        // bounded slice of the frame, and the classification is booked the
+        // moment the road is clear: the card is watching a run-out, so it has
+        // the frame to spare and the player has the seconds to spend.
+        const settling = settleRef.current;
+        if (settling && settleField(settling.field, SETTLE_STEPS, settling.limit)) {
+          settleRef.current = null;
+          const rows = fieldResults(settling.field, {
+            time: settling.time,
+            carId: settling.carId,
+          });
+          setSeason(recordStage(settling.locationId, settling.levelId, rows));
+          setResult({ levelId: settling.levelId, rows });
+        }
         // The road bed belongs to a run the player is IN. Behind the menu the
         // stage is scenery under a theme, and an engine bed over the top of
         // that is two pieces of music at once.
@@ -1338,8 +1429,14 @@ export function App() {
 
   // WHERE THE RESULTS CARD GOES ON TO. Only the ladder has a next rung:
   // Roam is one stage and a time trial is one stage repeated, so both offer
-  // the way out and nothing else.
-  const upNext = run.mode === "campaign" && run.levelId ? nextLevel(run.levelId) : null;
+  // the way out and nothing else. R30 — and the rung into the NEXT country is
+  // behind this one's championship, so the ladder is asked rather than
+  // walked.
+  const ladder =
+    run.mode === "campaign" && run.levelId
+      ? ladderAfter(run.levelId, season)
+      : ({ kind: "end" } as const);
+  const upNext = ladder.kind === "next" ? ladder.level : null;
   // R29 — …and only ON THE PODIUM. A stage finished outside the top three
   // is not cleared, so the card that comes up has nowhere to offer: the way
   // on is the same stage again.
@@ -1348,6 +1445,50 @@ export function App() {
     upNext && !missedPodium
       ? { name: upNext.name, go: (): void => playLevel(upNext, "campaign") }
       : null;
+  // …and when the way on is a country rather than a stage, what is holding
+  // it shut. Said only to a player who cleared the stage: one outside the
+  // podium is being told to run this one again, and a second lock behind
+  // that one is noise.
+  const lockedBehind = ladder.kind === "locked" && !missedPodium ? ladder.location.name : null;
+
+  // R30 — THE CARD'S POINTS. The place is worth what the place is worth; the
+  // season it went into is read back out of storage, so the total on the card
+  // is the total the menu will show. The sheet itself is null until the last
+  // car is home (`settleField`), which is what the card's own table waits on.
+  const here = run.mode === "campaign" && run.levelId ? findLevel(run.levelId) : null;
+  const championship: FinishChampionship | null = ((): FinishChampionship | null => {
+    if (!here || !snap?.standing) return null;
+    const table = standings(here.location, season);
+    const mine = table.find((row) => row.you) ?? table[table.length - 1];
+    const sheet = result?.levelId === here.level.id ? result.rows : null;
+    const totals = new Map(table.map((row) => [row.id, row.points]));
+    const paid = sheet ? new Map(sheet.map((row) => [row.id, pointsFor(row.place)])) : null;
+    const kept = stageScores(here.location.id, here.level.id, season)[PLAYER_ID] ?? 0;
+    const scored = sheet ? pointsFor(snap.standing.place) : null;
+    return {
+      location: here.location.name,
+      points: scored,
+      // A re-run that went worse keeps the run that went better (see
+      // `recordStage`), and the card says so rather than showing a total
+      // that did not move.
+      kept: scored !== null && kept > scored ? kept : null,
+      total: mine.points,
+      place: mine.place,
+      tied: mine.tied,
+      of: table.length,
+      champion: sheet !== null && championshipWon(here.location, season),
+      rows:
+        sheet &&
+        sheet.map((row) => ({
+          place: row.place,
+          name: row.alias,
+          time: row.time,
+          points: paid?.get(row.id) ?? 0,
+          total: totals.get(row.id) ?? 0,
+          you: row.you,
+        })),
+    };
+  })();
 
   // ...and where it goes back to. A TIME TRIAL is one stage run again and
   // again against a board, so the card offers the same stage from the grid
@@ -1412,6 +1553,8 @@ export function App() {
           onRetry={onRetry}
           onRetire={goMainMenu}
           scores={finishScores}
+          championship={championship}
+          locked={lockedBehind}
         />
       )}
       {/* Outside the HUD on purpose: ALT takes the game's chrome off so a
@@ -1445,7 +1588,15 @@ export function App() {
           settings={options}
           onSettings={applyOptions}
           onDeveloper={revealDeveloper}
-          onUnlockEverything={() => setProgress(unlockEverything())}
+          onUnlockEverything={() => {
+            setProgress(unlockEverything());
+            // An unlock that opened every stage and left the countries shut
+            // would be half a key: the lock on the next location is the
+            // championship, so the unlock wins them all.
+            setSeason(winEverything());
+          }}
+          season={season}
+          onSeasonReset={(locationId) => setSeason(resetSeason(locationId))}
           onMapRect={setMapRect}
           mapView={mapView}
         />
