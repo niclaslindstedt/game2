@@ -221,6 +221,11 @@ await scene("field", { menu: "1", splash: "0", bot: "1" }, async (page) => {
   await page.getByText("TAIGA", { exact: false }).first().click();
   await page.getByText("HARD", { exact: true }).first().click();
   await page.getByText("Loggers' Run", { exact: false }).first().click();
+  // A stage press opens the pre-race card, not the stage: the car and the
+  // gearbox are chosen there, and START is what begins the run. Without it
+  // this scene waits out its timeout on a card that is not going anywhere,
+  // and takes the three scenes below it down with it.
+  await page.getByRole("button", { name: "START" }).click();
   await racing(page);
   await atStageTime(page, 12);
 });
