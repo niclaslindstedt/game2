@@ -19,25 +19,35 @@ its generation, `mapgen-improvement`.
 
 ## The four files, one direction of flow
 
-| File                       | Owns                                                                                                                                                                                                                                               |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pwa/src/game/biome.ts`    | Biomes AS DATA: the ground palette, the plant communities (weighted species mixes + density + ground cover), the contextual overrides (lakeshore, highland), grove scale                                                                           |
-| `pwa/src/game/flora.ts`    | HOW each plant is shaped: the `GeoBuilder` merge helper, ~26 parametric variants, the two shared materials, the ground-cover sway shader                                                                                                           |
-| `pwa/src/game/terrain.ts`  | The heightfield AND its paint: altitude bands, moss/heath/forest-floor noise patches, slope-revealed bedrock, the tiling detail speckle, the road-apron shelf                                                                                      |
-| `pwa/src/game/world.ts`    | WHERE the SOFT things stand (ground cover, stumps, shrubs), dressing engine trunks with species, road clearance, boulders' rock meshes, cut-wall outcrop slabs, the rally gates and hay bales                                                      |
-| `engine/mapgen/terrain.ts` | WHERE the SOLID things stand: the grove quilt (`GROVES`, `groveAt`) and every collidable trunk (`treesNear`) and prop (`obstaclesNear`) — the car crashes into these, so placement is the engine's (the `collision` skill owns the contact itself) |
+| File                       | Owns                                                                                                                                                                                                                                                                                   |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pwa/src/game/biome.ts`    | Biomes AS DATA: the ground palette, the plant communities (weighted species mixes + density + ground cover), the contextual overrides (lakeshore, highland), grove scale                                                                                                               |
+| `pwa/src/game/flora.ts`    | HOW each plant is shaped: the `GeoBuilder` merge helper, ~26 parametric variants, the two shared materials, the ground-cover sway shader                                                                                                                                               |
+| `pwa/src/game/terrain.ts`  | The heightfield AND its paint: altitude bands, moss/heath/forest-floor noise patches, slope-revealed bedrock, the tiling detail speckle, the road-apron shelf                                                                                                                          |
+| `pwa/src/game/world.ts`    | WHERE the SOFT things stand (ground cover, stumps, shrubs), dressing engine trunks with species, road clearance, boulders' rock meshes, cut-wall outcrop slabs, the rally gates and hay bales                                                                                          |
+| `engine/mapgen/props.ts`   | WHERE the SOLID things stand: the region/grove/stand quilt (`REGIONS`, `GROVES`, `regionAt`, `groveAt`) and every collidable trunk (`treesNear`) and prop (`obstaclesNear`) — the car crashes into these, so placement is the engine's (the `collision` skill owns the contact itself) |
+| `engine/mapgen/terrain.ts` | The heightfield, water and streams the props stand on; it builds the prop field and re-exports it                                                                                                                                                                                      |
 
 Biome → flora ids are strings on purpose: `biome.ts` imports nothing from
-`flora.ts`, and `buildFlora` throws on an unknown id, so a typo in a new
-mix fails loudly on the first stage build. Shared value noise lives in
+the flora modules, and `buildFlora` throws on an unknown id, so a typo in a
+new mix fails loudly on the first stage build. `biome.ts` also checks at
+import that every engine grove and region has a row, so a quilt id with no
+community cannot silently fall back to the wrong wood. Shared value noise lives in
 `pwa/src/lib/noise.ts` — terrain shaping and grove placement must keep
 drawing from the same helpers or their patches stop lining up.
 
 ## The biome model
 
-- **A biome is data, not code.** Ground palette + communities + overrides.
-  A new biome is a new `Biome` row and a `biomeFor()` decision — no new
-  systems. Today `biomeFor()` always returns `TAIGA`.
+- **A biome is data, not code.** Ground palette + communities + regions +
+  overrides. A new biome is a new `Biome` row and a `biomeFor()` decision
+  — no new systems. Today `biomeFor()` always returns `TAIGA`.
+- **The landscape is quilted at THREE scales**, all placed in the engine
+  because the trunks are solid: a SUB-REGION (~900 m) says what kind of
+  country this is and re-weights the groves under it; a GROVE (~150 m)
+  picks the community; a STAND noise (~42 m) clumps the trees INSIDE one
+  grove into closed thickets and the clearings between them. The stand
+  noise is what stops a forest reading as evenly sprinkled, and its mean is
+  exactly 1, so it redistributes the forest without thinning it.
 - **Trees come in COMMUNITIES, not confetti.** A real forest is groves: a
   spruce wood, a birch grove, a pine heath, an open meadow. The quilt
   lives in the ENGINE (`terrain.groveAt` over the `GROVES` weight/density
@@ -55,19 +65,41 @@ drawing from the same helpers or their patches stop lining up.
   Forest density itself is `TREE_CELL`/`TREE_DENSITY` in
   `engine/mapgen/terrain.ts` (~1 trunk per 500 m² in a closed forest —
   gaps a car threads, walls it cannot ignore).
-- **Context beats community.** Within ~4 m of the water table the
-  lakeshore mix wins (willow, birch); above 26 m terrain altitude the
-  highland mix wins (squat spruce, juniper, snags). Those bands mirror the
-  terrain's own painting, so flora and ground always tell the same story.
+- **Context beats community**, and it lives in one place (`planting.ts`'s
+  `mixAt`). Within ~4 m of the water table the lakeshore mix wins (willow,
+  birch); inside `RIPARIAN_BAND` of a stream the riparian mix wins; above
+  26 m terrain altitude the highland mix wins (squat spruce, juniper,
+  snags). Those bands mirror the terrain's own painting, so flora and
+  ground always tell the same story. Keep the water-side mixes CONTEXTUAL
+  rather than making them regions — a noise field will happily put a
+  lakeside where there is no lake.
 
-## The taiga roster (26 variants)
+## The taiga roster (~40 variants)
 
-Spruces `spruceTall/Old/Young/Squat/Dark`, pines `pineTall/Crooked/Young`,
-firs `firSlim/Dense`, broadleaves `birch/birchPair/birchYoung`, `aspen`,
-`oak`, `maple`, `rowan` (berry accents), larches `larch/larchOld`, shrubs
-`willowShrub/juniper`, dead wood `deadSnag/stump/fallenLog`, ground cover
-`tallGrass/fern/largeFern/heathShrub` (the last four are the two-sided,
-wind-swayed set).
+Canopy conifers `spruceTall/Old/Young/Squat/Dark`, `pineTall/Crooked/Young`,
+`firSlim/Dense`, larches `larch/larchOld`; broadleaves
+`birch/birchPair/birchYoung`, `aspen`, `oak`, `maple`, `rowan`; a middle
+storey of `spruceSapling`, `pineSapling` and the bog's stunted `bogPine`;
+shrubs `willowShrub/juniper/bogShrub/berryBush`; dead and cut wood
+`deadSnag/brokenTrunk/leaningSnag/stump/fallenLog/rootLog/driftwood/fallenBranch`
+and the logging block's `logPile`; ground cover
+`tallGrass/fern/largeFern/heathShrub/mossPatch` and the wet ground's
+`reeds/sedgeTuft/cottonGrass` (the grass, fern, reed and sedge families are
+the two-sided, wind-swayed set).
+
+## The seasons
+
+`RaceEnv.season` is `spring | summer | autumn` — the taiga has three,
+because the boreal forest under snow is the ARCTIC biome, not a fourth
+season of this one. A season is a colour MAP applied inside
+`GeoBuilder.add`, so a species recipe names the summer colour it means and
+nothing in the roster knows what month it is; a colour absent from the
+table does not change, which is why every conifer, bark and dead-wood tone
+holds still while the broadleaves, the larch, the ground and the bogs move.
+That stillness is the point — it is what keeps the silhouette while the
+colour turns. The ground palette gets a per-season override, and the LIGHT
+is derived from the sun's actual noon elevation at 62°N rather than
+art-directed (`environment.ts`).
 
 ## The craft rules
 

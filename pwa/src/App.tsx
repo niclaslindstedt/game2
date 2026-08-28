@@ -36,6 +36,7 @@ import {
   type StageKnobs,
   type StageLength,
   type StageShape,
+  type Season,
   type TimeOfDay,
   type Track,
   type Weather,
@@ -67,6 +68,7 @@ import {
   STAGE_DIALS,
   STAGE_LENGTH_OPTIONS,
   STAGE_SHAPES,
+  SEASONS,
   TIMES_OF_DAY,
   WEATHERS,
   raceLaps,
@@ -200,6 +202,7 @@ function initialRace(): RaceSettings {
   const race: RaceSettings = {
     timeOfDay: "day",
     weather: "clear",
+    season: "summer",
     carId: "compact",
     length: "medium",
     shape: "sprint",
@@ -218,6 +221,8 @@ function initialRace(): RaceSettings {
   if (TIMES_OF_DAY.some((t) => t.id === tod)) race.timeOfDay = tod as TimeOfDay;
   const weather = params.get("weather");
   if (WEATHERS.some((w) => w.id === weather)) race.weather = weather as Weather;
+  const season = params.get("season");
+  if (SEASONS.some((x) => x.id === season)) race.season = season as Season;
   const car = params.get("car");
   if (car === "compact" || car === "classic") race.carId = car;
   const length = params.get("length");
@@ -268,6 +273,7 @@ type StageSpec = {
   carId: string;
   timeOfDay: TimeOfDay;
   weather: Weather;
+  season: Season;
   /** The menu's demo has no grid to sit on — nobody is waiting for it. */
   skipCountdown: boolean;
 };
@@ -283,6 +289,7 @@ function sameStage(a: StageSpec | null, b: StageSpec): boolean {
     a.carId === b.carId &&
     a.timeOfDay === b.timeOfDay &&
     a.weather === b.weather &&
+    a.season === b.season &&
     a.skipCountdown === b.skipCountdown
   );
 }
@@ -300,6 +307,7 @@ function demoStage(race: RaceSettings, seed: number): StageSpec {
     carId: race.carId,
     timeOfDay: race.timeOfDay,
     weather: race.weather,
+    season: race.season,
     skipCountdown: true,
   };
 }
@@ -318,6 +326,7 @@ function backdropFor(page: MenuPage, race: RaceSettings, seed: number, demoSeed:
         carId: race.carId,
         timeOfDay: race.timeOfDay,
         weather: race.weather,
+        season: race.season,
         skipCountdown: true,
       } satisfies StageSpec,
       driven: false,
@@ -501,7 +510,7 @@ export function App() {
       // and stays there — so the lights would only hang over the middle of
       // every frame the free camera was flown out to take.
       skipCountdown: spec.skipCountdown || godRef.current,
-      env: { timeOfDay: spec.timeOfDay, weather: spec.weather },
+      env: { timeOfDay: spec.timeOfDay, weather: spec.weather, season: spec.season },
     });
     const previous = gameRef.current;
     gameRef.current = state;
@@ -550,7 +559,7 @@ export function App() {
       carId: saved.carId,
       track: trackRef.current.track,
       skipCountdown: spec.skipCountdown,
-      env: { timeOfDay: spec.timeOfDay, weather: spec.weather },
+      env: { timeOfDay: spec.timeOfDay, weather: spec.weather, season: spec.season },
     });
     ghostRef.current = { state, tape: readGhost(saved), at: 0 };
     renderer.setGhost(state);
@@ -625,6 +634,7 @@ export function App() {
         carId: raceRef.current.carId,
         timeOfDay: level.timeOfDay,
         weather: level.weather,
+        season: level.season,
         skipCountdown: false,
       },
       mode,
@@ -645,6 +655,7 @@ export function App() {
         carId: r.carId,
         timeOfDay: r.timeOfDay,
         weather: r.weather,
+        season: r.season,
         skipCountdown: false,
       },
       "roam",
@@ -831,6 +842,7 @@ export function App() {
           carId: r.carId,
           timeOfDay: r.timeOfDay,
           weather: r.weather,
+          season: r.season,
           skipCountdown: false,
         };
         applyStageRef.current(spec, true);

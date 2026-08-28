@@ -46,11 +46,20 @@ export {
   GROUND_CELL,
   GROVES,
   GROVE_SCALE,
+  REGIONS,
+  REGION_SCALE,
   type GroveCommunity,
+  type Region,
   type TerrainField,
   type Stream,
 } from "./terrain.ts";
-export { SOLID_PROP_HEIGHT, standSolid, type SolidKind, type WildObstacle } from "./solids.ts";
+export {
+  SOLID_PROP_HEIGHT,
+  isWooden,
+  standSolid,
+  type SolidKind,
+  type WildObstacle,
+} from "./solids.ts";
 export {
   compileTrack,
   compileStage,

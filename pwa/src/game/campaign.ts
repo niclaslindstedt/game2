@@ -13,6 +13,7 @@ import {
   STAGE_RULES,
   type FiniteStageLength,
   type StageShape,
+  type Season,
   type TimeOfDay,
   type Weather,
 } from "@engine";
@@ -29,6 +30,10 @@ export type CampaignLevel = {
   laps?: number;
   timeOfDay: TimeOfDay;
   weather: Weather;
+  /** Which season the stage is run in — as much of a level's identity as
+   * the hour it starts at, and the reason two levels on the same country
+   * do not look like the same stage twice. */
+  season: Season;
   /** One line of billing on the level's box. */
   blurb: string;
 };
@@ -82,6 +87,7 @@ const TAIGA: CampaignLocation = {
       length: "short",
       timeOfDay: "day",
       weather: "clear",
+      season: "summer",
       blurb: "Open forest road, one jump",
     },
     {
@@ -91,6 +97,7 @@ const TAIGA: CampaignLocation = {
       length: "medium",
       timeOfDay: "dawn",
       weather: "clear",
+      season: "spring",
       blurb: "Fords and blind crests",
     },
     {
@@ -100,6 +107,7 @@ const TAIGA: CampaignLocation = {
       length: "long",
       timeOfDay: "dusk",
       weather: "rain",
+      season: "autumn",
       blurb: "Hairpins over seven jumps",
     },
     {
@@ -109,6 +117,7 @@ const TAIGA: CampaignLocation = {
       length: "xlong",
       timeOfDay: "night",
       weather: "storm",
+      season: "autumn",
       blurb: "Everything, in the dark",
     },
     {
@@ -119,6 +128,7 @@ const TAIGA: CampaignLocation = {
       shape: "circuit",
       timeOfDay: "dawn",
       weather: "clear",
+      season: "spring",
       blurb: "Three laps, gravel into tarmac",
     },
     {
@@ -129,6 +139,7 @@ const TAIGA: CampaignLocation = {
       shape: "circuit",
       timeOfDay: "dusk",
       weather: "rain",
+      season: "autumn",
       blurb: "Three laps, two jumps, no rest",
     },
   ],

@@ -40,6 +40,7 @@ import {
   type GameState,
   type RaceEnv,
   type RunStats,
+  type Season,
   type TimeOfDay,
   type Weather,
 } from "./state.ts";
@@ -129,9 +130,10 @@ export type CreateGameOptions = {
   /** Inject a pre-compiled track (tests and tooling); defaults to the
    * generated stage for `seed` at `length`. */
   track?: ReturnType<typeof compileTrack>;
-  /** Race conditions. Time of day is presentation-only; weather sets the
-   * wind band (TUNING.wind.speed). Defaults: day, clear. */
-  env?: { timeOfDay?: TimeOfDay; weather?: Weather };
+  /** Race conditions. Time of day and season are presentation-only;
+   * weather sets the wind band (TUNING.wind.speed). Defaults: day, clear,
+   * summer. */
+  env?: { timeOfDay?: TimeOfDay; weather?: Weather; season?: Season };
   /** The generator's dials (rules.ts) for the stage this run compiles.
    * Ignored when a pre-compiled `track` is handed in — that track carries
    * the dials it was built with. */
@@ -141,12 +143,13 @@ export type CreateGameOptions = {
 /** Wind direction, mean speed, and gust phase are seeded on their own
  * stream so adding weather never shifts the in-run RNG the physics draws
  * from. The same seed and weather always blow the same wind. */
-function buildEnv(seed: number, timeOfDay: TimeOfDay, weather: Weather): RaceEnv {
+function buildEnv(seed: number, timeOfDay: TimeOfDay, weather: Weather, season: Season): RaceEnv {
   const rng = createRng((seed ^ 0x51ab3d75) >>> 0);
   const [minSpeed, maxSpeed] = T.wind.speed[weather];
   return {
     timeOfDay,
     weather,
+    season,
     windDir: rng.range(0, Math.PI * 2),
     windSpeed: rng.range(minSpeed, maxSpeed),
     gustPhase: rng.range(0, Math.PI * 2),
@@ -193,6 +196,7 @@ export function createGame(options: CreateGameOptions): GameState {
     options.seed,
     options.env?.timeOfDay ?? "day",
     options.env?.weather ?? "clear",
+    options.env?.season ?? "summer",
   );
   // The grid already stands in the wind — its flags and fumes drift before
   // the lights go green, so the vector starts at its t = 0 value.

@@ -325,7 +325,6 @@ describe("going under (TUNING.crash.drown)", () => {
   it("ignores the driver for the whole penalty — the seconds are the point", () => {
     const { state } = driveIntoDeepWater();
     const D = TUNING.crash.drown;
-    const since = state.drowning?.since ?? 0;
     const raceAtEntry = state.raceTime;
     // Everything the panicking driver can reach, including the reset that
     // normally drags a wandering car home on the spot.
@@ -337,16 +336,24 @@ describe("going under (TUNING.crash.drown)", () => {
       boost: true,
       reset: true,
     };
+    // Run the penalty out by STEPS rather than by comparing the clock to
+    // it. Both the engine's own `age` and `state.t - since` out here are
+    // differences of two accumulated floats, and after a stage's worth of
+    // simulated seconds the last step of the penalty lands either side of
+    // the bar depending on how far the car drove before it went in.
     let home = 0;
-    while (state.t - since < D.duration - TUNING.dt) {
-      for (const ev of step(state, mashing)) if (ev.type === "respawn") home += 1;
-      expect(state.drowning, `t=${(state.t - since).toFixed(2)}`).not.toBeNull();
+    let steps = 0;
+    const bail = Math.round((D.duration + 1) / TUNING.dt);
+    while (state.drowning && steps++ < bail) {
+      for (const ev of step(state, mashing)) if (ev.type === "respawn" && state.drowning) home += 1;
     }
+    // Not once in the whole penalty did the reset bring the car home: the
+    // only respawn is the crew's, on the step the water finally let go.
     expect(home).toBe(0);
+    expect(state.drowning).toBeNull();
+    expect(steps).toBeLessThan(bail);
     // ...and the clock never stopped while it was ignoring them: the whole
     // penalty is charged to the run, which is what makes it one.
-    expect(state.raceTime - raceAtEntry).toBeCloseTo(D.duration, 3);
-    step(state, mashing);
-    expect(state.drowning).toBeNull();
+    expect(state.raceTime - raceAtEntry).toBeCloseTo(D.duration, 1);
   });
 });
