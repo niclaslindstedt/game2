@@ -39,7 +39,7 @@ and hold instead of just stopping), filters SWEEP, and oscillators DISTORT.
 | `pwa/src/game/audio/bank-ui.ts`    | The interface's own sounds — a separate bank because the menu is on the startup path.                                                                                                                 |
 | `pwa/src/game/audio/route.ts`      | Which sound a `GameEvent` makes, and how big.                                                                                                                                                         |
 | `pwa/src/game/audio/engine-bed.ts` | The engine, as overlapping grains.                                                                                                                                                                    |
-| `pwa/src/game/audio/road-grain.ts` | The tyres, the wind, the weather and the drift's scrub.                                                                                                                                               |
+| `pwa/src/game/audio/road-grain.ts` | The tyres, the wind, the weather, the gale and the drift's scrub.                                                                                                                                     |
 | `pwa/src/game/audio/drive-bed.ts`  | The scheduler, and the start lights' ticks.                                                                                                                                                           |
 | `pwa/src/game/audio/music.ts`      | The single player: which theme is up, and the per-track dynamic import.                                                                                                                               |
 | `pwa/src/game/audio/scores/`       | The scores themselves.                                                                                                                                                                                |
@@ -212,6 +212,50 @@ patter of the drops striking the car (brown, a narrow band around 620 Hz) —
 both lifting with speed, because a car at 140 km/h is driving INTO the rain
 rather than being rained on.
 
+Rain does not fall at one rate, either. `RoadVoice.squall` rides the level of
+both layers (`SQUALL_SWING`), and it is not a decoration: it is the live wind
+vector read against the stage's mean (`squallOf` in `pwa/src/game/weather.ts`,
+shared with the sky). A squall IS a gust, so the sheet thickens at exactly the
+moment the car is shoved sideways and the drops on screen get denser — one
+gust, felt, seen and heard.
+
+### The gale
+
+`RoadVoice.gale` is the wind that is not the car's. The air layer above is the
+car pushing through still air and it is silent at a standstill; this is air
+moving on its own, and it is the only thing in the whole bed a PARKED car in a
+storm can still hear. Two layers, because a gale is a low roar with something
+thin on top of it: a brown roar under a lowpass that opens with the wind, and
+a narrow whistle that only a real blow has — so it comes in on the fourth
+power of the wind rather than the second. Like the rain, it plays past every
+early return in the grain: the weather does not stop while the car is in the
+air.
+
+### Thunder
+
+A strike is a **cue**, not a `GameEvent` — the simulation has no weather in it.
+`storm.ts` draws the flash, knows how far off it was, and calls back when the
+sound has finished the journey (343 m/s: a strike two kilometres out is six
+seconds of silence and then a roll). `soundForThunder` in `route.ts` decides
+what arrives, and the distance sets all four axes for a physical reason:
+
+- it picks the **sound**. Inside 1.2 km it is `thunder_near`, which leads with
+  the rip of the channel itself — broadband, no body, air being torn. Past
+  that it is `thunder_far`, which has **no onset at all**: the crack has been
+  smeared into a swell by kilometres of air, and an attack on distant thunder
+  is the tell that turns it into a drum in the next room.
+- **gain** falls, because the energy spreads;
+- **pitch** falls, and here that scales every filter with it — air absorbs
+  high frequencies per metre travelled, so a far strike is a DARKER one rather
+  than a quiet one;
+- **stretch** grows, because what makes distant thunder roll for seconds is
+  the same wavefront arriving off a dozen hillsides.
+
+Claps closer together than `THUNDER_GAP_S` are dropped (`audio/index.ts`): an
+active cell can put three strikes in the air inside a second, their sounds
+arrive from different distances, and stacking the rolls is mud the ear cannot
+separate anyway.
+
 The **scrub** is the drift, and it is the loudest thing in the bed. On gravel it
 is proportional to `car.slide`, the engine's own measure of how far past
 gripping the car is, so it IS the drift rather than an effect layered over one:
@@ -283,8 +327,10 @@ A self-contained page built from the repository's own code — the same synth,
 bank, sequencer and road grain that ship — with every sound on a button beside
 the description it was written against, both scores under the real sequencer
 with a per-voice mute, and the continuous bed under sliders for revs, load,
-speed, how hard it is cornering, how sideways it has gone, and what surface. It is the only honest way to judge a
-continuous sound, and the only way a reviewer can hear a change at all.
+speed, how hard it is cornering, how sideways it has gone, how wet the stage
+is, where the squall has got to, how much wind is in the air, and what surface.
+It is the only honest way to judge a continuous sound, and the only way a
+reviewer can hear a change at all.
 
 `tests/audio_test.ts` holds the rest: every event routes to a sound the bank
 actually has, no voice exceeds the mixing ceiling, the interface stays quieter
@@ -292,4 +338,6 @@ than the car, both scores flatten with every token a real note and come in
 inside their length bounds, the engine bed's grains tile without a hole and
 re-anchor rather than booking into the past after a stall, and the tyre bed
 stays quiet on a straight, quietest of all on tarmac, and sings there from the
-cornering load alone.
+cornering load alone. Thunder gets its own guards: a near strike cracks and a
+far one rolls with no onset anywhere in it, and distance takes a clap quieter,
+lower and longer.

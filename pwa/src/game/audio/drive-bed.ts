@@ -12,6 +12,8 @@
 
 import { TUNING, type GameState, type Weather } from "@engine";
 
+import { squallOf } from "../weather.ts";
+
 import type { Synth } from "../../lib/voice.ts";
 
 import { RUN_BANK } from "./bank.ts";
@@ -52,6 +54,11 @@ const LAT_LIMIT = 14;
  * stage billed as wet that sounds a shade damp is worse than no weather at
  * all. */
 const WETNESS: Record<Weather, number> = { clear: 0, rain: 0.6, storm: 1 };
+
+/** The wind speed at which the gale layer is as loud as it gets, m/s. A
+ * storm's mean runs to 11 and the gusts swing it half as far again, so this
+ * is the top of what the game can actually blow. */
+const GALE_FULL = 16;
 
 /** How quickly the smoothed signals follow, as time constants in seconds.
  * Written as taus rather than as per-frame fractions because a fraction is
@@ -172,6 +179,11 @@ export function createDriveBed(synth: Synth): DriveBed {
         // read rather than smoothed — nothing here can change under the
         // car the way the surface can.
         wet: WETNESS[state.env.weather],
+        // The weather's two live numbers. Both come off the wind, so the
+        // gust the car is being shoved by is the same gust the player
+        // HEARS arrive — see `weather.ts`.
+        squall: squallOf(state.wind, state.env.windSpeed),
+        gale: Math.min(1, Math.hypot(state.wind.x, state.wind.z) / GALE_FULL),
       },
       at,
     );

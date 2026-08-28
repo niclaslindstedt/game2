@@ -428,6 +428,8 @@ const CONTROLS = [
   ["slide", "Sideways", 0],
   ["wear", "Damage", 0],
   ["wet", "Rain", 0],
+  ["squall", "Squall", 0.5],
+  ["gale", "Wind", 0],
 ];
 const value = { surface: "gravel", airborne: false };
 const sliders = document.getElementById("sliders");
@@ -508,6 +510,8 @@ roadBtn.addEventListener("click", () => {
           sideways: -value.slide * 10,
           airborne: value.airborne,
           wet: value.wet,
+          squall: value.squall,
+          gale: value.gale,
         },
         nextAt,
       );

@@ -1,315 +1,40 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// The atmosphere: time of day and weather turned into light and sky. The
-// target look is Sega Rally's chunky saturated world sitting inside
-// Valheim's air — a gradient sky dome whose horizon glows around the sun,
-// colored distance fog, a sun (or moon) with a soft halo, stars, wind-blown
-// clouds, hemisphere + directional lighting over the Lambert world, storm
-// lightning, and headlights when the light is gone. Everything here is
-// presentation: it reads GameState (env, wind, car) and never writes it.
+// The atmosphere: the sky a run is driven under, built out of the colours
+// `sky.ts` works out for its conditions. The target look is Sega Rally's
+// chunky saturated world sitting inside Valheim's air — a gradient sky dome
+// whose horizon glows around the sun, colored distance fog, a sun (or moon)
+// with a soft halo, stars, a horizon of ridge silhouettes, and headlights
+// when the light is gone.
+//
+// Three neighbours own the parts that are their own craft: `sky.ts` decides
+// what colour everything is, `clouds.ts` draws what is in the sky (a
+// cumulus ring, or an overcast deck with scud tearing along under it), and
+// `storm.ts` owns the lightning and the thunder behind it. Everything here
+// is presentation: it reads GameState (env, wind, car) and never writes it.
 
 import * as THREE from "three";
-import type { GameState, RaceEnv, Season, TimeOfDay, Weather } from "@engine";
+import type { GameState, RaceEnv } from "@engine";
 
+import { createClouds } from "./clouds.ts";
+import { createRain } from "./rain.ts";
+import { createStorm } from "./storm.ts";
+import {
+  carTintFor,
+  dayLight,
+  DOME_RADIUS,
+  rainTone,
+  skyFor,
+  SUN_AZIMUTH,
+  sunDir,
+  type Preset,
+} from "./sky.ts";
+import { squallOf, type Clap } from "./weather.ts";
 import { glowTexture } from "./textures.ts";
 
-/** Where the sun/moon sits on the compass, radians — fixed for every stage
- * so dawn and dusk always have a lit side; stages bend enough that every
- * run crosses the light at some point. */
-const SUN_AZIMUTH = 0.9;
-const DOME_RADIUS = 560;
-
-type Preset = {
-  zenith: number;
-  horizon: number;
-  /** Horizon glow color around the sun's azimuth, and how far it spreads. */
-  glow: number;
-  glowStrength: number;
-  /** The directional "sun" (the moon at night). */
-  sun: number;
-  sunIntensity: number;
-  /** Radians above the horizon. */
-  sunElevation: number;
-  hemiSky: number;
-  hemiGround: number;
-  hemiIntensity: number;
-  fog: number;
-  fogNear: number;
-  fogFar: number;
-  /** The visible disc and its halo. */
-  disc: number;
-  discSize: number;
-  halo: number;
-  haloSize: number;
-  haloOpacity: number;
-  /** 0–1 star opacity. */
-  stars: number;
-  cloud: number;
-  cloudOpacity: number;
-  headlights: boolean;
-};
-
-// The four times of day, authored for clear weather. Dawn is Valheim's
-// misty peach morning; day is the bright arcade baseline; dusk is the Sega
-// Rally mountain sunset (magenta clouds over a purple sky); night is a
-// moonlit blue that stays readable.
-const PRESETS: Record<TimeOfDay, Preset> = {
-  dawn: {
-    zenith: 0x5f7fc0,
-    horizon: 0xffc9a0,
-    glow: 0xff9a58,
-    glowStrength: 1.1,
-    sun: 0xffc08a,
-    sunIntensity: 1.3,
-    sunElevation: 0.14,
-    hemiSky: 0xd8dcff,
-    hemiGround: 0x8a7a66,
-    hemiIntensity: 0.72,
-    fog: 0xf0c8a6,
-    fogNear: 70,
-    fogFar: 400,
-    disc: 0xffe0b8,
-    discSize: 26,
-    halo: 0xffa060,
-    haloSize: 170,
-    haloOpacity: 0.55,
-    stars: 0,
-    cloud: 0xffd9c0,
-    cloudOpacity: 1,
-    headlights: false,
-  },
-  day: {
-    zenith: 0x1f7fe0,
-    horizon: 0xbfe3ff,
-    glow: 0xfff3c8,
-    glowStrength: 0.35,
-    sun: 0xfff2d8,
-    sunIntensity: 1.5,
-    sunElevation: 0.95,
-    hemiSky: 0xffffff,
-    hemiGround: 0xb0a894,
-    hemiIntensity: 0.95,
-    fog: 0xbfe3ff,
-    fogNear: 160,
-    fogFar: 520,
-    disc: 0xfff8dc,
-    discSize: 18,
-    halo: 0xfff3c8,
-    haloSize: 110,
-    haloOpacity: 0.35,
-    stars: 0,
-    cloud: 0xffffff,
-    cloudOpacity: 1,
-    headlights: false,
-  },
-  dusk: {
-    zenith: 0x3a2f6e,
-    horizon: 0xff6a3d,
-    glow: 0xff4f5a,
-    glowStrength: 1.25,
-    sun: 0xff9663,
-    sunIntensity: 1.15,
-    sunElevation: 0.09,
-    hemiSky: 0xc9a0c8,
-    hemiGround: 0x6e5a4a,
-    hemiIntensity: 0.62,
-    fog: 0xe08a6a,
-    fogNear: 90,
-    fogFar: 430,
-    disc: 0xffb36a,
-    discSize: 30,
-    halo: 0xff5f46,
-    haloSize: 210,
-    haloOpacity: 0.6,
-    stars: 0.15,
-    cloud: 0xd86a8a,
-    cloudOpacity: 1,
-    headlights: true,
-  },
-  night: {
-    zenith: 0x0a1230,
-    horizon: 0x1d2d55,
-    glow: 0x9fb6ff,
-    glowStrength: 0.5,
-    sun: 0xb8ccff,
-    sunIntensity: 0.55,
-    sunElevation: 0.65,
-    hemiSky: 0x3a5580,
-    hemiGround: 0x1e2840,
-    hemiIntensity: 0.55,
-    fog: 0x101c38,
-    fogNear: 80,
-    fogFar: 380,
-    disc: 0xeef2ff,
-    discSize: 14,
-    halo: 0xb8ccff,
-    haloSize: 95,
-    haloOpacity: 0.4,
-    stars: 1,
-    cloud: 0x2b3a5a,
-    cloudOpacity: 0.85,
-    headlights: true,
-  },
-};
-
-/** Weather sits on top of the time of day: rain greys and closes the air,
- * a storm nearly shuts it — sun hidden, fog tight, everything cold. */
-function weathered(time: TimeOfDay, weather: Weather): Preset {
-  const p = { ...PRESETS[time] };
-  if (weather === "clear") return p;
-  const grey = weather === "rain" ? 0x9aa4b0 : 0x59616e;
-  const mix = weather === "rain" ? 0.45 : 0.62;
-  const dim = weather === "rain" ? 0.78 : 0.6;
-  const toward = (c: number): number =>
-    new THREE.Color(c).lerp(new THREE.Color(grey), mix).getHex();
-  p.zenith = toward(p.zenith);
-  p.horizon = toward(p.horizon);
-  p.glow = toward(p.glow);
-  p.glowStrength *= 0.4;
-  p.sun = toward(p.sun);
-  p.sunIntensity *= dim;
-  p.hemiSky = toward(p.hemiSky);
-  p.hemiGround = toward(p.hemiGround);
-  p.hemiIntensity *= weather === "rain" ? 0.9 : 0.8;
-  p.fog = toward(p.fog);
-  p.fogNear *= weather === "rain" ? 0.6 : 0.42;
-  p.fogFar *= weather === "rain" ? 0.62 : 0.46;
-  p.haloOpacity *= weather === "rain" ? 0.25 : 0;
-  p.discSize = weather === "rain" ? p.discSize * 0.7 : 0;
-  p.stars *= weather === "rain" ? 0.2 : 0;
-  p.cloud = toward(p.cloud);
-  return p;
-}
-
-// ── The seasons, as astronomy rather than art direction ───────────────────
-// The single biggest difference between a May stage and a September one is
-// not the leaves — it is where the sun IS. A taiga rally is run at around
-// 62°N (central Scandinavia), and the sun's noon elevation there is
-// 90° − latitude + declination. The declination runs from +23.44° at the
-// summer solstice down through zero at the equinoxes, so:
-//
-//   mid-May          90 − 62 + 17.5  ≈ 45° above the horizon at noon
-//   summer solstice  90 − 62 + 23.4  ≈ 51°
-//   late September   90 − 62 −  1.8  ≈ 26°
-//
-// Half the height, at the season the north's colour peaks. Everything else
-// here falls out of that one number: longer shadows, a dimmer and warmer
-// beam, and a colder, lower key over the whole landscape.
-
-/** Where the taiga is, degrees north. */
-const LATITUDE = 62;
-
-/** The sun's declination in the middle of each season, degrees — mid-May,
- * the June solstice, and the last week of September, which is when "ruska"
- * (the north's autumn colour) peaks. Winter is not a season of this biome:
- * the boreal forest under snow is the arctic one. */
-const DECLINATION: Record<Season, number> = { spring: 17.5, summer: 23.4, autumn: -1.8 };
-
-/** The sine of the noon solar elevation — which is both how high the sun
- * gets and, because irradiance on flat ground goes as the cosine of the
- * zenith angle, how much of its light lands there. */
-function noonSun(season: Season): number {
-  return Math.sin(((90 - LATITUDE + DECLINATION[season]) * Math.PI) / 180);
-}
-
-/** Rayleigh optical depth of the whole clear atmosphere at sea level, per
- * air mass, at the wavelengths the renderer's three channels stand for
- * (~650, 550 and 450 nm). Scattering goes as λ⁻⁴, so blue is stripped out
- * of a beam about four and a half times as fast as red — which is why the
- * sky is blue, why a low sun is orange, and why a September noon is warmer
- * than a June one before a single cloud is involved. */
-const RAYLEIGH = { r: 0.049, g: 0.097, b: 0.221 };
-
-/** The season sits UNDER the time of day: it decides how high the sun gets
- * at all, and the time of day then says where along that arc it is. So the
- * elevation is SCALED rather than shifted — a dawn sun sits on the horizon
- * in every season; it is the noon one that moves — and the extra air the
- * lower beam has to come through is charged once, at the season's own noon,
- * rather than compounded onto a dawn that is already the length of the
- * atmosphere. */
-function seasoned(p: Preset, season: Season): Preset {
-  if (season === "summer") return p;
-  const here = noonSun(season);
-  const peak = noonSun("summer");
-  p.sunElevation = Math.asin(Math.min(1, Math.sin(p.sunElevation) * (here / peak)));
-  // Air mass is 1/sin(elevation): the path a beam takes through the
-  // atmosphere, in units of the straight-up one.
-  const extraAir = 1 / here - 1 / peak;
-  const through = (depth: number): number => Math.exp(-depth * extraAir);
-  const tr = through(RAYLEIGH.r);
-  const tg = through(RAYLEIGH.g);
-  const tb = through(RAYLEIGH.b);
-  // What survives the trip, channel by channel. Applied to the sun's COLOR
-  // rather than its intensity because that is what it physically is: a beam
-  // that has lost more blue than red is both warmer and weaker, and one
-  // multiply says both.
-  const sun = new THREE.Color(p.sun);
-  p.sun = sun.setRGB(sun.r * tr, sun.g * tg, sun.b * tb).getHex();
-  const mix = (c: number, toward: number, t: number): number =>
-    new THREE.Color(c).lerp(new THREE.Color(toward), t).getHex();
-  if (season === "autumn") {
-    // September air in the north is dry and clean — the humidity and the
-    // pollen haze of high summer are gone — so the sky reads deeper and
-    // the view opens out, while the low sun warms the horizon band.
-    p.zenith = mix(p.zenith, 0x0f5fb0, 0.22);
-    p.horizon = mix(p.horizon, 0xffd9a8, 0.2);
-    p.fog = mix(p.fog, 0xe8d3ac, 0.18);
-    p.fogFar *= 1.08;
-    // Skylight is the other half of the key, and there is less of it under
-    // a low sun. The ground BOUNCES a different colour too: what comes back
-    // up off a straw-and-bilberry landscape is warm, not green.
-    p.hemiIntensity *= 0.88;
-    p.hemiGround = mix(p.hemiGround, 0xa8843f, 0.5);
-    p.cloud = mix(p.cloud, 0xffe6cc, 0.15);
-  } else {
-    // May: the air still carries haze and birch pollen, so the sky is
-    // milkier and the distance closes in a little.
-    p.zenith = mix(p.zenith, 0x8fb4dc, 0.16);
-    p.fog = mix(p.fog, 0xd8e2e8, 0.12);
-    p.fogFar *= 0.94;
-    p.hemiIntensity *= 0.97;
-    p.hemiGround = mix(p.hemiGround, 0x9a9060, 0.35);
-  }
-  return p;
-}
-
-/** How dark the car is ever allowed to get, as a fraction of its daylight
- * paint. Everything else in the world is lit by the scene's own lights and
- * simply goes where they go; the car cannot, and past this it stops reading
- * as a car and starts reading as a silhouette with tail lamps. */
-const CAR_FLOOR = 0.2;
-
-/** The light a preset actually puts on a horizontal surface: the sky half
- * of the hemisphere plus what is left of the sun at its elevation. Linear
- * light, because that is the space three.js multiplies colors in. */
-function keyLight(p: Preset): THREE.Color {
-  const sky = new THREE.Color(p.hemiSky).multiplyScalar(p.hemiIntensity);
-  const sun = new THREE.Color(p.sun).multiplyScalar(
-    p.sunIntensity * Math.max(0, Math.sin(p.sunElevation)),
-  );
-  return sky.add(sun);
-}
-
-/** What the failing light does to the CAR. The body is fullbright — its
- * shading is baked into vertex colors so the arcade look never pops — which
- * means no light in the scene can reach it: at dusk the whole world goes
- * down and the car alone stays at noon, sitting on the landscape like a
- * sticker. This is the light put back on it: the preset's OWN key, measured
- * against the day preset's, so the car is as dark as the ground it stands
- * on and any retune of the lighting (or of the weather that dims it) is
- * carried onto the paint for free. */
-function carTintFor(p: Preset): THREE.Color {
-  const here = keyLight(p);
-  const noon = keyLight(PRESETS.day);
-  const ratio = (a: number, b: number): number =>
-    CAR_FLOOR + (1 - CAR_FLOOR) * Math.min(1, b > 0 ? a / b : 1);
-  return new THREE.Color(ratio(here.r, noon.r), ratio(here.g, noon.g), ratio(here.b, noon.b));
-}
-
-/** Direction from the origin toward the sun for elevation `el`. */
-function sunDir(el: number): THREE.Vector3 {
-  const c = Math.cos(el);
-  return new THREE.Vector3(Math.sin(SUN_AZIMUTH) * c, Math.sin(el), Math.cos(SUN_AZIMUTH) * c);
-}
+/** What a lightning flash lights the world with while it lasts — a cold
+ * blue-white that owes nothing to the time of day, because a strike is the
+ * same colour at dawn as it is at midnight. */
+const FLASH_COLOR = 0xdfe9ff;
 
 export type Environment = {
   /** Re-color the whole atmosphere for the run's conditions. */
@@ -340,6 +65,17 @@ export type Environment = {
   carTint: () => THREE.Color;
   /** Whether the run's light is gone and the car has its lights on. */
   lampsLit: () => boolean;
+  /** How bright the sky is with lightning this instant, 0..1. */
+  flash: () => number;
+  /** …and which way the strike lighting it is coming from. */
+  flashFrom: () => THREE.Vector3;
+  /** The transient-FX budget, 0..1 — the video options' own scale. At
+   * nothing the rain comes off entirely, which is what the low setting
+   * promises. */
+  setEffects: (scale: number) => void;
+  /** What to do when a clap of thunder finally arrives. Set once; the
+   * environment holds no opinion about sound beyond WHEN. */
+  onThunder: (play: (clap: Clap) => void) => void;
   /** How filthy the car is, 0..1 — every beam fades under a caked lens. */
   setGrime: (level: number) => void;
   /** How far off the centerline the car's lamps sit, m — front and rear. */
@@ -359,7 +95,9 @@ export function createEnvironment(scene: THREE.Scene): Environment {
 
   // ── Sky dome ─────────────────────────────────────────────────────────────
   // Vertex-colored gradient, recolored per preset: horizon → zenith with a
-  // warm bleed around the sun's azimuth — the Valheim glow.
+  // warm bleed around the sun's azimuth — the Valheim glow. Under an
+  // overcast sky the deck covers most of it and what is left is the band
+  // above the horizon, which is exactly where a storm's light gets in.
   const domeGeo = new THREE.SphereGeometry(DOME_RADIUS, 32, 18);
   const domeColors = new Float32Array(domeGeo.getAttribute("position").count * 3);
   domeGeo.setAttribute("color", new THREE.BufferAttribute(domeColors, 3));
@@ -561,181 +299,36 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     const zenith = new THREE.Color(p.zenith);
     const rock = new THREE.Color();
     const colors = ridgeGeo.getAttribute("color") as THREE.BufferAttribute;
+    // The snow's lift is a vertex colour and nothing in the scene can dim
+    // it, so the sky's own light has to: a snowfield under a black storm is
+    // grey, and left at its clear-day value it is the brightest thing on
+    // the screen.
+    const lit = 0.35 + 0.65 * dayLight(p);
     for (let i = 0; i < ridgeShade.length; i++) {
+      const shade = 1 + (ridgeShade[i] - 1) * lit;
       rock
         .copy(fogColor)
         .lerp(zenith, ridgeHaze[i])
-        .multiplyScalar(ridgeTone[i] * ridgeShade[i]);
+        .multiplyScalar(ridgeTone[i] * shade);
       colors.setXYZ(i, rock.r, rock.g, rock.b);
     }
     colors.needsUpdate = true;
   };
 
-  // ── Clouds: cumulus clusters, not single blobs. Each cloud is a handful
-  // of overlapping puffs — big lumps in the middle, smaller ones at the
-  // ends, undersides in a shaded material and sliced flat — and every
-  // cloud rides the wind at its own pace and altitude.
-  //
-  // The whole sky is TWO draw calls: one instanced mesh for the lit puffs,
-  // one for the shaded undersides. A puff is rigid against its cluster, so
-  // it carries a fixed shape matrix and the wind ride below only rewrites
-  // the translation column.
-  const cloudGroup = new THREE.Group();
-  const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, fog: false });
-  const cloudBaseMat = new THREE.MeshBasicMaterial({
-    color: 0xdde4ee,
-    transparent: true,
-    fog: false,
-  });
-  const cloudGeo = new THREE.SphereGeometry(1, 8, 6);
-  /** One puff: where it sits inside its cluster (already turned by the
-   * cluster's own heading), the shape it holds there, and which instance
-   * of which mesh draws it. */
-  type Puff = { at: THREE.Vector3; shape: THREE.Matrix4; shaded: boolean; index: number };
-  type Cloud = {
-    angle: number;
-    radius: number;
-    speed: number;
-    y: number;
-    /** The sphere the whole cluster fits inside, m: the furthest lump
-     * along its axis plus that lump's own radius, rounded up. */
-    reach: number;
-    puffs: Puff[];
-  };
-  const cloudList: Cloud[] = [];
-  const CLOUDS = 22;
-  let litCount = 0;
-  let shadedCount = 0;
-  const scale = new THREE.Vector3();
-  const ORIGIN = new THREE.Vector3();
-  const SKY_UP = new THREE.Vector3(0, 1, 0);
-  for (let i = 0; i < CLOUDS; i++) {
-    // Whole-cluster scale spread, in metres — read against the ring radius
-    // below, which is what decides how big one looks.
-    const size = 40 + Math.random() * 74;
-    const puffCount = 4 + Math.floor(Math.random() * 4);
-    const puffs: Puff[] = [];
-    const cloudSpin = new THREE.Quaternion().setFromAxisAngle(SKY_UP, Math.random() * Math.PI * 2);
-    const place = (
-      shaded: boolean,
-      x: number,
-      y: number,
-      z: number,
-      sx: number,
-      sy: number,
-      sz: number,
-    ): void => {
-      puffs.push({
-        at: new THREE.Vector3(x, y, z).applyQuaternion(cloudSpin),
-        shape: new THREE.Matrix4().compose(ORIGIN, cloudSpin, scale.set(sx, sy, sz)),
-        shaded,
-        index: shaded ? shadedCount++ : litCount++,
-      });
-    };
-    for (let p = 0; p < puffCount; p++) {
-      // Lumps along a rough axis: tall near the middle, trailing off at
-      // the ends; every puff keeps a flat shared base line.
-      const along = (p / (puffCount - 1) - 0.5) * 2;
-      const bulk = 0.55 + (1 - Math.abs(along)) * 0.6 + Math.random() * 0.25;
-      const px = along * size * (0.8 + Math.random() * 0.25);
-      const pz = (Math.random() - 0.5) * size * 0.4;
-      const r = bulk * size * 0.52;
-      place(false, px, bulk * size * 0.3, pz, r, r * 0.72, r);
-      // The shaded underside: a flatter, darker puff tucked below, on the
-      // same axis line as the lump it sits under.
-      place(
-        true,
-        px,
-        bulk * size * 0.06,
-        pz,
-        bulk * size * 0.5,
-        bulk * size * 0.22,
-        bulk * size * 0.5,
-      );
-    }
-    // Where the cluster rides. A cloud is SKY: it has to sit beyond every
-    // ridge ring (which top out at 552 m) or it is an opaque white drum
-    // parked on the hills, hard-facetted and half of it sliced away by the
-    // mountain it is standing in. Out here it is farther than the horizon
-    // is, so a cloud the skyline cuts into is one that is genuinely behind
-    // it. Size scales with the distance, so the apparent size is the one
-    // the sky was authored at, and the drift is ANGULAR, so pushing the
-    // ring out does not change how fast the weather crosses the sky.
-    const radius = 620 + Math.random() * 520;
-    cloudList.push({
-      angle: Math.random() * Math.PI * 2,
-      radius,
-      speed: 0.6 + Math.random() * 0.9,
-      // Height as a fraction of the distance out, i.e. an elevation ANGLE
-      // (about 18° to 39°): clouds belong in a band ABOVE the skyline. A
-      // flat altitude puts the far ones on it, and the ridge ring opens a
-      // gap toward the sun, so anything lower than the mountains shows
-      // through it as a smudge sitting on the horizon.
-      y: radius * (0.32 + Math.random() * 0.48),
-      reach: size * 2,
-      puffs,
-    });
-  }
-  // Room for every puff there is; how many of them are DRAWN is set per
-  // frame from what survives the cull. Anything past that count is left
-  // alone rather than trusted to be empty — an instance nobody sets keeps
-  // the identity matrix, which is a unit sphere over the start line.
-  const cloudPuffs = new THREE.InstancedMesh(cloudGeo, cloudMat, litCount);
-  const cloudBases = new THREE.InstancedMesh(cloudGeo, cloudBaseMat, shadedCount);
-  // Culled per cluster in `placeClouds`, so three is told not to try: its
-  // own test is over the whole ring, which the camera stands inside and
-  // which therefore always answers yes.
-  for (const mesh of [cloudPuffs, cloudBases]) mesh.frustumCulled = false;
-  cloudGroup.add(cloudPuffs, cloudBases);
-  group.add(cloudGroup);
+  const clouds = createClouds();
+  group.add(clouds.group);
 
-  /** Slide every puff onto its cluster's current place on the ring, and
-   * write only the clusters the camera can actually see.
-   *
-   * Culling is done HERE rather than left to three, because two instanced
-   * meshes are two objects to it and both straddle the camera: the ring
-   * the clouds orbit is drawn around the camera's own position, so a
-   * bounding test on either mesh always answers yes. Compacting the
-   * visible clusters into the front of the buffer costs nothing — the
-   * matrices are rewritten every frame anyway — and halves the sky's
-   * triangles for the price of 22 sphere tests. */
-  const cloudFrustum = new THREE.Frustum();
-  const cloudView = new THREE.Matrix4();
-  const cloudWhere = new THREE.Sphere();
-  const placeClouds = (camera: THREE.Camera | null): void => {
-    if (camera) {
-      camera.updateMatrixWorld();
-      cloudFrustum.setFromProjectionMatrix(
-        cloudView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse),
-      );
-    }
-    let litAt = 0;
-    let shadedAt = 0;
-    for (const cloud of cloudList) {
-      const x = Math.sin(cloud.angle) * cloud.radius;
-      const z = Math.cos(cloud.angle) * cloud.radius;
-      if (camera) {
-        // The clouds hang in the environment group, which rides the camera
-        // in x and z, so a cluster's world place is that offset plus this.
-        cloudWhere.center.set(group.position.x + x, cloud.y, group.position.z + z);
-        cloudWhere.radius = cloud.reach;
-        if (!cloudFrustum.intersectsSphere(cloudWhere)) continue;
-      }
-      for (const puff of cloud.puffs) {
-        const m = puff.shape;
-        m.elements[12] = x + puff.at.x;
-        m.elements[13] = cloud.y + puff.at.y;
-        m.elements[14] = z + puff.at.z;
-        if (puff.shaded) cloudBases.setMatrixAt(shadedAt++, m);
-        else cloudPuffs.setMatrixAt(litAt++, m);
-      }
-    }
-    cloudPuffs.count = litAt;
-    cloudBases.count = shadedAt;
-    cloudPuffs.instanceMatrix.needsUpdate = true;
-    cloudBases.instanceMatrix.needsUpdate = true;
-  };
-  placeClouds(null);
+  // The rain is weather like the deck above it, so it belongs here — but it
+  // lives in the WORLD rather than on the camera-riding group: a drop is a
+  // few metres from the lens, where the sky's fixed-size shells are
+  // hundreds, and the sheet is drawn at the velocity the camera SEES it at.
+  const rain = createRain();
+  scene.add(rain.lines);
+  let effects = 1;
+
+  let playThunder: (clap: Clap) => void = () => {};
+  const storm = createStorm((clap) => playThunder(clap));
+  group.add(storm.group);
 
   // ── Lights ───────────────────────────────────────────────────────────────
   const hemi = new THREE.HemisphereLight(0xffffff, 0xb0a894, 0.95);
@@ -822,31 +415,30 @@ export function createEnvironment(scene: THREE.Scene): Environment {
    * rear a flat lens right above the wheel that throws the gravel. */
   const HEAD_GRIME = 0.45;
   const TAIL_GRIME = 0.6;
+  /** How much of a beam survives the daylight it is competing with. A car
+   * running lights under a black storm at noon still has daylight on the
+   * road, and a full-strength pool under it reads as night. */
+  const lampPower = (): number => 1 - 0.75 * dayLight(preset);
   const setGrime = (level: number): void => {
     grime = level < 0 ? 0 : level > 1 ? 1 : level;
   };
 
-  // Lightning: a broad cold bloom high on the dome, plus a light surge.
-  const boltMat = new THREE.MeshBasicMaterial({
-    map: glowMap,
-    transparent: true,
-    opacity: 0,
-    color: 0xdce8ff,
-    fog: false,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
+  let preset: Preset = skyFor({
+    timeOfDay: "day",
+    weather: "clear",
+    season: "summer",
+    windDir: 0,
+    windSpeed: 0,
+    gustPhase: 0,
   });
-  const bolt = new THREE.Mesh(new THREE.PlaneGeometry(420, 420), boltMat);
-  bolt.renderOrder = -2;
-  bolt.visible = false;
-  group.add(bolt);
-  const reducedMotion =
-    typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let flash = 0;
-  let nextBolt = 5;
-
-  let preset: Preset = PRESETS.day;
-  let stormy = false;
+  /** The stage's mean wind, m/s — what the live gust is read against to
+   * find the squall (see `squallOf`). */
+  let meanWind = 0;
+  /** How hard it is coming down this instant, 0..1. */
+  let rainNow = 0;
+  /** True while a lightning flash owns the key light, so the preset's own
+   * sun is put back exactly once when the flash is over. */
+  let struck = false;
   let rangeScale = 1;
   /** Set while a view drives the fog in meters instead of by preset. */
   let absolute: { near: number; far: number } | null = null;
@@ -870,34 +462,40 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   const setSky = (show: boolean): void => {
     dome.visible = show;
     stars.visible = show;
-    cloudGroup.visible = show;
+    clouds.setVisible(show);
+    storm.setVisible(show);
     ridges.visible = show;
-    disc.visible = show;
-    halo.visible = show;
+    disc.visible = show && preset.discSize > 0;
+    halo.visible = show && preset.haloOpacity > 0.01;
+  };
+
+  /** Put the preset's own key light back on the scene. */
+  const restLight = (): void => {
+    hemi.color.set(preset.hemiSky);
+    hemi.intensity = preset.hemiIntensity;
+    sunLight.color.set(preset.sun);
+    sunLight.intensity = preset.sunIntensity;
+    sunLight.position.copy(sunDir(preset.sunElevation)).multiplyScalar(300);
   };
 
   const apply = (env: RaceEnv): void => {
-    preset = seasoned(weathered(env.timeOfDay, env.weather), env.season);
-    stormy = env.weather === "storm";
+    preset = skyFor(env);
+    meanWind = env.windSpeed;
+    rainNow = preset.rain;
     paintDome(preset);
     background.set(preset.zenith);
     fog.color.set(preset.fog);
     applyRange();
-    hemi.color.set(preset.hemiSky);
     hemi.groundColor.set(preset.hemiGround);
-    hemi.intensity = preset.hemiIntensity;
-    sunLight.color.set(preset.sun);
-    sunLight.intensity = preset.sunIntensity;
-    const dir = sunDir(preset.sunElevation);
-    sunLight.position.copy(dir).multiplyScalar(300);
+    struck = false;
+    restLight();
     starMat.opacity = preset.stars;
+    rain.setTone(rainTone(preset));
     paintRidges(preset);
-    cloudMat.color.set(preset.cloud);
-    cloudMat.opacity = preset.cloudOpacity;
-    cloudBaseMat.color.set(preset.cloud).multiplyScalar(0.8);
-    cloudBaseMat.opacity = preset.cloudOpacity;
+    clouds.apply(preset);
+    storm.apply(preset);
     // The disc and halo park where the light comes from.
-    const sky = dir.clone().multiplyScalar(DOME_RADIUS * 0.86);
+    const sky = sunDir(preset.sunElevation).multiplyScalar(DOME_RADIUS * 0.86);
     disc.position.copy(sky);
     disc.scale.setScalar(preset.discSize || 0.001);
     disc.visible = preset.discSize > 0;
@@ -908,9 +506,6 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     haloMat.opacity = preset.haloOpacity;
     halo.visible = preset.haloOpacity > 0.01;
     for (const lamp of lamps) lamp.visible = preset.headlights;
-    flash = 0;
-    boltMat.opacity = 0;
-    bolt.visible = false;
   };
 
   const update = (state: GameState, camera: THREE.Camera, dt: number): void => {
@@ -918,17 +513,17 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     group.position.set(cam.x, 0, cam.z);
     disc.lookAt(cam);
     halo.lookAt(cam);
-    bolt.lookAt(cam);
+
+    // The weather breathes with the gust that carries it: the squall is the
+    // downdraught, so the sheet thickens exactly as the car is shoved.
+    const squall = squallOf(state.wind, meanWind);
+    rainNow = preset.rain * (0.65 + 0.5 * squall);
 
     // Clouds ride the wind, each at its own pace — the sky drifts as a
-    // population, never as one rigid ring.
+    // population, never as one rigid ring. Under the map view the sky is
+    // off, and placing puffs nobody draws is the one part worth skipping.
     const windSpeed = Math.hypot(state.wind.x, state.wind.z);
-    for (const cloud of cloudList) {
-      cloud.angle += (0.0035 + windSpeed * 0.0014) * cloud.speed * dt;
-    }
-    // Under the map view the sky is off, and placing puffs nobody draws is
-    // the one part of the ride worth skipping.
-    if (cloudGroup.visible) placeClouds(camera);
+    if (clouds.group.visible) clouds.update(windSpeed, dt, camera, group.position);
 
     // Headlights track the nose, tail lamps the tail. Each pair's beams carry
     // half of what the single light used to, so the road ahead is as bright
@@ -938,7 +533,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
       const fwd = { x: Math.sin(car.heading), z: Math.cos(car.heading) };
       const right = { x: fwd.z, z: -fwd.x };
       aimLamps(headlights, car, fwd, right, {
-        intensity: 150 * (1 - HEAD_GRIME * grime),
+        intensity: 150 * lampPower() * (1 - HEAD_GRIME * grime),
         spread: headSpread,
         from: 1.4,
         up: 0.8,
@@ -947,7 +542,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
         splay: 5,
       });
       aimLamps(taillights, car, fwd, right, {
-        intensity: 20 * (1 - TAIL_GRIME * grime),
+        intensity: 20 * lampPower() * (1 - TAIL_GRIME * grime),
         spread: tailSpread,
         from: -1.6,
         up: 0.55,
@@ -957,26 +552,30 @@ export function createEnvironment(scene: THREE.Scene): Environment {
       });
     }
 
-    // Thunder: a storm builds toward a strike, the strike floods the light
-    // and blooms on the dome, then decays. Reduced motion keeps the storm
-    // without the hard flash.
-    if (stormy) {
-      nextBolt -= dt;
-      if (nextBolt <= 0) {
-        nextBolt = 6 + Math.random() * 9;
-        flash = reducedMotion ? 0.25 : 1;
-        const a = Math.random() * Math.PI * 2;
-        bolt.position.set(Math.sin(a) * 300, 170 + Math.random() * 90, Math.cos(a) * 300);
-        bolt.visible = true;
-      }
-      if (flash > 0) {
-        flash = Math.max(0, flash - (reducedMotion ? 1.8 : 4.5) * dt);
-        const surge = flash * flash;
-        hemi.intensity = preset.hemiIntensity * (1 + surge * 2.2);
-        sunLight.intensity = preset.sunIntensity * (1 + surge * 1.6);
-        boltMat.opacity = surge * 0.9;
-        if (flash === 0) bolt.visible = false;
-      }
+    // The storm strikes on its own clock; what it hands back is how much
+    // light is on the world this instant.
+    storm.update(dt, camera);
+    const surge = storm.surge();
+    clouds.setFlash(surge);
+    // The sheet rides the squall, and a strike lights it before it lights
+    // anything else — the rain is the nearest thing to the lens there is.
+    rain.setIntensity(effects > 0 ? rainNow : 0);
+    rain.setFlash(surge);
+    rain.update(cam.x, cam.y, cam.z, state.wind.x, state.wind.z, dt);
+    if (surge > 0) {
+      // A strike is a light SOMEWHERE, not a lift of the one that is
+      // already there: the key swings round to the bolt for as long as it
+      // burns, which is what puts the far side of a tree in shadow and
+      // sells the flash as a place rather than as a screen wash.
+      struck = true;
+      hemi.color.set(FLASH_COLOR);
+      hemi.intensity = preset.hemiIntensity + 2.2 * surge;
+      sunLight.color.set(FLASH_COLOR);
+      sunLight.intensity = preset.sunIntensity + 1.8 * surge;
+      sunLight.position.copy(storm.from()).multiplyScalar(300);
+    } else if (struck) {
+      struck = false;
+      restLight();
     }
   };
 
@@ -991,11 +590,9 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     disc.geometry.dispose();
     discMat.dispose();
     halo.geometry.dispose();
-    bolt.geometry.dispose();
-    boltMat.dispose();
-    cloudGeo.dispose();
-    cloudMat.dispose();
-    cloudBaseMat.dispose();
+    clouds.dispose();
+    storm.dispose();
+    rain.dispose();
     for (const lamp of lamps) lamp.dispose();
     sunLight.dispose();
     hemi.dispose();
@@ -1017,6 +614,14 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     setSky,
     carTint: () => carTintFor(preset),
     lampsLit: () => preset.headlights,
+    flash: () => storm.surge(),
+    flashFrom: () => storm.from(),
+    setEffects: (scale) => {
+      effects = scale;
+    },
+    onThunder: (play) => {
+      playThunder = play;
+    },
     setGrime,
     setLampSpread,
     update,

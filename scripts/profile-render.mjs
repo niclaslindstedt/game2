@@ -184,6 +184,14 @@ await scene("driving", { start: "1", bot: "1" }, async (page) => {
   await atStageTime(page, 12);
 });
 
+// The same stage under a thunderstorm: the overcast deck, the scud tearing
+// along under it, the rain sheet and both pairs of lamps, all of which are
+// off on a clear day. The one scene that meters what the WEATHER costs.
+await scene("storm", { start: "1", bot: "1", weather: "storm" }, async (page) => {
+  await racing(page);
+  await atStageTime(page, 12);
+});
+
 // The start grid — every car, the gantry, the crowd and the start gate in
 // one frame, which is the densest the stage ever gets.
 await scene("grid", { start: "1" }, async (page) => {

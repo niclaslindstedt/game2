@@ -942,6 +942,12 @@ await capture(
   },
   { tod: "dusk" },
 );
+// The thunderstorm. Not the same stage dimmed: the acceptance test is a
+// BLACK sky with a lit strip under the cloud base at the horizon, scud
+// tearing along below it, the rain leaning at the pace the car is doing,
+// and both pairs of lamps on at noon because there is no daylight left to
+// drive by. Every sky in every weather is on one sheet at `make sky`; this
+// is the one that has to hold up in the real game.
 await capture(
   "shot-storm",
   { width: 1280, height: 720 },

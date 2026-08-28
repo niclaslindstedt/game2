@@ -16,28 +16,41 @@
 
 import type { GameEvent, GameState } from "@engine";
 
+import type { Clap } from "../weather.ts";
+
 import { RUN_BANK } from "./bank.ts";
 import { sfx } from "./bus.ts";
 import { createDriveBed, type DriveBed } from "./drive-bed.ts";
 import { playSound } from "./play.ts";
-import { soundForEvent } from "./route.ts";
+import { soundForEvent, soundForThunder } from "./route.ts";
 
 export { setAudioVolumes, unlockAudio } from "./bus.ts";
 export { RUN_BANK } from "./bank.ts";
-export { soundForEvent } from "./route.ts";
+export { soundForEvent, soundForThunder } from "./route.ts";
 
 export type RunAudio = {
   /** Translate one step's events into sound. */
   events: (list: readonly GameEvent[]) => void;
   /** Advance the continuous beds; call once per rendered frame. */
   frame: (state: GameState, dt: number) => void;
+  /** A strike's sound has finished its journey and arrived. Raised by the
+   * renderer, which is where the storm is simulated — the engine has no
+   * weather in it and never reports one. */
+  thunder: (clap: Clap) => void;
   /** A run ended or the player left it. */
   reset: () => void;
 };
 
+/** How close together two claps may land, s. An active cell can put three
+ * strikes in the air inside a second and their sounds arrive from different
+ * distances; stacking the rolls turns a storm into mud, and the ear cannot
+ * separate them anyway. */
+const THUNDER_GAP_S = 0.45;
+
 export function createRunAudio(): RunAudio {
   const bed: DriveBed = createDriveBed(sfx);
   let lastGear = 0;
+  let lastClap = -Infinity;
 
   return {
     events(list) {
@@ -60,9 +73,19 @@ export function createRunAudio(): RunAudio {
       bed.update(state, dt);
     },
 
+    thunder(clap) {
+      const now = sfx.now();
+      if (now === null) return;
+      if (now - lastClap < THUNDER_GAP_S) return;
+      lastClap = now;
+      const hit = soundForThunder(clap);
+      playSound(sfx, RUN_BANK, hit.id, hit.shape);
+    },
+
     reset() {
       bed.reset();
       lastGear = 0;
+      lastClap = -Infinity;
     },
   };
 }

@@ -14,6 +14,8 @@
 
 import type { GameEvent } from "@engine";
 
+import type { Clap } from "../weather.ts";
+
 import type { PlayShape } from "./types.ts";
 
 /** Closing speeds that separate a brush from a hit from a wreck, m/s. The
@@ -164,4 +166,48 @@ export function soundForEvent(
     default:
       return null;
   }
+}
+
+/** How far a strike has to be before its crack has been smeared into a
+ * roll, m. Inside this the channel itself is audible; past it the air has
+ * eaten the transient and what arrives is the hills answering. */
+const CRACK_RANGE = 1200;
+/** …and how far a clap is still worth playing at all, m. */
+const ROLL_RANGE = 9000;
+
+/**
+ * WHAT A CLAP OF THUNDER SOUNDS LIKE FROM HERE.
+ *
+ * A CUE rather than an event: the simulation has no weather in it, so the
+ * strike is the app's own knowledge and this is where the opinion about it
+ * lives — the same job `soundForEvent` does, for the one moment nothing
+ * reports.
+ *
+ * Distance decides all four axes and each for a physical reason. It picks
+ * the SOUND (a crack has a transient, a roll has had its torn off by the
+ * air). It sets the GAIN, because the energy spreads. It drops the PITCH,
+ * which here moves every filter with it — high frequencies are absorbed by
+ * air per metre travelled, so a far strike is not a quiet near one, it is a
+ * darker one. And it STRETCHES, because what makes distant thunder roll for
+ * seconds is the same wavefront arriving off a dozen hillsides.
+ */
+export function soundForThunder(clap: Clap): { id: string; shape: PlayShape } {
+  const pan = Math.max(-1, Math.min(1, clap.pan));
+  if (clap.distance < CRACK_RANGE) {
+    const close = 1 - ramp(clap.distance, 0, CRACK_RANGE);
+    return {
+      id: "thunder_near",
+      shape: {
+        gain: 0.6 + 0.4 * close,
+        pitch: 0.88 + 0.22 * close,
+        stretch: 1.15 - 0.15 * close,
+        pan,
+      },
+    };
+  }
+  const far = ramp(clap.distance, CRACK_RANGE, ROLL_RANGE);
+  return {
+    id: "thunder_far",
+    shape: { gain: 0.9 - 0.62 * far, pitch: 1.02 - 0.3 * far, stretch: 1 + 0.55 * far, pan },
+  };
 }

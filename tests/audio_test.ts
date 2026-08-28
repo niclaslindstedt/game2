@@ -34,7 +34,7 @@ import {
 } from "../pwa/src/game/audio/road-grain.ts";
 import { GRAIN_MS, noteHz, rpmAt } from "../pwa/src/game/audio/engine-bed.ts";
 import { playDef } from "../pwa/src/game/audio/play.ts";
-import { soundForEvent } from "../pwa/src/game/audio/route.ts";
+import { soundForEvent, soundForThunder } from "../pwa/src/game/audio/route.ts";
 import { UI_BANK } from "../pwa/src/game/audio/bank-ui.ts";
 import { MENU_TRACK } from "../pwa/src/game/audio/scores/menu.ts";
 import { TAIGA_TRACK } from "../pwa/src/game/audio/scores/taiga.ts";
@@ -187,6 +187,49 @@ describe("event routing", () => {
     const flight = soundForEvent({ type: "landing", airTime: 2.5, clean: true }, 0);
     expect(flight?.shape?.gain ?? 0).toBeGreaterThan(hop?.shape?.gain ?? 0);
     expect(flight?.shape?.pitch ?? 1).toBeLessThan(hop?.shape?.pitch ?? 1);
+  });
+});
+
+describe("thunder", () => {
+  const clap = (distance: number, pan = 0): ReturnType<typeof soundForThunder> =>
+    soundForThunder({ distance, pan });
+
+  it("cracks up close and rolls from a distance", () => {
+    // Two sounds rather than one with a volume knob, because air absorbs
+    // the transient far faster than the body: a near strike has a rip in
+    // it and a far one has had that rip smeared into a swell.
+    expect(clap(300).id).toBe("thunder_near");
+    expect(clap(6000).id).toBe("thunder_far");
+    for (const id of ["thunder_near", "thunder_far"]) {
+      expect(RUN_BANK[id], `${id} is not in the bank`).toBeDefined();
+    }
+  });
+
+  it("gives the roll no onset at all", () => {
+    // An attack on distant thunder is the tell that turns it into a drum
+    // in the next room. Every voice of the far clap swells in.
+    for (const voice of RUN_BANK.thunder_far.voices) {
+      expect(voice.attackMs ?? 0).toBeGreaterThan(200);
+    }
+    // …where the near one leads with something that does not.
+    expect(Math.min(...RUN_BANK.thunder_near.voices.map((v) => v.attackMs ?? 0))).toBeLessThan(10);
+  });
+
+  it("takes a far strike quieter, lower and longer", () => {
+    const near = clap(2000).shape;
+    const far = clap(8000).shape;
+    expect(far.gain ?? 1).toBeLessThan(near.gain ?? 1);
+    // The pitch scales every filter with it, which is what air absorption
+    // physically does: a distant strike is a DARKER one, not a quiet one.
+    expect(far.pitch ?? 1).toBeLessThan(near.pitch ?? 1);
+    // And it rolls, because the same wavefront arrives off a dozen hills.
+    expect(far.stretch ?? 1).toBeGreaterThan(near.stretch ?? 1);
+  });
+
+  it("puts the strike where it happened, and never off the stage", () => {
+    expect(clap(500, -0.8).shape.pan).toBeCloseTo(-0.8, 5);
+    expect(clap(500, 4).shape.pan).toBe(1);
+    expect(clap(5000, -4).shape.pan).toBe(-1);
   });
 });
 
@@ -444,9 +487,14 @@ describe("the road bed", () => {
     const state = rolling();
     state.car.airborne = true;
     bed.update(state, 1 / 60);
-    // The wind is a highpass grain; the tyres are the bandpass ones. Airborne
-    // there must be no bandpass roll at all — the silence IS the jump.
-    const rolls = rec.noises.filter((n) => n.filter?.type === "bandpass" && (n.holdMs ?? 0) > 0);
+    // The wind is a highpass grain; the tyres are the BROAD bandpass one —
+    // every surface's roar sits under q 1, and every other bandpass in the
+    // grain (the rain's patter, the gale's whistle, the tarmac squeal) is
+    // narrower than that. Airborne there must be no roll at all: the
+    // silence IS the jump, and the weather is not part of it.
+    const rolls = rec.noises.filter(
+      (n) => n.filter?.type === "bandpass" && (n.filter.q ?? 0) < 1 && (n.holdMs ?? 0) > 0,
+    );
     const wind = rec.noises.filter((n) => n.filter?.type === "highpass" && (n.holdMs ?? 0) > 0);
     expect(rolls.length).toBe(0);
     expect(wind.length).toBeGreaterThan(0);
@@ -501,6 +549,8 @@ describe("the tyres", () => {
     sideways: 0,
     airborne: false,
     wet: 0,
+    squall: 0.5,
+    gale: 0,
   };
 
   /** The summed level of the ROLLING bed — the surface's roar (a still
@@ -580,6 +630,8 @@ describe("the weather", () => {
     sideways: 0,
     airborne: false,
     wet: 0,
+    squall: 0.5,
+    gale: 0,
   };
   const voices = (voice: Partial<RoadVoice>): ReturnType<typeof recorder> => {
     const rec = recorder();

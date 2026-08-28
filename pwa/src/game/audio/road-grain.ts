@@ -12,6 +12,8 @@
 //   WIND     how fast the air is going past, which is what sells speed
 //   SCRUB    the drift: a tyre asked to go somewhere it is not pointing
 //   RAIN     the weather, which is heard whatever the wheels are doing
+//   GALE     the wind that is not the car's — the only layer here a PARKED
+//            car in a storm can still hear
 //
 // AND WATER CHANGES WHAT A SURFACE IS, rather than merely adding to it. A
 // soaked gravel road is not a gravel road with rain over the top: the
@@ -177,6 +179,20 @@ function surfaceUnder(surface: string, wet: number): SurfaceVoice {
  * makes weather feel like part of the driving rather than a backdrop. */
 const RAIN = { sheet: 0.0115, patter: 0.0075, pace: 0.55 };
 
+/** How much of the rain's level the squall owns. Rain does not fall at one
+ * rate: it comes in waves, and a sheet that holds a constant level for two
+ * minutes is the same fault as a tyre bed that is as loud on the straight
+ * as it is in the corner — the loudest thing in the mix, saying nothing. */
+const SQUALL_SWING = 0.45;
+
+/** THE WIND THAT IS NOT THE CAR'S. The air layer above is the car pushing
+ * through still air and it is silent at a standstill; this is air that is
+ * moving on its own, and it is most of what a storm sounds like when the
+ * player lifts. Two layers, because a gale is a low roar with something
+ * thin on top of it — the roar is the mass of air, the whistle is what it
+ * is being dragged over. */
+const GALE = { roar: 0.014, whistle: 0.005 };
+
 /** The road under one car at one instant. Everything the grain needs, and
  * nothing about where any of it came from. */
 export type RoadVoice = {
@@ -200,6 +216,13 @@ export type RoadVoice = {
   /** How wet the stage is, 0..1 — clear, rain, storm. It picks the surface
    * (see `WET_SURFACES`) and it is the weather's own voice. */
   wet: number;
+  /** How hard it is coming down this instant, 0..1 — the squall breathing
+   * around the stage's own rate. The ROAD does not dry out between gusts,
+   * so this rides the sheet's level and never `wet`. */
+  squall: number;
+  /** How much wind there is in the air, 0..1 of a full gale — the weather's
+   * other voice, and the only one a parked car can still hear. */
+  gale: number;
 };
 
 /**
@@ -209,7 +232,7 @@ export type RoadVoice = {
  * one grain to the next — noise has none to carry.
  */
 export function playRoadGrain(synth: Synth, voice: RoadVoice, at: number): void {
-  const { speed, air, surface, corner, slide, sideways, airborne, wet } = voice;
+  const { speed, air, surface, corner, slide, sideways, airborne, wet, squall, gale } = voice;
 
   // ── The air ────────────────────────────────────────────────────────────
   // Wind is the layer that actually sells pace: pitch says revs, noise says
@@ -233,7 +256,7 @@ export function playRoadGrain(synth: Synth, voice: RoadVoice, at: number): void 
   // when the tyres do. Only its urgency is the driver's — the faster the
   // car goes the harder it is being rained ON.
   if (wet > 0) {
-    const drive = 1 + RAIN.pace * air;
+    const drive = (1 + RAIN.pace * air) * (1 - SQUALL_SWING + 2 * SQUALL_SWING * squall);
     // The sheet: everything falling everywhere, up above the tyres where
     // nothing else in the mix lives.
     synth.noise({
@@ -257,6 +280,35 @@ export function playRoadGrain(synth: Synth, voice: RoadVoice, at: number): void 
       color: "brown",
       volume: RAIN.patter * wet * drive,
       filter: { type: "bandpass", frequency: 620 + 260 * air, q: 1.1 },
+    });
+  }
+
+  // ── The gale ───────────────────────────────────────────────────────────
+  // Wind the car is not making. Squared, like the car's own air layer,
+  // because the ear reads air noise as roughly its power — and it plays
+  // through every early return below for the same reason the rain does: a
+  // storm does not stop while the car is in the air, and it is the one
+  // thing still audible when the player has stopped altogether.
+  if (gale > 0) {
+    synth.noise({
+      at,
+      durationMs: NOISE_LIFE_MS,
+      attackMs: NOISE_ATTACK_MS,
+      holdMs: NOISE_HOLD_MS,
+      color: "brown",
+      volume: GALE.roar * gale * gale,
+      filter: { type: "lowpass", frequency: 300 + 500 * gale, q: 1.3 },
+    });
+    // The thin edge on top: only a real blow has it, so it comes in on the
+    // fourth power rather than the second.
+    synth.noise({
+      at,
+      durationMs: NOISE_LIFE_MS,
+      attackMs: NOISE_ATTACK_MS,
+      holdMs: NOISE_HOLD_MS,
+      color: "pink",
+      volume: GALE.whistle * Math.pow(gale, 4),
+      filter: { type: "bandpass", frequency: 1150 + 700 * gale, q: 2.4 },
     });
   }
 

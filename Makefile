@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim track cars liveries field audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim track cars liveries field sky audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
 
 build:
 	npm run build
@@ -59,6 +59,14 @@ liveries:
 # field of strangers reads as fourteen teams.
 field:
 	npm run cars -- --field --out field
+
+# Render the sky to a labeled contact sheet (previews/sky.png): every
+# weather against every time of day, plus a caught lightning strike. The
+# review surface for anything about the atmosphere — a run screenshot can
+# only ever show one sky, and a flash lasts a fifth of a second. Same
+# Chromium requirements as `screenshots`.
+sky:
+	npm run sky
 
 # Build the audio review page: every sound in the bank on a button, both
 # scores under the real sequencer with per-voice mutes, and the continuous

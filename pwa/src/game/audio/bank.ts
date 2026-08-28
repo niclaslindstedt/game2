@@ -830,6 +830,116 @@ export const RUN_BANK: SoundBank = {
     ],
   },
 
+  // ── The sky ──────────────────────────────────────────────────────────────
+  // Thunder is the one sound in the bank with a JOURNEY behind it. Air
+  // absorbs high frequencies far faster than low ones and the ground and
+  // the hills scatter what is left, so what a strike sounds like is almost
+  // entirely a question of how far away it happened — which is why there
+  // are two of these rather than one with a volume knob.
+
+  thunder_near: {
+    description:
+      "A strike close enough to be frightening. The rip of the channel itself " +
+      "first — broadband, no body, the sound of air being torn — then the " +
+      "crack of it collapsing back in, a sub that drops away underneath, and " +
+      "only then the roll, arriving late off the hills. Near the crash in " +
+      "size, because a bolt inside a kilometre IS the loudest thing on the " +
+      "stage and a polite one is worse than none.",
+    voices: [
+      {
+        call: "noise",
+        durationMs: 90,
+        volume: 0.055,
+        color: "white",
+        filter: { type: "highpass", frequency: 1800, to: 500 },
+      },
+      {
+        call: "noise",
+        durationMs: 700,
+        volume: 0.08,
+        color: "brown",
+        attackMs: 4,
+        holdMs: 60,
+        echo: 0.3,
+        filter: { type: "lowpass", frequency: 1600, to: 200 },
+      },
+      {
+        call: "tone",
+        type: "sine",
+        from: 62,
+        to: 27,
+        durationMs: 900,
+        volume: 0.06,
+        attackMs: 8,
+        holdMs: 120,
+      },
+      {
+        call: "noise",
+        durationMs: 2800,
+        volume: 0.055,
+        color: "brown",
+        delayMs: 180,
+        attackMs: 220,
+        holdMs: 500,
+        echo: 0.55,
+        filter: { type: "lowpass", frequency: 260, to: 80 },
+      },
+      {
+        call: "noise",
+        durationMs: 1800,
+        volume: 0.03,
+        color: "brown",
+        delayMs: 900,
+        attackMs: 400,
+        holdMs: 300,
+        echo: 0.6,
+        filter: { type: "lowpass", frequency: 170, to: 65 },
+      },
+    ],
+  },
+
+  thunder_far: {
+    description:
+      "A strike out in the weather somewhere. NO transient at all — the crack " +
+      "has been smeared into a swell by kilometres of air, and an attack on " +
+      "this is the tell that turns distant thunder into a nearby drum. Two " +
+      "brown swells, the second arriving off the hills behind the first, over " +
+      "a sub that never quite resolves into a note.",
+    voices: [
+      {
+        call: "noise",
+        durationMs: 3400,
+        volume: 0.05,
+        color: "brown",
+        attackMs: 700,
+        holdMs: 700,
+        echo: 0.6,
+        filter: { type: "lowpass", frequency: 220, to: 70 },
+      },
+      {
+        call: "noise",
+        durationMs: 2400,
+        volume: 0.03,
+        color: "brown",
+        delayMs: 800,
+        attackMs: 500,
+        holdMs: 400,
+        echo: 0.55,
+        filter: { type: "lowpass", frequency: 150, to: 60 },
+      },
+      {
+        call: "tone",
+        type: "sine",
+        from: 44,
+        to: 26,
+        durationMs: 2600,
+        volume: 0.028,
+        attackMs: 500,
+        holdMs: 600,
+      },
+    ],
+  },
+
   respawn: {
     description:
       "Put back on the road. A reverse swell — pink air pulled inward through a " +
