@@ -2174,10 +2174,30 @@ body {
   color: var(--hud-good);
 }
 
-/* R29 — the best RESULT on the stage, above the best time. A campaign box
-   is cleared by beating the field, so the placing is the headline and the
-   clock is what you chase once it is. It takes the bottom of the box (and
-   the time's own `margin-top` with it) whenever it is there. */
+/* R30 — what the stage is paying the location's table, at the bottom of the
+   box above the two bests: the points are what the next box is locked to, so
+   they lead. Whichever of the three is FIRST takes the bottom of the box (and
+   the others' `margin-top` with it). */
+.menu-level-points {
+  margin-top: auto;
+  font-size: clamp(0.6rem, 2.1vmin, 0.8rem);
+  letter-spacing: 0.12em;
+  color: rgb(255 255 255 / 72%);
+}
+
+.menu-level-points-win {
+  color: var(--hud-good);
+}
+
+.menu-level-points + .menu-level-place,
+.menu-level-points + .menu-level-best {
+  margin-top: 0;
+  opacity: 0.8;
+}
+
+/* R29 — the best RESULT on the stage, under the points. A campaign box is
+   cleared by beating the field, so the placing is what the box reports and
+   the clock is what you chase once it is. */
 .menu-level-place {
   margin-top: auto;
   font-size: clamp(0.6rem, 2.1vmin, 0.8rem);
@@ -3710,7 +3730,7 @@ a.menu-version:focus-visible {
 
 /* ── R30: the result sheet ────────────────────────────────────────────────
    Fifteen rows of place, crew, time and points — the stage's classification
-   on the results card, and the location's championship table in the menu.
+   on the results card, and the location's standings table in the menu.
    One layout for both, because they are the same table asked at two
    different moments, and a player who has learned to read one has learned
    to read the other.
@@ -3744,7 +3764,7 @@ a.menu-version:focus-visible {
 
 /* Without a stage in view there are no times and no stage points — only what
    everybody has. */
-.results-table.is-season .results-row {
+.results-table.is-standings .results-row {
   grid-template-columns: 1.8em 1fr 3.6em;
 }
 
@@ -3867,8 +3887,8 @@ a.menu-version:focus-visible {
   color: var(--hud-bad);
 }
 
-/* …and the season those points went into. */
-.hud-finish-season {
+/* …and the location table those points went onto. */
+.hud-finish-standings {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3876,7 +3896,7 @@ a.menu-version:focus-visible {
   margin-top: 0.5rem;
 }
 
-.hud-finish-season-line {
+.hud-finish-standings-line {
   font-size: clamp(0.6rem, 2vmin, 0.85rem);
   letter-spacing: 0.1em;
   font-variant-numeric: tabular-nums;
@@ -3887,11 +3907,11 @@ a.menu-version:focus-visible {
   cursor: default;
 }
 
-/* ── R30: the season panel on a location page ───────────────────────────
-   What the player is actually playing for once the stages are open: where
-   the table stands, the way back into it, and the way to start it again. */
+/* ── R30: the standings panel on a location page ────────────────────────
+   What the stage boxes above it are being driven for: where the table
+   stands, the way back into it, and the way to drive it all again. */
 
-.menu-season {
+.menu-standings {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -3902,7 +3922,7 @@ a.menu-version:focus-visible {
   background: rgb(255 255 255 / 8%);
 }
 
-.menu-season-line {
+.menu-standings-line {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
@@ -3910,45 +3930,45 @@ a.menu-version:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-.menu-season-place {
+.menu-standings-place {
   font-size: clamp(0.85rem, 3vmin, 1.2rem);
   letter-spacing: 0.08em;
 }
 
-.menu-season-won {
+.menu-standings-won {
   color: var(--hud-good);
 }
 
-.menu-season-points {
+.menu-standings-points {
   font-size: clamp(0.85rem, 3vmin, 1.2rem);
   color: var(--hud-good);
 }
 
-.menu-season-run {
+.menu-standings-run {
   margin-left: auto;
   font-size: clamp(0.55rem, 1.8vmin, 0.72rem);
   letter-spacing: 0.12em;
   opacity: 0.72;
 }
 
-.menu-season-hint {
+.menu-standings-hint {
   font-size: clamp(0.55rem, 1.8vmin, 0.72rem);
   letter-spacing: 0.1em;
   opacity: 0.75;
 }
 
-.menu-season-acts {
+.menu-standings-acts {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
 }
 
-.menu-season-go {
+.menu-standings-go {
   border-color: var(--hud-good);
   color: var(--hud-good);
 }
 
-/* A country still behind its championship: the tile is a wall with the
+/* A country still behind the table before it: the tile is a wall with the
    reason written on it, not a button. */
 .menu-location-locked {
   cursor: default;

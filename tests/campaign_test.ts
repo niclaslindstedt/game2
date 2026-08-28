@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// R30 — THE CHAMPIONSHIP: three points for a stage win, two for second, one
-// for third, and the next country behind the table those points build.
+// R29/R30 — THE CAMPAIGN, PLAYED FOR POINTS: three for a stage win, two for
+// second, one for third, the next STAGE behind a podium and the next COUNTRY
+// behind the table those points build.
 //
-// Five things are worth a guard here, and every one of them is a lock that
+// Six things are worth a guard here, and every one of them is a lock that
 // fails SILENTLY — either it hands a player a country they did not earn, or
 // it takes one they did:
 //
@@ -16,32 +17,39 @@
 //     so the order has to be the times — with the crews who never made the
 //     line behind everybody who did.
 //   * A LADDER THAT LEAKS. The stage after this one is a podium away; the
-//     COUNTRY after this one is a championship away, and the results card
+//     COUNTRY after this one is the whole table away, and the results card
 //     must not offer what the campaign menu locks.
 //   * A SETTLE THAT NEVER SETTLES. The stragglers are run home off the
 //     results card's frames, so a bot that is never coming home has to be
 //     retired rather than waited for.
+//   * A SAVE THAT LOSES A LADDER. The points used to be a second game played
+//     on top of the campaign, in a storage key of its own. A player mid-way
+//     through one must come back to every stage they had opened and every
+//     point they had scored.
 
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { RIVALS, compileStage } from "@engine";
 
-import { LOCATIONS } from "../pwa/src/game/campaign.ts";
 import {
+  LOCATIONS,
+  PODIUM,
   POINTS,
-  championshipWon,
+  continueAt,
   ladderAfter,
-  loadChampionship,
+  levelCleared,
+  loadProgress,
+  locationComplete,
+  locationStandings,
   locationUnlocked,
+  locationWon,
   playerStanding,
   pointsFor,
-  recordStage,
-  resetSeason,
-  seasonComplete,
-  seasonContinue,
-  standings,
-  winEverything,
-} from "../pwa/src/game/championship.ts";
+  recordFinish,
+  recordResult,
+  resetPoints,
+  unlockEverything,
+} from "../pwa/src/game/campaign.ts";
 import {
   PLAYER_ID,
   createField,
@@ -85,10 +93,10 @@ function sheet(order: string[]): ClassRow[] {
 }
 
 /** Give the player `place` on every stage of the Taiga. */
-function driveSeason(place: number): void {
+function driveLocation(place: number): void {
   const ahead = RIVALS.slice(0, place - 1).map((crew) => crew.id);
   for (const level of TAIGA.levels) {
-    recordStage(TAIGA.id, level.id, sheet([...ahead, PLAYER_ID]));
+    recordResult(level.id, sheet([...ahead, PLAYER_ID]));
   }
 }
 
@@ -105,15 +113,15 @@ describe("what a place is worth", () => {
   });
 });
 
-describe("the season", () => {
+describe("the location's table", () => {
   beforeEach(() => {
     stubStorage();
   });
 
   it("adds a location's stages up for the whole field, not just the player", () => {
-    recordStage(TAIGA.id, TAIGA.levels[0].id, sheet(["frostbite", PLAYER_ID, "blink"]));
-    recordStage(TAIGA.id, TAIGA.levels[1].id, sheet([PLAYER_ID, "frostbite"]));
-    const table = standings(TAIGA, loadChampionship());
+    recordResult(TAIGA.levels[0].id, sheet(["frostbite", PLAYER_ID, "blink"]));
+    recordResult(TAIGA.levels[1].id, sheet([PLAYER_ID, "frostbite"]));
+    const table = locationStandings(TAIGA, loadProgress());
     const points = new Map(table.map((row) => [row.id, row.points]));
     // Second and then first: two and three.
     expect(points.get(PLAYER_ID)).toBe(5);
@@ -122,7 +130,7 @@ describe("the season", () => {
     expect(points.get("frostbite")).toBe(5);
     // Third on both, once as named and once off the back of the sheet.
     expect(points.get("blink")).toBe(2);
-    expect(playerStanding(TAIGA, loadChampionship()).place).toBe(1);
+    expect(playerStanding(TAIGA, loadProgress()).place).toBe(1);
     // Everybody entered is on the table, scored or not.
     expect(table).toHaveLength(RIVALS.length + 1);
     expect(table.map((row) => row.place)).toEqual(table.map((_row, i) => i + 1));
@@ -131,19 +139,19 @@ describe("the season", () => {
   it("keeps the better run when a stage is driven again", () => {
     const level = TAIGA.levels[0];
     const points = (id: string): number =>
-      standings(TAIGA, loadChampionship()).find((row) => row.id === id)?.points ?? 0;
-    recordStage(TAIGA.id, level.id, sheet(["frostbite", PLAYER_ID]));
+      locationStandings(TAIGA, loadProgress()).find((row) => row.id === id)?.points ?? 0;
+    recordResult(level.id, sheet(["frostbite", PLAYER_ID]));
     expect(points(PLAYER_ID)).toBe(2);
     expect(points("frostbite")).toBe(3);
 
     // A lap driven for fun, gone badly. It must not cost a single point —
     // and the field's own points from that afternoon go nowhere either.
-    recordStage(TAIGA.id, level.id, sheet(["frostbite", "blink", "scrapper", PLAYER_ID]));
+    recordResult(level.id, sheet(["frostbite", "blink", "scrapper", PLAYER_ID]));
     expect(points(PLAYER_ID)).toBe(2);
     expect(points("scrapper")).toBe(0);
 
     // …and a better one replaces the whole sheet, the field with it.
-    recordStage(TAIGA.id, level.id, sheet([PLAYER_ID, "frostbite"]));
+    recordResult(level.id, sheet([PLAYER_ID, "frostbite"]));
     expect(points(PLAYER_ID)).toBe(3);
     expect(points("frostbite")).toBe(2);
   });
@@ -151,12 +159,12 @@ describe("the season", () => {
   it("counts stage wins, and breaks a tie on them", () => {
     // Two wins for the player against a rival's three seconds: level on
     // points, and the wins decide it.
-    recordStage(TAIGA.id, TAIGA.levels[0].id, sheet([PLAYER_ID, "frostbite"]));
-    recordStage(TAIGA.id, TAIGA.levels[1].id, sheet([PLAYER_ID, "frostbite"]));
-    recordStage(TAIGA.id, TAIGA.levels[2].id, sheet(["blink", "scrapper", "frostbite"]));
-    recordStage(TAIGA.id, TAIGA.levels[3].id, sheet(["blink", "scrapper", "frostbite"]));
-    recordStage(TAIGA.id, TAIGA.levels[4].id, sheet(["blink", "scrapper", "frostbite"]));
-    const table = standings(TAIGA, loadChampionship());
+    recordResult(TAIGA.levels[0].id, sheet([PLAYER_ID, "frostbite"]));
+    recordResult(TAIGA.levels[1].id, sheet([PLAYER_ID, "frostbite"]));
+    recordResult(TAIGA.levels[2].id, sheet(["blink", "scrapper", "frostbite"]));
+    recordResult(TAIGA.levels[3].id, sheet(["blink", "scrapper", "frostbite"]));
+    recordResult(TAIGA.levels[4].id, sheet(["blink", "scrapper", "frostbite"]));
+    const table = locationStandings(TAIGA, loadProgress());
     const mine = table.find((row) => row.you);
     const rival = table.find((row) => row.id === "frostbite");
     expect(mine?.points).toBe(6);
@@ -168,55 +176,144 @@ describe("the season", () => {
   });
 
   it("is not won until every stage has been driven", () => {
-    const season = loadChampionship();
+    const progress = loadProgress();
     // An empty table is a fifteen-way tie the player leads on the tie-break,
     // and it must not open a thing.
-    expect(playerStanding(TAIGA, season).place).toBe(1);
-    expect(seasonComplete(TAIGA, season)).toBe(false);
-    expect(championshipWon(TAIGA, season)).toBe(false);
+    expect(playerStanding(TAIGA, progress).place).toBe(1);
+    expect(locationComplete(TAIGA, progress)).toBe(false);
+    expect(locationWon(TAIGA, progress)).toBe(false);
 
-    driveSeason(1);
-    expect(seasonComplete(TAIGA, loadChampionship())).toBe(true);
-    expect(championshipWon(TAIGA, loadChampionship())).toBe(true);
+    driveLocation(1);
+    expect(locationComplete(TAIGA, loadProgress())).toBe(true);
+    expect(locationWon(TAIGA, loadProgress())).toBe(true);
   });
 
-  it("is lost by a season of podiums that were never wins", () => {
-    driveSeason(3);
-    const table = standings(TAIGA, loadChampionship());
-    expect(seasonComplete(TAIGA, loadChampionship())).toBe(true);
-    expect(championshipWon(TAIGA, loadChampionship())).toBe(false);
+  it("is lost by a run of podiums that were never wins", () => {
+    driveLocation(3);
+    const table = locationStandings(TAIGA, loadProgress());
+    expect(locationComplete(TAIGA, loadProgress())).toBe(true);
+    expect(locationWon(TAIGA, loadProgress())).toBe(false);
     // Every stage cleared, and the crews who won them are up the road.
     expect(table.find((row) => row.you)?.points).toBe(TAIGA.levels.length * pointsFor(3));
     expect(table[0].you).toBe(false);
   });
 
-  it("picks the season back up: forward first, then back for the wins", () => {
-    const progress = { finished: [], cleared: [], best: {}, places: {} };
+  it("picks the campaign back up: forward first, then back for the wins", () => {
     // Nothing driven: the first stage, which is the only one open.
-    expect(seasonContinue(TAIGA, progress, loadChampionship())?.id).toBe(TAIGA.levels[0].id);
+    expect(continueAt(TAIGA, loadProgress())?.id).toBe(TAIGA.levels[0].id);
 
     // Driven, but only third — the stage is cleared, so the next one is open
-    // and forward is where the season goes.
-    recordStage(TAIGA.id, TAIGA.levels[0].id, sheet(["frostbite", "blink", PLAYER_ID]));
-    const cleared = { ...progress, cleared: [TAIGA.levels[0].id] };
-    expect(seasonContinue(TAIGA, cleared, loadChampionship())?.id).toBe(TAIGA.levels[1].id);
+    // and forward is where the campaign goes.
+    recordResult(TAIGA.levels[0].id, sheet(["frostbite", "blink", PLAYER_ID]));
+    expect(levelCleared(loadProgress(), TAIGA.levels[0].id)).toBe(true);
+    expect(continueAt(TAIGA, loadProgress())?.id).toBe(TAIGA.levels[1].id);
 
-    // …and once the open stages have all been driven, back to the first one
-    // that is not a WIN.
-    recordStage(TAIGA.id, TAIGA.levels[1].id, sheet([PLAYER_ID]));
-    expect(seasonContinue(TAIGA, cleared, loadChampionship())?.id).toBe(TAIGA.levels[0].id);
+    // Won, which opens the stage after it — and forward is still forward.
+    recordResult(TAIGA.levels[1].id, sheet([PLAYER_ID]));
+    expect(continueAt(TAIGA, loadProgress())?.id).toBe(TAIGA.levels[2].id);
+
+    // …and once every OPEN stage has been driven — this one outside the
+    // podium, so nothing further opens — back to the first stage that is not
+    // a WIN, which is the third place standing on stage one.
+    recordResult(TAIGA.levels[2].id, sheet(["frostbite", "blink", "scrapper", PLAYER_ID]));
+    expect(continueAt(TAIGA, loadProgress())?.id).toBe(TAIGA.levels[0].id);
   });
 
   it("starts again on a reset, and the developer unlock wins the lot", () => {
-    driveSeason(1);
-    expect(championshipWon(TAIGA, resetSeason(TAIGA.id))).toBe(false);
-    expect(playerStanding(TAIGA, loadChampionship()).points).toBe(0);
+    driveLocation(1);
+    recordFinish(TAIGA.levels[0].id, 100, { place: 1, difficulty: "hard" });
+    expect(levelCleared(loadProgress(), TAIGA.levels[0].id)).toBe(true);
+    expect(locationWon(TAIGA, resetPoints(TAIGA.id))).toBe(false);
+    expect(playerStanding(TAIGA, loadProgress()).points).toBe(0);
+    // The points ARE the ladder now, so a reset shuts it behind the first
+    // stage — but a road whose finish line has been seen cannot be un-seen,
+    // and it stays open in the time trial.
+    expect(levelCleared(loadProgress(), TAIGA.levels[0].id)).toBe(false);
+    expect(loadProgress().finished).toContain(TAIGA.levels[0].id);
+    expect(loadProgress().best[TAIGA.levels[0].id]).toBe(100);
 
-    const won = winEverything();
+    const won = unlockEverything();
     for (const location of LOCATIONS) {
-      expect(championshipWon(location, won)).toBe(true);
+      expect(locationWon(location, won)).toBe(true);
       expect(locationUnlocked(location, won)).toBe(true);
     }
+  });
+});
+
+describe("the line and the classification", () => {
+  beforeEach(() => {
+    stubStorage();
+  });
+
+  it("clears the stage at the line, then fills the field in behind it", () => {
+    // The player is home and the crews behind them are still out on the road.
+    // The stage is already cleared — a player who presses straight on to the
+    // next one must not lose the stage they just won.
+    recordFinish(TAIGA.levels[0].id, 90, { place: 2, difficulty: "hard" });
+    expect(levelCleared(loadProgress(), TAIGA.levels[0].id)).toBe(true);
+    expect(playerStanding(TAIGA, loadProgress()).points).toBe(2);
+    expect(
+      locationStandings(TAIGA, loadProgress()).find((row) => row.id === "frostbite")?.points,
+    ).toBe(0);
+
+    // …and when the last car lands, the same run's sheet fills the rest of
+    // the field in without moving the player's own points.
+    recordResult(TAIGA.levels[0].id, sheet(["frostbite", PLAYER_ID]));
+    expect(playerStanding(TAIGA, loadProgress()).points).toBe(2);
+    expect(
+      locationStandings(TAIGA, loadProgress()).find((row) => row.id === "frostbite")?.points,
+    ).toBe(3);
+  });
+
+  it("never lets a worse afternoon overwrite the sheet that stands", () => {
+    recordResult(TAIGA.levels[0].id, sheet([PLAYER_ID, "frostbite"]));
+    // A lap for fun, gone badly — at the line and again when it settles.
+    recordFinish(TAIGA.levels[0].id, 80, { place: PODIUM + 1, difficulty: "hard" });
+    recordResult(TAIGA.levels[0].id, sheet(["blink", "scrapper", "frostbite", PLAYER_ID]));
+    const table = locationStandings(TAIGA, loadProgress());
+    expect(table.find((row) => row.you)?.points).toBe(3);
+    expect(table.find((row) => row.id === "frostbite")?.points).toBe(2);
+    // Second on the afternoon that was thrown away is worth nothing at all.
+    expect(table.find((row) => row.id === "scrapper")?.points).toBe(0);
+    // …and the best time still belongs to the run that set it.
+    expect(loadProgress().best[TAIGA.levels[0].id]).toBe(80);
+  });
+});
+
+describe("a save from before the campaign kept the points", () => {
+  beforeEach(() => {
+    stubStorage();
+  });
+
+  it("keeps every point of the old season, and every rung it had opened", () => {
+    localStorage.setItem(
+      "scandi-flick-campaign",
+      JSON.stringify({
+        finished: [TAIGA.levels[0].id, TAIGA.levels[1].id],
+        cleared: [TAIGA.levels[0].id, TAIGA.levels[1].id],
+        best: { [TAIGA.levels[0].id]: 90 },
+        places: {},
+      }),
+    );
+    localStorage.setItem(
+      "scandi-flick-championship",
+      JSON.stringify({ taiga: { [TAIGA.levels[0].id]: { [PLAYER_ID]: 3, frostbite: 2 } } }),
+    );
+    const progress = loadProgress();
+    // The stage the old season scored comes back exactly as it was scored…
+    expect(progress.points[TAIGA.levels[0].id]).toEqual({ [PLAYER_ID]: 3, frostbite: 2 });
+    // …and the one it only knew as CLEARED comes back as the thinnest podium
+    // there is: the rung stays open, and no win is invented.
+    expect(levelCleared(progress, TAIGA.levels[1].id)).toBe(true);
+    expect(progress.points[TAIGA.levels[1].id]).toEqual({ [PLAYER_ID]: POINTS[PODIUM - 1] });
+    expect(progress.best[TAIGA.levels[0].id]).toBe(90);
+    expect(playerStanding(TAIGA, progress).points).toBe(3 + POINTS[PODIUM - 1]);
+
+    // The next write folds the lot into the one record and retires the old
+    // key — two boards is exactly what this merge is here to end.
+    recordFinish(TAIGA.levels[2].id, 100, { place: 1, difficulty: "hard" });
+    expect(localStorage.getItem("scandi-flick-championship")).toBeNull();
+    expect(playerStanding(TAIGA, loadProgress()).points).toBe(3 + POINTS[PODIUM - 1] + 3);
   });
 });
 
@@ -226,16 +323,16 @@ describe("the ladder out of a country", () => {
   });
 
   it("opens the first location and holds every one behind it shut", () => {
-    const season = loadChampionship();
-    expect(locationUnlocked(LOCATIONS[0], season)).toBe(true);
+    const progress = loadProgress();
+    expect(locationUnlocked(LOCATIONS[0], progress)).toBe(true);
     for (const location of LOCATIONS.slice(1)) {
-      expect(locationUnlocked(location, season)).toBe(false);
+      expect(locationUnlocked(location, progress)).toBe(false);
     }
   });
 
   it("offers the next stage inside a location, and the end of the road at its tail", () => {
-    const season = loadChampionship();
-    const first = ladderAfter(TAIGA.levels[0].id, season);
+    const progress = loadProgress();
+    const first = ladderAfter(TAIGA.levels[0].id, progress);
     expect(first.kind).toBe("next");
     expect(first.kind === "next" && first.level.id).toBe(TAIGA.levels[1].id);
 
@@ -243,13 +340,13 @@ describe("the ladder out of a country", () => {
     // not. A location with a country behind it answers "locked" instead —
     // see the crossing test below.
     const last = TAIGA.levels[TAIGA.levels.length - 1];
-    const after = ladderAfter(last.id, season);
+    const after = ladderAfter(last.id, progress);
     expect(after.kind).toBe(LOCATIONS.length > 1 ? "locked" : "end");
     if (after.kind === "locked") {
       expect(after.location.id).toBe(TAIGA.id);
-      // …and the championship opens it.
-      driveSeason(1);
-      expect(ladderAfter(last.id, loadChampionship()).kind).toBe("next");
+      // …and topping the table opens it.
+      driveLocation(1);
+      expect(ladderAfter(last.id, loadProgress()).kind).toBe("next");
     }
   });
 });

@@ -303,7 +303,7 @@ export function placeAtFinish(field: RivalField, at: number): number {
 }
 
 /** What the classification calls the player's own run. A crew id nobody in
- * `RIVALS` can ever hold, because the championship files points under it. */
+ * `RIVALS` can ever hold, because the campaign files points under it. */
 export const PLAYER_ID = "you";
 
 /** One line of a stage's classification: who, in what, how long it took. */

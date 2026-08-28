@@ -93,8 +93,8 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | Input mapping                                               | `pwa/src/game/input.ts` (bindings in `settings.ts`)                                                                       |
 | Main menu pages / routing                                   | `pwa/src/game/main-menu.tsx` (+ `menu-roam`, `menu-options`, `menu-car`)                                                  |
 | The pre-race card: car, spec sheet, gearbox                 | `pwa/src/game/menu-car.tsx`; the numbers on it in `car-stats.ts` (derived from the catalog)                               |
-| Campaign stages, locations, unlocks                         | `pwa/src/game/campaign.ts`                                                                                                |
-| The points a stage pays, and what opens the next location   | `pwa/src/game/championship.ts`; the sheet is drawn by `results-table.tsx`                                                 |
+| Campaign stages, locations, points, unlocks                 | `pwa/src/game/campaign.ts` — one board: the points a stage pays ARE what opens the next stage and the next location       |
+| The standings sheet, drawn                                  | `pwa/src/game/results-table.tsx` (the results card's modal and the menu's own table)                                      |
 | The time trial's high score board and its initials          | `pwa/src/game/scores.ts` (storage) + `score-board.tsx` / `hud-initials.tsx`                                               |
 | The time trial's ghost: recording, replay, storage          | `pwa/src/game/ghost.ts`                                                                                                   |
 | Taking a picture, and what is stamped on it                 | `pwa/src/game/screenshots.ts` (the canvas work) + `shot-plan.ts` (size, name, where the mark goes — DOM-free)             |

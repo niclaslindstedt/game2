@@ -48,20 +48,20 @@ export type FinishStanding = {
   podium: boolean;
 };
 
-/** R30 — what the stage was worth, and what the season looks like after it.
- * Null on every run outside the campaign: nobody keeps points for a lap
- * driven against the clock. */
-export type FinishChampionship = {
-  /** The location whose season this stage belongs to. */
+/** R30 — what the stage was worth, and what the location's table looks like
+ * after it. Null on every run outside the campaign: nobody keeps points for a
+ * lap driven against the clock. */
+export type FinishStandings = {
+  /** The location whose table this stage belongs to. */
   location: string;
-  /** What the stage paid the player — null while the field is still out on
-   * the road and the order behind them is not settled. */
-  points: number | null;
+  /** What the stage paid the player. Known at the line: the place is the
+   * place whether or not the crews behind them are home yet. */
+  points: number;
   /** What an EARLIER, better run on this stage is still worth, when this one
    * was not good enough to replace it. Null when this run is the one that
    * counts. */
   kept: number | null;
-  /** Their season total and where it stands, once it is. */
+  /** Their location total and where it stands, once the sheet is in. */
   total: number;
   place: number;
   /** Level with somebody on points and wins both — a place taken on the
@@ -71,8 +71,9 @@ export type FinishChampionship = {
   /** The whole result sheet, for the table the card opens. Null until the
    * last car is home. */
   rows: readonly ResultRow[] | null;
-  /** Set when this result took the location's championship. */
-  champion: boolean;
+  /** Set when this result topped the location's table with every stage of it
+   * driven — the country behind this one is open. */
+  won: boolean;
 };
 
 export type FinishCardProps = {
@@ -94,11 +95,11 @@ export type FinishCardProps = {
   scores: FinishScores | null;
   /** The field's verdict — null on every run with nobody else entered. */
   standing: FinishStanding | null;
-  /** R30 — the points, and the season they go into. */
-  championship: FinishChampionship | null;
-  /** The championship standing between the player and the next country,
-   * named — set only when the ladder's next rung is in a location this
-   * season has not opened. */
+  /** R30 — the points, and the location table they go onto. */
+  campaign: FinishStandings | null;
+  /** The location whose table stands between the player and the next country,
+   * named — set only when the ladder's next rung is in a location the points
+   * have not opened yet. */
   locked: string | null;
 };
 
@@ -112,7 +113,7 @@ export function FinishCard({
   onRetire,
   scores,
   standing,
-  championship,
+  campaign,
   locked,
 }: FinishCardProps) {
   // The full result sheet is a DELIBERATE look: fifteen rows over the top of
@@ -136,13 +137,11 @@ export function FinishCard({
         {/* R30 — what the place was WORTH. It sits directly under the place
           because it is the same sentence: third is one point, and fourth is
           the reason the podium matters at all. */}
-        {championship && (
+        {campaign && (
           <div className="hud-finish-points">
-            <span className="hud-finish-pts">
-              {championship.points === null ? "···" : `+${championship.points}`}
-            </span>
+            <span className="hud-finish-pts">+{campaign.points}</span>
             <span className="hud-finish-pts-label">
-              {championship.points === 1 ? "POINT" : "POINTS"}
+              {campaign.points === 1 ? "POINT" : "POINTS"}
             </span>
           </div>
         )}
@@ -159,42 +158,40 @@ export function FinishCard({
             ))}
           </div>
         )}
-        {/* …and the season those points went into, with the whole field's sheet
+        {/* …and the table those points went onto, with the whole field's sheet
           one press away. While the last cars are still coming home the table
           is not a table yet, so the way into it is held shut rather than
           opening on a half-written one. */}
-        {championship && (
-          <div className="hud-finish-season">
-            <div className="hud-finish-season-line">
-              {championship.location.toUpperCase()} CHAMPIONSHIP — {championship.total} PTS,{" "}
-              {championship.tied ? "=" : ""}
-              {ordinal(championship.place)} OF {championship.of}
+        {campaign && (
+          <div className="hud-finish-standings">
+            <div className="hud-finish-standings-line">
+              {campaign.location.toUpperCase()} STANDINGS — {campaign.total} PTS,{" "}
+              {campaign.tied ? "=" : ""}
+              {ordinal(campaign.place)} OF {campaign.of}
             </div>
-            {championship.kept !== null && (
-              <div className="hud-finish-note">
-                YOUR BEST RUN HERE STANDS — {championship.kept} PTS
-              </div>
+            {campaign.kept !== null && (
+              <div className="hud-finish-note">YOUR BEST RUN HERE STANDS — {campaign.kept} PTS</div>
             )}
-            {championship.champion && <div className="hud-finish-record">CHAMPION</div>}
+            {campaign.won && (
+              <div className="hud-finish-record">{campaign.location.toUpperCase()} WON</div>
+            )}
             <button
               type="button"
               className="hud-pause-act hud-finish-sheet"
-              disabled={championship.rows === null}
+              disabled={campaign.rows === null}
               onClick={() => {
                 playUi("select");
                 setSheet(true);
               }}
             >
-              {championship.rows === null ? "CARS STILL OUT…" : "FULL RESULTS"}
+              {campaign.rows === null ? "CARS STILL OUT…" : "FULL RESULTS"}
             </button>
           </div>
         )}
         {/* The lock between this country and the next one, said where the
           player is looking for the way on. */}
         {locked && (
-          <div className="hud-finish-note">
-            WIN THE {locked.toUpperCase()} CHAMPIONSHIP TO GO ON
-          </div>
+          <div className="hud-finish-note">TOP THE {locked.toUpperCase()} TABLE TO GO ON</div>
         )}
         {scores && !scores.entering && (
           <ScoreBoard entries={scores.board} highlight={scores.place} />
@@ -247,11 +244,11 @@ export function FinishCard({
           </div>
         )}
       </div>
-      {sheet && championship?.rows && (
+      {sheet && campaign?.rows && (
         <ResultsModal
           title="CLASSIFICATION"
-          sub={`${championship.location.toUpperCase()} CHAMPIONSHIP — POINTS AFTER THIS STAGE`}
-          rows={championship.rows}
+          sub={`${campaign.location.toUpperCase()} STANDINGS — POINTS AFTER THIS STAGE`}
+          rows={campaign.rows}
           stage
           onClose={() => setSheet(false)}
         />

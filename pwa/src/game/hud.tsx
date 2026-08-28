@@ -13,7 +13,7 @@ import { createThumbGuard } from "./thumb-guard.ts";
 import { PODIUM as PODIUM_PLACES } from "./campaign.ts";
 import {
   FinishCard,
-  type FinishChampionship,
+  type FinishStandings,
   type FinishScores,
   type NextStage,
 } from "./hud-finish.tsx";
@@ -188,11 +188,11 @@ type HudProps = {
   /** The time trial's board, and the initials it is still waiting on. Null
    * on every other kind of run. */
   scores: FinishScores | null;
-  /** R30 — the stage's points and the season they went into. Null outside
-   * the campaign. */
-  championship: FinishChampionship | null;
-  /** The location whose championship stands between this run and the next
-   * country, or null when nothing does. */
+  /** R30 — the stage's points and the location table they went onto. Null
+   * outside the campaign. */
+  campaign: FinishStandings | null;
+  /** The location whose table stands between this run and the next country,
+   * or null when nothing does. */
   locked: string | null;
 };
 
@@ -992,7 +992,7 @@ export function Hud({
   onRetry,
   onRetire,
   scores,
-  championship,
+  campaign,
   locked,
 }: HudProps) {
   const { touch } = input;
@@ -1132,7 +1132,7 @@ export function Hud({
             onRetry={onRetry}
             onRetire={onRetire}
             scores={scores}
-            championship={championship}
+            campaign={campaign}
             locked={locked}
           />
         )}

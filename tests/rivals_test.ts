@@ -51,6 +51,7 @@ import {
 import {
   PODIUM,
   bestPlace,
+  levelCleared,
   loadProgress,
   recordFinish,
   unlockEverything,
@@ -391,11 +392,11 @@ describe("the podium rule", () => {
   it("opens the time trial on any finish, and the ladder only on a podium", () => {
     const missed = recordFinish(FIRST.id, 120, { place: PODIUM + 1, difficulty: "hard" });
     expect(missed.finished).toContain(FIRST.id);
-    expect(missed.cleared).not.toContain(FIRST.id);
+    expect(levelCleared(missed, FIRST.id)).toBe(false);
     expect(levelCompleted(FIRST, missed)).toBe(true);
 
     const made = recordFinish(FIRST.id, 118, { place: PODIUM, difficulty: "hard" });
-    expect(made.cleared).toContain(FIRST.id);
+    expect(levelCleared(made, FIRST.id)).toBe(true);
   });
 
   it("keeps the best place per difficulty, and the best time across them all", () => {
@@ -413,7 +414,7 @@ describe("the podium rule", () => {
   it("posts a time and nothing else for a run with nobody entered", () => {
     const progress = recordFinish(FIRST.id, 99, null);
     expect(progress.finished).toContain(FIRST.id);
-    expect(progress.cleared).not.toContain(FIRST.id);
+    expect(levelCleared(progress, FIRST.id)).toBe(false);
     for (const id of DIFFICULTY_IDS) expect(bestPlace(progress, FIRST.id, id)).toBeUndefined();
   });
 
@@ -423,9 +424,10 @@ describe("the podium rule", () => {
       JSON.stringify({ cleared: [FIRST.id], best: { [FIRST.id]: 90 } }),
     );
     const progress = loadProgress();
-    // Nobody loses a time trial they had already opened.
+    // Nobody loses a time trial they had already opened, and nobody loses the
+    // rung the clear had already opened either.
     expect(progress.finished).toEqual([FIRST.id]);
-    expect(progress.cleared).toEqual([FIRST.id]);
+    expect(levelCleared(progress, FIRST.id)).toBe(true);
     expect(progress.places).toEqual({});
   });
 
@@ -434,7 +436,7 @@ describe("the podium rule", () => {
     for (const location of LOCATIONS) {
       for (const level of location.levels) {
         expect(progress.finished).toContain(level.id);
-        expect(progress.cleared).toContain(level.id);
+        expect(levelCleared(progress, level.id)).toBe(true);
       }
     }
   });
