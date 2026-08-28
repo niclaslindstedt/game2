@@ -664,14 +664,33 @@ describe("what a filter may be asked for", () => {
     }
   });
 
-  it("actually bites on the hi-hat at the rate iOS hands a headset", () => {
-    // The specific case, pinned: without the clamp this is the one number in
-    // the whole game that goes over.
-    const HAT_HZ = 8200;
-    expect(TAIGA_TRACK.instruments.hat?.filter?.frequency).toBe(HAT_HZ);
-    expect(MENU_TRACK.instruments.hat?.filter?.frequency).toBe(HAT_HZ);
-    expect(HAT_HZ).toBeGreaterThan(16000 / 2); // over Nyquist on that session
-    expect(safeCutoff(HAT_HZ, 16000)).toBe(16000 * MAX_CUTOFF_RATIO);
+  it("bites on a cutoff that would go over, at the rate iOS hands a headset", () => {
+    // The MECHANISM, not the content: what a score happens to author for its
+    // hi-hat is a taste decision that moves, and a guard pinned to it fails
+    // the day somebody retunes the kit rather than the day the clamp breaks.
+    const OVER = 8200; // where both hats sat when this was found
+    expect(OVER).toBeGreaterThan(16000 / 2); // over Nyquist on that session
+    expect(safeCutoff(OVER, 16000)).toBe(16000 * MAX_CUTOFF_RATIO);
+    expect(safeCutoff(OVER, 16000)).toBeLessThan(16000 / 2);
+    // …and it is the LIVE rate that decides, so the same number is untouched
+    // on the context a desktop hands back.
+    expect(safeCutoff(OVER, 48000)).toBe(OVER);
+  });
+
+  it("keeps the kit inside what a 16 kHz session can actually carry", () => {
+    // A hi-hat authored entirely above 8 kHz has almost nothing left to pass
+    // once the clamp has held it off Nyquist on a hands-free Bluetooth route.
+    // This is not the clamp's job to fix — it is the score's — so the bar is
+    // here, on the content, where a retune will see it.
+    const CEILING = 16000 * MAX_CUTOFF_RATIO;
+    for (const [name, track] of [
+      ["menu", MENU_TRACK],
+      ["taiga", TAIGA_TRACK],
+    ] as const) {
+      const hat = track.instruments.hat?.filter?.frequency;
+      expect(hat, `${name} has a hat with a filter`).toBeDefined();
+      expect(hat as number, `${name}/hat under the 16 kHz ceiling`).toBeLessThan(CEILING);
+    }
   });
 
   it("still floors a cutoff nobody should ask for", () => {
