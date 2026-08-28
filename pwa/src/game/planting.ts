@@ -78,3 +78,11 @@ export function pickFlora(mix: FloraMix, roll: number): string {
   }
   return last;
 }
+
+/** Whether two placements are the SAME thing standing in the same spot. The
+ * engine hands a felled solid back by position, and every side of the world
+ * planted it from the same seeded coordinate, so this is an identity test
+ * with room only for the float error of passing through a few objects. */
+export function samePlace(ax: number, az: number, bx: number, bz: number): boolean {
+  return Math.abs(ax - bx) < 0.01 && Math.abs(az - bz) < 0.01;
+}

@@ -848,6 +848,14 @@ export function App() {
         setPaused(false);
         const spec = stageRef.current;
         if (!spec) return;
+        // A new attempt inherits nothing from the last one, exactly as a
+        // fresh start does not: the engine's note starts from idle rather
+        // than gliding down from whatever the finish left, and the theme is
+        // re-armed — the finish sting stopped the score, and a run restarted
+        // from the results card never passes through the menu that would put
+        // it back. Both are no-ops mid-race, which is the other way in here.
+        audioRef.current?.reset();
+        playMusic("taiga");
         applyStageRef.current(spec, true);
         const active = runRef.current;
         armGhostRef.current(spec, active.mode, active.levelId);
@@ -1147,6 +1155,13 @@ export function App() {
     ? { name: upNext.name, go: (): void => playLevel(upNext, "campaign") }
     : null;
 
+  // ...and where it goes back to. A TIME TRIAL is one stage run again and
+  // again against a board, so the card offers the same stage from the grid
+  // — the same road, the same car, a clean clock and a fresh ghost. It is
+  // the restart the pause menu and `R` already do, put where a player who
+  // has just read their time is looking.
+  const onRetry = run.mode === "timetrial" ? (): void => actionsRef.current.restart() : null;
+
   // The board the results card shows, and the three letters it is waiting on.
   // Entering them writes the row and hands the new board straight back, so the
   // player sees where they landed without the card being rebuilt around them.
@@ -1196,6 +1211,7 @@ export function App() {
           onPause={() => setPaused(true)}
           onCamera={() => actionsRef.current.camera()}
           nextStage={nextStage}
+          onRetry={onRetry}
           onRetire={goMainMenu}
           scores={finishScores}
         />

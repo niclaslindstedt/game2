@@ -19,6 +19,7 @@ import {
   createGame,
   createTerrain,
   damageZoneAt,
+  standSolid,
   step,
   type GameEvent,
   type GameState,
@@ -31,19 +32,20 @@ function freshState(): GameState {
   return createGame({ seed: 3, skipCountdown: true, track: compileTrack(3, LONG_STRAIGHT) });
 }
 
-function solid(overrides: Partial<WildObstacle> = {}): WildObstacle {
-  return {
-    x: 0,
-    z: 0,
-    y: 0,
-    kind: "boulder",
-    size: 1,
-    spin: 0,
-    radius: 1,
-    height: 2,
-    ...overrides,
-  };
+/** A staged solid — the same factory the terrain field plants with, so a
+ * test collides with something the world could actually have stood up:
+ * the shape of its kind at that size, and with it the mass, the rooting
+ * and the strength the contact model reads off them. */
+function solid(overrides: Partial<StagedSolid> = {}): WildObstacle {
+  return standSolid({ x: 0, z: 0, y: 0, kind: "boulder", size: 1, spin: 0, ...overrides });
 }
+
+type StagedSolid = Parameters<typeof standSolid>[0];
+
+/** The biggest tree a stage ever grows, and the smallest — the two ends of
+ * the forest, which are two entirely different things to hit. */
+const OLD_TREE = 1.35;
+const SAPLING = 0.75;
 
 describe("damage zones", () => {
   it("maps impact angles onto the eight body zones", () => {
@@ -62,8 +64,14 @@ describe("the impulse", () => {
     const car = state.car;
     car.u = 30;
     const events: GameEvent[] = [];
-    // The trunk dead ahead, just inside the nose.
-    const tree = solid({ kind: "tree", z: car.z + TUNING.collision.halfLength + 0.5, x: car.x });
+    // The biggest trunk in the forest, dead ahead, just inside the nose:
+    // at 108 km/h the car has not got the momentum to break it.
+    const tree = solid({
+      kind: "tree",
+      size: OLD_TREE,
+      z: car.z + TUNING.collision.halfLength + 0.5,
+      x: car.x,
+    });
     const before = car.z;
     collideCar(state.spec, car, [tree], events, state.stats);
 
@@ -90,9 +98,9 @@ describe("the impulse", () => {
     const events: GameEvent[] = [];
     const tree = solid({
       kind: "tree",
+      size: SAPLING,
       x: car.x + TUNING.collision.halfWidth + 0.2,
       z: car.z,
-      radius: 0.4,
     });
     collideCar(state.spec, car, [tree], events, state.stats);
 
@@ -112,9 +120,9 @@ describe("the impulse", () => {
     const events: GameEvent[] = [];
     const tree = solid({
       kind: "tree",
+      size: SAPLING,
       x: car.x + TUNING.collision.halfWidth + 0.2,
       z: car.z,
-      radius: 0.4,
     });
     collideCar(state.spec, car, [tree], events, state.stats);
 
@@ -129,6 +137,7 @@ describe("the impulse", () => {
     light.car.u = 18;
     const nose = solid({
       kind: "tree",
+      size: OLD_TREE,
       x: light.car.x,
       z: light.car.z + TUNING.collision.halfLength + 0.5,
     });
@@ -149,7 +158,12 @@ describe("the impulse", () => {
     const car = state.car;
     const events: GameEvent[] = [];
     const grid = car.z;
-    const tree = solid({ kind: "tree", x: car.x, z: grid + TUNING.collision.halfLength + 0.5 });
+    const tree = solid({
+      kind: "tree",
+      size: OLD_TREE,
+      x: car.x,
+      z: grid + TUNING.collision.halfLength + 0.5,
+    });
     car.u = 30;
     collideCar(state.spec, car, [tree], events, state.stats);
     car.u = 30;
@@ -165,7 +179,7 @@ describe("the impulse", () => {
     car.y = 1.2;
     car.airborne = true;
     const events: GameEvent[] = [];
-    const log = solid({ kind: "log", x: car.x, z: car.z + 1, height: 0.75 });
+    const log = solid({ kind: "log", x: car.x, z: car.z + 1 });
     collideCar(state.spec, car, [log], events, state.stats);
     expect(car.u).toBe(30);
     expect(events).toHaveLength(0);
@@ -189,7 +203,12 @@ describe("the wreck", () => {
     const state = freshState();
     const car = state.car;
     const grid = car.z;
-    const tree = solid({ kind: "tree", x: car.x, z: grid + TUNING.collision.halfLength + 0.5 });
+    const tree = solid({
+      kind: "tree",
+      size: OLD_TREE,
+      x: car.x,
+      z: grid + TUNING.collision.halfLength + 0.5,
+    });
     // Ram it until the chassis has nothing left: three head-on hits at pace.
     for (let i = 0; i < 3; i++) {
       car.u = 30;
@@ -212,7 +231,12 @@ describe("the internal systems", () => {
     const state = freshState();
     const car = state.car;
     car.u = 30;
-    const tree = solid({ kind: "tree", x: car.x, z: car.z + TUNING.collision.halfLength + 0.5 });
+    const tree = solid({
+      kind: "tree",
+      size: OLD_TREE,
+      x: car.x,
+      z: car.z + TUNING.collision.halfLength + 0.5,
+    });
     collideCar(state.spec, car, [tree], [], state.stats);
     expect(car.damage.systems.engine).toBeGreaterThan(0.2); // nose → radiator
     expect(car.damage.systems.gearbox).toBe(0); // the back is untouched
@@ -380,29 +404,190 @@ describe("the wild's litter and outcrops", () => {
     }
   });
 
-  it("a rock at exactly the bar still stops a car on the ground", () => {
+  it("a small rock is knocked flying and barely slows the car", () => {
     const state = freshState();
     const car = state.car;
     car.u = 26;
     const events: GameEvent[] = [];
-    collideCar(
-      state.spec,
-      car,
-      [
-        solid({
-          kind: "rock",
-          x: car.x,
-          z: car.z + TUNING.collision.halfLength + 0.6,
-          y: car.y,
-          radius: 0.8,
-          height: SOLID_PROP_HEIGHT,
-        }),
-      ],
-      events,
-      state.stats,
-    );
-    expect(car.u).toBeLessThan(0);
-    expect(car.damage.zones[0]).toBeGreaterThan(0);
-    expect(events.some((e) => e.type === "impact")).toBe(true);
+    // The smallest lump the field will stand up — a couple of hundred kilos
+    // of stone against a tonne of car. It goes, the car does not.
+    const rock = solid({
+      kind: "rock",
+      size: SOLID_PROP_HEIGHT / 1.05,
+      x: car.x,
+      z: car.z + TUNING.collision.halfLength + 0.2,
+      y: car.y,
+    });
+    expect(rock.mass).toBeLessThan(state.spec.mass);
+    collideCar(state.spec, car, [rock], events, state.stats);
+
+    expect(car.u).toBeGreaterThan(26 * 0.7); // a bang and a dent, not a wall
+    const thrown = events.find((e) => e.type === "solidBreak");
+    expect(thrown).toBeDefined();
+    if (thrown?.type === "solidBreak") {
+      expect(thrown.broke).toBe(false); // stone does not break, it moves
+      expect(Math.hypot(thrown.vx, thrown.vz)).toBeGreaterThan(car.u);
+    }
+  });
+
+  it("a rock heavier than the car stays exactly where it is", () => {
+    const state = freshState();
+    const car = state.car;
+    car.u = 39; // 140 km/h
+    const events: GameEvent[] = [];
+    const rock = solid({
+      kind: "rock",
+      size: 2.1,
+      x: car.x,
+      z: car.z + TUNING.collision.halfLength + 1.6,
+      y: car.y,
+    });
+    expect(rock.mass).toBeGreaterThan(state.spec.mass * 10);
+    collideCar(state.spec, car, [rock], events, state.stats);
+
+    expect(events.some((e) => e.type === "solidBreak")).toBe(false);
+    expect(car.u).toBeLessThan(0); // stopped dead and bounced
+    // ...and stopping at 140 km/h is what wrecks a car.
+    expect(car.damage.wear).toBeGreaterThan(0.8);
+    expect(car.damage.broken).toContain("bumperF");
+  });
+});
+
+describe("what gives way", () => {
+  it("a sapling snaps and the car drives through; the old tree does not", () => {
+    const through = (size: number): { kept: number; broke: boolean } => {
+      const state = freshState();
+      const car = state.car;
+      car.u = 25; // 90 km/h
+      const events: GameEvent[] = [];
+      const tree = solid({
+        kind: "tree",
+        size,
+        x: car.x,
+        z: car.z + TUNING.collision.halfLength + 0.3,
+      });
+      collideCar(state.spec, car, [tree], events, state.stats);
+      return {
+        kept: car.u,
+        broke: events.some((e) => e.type === "solidBreak" && e.broke),
+      };
+    };
+    const small = through(SAPLING);
+    const old = through(OLD_TREE);
+    expect(small.broke).toBe(true);
+    expect(small.kept).toBeGreaterThan(5); // through it, and still moving
+    expect(old.broke).toBe(false);
+    expect(old.kept).toBeLessThan(0);
+  });
+
+  it("the biggest tree goes down at 140 km/h — and takes most of it with it", () => {
+    const state = freshState();
+    const car = state.car;
+    car.u = 39;
+    const events: GameEvent[] = [];
+    const tree = solid({
+      kind: "tree",
+      size: OLD_TREE,
+      x: car.x,
+      z: car.z + TUNING.collision.halfLength + 0.5,
+    });
+    collideCar(state.spec, car, [tree], events, state.stats);
+    expect(events.some((e) => e.type === "solidBreak" && e.broke)).toBe(true);
+    expect(car.u).toBeLessThan(12); // out the other side at walking-ish pace
+    expect(car.damage.wear).toBeGreaterThan(0.5); // and bent for good
+  });
+
+  it("a trunk the field is told to fell stops standing, for the rest of the run", () => {
+    const track = compileTrack(11);
+    const terrain = createTerrain(track);
+    const at = track.samples[Math.floor(track.samples.length / 2)];
+    const standing = terrain.treesNear(at.x, at.z, 120);
+    expect(standing.length).toBeGreaterThan(0);
+    const doomed = standing[0];
+    terrain.fell(doomed);
+    const after = terrain.treesNear(at.x, at.z, 120);
+    expect(after).toHaveLength(standing.length - 1);
+    expect(after.some((t) => t.x === doomed.x && t.z === doomed.z)).toBe(false);
+    // The cell caches are dropped and rebuilt as road streams in, so the
+    // question has to survive one: a felled tree that comes back is a tree
+    // the car drives through the second time.
+    terrain.sync(at.s);
+    expect(terrain.treesNear(at.x, at.z, 120)).toHaveLength(standing.length - 1);
+  });
+
+  it("a felled solid is handed to the caller and never collided with twice", () => {
+    const state = freshState();
+    const car = state.car;
+    const grid = car.z;
+    const rock = solid({
+      kind: "rock",
+      size: 0.5,
+      x: car.x,
+      z: grid + TUNING.collision.halfLength + 0.4,
+      y: car.y,
+    });
+    const gone: WildObstacle[] = [];
+    car.u = 20;
+    collideCar(state.spec, car, [rock], [], state.stats, (ob) => gone.push(ob));
+    expect(gone).toEqual([rock]);
+  });
+
+  it("leaning on a rock below the scuff floor neither marks the car nor moves the rock", () => {
+    const state = freshState();
+    const car = state.car;
+    car.u = TUNING.collision.scuffSpeed - 0.5;
+    const events: GameEvent[] = [];
+    const rock = solid({
+      kind: "rock",
+      size: 0.5,
+      x: car.x,
+      z: car.z + TUNING.collision.halfLength + 0.4,
+      y: car.y,
+    });
+    collideCar(state.spec, car, [rock], events, state.stats);
+    expect(events).toHaveLength(0);
+    expect(car.damage.wear).toBe(0);
+  });
+});
+
+describe("the trip", () => {
+  it("a rock caught sideways at speed rolls the car and lifts it off the ground", () => {
+    const state = freshState();
+    const car = state.car;
+    car.u = 5;
+    car.w = 24; // sliding hard to its right, flank first
+    const events: GameEvent[] = [];
+    // Big enough that the ground holds it — you trip over what does not move.
+    const rock = solid({
+      kind: "rock",
+      size: 0.9,
+      x: car.x + TUNING.collision.halfWidth + 0.6,
+      z: car.z,
+      y: car.y,
+    });
+    collideCar(state.spec, car, [rock], events, state.stats);
+
+    // Sliding right, checked at the sill: the car goes over onto its right,
+    // and positive roll is the one that lifts that side.
+    expect(car.rollRate).toBeLessThan(-TUNING.collision.solids.tripLaunch);
+    expect(car.airborne).toBe(true); // over the outside wheels and off
+    expect(car.vy).toBeGreaterThan(0);
+  });
+
+  it("a trunk meets the whole flank and only shoves — it never trips the car", () => {
+    const state = freshState();
+    const car = state.car;
+    car.u = 5;
+    car.w = 24;
+    const tree = solid({
+      kind: "tree",
+      size: OLD_TREE,
+      x: car.x + TUNING.collision.halfWidth + 0.5,
+      z: car.z,
+      y: car.y,
+    });
+    collideCar(state.spec, car, [tree], [], state.stats);
+    expect(car.rollRate).toBe(0);
+    expect(car.airborne).toBe(false);
   });
 });

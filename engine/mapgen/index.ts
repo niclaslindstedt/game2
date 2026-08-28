@@ -46,12 +46,11 @@ export {
   GROUND_CELL,
   GROVES,
   GROVE_SCALE,
-  SOLID_PROP_HEIGHT,
   type GroveCommunity,
   type TerrainField,
   type Stream,
-  type WildObstacle,
 } from "./terrain.ts";
+export { SOLID_PROP_HEIGHT, standSolid, type SolidKind, type WildObstacle } from "./solids.ts";
 export {
   compileTrack,
   compileStage,

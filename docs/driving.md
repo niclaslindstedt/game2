@@ -130,8 +130,8 @@ rewards it, and no drift seconds are counted at the player.
 
 - **The ground** — grounded, the car **rides** the road: its vertical speed is the road's own, sampled between centerline points rather than snapped to the nearest one, so it climbs a ramp smoothly instead of hopping up it in 2 m stairs.
 - **Attitude** — the engine owns how the car SITS, in `CarState.pitch` and `CarState.roll` (positive lifts the nose and the right side). Grounded, both are the ground under the wheels: the nose takes the grade along the heading, the body takes the camber across it. Airborne, the pitch is the flight's own arc and the roll is the tumble the take-off put in. Both ease toward their target at `TUNING.attitude.settle` — that lag IS the suspension travel a landing settles through. The renderer only spends the two angles on the right axes; it never derives them.
-- **Takeoff** — jump segments ramp up to a lip; crossing it throws the car with vertical speed proportional to pace × ramp slope (`takeoff`). The ramp EASES IN, steepest right at the lip, because a ramp that flattens as it reaches the top hands the car no upward speed at the one moment that matters. A crest launches the car too, but only when the road's own curvature would pull it down harder than gravity can (`TUNING.air.crestSpan`, `crestPull`) — so a real brow throws you at pace and holds you at a crawl, while the rolling ground under every stage is just ridden over.
-- **The roll** — a car that leaves the ground crossed up trips over its outside wheels: the take-off puts roll in the body from the slide it was holding plus the rotation already in it, and nothing in the air takes it out. Straight and level flies flat; properly sideways goes a long way over; the unluckiest launches go all the way round. Landing on your side is never a clean landing. The ground unwinds the roll toward the nearest upright, and then onto the CAMBER under the wheels — level on the road, tipped with the hillside out in the wild.
+- **Takeoff** — jump segments ramp up to a lip; crossing it throws the car with vertical speed proportional to pace × ramp slope (`takeoff`). The ramp EASES IN, steepest right at the lip, because a ramp that flattens as it reaches the top hands the car no upward speed at the one moment that matters. A crest launches the car too, but only when the road's own curvature would pull it down harder than gravity can (`TUNING.air.crestSpan`, `crestPull`) — so a real brow throws you at pace and holds you at a crawl, while the rolling ground under every stage is just ridden over. Off the road a sharp EDGE does the same: ground falling away by more than `edgeDrop` under the car's own footprint is a cliff lip, not a face to be driven down. Both gates read the speed the car is COVERING GROUND at rather than the speed it is pointing at, because sideways those are different numbers — a drift over a mountain top flies exactly like a straight one would.
+- **The roll** — a car that leaves the ground crossed up trips over its outside wheels: the take-off puts roll in the body from the slide it was holding plus the rotation already in it, and nothing in the air takes it out. The same trip about the vertical axis puts SPIN in it (`air.yawFromSlide`): the tires that were holding the slide let go all at once, so a car that goes over a ledge sideways keeps turning the way the slide was turning it, all the way down. Straight and level flies flat; properly sideways goes a long way over; the unluckiest launches go all the way round. Landing on your side is never a clean landing. The ground unwinds the roll toward the nearest upright, and then onto the CAMBER under the wheels — level on the road, tipped with the hillside out in the wild.
 - **Airborne** — the velocity vector is committed. Gravity is arcade-heavy (floatier hangs read as slow motion), the nose answers only faintly, and a small seeded turbulence rolls the car — flying, slightly out of control, exactly as intended. No lateral grip: whatever attitude you took off with survives to the ground.
 - **Landing** — straight (slip inside the clean limit) keeps all your speed: `CLEAN AIR`. Landing sideways scrubs speed and wobbles the car. Line up before the lip. Whatever the descent was, the springs take it (below), and a slam past what they can travel through bounces the whole chassis back off the ground for a beat — one landing still happening, not a second flight, so it draws no turbulence and never counts as a jump.
 
@@ -458,6 +458,32 @@ every solid is a circle, and a hit does several things at once:
   corner spins the car instead of politely stopping it. Below
   `scuffSpeed`, contact is a scuff: the car stops against the rock,
   unmarked.
+- **What the solid does about it.** Nothing in the wild is infinitely
+  heavy. Every standing thing carries a mass, a rooting (how much of it
+  the ground holds) and a snapping strength, all three derived from the
+  shape it is drawn as and the material it is drawn in
+  (`engine/mapgen/solids.ts`). The contact weighs the car against them and
+  the weaker of two things gives first: the GROUND'S HOLD, and the thing
+  comes out of its bed and leaves with the momentum the car gave it; or
+  its own STRUCTURE, and it breaks, taking exactly the impulse that cost
+  and letting the car through. Either way it is gone from the world —
+  a `solidBreak` event the renderer retires the drawing for and tumbles
+  the piece away from (`pwa/src/game/breakage.ts`).
+
+  So the size of what you hit is now the whole story. A football-sized
+  stone is a bang and a scratch and the stone is what leaves; a boulder
+  ten times the car's weight has not moved since the ice age and never
+  will. A sapling goes down under an ordinary excursion; the biggest
+  spruce on the stage is a wall until about 120 km/h, and going through
+  one costs very nearly everything you arrived with.
+
+- **The trip.** A solid standing below the car's centre of mass catches
+  the bottom of it while the body above keeps going, which is how a rally
+  car actually rolls: not off a bank, off a rock at the side of the road.
+  A flank sliding at pace into something low and solid rolls hard enough
+  to lift the inside wheels off the ground, and from there the car is
+  FLYING and finishes the roll in the air. A trunk, which meets the whole
+  side of the car at once, only ever shoves it (`solids.trip`).
 - **The crush.** Closing speed past the scuff floor folds the struck
   panels in, permanently — eight zones ring the body (`CarState.damage`),
   and the renderer bends the body's actual polygons from the ledger

@@ -198,6 +198,13 @@ export function launch(car: CarState, vy: number, events: GameEvent[], stats: Ru
   car.airTime = 0;
   car.vy = vy;
   car.rollRate = -(car.w * T.air.rollFromSlide + car.yawRate * T.air.rollFromYaw);
+  // The same trip about the vertical axis: the tires that were holding the
+  // slide let go all at once, so the car keeps turning the way the slide
+  // was turning it. Sideways off a ledge is a car that SPINS as it falls,
+  // which is the whole difference between a jump and going over the edge
+  // in a drift. (Heading grows clockwise and rotating the frame that way
+  // reduces `w`, so continuing the slide is a negative rate.)
+  car.yawRate -= car.w * T.air.yawFromSlide;
   events.push({ type: "takeoff", vy });
   stats.jumps += 1;
 }
@@ -713,8 +720,15 @@ export function stepGrounded(
   // the number the landings, the bounce and the renderer read, and it should
   // be the speed the wheels are actually going up or down at.
   const roadVy = car.u * ctx.slope + car.w * (ctx.slopeLat ?? 0);
-  const roadPull = -car.u * car.u * ctx.roadCurve;
-  if (car.u > T.air.crestSpeed && roadPull > T.air.gravity * T.air.crestPull) {
+  // Both takeoff gates below are on the speed the car is COVERING GROUND
+  // at, not on the speed it is pointing at. Sideways, those are different
+  // numbers — a car at full lock crossing a lip has most of its pace in
+  // `w` — and reading `u` alone glued every drift to the ground exactly
+  // where a drift most wants to fly: over a crest, off a ledge, over the
+  // top of a mountain. The lip does not care which way the nose is.
+  const pace = Math.hypot(car.u, car.w);
+  const roadPull = -pace * pace * ctx.roadCurve;
+  if (pace > T.air.crestSpeed && roadPull > T.air.gravity * T.air.crestPull) {
     launch(car, car.vy, events, stats);
   } else if (ctx.groundAt) {
     // Open ground: ride the terrain under the wheels — a slide carries the
@@ -728,7 +742,7 @@ export function stepGrounded(
     // does not read that lift as a cliff it has just driven off.
     const gy = ctx.groundAt(car.x, car.z);
     let seat = seatOn(car, gy, ctx.groundAt);
-    if (car.u > T.air.crestSpeed && seat < car.y - T.air.edgeDrop) {
+    if (pace > T.air.crestSpeed && seat < car.y - T.air.edgeDrop) {
       launch(car, car.vy, events, stats);
     } else {
       // The ground can also be a WALL. How far it rose over the ground the

@@ -130,6 +130,9 @@ type HudProps = {
   /** The stage after this one, once this one is over — null on a run with
    * nowhere to go on to (Roam, and the end of the ladder). */
   nextStage: NextStage | null;
+  /** Run the same stage again from the grid — the time trial's own way on.
+   * Null where a re-run means nothing. */
+  onRetry: (() => void) | null;
   /** Leave the run for the main menu — the results card's own way out. */
   onRetire: () => void;
   /** The time trial's board, and the initials it is still waiting on. Null
@@ -845,6 +848,7 @@ export function Hud({
   onPause,
   onCamera,
   nextStage,
+  onRetry,
   onRetire,
   scores,
 }: HudProps) {
@@ -947,6 +951,7 @@ export function Hud({
             laps={snap.laps}
             lapTimes={snap.lapTimes}
             nextStage={nextStage}
+            onRetry={onRetry}
             onRetire={onRetire}
             scores={scores}
           />

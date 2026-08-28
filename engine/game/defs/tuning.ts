@@ -490,6 +490,12 @@ export const TUNING = {
      * Straight and level flies flat; properly sideways goes a long way over,
      * and the unluckiest launches go all the way round. */
     rollFromYaw: 0.5,
+    /** The same trip, about the other axis: the tires that were holding a
+     * slide let go all at once, so the car keeps turning the way the slide
+     * was already turning it. Rad/s of yaw per m/s of sideways speed — a
+     * car that leaves a ledge sideways SPINS, which is the whole difference
+     * between a jump and going over the edge in a drift. */
+    yawFromSlide: 0.05,
     /** Random roll torque in flight, rad/s² — the same seeded turbulence
      * that unsettles the nose. */
     rollTurbulence: 0.5,
@@ -753,8 +759,60 @@ export const TUNING = {
      * the car instead of politely stopping it. */
     yawKick: 0.35,
     /** Closing speed under which a contact is a scuff: no crush, no wear,
-     * no event — parking against a rock is not an accident, m/s. */
+     * no event — parking against a rock is not an accident, m/s. Nothing
+     * is knocked loose or broken under it either, for the same reason. */
     scuffSpeed: 3,
+
+    /** THE THING ON THE OTHER SIDE OF THE CONTACT. Every solid carries a
+     * mass, a rooting and a snapping strength (mapgen/solids.ts); these are
+     * the numbers the CAR spends against them. */
+    solids: {
+      /** Impulse the ground's hold on a solid survives, N·s per kg of the
+       * mass it is holding, at rooting 1. Past it the thing comes out of
+       * the ground and leaves with whatever momentum the car gave it: a
+       * loose rock at a walking pace, a bedded boulder only if you arrive
+       * at it with a whole stage's worth of speed, an outcrop never.
+       * Deliberately ABOVE what wood survives (solids.ts), so a rooted
+       * tree always breaks before it is pulled out of the ground. */
+      anchorPerMass: 40,
+      /** Cap on how fast a solid the car knocked loose leaves, m/s. Past
+       * it a stone reads as a bullet rather than as something heavy that
+       * was hit very hard. */
+      throwMax: 25,
+      /** A thing that BROKE instead of moving leaves at this share of the
+       * closing speed. Most of the impulse a snapping trunk takes goes
+       * into breaking it, not into throwing it: a felled tree comes down
+       * where it stood, going the way the car was going. */
+      toppleKeep: 0.25,
+      /** ...and how much of that speed goes UP. A rock is struck below its
+       * own middle, so it lifts as it goes; a snapped trunk gets the same
+       * share and topples on the way. */
+      throwLift: 0.35,
+      /** THE TRIP. A solid whose top is below the car's centre of mass
+       * catches the bottom of the car while the rest of it keeps going —
+       * which is how a rally car actually rolls: not off a bank, off a
+       * rock. Roll rate per m/s of the sideways velocity the contact took,
+       * rad/s. Sized so a flank sliding at pace into something low and
+       * solid goes over, and an ordinary clip only leans. */
+      trip: 0.18,
+      /** Everything at or below this stands under the car's centre of mass
+       * and trips it fully, m... */
+      tripTop: 0.55,
+      /** ...and by this — the roofline — the contact is spread up the whole
+       * flank, its middle sits where the car's own mass does, and there is
+       * no lever left: a trunk shoves the car sideways, it never rolls it. */
+      tripFade: 1.45,
+      /** Roll rate a trip has to reach before the wheels actually come off
+       * the ground, rad/s — under it the car leans and the ground takes it
+       * back. Past it the car is FLYING, and whatever the roll was doing it
+       * now keeps doing (car.ts owns the air). */
+      tripLaunch: 1.6,
+      /** ...and how much lift that costs the ground, m/s per rad/s of trip.
+       * Enough air for the roll to reach past upright — a car tripped hard
+       * enough to leave the ground lands on its roof, not back on its
+       * wheels. */
+      tripLift: 1.1,
+    },
     /** Panel crush per m/s of closing speed past the scuff floor, m. A
      * 30 m/s head-on folds the nose ~0.3 m in. */
     crushPerSpeed: 0.011,

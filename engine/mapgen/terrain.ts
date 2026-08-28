@@ -28,6 +28,7 @@ import {
 import { createLandField, LAKE_Y } from "./land.ts";
 import { STAGE_RULES as R, knobScale } from "./rules.ts";
 import { createSpurIndex, type SpurIndex } from "./spurs.ts";
+import { SOLID_PROP_HEIGHT, solidShape, standSolid, type WildObstacle } from "./solids.ts";
 
 export { LAKE_Y } from "./land.ts";
 /** Edge length of the ground lattice the physics rides and the renderer
@@ -256,44 +257,12 @@ function streamWaterAt(streams: Stream[], x: number, z: number): number | null {
 
 // ── Wild props ────────────────────────────────────────────────────────────
 
-/** A solid thing standing in the wild: the physics collides with it and the
- * renderer draws it — the SAME seeded placement on both sides. */
-export type WildObstacle = {
-  x: number;
-  z: number;
-  /** Ground height under it (terrain.heightAt at its foot). */
-  y: number;
-  kind: "boulder" | "log" | "tree" | "rock" | "slab" | "stump";
-  /** Visual scale factor — how big this prop is drawn, in the units its
-   * own kind is authored in (~0.4–2.1 for a rock, ~0.8–1.8 for a boulder
-   * or a fallen trunk, ~1.6 up for an outcrop). */
-  size: number;
-  spin: number;
-  /** Collision radius in the ground plane, m — for a tree, the trunk. */
-  radius: number;
-  /** Height above its foot — a car flying higher clears it. */
-  height: number;
-  /** Trees only: species roll (0–1) and grove index (into GROVES) — the
-   * renderer picks WHAT to draw from these; the engine only owns WHERE the
-   * trunk stands and how thick it is. */
-  roll?: number;
-  grove?: number;
-};
-
 /** One obstacle candidate per grid cell of this edge, m. */
 const OB_CELL = 56;
 /** Fraction of cells that actually hold one. */
 const OB_DENSITY = 0.45;
 /** Obstacles keep this far from the road centerline beyond the half-width. */
 const OB_ROAD_CLEAR = 10;
-
-/** A prop standing this tall over its foot is SOLID — the car hits it.
- * The catalog's bonnets sit about 0.87 m over the ground, so this is the
- * MIDDLE OF THE HOOD: a rock reaching above it meets the body and stops
- * the car, one below it is litter the wheels ride over and the renderer
- * scatters for itself. Everything the field below places clears this bar;
- * nothing the renderer plants on its own may. */
-export const SOLID_PROP_HEIGHT = 0.45;
 
 /** One loose-rock candidate per grid cell of this edge, m, and the share
  * of cells that hold one — the open ground's rock litter, a field of its
@@ -414,6 +383,13 @@ export type TerrainField = {
    * as obstaclesNear, kept separate because trees are far denser and the
    * renderer draws them through the flora system rather than as props. */
   treesNear: (x: number, z: number, r: number) => WildObstacle[];
+  /** Take a solid OUT of the world: a trunk the car snapped, a rock it
+   * knocked flying. The field stops standing it, so nothing collides with
+   * it again and nothing draws it — the piece that is left is a loose body
+   * the renderer tumbles (`solidBreak`), not scenery either side still
+   * agrees on. Felling is part of the run, not part of the seed: a fresh
+   * game builds a fresh field with every trunk back up. */
+  fell: (ob: WildObstacle) => void;
   /** Which grove community (index into GROVES) owns a patch of ground —
    * the one quilt both the trunk placement above and the renderer's
    * species/undergrowth choices read, so a meadow is open on both sides. */
@@ -771,6 +747,16 @@ export function createTerrain(track: Track): TerrainField {
   const obSeed = rng.int(1, 1 << 30);
   let obCache = new Map<string, WildObstacle | null>();
 
+  // What the car has taken down. Keyed by position, because that is the one
+  // thing every field's props agree on — and the caches above are dropped
+  // and rebuilt as the road streams, so the flag cannot live on the prop.
+  const felled = new Set<string>();
+  const propKey = (ob: WildObstacle): string => `${ob.x.toFixed(2)},${ob.z.toFixed(2)}`;
+  const fell = (ob: WildObstacle): void => {
+    felled.add(propKey(ob));
+  };
+  const standing = (ob: WildObstacle): boolean => !felled.has(propKey(ob));
+
   /** Distance from a point to the nearest ABANDONED BRANCH's mat edge, or
    * Infinity when there is none near — nothing is planted on a road, and a
    * spur is as much a road as the stage is (R17). */
@@ -819,17 +805,16 @@ export function createTerrain(track: Track): TerrainField {
         if (y > LAKE_Y + 1) {
           const boulder = hash2(cx, cz, obSeed + 3) < 0.55;
           const size = 0.8 + hash2(cx, cz, obSeed + 4);
-          ob = {
+          // A trunk lies low enough to jump; a boulder takes real air —
+          // solids.ts owns both shapes, and what each one weighs.
+          ob = standSolid({
             x,
             z,
             y,
             kind: boulder ? "boulder" : "log",
             size,
             spin: hash2(cx, cz, obSeed + 5) * Math.PI * 2,
-            // A trunk lies low enough to jump; a boulder takes real air.
-            radius: boulder ? 1.9 * size : 2.6 * size,
-            height: boulder ? 2.1 * size : 0.75 * size,
-          };
+          });
         }
       }
     }
@@ -873,14 +858,13 @@ export function createTerrain(track: Track): TerrainField {
       const stump =
         hash2(cx, cz, rockSeed + 5) < STUMP_SHARE &&
         GROVES[groveAt(x, z)].density >= STUMP_GROVE_DENSITY;
+      const kind = stump ? "stump" : "rock";
       const size = stump
         ? STUMP_SIZE_MIN + roll * (STUMP_SIZE_MAX - STUMP_SIZE_MIN)
         : ROCK_SIZE_MIN + roll * (ROCK_SIZE_MAX - ROCK_SIZE_MIN);
-      // A rock sits a third of itself in the ground and is squashed
-      // flat-ish; a stump is its bole plus the saw cut on top. Either
-      // way this is what stands proud of the dirt.
-      const height = stump ? 0.98 * size : 1.05 * size;
-      const radius = stump ? 0.55 * size : 0.85 * size;
+      // What stands proud of the dirt, and how wide it stands — the same
+      // shape the contact model weighs and the renderer draws (solids.ts).
+      const { radius, height } = solidShape(kind, size);
       // Under the middle of the hood it is not an obstacle at all: the
       // renderer scatters that litter itself and the car rides over it.
       if (
@@ -890,16 +874,14 @@ export function createTerrain(track: Track): TerrainField {
       ) {
         const y = groundAt(x, z);
         if (y > LAKE_Y + 1) {
-          litter = {
+          litter = standSolid({
             x,
             z,
             y,
-            kind: stump ? "stump" : "rock",
+            kind,
             size,
             spin: hash2(cx, cz, rockSeed + 4) * Math.PI * 2,
-            radius,
-            height,
-          };
+          });
         }
       }
     }
@@ -935,22 +917,18 @@ export function createTerrain(track: Track): TerrainField {
           // reaches back over the ribbon it stands beside.
           const grow = 1.6 + hash2(cx, cz, slabSeed + 3) * (1.8 + Math.min(wall, 14) * 0.12);
           const size = Math.min(grow, (edge - PROP_ROAD_CLEAR) / 0.85);
-          const radius = 0.85 * size;
+          const { radius } = solidShape("slab", size);
           if (size > 1 && offEveryRoad(x, z, radius) && !inStream(streams, x, z, radius)) {
             const y = groundAt(x, z);
             if (y > LAKE_Y + 1) {
-              slab = {
+              slab = standSolid({
                 x,
                 z,
                 y,
                 kind: "slab",
                 size,
                 spin: hash2(cx, cz, slabSeed + 4) * Math.PI * 2,
-                radius,
-                // Sunk near half its depth, stretched tall: a face of
-                // rock nothing but a cliff flight gets over.
-                height: 1.8 * size,
-              };
+              });
             }
           }
         }
@@ -972,7 +950,7 @@ export function createTerrain(track: Track): TerrainField {
     for (let cx = Math.floor((x - r - 3) / cell); cx <= Math.floor((x + r + 3) / cell); cx++) {
       for (let cz = Math.floor((z - r - 3) / cell); cz <= Math.floor((z + r + 3) / cell); cz++) {
         const ob = inCell(cx, cz);
-        if (!ob) continue;
+        if (!ob || !standing(ob)) continue;
         const dx = ob.x - x;
         const dz = ob.z - z;
         if (dx * dx + dz * dz <= (r + ob.radius) * (r + ob.radius)) found.push(ob);
@@ -1030,22 +1008,16 @@ export function createTerrain(track: Track): TerrainField {
         const y = groundAt(x, z);
         if (y > LAKE_Y + 1.2) {
           const size = 0.75 + hash2(cx, cz, treeSeed + 3) * 0.6;
-          tree = {
+          tree = standSolid({
             x,
             z,
             y,
             kind: "tree",
             size,
             spin: hash2(cx, cz, treeSeed + 4) * Math.PI * 2,
-            // The trunk plus its lowest boughs — fat enough to punish a
-            // straight-through line, thin enough that gaps stay drivable.
-            radius: 0.3 + 0.25 * size,
-            // Tall enough that no jump clears a tree; only a real cliff
-            // flight sails over the forest.
-            height: 6 * size,
             roll: hash2(cx, cz, treeSeed + 5),
             grove,
-          };
+          });
         }
       }
     }
@@ -1066,18 +1038,18 @@ export function createTerrain(track: Track): TerrainField {
     for (const sapling of guard.saplings) {
       const y = groundAt(sapling.x, sapling.z);
       if (y < LAKE_Y + 1.2) continue;
-      grown.push({
-        x: sapling.x,
-        z: sapling.z,
-        y,
-        kind: "tree",
-        size: sapling.size,
-        spin: sapling.spin,
-        radius: 0.3 + 0.25 * sapling.size,
-        height: 6 * sapling.size,
-        roll: sapling.roll,
-        grove: groveAt(sapling.x, sapling.z),
-      });
+      grown.push(
+        standSolid({
+          x: sapling.x,
+          z: sapling.z,
+          y,
+          kind: "tree",
+          size: sapling.size,
+          spin: sapling.spin,
+          roll: sapling.roll,
+          grove: groveAt(sapling.x, sapling.z),
+        }),
+      );
     }
     guardTrees.set(guard, grown);
     return grown;
@@ -1096,7 +1068,7 @@ export function createTerrain(track: Track): TerrainField {
         cz++
       ) {
         const tree = treeInCell(cx, cz);
-        if (!tree) continue;
+        if (!tree || !standing(tree)) continue;
         const dx = tree.x - x;
         const dz = tree.z - z;
         if (dx * dx + dz * dz <= (r + tree.radius) * (r + tree.radius)) found.push(tree);
@@ -1105,6 +1077,7 @@ export function createTerrain(track: Track): TerrainField {
     for (const guard of guards.near(x, z, r)) {
       if (guard.kind !== "grove") continue;
       for (const tree of treesOfGuard(guard)) {
+        if (!standing(tree)) continue;
         const dx = tree.x - x;
         const dz = tree.z - z;
         if (dx * dx + dz * dz <= (r + tree.radius) * (r + tree.radius)) found.push(tree);
@@ -1202,6 +1175,7 @@ export function createTerrain(track: Track): TerrainField {
     stands: stands.stands,
     obstaclesNear,
     treesNear,
+    fell,
     groveAt,
     sync,
   };

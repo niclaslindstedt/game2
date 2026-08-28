@@ -670,6 +670,76 @@ export const RUN_BANK: SoundBank = {
     ],
   },
 
+  wood_break: {
+    description:
+      "A trunk giving way under a car. The bole is what makes the sound: a " +
+      "long dry CRACK that starts as a splintering tear high up and drops as " +
+      "the fibres let go, over a short woody thud of the whole weight of the " +
+      "tree shifting. Nothing metallic and nothing bright at the top — wood " +
+      "breaking is loud in the middle of the range and dead everywhere else.",
+    voices: [
+      {
+        call: "noise",
+        durationMs: 90,
+        volume: 0.075,
+        color: "pink",
+        filter: { type: "bandpass", frequency: 2600, to: 900, q: 3.2 },
+      },
+      {
+        call: "tone",
+        type: "square",
+        from: 220,
+        to: 62,
+        durationMs: 220,
+        volume: 0.05,
+        drive: 0.7,
+        filter: { type: "lowpass", frequency: 1400, to: 400 },
+      },
+      {
+        call: "noise",
+        durationMs: 260,
+        volume: 0.03,
+        delayMs: 120,
+        filter: { type: "bandpass", frequency: 1100, to: 520, q: 2.2 },
+        echo: 0.3,
+      },
+    ],
+  },
+
+  stone_shove: {
+    description:
+      "A rock coming off its bed and going. A hard flat knock with grit under " +
+      "it — stone on steel, then the lump rolling away through the scree. No " +
+      "tail to speak of: what left is heavy and it lands close.",
+    voices: [
+      {
+        call: "noise",
+        durationMs: 60,
+        volume: 0.07,
+        color: "pink",
+        filter: { type: "bandpass", frequency: 1500, to: 700, q: 2.4 },
+      },
+      {
+        call: "tone",
+        type: "triangle",
+        from: 150,
+        to: 84,
+        durationMs: 130,
+        volume: 0.045,
+        drive: 0.6,
+        filter: { type: "lowpass", frequency: 900 },
+      },
+      {
+        call: "noise",
+        durationMs: 150,
+        volume: 0.022,
+        delayMs: 110,
+        filter: { type: "bandpass", frequency: 2100, q: 2.8 },
+        echo: 0.25,
+      },
+    ],
+  },
+
   sink: {
     description:
       "The water closing over the roof. The car is already gone by the time " +

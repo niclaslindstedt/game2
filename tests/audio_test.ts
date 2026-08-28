@@ -22,7 +22,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { TUNING, createGame, step, type GameEvent } from "@engine";
+import { TUNING, createGame, standSolid, step, type GameEvent } from "@engine";
 
 import { RUN_BANK } from "../pwa/src/game/audio/bank.ts";
 import { createDriveBed } from "../pwa/src/game/audio/drive-bed.ts";
@@ -108,6 +108,11 @@ describe("the sound bank", () => {
   });
 });
 
+/** The two things a car takes out of the landscape — one of each material,
+ * because the route splits on what gave way rather than on how hard. */
+const SNAPPED_TREE = standSolid({ x: 0, y: 0, z: 0, kind: "tree", size: 1.2, spin: 0 });
+const SHOVED_ROCK = standSolid({ x: 0, y: 0, z: 0, kind: "rock", size: 0.6, spin: 0 });
+
 describe("event routing", () => {
   /** Every shape a `GameEvent` can take, one of each. Written out rather than
    * derived, because the point is to notice when the union grows. */
@@ -127,6 +132,8 @@ describe("event routing", () => {
     { type: "impact", speed: 10, angle: 1, belly: false },
     { type: "impact", speed: 24, angle: 2, belly: true },
     { type: "partBreak", part: "bumperF" },
+    { type: "solidBreak", solid: SNAPPED_TREE, broke: true, vx: 2, vy: 1, vz: 0 },
+    { type: "solidBreak", solid: SHOVED_ROCK, broke: false, vx: 9, vy: 3, vz: 1 },
     { type: "crash" },
     { type: "sink" },
     { type: "respawn" },

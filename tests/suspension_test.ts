@@ -16,6 +16,7 @@ import {
   collideCar,
   compileTrack,
   createGame,
+  standSolid,
   step,
   type CarInput,
   type GameEvent,
@@ -217,16 +218,14 @@ describe("mass", () => {
       const car = state.car;
       car.u = 30;
       // A trunk clipped by the front-right corner.
-      const tree: WildObstacle = {
+      const tree: WildObstacle = standSolid({
         x: car.x + TUNING.collision.halfWidth,
         z: car.z + TUNING.collision.halfLength + 0.4,
         y: car.y,
         kind: "tree",
         size: 1,
         spin: 0,
-        radius: 0.7,
-        height: 8,
-      };
+      });
       const events: GameEvent[] = [];
       collideCar(state.spec, car, [tree], events, state.stats);
       return Math.abs(car.yawRate);

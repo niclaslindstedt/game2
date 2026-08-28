@@ -177,3 +177,74 @@ describe("the jump", () => {
     expect(state.stats.cleanLandings).toBe(0);
   });
 });
+
+describe("over the edge", () => {
+  /** A car standing off the road on a flat table that falls away to nothing
+   * past `edgeZ` — a cliff lip, a mountain top, the end of a shelf. The
+   * road is a long way off; what the car is riding is the terrain. */
+  function onATable(edgeZ: number): GameState {
+    const state = createGame({
+      seed: 4,
+      carId: "classic",
+      skipCountdown: true,
+      track: compileTrack(4, [{ kind: "straight", length: 900, feature: "none" }]),
+    });
+    const heightAt = (_x: number, z: number): number => (z > edgeZ ? -40 : 0);
+    state.terrain = {
+      ...state.terrain,
+      heightAt,
+      groundAt: heightAt,
+      waterAt: () => null,
+      obstaclesNear: () => [],
+      treesNear: () => [],
+    };
+    state.car.x = 90; // well off the road, out on the terrain
+    state.car.y = 0;
+    return state;
+  }
+
+  /** Drive off the edge and report what happened at the moment of leaving:
+   * whether the car flew at all, and how fast it was spinning when it did. */
+  function overTheEdge(slip: number): { flew: boolean; spin: number } {
+    const state = onATable(40);
+    const car = state.car;
+    const speed = 30;
+    // The same 30 m/s across the ground either way — the difference is only
+    // how much of it the car is POINTING at.
+    car.heading = slip;
+    car.u = speed * Math.cos(slip);
+    car.w = -speed * Math.sin(slip);
+    car.z = 36; // right at the lip: the slide is still on when it goes over
+    let guard = 0;
+    while (!car.airborne && car.z < 60 && guard < 120 * 5) {
+      step(state, NEUTRAL_INPUT);
+      guard += 1;
+    }
+    return { flew: car.airborne, spin: Math.abs(car.yawRate) };
+  }
+
+  it("a car that goes over sideways flies — and spins on its way down", () => {
+    // Straight and level has always flown. The point of the gate being on
+    // the speed the car COVERS GROUND at is that a drift does too: at full
+    // lock most of the pace is across the nose, and reading the nose alone
+    // glued the car to the face of the cliff.
+    const straight = overTheEdge(0);
+    const sideways = overTheEdge(1); // ~57° of slip: properly crossed up
+    expect(straight.flew).toBe(true);
+    expect(sideways.flew).toBe(true);
+    // The tires were holding that slide; nothing is holding it now.
+    // Straight and level leaves the lip with no rotation at all; sideways
+    // leaves it turning, and keeps turning all the way down.
+    expect(straight.spin).toBeLessThan(0.05);
+    expect(sideways.spin).toBeGreaterThan(1);
+  });
+
+  it("under the crest speed the car stays glued however far the ground drops", () => {
+    const state = onATable(40);
+    const car = state.car;
+    car.z = 38;
+    car.u = TUNING.air.crestSpeed - 4;
+    step(state, NEUTRAL_INPUT);
+    expect(car.airborne).toBe(false);
+  });
+});

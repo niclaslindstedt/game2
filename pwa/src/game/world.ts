@@ -22,13 +22,15 @@ import {
   type Spur,
   type Track,
   SOLID_PROP_HEIGHT,
+  type WildObstacle,
 } from "@engine";
 
 import { isShared } from "../lib/shared-gpu.ts";
 import { biomeFor, type Biome, type Community } from "./biome.ts";
+import { createBreakage } from "./breakage.ts";
 import { createConeField, plantJumpCones, type ConeField } from "./cones.ts";
-import { buildFlora, swayFlora, type FloraPlacement } from "./flora.ts";
-import { communityByGrove, pickFlora, softMix, treePlacement } from "./planting.ts";
+import { TRUNK_COLOR, buildFlora, swayFlora, type FloraPlacement } from "./flora.ts";
+import { communityByGrove, pickFlora, samePlace, softMix, treePlacement } from "./planting.ts";
 import { buildWild } from "./wild.ts";
 import { buildTerrain, LAKE_Y, type Terrain } from "./terrain.ts";
 import { buildStreamMeshes } from "./streams.ts";
@@ -86,6 +88,9 @@ type SceneryChunk = {
   group: THREE.Group;
   /** Zero out any prop the newly built road now runs through. */
   clearNear: (track: Track, from: number, to: number) => void;
+  /** Stop drawing the one prop standing at a world point — the engine has
+   * taken it out of the field and the piece is flying (breakage.ts). */
+  retireAt: (x: number, z: number) => void;
   /** The engine trunks this chunk drew — released when the chunk drops so
    * the ownership set stays bounded on an endless run. */
   treeKeys: string[];
@@ -284,7 +289,11 @@ function buildScenery(
     if (touched) rockMesh.instanceMatrix.needsUpdate = true;
   };
 
-  return { group, clearNear, treeKeys };
+  const retireAt = (x: number, z: number): void => {
+    planted.retire((px, pz) => samePlace(px, pz, x, z));
+  };
+
+  return { group, clearNear, retireAt, treeKeys };
 }
 
 /** Everything that carries a bridge deck over its water (R13): the parapet
@@ -519,6 +528,10 @@ export type World = {
    * for the open country, which is pooled into meshes three cannot cull
    * because the camera stands inside every one of them. */
   cull: (camera: THREE.Camera, range: number) => void;
+  /** A solid the engine has taken OUT of the world (`solidBreak`): stop
+   * drawing it standing wherever it was drawn, and throw the piece it left
+   * along the velocity the contact gave it. */
+  fell: (solid: WildObstacle, vx: number, vy: number, vz: number) => void;
   /** R22 — where the finish's cannons point, for the renderer to fire.
    * Empty until the chunk carrying the finish gate is built, and on an
    * endless stage forever: nothing there ever finishes. */
@@ -609,6 +622,11 @@ export function buildWorld(track: Track, density = 1): World {
   // would leave it hanging.
   const cones = createConeField();
   group.add(cones.group);
+  // ...and, beside them, whatever the car breaks OFF the landscape. Same
+  // reason they live outside the road chunks: a chunk dropped behind an
+  // endless run would take a trunk still in the air with it.
+  const breakage = createBreakage(TRUNK_COLOR, biome.ground.bedrock);
+  group.add(breakage.group);
 
   type Chunk = {
     toS: number;
@@ -767,12 +785,27 @@ export function buildWorld(track: Track, density = 1): World {
     wild.cull(frustum);
   };
 
+  /** A solid the engine took out of the world: stop drawing it standing,
+   * wherever it was drawn — the road chunk that owns its patch of ground,
+   * or the wild cell out past them — and send the piece on its way. */
+  const fell = (solid: WildObstacle, vx: number, vy: number, vz: number): void => {
+    // The renderer keeps its own field instance, and it has to be told
+    // too: the wild streams cells in around the car for as long as the run
+    // lasts, and a field that still places a felled trunk stands it back up
+    // the moment the player drives away and comes back.
+    terrain.field.fell(solid);
+    for (const chunk of chunks) chunk.scenery.retireAt(solid.x, solid.z);
+    wild.retireAt(solid.x, solid.z);
+    breakage.spawn(solid, vx, vy, vz);
+  };
+
   const update = (state: GameState, dt: number): void => {
     terrain.update(dt);
     // The breeze is ONE uniform over the world's shared leafy material, so
     // it is advanced once here rather than per patch of planted ground.
     swayFlora(dt);
     cones.update(state, dt);
+    breakage.update(dt, terrain.heightAt);
     crowd?.update(dt, state.car.x, state.car.z);
   };
 
@@ -780,9 +813,10 @@ export function buildWorld(track: Track, density = 1): World {
     crowd?.dispose();
     wild.dispose();
     cones.dispose();
+    breakage.dispose();
     disposeGroup(group);
     terrain.dispose();
   };
 
-  return { group, update, sync, cull, dispose, muzzles: () => finish?.muzzles ?? [] };
+  return { group, update, sync, cull, fell, dispose, muzzles: () => finish?.muzzles ?? [] };
 }

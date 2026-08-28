@@ -16,7 +16,7 @@ import { createRng, inStream, type Track, type WildObstacle } from "@engine";
 
 import { buildFloraField, type FloraPlacement } from "./flora.ts";
 import type { Biome, Community } from "./biome.ts";
-import { communityByGrove, pickFlora, softMix, treePlacement } from "./planting.ts";
+import { communityByGrove, pickFlora, samePlace, softMix, treePlacement } from "./planting.ts";
 import { LAKE_Y, type Terrain } from "./terrain.ts";
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -93,6 +93,9 @@ export type Wild = {
   cull: (frustum: THREE.Frustum) => void;
   /** Retire wild props that newly built road now runs through. */
   clearNear: (t: Track, from: number, to: number) => void;
+  /** Stop drawing the one thing standing at a world point — the engine has
+   * taken it out of the field and the piece is flying (breakage.ts). */
+  retireAt: (x: number, z: number) => void;
   dispose: () => void;
 };
 
@@ -365,6 +368,24 @@ export function buildWild(track: Track, biome: Biome, terrain: Terrain, density:
     if (movedStones) flushStones();
   };
 
+  /** The engine felled the prop standing here: drop it out of whichever
+   * cell drew it, in both pools. A cell is only re-planted if it actually
+   * held the thing, so driving through a forest costs one rewrite per
+   * trunk that went down, not one per trunk in sight. */
+  const retireAt = (x: number, z: number): void => {
+    for (const [key, cell] of cells) {
+      const kept = cell.plants.filter((p) => !samePlace(p.x, p.z, x, z));
+      if (kept.length !== cell.plants.length) {
+        cell.plants = kept;
+        plants.plant(key, kept);
+      }
+      const standing = cell.stones.filter((ob) => !samePlace(ob.x, ob.z, x, z));
+      if (standing.length === cell.stones.length) continue;
+      cell.stones = standing;
+      flushStones();
+    }
+  };
+
   const dispose = (): void => {
     plants.dispose();
     stoneMesh?.dispose();
@@ -372,5 +393,5 @@ export function buildWild(track: Track, biome: Biome, terrain: Terrain, density:
     stoneMat.dispose();
   };
 
-  return { group, sync, cull, clearNear, dispose };
+  return { group, sync, cull, clearNear, retireAt, dispose };
 }

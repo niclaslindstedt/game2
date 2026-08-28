@@ -7,7 +7,7 @@
 // slides out to the left of its nose — a drift out of a clockwise turn.
 
 import type { CarSpec, GearboxMode } from "./defs/cars.ts";
-import type { Surface, TerrainField, Track } from "../mapgen/index.ts";
+import type { Surface, TerrainField, Track, WildObstacle } from "../mapgen/index.ts";
 import type { Rng } from "../lib/prng.ts";
 
 export type CarInput = {
@@ -225,6 +225,14 @@ export type GameEvent =
   | { type: "impact"; speed: number; angle: number; belly: boolean }
   /** A piece of the body tearing off — the renderer sends it flying. */
   | { type: "partBreak"; part: DamagePart }
+  /** A SOLID THE CAR TOOK OUT OF THE WORLD: a trunk snapped through, a
+   * rock knocked off its bed. The field has already stopped standing it,
+   * so this is the renderer's one chance to catch it — it retires whatever
+   * it was drawing there and tumbles the piece away along (`vx`, `vy`,
+   * `vz`), the velocity the contact actually gave it. `broke` separates
+   * the two: a snapped trunk comes down where it stood, an uprooted rock
+   * leaves at speed. */
+  | { type: "solidBreak"; solid: WildObstacle; broke: boolean; vx: number; vy: number; vz: number }
   /** The car has gone somewhere it cannot drive out of — deep water. A
    * solid never crashes the car: trees and rocks bend it and let it drive
    * on, and a wedge is answered by the stuck rule, not by a crash. The

@@ -56,7 +56,11 @@ noise. Three kinds of sound come out the other side:
   kerb hop and a forty-metre flight, one `cheer` covers a knot of six at a
   corner and the bank at the finish, and one `splash` covers a ford crossed
   at pace and a car going into a lake it will not be coming out of (an
-  octave down, half again as long).
+  octave down, half again as long). Where an event carries what it happened
+  TO, the route reads that: a `solidBreak` splits on the material — a dry
+  splintering `wood_break` for a trunk, a flat `stone_shove` for a rock —
+  and takes its pitch from the size of the thing that gave way, because a
+  sapling and an old spruce are heard apart before they are seen apart.
 - **Cues** are moments the app knows and the engine never reported. The
   countdown lights are the worked example: nothing happens in the simulation
   when a light changes, so the light is the bed's business. Menu clicks are
