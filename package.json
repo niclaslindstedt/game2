@@ -29,7 +29,8 @@
     "sim": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/simulate-run.mjs",
     "track": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/track-preview.mjs",
     "cars": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/car-preview.mjs",
-    "audition": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/audition.mjs"
+    "audition": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/audition.mjs",
+    "profile": "node scripts/profile-render.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

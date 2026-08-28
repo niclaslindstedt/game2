@@ -96,6 +96,22 @@ export class MeshBuilder {
     this.quad(p(-1, -1, -1), p(1, -1, -1), p(1, -1, 1), p(-1, -1, 1), color);
   }
 
+  /** Pour an already-baked geometry's triangles into this builder, so a
+   * part assembled from THREE primitives lands in the same buffer as the
+   * hand-wound faces around it. Only position and color come across: the
+   * whole game is fullbright, so a normal or a uv on the source is vertex
+   * data the shader will never read. The source is spent — it is disposed
+   * here rather than left for a caller that has no further use for it. */
+  absorb(source: THREE.BufferGeometry): void {
+    const pos = source.getAttribute("position");
+    const col = source.getAttribute("color");
+    for (let i = 0; i < pos.count; i++) {
+      this.pos.push(pos.getX(i), pos.getY(i), pos.getZ(i));
+      this.col.push(col.getX(i), col.getY(i), col.getZ(i));
+    }
+    source.dispose();
+  }
+
   geometry(): THREE.BufferGeometry {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(this.pos, 3));

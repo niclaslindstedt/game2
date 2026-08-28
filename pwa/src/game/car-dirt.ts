@@ -101,7 +101,12 @@ export function createDirtPainter(
   root: THREE.Group,
   spray: readonly SprayPoint[] = [],
 ): (coat: DirtCoat) => void {
-  const targets: DirtTarget[] = [];
+  // One target per GEOMETRY, not per mesh: the four wheels share a single
+  // buffer, and painting it four times over is four whole-buffer writes
+  // and four uploads for one result. The last mesh to claim a geometry is
+  // the one whose place on the car decides its filth — the rearmost wheel,
+  // which is the dirtiest corner and so the honest one to bake.
+  const byGeo = new Map<THREE.BufferGeometry, DirtTarget>();
   root.updateMatrixWorld(true);
   const origin = new THREE.Vector3();
   root.getWorldPosition(origin);
@@ -112,12 +117,13 @@ export function createDirtPainter(
     if (!color) return;
     const base = new THREE.Vector3();
     obj.getWorldPosition(base);
-    targets.push({
+    byGeo.set(geo, {
       geo,
-      orig: new Float32Array(color.array as Float32Array),
+      orig: byGeo.get(geo)?.orig ?? new Float32Array(color.array as Float32Array),
       base: base.sub(origin),
     });
   });
+  const targets: DirtTarget[] = [...byGeo.values()];
 
   const tone = new THREE.Color();
   return ({ dust, mud }: DirtCoat): void => {

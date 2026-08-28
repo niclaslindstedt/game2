@@ -746,6 +746,12 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       ghostCar.group.visible = view !== "map";
       ghostCar.shadow.visible = view !== "map";
     }
+    // The road and its scenery are built for the WHOLE stage; the frame
+    // only pays for the part the air is still clear enough to show. Last,
+    // because the map view sets its fog from the framing it just solved —
+    // culling ahead of that would measure the stage against a driving fog
+    // and blank the entire map for the frame the view opens on.
+    world?.cull(chase.camera, environment.fogFar());
     drawScene();
   };
 

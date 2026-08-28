@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim track cars audition screenshots shellcheck actionlint changelog bump hooks docs
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim track cars audition screenshots profile shellcheck actionlint changelog bump hooks docs
 
 build:
 	npm run build
@@ -60,6 +60,12 @@ audition:
 # playwright-core` and a Chromium (CHROMIUM_PATH overrides discovery).
 screenshots:
 	node scripts/screenshot.mjs
+
+# Meter what one frame costs the renderer: draw calls, triangles, program
+# and texture binds, per scene. Same Chromium requirements as
+# `screenshots`. Run it before and after any rendering change.
+profile:
+	npm run profile
 
 shellcheck:
 	shellcheck scripts/*.sh .githooks/* .claude/hooks/*.sh

@@ -224,7 +224,6 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     (blob.material as THREE.MeshBasicMaterial).dispose();
     for (const geo of lampGeos) geo.dispose();
     lampMat.dispose();
-    lampMap.dispose();
   };
 
   return {

@@ -4,7 +4,8 @@
 // the scenery scatters — a real forest is groves, not confetti, so trees
 // arrive as spruce woods, birch groves, pine heaths and open meadows, each
 // a weighted mix of a few species with its own ground cover. The geometry
-// lives in flora.ts, the painting in terrain.ts, the placement in world.ts.
+// lives in flora.ts, the painting in terrain.ts, the placement in
+// planting.ts (which species) with world.ts and wild.ts (where).
 // Today every stage is taiga; new biomes are new rows here, not new systems.
 
 /** Relative pick weights per flora variant id (see flora.ts for the ids).

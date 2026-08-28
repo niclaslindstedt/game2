@@ -184,7 +184,6 @@ export function createAmbientLife(): AmbientLife {
     planeMat.dispose();
     trailGeo.dispose();
     trailMat.dispose();
-    trailMap.dispose();
   };
 
   return { group, setTint, update, dispose };

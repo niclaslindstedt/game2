@@ -130,8 +130,60 @@ export function buildTerrain(track: Track, biome: Biome, waterTexture: THREE.Tex
   const bed = new THREE.Color(biome.ground.lakeBed);
   const c = new THREE.Color();
 
-  type Tile = { ground: THREE.Mesh; lake: THREE.Mesh | null };
+  // The water is ONE mesh for the whole ground: a pane per flooded tile,
+  // all at the same height and never overlapping, so instancing them costs
+  // nothing and saves a draw call per hollow. That needs every pane to
+  // share a geometry, which means the grain has to be anchored to the TILE
+  // rather than to the world — and it only reads as one continuous sheet
+  // if the repeat lands on a whole number of tiles, which is what
+  // WATER_REPEATS is for.
+  const WATER_REPEATS = 6;
+  const lakeGeo = new THREE.PlaneGeometry(TILE, TILE, 1, 1);
+  lakeGeo.rotateX(-Math.PI / 2);
+  {
+    const uv = lakeGeo.getAttribute("uv");
+    const pos = lakeGeo.getAttribute("position");
+    for (let i = 0; i < uv.count; i++) {
+      uv.setXY(
+        i,
+        ((pos.getX(i) + TILE / 2) / TILE) * WATER_REPEATS,
+        ((pos.getZ(i) + TILE / 2) / TILE) * WATER_REPEATS,
+      );
+    }
+  }
+  let lakes: THREE.InstancedMesh | null = null;
+  const lakeAt = new THREE.Matrix4();
+
+  type Tile = { ground: THREE.Mesh; lake: boolean };
   const tiles = new Map<string, Tile>();
+
+  /** Rewrite the water from every tile standing. Grown in blocks so a tile
+   * arriving does not reallocate the buffer each time. */
+  const flushLakes = (): void => {
+    const flooded: string[] = [];
+    for (const [key, tile] of tiles) if (tile.lake) flooded.push(key);
+    if (!lakes || lakes.instanceMatrix.count < flooded.length) {
+      if (lakes) {
+        group.remove(lakes);
+        lakes.dispose();
+      }
+      lakes = new THREE.InstancedMesh(lakeGeo, waterMat, Math.ceil((flooded.length + 1) / 32) * 32);
+      group.add(lakes);
+    }
+    flooded.forEach((key, i) => {
+      const [tx, tz] = key.split(",").map(Number);
+      lakeAt.makeTranslation((tx + 0.5) * TILE, LAKE_Y, (tz + 0.5) * TILE);
+      lakes?.setMatrixAt(i, lakeAt);
+    });
+    // Only what was written is drawn: an instance nobody sets keeps the
+    // identity matrix, which floods the start line.
+    lakes.count = flooded.length;
+    // A ground with no hollow in it draws no water at all: an instanced
+    // mesh with a count of zero is still a draw call.
+    lakes.visible = flooded.length > 0;
+    lakes.instanceMatrix.needsUpdate = true;
+    lakes.computeBoundingSphere();
+  };
 
   const buildTile = (tx: number, tz: number): Tile => {
     const originX = tx * TILE;
@@ -224,27 +276,11 @@ export function buildTerrain(track: Track, biome: Biome, waterTexture: THREE.Tex
     const ground = new THREE.Mesh(geo, groundMat);
     group.add(ground);
 
-    // Anywhere the tile dips under the water table, a water pane floods it
-    // — a lake in a hollow, the open sea across a basin. UVs are
-    // world-anchored so the sheet reads as one continuous water.
-    let lake: THREE.Mesh | null = null;
-    if (minH < LAKE_Y + 0.5) {
-      const lakeGeo = new THREE.PlaneGeometry(TILE, TILE, 1, 1);
-      lakeGeo.rotateX(-Math.PI / 2);
-      const uv = lakeGeo.getAttribute("uv");
-      const pos = lakeGeo.getAttribute("position");
-      for (let i = 0; i < uv.count; i++) {
-        uv.setXY(
-          i,
-          (originX + TILE / 2 + pos.getX(i)) / 40,
-          (originZ + TILE / 2 + pos.getZ(i)) / 40,
-        );
-      }
-      lake = new THREE.Mesh(lakeGeo, waterMat);
-      lake.position.set(originX + TILE / 2, LAKE_Y, originZ + TILE / 2);
-      group.add(lake);
-    }
-    return { ground, lake };
+    // Anywhere the tile dips under the water table, water floods it — a
+    // lake in a hollow, the open sea across a basin. The pane itself is an
+    // instance in the shared sheet above; this only says whether there is
+    // one here.
+    return { ground, lake: minH < LAKE_Y + 0.5 };
   };
 
   const dropTile = (key: string): void => {
@@ -253,10 +289,6 @@ export function buildTerrain(track: Track, biome: Biome, waterTexture: THREE.Tex
     tiles.delete(key);
     group.remove(tile.ground);
     tile.ground.geometry.dispose();
-    if (tile.lake) {
-      group.remove(tile.lake);
-      tile.lake.geometry.dispose();
-    }
   };
 
   /** Tiles the window of road [fromS, end) needs on screen right now. */
@@ -343,15 +375,20 @@ export function buildTerrain(track: Track, biome: Biome, waterTexture: THREE.Tex
         return { key, d: Math.hypot((tx + 0.5) * TILE - carX, (tz + 0.5) * TILE - carZ) };
       })
       .sort((a, b) => a.d - b.d);
+    let flooding = false;
     for (const { key } of missing.slice(0, budget)) {
       tiles.set(key, buildTile(...parseKey(key)));
+      flooding = true;
     }
     if (missing.length > budget) lastSyncedS = -Infinity; // come back next frame
 
     // Drop what neither the corridor nor the car can see anymore.
     for (const key of [...tiles.keys()]) {
-      if (!corridor.has(key) && !around.has(key)) dropTile(key);
+      if (corridor.has(key) || around.has(key)) continue;
+      dropTile(key);
+      flooding = true;
     }
+    if (flooding) flushLakes();
   };
 
   const update = (dt: number): void => {
@@ -361,7 +398,8 @@ export function buildTerrain(track: Track, biome: Biome, waterTexture: THREE.Tex
 
   const dispose = (): void => {
     for (const key of [...tiles.keys()]) dropTile(key);
-    groundTex.dispose();
+    lakes?.dispose();
+    lakeGeo.dispose();
     groundMat.dispose();
     waterMat.dispose();
   };
