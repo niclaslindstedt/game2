@@ -10,7 +10,17 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
-import { compileTrack, createGame, type GameState, type SegmentPlan } from "@engine";
+import {
+  NEUTRAL_INPUT,
+  TUNING,
+  compileTrack,
+  createGame,
+  step,
+  type GameState,
+  type SegmentPlan,
+} from "@engine";
+
+import { clamp } from "../pwa/src/lib/angles.ts";
 
 import { createGameCamera } from "../pwa/src/game/camera.ts";
 
@@ -274,5 +284,146 @@ describe("the hood camera's road grain", () => {
     // describing the sampling.
     expect(hood.heave).toBeLessThan(7);
     expect(hood.pitch).toBeLessThan(6.5);
+  });
+});
+
+/** THE WHEEL TRACKS. R16 builds the road with a crown down the middle and
+ * two worn tracks either side of it, and the car rides that cross-section —
+ * so a corner that carries the car across the road moves it up and down by
+ * fifteen centimetres on ground that is dead flat. The car is supposed to
+ * do that. The camera is not (SLACK in camera.ts).
+ *
+ * Nothing here is scripted onto the car: the road is compiled flat, the
+ * physics drives, and the only input is a lateral line the car is steered
+ * along. Whatever the camera does with it is the whole measurement.
+ */
+const WEAVE = { reach: 3.4, period: 5 };
+
+/** A dead-flat, dead-straight stage: no elevation, no bank. Every metre of
+ * vertical anything moves on it comes from the road's cross-section. */
+function flatRoad(): GameState {
+  const base = compileTrack(3, [{ kind: "straight", length: 2000, feature: "none" }]);
+  return createGame({
+    seed: 3,
+    carId: "compact",
+    skipCountdown: true,
+    track: { ...base, samples: base.samples.map((s) => ({ ...s, elevation: 0, bank: 0 })) },
+  });
+}
+
+/** ...and the same road rolled into 6 m hills on a 200 m wavelength: the
+ * terrain the camera still has to fly. */
+function rollingRoad(): GameState {
+  const base = compileTrack(3, [{ kind: "straight", length: 2000, feature: "none" }]);
+  return createGame({
+    seed: 3,
+    carId: "compact",
+    skipCountdown: true,
+    track: {
+      ...base,
+      samples: base.samples.map((s) => ({
+        ...s,
+        elevation: 6 * Math.sin((s.s * Math.PI * 2) / 200),
+        bank: 0,
+      })),
+    },
+  });
+}
+
+/** Drive `state` at full throttle for `seconds`, steering the car along a
+ * lateral line across the road, and report what the camera and the car each
+ * did. `line` is metres right of where the car started. */
+function driveAcross(
+  state: GameState,
+  mode: "chase" | "hood",
+  seconds: number,
+  line: (t: number) => number,
+): { camY: number[]; carY: number[]; camRoll: number[]; carRoll: number[] } {
+  const cam = createGameCamera(1600, 900);
+  cam.setMode(mode);
+  const sub = Math.round(FRAME / TUNING.dt);
+  const drive = (steer: number): void => {
+    for (let s = 0; s < sub; s++) step(state, { ...NEUTRAL_INPUT, throttle: 1, steer });
+  };
+  // Up to pace first, straight: a car pulling away from the line is not
+  // driving the road yet.
+  for (let f = 0; f < 60 * 6; f++) {
+    drive(0);
+    cam.update(state, FRAME);
+  }
+  const home = state.car.x;
+  const trace = {
+    camY: [] as number[],
+    carY: [] as number[],
+    camRoll: [] as number[],
+    carRoll: [] as number[],
+  };
+  const up = new THREE.Vector3();
+  const dir = new THREE.Vector3();
+  let was = 0;
+  for (let f = 0; f < Math.round(seconds / FRAME); f++) {
+    const off = state.car.x - home;
+    // Hold the line: proportional on the offset, damped on the rate it is
+    // closing at, so the car crosses the road instead of diverging off it.
+    const steer = clamp(0.11 * (line(f * FRAME) - off) - 0.24 * ((off - was) / FRAME), -0.4, 0.4);
+    was = off;
+    drive(steer);
+    cam.update(state, FRAME);
+    trace.camY.push(cam.camera.position.y);
+    trace.carY.push(state.car.y);
+    cam.camera.getWorldDirection(dir);
+    up.set(0, 1, 0).applyQuaternion(cam.camera.quaternion);
+    trace.camRoll.push(Math.atan2(up.x * dir.z - up.z * dir.x, up.y));
+    trace.carRoll.push(state.car.roll);
+  }
+  return trace;
+}
+
+/** The BUMP in a trace: the biggest excursion from its own 1.5 s moving
+ * average. A hill lives in the average; a wheel track does not. */
+function bump(series: number[]): number {
+  const win = Math.round(0.75 / FRAME);
+  let peak = 0;
+  for (let i = win; i < series.length - win; i++) {
+    let avg = 0;
+    for (let k = -win; k <= win; k++) avg += series[i + k];
+    peak = Math.max(peak, Math.abs(series[i] - avg / (2 * win + 1)));
+  }
+  return peak;
+}
+
+const weaving = (t: number): number => WEAVE.reach * Math.sin((t * Math.PI * 2) / WEAVE.period);
+
+describe("the road's own cross-section", () => {
+  it("moves the car and not the camera", () => {
+    const run = driveAcross(flatRoad(), "chase", 16, weaving);
+    // The car is doing what R16 says it should: dropping into a wheel track
+    // and climbing back over the crown, on a stage with no hill in it.
+    expect(bump(run.carY)).toBeGreaterThan(0.06);
+    // The camera is not following it there. What is left is a slow drift of
+    // under a centimetre — the play recovering — not a bump.
+    expect(bump(run.camY)).toBeLessThan(0.02);
+  });
+
+  it("rocks the body and not the driver's horizon", () => {
+    const run = driveAcross(flatRoad(), "hood", 16, weaving);
+    const body = Math.max(...run.carRoll) - Math.min(...run.carRoll);
+    const horizon = Math.max(...run.camRoll) - Math.min(...run.camRoll);
+    // The trough of a wheel track is steep enough to tip the body ten
+    // degrees over a crossing...
+    expect(body).toBeGreaterThan(0.15);
+    // ...and the driver's head is levelled against most of it. Not all: a
+    // seat that took none of the road would be a tripod, and the neck's own
+    // lean through the corner is in here too.
+    expect(horizon).toBeLessThan(body * 0.55);
+  });
+
+  it("leaves the hills alone", () => {
+    const run = driveAcross(rollingRoad(), "chase", 16, () => 0);
+    const rise = Math.max(...run.carY) - Math.min(...run.carY);
+    expect(rise).toBeGreaterThan(10);
+    // The camera flies all of it. The play it hangs on is the only thing it
+    // is allowed to keep, and that is centimetres against metres.
+    expect(Math.max(...run.camY) - Math.min(...run.camY)).toBeGreaterThan(rise - 0.75);
   });
 });

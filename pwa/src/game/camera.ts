@@ -551,6 +551,77 @@ const FOOTPRINT: [number, number][] = [
   [-FLOOR.span, -FLOOR.span],
 ];
 
+/** THE SURFACE IS NOT THE SHAPE. R16 builds a real dirt road across its
+ * width: a crown down the middle, two worn wheel tracks either side of it,
+ * a loose edge outside those, and a shoulder that steps down into the
+ * verge. The car RIDES all of it — it drops fifteen centimetres into a
+ * track and climbs back out over the crown, and it should: that is what
+ * tells a driver from inside the car that the road has been used. The
+ * CAMERA should not. Line a corner up so the car crosses the road and a
+ * camera hung off the car's own height heaves nearly ten centimetres up and
+ * down on a stage that is DEAD FLAT — a bump with nothing under it,
+ * arriving exactly where the shot is supposed to be at its steadiest.
+ *
+ * So the camera hangs off the car on a LOOSE LINKAGE. There is `reach` of
+ * play in it, and the linkage recovers that play at `recover` per second.
+ * Inside the play the camera barely moves; past it the linkage is tight and
+ * the camera moves one for one, so a crest, a landing, a cliff and a jump
+ * all arrive at full size and only ever late by the play itself. The clamp
+ * is also what makes a respawn free: the reading can never be further than
+ * the play from the truth, so there is no jump to catch and no snap case to
+ * write.
+ *
+ * The two quantities it is hung on are separated by different things, and
+ * the numbers say which.
+ *
+ * The HEIGHT is separated by SIZE, and it has to be: a long sweeper crosses
+ * the wheel tracks over several seconds, and no filter quick enough to
+ * leave a crest alone would ever reject that. What separates them instead
+ * is that the cross-section is BOUNDED and the terrain is not — so the play
+ * covers the whole cross-section and the recovery is slow enough that
+ * almost nothing leaks through it.
+ *
+ * The ROLL is separated by TIME, because size cannot do it: the body
+ * settles onto the camber under its wheels, and a wheel track's trough is
+ * worth about five degrees — which is also about what R19 banks a gravel
+ * corner. The difference is that a bank is HELD for the length of a corner
+ * and a wheel track is CROSSED in a second, so here the play is wide enough
+ * that the clamp stays out of the way of both and the recovery does the
+ * work: the bank is handed over inside its own runoff, and the crossing is
+ * gone. The clamp is still there for the one case time cannot handle — a
+ * hillside off the road, which is tens of degrees and would otherwise lag
+ * into the scenery. */
+const SLACK = {
+  /** The camera's height. The play is clear of the cross-section's whole
+   * range — a crown to the bottom of a wheel track is under 0.2 m, and the
+   * step off the mat onto the verge under 0.4 — and far under the smallest
+   * thing the generator builds that the camera is meant to fly. */
+  ground: { reach: 0.35, recover: 0.2 },
+  /** The hood camera's horizon, rad. Nine degrees of play is a whole
+   * wheel-track crossing and a whole bank, so what decides between them is
+   * the recovery: a corner's bank is most of the way through within its
+   * runoff, and a crossing leaks about a fifth of itself. */
+  roll: { reach: 0.16, recover: 0.35 },
+} as const;
+
+/** A reading hung off a moving one through `reach` of play, recovering it
+ * at `recover` per second. Inside the play the reading barely moves; past
+ * it it moves one for one, offset by the play. */
+function createSlack(spec: { reach: number; recover: number }): (v: number, dt: number) => number {
+  let datum = 0;
+  let hung = false;
+  return (value, dt) => {
+    // The first reading is taken where it is found: a linkage starts hung
+    // on the car, not on whatever height the world's origin happens to be.
+    if (!hung) {
+      datum = value;
+      hung = true;
+    }
+    datum += (value - datum) * clamp(spec.recover * dt, 0, 1);
+    return (datum = clamp(datum, value - spec.reach, value + spec.reach));
+  };
+}
+
 /** THE CLIFF. Driving off a cliff top is the one place the chase rig has
  * nothing sensible to follow. Riding the car down keeps it exactly two
  * metres over the roof for the whole plunge, so a twenty-five metre drop
@@ -704,6 +775,12 @@ export function createGameCamera(width: number, height: number): GameCamera {
    * it, m. */
   let takeoff = 0;
   let held = 0;
+  /** The play the camera hangs on (SLACK): the ground height every camera
+   * that stands over the car is built from, and the horizon the driver's
+   * own head is levelled against. Both are the car's reading with the
+   * road's SURFACE taken out of it. */
+  const groundSlack = createSlack(SLACK.ground);
+  const rollSlack = createSlack(SLACK.roll);
   /** Seconds the camera has been alive — the drone's circling and the map
    * view's azimuth both walk off it, so neither depends on frame rate. */
   let orbit = 0;
@@ -761,6 +838,12 @@ export function createGameCamera(width: number, height: number): GameCamera {
 
   const updateChase = (rig: ChaseRig, state: GameState, dt: number): void => {
     const car = state.car;
+    // The height the shot is built from — the car's, less whatever of it is
+    // only the road's cross-section (SLACK). The STAND and the AIM take the
+    // same one, so the play never shows as pitch: what it costs is the car
+    // riding a few centimetres up and down inside the frame, which is the
+    // car dropping into a wheel track, which is what is actually happening.
+    const ground = groundSlack(car.y, dt);
     const speed = Math.hypot(car.u, car.w);
     // The Sega Rally read: the camera follows the ROAD, so a drift swings
     // the car across the frame while the road keeps flowing to the
@@ -848,7 +931,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
 
     const sx = (Math.random() - 0.5) * shake * rig.shake;
     const sy = (Math.random() - 0.5) * shake * rig.shake;
-    const ride = car.y + height_ + car.ride * rig.heave + held;
+    const ride = ground + height_ + car.ride * rig.heave + held;
     camera.position.set(camX + sx, Math.max(ride, floor) + sy, camZ);
     // The drop from camera to aim point over the run between them IS the
     // pitch of the shot — a few degrees for the chase rigs, most of a right
@@ -857,7 +940,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
     const climb = clamp(car.vy / Math.max(10, car.u), -0.4, 0.4);
     camera.lookAt(
       car.x + Math.sin(yaw) * rig.aimAhead,
-      car.y + rig.aimHeight + climb * rig.aimClimb + sy * 0.5,
+      ground + rig.aimHeight + climb * rig.aimClimb + sy * 0.5,
       car.z + Math.cos(yaw) * rig.aimAhead,
     );
   };
@@ -1019,9 +1102,16 @@ export function createGameCamera(width: number, height: number): GameCamera {
     camera.lookAt(aim);
     // Positive body roll lifts the car's RIGHT side, which tips everything
     // bolted to it — the driver included — to the left; the neck adds its
-    // own tilt on top, the top of the head leading the lean.
+    // own tilt on top, the top of the head leading the lean. The body's
+    // roll arrives through the same play the chase rigs stand on (SLACK):
+    // a driver's neck holds their head level through the wheel track the
+    // car drops into and leans with the bank it is held on, and without
+    // that separation a straight road rocks the horizon every time the car
+    // wanders across the crown.
     camera.rotateZ(
-      car.roll * HEAD.rollFollow - HEAD.tilt * offLat + (g1 * 0.5 + g3 * 0.5) * GRAIN.tilt * grain,
+      rollSlack(car.roll, dt) * HEAD.rollFollow -
+        HEAD.tilt * offLat +
+        (g1 * 0.5 + g3 * 0.5) * GRAIN.tilt * grain,
     );
   };
 
@@ -1045,9 +1135,10 @@ export function createGameCamera(width: number, height: number): GameCamera {
     fov += (52 - fov) * clamp(2 * dt, 0, 1);
     const rightX = Math.cos(yaw);
     const rightZ = -Math.sin(yaw);
+    const ground = groundSlack(car.y, dt);
     camera.position.set(
       car.x - Math.sin(yaw) * dist + rightX * DRONE_SIDE,
-      car.y + height_,
+      ground + height_,
       car.z - Math.cos(yaw) * dist + rightZ * DRONE_SIDE,
     );
     // Aimed ahead of the car rather than at it, so the road the bot is
@@ -1056,7 +1147,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
     // than as a map scrolling past.
     camera.lookAt(
       car.x + Math.sin(yaw) * 46 + rightX * DRONE_SIDE * 0.55,
-      car.y + 12,
+      ground + 12,
       car.z + Math.cos(yaw) * 46 + rightZ * DRONE_SIDE * 0.55,
     );
   };
