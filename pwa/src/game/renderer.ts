@@ -29,7 +29,7 @@ import {
   WILD_THROW,
   type DustTint,
 } from "./dust.ts";
-import { SOOT, sootySmoke, STONE_DUST } from "./ground-tint.ts";
+import { SOOT, sootySmoke, STONE_DUST, type PlumeGround } from "./ground-tint.ts";
 import { createCarFx } from "./car-fx.ts";
 import { createEnvironment } from "./environment.ts";
 import { createFieldCars, type FieldCars } from "./field-cars.ts";
@@ -129,6 +129,11 @@ export type GameRenderer = {
    * cruising — the debug overlay's readout, and the repro line's
    * coordinates. */
   cameraPose: () => FreeFlyPose & { speed: number; mode: CameraMode };
+  /** The driver has thrown the establishing shot away. Call it BEFORE the
+   * engine's own `skipIntro`, which moves the run's clock in one step: this
+   * is what lets the camera fly the rest of the shot at speed instead of
+   * cutting to the driving rig (camera-start.ts). */
+  skipIntroShot: () => void;
   render: (state: GameState, dt: number) => void;
   onEvents: (state: GameState, events: GameEvent[]) => void;
   resize: () => void;
@@ -409,7 +414,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     route.group.visible = mapView;
     scene.add(route.group);
     fitCar(state);
-    // A new stage is a new run: a ghost or a field on it is asked for after.
+    // A new stage is a new run: a ghost or a field on it is asked for after,
+    // and the establishing shot starts again from the top.
+    chase.resetStartShot();
     dropGhost();
     field.clear();
     applyIsland();
@@ -455,6 +462,11 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
    * road is the renderer's own read of the conditions, so it is handed in
    * rather than asked for. */
   const groundDust = (state: GameState): number | DustTint => carFx.groundDust(state, wetGround);
+
+  /** …and what the same ground gives the cloud the car TOWS, which is a
+   * shorter list: only a surface with loose dry dust on it hangs anything in
+   * the air behind a car. */
+  const plumeDust = (state: GameState): PlumeGround => carFx.plumeDust(state, wetGround);
 
   const onEvents = (state: GameState, events: GameEvent[]): void => {
     const c = state.car;
@@ -577,10 +589,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     accelSmooth += (accel - accelSmooth) * Math.min(1, 8 * dt);
     // THE TOWED CLOUD, which is the other half of a loose surface and comes
     // up on its own terms: not thrown by a wheel, so not part of the wheel
-    // logic below, and off entirely where the ground has nothing to give —
-    // a sealed road, water, or a stage the rain has settled.
-    const lifts = sealed || wetGround || state.surface === "water";
-    plume.update(state, dt, fx, lifts ? null : groundDust(state));
+    // logic below, and off entirely where the ground has no loose dry dust
+    // in it. `plumeDust` is that whole judgement — a sealed road, water, a
+    // stage the rain has settled and a grass verge all come back null.
+    plume.update(state, dt, fx, plumeDust(state));
 
     // How hot the tires are, which only tarmac has any use for. A tire
     // cooks while it is sliding and cools the moment it hooks back up, and
@@ -978,6 +990,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     },
     placeCamera: (pose) => chase.free.place(pose),
     cameraPose: () => ({ ...chase.pose(), speed: chase.free.speed(), mode: chase.mode() }),
+    skipIntroShot: chase.skipStartShot,
     render,
     onEvents,
     resize,

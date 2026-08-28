@@ -173,6 +173,7 @@ export {
 } from "./sim/skill.ts";
 export {
   FIELD_SIZE,
+  GRID_STAGGER,
   PLAYER_NUMBER,
   RIVALS,
   START_INTERVAL,

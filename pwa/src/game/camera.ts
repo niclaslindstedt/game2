@@ -59,7 +59,7 @@ import {
   type FreeFlyPose,
   type FreeFlyRig,
 } from "./camera-free.ts";
-import { flyStart } from "./camera-start.ts";
+import { createStartCamera } from "./camera-start.ts";
 import { ISLAND_MARGIN } from "./map-island.ts";
 import { PLAY_CAMERAS, type PlayCamera } from "./settings.ts";
 
@@ -617,6 +617,12 @@ export type GameCamera = {
    * pushed when the car's meshes are built, because the mount is read off
    * that car's own silhouette. */
   setHoodEye: (eye: HoodEye) => void;
+  /** The driver has thrown the establishing shot away. The engine's own skip
+   * is instant; this lets the camera fly the rest of the shot at speed
+   * instead of cutting (camera-start.ts). */
+  skipStartShot: () => void;
+  /** Rewind the establishing shot for a new run. */
+  resetStartShot: () => void;
   update: (state: GameState, dt: number) => void;
   kick: (strength: number) => void;
   resize: (width: number, height: number) => void;
@@ -624,6 +630,7 @@ export type GameCamera = {
 
 export function createGameCamera(width: number, height: number): GameCamera {
   const camera = new THREE.PerspectiveCamera(60, width / height, DRIVING_NEAR, DRIVING_FAR);
+  const startShot = createStartCamera();
   let mode: CameraMode = "chase";
   let yaw = 0;
   /** Chase yaw, decomposed: the part that follows the nose... */
@@ -1160,11 +1167,12 @@ export function createGameCamera(width: number, height: number): GameCamera {
     // instead of it: the rig has just written the pose the player will be
     // driving with, and the shot blends into that exact frame, so the
     // hand-over is seamless in whichever camera they chose. The overhead
-    // views are the menu's own framing and are left alone.
-    const shot =
-      state.phase === "intro" && mode !== "drone" && mode !== "map"
-        ? flyStart(camera, state, fov)
-        : fov;
+    // views are the menu's own framing and are left alone — and a rushed
+    // hand-over the menu interrupted is abandoned rather than left pending,
+    // or it would resume over a frame nobody skipped from.
+    const overhead = mode === "drone" || mode === "map";
+    if (overhead) startShot.reset();
+    const shot = !overhead && startShot.flying(state) ? startShot.fly(camera, state, fov, dt) : fov;
     camera.fov = verticalFovFor(shot, camera.aspect);
     camera.updateProjectionMatrix();
   };
@@ -1194,6 +1202,8 @@ export function createGameCamera(width: number, height: number): GameCamera {
       mapPitch = MAP_PITCH;
       mapZoom = 1;
     },
+    skipStartShot: startShot.skip,
+    resetStartShot: startShot.reset,
     cycle: () => {
       // Genuinely a no-op from the overhead views: the drone and the map are
       // the menu's own framing, and walking them onto a driving camera would

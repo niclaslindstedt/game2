@@ -25,7 +25,7 @@ import {
   type Dust,
   type DustTint,
 } from "./dust.ts";
-import { groundTint } from "./ground-tint.ts";
+import { groundTint, plumeGround, type PlumeGround } from "./ground-tint.ts";
 import { createPlume, type Plume } from "./plume.ts";
 import { createFumes, type Fumes } from "./fumes.ts";
 import { rockAt } from "./terrain.ts";
@@ -60,6 +60,9 @@ export type CarFx = {
    * to be thrown off it. The rock test is deferred: it is a terrain lookup,
    * and only one of the branches ever asks for it. */
   groundDust: (state: GameState, wet: boolean) => number | DustTint;
+  /** …and what that same ground gives a cloud that HANGS, which is not the
+   * same list: null where there is nothing loose and dry to lift. */
+  plumeDust: (state: GameState, wet: boolean) => PlumeGround;
   /** A burst off ALL FOUR contact patches at once — which is what a
    * landing and a take-off are: four tyres meeting or leaving the ground
    * together, not one event in the middle of the car. `total` is the whole
@@ -109,8 +112,14 @@ export function createCarFx(scene: THREE.Scene): CarFx {
     life.setTint(tint);
   };
 
+  const bareRock = (state: GameState): number =>
+    rockAt(state.terrain.groundAt, state.car.x, state.car.z);
+
   const groundDust = (state: GameState, wet: boolean): number | DustTint =>
-    groundTint(state.surface, wet, () => rockAt(state.terrain.groundAt, state.car.x, state.car.z));
+    groundTint(state.surface, wet, () => bareRock(state));
+
+  const plumeDust = (state: GameState, wet: boolean): PlumeGround =>
+    plumeGround(state.surface, wet, () => bareRock(state));
 
   const atWheels = (
     cloud: Dust,
@@ -167,6 +176,7 @@ export function createCarFx(scene: THREE.Scene): CarFx {
     celebration,
     setTint,
     groundDust,
+    plumeDust,
     atWheels,
     step,
     dispose,

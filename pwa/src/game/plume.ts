@@ -10,12 +10,12 @@
 // Presentation only, like everything else in this directory: it reads the
 // live `GameState` and never writes a byte of it.
 //
-// WHAT DECIDES WHETHER IT COMES UP AT ALL is not here — the renderer owns
-// that call, because it is the same call that decides what colour a wheel's
-// grit is, and the two must never disagree. This module is handed a tint or
-// a null, and a null means the ground under the car has nothing to give:
-// a sealed road, which has nothing lying on it, or a wet one, where the
-// water has bound down everything that would otherwise fly.
+// WHAT DECIDES WHETHER IT COMES UP AT ALL is not here — ground-tint.ts owns
+// that call (`plumeGround`), because it is the same module that decides what
+// colour a wheel's grit is and the two must never disagree. This module is
+// handed a ground or a null, and a null means what is under the car has no
+// loose dry dust in it to lift: a sealed road, a wet one where the water has
+// bound everything down, or turf, which binds its own soil.
 
 import * as THREE from "three";
 
@@ -28,19 +28,18 @@ import {
   GROUND_CLOUD,
   PLUME,
   plumeScale,
-  WILD_THROW,
   type Dust,
-  type DustTint,
 } from "./dust.ts";
+import { type PlumeGround } from "./ground-tint.ts";
 
 export type Plume = {
   points: THREE.Points;
   /**
-   * Advance the cloud, and add to it if the car is earning any. `tint` is
-   * what the ground under the wheels is made of, or null where it gives up
-   * nothing at all; `fx` is the effects budget.
+   * Advance the cloud, and add to it if the car is earning any. `ground` is
+   * what the surface under the wheels has to hang in the air, or null where
+   * it has nothing; `fx` is the effects budget.
    */
-  update: (state: GameState, dt: number, fx: number, tint: number | DustTint | null) => void;
+  update: (state: GameState, dt: number, fx: number, ground: PlumeGround) => void;
   dispose: () => void;
 };
 
@@ -52,26 +51,17 @@ export function createPlume(): Plume {
    * puff every few frames. */
   let debt = 0;
 
-  const update = (
-    state: GameState,
-    dt: number,
-    fx: number,
-    tint: number | DustTint | null,
-  ): void => {
+  const update = (state: GameState, dt: number, fx: number, ground: PlumeGround): void => {
     cloud.update(dt);
     const car = state.car;
     // Nothing in the air: a car off the ground is not lifting anything off
     // it, and the plume it left is already behind it.
-    if (tint === null || fx <= 0 || car.airborne) return;
+    if (ground === null || fx <= 0 || car.airborne) return;
     const pace = plumeScale(car.u);
     if (pace <= 0) return;
 
-    // Turf holds together where a graded road does not: a wheel off the
-    // road tears out clods, it does not lift a screen of dust — so the
-    // wild gets the same cloud at the same cut the grit takes out there.
-    const ground = state.surface === "nature" ? WILD_THROW : 1;
     const rate = PLUME.rate.min + (PLUME.rate.max - PLUME.rate.min) * pace;
-    debt += rate * ground * Math.min(dt, PLUME.maxStep) * fx;
+    debt += rate * ground.amount * Math.min(dt, PLUME.maxStep) * fx;
     const puffs = Math.floor(debt);
     debt -= puffs;
     if (puffs <= 0) return;
@@ -95,12 +85,11 @@ export function createPlume(): Plume {
     const carry = car.u * PLUME.follow - PLUME.kick * (0.5 + 0.5 * pace) * Math.sign(car.u || 1);
     const vx = fwdX * carry + state.wind.x * 0.7;
     const vz = fwdZ * carry + state.wind.z * 0.7;
-    // WHICH WHEELS: the driven ones, and only those. An undriven wheel
-    // rolls over the surface and leaves it where it was; a driven one
-    // tears it out, and the cloud is what it tore out. So the car's
-    // layout picks the axle — and a front-driver's plume coming forward
-    // from under its nose is the most visible difference there is between
-    // the two layouts from behind the car.
+    // WHICH WHEELS: mostly the back ones on every layout, and how much
+    // "mostly" is comes off the drivetrain (`DRIVEN_REAR`). The rear axle
+    // runs through ground the front has already torn open and the wake that
+    // carries a plume sits behind the car, so a rear bias is what the effect
+    // is; a front-driver merely wears it a little more lightly.
     const rear = DRIVEN_REAR[state.spec.drive];
     // Spread rides with pace beside the count: a thinned cloud inside an
     // unchanged spread is the same wide cloud with gaps torn in it.
@@ -113,7 +102,7 @@ export function createPlume(): Plume {
         car.x + fwdX * along + rightX * side + jx,
         car.y + AXLE.height + Math.random() * PLUME.lift,
         car.z + fwdZ * along + rightZ * side + jz,
-        tint,
+        ground.tint,
         1,
         PLUME.spread * pace,
         vx,

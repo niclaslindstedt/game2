@@ -30,6 +30,25 @@ import type { BotProfile } from "./bot.ts";
  * player's start number a number rather than an afternoon. */
 export const START_INTERVAL = 10;
 
+/** WHERE THE CREW IN FRONT IS STOOD, metres to the RIGHT of the player's own
+ * grid slot.
+ *
+ * A start control is not one square of tarmac: the car being counted down
+ * sits beside the one waiting behind it, because two rally cars do not
+ * occupy the same piece of road. Every rival is entered off this same slot,
+ * and only one of them is ever out of the control at a time, so it is one
+ * number rather than a grid.
+ *
+ * It is bounded from both ends and there is not much room between them. Two
+ * bodies clear of each other needs more than a full car width between the
+ * centres (`TUNING.collision.halfWidth` is 0.92 m, so 1.84 m of body plus a
+ * gap you can see), and staying on the road caps it at the narrowest stage's
+ * half width less the same half body — a road is 7 m across at R21's floor,
+ * which leaves 2.58 m. This sits between the two: the crew in front pulls
+ * away from ALONGSIDE the player rather than out of them, and does it
+ * without a wheel on the verge. */
+export const GRID_STAGGER = 2.4;
+
 export type RivalCrew = {
   id: string;
   /** What the timing screens call them. Aliases rather than names because a
