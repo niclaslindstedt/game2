@@ -270,7 +270,13 @@ export const DEFAULT_SETTINGS: Settings = {
     boost: true,
     timer: true,
   },
-  camera: "chase",
+  // The shortest boom outside the car: the car fills the frame, a drift
+  // still swings it right across, and standing that close is what makes it
+  // the calmest read at pace — the nearer the camera, the fewer metres of
+  // world a given lag in the follow drags across the frame. A player who
+  // has not chosen a view gets the one that asks least of them; the ladder
+  // runs both ways from here, one press of the camera key at a time.
+  camera: "close",
   // Defaults with headroom on both: the engine bed and the score sum into
   // one limiter, and a game that arrives at full scale has nowhere to go but
   // down. Music sits under the effects, because the effects are what the

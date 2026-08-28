@@ -7,6 +7,7 @@
 // over the roof is what a twenty-five metre drop looks like when nothing at
 // all is happening. Driven directly — the camera only ever reads state, so a
 // scripted fall is the whole scenario and needs no physics.
+import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
 import { compileTrack, createGame, type GameState, type SegmentPlan } from "@engine";
@@ -150,5 +151,128 @@ describe("chase camera over a cliff", () => {
     // descent lift (`dropLift`) on the way down; the cliff hold contributes
     // none of it.
     expect(Math.max(...overs.slice(4))).toBeLessThan(2.8);
+  });
+});
+
+/** Undulating ground and a weaving car — everything an outside rig answers
+ * to at once (the nose, the swing, the hill lift, the floor it may not sink
+ * under), scripted so every rig answers the identical drive. */
+function weave(
+  state: GameState,
+  cam: ReturnType<typeof createGameCamera>,
+  frames: number,
+): { heights: number[]; pitches: number[] } {
+  const car = state.car;
+  const z0 = car.z;
+  const ground = (z: number): number =>
+    Math.sin((z - z0) * 0.07) * 1.1 + Math.sin((z - z0) * 0.31) * 0.2;
+  state.terrain = { ...state.terrain, groundAt: (_x, z) => ground(z), waterAt: () => null };
+  car.u = 30;
+  car.y = ground(z0);
+  const heights: number[] = [];
+  const pitches: number[] = [];
+  const dir = new THREE.Vector3();
+  for (let f = 0; f < frames; f++) {
+    const t = f * FRAME;
+    car.heading = Math.sin(t * 1.6) * 0.5;
+    car.yawRate = Math.cos(t * 1.6) * 0.8;
+    car.z += car.u * FRAME;
+    const y = ground(car.z);
+    car.vy = (y - car.y) / FRAME;
+    car.y = y;
+    cam.update(state, FRAME);
+    heights.push(cam.camera.position.y - car.y);
+    cam.camera.getWorldDirection(dir);
+    pitches.push(Math.asin(Math.max(-1, Math.min(1, dir.y))));
+  }
+  return { heights, pitches };
+}
+
+/** Nothing but the road's own grain: a car held at pace, dead straight, on
+ * ground with no shape to it at all. Whatever moves the lens here is the
+ * hood cam's own invention. */
+function straight(
+  state: GameState,
+  cam: ReturnType<typeof createGameCamera>,
+  frames: number,
+): { heights: number[]; pitches: number[] } {
+  const car = state.car;
+  state.terrain = { ...state.terrain, groundAt: () => car.y, waterAt: () => null };
+  car.heading = 0;
+  car.yawRate = 0;
+  car.u = 30;
+  const heights: number[] = [];
+  const pitches: number[] = [];
+  const dir = new THREE.Vector3();
+  for (let f = 0; f < frames; f++) {
+    car.z += car.u * FRAME;
+    cam.update(state, FRAME);
+    heights.push(cam.camera.position.y - car.y);
+    cam.camera.getWorldDirection(dir);
+    pitches.push(Math.asin(Math.max(-1, Math.min(1, dir.y))));
+  }
+  return { heights, pitches };
+}
+
+/** How violently a series moves, per second squared. A pan of any speed has
+ * almost no second difference; a shot that ROCKS is nothing else, which is
+ * why this and not the travel itself is what "smooth" has to be measured
+ * against — a camera can move a long way and still be smooth. */
+function jolt(series: number[]): number {
+  let sum = 0;
+  for (let i = 1; i < series.length - 1; i++) {
+    sum += ((series[i + 1] - 2 * series[i] + series[i - 1]) / (FRAME * FRAME)) ** 2;
+  }
+  return Math.sqrt(sum / (series.length - 2));
+}
+
+function spread(series: number[]): number {
+  const mean = series.reduce((a, v) => a + v, 0) / series.length;
+  return Math.sqrt(series.reduce((a, v) => a + (v - mean) ** 2, 0) / series.length);
+}
+
+/** The grain fades in over its first half second, and a rising envelope on
+ * an oscillation is its own transient — measure the steady state. */
+const SETTLED = 90;
+
+function steady(cam: ReturnType<typeof createGameCamera>, mode: "close" | "chase" | "hood") {
+  const state = game();
+  cam.setMode(mode);
+  cam.skipStartShot();
+  const run = mode === "hood" ? straight(state, cam, 600) : weave(state, cam, 600);
+  return {
+    heave: jolt(run.heights.slice(SETTLED)),
+    pitch: jolt(run.pitches.slice(SETTLED)),
+    travel: spread(run.heights.slice(SETTLED)),
+  };
+}
+
+describe("the two shots the game is driven from", () => {
+  it("are equally steady over the same drive", () => {
+    const close = steady(createGameCamera(1600, 900), "close");
+    const chase = steady(createGameCamera(1600, 900), "chase");
+    // `chase` stands further back than `close`, and a longer boom turns the
+    // same lag into more travel — so matching it is not free, it is what the
+    // shared follow rate and swing spring in CHASE_RIGS buy. Stood back is
+    // allowed to be a different FRAMING; it is not allowed to be a rockier
+    // picture.
+    expect(chase.heave).toBeLessThanOrEqual(close.heave);
+    expect(chase.pitch).toBeLessThanOrEqual(close.pitch);
+  });
+});
+
+describe("the hood camera's road grain", () => {
+  it("shakes the seat without shaking the picture apart", () => {
+    const hood = steady(createGameCamera(1600, 900), "hood");
+    // The road is still coming up through the seat: on a smooth straight at
+    // pace the eye is never still, and a grain that stopped being felt would
+    // put the bonnet back to being a painted slab pinned to the glass.
+    expect(hood.travel).toBeGreaterThan(0.004);
+    // ...but it is a vibration, not a rattle. Both ceilings are what a 60 Hz
+    // frame can still draw as a WAVE rather than as a different offset every
+    // frame; past them the grain has stopped describing the road and started
+    // describing the sampling.
+    expect(hood.heave).toBeLessThan(7);
+    expect(hood.pitch).toBeLessThan(6.5);
   });
 });
