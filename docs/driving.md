@@ -51,13 +51,14 @@ one continuous response rather than two modes.
   (`angleSpan × breakaway × slide`, over a band `angleBand` wide, both
   scaled by the surface — see below). The setpoint moves
   with the wheel, so full lock is a deep drift, half lock a shallower one,
-  and a centred wheel hands the car back. At 119 km/h the compact answers
-  a lock sweep like this — no step in it anywhere:
+  and a centred wheel hands the car back. At 119 km/h the compact — the
+  FRONT-driver, so the shallowest slide on the roster (`depth`, below) —
+  answers a lock sweep like this, with no step in it anywhere:
 
   | lock     | 0.2 | 0.3 | 0.4 | 0.5 | 0.6  | 0.7  | 0.8  | 0.9  | 1.0  |
   | -------- | --- | --- | --- | --- | ---- | ---- | ---- | ---- | ---- |
-  | slip°    | 1.3 | 2.2 | 4.0 | 7.6 | 14.2 | 23.1 | 29.0 | 33.9 | 37.8 |
-  | radius m | 173 | 104 | 65  | 44  | 32   | 27   | 21   | 17   | 15   |
+  | slip°    | 1.4 | 2.5 | 4.3 | 7.6 | 12.5 | 17.8 | 22.8 | 27.1 | 30.6 |
+  | radius m | 181 | 112 | 74  | 53  | 41   | 34   | 28   | 24   | 21   |
 
 - **The exit overshoots a tad.** Unwinding the lock does not stop the car
   rotating: while the slide lets go, the yaw answers its target more slowly
@@ -393,6 +394,23 @@ drawn by the renderer:
   swallow and give back. Past `travel`/`droop` the bump stops catch it, stiff
   and heavily damped, so a slam is absorbed rather than pogoed. Heavier cars
   ride the same springs more slowly (ω ∝ √(k/m)).
+
+  **The whole envelope is a bodywork measurement.** `heaveMax` is held at the
+  tightest gap between arch and tire on the roster (0.08–0.11 m — see
+  `arches.radius` against `wheelRadius` in `pwa/src/game/car-styles.ts`),
+  because past that the shell is visibly sliding off its own wheels rather
+  than riding on them. Two things keep the springs inside it. The ground-
+  follow jolt is capped at `joltMax`: a valley floor at pace is several g held
+  for a fifth of a second, no spring soft enough to feel like a rally car
+  holds a body against that inside a wheel arch, and past the cap the dampers
+  are simply out of authority and the whole car rides the ground up — which is
+  what a bottomed suspension does. A landing and an impact are velocity steps
+  of their own and are not capped. And the wheels' vertical speed is read from
+  the car's DIRECTION OF TRAVEL, not its heading (`slope` × `u` plus
+  `slopeLat` × `w`, which is the ground's gradient dotted with the velocity),
+  so a car sliding across a uniform hillside no longer reports a vertical
+  speed that swings with its own yaw.
+
 - **`CarState.pitchLoad`** — the dive under the brakes, the squat on the power
   and the nose-dip an impact throws in. Kept apart from `pitch` (the ground's
   own attitude) because only the BODY takes it: the wheels stay on the ground,
@@ -504,6 +522,15 @@ What the layout decides:
 - **Where the slide starts and how fast it lets go** (`entry`, `release`):
   a front-driver understeers up to the limit and gathers itself up quickly;
   a rear-driver has gone before it gets there and hangs on afterwards.
+- **How far the slide DEVELOPS once it has started** (`depth`, 0..1 against
+  the rear-driver's fully developed one). Where it begins and how deep it
+  goes are different questions: a front axle that runs out of grip WASHES
+  WIDE, so the hatch crosses the same threshold and then holds roughly half
+  the angle the saloon does at the same lock. Reaching a real angle in it
+  costs a flick, a lift or the handbrake rather than just the wheel — and the
+  handbrake still gets there, because the lever's yaw goes around this. Never
+  set over 1: an asked slide above the carried one pins `releasing` at zero
+  and the exit stops existing.
 - **How much torque reaches the ground** (`bite` × `spec.traction` × the
   surface's grip). One driven axle on a loose surface spins where four
   driven wheels hook up, worst at the bottom of the gear and gone by the top

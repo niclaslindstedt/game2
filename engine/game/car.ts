@@ -142,10 +142,10 @@ type SlideState = {
   open: number;
 };
 
-/** The three numbers the DRIVETRAIN moves in the slide: where the floor
- * under it sits, where it starts once past that floor, and how fast it lets
- * go again (TUNING.drivetrain). */
-type SlideLimits = { floor: number; entryAt: number; release: number };
+/** The four numbers the DRIVETRAIN moves in the slide: where the floor under
+ * it sits, where it starts once past that floor, HOW FAR it develops, and how
+ * fast it lets go again (TUNING.drivetrain). */
+type SlideLimits = { floor: number; entryAt: number; depth: number; release: number };
 
 function slideFactor(car: CarState, demand: number, limits: SlideLimits): SlideState {
   // THE SPEED FLOOR comes first, because under it there is no slide to
@@ -165,8 +165,16 @@ function slideFactor(car: CarState, demand: number, limits: SlideLimits): SlideS
   // easing in means nothing happens AT the limit at all. Where that entry
   // sits is the DRIVETRAIN's too: a front-driver understeers past the limit
   // before it steps out, a rear-driver has gone before it gets there.
+  // ...and HOW FAR it develops past that is the drivetrain's as well, because
+  // the two are different questions and only the first one used to be asked.
+  // Every layout ran up the same ramp once over its threshold, so a front
+  // axle out of grip produced the same tail-out slide as a lit-up rear one —
+  // and since the front-driver's rubber is what gives out first on the loose,
+  // it ended up the slidiest car in the game on the surface it is supposed to
+  // wash wide on. A front axle that runs out of grip GOES STRAIGHT ON: it
+  // still crosses the threshold, it just never develops much of a slide.
   const t = clamp((demand - limits.entryAt) / D.entrySpread, 0, 1);
-  const asked = t * t * (3 - 2 * t) * open;
+  const asked = t * t * (3 - 2 * t) * open * limits.depth;
   // A slide the wheel has stopped asking for lets go over a beat instead of
   // in a step: last step's slide decays, and the wheel can take it straight
   // back up. Holding it up on the ANGLE instead — which is the one thing a
@@ -399,6 +407,7 @@ export function stepGrounded(
   const { asked, sliding, open } = slideFactor(car, demand, {
     floor: D.slideFrom * DR.driftFloor,
     entryAt: D.entryAt * DR.entry,
+    depth: DR.depth,
     release: D.release * DR.release,
   });
   // The wheel does not just unstick the car — it NAMES the angle. Every
@@ -693,7 +702,17 @@ export function stepGrounded(
   // renderer reads the attitude straight off vy/u). It leaves the ground
   // only when the road falls away faster than gravity could pull it down —
   // so the same crest launches you at pace and holds you at a crawl.
-  const roadVy = car.u * ctx.slope;
+  // The wheels climb whatever the ground does under the DIRECTION OF TRAVEL,
+  // which in a slide is nowhere near the heading. `slope` and `slopeLat` are
+  // the ground's gradient resolved onto the car's own axes and (u, w) is its
+  // velocity on those same axes, so the pair of them is the gradient dotted
+  // with the velocity — the same number whichever way the car is pointing.
+  // Taking only the along-heading half made a car sliding across a uniform
+  // hillside report a vertical speed that swung with its own yaw. The jolt
+  // cap below now hides most of what that cost the springs, but this is also
+  // the number the landings, the bounce and the renderer read, and it should
+  // be the speed the wheels are actually going up or down at.
+  const roadVy = car.u * ctx.slope + car.w * (ctx.slopeLat ?? 0);
   const roadPull = -car.u * car.u * ctx.roadCurve;
   if (car.u > T.air.crestSpeed && roadPull > T.air.gravity * T.air.crestPull) {
     launch(car, car.vy, events, stats);
@@ -731,8 +750,17 @@ export function stepGrounded(
   // ── Suspension ───────────────────────────────────────────────────────────
   // Whatever the ground just did to the wheels, the body has to catch up
   // with. A dip flattening out, a crest falling away, a bank stopping the
-  // nose: all of it arrives here as one number.
-  stepSuspension(spec, car, car.airborne ? 0 : car.vy - prevVy, (car.u - prevU) / dt);
+  // nose: all of it arrives here as one number — but only up to a point. A
+  // valley floor taken at pace is several g of sustained lift, and a spring
+  // soft enough to feel like a rally car cannot hold a body against that in
+  // anything less than half a metre of travel. Past `joltMax` the springs are
+  // simply out of authority: the wheels stop pushing the body any harder and
+  // the whole car rides the ground up instead, which is what a bottomed
+  // suspension actually does. Landings and impacts arrive as their own
+  // velocity steps below and are not capped here.
+  const groundJolt = car.airborne ? 0 : car.vy - prevVy;
+  const joltCap = T.suspension.joltMax * dt;
+  stepSuspension(spec, car, clamp(groundJolt, -joltCap, joltCap), (car.u - prevU) / dt);
 }
 
 /** The car meeting a face it cannot climb. Reads the terrain's gradient at
