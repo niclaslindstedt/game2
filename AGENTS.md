@@ -16,6 +16,7 @@ make sim          # headless balance sweep — REQUIRED before/after any handlin
 make track        # render stages to previews/track-<seed>.png
 make cars         # render the car models to previews/cars.png (chase-cam + turntable sheet)
 make liveries     # render one body in the field's paint schemes to previews/liveries.png
+make field        # render the campaign's fourteen rivals in their own cars and colours
 make audition     # build previews/audition.html — every sound and both scores, playable
 make screenshots  # drive the built app headlessly, screenshot key moments
 make profile      # meter a frame's draw calls / triangles / binds — REQUIRED before/after any rendering change
@@ -71,6 +72,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | Bot behavior                                                | `engine/sim/bot.ts`                                                                                                       |
 | How GOOD a bot is (difficulty, skill budgets)               | `engine/sim/skill.ts` — the `bot-improvement` skill                                                                       |
 | Who the campaign's rivals ARE (aliases, cars, characters)   | `engine/sim/rivals.ts` — the `bot-improvement` skill                                                                      |
+| What a rival is PAINTED (colour, pattern, door number)      | `RIVAL_SCHEMES` in `pwa/src/game/car-livery.ts` — the `car-design` skill                                                  |
 | The field on the road, and what place a run is in           | `pwa/src/game/standings.ts` (+ `campaign.ts` for the podium rule)                                                         |
 | Anything drawn (meshes, textures, camera, effects)          | `pwa/src/game/` (renderer.ts and friends)                                                                                 |
 | Things the car knocks loose (cones, torn-off parts)         | `pwa/src/game/cones.ts`, `car-damage.ts`, over `tumble.ts` — renderer-side; the engine knows nothing of them              |
@@ -164,7 +166,7 @@ Skills live in `.agent/skills/` (`.claude/skills` symlinks there) — each a `SK
 - **`car-tuning`** — what separates one CAR from another: the catalog, the
   drivetrain and engine tables, and the roster-balance sweep that proves no
   car is best everywhere.
-- **`car-design`** — how the cars LOOK: the parametric body builder, the per-car specs, the field's paint schemes, and the `make cars` / `make liveries` render-compare-iterate loop.
+- **`car-design`** — how the cars LOOK: the parametric body builder, the per-car specs, the field's paint schemes (including what each named rival is painted), and the `make cars` / `make liveries` / `make field` render-compare-iterate loop.
 - **`nature`** — the biomes, trees and flora, ground cover, terrain paint, and the rally-gate dressing: the world the road runs through.
 
 **Maintenance** (each with a `.last-updated` baseline):

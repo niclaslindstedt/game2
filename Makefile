@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim track cars liveries audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim track cars liveries field audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
 
 build:
 	npm run build
@@ -53,6 +53,12 @@ cars:
 # cars or as one car nine times. CAR picks the body, COUNT how many slots.
 liveries:
 	npm run cars -- --liveries $(or $(CAR),compact) --count $(or $(COUNT),9) --out liveries
+
+# R29 — the campaign's fourteen rivals as they actually line up: each crew's
+# own car in their own paint, in start order. The sheet that says whether a
+# field of strangers reads as fourteen teams.
+field:
+	npm run cars -- --field --out field
 
 # Build the audio review page: every sound in the bank on a button, both
 # scores under the real sequencer with per-voice mutes, and the continuous

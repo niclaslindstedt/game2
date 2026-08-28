@@ -19,25 +19,25 @@ skill for any code change.
 
 ## Where everything lives
 
-| Piece                            | Role                                                                                                    |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `pwa/src/game/car-body.ts`       | The assembly line: builds the parts, packages the meshes, names the breakables                          |
-| `pwa/src/game/car/spec.ts`       | The whole `CarBodySpec` vocabulary. Pure types — a new part starts with an optional field here          |
-| `pwa/src/game/car/builder.ts`    | `MeshBuilder` (baked-sun triangles), `bakeShading`, the bilinear-patch helpers                          |
-| `pwa/src/game/car/shell.ts`      | The chassis loft: stations, the ring, wheel-arch openings, shut-line grooves, `flankX`, `sideBand`      |
-| `pwa/src/game/car/greenhouse.ts` | Windows cut out of a solid cabin; gutters, wipers                                                       |
-| `pwa/src/game/car/fascia.ts`     | Nose and tail: grille, lamps, bumpers, air dam, plate, exhaust, the detachable bonnet and boot lid      |
-| `pwa/src/game/car/trim.ts`       | Arch extensions, mirrors, handles, mud flaps, livery bands, door numbers, spoilers                      |
-| `pwa/src/game/car/wheels.ts`     | The tire and three rim styles                                                                           |
-| `pwa/src/game/car-styles.ts`     | The specs — one `CarBodySpec` per catalog id. **Pure data, no three.js import** (Node tooling loads it) |
-| `pwa/src/game/car-livery.ts`     | The FIELD's paint: palettes × patterns, and `applyLivery`, which repaints any spec. Pure data too       |
-| `pwa/src/game/car-livery.ts`     | The FIELD's paint: palettes x patterns, and `applyLivery` — a repaint of any spec. Pure data too        |
-| `pwa/src/game/car-dirt.ts`       | The grime a stage puts on it. Its painter is what the preview's `dirty` column calls                    |
-| `tests/car_geometry_test.ts`     | Holds every spec inside `TUNING.collision`'s box and inside real-car dimensions                         |
-| `pwa/src/game/car-mesh.ts`       | Scene wrapper: attitude (drift roll / air pitch), wheel spin + steer, blob shadow                       |
-| `pwa/src/tools/car-preview.ts`   | The harness page the preview tool drives (contact-sheet renderer)                                       |
-| `scripts/car-preview.mjs`        | The tool: `make cars` / `make liveries`; `--variants`, `--cars`, `--liveries`, `--out`, `--skip-build`  |
-| `engine/game/defs/cars.ts`       | NOT this skill's file — handling numbers and the catalog. Only `color`/`accent` feed the default look   |
+| Piece                            | Role                                                                                                                             |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `pwa/src/game/car-body.ts`       | The assembly line: builds the parts, packages the meshes, names the breakables                                                   |
+| `pwa/src/game/car/spec.ts`       | The whole `CarBodySpec` vocabulary. Pure types — a new part starts with an optional field here                                   |
+| `pwa/src/game/car/builder.ts`    | `MeshBuilder` (baked-sun triangles), `bakeShading`, the bilinear-patch helpers                                                   |
+| `pwa/src/game/car/shell.ts`      | The chassis loft: stations, the ring, wheel-arch openings, shut-line grooves, `flankX`, `sideBand`                               |
+| `pwa/src/game/car/greenhouse.ts` | Windows cut out of a solid cabin; gutters, wipers                                                                                |
+| `pwa/src/game/car/fascia.ts`     | Nose and tail: grille, lamps, bumpers, air dam, plate, exhaust, the detachable bonnet and boot lid                               |
+| `pwa/src/game/car/trim.ts`       | Arch extensions, mirrors, handles, mud flaps, livery bands, door numbers, spoilers                                               |
+| `pwa/src/game/car/wheels.ts`     | The tire and three rim styles                                                                                                    |
+| `pwa/src/game/car-styles.ts`     | The specs — one `CarBodySpec` per catalog id. **Pure data, no three.js import** (Node tooling loads it)                          |
+| `pwa/src/game/car-livery.ts`     | The FIELD's paint: palettes × patterns, and `applyLivery`, which repaints any spec. Pure data too                                |
+| `pwa/src/game/car-livery.ts`     | The FIELD's paint: palettes x patterns, and `applyLivery` — a repaint of any spec. Pure data too                                 |
+| `pwa/src/game/car-dirt.ts`       | The grime a stage puts on it. Its painter is what the preview's `dirty` column calls                                             |
+| `tests/car_geometry_test.ts`     | Holds every spec inside `TUNING.collision`'s box and inside real-car dimensions                                                  |
+| `pwa/src/game/car-mesh.ts`       | Scene wrapper: attitude (drift roll / air pitch), wheel spin + steer, blob shadow                                                |
+| `pwa/src/tools/car-preview.ts`   | The harness page the preview tool drives (contact-sheet renderer)                                                                |
+| `scripts/car-preview.mjs`        | The tool: `make cars` / `make liveries` / `make field`; `--variants`, `--cars`, `--liveries`, `--field`, `--out`, `--skip-build` |
+| `engine/game/defs/cars.ts`       | NOT this skill's file — handling numbers and the catalog. Only `color`/`accent` feed the default look                            |
 
 ## The loop: generate → render → LOOK → iterate
 
@@ -58,9 +58,14 @@ skill for any code change.
    Label variant ids by what changed (`cpt-A-boxy`, `cls-C-fastback`) so the
    sheet reads as an A/B/C test.
 
-3. **LOOK — with the Read tool, and zoom.** The full sheet shrinks in
-   terminal view; crop cells out (PIL or the harness cell math: 440×310 per
-   cell) before judging details like wheel arches or light placement.
+3. **LOOK — with the Read tool, and zoom.** A sheet of more than three or
+   four rows shrinks past the point of judging anything. **Re-render the
+   subset** rather than cropping the big sheet: build a `--variants` file
+   holding just the cars in question and render that. Cropping is the trap
+   it looks like the shortcut for — an image viewer handed a 3000×4300 PNG
+   scales it to fit, so a "crop of the top half" silently comes back as the
+   whole sheet shrunk, and it is not obvious that it did. (Cells are 440×310
+   if you do need the geometry, and PIL is not installed in a web session.)
 4. **Pick the winner, fold it into `car-styles.ts`, re-render.** Spec-only
    iterations can pass `--skip-build` — the harness bundle only needs a
    rebuild when `car-body.ts` or the harness itself changed.
@@ -140,6 +145,26 @@ Two traps, both of which look like rendering bugs:
 Judge it with `make liveries` (`CAR=classic`, `COUNT=12`), and judge it in
 the GAME column first: a field is a success when nine cars read as nine
 teams at 30 px, which is colour and roof before it is ever pattern.
+
+## The named crews
+
+The campaign's fourteen rivals do not draw from `liveryFor(slot)`: each has
+a scheme authored for them in `RIVAL_SCHEMES`, because the colour is the
+only thing about a rival the player can learn at a glance and it should say
+something true about how that crew DRIVES. Three rules hold it together, and
+`tests/car_livery_test.ts` asserts all of them:
+
+- **one palette each** — fourteen crews, fourteen palettes, so no two cars
+  in a start list can ever be the same colour;
+- **the door roundel is the START NUMBER**, not a number out of a hat;
+- **`solid` and `duotone` take an accent roof** — they leave the flank plain,
+  so the roof is the only cue left from directly behind, which is where a
+  chased car is seen from.
+
+Patterns repeat (there are nine) and that is fine: colour is read first.
+`make field` renders the actual start list, each crew in their own car — the
+sheet to judge a new crew or a repaint against, because `--liveries` puts
+every scheme on ONE body and the field never looks like that.
 
 ## Ship checklist
 
