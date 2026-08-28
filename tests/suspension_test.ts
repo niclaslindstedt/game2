@@ -84,7 +84,11 @@ describe("the springs", () => {
       }
     }
     // It compressed, it came back UP past where it started, and it settled.
-    expect(deepest).toBeLessThan(-0.08);
+    // The compression is stated against the springs' own travel rather than
+    // as a bare distance: a six-metre drop is meant to use all of it and sit
+    // down on the bump stops, and that claim stays true whatever the total
+    // travel is set to — a bare number only means anything at one envelope.
+    expect(deepest).toBeLessThan(-TUNING.suspension.travel);
     expect(highest).toBeGreaterThan(0.01);
     expect(Math.abs(car.ride)).toBeLessThan(0.02);
     // ...and never further than the stops allow, in either direction.

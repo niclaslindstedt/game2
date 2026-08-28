@@ -83,7 +83,11 @@ export type CarSpec = {
   stability: number;
   /** Lateral acceleration the tires can hold before the car starts to
    * slide, m/s² — the whole drift-entry threshold, since a slide is just a
-   * turn the tires cannot pay for. */
+   * turn the tires cannot pay for. It is also the base of the TRACTION
+   * CEILING (×`TUNING.grip.latCeiling`), so it decides how hard the car
+   * corners as well as when it lets go: move it and both change. To separate
+   * them, reach for the layout's `entry`/`depth` or the car's
+   * `gripLat`/`driftLat` instead. */
   gripAccel: number;
   /** The rubber that holds it, per surface family. */
   tyres: TyreSpec;
