@@ -855,6 +855,85 @@ export const TUNING = {
      * plunges and botched flights, not from every lip on the stage. */
     hardLandSpeed: 10,
 
+    /** WHAT THE REST OF THE LEDGER DOES TO THE DRIVING. The systems below
+     * are the machinery; these are the numbers for everything else the
+     * crash left behind — the spent structure the HUD draws the body's own
+     * outline in, the shell pulled out of true, the floorpan, and the
+     * panels that are lying back up the road. Read in game/damage.ts.
+     *
+     * The whole group is sized against the same bar as the systems: a car
+     * with every one of these at its worst is EXHAUSTING to drive and
+     * still gets to the finish. A car that cannot be driven home is a
+     * respawn, and a respawn is not a consequence. */
+    chassis: {
+      /** Fraction of lateral grip gone at wear 1 — a shell twisted past
+       * saving never holds its suspension geometry under load. */
+      wearGrip: 0.22,
+      /** ...and of braking, at wear 1: bent hubs and a rubbing wheel pull
+       * the car up long, which is what actually ends a run. */
+      wearBrake: 0.3,
+      /** Extra longitudinal drag at wear 1, 1/s. Against a gravel road's
+       * own 0.028, a spent chassis is about half as much again — the top
+       * end falls away without the acceleration going anywhere. */
+      wearDrag: 0.014,
+      /** ...per m of floorpan crush, 1/s. A folded underside is a plough. */
+      bellyDrag: 0.03,
+      /** ...and per m of panel crush anywhere, 1/s. A car folded on every
+       * corner is not the shape it was drawn as. */
+      crushDrag: 0.006,
+      /** Drag each part left on the road costs, 1/s. A mirror is a rounding
+       * error; a missing bonnet is a scoop with the whole engine bay behind
+       * it, and a missing hatch is the same hole facing the other way. */
+      partDrag: {
+        mirrorL: 0.0008,
+        mirrorR: 0.0008,
+        bumperF: 0.004,
+        bumperR: 0.003,
+        spoiler: 0.002,
+        hood: 0.009,
+        hatch: 0.007,
+      },
+      /** THE PULL. Lock the car carries with the wheel dead straight, per m
+       * of left-right crush difference — a body folded harder down one side
+       * drags that way, and the driver holds a corner of opposite lock down
+       * every straight for the rest of the stage. A whole side folded to
+       * `zoneMax` is 1.2 m of crush, which is about a tenth of the wheel —
+       * roughly 6°/s of unasked-for yaw at rally pace, so the correction is
+       * constant and small rather than a fight... */
+      pullPerCrush: 0.09,
+      /** ...and this is the most it can ever be, in lock, however badly the
+       * car is folded on both sides at once. Past this the correction stops
+       * being a nuisance and becomes the only thing the driver is doing. */
+      pullMax: 0.11,
+      /** Whatever the systems, the structure and the missing wing take off
+       * the tires together, they never take more than leaves this: the
+       * floor under lateral grip, as a fraction of the sound car's. Below
+       * about two thirds the car simply cannot be pointed. */
+      gripFloor: 0.62,
+      /** THE MISFIRE. Engine damage under this just makes less power; past
+       * it the ignition starts dropping beats and the car lurches. */
+      misfireFrom: 0.55,
+      /** How fast the stutter's carrier runs, rad/s... */
+      misfireRate: 9,
+      /** ...against a second wave this much faster, whose beat against the
+       * first is what keeps the misfire from settling into a rhythm. An
+       * irrational-ish ratio: a tidy one would be a drum machine. */
+      misfireDetune: 1.618,
+      /** Share of the time the engine is dead at engine damage 1, 0..1.
+       * A third of the beats missing is a car that still crawls home. */
+      misfireDuty: 0.34,
+      /** Gearbox damage at which the top gear stops engaging — the box is
+       * driven on what is left of it, which caps the stage's top end
+       * without ever stopping the car. */
+      topGearAt: 0.75,
+      /** Missing-wing lateral grip at speed, as a fraction — the downforce
+       * that is no longer on the back of the car... */
+      spoilerGrip: 0.12,
+      /** ...faded in by pace, m/s: a wing does nothing at walking speed and
+       * all of it at the top end. */
+      spoilerSpeed: 34,
+    },
+
     /** The machinery under the panels: how crush becomes internal damage
      * (per m of crush on the zones nearest each system), and how a damaged
      * system degrades its own job. All damage is 0..1 and never repaired —
@@ -872,12 +951,19 @@ export const TUNING = {
       suspensionFromBelly: 2.2,
       gearboxFromBelly: 0.8,
 
-      /** Fraction of engine power gone at engine damage 1. */
-      powerLoss: 0.35,
-      /** Fraction of steering authority gone at steering damage 1. */
-      steerLoss: 0.35,
-      /** Fraction of lateral grip gone at suspension damage 1. */
-      gripLoss: 0.18,
+      /** Fraction of engine power gone at engine damage 1 — half the
+       * motor, on top of the misfire that comes with it (chassis below).
+       * A beaten car has to be visibly, tiringly slow up every hill. */
+      powerLoss: 0.5,
+      /** Fraction of steering authority gone at steering damage 1. Enough
+       * that the corner the sound car turned in for has to be braked for,
+       * and short of the car simply refusing to change direction. */
+      steerLoss: 0.45,
+      /** Fraction of lateral grip gone at suspension damage 1. The tires
+       * are also being taxed by the structure and the missing wing, and
+       * `chassis.gripFloor` is what stops the three of them stacking into
+       * a car that cannot be pointed at all. */
+      gripLoss: 0.26,
       /** Fraction of the hard-landing tolerance gone at suspension 1 —
        * shot dampers turn ordinary jumps into underside hits. */
       landTolerance: 0.45,

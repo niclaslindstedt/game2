@@ -293,6 +293,125 @@ describe("the internal systems", () => {
   });
 });
 
+describe("a spent chassis and the panels left on the road", () => {
+  /** Hold the throttle for `secs` on a long straight and report the pace. */
+  const runTo = (secs: number, prep: (state: GameState) => void): number => {
+    const state = freshState();
+    prep(state);
+    for (let i = 0; i < 120 * secs; i++) step(state, { ...NEUTRAL_INPUT, throttle: 1 });
+    return state.car.u;
+  };
+
+  it("a worn-out shell drags: the same engine reaches a lower top end", () => {
+    const sound = runTo(30, () => {});
+    const spent = runTo(30, (state) => {
+      state.car.damage.wear = 1;
+    });
+    expect(spent).toBeLessThan(sound * 0.95);
+  });
+
+  it("panels left on the road cost pace — a missing bonnet is a hole in the car", () => {
+    const whole = runTo(30, () => {});
+    const stripped = runTo(30, (state) => {
+      state.car.damage.broken.push("hood", "hatch", "bumperF", "bumperR");
+    });
+    expect(stripped).toBeLessThan(whole);
+  });
+
+  it("a spent chassis brakes long — bent hubs cannot pull a car up", () => {
+    const stop = (wear: number): number => {
+      const state = freshState();
+      state.car.damage.wear = wear;
+      state.car.u = 30;
+      let travelled = 0;
+      for (let i = 0; i < 120 * 12 && state.car.u > 1; i++) {
+        const before = state.car.z;
+        step(state, { ...NEUTRAL_INPUT, brake: 1 });
+        travelled += Math.abs(state.car.z - before);
+      }
+      return travelled;
+    };
+    expect(stop(1)).toBeGreaterThan(stop(0) * 1.1);
+  });
+
+  it("a body folded down one side pulls that way with the wheel dead straight", () => {
+    const drift = (side: "right" | "left" | "none"): number => {
+      const state = freshState();
+      const zones = state.car.damage.zones;
+      if (side !== "none") {
+        const first = side === "right" ? 1 : 5;
+        for (let i = 0; i < 3; i++) zones[first + i] = TUNING.collision.zoneMax;
+      }
+      state.car.u = 25;
+      for (let i = 0; i < 120 * 3; i++) step(state, { ...NEUTRAL_INPUT, throttle: 0.5 });
+      return state.car.heading;
+    };
+    expect(drift("none")).toBeCloseTo(0, 5);
+    // Positive heading is clockwise in map view: the crushed side is the
+    // side the car goes.
+    expect(drift("right")).toBeGreaterThan(0.15);
+    expect(drift("left")).toBeLessThan(-0.15);
+  });
+
+  it("the wing that came off is grip the back of the car no longer has", () => {
+    const held = (broken: boolean): number => {
+      const state = freshState();
+      if (broken) state.car.damage.broken.push("spoiler");
+      state.car.u = 38;
+      for (let i = 0; i < 120; i++) step(state, { ...NEUTRAL_INPUT, throttle: 0.6, steer: 0.5 });
+      return Math.abs(state.car.slip);
+    };
+    expect(held(true)).toBeGreaterThan(held(false));
+  });
+
+  it("a gearbox past saving will not take its top ratio", () => {
+    const state = freshState();
+    state.car.damage.systems.gearbox = 1;
+    for (let i = 0; i < 120 * 40; i++) step(state, { ...NEUTRAL_INPUT, throttle: 1 });
+    expect(state.car.gear).toBe(state.spec.gearTop.length - 2);
+    expect(state.car.u).toBeLessThan(state.spec.gearTop[state.spec.gearTop.length - 2]);
+  });
+
+  it("an engine past the misfire threshold drops beats — the power comes and goes", () => {
+    const state = freshState();
+    state.car.damage.systems.engine = 1;
+    state.car.u = 20;
+    let dead = 0;
+    let firing = 0;
+    for (let i = 0; i < 120 * 6; i++) {
+      const before = state.car.u;
+      step(state, { ...NEUTRAL_INPUT, throttle: 1 });
+      if (state.car.u > before) firing += 1;
+      else dead += 1;
+    }
+    // Both happen: a misfire is a stutter, not a dead engine and not a
+    // smooth one.
+    expect(dead).toBeGreaterThan(30);
+    expect(firing).toBeGreaterThan(30);
+  });
+
+  it("everything at its worst still leaves a car that can be driven home", () => {
+    const state = freshState();
+    const damage = state.car.damage;
+    damage.wear = 1;
+    damage.belly = TUNING.collision.zoneMax;
+    for (let i = 0; i < DAMAGE_ZONES; i++) damage.zones[i] = TUNING.collision.zoneMax;
+    for (const key of Object.keys(damage.systems) as (keyof typeof damage.systems)[]) {
+      damage.systems[key] = 1;
+    }
+    damage.broken.push("hood", "hatch", "spoiler", "bumperF", "bumperR", "mirrorL", "mirrorR");
+    for (let i = 0; i < 120 * 40; i++) step(state, { ...NEUTRAL_INPUT, throttle: 1 });
+    // It still goes — no faster than a country road, and nowhere near what
+    // the same car does sound (over 40 m/s).
+    expect(state.car.u).toBeGreaterThan(8);
+    expect(state.car.u).toBeLessThan(28);
+    // ...and it still steers: the grip floor is what guarantees this.
+    const before = state.car.heading;
+    for (let i = 0; i < 120; i++) step(state, { ...NEUTRAL_INPUT, throttle: 0.5, steer: 1 });
+    expect(Math.abs(state.car.heading - before)).toBeGreaterThan(0.3);
+  });
+});
+
 describe("hard landings", () => {
   it("a cliff plunge crushes the underside and wears the chassis", () => {
     const state = freshState();
