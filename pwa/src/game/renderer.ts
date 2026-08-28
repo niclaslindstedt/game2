@@ -180,6 +180,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   let car: CarVisual | null = null;
   let ghost: GameState | null = null;
   let ghostCar: CarVisual | null = null;
+  /** The stage that is standing, as the state it was last shown with —
+   * the track the island is cut from, and the conditions anything that
+   * re-lights without being handed a state has to go back to. */
   let game: GameState | null = null;
   /** True while the map view is up: it suspends the transient FX and pushes
    * the fog out past the whole stage. */
@@ -274,7 +277,16 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     if (range > 0) environment.setFogRange(range * MAP_FOG_NEAR, range * MAP_FOG_FAR);
   };
 
+  /** Re-light the standing stage. `game` is rebound here as well as where
+   * the world is BUILT: a re-light is a newer state on the same road, and
+   * the callers that light off the handle instead of an argument — a camera
+   * entering or leaving the map, a video option — would otherwise put the
+   * conditions the world was built in back on top of it. Roam is where that
+   * bites: its map preview and its run share one compiled track, so a time
+   * of day picked there only ever reaches HERE, and the map-to-chase switch
+   * on DRIVE IT would light the run as whatever the page opened in. */
   const setConditions = (state: GameState): void => {
+    game = state;
     environment.apply(state.env);
     const wet = state.env.weather === "storm" ? 1 : state.env.weather === "rain" ? 0.55 : 0;
     rain.setIntensity(fxScale() > 0 ? wet : 0);
