@@ -253,14 +253,13 @@ export function buildCrowd(
   const pivot = new THREE.Vector3();
 
   let clock = 0;
-  const update = (dt: number, focusX = 0, focusZ = 0): void => {
-    clock += dt;
-    let any = false;
-    for (let i = 0; i < stands.length; i++) {
-      live[i] = Math.hypot(stands[i].x - focusX, stands[i].z - focusZ) < LIVE_RANGE;
-      any = any || live[i];
-    }
-    if (!any) return;
+  /** Write the matrices of every figure in a live stand. A figure in a stand
+   * that is not live keeps the matrix it was last given — which is the whole
+   * point of `live`, and is why this has to run over ALL of them once at
+   * build time: an instance nobody ever writes keeps the identity matrix,
+   * and a person on the identity matrix is a person standing at the world
+   * origin, which is the start line. */
+  const place = (): void => {
     for (const part of parts) {
       figures.forEach((f, n) => {
         if (!live[f.stand]) return;
@@ -300,11 +299,24 @@ export function buildCrowd(
       part.mesh.instanceMatrix.needsUpdate = true;
     }
   };
-  // Everybody is placed once with every stand live, so a crowd the car
-  // never gets near is still standing in the right place.
+
+  const update = (dt: number, focusX = 0, focusZ = 0): void => {
+    clock += dt;
+    let any = false;
+    for (let i = 0; i < stands.length; i++) {
+      live[i] = Math.hypot(stands[i].x - focusX, stands[i].z - focusZ) < LIVE_RANGE;
+      any = any || live[i];
+    }
+    if (!any) return;
+    place();
+  };
+
+  // Everybody is placed once with every stand live, so a crowd the car never
+  // gets near is still standing in the right place. It cannot go through
+  // `update`: that recomputes `live` from the focus before it writes
+  // anything, so a stand out of range would never be placed at all.
   live.fill(true);
-  update(0, stands[0]?.x ?? 0, stands[0]?.z ?? 0);
-  live.fill(true);
+  place();
 
   const dispose = (): void => {
     for (const part of parts) {
