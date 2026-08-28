@@ -20,6 +20,11 @@
 //   costs its draw calls, so it is switched off rather than shrunk. The map
 //   view takes the whole field off for the same reason it takes the dust off.
 //
+//   NAMED WHILE IN RANGE. Every built car carries a name tag (name-tag.ts)
+//   with its crew's alias and start number on it, so the car you are closing
+//   on is Frostbite rather than a blue coupe. The tag is hung and dropped
+//   with the body; its own shorter range is the module's, not this one's.
+//
 // A crew still in the start control, or already through the finish, is not
 // here at all: `onRoad` in standings.ts is the one place that decides, and
 // the collision in App.tsx reads the same answer.
@@ -29,6 +34,7 @@ import { TUNING, type GameEvent, type GameState } from "@engine";
 
 import { buildCar, tintCar, type CarVisual } from "./car-mesh.ts";
 import { liveryForCrew } from "./car-livery.ts";
+import { createNameTag, type NameTag } from "./name-tag.ts";
 import { onRoad, type RivalRun } from "./standings.ts";
 
 /** How near a crew has to come before their car is generated, m. Wider than
@@ -67,7 +73,10 @@ export type FieldCars = {
   /** Read every run this frame and place, hide or build its car. `shown`
    * is false under the map view, which is looking at a stage rather than at
    * cars and takes the whole field off along with the player's own body. */
-  update: (viewer: GameState, dt: number, shown: boolean) => void;
+  update: (viewer: GameState, camera: THREE.PerspectiveCamera, dt: number, shown: boolean) => void;
+  /** Whether a crew that is on the road is NAMED while it is there — the
+   * player's option (name-tag.ts). */
+  setNames: (on: boolean) => void;
   /** One rival's own events, spent on ITS body alone: a car the player put
    * into the trees crumples and sheds parts, and makes no sound and no dust,
    * because none of that happened here. */
@@ -80,29 +89,35 @@ export type FieldCars = {
   dispose: () => void;
 };
 
+/** One crew's body and the plate over it, built and dropped together. */
+type FieldCar = { visual: CarVisual; tag: NameTag };
+
 export function createFieldCars(scene: THREE.Scene): FieldCars {
   let runs: RivalRun[] = [];
-  const built = new Map<RivalRun, CarVisual>();
+  const built = new Map<RivalRun, FieldCar>();
   let drawn = 0;
   let tint = new THREE.Color(1, 1, 1);
   let lampsLit = false;
+  let named = true;
 
-  const drop = (visual: CarVisual): void => {
-    scene.remove(visual.group, visual.shadow, visual.debris);
+  const drop = ({ visual, tag }: FieldCar): void => {
+    scene.remove(visual.group, visual.shadow, visual.debris, tag.sprite);
     visual.dispose();
+    tag.dispose();
   };
 
   const clear = (): void => {
-    for (const visual of built.values()) drop(visual);
+    for (const car of built.values()) drop(car);
     built.clear();
     runs = [];
     drawn = 0;
   };
 
-  const show = (visual: CarVisual, on: boolean): void => {
+  const show = ({ visual, tag }: FieldCar, on: boolean): void => {
     visual.group.visible = on;
     visual.shadow.visible = on;
     visual.debris.visible = on;
+    if (!on) tag.hide();
   };
 
   return {
@@ -111,45 +126,55 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
       runs = next;
     },
     clear,
-    update: (viewer, dt, shown) => {
+    update: (viewer, camera, dt, shown) => {
       drawn = 0;
       for (const run of runs) {
-        const visual = built.get(run);
+        const existing = built.get(run);
         if (!onRoad(run)) {
           // Out of the world: still in the control, or home. The body is
           // KEPT — a crew that has finished is the crew you were racing, and
           // building it again the next time one comes past costs more than
           // leaving it standing.
-          if (visual) show(visual, false);
+          if (existing) show(existing, false);
           continue;
         }
         const car = run.state.car;
         const range = Math.hypot(car.x - viewer.car.x, car.z - viewer.car.z);
-        if (!visual) {
+        if (!existing) {
           if (range > BUILD_RANGE) continue;
-          const fresh = buildCar(run.state.spec, {
-            paint: liveryForCrew(run.entry.crew.id, run.entry.number),
+          const livery = liveryForCrew(run.entry.crew.id, run.entry.number);
+          const visual = buildCar(run.state.spec, { paint: livery });
+          // The plate wears the car's own paint and the number off its door,
+          // so the name and the colour coming up the road are one crew.
+          const tag = createNameTag(run.entry.crew.alias, livery.number, {
+            color: livery.paint,
           });
-          scene.add(fresh.group, fresh.shadow, fresh.debris);
+          scene.add(visual.group, visual.shadow, visual.debris, tag.sprite);
+          const fresh = { visual, tag };
           built.set(run, fresh);
-          tintCar(fresh, tint, lampsLit);
-          fresh.update(run.state, 0);
+          tintCar(visual, tint, lampsLit);
+          visual.update(run.state, 0);
           show(fresh, false);
           continue;
         }
         const near =
           shown && onScreen(viewer.phase) && range <= DRAW_RANGE && range > IN_THE_CONTROL;
-        show(visual, near);
+        show(existing, near);
         if (!near) continue;
         drawn += 1;
-        visual.update(run.state, dt);
+        existing.visual.update(run.state, dt);
+        if (named) existing.tag.place(car.x, car.y, car.z, camera);
       }
     },
-    events: (run, events) => built.get(run)?.onEvents(run.state, events),
+    setNames: (on) => {
+      named = on;
+      if (!on) for (const { tag } of built.values()) tag.hide();
+    },
+    events: (run, events) => built.get(run)?.visual.onEvents(run.state, events),
     paint: (next, lit) => {
       tint = next;
       lampsLit = lit;
-      for (const visual of built.values()) tintCar(visual, tint, lampsLit);
+      for (const { visual } of built.values()) tintCar(visual, tint, lampsLit);
     },
     drawn: () => drawn,
     dispose: clear,

@@ -39,6 +39,7 @@ import { EXHAUST } from "./fumes.ts";
 import { createWayHomeArrow } from "./way-home.ts";
 import { islandPlanes } from "./map-island.ts";
 import { createMirror, MIRROR_RANGE } from "./mirror.ts";
+import { createNameTag, GHOST_LOOK, TAG_LAYER, type NameTag } from "./name-tag.ts";
 import { buildMapRoute, type MapRoute } from "./map-route.ts";
 import { classify } from "./standings.ts";
 import { buildWorld, type World } from "./world.ts";
@@ -108,6 +109,10 @@ export type GameRenderer = {
    * their paint and their damage (field-cars.ts). The app owns the games;
    * the renderer only ever reads them. */
   field: FieldCars;
+  /** Name the other cars on the road — the field's crews, and the ghost the
+   * time trial is chasing. The player's HUD option; on by default, because
+   * a car with nobody's name on it is scenery. */
+  setNameTags: (on: boolean) => void;
   /** R29 — where the run stands in the field, for R25's salute at the line:
    * how big the cannons go IS how good the result was. Null on a run with
    * nobody entered, where the size falls back to where the TIME would have
@@ -166,6 +171,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   // when it is itself part of the scene being rendered.
   scene.add(chase.camera);
   chase.camera.add(wayHomeArrow.group);
+  // Only the forward camera draws name tags: the mirror pass reverses its
+  // image, and a reversed word is not a name (name-tag.ts).
+  chase.camera.layers.enable(TAG_LAYER);
 
   let world: World | null = null;
   /** The season the standing world was PLANTED in — the year's colours are
@@ -176,7 +184,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   let car: CarVisual | null = null;
   let ghost: GameState | null = null;
   let ghostCar: CarVisual | null = null;
+  let ghostTag: NameTag | null = null;
   const field = createFieldCars(scene);
+  /** Whether the cars that are not the player's are named. */
+  let nameTags = true;
   /** The stage that is standing, as the state it was last shown with —
    * the track the island is cut from, and the conditions anything that
    * re-lights without being handed a state has to go back to. */
@@ -352,6 +363,11 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
 
   const dropGhost = (): void => {
     ghost = null;
+    if (ghostTag) {
+      scene.remove(ghostTag.sprite);
+      ghostTag.dispose();
+      ghostTag = null;
+    }
     if (!ghostCar) return;
     scene.remove(ghostCar.group, ghostCar.shadow, ghostCar.debris);
     ghostCar.dispose();
@@ -426,7 +442,12 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     if (!state) return;
     ghost = state;
     ghostCar = buildCar(state.spec, { ghost: true });
-    scene.add(ghostCar.group, ghostCar.shadow, ghostCar.debris);
+    // The ghost gets the same plate the field does, for the same reason: on
+    // a road with two cars on it, which of them is the one to beat is
+    // information. Its own colour and its own fade, held under a real
+    // crew's, so the plate is as much a picture as the car under it.
+    ghostTag = createNameTag("Ghost", null, GHOST_LOOK);
+    scene.add(ghostCar.group, ghostCar.shadow, ghostCar.debris, ghostTag.sprite);
     applyTint();
   };
 
@@ -762,7 +783,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     if (ghost && ghostCar) ghostCar.update(ghost, dt);
     // The entry list, off their own games; off under the map view like the
     // player's own body below.
-    field.update(state, dt, view !== "map");
+    field.update(state, chase.camera, dt, view !== "map");
     // The way home is a DRIVING aid, bolted to the camera. Under the menu's
     // drone, the map view and god mode's free camera there is nobody lost
     // and nobody to point: left running, it would hang a compass needle over
@@ -808,6 +829,11 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     if (ghostCar) {
       ghostCar.group.visible = view !== "map";
       ghostCar.shadow.visible = view !== "map";
+    }
+    if (ghost && ghostTag) {
+      const g = ghost.car;
+      if (nameTags && view !== "map") ghostTag.place(g.x, g.y, g.z, chase.camera);
+      else ghostTag.hide();
     }
     // The mirror is bolted to the CAR, so it is aimed from the state rather
     // than from whatever the camera did with it — which is what lets the
@@ -903,6 +929,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     route?.dispose();
     car?.dispose();
     ghostCar?.dispose();
+    ghostTag?.dispose();
     field.dispose();
     carFx.dispose();
     wayHomeArrow.dispose();
@@ -919,6 +946,11 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     setCamera,
     setMirror: (on) => {
       mirrorOption = on;
+    },
+    setNameTags: (on) => {
+      nameTags = on;
+      field.setNames(on);
+      if (!on) ghostTag?.hide();
     },
     setMapRect,
     nudgeMap: (dAz, dPitch, zoomBy) => chase.nudgeMap(dAz, dPitch, zoomBy),

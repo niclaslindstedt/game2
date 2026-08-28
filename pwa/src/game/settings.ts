@@ -32,6 +32,7 @@ export const PLAY_CAMERAS: { id: PlayCamera; label: string; hint: string }[] = [
 export type HudToggle =
   | "minimap"
   | "mirror"
+  | "nameTags"
   | "cameraButton"
   | "pacenotes"
   | "pacenoteText"
@@ -49,6 +50,7 @@ export type HudSettings = Record<HudToggle, boolean>;
 export const HUD_TOGGLES: { id: HudToggle; label: string; hint: string }[] = [
   { id: "minimap", label: "MINIMAP", hint: "Route, position and progress" },
   { id: "mirror", label: "REAR VIEW", hint: "The road behind, from the car, in every view" },
+  { id: "nameTags", label: "NAME TAGS", hint: "Who the other cars on the road are" },
   {
     id: "cameraButton",
     label: "CAMERA BUTTON",
@@ -258,6 +260,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hud: {
     minimap: true,
     mirror: true,
+    nameTags: true,
     cameraButton: true,
     pacenotes: true,
     pacenoteText: true,

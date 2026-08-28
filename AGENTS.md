@@ -76,6 +76,8 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | Who the campaign's rivals ARE (aliases, cars, characters)   | `engine/sim/rivals.ts` — the `bot-improvement` skill                                                                      |
 | What a rival is PAINTED (colour, pattern, door number)      | `RIVAL_SCHEMES` in `pwa/src/game/car-livery.ts` — the `car-design` skill                                                  |
 | The field on the road, and what place a run is in           | `pwa/src/game/standings.ts` (+ `campaign.ts` for the podium rule)                                                         |
+| The rival cars you can see and hit                          | `pwa/src/game/field-cars.ts`; the plate over each one is `name-tag.ts`                                                    |
+| The name over a car that is not the player's                | `pwa/src/game/name-tag.ts` — a label, a colour and a point; it must never learn what a bot is                             |
 | Anything drawn (meshes, textures, camera, effects)          | `pwa/src/game/` (renderer.ts and friends)                                                                                 |
 | What colour the sky is under given conditions               | `pwa/src/game/sky.ts` (the presets and the weather/season colour maths)                                                   |
 | What is IN the sky (cumulus, the overcast deck, scud)       | `pwa/src/game/clouds.ts`                                                                                                  |
