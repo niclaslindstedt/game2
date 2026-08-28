@@ -170,7 +170,13 @@ export const TAIGA_TRACK: Track = {
       volume: 0.009,
       gate: 0.14,
       pan: 0.3,
-      filter: { type: "highpass", frequency: 8200 },
+      // 6500 rather than up at 8200, and the reason is the ROUTE rather than
+      // the taste. iOS runs a hands-free Bluetooth session at 16 kHz, where
+      // everything over 7200 Hz is held back off Nyquist (`safeCutoff`) — a
+      // hat living entirely above 8 kHz is then a hat with almost nothing
+      // left to pass. Down here it keeps about 4 dB more of itself on a
+      // headset, and costs 0.4 dB of level on a normal 48 kHz context.
+      filter: { type: "highpass", frequency: 6500 },
     },
     // One dry floor tom, for the build and nowhere else.
     tom: {
