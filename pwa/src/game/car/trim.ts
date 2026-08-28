@@ -135,31 +135,45 @@ function buildMudflaps(b: MeshBuilder, spec: CarBodySpec, axles: number[]): void
   }
 }
 
-/** Livery stripes hug the hood/deck by sampling the silhouette. */
+/** Livery stripes hug the hood/deck by sampling the silhouette. A spec may
+ * carry several groups — hood stripes and a boot-lid block are the same
+ * vocabulary run twice. */
 function buildStripes(b: MeshBuilder, spec: CarBodySpec): void {
-  const st = spec.stripes;
-  if (!st) return;
-  const color = st.color ?? spec.colors.accent;
+  if (!spec.stripes) return;
+  const groups = Array.isArray(spec.stripes) ? spec.stripes : [spec.stripes];
   const steps = 8;
-  for (const off of st.offsets) {
-    for (let i = 0; i < steps; i++) {
-      const za = st.zFrom + ((st.zTo - st.zFrom) * i) / steps;
-      const zb = st.zFrom + ((st.zTo - st.zFrom) * (i + 1)) / steps;
-      const a = sampleProfile(spec.profile, za);
-      const bb = sampleProfile(spec.profile, zb);
-      const w = st.width / 2;
-      // Above the bonnet lid, which is itself 20 mm proud of the deck —
-      // a stripe under it would simply disappear.
-      b.quad(
-        [off - w, a.topY + 0.03, za],
-        [off + w, a.topY + 0.03, za],
-        [off + w, bb.topY + 0.03, zb],
-        [off - w, bb.topY + 0.03, zb],
-        color,
-      );
+  groups.forEach((st, gi) => {
+    const color = st.color ?? spec.colors.accent;
+    // Each group is laid a hair above the last. Two groups on one plane —
+    // an edging line down a painted bonnet panel — z-fight into a stipple
+    // that flickers with the camera.
+    const lift = 0.03 + gi * 0.004;
+    for (const off of st.offsets) {
+      for (let i = 0; i < steps; i++) {
+        const za = st.zFrom + ((st.zTo - st.zFrom) * i) / steps;
+        const zb = st.zFrom + ((st.zTo - st.zFrom) * (i + 1)) / steps;
+        const a = sampleProfile(spec.profile, za);
+        const bb = sampleProfile(spec.profile, zb);
+        const w = st.width / 2;
+        // Above the bonnet lid, which is itself 20 mm proud of the deck —
+        // a stripe under it would simply disappear.
+        b.quad(
+          [off - w, a.topY + lift, za],
+          [off + w, a.topY + lift, za],
+          [off + w, bb.topY + lift, zb],
+          [off - w, bb.topY + lift, zb],
+          color,
+        );
+      }
     }
-  }
+  });
 }
+
+/** How far off the flank the roundel's panel floats, and its digits above
+ * that, m. Both sit outside the deepest livery band so a pattern drawn
+ * across the door cannot bury the number. */
+const PANEL_PROUD = 0.016;
+const INK_PROUD = 0.024;
 
 /** The door number: an optional panel, then the digits laid on the flank
  * cell by cell. Mirrored per side so it reads the right way round from
@@ -185,7 +199,11 @@ function buildRaceNumber(b: MeshBuilder, spec: CarBodySpec, axles: number[]): vo
         zTo: n.z - n.panel.width / 2,
         yFrom: n.y - n.panel.height / 2,
         yTo: n.y + n.panel.height / 2,
-        proud: 0.008,
+        // Clear of the livery bands, which stand up to 13 mm off the
+        // flank: a roundel laid under one is a roundel with a stripe
+        // through it, and the number is the one thing that has to be
+        // legible whatever the car is painted.
+        proud: PANEL_PROUD,
       },
       n.panel.color ?? spec.colors.accent,
     );
@@ -200,7 +218,7 @@ function buildRaceNumber(b: MeshBuilder, spec: CarBodySpec, axles: number[]): vo
       flankX(spec, axles, n.z, n.y),
       flankX(spec, axles, n.z + total / 2, n.y),
       flankX(spec, axles, n.z - total / 2, n.y),
-    ) + 0.016;
+    ) + INK_PROUD;
   for (const side of [-1, 1]) {
     // Reading direction along z. Seen from outside the RIGHT flank the
     // nose is to the left, so text advances toward the tail; from the left

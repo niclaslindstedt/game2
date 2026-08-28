@@ -58,6 +58,7 @@ Open the printed URL. The game opens on the main menu, over a stage a bot is dri
 | `make sim`         | Headless balance sweep: bots drive stages, prints the pace table (`--sweep` ranks the roster per stage archetype) |
 | `make track`       | Render generated stages: a schematic map AND a shaded view of the place, to `previews/`                           |
 | `make cars`        | Render the car models to a contact sheet (`previews/cars.png`)                                                    |
+| `make liveries`    | Render one body in the field's paint schemes (`previews/liveries.png`)                                            |
 | `make audition`    | Build the audio review page (`previews/audition.html`): every sound, both scores, live                            |
 | `make screenshots` | Drive the built app headlessly and screenshot the key moments                                                     |
 | `make profile`     | Meter what one frame costs the renderer — draw calls, triangles and binds per scene                               |

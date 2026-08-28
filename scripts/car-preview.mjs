@@ -10,6 +10,8 @@
 //   node --experimental-strip-types scripts/car-preview.mjs
 //     # previews/cars.png with the shipped catalog bodies
 //   ... car-preview.mjs --cars classic
+//   ... car-preview.mjs --liveries compact --out liveries
+//     # the same body in the field's paint schemes, one row each
 //   ... car-preview.mjs --variants my-candidates.json --out candidates
 //     # candidates: { "cars": [{ "id": "...", "spec": { CarBodySpec } }] }
 //   ... car-preview.mjs --skip-build
@@ -36,10 +38,26 @@ const has = (name) => args.includes(`--${name}`);
 const outName = flag("out") ?? "cars";
 const variantsPath = flag("variants");
 
+const liveryCar = flag("liveries");
+
 let variants;
 if (variantsPath) {
   variants = JSON.parse(await readFile(resolve(variantsPath), "utf8"));
   if (Array.isArray(variants)) variants = { cars: variants };
+} else if (liveryCar !== null) {
+  // The field's paint schemes on one body — the sheet that says whether two
+  // cars in a start list read as two cars.
+  const { CAR_BODIES } = await import("../pwa/src/game/car-styles.ts");
+  const { LIVERY_COUNT, applyLivery, liveryFor } = await import("../pwa/src/game/car-livery.ts");
+  const base = CAR_BODIES[liveryCar];
+  if (!base) throw new Error(`unknown car id: ${liveryCar} (have ${Object.keys(CAR_BODIES)})`);
+  const count = Number(flag("count") ?? 12);
+  const first = Number(flag("from") ?? 0);
+  variants = { cars: [] };
+  for (let i = first; i < first + Math.min(count, LIVERY_COUNT); i++) {
+    const livery = liveryFor(i);
+    variants.cars.push({ id: `${i} ${livery.pattern}`, spec: applyLivery(base, livery) });
+  }
 } else {
   // The shipped catalog bodies — car-styles.ts is pure data, so Node can
   // import it directly with types stripped.

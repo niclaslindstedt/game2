@@ -13,6 +13,7 @@ import type { CarSpec, GameEvent, GameState } from "@engine";
 import { buildCarBody, frontLampAnchors, rearLampAnchors } from "./car-body.ts";
 import { createCarDamage } from "./car-damage.ts";
 import { createCarDirt, wheelSpray } from "./car-dirt.ts";
+import type { Livery } from "./car-livery.ts";
 import { bodySpecFor } from "./car-styles.ts";
 import { glowTexture } from "./textures.ts";
 
@@ -79,6 +80,10 @@ const GHOST_OPACITY = 0.46;
 export type CarOptions = {
   /** Build the car as a ghost: see-through, and dimmer where it glows. */
   ghost?: boolean;
+  /** Repaint the body in one of the field's schemes (car-livery.ts) rather
+   * than the livery car-styles.ts authored for it — how a car that is not
+   * the player's is told apart from the player's. */
+  paint?: Livery;
 };
 
 /** How far off the centerline this car's beams hang, front and rear. */
@@ -93,7 +98,7 @@ function lampSpread(bodySpec: Parameters<typeof frontLampAnchors>[0]): {
 
 export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
   const group = new THREE.Group();
-  const bodySpec = bodySpecFor(spec);
+  const bodySpec = bodySpecFor(spec, options.paint);
   const body = buildCarBody(bodySpec);
   // Panels, parts and wheels share one material, so a ghost is one flag.
   // Its own back faces still occlude its front ones (depth writing stays

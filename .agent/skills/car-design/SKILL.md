@@ -30,11 +30,13 @@ skill for any code change.
 | `pwa/src/game/car/trim.ts`       | Arch extensions, mirrors, handles, mud flaps, livery bands, door numbers, spoilers                      |
 | `pwa/src/game/car/wheels.ts`     | The tire and three rim styles                                                                           |
 | `pwa/src/game/car-styles.ts`     | The specs — one `CarBodySpec` per catalog id. **Pure data, no three.js import** (Node tooling loads it) |
+| `pwa/src/game/car-livery.ts`     | The FIELD's paint: palettes × patterns, and `applyLivery`, which repaints any spec. Pure data too       |
+| `pwa/src/game/car-livery.ts`     | The FIELD's paint: palettes x patterns, and `applyLivery` — a repaint of any spec. Pure data too        |
 | `pwa/src/game/car-dirt.ts`       | The grime a stage puts on it. Its painter is what the preview's `dirty` column calls                    |
 | `tests/car_geometry_test.ts`     | Holds every spec inside `TUNING.collision`'s box and inside real-car dimensions                         |
 | `pwa/src/game/car-mesh.ts`       | Scene wrapper: attitude (drift roll / air pitch), wheel spin + steer, blob shadow                       |
 | `pwa/src/tools/car-preview.ts`   | The harness page the preview tool drives (contact-sheet renderer)                                       |
-| `scripts/car-preview.mjs`        | The tool: `make cars` / `npm run cars`; `--variants`, `--cars`, `--out`, `--skip-build`                 |
+| `scripts/car-preview.mjs`        | The tool: `make cars` / `make liveries`; `--variants`, `--cars`, `--liveries`, `--out`, `--skip-build`  |
 | `engine/game/defs/cars.ts`       | NOT this skill's file — handling numbers and the catalog. Only `color`/`accent` feed the default look   |
 
 ## The loop: generate → render → LOOK → iterate
@@ -108,10 +110,41 @@ skill for any code change.
   — goes through `sideBand`/`flankX` in `car/shell.ts` rather than a hand
   placed quad, so it hugs the fenders and rides or clips against the wheel
   arches instead of hanging in the opening.
+- A `SideBand` carries a `role`: `trim` is hardware that happens to be a
+  band (a rubbing strip, a sill skirt) and survives a repaint; anything
+  else is paint and a repaint replaces it. Tag a new structural band, or
+  `applyLivery` will strip it off the field's cars.
+
+## Painting the field
+
+A livery is a palette (`paint`/`accent`/`detail`/`hub`) plus a PATTERN, and
+`applyLivery(spec, livery)` composes the pattern out of the same vocabulary
+a hand-authored spec uses — `sideBands`, `stripes`, `colors.lower`,
+`raceNumber`, `roofPaint`. So a new pattern is a case in `flankBands`, not
+new geometry, as long as the shape it wants exists: `wave` sweeps a band on
+a sine, `taper` pinches it toward the tail, `dashes` breaks it into blocks
+(a comb of vertical bars is one tall dashed band), and `colors.lower` cuts
+a belt-line two-tone into the loft itself.
+
+Two traps, both of which look like rendering bugs:
+
+- **A pattern is authored against the body it lands on**, never in absolute
+  metres — the same numbers have to work on a short upright hatch and a
+  long low sedan. Everything comes off `metricsOf`.
+- **`overArch: "ride"` shares one floor.** Two bands riding the same arch
+  are pushed to the same height and z-fight into a stipple. Either clip
+  them, or put them on a `wave` whose crests clear the openings (1.5 cycles
+  over the length puts a crest above each axle) — which is also the shape
+  the liveries with a set of lines down the flank actually have.
+
+Judge it with `make liveries` (`CAR=classic`, `COUNT=12`), and judge it in
+the GAME column first: a field is a success when nine cars read as nine
+teams at 30 px, which is colour and roof before it is ever pattern.
 
 ## Ship checklist
 
-- [ ] Winner folded into `car-styles.ts` (specs stay pure data)
+- [ ] Winner folded into `car-styles.ts` (specs stay pure data), or the
+      pattern into `car-livery.ts`
 - [ ] `make cars` sheet checked — including the `dirty` column — AND
       `make screenshots` in-game check
 - [ ] `npx vitest run tests/car_geometry_test.ts` (the collision box)
