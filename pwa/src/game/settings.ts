@@ -341,17 +341,6 @@ export function assignPedalDir(
   return next;
 }
 
-/** Which control sections are worth showing. A desktop has no thumbs to
- * assign and a phone has no keys to rebind, so each surface only offers
- * what the device it is running on can actually use — a laptop with a
- * touchscreen reports both and gets both. */
-export function deviceControls(): { keyboard: boolean; touch: boolean } {
-  if (typeof window === "undefined") return { keyboard: true, touch: false };
-  const touch = navigator.maxTouchPoints > 0 || "ontouchstart" in window;
-  const keyboard = !touch || matchMedia("(pointer: fine)").matches;
-  return { keyboard, touch };
-}
-
 /** A `KeyboardEvent.code` as a player reads it on their keyboard. */
 export function keyLabel(code: string): string {
   if (code.startsWith("Key")) return code.slice(3);

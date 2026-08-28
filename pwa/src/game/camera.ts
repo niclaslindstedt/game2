@@ -30,7 +30,8 @@
 // back into it, so a camera at a distance reads as something being flown
 // rather than something bolted on. In the air the framing goes loose and
 // pulls wide, which reads as flying. Landings and splashes kick a decaying
-// shake.
+// shake. Over a CLIFF they stay up at the top and let the car fall away
+// below them, which is the one thing a chase rig must not follow.
 //
 // The hood cam is the one that is not a rig, because it is not standing
 // anywhere: it is sat in the car, and what makes it worth driving from is
@@ -280,6 +281,11 @@ type ChaseRig = {
   /** Scale on the impact shake. Distance is its own damping: a hit that
    * rattles a bumper cam is barely a wobble from a hundred feet up. */
   shake: number;
+  /** Share of the CLIFF hold this rig takes, 0..1 (see CLIFF). The low
+   * rigs take all of it — they are the ones the drop happens TO. The two
+   * that already fly a long way over the terrain take a fraction: from
+   * twenty metres up, holding another twelve only makes the car small. */
+  cliff: number;
 };
 
 /** The ladder, in numbers. `chase` is the reference frame — proportions read
@@ -313,6 +319,7 @@ const CHASE_RIGS: Record<Exclude<PlayCamera, "hood">, ChaseRig> = {
     swingDamp: 1,
     heave: 0.45,
     shake: 1.15,
+    cliff: 1,
   },
   chase: {
     dist: 5.6,
@@ -334,6 +341,7 @@ const CHASE_RIGS: Record<Exclude<PlayCamera, "hood">, ChaseRig> = {
     swingDamp: 0.95,
     heave: 0.4,
     shake: 1,
+    cliff: 1,
   },
   far: {
     dist: 9.8,
@@ -355,6 +363,7 @@ const CHASE_RIGS: Record<Exclude<PlayCamera, "hood">, ChaseRig> = {
     swingDamp: 0.72,
     heave: 0.3,
     shake: 0.85,
+    cliff: 0.9,
   },
   // Standoff and aim are a pair: 10 m up and 18 m back puts the car 29°
   // below the horizontal, and an aim 12 m ahead pitches the shot 17° down,
@@ -380,6 +389,7 @@ const CHASE_RIGS: Record<Exclude<PlayCamera, "hood">, ChaseRig> = {
     swingDamp: 0.5,
     heave: 0,
     shake: 0.35,
+    cliff: 0.4,
   },
   // Over the roof, tilted only far enough to see what is coming. The wide
   // fov is what buys that tilt: with the camera almost directly above the
@@ -408,6 +418,7 @@ const CHASE_RIGS: Record<Exclude<PlayCamera, "hood">, ChaseRig> = {
     swingDamp: 0.45,
     heave: 0,
     shake: 0.3,
+    cliff: 0.25,
   },
 };
 
@@ -431,6 +442,80 @@ const SPRING_STEP = 1 / 90;
  * that swallows half the frame. Both are checked at the camera's own
  * position, never the car's. */
 const CHASE_CLEARANCE = 1.3;
+
+/** How that floor is allowed to MOVE, which matters far more than where it
+ * is. The ground under a trailing camera is not a smooth reading: the
+ * terrain's lattice kinks at every cell edge, a shoreline swaps the ground
+ * for the water's surface, and the far country can step outright where two
+ * fields meet. Taken as a bare `groundAt` under a single point, each of
+ * those arrives in the picture in ONE FRAME — a cut, not a movement — and
+ * the steeper the ground, the bigger it is. That is the shake on a cliff
+ * top, and the reason a cliff top has felt broken.
+ *
+ * Two rules fix it. The ground is read over the camera's own FOOTPRINT
+ * rather than under a point, so a lateral wobble on steep ground (the swing,
+ * the impact shake) cannot pump the camera up and down. And the floor may
+ * rise at once — a camera inside a hill shows nothing at all — but only ever
+ * SINKS at a bounded rate, so ground falling away under the camera is
+ * something it flies down, never something it is cut to. */
+const FLOOR = {
+  /** Radius of the footprint the ground is read over, m. */
+  span: 1.8,
+  /** How fast the floor closes on a target below it, 1/s, and the ceiling on
+   * that, m/s. The rate is brisk enough that an ordinary descent — the
+   * ground under a trailing camera drops some 8 m/s on a steep one — tracks
+   * within a metre; the ceiling is what turns a cliff-sized step into a
+   * second of descent. */
+  sink: 10,
+  sinkMax: 16,
+  /** A jump this big between frames is a respawn or a fresh stage, m: the
+   * floor is taken where it is found rather than flown down to. */
+  snap: 24,
+};
+
+/** The footprint's points: the middle and the four corners. */
+const FOOTPRINT: [number, number][] = [
+  [0, 0],
+  [FLOOR.span, FLOOR.span],
+  [FLOOR.span, -FLOOR.span],
+  [-FLOOR.span, FLOOR.span],
+  [-FLOOR.span, -FLOOR.span],
+];
+
+/** THE CLIFF. Driving off a cliff top is the one place the chase rig has
+ * nothing sensible to follow. Riding the car down keeps it exactly two
+ * metres over the roof for the whole plunge, so a twenty-five metre drop
+ * reads as nothing happening; and the floor alone cannot save it, because
+ * the camera clears the lip a fifth of a second after the car does and from
+ * then on there is no ground under it either.
+ *
+ * So the camera simply declines to come all the way down. It holds part of
+ * the height it had at the top and lets the car sink away below it — which
+ * is what the moment actually is: the car is gone, nothing the driver does
+ * matters now, and all that is left to do is watch it fall. The aim is
+ * already at the car, so the shot pitches over the edge on its own.
+ *
+ * The hold is keyed to how far the car has fallen BELOW WHERE IT LEFT THE
+ * GROUND, not to how long it has been in the air, so a lip, a crest and a
+ * designed ramp jump — every one of which lands near the height it launched
+ * from — never touch it. The frame does not change for a jump (CHASE_RIGS);
+ * it changes for a fall. */
+const CLIFF = {
+  /** How far the car has to be under its own takeoff before the camera
+   * starts holding back, m. A stage's jumps live well inside this. */
+  slack: 6,
+  /** Share of the drop past that the camera keeps, and the most it ever
+   * keeps, m. Half means a twenty-five metre cliff leaves the car ten
+   * metres further down the frame than the rig would ever put it. */
+  gain: 0.5,
+  max: 12,
+  /** How fast the hold winds on and comes back off, 1/s. Winding on is
+   * quick because the drop itself is the shape of the gesture; coming off
+   * is slow, so the camera settles back over the couple of seconds after
+   * the landing instead of dropping onto the car like a lift. */
+  rise: 5,
+  settle: 1.4,
+};
 
 /** THE FINISH SHOT. The camera stops dead at the line and lets the car
  * leave, so everything here is about what a planted camera does.
@@ -522,6 +607,18 @@ export function createGameCamera(width: number, height: number): GameCamera {
    * momentum through the moment the wheel comes back. */
   let swing = 0;
   let swingVel = 0;
+  /** The floor the chase rigs ride over (FLOOR), and where it was last read
+   * — a camera that has been picked up and put down somewhere else takes the
+   * ground it finds rather than flying to it. */
+  let floor = -Infinity;
+  let floorX = 0;
+  let floorZ = 0;
+  let floored = false;
+  /** The cliff (CLIFF): the height the car left the ground at, and how far
+   * the camera is currently holding above where the rig would otherwise put
+   * it, m. */
+  let takeoff = 0;
+  let held = 0;
   /** Seconds the camera has been alive — the drone's circling and the map
    * view's azimuth both walk off it, so neither depends on frame rate. */
   let orbit = 0;
@@ -558,6 +655,22 @@ export function createGameCamera(width: number, height: number): GameCamera {
   let mapZoom = 1;
   /** Seconds since the player last moved the map themselves. */
   let mapHeld = MAP_HOLD;
+
+  /** The highest thing under the camera's footprint — ground or water,
+   * whichever is nearer the lens — over a square of FLOOR.span about the
+   * point. Sampling the corners as well as the middle is what makes the
+   * reading a SURFACE the camera stands on rather than a needle it balances
+   * on: at the top of a slope steep enough to matter, the difference between
+   * two points a metre apart is metres of height, and a camera that reads
+   * one point is a camera that jitters by that difference. */
+  const groundOver = (state: GameState, x: number, z: number): number => {
+    const { groundAt, waterAt } = state.terrain;
+    let high = -Infinity;
+    for (const [dx, dz] of FOOTPRINT) {
+      high = Math.max(high, groundAt(x + dx, z + dz), waterAt(x + dx, z + dz) ?? -Infinity);
+    }
+    return high;
+  };
 
   const updateChase = (rig: ChaseRig, state: GameState, dt: number): void => {
     const car = state.car;
@@ -617,9 +730,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
     const rightX = Math.cos(yaw);
     const rightZ = -Math.sin(yaw);
 
-    const sx = (Math.random() - 0.5) * shake * rig.shake;
-    const sy = (Math.random() - 0.5) * shake * rig.shake;
-    const camX = car.x - Math.sin(yaw) * dist + rightX * swing + sx;
+    const camX = car.x - Math.sin(yaw) * dist + rightX * swing;
     const camZ = car.z - Math.cos(yaw) * dist + rightZ * swing;
     // The floor is read where the CAMERA is: trailing a car down a hill
     // puts it inside the slope it just came over, and no amount of height
@@ -627,11 +738,31 @@ export function createGameCamera(width: number, height: number): GameCamera {
     // surface is opaque from underneath, so dropping below one costs the
     // whole frame. Never sink under either: a shot from too high still
     // shows the game.
-    const surface = state.terrain.waterAt(camX, camZ);
-    const under = Math.max(state.terrain.groundAt(camX, camZ), surface ?? -Infinity);
-    const floor = under + CHASE_CLEARANCE;
-    const want = car.y + height_ + car.ride * rig.heave + sy;
-    camera.position.set(camX, Math.max(want, floor), camZ);
+    //
+    // Read over a footprint and sunk at a bounded rate (FLOOR), and read
+    // before the impact shake is added rather than after: on ground this
+    // steep a few centimetres of lateral jitter is metres of vertical one,
+    // so a shake sampled INTO the terrain becomes a shake of the terrain.
+    const standing = groundOver(state, camX, camZ) + CHASE_CLEARANCE;
+    const gap = floor - standing;
+    const jumped = !floored || Math.hypot(camX - floorX, camZ - floorZ) > FLOOR.snap;
+    if (jumped || gap <= 0) floor = standing;
+    else floor -= Math.min(gap, Math.min(gap * FLOOR.sink, FLOOR.sinkMax) * dt);
+    floorX = camX;
+    floorZ = camZ;
+    floored = true;
+
+    // How far the car has fallen below the ground it left, and the share of
+    // that the camera keeps for itself (CLIFF).
+    const fallen = car.airborne ? takeoff - car.y : 0;
+    const wantHold = clamp((fallen - CLIFF.slack) * CLIFF.gain, 0, CLIFF.max) * rig.cliff;
+    const holdRate = wantHold > held ? CLIFF.rise : CLIFF.settle;
+    held += (wantHold - held) * clamp(holdRate * dt, 0, 1);
+
+    const sx = (Math.random() - 0.5) * shake * rig.shake;
+    const sy = (Math.random() - 0.5) * shake * rig.shake;
+    const ride = car.y + height_ + car.ride * rig.heave + held;
+    camera.position.set(camX + sx, Math.max(ride, floor) + sy, camZ);
     // The drop from camera to aim point over the run between them IS the
     // pitch of the shot — a few degrees for the chase rigs, most of a right
     // angle for the one over the roof. On a slope the aim rides the climb
@@ -950,6 +1081,10 @@ export function createGameCamera(width: number, height: number): GameCamera {
   const update = (state: GameState, dt: number): void => {
     shake = Math.max(0, shake - 6 * dt * shake - 0.4 * dt);
     orbit += dt;
+    // The height the car last left the ground at, kept in every mode so a
+    // camera switched to mid-flight knows how far the fall already is
+    // (CLIFF). Grounded it tracks the car, which is the same thing.
+    if (!state.car.airborne) takeoff = state.car.y;
     // The finish owns the shot in every mode a player can drive from.
     // Overhead it does not: the drone is the menu's backdrop, where a bot
     // finishes a stage every couple of minutes and nobody is watching it
@@ -1010,8 +1145,13 @@ export function createGameCamera(width: number, height: number): GameCamera {
     setHoodEye: (eye) => {
       hoodEye = eye;
       // A different car is a different seat; the head takes its new one
-      // rather than swinging across the gap between them.
+      // rather than swinging across the gap between them. A stage builds its
+      // car, so this is also where a fresh run drops whatever the last one
+      // left the rig holding — the ground under a new stage is found, not
+      // flown down to, and nobody starts a run mid-plunge.
       seated = false;
+      floored = false;
+      held = 0;
     },
     update,
     kick: (strength) => {

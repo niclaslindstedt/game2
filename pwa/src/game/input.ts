@@ -60,6 +60,20 @@ const KEY_STEER_SNAP = 0.02;
  * the page, which on a keyboard-driven game means the whole shell jumps. */
 const SWALLOWED: KeyAction[] = ["left", "right", "throttle", "brake", "handbrake"];
 
+/** Which control sections are worth showing. A desktop has no thumbs to
+ * assign and a phone has no keys to rebind, so each surface only offers
+ * what the device it is running on can actually use — a laptop with a
+ * touchscreen reports both and gets both. It lives here, with the rest of
+ * what asks the browser about input, rather than beside the bindings it
+ * decides the fate of: settings.ts is read by the camera, and through it by
+ * the engine's own test suite, which has no DOM to ask. */
+export function deviceControls(): { keyboard: boolean; touch: boolean } {
+  if (typeof window === "undefined") return { keyboard: true, touch: false };
+  const touch = navigator.maxTouchPoints > 0 || "ontouchstart" in window;
+  const keyboard = !touch || matchMedia("(pointer: fine)").matches;
+  return { keyboard, touch };
+}
+
 export function createInput(target: Window = window): InputManager {
   /** Every bound code, mapped to the actions it fires. A code can serve
    * more than one action — nothing stops a player binding it twice. */
