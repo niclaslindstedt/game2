@@ -141,6 +141,20 @@ export function soundForEvent(
     case "partBreak":
       return { id: "part_break" };
 
+    case "solidBreak": {
+      // Two materials, two sounds — and the SIZE of what gave way sets the
+      // pitch, because the difference between a sapling and an old spruce
+      // is heard before it is seen. Anything the ground made takes the
+      // stone knock; anything that grew takes the crack.
+      const wooden =
+        event.solid.kind === "tree" || event.solid.kind === "stump" || event.solid.kind === "log";
+      const big = ramp(event.solid.size, 0.5, 1.8);
+      return {
+        id: wooden ? "wood_break" : "stone_shove",
+        shape: { gain: 0.7 + 0.5 * big, pitch: 1.15 - 0.35 * big, stretch: 0.9 + 0.5 * big },
+      };
+    }
+
     case "crash":
       return { id: "crash" };
 

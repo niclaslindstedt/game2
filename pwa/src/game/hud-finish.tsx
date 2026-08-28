@@ -43,6 +43,12 @@ export type FinishCardProps = {
   laps: number;
   lapTimes: number[];
   nextStage: NextStage | null;
+  /** RUN IT AGAIN, from the grid — the same stage, the same car, a clean
+   * clock. Null where a re-run means nothing: on a stage whose whole point
+   * was to be cleared once. A time trial is the opposite of that, which is
+   * why the button lives here rather than behind the pause menu: a board
+   * you have just missed by two tenths is read and answered in one press. */
+  onRetry: (() => void) | null;
   onRetire: () => void;
   scores: FinishScores | null;
 };
@@ -53,6 +59,7 @@ export function FinishCard({
   laps,
   lapTimes,
   nextStage,
+  onRetry,
   onRetire,
   scores,
 }: FinishCardProps) {
@@ -91,6 +98,21 @@ export function FinishCard({
               }}
             >
               NEXT: {nextStage.name.toUpperCase()}
+            </button>
+          )}
+          {/* The time trial's own way on, and it is the PRIMARY one: a trial
+              has no next rung to climb to, so running it again is what the
+              player came here to do. */}
+          {onRetry && (
+            <button
+              type="button"
+              className="hud-start hud-finish-next"
+              onClick={() => {
+                playUi("start");
+                onRetry();
+              }}
+            >
+              RETRY
             </button>
           )}
           <button

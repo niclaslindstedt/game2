@@ -18,6 +18,7 @@ import {
   compileTrack,
   createGame,
   createTerrain,
+  standSolid,
   step,
   trackLost,
   type CarInput,
@@ -171,16 +172,14 @@ describe("exploring", () => {
       skipCountdown: true,
       track: compileTrack(3, LONG_STRAIGHT),
     });
-    const boulder = {
+    const boulder = standSolid({
       x: 30,
       z: 250,
       y: -0.35,
       kind: "boulder" as const,
       size: 1,
       spin: 0,
-      radius: 2,
-      height: 2,
-    };
+    });
     state.terrain = {
       ...state.terrain,
       heightAt: () => -0.35,
@@ -293,16 +292,14 @@ describe("crashes", () => {
   });
 
   it("a boulder at speed crushes and slows the car; a crawl is only a scuff", () => {
-    const boulder = {
+    const boulder = standSolid({
       x: 30,
       z: 250,
       y: -0.35,
       kind: "boulder" as const,
       size: 1,
       spin: 0,
-      radius: 2,
-      height: 2,
-    };
+    });
     const run = (speed: number, throttle: number): { events: GameEvent[]; state: GameState } => {
       const state = createGame({
         seed: 3,

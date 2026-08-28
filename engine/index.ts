@@ -108,6 +108,8 @@ export {
   GROVES,
   GROVE_SCALE,
   SOLID_PROP_HEIGHT,
+  standSolid,
+  type SolidKind,
   type GroveCommunity,
   type TerrainField,
   type Stream,

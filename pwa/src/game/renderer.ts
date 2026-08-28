@@ -35,6 +35,7 @@ import {
 } from "./dust.ts";
 import { biomeFor } from "./biome.ts";
 import { createEnvironment } from "./environment.ts";
+import { TRUNK_COLOR } from "./flora.ts";
 import { createFumes, EXHAUST } from "./fumes.ts";
 import { createRain } from "./rain.ts";
 import { createWayHomeArrow } from "./way-home.ts";
@@ -91,6 +92,11 @@ const STONE_DUST: DustTint = {
   fleck: biomeFor().ground.bedrockDark,
   fleckMix: 0.32,
 };
+
+/** A trunk giving way: pale splintered wood with the bark's own brown torn
+ * through it. Nothing else in the game throws wood, and a stone-grey burst
+ * off a tree reads as the tree having been made of concrete. */
+const SPLINTERS: DustTint = { base: 0xc9b892, fleck: TRUNK_COLOR, fleckMix: 0.35 };
 
 export type GameRenderer = {
   setGame: (state: GameState) => void;
@@ -501,6 +507,21 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         celebration.fire(classify(state.track, ev.time).place, world?.muzzles() ?? []);
       } else if (ev.type === "respawn") {
         chase.kick(0.3);
+      } else if (ev.type === "solidBreak") {
+        // Something came out of the landscape. The engine has already taken
+        // it out of the field and worked out where the piece is going; the
+        // world stops drawing it standing and throws it, and the burst here
+        // is the splinters and grit that went with it.
+        world?.fell(ev.solid, ev.vx, ev.vy, ev.vz);
+        const wooden = ev.solid.kind === "tree" || ev.solid.kind === "stump";
+        dust.spawn(
+          ev.solid.x,
+          ev.solid.y + ev.solid.height * 0.3,
+          ev.solid.z,
+          wooden ? SPLINTERS : STONE_DUST,
+          Math.round((ev.broke ? 26 : 14) * fx),
+          3.5,
+        );
       } else if (ev.type === "impact") {
         // The hit lands where the engine says it did: a debris-grey burst
         // at that point on the body, and a camera jolt sized to the speed.

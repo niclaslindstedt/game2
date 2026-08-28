@@ -673,7 +673,13 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     if (!crashed) {
       const solids = terrain.obstaclesNear(car.x, car.z, 2.5);
       solids.push(...terrain.treesNear(car.x, car.z, 2.5));
-      if (solids.length > 0) collideCar(state.spec, car, solids, events, state.stats);
+      // The field is handed the right to take a solid OUT of the world: a
+      // trunk the car snapped, a stone it knocked off its bed. Nothing
+      // stands there afterwards on either side of the wall — the piece is
+      // a `solidBreak` the renderer tumbles away.
+      if (solids.length > 0) {
+        collideCar(state.spec, car, solids, events, state.stats, terrain.fell);
+      }
     }
   }
   // A wreck is driven, not teleported: wear reaching 1 leaves a car with

@@ -15,7 +15,8 @@ import { createRng } from "@engine";
 import { detailTexture } from "./textures.ts";
 
 // ── The taiga paint box ────────────────────────────────────────────────────
-const TRUNK = new THREE.Color(0x7a4f2a);
+export const TRUNK_COLOR = 0x7a4f2a;
+const TRUNK = new THREE.Color(TRUNK_COLOR);
 const TRUNK_DARK = new THREE.Color(0x5f3d20);
 const PINE_BARK = new THREE.Color(0xa5683a); // Scots pine's orange upper bark
 const BIRCH_BARK = new THREE.Color(0xe8e4da);

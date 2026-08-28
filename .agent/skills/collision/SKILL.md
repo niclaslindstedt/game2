@@ -18,28 +18,42 @@ STAND, and **`test-scenario`** for staging exact contacts.
 
 ## The map — who owns what
 
-| Piece                                                                                                       | File                                                                    |
-| ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Contact model: OBB-vs-circle, impulse, yaw kick, crush, parts, systems, hard landings                       | `engine/game/collision.ts` (`collideCar`, `landingDamage`)              |
-| The GROUND as a solid: a face too steep to climb, met at the bumper                                         | `engine/game/collision.ts` (`collideSlope`) + `car.ts` (`hitFace`)      |
-| The springs: heave, dive/squat, the landing bounce — the car's WEIGHT                                       | `engine/game/car.ts` (`stepSuspension`), `TUNING.suspension`            |
-| Every number: box size, restitution, crush rates, part bolts, system transfer + effects, the springs        | `engine/game/defs/tuning.ts` → `TUNING.collision`, `TUNING.suspension`  |
-| The ledger: `CarState.damage` (zones, belly, wear, systems, broken, version), impact/partBreak/crash events | `engine/game/state.ts`                                                  |
-| Damaged-handling effects (power, grip, shift cuts, steering, landing tolerance)                             | `engine/game/car.ts` — reads `car.damage.systems`, never writes         |
-| When collision runs, the wedge check that is the only way home, deep-water crash                            | `engine/game/step.ts`                                                   |
-| Solid trunks + grove quilt (`treesNear`); every other solid (`obstaclesNear`) + the `SOLID_PROP_HEIGHT` bar | `engine/mapgen/terrain.ts`                                              |
-| Bending the polygons, scuff darkening, debris                                                               | `pwa/src/game/car-damage.ts` (+ `car-body.ts` `breakables`)             |
-| Drawing the springs: the sprung-mass group the heave and dive move                                          | `pwa/src/game/car-body.ts` (`chassis`) + `car-mesh.ts`                  |
-| Drawing the engine's trunks as trees (species stays app-side)                                               | `pwa/src/game/world.ts` (`treePlacement`, `solidMix`)                   |
-| Drawing the engine's stone (boulders, rocks, outcrops) where its circles are                                | `pwa/src/game/world.ts` (`buildWild`, `stoneMatrix`)                    |
-| The HUD damage instrument                                                                                   | `pwa/src/game/hud.tsx` (`DamagePanel`) + `App.tsx` snapshot             |
-| Tests                                                                                                       | `tests/collision_test.ts` (+ the boulder scenario in `explore_test.ts`) |
+| Piece                                                                                                       | File                                                                             |
+| ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Contact model: OBB-vs-circle, impulse, yaw kick, crush, parts, systems, hard landings                       | `engine/game/collision.ts` (`collideCar`, `landingDamage`)                       |
+| What the SOLID is made of: mass, rooting, snapping strength, and each kind's shape                          | `engine/mapgen/solids.ts` (`standSolid`, `solidShape`)                           |
+| Whether it gives way, and the roll a low one trips into the body                                            | `engine/game/collision.ts` (`meetSolid`, `tripRoll`) + `TUNING.collision.solids` |
+| The piece a felled solid leaves behind, flying                                                              | `pwa/src/game/breakage.ts`, over `tumble.ts`; retired via `world.fell`           |
+| The GROUND as a solid: a face too steep to climb, met at the bumper                                         | `engine/game/collision.ts` (`collideSlope`) + `car.ts` (`hitFace`)               |
+| The springs: heave, dive/squat, the landing bounce — the car's WEIGHT                                       | `engine/game/car.ts` (`stepSuspension`), `TUNING.suspension`                     |
+| Every number: box size, restitution, crush rates, part bolts, system transfer + effects, the springs        | `engine/game/defs/tuning.ts` → `TUNING.collision`, `TUNING.suspension`           |
+| The ledger: `CarState.damage` (zones, belly, wear, systems, broken, version), impact/partBreak/crash events | `engine/game/state.ts`                                                           |
+| Damaged-handling effects (power, grip, shift cuts, steering, landing tolerance)                             | `engine/game/car.ts` — reads `car.damage.systems`, never writes                  |
+| When collision runs, the wedge check that is the only way home, deep-water crash                            | `engine/game/step.ts`                                                            |
+| Solid trunks + grove quilt (`treesNear`); every other solid (`obstaclesNear`) + the `SOLID_PROP_HEIGHT` bar | `engine/mapgen/terrain.ts`                                                       |
+| Bending the polygons, scuff darkening, debris                                                               | `pwa/src/game/car-damage.ts` (+ `car-body.ts` `breakables`)                      |
+| Drawing the springs: the sprung-mass group the heave and dive move                                          | `pwa/src/game/car-body.ts` (`chassis`) + `car-mesh.ts`                           |
+| Drawing the engine's trunks as trees (species stays app-side)                                               | `pwa/src/game/world.ts` (`treePlacement`, `solidMix`)                            |
+| Drawing the engine's stone (boulders, rocks, outcrops) where its circles are                                | `pwa/src/game/world.ts` (`buildWild`, `stoneMatrix`)                             |
+| The HUD damage instrument                                                                                   | `pwa/src/game/hud.tsx` (`DamagePanel`) + `App.tsx` snapshot                      |
+| Tests                                                                                                       | `tests/collision_test.ts` (+ the boulder scenario in `explore_test.ts`)          |
 
 ## The invariants — each one is load-bearing
 
 - **The engine owns every number and every decision.** The renderer bends
   and tumbles what `car.damage` says, nothing more. New damage behavior
   starts in `collision.ts`/`tuning.ts`, never in `car-damage.ts`.
+- **A solid is never infinitely heavy unless its mass says so.** Mass,
+  rooting and snapping strength come out of `standSolid` — from the shape
+  the renderer draws and the material it is drawn in — and the contact
+  weighs the car against them. Never special-case a KIND in
+  `collision.ts`: if a rock should shrug the car off, that is a number in
+  `solids.ts`, and it moves what the renderer draws with it.
+- **A felled solid leaves BOTH fields.** The engine's field (via the
+  `fell` callback) and the renderer's own instance (`world.fell`) — the
+  wild streams cells in for as long as the run lasts, and a field that
+  still places a felled trunk stands it back up the moment the player
+  drives away and comes back.
 - **Anything solid is placed engine-side.** The renderer draws colliders
   where the engine put them (`treesNear`/`obstaclesNear`) — never the
   reverse, and never a drawn solid without a collider or a collider
