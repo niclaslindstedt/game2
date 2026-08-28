@@ -676,22 +676,32 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
         for (let dz = -rings - 1; dz <= rings + 1; dz++) inReach.add(key(ix + dx, iz + dz));
       }
     }
-    /** Distance to the apron running back from `sample` against its heading
-     * (the start's run-up) or forward along it (the finish's run-off). */
-    const apronDistance = (sample: TrackSample, sign: 1 | -1, x: number, z: number): number => {
-      const along =
-        ((x - sample.x) * Math.sin(sample.heading) + (z - sample.z) * Math.cos(sample.heading)) *
-        sign;
-      const lateral =
-        (x - sample.x) * Math.cos(sample.heading) - (z - sample.z) * Math.sin(sample.heading);
+    /** Distance to the apron running back from an END sample against its
+     * heading (the start's run-up) or forward along it (the finish's
+     * run-off). The two ends never move, so each arrives with its heading's
+     * sine and cosine already taken — a query is asked tens of thousands of
+     * times per branch and has no business re-deriving a constant. */
+    const apronDistance = (end: StageEnd, x: number, z: number): number => {
+      const dx = x - end.x;
+      const dz = z - end.z;
+      const along = (dx * end.sin + dz * end.cos) * end.sign;
+      const lateral = dx * end.cos - dz * end.sin;
       return Math.hypot(lateral, along <= 0 ? -along : Math.max(0, along - R.startZone.apron));
     };
-    const first = track.samples[0];
-    const last = track.samples[track.samples.length - 1];
+    type StageEnd = { x: number; z: number; sin: number; cos: number; sign: 1 | -1 };
+    const endOf = (sample: TrackSample, sign: 1 | -1): StageEnd => ({
+      x: sample.x,
+      z: sample.z,
+      sin: Math.sin(sample.heading),
+      cos: Math.cos(sample.heading),
+      sign,
+    });
+    const first = endOf(track.samples[0], -1);
+    const last = endOf(track.samples[track.samples.length - 1], 1);
     return (ignoreFrom: number, ignoreTo: number) =>
       (x: number, z: number): number => {
-        let best = apronDistance(first, -1, x, z);
-        if (!track.endless) best = Math.min(best, apronDistance(last, 1, x, z));
+        let best = apronDistance(first, x, z);
+        if (!track.endless) best = Math.min(best, apronDistance(last, x, z));
         const cx = Math.floor(x / CELL);
         const cz = Math.floor(z / CELL);
         if (!inReach.has(key(cx, cz))) return Math.min(best, ROAD_DISTANCE_REACH);
@@ -703,12 +713,15 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
         for (let ring = 0; ring <= rings; ring++) {
           if ((ring - 1) * CELL >= best) break;
           for (let dx = -ring; dx <= ring; dx++) {
-            const edge = Math.abs(dx) === ring;
-            for (let dz = -ring; dz <= ring; dz++) {
-              if (!edge && Math.abs(dz) !== ring) continue;
-              // Most cells in the ring are empty; `?? []` allocated an
-              // array for every one of them, on a query a branch makes
-              // tens of thousands of times.
+            // On the ring's two end columns every row is on the ring;
+            // between them only the top and the bottom are, so the walk
+            // strides straight from one to the other. Same cells, same
+            // order as testing all (2·ring+1)² of them and skipping the
+            // interior one at a time — just without the skipping.
+            const stride = Math.abs(dx) === ring || ring === 0 ? 1 : 2 * ring;
+            for (let dz = -ring; dz <= ring; dz += stride) {
+              // Most cells hold no road at all; `?? []` used to allocate an
+              // empty array for every one of those probes.
               const bucket = grid.get(key(cx + dx, cz + dz));
               if (bucket === undefined) continue;
               for (const sample of bucket) {

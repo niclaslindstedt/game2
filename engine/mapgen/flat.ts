@@ -21,6 +21,14 @@ export const SURFACES: readonly Surface[] = ["gravel", "asphalt", "water"];
 
 const CODE_OF: Record<Surface, number> = { gravel: 0, asphalt: 1, water: 2 };
 
+/** Samples per bounding group — a power of two, so the walk can test
+ * alignment and pick a group with shifts. */
+export const GROUP = 8;
+
+/** Below this, a sample is straight: no corner plan has anything to say
+ * about it. The same threshold the bot's scan used inline. */
+export const STRAIGHT = 1e-4;
+
 export type FlatTrack = {
   x: Float64Array;
   z: Float64Array;
@@ -38,6 +46,25 @@ export type FlatTrack = {
   cosHeading: Float64Array;
   /** Index into `SURFACES`. */
   surface: Uint8Array;
+  /** How many samples ahead the next one that actually BENDS is; 0 at a
+   * sample that bends itself. Two fifths of a stage is dead straight and a
+   * corner plan skips every one of those, so it skips them in one jump
+   * rather than one at a time. Cyclic on a circuit, where the road runs on
+   * into its own start line; on a sprint a value of `samples.length` or
+   * more means there is no corner left before the finish. */
+  toNextCurve: Int32Array;
+  /** Bounding circles over runs of `GROUP` consecutive samples: centre and
+   * a radius that reaches every sample in the run.
+   *
+   * Locating the car searches a sixty-sample window, twice per physics
+   * step, and almost all of that window is road the car is nowhere near.
+   * A group whose whole circle lies further off than the nearest sample
+   * found so far cannot contain a nearer one, so the walk steps over it
+   * whole. The radius carries a hair of slack, so the test can only ever
+   * decline to skip a group it could have skipped — never the reverse. */
+  groupX: Float64Array;
+  groupZ: Float64Array;
+  groupR: Float64Array;
 };
 
 const CACHE = new WeakMap<Track, FlatTrack>();
@@ -73,6 +100,10 @@ export function flatTrack(track: Track): FlatTrack {
     sinHeading: new Float64Array(n),
     cosHeading: new Float64Array(n),
     surface: new Uint8Array(n),
+    toNextCurve: new Int32Array(n),
+    groupX: new Float64Array(Math.ceil(n / GROUP)),
+    groupZ: new Float64Array(Math.ceil(n / GROUP)),
+    groupR: new Float64Array(Math.ceil(n / GROUP)),
   };
   let from = 0;
   if (cached) {
@@ -96,6 +127,60 @@ export function flatTrack(track: Track): FlatTrack {
     flat.sinHeading[i] = Math.sin(s.heading);
     flat.cosHeading[i] = Math.cos(s.heading);
     flat.surface[i] = CODE_OF[s.surface];
+  }
+  // The group circles, over the samples this build added. A group is only
+  // ever finished once, but the last one of a growing endless road is not,
+  // so rebuild from the group the extension starts in.
+  for (let g = (from / GROUP) | 0; g < flat.groupX.length; g++) {
+    const start = g * GROUP;
+    const end = Math.min(n, start + GROUP);
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    for (let i = start; i < end; i++) {
+      if (flat.x[i] < minX) minX = flat.x[i];
+      if (flat.x[i] > maxX) maxX = flat.x[i];
+      if (flat.z[i] < minZ) minZ = flat.z[i];
+      if (flat.z[i] > maxZ) maxZ = flat.z[i];
+    }
+    const cx = (minX + maxX) / 2;
+    const cz = (minZ + maxZ) / 2;
+    let r2 = 0;
+    for (let i = start; i < end; i++) {
+      const dx = flat.x[i] - cx;
+      const dz = flat.z[i] - cz;
+      const d2 = dx * dx + dz * dz;
+      if (d2 > r2) r2 = d2;
+    }
+    flat.groupX[g] = cx;
+    flat.groupZ[g] = cz;
+    // Slack, so rounding can never shrink the circle below the samples it
+    // is standing in for.
+    flat.groupR[g] = Math.sqrt(r2) * (1 + 1e-9) + 1e-6;
+  }
+  // Rebuilt whole rather than extended: a straight tail that a later
+  // section puts a corner on has a different answer than it had before.
+  let gap = n;
+  for (let i = n - 1; i >= 0; i--) {
+    if (flat.curvature[i] >= STRAIGHT) gap = 0;
+    else gap = gap >= n ? n : gap + 1;
+    flat.toNextCurve[i] = gap;
+  }
+  if (track.circuit) {
+    let first = -1;
+    for (let i = 0; i < n; i++) {
+      if (flat.curvature[i] >= STRAIGHT) {
+        first = i;
+        break;
+      }
+    }
+    // The straight run at the end of the lap carries on into the start.
+    if (first >= 0) {
+      for (let i = n - 1; i >= 0 && flat.toNextCurve[i] >= n; i--) {
+        flat.toNextCurve[i] = n - i + first;
+      }
+    }
   }
   CACHE.set(track, flat);
   lastTrack = track;

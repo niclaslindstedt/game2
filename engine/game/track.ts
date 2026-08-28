@@ -6,7 +6,7 @@
 // — a car that leaves the road keeps its last on-road progress for respawn.
 
 import { STAGE_RULES, finishIndex, type Surface, type Track } from "../mapgen/index.ts";
-import { flatTrack, type FlatTrack } from "../mapgen/flat.ts";
+import { flatTrack, GROUP, type FlatTrack } from "../mapgen/flat.ts";
 import { corridorOffset, crossOffset } from "../mapgen/road.ts";
 import { TUNING } from "./defs/tuning.ts";
 import type { GameState } from "./state.ts";
@@ -171,18 +171,54 @@ export function locatePoint(track: Track, x: number, z: number, hint: number): T
   let bestD2 = Infinity;
   // Over the flat arrays, not the sample objects: this window is sixty-odd
   // samples and the run walks it twice per physics step, which is the
-  // single hottest loop in the engine.
+  // single hottest loop in the engine. Whole groups of eight are stepped
+  // over when their bounding circle proves none of them can beat the
+  // distance the walk is already holding — which is most of the window,
+  // most of the time: it reaches ninety meters up the road for the rare
+  // step that needs it, not for the ordinary one that does not.
   const flat = flatTrack(track);
   const fx = flat.x;
   const fz = flat.z;
-  for (let i = lo; i <= hi; i++) {
+  // The bound the groups are tested against. It starts at the hint's own
+  // sample, which is IN the window, so it is an upper bound on the nearest
+  // one — and a group further off than an upper bound cannot hold the
+  // answer, so the far end of the window is dropped without being walked.
+  // Only ever read at a group boundary, so the root is taken there rather
+  // than on every improvement along the way.
+  const seed = lo > hint ? lo : hint > hi ? hi : hint;
+  const seedX = x - fx[seed];
+  const seedZ = z - fz[seed];
+  let bound = Math.sqrt(seedX * seedX + seedZ * seedZ);
+  let bounded = true;
+  let i = lo;
+  while (i <= hi) {
+    if ((i & (GROUP - 1)) === 0 && i + GROUP - 1 <= hi) {
+      if (!bounded) {
+        const found = Math.sqrt(bestD2);
+        if (found < bound) bound = found;
+        bounded = true;
+      }
+      const g = i / GROUP;
+      const gx = x - flat.groupX[g];
+      const gz = z - flat.groupZ[g];
+      const reach = bound + flat.groupR[g];
+      // Strictly conservative: the margin can only ever keep a group in the
+      // walk that could have been dropped, never drop one that holds the
+      // answer.
+      if (gx * gx + gz * gz > reach * reach * (1 + 1e-9)) {
+        i += GROUP;
+        continue;
+      }
+    }
     const dx = x - fx[i];
     const dz = z - fz[i];
     const d2 = dx * dx + dz * dz;
     if (d2 < bestD2) {
       bestD2 = d2;
       best = i;
+      bounded = false;
     }
+    i++;
   }
   const s = samples[best];
   // Project the offset onto the sample's right axis for a signed lateral.
@@ -197,8 +233,11 @@ export function locatePoint(track: Track, x: number, z: number, hint: number): T
   // valleys and through hillsides. Road is drawn and shelved for one apron
   // past each end (R24); past that the terrain owns the ground. A circuit
   // has no such end — its road runs back into its own start line.
-  const offEnd = pastApron(track, best, s, dx, dz);
-  const offRoad = offEnd || Math.abs(lateral) > halfWidth(track) + TUNING.offTrack.verge;
+  // Only the two end samples can be run off the end of, so the test itself
+  // is only reached there — every other fix skips the call.
+  const offEnd =
+    (best === 0 || best === samples.length - 1) && pastApron(track, best, flat, best, dx, dz);
+  const offRoad = offEnd || Math.abs(lateral) > track.width / 2 + TUNING.offTrack.verge;
   // Allocated at the full width so `locate` can fill the profile in place
   // and everything downstream sees one object shape.
   const fix: TrackFix = {
@@ -226,7 +265,7 @@ export function locate(track: Track, x: number, z: number, hint: number): TrackF
   const s = samples[best];
   const dx = x - s.x;
   const dz = z - s.z;
-  const halfRoad = halfWidth(track);
+  const halfRoad = track.width / 2;
   // Ground height and slope come from BETWEEN the samples. The nearest
   // sample alone quantizes the road to the 2 m sample grid, and on a graded
   // road that staircase reads as the ground falling away — a car that hops
@@ -269,11 +308,6 @@ export function locate(track: Track, x: number, z: number, hint: number): TrackF
   return fix;
 }
 
-/** Half the road's mat, m. */
-function halfWidth(track: Track): number {
-  return track.width / 2;
-}
-
 /** True when the car has run off one of the stage's ENDS — past the apron
  * of dirt the generator lays before the start gate and after the flying
  * finish (R24). Only the two end samples can report it: anywhere else the
@@ -286,7 +320,8 @@ function halfWidth(track: Track): number {
 function pastApron(
   track: Track,
   index: number,
-  sample: Track["samples"][number],
+  flat: FlatTrack,
+  at: number,
   dx: number,
   dz: number,
 ): boolean {
@@ -294,7 +329,7 @@ function pastApron(
   const first = index === 0;
   const last = index === track.samples.length - 1 && !track.endless;
   if (!first && !last) return false;
-  const along = dx * Math.sin(sample.heading) + dz * Math.cos(sample.heading);
+  const along = dx * flat.sinHeading[at] + dz * flat.cosHeading[at];
   const past = first ? -along : along;
   return past > STAGE_RULES.startZone.apron;
 }

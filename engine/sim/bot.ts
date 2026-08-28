@@ -125,7 +125,7 @@ export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): Car
   // surface. The scan below walks dozens of samples on EVERY physics step,
   // so both the sample objects and the string key into the tuning table are
   // worth staying out of.
-  const { curvature, surface, arc } = flatTrack(track);
+  const { curvature, surface, arc, toNextCurve } = flatTrack(track);
   const gripOf = gripBySurface(state.spec);
   const braking = 2 * state.spec.brake * 0.7;
   const hotEntry = profile.hotEntry * rotation;
@@ -137,12 +137,21 @@ export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): Car
   // it the scan has nothing left to learn about the handbrake, which is
   // what lets the plan stop early.
   const flickReach = Math.max(12, car.u * 0.5);
-  for (let ahead = 1; ahead <= scan; ahead++) {
+  let ahead = 1;
+  while (ahead <= scan) {
     // The sample `ahead` down the road — see `aheadOf`, inlined because
     // this loop is the bot's whole cost. `scan` never exceeds one lap, so
     // a circuit wraps at most once.
     let i = from + ahead;
     if (i >= count) i = track.circuit ? i - count : count - 1;
+    // Straight road has nothing to plan around, and two fifths of a stage
+    // is straight — so the scan steps over a whole straight at once instead
+    // of asking each of its samples in turn.
+    const straight = toNextCurve[i];
+    if (straight > 0) {
+      ahead += straight;
+      continue;
+    }
     // Arc distance to it — round the lap on a circuit, where a sample the
     // bot is planning for can sit at a smaller `s` than the car does.
     const s = arc[i];
@@ -159,7 +168,6 @@ export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): Car
       break;
     }
     const k = curvature[i];
-    if (k < 1e-4) continue;
     // The grip the car will actually HAVE at that corner, not the number on
     // its spec sheet: the surface it is paved with and the rubber this car
     // is on both scale it, and a driver reads the road ahead. Without this
@@ -184,6 +192,7 @@ export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): Car
       hardDistance = distance;
       hardCap = cap;
     }
+    ahead += 1;
   }
 
   let throttle = car.u < targetSpeed ? 1 : 0;

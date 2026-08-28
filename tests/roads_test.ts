@@ -460,3 +460,63 @@ describe("one ground under the car and the picture of it", () => {
     }
   });
 });
+
+// `locate` searches a window of sixty-odd samples around its hint, twice on
+// every one of a run's 120 steps a second, and skips whole groups of eight
+// of them whenever a bounding circle proves none can be nearer than what it
+// already has. That is an optimization with a proof behind it, and a proof
+// is worth exactly as much as the test that checks it: everything the run
+// stands on — which sample the car is at, how far off line, whether that is
+// off the road at all — comes out of that search.
+describe("locating the car against the centerline", () => {
+  /** The window `locate` searches, walked without any of the skipping. */
+  function brute(track: ReturnType<typeof compileStage>, x: number, z: number, hint: number) {
+    const lo = Math.max(0, hint - 15);
+    const hi = Math.min(track.samples.length - 1, hint + 45);
+    let best = lo;
+    let bestD2 = Infinity;
+    for (let i = lo; i <= hi; i++) {
+      const dx = x - track.samples[i].x;
+      const dz = z - track.samples[i].z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  it("finds the same sample the unskipped search would, everywhere", () => {
+    let checked = 0;
+    for (const seed of [1, 4, 17, 42]) {
+      for (const shape of ["sprint", "circuit"] as const) {
+        const track = compileStage(seed, "medium", {}, shape);
+        const n = track.samples.length;
+        // Probes on the road, out on the verge, far into the country, and
+        // behind the car — a hint is only a hint, and the window reaches
+        // thirty meters back and ninety forward for the steps where the two
+        // have come apart.
+        for (let i = 0; i < n; i += 7) {
+          const s = track.samples[i];
+          const rx = Math.cos(s.heading);
+          const rz = -Math.sin(s.heading);
+          for (const [out, ahead] of [
+            [0, 0],
+            [track.width / 2 - 0.2, 0],
+            [-track.width, 6],
+            [40, -12],
+            [-120, 30],
+          ]) {
+            const x = s.x + rx * out;
+            const z = s.z + rz * out;
+            const hint = Math.max(0, Math.min(n - 1, i + ahead));
+            expect(locate(track, x, z, hint).index).toBe(brute(track, x, z, hint));
+            checked += 1;
+          }
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(5000);
+  });
+});
