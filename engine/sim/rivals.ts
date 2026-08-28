@@ -81,8 +81,8 @@ export const RIVALS: RivalCrew[] = [
       "Reflexes that can save anything, and no interest at all in seeing it coming — he aims at his own bonnet and sorts the rest out with his hands. Devastating where he can improvise: open, flowing, wide. Expensive anywhere blind, where he meets the hairpin already far too fast and then catches it beautifully, forty metres late.",
   },
   {
-    id: "wolverine",
-    alias: "Wolverine",
+    id: "scrapper",
+    alias: "Scrapper",
     driver: "Kaisa Ahonen",
     carId: "coupe",
     standing: 0.85,
