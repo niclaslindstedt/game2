@@ -94,7 +94,11 @@ export function simulateStage(options: SimOptions): SimResult {
   // fold a coast-down into every pace and top-speed column.
   while (state.phase !== "rollout" && state.phase !== "finished" && steps < maxSteps) {
     const input = botInput(state, profile);
-    events.push(...step(state, input));
+    // Copied across rather than spread: a spread of the step's (usually
+    // empty) event list allocates and walks an iterator on every one of a
+    // run's tens of thousands of steps.
+    const emitted = step(state, input);
+    for (let i = 0; i < emitted.length; i++) events.push(emitted[i]);
     steps += 1;
     if (steps % 30 === 0) {
       mix(state.car.x);

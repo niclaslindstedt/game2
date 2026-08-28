@@ -19,6 +19,7 @@ import type {
 import { SAMPLE_STEP, STAGE_RULES as R, knobScale, resolveKnobs } from "./rules.ts";
 import { createStageStream, generateStage } from "./generate.ts";
 import { createRng } from "../lib/prng.ts";
+import { cellKey } from "../lib/math.ts";
 import { createLandField } from "./land.ts";
 import { junctionFlat, junctionPlatformY, ROAD_CROSS } from "./road.ts";
 import { buildSpur, type Spur } from "./spurs.ts";
@@ -645,11 +646,7 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
    * seconds of work per stage. */
   const roadDistanceField = () => {
     const CELL = 48;
-    // Numeric cell keys: a branch asks this tens of thousands of times, and
-    // a template string per probe is a string allocated per probe. Cell
-    // indices are bounded by the world (a few dozen either way), so packing
-    // two of them into one integer cannot collide.
-    const key = (ix: number, iz: number): number => ix * 8192 + iz;
+    const key = cellKey;
     const grid = new Map<number, TrackSample[]>();
     const rings = Math.ceil(ROAD_DISTANCE_REACH / CELL);
     // ...and the same cells DILATED by the query's reach: a cell in here is
@@ -709,7 +706,12 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
             const edge = Math.abs(dx) === ring;
             for (let dz = -ring; dz <= ring; dz++) {
               if (!edge && Math.abs(dz) !== ring) continue;
-              for (const sample of grid.get(key(cx + dx, cz + dz)) ?? []) {
+              // Most cells in the ring are empty; `?? []` allocated an
+              // array for every one of them, on a query a branch makes
+              // tens of thousands of times.
+              const bucket = grid.get(key(cx + dx, cz + dz));
+              if (bucket === undefined) continue;
+              for (const sample of bucket) {
                 if (sample.s > ignoreFrom && sample.s < ignoreTo) continue;
                 const d = Math.hypot(sample.x - x, sample.z - z);
                 if (d < best) best = d;

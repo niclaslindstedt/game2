@@ -9,6 +9,7 @@
 // circuit.ts own.
 
 import type { Rng } from "../lib/prng.ts";
+import { cellKey } from "../lib/math.ts";
 import { STAGE_RULES as R, knobScale, type SegmentPlan, type StageKnobs } from "./rules.ts";
 
 export type Cursor = { x: number; z: number; heading: number; arc: number };
@@ -33,8 +34,8 @@ export function createPointField(clear: number) {
   const cell = clear;
   const minD2 = clear * clear;
   const points: Cursor[] = [];
-  const grid = new Map<string, Cursor[]>();
-  const keyOf = (p: Cursor): string => `${Math.floor(p.x / cell)},${Math.floor(p.z / cell)}`;
+  const grid = new Map<number, Cursor[]>();
+  const keyOf = (p: Cursor): number => cellKey(Math.floor(p.x / cell), Math.floor(p.z / cell));
 
   return {
     points,
@@ -84,7 +85,7 @@ export function createPointField(clear: number) {
       const iz = Math.floor(c.z / cell);
       for (let dx = -1; dx <= 1; dx++) {
         for (let dz = -1; dz <= 1; dz++) {
-          const bucket = grid.get(`${ix + dx},${iz + dz}`);
+          const bucket = grid.get(cellKey(ix + dx, iz + dz));
           if (!bucket) continue;
           for (const p of bucket) {
             const gap = c.arc - p.arc;

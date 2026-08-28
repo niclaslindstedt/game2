@@ -170,23 +170,31 @@ function shapeOf(shape: RoadShape): "gravel" | "asphalt" | "deck" {
 
 /** R19 — how much of the crown survives a bank. A banked corner is not a
  * crowned road tipped over: the blade takes the crown out and lays the
- * whole width on one plane, or the inside edge would be a gutter. */
-function crownScale(bank: number, kind: "gravel" | "asphalt" | "deck"): number {
-  const full = Math.max(ROAD_CROSS.crown[kind], 1e-6);
+ * whole width on one plane, or the inside edge would be a gutter. `crown`
+ * is the camber the cross-section wears (`ROAD_CROSS.crown`), passed in
+ * because the caller has already read it. */
+function crownScale(bank: number, crown: number): number {
+  const full = Math.max(crown, 1e-6);
   return Math.max(0, 1 - Math.abs(bank) / full);
 }
 
 /** Height of the DRIVEN surface at lateral offset `lateral` (m, signed
  * from the centerline), relative to the sample's own elevation — which is
  * the road's height on the crown, so this only ever falls away. Inside the
- * road only; past the edge, `vergeOffset` takes over. */
+ * road only; past the edge, `vergeOffset` takes over.
+ *
+ * The run asks this about ten times per physics step (the car's own fix
+ * either side of the move, plus the camber probe each of those takes), so
+ * the cross-section's two numbers are read out of the table once here
+ * rather than once per reader. */
 export function crossOffset(shape: RoadShape, lateral: number, width: number): number {
   const kind = shapeOf(shape);
+  const crown = ROAD_CROSS.crown[kind];
   const open = 1 - clamp01(shape.flat ?? 0);
   const bank = (shape.bank ?? 0) * open;
   const half = width / 2;
   const t = Math.min(1, Math.abs(lateral) / half);
-  let y = -ROAD_CROSS.crown[kind] * crownScale(bank, kind) * open * t * t - bank * lateral;
+  let y = -crown * crownScale(bank, crown) * open * t * t - bank * lateral;
   const depth = ROAD_CROSS.rut.depth[kind] * open;
   if (depth > 0) {
     // Two tracks, each a soft trough — a hard-edged groove would be a rail

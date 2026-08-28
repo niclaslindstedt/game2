@@ -12,6 +12,7 @@
 // analytic noise, so the ground under the car never stairsteps.
 
 import { createRng } from "../lib/prng.ts";
+import { cellKey } from "../lib/math.ts";
 import { hash2, smooth, valueNoise } from "../lib/noise.ts";
 import type { Surface, Track, TrackSample } from "./compile.ts";
 import { createGuardField, type CornerGuard, type GuardField } from "./guards.ts";
@@ -437,13 +438,13 @@ export function createTerrain(track: Track): TerrainField {
   // query never snaps to road the world has already forgotten.
   const samples = track.samples;
   const GRID = 48;
-  let grid = new Map<string, number[]>();
+  let grid = new Map<number, number[]>();
   let firstIndexed = 0;
   let indexed = 0;
 
   const indexSamples = (from: number, to: number): void => {
     for (let i = from; i < to; i++) {
-      const key = `${Math.floor(samples[i].x / GRID)},${Math.floor(samples[i].z / GRID)}`;
+      const key = cellKey(Math.floor(samples[i].x / GRID), Math.floor(samples[i].z / GRID));
       let cell = grid.get(key);
       if (!cell) grid.set(key, (cell = []));
       cell.push(i);
@@ -458,11 +459,12 @@ export function createTerrain(track: Track): TerrainField {
     let bestD2 = Infinity;
     for (let dx = -3; dx <= 3; dx++) {
       for (let dz = -3; dz <= 3; dz++) {
-        const cell = grid.get(`${cx + dx},${cz + dz}`);
+        const cell = grid.get(cellKey(cx + dx, cz + dz));
         if (!cell) continue;
         for (const i of cell) {
-          const ddx = x - samples[i].x;
-          const ddz = z - samples[i].z;
+          const s = samples[i];
+          const ddx = x - s.x;
+          const ddz = z - s.z;
           const d2 = ddx * ddx + ddz * ddz;
           if (d2 < bestD2) {
             bestD2 = d2;

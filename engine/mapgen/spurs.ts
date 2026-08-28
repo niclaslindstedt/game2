@@ -24,6 +24,7 @@
 // and where it cannot, it stops.
 
 import { createRng } from "../lib/prng.ts";
+import { cellKey } from "../lib/math.ts";
 import type { Surface } from "./compile.ts";
 import { LAKE_Y, type LandField } from "./land.ts";
 import { ROAD_CROSS, roadClearance } from "./road.ts";
@@ -382,9 +383,9 @@ const INDEX_CELL = 24;
 
 export function createSpurIndex(): SpurIndex {
   const spurs: Spur[] = [];
-  const grid = new Map<string, { spur: Spur; sample: SpurSample }[]>();
-  const key = (x: number, z: number): string =>
-    `${Math.floor(x / INDEX_CELL)},${Math.floor(z / INDEX_CELL)}`;
+  const grid = new Map<number, { spur: Spur; sample: SpurSample }[]>();
+  const key = (x: number, z: number): number =>
+    cellKey(Math.floor(x / INDEX_CELL), Math.floor(z / INDEX_CELL));
 
   const add = (spur: Spur): void => {
     spurs.push(spur);
@@ -406,7 +407,7 @@ export function createSpurIndex(): SpurIndex {
     // being flattened at the cell boundary instead of at the blend's end.
     for (let dx = -3; dx <= 3; dx++) {
       for (let dz = -3; dz <= 3; dz++) {
-        const bucket = grid.get(`${cx + dx},${cz + dz}`);
+        const bucket = grid.get(cellKey(cx + dx, cz + dz));
         if (!bucket) continue;
         for (const entry of bucket) {
           const d = Math.hypot(entry.sample.x - x, entry.sample.z - z);
