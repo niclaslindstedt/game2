@@ -62,6 +62,7 @@ import {
   onRoad,
   placeAtFinish,
   placeAtSplit,
+  settleField,
   splitLeader,
   stepField,
   stopField,
@@ -312,6 +313,26 @@ describe("the field on the road", () => {
     expect(times.length).toBeGreaterThan(RIVALS.length / 2);
     expect(placeAtFinish(field, Math.max(...times) + 1)).toBe(times.length + 1);
     expect(placeAtFinish(field, Math.min(...times) - 1)).toBe(1);
+  });
+
+  it("runs a crew home even while they still owe their head start", () => {
+    // The seam between the stagger and R30's straggler settling: the results
+    // card drives everybody home for the finishing ORDER, and most of the
+    // field is still in the start control when a run is abandoned early.
+    // Their debt is deliberately left standing — `owed` places a car on the
+    // road relative to the player, and the player has finished — so they must
+    // come home with a real time while never counting as on the road.
+    const field = createField(compileStage(38, "short"), "easy", stage);
+    const owing = field.runs.filter((run) => run.owed > 0);
+    expect(owing.length).toBe(field.runs.length - 1);
+    let guard = 0;
+    while (!settleField(field, 4000, 400) && guard < 400) guard += 1;
+    expect(guard).toBeLessThan(400);
+    for (const run of owing) {
+      expect(run.time).not.toBeNull();
+      expect(run.owed).toBeGreaterThan(0);
+      expect(onRoad(run)).toBe(false);
+    }
   });
 
   it("takes a crew off the road the moment they are home", () => {
