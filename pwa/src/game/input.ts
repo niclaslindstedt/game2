@@ -17,6 +17,7 @@
 
 import type { CarInput } from "@engine";
 
+import { KEY_LOOK_RATE, MOUSE_LOOK_RATE, NEUTRAL_MOVE, type FreeFlyMove } from "./camera-free.ts";
 import { snapPedal, snapSteer } from "./ghost.ts";
 import { DEFAULT_KEYS, type KeyAction, type KeyBindings } from "./settings.ts";
 
@@ -44,7 +45,67 @@ export type InputManager = {
   /** Fired on the keys bound to restart / main menu / camera / pause so the
    * app can react. */
   onAction: (handler: (action: InputAction) => void) => void;
+  /** Hand the controls to god mode's camera, or take them back. While it is
+   * on the CAR is given nothing at all — `sample` returns neutral — so a
+   * flight cannot leave the wheel wound on or the throttle buried when the
+   * camera comes back down. */
+  setFreeFly: (on: boolean) => void;
+  /** What the free camera should do with `dt` seconds of held keys and the
+   * mouse travel banked since the last read. Consuming: the look and wheel
+   * deltas come out once. */
+  flyMove: (dt: number) => FreeFlyMove;
+  /** True while ALT is held — the key that takes the HUD off the screen for
+   * a clean screenshot. Read rather than dispatched: it is a state the
+   * screen is in, not a press anything acts on. */
+  altHeld: () => boolean;
   dispose: () => void;
+};
+
+/** God mode's keyboard, fixed rather than rebindable: it is a developer
+ * tool, and a scripted pass driving it headlessly has to know what the keys
+ * ARE without reading anyone's local storage.
+ *
+ * Q and E shadow SPACE and CTRL on purpose. Ctrl+W is the browser's
+ * close-tab chord and cannot be swallowed by a page, so descending while
+ * flying forward needs a second way to say "down" — and Q/E is what every
+ * level editor already means by it. */
+const FLY_KEYS = {
+  forward: ["KeyW"],
+  back: ["KeyS"],
+  left: ["KeyA"],
+  right: ["KeyD"],
+  up: ["Space", "KeyE"],
+  down: ["ControlLeft", "ControlRight", "KeyQ"],
+  fast: ["ShiftLeft", "ShiftRight"],
+  lookLeft: ["ArrowLeft"],
+  lookRight: ["ArrowRight"],
+  lookUp: ["ArrowUp"],
+  lookDown: ["ArrowDown"],
+  slower: ["Minus", "NumpadSubtract"],
+  faster: ["Equal", "NumpadAdd"],
+} as const;
+
+/** Every code god mode claims, so a flight can swallow the presses the
+ * browser would otherwise scroll, zoom or bookmark with. */
+const FLY_CODES = new Set<string>(Object.values(FLY_KEYS).flat());
+
+/** Speed steps a single press of - / = is worth. Held, the key repeats and
+ * walks the cruise speed at the browser's own repeat rate, which is a
+ * usable dial and needs no ramp of its own. */
+const KEY_SPEED_STEP = 1;
+
+/** What the car is handed while god mode has the controls: nothing at all.
+ * A frozen constant rather than a fresh object per step — the engine reads
+ * it and never writes it. */
+const FLYING_INPUT: CarInput = {
+  steer: 0,
+  throttle: 0,
+  brake: 0,
+  handbrake: false,
+  boost: false,
+  shiftUp: false,
+  shiftDown: false,
+  reset: false,
 };
 
 /** Keyboard steering ramp, 1/s: a held arrow eases toward full lock at
@@ -87,6 +148,15 @@ export function createInput(target: Window = window): InputManager {
   let shiftDown = false;
   let reset = false;
   let actionHandler: ((action: InputAction) => void) | null = null;
+  /** God mode: whether the camera has the controls, which raw codes are
+   * down, and the look and speed nudges banked since the camera last read
+   * them. Raw codes rather than bound actions — the fly keys are fixed. */
+  let flying = false;
+  const flyDown = new Set<string>();
+  let mouseYaw = 0;
+  let mousePitch = 0;
+  let speedSteps = 0;
+  let altHeld = false;
 
   const touch = { steer: 0, throttle: false, brake: false, handbrake: false, boost: false };
 
@@ -108,6 +178,24 @@ export function createInput(target: Window = window): InputManager {
   setKeys(DEFAULT_KEYS);
 
   const onKeyDown = (e: KeyboardEvent): void => {
+    // ALT is a HOLD, not a press: it hides the HUD for as long as it is
+    // down. Swallowed so the browser does not take the keystroke off to its
+    // own menu bar and leave the key stuck down with no keyup coming.
+    if (e.altKey || e.code === "AltLeft" || e.code === "AltRight") {
+      altHeld = true;
+      if (e.code === "AltLeft" || e.code === "AltRight") e.preventDefault();
+    }
+    if (flying && FLY_CODES.has(e.code)) {
+      e.preventDefault();
+      flyDown.add(e.code);
+      // The speed keys are the one fly control that acts on the PRESS
+      // rather than on being held, and they are left to repeat: holding one
+      // walks the cruise speed at the browser's repeat rate.
+      if ((FLY_KEYS.slower as readonly string[]).includes(e.code)) speedSteps -= KEY_SPEED_STEP;
+      else if ((FLY_KEYS.faster as readonly string[]).includes(e.code)) {
+        speedSteps += KEY_SPEED_STEP;
+      }
+    }
     if (e.repeat) return;
     const actions = byCode.get(e.code);
     if (!actions) return;
@@ -124,6 +212,8 @@ export function createInput(target: Window = window): InputManager {
     }
   };
   const onKeyUp = (e: KeyboardEvent): void => {
+    if (!e.altKey) altHeld = false;
+    flyDown.delete(e.code);
     if (!downCodes.delete(e.code)) return;
     // An action stays held while ANY other code still bound to it is down.
     for (const action of byCode.get(e.code) ?? []) {
@@ -134,13 +224,46 @@ export function createInput(target: Window = window): InputManager {
   const onBlur = (): void => {
     held.clear();
     downCodes.clear();
+    // A key the window never saw released would otherwise stay down for
+    // good: the camera would fly away by itself, and the HUD would stay
+    // hidden, after an alt-tab out of the tab.
+    flyDown.clear();
+    altHeld = false;
+  };
+
+  /** Mouse look, under pointer lock only. Unlocked, the pointer belongs to
+   * the page — a drag over the canvas is somebody selecting text, not
+   * somebody aiming a camera. */
+  const onMouseMove = (e: MouseEvent): void => {
+    if (!flying || !document.pointerLockElement) return;
+    mouseYaw += e.movementX * MOUSE_LOOK_RATE;
+    mousePitch -= e.movementY * MOUSE_LOOK_RATE;
+  };
+  /** The wheel is the cruise-speed dial. `deltaY` is reported in wildly
+   * different units between browsers and devices, so only its SIGN is
+   * read — one notch is one step whatever the mouse says it sent. */
+  const onWheel = (e: WheelEvent): void => {
+    if (!flying || e.deltaY === 0) return;
+    e.preventDefault();
+    speedSteps -= Math.sign(e.deltaY);
   };
 
   target.addEventListener("keydown", onKeyDown);
   target.addEventListener("keyup", onKeyUp);
   target.addEventListener("blur", onBlur);
+  target.addEventListener("mousemove", onMouseMove);
+  target.addEventListener("wheel", onWheel, { passive: false });
 
   const sample = (dt: number): CarInput => {
+    // God mode has the controls: the car is given nothing, and the shift
+    // and reset edges banked while flying are dropped rather than saved up
+    // to fire the moment the camera lands.
+    if (flying) {
+      shiftUp = false;
+      shiftDown = false;
+      reset = false;
+      return FLYING_INPUT;
+    }
     // Screen-space: the right-steer key is +1 here, negated below for the
     // engine.
     const keyTarget = (held.has("right") ? 1 : 0) - (held.has("left") ? 1 : 0);
@@ -184,10 +307,44 @@ export function createInput(target: Window = window): InputManager {
     onAction: (handler) => {
       actionHandler = handler;
     },
+    setFreeFly: (on) => {
+      if (on === flying) return;
+      flying = on;
+      flyDown.clear();
+      mouseYaw = 0;
+      mousePitch = 0;
+      speedSteps = 0;
+      // The wheel and the pedals are RAMPS, and a ramp left wound on is
+      // what the car would be handed the instant the camera lands.
+      steer = 0;
+      held.clear();
+      downCodes.clear();
+    },
+    flyMove: (dt) => {
+      if (!flying) return NEUTRAL_MOVE;
+      const axis = (plus: readonly string[], minus: readonly string[]): number =>
+        (plus.some((c) => flyDown.has(c)) ? 1 : 0) - (minus.some((c) => flyDown.has(c)) ? 1 : 0);
+      const move: FreeFlyMove = {
+        forward: axis(FLY_KEYS.forward, FLY_KEYS.back),
+        right: axis(FLY_KEYS.right, FLY_KEYS.left),
+        up: axis(FLY_KEYS.up, FLY_KEYS.down),
+        yawDelta: mouseYaw + axis(FLY_KEYS.lookRight, FLY_KEYS.lookLeft) * KEY_LOOK_RATE * dt,
+        pitchDelta: mousePitch + axis(FLY_KEYS.lookUp, FLY_KEYS.lookDown) * KEY_LOOK_RATE * dt,
+        fast: FLY_KEYS.fast.some((c) => flyDown.has(c)),
+        speedSteps,
+      };
+      mouseYaw = 0;
+      mousePitch = 0;
+      speedSteps = 0;
+      return move;
+    },
+    altHeld: () => altHeld,
     dispose: () => {
       target.removeEventListener("keydown", onKeyDown);
       target.removeEventListener("keyup", onKeyUp);
       target.removeEventListener("blur", onBlur);
+      target.removeEventListener("mousemove", onMouseMove);
+      target.removeEventListener("wheel", onWheel);
     },
   };
 }

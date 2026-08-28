@@ -981,5 +981,53 @@ await capture(
   { bot: "1", length: "short", seed: "38" },
 );
 
+// THE DEVELOPER TOOLS, which only exist to be photographed: the debug
+// overlay is a contract that a screenshot of the game carries enough to
+// stand in the same place again, and the only way to know it still does is
+// to take one and read it. The bot drives so the car box has something in
+// it other than a parked car.
+await capture(
+  "shot-debug",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await racing(page);
+    await atStageTime(page, 12);
+  },
+  { debug: "1", bot: "1" },
+);
+// The same frame with ALT held: the game's chrome comes off, the overlay
+// does NOT. A shot where both vanish is the bug this scene catches.
+await capture(
+  "shot-debug-hud-hidden",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await racing(page);
+    await atStageTime(page, 12);
+    await page.keyboard.down("Alt");
+    await page.waitForTimeout(300);
+  },
+  { debug: "1", bot: "1" },
+);
+// God mode, parked off the road above a corner — the shot a report comes in
+// as, and the one `make debug-shot` has to be able to reproduce from the
+// REPRO line printed along the bottom of it.
+await capture(
+  "shot-debug-god",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await page.waitForSelector(".debug-repro", { timeout: 120000 });
+    await page.waitForTimeout(3000);
+  },
+  {
+    debug: "1",
+    god: "1",
+    gx: "-30",
+    gy: "25",
+    gz: "120",
+    gyaw: "2.6",
+    gpitch: "-0.35",
+  },
+);
+
 await browser.close();
 server.close();

@@ -18,6 +18,7 @@ make cars         # render the car models to previews/cars.png (chase-cam + turn
 make audition     # build previews/audition.html — every sound and both scores, playable
 make screenshots  # drive the built app headlessly, screenshot key moments
 make profile      # meter a frame's draw calls / triangles / binds — REQUIRED before/after any rendering change
+make debug-shot   # REPRO='<line off the debug overlay>' — stand where a shot was taken
 make icons        # regenerate icons/favicon/og.png from the app mark
 make check-seo    # build + structural SEO/PWA/bundle assertions
 make hooks        # install pre-commit + commit-msg hooks
@@ -76,6 +77,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | Campaign stages, locations, unlocks                    | `pwa/src/game/campaign.ts`                                                                                                |
 | The time trial's ghost: recording, replay, storage     | `pwa/src/game/ghost.ts`                                                                                                   |
 | A player option (HUD, video, controls)                 | `pwa/src/game/settings.ts`, then its reader                                                                               |
+| The debug overlay, god mode, the debug log             | `pwa/src/game/debug-*.ts(x)`, `camera-free.ts`, `menu-dev.tsx` — the `debug-tools` skill                                  |
 | The studio card / boot cover                           | `pwa/src/game/splash.ts` (policy) + `splash-screen.tsx`                                                                   |
 | App identity (name, palette, URLs)                     | `pwa/src/identity.ts` (single source)                                                                                     |
 | New CLI tooling                                        | `scripts/*.mjs` (Node, no deps beyond `scripts/lib/`)                                                                     |
@@ -93,16 +95,17 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 
 ## Documentation sync points
 
-| When this changes                          | Update this                                                                      |
-| ------------------------------------------ | -------------------------------------------------------------------------------- |
-| Handling model / tuning                    | `docs/driving.md`                                                                |
-| Generator rules (`engine/mapgen/rules.ts`) | `docs/track-generator.md` (rules are listed verbatim)                            |
-| Bot or sim harness                         | `docs/simulation.md`                                                             |
-| The sound bank, the beds, or a score       | `docs/audio.md`                                                                  |
-| Commands / npm scripts / Make targets      | README Usage table + this file's command block                                   |
-| App identity, domain, deploy slots         | `pwa/src/identity.ts`, README, `docs/configuration.md`, `pwa/public/*` SEO files |
-| Cars, controls, install flow               | README (What/Usage) + `docs/getting-started.md`                                  |
-| Shell/platform plans                       | `docs/platforms.md`                                                              |
+| When this changes                          | Update this                                                                                  |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| Handling model / tuning                    | `docs/driving.md`                                                                            |
+| Generator rules (`engine/mapgen/rules.ts`) | `docs/track-generator.md` (rules are listed verbatim)                                        |
+| Bot or sim harness                         | `docs/simulation.md`                                                                         |
+| The sound bank, the beds, or a score       | `docs/audio.md`                                                                              |
+| Commands / npm scripts / Make targets      | README Usage table + this file's command block                                               |
+| The debug overlay's REPRO line             | `App.tsx`'s URL readers — writer and reader move together, or a screenshot stops reproducing |
+| App identity, domain, deploy slots         | `pwa/src/identity.ts`, README, `docs/configuration.md`, `pwa/public/*` SEO files             |
+| Cars, controls, install flow               | README (What/Usage) + `docs/getting-started.md`                                              |
+| Shell/platform plans                       | `docs/platforms.md`                                                                          |
 
 ## Parity and cross-cutting rules
 
@@ -138,6 +141,10 @@ Skills live in `.agent/skills/` (`.claude/skills` symlinks there) — each a `SK
 - **`bot-improvement`** — the bot driver in `engine/sim/bot.ts`.
 - **`simulate-run`** — measuring balance with `make sim`; owns reading the table.
 - **`debug-game`** / **`test-scenario`** — deterministic repros; staging exact situations on synthetic tracks.
+- **`debug-tools`** — the in-game developer tools: god mode's free camera,
+  the debug overlay and the REPRO line that turns a screenshot into a frame
+  anyone can stand in, the debug log, and `make debug-shot`. Load it when a
+  problem arrives as a PICTURE rather than as a repro.
 - **`playtest`** / **`ui-review`** — looking at the real game (`make screenshots`); the HUD fit-and-finish sweep.
 - **`visual-effects`** — transient FX in the three.js world and the HUD layer.
 - **`sound-effects`** — what the game SOUNDS like moment to moment: the bank,

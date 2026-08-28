@@ -61,6 +61,7 @@ Open the printed URL. The game opens on the main menu, over a stage a bot is dri
 | `make audition`    | Build the audio review page (`previews/audition.html`): every sound, both scores, live                            |
 | `make screenshots` | Drive the built app headlessly and screenshot the key moments                                                     |
 | `make profile`     | Meter what one frame costs the renderer — draw calls, triangles and binds per scene                               |
+| `make debug-shot`  | Stand where a screenshot was taken: `REPRO='<line off the in-game debug overlay>'`, captured to `previews/`       |
 | `make icons`       | Regenerate PWA icons, favicon, and the OG image from the app mark                                                 |
 | `make check-seo`   | Build + structural SEO/PWA/bundle-budget assertions                                                               |
 | `make hooks`       | Install the pre-commit / commit-msg git hooks                                                                     |

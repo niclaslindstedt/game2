@@ -30,6 +30,7 @@ import {
   type CampaignProgress,
 } from "./campaign.ts";
 import { CarPicker } from "./car-picker.tsx";
+import { DebugLogPage, DeveloperPage } from "./menu-dev.tsx";
 import type { RaceSettings } from "./menu.tsx";
 import { OptionsPage, type OptionsTab } from "./menu-options.tsx";
 import { unlockAudio } from "./audio/bus.ts";
@@ -44,7 +45,8 @@ export type MenuPage =
   | { page: "timetrial" }
   | { page: "roam" }
   | { page: "options"; tab: OptionsTab }
-  | { page: "developer" };
+  | { page: "developer" }
+  | { page: "debuglog" };
 
 /** How a stage was entered — the campaign is what records a clear, and a
  * time trial is a lap you drive for the clock alone. */
@@ -215,49 +217,6 @@ function CarRow({
         onPick={(carId) => onRace({ ...race, carId })}
         onDeveloper={onDeveloper}
       />
-    </div>
-  );
-}
-
-/** The developer menu: out of the way of a player who never found it, and
- * blunt for one who did. Everything here bypasses the game rather than
- * playing it, which is the point — it is how the whole thing gets tested
- * without driving four stages first. */
-function DeveloperPage({
-  progress,
-  onUnlockEverything,
-  onNavigate,
-}: {
-  progress: CampaignProgress;
-  onUnlockEverything: () => void;
-  onNavigate: (page: MenuPage) => void;
-}) {
-  const total = LOCATIONS.reduce((n, l) => n + l.levels.length, 0);
-  const cleared = LOCATIONS.reduce(
-    (n, l) => n + l.levels.filter((v) => progress.cleared.includes(v.id)).length,
-    0,
-  );
-  const allOpen = cleared >= total;
-  return (
-    <div className="menu-card">
-      <BackButton label="MAIN MENU" onClick={() => onNavigate({ page: "root" })} />
-      <div className="menu-title menu-title-dev">DEVELOPER</div>
-      <div className="menu-sub">
-        {cleared} of {total} stages cleared
-      </div>
-      <button
-        type="button"
-        className="menu-item menu-item-dev"
-        onClick={onUnlockEverything}
-        disabled={allOpen}
-      >
-        UNLOCK EVERYTHING
-        <span className="menu-item-sub">
-          {allOpen
-            ? "Every stage is already open, in campaign and time trial"
-            : "Open every stage in campaign and time trial. Best times are kept."}
-        </span>
-      </button>
     </div>
   );
 }
@@ -437,6 +396,7 @@ const DEPTH: Record<MenuPage["page"], number> = {
   options: 1,
   developer: 1,
   location: 2,
+  debuglog: 2,
 };
 
 /** Where BACK goes from a page — the same step that page's own back button
@@ -556,9 +516,15 @@ export function MainMenu(props: MainMenuProps) {
         {page.page === "developer" && (
           <DeveloperPage
             progress={props.progress}
+            dev={props.settings.dev}
+            onDev={(dev) => props.onSettings({ ...props.settings, dev })}
             onUnlockEverything={props.onUnlockEverything}
-            onNavigate={navigate}
+            onBack={() => navigate({ page: "root" })}
+            onDebugLog={() => navigate({ page: "debuglog" })}
           />
+        )}
+        {page.page === "debuglog" && (
+          <DebugLogPage onBack={() => navigate({ page: "developer" })} />
         )}
         {page.page === "options" && (
           <OptionsPage

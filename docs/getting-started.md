@@ -15,20 +15,21 @@ The **car** is picked on any of those pages, turning on its stand. **Time of day
 
 **Desktop (keyboard).** Every one of these is rebindable in Options → Controls — click a binding, press the key you want.
 
-| Key       | Action                             |
-| --------- | ---------------------------------- |
-| ↑ / W     | Throttle                           |
-| ↓ / S     | Brake — and reverse, stopped       |
-| ← → / A D | Steer                              |
-| Space     | Handbrake — unsticks the rear      |
-| L. Shift  | Booster — finite, no refills       |
-| E / X     | Shift up (manual car)              |
-| Q / Z     | Shift down (manual car)            |
-| Esc       | In-race menu — and BACK, in a menu |
-| C / V     | Camera: next of six angles         |
-| M         | Back to the main menu              |
-| B         | Back to the track (off-road)       |
-| R         | Restart stage                      |
+| Key        | Action                                                             |
+| ---------- | ------------------------------------------------------------------ |
+| ↑ / W      | Throttle                                                           |
+| ↓ / S      | Brake — and reverse, stopped                                       |
+| ← → / A D  | Steer                                                              |
+| Space      | Handbrake — unsticks the rear                                      |
+| L. Shift   | Booster — finite, no refills                                       |
+| E / X      | Shift up (manual car)                                              |
+| Q / Z      | Shift down (manual car)                                            |
+| Esc        | In-race menu — and BACK, in a menu                                 |
+| C / V      | Camera: next of six angles                                         |
+| M          | Back to the main menu                                              |
+| B          | Back to the track (off-road)                                       |
+| R          | Restart stage                                                      |
+| Alt (hold) | Hide the HUD — for a clean look at the game, or a screenshot of it |
 
 **Phone (touch):** one half of the screen is the wheel — touch anywhere and drag sideways to steer. The rim has weight — it turns toward your thumb rather than snapping to it, so a thumb wobble is not a slide and a slight steer is a real option, while a committed shove takes it to full lock in about a quarter second. A blue arc fills the rim from 12 o'clock to the marker, showing how much lock the car has. The other half is the pedal: touching it is GAS, drag down to BRAKE, drag up to burn the BOOSTER (finite — it never refills), drag right for the handbrake (DRIFT — unsticks the rear for tight curves). Pulling the thumb back is the car being reined in, pushing it away is the car being sent — the gesture means what it looks like. Keep the brake held once the car has stopped and it backs up, so a nose in a tree is something you drive out of. Which half steers, and which drag does what, are set in Options → Controls; each direction holds one action, so assigning a taken one swaps them. The manual car adds − / + gear buttons. Tap the **minimap** for the in-race menu (resume, restart, main menu). Works in portrait and landscape — the HUD re-flows, and in portrait the booster stands up beside the dials.
 
@@ -39,6 +40,15 @@ The **car** is picked on any of those pages, turning on its stand. **Time of day
 **Video** is the set of levers that buy frames on a weak device: **resolution** (the pixel-ratio ceiling, and the biggest single win), **draw distance** (how far the fog lets you see), **effects** (dust, spray, exhaust, rain and the ambient life), and **undergrowth** — the grass, shrubs and stumps scattered between the trees, which applies to the next stage you start because it is baked into the geometry. Undergrowth is a picture setting and nothing more: the trees you can HIT are always drawn whatever it says, so turning it down never makes a stage easier. How thickly the forest itself stands is a stage dial, set per run in Roam.
 
 **Controls** only ever offers what the device you are on can use: a desktop gets the key bindings, a touch device gets the thumb layout, and a laptop with a touchscreen gets both.
+
+### Developer tools
+
+Tap the car on its stand seven times and a **DEVELOPER** row appears on the main menu; it stays for good. Besides opening every stage, it holds the two tools that make a problem you can SEE into one somebody else can reproduce — both also on the pause card mid-run, which is where you actually want them:
+
+- **God mode** takes the camera off the car and flies it: `W A S D` to move (forward follows where you look; strafe stays level), `Space`/`E` up, `Ctrl`/`Q` down, `Shift` for a burst of speed, `-` and `=` for the cruise speed, the arrow keys or the mouse (click first) to look. The car is handed no input and waits where you left it.
+- **Debug overlay** puts boxes in the corner naming the stage, where the camera is standing, and what the car is doing — and along the bottom, a **REPRO** line: a URL carrying the seed, the generator dials, the conditions and the camera's exact pose. Send a screenshot with that line in it and whoever reads it can open the same frame. Holding Alt hides the game's HUD and leaves these boxes up, which is the shot worth sending.
+
+**DEVELOPER → DEBUG LOG** keeps what led there: every engine event with its numbers, and a position line a second. Copy the latest run or the whole buffer.
 
 ### Installing on your phone
 
