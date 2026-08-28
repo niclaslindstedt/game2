@@ -569,15 +569,47 @@ every solid is a circle, and a hit does several things at once:
   it back on the road. The dents, the torn-off parts and the hurt systems
   all stay: the run remembers.
 
+### What a broken car drives like
+
+Nothing in the damage ledger is decoration. `engine/game/damage.ts` reads
+the whole of it once per step and hands the handling model the multipliers
+it drives through; `TUNING.collision.systems` and `TUNING.collision.chassis`
+hold every number. The rule sizing all of them is that damage **degrades and
+never disables** — a car the player cannot move is a respawn two seconds
+later, not a consequence — so a car with every gauge at its worst still
+crawls to the finish at somewhere around a third of its sound top speed.
+
 Under the panels live four **internal systems** (`damage.systems`), each
 fed by the crush landing nearest to it and each degrading its own job:
 
-| System     | Hurt by                     | Effect when damaged                                                |
-| ---------- | --------------------------- | ------------------------------------------------------------------ |
-| Engine     | Nose and front-corner crush | Power fades (up to `systems.powerLoss`) — the car limps            |
-| Suspension | Flank and belly crush       | Less lateral grip, narrower landing tolerance, wobblier touchdowns |
-| Gearbox    | Rear and belly crush        | Manual shift cuts stretch; the auto box starts cutting throttle    |
-| Steering   | Front-corner crush          | The rack loses authority (up to `systems.steerLoss`)               |
+| System     | Hurt by                     | Effect when damaged                                                       |
+| ---------- | --------------------------- | ------------------------------------------------------------------------- |
+| Engine     | Nose and front-corner crush | Power fades (`systems.powerLoss`), and past `chassis.misfireFrom` the     |
+|            |                             | ignition drops beats outright — the car lurches instead of pulling        |
+| Suspension | Flank and belly crush       | Less lateral grip, narrower landing tolerance, wobblier touchdowns        |
+| Gearbox    | Rear and belly crush        | Shift cuts stretch; past `chassis.topGearAt` the top ratio stops engaging |
+| Steering   | Front-corner crush          | The rack loses authority (up to `systems.steerLoss`)                      |
+
+The rest of the ledger is felt too:
+
+| Signal                      | Effect on the driving                                                      |
+| --------------------------- | -------------------------------------------------------------------------- |
+| Structural wear             | Lateral grip and braking fall away (`chassis.wearGrip`, `wearBrake`) and   |
+|                             | the shell drags (`wearDrag`) — a spent car is slow, loose, and stops long  |
+| Crush, left side vs right   | **The pull**: a body folded harder down one side carries lock with the     |
+|                             | wheel dead straight (`chassis.pullPerCrush`), so the driver holds a        |
+|                             | correction into it down every straight                                     |
+| Crush anywhere, belly crush | Drag: a car folded on every corner is not the shape it was drawn as, and a |
+|                             | folded floorpan ploughs (`chassis.crushDrag`, `bellyDrag`)                 |
+| Parts left on the road      | Drag, per part (`chassis.partDrag`) — a mirror is a rounding error, a      |
+|                             | missing bonnet is a scoop with the engine bay behind it                    |
+| The spoiler specifically    | Downforce the back of the car no longer has, faded in with pace            |
+|                             | (`chassis.spoilerGrip` over `spoilerSpeed`)                                |
+
+Grip is the one place the taxes stack — suspension, structure and the missing
+wing all pull on it — so `chassis.gripFloor` is the floor under all three
+together: below about two thirds of the sound car's grip nothing can be
+pointed, and an unpointable car is not a consequence either.
 
 Nothing repairs mid-run. The HUD's damage instrument (top of the bottom-left
 cluster, over the rev counter) is a single top-view car: the crush ring wears

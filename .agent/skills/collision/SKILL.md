@@ -18,25 +18,25 @@ STAND, and **`test-scenario`** for staging exact contacts.
 
 ## The map — who owns what
 
-| Piece                                                                                                       | File                                                                             |
-| ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Contact model: OBB-vs-circle, impulse, yaw kick, crush, parts, systems, hard landings                       | `engine/game/collision.ts` (`collideCar`, `landingDamage`)                       |
-| What the SOLID is made of: mass, rooting, snapping strength, and each kind's shape                          | `engine/mapgen/solids.ts` (`standSolid`, `solidShape`)                           |
-| Whether it gives way, and the roll a low one trips into the body                                            | `engine/game/collision.ts` (`meetSolid`, `tripRoll`) + `TUNING.collision.solids` |
-| The piece a felled solid leaves behind, flying                                                              | `pwa/src/game/breakage.ts`, over `tumble.ts`; retired via `world.fell`           |
-| The GROUND as a solid: a face too steep to climb, met at the bumper                                         | `engine/game/collision.ts` (`collideSlope`) + `car.ts` (`hitFace`)               |
-| The springs: heave, dive/squat, the landing bounce — the car's WEIGHT                                       | `engine/game/car.ts` (`stepSuspension`), `TUNING.suspension`                     |
-| Every number: box size, restitution, crush rates, part bolts, system transfer + effects, the springs        | `engine/game/defs/tuning.ts` → `TUNING.collision`, `TUNING.suspension`           |
-| The ledger: `CarState.damage` (zones, belly, wear, systems, broken, version), impact/partBreak/crash events | `engine/game/state.ts`                                                           |
-| Damaged-handling effects (power, grip, shift cuts, steering, landing tolerance)                             | `engine/game/car.ts` — reads `car.damage.systems`, never writes                  |
-| When collision runs, the wedge check that is the only way home, deep-water crash                            | `engine/game/step.ts`                                                            |
-| Solid trunks + grove quilt (`treesNear`); every other solid (`obstaclesNear`) + the `SOLID_PROP_HEIGHT` bar | `engine/mapgen/terrain.ts`                                                       |
-| Bending the polygons, scuff darkening, debris                                                               | `pwa/src/game/car-damage.ts` (+ `car-body.ts` `breakables`)                      |
-| Drawing the springs: the sprung-mass group the heave and dive move                                          | `pwa/src/game/car-body.ts` (`chassis`) + `car-mesh.ts`                           |
-| Drawing the engine's trunks as trees (species stays app-side)                                               | `pwa/src/game/world.ts` (`treePlacement`, `solidMix`)                            |
-| Drawing the engine's stone (boulders, rocks, outcrops) where its circles are                                | `pwa/src/game/world.ts` (`buildWild`, `stoneMatrix`)                             |
-| The HUD damage instrument                                                                                   | `pwa/src/game/hud.tsx` (`DamagePanel`) + `App.tsx` snapshot                      |
-| Tests                                                                                                       | `tests/collision_test.ts` (+ the boulder scenario in `explore_test.ts`)          |
+| Piece                                                                                                                  | File                                                                             |
+| ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Contact model: OBB-vs-circle, impulse, yaw kick, crush, parts, systems, hard landings                                  | `engine/game/collision.ts` (`collideCar`, `landingDamage`)                       |
+| What the SOLID is made of: mass, rooting, snapping strength, and each kind's shape                                     | `engine/mapgen/solids.ts` (`standSolid`, `solidShape`)                           |
+| Whether it gives way, and the roll a low one trips into the body                                                       | `engine/game/collision.ts` (`meetSolid`, `tripRoll`) + `TUNING.collision.solids` |
+| The piece a felled solid leaves behind, flying                                                                         | `pwa/src/game/breakage.ts`, over `tumble.ts`; retired via `world.fell`           |
+| The GROUND as a solid: a face too steep to climb, met at the bumper                                                    | `engine/game/collision.ts` (`collideSlope`) + `car.ts` (`hitFace`)               |
+| The springs: heave, dive/squat, the landing bounce — the car's WEIGHT                                                  | `engine/game/car.ts` (`stepSuspension`), `TUNING.suspension`                     |
+| Every number: box size, restitution, crush rates, part bolts, system transfer + effects, the springs                   | `engine/game/defs/tuning.ts` → `TUNING.collision`, `TUNING.suspension`           |
+| The ledger: `CarState.damage` (zones, belly, wear, systems, broken, version), impact/partBreak/crash events            | `engine/game/state.ts`                                                           |
+| What a damaged car DRIVES like: the whole ledger as multipliers (power, misfire, rack, pull, grip, brake, drag, gears) | `engine/game/damage.ts` — reads `car.damage`, never writes; spent in `car.ts`    |
+| When collision runs, the wedge check that is the only way home, deep-water crash                                       | `engine/game/step.ts`                                                            |
+| Solid trunks + grove quilt (`treesNear`); every other solid (`obstaclesNear`) + the `SOLID_PROP_HEIGHT` bar            | `engine/mapgen/terrain.ts`                                                       |
+| Bending the polygons, scuff darkening, debris                                                                          | `pwa/src/game/car-damage.ts` (+ `car-body.ts` `breakables`)                      |
+| Drawing the springs: the sprung-mass group the heave and dive move                                                     | `pwa/src/game/car-body.ts` (`chassis`) + `car-mesh.ts`                           |
+| Drawing the engine's trunks as trees (species stays app-side)                                                          | `pwa/src/game/world.ts` (`treePlacement`, `solidMix`)                            |
+| Drawing the engine's stone (boulders, rocks, outcrops) where its circles are                                           | `pwa/src/game/world.ts` (`buildWild`, `stoneMatrix`)                             |
+| The HUD damage instrument                                                                                              | `pwa/src/game/hud.tsx` (`DamagePanel`) + `App.tsx` snapshot                      |
+| Tests                                                                                                                  | `tests/collision_test.ts` (+ the boulder scenario in `explore_test.ts`)          |
 
 ## The invariants — each one is load-bearing
 
@@ -80,6 +80,12 @@ STAND, and **`test-scenario`** for staging exact contacts.
   automatic way home is `TUNING.offTrack.stuck` — throttle held without
   covering ground — so any change that stops a hit car from moving at all
   now costs a respawn two seconds later.
+- **Nothing in the ledger is decoration.** `damage.ts` is the one place that
+  turns `car.damage` into handling, and every field in the ledger has to come
+  out of it somewhere — wear, both kinds of crush, all four systems, every
+  part that can come off. A field in `CarDamage` that `damageEffects` does not
+  read is a gauge the player watches move while the car drives exactly the
+  same, which is the bug this module exists to answer.
 - **Damage degrades, never disables.** Every system effect is sized so a
   broken system cripples the car's feel without parking it — bots must
   still finish (`make sim`).

@@ -13,6 +13,7 @@
 // defs/, not here.
 
 import { clamp } from "../lib/math.ts";
+import { damageEffects, type DamageEffects } from "./damage.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 import {
@@ -80,9 +81,17 @@ function stepGearbox(
   car: CarState,
   input: CarInput,
   t: number,
+  hurt: DamageEffects,
   events: GameEvent[],
 ): void {
-  const maxGear = spec.gearTop.length - 1;
+  // A box past `topGearAt` no longer takes its highest ratio: the stage is
+  // finished on what is left of it, which caps the top end without ever
+  // stopping the car. A car already in that gear is dropped out of it.
+  const maxGear = Math.max(0, spec.gearTop.length - 1 - hurt.gearsLost);
+  if (car.gear > maxGear) {
+    car.gear = maxGear;
+    events.push({ type: "shift", gear: car.gear });
+  }
   // A hurt gearbox shifts harsher: the auto box, seamless when sound, cuts
   // throttle per shift as its damage grows; the manual's cut stretches.
   const gearboxDamage = car.damage.systems.gearbox;
@@ -309,6 +318,10 @@ export function stepGrounded(
   const surfaceGrip = T.surfaces.grip[ctx.surface] * tyre;
   const surfaceDrag = T.surfaces.drag[ctx.surface];
   const surfacePower = T.surfaces.power[ctx.surface];
+  // Everything the crashes have done, as the multipliers the rest of this
+  // function drives through (damage.ts). Read once, never written back:
+  // collision.ts owns the ledger, the handling model only spends it.
+  const hurt = damageEffects(car, Math.abs(car.u), ctx.t);
   /** Which wheels this car drives — the row every line below reads. */
   const DR = T.drivetrain[spec.drive];
 
@@ -333,7 +346,11 @@ export function stepGrounded(
   // would throw the car back the way it came.
   if (thrown > 0) car.flickDir = Math.sign(rackVel);
   car.steer += (input.steer - car.steer) * clamp(T.steering.rackRate * dt, 0, 1);
-  const steer = car.steer;
+  // THE PULL: a body folded harder down one side drags that way, and the
+  // driver holds a correction into it for the rest of the stage. It goes on
+  // the lock the TIRES see, not on `car.steer` — that is where the driver's
+  // hands are, and the rack would ease the pull away as fast as it appeared.
+  const steer = clamp(car.steer + hurt.pull, -1, 1);
   // Brake lights, so only a car being SLOWED lights them — a car backing out
   // of a ditch is under power, not under the brake.
   car.braking = input.brake > 0.2 && car.u > 3;
@@ -351,7 +368,7 @@ export function stepGrounded(
     input.throttle === 0 &&
     (input.brake > 0 ? car.u <= T.reverse.engageBelow : car.reversing && car.u < -T.standstill);
 
-  stepGearbox(spec, car, input, ctx.t, events);
+  stepGearbox(spec, car, input, ctx.t, hurt, events);
 
   // ── Yaw ──────────────────────────────────────────────────────────────────
   // Steering authority fades with speed (stability) and with standstill
@@ -368,7 +385,7 @@ export function stepGrounded(
   const backwards = car.u < 0 ? -1 : 1;
   const speedFactor = clamp(speed / T.steering.deadSpeed, 0, 1);
   // A bent rack answers late and short: steering damage bleeds authority.
-  const rack = 1 - T.collision.systems.steerLoss * car.damage.systems.steering;
+  const rack = hurt.steering;
   // ...and how fast that authority bleeds off with speed is the car's own
   // composure: a stable car calms down at pace and is lazy to turn in with
   // it, a nervous one stays sharp and stays nervous. It is why a stage of
@@ -541,9 +558,10 @@ export function stepGrounded(
 
   // ── Longitudinal ─────────────────────────────────────────────────────────
   const shiftCut = ctx.t < car.shiftCutUntil ? 0 : 1;
-  // A folded radiator starves the engine: power fades with engine damage —
-  // the car limps, it never parks.
-  const damagePower = 1 - T.collision.systems.powerLoss * car.damage.systems.engine;
+  // A folded radiator starves the engine, and past the misfire threshold the
+  // ignition drops beats outright: a badly hurt car lurches up the road
+  // instead of pulling up it. It limps, it never parks.
+  const damagePower = hurt.power * hurt.firing;
   const accel =
     engineAccel(spec, car, surfaceGrip) * input.throttle * surfacePower * shiftCut * damagePower;
   car.u += accel * dt;
@@ -558,9 +576,12 @@ export function stepGrounded(
         ? Math.max(-T.reverse.top, car.u - T.reverse.accel * input.brake * dt)
         : Math.min(0, car.u + T.reverse.coastStop * dt);
   } else {
-    car.u -= spec.brake * input.brake * Math.sign(car.u) * dt;
+    // A spent chassis cannot hold its hubs square, so the car pulls up long.
+    car.u -= spec.brake * hurt.brake * input.brake * Math.sign(car.u) * dt;
   }
-  car.u -= surfaceDrag * car.u * dt;
+  // Torn bodywork, a ploughing floorpan and a shell that is no longer the
+  // shape it was drawn as, all on top of what the surface itself costs.
+  car.u -= (surfaceDrag + hurt.drag) * car.u * dt;
   if (ctx.surface === "nature") {
     // The rough-ground cap: open nature is fast but never road-fast.
     car.u -= Math.max(0, car.u - T.surfaces.natureTop) * T.surfaces.natureOverDrag * dt;
@@ -623,10 +644,10 @@ export function stepGrounded(
   // takes the rear away: under it the handbrake stops the car and does not
   // unstick it, so a yank at 40 km/h is a brake and nothing more.
   const handbrakeGrip = input.handbrake ? 1 + (T.grip.handbrakeGrip - 1) * open : 1;
-  // Bent arms hold the tires at the wrong angles: suspension damage costs
-  // lateral grip across the board.
-  const arms = 1 - T.collision.systems.gripLoss * car.damage.systems.suspension;
-  const grip = surfaceGrip * lift * handbrakeGrip * arms;
+  // Bent arms, a twisted shell that moves the geometry under load, and the
+  // downforce of a wing that is no longer on the car — all three through
+  // `hurt.grip`, floored so they can never stack into an unpointable car.
+  const grip = surfaceGrip * lift * handbrakeGrip * hurt.grip;
   const latRate = (spec.gripLat + (spec.driftLat - spec.gripLat) * sliding) * grip;
   // THE TRACTION CEILING. The redirect is a RATE, and a rate times a speed
   // is a force the tires have to find: unbounded, the car pulls whatever

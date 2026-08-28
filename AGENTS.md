@@ -70,6 +70,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | Track geometry/compilation                                  | `engine/mapgen/compile.ts`                                                                                                |
 | Run orchestration (phases, laps, respawn, events)           | `engine/game/step.ts`                                                                                                     |
 | Collision / damage (crush, parts, wreck, systems)           | `engine/game/collision.ts` — the `collision` skill                                                                        |
+| What a DAMAGED car drives like (power, grip, pull, drag)    | `engine/game/damage.ts` + `TUNING.collision.chassis` — the `collision` skill                                              |
 | Bot behavior                                                | `engine/sim/bot.ts`                                                                                                       |
 | How GOOD a bot is (difficulty, skill budgets)               | `engine/sim/skill.ts` — the `bot-improvement` skill                                                                       |
 | Who the campaign's rivals ARE (aliases, cars, characters)   | `engine/sim/rivals.ts` — the `bot-improvement` skill                                                                      |
