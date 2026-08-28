@@ -287,7 +287,11 @@ not a mistake anymore; it is exploration:
   one crash left** — and it is a drowning, not a teleport: see below.
   Nothing solid ever crashes the car. The channel under a bridge is cut
   deep enough to qualify, so going over a parapet is a drowning, not a
-  shortcut.
+  shortcut. Water is only water where the ground the car rides is UNDER it
+  (`terrain.waterAt` asks the ground lattice, and a road standing over the
+  water answers for itself): a lake under an embankment, a channel running
+  under a hillside the tiles never dip into, and the river under a bridge
+  deck are all somebody else's problem to the car on top of them.
 - **Other people's roads** — the branch the route abandons at each junction
   is real road: the terrain flattens its shelf, the forest keeps off it,
   and a car that drives past the tape drives on the surface that branch is

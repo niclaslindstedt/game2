@@ -677,7 +677,7 @@ export function buildWorld(track: Track, density = 1): World {
     chunkGroup.add(fords.group);
     const toS = track.samples[to - 1].s;
     const fresh = terrain.field.streams.filter((s) => s.centerS >= streamScanS && s.centerS < toS);
-    if (fresh.length > 0) chunkGroup.add(buildStreamMeshes(fresh, waterTex));
+    if (fresh.length > 0) chunkGroup.add(buildStreamMeshes(fresh, waterTex, terrain.field.waterAt));
     streamScanS = toS;
     // The clearance guard: the whole road where it is known, and otherwise
     // this chunk's aproned ribbon plus a margin of neighbouring road so
