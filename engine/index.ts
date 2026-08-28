@@ -46,6 +46,7 @@ export {
 export {
   crossedFinish,
   gateHalfWidth,
+  lastCheckpoint,
   locate,
   trackLost,
   wayHome,
@@ -144,6 +145,7 @@ export {
   type Track,
   type TrackSample,
   type Pacenote,
+  type Checkpoint,
 } from "./mapgen/index.ts";
 
 // The headless simulator and its bot driver.

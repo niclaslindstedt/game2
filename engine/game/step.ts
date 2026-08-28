@@ -26,9 +26,11 @@ import {
   curvatureAt,
   locate,
   locatePoint,
+  lastCheckpoint,
   slopeAt,
   trackLost,
   wayHome,
+  type WayHome,
 } from "./track.ts";
 import {
   DAMAGE_ZONES,
@@ -225,6 +227,9 @@ export function createGame(options: CreateGameOptions): GameState {
     lapStart: 0,
     rollout: 0,
     cheeredS: 0,
+    checkpointsPassed: 0,
+    checkpointS: 0,
+    checkpointTimes: [],
     progressIndex: 0,
     progressS: 0,
     lateral: 0,
@@ -252,8 +257,21 @@ function offRoadSurface(state: GameState, x: number, z: number): Surface | "natu
   return state.terrain.spurSurfaceAt(x, z) ?? "nature";
 }
 
-function respawn(state: GameState, events: GameEvent[]): void {
-  const home = wayHome(state);
+/** Put the car back on the road at `home`, and wind progress back with it:
+ * the road between there and wherever the car got to is road the run has to
+ * drive again, and leaving progress out there would credit it twice and
+ * hand the ghost gap a jump it never drove.
+ *
+ * WHICH place that is says what happened. A drowning and a press of the
+ * reset button are both the run being GIVEN UP on, so they cost the road
+ * back to the last split board (R28) — which is the whole reason the boards
+ * sit just past the corners worth being sent back through. The wedge rescue
+ * is neither: nobody asked for it, the car is pinned against a trunk
+ * through no decision of the driver's, and a rescue that costs a checkpoint
+ * would put the car back at a board it has already proved it can drive from
+ * into the same trunk, forever. That one goes to the road where the car
+ * stands, exactly as it always has. */
+function respawn(state: GameState, events: GameEvent[], home: WayHome): void {
   const car = state.car;
   car.x = home.x;
   car.z = home.z;
@@ -278,6 +296,13 @@ function respawn(state: GameState, events: GameEvent[]): void {
   // parts and the hurt systems all stay.
   if (car.damage.wear >= 1) car.damage.wear = T.collision.repairTo;
   state.drowning = null;
+  state.progressIndex = home.index;
+  state.progressS = state.track.samples[home.index].s;
+  // The board the car is standing on has already been checked in, so the
+  // window opens where it stands: driving off it again must not book the
+  // same split twice.
+  state.checkpointS = state.progressS;
+  state.cheeredS = state.progressS;
   state.offRoad = false;
   state.stuck.x = car.x;
   state.stuck.z = car.z;
@@ -380,7 +405,7 @@ function stepDrowning(state: GameState, events: GameEvent[]): void {
     events.push({ type: "sink" });
   }
 
-  if (age >= D.duration) respawn(state, events);
+  if (age >= D.duration) respawn(state, events, lastCheckpoint(state));
 }
 
 /** The wedge check: a car pinned against a trunk with the throttle buried
@@ -404,7 +429,7 @@ function stepStuck(state: GameState, input: CarInput, events: GameEvent[]): void
     state.stuck.z = car.z;
     state.stuck.since = state.t;
   } else if (state.t - state.stuck.since >= T.offTrack.stuck.after) {
-    respawn(state, events);
+    respawn(state, events, wayHome(state));
   }
 }
 
@@ -445,6 +470,30 @@ function cheerFor(state: GameState, events: GameEvent[]): void {
     if (stand.s <= from) continue;
     if (stand.s > to) break;
     events.push({ type: "cheer", size: stand.size });
+  }
+}
+
+/** R28 — the split boards this step drove through. Windowed on arc position
+ * exactly as the crowd is, so a respawn winding progress back re-arms the
+ * boards ahead of it without ever re-booking the one it is standing on. */
+function checkIn(state: GameState, events: GameEvent[]): void {
+  const from = state.checkpointS;
+  const to = state.progressS;
+  if (to <= from) return;
+  state.checkpointS = to;
+  const boards = state.track.checkpoints;
+  for (let i = state.checkpointsPassed; i < boards.length; i++) {
+    if (boards[i].s <= from) continue;
+    if (boards[i].s > to) break;
+    state.checkpointsPassed = i + 1;
+    events.push({
+      type: "checkpoint",
+      index: i,
+      count: boards.length,
+      split: state.checkpointTimes.length,
+      time: state.raceTime,
+    });
+    state.checkpointTimes.push(state.raceTime);
   }
 }
 
@@ -688,12 +737,16 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   }
   // A wreck is driven, not teleported: wear reaching 1 leaves a car with
   // nothing left to give still sitting where it stopped. Only the wedge
-  // check below, or the reset input, ever brings it home.
-  if (drive.reset && !crashed) respawn(state, events);
+  // check below, or the reset input, ever brings it home — and the two land
+  // in different places (see `respawn`).
+  if (drive.reset && !crashed) respawn(state, events, lastCheckpoint(state));
   else if (!crashed) stepStuck(state, drive, events);
 
   // R25 — the crowd, which only exists to be driven past.
   if (state.phase === "racing") cheerFor(state, events);
+  // R28 — the split boards. After the respawn above, so a car put back at a
+  // board does not immediately book it again.
+  if (state.phase === "racing") checkIn(state, events);
 
   // Through the gate. On a circuit (R22) it is the same line the run
   // started on, so crossing it books a lap and — until the last one — puts
@@ -716,6 +769,14 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
       // physically is.
       state.progressIndex = 0;
       state.progressS = track.samples[0].s;
+      // R28 — the boards are the LAP's, so the next lap drives through all
+      // of them again. The times stay on one list for the whole run.
+      state.checkpointsPassed = 0;
+      state.checkpointS = state.progressS;
+      // R27's crowd is windowed on the same arc position, so it needs the
+      // same rewind: a mark left at the end of the last lap is one the
+      // whole of the next lap sits behind, and nobody would cheer again.
+      state.cheeredS = state.progressS;
     } else {
       events.push({ type: "finish", time: state.raceTime });
       status(`Finished stage ${state.seed} in ${state.raceTime.toFixed(2)} s`);

@@ -51,8 +51,9 @@ import { DebugHud } from "./game/debug-hud.tsx";
 import { stageQuery, traceLine, type DebugContext } from "./game/debug-info.ts";
 import { debugLogging, log as debugLog, logRunStart, setDebugLogging } from "./game/debug-log.ts";
 import type { GameRenderer } from "./game/renderer.ts";
-import { Hud, type HudFlash, type HudSnapshot } from "./game/hud.tsx";
+import { Hud, type HudFlash, type HudSnapshot, type HudSplit } from "./game/hud.tsx";
 import type { FinishScores } from "./game/hud-finish.tsx";
+import { rivalSplits } from "./game/standings.ts";
 import {
   lastInitials,
   loadBoard,
@@ -346,6 +347,17 @@ function startCamera(chosen: PlayCamera): PlayCamera {
 
 let flashId = 0;
 
+/** How long a split stays on screen, SECONDS OF THE RUN. Long enough to read
+ * the gap and the clock under it at speed, and a small fraction of the gap
+ * between boards, so a second split is always the first one long gone.
+ *
+ * Measured on the race clock rather than on a timer, because that is the
+ * clock the reading belongs to: a paused run holds its split the way it
+ * holds everything else on the HUD, and a machine rendering the stage at a
+ * fraction of real time shows it for as much of the ROAD as a machine that
+ * is keeping up. */
+const SPLIT_HOLD = 3.6;
+
 /** Air time under which a landing is not worth a banner, s — every ripple
  * and curb technically leaves the ground, and "CLEAN AIR 0.0s" three times
  * in a row is the HUD talking over the game. */
@@ -405,6 +417,16 @@ export function App() {
    * only while the overlay is up. */
   const [debugCtx, setDebugCtx] = useState<DebugContext | null>(null);
   const [flashes, setFlashes] = useState<HudFlash[]>([]);
+  /** R28 — the split just driven through, until the run's clock times it
+   * out. Mirrored in a ref: the frame loop is created once and expires it
+   * from there, off the same clock the split is a reading of. */
+  const [split, setSplit] = useState<HudSplit | null>(null);
+  const splitRef = useRef<HudSplit | null>(null);
+  splitRef.current = split;
+  /** The splits this run is measured against, in board order — the ghost's
+   * for a time trial, and (once the campaign has opponents to race) the
+   * rival's. Empty on a stage with nothing to chase. */
+  const splitsRef = useRef<{ times: number[]; against: string }>({ times: [], against: "" });
   const finishTimeRef = useRef<number | null>(null);
   /** The controls of the run being driven, written down step by step so a
    * time worth keeping can be raced against later. Null on a stage that
@@ -473,6 +495,23 @@ export function App() {
     setTimeout(() => setFlashes((prev) => prev.filter((f) => f.id !== id)), 1800);
   };
 
+  /** R28 — put a split on screen. Taking it off again belongs to the frame
+   * loop, which has the race clock; one board is up at a time, and they are
+   * `checkpoint.spacing` seconds apart, so a second one arriving is the
+   * first one long gone. */
+  const showSplit = (index: number, count: number, split: number, time: number): void => {
+    const { times, against } = splitsRef.current;
+    const reference = times[split];
+    setSplit({
+      id: ++flashId,
+      index,
+      count,
+      time,
+      delta: reference === undefined ? null : time - reference,
+      against,
+    });
+  };
+
   /** (Re)build the run for a stage spec, unless that exact stage is already
    * standing. The compiled track is cached per seed and length, so changing
    * only the light re-lights instead of rebuilding the world. */
@@ -538,11 +577,12 @@ export function App() {
     const renderer = rendererRef.current;
     recorderRef.current = null;
     ghostRef.current = null;
+    splitsRef.current = { times: [], against: "" };
+    setSplit(null);
     renderer?.setGhost(null);
     if (!renderer || !trackRef.current || menuRef.current) return;
     if (!levelId || spec.length === "endless") return;
     recorderRef.current = createGhostRecorder();
-    if (mode !== "timetrial") return;
     const stage: GhostStage = {
       seed: spec.seed,
       length: spec.length as FiniteStageLength,
@@ -552,6 +592,16 @@ export function App() {
     };
     const saved = loadGhost(levelId);
     if (!saved || !ghostMatches(saved, stage)) return;
+    // R28 — the splits to be measured against. A campaign run is meant to
+    // be measured against the car it is racing; until the campaign has one
+    // (`rivalSplits`), your own best run is the honest stand-in, and it is
+    // the only reference a time trial ever wants.
+    splitsRef.current = {
+      times: (mode === "campaign" ? rivalSplits(trackRef.current.track) : null) ?? saved.splits,
+      against: "GHOST",
+    };
+    // Only a TIME TRIAL puts the ghost's car back on the road beside you.
+    if (mode !== "timetrial") return;
     // The ghost's own game, on the SAME compiled track — the stage is read
     // only, so there is nothing to build twice but the run itself.
     const state = createGame({
@@ -956,6 +1006,7 @@ export function App() {
                     },
                     spec.carId,
                     ev.time,
+                    state.checkpointTimes,
                   ),
                 );
               }
@@ -999,7 +1050,9 @@ export function App() {
           // hung, and the moment the tank runs dry. Splashes, crashes,
           // landings and respawns all announce themselves on screen already
           // — captioning them is noise over the top of the game.
-          if (ev.type === "lap") {
+          if (ev.type === "checkpoint") {
+            showSplit(ev.index + 1, ev.count, ev.split, ev.time);
+          } else if (ev.type === "lap") {
             flash(
               `LAP ${ev.lap} — ${formatTime(ev.time)}${ev.best ? " BEST" : ""}`,
               ev.best ? "good" : "info",
@@ -1117,6 +1170,9 @@ export function App() {
                 bookRef.current,
               ),
             );
+            // R28 — and the split ages on the race clock beside it.
+            const up = splitRef.current;
+            if (up && state.raceTime - up.time > SPLIT_HOLD) setSplit(null);
             // The overlay reads its own snapshot: it needs the CAMERA, which
             // the HUD's has no reason to carry, and it is off entirely for
             // everyone who never let the developer menu out.
@@ -1217,6 +1273,7 @@ export function App() {
           snap={snap}
           live={liveRef.current}
           flashes={flashes}
+          split={split}
           input={input}
           show={options.hud}
           touchLayout={options.touch}

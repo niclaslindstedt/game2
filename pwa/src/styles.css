@@ -388,6 +388,15 @@ body {
   color: #ffa726;
 }
 
+/* The price of the button, beside the distance the arrow is quoting: small
+   enough to be a footnote on the call rather than a second instruction. */
+.hud-pace-cost {
+  font-size: 0.45em;
+  letter-spacing: 0.12em;
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+
 .hud-center {
   position: absolute;
   inset: 0;
@@ -709,6 +718,66 @@ body {
 .hud-finish-next {
   font-size: clamp(0.9rem, 3.4vmin, 1.4rem);
   margin-top: 0;
+}
+
+/* R28 — the split board. It stands where the flashes do and above them, in
+   the middle of the screen where a driver's eyes already are, because the
+   gap is read in the half second after a corner exit and nothing on the
+   edges of the HUD gets read at all at that moment. The GAP is the whole
+   instrument; the clock and who it is against are a caption under it. */
+/* R28 — the split, in the clock's own column. The middle of the screen is
+   the co-driver's (`.hud-pace`, 11%) and the corner call is the one reading
+   a driver may never have covered up, so the split reports where the time
+   already lives instead. */
+.hud-split {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.05rem;
+  margin-top: 0.15rem;
+  color: var(--hud-info);
+  /* Fades IN and then holds: the run's clock decides when it goes (see
+     SPLIT_HOLD in App.tsx), so the animation must not take it away on a
+     timeline of its own — and an entry that only touches opacity leaves the
+     column's box where it is, instead of shifting the clock above it. */
+  animation: hud-split-in 220ms ease-out;
+}
+
+.hud-split-of {
+  opacity: 0.6;
+}
+
+.hud-split-gap {
+  font-size: clamp(1.4rem, 5.5vmin, 2.6rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.hud-split-sub {
+  font-size: clamp(0.6rem, 2vmin, 0.9rem);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.1em;
+  opacity: 0.8;
+}
+
+.hud-split-up .hud-split-gap {
+  color: var(--hud-good);
+}
+
+.hud-split-down .hud-split-gap {
+  color: var(--hud-bad);
+}
+
+/* Up fast, hold while it is being read, then out — a board goes past, it
+   does not fade the whole time it is on screen. */
+@keyframes hud-split-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 .hud-flashes {
@@ -1045,6 +1114,20 @@ body {
   /* Tweened between the HUD's 12 Hz snapshots, like the tach needle, so the
      icon slides and swings instead of stepping. */
   transition: transform 120ms linear;
+}
+
+/* R28 — the split boards on the route. A dim pip until the run has been
+   through it and a lit one after, so the map says both where the next board
+   is and how much of the stage is already in the book. */
+.hud-minimap-cp {
+  fill: rgb(9 24 52 / 85%);
+  stroke: rgb(255 255 255 / 72%);
+  stroke-width: 1.2;
+}
+
+.hud-minimap-cp-passed {
+  fill: var(--hud-good);
+  stroke: rgb(9 24 52 / 85%);
 }
 
 .hud-minimap-ring-track {

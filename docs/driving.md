@@ -261,6 +261,32 @@ Anything measuring the run measures it at the LINE: `raceTime` stops there,
 and the sim's `trackLength` is the raced distance rather than the whole
 compiled ribbon, so a pace column never has a coast-down folded into it.
 
+## Checkpoints (R28)
+
+A stage is cut into split boards roughly `STAGE_RULES.checkpoint.spacing`
+seconds of driving apart (15 s at the measured bot pace, so ~390 m), and
+every board stands just past a corner's EXIT. Which corner is the rule that
+matters: inside the target gap nothing but a hard turn earns a board, from
+the gap a medium will do, and only past `late` is a soft bend taken rather
+than let the split drift. A board is therefore something the road made you
+work for, and being sent back through that corner is what makes it cost.
+The generator does the placing (`engine/mapgen/compile.ts`); no board is
+laid inside `finishClear` of the finish gate, where a split would only say
+what the line is about to say properly.
+
+Driving through one books a split: `checkpoint` fires with the board's
+index, how many the lap has, and the race clock as it passed, and the time
+goes on `state.checkpointTimes`. The window is arc position (the same
+mechanism R27's crowd uses), so a car put back on a board it has already
+driven through never books it twice. A circuit re-arms all of them each lap;
+the times stay on one list for the whole run.
+
+Two things read the splits. The HUD puts the gap up under the race clock for
+a few seconds — measured against the ghost's own splits, which ride on the
+tape (`GhostRun.splits`) rather than being read back off the replay, so the
+number is there from the first board even on a run that is well up the road
+on its ghost. And a respawn goes to the last board (above).
+
 ## The open world
 
 The road runs through a landscape the car can actually drive
@@ -373,20 +399,28 @@ The respawn is at the far end, and it is the only thing that clears
 
 - **The way home** — exploring never times out, and hitting things never
   ends it: crash into trees for as long as the car still moves. Only two
-  things put a car back on the road (both at the last on-road progress, both
-  the same point `wayHome` reports): the **reset input** (`CarInput.reset`,
-  the B key / the HUD's TRACK button), and the **wedge check** — throttle
-  held for `TUNING.offTrack.stuck.after` seconds without covering
-  `stuck.radius` meters. A car pinned against a trunk is not driving out of
-  it; anything still making ground is left alone. The TRACK button is there
+  things put a car back on the road, and they land in DIFFERENT places. The
+  **reset input** (`CarInput.reset`, the B key / the HUD's TRACK button) is
+  the run being given up on, so it costs the road back to the last
+  checkpoint (`lastCheckpoint`, R28) — the same place a drowning respawns
+  at. The **wedge check** — throttle held for `TUNING.offTrack.stuck.after`
+  seconds without covering `stuck.radius` meters — is not: nobody asked for
+  it, the car is pinned through no decision of the driver's, and a rescue
+  that cost a checkpoint would put the car back at a board it has already
+  proved it can drive from into the same trunk, forever. That one goes to
+  the road where the car stands (`wayHome`). A car pinned against a trunk is
+  not driving out of it; anything still making ground is left alone. Either
+  way `state.progressIndex` comes back with the car: the road in between is
+  road the run has to drive again. The TRACK button is there
   the whole time the car is off the road — a driver two metres into a ditch
   should not have to be lost first — but the ALERT waits for the car to
   actually be lost (`trackLost`, `TUNING.offTrack.guide`): more than 20 m
   out AND pointed more than 110° away from the way home. Two wheels on the
   verge is not lost, and neither is a clearing crossed perpendicular with the
   stage running alongside. Once it is, the co-driver's strip reads RETURN TO
-  TRACK with the distance, and an arrow hangs over the car pointing at the
-  spot itself. Going OFF has no threshold of its own: the alert is an
+  TRACK with the distance to the road, a footnote saying what the button
+  costs (the last checkpoint), and an arrow hangs over the car pointing at
+  the road itself. Going OFF has no threshold of its own: the alert is an
   instruction, so the only thing that clears it is the track being back
   under the wheels. Nearing the road or aiming at it leaves it up, which is
   also what stops a wandering car blinking it on and off.

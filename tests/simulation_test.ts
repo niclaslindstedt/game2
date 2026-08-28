@@ -85,13 +85,25 @@ describe("bot simulations", () => {
     const state = createGame({ seed: 7, length: "endless", skipCountdown: true });
     expect(state.track.endless).toBe(true);
     const steps = Math.round(90 / TUNING.dt);
+    // The ROAD DRIVEN, not the progress reached: a respawn winds progress
+    // back to the last checkpoint (R28), so on a stage where the bot has an
+    // excursion the two are different numbers and only this one says the
+    // car kept driving. The teleport itself is not driving, so a step that
+    // covers more ground than a car can at 120 Hz is left out.
+    let driven = 0;
+    let px = state.car.x;
+    let pz = state.car.z;
     for (let i = 0; i < steps; i++) {
       const events = step(state, botInput(state));
       for (const ev of events) expect(ev.type).not.toBe("finish");
+      const d = Math.hypot(state.car.x - px, state.car.z - pz);
+      if (d < 2) driven += d;
+      px = state.car.x;
+      pz = state.car.z;
     }
     expect(state.phase).toBe("racing");
-    // Real distance covered, and the stream kept the horizon of road alive.
-    expect(state.progressS).toBeGreaterThan(1200);
+    expect(driven).toBeGreaterThan(1200);
+    // ...and the stream kept the horizon of road alive ahead of it.
     expect(state.track.length).toBeGreaterThanOrEqual(
       state.progressS + STAGE_RULES.endless.horizon,
     );

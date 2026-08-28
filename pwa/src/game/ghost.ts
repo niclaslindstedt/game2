@@ -46,7 +46,7 @@ const PEDAL_STEPS = 255;
 
 /** Bump when the tape's layout changes — an old recording decodes into
  * different driving, which is worse than no ghost at all. */
-const GHOST_FORMAT = 1;
+const GHOST_FORMAT = 2;
 
 const KEY_PREFIX = "scandi-flick-ghost:";
 
@@ -87,6 +87,12 @@ export type GhostRun = GhostStage & {
   carId: string;
   /** The finish time it recorded, seconds. */
   time: number;
+  /** R28 — the race clock at every checkpoint the run drove through, in
+   * order. Written down rather than read back off the replay: the player
+   * reaches a board whenever they reach it, and a split that only appeared
+   * once the ghost had got there too would be blank exactly when the run is
+   * quick. */
+  splits: number[];
   /** Steps on the tape: the whole run, countdown included, so replay and
    * run advance in lockstep from the first step of the game. */
   steps: number;
@@ -160,8 +166,9 @@ export type GhostRecorder = {
    * the engine ACTUALLY received, never the one that produced it. */
   record: (input: CarInput) => void;
   steps: () => number;
-  /** Seal the tape into a run worth keeping. */
-  seal: (stage: GhostStage, carId: string, time: number) => GhostRun;
+  /** Seal the tape into a run worth keeping. `splits` is the run's
+   * `checkpointTimes` — what the next attempt is measured against. */
+  seal: (stage: GhostStage, carId: string, time: number, splits: number[]) => GhostRun;
 };
 
 export function createGhostRecorder(): GhostRecorder {
@@ -183,12 +190,13 @@ export function createGhostRecorder(): GhostRecorder {
       );
     },
     steps: () => steer.length,
-    seal: (stage, carId, time) => ({
+    seal: (stage, carId, time, splits) => ({
       format: GHOST_FORMAT,
       ...stage,
       knobs: resolveKnobs(stage.knobs),
       carId,
       time,
+      splits: [...splits],
       steps: steer.length,
       steer: encodeStream(steer),
       throttle: encodeStream(throttle),
@@ -256,6 +264,7 @@ export function loadGhost(levelId: string): GhostRun | null {
     if (!Number.isFinite(run.steps) || run.steps <= 0) return null;
     if (typeof run.steer !== "string" || typeof run.flags !== "string") return null;
     if (typeof run.throttle !== "string" || typeof run.brake !== "string") return null;
+    if (!Array.isArray(run.splits)) return null;
     return run;
   } catch {
     return null;

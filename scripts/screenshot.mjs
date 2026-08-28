@@ -946,6 +946,35 @@ await captureElement(
   { shape: "circuit", length: "medium", seed: "3", bot: "1" },
 );
 
+// R28 — the SPLIT, as the car goes through the first checkpoint. The bot
+// drives: a board stands a corner or two into the stage and reaching one is
+// the whole point of the shot, not something a scripted key press can
+// stage. Captured as the CLOCK COLUMN rather than the whole frame — the
+// split times itself off the screen in a few seconds, and a full-frame
+// screenshot of a software-rendered stage takes long enough to miss it.
+await captureElement(
+  "shot-checkpoint",
+  ".hud-topleft",
+  async (page) => {
+    await racing(page);
+    await page.waitForSelector(".hud-split", { timeout: 240000 });
+  },
+  { length: "short", bot: "1" },
+);
+
+// ...and the pips on the route, close up: a board already driven through
+// reads differently from one still to come.
+await captureElement(
+  "shot-instrument-checkpoints",
+  ".hud-minimap-dock",
+  async (page) => {
+    await racing(page);
+    await page.waitForSelector(".hud-minimap-cp-passed", { timeout: 240000 });
+    await page.waitForTimeout(400);
+  },
+  { length: "short", bot: "1" },
+);
+
 // THE SALUTE, and the run-out behind it (R23/R24/R25). The one scene that
 // cannot be staged: the car has to actually drive a whole stage to reach a
 // finish, so the BOT drives a short SPRINT — a circuit's finish is its own

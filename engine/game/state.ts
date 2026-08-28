@@ -24,9 +24,10 @@ export type CarInput = {
   /** Edge-triggered: consumed by the step they arrive in (manual box). */
   shiftUp: boolean;
   shiftDown: boolean;
-  /** Edge-triggered: put the car back on the track at its last progress —
-   * the way home from a wedged rock or the bottom of a valley, since
-   * exploring never times out on its own. */
+  /** Edge-triggered: put the car back on the road at its last checkpoint
+   * (R28) — the way home from a wedged rock or the bottom of a valley,
+   * since exploring never times out on its own. It costs the road since
+   * that board, which is what makes driving back yourself worth doing. */
   reset: boolean;
 };
 
@@ -252,6 +253,14 @@ export type GameEvent =
    * just completed (1-based), `time` how long it took, and `best` says it
    * is the quickest of the run so far. */
   | { type: "lap"; lap: number; time: number; best: boolean }
+  /** R28 — the car has driven through a split board. `index` is which one it
+   * was on the LAP (0-based) and `count` how many the lap has — together
+   * they are what a driver reads. `split` is where the time landed in
+   * `checkpointTimes`, which on a circuit runs on across the laps: the two
+   * differ from the second lap onward, and measuring against a ghost with
+   * the lap index would put lap two's board against lap one's time. `time`
+   * is the race clock as it went through — the split itself. */
+  | { type: "checkpoint"; index: number; count: number; split: number; time: number }
   /** R27 — the car has come past a stand of spectators at a pace worth
    * cheering. `size` is how big that crowd is, 0..1, so one voice route
    * covers a knot of six at a corner and the bank at the finish. */
@@ -335,7 +344,24 @@ export type GameState = {
    * position, unlike an index, survives an endless stage pruning the stands
    * it has left behind. */
   cheeredS: number;
-  /** Index into track.samples the car is nearest to. */
+  /** R28 — how many split boards the car has driven through THIS LAP; 0 on
+   * the grid, and back to 0 when a circuit starts the next one. It is also
+   * which checkpoint a respawn puts the car back at: board `n - 1`, or the
+   * start line while it is still 0. */
+  checkpointsPassed: number;
+  /** R28 — how far along the stage the car has already been checked in,
+   * meters. The window between this and `progressS` is exactly the boards
+   * this step drove through, which is what keeps a board from firing twice
+   * when a respawn puts the car back on top of it. */
+  checkpointS: number;
+  /** R28 — the race clock at every board passed this RUN, laps included, in
+   * the order they were passed. The splits a ghost is measured against, and
+   * what a sealed ghost writes down for the next run to chase. */
+  checkpointTimes: number[];
+  /** Index into track.samples the car is nearest to. A respawn is the one
+   * thing that moves it BACKWARDS: it puts the car at a checkpoint, and
+   * progress has to come back with it or the run would be credited with
+   * road it is about to drive again. */
   progressIndex: number;
   /** Arc position along the stage, meters. */
   progressS: number;

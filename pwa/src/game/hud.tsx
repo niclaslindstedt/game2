@@ -13,7 +13,7 @@ import { createThumbGuard } from "./thumb-guard.ts";
 import { FinishCard, type FinishScores, type NextStage } from "./hud-finish.tsx";
 import { Minimap, type HudMinimap } from "./minimap.tsx";
 import type { HudSettings, PedalDir, TouchSettings } from "./settings.ts";
-import { clamp } from "../lib/util.ts";
+import { clamp, formatTime } from "../lib/util.ts";
 import { RaceClock, StartLights } from "./hud-clock.tsx";
 import type { LiveRun } from "./snapshot.ts";
 
@@ -114,9 +114,30 @@ export type HudDamage = {
 
 export type HudFlash = { id: number; text: string; tone: "good" | "bad" | "info" };
 
+/** R28 — the SPLIT: what the board the car has just gone through said. Held
+ * on screen for a few seconds and then gone, the way a split board is: it
+ * is read at 140 km/h out of the corner of an eye, so the number that
+ * matters — the gap — is the big one and everything else is a caption. */
+export type HudSplit = {
+  id: number;
+  /** Which board it was, 1-based, and how many the lap has. */
+  index: number;
+  count: number;
+  /** The race clock as the car went through, seconds. */
+  time: number;
+  /** Seconds up (positive: slower) or down (negative: quicker) on whoever
+   * this run is being measured against — null when it is measured against
+   * nobody, which is a stage nothing has been driven on yet. */
+  delta: number | null;
+  /** Who that is, for the caption under the gap. */
+  against: string;
+};
+
 type HudProps = {
   snap: HudSnapshot;
   flashes: HudFlash[];
+  /** The split board just driven through, until it times out. */
+  split: HudSplit | null;
   input: InputManager;
   /** Which instruments the player has left switched on. */
   show: HudSettings;
@@ -588,7 +609,45 @@ function WayHomeCall({ distance }: { distance: number }) {
         <span className="hud-pace-text">
           RETURN TO TRACK
           <span className="hud-pace-dist">{Math.round(distance)}m</span>
+          {/* What the way-home BUTTON does, which is no longer the same as
+              what the arrow points at: driving back keeps the road, and the
+              button hands it back to the last checkpoint (R28). A driver
+              deciding between the two has to be told the price. */}
+          <span className="hud-pace-cost">↺ LAST CP</span>
         </span>
+      </div>
+    </div>
+  );
+}
+
+/** R28 — the split, as the car goes through a board. The GAP is the whole
+ * instrument: yellow and leading with a minus when the run is up on what it
+ * is chasing, red and a plus when it is down, with which board it was and
+ * the clock as a caption under it. A stage nobody has driven yet has no gap
+ * to show, and then the caption is the whole readout — a second set of big
+ * digits under the race clock would read as a second race clock, and a zero
+ * would read as dead level with a car that is not there. It goes up under
+ * the race clock and ages off it: a split is read once, at speed, and then
+ * it is behind you. */
+function SplitBoard({ split }: { split: HudSplit }) {
+  const { delta } = split;
+  const up = delta !== null && delta < 0;
+  return (
+    <div
+      className={`hud-split ${delta === null ? "" : up ? "hud-split-up" : "hud-split-down"}`}
+      role="status"
+    >
+      {delta !== null && (
+        <div className="hud-split-gap">
+          {up ? "−" : "+"}
+          {Math.abs(delta).toFixed(2)}
+        </div>
+      )}
+      <div className="hud-split-sub">
+        CP {split.index}
+        <span className="hud-split-of">/{split.count}</span>
+        {` · ${formatTime(split.time)}`}
+        {delta !== null && ` · ${split.against}`}
       </div>
     </div>
   );
@@ -842,6 +901,7 @@ export function Hud({
   snap,
   live,
   flashes,
+  split,
   input,
   show,
   touchLayout,
@@ -883,6 +943,11 @@ export function Hud({
               {Math.abs(Math.round(snap.ghostGap))}m<span className="hud-chip-sub">GHOST</span>
             </div>
           )}
+          {/* R28 — the split, under the clock it is a reading of. The
+              co-driver owns the top of the screen and the corner call is
+              the one thing a driver may never have covered up, so a board
+              reports where the time already lives. */}
+          {show.timer && split && snap.phase === "racing" && <SplitBoard split={split} />}
         </div>
         <div className="hud-actions pointer-events-auto">
           <button

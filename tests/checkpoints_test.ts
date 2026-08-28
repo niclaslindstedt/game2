@@ -1,0 +1,225 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// R28 — the split boards: where the generator puts them, when the run books
+// one, and where a car that gave up is put back on the road.
+import { describe, expect, it } from "vitest";
+
+import {
+  NEUTRAL_INPUT,
+  STAGE_RULES,
+  TUNING,
+  botInput,
+  compileStage,
+  compileTrack,
+  createGame,
+  finishAt,
+  lastCheckpoint,
+  step,
+  type CarInput,
+  type SegmentPlan,
+} from "@engine";
+
+const C = STAGE_RULES.checkpoint;
+/** The target gap between boards in METERS — the rule is quoted in seconds
+ * of driving at the measured bot pace. */
+const GAP = C.spacing * C.pace;
+const SEEDS = [1, 2, 3, 7, 42, 99, 313];
+
+/** The corner (or combination) the co-driver called last before `s`. */
+function cornerBefore(track: ReturnType<typeof compileStage>, s: number) {
+  let note = null;
+  for (const n of track.pacenotes) {
+    if (n.endS > s + 0.5) break;
+    note = n;
+  }
+  return note;
+}
+
+describe("checkpoint placement", () => {
+  it("splits every finite stage into boards roughly the target gap apart", () => {
+    for (const seed of SEEDS) {
+      const track = compileStage(seed, "medium");
+      expect(track.checkpoints.length).toBeGreaterThan(3);
+      let prev = 0;
+      for (const board of track.checkpoints) {
+        const gap = board.s - prev;
+        // No board inside the early bar, and none so far past the target
+        // that the stage went a whole extra split without one.
+        expect(gap).toBeGreaterThanOrEqual(GAP * C.early - 1);
+        expect(gap).toBeLessThan(GAP * 2.6);
+        prev = board.s;
+      }
+    }
+  });
+
+  it("stands every board on the exit of a corner, and prefers the tight ones", () => {
+    let tight = 0;
+    let total = 0;
+    for (const seed of SEEDS) {
+      const track = compileStage(seed, "long");
+      for (const board of track.checkpoints) {
+        const note = cornerBefore(track, board.s);
+        expect(note).not.toBeNull();
+        // The board sits on the corner's exit, at most one run-out past it.
+        expect(board.s - (note as { endS: number }).endS).toBeLessThanOrEqual(
+          C.runOut + track.step,
+        );
+        total += 1;
+        if ((note as { severity: string }).severity !== "soft") tight += 1;
+      }
+    }
+    expect(total).toBeGreaterThan(50);
+    // "Prefer tight corners" is a claim about the mix, so measure it: a soft
+    // bend only ever gets a board when the stage has run well past its gap.
+    expect(tight / total).toBeGreaterThan(0.9);
+  });
+
+  it("keeps the boards on the samples they name, and clear of the finish gate", () => {
+    for (const seed of SEEDS) {
+      const track = compileStage(seed, "medium");
+      const gate = finishAt(track) as number;
+      for (const board of track.checkpoints) {
+        expect(track.samples[board.index].s).toBe(board.s);
+        expect(board.s).toBeLessThanOrEqual(gate - C.finishClear);
+      }
+    }
+  });
+});
+
+/** Drive a scripted stage until `done`, or until the step budget runs out. */
+function drive(
+  state: ReturnType<typeof createGame>,
+  input: (state: ReturnType<typeof createGame>) => CarInput,
+  done: (state: ReturnType<typeof createGame>) => boolean,
+  seconds = 120,
+): number {
+  const steps = Math.round(seconds / TUNING.dt);
+  for (let i = 0; i < steps; i++) {
+    step(state, input(state));
+    if (done(state)) return i;
+  }
+  return -1;
+}
+
+describe("checking in", () => {
+  it("books a split with the race clock as the car drives through", () => {
+    const state = createGame({ seed: 42, length: "medium", skipCountdown: true });
+    const boards = state.track.checkpoints.length;
+    expect(boards).toBeGreaterThan(3);
+    const times: number[] = [];
+    const steps = Math.round(200 / TUNING.dt);
+    for (let i = 0; i < steps && state.checkpointsPassed < 3; i++) {
+      for (const ev of step(state, botInput(state))) {
+        if (ev.type !== "checkpoint") continue;
+        expect(ev.index).toBe(times.length);
+        expect(ev.count).toBe(boards);
+        times.push(ev.time);
+      }
+    }
+    expect(times).toHaveLength(3);
+    expect(state.checkpointTimes).toEqual(times);
+    // A split is the race clock, so they only ever climb.
+    expect(times[0]).toBeLessThan(times[1]);
+    expect(times[1]).toBeLessThan(times[2]);
+  });
+
+  it("re-arms every board each lap of a circuit, on one running list", () => {
+    const state = createGame({
+      seed: 3,
+      length: "short",
+      shape: "circuit",
+      laps: 2,
+      skipCountdown: true,
+    });
+    const boards = state.track.checkpoints.length;
+    expect(boards).toBeGreaterThan(0);
+    const lapIndex: number[] = [];
+    const splitIndex: number[] = [];
+    const steps = Math.round(400 / TUNING.dt);
+    for (let i = 0; i < steps && state.lap < 2; i++) {
+      for (const ev of step(state, botInput(state))) {
+        if (ev.type !== "checkpoint") continue;
+        lapIndex.push(ev.index);
+        splitIndex.push(ev.split);
+      }
+    }
+    // Round onto the second lap and through its first board.
+    for (let i = 0; i < steps && splitIndex.length <= boards; i++) {
+      for (const ev of step(state, botInput(state))) {
+        if (ev.type !== "checkpoint") continue;
+        lapIndex.push(ev.index);
+        splitIndex.push(ev.split);
+      }
+    }
+    expect(state.lap).toBe(2);
+    // The LAP index starts again; the SPLIT index runs on, which is what
+    // keeps lap two measured against lap two of whatever it is chasing.
+    expect(lapIndex.slice(0, boards)).toEqual(Array.from({ length: boards }, (_, i) => i));
+    expect(lapIndex[boards]).toBe(0);
+    expect(splitIndex.slice(0, boards + 1)).toEqual(
+      Array.from({ length: boards + 1 }, (_, i) => i),
+    );
+    expect(state.checkpointTimes).toHaveLength(splitIndex.length);
+  });
+
+  it("never books the same board twice, respawn or not", () => {
+    const state = createGame({ seed: 42, length: "medium", skipCountdown: true });
+    const steps = Math.round(300 / TUNING.dt);
+    const indices: number[] = [];
+    // One press of the way-home button once the second board is behind us:
+    // it drops the car back ON that board, and driving off it again must
+    // not book it a second time.
+    let asked = false;
+    for (let i = 0; i < steps && indices.length < 3; i++) {
+      const reset = indices.length === 2 && !asked;
+      if (reset) asked = true;
+      for (const ev of step(state, { ...botInput(state), reset })) {
+        if (ev.type === "checkpoint") indices.push(ev.index);
+      }
+    }
+    expect(asked).toBe(true);
+    expect(indices).toEqual([0, 1, 2]);
+  });
+});
+
+describe("where a respawn lands", () => {
+  /** A rig with a long opening straight and a hairpin, so a board is earned
+   * partway down a road the car can be driven off at will. */
+  const RIG: SegmentPlan[] = [
+    { kind: "straight", length: 600, feature: "none" },
+    { kind: "turn", length: 40, dir: 1, radius: 18, severity: "hard", feature: "none" },
+    { kind: "straight", length: 600, feature: "none" },
+  ];
+
+  it("puts a car that gives up back at its last board, progress and all", () => {
+    const track = compileTrack(7, RIG);
+    expect(track.checkpoints).toHaveLength(1);
+    const board = track.checkpoints[0];
+    const state = createGame({ seed: 7, track, skipCountdown: true });
+    // Drive past the board, then ask for the way home.
+    const at = drive(state, botInput, (s) => s.progressS > board.s + 100);
+    expect(at).toBeGreaterThan(0);
+    expect(state.checkpointsPassed).toBe(1);
+    step(state, { ...NEUTRAL_INPUT, reset: true });
+    expect(state.car.x).toBeCloseTo(track.samples[board.index].x, 3);
+    expect(state.car.z).toBeCloseTo(track.samples[board.index].z, 3);
+    // Progress comes back with the car — the road between is road to drive
+    // again, not road the run keeps.
+    expect(state.progressIndex).toBe(board.index);
+    expect(state.progressS).toBeCloseTo(board.s, 3);
+    // ...and the board it is standing on stays booked.
+    expect(state.checkpointsPassed).toBe(1);
+  });
+
+  it("puts a car that has passed no board back on the start line", () => {
+    const track = compileTrack(7, RIG);
+    const state = createGame({ seed: 7, track, skipCountdown: true });
+    const grid = { x: state.car.x, z: state.car.z };
+    expect(drive(state, botInput, (s) => s.progressS > 200)).toBeGreaterThan(0);
+    expect(state.checkpointsPassed).toBe(0);
+    expect(lastCheckpoint(state).index).toBe(0);
+    step(state, { ...NEUTRAL_INPUT, reset: true });
+    expect(state.car.x).toBeCloseTo(grid.x, 3);
+    expect(state.car.z).toBeCloseTo(grid.z, 3);
+    expect(state.progressS).toBe(track.samples[0].s);
+  });
+});

@@ -179,6 +179,16 @@ undoes it without knowing it was ever a rule.
   overlap; whichever road is nearer owns the ground. Get this wrong and the
   ground under the stage road inherits a branch's grade — a six-meter step
   under the racing line that no test but the shelf assertion will catch.
+- **Sample spacing is only APPROXIMATELY `SAMPLE_STEP`.** Each segment
+  divides its OWN length into a whole number of steps, so the real spacing is
+  per-segment and the slack accumulates along the stage. Anything that has to
+  land on a sample AT a given arc position — a gate, a board, a marker the
+  player drives past — must SEARCH the samples (monotonic in `s`, so binary
+  search: `finishIndex` is the worked example) or carry the index it was
+  built with. `Math.round(s / track.step)` put the finish gate four metres
+  off the line the clock stops at on a 1.9 km stage, and the error grows with
+  length. `elevationAt` and the guard/stand helpers divide on purpose: they
+  only want "a sample near here", and a metre costs them nothing.
 - **`smooth()` is a Hermite fade, not a curve.** Outside `0..1` it turns over
   and runs away. Every call needs `clamp01` around its argument; an unclamped
   one is how stream ends ended up a kilometer off the map.
