@@ -47,6 +47,14 @@ export type BotProfile = {
   rotationRef: number;
   /** Margin over the corner speed that triggers braking, m/s. */
   brakeMargin: number;
+  /** How much of the car's braking the corner plan assumes it will get —
+   * the fraction of `2 · spec.brake` the distance-discount is worked out
+   * with. A driver who trusts the brakes stays on the throttle later and
+   * hauls the car down at the corner; one who does not starts lifting a
+   * long way out. Under 1 for everybody: the plan is a driver's estimate,
+   * and one that assumed every last newton would arrive at the apex having
+   * run out of road. */
+  brakeUse: number;
   /** Seconds pinned against something with the throttle buried before the
    * bot stops pushing and backs out of it instead. Under the engine's own
    * wedge rescue (TUNING.offTrack.stuck.after) on purpose: reversing is
@@ -56,6 +64,11 @@ export type BotProfile = {
   /** Reverse speed that ends the manoeuvre, m/s. Reached it, the car is off
    * whatever it was against and has room for another run at the line. */
   reverseSpeed: number;
+  /** Seconds out in the wild before the bot stops trying to drive back and
+   * takes the reset instead. Knowing when an excursion is over is a skill:
+   * a driver who ploughs on through the trees for a quarter of a minute
+   * loses more than the reset would have cost. */
+  offRoadGiveUp: number;
 };
 
 /** The default rally brain: quick hands, plans ~3 s ahead, drifts hairpins. */
@@ -68,8 +81,10 @@ export const RALLY_BOT: BotProfile = {
   hotEntry: 2.5,
   rotationRef: 2.5,
   brakeMargin: 2.5,
+  brakeUse: 0.7,
   reverseAfter: 0.8,
   reverseSpeed: 4,
+  offRoadGiveUp: 8,
 };
 
 /** The lateral grip multiplier this car has on each surface, by surface
@@ -127,7 +142,7 @@ export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): Car
   let hardDistance = Infinity;
   let hardCap = 0;
   const gripOf = gripBySurface(state.spec);
-  const braking = 2 * state.spec.brake * 0.7;
+  const braking = 2 * state.spec.brake * profile.brakeUse;
   const hotEntry = profile.hotEntry * rotation;
   const progressS = state.progressS;
   const trackLength = track.length;
@@ -228,7 +243,7 @@ export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): Car
     // Being WEDGED is no longer one of those — that is what reverse is for.
     throttle = car.u < 16 ? 0.8 : 0;
     brake = car.u > 22 ? 0.7 : 0;
-    reset = !car.airborne && state.t - state.offRoadSince > 8;
+    reset = !car.airborne && state.t - state.offRoadSince > profile.offRoadGiveUp;
   }
   if (car.airborne) {
     // Committed: line the nose up with the travel direction for the landing.

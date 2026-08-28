@@ -15,12 +15,14 @@
 // to keep in step, and the whole menu is one component tree over one canvas.
 
 import { useEffect, useRef } from "react";
-import { STAGE_RULES } from "@engine";
+import { FIELD_SIZE, STAGE_RULES, type Difficulty } from "@engine";
 
 import { APP_NAME, REPO_URL } from "../identity.ts";
-import { formatTime } from "../lib/util.ts";
+import { formatTime, ordinal } from "../lib/util.ts";
 import {
   LOCATIONS,
+  PODIUM,
+  bestPlace,
   levelCompleted,
   levelLaps,
   levelUnlocked,
@@ -31,7 +33,7 @@ import {
 } from "./campaign.ts";
 import { CarPicker } from "./car-picker.tsx";
 import { DebugLogPage, DeveloperPage } from "./menu-dev.tsx";
-import type { RaceSettings } from "./menu.tsx";
+import { DIFFICULTY_OPTIONS, OptionRow, type RaceSettings } from "./menu.tsx";
 import { OptionsPage, type OptionsTab } from "./menu-options.tsx";
 import { unlockAudio } from "./audio/bus.ts";
 import { playUi } from "./audio/ui.ts";
@@ -140,13 +142,17 @@ type LevelBoxProps = {
    * reasons, and a padlock with no reason on it is just a wall. */
   hint: string;
   best: number | undefined;
+  /** R29 — the best position this stage has ever been finished in at the
+   * difficulty currently selected, or undefined if it never has been.
+   * Undefined ALSO on the time trial's grid, which races nobody. */
+  place: number | undefined;
   onPlay: () => void;
 };
 
 /** One stage box. Locked boxes wear a grey border and a padlock, name
  * nothing about the stage behind them and cannot be pressed; open ones wear
  * green and say what they are. */
-function LevelBox({ level, index, unlocked, hint, best, onPlay }: LevelBoxProps) {
+function LevelBox({ level, index, unlocked, hint, best, place, onPlay }: LevelBoxProps) {
   if (!unlocked) {
     return (
       <div className="menu-level menu-level-locked" aria-label={`Stage ${index + 1}, locked`}>
@@ -162,6 +168,17 @@ function LevelBox({ level, index, unlocked, hint, best, onPlay }: LevelBoxProps)
       <span className="menu-level-name">{level.name}</span>
       <span className="menu-level-meta">{lengthLabel(level)}</span>
       <span className="menu-level-blurb">{level.blurb}</span>
+      {/* Two bests, and the RESULT is the one that matters: a stage is
+          cleared by beating the field, not by beating the clock. The time
+          rides underneath it as the thing to chase once it is. */}
+      {place !== undefined && (
+        <span
+          className={`menu-level-place ${place <= PODIUM ? "menu-level-place-podium" : ""}`}
+          title={`Best finish: ${place} of ${FIELD_SIZE}`}
+        >
+          BEST {ordinal(place)}
+        </span>
+      )}
       {best !== undefined && <span className="menu-level-best">BEST {formatTime(best)}</span>}
     </button>
   );
@@ -175,12 +192,16 @@ function LevelGrid({
   progress,
   open,
   hint,
+  difficulty,
   onPlay,
 }: {
   location: CampaignLocation;
   progress: CampaignProgress;
   open: (level: CampaignLevel, index: number) => boolean;
   hint: string;
+  /** Which field's results to show on the boxes. Absent on the time trial's
+   * grid, where there is no field and a placing would be a fiction. */
+  difficulty?: Difficulty;
   onPlay: (level: CampaignLevel, index: number) => void;
 }) {
   return (
@@ -193,6 +214,7 @@ function LevelGrid({
           unlocked={open(level, index)}
           hint={hint}
           best={progress.best[level.id]}
+          place={difficulty === undefined ? undefined : bestPlace(progress, level.id, difficulty)}
           onPlay={() => onPlay(level, index)}
         />
       ))}
@@ -343,8 +365,18 @@ function LocationPage({
         location={location}
         progress={progress}
         open={(_level, index) => levelUnlocked(location, index, progress)}
-        hint="Finish the stage before this one"
+        hint="Podium on the stage before this one"
+        difficulty={race.difficulty}
         onPlay={(level) => onPlayLevel(level, "campaign")}
+      />
+      {/* R29 — how good the fourteen crews you are running against are. It
+          sits with the car because it is the same kind of choice: the two
+          things the player brings to an authored stage. */}
+      <OptionRow
+        label="RIVALS"
+        options={DIFFICULTY_OPTIONS}
+        value={race.difficulty}
+        onPick={(difficulty) => onRace({ ...race, difficulty })}
       />
       <CarRow race={race} onRace={onRace} onDeveloper={onDeveloper} />
     </div>

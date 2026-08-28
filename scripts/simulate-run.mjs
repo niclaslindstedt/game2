@@ -19,15 +19,27 @@
 //   npm run sim -- --sweep               # the ROSTER BALANCE table: every
 //                                        # car over five stage archetypes,
 //                                        # ranked per archetype
+//   npm run sim -- --field               # R29 — the CAMPAIGN FIELD table:
+//                                        # the fourteen rival crews driven
+//                                        # at all three difficulties, with
+//                                        # what each is worth in points and
+//                                        # what that does to the clock
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const { simulateStage, compileStage, CARS, STAGE_RULES } = await import(
-  join(root, "engine/index.ts")
-);
+const {
+  simulateStage,
+  compileStage,
+  CARS,
+  STAGE_RULES,
+  DIFFICULTIES,
+  DIFFICULTY_IDS,
+  rivalField,
+  skillPoints,
+} = await import(join(root, "engine/index.ts"));
 
 const args = process.argv.slice(2);
 function flag(name) {
@@ -236,6 +248,81 @@ if (args.includes("--sweep")) {
   // for. Say so loudly rather than leaving it to be read out of the numbers.
   const hog = [...wins.entries()].find(([, n]) => n === ARCHETYPES.length);
   if (hog) console.log(`  !! ${hog[0]} is fastest on EVERY archetype — the roster is not balanced`);
+}
+
+/** R29 — THE CAMPAIGN FIELD. The tuning loop for the rival difficulties: it
+ * drives every crew at every setting through the real engine and prints what
+ * the budgets in `engine/sim/skill.ts` actually buy.
+ *
+ * Everything is quoted as a RATIO to `RALLY_BOT` on the same seed and car,
+ * because that profile is the reference every other table in this repo is
+ * measured with and the one number here that does not move when a stage
+ * changes length. Read the P3 column: it is the podium, and the podium is
+ * what a difficulty IS. Above 1.00 the field is slower than the reference
+ * bot; below it, quicker.
+ *
+ * Three seeds by default — fourteen crews at three settings is already 126
+ * runs, and a fourth seed buys less than it costs. `--seeds` overrides. */
+if (args.includes("--field")) {
+  const pool = (flag("seeds") ? seeds : seeds.slice(0, 3)).slice(0, 6);
+  console.log(
+    `\nCAMPAIGN FIELD — ${length} stages, seeds ${pool.join(",")}, ` +
+      `ratios to RALLY_BOT on the same seed and car`,
+  );
+  const reference = new Map();
+  for (const seed of pool) {
+    for (const carId of CARS.map((c) => c.id)) {
+      const r = simulateStage({ seed, carId, gearbox, length, maxTime, weather, knobs });
+      reference.set(`${seed}/${carId}`, r.finished ? r.time : maxTime);
+    }
+  }
+  for (const difficulty of DIFFICULTY_IDS) {
+    const { budget, spread } = DIFFICULTIES[difficulty];
+    const crews = rivalField(difficulty).map((entry) => ({
+      alias: entry.crew.alias,
+      points: skillPoints(entry.skill),
+      ratios: [],
+      dnf: 0,
+    }));
+    for (const seed of pool) {
+      rivalField(difficulty).forEach((entry, i) => {
+        const r = simulateStage({
+          seed,
+          carId: entry.crew.carId,
+          gearbox,
+          length,
+          maxTime,
+          weather,
+          knobs,
+          profile: entry.profile,
+        });
+        if (r.finished) crews[i].ratios.push(r.time / reference.get(`${seed}/${entry.crew.carId}`));
+        else crews[i].dnf += 1;
+      });
+    }
+    for (const crew of crews) {
+      crew.mean = crew.ratios.length
+        ? crew.ratios.reduce((a, b) => a + b, 0) / crew.ratios.length
+        : Infinity;
+    }
+    const ranked = [...crews].sort((a, b) => a.mean - b.mean);
+    const at = (place) => (ranked[place - 1]?.mean ?? Infinity).toFixed(3);
+    console.log(
+      `\n  ${difficulty.toUpperCase().padEnd(7)} budget ${String(budget).padStart(2)} ` +
+        `± ${spread / 2}   P1 ${at(1)}  P3 ${at(3)}  P7 ${at(7)}  last ${at(ranked.length)}`,
+    );
+    console.log(
+      "    " +
+        ranked
+          .map((c) => `${c.alias} ${c.points.toFixed(0)}p ${c.mean.toFixed(2)}${c.dnf ? "!" : ""}`)
+          .join("  ·  "),
+    );
+  }
+  // A podium the reference bot could not reach is a difficulty nobody can
+  // clear; one it walks is a difficulty that is not one. Say both out loud.
+  console.log(
+    "\n  P3 is the podium: over 1.00 a reference-pace run wins it, under 1.00 it does not.",
+  );
 }
 
 const jsonOut = flag("json");

@@ -12,10 +12,11 @@
 // not a countdown.
 
 import { playUi } from "./audio/ui.ts";
+import { PODIUM } from "./campaign.ts";
 import { InitialsEntry } from "./hud-initials.tsx";
 import { ScoreBoard } from "./score-board.tsx";
 import type { ScoreEntry } from "./scores.ts";
-import { formatTime } from "../lib/util.ts";
+import { formatTime, ordinal } from "../lib/util.ts";
 
 /** Where the run goes on to, when it has anywhere to go: the ladder's next
  * rung. Null on Roam, in a time trial, and at the end of a location. */
@@ -32,6 +33,16 @@ export type FinishScores = {
    * ways ON back until they are: an arcade does not let you walk away from
    * the board with your initials half typed. */
   entering: { initial: string; onDone: (who: string) => void } | null;
+};
+
+/** R29 — where the run finished in the field, and whether that is good
+ * enough. A campaign stage is CLEARED on the podium and nowhere else, so
+ * this is also the card's whole mood: the same numbers under a different
+ * headline, with the way on to the next stage present or absent. */
+export type FinishStanding = {
+  place: number;
+  of: number;
+  podium: boolean;
 };
 
 export type FinishCardProps = {
@@ -51,6 +62,8 @@ export type FinishCardProps = {
   onRetry: (() => void) | null;
   onRetire: () => void;
   scores: FinishScores | null;
+  /** The field's verdict — null on every run with nobody else entered. */
+  standing: FinishStanding | null;
 };
 
 export function FinishCard({
@@ -62,10 +75,22 @@ export function FinishCard({
   onRetry,
   onRetire,
   scores,
+  standing,
 }: FinishCardProps) {
+  // A run outside the podium is not a stage clear, and the card must not
+  // dress it as one: the confetti is off, the way on is gone, and the
+  // headline says the only thing that happened.
+  const slow = standing !== null && !standing.podium;
   return (
-    <div className="hud-finish">
-      <div className="hud-finish-title">STAGE CLEAR</div>
+    <div className={`hud-finish ${slow ? "hud-finish-slow" : ""}`}>
+      <div className="hud-finish-title">{slow ? "TOO SLOW" : "STAGE CLEAR"}</div>
+      {standing && (
+        <div className="hud-finish-place">
+          <span className="hud-finish-place-no">{ordinal(standing.place)}</span>
+          <span className="hud-finish-place-of">of {standing.of}</span>
+        </div>
+      )}
+      {slow && <div className="hud-finish-note">TOP {PODIUM} TO GO ON — RUN IT AGAIN</div>}
       <div className="hud-finish-label">TOTAL TIME</div>
       <div className="hud-finish-time">{formatTime(time)}</div>
       {record && <div className="hud-finish-record">NEW RECORD</div>}

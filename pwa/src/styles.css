@@ -267,6 +267,38 @@ body {
   flex: none;
 }
 
+/* R29 — THE POSITION BOARD. Last thing on the top bar's button row, which
+   puts it hard against the minimap: place and route are the two things a
+   driver glances right for, and they should cost one glance rather than
+   two. Sized like a button so the row stays a row, but it is not one —
+   there is nothing to press, only something to read. */
+.hud-place {
+  display: flex;
+  align-items: baseline;
+  gap: 0.1rem;
+  padding: 0.15rem 0.45rem;
+  border: 2px solid rgb(255 255 255 / 65%);
+  border-radius: 0.4rem;
+  background: rgb(18 48 105 / 75%);
+  line-height: 1;
+  flex: none;
+}
+
+.hud-place-no {
+  font-size: clamp(1rem, 3.4vmin, 1.5rem);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The field size is a caption, not a number to read at speed. */
+.hud-place-of {
+  font-size: clamp(0.5rem, 1.5vmin, 0.7rem);
+  opacity: 0.75;
+}
+
+.hud-place-podium .hud-place-no {
+  color: var(--hud-good);
+}
+
 .hud-mini {
   font: inherit;
   font-size: clamp(0.55rem, 1.8vmin, 0.8rem);
@@ -559,6 +591,45 @@ body {
   font-size: clamp(1.8rem, 7.5vmin, 3.4rem);
   font-variant-numeric: tabular-nums;
   line-height: 1.05;
+}
+
+/* R29 — where the run finished, under the headline that already said
+   whether that was good enough. */
+.hud-finish-place {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.45rem;
+  line-height: 1.05;
+}
+
+.hud-finish-place-no {
+  font-size: clamp(1.4rem, 5.6vmin, 2.6rem);
+  color: var(--hud-good);
+}
+
+.hud-finish-place-of {
+  font-size: clamp(0.65rem, 2.2vmin, 0.95rem);
+  opacity: 0.8;
+}
+
+/* Off the podium the stage is not cleared, and the card says so in the one
+   way a card can: the colour every good thing in this game is written in
+   goes away. */
+.hud-finish-slow {
+  background: rgb(72 26 40 / 82%);
+}
+
+.hud-finish-slow .hud-finish-title,
+.hud-finish-slow .hud-finish-place-no,
+.hud-finish-slow .hud-finish-label {
+  color: var(--hud-bad);
+}
+
+.hud-finish-note {
+  font-size: clamp(0.6rem, 2vmin, 0.9rem);
+  letter-spacing: 0.1em;
+  opacity: 0.85;
 }
 
 .hud-finish-record {
@@ -1174,6 +1245,10 @@ body {
 
   .hud-gap {
     font-size: 0.8rem;
+  }
+
+  .hud-place-no {
+    font-size: 0.95rem;
   }
 
   .hud-chip {
@@ -2030,6 +2105,26 @@ body {
   font-size: clamp(0.56rem, 1.9vmin, 0.72rem);
   letter-spacing: 0.12em;
   color: var(--hud-good);
+}
+
+/* R29 — the best RESULT on the stage, above the best time. A campaign box
+   is cleared by beating the field, so the placing is the headline and the
+   clock is what you chase once it is. It takes the bottom of the box (and
+   the time's own `margin-top` with it) whenever it is there. */
+.menu-level-place {
+  margin-top: auto;
+  font-size: clamp(0.6rem, 2.1vmin, 0.8rem);
+  letter-spacing: 0.12em;
+  color: rgb(255 255 255 / 72%);
+}
+
+.menu-level-place-podium {
+  color: var(--hud-good);
+}
+
+.menu-level-place + .menu-level-best {
+  margin-top: 0;
+  opacity: 0.75;
 }
 
 /* Landscape on a phone: four boxes already sit side by side across the wide

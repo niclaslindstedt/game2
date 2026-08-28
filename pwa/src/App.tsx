@@ -36,6 +36,7 @@ import {
   type StageKnobs,
   type StageLength,
   type StageShape,
+  type Difficulty,
   type Season,
   type TimeOfDay,
   type Track,
@@ -53,7 +54,15 @@ import { debugLogging, log as debugLog, logRunStart, setDebugLogging } from "./g
 import type { GameRenderer } from "./game/renderer.ts";
 import { Hud, type HudFlash, type HudSnapshot, type HudSplit } from "./game/hud.tsx";
 import type { FinishScores } from "./game/hud-finish.tsx";
-import { rivalSplits } from "./game/standings.ts";
+import {
+  createField,
+  placeAtFinish,
+  placeAtSplit,
+  splitLeader,
+  stepField,
+  stopField,
+  type RivalField,
+} from "./game/standings.ts";
 import {
   lastInitials,
   loadBoard,
@@ -71,6 +80,7 @@ import {
 } from "./game/snapshot.ts";
 import {
   DEFAULT_STAGE_KNOBS,
+  DIFFICULTY_OPTIONS,
   PauseMenu,
   STAGE_DIALS,
   STAGE_LENGTH_OPTIONS,
@@ -84,6 +94,7 @@ import {
 import { MainMenu, type MenuPage, type PlayMode } from "./game/main-menu.tsx";
 import type { MapRect, MapView } from "./game/menu-roam.tsx";
 import {
+  PODIUM,
   levelLaps,
   loadProgress,
   nextLevel,
@@ -214,6 +225,7 @@ function initialRace(): RaceSettings {
     length: "medium",
     shape: "sprint",
     knobs: { ...DEFAULT_STAGE_KNOBS },
+    difficulty: "medium",
   };
   try {
     const stored = localStorage.getItem(RACE_KEY);
@@ -223,6 +235,7 @@ function initialRace(): RaceSettings {
   }
   if (!STAGE_LENGTH_OPTIONS.some((l) => l.id === race.length)) race.length = "medium";
   if (!STAGE_SHAPES.some((s) => s.id === race.shape)) race.shape = "sprint";
+  if (!DIFFICULTY_OPTIONS.some((d) => d.id === race.difficulty)) race.difficulty = "medium";
   const params = new URLSearchParams(location.search);
   const tod = params.get("tod");
   if (TIMES_OF_DAY.some((t) => t.id === tod)) race.timeOfDay = tod as TimeOfDay;
@@ -236,6 +249,10 @@ function initialRace(): RaceSettings {
   if (STAGE_LENGTH_OPTIONS.some((l) => l.id === length)) race.length = length as StageLength;
   const shape = params.get("shape");
   if (STAGE_SHAPES.some((s) => s.id === shape)) race.shape = shape as StageShape;
+  const difficulty = params.get("difficulty");
+  if (DIFFICULTY_OPTIONS.some((d) => d.id === difficulty)) {
+    race.difficulty = difficulty as Difficulty;
+  }
   // The generator's dials, each 0..1 — the tooling pins a stage's character
   // the same way it pins its seed.
   race.knobs = resolveKnobs(race.knobs);
@@ -434,9 +451,18 @@ export function App() {
   const splitRef = useRef<HudSplit | null>(null);
   splitRef.current = split;
   /** The splits this run is measured against, in board order — the ghost's
-   * for a time trial, and (once the campaign has opponents to race) the
-   * rival's. Empty on a stage with nothing to chase. */
+   * own, on a stage where the ghost is the only thing out there. A campaign
+   * run prefers the LEADER's split, which is not knowable in advance and is
+   * read off the field as each board goes by. */
   const splitsRef = useRef<{ times: number[]; against: string }>({ times: [], against: "" });
+  /** R29 — THE FIELD: fourteen rival games on the same road, stepped beside
+   * the player's. Null on every run with nobody entered (Roam, time trial,
+   * the menu's demo). */
+  const fieldRef = useRef<RivalField | null>(null);
+  /** Where the run stands, as of the last board it went through. Held in a
+   * ref because the HUD reads it off the snapshot the frame loop takes, and
+   * mirrored into state only so the results card re-renders on the finish. */
+  const standingRef = useRef<{ place: number; of: number } | null>(null);
   const finishTimeRef = useRef<number | null>(null);
   /** The controls of the run being driven, written down step by step so a
    * time worth keeping can be raced against later. Null on a stage that
@@ -509,16 +535,25 @@ export function App() {
    * loop, which has the race clock; one board is up at a time, and they are
    * `checkpoint.spacing` seconds apart, so a second one arriving is the
    * first one long gone. */
-  const showSplit = (index: number, count: number, split: number, time: number): void => {
+  const showSplit = (
+    index: number,
+    count: number,
+    split: number,
+    time: number,
+    measured: { time: number; against: string } | null,
+  ): void => {
     const { times, against } = splitsRef.current;
-    const reference = times[split];
+    // The car the gap is to: the field's leader through this board when
+    // there is a field, and your own best run when there is not.
+    const reference =
+      measured ?? (times[split] === undefined ? null : { time: times[split], against });
     setSplit({
       id: ++flashId,
       index,
       count,
       time,
-      delta: reference === undefined ? null : time - reference,
-      against,
+      delta: reference === null ? null : time - reference.time,
+      against: reference?.against ?? "",
     });
   };
 
@@ -583,6 +618,32 @@ export function App() {
    *
    * A ghost is only worth building on the finite, fixed-dial campaign
    * stages a time belongs to; nothing here ever runs behind the menu. */
+  /** R29 — enter the field for a campaign run: fourteen crews on the same
+   * compiled track, at the difficulty the player chose. Nobody is entered on
+   * Roam, in a time trial or behind the menu, and an endless stage has no
+   * finish to place at, so all of those race alone. Called on every start
+   * AND every restart — a field carried over from the last attempt would be
+   * fourteen cars already halfway down the road. */
+  const armField = (spec: StageSpec, mode: PlayMode): void => {
+    fieldRef.current = null;
+    standingRef.current = null;
+    rendererRef.current?.setStanding(null);
+    if (!trackRef.current || menuRef.current) return;
+    if (mode !== "campaign" || spec.length === "endless") return;
+    fieldRef.current = createField(trackRef.current.track, raceRef.current.difficulty, {
+      seed: spec.seed,
+      laps: spec.laps,
+      timeOfDay: spec.timeOfDay,
+      weather: spec.weather,
+      season: spec.season,
+    });
+    // Last car on the road until a board says otherwise — which is the truth
+    // on the grid, not a placeholder.
+    standingRef.current = { place: fieldRef.current.playerNumber, of: fieldRef.current.of };
+  };
+  const armFieldRef = useRef(armField);
+  armFieldRef.current = armField;
+
   const armGhost = (spec: StageSpec, mode: PlayMode, levelId?: string): void => {
     const renderer = rendererRef.current;
     recorderRef.current = null;
@@ -602,14 +663,11 @@ export function App() {
     };
     const saved = loadGhost(levelId);
     if (!saved || !ghostMatches(saved, stage)) return;
-    // R28 — the splits to be measured against. A campaign run is meant to
-    // be measured against the car it is racing; until the campaign has one
-    // (`rivalSplits`), your own best run is the honest stand-in, and it is
-    // the only reference a time trial ever wants.
-    splitsRef.current = {
-      times: (mode === "campaign" ? rivalSplits(trackRef.current.track) : null) ?? saved.splits,
-      against: "GHOST",
-    };
+    // R28 — the splits to be measured against when there is no field out
+    // there: your own best run. A campaign run has fourteen real cars on the
+    // road and reads the LEADER's board instead (see the checkpoint handler),
+    // falling back to this on the boards nobody has reached yet.
+    splitsRef.current = { times: saved.splits, against: "GHOST" };
     // Only a TIME TRIAL puts the ghost's car back on the road beside you.
     if (mode !== "timetrial") return;
     // The ghost's own game, on the SAME compiled track — the stage is read
@@ -647,6 +705,8 @@ export function App() {
     setScores(null);
     recorderRef.current = null;
     ghostRef.current = null;
+    fieldRef.current = null;
+    standingRef.current = null;
     rendererRef.current?.setGhost(null);
     setMenu({ page: "root" });
   };
@@ -672,6 +732,7 @@ export function App() {
     setMenu(null);
     menuRef.current = null;
     applyStage(spec, true);
+    armField(spec, mode);
     armGhost(spec, mode, levelId);
     playCameraRef.current = startCamera(optionsRef.current.camera);
     // The god-mode effect owns the camera while it is flying; setting a play
@@ -930,6 +991,7 @@ export function App() {
         playMusic("taiga");
         applyStageRef.current(spec, true);
         const active = runRef.current;
+        armFieldRef.current(spec, active.mode);
         armGhostRef.current(spec, active.mode, active.levelId);
       };
       const camera = (): void => {
@@ -955,6 +1017,17 @@ export function App() {
       });
 
       const handleEvents = (state: GameState, events: GameEvent[]): void => {
+        // R25's salute is sized by where the time placed, and the renderer
+        // fires it off the finish event itself — so the field's verdict has
+        // to be in before the events are handed over, not after.
+        const field = fieldRef.current;
+        if (field && events.some((ev) => ev.type === "finish") && menuRef.current === null) {
+          standingRef.current = { place: placeAtFinish(field), of: field.of };
+          renderer.setStanding(standingRef.current.place);
+          // The player is home; anybody still out there is behind them, and
+          // stepping the field on would only cost the results card frames.
+          stopField(field);
+        }
         renderer.onEvents(state, events);
         if (debugLogging() && menuRef.current === null) {
           for (const ev of events) {
@@ -1021,7 +1094,21 @@ export function App() {
                 );
               }
               recorderRef.current = null;
-              setProgress(recordFinish(active.levelId, ev.time));
+              setProgress(
+                recordFinish(
+                  active.levelId,
+                  ev.time,
+                  // A run with nobody entered posts a time and nothing else:
+                  // the ladder's next rung is opened by a podium, and a time
+                  // trial is not a place.
+                  standingRef.current && active.mode === "campaign"
+                    ? {
+                        place: standingRef.current.place,
+                        difficulty: raceRef.current.difficulty,
+                      }
+                    : null,
+                ),
+              );
               // THE BOARD IS THE TIME TRIAL'S, and only its. The campaign is a
               // ladder you climb once; the trial is the stage you come back to,
               // which is the only place ten rows of other people's initials
@@ -1061,7 +1148,16 @@ export function App() {
           // landings and respawns all announce themselves on screen already
           // — captioning them is noise over the top of the game.
           if (ev.type === "checkpoint") {
-            showSplit(ev.index + 1, ev.count, ev.split, ev.time);
+            // R29 — the one moment a staggered rally actually knows where
+            // anybody is: the board. Your place is every car already through
+            // it, plus you.
+            let measured: { time: number; against: string } | null = null;
+            if (field) {
+              standingRef.current = { place: placeAtSplit(field, ev.split), of: field.of };
+              const leader = splitLeader(field, ev.split);
+              if (leader) measured = { time: leader.time, against: leader.alias.toUpperCase() };
+            }
+            showSplit(ev.index + 1, ev.count, ev.split, ev.time, measured);
           } else if (ev.type === "lap") {
             flash(
               `LAP ${ev.lap} — ${formatTime(ev.time)}${ev.best ? " BEST" : ""}`,
@@ -1147,6 +1243,12 @@ export function App() {
           const human = input.sample(TUNING.dt);
           if (autopilot && driving(human)) autopilot = false;
           const driven = page || autopilot ? botInput(state) : human;
+          // R29 — the field takes the same tick, and takes it FIRST: the
+          // player is the last car on the road, so a rival through a board on
+          // this step was through it before them. Held while the lights are
+          // still on, because every crew's clock starts at their own.
+          const racing = fieldRef.current;
+          if (racing && state.phase === "racing") stepField(racing);
           const events = step(state, driven);
           if (events.length > 0) handleEvents(state, events);
           if (page) continue;
@@ -1179,6 +1281,7 @@ export function App() {
                 finishTimeRef.current,
                 ghostRef.current?.state.progressS ?? null,
                 bookRef.current,
+                standingRef.current,
               ),
             );
             // R28 — and the split ages on the race clock beside it.
@@ -1230,16 +1333,24 @@ export function App() {
   // Roam is one stage and a time trial is one stage repeated, so both offer
   // the way out and nothing else.
   const upNext = run.mode === "campaign" && run.levelId ? nextLevel(run.levelId) : null;
-  const nextStage = upNext
-    ? { name: upNext.name, go: (): void => playLevel(upNext, "campaign") }
-    : null;
+  // R29 — …and only ON THE PODIUM. A stage finished outside the top three
+  // is not cleared, so the card that comes up has nowhere to offer: the way
+  // on is the same stage again.
+  const missedPodium = snap?.standing != null && snap.standing.place > PODIUM;
+  const nextStage =
+    upNext && !missedPodium
+      ? { name: upNext.name, go: (): void => playLevel(upNext, "campaign") }
+      : null;
 
   // ...and where it goes back to. A TIME TRIAL is one stage run again and
   // again against a board, so the card offers the same stage from the grid
   // — the same road, the same car, a clean clock and a fresh ghost. It is
   // the restart the pause menu and `R` already do, put where a player who
   // has just read their time is looking.
-  const onRetry = run.mode === "timetrial" ? (): void => actionsRef.current.restart() : null;
+  // …and a campaign run that missed the podium wants exactly the same
+  // button: the stage is still there, and the field will run it again.
+  const onRetry =
+    run.mode === "timetrial" || missedPodium ? (): void => actionsRef.current.restart() : null;
 
   // The board the results card shows, and the three letters it is waiting on.
   // Entering them writes the row and hands the new board straight back, so the

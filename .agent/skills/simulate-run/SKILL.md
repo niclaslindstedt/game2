@@ -83,6 +83,25 @@ after, in the PR beside the plain one. Read it for three things: every car
 winning at least one archetype, the specialists winning their home ground by
 MORE than the all-rounder wins the middle, and nobody worst everywhere.
 
+## The campaign field table (`npm run sim -- --field`)
+
+R29 — the tuning loop for the campaign's rival difficulties. It drives every
+one of the fourteen crews at all three settings through the real engine and
+prints what the budgets in `engine/sim/skill.ts` actually buy. Three seeds by
+default (`--seeds` overrides); everything is a RATIO to `RALLY_BOT` on the
+same seed and car, because that profile is the reference every other table
+here is measured with and the one number that does not move when a stage
+changes length.
+
+Read the **P3** column first: it is the podium, and the podium is what a
+difficulty IS. Above 1.00 a reference-pace run wins it; below 1.00 it does
+not. Then read the per-crew line for CHARACTER: if two crews on the same
+points are never in a different order on a different stage, one of them is
+not actually a different driver and its weights need a shape.
+
+**Any change to `engine/sim/skill.ts` or `engine/sim/rivals.ts` owes this
+table**, before and after, in the PR.
+
 ## The knob loop
 
 1. **Baseline**: `make sim` on the clean tree (or `--json baseline.json` for a

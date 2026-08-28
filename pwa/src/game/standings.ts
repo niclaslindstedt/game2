@@ -1,77 +1,202 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE CLASSIFICATION — what "first, second, third" means in a game with no
-// other cars on the road.
+// THE CLASSIFICATION — what "first, second, third" means on a stage.
 //
-// It means what it means in a real rally: a stage is driven alone against
-// the clock, and the result is where your time slots into the start list's.
-// So the stage carries a START LIST — a field of crews with times on it —
-// and finishing puts you somewhere in it. That is the whole model, and it
-// is the honest one for this game: there is nothing to overtake, and a
-// placing invented out of a medal threshold would be a medal wearing a
-// placing's clothes.
+// It means what it means in a real rally: the cars leave the start control
+// one at a time, `START_INTERVAL` seconds apart, everybody drives the same
+// road alone against the clock, and the result is the order of the times.
+// The player is always the LAST car out (R29), which is what makes a
+// position readable at all — everybody ahead has already been through the
+// board you are arriving at, so your place at a split is simply how many of
+// them got there before you did, plus one.
 //
-// The field is DERIVED, not authored. A rival's time is a multiple of the
-// stage's par — the distance at the pace this game's handling actually
-// produces — jittered per crew off the stage's own seed. Which means:
+// THE RIVALS ARE REAL. There is no table of authored times here and no
+// curve fitted to a par: the campaign builds fourteen more `GameState`s on
+// the same compiled track and steps them beside the player's, each driven by
+// the real bot with its own skill profile (engine/sim/rivals.ts) in its own
+// car. They brake for the corners the player brakes for, they get it wrong
+// on the corners their profile is bad at, and the ones who go off lose the
+// same seconds anybody loses. That costs about a percent of a frame — the
+// track is shared, so a rival is a car and a terrain index and nothing more —
+// and it buys a field that cannot drift away from the handling, because it
+// IS the handling.
 //
-//   * the same stage always presents the same field, to every player, on
-//     every run, so a time that was worth third is worth third tomorrow;
-//   * a longer stage's times are longer, without anybody authoring them;
-//   * and the field is beatable. The quick end of it sits just under par,
-//     so a clean run is a podium and a scruffy one is not — which is what
-//     makes the confetti at the finish mean something.
+// Nobody DRAWS them: with ten seconds between cars there is nothing on the
+// road to see, exactly as there is nothing to see in a rally. What the
+// player gets is the position in the corner of the screen, moving at every
+// split board.
 //
-// NOTHING SHOWS THE PLACING TO THE PLAYER. It was on the results card and it
-// read as a lie — twelve crews on a start list nobody can see is a number the
-// player has no way to make sense of — so the card says the time and the board
-// says who else has driven it. What is left reading this module is R25's
-// finish cannons: how big the salute is IS how good the time was, and that is
-// a judgement the derived field can honestly make without ever claiming there
-// was somebody to beat. When there are real opponents to place against, this
-// is where they go.
+// Time trial and Roam have no field — nobody else is entered — so the one
+// judgement those runs still need, how big R25's finish salute should be,
+// comes from the derived start list at the bottom of this file.
 
-import { createRng, finishAt, type Track } from "@engine";
+import {
+  botInput,
+  createGame,
+  finishAt,
+  createRng,
+  rivalField,
+  step,
+  FIELD_SIZE,
+  PLAYER_NUMBER,
+  START_INTERVAL,
+  type Difficulty,
+  type GameState,
+  type RivalEntry,
+  type Season,
+  type TimeOfDay,
+  type Track,
+  type Weather,
+} from "@engine";
 
-/** R28 — THE SPLITS A CAMPAIGN RUN IS MEASURED AGAINST: the race clock the
- * car it is racing had at each checkpoint. Null while the campaign has
- * nobody on the road — which is today, so the HUD falls back to the ghost.
- *
- * TODO: fill this in when the campaign gets real opponents. The rule is the
- * one every rally broadcast uses: the gap shown is to the LEADER, except
- * when the player IS the leader, where it is to whoever is second — the
- * number a driver needs is always the one that says how much of the stage
- * is theirs to lose. That makes this a function of the opponents' split
- * times, so it takes the field once there is one to take.
- *
- * The field itself belongs here beside `startList`, which is already the
- * derived-opponents module; nothing else in the app needs to change to
- * light the splits up — App.tsx prefers this over the ghost's the moment it
- * returns something. */
-export function rivalSplits(_track: Track): number[] | null {
-  return null;
+/** One rival's run: their game, and the times it has posted so far. */
+export type RivalRun = {
+  entry: RivalEntry;
+  state: GameState;
+  /** Race time at each split board passed, in order. On a circuit this runs
+   * on across the laps, exactly as the player's `checkpointTimes` does, so
+   * the two are compared index for index. */
+  splits: number[];
+  /** Stage time once they are through the finish; null while they are still
+   * out there. */
+  time: number | null;
+  /** Nothing left to step — they have finished, or the stage has. */
+  done: boolean;
+};
+
+/** The field entered for one stage. */
+export type RivalField = {
+  runs: RivalRun[];
+  difficulty: Difficulty;
+  /** Everybody on the start list, the player included. */
+  of: number;
+  /** The player's start number — last car on the road. */
+  playerNumber: number;
+  /** Seconds between cars leaving the start control. */
+  interval: number;
+};
+
+/** The conditions a rival is entered under: the player's, exactly. The
+ * whole field runs the same seed, the same weather and the same laps —
+ * a stage everybody drives in a different wind is not a result. */
+export type FieldStage = {
+  seed: number;
+  laps: number;
+  timeOfDay: TimeOfDay;
+  weather: Weather;
+  season: Season;
+};
+
+/** Enter the field for a stage. The compiled track is SHARED with the
+ * player's run: it is read-only, so fourteen more cars on it cost fourteen
+ * cars and not fourteen worlds. */
+export function createField(track: Track, difficulty: Difficulty, stage: FieldStage): RivalField {
+  const runs = rivalField(difficulty).map((entry) => ({
+    entry,
+    // The rivals' clocks start at their own green light, not the player's,
+    // so they skip the countdown and the app holds them until the player's
+    // lights go out. From there both clocks run on the same steps.
+    state: createGame({
+      seed: stage.seed,
+      carId: entry.crew.carId,
+      track,
+      laps: stage.laps,
+      skipCountdown: true,
+      quiet: true,
+      env: { timeOfDay: stage.timeOfDay, weather: stage.weather, season: stage.season },
+    }),
+    splits: [] as number[],
+    time: null as number | null,
+    done: false,
+  }));
+  return {
+    runs,
+    difficulty,
+    of: FIELD_SIZE,
+    playerNumber: PLAYER_NUMBER,
+    interval: START_INTERVAL,
+  };
 }
 
-/** Crews on the start list, INCLUDING the player. Big enough that a placing
- * is a real position rather than a coin toss, small enough to read as a
- * club rally's entry rather than a championship round. */
-export const FIELD_SIZE = 12;
+/** Drive the whole field one physics step, and book whatever they went
+ * through. Called from the app's fixed-timestep loop BEFORE the player's own
+ * step: the player is last on the road, so a rival reaching a board on the
+ * same tick reached it first. */
+export function stepField(field: RivalField): void {
+  for (const run of field.runs) {
+    if (run.done) continue;
+    const events = step(run.state, botInput(run.state, run.entry.profile));
+    for (const event of events) {
+      if (event.type === "checkpoint") run.splits.push(event.time);
+      else if (event.type === "finish") {
+        run.time = event.time;
+        // Past the line their run tells the classification nothing more, and
+        // R25's roll-out is a celebration nobody is watching.
+        run.done = true;
+      }
+    }
+  }
+}
+
+/** Stop the field. The player's run is over — anybody still out there is
+ * behind, and stepping them on costs frames the results card wants. */
+export function stopField(field: RivalField): void {
+  for (const run of field.runs) run.done = true;
+}
+
+/** Where the player stands at split board `split` (0-based): one place for
+ * every car already through it, plus their own. */
+export function placeAtSplit(field: RivalField, split: number): number {
+  let ahead = 0;
+  for (const run of field.runs) if (run.splits.length > split) ahead += 1;
+  return ahead + 1;
+}
+
+/** …and at the finish line, by the same count. */
+export function placeAtFinish(field: RivalField): number {
+  let ahead = 0;
+  for (const run of field.runs) if (run.time !== null) ahead += 1;
+  return ahead + 1;
+}
+
+/** THE CAR THE SPLIT IS MEASURED AGAINST: the leader through that board, or
+ * — when the player IS the leader and nobody has been through it — nobody.
+ * The number a driver needs is always the one that says how much of the
+ * stage is theirs to lose. Null when the player is leading the split. */
+export function splitLeader(
+  field: RivalField,
+  split: number,
+): { time: number; alias: string } | null {
+  let best: RivalRun | null = null;
+  for (const run of field.runs) {
+    const at = run.splits[split];
+    if (at === undefined) continue;
+    if (best === null || at < best.splits[split]) best = run;
+  }
+  return best === null ? null : { time: best.splits[split], alias: best.entry.crew.alias };
+}
+
+// ── The derived start list ────────────────────────────────────────────────
+// For the runs with nobody else entered. A time trial and a Roam stage still
+// end with R25's cannons, and how big the salute is IS how good the time was;
+// with no field to place against, the honest stand-in is where the time would
+// have slotted into a list of times the pace of this stage produces. It is
+// derived rather than authored, so it moves with the handling and with the
+// stage's length, and it is deterministic in the seed — a time that was worth
+// third is worth third tomorrow.
+
+/** Crews on the derived list, INCLUDING the player. */
+const PAR_FIELD = 12;
 
 /** Par pace, m/s — the pace this game's cars and stages actually produce,
- * measured with `make sim` (~93 km/h across the seeds and the three cars).
- * Everything in the field is a multiple of the time this implies, so the
- * ladder moves with the handling instead of drifting away from it. */
+ * measured with `make sim` (~97 km/h across the seeds and the three cars). */
 const PAR_PACE = 25.8;
 
-/** The field's spread, as multiples of par time: the quickest crew on the
- * list and the slowest. The fast end is deliberately just UNDER par — the
- * player has to beat the pace the sim says is normal to get on the podium,
- * and beating it comfortably is what wins. */
+/** The list's spread, as multiples of par time. The fast end is deliberately
+ * just UNDER par: a clean run is a podium and a scruffy one is not. */
 const SPREAD = { fastest: 0.93, slowest: 1.26 };
 
-/** How much a crew's own time wanders off its slot in that spread, as a
- * fraction of the gap between slots. Under half a slot, so the order of the
- * list still broadly holds while no two stages have the same shape of
- * field. */
+/** How far a crew's own time wanders off its slot, as a fraction of the gap
+ * between slots. Under half a slot, so the order still broadly holds. */
 const JITTER = 0.42;
 
 /** A stage's result: where the time placed, and out of how many. */
@@ -79,17 +204,13 @@ export type Standing = {
   /** 1 is a win. Never below 1, never above `of`. */
   place: number;
   of: number;
-  /** The time that would have placed one better, seconds — null when there
-   * is nothing better to chase. What a results card shows as the gap. */
-  target: number | null;
 };
 
-/** The rival times on a stage's start list, quickest first. Deterministic
- * in the seed and the stage's raced length. */
-export function startList(track: Track): number[] {
+/** The derived times on a stage, quickest first. */
+function parList(track: Track): number[] {
   const raced = finishAt(track) ?? track.length;
   const par = raced / PAR_PACE;
-  const rivals = FIELD_SIZE - 1;
+  const rivals = PAR_FIELD - 1;
   // A stream of its own, mixed off the seed: adding a start list must not
   // shift a single number the stage geometry or the physics draws.
   const rng = createRng((track.seed ^ 0x3c6ef372) >>> 0);
@@ -102,16 +223,10 @@ export function startList(track: Track): number[] {
   return times.sort((a, b) => a - b);
 }
 
-/** Where `time` places on that list. */
+/** Where `time` places on that derived list. */
 export function classify(track: Track, time: number): Standing {
-  const rivals = startList(track);
+  const rivals = parList(track);
   let ahead = 0;
   while (ahead < rivals.length && rivals[ahead] < time) ahead += 1;
-  return {
-    place: ahead + 1,
-    of: rivals.length + 1,
-    // The next time up the list is the one to chase. A win has nothing
-    // above it, which is the one case with no gap to show.
-    target: ahead > 0 ? rivals[ahead - 1] : null,
-  };
+  return { place: ahead + 1, of: rivals.length + 1 };
 }

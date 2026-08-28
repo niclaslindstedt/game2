@@ -140,6 +140,11 @@ export type CreateGameOptions = {
    * Ignored when a pre-compiled `track` is handed in — that track carries
    * the dials it was built with. */
   knobs?: Partial<StageKnobs>;
+  /** Build without announcing the stage. A run the player is IN is worth a
+   * line in the log; the fourteen rival games built beside it on the same
+   * road are the same line fourteen more times, which is the log saying
+   * nothing loudly. */
+  quiet?: boolean;
 };
 
 /** Wind direction, mean speed, and gust phase are seeded on their own
@@ -204,14 +209,16 @@ export function createGame(options: CreateGameOptions): GameState {
   // the lights go green, so the vector starts at its t = 0 value.
   const wind = { x: 0, z: 0 };
   blowWind(env, 0, wind);
-  status(
-    track.endless
-      ? `Stage ${options.seed}: endless — ${spec.name}`
-      : `Stage ${options.seed}: ${(track.length / 1000).toFixed(1)} km` +
-          `${laps > 1 ? ` × ${laps} laps` : ""}, ` +
-          `${track.segments.filter((p) => p.kind === "turn").length} turns, ` +
-          `${track.segments.filter((p) => p.feature === "jump").length} jumps — ${spec.name}`,
-  );
+  if (!options.quiet) {
+    status(
+      track.endless
+        ? `Stage ${options.seed}: endless — ${spec.name}`
+        : `Stage ${options.seed}: ${(track.length / 1000).toFixed(1)} km` +
+            `${laps > 1 ? ` × ${laps} laps` : ""}, ` +
+            `${track.segments.filter((p) => p.kind === "turn").length} turns, ` +
+            `${track.segments.filter((p) => p.feature === "jump").length} jumps — ${spec.name}`,
+    );
+  }
   return {
     seed: options.seed,
     spec,

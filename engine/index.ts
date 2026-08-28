@@ -151,6 +151,29 @@ export {
 // The headless simulator and its bot driver.
 export { simulateStage, type SimOptions, type SimResult } from "./sim/simulate.ts";
 export { botInput, RALLY_BOT, type BotProfile } from "./sim/bot.ts";
+export {
+  AXIS_MAX,
+  DIFFICULTIES,
+  DIFFICULTY_IDS,
+  SKILL_AXES,
+  SKILL_MAX,
+  budgetFor,
+  profileFor,
+  skillPoints,
+  spend,
+  type BotSkill,
+  type Difficulty,
+  type SkillAxis,
+} from "./sim/skill.ts";
+export {
+  FIELD_SIZE,
+  PLAYER_NUMBER,
+  RIVALS,
+  START_INTERVAL,
+  rivalField,
+  type RivalCrew,
+  type RivalEntry,
+} from "./sim/rivals.ts";
 
 // Deterministic utilities shared with tooling.
 export { createRng, type Rng } from "./lib/prng.ts";

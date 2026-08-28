@@ -11,7 +11,10 @@
 
 import {
   DEFAULT_KNOBS,
+  DIFFICULTIES,
+  DIFFICULTY_IDS,
   STAGE_RULES,
+  type Difficulty,
   type StageKnobs,
   type StageLength,
   type Season,
@@ -33,7 +36,20 @@ export type RaceSettings = {
   shape: StageShape;
   /** The generator's dials — what KIND of stage the seed builds. */
   knobs: StageKnobs;
+  /** R29 — how good the campaign's field is. Nothing else reads it: Roam
+   * has nobody entered and a time trial races the clock. */
+  difficulty: Difficulty;
 };
+
+/** R29 — the three settings the campaign's field comes in, labelled from the
+ * engine's own table so the menu can never offer one the field does not
+ * have. What each buys is a points budget for the fourteen crews, and it is
+ * deliberately NOT spelled out on the button: "EASY" is a promise about how
+ * hard it will be to podium, not a stat block. */
+export const DIFFICULTY_OPTIONS: { id: Difficulty; label: string }[] = DIFFICULTY_IDS.map((id) => ({
+  id,
+  label: DIFFICULTIES[id].label,
+}));
 
 /** R22 — the two shapes a stage comes in. A circuit is the same minutes of
  * driving as the sprint band it is named for, cut into laps: the road is
