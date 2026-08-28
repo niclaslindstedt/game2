@@ -14,7 +14,6 @@
 
 import * as THREE from "three";
 import {
-  GROVES,
   STAGE_RULES,
   createRng,
   inStream,
@@ -22,12 +21,14 @@ import {
   type GameState,
   type Spur,
   type Track,
-  type WildObstacle,
   SOLID_PROP_HEIGHT,
 } from "@engine";
 
-import { biomeFor, type Biome, type Community, type FloraMix } from "./biome.ts";
-import { buildFlora, type Flora, type FloraPlacement } from "./flora.ts";
+import { isShared } from "../lib/shared-gpu.ts";
+import { biomeFor, type Biome, type Community } from "./biome.ts";
+import { buildFlora, swayFlora, type FloraPlacement } from "./flora.ts";
+import { communityByGrove, pickFlora, softMix, treePlacement } from "./planting.ts";
+import { buildWild } from "./wild.ts";
 import { buildTerrain, LAKE_Y, type Terrain } from "./terrain.ts";
 import { buildStreamMeshes } from "./streams.ts";
 import { chevronTexture, gravelTexture, waterTexture } from "./textures.ts";
@@ -80,75 +81,8 @@ function pace(dt: number): number {
   return Math.min(8, Math.max(1, Math.round(dt * 60)));
 }
 
-/** The community a grove-quilt index names — the quilt itself lives in the
- * ENGINE's terrain field now (terrain.field.groveAt), because the trunks it
- * places are solid; the biome only supplies what grows in each patch. */
-function communityByGrove(biome: Biome, grove: number): Community {
-  const id = GROVES[grove]?.id;
-  return biome.communities.find((c) => c.id === id) ?? biome.communities[0];
-}
-
-/** Brush the car drives THROUGH: the only flora still planted app-side,
- * because nothing about it stands over the middle of the hood. Everything
- * else that reads as solid — trunks, stumps, fallen logs — comes from the
- * engine's prop fields, where the physics can collide with it. */
-const SOFT_FLORA = new Set(["heathShrub", "juniper", "willowShrub"]);
-
-/** ...and what a solid TRUNK may never be dressed as: the brush above plus
- * the dead wood the engine plants as props of its own. */
-const NOT_A_TRUNK = new Set([...SOFT_FLORA, "stump", "fallenLog"]);
-
-/** A mix stripped to the species that read as solid trees (falls back to
- * the whole mix if nothing tall grows there). */
-function solidMix(mix: FloraMix): FloraMix {
-  const out: FloraMix = {};
-  for (const id in mix) if (!NOT_A_TRUNK.has(id)) out[id] = mix[id];
-  return Object.keys(out).length > 0 ? out : mix;
-}
-
-/** ...and the complement: the low soft stuff of a community's tree mix. */
-function softMix(mix: FloraMix): FloraMix | null {
-  const out: FloraMix = {};
-  for (const id in mix) if (SOFT_FLORA.has(id)) out[id] = mix[id];
-  return Object.keys(out).length > 0 ? out : null;
-}
-
-/** Dress one engine trunk as the tree the biome grows there. The engine
- * owns WHERE a solid tree stands and how thick its trunk is; which species
- * it IS stays the biome's call — with the same overrides as ever: willow
- * and birch crowd the shores, only the tough survive the high bedrock. */
-function treePlacement(tree: WildObstacle, biome: Biome): FloraPlacement {
-  let mix: FloraMix;
-  if (tree.y < LAKE_Y + 4) mix = biome.lakeshoreTrees;
-  else if (tree.y > 26) mix = biome.highlandTrees;
-  else mix = communityByGrove(biome, tree.grove ?? 0).trees;
-  return {
-    id: pickFlora(solidMix(mix), tree.roll ?? 0),
-    x: tree.x,
-    y: tree.y,
-    z: tree.z,
-    scale: tree.size,
-    spin: tree.spin,
-  };
-}
-
-/** Draw one flora variant id from a weighted mix. */
-function pickFlora(mix: FloraMix, roll: number): string {
-  let total = 0;
-  for (const id in mix) total += mix[id];
-  let t = roll * total;
-  let last = "";
-  for (const id in mix) {
-    last = id;
-    t -= mix[id];
-    if (t <= 0) return id;
-  }
-  return last;
-}
-
 type SceneryChunk = {
   group: THREE.Group;
-  update: (dt: number) => void;
   /** Zero out any prop the newly built road now runs through. */
   clearNear: (track: Track, from: number, to: number) => void;
   /** The engine trunks this chunk drew — released when the chunk drops so
@@ -349,7 +283,7 @@ function buildScenery(
     if (touched) rockMesh.instanceMatrix.needsUpdate = true;
   };
 
-  return { group, update: planted.update, clearNear, treeKeys };
+  return { group, clearNear, treeKeys };
 }
 
 /** Everything that carries a bridge deck over its water (R13): the parapet
@@ -601,6 +535,15 @@ export type World = {
    * `dt` is the frame's own length, which is how much of the outstanding
    * work this call takes on. */
   sync: (state: GameState, dt: number) => void;
+  /** Hide everything the frame cannot show. A finite stage builds its
+   * whole road — kilometres of it — and the camera's far plane stands well
+   * past where the air goes solid, so without this the frame pays for five
+   * kilometres of forest to draw a few hundred metres of it. `range` is the
+   * fog's far distance: past it every fragment is pure fog color, so what
+   * is dropped could not have been seen. The frustum does the other half,
+   * for the open country, which is pooled into meshes three cannot cull
+   * because the camera stands inside every one of them. */
+  cull: (camera: THREE.Camera, range: number) => void;
   /** R22 — where the finish's cannons point, for the renderer to fire.
    * Empty until the chunk carrying the finish gate is built, and on an
    * endless stage forever: nothing there ever finishes. */
@@ -608,286 +551,58 @@ export type World = {
   dispose: () => void;
 };
 
-/** Cell edge for the wild's scenery, m (the terrain's tile grid). */
-const WILD_CELL = 224;
-/** Wild cells dressed within this range of the car, m. */
-const WILD_FAR = 430;
-/** The prop kinds drawn as instanced rock — everything the ground made of
- * stone. The wooden ones (fallen trunks, cut stumps) go through flora. */
-const STONE_KINDS = new Set<WildObstacle["kind"]>(["boulder", "rock", "slab"]);
+/** How far from the road a chunk's own scenery reaches, m — the band the
+ * road chunks plant, beyond which the wild cells take over. The fog cull
+ * has to allow for it, or a chunk goes dark while its outermost trees are
+ * still inside the fog. */
+const SCENERY_REACH = 175;
 
-/** How one stone prop sits in the ground. Each kind has its own seat, and
- * each formula is the one the engine wrote its collision circle and its
- * height from — what is drawn IS what the car hits. */
-function stoneMatrix(
-  ob: WildObstacle,
-  m: THREE.Matrix4,
-  q: THREE.Quaternion,
-  v: THREE.Vector3,
-  sc: THREE.Vector3,
-): THREE.Matrix4 {
-  if (ob.kind === "slab") {
-    // An outcrop: sunk near half its depth and stretched tall, a face of
-    // rock rather than a pebble.
-    return m.compose(
-      v.set(ob.x, ob.y + ob.size * 0.5, ob.z),
-      q,
-      sc.set(ob.size, ob.size * 1.3, ob.size * 0.8),
-    );
+/** How far apart the points the fog cull measures a chunk by are, samples.
+ * A chunk is a few hundred metres of road that can bend right back on
+ * itself, so the honest question is how close its NEAREST point is, not
+ * how close the circle around the whole thing is: a bounding sphere over
+ * 300 m of road is 150 m of slack, and 150 m of slack against a 400 m fog
+ * keeps half a stage alive that nobody can see. Every fourth sample is
+ * eight metres of road — far finer than the tolerance the reach already
+ * carries. */
+const CULL_STRIDE = 4;
+
+/** The points the fog cull measures a chunk by. */
+function chunkTrace(ribbon: Track["samples"]): Float64Array {
+  const points = new Float64Array(Math.ceil(ribbon.length / CULL_STRIDE) * 2);
+  let at = 0;
+  for (let i = 0; i < ribbon.length; i += CULL_STRIDE) {
+    points[at++] = ribbon[i].x;
+    points[at++] = ribbon[i].z;
   }
-  if (ob.kind === "rock") {
-    // Loose stone: a squashed lump a third of itself in the ground.
-    return m.compose(
-      v.set(ob.x, ob.y + ob.size * 0.35, ob.z),
-      q,
-      sc.set(ob.size, ob.size * 0.7, ob.size),
-    );
+  return points;
+}
+
+/** True while any point of `trace` is within `reach` of (x, z). */
+function traceWithin(trace: Float64Array, x: number, z: number, reach: number): boolean {
+  const limit = reach * reach;
+  for (let i = 0; i < trace.length; i += 2) {
+    const dx = trace[i] - x;
+    const dz = trace[i + 1] - z;
+    if (dx * dx + dz * dz <= limit) return true;
   }
-  // A deep-wild boulder, sunk near half in and matched to its circle.
-  return m.compose(
-    v.set(ob.x, ob.y + ob.height * 0.42, ob.z),
-    q,
-    sc.set(ob.radius * 0.95, ob.height * 0.85, ob.radius * 0.8),
-  );
+  return false;
 }
 
-/** Cells dressed per sync at most — the forest streams in, never hitches. */
-const WILD_BUDGET = 2;
-
-type WildCell = {
-  group: THREE.Group;
-  flora: Flora;
-  stones: { mesh: THREE.InstancedMesh; list: WildObstacle[] } | null;
-  /** Which of this cell's plants are ENGINE props rather than app-side
-   * dressing, by position — they are retired on the engine's word, not on
-   * a radius of our own. */
-  props: Set<string>;
-};
-
-/** A prop's position as a key both sides agree on. */
-function propKey(x: number, z: number): string {
-  return `${x.toFixed(2)},${z.toFixed(2)}`;
-}
-
-type Wild = {
-  group: THREE.Group;
-  sync: (carX: number, carZ: number) => void;
-  update: (dt: number) => void;
-  /** Retire wild props that newly built road now runs through. */
-  clearNear: (t: Track, from: number, to: number) => void;
-};
-
-/** The wild: the living landscape beyond the road bands' 150 m — the
- * nature an exploring car actually drives through. Cells on the terrain's
- * tile grid stream in around the CAR (wherever it is, road or not), each
- * planting the same biome quilt the road bands plant, thinner — plus the
- * engine terrain's solid props, drawn exactly where the physics collides
- * with them: the wooden ones (fallen trunks, cut stumps) join the flora
- * instancing, the stone ones (boulders, rocks, outcrops) share one
- * instanced rock. Deterministic per seed and cell. */
-function buildWild(track: Track, biome: Biome, terrain: Terrain, density: number): Wild {
-  const group = new THREE.Group();
-  const communityAt = (x: number, z: number): Community =>
-    communityByGrove(biome, terrain.field.groveAt(x, z));
-  const cells = new Map<string, WildCell>();
-  const heightAt = terrain.heightAt;
-  const field = terrain.field;
-
-  const m = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  const v = new THREE.Vector3();
-  const sc = new THREE.Vector3();
-  const tint = new THREE.Color();
-
-  const buildCell = (cx: number, cz: number): WildCell => {
-    const cellGroup = new THREE.Group();
-    const rng = createRng(
-      (track.seed ^ 0x2ce1a373 ^ (Math.imul(cx, 2246822519) + Math.imul(cz, 668265263))) >>> 0,
-    );
-    const originX = cx * WILD_CELL;
-    const originZ = cz * WILD_CELL;
-    const placements: FloraPlacement[] = [];
-
-    // The wild forest — the same engine trunk field the physics collides
-    // with, each trunk drawn by the cell that OWNS its position. The road
-    // bands' scenery chunks own everything within 150 m of the road.
-    const treesHere = field
-      .treesNear(originX + WILD_CELL / 2, originZ + WILD_CELL / 2, WILD_CELL * 0.71)
-      .filter(
-        (t) =>
-          Math.floor(t.x / WILD_CELL) === cx &&
-          Math.floor(t.z / WILD_CELL) === cz &&
-          field.roadDistanceAt(t.x, t.z) >= 150,
-      );
-    for (const tree of treesHere) placements.push(treePlacement(tree, biome));
-
-    // The soft small stuff between the trunks — a light app-side scatter.
-    for (let i = 0; i < 14; i++) {
-      const x = originX + rng.range(0, WILD_CELL);
-      const z = originZ + rng.range(0, WILD_CELL);
-      const roll = rng.next();
-      const scale = rng.range(0.75, 1.35);
-      const spin = rng.range(0, Math.PI * 2);
-      if (!rng.chance(0.5 * density)) continue;
-      if (field.roadDistanceAt(x, z) < 150) continue;
-      if (inStream(field.streams, x, z, 1.5)) continue;
-      const y = heightAt(x, z);
-      if (y < LAKE_Y + 1.2) continue;
-      const soft = softMix(
-        y < LAKE_Y + 4
-          ? biome.lakeshoreTrees
-          : y > 26
-            ? biome.highlandTrees
-            : communityAt(x, z).trees,
-      );
-      if (!soft) continue;
-      placements.push({ id: pickFlora(soft, roll), x, y, z, scale, spin });
-    }
-    // Ground cover barely reads at exploring pace — a light scatter.
-    for (let i = 0; i < 20; i++) {
-      const x = originX + rng.range(0, WILD_CELL);
-      const z = originZ + rng.range(0, WILD_CELL);
-      const roll = rng.next();
-      const scale = rng.range(0.7, 1.3);
-      const spin = rng.range(0, Math.PI * 2);
-      const community = communityAt(x, z);
-      if (!rng.chance((biome.undergrowthDensity / 3) * (community.groundCover ?? 1) * density)) {
-        continue;
-      }
-      if (field.roadDistanceAt(x, z) < 150) continue;
-      if (inStream(field.streams, x, z, 0.5)) continue;
-      const y = heightAt(x, z);
-      if (y < LAKE_Y + 1.2) continue;
-      placements.push({
-        id: pickFlora(community.undergrowth ?? biome.undergrowth, roll),
-        x,
-        y,
-        z,
-        scale,
-        spin,
-      });
-    }
-
-    // The solid props. Each obstacle is drawn by the cell that OWNS its
-    // position, so neighbouring cells never draw it twice.
-    const obstacles = field
-      .obstaclesNear(originX + WILD_CELL / 2, originZ + WILD_CELL / 2, WILD_CELL * 0.71)
-      .filter((ob) => Math.floor(ob.x / WILD_CELL) === cx && Math.floor(ob.z / WILD_CELL) === cz);
-    // The wooden ones are flora variants; the stone ones share one
-    // instanced rock below.
-    const props = new Set<string>();
-    for (const ob of obstacles) {
-      const id = ob.kind === "log" ? "fallenLog" : ob.kind === "stump" ? "stump" : null;
-      if (!id) continue;
-      props.add(propKey(ob.x, ob.z));
-      placements.push({ id, x: ob.x, y: ob.y, z: ob.z, scale: ob.size, spin: ob.spin });
-    }
-    const flora = buildFlora(placements, () => rng.next());
-    cellGroup.add(flora.group);
-
-    const stoneList = obstacles.filter((ob) => STONE_KINDS.has(ob.kind));
-    let stones: WildCell["stones"] = null;
-    if (stoneList.length > 0) {
-      const geo = new THREE.DodecahedronGeometry(1);
-      const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color(biome.ground.bedrock) });
-      const mesh = new THREE.InstancedMesh(geo, mat, stoneList.length);
-      const dark = new THREE.Color(biome.ground.bedrockDark);
-      stoneList.forEach((ob, i) => {
-        q.setFromAxisAngle(UP, ob.spin);
-        stoneMatrix(ob, m, q, v, sc);
-        mesh.setMatrixAt(i, m);
-        tint.setScalar(0.75 + (ob.spin % 1) * 0.35);
-        // An outcrop is the bedrock itself showing through, not a stone
-        // that rolled here: it takes the darker face.
-        if (ob.kind === "slab") tint.lerp(dark, 0.6);
-        mesh.setColorAt(i, tint);
-      });
-      cellGroup.add(mesh);
-      stones = { mesh, list: stoneList };
-    }
-    group.add(cellGroup);
-    return { group: cellGroup, flora, stones, props };
-  };
-
-  const dropCell = (key: string): void => {
-    const cell = cells.get(key);
-    if (!cell) return;
-    cells.delete(key);
-    group.remove(cell.group);
-    disposeGroup(cell.group);
-  };
-
-  const sync = (carX: number, carZ: number): void => {
-    const reach = Math.ceil(WILD_FAR / WILD_CELL);
-    const ccx = Math.floor(carX / WILD_CELL);
-    const ccz = Math.floor(carZ / WILD_CELL);
-    const missing: { key: string; d: number }[] = [];
-    const needed = new Set<string>();
-    for (let dx = -reach; dx <= reach; dx++) {
-      for (let dz = -reach; dz <= reach; dz++) {
-        const centerX = (ccx + dx + 0.5) * WILD_CELL;
-        const centerZ = (ccz + dz + 0.5) * WILD_CELL;
-        const d = Math.hypot(centerX - carX, centerZ - carZ);
-        if (d > WILD_FAR + WILD_CELL * 0.71) continue;
-        const key = `${ccx + dx},${ccz + dz}`;
-        needed.add(key);
-        if (!cells.has(key)) missing.push({ key, d });
-      }
-    }
-    missing.sort((a, b) => a.d - b.d);
-    for (const { key } of missing.slice(0, WILD_BUDGET)) {
-      const [cx, cz] = key.split(",").map(Number);
-      cells.set(key, buildCell(cx, cz));
-    }
-    for (const key of [...cells.keys()]) {
-      if (!needed.has(key)) dropCell(key);
-    }
-  };
-
-  const zero = new THREE.Matrix4().makeScale(0, 0, 0);
-  const clearNear = (t: Track, from: number, to: number): void => {
-    const hits = (x: number, z: number): boolean => {
-      for (let i = from; i < to; i += 2) {
-        const dx = x - t.samples[i].x;
-        const dz = z - t.samples[i].z;
-        if (dx * dx + dz * dz < 12 * 12) return true;
-      }
-      return false;
-    };
-    // An engine prop goes when the ENGINE drops it — road built later has
-    // claimed the ground it stood on and its field stopped placing it.
-    // Asking the field beats guessing at a radius: a stone still solid but
-    // no longer drawn is exactly the bug the props were moved to fix.
-    const gone = (x: number, z: number): boolean =>
-      !field.obstaclesNear(x, z, 0.5).some((ob) => ob.x === x && ob.z === z);
-    for (const cell of cells.values()) {
-      cell.flora.retire((x, z) => (cell.props.has(propKey(x, z)) ? gone(x, z) : hits(x, z)));
-      if (!cell.stones) continue;
-      let touched = false;
-      cell.stones.list.forEach((ob, i) => {
-        if (!gone(ob.x, ob.z)) return;
-        cell.stones?.mesh.setMatrixAt(i, zero);
-        touched = true;
-      });
-      if (touched) cell.stones.mesh.instanceMatrix.needsUpdate = true;
-    }
-  };
-
-  const update = (dt: number): void => {
-    for (const cell of cells.values()) cell.flora.update(dt);
-  };
-
-  return { group, sync, update, clearNear };
-}
-
+/** Tear down everything a group OWNS. The flora library's shapes, the two
+ * materials it plants them with and every procedural texture in the app
+ * are shared by the whole world, so they are marked and skipped — freeing
+ * them with the chunk that happened to be dropped first would blank the
+ * forest still standing. */
 function disposeGroup(group: THREE.Group): void {
   group.traverse((obj) => {
     if (obj instanceof THREE.Mesh) {
-      obj.geometry.dispose();
+      if (!isShared(obj.geometry)) obj.geometry.dispose();
       const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
       for (const mat of mats) {
+        if (isShared(mat)) continue;
         if (mat instanceof THREE.MeshLambertMaterial || mat instanceof THREE.MeshPhongMaterial) {
-          mat.map?.dispose();
+          if (!isShared(mat.map)) mat.map?.dispose();
         }
         mat.dispose();
       }
@@ -915,7 +630,14 @@ export function buildWorld(track: Track, density = 1): World {
   group.add(wild.group);
   wild.sync(track.samples[0].x, track.samples[0].z);
 
-  type Chunk = { toS: number; group: THREE.Group; scenery: SceneryChunk };
+  type Chunk = {
+    toS: number;
+    group: THREE.Group;
+    scenery: SceneryChunk;
+    /** Points along this slice of road, the cursor the fog cull measures
+     * it by. */
+    trace: Float64Array;
+  };
   const chunks: Chunk[] = [];
   /** Engine trunks already drawn by some scenery chunk — chunk queries
    * overlap at the seams, and a tree drawn twice z-fights itself. */
@@ -979,7 +701,7 @@ export function buildWorld(track: Track, density = 1): World {
       chunkGroup.add(finish.group);
     }
     group.add(chunkGroup);
-    chunks.push({ toS, group: chunkGroup, scenery });
+    chunks.push({ toS, group: chunkGroup, scenery, trace: chunkTrace(ribbon) });
   };
 
   /** R26 — (re)build the people. The stands come from the terrain field,
@@ -1049,18 +771,35 @@ export function buildWorld(track: Track, density = 1): World {
     }
   };
 
+  const frustum = new THREE.Frustum();
+  const view = new THREE.Matrix4();
+  const cull = (camera: THREE.Camera, range: number): void => {
+    const at = camera.position;
+    const reach = range + SCENERY_REACH;
+    for (const chunk of chunks) {
+      chunk.group.visible = traceWithin(chunk.trace, at.x, at.z, reach);
+    }
+    camera.updateMatrixWorld();
+    frustum.setFromProjectionMatrix(
+      view.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse),
+    );
+    wild.cull(frustum);
+  };
+
   const update = (dt: number, focusX = 0, focusZ = 0): void => {
     terrain.update(dt);
-    wild.update(dt);
+    // The breeze is ONE uniform over the world's shared leafy material, so
+    // it is advanced once here rather than per patch of planted ground.
+    swayFlora(dt);
     crowd?.update(dt, focusX, focusZ);
-    for (const chunk of chunks) chunk.scenery.update(dt);
   };
 
   const dispose = (): void => {
     crowd?.dispose();
+    wild.dispose();
     disposeGroup(group);
     terrain.dispose();
   };
 
-  return { group, update, sync, dispose, muzzles: () => finish?.muzzles ?? [] };
+  return { group, update, sync, cull, dispose, muzzles: () => finish?.muzzles ?? [] };
 }

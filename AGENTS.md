@@ -17,6 +17,7 @@ make track        # render stages to previews/track-<seed>.png
 make cars         # render the car models to previews/cars.png (chase-cam + turntable sheet)
 make audition     # build previews/audition.html — every sound and both scores, playable
 make screenshots  # drive the built app headlessly, screenshot key moments
+make profile      # meter a frame's draw calls / triangles / binds — REQUIRED before/after any rendering change
 make icons        # regenerate icons/favicon/og.png from the app mark
 make check-seo    # build + structural SEO/PWA/bundle assertions
 make hooks        # install pre-commit + commit-msg hooks
@@ -33,6 +34,7 @@ This project is tuned by measuring, not guessing:
 1. **`make sim`** before and after every handling/generator change. The table (pace, drifts, clean exits, air time, respawns) is the regression surface — bots must keep finishing and keep drifting.
 2. **`make track`** to LOOK at what the rules engine builds.
 3. **`make screenshots`** to LOOK at the game itself (grid, speed, drift, hood cam, portrait). In Claude web sessions Chromium is preinstalled — `CHROMIUM_PATH=/opt/pw-browsers/chromium make screenshots`.
+4. **`make profile`** before and after every rendering change. Draw calls, triangles and binds are the numbers a real GPU sees; the fps it also prints is software rasterization and means nothing off this machine.
 
 ## Commit and PR conventions
 

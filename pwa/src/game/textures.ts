@@ -6,6 +6,8 @@
 
 import * as THREE from "three";
 
+import { shareOne } from "../lib/shared-gpu.ts";
+
 function makeCanvas(size: number): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } {
   const canvas = document.createElement("canvas");
   canvas.width = size;
@@ -32,6 +34,18 @@ function speckle(
   }
 }
 
+/** Paint a texture once and hand the same one to everybody after.
+ *
+ * Every texture here is a TILE — the same speckle wherever it lands — so a
+ * second copy is a canvas, a few thousand fillRects and a GPU upload spent
+ * on a picture nobody can tell from the first. That matters because the
+ * road and the forest ask for theirs once per chunk of stage raised, which
+ * is once every few frames while a stage streams in.
+ *
+ * `bannerTexture` is the exception below: it paints WORDS, so no two of
+ * them are the same picture and each belongs to its caller. */
+const once = shareOne<THREE.CanvasTexture>;
+
 function toTexture(canvas: HTMLCanvasElement, repeat: number): THREE.CanvasTexture {
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = THREE.RepeatWrapping;
@@ -43,7 +57,7 @@ function toTexture(canvas: HTMLCanvasElement, repeat: number): THREE.CanvasTextu
   return tex;
 }
 
-export function gravelTexture(): THREE.CanvasTexture {
+export const gravelTexture = once((): THREE.CanvasTexture => {
   const { canvas, ctx } = makeCanvas(128);
   speckle(ctx, 128, "#b29268", [
     { color: "#a08258", count: 900, min: 1, max: 3 },
@@ -52,12 +66,12 @@ export function gravelTexture(): THREE.CanvasTexture {
     { color: "#d8c096", count: 150, min: 1, max: 2 },
   ]);
   return toTexture(canvas, 1);
-}
+});
 
 /** A near-white speckle that multiplies vertex colors: pure grain, no hue.
  * The ground and every flora instance share it, so grass, bedrock and
  * foliage all carry the same chunky arcade noise whatever color they are. */
-export function detailTexture(): THREE.CanvasTexture {
+export const detailTexture = once((): THREE.CanvasTexture => {
   const { canvas, ctx } = makeCanvas(128);
   speckle(ctx, 128, "#ffffff", [
     { color: "#e6e6e0", count: 900, min: 1, max: 3 },
@@ -66,9 +80,9 @@ export function detailTexture(): THREE.CanvasTexture {
     { color: "#f2f2ec", count: 500, min: 1, max: 4 },
   ]);
   return toTexture(canvas, 1);
-}
+});
 
-export function waterTexture(): THREE.CanvasTexture {
+export const waterTexture = once((): THREE.CanvasTexture => {
   const { canvas, ctx } = makeCanvas(64);
   speckle(ctx, 64, "#2f86e0", [
     { color: "#4fa0f0", count: 220, min: 1, max: 5 },
@@ -76,7 +90,7 @@ export function waterTexture(): THREE.CanvasTexture {
     { color: "#dff1ff", count: 60, min: 1, max: 2 },
   ]);
   return toTexture(canvas, 2);
-}
+});
 
 /** A rally gate banner: the word in chunky dark caps on a white ground,
  * framed by checkered-flag bands top and bottom. Nearest filtering keeps
@@ -112,7 +126,7 @@ export function bannerTexture(text: string): THREE.CanvasTexture {
 
 /** The board at a taped-off junction: black chevrons on rally yellow,
  * pointing back at the way the stage actually goes. */
-export function chevronTexture(): THREE.CanvasTexture {
+export const chevronTexture = once((): THREE.CanvasTexture => {
   const canvas = document.createElement("canvas");
   canvas.width = 256;
   canvas.height = 96;
@@ -139,11 +153,11 @@ export function chevronTexture(): THREE.CanvasTexture {
   tex.minFilter = THREE.NearestFilter;
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
-}
+});
 
 /** A soft radial glow (white core fading to transparent) — the sun's halo,
  * the moon's veil, a lightning bloom. Tint via the material's color. */
-export function glowTexture(): THREE.CanvasTexture {
+export const glowTexture = once((): THREE.CanvasTexture => {
   const { canvas, ctx } = makeCanvas(128);
   const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
   g.addColorStop(0, "rgba(255,255,255,1)");
@@ -155,14 +169,14 @@ export function glowTexture(): THREE.CanvasTexture {
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
-}
+});
 
 /** A tire-smoke puff, chunky rather than misty: three steps of a lumpy blob
  * on a tiny canvas, nearest-filtered so its edge is made of visible pixels.
  * A bare point sprite is a screen-aligned SQUARE, and a square big enough to
  * read as smoke reads as a rectangle stuck to the lens instead — this is
  * what a particle has to wear to be allowed to be big. */
-export function puffTexture(): THREE.CanvasTexture {
+export const puffTexture = once((): THREE.CanvasTexture => {
   const size = 16;
   const { canvas, ctx } = makeCanvas(size);
   ctx.clearRect(0, 0, size, size);
@@ -206,4 +220,4 @@ export function puffTexture(): THREE.CanvasTexture {
   tex.minFilter = THREE.NearestFilter;
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
-}
+});

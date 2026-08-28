@@ -98,31 +98,43 @@ function rimFace(
   }
 }
 
-/** One wheel's geometries — tire, rim faces, tread lugs. Axle along x;
- * origin at the wheel center. */
-export function buildWheel(spec: CarBodySpec): THREE.BufferGeometry[] {
+/** One wheel as a SINGLE geometry — tire, both rim faces and every tread
+ * lug in one buffer. Axle along x; origin at the wheel center.
+ *
+ * The parts are welded rather than kept apart because nothing ever moves
+ * one relative to another: a wheel spins as a unit. Split, a car spends ten
+ * draw calls per corner and forty on its wheels alone — the cost that
+ * decides how many cars can be on a stage at once. */
+export function buildWheel(spec: CarBodySpec): THREE.BufferGeometry {
   const r = spec.wheelRadius;
-  const tireGeo = bakeShading(
-    new THREE.CylinderGeometry(r, r, spec.wheelWidth, RIM_FACETS).rotateZ(Math.PI / 2),
-    0x181c22,
-  );
-  const b = new MeshBuilder();
   const hub = spec.colors.hub ?? 0xe6e3da;
   const style = spec.wheelStyle ?? "alloy";
   const spokes = spec.wheelSpokes ?? STYLES[style].spokes;
+
+  // The rim faces are drawn in unit radius and scaled to the tire, so they
+  // are built in a builder of their own and poured into the wheel after.
+  const rim = new MeshBuilder();
   for (const side of [1, -1]) {
-    rimFace(b, side * (spec.wheelWidth / 2 + 0.005), side, style, hub, spokes);
+    rimFace(rim, side * (spec.wheelWidth / 2 + 0.005), side, style, hub, spokes);
   }
-  const rimGeo = b.geometry();
+  const rimGeo = rim.geometry();
   rimGeo.scale(1, r, r);
+
+  const b = new MeshBuilder();
+  b.absorb(
+    bakeShading(
+      new THREE.CylinderGeometry(r, r, spec.wheelWidth, RIM_FACETS).rotateZ(Math.PI / 2),
+      0x181c22,
+    ),
+  );
+  b.absorb(rimGeo);
 
   // Tread lugs: blocks a shade lighter than the tire, riding the rolling
   // surface so the tire itself visibly turns even seen dead from the side.
-  const geos = [tireGeo, rimGeo];
   const lugs = 8;
   for (let i = 0; i < lugs; i++) {
     const angle = (i / lugs) * Math.PI * 2;
-    geos.push(
+    b.absorb(
       bakeShading(
         new THREE.BoxGeometry(spec.wheelWidth + 0.015, 0.05, 0.09)
           .translate(0, r - 0.008, 0)
@@ -131,5 +143,5 @@ export function buildWheel(spec: CarBodySpec): THREE.BufferGeometry[] {
       ),
     );
   }
-  return geos;
+  return b.geometry();
 }

@@ -60,6 +60,7 @@ Open the printed URL. The game opens on the main menu, over a stage a bot is dri
 | `make cars`        | Render the car models to a contact sheet (`previews/cars.png`)                                                    |
 | `make audition`    | Build the audio review page (`previews/audition.html`): every sound, both scores, live                            |
 | `make screenshots` | Drive the built app headlessly and screenshot the key moments                                                     |
+| `make profile`     | Meter what one frame costs the renderer — draw calls, triangles and binds per scene                               |
 | `make icons`       | Regenerate PWA icons, favicon, and the OG image from the app mark                                                 |
 | `make check-seo`   | Build + structural SEO/PWA/bundle-budget assertions                                                               |
 | `make hooks`       | Install the pre-commit / commit-msg git hooks                                                                     |

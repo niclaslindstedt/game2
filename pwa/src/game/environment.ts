@@ -225,6 +225,9 @@ export type Environment = {
   /** Scale how far the fog lets the player see, as a multiple of the
    * preset's own distances — the video options pull it in on a weak device. */
   setRange: (scale: number) => void;
+  /** Where the air goes solid, m. Past it every fragment is pure fog
+   * color, which is what makes the world's fog cull safe. */
+  fogFar: () => number;
   /** Set the fog distances outright, in meters. The map view frames a whole
    * stage from kilometres away, where a multiple of the driving preset is
    * meaningless; what it needs is ground that dissolves just before the
@@ -388,6 +391,11 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   // of overlapping puffs — big lumps in the middle, smaller ones at the
   // ends, undersides in a shaded material and sliced flat — and every
   // cloud rides the wind at its own pace and altitude.
+  //
+  // The whole sky is TWO draw calls: one instanced mesh for the lit puffs,
+  // one for the shaded undersides. A puff is rigid against its cluster, so
+  // it carries a fixed shape matrix and the wind ride below only rewrites
+  // the translation column.
   const cloudGroup = new THREE.Group();
   const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, fog: false });
   const cloudBaseMat = new THREE.MeshBasicMaterial({
@@ -396,44 +404,138 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     fog: false,
   });
   const cloudGeo = new THREE.SphereGeometry(1, 8, 6);
-  type Cloud = { pivot: THREE.Group; angle: number; radius: number; speed: number };
+  /** One puff: where it sits inside its cluster (already turned by the
+   * cluster's own heading), the shape it holds there, and which instance
+   * of which mesh draws it. */
+  type Puff = { at: THREE.Vector3; shape: THREE.Matrix4; shaded: boolean; index: number };
+  type Cloud = {
+    angle: number;
+    radius: number;
+    speed: number;
+    y: number;
+    /** The sphere the whole cluster fits inside, m: the furthest lump
+     * along its axis plus that lump's own radius, rounded up. */
+    reach: number;
+    puffs: Puff[];
+  };
   const cloudList: Cloud[] = [];
   const CLOUDS = 22;
+  let litCount = 0;
+  let shadedCount = 0;
+  const scale = new THREE.Vector3();
+  const ORIGIN = new THREE.Vector3();
+  const SKY_UP = new THREE.Vector3(0, 1, 0);
   for (let i = 0; i < CLOUDS; i++) {
-    const pivot = new THREE.Group();
     const size = 14 + Math.random() * 26; // whole-cluster scale spread
     const puffCount = 4 + Math.floor(Math.random() * 4);
-    let reach = 0;
+    const puffs: Puff[] = [];
+    const cloudSpin = new THREE.Quaternion().setFromAxisAngle(SKY_UP, Math.random() * Math.PI * 2);
+    const place = (
+      shaded: boolean,
+      x: number,
+      y: number,
+      z: number,
+      sx: number,
+      sy: number,
+      sz: number,
+    ): void => {
+      puffs.push({
+        at: new THREE.Vector3(x, y, z).applyQuaternion(cloudSpin),
+        shape: new THREE.Matrix4().compose(ORIGIN, cloudSpin, scale.set(sx, sy, sz)),
+        shaded,
+        index: shaded ? shadedCount++ : litCount++,
+      });
+    };
     for (let p = 0; p < puffCount; p++) {
       // Lumps along a rough axis: tall near the middle, trailing off at
       // the ends; every puff keeps a flat shared base line.
       const along = (p / (puffCount - 1) - 0.5) * 2;
       const bulk = 0.55 + (1 - Math.abs(along)) * 0.6 + Math.random() * 0.25;
-      const puff = new THREE.Mesh(cloudGeo, cloudMat);
       const px = along * size * (0.8 + Math.random() * 0.25);
-      puff.position.set(px, bulk * size * 0.3, (Math.random() - 0.5) * size * 0.4);
-      puff.scale.setScalar(bulk * size * 0.52);
-      puff.scale.y *= 0.72;
-      pivot.add(puff);
-      reach = Math.max(reach, Math.abs(px));
-      // The shaded underside: a flatter, darker puff tucked below.
-      const base = new THREE.Mesh(cloudGeo, cloudBaseMat);
-      base.position.set(px, bulk * size * 0.06, puff.position.z);
-      base.scale.set(bulk * size * 0.5, bulk * size * 0.22, bulk * size * 0.5);
-      pivot.add(base);
+      const pz = (Math.random() - 0.5) * size * 0.4;
+      const r = bulk * size * 0.52;
+      place(false, px, bulk * size * 0.3, pz, r, r * 0.72, r);
+      // The shaded underside: a flatter, darker puff tucked below, on the
+      // same axis line as the lump it sits under.
+      place(
+        true,
+        px,
+        bulk * size * 0.06,
+        pz,
+        bulk * size * 0.5,
+        bulk * size * 0.22,
+        bulk * size * 0.5,
+      );
     }
-    const radius = 190 + Math.random() * 240;
     cloudList.push({
-      pivot,
       angle: Math.random() * Math.PI * 2,
-      radius,
+      radius: 190 + Math.random() * 240,
       speed: 0.6 + Math.random() * 0.9,
+      y: 85 + Math.random() * 60,
+      reach: size * 2,
+      puffs,
     });
-    pivot.position.y = 85 + Math.random() * 60;
-    pivot.rotation.y = Math.random() * Math.PI * 2;
-    cloudGroup.add(pivot);
   }
+  // Room for every puff there is; how many of them are DRAWN is set per
+  // frame from what survives the cull. Anything past that count is left
+  // alone rather than trusted to be empty — an instance nobody sets keeps
+  // the identity matrix, which is a unit sphere over the start line.
+  const cloudPuffs = new THREE.InstancedMesh(cloudGeo, cloudMat, litCount);
+  const cloudBases = new THREE.InstancedMesh(cloudGeo, cloudBaseMat, shadedCount);
+  // Culled per cluster in `placeClouds`, so three is told not to try: its
+  // own test is over the whole ring, which the camera stands inside and
+  // which therefore always answers yes.
+  for (const mesh of [cloudPuffs, cloudBases]) mesh.frustumCulled = false;
+  cloudGroup.add(cloudPuffs, cloudBases);
   group.add(cloudGroup);
+
+  /** Slide every puff onto its cluster's current place on the ring, and
+   * write only the clusters the camera can actually see.
+   *
+   * Culling is done HERE rather than left to three, because two instanced
+   * meshes are two objects to it and both straddle the camera: the ring
+   * the clouds orbit is drawn around the camera's own position, so a
+   * bounding test on either mesh always answers yes. Compacting the
+   * visible clusters into the front of the buffer costs nothing — the
+   * matrices are rewritten every frame anyway — and halves the sky's
+   * triangles for the price of 22 sphere tests. */
+  const cloudFrustum = new THREE.Frustum();
+  const cloudView = new THREE.Matrix4();
+  const cloudWhere = new THREE.Sphere();
+  const placeClouds = (camera: THREE.Camera | null): void => {
+    if (camera) {
+      camera.updateMatrixWorld();
+      cloudFrustum.setFromProjectionMatrix(
+        cloudView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse),
+      );
+    }
+    let litAt = 0;
+    let shadedAt = 0;
+    for (const cloud of cloudList) {
+      const x = Math.sin(cloud.angle) * cloud.radius;
+      const z = Math.cos(cloud.angle) * cloud.radius;
+      if (camera) {
+        // The clouds hang in the environment group, which rides the camera
+        // in x and z, so a cluster's world place is that offset plus this.
+        cloudWhere.center.set(group.position.x + x, cloud.y, group.position.z + z);
+        cloudWhere.radius = cloud.reach;
+        if (!cloudFrustum.intersectsSphere(cloudWhere)) continue;
+      }
+      for (const puff of cloud.puffs) {
+        const m = puff.shape;
+        m.elements[12] = x + puff.at.x;
+        m.elements[13] = cloud.y + puff.at.y;
+        m.elements[14] = z + puff.at.z;
+        if (puff.shaded) cloudBases.setMatrixAt(shadedAt++, m);
+        else cloudPuffs.setMatrixAt(litAt++, m);
+      }
+    }
+    cloudPuffs.count = litAt;
+    cloudBases.count = shadedAt;
+    cloudPuffs.instanceMatrix.needsUpdate = true;
+    cloudBases.instanceMatrix.needsUpdate = true;
+  };
+  placeClouds(null);
 
   // ── Lights ───────────────────────────────────────────────────────────────
   const hemi = new THREE.HemisphereLight(0xffffff, 0xb0a894, 0.95);
@@ -632,9 +734,10 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     const windSpeed = Math.hypot(state.wind.x, state.wind.z);
     for (const cloud of cloudList) {
       cloud.angle += (0.0035 + windSpeed * 0.0014) * cloud.speed * dt;
-      cloud.pivot.position.x = Math.sin(cloud.angle) * cloud.radius;
-      cloud.pivot.position.z = Math.cos(cloud.angle) * cloud.radius;
     }
+    // Under the map view the sky is off, and placing puffs nobody draws is
+    // the one part of the ride worth skipping.
+    if (cloudGroup.visible) placeClouds(camera);
 
     // Headlights track the nose, tail lamps the tail. Each pair's beams carry
     // half of what the single light used to, so the road ahead is as bright
@@ -695,7 +798,6 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     domeMat.dispose();
     starGeo.dispose();
     starMat.dispose();
-    glowMap.dispose();
     haloMat.dispose();
     disc.geometry.dispose();
     discMat.dispose();
@@ -714,6 +816,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   return {
     apply,
     setRange,
+    fogFar: () => fog.far,
     setFogRange,
     setSky,
     carTint: () => carTintFor(preset),

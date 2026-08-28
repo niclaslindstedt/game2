@@ -92,15 +92,14 @@ export function buildCarBody(spec: CarBodySpec): CarBodyParts {
 
   const wheelGroups: THREE.Group[] = [];
   const wheelSpin: THREE.Object3D[] = [];
-  // All four wheels share one tire and one rim — only their transforms
-  // differ, so the geometry is built once and disposed once.
-  const wheelGeos = buildWheel(spec);
+  // All four wheels share one geometry — only their transforms differ, so
+  // it is built once and disposed once.
+  const wheelGeo = buildWheel(spec);
   for (const axle of axles) {
     for (const side of [-1, 1]) {
       const wheel = new THREE.Group();
       wheel.position.set(side * spec.trackHalf, spec.wheelRadius, axle);
-      const spin = new THREE.Group();
-      for (const geo of wheelGeos) spin.add(new THREE.Mesh(geo, material));
+      const spin = new THREE.Mesh(wheelGeo, material);
       wheel.add(spin);
       group.add(wheel);
       wheelGroups.push(wheel);
@@ -111,7 +110,7 @@ export function buildCarBody(spec: CarBodySpec): CarBodyParts {
   const dispose = (): void => {
     bodyGeo.dispose();
     for (const g of partGeos) g.dispose();
-    for (const g of wheelGeos) g.dispose();
+    wheelGeo.dispose();
     material.dispose();
   };
   return { group, chassis, wheelGroups, wheelSpin, body, breakables, dispose };

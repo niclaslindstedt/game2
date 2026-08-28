@@ -119,7 +119,6 @@ export function createFumes(): Fumes {
   const dispose = (): void => {
     geo.dispose();
     mat.dispose();
-    map.dispose();
   };
 
   for (let i = 0; i < POOL; i++) positions[i * 3 + 1] = -50;

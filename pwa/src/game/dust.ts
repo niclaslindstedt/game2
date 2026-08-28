@@ -328,7 +328,6 @@ export function createDust(style: DustStyle = GRAVEL_DUST): Dust {
   const dispose = (): void => {
     geo.dispose();
     mat.dispose();
-    map?.dispose();
   };
 
   // Park the whole pool out of sight until first use.
