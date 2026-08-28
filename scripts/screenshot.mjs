@@ -346,6 +346,23 @@ await capture(
   { bot: "1" },
 );
 
+// …and the same plume from ABOVE, which is the angle it is actually shaped
+// for and the only one that shows the whole of it. From behind the car the
+// cloud is foreshortened into a haze at the bumper; from the helicopter it
+// is a TAIL, and the acceptance test is its profile down the road: narrow
+// and dense where it leaves the wheels, opening out and thinning the
+// further back it goes, with the widest part of it a good way behind the
+// car rather than on it.
+await capture(
+  "shot-plume-heli",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await racing(page);
+    await atStageTime(page, 14);
+  },
+  { bot: "1", camera: "heli" },
+);
+
 // THE RAIN, which takes the plume away. Water binds a loose surface
 // together, so the acceptance test here is an ABSENCE: the same gravel
 // road at the same pace as shot-speed, with no cloud over it at all — just

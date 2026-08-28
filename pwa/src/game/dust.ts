@@ -225,6 +225,14 @@ export const GROUND_CLOUD: DustStyle = {
   rise: 0.7,
   updraft: 0.25,
   gravity: -0.02,
+  // The LENGTH of the tail is the other half of its shape, and it is
+  // bounded from both ends. Too short and the cloud stops a car's length
+  // behind the car; too long and the same number of puffs is stretched
+  // over more road until the tail reads as a line of separate blobs
+  // instead of one mass — and the rate cannot be raised to cover it,
+  // because the density that fixes the tail is the density that closes the
+  // cloud over the car (see `rate`). This is the length that holds
+  // together at the rate the near view can afford.
   life: { min: 1, max: 1.9 },
   pool: 1024,
   puffy: true,
