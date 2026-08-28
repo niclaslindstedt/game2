@@ -425,14 +425,31 @@ not a mistake anymore; it is exploration:
   same as if the car had driven off the side. Reverse away from the start
   line for long enough and the country takes over, hills and all.
 - **Solid props and the forest** — the wild scatters boulders and fallen
-  trunks, loose rock litter, cut stumps under the woods, and the bedrock
-  outcrops that shoulder out of a cut wall beside the road
-  (`terrain.obstaclesNear`); the forest's trees stand on solid trunks of
-  their own (`terrain.treesNear`, placed by the same engine-side grove
-  quilt the renderer picks species from) — everything seeded, kept off the
-  road, and drawn exactly where the physics collides with it. Contact does
-  not teleport the car anywhere: it bends it — see the collision model
-  below. A fallen trunk lies low enough to jump; a tree is not.
+  trunks, loose rock litter, cut stumps under the woods, ROCKY OUTCROPS
+  (five to ten stones bedded into one steep hillside, strung along the
+  contour, biggest in the middle) and the bedrock slabs that shoulder out
+  of a cut wall beside the road (`terrain.obstaclesNear`); the forest's
+  trees stand on solid trunks of their own (`terrain.treesNear`, placed by
+  the same engine-side grove quilt the renderer picks species from) —
+  everything seeded, kept off the road, and drawn exactly where the physics
+  collides with it. Contact does not teleport the car anywhere: it bends
+  it — see the collision model below. A fallen trunk lies low enough to
+  jump; a tree is not.
+- **Blowdowns** — where a noise field says a gale went through, the deep
+  wild's fallen timber thickens, grows to old-tree size, and comes down in
+  twos and threes lying PARALLEL: down the fall line where the ground has
+  one, along that seed's own gale bearing where it does not, and spaced
+  across that line rather than end to end, so a car meets one trunk at a
+  time. A lying trunk's `spin` is the compass bearing it lies along rather
+  than a free yaw — `planting.ts` turns it into the rotation the drawn log
+  needs.
+- **The forest stands in clumps** — a tree cell holds a CLUMP rather than a
+  trunk: one to four stems thrown into a couple of metres around the cell's
+  candidate, more of them where the stand noise is thick, one of them
+  always the biggest. The cell's own chance is divided by the clump's
+  expected size, so a hectare of forest carries exactly as many trunks as
+  it did — what changes is that they arrive in knots with light between
+  them instead of one per ten-metre cell.
 - **What counts as an obstacle** — `SOLID_PROP_HEIGHT` (0.45 m) is the
   bar, and it is the MIDDLE OF THE HOOD: the catalog's bonnets sit about
   0.87 m over the ground, so anything standing higher than half of that

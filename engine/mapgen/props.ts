@@ -26,7 +26,13 @@ import { hash2, valueNoise } from "../lib/noise.ts";
 import type { CornerGuard, GuardField } from "./guards.ts";
 import { LAKE_Y } from "./land.ts";
 import { ROAD_CROSS } from "./road.ts";
-import { SOLID_PROP_HEIGHT, solidShape, standSolid, type WildObstacle } from "./solids.ts";
+import {
+  SOLID_PROP_HEIGHT,
+  solidShape,
+  standSolid,
+  type SolidKind,
+  type WildObstacle,
+} from "./solids.ts";
 
 /** Solid props keep this far from the road EDGE, m, measured to their own
  * rim rather than their center — the ribbon draws its shoulder and ditch
@@ -172,6 +178,22 @@ const TREE_CELL = 10;
  * a trunk per 450 m² — gaps a car can thread, walls it cannot ignore. */
 const TREE_DENSITY = 0.22;
 
+/** ...and how many trunks that one candidate grows. A cell grid puts at most
+ * one trunk every ten metres, which is a spacing no forest has: even a
+ * saturated stand comes out evenly spread, because the grid IS the spacing.
+ * Real conifers grow in tight knots of three or four with light between the
+ * knots, so a candidate is a CLUMP — its stems thrown into a couple of metres
+ * around it, more of them where the stand noise is thick.
+ *
+ * The cell's own chance is divided by the clump's expected size, so the
+ * forest holds exactly as many trunks per hectare as it did: what changes is
+ * where they stand, not how many. */
+const CLUMP_MAX = 4;
+/** How far a clump's outer stems stand from its first one, m — closer than
+ * this and two trunks are one fat trunk, further and they are two trees. */
+const CLUMP_NEAR = 1.9;
+const CLUMP_FAR = 4.6;
+
 // ── The deep wild's boulders and fallen trunks ────────────────────────────
 
 /** One obstacle candidate per grid cell of this edge, m. */
@@ -186,6 +208,25 @@ const OB_ROAD_CLEAR = 10;
  * metre and a half over a thing you could otherwise drive across, so the
  * collision shape has to know about it too. */
 const ROOTED_LOG_SHARE = 0.45;
+
+/** Blowdowns: metres of period for the noise that says where a gale went
+ * through this forest, the level it has to reach for one, and what the deep
+ * wild's fallen timber is multiplied by inside it. A trunk down on its own is
+ * a prop somebody dropped; five of them lying parallel down the same slope is
+ * weather, and weather is what a boreal forest is mostly made of. */
+const WINDTHROW_SCALE = 190;
+const WINDTHROW_FROM = 0.56;
+const WINDTHROW_DENSITY = 2.6;
+/** The most trunks one candidate lays down in the middle of a blowdown, and
+ * how far apart they lie ACROSS the fall line, m — far enough apart that a
+ * car meets one at a time. */
+const BLOWDOWN_MAX = 3;
+const BLOWDOWN_GAP_MIN = 5.5;
+const BLOWDOWN_GAP_MAX = 10;
+/** How far apart the ground is sampled to read which way is downhill, m, and
+ * the gradient below which a slope has no opinion and the gale decides. */
+const FALL_SPAN = 5;
+const FALL_SLOPE = 0.06;
 
 /** One loose-rock candidate per grid cell of this edge, m, and the share
  * of cells that hold one — the open ground's rock litter, a field of its
@@ -221,9 +262,40 @@ const STUMP_GROVE_DENSITY = 0.5;
  * because being cut over is what they are. */
 const FELLED_GROVES = new Set(["logging", "deadStand"]);
 
-/** One bedrock-outcrop candidate per grid cell of this edge, m — a fine
- * grid, because a slab only ever stands in the narrow band beside the
- * road where the ground is climbing out of a cut. */
+/** ROCKY OUTCROPS: one candidate per grid cell of this edge, m, and the
+ * share of those that carry one. A lone boulder in a field reads as a prop
+ * somebody placed however well it is drawn; a knot of stone shouldering out
+ * of a hillside reads as the hill itself, which is the only reason to have
+ * rocks in a landscape at all. So the deep wild grows CLUSTERS: half a dozen
+ * to a dozen stones bedded into one slope, biggest first, strung out along
+ * the contour the way a bed of rock actually breaks surface. */
+const OUTCROP_CELL = 120;
+const OUTCROP_CHANCE = 0.75;
+/** How many stones one outcrop is made of. */
+const OUTCROP_MIN = 5;
+const OUTCROP_MAX = 10;
+/** How far its stones spread from its middle, m — along the contour, and
+ * this much again halved up and down the slope. */
+const OUTCROP_SPREAD = 8;
+/** How big its stones get, smallest at the ends of the band and biggest in
+ * the middle. The small end is set by what the field is ALLOWED to place: a
+ * stone has to stand SOLID_PROP_HEIGHT over the ground once it is bedded in,
+ * and one too small to do that is litter the renderer scatters for itself. */
+const OUTCROP_SIZE_MIN = 0.8;
+const OUTCROP_SIZE_MAX = 1.7;
+/** The gradient the ground under one has to have. Bedrock shows where the
+ * hill is steep, which is the same rule the terrain's own paint follows —
+ * so an outcrop stands in ground that is already painted as rock. */
+const OUTCROP_SLOPE = 0.22;
+/** How deep into the hill a stone is bedded, as a share of its own height.
+ * This is the whole difference between geology and litter: a rock sitting ON
+ * a slope was dropped there, one sunk half its depth INTO it grew there. */
+const OUTCROP_SINK = 0.45;
+
+/** One CUT-WALL SLAB candidate per grid cell of this edge, m — a fine grid,
+ * because a slab only ever stands in the narrow band beside the road where
+ * the ground is climbing out of a cut. (The outcrops above are the same rock
+ * out in the country; these are the face the road was cut through.) */
 const SLAB_CELL = 16;
 /** ...and the share of those that stand up where the ground allows one. */
 const SLAB_CHANCE = 0.7;
@@ -357,43 +429,119 @@ export function createPropField(ctx: PropContext): PropField {
     return spurClearance(x, z) - radius > PROP_ROAD_CLEAR;
   };
 
-  const obSeed = (ctx.seed ^ 0x45d9f3b3) >>> 0;
-  let obCache = new Map<string, WildObstacle | null>();
+  /** Plant one deep-wild solid, if the ground here will have it: clear of
+   * every road by its own RIM, out of the streams and above the water table.
+   * `sink` beds it that far into the hill — the one thing that separates an
+   * outcrop's stones, which the hillside grew, from rocks set down on it.
+   * Everything the field decides is a pure function of the seed, so both
+   * sides of the world build the same one. */
+  const addSolid = (
+    into: WildObstacle[],
+    x: number,
+    z: number,
+    kind: SolidKind,
+    size: number,
+    spin: number,
+    roll: number,
+    sink = 0,
+  ): void => {
+    const near = roadNear(x, z);
+    if (near && near.d < half + OB_ROAD_CLEAR) return;
+    if (spurClearance(x, z) < OB_ROAD_CLEAR) return;
+    const { radius } = solidShape(kind, size);
+    if (!offEveryRoad(x, z, radius) || inAnyStream(x, z, Math.max(1, radius * 0.5))) return;
+    // Feet on the RIDDEN ground: the car collides against `y`, so a prop
+    // planted on the analytic field could hover a step above the surface the
+    // car actually drives on.
+    const y = groundAt(x, z);
+    if (y <= LAKE_Y + 1) return;
+    into.push(standSolid({ x, z, y: y - sink, kind, size, spin, roll }));
+  };
 
-  const obstacleInCell = (cx: number, cz: number): WildObstacle | null => {
+  /** Which way the ground falls away here, and how hard. Everything that
+   * came down rather than grew — a blown-over trunk, a bed of rock breaking
+   * surface — is placed against this: gravity is the only art direction a
+   * hillside needs. */
+  const fallLine = (x: number, z: number): { x: number; z: number; slope: number } => {
+    const gx = groundAt(x + FALL_SPAN, z) - groundAt(x - FALL_SPAN, z);
+    const gz = groundAt(x, z + FALL_SPAN) - groundAt(x, z - FALL_SPAN);
+    const run = Math.hypot(gx, gz);
+    if (run < 1e-4) return { x: 1, z: 0, slope: 0 };
+    return { x: -gx / run, z: -gz / run, slope: run / (2 * FALL_SPAN) };
+  };
+
+  const obSeed = (ctx.seed ^ 0x45d9f3b3) >>> 0;
+  let obCache = new Map<string, WildObstacle[]>();
+
+  /** How badly the wind has been through this wood, 0 outside a blowdown and
+   * up to 1 in the middle of one — the same shape of field as `bouldery`
+   * below, and for the same reason: a patch of country that reads as ONE
+   * event beats dice that happened to run hot. */
+  const windthrown = (x: number, z: number): number => {
+    const n = valueNoise(x, z, WINDTHROW_SCALE, (obSeed + 11) >>> 0);
+    return n <= WINDTHROW_FROM ? 0 : (n - WINDTHROW_FROM) / (1 - WINDTHROW_FROM);
+  };
+
+  /** The bearing a gale on this seed blew from — one for the whole stage,
+   * because one storm laid all of this down. */
+  const galeBearing = hash2(0, 0, (obSeed + 12) >>> 0) * Math.PI * 2;
+
+  const obstacleInCell = (cx: number, cz: number): WildObstacle[] => {
     const key = `${cx},${cz}`;
     const hit = obCache.get(key);
     if (hit !== undefined) return hit;
     if (obCache.size > 4096) obCache = new Map();
-    let ob: WildObstacle | null = null;
-    if (hash2(cx, cz, obSeed) < OB_DENSITY) {
-      const x = (cx + 0.12 + hash2(cx, cz, obSeed + 1) * 0.76) * OB_CELL;
-      const z = (cz + 0.12 + hash2(cx, cz, obSeed + 2) * 0.76) * OB_CELL;
-      const near = roadNear(x, z);
-      const clear = (!near || near.d > half + OB_ROAD_CLEAR) && spurClearance(x, z) > OB_ROAD_CLEAR;
-      if (clear && !inAnyStream(x, z, 1)) {
-        // Feet on the RIDDEN ground: the car collides against `y`, so a
-        // prop planted on the analytic field could hover a step above the
-        // surface the car actually drives on.
-        const y = groundAt(x, z);
-        if (y > LAKE_Y + 1) {
-          const boulder = hash2(cx, cz, obSeed + 3) < 0.55;
-          const size = 0.8 + hash2(cx, cz, obSeed + 4);
-          const roll = hash2(cx, cz, obSeed + 6);
-          ob = standSolid({
-            x,
-            z,
-            y,
-            kind: boulder ? "boulder" : roll < ROOTED_LOG_SHARE ? "rootlog" : "log",
-            size,
-            spin: hash2(cx, cz, obSeed + 5) * Math.PI * 2,
-            roll,
-          });
+    const found: WildObstacle[] = [];
+    const x = (cx + 0.12 + hash2(cx, cz, obSeed + 1) * 0.76) * OB_CELL;
+    const z = (cz + 0.12 + hash2(cx, cz, obSeed + 2) * 0.76) * OB_CELL;
+    const gale = windthrown(x, z);
+    if (hash2(cx, cz, obSeed) < OB_DENSITY * (1 + gale * (WINDTHROW_DENSITY - 1))) {
+      // Stone is what the ground sheds and wood is what the weather takes
+      // down, so a blowdown is nearly all timber even where the same country
+      // is otherwise strewn with boulders.
+      const boulder = hash2(cx, cz, obSeed + 3) < 0.55 * (1 - gale * 0.85);
+      const roll = hash2(cx, cz, obSeed + 6);
+      const spin = hash2(cx, cz, obSeed + 5) * Math.PI * 2;
+      if (boulder) {
+        addSolid(found, x, z, "boulder", 0.8 + hash2(cx, cz, obSeed + 4), spin, roll);
+      } else {
+        // Trunks lie the way they fell: down the slope where there is one,
+        // and along the gale where the ground is flat. `spin` on a lying
+        // kind is that BEARING — the renderer turns it into the yaw its own
+        // fallen-log geometry needs (planting.ts).
+        const fall = fallLine(x, z);
+        const wobble = (hash2(cx, cz, obSeed + 7) - 0.5) * 0.5;
+        const bearing =
+          (fall.slope > FALL_SLOPE ? Math.atan2(fall.z, fall.x) : galeBearing) + wobble;
+        // Across the fall line — a gale lays trunks side by side, not end to
+        // end, and side by side is what a car meets one at a time.
+        const acrossX = -Math.sin(bearing);
+        const acrossZ = Math.cos(bearing);
+        const trunks = Math.min(
+          BLOWDOWN_MAX,
+          1 + Math.floor(hash2(cx, cz, obSeed + 8) * (1 + gale * BLOWDOWN_MAX)),
+        );
+        for (let i = 0; i < trunks; i++) {
+          // Strung out either side of the candidate, so a blowdown grows
+          // around where a lone trunk would have lain rather than off it.
+          const step = i - (trunks - 1) / 2;
+          const gap =
+            BLOWDOWN_GAP_MIN +
+            hash2(cx * 7 + i, cz, obSeed + 9) * (BLOWDOWN_GAP_MAX - BLOWDOWN_GAP_MIN);
+          const tx = x + acrossX * step * gap;
+          const tz = z + acrossZ * step * gap;
+          const tRoll = i === 0 ? roll : hash2(cx, cz * 7 + i, obSeed + 10);
+          // Bigger in a blowdown: what a gale takes is the old trees that
+          // stood clear of the canopy, and a metre-thick bole down a
+          // hillside is a landmark rather than a stick.
+          const size = 0.8 + hash2(cx * 13 + i, cz, obSeed + 4) + gale * 0.6;
+          const kind = tRoll < ROOTED_LOG_SHARE ? "rootlog" : "log";
+          addSolid(found, tx, tz, kind, size, bearing, tRoll);
         }
       }
     }
-    obCache.set(key, ob);
-    return ob;
+    obCache.set(key, found);
+    return found;
   };
 
   // ── Litter, boulder fields and bedrock outcrops ───────────────────────
@@ -405,7 +553,7 @@ export function createPropField(ctx: PropContext): PropField {
   // an obstacle (SOLID_PROP_HEIGHT) and the renderer scatters it itself.
 
   const rockSeed = (ctx.seed ^ 0x517cc1b7) >>> 0;
-  let rockCache = new Map<string, WildObstacle | null>();
+  let rockCache = new Map<string, WildObstacle[]>();
 
   /** How stony this ground is, 0 off a boulder field and up to 1 in the
    * middle of one. The same field drives both how many stones the ground
@@ -416,12 +564,12 @@ export function createPropField(ctx: PropContext): PropField {
     return n <= BOULDER_FROM ? 0 : (n - BOULDER_FROM) / (1 - BOULDER_FROM);
   };
 
-  const litterInCell = (cx: number, cz: number): WildObstacle | null => {
+  const litterInCell = (cx: number, cz: number): WildObstacle[] => {
     const key = `${cx},${cz}`;
     const hit = rockCache.get(key);
     if (hit !== undefined) return hit;
     if (rockCache.size > 8192) rockCache = new Map();
-    let litter: WildObstacle | null = null;
+    const found: WildObstacle[] = [];
     const x = (cx + 0.1 + hash2(cx, cz, rockSeed + 1) * 0.8) * ROCK_CELL;
     const z = (cz + 0.1 + hash2(cx, cz, rockSeed + 2) * 0.8) * ROCK_CELL;
     const field = bouldery(x, z);
@@ -443,31 +591,96 @@ export function createPropField(ctx: PropContext): PropField {
       if (height >= SOLID_PROP_HEIGHT && offEveryRoad(x, z, radius) && !inAnyStream(x, z, radius)) {
         const y = groundAt(x, z);
         if (y > LAKE_Y + 1) {
-          litter = standSolid({
-            x,
-            z,
-            y,
-            kind,
-            size,
-            spin: hash2(cx, cz, rockSeed + 4) * Math.PI * 2,
-            roll,
-          });
+          found.push(
+            standSolid({
+              x,
+              z,
+              y,
+              kind,
+              size,
+              spin: hash2(cx, cz, rockSeed + 4) * Math.PI * 2,
+              roll,
+            }),
+          );
         }
       }
     }
-    rockCache.set(key, litter);
-    return litter;
+    rockCache.set(key, found);
+    return found;
+  };
+
+  // ── Rocky outcrops: the bedrock breaking surface, in company ─────────
+  // A slab (below) is the cut wall beside the road showing through. This is
+  // the same rock out in the country, and the difference that matters is
+  // that it never comes alone: a bed of stone breaks surface as a knot of
+  // boulders strung along the contour, half-buried, biggest in the middle.
+  const outcropSeed = (ctx.seed ^ 0x9e3d7c11) >>> 0;
+  let outcropCache = new Map<string, WildObstacle[]>();
+
+  const outcropInCell = (cx: number, cz: number): WildObstacle[] => {
+    const key = `${cx},${cz}`;
+    const hit = outcropCache.get(key);
+    if (hit !== undefined) return hit;
+    if (outcropCache.size > 2048) outcropCache = new Map();
+    const found: WildObstacle[] = [];
+    if (hash2(cx, cz, outcropSeed) < OUTCROP_CHANCE) {
+      const x = (cx + 0.15 + hash2(cx, cz, outcropSeed + 1) * 0.7) * OUTCROP_CELL;
+      const z = (cz + 0.15 + hash2(cx, cz, outcropSeed + 2) * 0.7) * OUTCROP_CELL;
+      const fall = fallLine(x, z);
+      if (fall.slope >= OUTCROP_SLOPE) {
+        // Along the contour: rock breaks surface in a band across the slope,
+        // not in a line down it.
+        const alongX = -fall.z;
+        const alongZ = fall.x;
+        const stones =
+          OUTCROP_MIN +
+          Math.floor(hash2(cx, cz, outcropSeed + 3) * (OUTCROP_MAX - OUTCROP_MIN + 1));
+        for (let i = 0; i < stones; i++) {
+          const a = hash2(cx * 31 + i, cz, outcropSeed + 4) - 0.5;
+          const b = hash2(cx, cz * 31 + i, outcropSeed + 5) - 0.5;
+          const sx = x + alongX * a * 2 * OUTCROP_SPREAD + fall.x * b * OUTCROP_SPREAD;
+          const sz = z + alongZ * a * 2 * OUTCROP_SPREAD + fall.z * b * OUTCROP_SPREAD;
+          // Biggest at the middle of the band and smaller out at its ends,
+          // so the cluster has a mass rather than being a scatter of equals.
+          const roll = hash2(cx * 17 + i, cz * 19 + i, outcropSeed + 6);
+          const taper = Math.max(0, 1 - Math.abs(a) * 1.4);
+          const size =
+            OUTCROP_SIZE_MIN + (OUTCROP_SIZE_MAX - OUTCROP_SIZE_MIN) * taper * (0.55 + roll * 0.45);
+          const kind: SolidKind = taper > 0.55 ? "boulder" : "rock";
+          const { height } = solidShape(kind, size);
+          // ...and it beds in only as far as it can while still standing
+          // over that bar: an outcrop with the holes shot out of it is not
+          // an outcrop, so a stone is shallower rather than absent.
+          const sink = Math.max(
+            0,
+            Math.min(height * OUTCROP_SINK * (0.6 + roll * 0.4), height - SOLID_PROP_HEIGHT - 0.05),
+          );
+          addSolid(
+            found,
+            sx,
+            sz,
+            kind,
+            size,
+            hash2(cx + i, cz, outcropSeed + 7) * Math.PI * 2,
+            roll,
+            sink,
+          );
+        }
+      }
+    }
+    outcropCache.set(key, found);
+    return found;
   };
 
   const slabSeed = (ctx.seed ^ 0x2545f491) >>> 0;
-  let slabCache = new Map<string, WildObstacle | null>();
+  let slabCache = new Map<string, WildObstacle[]>();
 
-  const slabInCell = (cx: number, cz: number): WildObstacle | null => {
+  const slabInCell = (cx: number, cz: number): WildObstacle[] => {
     const key = `${cx},${cz}`;
     const hit = slabCache.get(key);
     if (hit !== undefined) return hit;
     if (slabCache.size > 8192) slabCache = new Map();
-    let slab: WildObstacle | null = null;
+    const found: WildObstacle[] = [];
     if (hash2(cx, cz, slabSeed) < SLAB_CHANCE) {
       const x = (cx + 0.15 + hash2(cx, cz, slabSeed + 1) * 0.7) * SLAB_CELL;
       const z = (cz + 0.15 + hash2(cx, cz, slabSeed + 2) * 0.7) * SLAB_CELL;
@@ -491,34 +704,36 @@ export function createPropField(ctx: PropContext): PropField {
           if (size > 1 && offEveryRoad(x, z, radius) && !inAnyStream(x, z, radius)) {
             const y = groundAt(x, z);
             if (y > LAKE_Y + 1) {
-              slab = standSolid({
-                x,
-                z,
-                y,
-                kind: "slab",
-                size,
-                spin: hash2(cx, cz, slabSeed + 4) * Math.PI * 2,
-                roll: hash2(cx, cz, slabSeed + 5),
-              });
+              found.push(
+                standSolid({
+                  x,
+                  z,
+                  y,
+                  kind: "slab",
+                  size,
+                  spin: hash2(cx, cz, slabSeed + 4) * Math.PI * 2,
+                  roll: hash2(cx, cz, slabSeed + 5),
+                }),
+              );
             }
           }
         }
       }
     }
-    slabCache.set(key, slab);
-    return slab;
+    slabCache.set(key, found);
+    return found;
   };
 
   // ── Human traces: the cut timber a logging block leaves behind ────────
   const timberSeed = (ctx.seed ^ 0x7feb352d) >>> 0;
-  let timberCache = new Map<string, WildObstacle | null>();
+  let timberCache = new Map<string, WildObstacle[]>();
 
-  const timberInCell = (cx: number, cz: number): WildObstacle | null => {
+  const timberInCell = (cx: number, cz: number): WildObstacle[] => {
     const key = `${cx},${cz}`;
     const hit = timberCache.get(key);
     if (hit !== undefined) return hit;
     if (timberCache.size > 2048) timberCache = new Map();
-    let stack: WildObstacle | null = null;
+    const found: WildObstacle[] = [];
     if (hash2(cx, cz, timberSeed) < TIMBER_CHANCE) {
       const x = (cx + 0.15 + hash2(cx, cz, timberSeed + 1) * 0.7) * TIMBER_CELL;
       const z = (cz + 0.15 + hash2(cx, cz, timberSeed + 2) * 0.7) * TIMBER_CELL;
@@ -528,98 +743,138 @@ export function createPropField(ctx: PropContext): PropField {
         if (offEveryRoad(x, z, radius) && !inAnyStream(x, z, radius)) {
           const y = groundAt(x, z);
           if (y > LAKE_Y + 1.2) {
-            stack = standSolid({
-              x,
-              z,
-              y,
-              kind: "timber",
-              size,
-              spin: hash2(cx, cz, timberSeed + 4) * Math.PI * 2,
-              roll: hash2(cx, cz, timberSeed + 5),
-            });
+            found.push(
+              standSolid({
+                x,
+                z,
+                y,
+                kind: "timber",
+                size,
+                spin: hash2(cx, cz, timberSeed + 4) * Math.PI * 2,
+                roll: hash2(cx, cz, timberSeed + 5),
+              }),
+            );
           }
         }
       }
     }
-    timberCache.set(key, stack);
-    return stack;
+    timberCache.set(key, found);
+    return found;
   };
 
-  /** Collect one cell field's props within `r` of a point. */
+  /** Collect one cell field's props within `r` of a point. A cell may hold
+   * several — a blowdown is a handful of trunks and an outcrop a knot of
+   * stones — so the reach is widened by the furthest one of those can stand
+   * from the cell's own candidate. */
   const gather = (
     found: WildObstacle[],
     cell: number,
-    inCell: (cx: number, cz: number) => WildObstacle | null,
+    spread: number,
+    inCell: (cx: number, cz: number) => WildObstacle[],
     x: number,
     z: number,
     r: number,
   ): void => {
-    for (let cx = Math.floor((x - r - 3) / cell); cx <= Math.floor((x + r + 3) / cell); cx++) {
-      for (let cz = Math.floor((z - r - 3) / cell); cz <= Math.floor((z + r + 3) / cell); cz++) {
-        const ob = inCell(cx, cz);
-        if (!ob || !standing(ob)) continue;
-        const dx = ob.x - x;
-        const dz = ob.z - z;
-        if (dx * dx + dz * dz <= (r + ob.radius) * (r + ob.radius)) found.push(ob);
+    const edge = r + 3 + spread;
+    for (let cx = Math.floor((x - edge) / cell); cx <= Math.floor((x + edge) / cell); cx++) {
+      for (let cz = Math.floor((z - edge) / cell); cz <= Math.floor((z + edge) / cell); cz++) {
+        for (const ob of inCell(cx, cz)) {
+          if (!standing(ob)) continue;
+          const dx = ob.x - x;
+          const dz = ob.z - z;
+          if (dx * dx + dz * dz <= (r + ob.radius) * (r + ob.radius)) found.push(ob);
+        }
       }
     }
   };
 
   const obstaclesNear = (x: number, z: number, r: number): WildObstacle[] => {
     const found: WildObstacle[] = [];
-    gather(found, OB_CELL, obstacleInCell, x, z, r);
-    gather(found, ROCK_CELL, litterInCell, x, z, r);
-    gather(found, SLAB_CELL, slabInCell, x, z, r);
-    gather(found, TIMBER_CELL, timberInCell, x, z, r);
+    gather(found, OB_CELL, BLOWDOWN_GAP_MAX * BLOWDOWN_MAX, obstacleInCell, x, z, r);
+    gather(found, ROCK_CELL, 0, litterInCell, x, z, r);
+    gather(found, SLAB_CELL, 0, slabInCell, x, z, r);
+    gather(found, TIMBER_CELL, 0, timberInCell, x, z, r);
+    gather(found, OUTCROP_CELL, OUTCROP_SPREAD * 2, outcropInCell, x, z, r);
     return found;
   };
 
   // ── The forest: one seeded trunk candidate per tree cell ───────────────
   const treeSeed = (ctx.seed ^ 0x1d2c6fe1) >>> 0;
-  let treeCache = new Map<string, WildObstacle | null>();
+  let treeCache = new Map<string, WildObstacle[]>();
 
-  const treeInCell = (cx: number, cz: number): WildObstacle | null => {
+  /** Stand one trunk of a clump, if the ground where it landed will have it.
+   * Every stem is checked on its own account: a clump thrown across the edge
+   * of a stream valley loses the stems that fell in it and keeps the rest,
+   * which is what a real thicket does at a bank. */
+  const addTree = (
+    into: WildObstacle[],
+    x: number,
+    z: number,
+    grove: number,
+    size: number,
+    spin: number,
+    roll: number,
+  ): void => {
+    const near = roadNear(x, z);
+    if (near && near.d < half + TREE_ROAD_CLEAR) return;
+    if (spurClearance(x, z) < TREE_ROAD_CLEAR || inAnyStream(x, z, 1.5)) return;
+    // Feet on the RIDDEN lattice ground, same as the props: the trunk must
+    // stand exactly on the surface the car drives.
+    const y = groundAt(x, z);
+    if (y <= LAKE_Y + 1.2) return;
+    into.push(standSolid({ x, z, y, kind: "tree", size, spin, roll, grove }));
+  };
+
+  const treeInCell = (cx: number, cz: number): WildObstacle[] => {
     const key = `${cx},${cz}`;
     const hit = treeCache.get(key);
     if (hit !== undefined) return hit;
     if (treeCache.size > 16384) treeCache = new Map();
-    let tree: WildObstacle | null = null;
+    const found: WildObstacle[] = [];
     const x = (cx + 0.1 + hash2(cx, cz, treeSeed + 1) * 0.8) * TREE_CELL;
     const z = (cz + 0.1 + hash2(cx, cz, treeSeed + 2) * 0.8) * TREE_CELL;
     const grove = groveAt(x, z);
-    const chance = Math.min(
-      STAND_CEILING,
-      TREE_DENSITY *
-        ctx.forestScale *
-        REGIONS[regionAt(x, z)].forest *
-        GROVES[grove].density *
-        standDensity(x, z),
-    );
+    const stand = standDensity(x, z);
+    // How many stems this candidate grows, and — because the clump has to
+    // cost the landscape nothing — the number the cell's own chance is then
+    // divided by. Thick ground grows the big knots; the ceiling is what
+    // keeps the thickest of them a thicket rather than a hedge.
+    const crowd = Math.min(stand, 3);
+    const stems = Math.min(CLUMP_MAX, 1 + Math.floor(hash2(cx, cz, treeSeed + 6) * (1 + crowd)));
+    const mean = 1 + (Math.min(CLUMP_MAX, 1 + crowd) - 1) / 2;
+    const chance =
+      Math.min(
+        STAND_CEILING,
+        TREE_DENSITY *
+          ctx.forestScale *
+          REGIONS[regionAt(x, z)].forest *
+          GROVES[grove].density *
+          stand,
+      ) / mean;
     if (hash2(cx, cz, treeSeed) < chance) {
-      const near = roadNear(x, z);
-      const clear =
-        (!near || near.d > half + TREE_ROAD_CLEAR) && spurClearance(x, z) > TREE_ROAD_CLEAR;
-      if (clear && !inAnyStream(x, z, 1.5)) {
-        // Feet on the RIDDEN lattice ground, same as the props: the trunk
-        // must stand exactly on the surface the car drives.
-        const y = groundAt(x, z);
-        if (y > LAKE_Y + 1.2) {
-          const size = 0.75 + hash2(cx, cz, treeSeed + 3) * 0.6;
-          tree = standSolid({
-            x,
-            z,
-            y,
-            kind: "tree",
-            size,
-            spin: hash2(cx, cz, treeSeed + 4) * Math.PI * 2,
-            roll: hash2(cx, cz, treeSeed + 5),
-            grove,
-          });
-        }
+      for (let i = 0; i < stems; i++) {
+        const a = hash2(cx * 29 + i, cz, treeSeed + 7) * Math.PI * 2;
+        const d =
+          i === 0
+            ? 0
+            : CLUMP_NEAR + hash2(cx, cz * 29 + i, treeSeed + 8) * (CLUMP_FAR - CLUMP_NEAR);
+        // One tree of a knot is always older than the others — a clump of
+        // identical stems is a hedge, and a hedge is what an even scatter
+        // was trying not to be.
+        const grade = i === 0 ? 1 : 0.62 + hash2(cx + i, cz + i, treeSeed + 9) * 0.4;
+        addTree(
+          found,
+          x + Math.cos(a) * d,
+          z + Math.sin(a) * d,
+          grove,
+          (0.75 + hash2(cx * 11 + i, cz, treeSeed + 3) * 0.6) * grade,
+          hash2(cx, cz * 11 + i, treeSeed + 4) * Math.PI * 2,
+          hash2(cx * 7 + i, cz * 5 + i, treeSeed + 5),
+        );
       }
     }
-    treeCache.set(key, tree);
-    return tree;
+    treeCache.set(key, found);
+    return found;
   };
 
   // The guard groves' trunks (R14): the same solid trees the forest field
@@ -655,21 +910,25 @@ export function createPropField(ctx: PropContext): PropField {
 
   const treesNear = (x: number, z: number, r: number): WildObstacle[] => {
     const found: WildObstacle[] = [];
+    // A cell's stems stand up to a clump radius out from its candidate, so
+    // the walk has to reach a clump further than the circle asked for.
+    const edge = r + 1 + CLUMP_FAR;
     for (
-      let cx = Math.floor((x - r - 1) / TREE_CELL);
-      cx <= Math.floor((x + r + 1) / TREE_CELL);
+      let cx = Math.floor((x - edge) / TREE_CELL);
+      cx <= Math.floor((x + edge) / TREE_CELL);
       cx++
     ) {
       for (
-        let cz = Math.floor((z - r - 1) / TREE_CELL);
-        cz <= Math.floor((z + r + 1) / TREE_CELL);
+        let cz = Math.floor((z - edge) / TREE_CELL);
+        cz <= Math.floor((z + edge) / TREE_CELL);
         cz++
       ) {
-        const tree = treeInCell(cx, cz);
-        if (!tree || !standing(tree)) continue;
-        const dx = tree.x - x;
-        const dz = tree.z - z;
-        if (dx * dx + dz * dz <= (r + tree.radius) * (r + tree.radius)) found.push(tree);
+        for (const tree of treeInCell(cx, cz)) {
+          if (!standing(tree)) continue;
+          const dx = tree.x - x;
+          const dz = tree.z - z;
+          if (dx * dx + dz * dz <= (r + tree.radius) * (r + tree.radius)) found.push(tree);
+        }
       }
     }
     for (const guard of guards.near(x, z, r)) {
@@ -687,6 +946,7 @@ export function createPropField(ctx: PropContext): PropField {
   const invalidate = (): void => {
     obCache = new Map();
     rockCache = new Map();
+    outcropCache = new Map();
     slabCache = new Map();
     timberCache = new Map();
     treeCache = new Map();

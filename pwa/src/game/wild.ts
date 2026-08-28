@@ -12,7 +12,7 @@
 // does.
 
 import * as THREE from "three";
-import { createRng, inStream, type Season, type Track, type WildObstacle } from "@engine";
+import { createRng, hash2, inStream, type Season, type Track, type WildObstacle } from "@engine";
 
 import { buildFloraField, type FloraPlacement } from "./flora.ts";
 import type { Biome, Community } from "./biome.ts";
@@ -25,6 +25,7 @@ import {
   samePlace,
   softMix,
   treePlacement,
+  understoryAround,
 } from "./planting.ts";
 import { LAKE_Y, type Terrain } from "./terrain.ts";
 
@@ -37,6 +38,46 @@ const WILD_FAR = 430;
 /** The prop kinds drawn as instanced rock — everything the ground made of
  * stone. The wooden ones (fallen trunks, cut stumps) go through flora. */
 const STONE_KINDS = new Set<WildObstacle["kind"]>(["boulder", "rock", "slab"]);
+
+/** The share of the wild's loose stone that has gone over to moss, and the
+ * green it wears. Nothing in a boreal forest stays bare for long: a stone
+ * lying in the shade for fifty years is a green stone with grey sides, and
+ * the difference between rock that has been there and rock that was PUT
+ * there is most of what makes a hillside read as old. */
+const MOSSY_SHARE = 0.45;
+const MOSS_COLOR = 0x86a84e;
+
+/** The lump every wild stone is drawn from, with moss laid over the faces
+ * that look at the sky. The colours are absolute, so the material carries
+ * none of its own and the per-instance tint still varies the grey under the
+ * green. Facets are flat at this detail, so each one is either a top, an
+ * upper flank or a side, and the moss line falls where the rock turns over:
+ * the caps go fully over, the flanks most of the way, the sides not at all.
+ * A cap alone is not enough — it is a few pixels of a stone seen from a car,
+ * and what has to read is the whole UPPER HALF being green. */
+function mossyStone(rock: number): THREE.BufferGeometry {
+  const geo = new THREE.DodecahedronGeometry(1);
+  const normal = geo.getAttribute("normal");
+  const base = new THREE.Color(rock);
+  const moss = new THREE.Color(MOSS_COLOR);
+  const c = new THREE.Color();
+  const colors: number[] = [];
+  for (let i = 0; i < normal.count; i++) {
+    const up = normal.getY(i);
+    c.copy(base).lerp(moss, Math.min(1, Math.max(0, (up - 0.1) * 1.6)));
+    colors.push(c.r, c.g, c.b);
+  }
+  geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  return geo;
+}
+
+/** Whether this stone is one of the mossy ones — from where it lies, so it
+ * keeps its coat across a cell being dropped and rebuilt. An outcrop's face
+ * is freshly broken bedrock and never takes one. */
+function mossGrows(ob: WildObstacle): boolean {
+  if (ob.kind === "slab") return false;
+  return hash2(Math.round(ob.x * 4), Math.round(ob.z * 4), 0x5eaf1a55) < MOSSY_SHARE;
+}
 
 /** How one stone prop sits in the ground. Each kind has its own seat, and
  * each formula is the one the engine wrote its collision circle and its
@@ -143,7 +184,10 @@ export function buildWild(
   group.add(plants.group);
   const stoneGeo = new THREE.DodecahedronGeometry(1);
   const stoneMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(biome.ground.bedrock) });
+  const mossGeo = mossyStone(biome.ground.bedrock);
+  const mossMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   let stoneMesh: THREE.InstancedMesh | null = null;
+  let mossMesh: THREE.InstancedMesh | null = null;
 
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
@@ -152,40 +196,55 @@ export function buildWild(
   const tint = new THREE.Color();
   const dark = new THREE.Color(biome.ground.bedrockDark);
 
-  /** Rewrite the stone pool from every cell standing. Grown in blocks so a
-   * cell arriving does not reallocate the buffer each time. */
-  const flushStones = (): void => {
-    const all: WildObstacle[] = [];
-    for (const cell of cells.values()) all.push(...cell.stones);
-    if (!stoneMesh || stoneMesh.instanceMatrix.count < all.length) {
-      if (stoneMesh) {
-        group.remove(stoneMesh);
-        stoneMesh.dispose();
+  /** Rewrite one stone pool from a list. Grown in blocks so a cell arriving
+   * does not reallocate the buffer each time. */
+  const writeStones = (
+    mesh: THREE.InstancedMesh | null,
+    geo: THREE.BufferGeometry,
+    mat: THREE.Material,
+    all: WildObstacle[],
+  ): THREE.InstancedMesh => {
+    let pool = mesh;
+    if (!pool || pool.instanceMatrix.count < all.length) {
+      if (pool) {
+        group.remove(pool);
+        pool.dispose();
       }
-      stoneMesh = new THREE.InstancedMesh(
-        stoneGeo,
-        stoneMat,
-        Math.ceil((all.length + 1) / 64) * 64,
-      );
-      group.add(stoneMesh);
+      pool = new THREE.InstancedMesh(geo, mat, Math.ceil((all.length + 1) / 64) * 64);
+      group.add(pool);
     }
     all.forEach((ob, i) => {
       q.setFromAxisAngle(UP, ob.spin);
       stoneMatrix(ob, m, q, v, sc);
-      stoneMesh?.setMatrixAt(i, m);
+      pool.setMatrixAt(i, m);
       tint.setScalar(0.75 + (ob.spin % 1) * 0.35);
       // An outcrop is the bedrock itself showing through, not a stone that
       // rolled here: it takes the darker face.
       if (ob.kind === "slab") tint.lerp(dark, 0.6);
-      stoneMesh?.setColorAt(i, tint);
+      pool.setColorAt(i, tint);
     });
     // Only what was written is drawn: an instance nobody sets keeps the
     // identity matrix, which puts a boulder on the start line.
-    stoneMesh.count = all.length;
-    stoneMesh.visible = all.length > 0;
-    stoneMesh.instanceMatrix.needsUpdate = true;
-    if (stoneMesh.instanceColor) stoneMesh.instanceColor.needsUpdate = true;
-    stoneMesh.computeBoundingSphere();
+    pool.count = all.length;
+    pool.visible = all.length > 0;
+    pool.instanceMatrix.needsUpdate = true;
+    if (pool.instanceColor) pool.instanceColor.needsUpdate = true;
+    pool.computeBoundingSphere();
+    return pool;
+  };
+
+  /** Rewrite both stone pools from every cell standing — the bare rock and
+   * the mossed-over rock are two meshes because the moss is baked into the
+   * geometry, which is what lets it sit on the TOP of a stone rather than
+   * washing the whole thing green. */
+  const flushStones = (): void => {
+    const bare: WildObstacle[] = [];
+    const mossed: WildObstacle[] = [];
+    for (const cell of cells.values()) {
+      for (const ob of cell.stones) (mossGrows(ob) ? mossed : bare).push(ob);
+    }
+    stoneMesh = writeStones(stoneMesh, stoneGeo, stoneMat, bare);
+    mossMesh = writeStones(mossMesh, mossGeo, mossMat, mossed);
   };
 
   const buildCell = (cx: number, cz: number): WildCell => {
@@ -209,8 +268,18 @@ export function buildWild(
       );
     const riparian = (x: number, z: number): boolean =>
       inStream(field.streams, x, z, RIPARIAN_BAND);
+    // Out here every trunk is already 150 m from the nearest road, so the
+    // only ground its skirt has to keep off is the water.
+    const understory = {
+      biome,
+      rng: () => rng.next(),
+      groundAt: heightAt,
+      blocked: (x: number, z: number): boolean => inStream(field.streams, x, z, 1),
+    };
     for (const tree of treesHere) {
-      placements.push(treePlacement(tree, biome, riparian(tree.x, tree.z)));
+      const rip = riparian(tree.x, tree.z);
+      placements.push(treePlacement(tree, biome, rip));
+      for (const plant of understoryAround(tree, rip, understory)) placements.push(plant);
     }
 
     // The soft small stuff between the trunks — a light app-side scatter.
@@ -409,8 +478,11 @@ export function buildWild(
   const dispose = (): void => {
     plants.dispose();
     stoneMesh?.dispose();
+    mossMesh?.dispose();
     stoneGeo.dispose();
+    mossGeo.dispose();
     stoneMat.dispose();
+    mossMat.dispose();
   };
 
   return { group, sync, cull, clearNear, retireAt, dispose };
