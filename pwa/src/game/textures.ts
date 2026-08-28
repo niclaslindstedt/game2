@@ -221,3 +221,78 @@ export const puffTexture = once((): THREE.CanvasTexture => {
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 });
+
+/** THE BILLOW — the mask a puff wears when it is allowed to be METRES
+ * across rather than centimetres, which is what separates a dust cloud
+ * from a tire's little cough of smoke.
+ *
+ * The small puff's three concentric rings cannot be scaled up to this: a
+ * blob whose alpha climbs evenly toward its middle is a RADIAL GRADIENT,
+ * and at two metres across that reads as a lens smudge rather than as
+ * matter. What a real puff has is LUMPS — an outline that bulges the wrong
+ * way, and a bright shoulder off to one side where the light catches the
+ * top of it — so this one is built as a cauliflower instead: an irregular
+ * rim, then four clusters that walk OFF the centre as they brighten. Every
+ * puff is drawn at its own angle, so the same lump lands somewhere
+ * different each time and a hundred of them never repeat.
+ *
+ * Twenty-four pixels and nearest-filtered, like everything else here: at
+ * the sizes this is drawn the mask's own pixels are visible, and they are
+ * meant to be. This is a chunkier cloud, not a softer one. */
+export const billowTexture = once((): THREE.CanvasTexture => {
+  const size = 24;
+  const { canvas, ctx } = makeCanvas(size);
+  ctx.clearRect(0, 0, size, size);
+  const mid = size / 2;
+  /** Each cluster is `[alpha, [x, y, r]…]`, in fractions of the half-width
+   * from the middle. Painted rim-first, so a later cluster covers what is
+   * under it and the alpha climbs in visible steps rather than a ramp. */
+  const clusters: [number, [number, number, number][]][] = [
+    // The rim: barely there, and made of lobes ONLY — no disc under them.
+    // A big circle at the bottom of the stack is what turns a puff back
+    // into a smudge however lumpy the layers above it are.
+    [
+      0.22,
+      [
+        [0.28, -0.18, 0.55],
+        [-0.3, 0.12, 0.5],
+        [0.1, 0.34, 0.48],
+        [-0.22, -0.36, 0.44],
+        [0.4, 0.22, 0.4],
+        [-0.44, -0.02, 0.36],
+      ],
+    ],
+    // The body, shouldered up and to one side.
+    [
+      0.46,
+      [
+        [0.12, -0.12, 0.42],
+        [-0.18, 0.16, 0.34],
+        [0.3, 0.18, 0.28],
+      ],
+    ],
+    // The lit shoulder — off centre on purpose, so the puff has a TOP.
+    [
+      0.72,
+      [
+        [0.14, -0.2, 0.3],
+        [-0.08, 0.02, 0.22],
+      ],
+    ],
+    // …and the core it falls away from.
+    [1, [[0.18, -0.26, 0.16]]],
+  ];
+  for (const [alpha, lobes] of clusters) {
+    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+    for (const [dx, dy, r] of lobes) {
+      ctx.beginPath();
+      ctx.arc(mid + dx * mid, mid + dy * mid, r * mid, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+});

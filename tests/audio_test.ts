@@ -26,7 +26,12 @@ import { TUNING, createGame, standSolid, step, type GameEvent } from "@engine";
 
 import { RUN_BANK } from "../pwa/src/game/audio/bank.ts";
 import { createDriveBed } from "../pwa/src/game/audio/drive-bed.ts";
-import { playRoadGrain, type RoadVoice } from "../pwa/src/game/audio/road-grain.ts";
+import {
+  playRoadGrain,
+  SURFACES,
+  WET_SURFACES,
+  type RoadVoice,
+} from "../pwa/src/game/audio/road-grain.ts";
 import { GRAIN_MS, noteHz, rpmAt } from "../pwa/src/game/audio/engine-bed.ts";
 import { playDef } from "../pwa/src/game/audio/play.ts";
 import { soundForEvent } from "../pwa/src/game/audio/route.ts";
@@ -495,6 +500,7 @@ describe("the tyres", () => {
     slide: 0,
     sideways: 0,
     airborne: false,
+    wet: 0,
   };
 
   /** The summed level of the ROLLING bed — the surface's roar (a still
@@ -561,6 +567,98 @@ describe("the tyres", () => {
     expect(scrub({ surface: "asphalt", corner: 0 })).toBe(0);
     expect(scrub({ surface: "gravel", corner: 1 })).toBe(0);
     expect(scrub({ surface: "gravel", corner: 1, slide: 0.8 })).toBeGreaterThan(0);
+  });
+});
+
+describe("the weather", () => {
+  const ROLLING: RoadVoice = {
+    speed: 30,
+    air: 0.8,
+    surface: "gravel",
+    corner: 0,
+    slide: 0,
+    sideways: 0,
+    airborne: false,
+    wet: 0,
+  };
+  const voices = (voice: Partial<RoadVoice>): ReturnType<typeof recorder> => {
+    const rec = recorder();
+    playRoadGrain(rec, { ...ROLLING, ...voice }, 0);
+    return rec;
+  };
+  /** The surface's own roar, told from the rain's patter by how broad it
+   * is — every surface band here is wider than 1, the patter narrower. */
+  const roar = (voice: Partial<RoadVoice>): number | undefined =>
+    voices(voice).noises.find((n) => n.filter?.type === "bandpass" && (n.filter.q ?? 0) < 1)?.filter
+      ?.frequency;
+
+  it("turns gravel into mud rather than putting rain on top of it", () => {
+    const dry = SURFACES.gravel as (typeof SURFACES)[string];
+    const mud = WET_SURFACES.gravel as (typeof SURFACES)[string];
+    // A wet stone does not rattle. The crunch is the layer that says
+    // "loose surface", and water is exactly what takes it away.
+    expect(mud.grain).toBeLessThan(dry.grain * 0.2);
+    // The roar drops with it: mud churns where dry grit rushes.
+    expect(mud.hz).toBeLessThan(dry.hz);
+    // …and the STRAIGHT gets louder, which is the tell that this is a
+    // different surface rather than a quieter one. What is being heard is
+    // the water under the tread instead of the stones on top of it, and
+    // that does not care which way the car is pointing — so the cornering
+    // multiplier comes down as the cruise goes up.
+    expect(mud.level).toBeGreaterThan(dry.level);
+    expect(mud.corner).toBeLessThan(dry.corner);
+  });
+
+  it("makes wet tarmac the one surface the rain brightens", () => {
+    const dry = SURFACES.asphalt as (typeof SURFACES)[string];
+    const wet = WET_SURFACES.asphalt as (typeof SURFACES)[string];
+    expect(wet.hz).toBeGreaterThan(dry.hz * 4);
+    expect(wet.level).toBeGreaterThan(dry.level * 2);
+  });
+
+  it("mixes the two surfaces rather than flipping between them", () => {
+    // Weather comes in three strengths and the middle one has to sound
+    // like the middle one: a stage that is dry until it is suddenly mud is
+    // a stage with one wet sound in it.
+    const dry = roar({}) as number;
+    const damp = roar({ wet: 0.5 }) as number;
+    const soaked = roar({ wet: 1 }) as number;
+    expect(soaked).toBeLessThan(damp);
+    expect(damp).toBeLessThan(dry);
+  });
+
+  it("rains on a car that is doing nothing at all", () => {
+    // The weather is the one bed that is not about the car: it plays over
+    // a parked car and over one in mid-air, where every other layer here
+    // has already stopped.
+    expect(voices({ speed: 0, air: 0, wet: 1 }).noises.length).toBeGreaterThan(
+      voices({ speed: 0, air: 0 }).noises.length,
+    );
+    expect(voices({ airborne: true, wet: 1 }).noises.length).toBeGreaterThan(
+      voices({ airborne: true }).noises.length,
+    );
+  });
+
+  it("keeps the storm beside the wind rather than over it", () => {
+    // Rain is heard for a whole run, so it is mixed like a bed and not
+    // like an event — and a storm is louder than rain, or the three skies
+    // are two.
+    const level = (wet: number): number =>
+      voices({ wet }).noises.reduce((sum, n) => sum + (n.volume ?? 0), 0);
+    expect(level(1) - level(0)).toBeLessThan(0.04);
+    expect(level(0.6)).toBeGreaterThan(level(0));
+    expect(level(1)).toBeGreaterThan(level(0.6));
+  });
+
+  it("stops a wet tyre singing on tarmac", () => {
+    // The squeal is rubber gripping and letting go against the road several
+    // hundred times a second, and a film of water is precisely what stops
+    // that happening.
+    const sing = (wet: number): number =>
+      voices({ surface: "asphalt", corner: 1, wet })
+        .noises.filter((n) => (n.filter?.q ?? 0) > 5)
+        .reduce((sum, n) => sum + (n.volume ?? 0), 0);
+    expect(sing(1)).toBeLessThan(sing(0) * 0.5);
   });
 });
 

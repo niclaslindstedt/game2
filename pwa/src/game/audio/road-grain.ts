@@ -11,6 +11,14 @@
 //   TYRES    what the wheels are rolling on — the surface, heard
 //   WIND     how fast the air is going past, which is what sells speed
 //   SCRUB    the drift: a tyre asked to go somewhere it is not pointing
+//   RAIN     the weather, which is heard whatever the wheels are doing
+//
+// AND WATER CHANGES WHAT A SURFACE IS, rather than merely adding to it. A
+// soaked gravel road is not a gravel road with rain over the top: the
+// stones stop rattling and start squelching, the roar drops, and a film of
+// water under the tread makes a straight LOUDER where dry grit makes it
+// quieter. So every surface has a wet twin and the bed reads somewhere
+// between the two — see `WET_SURFACES`.
 //
 // WHY THE DRIFT IS THE LOUDEST THING HERE. This game is about the moment the
 // car stops going where it is pointing; the scrub bed IS that moment's audio,
@@ -108,6 +116,67 @@ export const SURFACES: Record<string, SurfaceVoice> = {
   nature: { color: "brown", hz: 190, q: 0.7, level: 0.026, corner: 1.6, grain: 0.011 },
 };
 
+/**
+ * THE SAME FOUR SURFACES WITH WATER STANDING ON THEM.
+ *
+ * Not a filter over the dry voice — a different surface, because that is
+ * what rain makes of one. Two things move on every row and they move
+ * opposite ways: the `grain` all but disappears (a wet stone is a stone
+ * that has been stuck to the road, and mud does not rattle), while `level`
+ * goes UP, because the loudest thing about a wet road is the water itself
+ * being squeezed out from under the tread — which is also why the `corner`
+ * multipliers come down. A wet surface is loud all the time, so it has
+ * less left to say when the car turns.
+ */
+export const WET_SURFACES: Record<string, SurfaceVoice> = {
+  // MUD, which is what this game's home surface becomes in the rain: the
+  // dry road's busy mid-range rush drops most of an octave into a heavy
+  // wet churn with no stones in it at all, and the corner is the surface
+  // being thrown in lumps rather than sprayed in grains.
+  gravel: { color: "pink", hz: 210, q: 0.75, level: 0.0125, corner: 4.2, grain: 0.0004 },
+  // Wet tarmac: the one surface the rain makes BRIGHTER. A sealed road
+  // holds a film of water the tread has to cut through, and that hiss is
+  // the whole sound of a wet sealed stage — the dull bass drumming of the
+  // dry road is still under it, but it is no longer the only thing there.
+  asphalt: { color: "pink", hz: 1150, q: 0.6, level: 0.0135, corner: 1.9, grain: 0 },
+  // Sodden turf: heavier and duller still, and squelching rather than
+  // rough. Being off the road in the rain should sound like a worse
+  // mistake than being off it in the dry.
+  nature: { color: "brown", hz: 155, q: 0.7, level: 0.032, corner: 1.4, grain: 0.0035 },
+  // Water is already water. Left identical on purpose, so a ford sounds
+  // like a ford whatever the sky is doing.
+  water: { color: "pink", hz: 900, q: 0.6, level: 0.036, corner: 1.3, grain: 0 },
+};
+
+/** The dry surface and its wet twin, mixed. `wet` is 0 on a clear stage,
+ * about half in rain and 1 in a storm, so drizzle genuinely lands between
+ * the two rather than flipping to mud at a threshold. The noise COLOUR
+ * cannot be mixed, so it goes with whichever side is carrying more of the
+ * sound — which is inaudible where they are level, because that is exactly
+ * where the two spectra overlap most. */
+function surfaceUnder(surface: string, wet: number): SurfaceVoice {
+  const dry = SURFACES[surface] ?? (SURFACES.gravel as SurfaceVoice);
+  const soaked = WET_SURFACES[surface];
+  if (soaked === undefined || wet <= 0) return dry;
+  const mix = (a: number, b: number): number => a + (b - a) * wet;
+  return {
+    color: wet > 0.5 ? soaked.color : dry.color,
+    hz: mix(dry.hz, soaked.hz),
+    q: mix(dry.q, soaked.q),
+    level: mix(dry.level, soaked.level),
+    corner: mix(dry.corner, soaked.corner),
+    grain: mix(dry.grain, soaked.grain),
+  };
+}
+
+/** How loud the weather itself is, and where it sits. Two layers, because
+ * rain heard from inside a moving car is two things: the SHEET of it in
+ * the air all around, and the PATTER of the drops that are hitting the
+ * car. Both lift with speed — a car standing still is rained on, a car at
+ * 140 km/h is driving INTO the rain, and the difference is most of what
+ * makes weather feel like part of the driving rather than a backdrop. */
+const RAIN = { sheet: 0.0115, patter: 0.0075, pace: 0.55 };
+
 /** The road under one car at one instant. Everything the grain needs, and
  * nothing about where any of it came from. */
 export type RoadVoice = {
@@ -128,6 +197,9 @@ export type RoadVoice = {
   sideways: number;
   /** Nothing under the wheels. */
   airborne: boolean;
+  /** How wet the stage is, 0..1 — clear, rain, storm. It picks the surface
+   * (see `WET_SURFACES`) and it is the weather's own voice. */
+  wet: number;
 };
 
 /**
@@ -137,7 +209,7 @@ export type RoadVoice = {
  * one grain to the next — noise has none to carry.
  */
 export function playRoadGrain(synth: Synth, voice: RoadVoice, at: number): void {
-  const { speed, air, surface, corner, slide, sideways, airborne } = voice;
+  const { speed, air, surface, corner, slide, sideways, airborne, wet } = voice;
 
   // ── The air ────────────────────────────────────────────────────────────
   // Wind is the layer that actually sells pace: pitch says revs, noise says
@@ -155,14 +227,47 @@ export function playRoadGrain(synth: Synth, voice: RoadVoice, at: number): void 
     filter: { type: "highpass", frequency: 400 + 1500 * air },
   });
 
+  // ── The weather ────────────────────────────────────────────────────────
+  // Rain is the one bed that has nothing to do with the car: it plays over
+  // a stationary one, it plays over a car in the air, and it does not stop
+  // when the tyres do. Only its urgency is the driver's — the faster the
+  // car goes the harder it is being rained ON.
+  if (wet > 0) {
+    const drive = 1 + RAIN.pace * air;
+    // The sheet: everything falling everywhere, up above the tyres where
+    // nothing else in the mix lives.
+    synth.noise({
+      at,
+      durationMs: NOISE_LIFE_MS,
+      attackMs: NOISE_ATTACK_MS,
+      holdMs: NOISE_HOLD_MS,
+      color: "pink",
+      volume: RAIN.sheet * wet * drive,
+      filter: { type: "highpass", frequency: 2600 },
+    });
+    // …and the drops that are actually hitting the car, which is the layer
+    // that puts the player INSIDE it rather than under it. Shorter and
+    // narrower: a body panel being struck has a pitch, where the sky does
+    // not.
+    synth.noise({
+      at,
+      durationMs: NOISE_LIFE_MS * 0.7,
+      attackMs: NOISE_ATTACK_MS * 0.7,
+      holdMs: NOISE_HOLD_MS * 0.7,
+      color: "brown",
+      volume: RAIN.patter * wet * drive,
+      filter: { type: "bandpass", frequency: 620 + 260 * air, q: 1.1 },
+    });
+  }
+
   // Airborne, the only things left are the engine (free-revving, which the
-  // load model handles) and the wind. The silence where the tyres were is what
+  // load model handles), the wind and the weather. The silence where the tyres were is what
   // a jump sounds like, and it is worth more than any effect that could be put
   // in its place.
   if (airborne || speed < ROLL_FLOOR) return;
 
   // ── The tyres ──────────────────────────────────────────────────────────
-  const road = SURFACES[surface] ?? (SURFACES.gravel as SurfaceVoice);
+  const road = surfaceUnder(surface, wet);
   const roll = Math.min(1, air / 0.8);
   // The cornering multiplier: 1 dead ahead, `road.corner` with the tyres at
   // their lateral limit. It is what makes a straight quiet and a corner an
@@ -204,7 +309,14 @@ export function playRoadGrain(synth: Synth, voice: RoadVoice, at: number): void 
     // inside it, and it is the one place in this game anything squeals. It is
     // driven by the LOAD rather than by the slide, so a corner taken flat and
     // gripped still howls; a genuine slide takes over from there.
-    const scrub = Math.max(slip, Math.max(0, (corner - SING_FLOOR) / (1 - SING_FLOOR))) * roll;
+    // A WET TYRE DOES NOT SING. The squeal is rubber gripping and letting
+    // go against the road several hundred times a second, and a film of
+    // water is exactly the thing that stops it happening — what a sealed
+    // road gives in the rain is the hiss already in its wet voice above.
+    const scrub =
+      Math.max(slip, Math.max(0, (corner - SING_FLOOR) / (1 - SING_FLOOR))) *
+      roll *
+      (1 - 0.6 * wet);
     if (scrub <= 0) return;
     const sing = 780 + 520 * scrub;
     synth.noise({

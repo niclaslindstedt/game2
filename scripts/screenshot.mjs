@@ -330,6 +330,42 @@ await capture("shot-crawl-dust", { width: 1280, height: 720 }, async (page) => {
   await page.keyboard.up("ArrowDown");
 });
 
+// THE PLUME: a car at rally pace on dry gravel, which is the shot this
+// whole effect exists for. Driven by the bot so the frame lands on the
+// road at a speed well past the cloud's 30 km/h threshold — the acceptance
+// test is a boiling tan wall behind and beside the car that is plainly
+// made of SMOKE rather than of dots, and that it thins toward the top
+// rather than ending at an edge.
+await capture(
+  "shot-gravel-plume",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await racing(page);
+    await atStageTime(page, 14);
+  },
+  { bot: "1" },
+);
+
+// THE RAIN, which takes the plume away. Water binds a loose surface
+// together, so the acceptance test here is an ABSENCE: the same gravel
+// road at the same pace as shot-speed, with no cloud over it at all — just
+// dark clods off the wheels and the drops in the air. A frame with a tan
+// haze in it means the plume is still coming up in the wet.
+await capture(
+  "shot-rain-mud",
+  { width: 1280, height: 720 },
+  async (page) => {
+    // Driven by the bot, for the same reason the tarmac scenes are: this
+    // shot has to be ON the road at a pace past the plume's own 30 km/h
+    // threshold, and a blind throttle held down the opening of a stage
+    // ends up in a field — where the ground is a different ground and the
+    // shot proves nothing about the road.
+    await racing(page);
+    await atStageTime(page, 14);
+  },
+  { weather: "rain", bot: "1" },
+);
+
 // The mountain, which is the wild's OTHER ground. Above the meadow and on
 // the steep flanks there is no turf to tear, so the acceptance test is the
 // color of the cloud: a car scrabbling up bare rock must throw stone, not
@@ -419,7 +455,15 @@ await capture(
     await atStageTime(page, flick + 0.3);
     await page.keyboard.up("Space");
     // Caught with the angle up and the car still on its own side of the
-    // road — a slide held any longer is a picture of the scenery.
+    // road — a slide held any longer is a picture of the scenery, which is
+    // also why there is no separate shot of a LONG tarmac drift: a sealed
+    // surface has too much grip to hang the car out for a second and stay
+    // on the road. So this frame carries both halves of the tarmac smoke.
+    // The angle is one; the COLOR is the other — the rubber has been
+    // cooking for half a second by now (`SOOT` in ground-tint.ts), so the
+    // cloud should be visibly grey rather than the clean white a tire
+    // gives the instant it lets go, and darker again the longer a player
+    // holds it in the real game.
     await atStageTime(page, flick + 0.45);
   },
   TARMAC,
