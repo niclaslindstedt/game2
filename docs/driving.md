@@ -66,6 +66,20 @@ one continuous response rather than two modes.
   direction of travel (`releaseSnap`). A spring with light damping — so a
   deep drift swings back through centre by a degree or two and asks for a
   dab of opposite lock, while a moderate one just gathers up.
+- **The exit belongs to the driver.** Dropping the wheel mid-slide gathers
+  the NOSE up, but it does not put the car back on the road: the car carries
+  on out toward the outside, going very nearly where it was already going,
+  and steering is what tips it back into the middle. What makes that true is
+  `TUNING.grip.tailPeak` / `tailBand` / `tailFade` — sideways, the front
+  tires are as crossed up as the body is and have almost nothing to pull
+  against, so past a real slip angle a CENTRED wheel gives up most of the
+  redirect. Lock takes it straight back, either way round: the corner held on
+  or the catch on the way out. Without that gate the tires ate the car's whole
+  sideways momentum on their own — the velocity swung thirty degrees back in
+  behind the nose after the hands came off, so the slide finished the corner
+  by itself and handed the car back straight, on the line and faster than it
+  went in, with nothing left to catch. It is gated by the speed floor and by
+  the wheel, so a held drift is untouched and a slow scrabble cannot use it.
 - **Power oversteer** — for the car with a driven REAR axle, and the EXIT
   is where it shows: steered into the slide the corner behaves classically,
   but once the wheel stops asking for the angle the driven axle keeps
@@ -89,6 +103,20 @@ one continuous response rather than two modes.
     (arcade weight transfer). On the power the slide runs; breathe and the
     car both tightens its line and calms its tail. This is the tool against
     running wide and the no-hands way out of a drift.
+- **Lift-to-rotate.** A closed throttle also asks the slide to go DEEPER
+  (`TUNING.drift.liftSpan`): the weight goes forward, the driven axle
+  unloads and the tail comes further round than the wheel alone would ever
+  take it. It moves the SETPOINT rather than pushing on the forces —
+  `askedSlip` is what every deepening term, `liftYaw` included, fades out
+  against, so a lift that only pushed harder would be pushing against a band
+  that had already shut and the pedal would do nothing to the angle at all.
+  With the setpoint moved the band reopens and the whole slide carries the
+  car there, while lift-to-tighten above pulls the line in underneath it —
+  one pedal, both halves of a rally turn-in. The weight is lagged
+  (`CarState.lift`, at `TUNING.grip.liftSettle`) rather than read off the
+  pedal: the throttle is a key on a keyboard and the mass it moves is not, and
+  read raw, every dab became a wobble and one long drift was counted and drawn
+  as a dozen twitchy little ones.
 - **Speed costs radius.** The redirect is a rate, and a rate times a speed
   is a force the tires have to find: left unbounded it lets the car hold a
   hairpin's radius at a straight's speed, which is what makes a car feel
@@ -109,13 +137,29 @@ one continuous response rather than two modes.
 (slip)` is actually burned off — ordinary cornering costs nothing, and even
   a big drift bleeds a few percent per second. A drift is never _felt_ as a
   brake; that is the whole point.
-- **The handbrake** — cuts rear grip and adds some yaw while it is held. It
+- **The handbrake** — cuts rear grip and adds yaw while it is held. It
   unsticks the car; it does not teleport it sideways, and it does not slow it
   down. It works by lowering the grip ceiling, so the same lock asks far
   more of what is left. It is a flick, not a hold: with the power down and full lock, a held
   handbrake takes the rear past any catch and spins the car around. Below the
   speed floor both halves of it — the yaw and the grip cut — are gone, and
   the lever is a pair of locked wheels: it is not a way round the floor.
+  What the lever cuts is the REAR: `handbrakeGrip` is the rear letting go, up
+  at the slide threshold, and `handbrakeLat` — much higher — is what the
+  lateral redirect keeps, because the fronts go on rolling and go on
+  steering. They are two numbers for a reason. Folded into one, the handbrake
+  pivoted the car through seventy degrees and then carried it straight on past
+  the apex on a WIDER arc than a plain lift would have taken: spectacular, and
+  useless for the hairpin the lever exists to get round.
+
+  The three tools are a ladder, each going both deeper and tighter than the
+  last — full lock on gravel, held to a settled angle and radius:
+
+  |               | on the power | lift       | handbrake  |
+  | ------------- | ------------ | ---------- | ---------- |
+  | compact (fwd) | 32° / 39 m   | 40° / 21 m | 63° / 16 m |
+  | classic (rwd) | 44° / 23 m   | 46° / 13 m | 73° / 10 m |
+  | coupe (awd)   | 37° / 37 m   | 41° / 22 m | 73° / 16 m |
 
 `car.slide` and `car.drifting` are readouts for the dust, the HUD and the
 balance table — nothing in the model branches on them. `drifting` is read off

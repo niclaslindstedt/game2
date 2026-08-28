@@ -100,9 +100,49 @@ export const TUNING = {
     yawResponse: { grip: 8, slide: 6 },
     /** Rear grip while the handbrake is pulled (multiplier)... */
     handbrakeGrip: 0.4,
+    /** ...and how much of the LATERAL redirect survives the same lever,
+     * 0..1. Much higher than `handbrakeGrip` above, and they are different
+     * numbers because the lever locks the REAR wheels only: the fronts go on
+     * rolling and go on steering, so the car loses its tail and not its
+     * ability to change direction. Folded into one number the handbrake
+     * pivoted the car through seventy degrees and then carried it straight
+     * on past the apex on a WIDER arc than a plain lift would have taken —
+     * spectacular, and useless for the hairpin it exists to get round. */
+    handbrakeLat: 0.85,
     /** ...and the yaw it adds toward the steered side, rad/s. The handbrake
      * unsticks the rear; it does not teleport the car sideways. */
-    handbrakeYaw: 0.9,
+    handbrakeYaw: 1.5,
+    /** How fast the weight actually moves forward when the throttle comes
+     * up, and back again when it goes down, 1/s. The pedal is instant — a
+     * key, or a finger on a trigger — and the mass it moves is not. Slow
+     * enough that a stab does not rotate the car, quick enough that a
+     * deliberate lift into a corner is felt as turn-in. Read `drift.liftSpan`
+     * beside it: without this lag, a bot or a player breathing the throttle
+     * pumps the angle the slide is asking for several times a second, and
+     * one long drift is counted and drawn as a dozen twitchy little ones. */
+    liftSettle: 4.5,
+    /** THE BOOT: how much slide a driven axle spinning up under a sudden
+     * application of throttle asks for, ×`drivetrain[].spin` × the car's own
+     * `torque`. The friction circle — a tire has one budget of grip to spend,
+     * and rubber already near saturation asked to put power down as well has
+     * less of it left to corner with. On a driven REAR axle that is the tail
+     * stepping out, which is why this is a rear-driver's move and almost
+     * nothing on a front-driver, whose axle answers the same trade by losing
+     * the nose instead (`pullStraight` owns that half).
+     *
+     * A SPIKE, like the flick, and for the same reason: what rotates the car
+     * is the torque arriving faster than the tires can shed it, not the
+     * throttle being down. Holding it down is `powerYaw` and the steady
+     * angle the wheel is asking for; this is the stab. It rides on the same
+     * lagged weight as the lift — how fast `CarState.lift` is FALLING is how
+     * hard the power is coming back on — so it needs no state of its own and
+     * cannot fire on a throttle that was already open.
+     *
+     * With it the pedal rotates the car at both ends: lift to go deeper and
+     * tighter, boot it to bring the tail round again, and a maintenance
+     * throttle in between to hold what you have. Without it, getting back on
+     * the power mid-drift only ever made the angle fall away. */
+    bootThrow: 0.7,
     /** Extra lateral grip from lifting off mid-slide (weight transfer). */
     liftGrip: 0.6,
     /** THE TRACTION CEILING, as a multiple of the car's own `gripAccel`:
@@ -127,6 +167,35 @@ export const TUNING = {
      * tightens the line, it just costs a great deal of angle to buy very
      * little radius. */
     latGive: 0.25,
+    /** WHAT A CENTRED WHEEL COSTS THE TIRES. Sideways, the front wheels sit
+     * at the same angle to the travel that the body does — pointed nowhere
+     * near where the car is actually going, with almost nothing to pull
+     * against. LOCK is what aims them back along the travel and lets them
+     * bite, and it works either way round: the lock held through a corner,
+     * and the catch on the way out. So the redirect keeps its full rate
+     * wherever the wheel is asking for something, and gives up `tailFade` of
+     * it (0..1) only where a CENTRED wheel meets a real slip angle —
+     * `tailPeak` is the angle that starts to count and `tailBand` how much
+     * further past it the fade takes to arrive. Both scale with the
+     * surface's own breakaway, for the same reason `angleSpan` does: a
+     * sealed road's whole slip vocabulary is a few degrees wide and a fade
+     * sized for gravel would never reach it.
+     *
+     * This is the knob that decides who owns the EXIT. At zero the tires
+     * gather a dropped slide up entirely on their own — the velocity swings
+     * thirty degrees back in behind the nose the moment the hands come off,
+     * so the drift finishes the corner by itself and hands the car back
+     * straight, on the line and carrying more speed than it went in with,
+     * with nothing left to catch. Turned up, letting go leaves the car
+     * going where it was already going: out toward the outside of the road,
+     * aimed off the line, waiting for the wheel to tip it back into the
+     * middle. Nothing below `tailPeak` changes at all, a held drift is
+     * untouched because the lock is still on, and it can only ever HOLD an
+     * angle, never inflate one — the redirect still decays the slip every
+     * step, it just no longer erases it. */
+    tailPeak: 0.22,
+    tailBand: 0.4,
+    tailFade: 0.93,
     /** ...and the ROTATION the same lift feeds a slide, rad/s at full slide
      * and pace. Lifting takes the weight off the driven axle and swings the
      * tail: it is what a front-driven car has instead of power oversteer,
@@ -338,6 +407,19 @@ export const TUNING = {
      * only thing holding a slide up once the lock comes off, so it is what
      * carries one corner's angle into the next instead of snapping back to
      * grip the instant the wheel passes centre. */
+    /** How much DEEPER a fully closed throttle asks the slide to go, as a
+     * fraction of `angleSpan`. The lift is the driver's other way into a
+     * corner: the weight goes forward, the driven axle unloads, and the tail
+     * comes round further than the wheel on its own would ever take it.
+     *
+     * It moves the SETPOINT, not the forces — `askedSlip` is what every
+     * deepening term fades out against, the lift's own `liftYaw` among them,
+     * so a lift that only pushed harder would be pushing against a band that
+     * had already shut and the pedal would do nothing to the angle at all.
+     * Moving the setpoint reopens the band and lets the whole slide carry
+     * the car there. `grip.liftGrip` is the same lift's other half, pulling
+     * the line tighter while this takes it further round. */
+    liftSpan: 0.55,
     release: 0.4,
     /** THE OVERSHOOT on the way out, 0..1. How much the car's rotation
      * outlives the lock that made it: while the slide is letting go, the
@@ -347,13 +429,13 @@ export const TUNING = {
      * opposite lock. Zero is a clean gather-up with nothing to catch; a TAD
      * is the point, and past ~0.8 the exit becomes a second drift the other
      * way that has to be caught properly. */
-    releaseHang: 0.75,
+    releaseHang: 0.88,
     /** ...and how hard the rear pulls the nose back toward the direction of
      * travel while it does, rad/s per rad of slip. This is the SPRING and
      * `releaseHang` is its damping: together they decide whether the exit
      * eases to straight (low) or swings back through centre and asks for a
      * dab of opposite lock (high). */
-    releaseSnap: 8,
+    releaseSnap: 10,
     /** THE FLOOR UNDER THE WHOLE SLIDE, m/s of ground speed. Below it the
      * car does not drift at all — the wheel steers it and that is the only
      * thing the wheel does. A slow car going sideways is not the drama this

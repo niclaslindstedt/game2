@@ -49,6 +49,18 @@ function upToSpeed(state: GameState, seconds: number): void {
   run(state, { throttle: 1 }, seconds);
 }
 
+/** Which way the car is actually TRAVELLING, in world radians — the nose
+ * turned by the slip. What a drift's exit is allowed to do to this is the
+ * difference between the driver finishing the corner and the tires doing
+ * it for them. */
+function travelDir(state: GameState): number {
+  const { heading, u, w } = state.car;
+  return Math.atan2(
+    Math.sin(heading) * u + Math.cos(heading) * w,
+    Math.cos(heading) * u - Math.sin(heading) * w,
+  );
+}
+
 describe("turning at pace", () => {
   it("a committed turn at speed slides the car — no handbrake, no flick", () => {
     const state = game();
@@ -251,12 +263,54 @@ describe("rear-wheel drive", () => {
     expect(state.car.drifting).toBe(false);
   });
 
+  it("letting go of the wheel does not finish the corner", () => {
+    // The exit belongs to the driver. Dropping the wheel mid-slide gathers
+    // the NOSE up — but the car carries on out toward the outside of the
+    // road, going very nearly where it was already going. What the tires may
+    // not do is swing the whole car round the corner on the driver's behalf
+    // and hand it back straight, on the line and up to speed, with nothing
+    // left to catch.
+    const state = rwd();
+    enterDrift(state);
+    const before = travelDir(state);
+    run(state, { throttle: 1 }, 1.2);
+    expect(Math.abs(state.car.slip)).toBeLessThan(0.1);
+    expect(Math.abs(travelDir(state) - before)).toBeLessThan(0.25);
+
+    // ...and it is LOCK that takes the car back, exactly as hard as it ever
+    // did: the same slide with the wheel still asking redirects the car four
+    // times as far. The fade is what a CENTRED wheel costs the front tires,
+    // never a blanket loss of grip.
+    const holding = rwd();
+    enterDrift(holding);
+    const held = travelDir(holding);
+    run(holding, { throttle: 1, steer: 1 }, 1.2);
+    expect(Math.abs(travelDir(holding) - held)).toBeGreaterThan(1.2);
+  });
+
   it("lifting the throttle calms the car without any counter-steer", () => {
     const state = rwd();
     enterDrift(state);
     run(state, {}, 1.5);
     expect(state.car.drifting).toBe(false);
     expect(Math.abs(state.car.slip)).toBeLessThan(0.15);
+  });
+
+  it("booting it mid-drift brings the tail round again", () => {
+    // The friction circle: rubber already near saturation, asked to put the
+    // power down as well, has less grip left to corner with — and on a driven
+    // REAR axle that is the tail stepping out. A stab, not a state: what
+    // rotates the car is the torque arriving faster than the tires can shed
+    // it, so the angle spikes and then settles back to whatever the wheel is
+    // asking for.
+    const state = rwd();
+    enterDrift(state);
+    run(state, { steer: 1 }, 0.6);
+    const lifted = Math.abs(state.car.slip);
+    run(state, { throttle: 1, steer: 1 }, 0.25);
+    expect(Math.abs(state.car.slip)).toBeGreaterThan(lifted * 1.15);
+    run(state, { throttle: 1, steer: 1 }, 1.2);
+    expect(Math.abs(state.car.slip)).toBeLessThan(lifted);
   });
 
   it("over-holding the counter swings the pendulum into an opposite drift", () => {
@@ -288,6 +342,22 @@ describe("rear-wheel drive", () => {
 // are what a player means by "the steering feels wrong on tarmac": a lock
 // that arrives in a single tick, and a sealed road that lets the car hang
 // out at the same rally angle gravel does.
+describe("front-wheel drive", () => {
+  it("the boot is the rear-driver's move — the front-driver just goes straight on", () => {
+    // Same trade at the other axle: a driven FRONT axle asked for torque it
+    // has no grip left for loses its NOSE, not its tail. So the stab that
+    // brings a saloon's tail round does nothing at all for the hatch, which
+    // is rotated on the lift and on the lever instead.
+    const state = game("compact");
+    upToSpeed(state, 8);
+    run(state, { throttle: 1, steer: 1 }, 1);
+    run(state, { steer: 1 }, 0.6);
+    const lifted = Math.abs(state.car.slip);
+    run(state, { throttle: 1, steer: 1 }, 0.25);
+    expect(Math.abs(state.car.slip)).toBeLessThan(lifted);
+  });
+});
+
 describe("the wheel, and what the surface does with it", () => {
   it("takes a beat to reach the lock the driver asked for", () => {
     const state = game();

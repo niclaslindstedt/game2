@@ -91,6 +91,7 @@ function freshCar(): CarState {
     drifting: false,
     flick: 0,
     flickDir: 1,
+    lift: 0,
     gear: 0,
     rev: 0,
     gearbox: "auto",

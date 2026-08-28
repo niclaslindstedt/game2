@@ -151,6 +151,15 @@ export type CarState = {
    * the new lock, and reading the sign off the wheel then would throw the
    * car back the way it came. */
   flickDir: number;
+  /** How far the weight has moved FORWARD off the driven axle, 0..1 — the
+   * lift, as the tires feel it rather than as the pedal reports it. The
+   * throttle is a switch on a keyboard and a thing a driver breathes on a
+   * pad, but the mass it moves takes a couple of tenths to arrive and the
+   * same to go back; read straight off the pedal, a lift deep enough to
+   * rotate the car turns every dab into a wobble and every corner into a
+   * dozen flickering little drifts. Same reasoning as `flick` above, and
+   * the same treatment. Set by the grounded step, read by nothing else. */
+  lift: number;
   gear: number;
   /** Engine revs, 0 at idle and 1 at the redline (a shade over is the
    * limiter). On the move it is gearing plus forward speed — there is no
