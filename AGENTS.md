@@ -15,6 +15,7 @@ make fmt          # prettier in place; fmt-check is what CI runs
 make sim          # headless balance sweep — REQUIRED before/after any handling or generator change
 make track        # render stages to previews/track-<seed>.png
 make cars         # render the car models to previews/cars.png (chase-cam + turntable sheet)
+make liveries     # render one body in the field's paint schemes to previews/liveries.png
 make audition     # build previews/audition.html — every sound and both scores, playable
 make screenshots  # drive the built app headlessly, screenshot key moments
 make profile      # meter a frame's draw calls / triangles / binds — REQUIRED before/after any rendering change
@@ -60,6 +61,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | A new car                                                   | A data row in `engine/game/defs/cars.ts` — the `car-tuning` skill                                                         |
 | What separates one CAR from another                         | `cars.ts` + `TUNING.drivetrain` — the `car-tuning` skill                                                                  |
 | A car's LOOK (silhouette, panels, wheels, livery)           | `pwa/src/game/car-styles.ts` (specs); generator in `pwa/src/game/car/`                                                    |
+| A PAINT SCHEME an opponent is dressed in                    | `pwa/src/game/car-livery.ts` (palettes + patterns) — the `car-design` skill                                               |
 | A new PART on the car (a light pod, a snorkel, a vent)      | a builder in `pwa/src/game/car/`, driven by an optional `spec.ts` field                                                   |
 | How dirty the car gets, and where                           | `pwa/src/game/car-dirt.ts`                                                                                                |
 | Stage generation rules or vocabulary                        | `engine/mapgen/rules.ts` (data); the searches in `generate.ts` (sprint, endless) and `circuit.ts` (R22), over `search.ts` |
@@ -162,7 +164,7 @@ Skills live in `.agent/skills/` (`.claude/skills` symlinks there) — each a `SK
 - **`car-tuning`** — what separates one CAR from another: the catalog, the
   drivetrain and engine tables, and the roster-balance sweep that proves no
   car is best everywhere.
-- **`car-design`** — how the cars LOOK: the parametric body builder, the per-car specs, and the `make cars` render-compare-iterate loop.
+- **`car-design`** — how the cars LOOK: the parametric body builder, the per-car specs, the field's paint schemes, and the `make cars` / `make liveries` render-compare-iterate loop.
 - **`nature`** — the biomes, trees and flora, ground cover, terrain paint, and the rally-gate dressing: the world the road runs through.
 
 **Maintenance** (each with a `.last-updated` baseline):

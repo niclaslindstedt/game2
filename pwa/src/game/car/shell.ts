@@ -221,21 +221,32 @@ export function ring(spec: CarBodySpec, st: Station): V3[] {
   ];
 }
 
+/** The ring segments that make up the flank BELOW the belt line — the half
+ * of the side a two-tone paints in its second color. Segment k spans ring
+ * point k to k+1: 3–4 climb the right flank from the sill to the belt, and
+ * 11–12 come back down the left one. */
+const LOWER_FLANK = new Set([3, 4, 11, 12]);
+
 /** Which color each ring segment is painted. Segment k spans ring point k
  * to k+1, so this is the map from "where on the cross-section" to "what
  * kind of surface". */
-function segmentColor(k: number, paint: number, under: number, well: number): number {
+function segmentColor(
+  k: number,
+  colors: { paint: number; lower?: number },
+  under: number,
+  well: number,
+): number {
   if (k === 0 || k === 15) return under; // the flat underbody
   if (k === 1 || k === 14) return well; // wheel-well inner wall
   if (k === 2 || k === 13) return well; // the arch lip, seen from below
-  return paint;
+  if (colors.lower !== undefined && LOWER_FLANK.has(k)) return colors.lower;
+  return colors.paint;
 }
 
 export function buildShell(b: MeshBuilder, spec: CarBodySpec, stations: Station[]): void {
   const paint = spec.colors.paint;
   const under = spec.colors.trim ?? 0x14181f;
   const well = spec.colors.shadow ?? 0x191d24;
-  const seamColor = shade(paint, SEAM_SHADE);
 
   for (let i = 0; i < stations.length - 1; i++) {
     const sa = stations[i];
@@ -249,10 +260,12 @@ export function buildShell(b: MeshBuilder, spec: CarBodySpec, stations: Station[
     const c = ring(spec, sc);
     for (let k = 0; k < a.length; k++) {
       const k2 = (k + 1) % a.length;
-      const base = segmentColor(k, paint, under, well);
+      const base = segmentColor(k, spec.colors, under, well);
       // Only the visible flank and deck carry the line; the underbody is
-      // already shadow-colored.
-      const color = gap && base === paint ? seamColor : base;
+      // already shadow-colored. A two-tone's lower half darkens into its
+      // OWN shade, or the groove reads as a stripe of the wrong color.
+      const painted = base === paint || base === spec.colors.lower;
+      const color = gap && painted ? shade(base, SEAM_SHADE) : base;
       b.quad(a[k2], a[k], c[k], c[k2], color);
     }
   }
@@ -269,8 +282,12 @@ export function buildShell(b: MeshBuilder, spec: CarBodySpec, stations: Station[
     const center: V3 = [cx / pts.length, cy / pts.length, st.z];
     for (let k = 0; k < pts.length; k++) {
       const k2 = (k + 1) % pts.length;
-      if (forward) b.tri(center, pts[k], pts[k2], paint);
-      else b.tri(center, pts[k2], pts[k], paint);
+      // The cap's fan follows the same ring, so a two-tone carries around
+      // the nose and the tail instead of stopping at the corner.
+      const color =
+        spec.colors.lower !== undefined && LOWER_FLANK.has(k) ? spec.colors.lower : paint;
+      if (forward) b.tri(center, pts[k], pts[k2], color);
+      else b.tri(center, pts[k2], pts[k], color);
     }
   };
   cap(stations[0], true);
@@ -318,26 +335,72 @@ function bandSamples(spec: CarBodySpec, axles: number[], zFrom: number, zTo: num
   return zFrom > zTo ? out.reverse() : out;
 }
 
+export type BandShape = {
+  zFrom: number;
+  zTo: number;
+  yFrom: number;
+  yTo: number;
+  rise?: number;
+  proud?: number;
+  overArch?: "clip" | "ride";
+  wave?: { amp: number; cycles?: number; phase?: number };
+  taper?: number;
+  dashes?: { count: number; duty?: number; phase?: number };
+};
+
 /** A flat band laid on the flank, both sides, sampled along z so it hugs
- * the fenders. `rise` lifts the front end of the band above the rear. */
+ * the fenders. `rise` lifts the front end of the band above the rear;
+ * `wave` sweeps it, `taper` pinches it toward the tail, and `dashes` breaks
+ * it into blocks. */
 export function sideBand(
   b: MeshBuilder,
   spec: CarBodySpec,
   axles: number[],
-  band: {
-    zFrom: number;
-    zTo: number;
-    yFrom: number;
-    yTo: number;
-    rise?: number;
-    proud?: number;
-    overArch?: "clip" | "ride";
-  },
+  band: BandShape,
+  color: number,
+): void {
+  // A dashed band is N short bands, not one band with holes: each block
+  // then gets the full sampling ladder below, so a chequer square over a
+  // flare hugs the fender exactly as a continuous stripe does. The rake,
+  // the wave and the taper are measured against the WHOLE span (`band`),
+  // not each block's own, so the blocks ride one curve instead of every
+  // one of them repeating it.
+  const dashes = band.dashes;
+  if (dashes && dashes.count > 1) {
+    const span = band.zTo - band.zFrom;
+    const pitch = span / dashes.count;
+    const duty = dashes.duty ?? 0.5;
+    const phase = dashes.phase ?? 0;
+    for (let i = 0; i < dashes.count; i++) {
+      const start = band.zFrom + pitch * (i + phase);
+      const end = start + pitch * duty;
+      // A block shifted off either end of the span would hang past the car.
+      const from = (start - band.zFrom) / span;
+      const to = (end - band.zFrom) / span;
+      if (from < -1e-6 || to > 1 + 1e-6) continue;
+      bandStrip(b, spec, axles, { ...band, zFrom: start, zTo: end }, band, color);
+    }
+    return;
+  }
+  bandStrip(b, spec, axles, band, band, color);
+}
+
+/** One continuous run of a band. `shape` is what the rake, wave and taper
+ * are measured along — the same object for a plain band, the undivided span
+ * for one block of a dashed one. */
+function bandStrip(
+  b: MeshBuilder,
+  spec: CarBodySpec,
+  axles: number[],
+  band: BandShape,
+  shape: BandShape,
   color: number,
 ): void {
   const proud = band.proud ?? 0.006;
-  const rise = band.rise ?? 0;
+  const rise = shape.rise ?? 0;
   const height = band.yTo - band.yFrom;
+  const wave = shape.wave;
+  const taper = shape.taper ?? 1;
   // The band's own samples PLUS every z where the flank itself changes
   // direction. A uniform sampling cuts a straight chord across a box
   // flare's step and the bodywork bursts through the paint; landing a
@@ -348,17 +411,30 @@ export function sideBand(
   // it (a panel that stops where the metal stops); `ride` keeps its full
   // height and arcs over the opening, which is what a rocker stripe does.
   // Either way it is capped just above the belt: a band that climbs onto
-  // the shoulder balloons into a dome instead of following the car.
-  const ceiling = spec.beltY + 0.04;
+  // the shoulder balloons into a dome instead of following the car. What
+  // the spec ITSELF asks for is not that accident, so the cap opens up to
+  // whatever height the rake and the wave were authored to reach.
+  const ceiling =
+    spec.beltY +
+    0.04 +
+    Math.max(0, rise) +
+    Math.abs(wave?.amp ?? 0) +
+    Math.max(0, taper - 1) * height;
   const at = (i: number): { z: number; y0: number; y1: number } => {
     const z = zs[i];
     // t = 0 is the front end of the band, so the rake decays going back.
-    const t = (z - band.zFrom) / (band.zTo - band.zFrom || 1);
-    const lift = rise * (1 - t);
+    const t = (z - shape.zFrom) / (shape.zTo - shape.zFrom || 1);
+    const swept = wave
+      ? wave.amp * Math.sin(2 * Math.PI * ((wave.cycles ?? 0.5) * t + (wave.phase ?? 0)))
+      : 0;
+    const lift = rise * (1 - t) + swept;
+    // The taper hangs off the TOP edge, so a dart pinches shut against its
+    // own baseline instead of sliding up the flank as it narrows.
+    const tall = height * (1 + (taper - 1) * t);
     const floor = archAt(spec, axles, z) + 0.012;
     const y0 = Math.max(band.yFrom + lift, floor);
-    const wanted =
-      band.overArch === "ride" ? Math.max(band.yTo + lift, y0 + height) : band.yTo + lift;
+    const top = band.yFrom + lift + tall;
+    const wanted = band.overArch === "ride" ? Math.max(top, y0 + height) : top;
     // Never inverted: a band whose top has been pushed below its bottom
     // draws back to front and bleeds ragged streaks into the paint.
     return { z, y0, y1: Math.max(y0, Math.min(wanted, ceiling)) };

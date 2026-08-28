@@ -40,6 +40,10 @@ export type WheelStyle = "alloy" | "steel" | "split";
 export type SideBand = {
   zFrom: number;
   zTo: number;
+  /** What the band IS. `trim` is hardware that happens to be a band — a
+   * rubbing strip, a sill skirt — and belongs to the car whatever it is
+   * painted; `livery` (the default) is paint, and a repaint replaces it. */
+  role?: "livery" | "trim";
   /** Band bottom and top, m — absolute heights, sampled onto whatever
    * width the flank has at each z. */
   yFrom: number;
@@ -56,6 +60,33 @@ export type SideBand = {
    * stops where the metal does; `ride` keeps the band's full height and
    * arcs it over the arch, the way a rocker stripe runs. */
   overArch?: "clip" | "ride";
+  /** A sine swept along the band's length — the sweep a works livery draws
+   * down the flank instead of a ruled line. `amp` is the peak rise in m,
+   * `cycles` how many full waves fit across the span (0.5 is one arc, 1 a
+   * dip between two crests), `phase` turns the wave in cycles. */
+  wave?: { amp: number; cycles?: number; phase?: number };
+  /** Height at the band's REAR end as a fraction of its front height. Under
+   * 1 the band is a dart that sharpens toward the tail; over 1 it opens
+   * out. The taper is taken off the top edge, so the bottom stays where it
+   * was authored and the band reads as pinched rather than as sliding. */
+  taper?: number;
+  /** Break the band into evenly pitched blocks instead of one continuous
+   * run: a chequer row, a dashed flash, a set of chevrons. `duty` is how
+   * much of each pitch a block fills (0..1); `phase` shifts the ladder
+   * along the span in pitches, and half a pitch on the second row is what
+   * makes two rows a chequerboard. */
+  dashes?: { count: number; duty?: number; phase?: number };
+};
+
+/** Stripes laid along the top surfaces — hood, boot lid. They sample the
+ * silhouette, so a stripe that crosses a fold climbs it. */
+export type DeckStripes = {
+  /** x centers, m — one stripe per entry. */
+  offsets: number[];
+  width: number;
+  zFrom: number;
+  zTo: number;
+  color?: number;
 };
 
 /** A grille: a recessed dark panel with a colored surround (the bright
@@ -210,8 +241,10 @@ export type CarBodySpec = {
    * bolted-on Group-4 look. */
   flare?: { extra: number; length: number; kind?: "smooth" | "box" };
   spoiler?: Spoiler;
-  /** Accent stripes laid on the hood/deck, offsets are x centers, m. */
-  stripes?: { offsets: number[]; width: number; zFrom: number; zTo: number; color?: number };
+  /** Accent stripes laid on the hood/deck. A list runs several groups —
+   * hood stripes and a boot-lid block are different runs of the same
+   * vocabulary, and one spec wants both. */
+  stripes?: DeckStripes | DeckStripes[];
   /** Panel shut lines cut into the flank, at these z positions (m). */
   doorSeams?: number[];
   /** Livery and trim bands on the flank, drawn in order. */
@@ -236,6 +269,10 @@ export type CarBodySpec = {
   colors: {
     paint: number;
     accent: number;
+    /** Second body color under the belt line — the two-tone that splits a
+     * car horizontally. Cut into the loft rather than laid over it, so it
+     * follows the flares exactly and wraps the nose and tail caps. */
+    lower?: number;
     glass?: number;
     trim?: number;
     hub?: number;

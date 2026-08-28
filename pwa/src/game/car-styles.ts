@@ -22,6 +22,7 @@
 
 import type { CarSpec } from "@engine";
 import type { CarBodySpec } from "./car-body.ts";
+import { applyLivery, type Livery } from "./car-livery.ts";
 
 /** The front-driver: a short, tall, slab-sided two-box hatch. Stubby nose, near
  * vertical screen, a long flat roof over a steep tailgate, and heavy
@@ -79,9 +80,18 @@ export const COMPACT_BODY: CarBodySpec = {
   doorSeams: [0.44, -0.66],
   handles: { z: [-0.3], y: 0.8 },
   sideBands: [
-    // The sill skirt, then the rubbing strip under the belt line.
-    { zFrom: 0.72, zTo: -0.72, yFrom: 0.31, yTo: 0.44, color: 0x1b1e23, proud: 0.01 },
-    { zFrom: 1.72, zTo: -1.74, yFrom: 0.765, yTo: 0.81, color: 0x1b1e23, proud: 0.014 },
+    // The sill skirt, then the rubbing strip under the belt line. Both are
+    // plastic hardware rather than paint, so a repaint keeps them.
+    { role: "trim", zFrom: 0.72, zTo: -0.72, yFrom: 0.31, yTo: 0.44, color: 0x1b1e23, proud: 0.01 },
+    {
+      role: "trim",
+      zFrom: 1.72,
+      zTo: -1.74,
+      yFrom: 0.765,
+      yTo: 0.81,
+      color: 0x1b1e23,
+      proud: 0.014,
+    },
   ],
   raceNumber: { text: "5", z: -0.11, y: 0.6, size: 0.24, color: 0x1b1e23 },
   front: {
@@ -339,14 +349,18 @@ export const CAR_BODIES: Record<string, CarBodySpec> = {
 };
 
 /** Body spec for a catalog car; unknown ids fall back to the compact
- * silhouette recolored in the car's own livery. */
-export function bodySpecFor(car: CarSpec): CarBodySpec {
-  const body = CAR_BODIES[car.id];
-  if (body) return body;
-  return {
+ * silhouette recolored in the car's own livery.
+ *
+ * `paint` repaints whatever body comes back in one of the field's schemes
+ * (car-livery.ts) — the same shell in another team's colors. It is how a
+ * start list is dressed; leave it off and the car wears the livery this
+ * file authored for it, which is what the player's own car always does. */
+export function bodySpecFor(car: CarSpec, paint?: Livery): CarBodySpec {
+  const body = CAR_BODIES[car.id] ?? {
     ...COMPACT_BODY,
     colors: { ...COMPACT_BODY.colors, paint: car.color, accent: car.accent },
   };
+  return paint ? applyLivery(body, paint) : body;
 }
 
 /** Where the hood camera's eye sits on a given car, in body-local metres

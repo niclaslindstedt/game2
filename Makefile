@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim track cars audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim track cars liveries audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
 
 build:
 	npm run build
@@ -47,6 +47,12 @@ track:
 # iteration loop. Same Chromium requirements as `screenshots`.
 cars:
 	npm run cars
+
+# Render one body in the field's paint schemes (previews/liveries.png) —
+# the sheet that says whether a start list reads as a field of different
+# cars or as one car nine times. CAR picks the body, COUNT how many slots.
+liveries:
+	npm run cars -- --liveries $(or $(CAR),compact) --count $(or $(COUNT),9) --out liveries
 
 # Build the audio review page: every sound in the bank on a button, both
 # scores under the real sequencer with per-voice mutes, and the continuous

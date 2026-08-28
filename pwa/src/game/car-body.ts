@@ -21,6 +21,7 @@ import { buildWheel } from "./car/wheels.ts";
 
 export type {
   CarBodySpec,
+  DeckStripes,
   FrontSpec,
   Grille,
   Lights,
