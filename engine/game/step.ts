@@ -390,8 +390,12 @@ function stepStuck(state: GameState, input: CarInput, events: GameEvent[]): void
   // a bot — working the brake to get out of it must not stop the clock by
   // trying: without this the reverse attempt is unbounded.
   const asking = (input.throttle > 0.5 || car.reversing) && !car.airborne;
-  const moved = Math.hypot(car.x - state.stuck.x, car.z - state.stuck.z);
-  if (!asking || moved > T.offTrack.stuck.radius) {
+  // The distance is only ever needed to decide whether a car that IS asking
+  // has got anywhere, so a car that is not asking never measures it.
+  if (
+    !asking ||
+    Math.hypot(car.x - state.stuck.x, car.z - state.stuck.z) > T.offTrack.stuck.radius
+  ) {
     state.stuck.x = car.x;
     state.stuck.z = car.z;
     state.stuck.since = state.t;
