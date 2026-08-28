@@ -167,7 +167,7 @@ Generated stages roll (`STAGE_RULES.elevation` — long climbs, medium rollers, 
 
 | Surface     | Effect                                                                                                                                                                                                                                               |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Gravel      | The baseline: full power, honest grip, dust off the rear when sideways — and a plume towed behind the car from 30 km/h up                                                                                                                            |
+| Gravel      | The baseline: full power, honest grip, dust off the rear when sideways — and a plume towed off the back wheels from 30 km/h up                                                                                                                       |
 | **Asphalt** | A third more lateral grip and a third of the breakaway angle: the corner that needed a slide is driven round, the drift has to be ASKED for and stays small when it comes — and it throws nothing at all until a tire is overwhelmed, then smokes it |
 | Water       | Fords and shallows: a splash on entry, heavy drag, reduced grip and power                                                                                                                                                                            |
 | Nature      | The open landscape off the road: loose grip, fast — up to ~150 km/h                                                                                                                                                                                  |
@@ -202,8 +202,22 @@ arc anywhere. It starts at 30 km/h (`PLUME.from` in `pwa/src/game/dust.ts`,
 spawned by `plume.ts`) and thickens with pace the whole way to the top of
 the stage's speeds, and it is dragged along in the low pressure behind the
 car at a fraction of the car's own velocity — signed, so reversing tows it
-backwards. Off the road it takes the same `WILD_THROW` cut the grit does:
-turf holds together where a graded road does not.
+backwards. Mostly off the REAR axle whatever is driving the car
+(`DRIVEN_REAR`): a driven wheel is what tears the surface open, but the back
+wheels then run through everything the fronts have loosened, and the wake
+that carries a plume at all sits behind the car. The drivetrain tilts the
+split rather than deciding it.
+
+Off the road it does not come up at all over turf. Grass is what BINDS a
+surface, so a field has no loose dry dust to lift, and a green cloud is a
+substance that does not exist — `plumeGround` in `ground-tint.ts` is the one
+place that decides, and over a meadow it answers with nothing. What the wild
+still gives is what the wheels TEAR OUT: earth, mostly, with torn blades
+through it (`WILD_DUST`), at close to the count the road throws
+(`WILD_THROW`) because it is the only ground-contact effect the wild has
+left. Above the tree line the plume comes back — bare bedrock is dust again,
+so a scree flank throws a full stone cloud (`STONE_DUST`) and a hillside
+going over to rock fades between the two.
 
 Rain takes it away completely. Water is what binds a loose surface, so
 there is no dust left to lift: what a wheel picks up in the wet is dark
@@ -756,10 +770,15 @@ A run opens held, in two beats, and neither is driveable:
 
 - **`intro`** (`TUNING.intro`, 7 s) — the establishing shot. The camera
   circles the start control and comes down onto the car
-  (`pwa/src/game/camera-start.ts`), and the crew in front leaves the line and
-  drives away up the road. Any deliberate pedal, the handbrake or a shift
+  (`pwa/src/game/camera-start.ts`), and the crew in front — stood alongside
+  the player's own slot, `GRID_STAGGER` metres to their right, because two
+  rally cars do not occupy the same square metre of road — leaves the line
+  and drives away up the road. Any deliberate pedal, the handbrake or a shift
   skips it (`skipIntro`), which jumps the field on by the same seconds so the
-  stagger is not quietly shortened.
+  stagger is not quietly shortened. The ENGINE's skip is instant, because the
+  field's stagger depends on it being one step; the CAMERA answers it by
+  flying the rest of the shot at speed (`RUSH`), so skipping is a quick move
+  to the driving view rather than a cut.
 - **`countdown`** (`TUNING.countdown`, 3 s) — the gantry. One red per second,
   a tick on each, then green. Nobody skips this one.
 
@@ -795,7 +814,7 @@ nudge — separated, undamaged, no event.
 
 Contacts exist only between cars that are both ON THE ROAD: a car still in
 the start control cannot be touched, which is what lets the whole field be
-built on one grid sample. Rivals never resolve against each other — see
+built on one staging slot. Rivals never resolve against each other — see
 [simulation.md](simulation.md).
 
 ## Tuning etiquette

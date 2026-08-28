@@ -49,6 +49,7 @@ import {
   rivalField,
   step,
   FIELD_SIZE,
+  GRID_STAGGER,
   TUNING,
   PLAYER_NUMBER,
   START_INTERVAL,
@@ -131,6 +132,11 @@ export function createField(track: Track, difficulty: Difficulty, stage: FieldSt
       laps: stage.laps,
       skipCountdown: true,
       quiet: true,
+      // Off to one side of the line, because the player is on it. Only the
+      // crew immediately in front is ever visible from the control, and
+      // this is the metre and a bit of road that has them pulling away
+      // ALONGSIDE the player instead of out from inside their bodywork.
+      gridOffset: GRID_STAGGER,
       env: { timeOfDay: stage.timeOfDay, weather: stage.weather, season: stage.season },
     }),
     splits: [] as number[],

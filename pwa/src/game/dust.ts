@@ -318,19 +318,27 @@ export const TARMAC_SMOKE = {
 export const AXLE = { rear: 1.5, front: 1.15, side: 0.82, height: 0.15 };
 
 /** WHICH WHEELS ARE DIGGING, by drivetrain — the share of the towed cloud
- * that comes off the REAR axle, so 1 is the back wheels, 0 the front ones
- * and a half all four.
+ * that comes off the REAR axle, so 1 is the back wheels and 0 the front
+ * ones.
  *
- * The plume is dust a wheel has TORN OUT of the road, and only a DRIVEN
- * wheel tears anything out: an undriven one rolls over the surface and
- * leaves it where it was. So a rear-driver hangs its cloud off the back
- * end, a front-driver throws it forward from under its own nose — which is
- * the most visible difference there is between the two layouts from behind
- * the car — and a four-wheel-drive lifts it with all four. */
+ * THE REAR AXLE OWNS THE CLOUD ON EVERY LAYOUT, and the drivetrain only
+ * tilts how completely. Two reasons, and they both point the same way. A
+ * driven wheel is what TEARS the surface open, but the back wheels then run
+ * through everything the fronts have already broken loose and lift it a
+ * second time — so a front-driver's rear axle is working the richest ground
+ * on the car. And the low pressure that carries a plume at all sits BEHIND
+ * the car, which is why a real rally car tows its dust from the tail
+ * whatever is driving it.
+ *
+ * A layout that hangs its whole cloud off the front axle is the shape this
+ * band exists to prevent: from the chase camera those puffs are born
+ * alongside the bodywork, so the dust the player sees is the dust smeared
+ * over the car they are steering rather than the wall of it receding down
+ * the road. Even the front-driver keeps its majority at the back. */
 export const DRIVEN_REAR: Record<DriveLayout, number> = {
   rwd: 1,
-  fwd: 0,
-  awd: 0.5,
+  fwd: 0.6,
+  awd: 0.8,
 };
 
 /** WHEN THE PLUME COMES UP, and how thick it is once it has.
@@ -475,21 +483,25 @@ export function launchThrow(u: number, accel: number): number {
   return spin * (1 - hooked * hooked);
 }
 
-/** What the WILD throws, as a fraction of what the road throws. Turf holds
- * together where loose grit does not: a wheel off the road tears out clods
- * and blades, it does not lift a screen of dust the way a graded surface
- * with nothing binding it does. The road is the loud surface here, and the
- * grass beside it is the quiet one.
+/** What the WILD throws, as a fraction of what the road throws — GRAINS
+ * only. Turf holds together where loose grit does not: a wheel off the road
+ * tears out clods and blades, and the screen of fine dust a graded surface
+ * gives up is not something turf HAS. That half of it is not cut here, it
+ * is refused outright — the towed cloud does not come up over grass at all
+ * (`plumeGround`), because a green cloud is a substance that does not
+ * exist.
  *
- * It is deliberately a MILD cut, and `PACE` above is the deep one. They
- * answer different questions — how loud is turf, and how loud is a walking
- * pace — and compounding both into this one number would take the wild's
- * cloud out entirely at the speeds where it is most on screen. At pace the
- * car's own wake carries the grains behind the chase camera within a
- * fraction of a second, so this number is judged at the speeds a player
- * actually looks at the ground: crawling out of a field, and sliding
- * across one. */
-export const WILD_THROW = 0.45;
+ * Which is why this sits where it does. What a wheel THROWS is the only
+ * ground-contact effect the wild has left, so cutting it as well would
+ * leave a car crossing a field at 150 km/h disturbing nothing — the ground
+ * has to answer the car even when it answers with clods instead of dust.
+ * A shade under parity: the grains are earth rather than the road's pale
+ * grit (`WILD_DUST`), so the same count reads as ground being torn open
+ * rather than as a second dust cloud in a different colour. Judged at the
+ * speeds a player actually looks at the ground — crawling out of a field,
+ * and sliding across one — because at pace the car's own wake carries the
+ * grains behind the chase camera inside a fraction of a second. */
+export const WILD_THROW = 0.9;
 
 /** How much MORE a soaked surface throws than a dry one. Two reasons, and
  * they agree. A wet road genuinely throws more: there is standing water

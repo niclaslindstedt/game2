@@ -147,6 +147,17 @@ export type CreateGameOptions = {
    * road are the same line fourteen more times, which is the log saying
    * nothing loudly. */
   quiet?: boolean;
+  /** Where on the start line this car is stood, metres to the RIGHT of the
+   * road's centre; defaults to the centre itself.
+   *
+   * A start control holds more than one car, and two of them cannot be on
+   * the same square metre of road — the crew being counted down is stood
+   * beside the crew waiting behind it. The player takes the centre and the
+   * field is entered off to one side (`GRID_STAGGER`), which is why the car
+   * in front pulls away from ALONGSIDE rather than out of the player's own
+   * bodywork. It is a starting position and nothing more: the road is
+   * driven from it, so a bot is back on its line within a corner. */
+  gridOffset?: number;
 };
 
 /** Wind direction, mean speed, and gust phase are seeded on their own
@@ -196,8 +207,13 @@ export function createGame(options: CreateGameOptions): GameState {
   // gravel (or hovering over it) until the first step snaps it onto the road.
   const grid = track.samples[0];
   const car = freshCar();
-  car.x = grid.x;
-  car.z = grid.z;
+  // …and the slot on that line this car was entered in, across the road.
+  // The right axis is the sample's heading turned a quarter: the same one
+  // `locate` measures a signed `lateral` along, so a positive offset is a
+  // car to the driver's right on the road and reads back as one.
+  const slot = options.gridOffset ?? 0;
+  car.x = grid.x + Math.cos(grid.heading) * slot;
+  car.z = grid.z - Math.sin(grid.heading) * slot;
   car.y = grid.elevation;
   car.heading = grid.heading;
   car.gearbox = options.gearbox ?? "auto";
@@ -241,7 +257,7 @@ export function createGame(options: CreateGameOptions): GameState {
     checkpointTimes: [],
     progressIndex: 0,
     progressS: 0,
-    lateral: 0,
+    lateral: slot,
     offRoad: false,
     offRoadSince: 0,
     lost: false,

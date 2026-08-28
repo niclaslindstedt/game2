@@ -28,9 +28,14 @@
 // A crew still in the start control, or already through the finish, is not
 // here at all: `onRoad` in standings.ts is the one place that decides, and
 // the collision in App.tsx reads the same answer.
+//
+// Everything on the road is DRAWN, with no near limit under the far one: the
+// field is entered off to one side of the player's grid slot
+// (`GRID_STAGGER`), so the closest two cars ever get in the start control is
+// alongside each other, and the contact model keeps them apart from there.
 
 import * as THREE from "three";
-import { TUNING, type GameEvent, type GameState } from "@engine";
+import { type GameEvent, type GameState } from "@engine";
 
 import { buildCar, tintCar, type CarVisual } from "./car-mesh.ts";
 import { liveryForCrew } from "./car-livery.ts";
@@ -54,15 +59,6 @@ const DRAW_RANGE = 340;
 function onScreen(phase: GameState["phase"]): boolean {
   return phase !== "rollout" && phase !== "finished";
 }
-
-/** ...and how near is TOO near, m: half a car length between two centres is
- * one body standing inside another, which happens in exactly one place —
- * the start control, where the whole field is built on the same grid sample
- * and the crew in front leaves from the line the player is sat on. Drawing
- * it there is two shells fighting over the same pixels. The contact model
- * never leaves two cars this deep inside each other, so nothing that is
- * actually ON the road is hidden by it. */
-const IN_THE_CONTROL = TUNING.collision.halfLength;
 
 export type FieldCars = {
   /** Put a field on the road. Takes the last one off first: a restart is a
@@ -157,8 +153,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
           show(fresh, false);
           continue;
         }
-        const near =
-          shown && onScreen(viewer.phase) && range <= DRAW_RANGE && range > IN_THE_CONTROL;
+        const near = shown && onScreen(viewer.phase) && range <= DRAW_RANGE;
         show(existing, near);
         if (!near) continue;
         drawn += 1;

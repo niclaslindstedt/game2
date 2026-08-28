@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// WHAT THE GROUND UNDER THE CAR IS MADE OF, as colors — the one answer two
-// separate effects have to agree on. The grit a wheel throws (the
-// renderer's wheel logic) and the cloud the car tows (plume.ts) are
-// different systems drawing the same substance, and a stage where the
-// rooster tail is grass and the plume above it is grey is a stage where
-// neither reads.
+// WHAT THE GROUND UNDER THE CAR IS MADE OF, as colors — the answers the
+// grit a wheel throws (the renderer's wheel logic) and the cloud the car
+// tows (plume.ts) are both read off, so a stage never has a rooster tail of
+// one substance under a plume of another.
 //
-// Colors only. NOTHING here decides whether an effect happens — that stays
-// with whoever owns the effect.
+// They are two answers rather than one, and the difference is the point: a
+// wheel throws whatever it is standing on, where a cloud can only be made
+// of ground that has loose dry dust in it. `groundTint` is the first
+// question and `plumeGround` the second.
+//
+// Colors, and the one thing only a colour can say — that a given ground has
+// nothing to hang in the air. WHEN an effect happens otherwise stays with
+// whoever owns the effect.
 
 import * as THREE from "three";
 
@@ -28,15 +32,19 @@ export const SPRAY = 0x4fa0f0;
 export const MUD_CLODS: DustTint = { base: 0x4a3a29, fleck: 0x6d5a43, fleckMix: 0.34 };
 
 /** Off the road there is turf on top of the earth, and a wheel brings up
- * both: mostly torn grass with dark clods of the dirt under it. The green
- * is the biome's own meadow taken a shade down — a blade in the air is not
- * lit like the field it came out of — and the clods are earth, the one tone
- * the ground palette has no name for, because nothing is that color until
- * something digs it up. */
+ * both — but MOSTLY THE EARTH. A tyre digging into a verge cuts straight
+ * through the turf into the soil under it, so what comes out of the arch is
+ * dirt with torn grass through it, not a spray of grass with dirt through
+ * it. The majority tone has to be the earth for the same reason the wild
+ * lifts no cloud at all (`plumeGround`): green is what a FIELD is, and a
+ * green cloud coming off a car reads as the effect having picked up the
+ * ground's paint rather than as anything the wheels dug up. The blades are
+ * the biome's own meadow taken a shade down — a blade in the air is not lit
+ * like the field it came out of. */
 export const WILD_DUST: DustTint = {
-  base: new THREE.Color(biomeFor().ground.grass).multiplyScalar(0.86).getHex(),
-  fleck: 0x4a3520,
-  fleckMix: 0.28,
+  base: 0x4a3520,
+  fleck: new THREE.Color(biomeFor().ground.grass).multiplyScalar(0.86).getHex(),
+  fleckMix: 0.3,
 };
 
 /** What a mountain gives instead. Above the tree line and on the steep
@@ -106,4 +114,39 @@ export function groundTint(surface: string, wet: boolean, rock: () => number): n
   if (wet && surface !== "asphalt") return MUD_CLODS;
   if (surface !== "nature") return GRIT;
   return Math.random() < rock() ? STONE_DUST : WILD_DUST;
+}
+
+/** What HANGS IN THE AIR behind the car, which is a narrower question than
+ * what a wheel throws, and the two must not be answered together.
+ *
+ * A wheel throws whatever it is standing on: a verge gives it clods and torn
+ * turf, and those are GRAINS — thrown, arcing, back on the ground inside a
+ * second. A CLOUD is something else. It is fine dry dust lifted off a
+ * surface that has nothing binding it, and grass is precisely the thing that
+ * binds a surface: turf holds its soil down, which is why a car crossing a
+ * meadow leaves torn ground behind it and no plume over it at all. A green
+ * cloud is not a quieter version of a dust cloud — it is a substance that
+ * does not exist, and the effect reads as the ground's paint having been
+ * smeared into the air.
+ *
+ * So off the road the plume comes off BARE STONE and nothing else: `amount`
+ * is the share of the ground under the wheels that is exposed bedrock, by
+ * the same test the terrain is painted with, so a scree flank throws a full
+ * cloud, a meadow throws none, and a hillside going over to rock fades
+ * between the two instead of switching. Null means this ground has no dust
+ * in it to lift.
+ */
+export type PlumeGround = {
+  /** What the hanging dust is coloured. */
+  tint: number | DustTint;
+  /** How much of this ground is actually loose dust, 0..1 — the cloud's own
+   * density on top of everything pace already decides. */
+  amount: number;
+} | null;
+
+export function plumeGround(surface: string, wet: boolean, rock: () => number): PlumeGround {
+  if (surface === "water" || surface === "asphalt" || wet) return null;
+  if (surface !== "nature") return { tint: GRIT, amount: 1 };
+  const bare = rock();
+  return bare > 0 ? { tint: STONE_DUST, amount: bare } : null;
 }

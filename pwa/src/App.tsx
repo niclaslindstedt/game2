@@ -1427,6 +1427,11 @@ export function App() {
           // field is pushed on by exactly what the player jumped, or the
           // stagger the whole classification rests on quietly shrinks.
           if (state.phase === "intro" && wantsOff(human)) {
+            // The camera is told FIRST, while the shot is still up: the
+            // engine's skip is one instant jump — the field's stagger
+            // depends on it being one — and the camera answers it by flying
+            // the rest of the shot quickly rather than cutting.
+            renderer.skipIntroShot();
             const jumped = skipIntro(state);
             if (running) advanceField(running, jumped);
           }
