@@ -2,10 +2,10 @@
 // How fast each of the four wheels turns.
 //
 // A wheel is turned by two things and no others: the ground running past
-// underneath it, and — only where the engine reaches it — torque spinning it
-// beyond that. Which wheels the engine reaches is the car's drive layout, so
-// a front-driver's rear pair and a rear-driver's front pair can never do
-// anything but report the speed of the road. Drawing them spun up is the
+// underneath it, and — only where the engine reaches it — the engine, at
+// whatever the revs come to through the gear it is in. Which wheels the
+// engine reaches is the car's drive layout, so a front-driver's rear pair and
+// a rear-driver's front pair can never do anything but report the road. Drawing them spun up is the
 // oldest tell that a car is a toy: real wheels with nothing driving them
 // stop turning when the car stops moving, and slow down when the car is
 // dragged sideways across them.
@@ -13,15 +13,6 @@
 // Plain arithmetic, no three.js and no DOM, so the rule above is testable.
 
 import type { DriveLayout } from "@engine";
-
-/** How much faster than the road a fully lit driven axle turns, m/s of tyre
- * surface speed at `wheelspin` = 1. It is the whole visible difference
- * between the three layouts off the line: a rear-driver's back wheels racing
- * away from a car that has barely moved, a front-driver's doing it up front,
- * and the four-wheel-drive spreading the same torque over four tyres and
- * simply going. Big enough to read at a glance, small enough that the spokes
- * do not strobe their way back to standing still. */
-export const WHEEL_SPIN_OVERSPEED = 9;
 
 /** What a wheel needs to know about the car above it: how the body is moving
  * over the ground, and how hard the driven pair is spinning beyond it. */
@@ -32,7 +23,10 @@ export type WheelMotion = {
   w: number;
   /** Yaw rate, rad/s — positive turns the nose toward the car's right. */
   yawRate: number;
-  /** How lit the driven wheels are, 0..1 — `CarState.wheelspin`. */
+  /** How far the driven wheels are outrunning the road, m/s —
+   * `CarState.wheelspin`. The engine sizes it against the gearing it is
+   * spinning through, so there is no number to pick here: what the tyre is
+   * doing over the road is what gets drawn. */
   wheelspin: number;
 };
 
@@ -60,8 +54,10 @@ export function wheelRoadSpeed(motion: WheelMotion, at: WheelAt, steer: number):
 }
 
 /** ...and how fast the tyre's surface is actually travelling, m/s: the road's
- * speed for an undriven wheel, and the road plus whatever the engine is
- * spinning away (`CarState.wheelspin`) for a driven one. */
+ * speed for an undriven wheel, and the road plus the slip the engine is
+ * spinning into it (`CarState.wheelspin`) for a driven one — which is the
+ * revs through the gear it is in, since that is the only thing a wheel with
+ * a gear engaged can be doing. */
 export function wheelSurfaceSpeed(
   motion: WheelMotion,
   at: WheelAt,
@@ -69,5 +65,5 @@ export function wheelSurfaceSpeed(
   driven: boolean,
 ): number {
   const road = wheelRoadSpeed(motion, at, steer);
-  return driven ? road + motion.wheelspin * WHEEL_SPIN_OVERSPEED : road;
+  return driven ? road + motion.wheelspin : road;
 }

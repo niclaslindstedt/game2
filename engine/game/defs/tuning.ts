@@ -256,6 +256,13 @@ export const TUNING = {
      * top of it — which is why the loose-surface launch is where a
      * one-axle car loses to a four-wheel-drive and nowhere else. */
     wheelspin: 0.5,
+    /** How much of a fully developed slide lights the driven axle up, 0..1
+     * of the wheelspin a launch has. A tyre spending its grip sideways has
+     * that much less of it left to drive with, so a driven axle on the
+     * throttle mid-drift spins up at any speed at all — which is exactly the
+     * wheelspin a launch does NOT have. The launch's own is gone by the top
+     * of the gear (it scales with `1 - rev`); a drift's is not. */
+    slideSpin: 0.55,
     /** How fast `CarState.wheelspin` — the readout the drawn wheels turn on
      * — builds and dies, 1/s. A tyre lights up in a few frames and hooks
      * back up about as fast; the lag is what keeps a throttle being fed in
@@ -480,6 +487,13 @@ export const TUNING = {
     blip: 7,
     /** ...and fall away off it, 1/s — slower: a flywheel spinning down. */
     settle: 3.4,
+    /** How far past the redline the limiter lets a gear go, ×`gearTop`. It
+     * is the ceiling on the DRIVEN wheels as much as on the needle: with a
+     * gear engaged the tyre cannot turn faster than the engine can spin it,
+     * so it is what stops a lit-up axle winding away to nothing. The booster
+     * can push a gear past its own top, which is the other reason it is not
+     * exactly 1. */
+    limiter: 1.06,
   },
 
   /** THE SUSPENSION — the springs the body sits on, and the only reason

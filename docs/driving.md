@@ -725,15 +725,24 @@ What the layout decides:
   driven wheels hook up, worst at the bottom of the gear and gone by the top
   of it. It is the four-wheel-drive's whole case and the rear-driver's whole
   cost — a standing start through water keeps well under half its dry pace.
-- **Which wheels are SEEN to spin.** The same torque loss above is carried
-  out to the renderer as `CarState.wheelspin` (0..1, chased at
-  `TUNING.engine.spinSettle` so a throttle fed in and out of a corner cannot
-  strobe the drawn wheels), and the app spins the DRIVEN axle by it and no
-  other. Every wheel otherwise turns at the speed of its own contact patch —
-  the car's velocity at that corner of it, projected onto the way the wheel
-  points — so an undriven pair can only ever report the road: a front-driver
-  lighting its tyres up on the line still has two wheels standing still, and a
+- **Which wheels are SEEN to spin, and how fast.** The driven axle carries
+  `CarState.wheelspin` — how far ahead of the road the engine is turning it,
+  m/s. Two things put it there: the torque above that never reaches the
+  ground, which is a LAUNCH and fades with `1 - rev` up the gear, and a tyre
+  spending its grip sideways (`TUNING.engine.slideSpin` × `slide`), which is a
+  DRIFT and does not. It is capped by the gear it is in — a wheel with a gear
+  engaged cannot turn faster than the engine can spin it, so a fully lit axle
+  winds to `gearTop × TUNING.revs.limiter` and no further, which is why first
+  gear spins away from a standstill and top gear cannot spin at all — and
+  chased at `TUNING.engine.spinSettle`, because a tyre lights up over a few
+  frames rather than instantly.
+
+  Every wheel otherwise turns at the speed of its own contact patch — the
+  car's velocity at that corner of it, projected onto the way the wheel points
+  — so an undriven pair can only ever report the road: a front-driver lighting
+  its tyres up on the line still has two wheels standing still, and a
   rear-driver's fronts visibly slow when opposite lock drags them sideways.
+
 - **How hard the rear weathervanes the nose straight** (`snap` ×
   `TUNING.drift.releaseSnap`) — which is what decides how long a slide
   LINGERS once the wheel is centred. Not `release`: a slower release holds
@@ -823,10 +832,15 @@ whole roster over five stage archetypes and ranks them per archetype; one
 car being fastest on all five is the failure it exists to catch. Any change
 to these numbers owes that table.
 
-**Revs** (`CarState.rev`, 0 at idle and 1 at the redline) are gearing plus
-forward speed — there is no crank in the model, and reading them off the
-speed the gearbox itself shifts on is what keeps the tachometer, the shift
-light and the engine note from ever disagreeing. The one exception is the
+**Revs** (`CarState.rev`, 0 at idle and 1 at the redline) are the DRIVEN
+WHEELS read back through the gearing — road speed plus whatever `wheelspin`
+the axle is carrying — because with a gear engaged that is the only thing the
+crank can be doing. So the needle flares when the tyres light up, the engine
+note flares with it, and the wheels the renderer draws are turning at exactly
+what the needle says. The GEARBOX still shifts on road speed alone, and so
+does the shift light (`gearedRev` in the app's `snapshot.ts`): a needle flared
+by a lit-up axle is not a gear that has run out, and a car spinning its wheels
+in second wants the throttle backed off, never third. The one exception is the
 START CONTROL: through both of its beats nothing is geared (the HUD reads
 **N**) and the car is not moving, so the throttle drives the revs directly,
 up at `TUNING.revs.blip` and down at `settle`. Blipping it on the line is the

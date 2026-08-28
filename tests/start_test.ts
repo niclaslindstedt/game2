@@ -86,9 +86,15 @@ describe("the start grid", () => {
       step(state, { ...NEUTRAL_INPUT, throttle: 1 });
     }
     expect(state.phase).toBe("racing");
-    // On the move the revs ARE gearing plus forward speed — the one thing
-    // the tachometer, the shift light and the engine note all read.
-    expect(state.car.rev).toBeCloseTo(state.car.u / state.spec.gearTop[state.car.gear], 6);
+    // On the move the revs are the DRIVEN WHEELS through the gearing — the
+    // free revs of the grid are gone, and the one number the tachometer and
+    // the engine note read is the drivetrain's again. Road speed plus
+    // whatever the axle is spinning beyond it: a launch is still lighting
+    // the tyres up a second after the flag, so the needle sits a shade over
+    // the road's own reading rather than exactly on it.
+    const top = state.spec.gearTop[state.car.gear];
+    expect(state.car.rev).toBeCloseTo((state.car.u + state.car.wheelspin) / top, 6);
+    expect(state.car.rev).toBeGreaterThanOrEqual(state.car.u / top);
   });
 });
 

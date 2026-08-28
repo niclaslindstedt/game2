@@ -140,12 +140,16 @@ export type CarState = {
   slide: number;
   /** True while `slide` reads as a drift at pace — dust, HUD, stats. */
   drifting: boolean;
-  /** How far the DRIVEN wheels are outrunning the road, 0..1 — 0 hooked up,
-   * 1 fully lit. Which wheels those are is the car's `drive` layout: an
-   * undriven wheel has nothing to spin it, so it only ever turns at the
-   * speed of the ground under it. Renderer readout (the handling has
-   * already spent the same number as torque that never reached the road);
-   * the physics never reads it back. */
+  /** How far the DRIVEN wheels are outrunning the road, m/s — 0 hooked up,
+   * and never more than the headroom between the road and what the current
+   * gear gives at the limiter, because a wheel with a gear engaged cannot
+   * turn faster than the engine can spin it. Which wheels those are is the
+   * car's `drive` layout: an undriven wheel has nothing to spin it, so it
+   * only ever turns at the speed of the ground under it. `rev` is this same
+   * wheel speed read back through the gearing, so the needle, the engine
+   * note and the drawn wheels are one number. Presentation readout (the
+   * handling has already spent the same spin as torque that never reached
+   * the road); the physics never reads it back. */
   wheelspin: number;
   /** How much weight is currently thrown across the car by a flick, 0..1.
    * The hands are only over the other side for a few frames; the LOAD they
@@ -169,9 +173,11 @@ export type CarState = {
   lift: number;
   gear: number;
   /** Engine revs, 0 at idle and 1 at the redline (a shade over is the
-   * limiter). On the move it is gearing plus forward speed — there is no
-   * crank in this model, and that is what keeps the needle, the shift light
-   * and the engine note from ever disagreeing. On the GRID, where the car
+   * limiter). On the move it is the DRIVEN WHEELS through the gearing:
+   * road speed plus whatever `wheelspin` the axle is carrying, so the
+   * needle flares when the tyres light up and the engine note flares with
+   * it. The GEARBOX shifts on road speed alone, so a flare is never
+   * mistaken for a gear that has run out. On the GRID, where the car
    * is not moving and no gear is selected yet, the throttle blips it
    * directly: a driver waiting for the lights revs the engine, and both the
    * tachometer and the engine bed read it here. HUD and audio readout — the

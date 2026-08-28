@@ -162,9 +162,10 @@ between a bed and a stutter:
 
 `RPM_PER_HZ = 30`, because a four-cylinder four-stroke fires twice per
 revolution: idle (900 rpm) is a 30 Hz chug and the limiter (7000) is 240 Hz.
-Revs come from the engine's own `car.rev` — gearing plus forward speed on the
-move, exactly what the tachometer reads, so the needle, the shift light and
-the note can never disagree — and on the GRID, where nothing is geared and
+Revs come from the engine's own `car.rev` — the driven wheels through the
+gearing on the move, exactly what the tachometer reads, so the needle and the
+note can never disagree, and the note flares with a lit-up axle the way the
+needle does — and on the GRID, where nothing is geared and
 the car is not moving, from the throttle itself, so a driver waiting for the
 lights can blip it and hear the engine answer. Over that
 sit four layers with four different jobs — a HUM (how fast it is turning, the

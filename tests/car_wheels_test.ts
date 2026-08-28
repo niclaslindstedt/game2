@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   NEUTRAL_INPUT,
+  TUNING,
   carById,
   compileTrack,
   createGame,
@@ -22,7 +23,6 @@ import {
 } from "@engine";
 
 import {
-  WHEEL_SPIN_OVERSPEED,
   drivenAxles,
   wheelRoadSpeed,
   wheelSurfaceSpeed,
@@ -37,12 +37,25 @@ const drive = (overrides: Partial<CarInput> = {}): CarInput => ({
 });
 
 function freshState(carId: string): GameState {
+  // A slide carries the car tens of meters sideways: the road is widened so
+  // the wheels are measured rather than the off-road respawn.
+  const base = compileTrack(3, LONG_STRAIGHT);
   return createGame({
     seed: 3,
     carId,
     skipCountdown: true,
-    track: compileTrack(3, LONG_STRAIGHT),
+    track: { ...base, width: 220 },
   });
+}
+
+/** The speed the driven wheels' own surface is travelling at, m/s. */
+function wheelSpeed(state: GameState): number {
+  return Math.max(0, state.car.u) + state.car.wheelspin;
+}
+
+/** ...and what the gear it is in allows at the limiter. */
+function gearCeiling(state: GameState): number {
+  return state.spec.gearTop[state.car.gear] * TUNING.revs.limiter;
 }
 
 /** Steady state under one input — long enough for the readout's own settle
@@ -67,12 +80,15 @@ const rolling = (over: Partial<WheelMotion> = {}): WheelMotion => ({
 describe("the engine's wheelspin readout", () => {
   it("lights the driven axle up off the line and hands it back at cruise", () => {
     const state = freshState("classic");
-    hold(state, drive({ throttle: 1 }), 0.5);
+    hold(state, drive({ throttle: 1 }), 0.25);
     const launch = state.car.wheelspin;
-    expect(launch).toBeGreaterThan(0.2);
+    // Off the line the rear-driver's tyres turn half again as fast as the
+    // road under them — the whole cost of its launch, made visible.
+    expect(launch).toBeGreaterThan(0.5 * state.car.u);
     hold(state, drive({ throttle: 1 }), 12);
-    // Gone by the top of the gearing: the loss is worst where the torque is
-    // highest and there is least speed to hide behind.
+    // Gone once the car is up to the gearing: the loss is worst where the
+    // torque is highest and there is least speed to hide behind, and there
+    // is no headroom left to spin into at the top of a gear either.
     expect(state.car.wheelspin).toBeLessThan(launch);
   });
 
@@ -92,13 +108,63 @@ describe("the engine's wheelspin readout", () => {
     expect(allFour.car.wheelspin).toBeLessThan(oneAxle.car.wheelspin);
   });
 
-  it("stays inside 0..1 — the renderer spends it as a fraction", () => {
+  it("lights the axle up again in a drift, where the launch's spin has gone", () => {
     const state = freshState("classic");
-    for (let i = 0; i < 1200; i++) {
+    hold(state, drive({ throttle: 1 }), 9);
+    const cruising = state.car.wheelspin;
+    hold(state, drive({ throttle: 1, steer: 1 }), 1);
+    expect(state.car.slide).toBeGreaterThan(0.5);
+    // A tyre spending its grip sideways has that much less of it left to
+    // drive with, so the rears light up at a speed where nothing else would
+    // have spun them.
+    expect(state.car.wheelspin).toBeGreaterThan(cruising + 1);
+  });
+
+  it("never spins a wheel past what the gear gives at the limiter", () => {
+    const state = freshState("classic");
+    for (let i = 0; i < 1800; i++) {
       step(state, drive({ throttle: 1, steer: Math.sin(i / 40) }));
       expect(state.car.wheelspin).toBeGreaterThanOrEqual(0);
-      expect(state.car.wheelspin).toBeLessThanOrEqual(1);
+      // The ROAD can carry a gear past its own limiter — a downshift hands
+      // the engine a wheel already turning faster than it would, which is
+      // what the limiter reading is for. The SPIN never adds to that: the
+      // engine cannot turn a wheel faster than it turns itself.
+      const ceiling = Math.max(state.car.u, gearCeiling(state));
+      expect(wheelSpeed(state)).toBeLessThanOrEqual(ceiling + 1e-6);
     }
+  });
+});
+
+describe("the needle and the wheels are one number", () => {
+  it("reads the revs back off the wheel speed through the gearing", () => {
+    const state = freshState("classic");
+    hold(state, drive({ throttle: 1 }), 0.5);
+    expect(state.car.wheelspin).toBeGreaterThan(0);
+    expect(state.car.rev).toBeCloseTo(wheelSpeed(state) / state.spec.gearTop[state.car.gear], 6);
+  });
+
+  it("flares the needle past the road when the axle is lit, and not otherwise", () => {
+    const spinning = freshState("classic");
+    hold(spinning, drive({ throttle: 1 }), 0.5);
+    const roadRev = spinning.car.u / spinning.spec.gearTop[spinning.car.gear];
+    expect(spinning.car.rev).toBeGreaterThan(roadRev);
+
+    // Hooked up and coasting, the needle is the road and nothing else.
+    const rolling = freshState("classic");
+    hold(rolling, drive({ throttle: 1 }), 9);
+    hold(rolling, drive(), 1);
+    const geared = rolling.car.u / rolling.spec.gearTop[rolling.car.gear];
+    expect(rolling.car.rev - geared).toBeLessThan(0.001);
+  });
+
+  it("leaves the wheels standing still on the grid, however hard the driver revs", () => {
+    // Nothing is geared yet: the blip is free revs, and free revs turn
+    // nothing. The grid step never reaches the handling at all.
+    const base = compileTrack(3, LONG_STRAIGHT);
+    const state = createGame({ seed: 3, carId: "classic", track: base });
+    hold(state, drive({ throttle: 1 }), 1);
+    expect(state.car.rev).toBeGreaterThan(0.5);
+    expect(state.car.wheelspin).toBe(0);
   });
 });
 
@@ -110,25 +176,22 @@ describe("which wheels the layout lets spin", () => {
   });
 
   it("leaves an undriven wheel on the road's own speed however lit the car is", () => {
-    const motion = rolling({ wheelspin: 1 });
+    const motion = rolling({ wheelspin: 12 });
     const road = wheelRoadSpeed(motion, REAR_RIGHT, 0);
     expect(wheelSurfaceSpeed(motion, REAR_RIGHT, 0, false)).toBeCloseTo(road, 6);
     // ...and a standing car's undriven wheels do not turn at all: a
     // rear-driver lighting its tyres up on the line still has two wheels
     // that say the car has not moved.
-    expect(wheelSurfaceSpeed(rolling({ u: 0, wheelspin: 1 }), FRONT_RIGHT, 0, false)).toBeCloseTo(
+    expect(wheelSurfaceSpeed(rolling({ u: 0, wheelspin: 12 }), FRONT_RIGHT, 0, false)).toBeCloseTo(
       0,
       6,
     );
   });
 
-  it("lets a driven wheel outrun the road by the spin it is carrying", () => {
-    const motion = rolling({ wheelspin: 0.5 });
+  it("lets a driven wheel outrun the road by exactly the slip it is carrying", () => {
+    const motion = rolling({ wheelspin: 6 });
     const road = wheelRoadSpeed(motion, REAR_RIGHT, 0);
-    expect(wheelSurfaceSpeed(motion, REAR_RIGHT, 0, true)).toBeCloseTo(
-      road + 0.5 * WHEEL_SPIN_OVERSPEED,
-      6,
-    );
+    expect(wheelSurfaceSpeed(motion, REAR_RIGHT, 0, true)).toBeCloseTo(road + 6, 6);
   });
 });
 

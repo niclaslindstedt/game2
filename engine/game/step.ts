@@ -708,11 +708,18 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   state.progressS = track.samples[state.progressIndex].s;
   state.lateral = fix.lateral;
   state.stats.topSpeed = Math.max(state.stats.topSpeed, car.u);
-  // Revs on the move: how far up the current gear the car is. The gearbox
-  // shifts on the same forward speed, so the needle and the shift light can
-  // never disagree with the gear. A shade past the redline is the limiter —
-  // the booster can push a gear past its own top.
-  car.rev = clamp(Math.max(0, car.u) / state.spec.gearTop[car.gear], 0, 1.06);
+  // Revs on the move: the DRIVEN WHEELS read back through the gearing, which
+  // with a gear engaged is the only thing the crank can be doing. Normally
+  // that is just how far up the gear the road speed is; when the axle is lit
+  // up (`car.wheelspin`) the needle flares away from the road with the
+  // wheels, which is what wheelspin looks and sounds like in a car. The
+  // limiter caps both. The gearbox still shifts on ROAD speed, so a flare
+  // can never be mistaken for a gear that has run out.
+  car.rev = clamp(
+    (Math.max(0, car.u) + car.wheelspin) / state.spec.gearTop[car.gear],
+    0,
+    T.revs.limiter,
+  );
 
   // An endless stage keeps the road materialized well past the horizon —
   // the bot's plan, the pacenotes, and the renderer all read ahead of the
