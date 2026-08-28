@@ -722,8 +722,13 @@ export function stepGrounded(
     // height is read where the car actually is. A sharp edge (a cliff lip,
     // a cut bank) falls away faster than the smoothed crest check can read;
     // at pace it throws the car instead of gluing it down the face.
+    // The seat, not the single point under the middle — see seatOn. Both
+    // the edge check and the wall check below are the SAME quantity the car
+    // is standing at, so a car whose body is being held up by one corner
+    // does not read that lift as a cliff it has just driven off.
     const gy = ctx.groundAt(car.x, car.z);
-    if (car.u > T.air.crestSpeed && gy < car.y - T.air.edgeDrop) {
+    let seat = seatOn(car, gy, ctx.groundAt);
+    if (car.u > T.air.crestSpeed && seat < car.y - T.air.edgeDrop) {
       launch(car, car.vy, events, stats);
     } else {
       // The ground can also be a WALL. How far it rose over the ground the
@@ -732,10 +737,13 @@ export function stepGrounded(
       // is metres wide, and a smoothed slope would let the car drive up the
       // side of a mountain at pace.
       const run = Math.hypot(car.x - fromX, car.z - fromZ);
-      if (run > 1e-4 && gy - car.y > run * T.collision.climbLimit) {
-        hitFace(spec, car, ctx.groundAt, (gy - car.y) / run, fromX, fromZ, events, stats);
+      if (run > 1e-4 && seat - car.y > run * T.collision.climbLimit) {
+        hitFace(spec, car, ctx.groundAt, (seat - car.y) / run, fromX, fromZ, events, stats);
+        // The contact gave part of the step back, so the car is no longer
+        // standing where the seat above was measured.
+        seat = seatOn(car, ctx.groundAt(car.x, car.z), ctx.groundAt);
       }
-      car.y = ctx.groundAt(car.x, car.z);
+      car.y = seat;
       // Attitude from the smoothed slope: the raw per-step height delta
       // would pitch-jitter the nose over every ripple of noise.
       car.vy = roadVy;
@@ -761,6 +769,55 @@ export function stepGrounded(
   const groundJolt = car.airborne ? 0 : car.vy - prevVy;
   const joltCap = T.suspension.joltMax * dt;
   stepSuspension(spec, car, clamp(groundJolt, -joltCap, joltCap), (car.u - prevU) / dt);
+}
+
+/**
+ * WHERE A CAR STANDS ON UNEVEN GROUND — the height of the plane its own
+ * body sits on, rather than the height of the one point under its middle.
+ *
+ * `car.y` is the ground under the car and everything drawn hangs off it at
+ * the attitude the ground asked for, so reading it at the centre alone is
+ * only honest where the ground is flat under the whole footprint. Out in the
+ * wild it is not: a hillside steeper than `attitude.pitchMax`, the crease
+ * where two lattice triangles meet, the foot of a cut bank — all of them
+ * leave one end of the car metres under the surface the renderer draws, and
+ * a car buried to its roof is what the player sees.
+ *
+ * So the body's four corners are sampled and the plane is LIFTED until none
+ * of them is below the ground: the seat is the highest a corner asks for,
+ * measured against where that corner sits under the attitude the car is
+ * already holding. Flat ground gives back the centre height exactly, which
+ * is why this is safe to run everywhere off the road.
+ *
+ * A corner over ground that rises harder than `collision.climbLimit` is not
+ * standing on it, it is up against a WALL — and a wall pushes a car back, it
+ * does not hold its nose in the air. So the rise a corner may claim is capped
+ * at the grade the wheels could have climbed to get there, which is the same
+ * line the ground-as-a-solid check draws; past it the contact model has the
+ * car, not this.
+ */
+function seatOn(car: CarState, centre: number, ground: (x: number, z: number) => number): number {
+  const hl = T.collision.halfLength;
+  const hw = T.collision.halfWidth;
+  const sinH = Math.sin(car.heading);
+  const cosH = Math.cos(car.heading);
+  // The body's own rise at a corner: the nose lifts with pitch, the right
+  // side with roll — the same two angles the renderer draws the body at.
+  const risePitch = Math.sin(car.pitch);
+  const riseRoll = Math.sin(car.roll);
+  let seat = centre;
+  for (const lz of [hl, -hl]) {
+    for (const lx of [hw, -hw]) {
+      // Forward is (sin h, cos h) and right is (cos h, -sin h).
+      const x = car.x + sinH * lz + cosH * lx;
+      const z = car.z + cosH * lz - sinH * lx;
+      const reach = Math.hypot(lz, lx) * T.collision.climbLimit;
+      const rise = Math.min(ground(x, z), centre + reach);
+      const plane = rise - (lz * risePitch + lx * riseRoll);
+      if (plane > seat) seat = plane;
+    }
+  }
+  return seat;
 }
 
 /** The car meeting a face it cannot climb. Reads the terrain's gradient at

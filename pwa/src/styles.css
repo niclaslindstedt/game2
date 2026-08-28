@@ -533,9 +533,20 @@ body {
   margin-right: 0.3rem;
 }
 
-.hud-finish-sub {
-  font-size: clamp(0.75rem, 2.4vmin, 1rem);
-  opacity: 0.85;
+/* The ways on off the results card. Stacked rather than side by side so the
+   next stage's NAME fits on a phone in portrait, and so the two presses are
+   never a thumb's width apart. */
+.hud-finish-acts {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+}
+
+.hud-finish-next {
+  font-size: clamp(0.9rem, 3.4vmin, 1.4rem);
+  margin-top: 0;
 }
 
 .hud-flashes {

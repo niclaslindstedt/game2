@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 
 import type { GamePhase, TurnSeverity } from "@engine";
 
+import { playUi } from "./audio/ui.ts";
 import { deviceControls, type InputManager } from "./input.ts";
 import { createThumbGuard } from "./thumb-guard.ts";
 import { Minimap, type HudMinimap } from "./minimap.tsx";
@@ -130,6 +131,13 @@ type HudProps = {
   live: LiveRun;
   onPause: () => void;
   onCamera: () => void;
+  /** The stage after this one, once this one is over — null on a run with
+   * nowhere to go on to (Roam, and the end of the ladder). */
+  nextStage: { name: string; go: () => void } | null;
+  /** Leave the run for the main menu. The results card never times out: a
+   * time is read for as long as the player wants to read it, and the way on
+   * is a press rather than a countdown. */
+  onRetire: () => void;
 };
 
 /** Capture the pointer so a drag that leaves the zone keeps steering; a
@@ -848,6 +856,8 @@ export function Hud({
   touchLayout,
   onPause,
   onCamera,
+  nextStage,
+  onRetire,
 }: HudProps) {
   const { touch } = input;
   const pedalSide = touchLayout.steerSide === "left" ? "right" : "left";
@@ -973,7 +983,33 @@ export function Hud({
                 ))}
               </div>
             )}
-            <div className="hud-finish-sub">next stage rolling in…</div>
+            {/* The two ways on. They come up with the card — during the
+                run-out, while the car is still coasting past the gate — so a
+                player who is done reading never waits on the celebration. */}
+            <div className="hud-finish-acts pointer-events-auto">
+              {nextStage && (
+                <button
+                  type="button"
+                  className="hud-start hud-finish-next"
+                  onClick={() => {
+                    playUi("start");
+                    nextStage.go();
+                  }}
+                >
+                  NEXT: {nextStage.name.toUpperCase()}
+                </button>
+              )}
+              <button
+                type="button"
+                className="hud-pause-act"
+                onClick={() => {
+                  playUi("select");
+                  onRetire();
+                }}
+              >
+                RETIRE
+              </button>
+            </div>
           </div>
         )}
         {snap.airborne && snap.phase === "racing" && <div className="hud-air">AIRBORNE</div>}

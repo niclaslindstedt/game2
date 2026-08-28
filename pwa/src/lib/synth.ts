@@ -35,7 +35,7 @@
 // only `ToneOptions` would pull this whole file — and `AudioContext` with it —
 // into builds that have no browser. Everything that merely DESCRIBES a sound
 // imports from `voice.ts`; this file is for making one.
-import type { FilterOptions, NoiseColor, Synth } from "./voice.ts";
+import { envelopeShape, type FilterOptions, type NoiseColor, type Synth } from "./voice.ts";
 
 // The shared echo: a filtered feedback delay every voice can send into. One
 // instance per context keeps overlapping sounds in the same room. Short and
@@ -431,10 +431,9 @@ export function createSynth(): Synth {
   };
 
   /**
-   * The attack/hold/decay envelope, written onto `gain` between t0 and t1.
-   * Shared by tone and noise so a pitched bed and a noise bed tile the same
-   * way — the whole reason a slide's scrub can sit on top of an engine
-   * without either of them pulsing against the other.
+   * Play the gain curve `voice.ts` describes onto a real GainNode. The SHAPE
+   * lives there (`envelopeShape`) because it is the part worth reading and
+   * testing without a browser; all that is left here is writing it down.
    */
   const envelope = (
     gain: GainNode,
@@ -443,32 +442,13 @@ export function createSynth(): Synth {
     t1: number,
     attackMs: number,
     holdMs: number,
+    decay: "exp" | "lin" = "exp",
   ): void => {
-    // An exponential ramp may not touch zero — WebAudio throws rather than
-    // silently flooring it — and a voice CAN legitimately arrive at zero: a
-    // muted track in the audition page is a patch whose volume is 0. The floor
-    // is far below anything audible, so a voice that lands on it is silence
-    // either way; what it buys is that no caller has to know the rule.
-    const peak = Math.max(1e-5, target);
-    const durationMs = (t1 - t0) * 1000;
-    let level = t0; // when the voice is up at `peak` and the decay may begin
-    if (attackMs > 0) {
-      level = t0 + Math.min(attackMs, durationMs * 0.5) / 1000;
-      gain.gain.setValueAtTime(0.0001, t0);
-      gain.gain.exponentialRampToValueAtTime(peak, level);
-    } else {
-      gain.gain.setValueAtTime(peak, t0);
+    for (const point of envelopeShape(target, t0, t1, attackMs, holdMs, decay)) {
+      if (point.ramp === "set") gain.gain.setValueAtTime(point.value, point.at);
+      else if (point.ramp === "lin") gain.gain.linearRampToValueAtTime(point.value, point.at);
+      else gain.gain.exponentialRampToValueAtTime(point.value, point.at);
     }
-    // THE HOLD NEEDS ITS OWN EVENT TO EXIST AT ALL: a ramp starts from the
-    // time of the PREVIOUS automation point, so without this the decay below
-    // would begin at the top of the attack and the voice would fall through
-    // the sustain rather than sitting on it. A hair of the duration is always
-    // left for the decay itself.
-    if (holdMs > 0) {
-      const decayFrom = Math.min(level + holdMs / 1000, t1 - 0.005);
-      if (decayFrom > level) gain.gain.setValueAtTime(peak, decayFrom);
-    }
-    gain.gain.exponentialRampToValueAtTime(0.0001, t1);
   };
 
   return {
@@ -607,12 +587,7 @@ export function createSynth(): Synth {
       // tile the same way.
       const shaped = attackMs > 0 || holdMs > 0;
       const gain = c.createGain();
-      if (shaped) {
-        envelope(gain, volume, t0, t1, attackMs, holdMs);
-      } else {
-        gain.gain.setValueAtTime(volume, t0);
-        gain.gain.linearRampToValueAtTime(0, t1);
-      }
+      envelope(gain, volume, t0, t1, attackMs, holdMs, shaped ? "exp" : "lin");
 
       // A WINDOW ONTO THE SHARED POOL, not a buffer of this voice's own — see
       // NOISE_POOL_S. The offset is random so no two grains read the same

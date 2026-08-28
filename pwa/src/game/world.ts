@@ -26,6 +26,7 @@ import {
 
 import { isShared } from "../lib/shared-gpu.ts";
 import { biomeFor, type Biome, type Community } from "./biome.ts";
+import { createConeField, plantJumpCones, type ConeField } from "./cones.ts";
 import { buildFlora, swayFlora, type FloraPlacement } from "./flora.ts";
 import { communityByGrove, pickFlora, softMix, treePlacement } from "./planting.ts";
 import { buildWild } from "./wild.ts";
@@ -409,7 +410,7 @@ function buildBridges(track: Track, from: number, to: number): THREE.Group {
  * between two posts, and a chevron board facing whoever arrives. Nothing
  * here is solid. A player who wants to see where the road goes is allowed
  * to find out; the tape is a statement, not a wall. */
-function buildSpur(track: Track, spur: Spur): THREE.Group {
+function buildSpur(track: Track, spur: Spur, cones: ConeField): THREE.Group {
   const group = new THREE.Group();
   group.add(buildSkirts(spur.samples, spur.width));
   // A hair under the stage's own mat: inside a junction the two are warped
@@ -426,13 +427,9 @@ function buildSpur(track: Track, spur: Spur): THREE.Group {
     spur.samples.find((sample) => sample.flat <= 0) ?? spur.samples[spur.samples.length - 1];
   const r = rightOf(at.heading);
   const half = spur.width / 2;
-  const coneGeo = new THREE.ConeGeometry(0.42, 1, 6);
-  const coneMat = new THREE.MeshLambertMaterial({ color: "#ff7d1f" });
   for (let k = -2; k <= 2; k++) {
     const lat = (k / 2.4) * half;
-    const cone = new THREE.Mesh(coneGeo, coneMat);
-    cone.position.set(at.x + r.x * lat, at.elevation + 0.5, at.z + r.z * lat);
-    group.add(cone);
+    cones.plant(at.x + r.x * lat, at.elevation, at.z + r.z * lat, spur.atS);
   }
   const postMat = new THREE.MeshLambertMaterial({ color: "#f6f3ea" });
   const tapeMat = new THREE.MeshLambertMaterial({ color: "#e23c2c" });
@@ -501,34 +498,12 @@ function buildJunctions(track: Track, from: number, to: number): THREE.Group {
   return group;
 }
 
-/** Warning cones flanking each jump lip in the range. */
-function buildCones(track: Track, from: number, to: number): THREE.Group {
-  const group = new THREE.Group();
-  const half = track.width / 2;
-  const coneGeo = new THREE.ConeGeometry(0.45, 1.1, 6);
-  const coneMat = new THREE.MeshLambertMaterial({ color: "#ff7d1f" });
-  for (let i = from; i < to; i++) {
-    const s = track.samples[i];
-    if (!s.jump) continue;
-    const r = rightOf(s.heading);
-    for (const side of [-1, 1]) {
-      const cone = new THREE.Mesh(coneGeo, coneMat);
-      cone.position.set(
-        s.x + r.x * (half + 0.8) * side,
-        s.elevation + 0.55,
-        s.z + r.z * (half + 0.8) * side,
-      );
-      group.add(cone);
-    }
-  }
-  return group;
-}
-
 export type World = {
   group: THREE.Group;
-  /** Advance everything that moves on its own. The focus point is the car:
-   * R26's crowd only animates the stands near it. */
-  update: (dt: number, focusX: number, focusZ: number) => void;
+  /** Advance everything that moves on its own, and let the car knock over
+   * whatever it is driving through. The car is also the focus point: R26's
+   * crowd only animates the stands near it. */
+  update: (state: GameState, dt: number) => void;
   /** Catch the world up with the track and the car, one frame's worth at a
    * time: raise the road still owed, build the ground the car and the
    * corridor now need, and — on an endless stage — drop what is behind.
@@ -629,6 +604,11 @@ export function buildWorld(track: Track, density = 1): World {
   const wild = buildWild(track, biome, terrain, density);
   group.add(wild.group);
   wild.sync(track.samples[0].x, track.samples[0].z);
+  // The cones live OUTSIDE the road chunks: a chunk drops the moment the car
+  // is far enough past it, and one that took a cone still in the air with it
+  // would leave it hanging.
+  const cones = createConeField();
+  group.add(cones.group);
 
   type Chunk = {
     toS: number;
@@ -670,7 +650,7 @@ export function buildWorld(track: Track, density = 1): World {
     for (; spurScan < track.spurs.length; spurScan++) {
       const spur = track.spurs[spurScan];
       if (spur.atS > track.samples[to - 1].s) break;
-      chunkGroup.add(buildSpur(track, spur));
+      chunkGroup.add(buildSpur(track, spur, cones));
     }
     const fords = buildFords(track, fordScan, to, waterTex);
     fordScan = fords.next;
@@ -689,7 +669,7 @@ export function buildWorld(track: Track, density = 1): World {
     ];
     const scenery = buildScenery(track, biome, terrain, from, to, guard, drawnTrees, density);
     chunkGroup.add(scenery.group);
-    chunkGroup.add(buildCones(track, from, to));
+    plantJumpCones(cones, track, from, to);
     // A circuit's start line IS its finish line (R22), so it gets one gate
     // saying so rather than two ten metres apart.
     if (from === 0 && !track.circuit) chunkGroup.add(buildStartGate(track, 2));
@@ -768,6 +748,7 @@ export function buildWorld(track: Track, density = 1): World {
       for (const key of old.scenery.treeKeys) drawnTrees.delete(key);
       group.remove(old.group);
       disposeGroup(old.group);
+      cones.retireBefore(old.toS);
     }
   };
 
@@ -786,17 +767,19 @@ export function buildWorld(track: Track, density = 1): World {
     wild.cull(frustum);
   };
 
-  const update = (dt: number, focusX = 0, focusZ = 0): void => {
+  const update = (state: GameState, dt: number): void => {
     terrain.update(dt);
     // The breeze is ONE uniform over the world's shared leafy material, so
     // it is advanced once here rather than per patch of planted ground.
     swayFlora(dt);
-    crowd?.update(dt, focusX, focusZ);
+    cones.update(state, dt);
+    crowd?.update(dt, state.car.x, state.car.z);
   };
 
   const dispose = (): void => {
     crowd?.dispose();
     wild.dispose();
+    cones.dispose();
     disposeGroup(group);
     terrain.dispose();
   };

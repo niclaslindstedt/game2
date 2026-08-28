@@ -12,6 +12,7 @@ import * as THREE from "three";
 import { DAMAGE_ZONES, type DamagePart, type GameEvent, type GameState } from "@engine";
 
 import type { CarBodyParts } from "./car-body.ts";
+import { stepTumble, tumbleFrom, type TumbleBody } from "./tumble.ts";
 
 /** Crumple hash — any cheap deterministic per-vertex jitter works; the
  * shape only has to look torn, not be reproducible across sessions. */
@@ -29,16 +30,10 @@ const SCUFF = 0.55;
 /** The body sits this much lower per meter of belly crush (shot springs). */
 const BELLY_SAG = 0.6;
 
-const GRAVITY = 15.7;
-const DEBRIS_LIFE = 4;
-
-type Debris = {
-  mesh: THREE.Mesh;
-  vel: THREE.Vector3;
-  spin: THREE.Vector3;
-  floorY: number;
-  life: number;
-};
+/** How far a torn-off piece's own origin ends up sitting over the ground —
+ * the body's parts are modelled around their mounting point, not around the
+ * face that ends up lying in the dirt. */
+const DEBRIS_REST = 0.08;
 
 export type CarDamageVisual = {
   /** World-anchored group the torn-off pieces tumble in — the renderer
@@ -57,7 +52,7 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
   const restCol = new Float32Array(col.array as Float32Array);
 
   const debris = new THREE.Group();
-  const flying: Debris[] = [];
+  const flying: TumbleBody[] = [];
   const detached = new Set<DamagePart>();
   let bentVersion = 0;
 
@@ -115,21 +110,25 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     const c = state.car;
     const sinH = Math.sin(c.heading);
     const cosH = Math.cos(c.heading);
-    flying.push({
-      mesh,
-      vel: new THREE.Vector3(
-        (sinH * c.u + cosH * c.w) * 0.8 + (Math.random() - 0.5) * 3,
-        2.5 + Math.random() * 3,
-        (cosH * c.u - sinH * c.w) * 0.8 + (Math.random() - 0.5) * 3,
+    // It leaves at the car's own speed, thrown up and out — and then the
+    // world has it: it falls onto the ground under wherever it gets to, not
+    // onto a plane at the height the car happened to be at when it tore off.
+    flying.push(
+      tumbleFrom(
+        mesh,
+        new THREE.Vector3(
+          (sinH * c.u + cosH * c.w) * 0.8 + (Math.random() - 0.5) * 3,
+          2.5 + Math.random() * 3,
+          (cosH * c.u - sinH * c.w) * 0.8 + (Math.random() - 0.5) * 3,
+        ),
+        new THREE.Vector3(
+          (Math.random() - 0.5) * 14,
+          (Math.random() - 0.5) * 10,
+          (Math.random() - 0.5) * 14,
+        ),
+        DEBRIS_REST,
       ),
-      spin: new THREE.Vector3(
-        (Math.random() - 0.5) * 14,
-        (Math.random() - 0.5) * 10,
-        (Math.random() - 0.5) * 14,
-      ),
-      floorY: c.y,
-      life: DEBRIS_LIFE,
-    });
+    );
   };
 
   const onEvents = (state: GameState, events: GameEvent[]): void => {
@@ -144,31 +143,16 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     // anything it says is broken and still bolted on comes off now.
     for (const part of state.car.damage.broken) breakOff(part, state);
 
+    // A piece that has come to rest is scenery the run drove past: it keeps
+    // lying where it landed, and costs nothing to leave there.
+    const ground = state.terrain.groundAt;
     for (let i = flying.length - 1; i >= 0; i--) {
-      const d = flying[i];
-      d.life -= dt;
-      if (d.life <= 0) {
-        debris.remove(d.mesh); // geometry stays owned by the car body
-        flying.splice(i, 1);
-        continue;
-      }
-      d.vel.y -= GRAVITY * dt;
-      d.mesh.position.addScaledVector(d.vel, dt);
-      d.mesh.rotation.x += d.spin.x * dt;
-      d.mesh.rotation.y += d.spin.y * dt;
-      d.mesh.rotation.z += d.spin.z * dt;
-      if (d.mesh.position.y < d.floorY + 0.06 && d.vel.y < 0) {
-        d.mesh.position.y = d.floorY + 0.06;
-        d.vel.y *= -0.3; // one dull bounce, then it skids out
-        d.vel.x *= 0.55;
-        d.vel.z *= 0.55;
-        d.spin.multiplyScalar(0.5);
-      }
+      if (!stepTumble(flying[i], dt, ground)) flying.splice(i, 1);
     }
   };
 
   const dispose = (): void => {
-    for (const d of flying) debris.remove(d.mesh);
+    for (const d of flying) debris.remove(d.object);
     flying.length = 0;
   };
 

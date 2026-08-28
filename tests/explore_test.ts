@@ -156,7 +156,12 @@ describe("exploring", () => {
     back(APRON + 90);
     step(state, NEUTRAL_INPUT);
     expect(state.offRoad).toBe(true);
-    expect(state.car.y).toBeCloseTo(state.terrain.groundAt(state.car.x, state.car.z), 1);
+    // Standing on the TERRAIN, not on the ribbon: at the height of the
+    // ground under it, or up to the lift its own footprint asks for where
+    // that ground is not level under the whole body (see seatOn).
+    const under = state.terrain.groundAt(state.car.x, state.car.z);
+    expect(state.car.y).toBeGreaterThanOrEqual(under - 1e-6);
+    expect(state.car.y - under).toBeLessThan(TUNING.collision.halfLength);
     expect(Math.abs(state.car.y - grid.elevation)).toBeGreaterThan(1);
   });
 
@@ -403,6 +408,57 @@ describe("the attitude the ground puts in the body", () => {
     expect(Math.abs(level.car.slip)).toBeGreaterThan(TUNING.drift.enterSlip);
     const crown = Math.atan((2 * ROAD_CROSS.crown.gravel) / (level.track.width / 2));
     expect(Math.abs(level.car.roll)).toBeLessThan(crown);
+  });
+});
+
+describe("where the body stands on uneven ground", () => {
+  it("keeps the whole body out of the ground on a face steeper than the body can pitch to", () => {
+    const state = createGame({
+      seed: 3,
+      skipCountdown: true,
+      track: compileTrack(3, LONG_STRAIGHT),
+    });
+    // A 1-in-1.4 face — steeper than TUNING.attitude.pitchMax can lean the
+    // body to, which is exactly the case that used to bury the nose.
+    const grade = 0.7;
+    const heightAt = (_x: number, z: number): number => z * grade;
+    flatWild(state, heightAt);
+    state.car.x = 60;
+    state.car.z = 200;
+    state.car.y = heightAt(60, 200);
+    state.car.u = 6;
+    for (let i = 0; i < 120 * 2; i++) step(state, drive());
+
+    // Every corner of the body box, at the attitude the renderer draws it,
+    // stands at or above the ground it is over.
+    const car = state.car;
+    const hl = TUNING.collision.halfLength;
+    const hw = TUNING.collision.halfWidth;
+    const sinH = Math.sin(car.heading);
+    const cosH = Math.cos(car.heading);
+    for (const lz of [hl, -hl]) {
+      for (const lx of [hw, -hw]) {
+        const x = car.x + sinH * lz + cosH * lx;
+        const z = car.z + cosH * lz - sinH * lx;
+        const corner = car.y + lz * Math.sin(car.pitch) + lx * Math.sin(car.roll);
+        expect(corner).toBeGreaterThanOrEqual(heightAt(x, z) - 1e-6);
+      }
+    }
+  });
+
+  it("still sits exactly on flat ground — the seat is a lift, not a hover", () => {
+    const state = createGame({
+      seed: 3,
+      skipCountdown: true,
+      track: compileTrack(3, LONG_STRAIGHT),
+    });
+    flatWild(state, () => 12);
+    state.car.x = 60;
+    state.car.z = 200;
+    state.car.y = 12;
+    state.car.u = 8;
+    for (let i = 0; i < 120; i++) step(state, drive());
+    expect(state.car.y).toBeCloseTo(12, 6);
   });
 });
 

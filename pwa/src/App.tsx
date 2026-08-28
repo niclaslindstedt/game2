@@ -68,6 +68,7 @@ import type { MapRect, MapView } from "./game/menu-roam.tsx";
 import {
   levelLaps,
   loadProgress,
+  nextLevel,
   recordFinish,
   unlockEverything,
   type CampaignLevel,
@@ -332,12 +333,6 @@ let flashId = 0;
  * in a row is the HUD talking over the game. */
 const REAL_AIR = 0.5;
 
-/** How long the results card stays up AFTER the car has finally stopped
- * rolling, ms. The whole roll-out past the gate is already card time, so
- * this only has to be the last beat — long enough to read the placing, short
- * enough that the stage does not end with everybody waiting for a menu. */
-const RESULT_LINGER = 2600;
-
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<GameRenderer | null>(null);
@@ -574,6 +569,11 @@ export function App() {
     // A new run inherits nothing from the last one: the engine's note would
     // otherwise glide from wherever the previous car left it.
     audioRef.current?.reset();
+    // The finish sting silenced the score (see the finish handler). Starting
+    // the next stage from the results card never passes through the menu, so
+    // the theme is re-armed here rather than by the menu's own effect; it is
+    // a no-op when the score is already the one playing.
+    playMusic("taiga");
     setPaused(false);
     setRun({ mode, levelId });
     runRef.current = { mode, levelId };
@@ -812,10 +812,6 @@ export function App() {
 
       const restart = (): void => {
         setPaused(false);
-        // A restart cancels a finish that was on its way back to the menu:
-        // without this the new run is interrupted by the last one's timer.
-        if (nextStageTimer) clearTimeout(nextStageTimer);
-        nextStageTimer = null;
         const spec = stageRef.current;
         if (!spec) return;
         applyStageRef.current(spec, true);
@@ -844,11 +840,6 @@ export function App() {
         } else camera();
       });
 
-      let nextStageTimer: ReturnType<typeof setTimeout> | null = null;
-
-      cleanups.push(() => {
-        if (nextStageTimer) clearTimeout(nextStageTimer);
-      });
       const handleEvents = (state: GameState, events: GameEvent[]): void => {
         renderer.onEvents(state, events);
         if (debugLogging() && menuRef.current === null) {
@@ -920,8 +911,9 @@ export function App() {
             // The card goes up NOW — the clock has stopped — but the run
             // is not over: the car is still coasting down R25's run-out with
             // the camera planted at the gate, and that beat IS the
-            // celebration. The frame loop below sends everyone back to the
-            // menu once the car has actually come to rest.
+            // celebration. Where the run goes next is the PLAYER's press on
+            // the card, not a countdown: a stage that threw you back to the
+            // menu on its own was the ladder taking the next rung away.
             continue;
           }
           if (demo) continue;
@@ -1026,17 +1018,6 @@ export function App() {
             if (ghostEvents.length > 0) renderer.onGhostEvents(ghost.state, ghostEvents);
           }
         }
-        // A stage ends where it started: back to the menu, once the car has
-        // come to rest past the finish AND the result has been on screen
-        // long enough to read.
-        if (
-          finishTimeRef.current !== null &&
-          !page &&
-          nextStageTimer === null &&
-          state.phase === "finished"
-        ) {
-          nextStageTimer = setTimeout(goMainMenu, RESULT_LINGER);
-        }
         // The road bed belongs to a run the player is IN. Behind the menu the
         // stage is scenery under a theme, and an engine bed over the top of
         // that is two pieces of music at once.
@@ -1100,6 +1081,14 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // WHERE THE RESULTS CARD GOES ON TO. Only the ladder has a next rung:
+  // Roam is one stage and a time trial is one stage repeated, so both offer
+  // the way out and nothing else.
+  const upNext = run.mode === "campaign" && run.levelId ? nextLevel(run.levelId) : null;
+  const nextStage = upNext
+    ? { name: upNext.name, go: (): void => playLevel(upNext, "campaign") }
+    : null;
+
   return (
     <div className="app-root">
       <canvas
@@ -1125,6 +1114,8 @@ export function App() {
           touchLayout={options.touch}
           onPause={() => setPaused(true)}
           onCamera={() => actionsRef.current.camera()}
+          nextStage={nextStage}
+          onRetire={goMainMenu}
         />
       )}
       {/* Outside the HUD on purpose: ALT takes the game's chrome off so a
