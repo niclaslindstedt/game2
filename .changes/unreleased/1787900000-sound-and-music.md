@@ -17,7 +17,7 @@ and every note is synthesized in the browser.
   parts tearing off, the wreck, the respawn, and the finish.
 - **The menus.** A click for every row, a switch for every option, a whoosh for
   every page, and one big noise for the launch onto a stage.
-- **Two scores.** SERVICE PARK, FIRST LIGHT under the menu and TAIGA, FLAT OUT
+- **Two scores.** STARTING RAMP under the menu and TAIGA, FLAT OUT
   on the stage, both looping tracker arrangements written for this game.
 - **Options → Audio.** Separate faders for the effects and the music, in five
   steps each, OFF included.
