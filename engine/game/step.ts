@@ -127,7 +127,9 @@ export type CreateGameOptions = {
    * `STAGE_RULES.circuit.laps`. A stage that does not come back to its own
    * start line is always a single lap, whatever is asked for here. */
   laps?: number;
-  /** Skip the countdown (sim runs start racing immediately). */
+  /** Skip the whole start control — the establishing shot AND the lights.
+   * Sim runs, the menu's demo and every rival in the field start racing on
+   * their first step; only the run a player is sat in is worth a ceremony. */
   skipCountdown?: boolean;
   /** Inject a pre-compiled track (tests and tooling); defaults to the
    * generated stage for `seed` at `length`. */
@@ -225,7 +227,7 @@ export function createGame(options: CreateGameOptions): GameState {
     track,
     terrain: createTerrain(track),
     car,
-    phase: options.skipCountdown ? "racing" : "countdown",
+    phase: options.skipCountdown ? "racing" : "intro",
     t: 0,
     raceTime: 0,
     lap: 1,
@@ -522,6 +524,31 @@ const GROUND: GroundContext = {
   groundAt: undefined,
 };
 
+/** Seconds until the lights go out, counting down through the whole start
+ * control: `intro + countdown` on the first frame, 0 the moment the stage
+ * is live. The HUD's gantry and the tick on the audio bed both read it, so
+ * neither has to know how the beats before the green are divided up. */
+export function startsIn(state: GameState): number {
+  if (state.phase !== "intro" && state.phase !== "countdown") return 0;
+  return Math.max(0, T.intro + T.countdown - state.t);
+}
+
+/** Skip the establishing shot: hand the car straight to the start line with
+ * the lights already counting. Returns the seconds of sim it jumped, which
+ * is what everything ELSE on the road owes to keep the stagger — a start
+ * control the player walked out of early is still a start control.
+ *
+ * A no-op once the lights are up: the countdown itself is the one part of
+ * the start nobody gets to skip. */
+export function skipIntro(state: GameState): number {
+  if (state.phase !== "intro") return 0;
+  const jumped = T.intro - state.t;
+  state.t = T.intro;
+  state.phase = "countdown";
+  state.stuck.since = state.t;
+  return jumped;
+}
+
 /** Advance the run by one fixed timestep. Returns the events it emitted. */
 export function step(state: GameState, input: CarInput): GameEvent[] {
   const events: GameEvent[] = [];
@@ -531,8 +558,14 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // before the lights go green.
   blowWind(state.env, state.t, state.wind);
 
-  if (state.phase === "countdown") {
-    if (state.t >= T.countdown) {
+  // THE START CONTROL. Two beats, one held car: the establishing shot while
+  // the crew in front leaves, and then the lights. Both are the same thing
+  // as far as the car is concerned — nothing it does moves it — so they
+  // share the grid hold below and differ only in when they hand over.
+  if (state.phase === "intro" || state.phase === "countdown") {
+    if (state.phase === "intro") {
+      if (state.t >= T.intro) state.phase = "countdown";
+    } else if (state.t >= T.intro + T.countdown) {
       state.phase = "racing";
       events.push({ type: "go" });
     }

@@ -17,7 +17,7 @@ import {
   RESOLUTION_SCALE,
   type VideoSettings,
 } from "./settings.ts";
-import { LAMP_MATERIAL, buildCar, type CarVisual } from "./car-mesh.ts";
+import { buildCar, tintCar, type CarVisual } from "./car-mesh.ts";
 import { hoodEyeFor } from "./car-styles.ts";
 import {
   AXLE,
@@ -32,6 +32,7 @@ import {
 import { SOOT, sootySmoke, STONE_DUST } from "./ground-tint.ts";
 import { createCarFx } from "./car-fx.ts";
 import { createEnvironment } from "./environment.ts";
+import { createFieldCars, type FieldCars } from "./field-cars.ts";
 import type { Clap } from "./weather.ts";
 import { TRUNK_COLOR } from "./flora.ts";
 import { EXHAUST } from "./fumes.ts";
@@ -103,6 +104,10 @@ export type GameRenderer = {
    * sheds parts the way the run did, and throws no dust, no camera kick
    * and no sound, because none of that happened here. */
   onGhostEvents: (state: GameState, events: GameEvent[]) => void;
+  /** R29 — the rest of the entry list, as cars on the road: their bodies,
+   * their paint and their damage (field-cars.ts). The app owns the games;
+   * the renderer only ever reads them. */
+  field: FieldCars;
   /** R29 — where the run stands in the field, for R25's salute at the line:
    * how big the cannons go IS how good the result was. Null on a run with
    * nobody entered, where the size falls back to where the TIME would have
@@ -171,6 +176,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   let car: CarVisual | null = null;
   let ghost: GameState | null = null;
   let ghostCar: CarVisual | null = null;
+  const field = createFieldCars(scene);
   /** The stage that is standing, as the state it was last shown with —
    * the track the island is cut from, and the conditions anything that
    * re-lights without being handed a state has to go back to. */
@@ -213,26 +219,13 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   let drownClock = 0;
 
   /** The environment's light tint, pushed onto everything that carries its
-   * own baked or vertex colors (the car, the particles). */
+   * own baked or vertex colors (the cars, the particles). */
   const applyTint = (): void => {
     const tint = environment.carTint();
-    const paint = (visual: CarVisual | null): void =>
-      visual?.group.traverse((obj) => {
-        if (obj instanceof THREE.Mesh || obj instanceof THREE.Points) {
-          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-          for (const mat of mats) {
-            const painted =
-              mat instanceof THREE.MeshBasicMaterial || mat instanceof THREE.PointsMaterial;
-            if (painted && mat.name !== LAMP_MATERIAL) mat.color.copy(tint);
-          }
-        }
-      });
-    paint(car);
-    paint(ghostCar);
-    // A lamp is the one thing on the car the failing light makes BRIGHTER,
-    // so it is switched, not tinted.
-    car?.setLights(environment.lampsLit());
-    ghostCar?.setLights(environment.lampsLit());
+    const lit = environment.lampsLit();
+    if (car) tintCar(car, tint, lit);
+    if (ghostCar) tintCar(ghostCar, tint, lit);
+    field.paint(tint, lit);
     carFx.setTint(tint);
   };
 
@@ -400,8 +393,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     route.group.visible = mapView;
     scene.add(route.group);
     fitCar(state);
-    // A new stage is a new run: whoever wants a ghost on it says so after.
+    // A new stage is a new run: a ghost or a field on it is asked for after.
     dropGhost();
+    field.clear();
     applyIsland();
     setConditions(state);
   };
@@ -683,11 +677,13 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // engine is drinking, handed to the wind the moment they leave the pipe.
     // A car revving on the grid is drinking plenty and turning none of it
     // into road speed, so it smokes harder than one at pace — `car.rev` is
-    // the throttle itself during the countdown, and gearing plus speed at
-    // every other moment, which is why the revving read is phase-gated.
+    // the throttle itself anywhere in the start control, and gearing plus
+    // speed at every other moment, which is why the read is phase-gated.
     const X = EXHAUST;
     const revving =
-      state.phase === "countdown" ? Math.max(0, (c.rev - X.rev.from) / (1 - X.rev.from)) : 0;
+      state.phase === "countdown" || state.phase === "intro"
+        ? Math.max(0, (c.rev - X.rev.from) / (1 - X.rev.from))
+        : 0;
     fumeClock += dt;
     const idling = c.boosting ? X.every.boost : c.u > 1 ? X.every.rolling : X.every.idle;
     const fumeEvery = (idling + (X.rev.every - idling) * revving) / Math.max(0.2, fx);
@@ -764,6 +760,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     celebration.update(dt);
     car?.update(state, dt);
     if (ghost && ghostCar) ghostCar.update(ghost, dt);
+    // The entry list, off their own games; off under the map view like the
+    // player's own body below.
+    field.update(state, dt, view !== "map");
     // The way home is a DRIVING aid, bolted to the camera. Under the menu's
     // drone, the map view and god mode's free camera there is nobody lost
     // and nobody to point: left running, it would hang a compass needle over
@@ -904,6 +903,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     route?.dispose();
     car?.dispose();
     ghostCar?.dispose();
+    field.dispose();
     carFx.dispose();
     wayHomeArrow.dispose();
     mirror.dispose();
@@ -927,6 +927,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     onThunder: environment.onThunder,
     setGhost,
     onGhostEvents,
+    field,
     setStanding: (place) => {
       standing = place;
     },

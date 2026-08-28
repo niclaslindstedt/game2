@@ -44,9 +44,11 @@ const STEER_STEPS = 127;
  * pedal is an axis in `CarInput` and one day may be driven like one. */
 const PEDAL_STEPS = 255;
 
-/** Bump when the tape's layout changes — an old recording decodes into
- * different driving, which is worse than no ghost at all. */
-const GHOST_FORMAT = 2;
+/** Bump when the tape's layout changes, OR when what step 0 means changes —
+ * a recording whose first step was a different moment of the start control
+ * replays every corner at the wrong time, which is worse than no ghost at
+ * all. Format 3 is a tape that opens on the establishing shot. */
+const GHOST_FORMAT = 3;
 
 const KEY_PREFIX = "scandi-flick-ghost:";
 
@@ -93,8 +95,10 @@ export type GhostRun = GhostStage & {
    * once the ghost had got there too would be blank exactly when the run is
    * quick. */
   splits: number[];
-  /** Steps on the tape: the whole run, countdown included, so replay and
-   * run advance in lockstep from the first step of the game. */
+  /** Steps on the tape: the whole run, the start control included, so
+   * replay and run advance in lockstep from the first step of the game.
+   * Which is why `GHOST_FORMAT` moves when the start control does — step 0
+   * has to mean the same moment in both. */
   steps: number;
   /** One RLE'd, base64'd byte per step, per control. */
   steer: string;

@@ -57,6 +57,10 @@ Each crew is also PAINTED to fit: `RIVAL_SCHEMES` in `pwa/src/game/car-livery.ts
 
 **The rivals are not a table of times.** The app builds fourteen more `GameState`s on the same compiled track and steps them beside the player's, so the field cannot drift away from the handling — it IS the handling. See `pwa/src/game/standings.ts`.
 
+**They leave staggered, and they are really out there.** Each crew is entered owing `(PLAYER_NUMBER - 1 - number) × START_INTERVAL` seconds of head start, paid off in budgeted slices while the establishing shot runs; car 14 owes nothing and leaves as the shot opens, which is the car the player watches go. A crew still owing is still in the start control: not drawn, and not something the world can touch. On a short stage the front of the field is home before the player's lights go out, which is what a ten-second interval over a two-minute stage actually looks like.
+
+**The player is the only disruption.** Contacts are resolved between the player and each rival on the road (`collideCars`) and never between two rivals: a rival's time has to mean a stage they drove alone, and a result decided by a shunt the player never saw is not one they can read. Catch the crew in front and you can lean on them out of a corner — or put them into the trees, and their time with them.
+
 ## The harness (`engine/sim/simulate.ts`)
 
 `simulateStage({ seed, carId, gearbox, profile, length, shape, laps, maxTime })` runs a full stage (at a finite stage length band — default medium) and returns: finish state and time, the laps raced and each lap's time, one lap of road (`trackLength`) and the ground the race actually covered (`raceLength`), the whole event log, the run stats (drift count/time/score, jumps, air time, clean landings, splashes, off-road time, impacts, crashes, respawns, top speed), and a **digest** — an FNV hash over sampled positions. Runs are deterministic: same seed + car + profile ⇒ same digest, which is exactly what `tests/simulation_test.ts` asserts. `shape: "circuit"` races a closed lap over three of them (R22); a sprint is one lap of a road that never comes back, and asking for more laps of one does nothing.

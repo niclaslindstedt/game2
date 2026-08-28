@@ -4,10 +4,15 @@
 // It means what it means in a real rally: the cars leave the start control
 // one at a time, `START_INTERVAL` seconds apart, everybody drives the same
 // road alone against the clock, and the result is the order of the times.
-// The player is always the LAST car out (R29), which is what makes a
-// position readable at all — everybody ahead has already been through the
-// board you are arriving at, so your place at a split is simply how many of
-// them got there before you did, plus one.
+// The player is always the LAST car out (R29).
+//
+// THE STAGGER IS REAL, not a story told over a simultaneous start. Car 1
+// leaves thirteen intervals before the player, car 14 leaves exactly one —
+// on the first frame of the establishing shot, which is why the player
+// WATCHES the crew in front go. Everybody is therefore genuinely up the
+// road, and that is what makes a split readable: any rival whose split time
+// beats yours went through that board before you got to it, so the place is
+// a straight count of the better times and never a provisional one.
 //
 // THE RIVALS ARE REAL. There is no table of authored times here and no
 // curve fitted to a par: the campaign builds fourteen more `GameState`s on
@@ -20,10 +25,17 @@
 // and it buys a field that cannot drift away from the handling, because it
 // IS the handling.
 //
-// Nobody DRAWS them: with ten seconds between cars there is nothing on the
-// road to see, exactly as there is nothing to see in a rally. What the
-// player gets is the position in the corner of the screen, moving at every
-// split board.
+// THE HEAD START HAS TO BE PAID FOR. Thirteen intervals of driving is about
+// a second of CPU, so it is spent in BUDGETED slices from the moment the
+// field is entered — under the establishing shot, which is exactly long
+// enough to hide it. A crew still owing time has not left the control yet:
+// nothing draws it and nothing can hit it, so a whole field standing on one
+// start line is invisible rather than a fifteen-car pile-up.
+//
+// They ARE drawn now, and they are solid (field-cars.ts, collideCars): with
+// ten seconds between cars there is usually nothing on the road to see, but
+// catch the crew in front and it is a car — one you can lean on, and one you
+// can put off the road.
 //
 // Time trial and Roam have no field — nobody else is entered — so the one
 // judgement those runs still need, how big R25's finish salute should be,
@@ -37,6 +49,7 @@ import {
   rivalField,
   step,
   FIELD_SIZE,
+  TUNING,
   PLAYER_NUMBER,
   START_INTERVAL,
   type Difficulty,
@@ -61,6 +74,10 @@ export type RivalRun = {
   time: number | null;
   /** Nothing left to step — they have finished, or the stage has. */
   done: boolean;
+  /** Seconds of head start still to be simulated. It counts down as the
+   * catch-up spends its budget; until it reaches zero this crew has not
+   * left the start control and is not anywhere the world can reach. */
+  owed: number;
 };
 
 /** The field entered for one stage. */
@@ -86,6 +103,17 @@ export type FieldStage = {
   season: Season;
 };
 
+/** How long the catch-up may spend per frame, ms. Sized against the beat it
+ * runs under: the establishing shot is `TUNING.intro` long, so even a
+ * device managing 30 fps has a couple of hundred slices to spend the
+ * field's head start in, and nothing the player can see is waiting on it. */
+const CATCHUP_MS = 4;
+
+/** Steps taken between two readings of the clock inside the catch-up. Long
+ * enough that the timing costs nothing, short enough that the budget is
+ * still honoured on a slow device. */
+const CATCHUP_GRAIN = 64;
+
 /** Enter the field for a stage. The compiled track is SHARED with the
  * player's run: it is read-only, so fourteen more cars on it cost fourteen
  * cars and not fourteen worlds. */
@@ -93,8 +121,9 @@ export function createField(track: Track, difficulty: Difficulty, stage: FieldSt
   const runs = rivalField(difficulty).map((entry) => ({
     entry,
     // The rivals' clocks start at their own green light, not the player's,
-    // so they skip the countdown and the app holds them until the player's
-    // lights go out. From there both clocks run on the same steps.
+    // so they skip the whole start control: their stage time is measured
+    // from their first step, and the offset between the fifteen clocks is
+    // carried by `owed` instead.
     state: createGame({
       seed: stage.seed,
       carId: entry.crew.carId,
@@ -107,6 +136,9 @@ export function createField(track: Track, difficulty: Difficulty, stage: FieldSt
     splits: [] as number[],
     time: null as number | null,
     done: false,
+    // Car 14 leaves as the establishing shot opens and owes nothing; every
+    // car ahead of them owes another interval.
+    owed: (PLAYER_NUMBER - 1 - entry.number) * START_INTERVAL,
   }));
   return {
     runs,
@@ -117,7 +149,15 @@ export function createField(track: Track, difficulty: Difficulty, stage: FieldSt
   };
 }
 
-/** One rival, one physics step, with whatever they went through booked. */
+/** A crew the world can reach: out of the control, still on the stage. What
+ * is drawn, and what the player's car can hit. A run past the finish line is
+ * off the road for the same reason a run that has not started is — there is
+ * nowhere on a rally stage for a finished car to stand. */
+export function onRoad(run: RivalRun): boolean {
+  return !run.done && run.owed <= 0;
+}
+
+/** Advance one rival by one step and book whatever they went through. */
 function advance(run: RivalRun): void {
   const events = step(run.state, botInput(run.state, run.entry.profile));
   for (const event of events) {
@@ -136,9 +176,53 @@ function advance(run: RivalRun): void {
  * step: the player is last on the road, so a rival reaching a board on the
  * same tick reached it first. */
 export function stepField(field: RivalField): void {
+  for (const run of field.runs) if (onRoad(run)) advance(run);
+}
+
+/** Spend a slice of this frame on the head start the field is still owed.
+ * Runs every frame from the moment the field is entered; a no-op the moment
+ * everybody is out of the control. Returns true while there is more to do,
+ * which is what the debug overlay reads. */
+export function catchUpField(field: RivalField, budgetMs = CATCHUP_MS): boolean {
+  const deadline = performance.now() + budgetMs;
+  let owing = true;
+  while (owing) {
+    owing = false;
+    for (const run of field.runs) {
+      if (run.done || run.owed <= 0) continue;
+      owing = true;
+      for (let i = 0; i < CATCHUP_GRAIN && run.owed > 0 && !run.done; i++) {
+        advance(run);
+        run.owed -= TUNING.dt;
+      }
+    }
+    if (performance.now() >= deadline) return owing;
+  }
+  return false;
+}
+
+/** Pay the WHOLE head start now, however long it takes. The classification
+ * cannot be read while a crew is still owed road — their splits and their
+ * time are simply missing — so anything that reads it drains what is left
+ * rather than placing the player against a field that has not finished
+ * driving. */
+export function drainField(field: RivalField): void {
+  while (catchUpField(field, Infinity));
+}
+
+/** Push the player's own clock forward — what skipping the establishing
+ * shot does. Everybody on the road owes the same seconds, or the stagger
+ * the whole classification rests on quietly shrinks. */
+export function advanceField(field: RivalField, seconds: number): void {
+  if (seconds <= 0) return;
+  const steps = Math.round(seconds / TUNING.dt);
   for (const run of field.runs) {
     if (run.done) continue;
-    advance(run);
+    // A crew still in the control takes it as more time owed; one already on
+    // the road drives it, because taking it as debt would put a car that is
+    // visibly out there back into the control.
+    if (run.owed > 0) run.owed += seconds;
+    else for (let i = 0; i < steps && !run.done; i++) advance(run);
   }
 }
 
@@ -153,6 +237,12 @@ export function stepField(field: RivalField): void {
  * Anybody still going at `limit` seconds of race time is RETIRED where they
  * stand — a bot wedged nose-first against a trunk would otherwise hold the
  * results open for as long as the player was prepared to watch it.
+ *
+ * A crew still OWING their head start is driven home here too, and their
+ * debt is left standing: `owed` places a car on the road relative to the
+ * player, and the player has finished. Their time is their own race clock,
+ * which never knew about the stagger — so the result is right and nothing
+ * appears back at the start line while the card is up.
  *
  * Returns true once nobody is left running. */
 export function settleField(field: RivalField, steps: number, limit: number): boolean {
@@ -175,24 +265,31 @@ export function settleField(field: RivalField, steps: number, limit: number): bo
   return field.runs.every((run) => run.done);
 }
 
-/** Stop the field. The player's run is over — anybody still out there is
- * behind, and stepping them on costs frames the results card wants. */
+/** Stop the field where it stands. Nothing is classified off this — a run
+ * abandoned for the menu is not a result — so unlike `settleField` it asks
+ * nobody to finish, and unlike `drainField` it pays nobody's head start. */
 export function stopField(field: RivalField): void {
   for (const run of field.runs) run.done = true;
 }
 
-/** Where the player stands at split board `split` (0-based): one place for
- * every car already through it, plus their own. */
-export function placeAtSplit(field: RivalField, split: number): number {
+/** Where the player stands at split board `split` (0-based) having reached
+ * it at race time `at`: one place for every crew through it quicker, plus
+ * their own. The stagger is what makes this exact rather than provisional —
+ * a rival with a better split time went through that board while the player
+ * was still up the road. */
+export function placeAtSplit(field: RivalField, split: number, at: number): number {
   let ahead = 0;
-  for (const run of field.runs) if (run.splits.length > split) ahead += 1;
+  for (const run of field.runs) {
+    const time = run.splits[split];
+    if (time !== undefined && time < at) ahead += 1;
+  }
   return ahead + 1;
 }
 
 /** …and at the finish line, by the same count. */
-export function placeAtFinish(field: RivalField): number {
+export function placeAtFinish(field: RivalField, at: number): number {
   let ahead = 0;
-  for (const run of field.runs) if (run.time !== null) ahead += 1;
+  for (const run of field.runs) if (run.time !== null && run.time < at) ahead += 1;
   return ahead + 1;
 }
 

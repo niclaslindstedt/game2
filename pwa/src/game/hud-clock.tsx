@@ -122,12 +122,16 @@ const LAMPS = Math.max(1, Math.round(TUNING.countdown));
 const GREEN_HOLD = 1.1;
 
 /** What the gantry is showing, as ONE number so an unchanged frame costs
- * nothing: `AWAY` when the start is behind us, `GREEN` when the lights are
- * out and the stage is live, and otherwise how many reds are lit. */
+ * nothing: `AWAY` when the start is behind us, `SHOT` while the camera is
+ * still circling the control and there is nothing on the gantry yet,
+ * `GREEN` when the lights are out and the stage is live, and otherwise how
+ * many reds are lit. */
 const AWAY = -1;
+const SHOT = -2;
 const GREEN = 0;
 
 function gantry(live: LiveRun): number {
+  if (live.phase === "intro") return SHOT;
   if (live.phase === "countdown") {
     // `countdown` runs LAMPS → 0, and the audio bed sounds a tick on each
     // whole second remaining. Ceil it and both land on the same frame.
@@ -139,7 +143,12 @@ function gantry(live: LiveRun): number {
 /** The start: a rally gantry rather than a number counting itself down. A
  * bank of reds fills a lamp per second — the same beat as the tick on the
  * audio bed — and then goes green all at once, which is the one signal a
- * driver reads without reading. */
+ * driver reads without reading.
+ *
+ * Ahead of all that is the establishing shot, which puts NO lamps up: the
+ * car in front is still leaving and there is nothing to be ready for yet.
+ * What it puts up instead is the one thing a driver who has seen the shot
+ * before needs — how to leave it. */
 export function StartLights({ live }: { live: LiveRun }) {
   const [state, setState] = useState(() => gantry(live));
   useFrame(() =>
@@ -149,6 +158,14 @@ export function StartLights({ live }: { live: LiveRun }) {
     }),
   );
   if (state === AWAY) return null;
+  if (state === SHOT) {
+    return (
+      <div className="hud-start-shot">
+        <span className="hud-start-control">START CONTROL</span>
+        <span className="hud-start-skip">THROTTLE TO SKIP</span>
+      </div>
+    );
+  }
   const green = state === GREEN;
   return (
     <div

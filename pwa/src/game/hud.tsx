@@ -34,6 +34,12 @@ export type HudPacenote = {
   distance: number;
 };
 
+/** The car is in the start control — either beat of it. Nothing is geared
+ * and no clock is running, which is what the instruments read off. */
+function onTheLine(phase: GamePhase): boolean {
+  return phase === "intro" || phase === "countdown";
+}
+
 export type HudSnapshot = {
   phase: GamePhase;
   /** Total race time, seconds — the clock that never resets. */
@@ -1149,7 +1155,7 @@ export function Hud({
                 reading first before the lights have gone is the instrument
                 telling the player the run has started when it has not. */}
             <span className="hud-gear">
-              {snap.reversing ? "R" : snap.phase === "countdown" ? "N" : snap.gear + 1}
+              {snap.reversing ? "R" : onTheLine(snap.phase) ? "N" : snap.gear + 1}
             </span>
             <span className="hud-shiftlight">{snap.gearbox === "auto" ? "AUTO" : "SHIFT"}</span>
           </div>

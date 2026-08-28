@@ -234,7 +234,7 @@ describe("R22 — racing a circuit over laps", () => {
   it("holds the lap clock on the grid, like the total clock", () => {
     const state = createGame({ seed: 3, length: "short", shape: "circuit" });
     for (let i = 0; i < 60; i++) step(state, NEUTRAL_INPUT);
-    expect(state.phase).toBe("countdown");
+    expect(state.phase).toBe("intro");
     expect(state.lap).toBe(1);
     expect(state.raceTime).toBe(0);
     expect(state.lapStart).toBe(0);

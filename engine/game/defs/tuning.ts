@@ -10,6 +10,19 @@ export const TUNING = {
   /** Fixed physics timestep, seconds (120 Hz). */
   dt: 1 / 120,
 
+  /** The establishing shot at the start of a stage, seconds — the beat
+   * before the lights, while the camera is still circling the start area
+   * and the car ahead is leaving the control. Nothing is driveable through
+   * it and the clock has not started.
+   *
+   * It is sized so that `intro + countdown` is exactly `START_INTERVAL`
+   * (sim/rivals.ts): the crew in front leaves the control on the first
+   * frame of the shot, the player's lights go out one full interval later,
+   * and the stagger the classification is built on is a thing the player
+   * WATCHES rather than a rule they are told about. `start_test.ts` holds
+   * the two numbers to that sum. */
+  intro: 7,
+
   /** Countdown before control is handed over, seconds. */
   countdown: 3,
 
@@ -812,6 +825,38 @@ export const TUNING = {
        * enough to leave the ground lands on its roof, not back on its
        * wheels. */
       tripLift: 1.1,
+    },
+
+    /** THE OTHER CAR. A rally stage is driven alone, but a stagger only
+     * holds if everybody drives it at the same pace — catch the crew in
+     * front and they are a solid that is going somewhere, and the contact
+     * is between two things that both give. Which is the difference from
+     * everything in `solids` above: neither side is anchored, so the
+     * exchange is a two-body one and BOTH cars pay for it. */
+    cars: {
+      /** Fraction of the closing speed bounced back, 0..1. Lower than a
+       * tree's: two crumpling shells absorb a hit rather than trade it,
+       * and a pair of cars that ping apart reads as bumper cars. */
+      restitution: 0.22,
+      /** Fraction of the RELATIVE speed along the contact kept — high, so
+       * running down the flank of the car in front is a scrape that leaves
+       * both of you going, not a pair of cars welded together. */
+      tangentKeep: 0.88,
+      /** Yaw kicked into each body per (m/s of its own velocity change ×
+       * m of lever arm). Above the tree's kick: a tap on the corner of a
+       * car that is already travelling is the classic way to put one
+       * round, and it is the whole point of being allowed to touch. */
+      yawKick: 0.5,
+      /** How far apart in height two cars can be and still touch, m. Past
+       * it one of them is over the other — a landing on somebody's roof is
+       * not a contact this model has any business resolving. */
+      reach: 1.6,
+      /** How deeply a car-to-car hit folds panels, as a share of what the
+       * same closing speed into a tree would fold. Under half each, so a
+       * two-car contact costs about as much bodywork in total as one tree:
+       * a post does not deform and a car does, and the energy that went
+       * into the other car's panels did not go into yours. */
+      crushShare: 0.45,
     },
     /** Panel crush per m/s of closing speed past the scuff floor, m. A
      * 30 m/s head-on folds the nose ~0.3 m in. */

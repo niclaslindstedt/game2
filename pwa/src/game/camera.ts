@@ -37,11 +37,14 @@
 // anywhere: it is sat in the car, and what makes it worth driving from is
 // that the eye has WEIGHT (HEAD) and the road has GRAIN (GRAIN).
 //
-// And one BEAT overrides whichever of them is up: the flying finish. The
-// moment the car crosses the line the camera stops travelling with it,
-// plants itself where it stood, and simply turns to watch the car go — the
-// shot every rally broadcast cuts to, and the reason R25 builds road past
-// the gate for the car to disappear down.
+// And two BEATS override whichever of them is up. The establishing shot
+// opens every stage: the camera circles the start control while the crew in
+// front leaves, then comes down onto the car it will be driven from
+// (camera-start.ts). The flying finish closes it: the moment the car crosses
+// the line the camera stops travelling with it, plants itself where it
+// stood, and simply turns to watch the car go — the shot every rally
+// broadcast cuts to, and the reason R25 builds road past the gate for the
+// car to disappear down.
 
 import * as THREE from "three";
 import { angleLerp, clamp } from "../lib/angles.ts";
@@ -56,6 +59,7 @@ import {
   type FreeFlyPose,
   type FreeFlyRig,
 } from "./camera-free.ts";
+import { flyStart } from "./camera-start.ts";
 import { ISLAND_MARGIN } from "./map-island.ts";
 import { PLAY_CAMERAS, type PlayCamera } from "./settings.ts";
 
@@ -1152,7 +1156,16 @@ export function createGameCamera(width: number, height: number): GameCamera {
     else if (mode === "drone") updateDrone(state, dt);
     else if (mode === "map") updateMap(state, dt);
     else updateChase(CHASE_RIGS[mode], state, dt);
-    camera.fov = verticalFovFor(fov, camera.aspect);
+    // The establishing shot rides OVER the driving camera rather than
+    // instead of it: the rig has just written the pose the player will be
+    // driving with, and the shot blends into that exact frame, so the
+    // hand-over is seamless in whichever camera they chose. The overhead
+    // views are the menu's own framing and are left alone.
+    const shot =
+      state.phase === "intro" && mode !== "drone" && mode !== "map"
+        ? flyStart(camera, state, fov)
+        : fov;
+    camera.fov = verticalFovFor(shot, camera.aspect);
     camera.updateProjectionMatrix();
   };
 

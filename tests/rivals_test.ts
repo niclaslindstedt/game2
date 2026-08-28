@@ -56,9 +56,13 @@ import {
   LOCATIONS,
 } from "../pwa/src/game/campaign.ts";
 import {
+  advanceField,
   createField,
+  drainField,
+  onRoad,
   placeAtFinish,
   placeAtSplit,
+  settleField,
   splitLeader,
   stepField,
   stopField,
@@ -196,41 +200,103 @@ describe("the roster", () => {
 });
 
 describe("the field on the road", () => {
-  it("books splits as the crews go through, and places the player behind them", () => {
-    const track = compileStage(38, "short");
-    const field = createField(track, "hard", {
-      seed: 38,
-      laps: 1,
-      timeOfDay: "day",
-      weather: "clear",
-      season: "summer",
-    });
+  const stage = {
+    seed: 38,
+    laps: 1,
+    timeOfDay: "day",
+    weather: "clear",
+    season: "summer",
+  } as const;
+
+  it("enters the field staggered, one interval per start number", () => {
+    const field = createField(compileStage(38, "short"), "hard", stage);
     expect(field.of).toBe(FIELD_SIZE);
-    // On the grid the player is the last car out and nobody has been through
-    // anything, so the first board is theirs to lose.
-    expect(placeAtSplit(field, 0)).toBe(1);
+    expect(field.playerNumber).toBe(PLAYER_NUMBER);
+    // The crew directly in front of the player leaves as the establishing
+    // shot opens and owes nothing; everybody ahead of THEM owes another
+    // interval, right back to car 1.
+    for (const run of field.runs) {
+      expect(run.owed).toBeCloseTo((PLAYER_NUMBER - 1 - run.entry.number) * START_INTERVAL, 6);
+    }
+    const last = field.runs.find((run) => run.entry.number === PLAYER_NUMBER - 1);
+    expect(last?.owed).toBe(0);
+    // Only that crew is out of the control before a single step is taken —
+    // which is why fifteen cars can be built on one grid sample.
+    expect(field.runs.filter(onRoad)).toEqual([last]);
+  });
+
+  it("pays the head start off, and nobody is on the road until theirs is", () => {
+    const field = createField(compileStage(38, "short"), "hard", stage);
+    const line = field.runs.map((run) => ({ x: run.state.car.x, z: run.state.car.z }));
+    drainField(field);
+    // Everybody has either spent their whole head start or used it to
+    // finish: a short stage takes less than the thirteen intervals the
+    // front of the field is given, so the leaders are home before the
+    // player's lights go out — which is what a ten-second interval over a
+    // two-minute stage actually looks like.
+    for (const run of field.runs) expect(run.done || run.owed <= 0).toBe(true);
+    // Everybody who is still out there has driven road, and the field is
+    // strung out down it rather than stacked on the line.
+    const went = (run: (typeof field.runs)[number], i: number): boolean =>
+      Math.hypot(run.state.car.x - line[i].x, run.state.car.z - line[i].z) > 50;
+    // Every crew but ONE: the car directly in front of the player owes
+    // nothing, so it is still stood on the line waiting for the shot to
+    // open, which is the whole point of the shot.
+    expect(field.runs.filter(went).length).toBe(field.runs.length - 1);
+    const last = field.runs.findIndex((run) => run.entry.number === PLAYER_NUMBER - 1);
+    expect(went(field.runs[last], last)).toBe(false);
+    // …and in start order: an earlier number has had longer, so it is
+    // further down the stage (or already home).
+    const inOrder = [...field.runs].sort((a, b) => a.entry.number - b.entry.number);
+    for (let i = 1; i < inOrder.length; i++) {
+      const ahead = inOrder[i - 1];
+      const behind = inOrder[i];
+      if (ahead.done || behind.done) continue;
+      expect(ahead.state.progressS).toBeGreaterThan(behind.state.progressS);
+    }
+  });
+
+  it("pushes the whole field on when the player skips the shot", () => {
+    const field = createField(compileStage(38, "short"), "hard", stage);
+    const owedBefore = field.runs.map((run) => run.owed);
+    const rolling = field.runs.find((run) => onRoad(run))!;
+    const was = rolling.state.t;
+    advanceField(field, 4);
+    // A crew still in the control takes it as more debt; the one already out
+    // there drives it, or the stagger would quietly shrink by what the
+    // player jumped.
+    field.runs.forEach((run, i) => {
+      if (owedBefore[i] > 0) expect(run.owed).toBeCloseTo(owedBefore[i] + 4, 6);
+    });
+    expect(rolling.state.t - was).toBeCloseTo(4, 1);
+  });
+
+  it("books splits as the crews go through, and places the player by TIME", () => {
+    const field = createField(compileStage(38, "short"), "hard", stage);
+    // Nobody has been through anything yet, so the first board is the
+    // player's to lose whatever time they arrive with.
+    expect(placeAtSplit(field, 0, 9999)).toBe(1);
     expect(splitLeader(field, 0)).toBeNull();
 
-    // Half a minute of racing: enough for the field to reach the first board
-    // on a short stage, and cheap enough to run in a unit test.
+    drainField(field);
+    // Half a minute more of racing: enough for the field to reach the first
+    // board on a short stage, and cheap enough to run in a unit test.
     for (let i = 0; i < 120 * 45; i++) stepField(field);
-    const through = field.runs.filter((run) => run.splits.length > 0).length;
-    expect(through).toBeGreaterThan(0);
-    expect(placeAtSplit(field, 0)).toBe(through + 1);
+    const splits = field.runs.map((run) => run.splits[0]).filter((at) => at !== undefined);
+    expect(splits.length).toBeGreaterThan(0);
+
+    // The place is a straight count of the better times — the stagger is
+    // what makes that exact rather than provisional.
+    const slowest = Math.max(...splits);
+    expect(placeAtSplit(field, 0, slowest + 1)).toBe(splits.length + 1);
+    const quickest = Math.min(...splits);
+    expect(placeAtSplit(field, 0, quickest - 1)).toBe(1);
 
     const leader = splitLeader(field, 0);
     expect(leader).not.toBeNull();
     // Whoever is quoted IS the quickest through that board.
-    for (const run of field.runs) {
-      if (run.splits[0] !== undefined) expect(run.splits[0]).toBeGreaterThanOrEqual(leader!.time);
-    }
+    for (const at of splits) expect(at).toBeGreaterThanOrEqual(leader!.time);
     expect(RIVALS.some((crew) => crew.alias === leader!.alias)).toBe(true);
-
-    // …and the place can only ever hold or worsen from here, because every
-    // car is ahead of the player on the road and none of them can come back.
-    const early = placeAtSplit(field, 0);
-    for (let i = 0; i < 120 * 20; i++) stepField(field);
-    expect(placeAtSplit(field, 0)).toBeGreaterThanOrEqual(early);
 
     stopField(field);
     const frozen = field.runs.map((run) => run.splits.length);
@@ -239,19 +305,43 @@ describe("the field on the road", () => {
   });
 
   it("counts the cars home at the line", () => {
-    const track = compileStage(38, "short");
-    const field = createField(track, "easy", {
-      seed: 38,
-      laps: 1,
-      timeOfDay: "day",
-      weather: "clear",
-      season: "summer",
-    });
-    expect(placeAtFinish(field)).toBe(1);
+    const field = createField(compileStage(38, "short"), "easy", stage);
+    expect(placeAtFinish(field, 0)).toBe(1);
+    drainField(field);
     for (let i = 0; i < 120 * 200; i++) stepField(field);
-    const home = field.runs.filter((run) => run.time !== null).length;
-    expect(home).toBeGreaterThan(RIVALS.length / 2);
-    expect(placeAtFinish(field)).toBe(home + 1);
+    const times = field.runs.map((run) => run.time).filter((t): t is number => t !== null);
+    expect(times.length).toBeGreaterThan(RIVALS.length / 2);
+    expect(placeAtFinish(field, Math.max(...times) + 1)).toBe(times.length + 1);
+    expect(placeAtFinish(field, Math.min(...times) - 1)).toBe(1);
+  });
+
+  it("runs a crew home even while they still owe their head start", () => {
+    // The seam between the stagger and R30's straggler settling: the results
+    // card drives everybody home for the finishing ORDER, and most of the
+    // field is still in the start control when a run is abandoned early.
+    // Their debt is deliberately left standing — `owed` places a car on the
+    // road relative to the player, and the player has finished — so they must
+    // come home with a real time while never counting as on the road.
+    const field = createField(compileStage(38, "short"), "easy", stage);
+    const owing = field.runs.filter((run) => run.owed > 0);
+    expect(owing.length).toBe(field.runs.length - 1);
+    let guard = 0;
+    while (!settleField(field, 4000, 400) && guard < 400) guard += 1;
+    expect(guard).toBeLessThan(400);
+    for (const run of owing) {
+      expect(run.time).not.toBeNull();
+      expect(run.owed).toBeGreaterThan(0);
+      expect(onRoad(run)).toBe(false);
+    }
+  });
+
+  it("takes a crew off the road the moment they are home", () => {
+    const field = createField(compileStage(38, "short"), "easy", stage);
+    drainField(field);
+    for (let i = 0; i < 120 * 200; i++) stepField(field);
+    for (const run of field.runs) {
+      if (run.time !== null) expect(onRoad(run)).toBe(false);
+    }
   });
 });
 
