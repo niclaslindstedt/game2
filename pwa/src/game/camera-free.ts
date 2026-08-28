@@ -13,7 +13,11 @@
 // yaw 0 looks down +z and grows toward +x, pitch is positive UP. Keep it
 // that way — the repro line writes these two numbers down, and a pose that
 // means something different here than in camera.ts is a teleport that lands
-// somewhere else every time.
+// somewhere else every time. Note which way that convention TURNS: growing
+// the yaw swings the view to the LEFT of the screen, because the camera's
+// right in this world is forward x up = (-cos yaw, 0, sin yaw). Everything
+// the hands do — the mouse, the arrows, A and D — is in screen terms, so it
+// crosses that sign exactly once, here in `update`.
 
 import * as THREE from "three";
 
@@ -119,7 +123,11 @@ export function createFreeFly(): FreeFlyRig {
     if (move.speedSteps !== 0) {
       speed = clamp(speed * SPEED_STEP ** move.speedSteps, SPEED_MIN, SPEED_MAX);
     }
-    pose.yaw += move.yawDelta;
+    // The look deltas arrive in SCREEN terms — positive is "turn right" —
+    // and the pose's yaw grows the other way (see the header): forward is
+    // (sin yaw, cos yaw), and rotating that toward +x swings the view to
+    // the LEFT of the screen. So a right-hand turn subtracts.
+    pose.yaw -= move.yawDelta;
     pose.pitch = clamp(pose.pitch + move.pitchDelta, -PITCH_LIMIT, PITCH_LIMIT);
 
     // Forward carries the pitch — the rig flies where it looks, which is
@@ -129,8 +137,12 @@ export function createFreeFly(): FreeFlyRig {
     const fx = Math.sin(pose.yaw) * cosP;
     const fy = Math.sin(pose.pitch);
     const fz = Math.cos(pose.yaw) * cosP;
-    const rx = Math.cos(pose.yaw);
-    const rz = -Math.sin(pose.yaw);
+    // The camera's own right, which in a right-handed world with +y up is
+    // forward x up — NOT the engine's map-space right (cos, -sin). The two
+    // are mirror images, and taking the engine's one here is what made D
+    // strafe left.
+    const rx = -Math.cos(pose.yaw);
+    const rz = Math.sin(pose.yaw);
 
     const rate = speed * (move.fast ? FAST_SCALE : 1);
     // Normalised so a diagonal is not faster than a straight line — the

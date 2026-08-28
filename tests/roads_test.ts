@@ -283,6 +283,54 @@ describe("junctions (R17)", () => {
     }
   });
 
+  it("R23/R31 — a branch keeps clear of the stage in HEIGHT as well as on the map", () => {
+    // Two things the junction's exemption is not. It is not a standing
+    // licence: the stage either side of a meeting point is the branch's own
+    // road while the two are still parting, and a branch that wandered a
+    // kilometre and folded back over the road beside its own junction took
+    // it as one — and stood forty metres above a road being driven. And it
+    // is not only about the map: two roads far enough apart to be separate
+    // can still be tens of metres apart in HEIGHT, and the hillside that
+    // carried one up to the other is exactly the wall R31 cuts away.
+    //
+    // Strided over the route the same way the generator's own keep-out
+    // field is, with the same slack: a check that keeps MORE room than the
+    // rule asks for, never less.
+    const STRIDE = 8;
+    const SLACK = 9;
+    for (const seed of seeds) {
+      const track = compileStage(seed, "medium", { asphalt: 0.4 });
+      const keepOut = roadClearance(track.width);
+      const bench = Math.max(track.width / 2 + ROAD_CROSS.reach, R.verge.bench);
+      const route = track.samples.filter((_, i) => i % STRIDE === 0);
+      for (const spur of track.spurs) {
+        let departed = false;
+        for (const sample of spur.samples) {
+          let nearest = Infinity;
+          let shortfall = 0;
+          for (const road of route) {
+            const d = Math.hypot(road.x - sample.x, road.z - sample.z);
+            if (d < nearest) nearest = d;
+            if (sample.s <= SPUR.keep) continue;
+            // Inside the junction's own window the two roads share the
+            // junction's plane; the departure latch is what holds the
+            // branch there.
+            if (Math.abs(road.s - spur.atS) < 240) continue;
+            const over = sample.elevation - road.elevation;
+            if (over <= 0) continue;
+            const short = bench + over / R.verge.climb - d;
+            if (short > shortfall) shortfall = short;
+          }
+          expect(shortfall).toBeLessThan(SLACK);
+          if (nearest >= keepOut) departed = true;
+          else if (departed && sample.s > SPUR.keep) {
+            expect(nearest).toBeGreaterThanOrEqual(keepOut - SLACK);
+          }
+        }
+      }
+    }
+  });
+
   it("puts the junction ON the road, at a corner tight enough to be one", () => {
     for (const seed of seeds) {
       const track = compileStage(seed, "medium", { asphalt: 0.4 });

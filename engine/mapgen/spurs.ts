@@ -139,7 +139,11 @@ export function buildSpur(
    * already road: the stage outside this junction's own neighbourhood, and
    * the aprons its start and finish stand on. Infinity where the country is
    * the branch's to take. */
-  roadDistance: (x: number, z: number) => number,
+  roadDistance: (x: number, z: number, ignoringJunction?: boolean) => number,
+  /** R23 + R31 — whether the ground is still there for a road standing at
+   * a point and height, once the stage's own verge cone has cut away
+   * whatever would have been a wall beside it. */
+  shelfHolds: (x: number, z: number, y: number) => boolean,
 ): Spur {
   const rng = createRng(
     (seed ^ (Math.round(atS) * 2654435761) ^ (end === "entry" ? 0x9e37 : 0x85eb)) >>> 0,
@@ -321,9 +325,27 @@ export function buildSpur(
   // to it — cut. A branch that dips into the stage's ground halfway along
   // and comes out the far side is over at the dip, because everything past
   // it was reached by crossing ground that was never this road's to cross.
+  //
+  // And the junction's own exemption LAPSES here. The stage either side of
+  // a junction is this branch's own road while the branch is still leaving
+  // it — that is what a junction IS — but once the branch has got properly
+  // clear of the whole stage, coming back to any part of it, its own
+  // junction's arms included, is just a second carriageway. Without the
+  // lapse a branch could wander a kilometre and fold back over the road
+  // beside the junction it started at, which one did: forty metres above it.
+  let departed = false;
   for (let i = 0; i < samples.length; i++) {
-    if (samples[i].s <= SPUR.keep) continue;
-    if (roadDistance(samples[i].x, samples[i].z) >= keepOut) continue;
+    const at = samples[i];
+    // Measured against the WHOLE stage, junction window and all: this is
+    // the question of whether the branch is still leaving.
+    const clear = roadDistance(at.x, at.z, false);
+    if (clear >= keepOut) departed = true;
+    if (at.s <= SPUR.keep) continue;
+    // Still leaving: the stage either side of the junction is this branch's
+    // own road, and the ground under both is the junction's one plane.
+    if (!departed) {
+      if (roadDistance(at.x, at.z, true) >= keepOut) continue;
+    } else if (clear >= keepOut && shelfHolds(at.x, at.z, at.elevation)) continue;
     samples.length = i;
     endsAt = "stage";
     break;

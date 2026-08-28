@@ -35,7 +35,11 @@
 //   R13 A water crossing too wide to wade carries a BRIDGE instead of a
 //       ford: the road stays level across it, the water runs in a ravine
 //       below, and the deck is timber up to `bridge.timberMax` — past that
-//       only concrete spans it.
+//       only concrete spans it. A concrete deck is WALLED: its parapet is
+//       an unbroken run of solids down both edges, cast into the deck and
+//       immovable, and it is the one wall on a stage that is there on
+//       purpose — R31 cuts every other one away. A timber deck's rail is
+//       posts and a rail, and a car goes through it.
 //   R14 The inside of a sharp corner is GUARDED: a turn (or a combination)
 //       that bends past `guard.angle` gets the ground between its entry and
 //       its exit filled with a steep mound or a dense grove, so cutting
@@ -109,6 +113,16 @@
 //       place a lost, drowned or crashed car is put back on the road, so it
 //       belongs where the road has just asked the driver a question rather
 //       than in the middle of a straight where it would cost nothing.
+//   R31 The road and the ground beside it are RIDEABLE. Within a BENCH of
+//       a road — the route's or an abandoned branch's — the landscape never
+//       stands above that road's own corridor, and past the bench it may
+//       only rise at a grade the car can climb. Whatever the country was
+//       doing there is CUT where it would otherwise be a wall a car sliding
+//       off the road stops dead against, or a hillside the ground lattice
+//       drags up through the tarmac. The bench is a LATTICE CELL DIAGONAL
+//       wide because that is the reach of the triangles the ground is drawn
+//       and driven on: pin every corner that could sit over a road, and no
+//       triangle can cut up through one.
 
 /** Sample spacing along the compiled centerline, meters. It lives here
  * because it is not only the compiler's business: a search that has to land
@@ -659,6 +673,28 @@ export const STAGE_RULES = {
    * rejecting hard corner combinations instead of crossings (the sim's
    * severity mix is the measurement that says where the line is). */
   roadClear: { margin: 13 },
+
+  /** R31 — the RIDEABLE VERGE: how far the ground beside a road is held
+   * under it, and how steeply it may climb away past that. A rally car
+   * leaves the road constantly and has to be able to get back on, so the
+   * country next to the road is the one place the landscape does not get
+   * the last word. */
+  verge: {
+    /** Half-width of the bench, m, measured from the road's centerline:
+     * inside it nothing stands above the road's own corridor. The number is
+     * one GROUND LATTICE CELL DIAGONAL, rounded up, and that is what makes
+     * it load-bearing — every corner of a lattice cell a road crosses lies
+     * inside that radius of the road, so pinning them under it is what
+     * stops a ground triangle cutting up through the tarmac. Shrink it
+     * below the diagonal and the guarantee stops being one; the cell size
+     * lives in terrain.ts and a test pins the two together. */
+    bench: 20,
+    /** ...and the grade the ground may rise at past the bench, m per m.
+     * Under `collision.climbLimit` with room to spare, because the lattice
+     * reads a field of this grade BACK at up to `climb * SQRT2` across a
+     * cell diagonal, and that steeper number is the face the car meets. */
+    climb: 0.45,
+  },
 
   /** R24 — the start zone. `apron` is the dirt extrapolated straight past
    * each stage end, m: the run-up before the gate and the run-off past the

@@ -11,11 +11,15 @@ import { describe, expect, it } from "vitest";
 import {
   APRON,
   CARS,
+  GROUND_CELL,
   LAKE_Y,
   NEUTRAL_INPUT,
   ROAD_CROSS,
+  STAGE_RULES as R,
   TUNING,
+  compileStage,
   compileTrack,
+  corridorOffset,
   createGame,
   createTerrain,
   standSolid,
@@ -491,11 +495,135 @@ describe("the terrain field", () => {
     const track = compileTrack(11);
     const terrain = createTerrain(track);
     const s = track.samples[100];
-    // Under the road the shelf sits pinned just below grade.
-    expect(terrain.heightAt(s.x, s.z)).toBeCloseTo(s.elevation - 0.35, 1);
+    // Under the road the shelf sits pinned below grade — under the outer
+    // VERGE, which is the lowest line the corridor is drawn on (R31), and
+    // then the tile clearance under that. It is never above the road.
+    const shelf = terrain.heightAt(s.x, s.z);
+    expect(shelf).toBeLessThan(s.elevation);
+    expect(shelf).toBeGreaterThan(s.elevation - 1.5);
     // Far away the landscape is its own: finite and varied.
     const far = terrain.heightAt(s.x + 2000, s.z + 2000);
     expect(Number.isFinite(far)).toBe(true);
+  });
+
+  // R31 — THE RIDEABLE VERGE. A rally car spends half a stage off the road
+  // and the one thing it must always be able to do is come back, so the
+  // landscape does not get the last word next to a road. Both halves of the
+  // rule are measured on `groundAt` — the LATTICE the car actually rides and
+  // the renderer actually draws — because every version of them stated
+  // against the analytic field passes by construction and says nothing.
+  describe("R31 — the rideable verge", () => {
+    const seeds = [3, 7, 11, 21];
+
+    it("states its bench in metres, and it covers a ground cell's diagonal", () => {
+      // The whole guarantee below rests on this: every corner of a lattice
+      // cell a road crosses lies inside one diagonal of that road.
+      expect(R.verge.bench).toBeGreaterThanOrEqual(GROUND_CELL * Math.SQRT2);
+      // ...and the grade past it is one the car can climb, with room for
+      // what a triangle spanning a cell diagonal reads back.
+      expect(R.verge.climb * Math.SQRT2).toBeLessThan(TUNING.collision.climbLimit);
+    });
+
+    it("never drags the ground up through the road it is drawn beside", () => {
+      // On the LATTICE, rebuilt here the way the ground tiles are built:
+      // `heightAt` at the cell corners, interpolated across the same two
+      // triangles. That is the only surface this can be asked of — the
+      // analytic field between the corners is not what anybody sees or
+      // drives, and a version of this stated against it passes by
+      // construction. Before R31 a hillside beside the road dragged a
+      // triangle seven metres up through the tarmac.
+      for (const seed of seeds) {
+        const track = compileStage(seed, "medium");
+        const terrain = createTerrain(track);
+        const corner = (i: number, j: number): number =>
+          terrain.heightAt(i * GROUND_CELL, j * GROUND_CELL);
+        const latticeAt = (x: number, z: number): number => {
+          const gx = x / GROUND_CELL;
+          const gz = z / GROUND_CELL;
+          const i = Math.floor(gx);
+          const j = Math.floor(gz);
+          const fx = gx - i;
+          const fz = gz - j;
+          if (fx + fz <= 1) {
+            const h = corner(i, j);
+            return h + fx * (corner(i + 1, j) - h) + fz * (corner(i, j + 1) - h);
+          }
+          const h = corner(i + 1, j + 1);
+          return h + (1 - fx) * (corner(i, j + 1) - h) + (1 - fz) * (corner(i + 1, j) - h);
+        };
+        const half = track.width / 2;
+        for (let k = 0; k < track.samples.length; k += 3) {
+          const s = track.samples[k];
+          if (s.deck) continue;
+          const right = { x: Math.cos(s.heading), z: -Math.sin(s.heading) };
+          for (let lat = -half; lat <= half; lat += 2) {
+            const tile = latticeAt(s.x + right.x * lat, s.z + right.z * lat);
+            expect(tile).toBeLessThan(s.elevation + corridorOffset(s, lat, track.width));
+          }
+        }
+      }
+    });
+
+    it("holds the whole landscape under a cone the car could drive up", () => {
+      // The rule itself, stated where it is made: the field is capped at
+      // the road's own underside, opening upward at `climb` past the bench.
+      // No tolerance — a hillside, a mountain's toe, a corner guard's mound
+      // and the far field's blend are all cut to this exactly.
+      for (const seed of seeds) {
+        const track = compileStage(seed, "medium");
+        const terrain = createTerrain(track);
+        const edge = track.width / 2 + ROAD_CROSS.reach;
+        for (let i = 0; i < track.samples.length; i += 3) {
+          const s = track.samples[i];
+          if (s.deck) continue;
+          const right = { x: Math.cos(s.heading), z: -Math.sin(s.heading) };
+          for (const side of [-1, 1]) {
+            const top = s.elevation + corridorOffset(s, side * edge, track.width);
+            for (let out = 0; out <= 25; out++) {
+              const lat = side * (edge + out);
+              const here = terrain.heightAt(s.x + right.x * lat, s.z + right.z * lat);
+              expect(here).toBeLessThanOrEqual(top + R.verge.climb * out);
+            }
+          }
+        }
+      }
+    });
+
+    it("leaves almost nothing beside the road the car cannot climb back over", () => {
+      // And what that BUYS, measured on the lattice the car actually rides.
+      // Not zero: R18 cuts a stream its banks, a second road's own drawn
+      // corridor can stand proud of the country beside it, and a triangle
+      // spanning a cell diagonal reads a Lipschitz field back steeper than
+      // it is. Before R31 it was four to six percent of the ground beside
+      // the road — walls a car sliding off it stopped dead against.
+      const limit = TUNING.collision.climbLimit;
+      let probes = 0;
+      let walls = 0;
+      for (const seed of seeds) {
+        const track = compileStage(seed, "medium");
+        const terrain = createTerrain(track);
+        const edge = track.width / 2 + ROAD_CROSS.reach;
+        for (let i = 0; i < track.samples.length; i += 5) {
+          const s = track.samples[i];
+          if (s.deck) continue;
+          const right = { x: Math.cos(s.heading), z: -Math.sin(s.heading) };
+          for (const side of [-1, 1]) {
+            let prev = terrain.groundAt(s.x + right.x * side * edge, s.z + right.z * side * edge);
+            for (let out = 1; out <= 25; out++) {
+              const lat = side * (edge + out);
+              const here = terrain.groundAt(s.x + right.x * lat, s.z + right.z * lat);
+              // The face is measured LEAVING the road: what a car sliding
+              // off it drives into. A drop is the country's business — a
+              // rise it cannot get over is not.
+              probes++;
+              if (here - prev >= limit) walls++;
+              prev = here;
+            }
+          }
+        }
+      }
+      expect(walls / probes).toBeLessThan(0.005);
+    });
   });
 });
 

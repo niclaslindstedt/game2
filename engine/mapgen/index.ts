@@ -54,7 +54,13 @@ export {
   type Stream,
 } from "./terrain.ts";
 export {
+  PARAPET_BAY,
+  PARAPET_GAP,
+  PARAPET_INSET,
+  PARAPET_OUT,
+  PARAPET_THICK,
   SOLID_PROP_HEIGHT,
+  bridgeParapets,
   isWooden,
   standSolid,
   type SolidKind,

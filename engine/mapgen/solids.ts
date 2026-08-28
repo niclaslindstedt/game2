@@ -68,7 +68,11 @@ export type SolidKind =
   | "slab"
   | "stump"
   /** Cut timber stacked at the roadside for the lorry. */
-  | "timber";
+  | "timber"
+  /** R13 — a bay of a concrete bridge's PARAPET. The one solid on a stage
+   * that is there on purpose: a wall between the deck and a drop, and the
+   * only thing that makes a bridge a place you have to be accurate. */
+  | "parapet";
 
 /** A prop standing this tall over its foot is SOLID — the car hits it.
  * The catalog's bonnets sit about 0.87 m over the ground, so this is the
@@ -77,6 +81,33 @@ export type SolidKind =
  * scatters for itself. Everything the terrain field places clears this bar;
  * nothing the renderer plants on its own may. */
 export const SOLID_PROP_HEIGHT = 0.45;
+
+/** R13 — one bay of a parapet: its collision circle in the ground plane and
+ * how high the wall stands over the deck. Declared beside SOLID_PROP_HEIGHT
+ * because the height has to clear it — a parapet the car rides over is not
+ * a parapet. */
+const PARAPET_RADIUS = 0.6;
+const PARAPET_HEIGHT = 0.9;
+
+/** R13 — the concrete parapet, as geometry: how long one BAY of it is, m
+ * (and so how far apart the run of solids that makes it stands), how thick
+ * the wall is, and how far outside the mat's edge its INNER FACE stands.
+ * The engine collides with the run and the renderer draws the same bays in
+ * the same places — one statement, both sides.
+ *
+ * The collision circle is deliberately fatter than the wall, because a run
+ * of circles with a gap in it is worse than no wall at all: a nose finds
+ * the gap, and behind this one is the river. So the two are lined up on
+ * the wall's INNER face rather than on their centres — `PARAPET_INSET` is
+ * how far in from a bay's centre the drawn wall's centre sits, and it is
+ * what makes the car stop exactly where the concrete looks like it is. */
+export const PARAPET_BAY = 1;
+export const PARAPET_THICK = 0.5;
+export const PARAPET_GAP = 0.2;
+/** Lateral distance from a bay's centre to the road, m: the solid's own
+ * radius past the wall's inner face. */
+export const PARAPET_OUT = PARAPET_GAP + PARAPET_RADIUS;
+export const PARAPET_INSET = PARAPET_RADIUS - PARAPET_THICK / 2;
 
 /** Bulk densities, kg/m³. Both are honest for the material and deliberately
  * shy of the textbook figure for the SHAPE: a wild boulder is fissured and
@@ -114,6 +145,8 @@ const MATERIAL: Record<SolidKind, { of: keyof typeof DENSITY; rooted: number }> 
   rock: { of: "stone", rooted: 0.3 },
   boulder: { of: "stone", rooted: 0.55 },
   slab: { of: "stone", rooted: 1 },
+  // Cast onto the deck it stands on: as immovable as the bridge is.
+  parapet: { of: "stone", rooted: 1 },
 };
 
 /** Is this thing made of WOOD? What breaks off it, what colour the
@@ -156,6 +189,10 @@ export function solidShape(kind: SolidKind, size: number): { radius: number; hei
     case "boulder":
       // A deep-wild boulder — it takes real air to clear one.
       return { radius: 1.9 * size, height: 2.1 * size };
+    case "parapet":
+      // One bay of a wall — see PARAPET_BAY for why the circle is fatter
+      // than the concrete is thick.
+      return { radius: PARAPET_RADIUS * size, height: PARAPET_HEIGHT * size };
     default:
       // An outcrop: sunk near half its depth and stretched tall, a face of
       // rock nothing but a cliff flight gets over.
@@ -184,6 +221,10 @@ function solidVolume(ob: {
       return LUMP * (radius * 0.95) * (radius * 0.8) * (height * 0.85);
     case "slab":
       return LUMP * size * (size * 0.8) * (size * 1.3);
+    case "parapet":
+      // The bay the renderer draws: a metre of wall, half a metre thick,
+      // standing to the top of a door handle.
+      return PARAPET_BAY * PARAPET_THICK * height;
     case "log":
       // A trunk lying down: its collision circle is the length it covers,
       // its height the thickness of the bole.
@@ -232,4 +273,88 @@ export function standSolid(
     rooted: material.rooted,
     snap: mass * SNAP_PER_MASS[material.of],
   };
+}
+
+/** The road samples this needs to build a parapet — a structural shape, so
+ * a stage sample satisfies it without solids.ts having to know what a track
+ * is. `deck` is only ever tested for being set. */
+type DeckSample = {
+  x: number;
+  z: number;
+  heading: number;
+  elevation: number;
+  s: number;
+  deck: unknown;
+};
+
+/** R13 — the PARAPET a concrete deck carries, as solids: one bay every
+ * `PARAPET_BAY` metres down both edges of every concrete deck in
+ * `samples[from..to)`.
+ *
+ * This is the one wall on a stage that is there on purpose. Everywhere else
+ * R31 cuts the ground back to something a car can climb; here the whole
+ * point is that it cannot — over the side is a drowning (R13), so the
+ * bridge is a place you have to be accurate, and the wall has to be as
+ * solid as it looks. Cast onto the deck and immovable: a car that arrives
+ * at one sideways stops there.
+ *
+ * The bays are walked by ARC LENGTH rather than per sample, because the
+ * sample spacing is only approximately `SAMPLE_STEP` and a run of solids
+ * with a gap in it is worse than no run at all — a nose finds the gap, and
+ * behind it is the river. One function, read by the engine's contact model
+ * and by the renderer that draws the same bays in the same places.
+ *
+ * A TIMBER deck's rail is not this: it is posts and a rail, and a car goes
+ * through it. */
+export function bridgeParapets(
+  samples: DeckSample[],
+  width: number,
+  from = 0,
+  to = samples.length,
+): WildObstacle[] {
+  const out: WildObstacle[] = [];
+  const lat = width / 2 + PARAPET_OUT;
+  let i = Math.max(0, from);
+  while (i < to) {
+    if (samples[i].deck !== "concrete") {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < samples.length && samples[j].deck === "concrete") j++;
+    const startS = samples[i].s;
+    const endS = samples[j - 1].s;
+    let k = i;
+    for (let s = startS; s <= endS; s += PARAPET_BAY) {
+      while (k + 1 < j && samples[k + 1].s <= s) k++;
+      const a = samples[k];
+      const b = samples[Math.min(k + 1, j - 1)];
+      const run = b.s - a.s;
+      const t = run > 1e-6 ? (s - a.s) / run : 0;
+      const x = a.x + (b.x - a.x) * t;
+      const z = a.z + (b.z - a.z) * t;
+      const y = a.elevation + (b.elevation - a.elevation) * t;
+      const right = { x: Math.cos(a.heading), z: -Math.sin(a.heading) };
+      for (const side of [-1, 1]) {
+        out.push(
+          standSolid({
+            x: x + right.x * lat * side,
+            z: z + right.z * lat * side,
+            y,
+            kind: "parapet",
+            size: 1,
+            // The bay's own heading, turned about-face on the LEFT side of
+            // the road. A box does not care which way round it is, but the
+            // sign does: it makes `rightOf(spin)` point OUT of the road for
+            // every bay, so the wall's inner face is one subtraction away
+            // wherever it stands (PARAPET_INSET) and nothing downstream has
+            // to remember which order the pairs came out in.
+            spin: side < 0 ? a.heading + Math.PI : a.heading,
+          }),
+        );
+      }
+    }
+    i = j;
+  }
+  return out;
 }
