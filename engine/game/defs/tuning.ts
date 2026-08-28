@@ -313,8 +313,8 @@ export const TUNING = {
        * a lift or the handbrake rather than just the wheel. `entry` alone
        * cannot say any of that: it moves where the slide begins and nothing
        * about how deep it goes, so on the loose — where the front-driver's
-       * rubber is the first to give up — the hatch used to hang exactly the
-       * same tail out as the saloon, only earlier. */
+       * rubber is the first to give up — `entry` alone leaves the hatch
+       * hanging exactly the same tail out as the saloon, only earlier. */
       depth: 0.6,
       /** How fast a slide the wheel has stopped asking for lets go,
        * ×`drift.release`. Fast — it gathers itself up. */
@@ -960,6 +960,46 @@ export const TUNING = {
        * into the other car's panels did not go into yours. */
       crushShare: 0.45,
     },
+    /** R26 — THE ANTI-CUT BLOCKS. A concrete block laid along the inside of
+     * a corner is not a thing to be crashed into: it is a thing the car
+     * RIDES OVER, and everything it does follows from that. The wheels on
+     * one side go up and come off again, the car is shoved back out of the
+     * inside, and it costs speed. What it never does is fold a panel —
+     * cutting an apex has to be paid for, not punished with the run, or
+     * every corner on the stage is a wreck waiting for a tidy line.
+     *
+     * The blocks are 0.6 m of road 3.4 m apart, so an apex taken over them
+     * is several of these in a row and the costs COMPOUND: one is a thump
+     * and a twitch, a whole apex cut over them is most of a gear and a car
+     * that arrives at the exit pointing the wrong way. */
+    kerb: {
+      /** Speed the car keeps through one block, 0..1 of what it had. */
+      keep: 0.955,
+      /** Under this the car is stepping over a block rather than mounting
+       * it: no jolt, no thud, no cost, m/s of closing speed. */
+      clipSpeed: 2.5,
+      /** Sideways shove out of the inside of the corner, m/s per m/s of
+       * closing speed — the block doing what it was laid there to do. */
+      shove: 0.32,
+      /** Roll rate the mounted side is lifted at, rad/s per m/s of closing
+       * speed. An order under `solids.tripLaunch`, and capped below it, so
+       * a kerb never puts a car over however hard it is taken. */
+      lift: 0.06,
+      liftMax: 0.9,
+      /** Yaw the shove drags the nose round by, rad/s per m/s. Small on
+       * purpose: a block unsettles the car, it does not spin it. */
+      yaw: 0.035,
+      /** Heave thrown into the springs per m/s of closing speed, m/s of
+       * ride rate — the wheels going up 0.28 m and dropping off the far
+       * side, which is the wobble the player actually feels. */
+      heave: 0.11,
+      /** How long the body is deaf to the kerbing after one bite, s. A
+       * block is 0.6 m of road and the car is inside one for several steps
+       * at any speed; without this it is jolted on every one of them, and
+       * one block costs what a whole apex should. */
+      again: 0.08,
+    },
+
     /** Panel crush per m/s of closing speed past the scuff floor, m. A
      * 30 m/s head-on folds the nose ~0.3 m in. */
     crushPerSpeed: 0.011,

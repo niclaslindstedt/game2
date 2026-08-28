@@ -1081,6 +1081,11 @@ export function App() {
       renderer.onThunder((clap) => {
         if (menuRef.current === null) audioRef.current?.thunder(clap);
       });
+      // The light things the car drives through are knocked over by the
+      // renderer, so this is the only place their noise can be raised.
+      renderer.onKnock((speed) => {
+        if (menuRef.current === null) audioRef.current?.knock(speed);
+      });
       cleanups.push(() => renderer.dispose());
       const page = menuRef.current;
       if (page) showBackdropRef.current(page);

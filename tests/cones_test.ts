@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE LOOSE THINGS — the marshal's cones the car drives through, and the
-// tumbler every knocked-free object falls under.
+// THE LOOSE THINGS — the marshal's cones and the marker posts the car drives
+// through, and the tumbler every knocked-free object falls under.
 //
 // None of this is engine state: a cone stops nothing, no run changes for
 // having hit one, and the whole field lives renderer-side. What it owes is
@@ -15,6 +15,10 @@
 //     it freezes mid-arc the moment the car drives on, which is the same
 //     fault seen from the other end.
 //
+// The posts are the same idea drawn a cheaper way: they never leave the
+// instanced batch the stage draws them all in, so what is read back here is
+// an instance matrix rather than an object of their own.
+//
 // So the tests here drive a real car at a real cone over ground that is not
 // flat, and then look at where things end up.
 //
@@ -26,16 +30,19 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
 import {
+  KERB_MARKER,
   NEUTRAL_INPUT,
   compileTrack,
   createGame,
   step,
   type CarInput,
   type GameState,
+  type KerbMarker,
   type SegmentPlan,
 } from "@engine";
 
 import { createConeField } from "../pwa/src/game/cones.ts";
+import { createPostField } from "../pwa/src/game/kerbs.ts";
 import { stepTumble, tumbleFrom } from "../pwa/src/game/tumble.ts";
 
 const LONG_STRAIGHT: SegmentPlan[] = [{ kind: "straight", length: 6000, feature: "none" }];
@@ -232,5 +239,88 @@ describe("a long thing coming to rest", () => {
     const body = tumbleFrom(panel, new THREE.Vector3(), new THREE.Vector3(), 0.2, false);
     expect(settle(body, 8)).toBeGreaterThan(0);
     expect(panel.rotation.x).toBeCloseTo(0.7, 5);
+  });
+});
+
+describe("driving through the marker posts", () => {
+  /** Stand a post `ahead` metres down the car's nose, and take it under a
+   * fresh field's management. The batch is an InstancedMesh, so what the
+   * test reads back is the instance matrix rather than an object's own
+   * position — which is the point: a knocked post never stops being one of
+   * the hundreds the stage draws in a single call. */
+  function postAhead(state: GameState, field: ReturnType<typeof createPostField>, ahead: number) {
+    const sinH = Math.sin(state.car.heading);
+    const cosH = Math.cos(state.car.heading);
+    const x = state.car.x + sinH * ahead;
+    const z = state.car.z + cosH * ahead;
+    const marker: KerbMarker = {
+      kind: "post",
+      x,
+      y: state.terrain.groundAt(x, z),
+      z,
+      spin: state.car.heading,
+      s: 0,
+      side: 1,
+    };
+    return field.plant([marker]) as THREE.InstancedMesh;
+  }
+
+  /** Where instance 0 of a batch has got to, and how far from upright. */
+  function poseOf(batch: THREE.InstancedMesh): { at: THREE.Vector3; tilt: number } {
+    const m = new THREE.Matrix4();
+    batch.getMatrixAt(0, m);
+    const at = new THREE.Vector3();
+    const q = new THREE.Quaternion();
+    m.decompose(at, q, new THREE.Vector3());
+    // How far the stake's own up axis has fallen away from the world's.
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+    return { at, tilt: Math.acos(Math.min(1, Math.abs(up.y))) };
+  }
+
+  it("lays a post flat on the ground and thuds once for it", () => {
+    const state = onGround(() => 20);
+    const field = createPostField();
+    intoTheWild(state, 24);
+    const batch = postAhead(state, field, 25);
+    const stood = poseOf(batch);
+    expect(stood.tilt).toBeLessThan(0.01);
+
+    let knocks = 0;
+    const dt = 1 / 120;
+    for (let i = 0; i < 6 * 120; i++) {
+      step(state, drive({ throttle: 1 }));
+      field.update(state, dt, () => (knocks += 1));
+    }
+
+    // It made exactly one noise — a post is knocked over once, however many
+    // frames the car spends on top of where it used to stand.
+    expect(knocks).toBe(1);
+    const down = poseOf(batch);
+    // It is DOWN: lying on the ground rather than standing in it, and past
+    // halfway to flat rather than merely leaning.
+    expect(down.tilt).toBeGreaterThan(Math.PI / 4);
+    expect(down.at.y).toBeLessThan(20 + KERB_MARKER.post.width);
+    expect(down.at.y).toBeGreaterThan(20 - 0.01);
+    // ...and it went somewhere doing it.
+    expect(down.at.distanceTo(stood.at)).toBeGreaterThan(1);
+  });
+
+  it("leaves a post the car never reaches standing exactly where it was put", () => {
+    const state = onGround(() => 20);
+    const field = createPostField();
+    intoTheWild(state, 20);
+    const batch = postAhead(state, field, 12);
+    // Off to one side, well outside anything the body could brush.
+    state.car.x += 9;
+    const stood = poseOf(batch);
+
+    for (let i = 0; i < 4 * 120; i++) {
+      step(state, drive({ throttle: 1 }));
+      field.update(state, 1 / 120);
+    }
+
+    const after = poseOf(batch);
+    expect(after.at.distanceTo(stood.at)).toBe(0);
+    expect(after.tilt).toBeLessThan(0.01);
   });
 });

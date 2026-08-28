@@ -440,7 +440,7 @@ export const STAGE_RULES = {
    * mound where there is room for one, a dense grove where there is not.
    * Neither is a wall: a mound can be climbed and a grove threaded, but
    * both cost more than the corner they replace, which is the point. */
-  /** R26 — where the red-and-white goes. The level-design guide states the
+  /** R26 — where the marking goes. The level-design guide states the
    * placement in prose (docs/track-generator.md); these are the numbers it
    * resolves to. A zone is an arc-length span on ONE side of the road, and
    * the four roles are the four reasons a kerb is ever painted:
@@ -484,6 +484,12 @@ export const STAGE_RULES = {
     /** Marker posts on gravel stand this far apart, meters (R26 — a dirt
      * road is marked by posts, not by a painted band). */
     postSpacing: 6,
+    /** ...and the anti-cut blocks laid through an apex, meters. Wider than
+     * the posts because a block is wider than a post and because it is a
+     * thing the car is meant to be able to WEAVE at: a continuous wall
+     * along the inside of a corner is a barrier, and a barrier there is a
+     * corner nobody may take tight. */
+    blockSpacing: 3.4,
   },
 
   /** R27 — the crowd. Spectators stand where a rally crowd stands: at the

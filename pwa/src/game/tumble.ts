@@ -26,6 +26,7 @@
 // contact with the ground turns it toward horizontal.
 
 import * as THREE from "three";
+import { TUNING, type CarState } from "@engine";
 
 /** Gravity, m/s². A hair over the real thing — the arcs are metres long and
  * a light one reads as slow motion at this scale. */
@@ -43,6 +44,12 @@ const GROUND_DRAG = 2.6;
  * Its spin has to be spent too, or a cone stops moving while still rolling. */
 const SLEEP_SPEED = 0.6;
 const SLEEP_SPIN = 1.2;
+
+/** Objects further than this from the car are not even tested for a hit,
+ * m. One that is already in the air is stepped wherever it is: a piece
+ * frozen mid-flight because the car drove on is the whole fault this
+ * module exists to avoid. */
+const NEAR = 12;
 
 export type TumbleBody = {
   object: THREE.Object3D;
@@ -154,4 +161,58 @@ export function stepTumble(
     return false;
   }
   return true;
+}
+
+/**
+ * THE CAR AS A BOX — what counts as driving through something light.
+ *
+ * Nothing in this module's care is collided with by the physics: a cone, a
+ * marker post and a torn-off bumper all stop the car exactly as much as
+ * each other, which is not at all. So the test is not a contact model, it
+ * is a question about the BODY: is this point inside the same oriented box
+ * the engine collides the car with, grown by the object's own `reach`,
+ * because an object is a shape rather than a point and a wheel brushing one
+ * is still a hit.
+ *
+ * Returns the point in the CAR's frame — `right` along its right axis,
+ * `fwd` along its nose — or null when the car is nowhere near it. `tall` is
+ * how far above or below the car's own height it can still be caught at, so
+ * a flight clears what it is high enough over.
+ */
+export function drivingThrough(
+  car: CarState,
+  x: number,
+  y: number,
+  z: number,
+  reach: number,
+  tall: number,
+): { right: number; fwd: number } | null {
+  if (Math.abs(y - car.y) >= tall) return null;
+  const dx = x - car.x;
+  const dz = z - car.z;
+  if (Math.abs(dx) > NEAR || Math.abs(dz) > NEAR) return null;
+  const sinH = Math.sin(car.heading);
+  const cosH = Math.cos(car.heading);
+  const fwd = dx * sinH + dz * cosH;
+  const right = dx * cosH - dz * sinH;
+  if (Math.abs(fwd) >= TUNING.collision.halfLength + reach) return null;
+  if (Math.abs(right) >= TUNING.collision.halfWidth + reach) return null;
+  return { right, fwd };
+}
+
+/** Which way a struck object should leave: out of the body along whichever
+ * face is nearest — the flank for something beside the car, the nose for
+ * something dead ahead — as a world direction. */
+export function outOfBody(
+  car: CarState,
+  hit: { right: number; fwd: number },
+  reach: number,
+): { x: number; z: number } {
+  const hl = TUNING.collision.halfLength + reach;
+  const hw = TUNING.collision.halfWidth + reach;
+  const right = hw - Math.abs(hit.right) < hl - Math.abs(hit.fwd) ? Math.sign(hit.right) : 0;
+  const fwd = right === 0 ? Math.sign(hit.fwd) : 0;
+  const sinH = Math.sin(car.heading);
+  const cosH = Math.cos(car.heading);
+  return { x: right * cosH + fwd * sinH, z: fwd * cosH - right * sinH };
 }

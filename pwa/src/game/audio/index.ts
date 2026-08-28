@@ -37,9 +37,20 @@ export type RunAudio = {
    * renderer, which is where the storm is simulated — the engine has no
    * weather in it and never reports one. */
   thunder: (clap: Clap) => void;
+  /** Something light has gone over — a marshal's cone, a marker post out
+   * of the verge — at `speed` m/s. Raised by the renderer for the same
+   * reason: neither is an engine prop, so `step()` never reports one. */
+  knock: (speed: number) => void;
   /** A run ended or the player left it. */
   reset: () => void;
 };
+
+/** How close together two knocks may be heard, s. A car through a run of
+ * marker posts puts one over every couple of tenths, and at the top of
+ * fourth several inside one frame: past a handful a second the ear stops
+ * hearing individual posts and starts hearing a buzz, so the extra copies
+ * buy nothing and cost the mix. */
+const KNOCK_GAP_S = 0.06;
 
 /** How close together two claps may land, s. An active cell can put three
  * strikes in the air inside a second and their sounds arrive from different
@@ -51,6 +62,7 @@ export function createRunAudio(): RunAudio {
   const bed: DriveBed = createDriveBed(sfx);
   let lastGear = 0;
   let lastClap = -Infinity;
+  let lastKnock = -Infinity;
 
   return {
     events(list) {
@@ -82,10 +94,22 @@ export function createRunAudio(): RunAudio {
       playSound(sfx, RUN_BANK, hit.id, hit.shape);
     },
 
+    knock(speed) {
+      const now = sfx.now();
+      if (now === null) return;
+      if (now - lastKnock < KNOCK_GAP_S) return;
+      lastKnock = now;
+      // How hard it was hit, as one sound at a size — a post flicked off a
+      // verge at a crawl and one taken flat out are the same hollow knock.
+      const hard = Math.min(1, Math.max(0, (speed - 1) / 11));
+      playSound(sfx, RUN_BANK, "knock", { gain: 0.6 + 0.7 * hard, pitch: 1.12 - 0.22 * hard });
+    },
+
     reset() {
       bed.reset();
       lastGear = 0;
       lastClap = -Infinity;
+      lastKnock = -Infinity;
     },
   };
 }

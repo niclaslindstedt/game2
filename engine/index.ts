@@ -23,6 +23,7 @@ export {
 // The simulation.
 export { createGame, skipIntro, startsIn, step, type CreateGameOptions } from "./game/step.ts";
 export {
+  clipKerbs,
   collideCar,
   collideCars,
   damageZoneAt,
@@ -102,6 +103,10 @@ export {
   spurReach,
   createGuardField,
   buildKerbs,
+  createKerbField,
+  KERB_MARKER,
+  markersBetween,
+  roleAt,
   createStandField,
   createTerrain,
   computeStreams,
@@ -151,6 +156,8 @@ export {
   type SpurSample,
   type CornerGuard,
   type GuardField,
+  type KerbField,
+  type KerbMarker,
   type KerbRole,
   type KerbZone,
   type Stand,

@@ -619,6 +619,71 @@ export const RUN_BANK: SoundBank = {
     ],
   },
 
+  kerb_block: {
+    description:
+      "R26 — riding over an anti-cut block on the inside of a corner. Concrete " +
+      "under a tyre, felt through the floor rather than heard through the " +
+      "panels: a short dry knock with the whole weight of the car behind it, a " +
+      "low thump as the suspension takes the drop off the far side, and no " +
+      "brightness at all. It must NOT sound like an impact — nothing broke, " +
+      "and a player who hears a crash here will stop cutting the apex " +
+      "altogether instead of learning what it costs.",
+    voices: [
+      {
+        call: "noise",
+        durationMs: 55,
+        volume: 0.05,
+        color: "brown",
+        filter: { type: "bandpass", frequency: 260, q: 1.4 },
+      },
+      {
+        call: "noise",
+        durationMs: 190,
+        volume: 0.038,
+        color: "brown",
+        delayMs: 25,
+        filter: { type: "lowpass", frequency: 700, to: 160 },
+      },
+      { call: "tone", type: "sine", from: 96, to: 44, durationMs: 220, volume: 0.045 },
+      {
+        call: "tone",
+        type: "triangle",
+        from: 190,
+        to: 118,
+        durationMs: 120,
+        volume: 0.02,
+        drive: 0.3,
+        filter: { type: "lowpass", frequency: 900 },
+      },
+    ],
+  },
+
+  knock: {
+    description:
+      "Something light going over: a marshal's cone, a marker post out of the " +
+      "verge. Hollow plastic struck once and then gone — a short mid knock with " +
+      "a bit of a rattle behind it as the thing lands. Deliberately small: at " +
+      "pace through a run of posts this fires several times a second, and " +
+      "anything with weight in it would read as the car breaking.",
+    voices: [
+      {
+        call: "noise",
+        durationMs: 40,
+        volume: 0.03,
+        filter: { type: "bandpass", frequency: 900, to: 520, q: 2.2 },
+      },
+      { call: "tone", type: "triangle", from: 320, to: 190, durationMs: 90, volume: 0.022 },
+      {
+        call: "noise",
+        durationMs: 150,
+        volume: 0.012,
+        delayMs: 60,
+        filter: { type: "bandpass", frequency: 1900, q: 1.6 },
+        echo: 0.12,
+      },
+    ],
+  },
+
   part_break: {
     description:
       "A piece of the car leaving it. Metal giving way is a bright tearing " +

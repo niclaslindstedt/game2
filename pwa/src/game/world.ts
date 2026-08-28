@@ -19,9 +19,11 @@ import {
   PARAPET_THICK,
   ROAD_CROSS,
   bridgeParapets,
+  createKerbField,
   createRng,
   inStream,
   junctionPlatformY,
+  markersBetween,
   type GameState,
   type Season,
   type Spur,
@@ -50,7 +52,7 @@ import { buildTerrain, LAKE_Y, type Terrain } from "./terrain.ts";
 import { buildStreamMeshes } from "./streams.ts";
 import { chevronTexture, gravelTexture, waterTexture } from "./textures.ts";
 import { buildFinishGate, buildStartGate, type FinishGate, type Muzzle } from "./finish-gate.ts";
-import { buildKerbing } from "./kerbs.ts";
+import { buildKerbing, createPostField } from "./kerbs.ts";
 import { buildCrowd, type Crowd } from "./crowd.ts";
 import { rightOf } from "./ribbon.ts";
 import {
@@ -709,8 +711,10 @@ export type World = {
   group: THREE.Group;
   /** Advance everything that moves on its own, and let the car knock over
    * whatever it is driving through. The car is also the focus point: R26's
-   * crowd only animates the stands near it. */
-  update: (state: GameState, dt: number) => void;
+   * crowd only animates the stands near it. `knocked` is raised once per
+   * cone or marker post put over, with the speed it left at — neither is an
+   * engine prop, so this is the only place their noise can come from. */
+  update: (state: GameState, dt: number, knocked?: (speed: number) => void) => void;
   /** Catch the world up with the track and the car, one frame's worth at a
    * time: raise the road still owed, build the ground the car and the
    * corridor now need, and — on an endless stage — drop what is behind.
@@ -820,6 +824,13 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer")
   // would leave it hanging.
   const cones = createConeField();
   group.add(cones.group);
+  // R26 — the marker posts. Their instanced batches live in the road
+  // chunks that draw them; the field only holds the references, so the car
+  // can knock one flat wherever it stands.
+  const posts = createPostField();
+  // The engine's own marker list: the physics collides the anti-cut blocks
+  // in it, so nothing here may decide for itself where one stands.
+  const kerbs = createKerbField(track);
   // ...and, beside them, whatever the car breaks OFF the landscape. Same
   // reason they live outside the road chunks: a chunk dropped behind an
   // endless run would take a trunk still in the air with it.
@@ -856,8 +867,24 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer")
     chunkGroup.add(buildSkirts(ribbon, track.width));
     chunkGroup.add(buildRoad(track, ribbon, track.width));
     chunkGroup.add(buildMarkings(track, bare, track.width));
-    // R25 — the rally's own red and white, at the corners that earn it.
-    chunkGroup.add(buildKerbing(track, bare, track.width));
+    // R25 — the rally's own striped marking, at the corners that earn it.
+    // The window is half-open at the top and starts at this chunk's FIRST
+    // sample rather than the strip's overlapping one, so every marker the
+    // engine placed is drawn by exactly one chunk.
+    kerbs.extend(to);
+    chunkGroup.add(
+      buildKerbing(
+        track,
+        bare,
+        track.width,
+        markersBetween(
+          kerbs,
+          track.samples[from].s,
+          to < track.samples.length ? track.samples[to].s : Infinity,
+        ),
+        posts,
+      ),
+    );
     const chippings = buildChippings(track, bare, track.width);
     if (chippings) chunkGroup.add(chippings);
     chunkGroup.add(buildBridges(track, from, to, terrain.heightAt));
@@ -975,6 +1002,8 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer")
       group.remove(old.group);
       disposeGroup(old.group);
       cones.retireBefore(old.toS);
+      posts.retireBefore(old.toS);
+      kerbs.pruneBefore(old.toS);
     }
   };
 
@@ -1018,12 +1047,13 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer")
     breakage.spawn(solid, vx, vy, vz);
   };
 
-  const update = (state: GameState, dt: number): void => {
+  const update = (state: GameState, dt: number, knocked?: (speed: number) => void): void => {
     terrain.update(dt);
     // The breeze is ONE uniform over the world's shared leafy material, so
     // it is advanced once here rather than per patch of planted ground.
     swayFlora(dt);
-    cones.update(state, dt);
+    cones.update(state, dt, knocked);
+    posts.update(state, dt, knocked);
     breakage.update(dt, terrain.heightAt);
     crowd?.update(dt, state.car.x, state.car.z);
   };
@@ -1032,6 +1062,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer")
     crowd?.dispose();
     wild.dispose();
     cones.dispose();
+    posts.dispose();
     breakage.dispose();
     disposeGroup(group);
     terrain.dispose();

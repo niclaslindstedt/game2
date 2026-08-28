@@ -433,7 +433,15 @@ body {
   background: rgb(18 48 105 / 45%);
 }
 
-/* Severity is the color story: green flows, amber commits, red bites. */
+/* Severity is the color story: green flows, yellow commits, orange bites.
+
+   The top rung is deliberately NOT the HUD's red (--hud-bad). Red in this
+   game means something has GONE WRONG — the damage instrument, the tape
+   across a closed road — and a hard corner has not gone wrong yet: it is
+   the call a driver most wants to read as instruction, and painting it in
+   the failure colour reads as a reprimand for a line nobody has taken. A
+   deep orange is a step past the yellow without changing what the colour
+   means. */
 .hud-pace-soft {
   color: #6de37f;
 }
@@ -443,7 +451,7 @@ body {
 }
 
 .hud-pace-hard {
-  color: #ff5a4e;
+  color: #ff7a1f;
 }
 
 /* Off the road the strip is not calling a corner any more: amber, the same
@@ -2593,14 +2601,6 @@ a.menu-version:focus-visible {
   align-items: center;
   flex-wrap: wrap;
   gap: 0.3rem 0.7rem;
-}
-
-/* The way back, as the arrow alone. Sized off the page title beside it so
-   the two read as one piece of chrome rather than a button and a heading. */
-.roam-back {
-  font-size: clamp(0.85rem, 3vmin, 1.25rem);
-  line-height: 1;
-  padding: 0.1rem 0.55rem;
 }
 
 .roam-title {

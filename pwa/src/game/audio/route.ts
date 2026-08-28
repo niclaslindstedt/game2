@@ -143,6 +143,15 @@ export function soundForEvent(
     case "partBreak":
       return { id: "part_break" };
 
+    // R26 — an anti-cut block ridden over. One sound at one size band: what
+    // a block costs is the LINE, and a slab taken at 40 km/h and one taken
+    // at 130 are the same slab. It gets heavier and lower with the speed
+    // it was taken at, and no further.
+    case "kerbHit": {
+      const hard = ramp(event.speed, 3, 14);
+      return { id: "kerb_block", shape: { gain: 0.7 + 0.5 * hard, pitch: 1.08 - 0.18 * hard } };
+    }
+
     case "solidBreak": {
       // Two materials, two sounds — and the SIZE of what gave way sets the
       // pitch, because the difference between a sapling and an old spruce

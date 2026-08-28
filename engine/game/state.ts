@@ -7,7 +7,7 @@
 // slides out to the left of its nose — a drift out of a clockwise turn.
 
 import type { CarSpec, GearboxMode } from "./defs/cars.ts";
-import type { Surface, TerrainField, Track, WildObstacle } from "../mapgen/index.ts";
+import type { KerbField, Surface, TerrainField, Track, WildObstacle } from "../mapgen/index.ts";
 import type { Rng } from "../lib/prng.ts";
 
 export type CarInput = {
@@ -135,6 +135,11 @@ export type CarState = {
    * from `pitch` (the ground's own attitude) because only the BODY takes
    * it: the wheels stay on the ground and so does the shadow. */
   pitchLoad: number;
+  /** Sim time the body may next be jolted by an anti-cut block, s. A block
+   * is 0.6 m of road and the car is inside one for several steps at any
+   * speed: without a floor between bites, one block costs what a whole
+   * apex should (`TUNING.collision.kerb.again`). */
+  kerbFrom: number;
   /** How sideways the car is this step, 0..1 — 0 gripping, 1 fully sliding
    * (renderer/HUD readout; the handling model computes it every step). */
   slide: number;
@@ -254,6 +259,11 @@ export type GameEvent =
   | { type: "impact"; speed: number; angle: number; belly: boolean }
   /** A piece of the body tearing off — the renderer sends it flying. */
   | { type: "partBreak"; part: DamagePart }
+  /** R26 — the car has ridden over an anti-cut block on the inside of a
+   * corner. `speed` is the closing speed into it, m/s. Not an `impact`:
+   * nothing folded, nothing broke, and the car drives on — what it cost
+   * was the line and a share of the speed carried through the apex. */
+  | { type: "kerbHit"; speed: number }
   /** A SOLID THE CAR TOOK OUT OF THE WORLD: a trunk snapped through, a
    * rock knocked off its bed. The field has already stopped standing it,
    * so this is the renderer's one chance to catch it — it retires whatever
@@ -345,6 +355,11 @@ export type GameState = {
   /** The landscape around the road — the ground the car rides once it
    * leaves the samples, with its water and its solid wild props. */
   terrain: TerrainField;
+  /** R26 — the marking standing beside the road: the posts the car flattens
+   * and the anti-cut blocks it is thrown by. Placed here rather than by the
+   * renderer because one of the two is SOLID, and a block the car is thrown
+   * by has to be a block the player can see. */
+  kerbs: KerbField;
   car: CarState;
   phase: GamePhase;
   /** Set while the car is going down in deep water; null while it drives.

@@ -15,7 +15,7 @@
 // live in defs/tuning.ts.
 
 import { clamp } from "../lib/math.ts";
-import type { WildObstacle } from "../mapgen/index.ts";
+import { KERB_MARKER, type KerbMarker, type WildObstacle } from "../mapgen/index.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 import {
@@ -145,7 +145,7 @@ export function landingDamage(
  *
  * Held fast by the ground, a solid takes the whole impulse the car can
  * deliver — `(1+e)·closing·mass` — and hands every bit of it back; that is
- * bite 1, and it is the only case the model used to have. Otherwise one of
+ * bite 1, and it is the only case in which nothing gives. Otherwise one of
  * two things gives first, whichever is weaker:
  *
  *   the GROUND'S HOLD → the thing comes out of its bed and the contact is
@@ -341,6 +341,101 @@ export function collideCar(
         stats,
       );
     }
+  }
+}
+
+/**
+ * R26 — THE ANTI-CUT BLOCKS, resolved as what they are: things the car
+ * rides OVER rather than into.
+ *
+ * A block is a slab of concrete a hand's width proud of the verge, laid
+ * along the inside of a corner precisely where a driver wants to put two
+ * wheels. Nothing about hitting one is a crash — the panels never touch it
+ * and the body never folds — but it is the opposite of free, and this is
+ * everything it costs:
+ *
+ *   SPEED   the tyres climb it and drop off the far side, and a share of
+ *           what the car was carrying goes into doing that.
+ *   THE CAR the wheels on one side go up while the other side stays down,
+ *           so the body rolls away from it and rocks on its springs. That
+ *           is the wobble, and it is the part the player feels first.
+ *   THE LINE the block shoves the car back out of the inside of the corner
+ *           and drags the nose round with it — which is exactly the job an
+ *           anti-cut block is laid to do.
+ *
+ * A block is treated as a circle like every other solid, and the radius is
+ * its half-width because that is the dimension across the road. `kerbFrom`
+ * keeps one block to one bite: it is 0.6 m of road and the car is inside
+ * one for several steps at any speed.
+ */
+export function clipKerbs(
+  spec: CarSpec,
+  car: CarState,
+  now: number,
+  blocks: KerbMarker[],
+  events: GameEvent[],
+): void {
+  const K = T.collision.kerb;
+  if (now < car.kerbFrom) return;
+  // A car in the air is over the whole thing; one whose wheels are well
+  // above the slab has already climbed something else to get there.
+  if (car.airborne) return;
+
+  // A heavier car is shrugged around less by the same slab, exactly as it
+  // is by the same trunk.
+  const mass = massRatio(spec);
+  const hl = T.collision.halfLength;
+  const hw = T.collision.halfWidth;
+  const radius = KERB_MARKER.block.width / 2;
+  const sinH = Math.sin(car.heading);
+  const cosH = Math.cos(car.heading);
+
+  for (const block of blocks) {
+    if (Math.abs(car.y - block.y) > KERB_MARKER.block.height + 0.5) continue;
+    // The block's centre in the car frame: `fwd` along the nose, `right`
+    // along the right axis — the same box the body meets a trunk with.
+    const dx = block.x - car.x;
+    const dz = block.z - car.z;
+    const fwd = dx * sinH + dz * cosH;
+    const right = dx * cosH - dz * sinH;
+    const ex = right - clamp(right, -hw, hw);
+    const ez = fwd - clamp(fwd, -hl, hl);
+    if (Math.hypot(ex, ez) >= radius) continue;
+
+    // Closing speed into the block, measured along the line from the body
+    // to it — a car running down the row parallel to the road barely
+    // touches one, a car cutting across the apex mounts it square.
+    const d = Math.hypot(ex, ez) || 1;
+    const nx = ex / d;
+    const nz = ez / d;
+    const closing = car.u * nz + car.w * nx;
+    if (closing <= K.clipSpeed) continue;
+
+    car.kerbFrom = now + K.again;
+    // Everything the car is carrying pays the same share: a block does not
+    // care which way the speed was pointing, only that the wheels had to
+    // climb it.
+    car.u *= K.keep;
+    car.w *= K.keep;
+    // ...then the shove back out of the inside, along the contact normal,
+    // with the nose dragged round after it.
+    const shove = (closing * K.shove) / mass;
+    car.u -= nz * shove;
+    car.w -= nx * shove;
+    car.yawRate -= (Math.sign(right) * closing * K.yaw) / mass;
+    updateSlip(car);
+
+    // The body over the wheels. Positive roll lifts the car's RIGHT side,
+    // so a block under the right wheels rolls the car positive — and the
+    // lift is capped well under `solids.tripLaunch`, because a kerb that
+    // can put a car on its roof is a barrier and not a kerb.
+    const lift = Math.min(K.liftMax, (closing * K.lift) / mass);
+    car.rollRate += Math.sign(right) * lift;
+    loadSprings(car, closing * K.heave, nz);
+    events.push({ type: "kerbHit", speed: closing });
+    // One bite per step: a car crossing two blocks at once has ridden over
+    // a kerb, not over two of them, and it should thump once.
+    return;
   }
 }
 

@@ -61,10 +61,19 @@ noise. Three kinds of sound come out the other side:
   splintering `wood_break` for a trunk, a flat `stone_shove` for a rock —
   and takes its pitch from the size of the thing that gave way, because a
   sapling and an old spruce are heard apart before they are seen apart.
+  `kerbHit` is the one contact that is deliberately NOT on the impact
+  ladder: an R26 anti-cut block ridden over is concrete felt through the
+  floor with no top end in it at all, because a player who hears the car
+  break there stops cutting apexes instead of learning what cutting one
+  costs.
 - **Cues** are moments the app knows and the engine never reported. The
   countdown lights are the worked example: nothing happens in the simulation
-  when a light changes, so the light is the bed's business. Menu clicks are
-  cues too. **Presentation never becomes a `GameEvent`.**
+  when a light changes, so the light is the bed's business. A clap of
+  thunder is one (the storm is simulated renderer-side), and so is the
+  `knock` of a marshal's cone or an R26 marker post going over — neither is
+  an engine prop, so `step()` never sees one. Both reach the audio through
+  the renderer (`onThunder`, `onKnock`). Menu clicks are cues too.
+  **Presentation never becomes a `GameEvent`.**
 - **Beds** have no beginning and no end. They are re-read from the live state
   every time a grain is booked, which is what a static bank entry cannot be.
 
@@ -179,11 +188,29 @@ how hard it is driven through the waveshaper.
 
 The tyre bed picks its colour, its band and its weight from the surface:
 tarmac is a dull bass drumming with no crunch at all; gravel is a broad low
-rush with the stones over it; forest floor is brown and muffled; water is a
-hiss with no crunch. The
-wind is pink noise rising with the SQUARE of speed, and it is the only bed that
-keeps going in the air — the silence where the tyres were is what a jump sounds
-like.
+rush with the stones over it; water is a hiss with no crunch. The wind is pink
+noise rising with the SQUARE of speed, and it is the only bed that keeps going
+in the air — the silence where the tyres were is what a jump sounds like.
+
+Over the roar a surface may carry two optional `Layer`s, and which of them it
+has is most of what tells one from another. A **`grain`** is the individual
+pieces the tyres are moving; a `Layer` with no `q` runs on upward from its
+corner (gravel's stones, which are all top end and climb hard with speed),
+and one with a `q` is penned into a band instead. A **`body`** is a second,
+wider band filling the MIDDLE of the voice. **Every layer gets the full grain
+envelope** — a layer's character is its BAND, never its length (see the
+maraca in `NOISE_LIFE_MS`).
+
+**Off the road is the surface that needs both.** Turf, moss and rutted forest
+floor contain no hard material at all, and the failure mode is specific: a
+resonant bottom end with a bright open crunch over it and a hole between them
+reads as a sheet of metal being scoured, not as a field being ploughed. So the
+`nature` roar is broad and low rather than peaky, a wide soft `body` around
+560 Hz carries the grass going flat and dragging along the underside, and the
+`grain` over it is a dull banded tear rather than a crunch. Nothing out there
+rings, sizzles or is bright — `tests/audio_test.ts` holds the off-road bed to
+no open layer at all and to a middle that weighs as much as the rumble under
+it.
 
 **A tyre rolling straight ahead barely makes a noise.** What makes the noise is
 a tyre being asked to turn the car, so every surface is written as a quiet
@@ -192,11 +219,10 @@ the multiplier lifts the crunch with the roar. Tarmac's cruise is close to
 silence — down a sealed straight the player should be hearing the engine and,
 under it, a dull bass rumble around 125 Hz and nothing else; a sealed surface
 has no loose material, so it carries no crunch layer at all. Gravel's cruise
-is half what it was, with the corner multiplier doubled to pay it back: a
-corner is exactly as loud as it always was and a straight is half as loud,
-which is the whole point of writing a bed as cruise-plus-corner. Off the road
-stays loud on the straight, because being off the road should sound like a
-mistake.
+is deliberately quiet and its corner multiplier deliberately enormous, which
+is the whole point of writing a bed as cruise-plus-corner: what the player
+hears is the road being ASKED for something. Off the road stays loud on the
+straight, because being off the road should sound like a mistake.
 
 The cornering signal is **lateral acceleration** (`car.u * car.yawRate`,
 against `LAT_LIMIT` in `drive-bed.ts`): zero on a straight at any speed, zero at
@@ -214,7 +240,9 @@ in opposite directions on every wet row. The `grain` all but disappears — a
 wet stone does not rattle, and gravel in the rain is MUD — while the `level`
 goes UP, because the loudest thing about a wet road is the water being
 squeezed out from under the tread; the `corner` multipliers come down to pay
-for it, since a wet surface is loud whichever way the car is pointing. Wet
+for it, since a wet surface is loud whichever way the car is pointing. Sodden
+turf moves every band down and leans harder on its `body`: wet grass is not
+rustled, it is dragged. Wet
 tarmac is the one surface the rain makes brighter: a film of water the tread
 has to cut through, a hiss where the dry road has only its bass drumming.
 A wet tyre also stops SINGING — the squeal is rubber gripping and releasing
