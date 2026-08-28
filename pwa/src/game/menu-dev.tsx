@@ -12,7 +12,7 @@
 
 import { useState } from "react";
 
-import { LOCATIONS, type CampaignProgress } from "./campaign.ts";
+import { LOCATIONS, levelCleared, type CampaignProgress } from "./campaign.ts";
 import { clearDebugLog, debugLogCounts, debugLogTail, debugLogText } from "./debug-log.ts";
 import { playUi } from "./audio/ui.ts";
 import { ToggleRow } from "./menu.tsx";
@@ -129,7 +129,7 @@ export function DeveloperPage({
 }: DeveloperProps) {
   const total = LOCATIONS.reduce((n, l) => n + l.levels.length, 0);
   const cleared = LOCATIONS.reduce(
-    (n, l) => n + l.levels.filter((v) => progress.cleared.includes(v.id)).length,
+    (n, l) => n + l.levels.filter((v) => levelCleared(progress, v.id)).length,
     0,
   );
   const allOpen = cleared >= total;

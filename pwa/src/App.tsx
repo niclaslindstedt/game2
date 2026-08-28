@@ -55,7 +55,7 @@ import { stageQuery, traceLine, type DebugContext } from "./game/debug-info.ts";
 import { debugLogging, log as debugLog, logRunStart, setDebugLogging } from "./game/debug-log.ts";
 import type { GameRenderer } from "./game/renderer.ts";
 import { Hud, type HudFlash, type HudSnapshot, type HudSplit } from "./game/hud.tsx";
-import type { FinishChampionship, FinishScores } from "./game/hud-finish.tsx";
+import type { FinishScores, FinishStandings } from "./game/hud-finish.tsx";
 import {
   advanceField,
   catchUpField,
@@ -73,18 +73,6 @@ import {
   type ClassRow,
   type RivalField,
 } from "./game/standings.ts";
-import {
-  championshipWon,
-  ladderAfter,
-  loadChampionship,
-  pointsFor,
-  recordStage,
-  resetSeason,
-  stageScores,
-  standings,
-  winEverything,
-  type Championship,
-} from "./game/championship.ts";
 import {
   lastInitials,
   loadBoard,
@@ -118,9 +106,16 @@ import type { MapRect, MapView } from "./game/menu-roam.tsx";
 import {
   PODIUM,
   findLevel,
+  ladderAfter,
   levelLaps,
   loadProgress,
+  locationStandings,
+  locationWon,
+  pointsFor,
   recordFinish,
+  recordResult,
+  resetPoints,
+  stagePoints,
   unlockEverything,
   type CampaignLevel,
   type CampaignProgress,
@@ -444,11 +439,11 @@ export function App() {
   const input = useMemo(() => createInput(), []);
   const [race, setRace] = useState<RaceSettings>(initialRace);
   const [options, setOptions] = useState<Settings>(initialSettings);
+  /** R29/R30 — the campaign board: what has been driven, what every stage
+   * paid, and the best of each. Read once and carried in state, because the
+   * results card and the campaign menu both render off it and neither should
+   * be a storage read. */
   const [progress, setProgress] = useState<CampaignProgress>(loadProgress);
-  /** R30 — the points every location's season has paid out so far. Read once
-   * and carried in state: the results card and the campaign menu both render
-   * off it, and neither should be a storage read. */
-  const [season, setSeason] = useState<Championship>(loadChampionship);
   /** The stage just finished, classified — every crew's time in finishing
    * order, which only exists once the last car is home. Null until then, and
    * again the moment the next run starts. */
@@ -525,7 +520,6 @@ export function App() {
    * lands. */
   const settleRef = useRef<{
     field: RivalField;
-    locationId: string;
     levelId: string;
     time: number;
     carId: string;
@@ -1228,7 +1222,6 @@ export function App() {
             // there are run home off the card's frames rather than abandoned.
             settleRef.current = {
               field,
-              locationId: where.location.id,
               levelId: where.level.id,
               time: home,
               carId: stageRef.current?.carId ?? "",
@@ -1507,7 +1500,7 @@ export function App() {
             time: settling.time,
             carId: settling.carId,
           });
-          setSeason(recordStage(settling.locationId, settling.levelId, rows));
+          setProgress(recordResult(settling.levelId, rows));
           setResult({ levelId: settling.levelId, rows });
         }
         // The road bed belongs to a run the player is IN. Behind the menu the
@@ -1593,11 +1586,10 @@ export function App() {
   // WHERE THE RESULTS CARD GOES ON TO. Only the ladder has a next rung:
   // Roam is one stage and a time trial is one stage repeated, so both offer
   // the way out and nothing else. R30 — and the rung into the NEXT country is
-  // behind this one's championship, so the ladder is asked rather than
-  // walked.
+  // behind this location's table, so the ladder is asked rather than walked.
   const ladder =
     run.mode === "campaign" && run.levelId
-      ? ladderAfter(run.levelId, season)
+      ? ladderAfter(run.levelId, progress)
       : ({ kind: "end" } as const);
   const upNext = ladder.kind === "next" ? ladder.level : null;
   // R29 — …and only ON THE PODIUM. A stage finished outside the top three
@@ -1615,31 +1607,35 @@ export function App() {
   const lockedBehind = ladder.kind === "locked" && !missedPodium ? ladder.location.name : null;
 
   // R30 — THE CARD'S POINTS. The place is worth what the place is worth; the
-  // season it went into is read back out of storage, so the total on the card
-  // is the total the menu will show. The sheet itself is null until the last
-  // car is home (`settleField`), which is what the card's own table waits on.
+  // board it went onto is read back out of the campaign's own record, so the
+  // total on the card is the total the menu will show. The sheet itself is
+  // null until the last car is home (`settleField`), which is what the card's
+  // own table waits on.
   const here = run.mode === "campaign" && run.levelId ? findLevel(run.levelId) : null;
-  const championship: FinishChampionship | null = ((): FinishChampionship | null => {
+  const campaign: FinishStandings | null = ((): FinishStandings | null => {
     if (!here || !snap?.standing) return null;
-    const table = standings(here.location, season);
+    const table = locationStandings(here.location, progress);
     const mine = table.find((row) => row.you) ?? table[table.length - 1];
     const sheet = result?.levelId === here.level.id ? result.rows : null;
     const totals = new Map(table.map((row) => [row.id, row.points]));
     const paid = sheet ? new Map(sheet.map((row) => [row.id, pointsFor(row.place)])) : null;
-    const kept = stageScores(here.location.id, here.level.id, season)[PLAYER_ID] ?? 0;
-    const scored = sheet ? pointsFor(snap.standing.place) : null;
+    const kept = stagePoints(here.level.id, progress)[PLAYER_ID] ?? 0;
+    // What the place paid is known AT THE LINE and is already on the board
+    // (`recordFinish`), so the card says it while the last cars are still
+    // coming home; only the field's own sheet waits for them.
+    const scored = pointsFor(snap.standing.place);
     return {
       location: here.location.name,
       points: scored,
       // A re-run that went worse keeps the run that went better (see
-      // `recordStage`), and the card says so rather than showing a total
+      // `recordResult`), and the card says so rather than showing a total
       // that did not move.
-      kept: scored !== null && kept > scored ? kept : null,
+      kept: kept > scored ? kept : null,
       total: mine.points,
       place: mine.place,
       tied: mine.tied,
       of: table.length,
-      champion: sheet !== null && championshipWon(here.location, season),
+      won: sheet !== null && locationWon(here.location, progress),
       rows:
         sheet &&
         sheet.map((row) => ({
@@ -1717,7 +1713,7 @@ export function App() {
           onRetry={onRetry}
           onRetire={goMainMenu}
           scores={finishScores}
-          championship={championship}
+          campaign={campaign}
           locked={lockedBehind}
         />
       )}
@@ -1752,15 +1748,8 @@ export function App() {
           settings={options}
           onSettings={applyOptions}
           onDeveloper={revealDeveloper}
-          onUnlockEverything={() => {
-            setProgress(unlockEverything());
-            // An unlock that opened every stage and left the countries shut
-            // would be half a key: the lock on the next location is the
-            // championship, so the unlock wins them all.
-            setSeason(winEverything());
-          }}
-          season={season}
-          onSeasonReset={(locationId) => setSeason(resetSeason(locationId))}
+          onUnlockEverything={() => setProgress(unlockEverything())}
+          onResetPoints={(locationId) => setProgress(resetPoints(locationId))}
           onMapRect={setMapRect}
           mapView={mapView}
         />

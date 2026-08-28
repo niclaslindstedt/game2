@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // THE RESULT SHEET, DRAWN — fifteen rows of place, crew, time and points, in
 // the one layout both places that show it use: the modal the results card
-// opens the moment a stage lands, and the championship table the campaign
-// menu shows before the player picks the next one.
+// opens the moment a stage lands, and the location's standings table the
+// campaign menu shows before the player picks the next stage.
 //
 // Fifteen rows is more than a card can hold, which is exactly why it is a
 // MODAL rather than another block on the results card: the card answers "how
-// did I do", and this answers "how is the season going" — a different
+// did I do", and this answers "how does the location stand" — a different
 // question, asked deliberately, with the whole field on screen at once.
 
 import { playUi } from "./audio/ui.ts";
@@ -29,13 +29,13 @@ export type ResultRow = {
 export type ResultsTableProps = {
   rows: readonly ResultRow[];
   /** Draw the TIME and PTS columns — a table with a stage in view. Without
-   * it the table is the season's standings and nothing else. */
+   * it the table is the location's standings and nothing else. */
   stage: boolean;
 };
 
 export function ResultsTable({ rows, stage }: ResultsTableProps) {
   return (
-    <ol className={`results-table ${stage ? "" : "is-season"}`}>
+    <ol className={`results-table ${stage ? "" : "is-standings"}`}>
       <li className="results-row results-head">
         <span className="results-pos">#</span>
         <span className="results-who">DRIVER</span>
@@ -62,7 +62,8 @@ export function ResultsTable({ rows, stage }: ResultsTableProps) {
 
 export type ResultsModalProps = ResultsTableProps & {
   title: string;
-  /** One line under the title — what season this is, and where it stands. */
+  /** One line under the title — which table this is, and how far into it the
+   * location has been driven. */
   sub: string;
   onClose: () => void;
 };
