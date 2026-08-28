@@ -78,6 +78,9 @@ export type Environment = {
   carTint: () => THREE.Color;
   /** Whether the run's light is gone and the car has its lights on. */
   lampsLit: () => boolean;
+  /** How hard this stage is raining, 0..1 — what anything the weather LANDS
+   * on reads, the wipers on the car's glass first among them. */
+  rainfall: () => number;
   /** How bright the sky is with lightning this instant, 0..1. */
   flash: () => number;
   /** …and which way the strike lighting it is coming from. */
@@ -641,6 +644,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     setSky,
     carTint: () => carTintFor(preset),
     lampsLit: () => preset.headlights,
+    rainfall: () => preset.rain,
     flash: () => storm.surge(),
     flashFrom: () => storm.from(),
     setEffects: (scale) => {

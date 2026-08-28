@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Ambient life: the world keeps moving whether or not the car does. Bird
-// flocks wheel over the stage on flapping triangle wings, and now and then
+// flocks wheel over the stage on flapping swept wings, and now and then
 // an airplane crosses high overhead trailing a contrail — a pooled ribbon
 // of glow sprites that drifts on the wind and takes the sky's light (white
 // at noon, embered at dusk). Pure presentation; all randomness here is
@@ -22,13 +22,36 @@ export type AmbientLife = {
   dispose: () => void;
 };
 
+/** One wing: a swept triangle hinged at the body, its tip trailing behind
+ * the leading edge. Three vertices — the cheapest shape that is not a
+ * plank, and the sweep is what makes a distant speck read as a bird. x runs
+ * out along the wing, z along the flight direction (+z ahead). */
+function wingShape(): THREE.BufferGeometry {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute([0, 0, 0.16, 0.9, 0, -0.12, 0, 0, -0.2], 3),
+  );
+  return geo;
+}
+
+/** The wing angles a beat swings between, rad: deep on the downstroke,
+ * shallow on the recovery, and a little dihedral held at the crossing. A
+ * symmetric beat reads as a metronome. */
+const BEAT = { down: 0.95, up: 0.5, dihedral: 0.08 };
+
 export function createAmbientLife(): AmbientLife {
   const group = new THREE.Group();
 
-  // ── Birds: two wing planes per bird, flapped in code ─────────────────────
+  // ── Birds: two swept wings per bird, flapped in code ─────────────────────
+  //
+  // A bird at this range is TWO LINES meeting at a point, and everything
+  // about whether it reads as a bird is in the angle between them. Both
+  // wings therefore beat the SAME way — down together, up together, into a
+  // shallow V — because two wings moving opposite ways are one straight line
+  // rotating about its middle, which is a propeller.
   const birdMat = new THREE.MeshBasicMaterial({ color: 0x2a2d33, side: THREE.DoubleSide });
-  const wingGeo = new THREE.PlaneGeometry(0.9, 0.35);
-  wingGeo.translate(0.45, 0, 0); // hinge at the body
+  const wingGeo = wingShape();
   type Bird = { root: THREE.Group; left: THREE.Mesh; right: THREE.Mesh; phase: number };
   type Flock = {
     center: THREE.Vector3;
@@ -43,7 +66,7 @@ export function createAmbientLife(): AmbientLife {
     for (let b = 0; b < BIRDS_PER_FLOCK; b++) {
       const root = new THREE.Group();
       const left = new THREE.Mesh(wingGeo, birdMat);
-      left.rotation.y = Math.PI; // mirror to the other side of the hinge
+      left.scale.x = -1; // mirrored, so both wings sweep back off the body
       const right = new THREE.Mesh(wingGeo, birdMat);
       root.add(left, right);
       group.add(root);
@@ -118,10 +141,19 @@ export function createAmbientLife(): AmbientLife {
           flock.center.y + Math.sin(t * 0.7 + bird.phase) * 2,
           flock.center.z + Math.cos(a) * r,
         );
-        bird.root.rotation.y = a + (flock.speed > 0 ? 0 : Math.PI);
-        const flap = Math.sin(t * 9 + bird.phase) * 0.9;
-        bird.left.rotation.z = flap;
-        bird.right.rotation.z = -flap;
+        // Facing the way it is GOING, which is the tangent of the circle
+        // and not the radius: a quarter turn off the position angle, the
+        // other way round for a flock wheeling the other way. Square wings
+        // hid this; swept ones fly visibly sideways without it.
+        bird.root.rotation.y = a + (flock.speed > 0 ? Math.PI / 2 : -Math.PI / 2);
+        // The mirrored wing takes the same angle with the opposite sign, so
+        // the pair opens and closes TOGETHER. Give them opposite signs and
+        // the bird is one straight line rotating about its middle.
+        const beat = Math.sin(t * 9 + bird.phase);
+        const swing = beat > 0 ? beat * beat * BEAT.up : -(beat * beat) * BEAT.down;
+        const flap = swing + BEAT.dihedral;
+        bird.left.rotation.z = -flap;
+        bird.right.rotation.z = flap;
       }
     }
 

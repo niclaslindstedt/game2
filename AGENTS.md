@@ -40,6 +40,10 @@ This project is tuned by measuring, not guessing:
 3. **`make screenshots`** to LOOK at the game itself (grid, speed, drift, hood cam, portrait). In Claude web sessions Chromium is preinstalled — `CHROMIUM_PATH=/opt/pw-browsers/chromium make screenshots`.
 4. **`make profile`** before and after every rendering change. Draw calls, triangles and binds are the numbers a real GPU sees; the fps it also prints is software rasterization and means nothing off this machine.
 
+Both harnesses serve `pwa/dist`, so **`make build` first, every time**: a stale
+dist photographs and meters the last change rather than this one, and the
+picture that comes back is wrong in a way that reads as a bug in the code.
+
 ## Commit and PR conventions
 
 - Conventional commits (`feat(engine): …`, `fix(pwa): …`); enforced by the `commit-msg` hook. Squash-merge: the PR title becomes the commit subject on `main`, so it must be a conventional subject too.
@@ -65,6 +69,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | A car's LOOK (silhouette, panels, wheels, livery)           | `pwa/src/game/car-styles.ts` (specs); generator in `pwa/src/game/car/`                                                    |
 | A PAINT SCHEME an opponent is dressed in                    | `pwa/src/game/car-livery.ts` (palettes + patterns) — the `car-design` skill                                               |
 | A new PART on the car (a light pod, a snorkel, a vent)      | a builder in `pwa/src/game/car/`, driven by an optional `spec.ts` field                                                   |
+| The wipers, and the grime on the glass they clear           | `pwa/src/game/car/wipers.ts` — the `car-design` skill                                                                     |
 | How dirty the car gets, and where                           | `pwa/src/game/car-dirt.ts`                                                                                                |
 | Stage generation rules or vocabulary                        | `engine/mapgen/rules.ts` (data); the searches in `generate.ts` (sprint, endless) and `circuit.ts` (R22), over `search.ts` |
 | Track geometry/compilation                                  | `engine/mapgen/compile.ts`                                                                                                |

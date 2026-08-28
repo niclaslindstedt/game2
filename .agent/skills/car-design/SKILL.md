@@ -25,7 +25,8 @@ skill for any code change.
 | `pwa/src/game/car/spec.ts`       | The whole `CarBodySpec` vocabulary. Pure types — a new part starts with an optional field here                                   |
 | `pwa/src/game/car/builder.ts`    | `MeshBuilder` (baked-sun triangles), `bakeShading`, the bilinear-patch helpers                                                   |
 | `pwa/src/game/car/shell.ts`      | The chassis loft: stations, the ring, wheel-arch openings, shut-line grooves, `flankX`, `sideBand`                               |
-| `pwa/src/game/car/greenhouse.ts` | Windows cut out of a solid cabin; gutters, wipers                                                                                |
+| `pwa/src/game/car/greenhouse.ts` | Windows cut out of a solid cabin; gutters; the two screens as glass (`screenPanes`)                                              |
+| `pwa/src/game/car/wipers.ts`     | The screens' grime film and the blades that sweep it — arms, park and sweep angles, how fast the glass soils                     |
 | `pwa/src/game/car/fascia.ts`     | Nose and tail: grille, lamps, bumpers, air dam, plate, exhaust, the detachable bonnet and boot lid                               |
 | `pwa/src/game/car/trim.ts`       | Arch extensions, mirrors, handles, mud flaps, livery bands, door numbers, spoilers                                               |
 | `pwa/src/game/car/wheels.ts`     | The tire and three rim styles                                                                                                    |

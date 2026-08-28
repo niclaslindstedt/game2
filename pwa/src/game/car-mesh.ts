@@ -29,9 +29,12 @@ const LAMP_GLOW = 0xff2a14;
 export const LAMP_MATERIAL = "car-lamp";
 /** How far the bloom spreads past the lens, as a multiple of the lens size. */
 const LAMP_SPREAD = 3.4;
-/** Bloom strength with the lights off (daylight) and on (dusk, night). */
-const LAMP_DAY = 0.22;
-const LAMP_NIGHT = 0.85;
+/** Bloom strength with the lights off (daylight) and on (dusk, night). A
+ * tail lamp is a marker, not a headlight pointed at the player: at the few
+ * car lengths a chase is fought over, a bloom that reads as a lamp from a
+ * hundred metres is a red smear over the whole tail up close. */
+const LAMP_DAY = 0.11;
+const LAMP_NIGHT = 0.42;
 /** How much of the bloom a fully caked lens swallows, 0..1. A stage's worth
  * of gravel on the glass is the reason rally cars carry lamp pods and
  * somebody wipes them at every service. */
@@ -62,6 +65,10 @@ export type CarVisual = {
   /** Whether the run's light is gone — the tail lamps burn harder when it
    * is. Pushed from the environment, which owns that decision. */
   setLights: (on: boolean) => void;
+  /** How hard it is raining on this car, 0..1 — what wets its screens and
+   * sets its wipers going. Pushed from the environment for the same reason
+   * the light is: the weather is the stage's, not the car's. */
+  setWet: (rain: number) => void;
   /** How filthy the car has got, 0..1 — the environment dims its beams by
    * it, because the dirt is on the glass too. */
   grime: () => number;
@@ -97,12 +104,18 @@ function lampSpread(bodySpec: Parameters<typeof frontLampAnchors>[0]): {
   return { front: off(frontLampAnchors(bodySpec)), rear: off(rearLampAnchors(bodySpec)) };
 }
 
-/** Push the environment's light onto one body. Everything on a car carries
- * BAKED vertex colours on fullbright materials, so the time of day arrives
- * as a multiply into `material.color` rather than as a light — except a
- * LAMP, which is the one thing the failing light makes brighter, and is
- * therefore switched rather than tinted. */
-export function tintCar(visual: CarVisual, tint: THREE.Color, lampsLit: boolean): void {
+/** Push the environment onto one body: its light, and how hard it is
+ * raining on it. Everything on a car carries BAKED vertex colours on
+ * fullbright materials, so the time of day arrives as a multiply into
+ * `material.color` rather than as a light — except a LAMP, which is the one
+ * thing the failing light makes brighter, and is therefore switched rather
+ * than tinted. */
+export function tintCar(
+  visual: CarVisual,
+  tint: THREE.Color,
+  lampsLit: boolean,
+  rain: number,
+): void {
   visual.group.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh) && !(obj instanceof THREE.Points)) return;
     const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
@@ -112,6 +125,7 @@ export function tintCar(visual: CarVisual, tint: THREE.Color, lampsLit: boolean)
     }
   });
   visual.setLights(lampsLit);
+  visual.setWet(rain);
 }
 
 export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
@@ -159,6 +173,10 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
   let lit = false;
   const setLights = (on: boolean): void => {
     lit = on;
+  };
+  let wet = 0;
+  const setWet = (rain: number): void => {
+    wet = clamp(rain, 0, 1);
   };
   /** The bloom, dimmed by whatever the run has thrown at the lens. */
   const shineLamps = (): void => {
@@ -230,6 +248,9 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     }
 
     dirt.update(state, dt);
+    // The glass answers to both the weather landing on it and the filth the
+    // stage has thrown at the rest of the car.
+    body.wipers.update(wet, dirt.level(), dt);
     shineLamps();
     damage.update(state, dt);
 
@@ -266,6 +287,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     update,
     onEvents: damage.onEvents,
     setLights,
+    setWet,
     grime: dirt.level,
     lampSpread: lampSpread(bodySpec),
     dispose,

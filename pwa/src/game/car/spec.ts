@@ -229,7 +229,10 @@ export type CarBodySpec = {
     /** Rain gutters along the roof edges — the detail that dates a car to
      * the era both launch cars come from. Width in m. */
     gutter?: { width: number; color?: number };
-    /** Wipers parked at the base of the screen. */
+    /** Arms on the glass: a tandem pair on the windscreen and one on the
+     * backlight, which sweep when there is something on the screen to clear
+     * (car/wipers.ts). Off leaves the car with glass that soils and never
+     * comes clean. */
     wipers?: boolean;
     /** Black-out band around the glass openings, m. Reads as the rubber
      * seal that separates a glass opening from a painted panel. */

@@ -18,6 +18,7 @@ import { buildGreenhouse } from "./car/greenhouse.ts";
 import { buildShell, buildStations } from "./car/shell.ts";
 import { buildTrim } from "./car/trim.ts";
 import { buildWheel } from "./car/wheels.ts";
+import { buildWipers, type CarWipers } from "./car/wipers.ts";
 
 export type {
   CarBodySpec,
@@ -52,6 +53,9 @@ export type CarBodyParts = {
   /** The pieces an impact can tear off, each its own mesh so the damage
    * visual can detach one and send it flying (the engine names which). */
   breakables: Partial<Record<DamagePart, THREE.Mesh>>;
+  /** The screens' grime and the arms that clear it — the one part of the
+   * body that MOVES on its own, so it is handed out rather than baked in. */
+  wipers: CarWipers;
   dispose: () => void;
 };
 
@@ -91,6 +95,11 @@ export function buildCarBody(spec: CarBodySpec): CarBodyParts {
     partGeos.push(geo);
   }
 
+  // Last onto the chassis: the film has to be laid over glass that already
+  // exists, and the blades over the film.
+  const wipers = buildWipers(spec, material);
+  chassis.add(wipers.group);
+
   const wheelGroups: THREE.Group[] = [];
   const wheelSpin: THREE.Object3D[] = [];
   // All four wheels share one geometry — only their transforms differ, so
@@ -109,10 +118,11 @@ export function buildCarBody(spec: CarBodySpec): CarBodyParts {
   }
 
   const dispose = (): void => {
+    wipers.dispose();
     bodyGeo.dispose();
     for (const g of partGeos) g.dispose();
     wheelGeo.dispose();
     material.dispose();
   };
-  return { group, chassis, wheelGroups, wheelSpin, body, breakables, dispose };
+  return { group, chassis, wheelGroups, wheelSpin, body, breakables, wipers, dispose };
 }

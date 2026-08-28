@@ -77,9 +77,10 @@ export type FieldCars = {
    * into the trees crumples and sheds parts, and makes no sound and no dust,
    * because none of that happened here. */
   events: (run: RivalRun, events: GameEvent[]) => void;
-  /** The light: the tint every baked-colour surface takes, and whether the
-   * lamps are lit. Pushed by the renderer, which owns both. */
-  paint: (tint: THREE.Color, lampsLit: boolean) => void;
+  /** The conditions: the tint every baked-colour surface takes, whether the
+   * lamps are lit, and how hard it is raining on the glass. Pushed by the
+   * renderer, which owns all three. */
+  paint: (tint: THREE.Color, lampsLit: boolean, rain: number) => void;
   /** How many rival cars are being drawn right now (the debug overlay). */
   drawn: () => number;
   dispose: () => void;
@@ -94,6 +95,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
   let drawn = 0;
   let tint = new THREE.Color(1, 1, 1);
   let lampsLit = false;
+  let rain = 0;
   let named = true;
 
   const drop = ({ visual, tag }: FieldCar): void => {
@@ -148,7 +150,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
           scene.add(visual.group, visual.shadow, visual.debris, tag.sprite);
           const fresh = { visual, tag };
           built.set(run, fresh);
-          tintCar(visual, tint, lampsLit);
+          tintCar(visual, tint, lampsLit, rain);
           visual.update(run.state, 0);
           show(fresh, false);
           continue;
@@ -166,10 +168,11 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
       if (!on) for (const { tag } of built.values()) tag.hide();
     },
     events: (run, events) => built.get(run)?.visual.onEvents(run.state, events),
-    paint: (next, lit) => {
+    paint: (next, lit, wet) => {
       tint = next;
       lampsLit = lit;
-      for (const { visual } of built.values()) tintCar(visual, tint, lampsLit);
+      rain = wet;
+      for (const { visual } of built.values()) tintCar(visual, tint, lampsLit, rain);
     },
     drawn: () => drawn,
     dispose: clear,
