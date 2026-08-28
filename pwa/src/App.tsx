@@ -148,6 +148,7 @@ import { setAudioVolumes, unlockAudio } from "./game/audio/bus.ts";
 import { playUi } from "./game/audio/ui.ts";
 import { armMenuMusic, pauseMusic, playMusic, resumeMusic, stopMusic } from "./game/audio/music.ts";
 import type { RunAudio } from "./game/audio/index.ts";
+import { armScreenshots, captureFrame } from "./game/screenshots.ts";
 import { splashSkipped } from "./game/splash.ts";
 import { SplashScreen } from "./game/splash-screen.tsx";
 import { UpdateCard } from "./game/update-card.tsx";
@@ -588,6 +589,13 @@ export function App() {
   /** Roam's map pane, held here so a renderer that finishes loading after
    * the pane has already measured itself still learns where to draw. */
   const mapRectRef = useRef<MapRect | null>(null);
+  /** A screenshot the player has asked for, waiting for a frame to be taken
+   * off. It is a REQUEST rather than a capture because the drawing buffer
+   * is only readable inside the animation callback that drew it — the frame
+   * loop is the only place in the app that is (screenshots.ts) — and
+   * because a press must never stop the car. Null means nothing pending;
+   * a second press before the first has been served simply relabels it. */
+  const shotRef = useRef<string | null>(null);
 
   const pwa = usePwaUpdate({
     base: import.meta.env.BASE_URL,
@@ -602,6 +610,36 @@ export function App() {
     setFlashes((prev) => [...prev.slice(-2), { id, text, tone }]);
     setTimeout(() => setFlashes((prev) => prev.filter((f) => f.id !== id)), 1800);
   };
+
+  /** What the gallery writes under a picture: the stage it was taken on and
+   * the car it was taken in. Those two place a frame that otherwise has
+   * nothing in it but trees — a roll of forty low-poly forests is
+   * unbrowsable without them. */
+  const shotLabel = (): string => {
+    const found = runRef.current.levelId ? findLevel(runRef.current.levelId) : null;
+    const where = found ? found.level.name : `Stage ${stageRef.current?.seed ?? seedRef.current}`;
+    return `${where} · ${carById(raceRef.current.carId).name}`;
+  };
+
+  /** THE SHUTTER — the bound key, or the HUD's own button on a phone.
+   * Nothing is captured here: the drawing buffer can only be read inside
+   * the animation callback that filled it (screenshots.ts), so a press
+   * leaves a label behind and the very next frame is the picture. A second
+   * press before the first has been served simply relabels the request,
+   * which is right — the two would have been the same frame anyway. */
+  const takeShot = (): void => {
+    if (!optionsRef.current.screenshots) return;
+    // Not behind the menu: that frame is the drone circling a stage nobody
+    // is driving, with a card over half of it.
+    if (menuRef.current !== null) return;
+    // The shutter answers the PRESS, not the encode. A camera noise that
+    // arrived a beat after the button would read as lag rather than as a
+    // camera.
+    playUi("select");
+    shotRef.current = shotLabel();
+  };
+  const takeShotRef = useRef(takeShot);
+  takeShotRef.current = takeShot;
 
   /** R28 — put a split on screen. Taking it off again belongs to the frame
    * loop, which has the race clock; one board is up at a time, and they are
@@ -1035,6 +1073,10 @@ export function App() {
       if (disposed) return;
       const renderer = createRenderer(canvas, optionsRef.current.video);
       rendererRef.current = renderer;
+      // Name the roll and decode the mark now rather than on the first
+      // press: both are cheap, and the first picture of a session is the
+      // one most likely to be shown to somebody.
+      if (optionsRef.current.screenshots) armScreenshots();
       renderer.setMirror(optionsRef.current.hud.mirror);
       renderer.setNameTags(optionsRef.current.hud.nameTags);
       renderer.setMapRect(mapRectRef.current);
@@ -1114,6 +1156,7 @@ export function App() {
       input.onAction((action) => {
         if (action === "restart") restart();
         else if (action === "menu") goMainMenu();
+        else if (action === "screenshot") takeShotRef.current();
         else if (action === "pause") {
           if (!menuRef.current) setPaused((was) => !was);
         } else camera();
@@ -1472,6 +1515,18 @@ export function App() {
         // that is two pieces of music at once.
         if (!page) audioRef.current?.frame(state, dtFrame);
         renderer.render(state, dtFrame);
+        // The picture, if one was asked for. It has to be lifted off the
+        // drawing buffer HERE — same task as the render that filled it —
+        // because the context keeps no back buffer for anyone who asks
+        // later (screenshots.ts). Everything after the grab can wait, and
+        // does: the run has already stepped on.
+        const wanted = shotRef.current;
+        if (wanted !== null) {
+          shotRef.current = null;
+          void captureFrame(canvas, wanted).then((capture) => {
+            flash(capture ? "PICTURE SAVED" : "PICTURE FAILED", capture ? "good" : "bad");
+          });
+        }
         // Every frame, ahead of the throttled snapshot: the clock's
         // hundredths and the start lights are the two things a run cannot
         // read at 12 Hz.
@@ -1657,6 +1712,7 @@ export function App() {
           touchLayout={options.touch}
           onPause={() => setPaused(true)}
           onCamera={() => actionsRef.current.camera()}
+          onShot={options.screenshots ? () => takeShotRef.current() : null}
           nextStage={nextStage}
           onRetry={onRetry}
           onRetire={goMainMenu}

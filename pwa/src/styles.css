@@ -3992,3 +3992,181 @@ a.menu-version:focus-visible {
     top: 42%;
   }
 }
+
+/* ── THE GALLERY ──────────────────────────────────────────────────────────
+   The pictures the player took, on the main menu's own card. A VIEWER, not
+   a grid: one shot fills the frame, the roll runs as a filmstrip under it,
+   and flipping is the primary verb. The frame is sized off the VIEWPORT
+   rather than off the picture — every shot has the shape of the window it
+   was taken through, so a frame that grew to fit each one would jump about
+   as the player flips, and a menu card that resizes under a press is a menu
+   card nobody can aim at. */
+
+.gallery {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.4rem, 1.4vmin, 0.8rem);
+  min-height: 0;
+}
+
+.gallery-stage {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.3rem, 1.2vmin, 0.7rem);
+  min-height: 0;
+}
+
+.gallery-frame {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* The letterbox the picture sits in, and the only thing in the card with
+     a fixed height: it is what stops the flip from moving everything under
+     it. Dark rather than transparent so a night stage still reads as a
+     picture with edges. */
+  height: min(46vh, 22rem);
+  border: 2px solid rgb(255 255 255 / 22%);
+  border-radius: 0.6rem;
+  background: rgb(6 12 24 / 70%);
+  overflow: hidden;
+}
+
+.gallery-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.gallery-step {
+  font: inherit;
+  font-size: clamp(1.1rem, 3.4vmin, 1.7rem);
+  line-height: 1;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 10%);
+  border: 2px solid rgb(255 255 255 / 35%);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.55rem;
+  cursor: pointer;
+  text-shadow: none;
+  flex: none;
+}
+
+.gallery-step:hover:not(:disabled),
+.gallery-step:focus-visible {
+  background: rgb(255 255 255 / 20%);
+}
+
+.gallery-step:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.gallery-caption {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.gallery-label {
+  font-size: clamp(0.72rem, 2.4vmin, 0.95rem);
+  color: var(--hud-good);
+  letter-spacing: 0.08em;
+}
+
+/* Which picture of how many, and when — a caption on the caption. */
+.gallery-stamp {
+  font-size: clamp(0.55rem, 1.9vmin, 0.72rem);
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.gallery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.gallery-btn {
+  font: inherit;
+  font-size: clamp(0.6rem, 2vmin, 0.8rem);
+  letter-spacing: 0.12em;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 10%);
+  border: 2px solid rgb(255 255 255 / 35%);
+  border-radius: 0.5rem;
+  padding: 0.3rem 0.75rem;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.gallery-btn:hover,
+.gallery-btn:focus-visible {
+  background: rgb(255 255 255 / 20%);
+}
+
+/* DELETE is the one press here that cannot be taken back, so it is the one
+   button that does not look like an invitation — until it is armed, when it
+   stops being quiet and says so. */
+.gallery-btn-quiet {
+  margin-left: auto;
+  opacity: 0.6;
+}
+
+.gallery-btn-arm {
+  opacity: 1;
+  color: var(--hud-bad);
+  border-color: currentcolor;
+}
+
+.gallery-notice {
+  font-size: clamp(0.55rem, 1.9vmin, 0.72rem);
+  letter-spacing: 0.12em;
+  color: var(--hud-good);
+  min-width: 6ch;
+}
+
+/* The filmstrip: the whole roll, newest first. Scrolls on its own so a full
+   roll never grows the card past the viewport. */
+.gallery-strip {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding-bottom: 0.2rem;
+  scrollbar-width: thin;
+}
+
+.gallery-thumb {
+  flex: none;
+  width: clamp(3.2rem, 11vmin, 5rem);
+  aspect-ratio: 16 / 9;
+  padding: 0;
+  border: 2px solid rgb(255 255 255 / 22%);
+  border-radius: 0.35rem;
+  background: rgb(6 12 24 / 70%);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.gallery-thumb-on {
+  border-color: var(--hud-good);
+}
+
+.gallery-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+@media (orientation: portrait) {
+  /* A portrait picture is tall, and a landscape letterbox would show it as
+     a stripe down the middle of a lot of nothing. */
+  .gallery-frame {
+    height: min(38vh, 20rem);
+  }
+}

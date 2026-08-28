@@ -315,6 +315,28 @@ function TouchSection({ settings, onSettings }: Pick<OptionsProps, "settings" | 
   );
 }
 
+/** The camera the player carries. It is on this tab and not on HUD because
+ * what it actually is, is a KEY and a button — the picture it takes has no
+ * HUD in it at all. Off stops both; the gallery stays where it is, because
+ * the pictures already taken are still the player's. */
+function ScreenshotSection({
+  settings,
+  onSettings,
+}: Pick<OptionsProps, "settings" | "onSettings">) {
+  const key = settings.keys.screenshot.map(keyLabel).join(" / ") || "the bound key";
+  return (
+    <div className="opt-section">
+      <div className="opt-section-title">SCREENSHOTS</div>
+      <ToggleRow
+        label="SCREENSHOTS"
+        hint={`${key}, or the shutter on the HUD — kept in MAIN MENU ▸ GALLERY`}
+        on={settings.screenshots}
+        onToggle={() => onSettings({ ...settings, screenshots: !settings.screenshots })}
+      />
+    </div>
+  );
+}
+
 /** The gearbox, offered for every car in the roster rather than baked into
  * one of them. It is the one control choice that changes what the CAR does
  * rather than what a button does, so it sits at the top of the tab and on
@@ -340,6 +362,7 @@ function ControlsTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "
   return (
     <div className="opt-list">
       <GearboxSection settings={settings} onSettings={onSettings} />
+      <ScreenshotSection settings={settings} onSettings={onSettings} />
       {device.keyboard && <KeyboardSection settings={settings} onSettings={onSettings} />}
       {device.touch && <TouchSection settings={settings} onSettings={onSettings} />}
     </div>

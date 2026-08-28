@@ -144,7 +144,8 @@ export type KeyAction =
   | "camera"
   | "restart"
   | "menu"
-  | "pause";
+  | "pause"
+  | "screenshot";
 
 /** Bound `KeyboardEvent.code` values per action — a list, because the
  * defaults ship the arrow keys and WASD side by side. Rebinding an action
@@ -165,6 +166,7 @@ export const KEY_ACTIONS: { id: KeyAction; label: string }[] = [
   { id: "restart", label: "RESTART STAGE" },
   { id: "menu", label: "MAIN MENU" },
   { id: "pause", label: "PAUSE" },
+  { id: "screenshot", label: "SCREENSHOT" },
 ];
 
 export const DEFAULT_KEYS: KeyBindings = {
@@ -181,6 +183,10 @@ export const DEFAULT_KEYS: KeyBindings = {
   restart: ["KeyR"],
   menu: ["KeyM"],
   pause: ["Escape"],
+  // ENTER, because it is the one key on a driving keyboard that nothing
+  // else on the road wants: the pedals are the arrows and WASD, the gears
+  // and the camera are letters around them, and ESCAPE is the pause card.
+  screenshot: ["Enter"],
 };
 
 /** The four ways a thumb can drag off its anchor on the pedal zone. */
@@ -228,6 +234,13 @@ export type Settings = {
    * how much of the car you want to be responsible for, not a property of
    * any one of them, so it lives here rather than in the catalog. */
   gearbox: GearboxMode;
+  /** Whether the SCREENSHOT key and the HUD's shutter take pictures at
+   * all. On by default — the feature is the point of having it — and off
+   * is for a player who keeps hitting ENTER by accident, or who would
+   * rather their own device's screenshot key were the only camera in the
+   * room. Off leaves the gallery reachable: the pictures already in the
+   * roll are still theirs to look at, copy and share. */
+  screenshots: boolean;
   /** True once the developer menu has been let out — see DEV_TAPS. It stays
    * out: a player who found it deliberately does not want to find it again
    * every time they open the game. */
@@ -282,6 +295,7 @@ export const DEFAULT_SETTINGS: Settings = {
   // The automatic: a player who has not chosen has not asked to be given
   // something else to manage while the road is coming at them.
   gearbox: "auto",
+  screenshots: true,
   developer: false,
   dev: { debug: false, god: false },
 };
@@ -332,6 +346,7 @@ export function loadSettings(): Settings {
     keys: { ...DEFAULT_SETTINGS.keys },
     touch: { ...DEFAULT_SETTINGS.touch },
     gearbox: DEFAULT_SETTINGS.gearbox,
+    screenshots: DEFAULT_SETTINGS.screenshots,
     developer: false,
     dev: { ...DEFAULT_SETTINGS.dev },
   };
@@ -353,6 +368,7 @@ export function loadSettings(): Settings {
     migrateCameraKey(settings.keys);
     migratePedalDirs(settings.touch);
     if (parsed.gearbox === "manual") settings.gearbox = "manual";
+    if (parsed.screenshots === false) settings.screenshots = false;
     if (parsed.developer === true) settings.developer = true;
     if (parsed.dev) Object.assign(settings.dev, parsed.dev);
     // A tool nobody can reach is a tool nobody can switch off: if the menu

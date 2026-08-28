@@ -97,6 +97,9 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | The points a stage pays, and what opens the next location   | `pwa/src/game/championship.ts`; the sheet is drawn by `results-table.tsx`                                                 |
 | The time trial's high score board and its initials          | `pwa/src/game/scores.ts` (storage) + `score-board.tsx` / `hud-initials.tsx`                                               |
 | The time trial's ghost: recording, replay, storage          | `pwa/src/game/ghost.ts`                                                                                                   |
+| Taking a picture, and what is stamped on it                 | `pwa/src/game/screenshots.ts` (the canvas work) + `shot-plan.ts` (size, name, where the mark goes — DOM-free)             |
+| The roll of pictures, and sending one on                    | `pwa/src/lib/shot-store.ts` over `shot-roll.ts`; the share/copy/save probes in `pwa/src/lib/share-image.ts`               |
+| The gallery the pictures are browsed in                     | `pwa/src/game/menu-gallery.tsx`                                                                                           |
 | Where the split boards stand on a stage (R28)               | `STAGE_RULES.checkpoint` + the placement in `engine/mapgen/compile.ts` — the `mapgen-improvement` skill                   |
 | What a split is measured against, and where a respawn lands | `engine/game/track.ts` (`lastCheckpoint`) + `pwa/src/game/standings.ts` (the field's leader)                              |
 | A player option (HUD, video, controls)                      | `pwa/src/game/settings.ts`, then its reader                                                                               |
