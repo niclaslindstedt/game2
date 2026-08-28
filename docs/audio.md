@@ -75,14 +75,28 @@ engine is a **grain** fired on a steady cadence, and the grains overlap into
 something continuous. Overlap alone is not enough: a tone's level falls
 exponentially across its whole length, so grains that merely outlast the gap
 between them still arrive as separate events, and what comes out of the speaker
-is putt … putt … putt. Three things together fix it:
+is putt … putt … putt. Four things together fix it:
 
 1. the grain **holds** its peak (`holdMs`),
-2. the cadence is a **fraction** of the hold, so three grains are always up
-   together,
+2. the grain is a **cross-fade**: its attack and its tail are each exactly one
+   cadence and its hold a whole number of them, so what one grain gives up is
+   exactly what the next has not taken yet. Near-enough is not enough — a hold
+   of 1.2 cadences leaves a layer up on its own half the time and its level
+   swings about 3 dB at the grain rate. On a bright band that is not a surface,
+   it is a maraca, and it plays for the whole run.
 3. the cadence is **constant** — a cadence that quickened with the revs would
    make the rate of the putter the thing the ear follows, when the rate the
    engine is turning at is the PITCH.
+4. a PITCHED grain is marked **`bed: true`**. An oscillator starts at the top
+   of its own cycle, so same-note grains fired on a fixed cadence reinforce
+   where the note and the cadence divide evenly and cancel where they land half
+   a cycle apart — and since the note moves while the cadence does not, an
+   engine walks through both as it revs. The flag starts the oscillator in the
+   phase a never-stopping one would be in, and gives the envelope linear ramps
+   so the copies actually cross-fade. Unmarked, the bed's level bounced by 7 dB
+   across the rev range and wobbled 14% at the grain rate; marked, the spread
+   is under a decibel and the wobble under 1%. Noise grains need neither: each
+   reads a random window of the pool, so they are already incoherent.
 
 Noise beds want a deeper stack than pitched ones (five grains against three),
 because uncorrelated noise sums in power rather than in level.
@@ -256,6 +270,11 @@ active cell can put three strikes in the air inside a second, their sounds
 arrive from different distances, and stacking the rolls is mud the ear cannot
 separate anyway.
 
+The whole tyre bed is mixed **under** the engine. It is the sound a player
+hears for every minute of every stage, so a rush that has to be shouted over is
+one nobody can enjoy for twenty of them — and gravel, the home surface, sits
+lowest and darkest of the four.
+
 The **scrub** is the drift, and it is the loudest thing in the bed. On gravel it
 is proportional to `car.slide`, the engine's own measure of how far past
 gripping the car is, so it IS the drift rather than an effect layered over one:
@@ -336,7 +355,9 @@ reviewer can hear a change at all.
 actually has, no voice exceeds the mixing ceiling, the interface stays quieter
 than the car, both scores flatten with every token a real note and come in
 inside their length bounds, the engine bed's grains tile without a hole and
-re-anchor rather than booking into the past after a stall, and the tyre bed
+re-anchor rather than booking into the past after a stall, every layer of the
+bed holds for at least two cadences and every pitched one is phase-aligned, and
+the tyre bed
 stays quiet on a straight, quietest of all on tarmac, and sings there from the
 cornering load alone. Thunder gets its own guards: a near strike cracks and a
 far one rolls with no onset anywhere in it, and distance takes a clap quieter,

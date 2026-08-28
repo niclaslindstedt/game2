@@ -85,6 +85,31 @@ export type ToneOptions = {
    * stacking a sawtooth on top. 0.2–0.4 is grit; past 0.7 it is a fuzz pedal.
    */
   drive?: number;
+  /**
+   * THIS VOICE IS ONE GRAIN OF A PITCHED BED, and two things follow from it.
+   *
+   * PHASE. An oscillator always starts at the top of its cycle, so grains of
+   * the same note fired on a fixed cadence meet each other at whatever phase
+   * the note and the cadence happen to divide into: they REINFORCE where the
+   * two agree and CANCEL where they land half a cycle apart. The note moves
+   * and the cadence does not, so an engine walks through both as it revs —
+   * the bed loses several decibels at some revs and sweeps between the two at
+   * others. A grain instead starts where a never-stopping oscillator of its
+   * pitch would already be, so overlapping copies can only add.
+   *
+   * WINDOW. Once they add, the summed level is the summed ENVELOPE, and the
+   * exponential attack and decay a one-shot wants do not cross-fade: two of
+   * them overlapping dip in the middle. A grain gets LINEAR ramps instead, so
+   * one grain's fade-out fills in exactly what the next one's fade-in has not
+   * reached yet. That only sums flat if the caller makes `attackMs` and the
+   * tail (`durationMs - attackMs - holdMs`) each exactly one cadence, and the
+   * hold a whole number of them — get it right and the wobble at the grain
+   * rate goes from about 14% to under 1%.
+   *
+   * Noise grains want neither: each reads a random window of the shared pool,
+   * so they are incoherent already and sum in power rather than in level.
+   */
+  bed?: boolean;
 };
 
 export type NoiseOptions = {

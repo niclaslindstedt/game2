@@ -22,6 +22,23 @@
 //
 // So: pitch says revs, and nothing else has to.
 //
+// AND THE GRAINS HAVE TO AGREE ABOUT WHERE THE CYCLE IS. An oscillator starts
+// at the top of its own, so grains of one note fired on a fixed cadence meet
+// at whatever phase the note and the cadence happen to divide into: they add
+// up where the two agree and cancel where they land half a cycle apart. The
+// note moves and the cadence does not, so an engine walks through both as it
+// revs — measured over the range, the bed's level bounced by up to 7 dB from
+// one part of the band to the next, which is heard as a rattle, not as an
+// engine. Every pitched layer here is a `bed` grain, so it starts in the
+// phase a never-stopping oscillator would be in and the level is flat across
+// the whole band.
+//
+// ONCE THEY ADD, THE SHAPE OF THE GRAIN IS THE SOUND. Coherent grains sum in
+// LEVEL, so the summed envelope is heard directly: the four numbers below are
+// a cross-fade, not a taste, and the attack and the tail are each exactly one
+// cadence so that what one grain gives up the next has already taken. Off by
+// a little and the bed wobbles 14% at the grain rate; right, under 1%.
+//
 // WHAT THE ENGINE IS MADE OF, in the order the ear finds them: a HUM (the
 // firing note, the one layer whose pitch moves), a CLATTER over it (a dry tick
 // per turn of the crank — the parts), a BASS bed under it (the mass of the
@@ -70,16 +87,17 @@ export function rpmAt(rev: number): number {
 /**
  * THE CADENCE, and the shape below is written in its units.
  *
- * Fire a grain every `GRAIN_MS` and three of them sound at any instant, their
- * holds tiling end to end — the summed level wobbles by about a decibel, which
- * reads as engine roughness rather than as a pulse. The four numbers are
- * related, not independently chosen: the cadence has to be about half the hold,
- * and the life has to cover the attack, the hold and a short tail.
+ * Fire a grain every `GRAIN_MS` and four of them sound at any instant: two
+ * holding, one fading in and one fading out. The four numbers are a cross-fade
+ * and not independent choices — the attack and the tail are each exactly one
+ * cadence, and the hold two more — so the fading pair always sums to the one
+ * grain neither of them is yet, and the total never moves. Being merely CLOSE
+ * to this is what a grain-rate wobble is.
  */
 export const GRAIN_MS = 105;
-const ATTACK_MS = 60;
-const HOLD_MS = 200;
-const LIFE_MS = 320;
+const ATTACK_MS = GRAIN_MS;
+const HOLD_MS = GRAIN_MS * 2;
+const LIFE_MS = GRAIN_MS * 4;
 
 /** How low the BASS bed may go. Below about here a phone gives you nothing and
  * a desktop gives you cabinet noise, so the layer holding the whole sound up
@@ -132,9 +150,10 @@ export type EngineVoice = {
  * return is the same thing for the NEXT grain, which the caller hands straight
  * back.
  *
- * THE LEVELS ARE THE SUM'S, NOT THE GRAIN'S. Three grains sound at once, so
- * every volume here is roughly a third of what the player hears — the numbers
- * look quiet beside the rest of the bank and are not.
+ * THE LEVELS ARE THE SUM'S, NOT THE GRAIN'S. Three grains' worth sounds at
+ * once and they add up rather than fight, so every volume here is a third of
+ * what the player hears — the numbers look quiet beside the rest of the bank
+ * and are not.
  */
 export function playEngineGrain(
   synth: Synth,
@@ -158,10 +177,11 @@ export function playEngineGrain(
     durationMs: LIFE_MS,
     attackMs: ATTACK_MS,
     holdMs: HOLD_MS,
-    volume: 0.009 + 0.013 * load,
+    volume: 0.0065 + 0.0095 * load,
     detuneCents: 10 + 16 * wear,
     drive: 0.2 + 0.35 * load + 0.15 * wear,
     filter: { type: "lowpass", frequency: 700 + 2600 * rev },
+    bed: true,
   });
   // ITS OCTAVE, which is what carries the note at all down at the bottom of the
   // band: a 30 Hz idle is barely a thing a phone speaker can reproduce and a
@@ -176,9 +196,10 @@ export function playEngineGrain(
     durationMs: LIFE_MS,
     attackMs: ATTACK_MS,
     holdMs: HOLD_MS,
-    volume: 0.008 - 0.006 * rev,
+    volume: 0.0058 - 0.0044 * rev,
     detuneCents: 8,
     drive: 0.2,
+    bed: true,
   });
   // ── THE RASP ─────────────────────────────────────────────────────────────
   // Intake and exhaust edge: a thin driven sawtooth on the firing note, only
@@ -193,10 +214,11 @@ export function playEngineGrain(
       durationMs: LIFE_MS,
       attackMs: ATTACK_MS,
       holdMs: HOLD_MS,
-      volume: 0.002 + 0.008 * rev * load,
+      volume: 0.0015 + 0.0058 * rev * load,
       detuneCents: 18,
       drive: 0.45,
       filter: { type: "bandpass", frequency: 900 + 2200 * rev, q: 1.1 },
+      bed: true,
     });
   }
   // ── THE BASS ─────────────────────────────────────────────────────────────
@@ -216,8 +238,9 @@ export function playEngineGrain(
     durationMs: LIFE_MS,
     attackMs: ATTACK_MS,
     holdMs: HOLD_MS,
-    volume: 0.01 + 0.008 * load,
+    volume: 0.0073 + 0.0058 * load,
     detuneCents: 5,
+    bed: true,
   });
   // ── THE CLATTER ──────────────────────────────────────────────────────────
   // One tick per revolution across this grain's window. Loudest at idle and as
