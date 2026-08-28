@@ -162,10 +162,10 @@ past `SING_FLOOR`, with a genuine slide taking over from there.
 
 Two tracker arrangements, both looping:
 
-| Id      | Title                     | Where                  | Loop           |
-| ------- | ------------------------- | ---------------------- | -------------- |
-| `menu`  | SERVICE PARK, FIRST LIGHT | Behind every menu page | 96 bpm, ~120 s |
-| `taiga` | TAIGA, FLAT OUT           | On a stage             | 150 bpm, ~90 s |
+| Id      | Title           | Where                  | Loop            |
+| ------- | --------------- | ---------------------- | --------------- |
+| `menu`  | STARTING RAMP   | Behind every menu page | 132 bpm, ~116 s |
+| `taiga` | TAIGA, FLAT OUT | On a stage             | 150 bpm, ~90 s  |
 
 A score is instruments (named patches), patterns (sections of note tokens on a
 sixteenth-note grid) and an order (the arrangement, which loops). Each one is
