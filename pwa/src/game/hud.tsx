@@ -11,7 +11,12 @@ import type { GamePhase, TurnSeverity } from "@engine";
 import { deviceControls, type InputManager } from "./input.ts";
 import { createThumbGuard } from "./thumb-guard.ts";
 import { PODIUM as PODIUM_PLACES } from "./campaign.ts";
-import { FinishCard, type FinishScores, type NextStage } from "./hud-finish.tsx";
+import {
+  FinishCard,
+  type FinishChampionship,
+  type FinishScores,
+  type NextStage,
+} from "./hud-finish.tsx";
 import { Minimap, type HudMinimap } from "./minimap.tsx";
 import type { HudSettings, PedalDir, TouchSettings } from "./settings.ts";
 import { clamp, formatTime } from "../lib/util.ts";
@@ -174,6 +179,12 @@ type HudProps = {
   /** The time trial's board, and the initials it is still waiting on. Null
    * on every other kind of run. */
   scores: FinishScores | null;
+  /** R30 — the stage's points and the season they went into. Null outside
+   * the campaign. */
+  championship: FinishChampionship | null;
+  /** The location whose championship stands between this run and the next
+   * country, or null when nothing does. */
+  locked: string | null;
 };
 
 /** Capture the pointer so a drag that leaves the zone keeps steering; a
@@ -946,6 +957,8 @@ export function Hud({
   onRetry,
   onRetire,
   scores,
+  championship,
+  locked,
 }: HudProps) {
   const { touch } = input;
   const pedalSide = touchLayout.steerSide === "left" ? "right" : "left";
@@ -1065,6 +1078,8 @@ export function Hud({
             onRetry={onRetry}
             onRetire={onRetire}
             scores={scores}
+            championship={championship}
+            locked={locked}
           />
         )}
         {snap.airborne && snap.phase === "racing" && <div className="hud-air">AIRBORNE</div>}

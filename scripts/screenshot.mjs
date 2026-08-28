@@ -1170,6 +1170,16 @@ if (only.length === 0 || only.some((f) => "shot-campaign".includes(f))) {
   await page.waitForTimeout(600);
   await page.screenshot({ path: join(outDir, "shot-campaign-result.png") });
   console.log("previews/shot-campaign-result.png");
+  // R30 — THE RESULT SHEET: fifteen crews, their times, what the stage paid
+  // them and what they have for the season. The card holds the way in shut
+  // until the last car is home, so this waits for the button to say so
+  // rather than for a number of seconds.
+  const sheet = page.getByRole("button", { name: "FULL RESULTS" });
+  await sheet.waitFor({ timeout: FINISH_WAIT });
+  await sheet.click();
+  await page.waitForSelector(".hud-modal");
+  await page.screenshot({ path: join(outDir, "shot-campaign-points.png") });
+  console.log("previews/shot-campaign-points.png");
   await page.close();
 }
 

@@ -14,7 +14,7 @@
 // The pages are a plain tagged union rather than a router: there is no URL
 // to keep in step, and the whole menu is one component tree over one canvas.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FIELD_SIZE, STAGE_RULES, type Difficulty } from "@engine";
 
 import { APP_NAME, REPO_URL } from "../identity.ts";
@@ -32,6 +32,16 @@ import {
   type CampaignProgress,
 } from "./campaign.ts";
 import { CarPicker } from "./car-picker.tsx";
+import {
+  championshipWon,
+  locationUnlocked,
+  playerStanding,
+  seasonComplete,
+  seasonContinue,
+  standings,
+  type Championship,
+} from "./championship.ts";
+import { ResultsModal } from "./results-table.tsx";
 import { DebugLogPage, DeveloperPage } from "./menu-dev.tsx";
 import { DIFFICULTY_OPTIONS, OptionRow, type RaceSettings } from "./menu.tsx";
 import { OptionsPage, type OptionsTab } from "./menu-options.tsx";
@@ -72,6 +82,10 @@ export type MainMenuProps = {
   /** Let the developer menu out — the chassis secret found (see DEV_TAPS). */
   onDeveloper: () => void;
   onUnlockEverything: () => void;
+  /** R30 — the points every location's season has paid out so far. */
+  season: Championship;
+  /** Tear a location's table up and start its season again. */
+  onSeasonReset: (locationId: string) => void;
   /** Where Roam's map pane is, for the renderer to draw the stage into. */
   onMapRect: (rect: MapRect | null) => void;
   /** Roam's handle on the map camera — the pane's drags, wheels and pinches. */
@@ -305,9 +319,11 @@ function RootPage({
 
 function CampaignPage({
   progress,
+  season,
   onNavigate,
 }: {
   progress: CampaignProgress;
+  season: Championship;
   onNavigate: (page: MenuPage) => void;
 }) {
   return (
@@ -316,8 +332,26 @@ function CampaignPage({
       <div className="menu-title">CAMPAIGN</div>
       <div className="menu-sub">Pick a location</div>
       <div className="menu-locations">
-        {LOCATIONS.map((location) => {
+        {LOCATIONS.map((location, index) => {
           const cleared = location.levels.filter((l) => progress.cleared.includes(l.id)).length;
+          const mine = playerStanding(location, season);
+          // R30 — a country is opened by the PREVIOUS country's championship,
+          // not by its stages: a player who podiumed their way through Taiga
+          // has seen all of it and still has a table to win.
+          if (!locationUnlocked(location, season)) {
+            const before = LOCATIONS[index - 1];
+            return (
+              <div
+                key={location.id}
+                className="menu-location menu-location-locked menu-level-locked"
+                aria-label={`${location.name}, locked`}
+              >
+                <span className="menu-location-name">{location.name.toUpperCase()}</span>
+                <LockGlyph />
+                <span className="menu-location-blurb">Win the {before.name} championship</span>
+              </div>
+            );
+          }
           return (
             <button
               key={location.id}
@@ -329,6 +363,11 @@ function CampaignPage({
               <span className="menu-location-blurb">{location.blurb}</span>
               <span className="menu-location-progress">
                 {cleared} / {location.levels.length} STAGES
+                {championshipWon(location, season)
+                  ? " · CHAMPION"
+                  : mine.points > 0
+                    ? ` · ${mine.points} PTS, ${mine.tied ? "=" : ""}${ordinal(mine.place)}`
+                    : ""}
               </span>
             </button>
           );
@@ -338,21 +377,139 @@ function CampaignPage({
   );
 }
 
+/** R30 — THE SEASON PANEL. The location's table is the thing the player is
+ * actually playing for once the stages are open, so it sits on the location
+ * page with the three presses it is worth: pick the season back up, read the
+ * whole table, or tear it up and start again.
+ *
+ * CONTINUE walks FORWARD first — the next stage never driven — and only then
+ * back to the first stage not yet WON. That is the shape of a points
+ * championship: see the country, then go back for the wins it costs to leave
+ * it. */
+function SeasonPanel({
+  location,
+  progress,
+  season,
+  onPlayLevel,
+  onReset,
+}: {
+  location: CampaignLocation;
+  progress: CampaignProgress;
+  season: Championship;
+  onPlayLevel: (level: CampaignLevel, mode: PlayMode) => void;
+  onReset: (locationId: string) => void;
+}) {
+  const [table, setTable] = useState(false);
+  // A reset costs a whole season and cannot be undone, so it asks once. The
+  // question expires with the page rather than sitting armed forever.
+  const [sure, setSure] = useState(false);
+  const rows = standings(location, season);
+  const mine = playerStanding(location, season);
+  const next = seasonContinue(location, progress, season);
+  const won = championshipWon(location, season);
+  const run = location.levels.filter((level) => season[location.id]?.[level.id]).length;
+  return (
+    <div className="menu-season">
+      <div className="menu-season-line">
+        <span className="menu-label">CHAMPIONSHIP</span>
+        <span className={`menu-season-place ${won ? "menu-season-won" : ""}`}>
+          {won
+            ? "WON"
+            : run === 0
+              ? // A place on a table nobody has scored on is not a place.
+                "NOT STARTED"
+              : `${mine.tied ? "=" : ""}${ordinal(mine.place)} OF ${rows.length}`}
+        </span>
+        {run > 0 && <span className="menu-season-points">{mine.points} PTS</span>}
+        <span className="menu-season-run">
+          {run} / {location.levels.length} STAGES DRIVEN
+        </span>
+      </div>
+      {!won && (
+        <div className="menu-season-hint">
+          {seasonComplete(location, season)
+            ? "TOP THE TABLE TO OPEN THE NEXT COUNTRY"
+            : "3 · 2 · 1 POINTS FOR THE PODIUM — DRIVE THEM ALL, THEN WIN THEM"}
+        </div>
+      )}
+      <div className="menu-season-acts">
+        {next && (
+          <button
+            type="button"
+            className="menu-opt menu-season-go"
+            onClick={() => {
+              playUi("start");
+              onPlayLevel(next, "campaign");
+            }}
+          >
+            CONTINUE: {next.name.toUpperCase()}
+          </button>
+        )}
+        <button
+          type="button"
+          className="menu-opt"
+          onClick={() => {
+            playUi("select");
+            setTable(true);
+          }}
+        >
+          STANDINGS
+        </button>
+        {mine.points > 0 && (
+          <button
+            type="button"
+            className="menu-opt"
+            onClick={() => {
+              playUi("select");
+              if (!sure) {
+                setSure(true);
+                return;
+              }
+              setSure(false);
+              onReset(location.id);
+            }}
+          >
+            {sure ? "SURE? RESET" : "RESET SEASON"}
+          </button>
+        )}
+      </div>
+      {table && (
+        <ResultsModal
+          title={`${location.name.toUpperCase()} CHAMPIONSHIP`}
+          sub={`${run} of ${location.levels.length} stages driven`}
+          rows={rows.map((row) => ({
+            place: row.place,
+            name: row.alias,
+            total: row.points,
+            you: row.you,
+          }))}
+          stage={false}
+          onClose={() => setTable(false)}
+        />
+      )}
+    </div>
+  );
+}
+
 function LocationPage({
   locationId,
   progress,
+  season,
   race,
   onRace,
   onNavigate,
   onPlayLevel,
+  onSeasonReset,
   onDeveloper,
 }: {
   locationId: string;
   progress: CampaignProgress;
+  season: Championship;
   race: RaceSettings;
   onRace: (race: RaceSettings) => void;
   onNavigate: (page: MenuPage) => void;
   onPlayLevel: (level: CampaignLevel, mode: PlayMode) => void;
+  onSeasonReset: (locationId: string) => void;
   onDeveloper: () => void;
 }) {
   const location = locationById(locationId);
@@ -368,6 +525,13 @@ function LocationPage({
         hint="Podium on the stage before this one"
         difficulty={race.difficulty}
         onPlay={(level) => onPlayLevel(level, "campaign")}
+      />
+      <SeasonPanel
+        location={location}
+        progress={progress}
+        season={season}
+        onPlayLevel={onPlayLevel}
+        onReset={onSeasonReset}
       />
       {/* R29 — how good the fourteen crews you are running against are. It
           sits with the car because it is the same kind of choice: the two
@@ -556,16 +720,18 @@ export function MainMenu(props: MainMenuProps) {
           <RootPage developer={props.settings.developer} onNavigate={navigate} />
         )}
         {page.page === "campaign" && (
-          <CampaignPage progress={props.progress} onNavigate={navigate} />
+          <CampaignPage progress={props.progress} season={props.season} onNavigate={navigate} />
         )}
         {page.page === "location" && (
           <LocationPage
             locationId={page.locationId}
             progress={props.progress}
+            season={props.season}
             race={props.race}
             onRace={props.onRace}
             onNavigate={navigate}
             onPlayLevel={props.onPlayLevel}
+            onSeasonReset={props.onSeasonReset}
             onDeveloper={props.onDeveloper}
           />
         )}

@@ -117,6 +117,20 @@ export function createField(track: Track, difficulty: Difficulty, stage: FieldSt
   };
 }
 
+/** One rival, one physics step, with whatever they went through booked. */
+function advance(run: RivalRun): void {
+  const events = step(run.state, botInput(run.state, run.entry.profile));
+  for (const event of events) {
+    if (event.type === "checkpoint") run.splits.push(event.time);
+    else if (event.type === "finish") {
+      run.time = event.time;
+      // Past the line their run tells the classification nothing more, and
+      // R25's roll-out is a celebration nobody is watching.
+      run.done = true;
+    }
+  }
+}
+
 /** Drive the whole field one physics step, and book whatever they went
  * through. Called from the app's fixed-timestep loop BEFORE the player's own
  * step: the player is last on the road, so a rival reaching a board on the
@@ -124,17 +138,41 @@ export function createField(track: Track, difficulty: Difficulty, stage: FieldSt
 export function stepField(field: RivalField): void {
   for (const run of field.runs) {
     if (run.done) continue;
-    const events = step(run.state, botInput(run.state, run.entry.profile));
-    for (const event of events) {
-      if (event.type === "checkpoint") run.splits.push(event.time);
-      else if (event.type === "finish") {
-        run.time = event.time;
-        // Past the line their run tells the classification nothing more, and
-        // R25's roll-out is a celebration nobody is watching.
-        run.done = true;
-      }
-    }
+    advance(run);
   }
+}
+
+/** RUN THE STRAGGLERS HOME. The player is across the line and the card is
+ * up, but a classification needs everybody's time, not just the times of the
+ * crews who beat them — R30's points are handed out to a finishing ORDER, and
+ * the two places behind the player are worth two and one to somebody.
+ *
+ * So the cars still out there are driven home off the results card's frames,
+ * `steps` at a time so the card never hitches: nothing is being rendered but
+ * a run-out, and a rival is one car on a track that is already compiled.
+ * Anybody still going at `limit` seconds of race time is RETIRED where they
+ * stand — a bot wedged nose-first against a trunk would otherwise hold the
+ * results open for as long as the player was prepared to watch it.
+ *
+ * Returns true once nobody is left running. */
+export function settleField(field: RivalField, steps: number, limit: number): boolean {
+  let budget = steps;
+  while (budget > 0) {
+    let stepped = false;
+    for (const run of field.runs) {
+      if (run.done) continue;
+      if (run.state.raceTime >= limit) {
+        run.done = true;
+        continue;
+      }
+      advance(run);
+      stepped = true;
+      if (--budget <= 0) break;
+    }
+    // Nobody moved: everybody is home, retired, or stopped.
+    if (!stepped) break;
+  }
+  return field.runs.every((run) => run.done);
 }
 
 /** Stop the field. The player's run is over — anybody still out there is
@@ -156,6 +194,58 @@ export function placeAtFinish(field: RivalField): number {
   let ahead = 0;
   for (const run of field.runs) if (run.time !== null) ahead += 1;
   return ahead + 1;
+}
+
+/** What the classification calls the player's own run. A crew id nobody in
+ * `RIVALS` can ever hold, because the championship files points under it. */
+export const PLAYER_ID = "you";
+
+/** One line of a stage's classification: who, in what, how long it took. */
+export type ClassRow = {
+  /** The crew's id, or `PLAYER_ID`. */
+  id: string;
+  /** What the timing screen calls them — one word wide. */
+  alias: string;
+  driver: string;
+  carId: string;
+  /** Stage time, or null for a crew who never reached the line. */
+  time: number | null;
+  /** 1 is the stage win. Retirements are classified behind every finisher. */
+  place: number;
+  you: boolean;
+};
+
+/** THE STAGE'S RESULT SHEET — everybody who started, in the order they
+ * finished, with the retirements at the bottom in start order. Only honest
+ * once `settleField` says the road is clear: a rival still out there has no
+ * time yet, and would be classified as a retirement they never made. */
+export function fieldResults(
+  field: RivalField,
+  player: { time: number; carId: string },
+): ClassRow[] {
+  const rows: Omit<ClassRow, "place">[] = field.runs.map((run) => ({
+    id: run.entry.crew.id,
+    alias: run.entry.crew.alias,
+    driver: run.entry.crew.driver,
+    carId: run.entry.crew.carId,
+    time: run.time,
+    you: false,
+  }));
+  rows.push({
+    id: PLAYER_ID,
+    alias: "YOU",
+    driver: "You",
+    carId: player.carId,
+    time: player.time,
+    you: true,
+  });
+  // Times first, quickest first; anybody without one is out of the results
+  // and stays in the order they left the start control.
+  rows.sort((a, b) => {
+    if (a.time === null || b.time === null) return a.time === null ? (b.time === null ? 0 : 1) : -1;
+    return a.time - b.time;
+  });
+  return rows.map((row, index) => ({ ...row, place: index + 1 }));
 }
 
 /** THE CAR THE SPLIT IS MEASURED AGAINST: the leader through that board, or
