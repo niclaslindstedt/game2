@@ -137,6 +137,8 @@ describe("event routing", () => {
     { type: "impact", speed: 10, angle: 1, belly: false },
     { type: "impact", speed: 24, angle: 2, belly: true },
     { type: "partBreak", part: "bumperF" },
+    { type: "kerbHit", speed: 5 },
+    { type: "kerbHit", speed: 20 },
     { type: "solidBreak", solid: SNAPPED_TREE, broke: true, vx: 2, vy: 1, vz: 0 },
     { type: "solidBreak", solid: SHOVED_ROCK, broke: false, vx: 9, vy: 3, vz: 1 },
     { type: "crash" },
@@ -161,6 +163,29 @@ describe("event routing", () => {
   it("picks the shift direction off the gear it came from", () => {
     expect(soundForEvent({ type: "shift", gear: 3 }, 2)?.id).toBe("shift_up");
     expect(soundForEvent({ type: "shift", gear: 2 }, 3)?.id).toBe("shift_down");
+  });
+
+  it("keeps an anti-cut block off the impact ladder", () => {
+    // R26 — a block ridden over is not a crash and must not sound like
+    // one: a player who hears the car break here stops cutting apexes
+    // instead of learning what cutting one costs.
+    const soft = soundForEvent({ type: "kerbHit", speed: 5 }, 0);
+    const hard = soundForEvent({ type: "kerbHit", speed: 20 }, 0);
+    expect(soft?.id).toBe("kerb_block");
+    expect(hard?.id).toBe("kerb_block");
+    expect(hard?.shape?.gain ?? 0).toBeGreaterThan(soft?.shape?.gain ?? 0);
+    expect(hard?.shape?.pitch ?? 1).toBeLessThan(soft?.shape?.pitch ?? 1);
+    // …and there is nothing BRIGHT anywhere in it. The crack of panels and
+    // glass is what an impact is MADE of, and a block breaks neither: it is
+    // concrete under a tyre, felt through the floor.
+    for (const voice of RUN_BANK.kerb_block.voices) {
+      expect(voice.filter?.frequency ?? 0).toBeLessThan(1000);
+      expect(voice.filter?.to ?? 0).toBeLessThan(1000);
+    }
+    expect(
+      RUN_BANK.impact_hit.voices.some((v) => (v.filter?.frequency ?? 0) > 1000),
+      "the impact this is being told apart from has no top end either",
+    ).toBe(true);
   });
 
   it("climbs the impact ladder with closing speed", () => {
@@ -654,6 +679,27 @@ describe("the tyres", () => {
     expect(roar?.filter?.frequency).toBeLessThan(200);
   });
 
+  it("keeps the off-road bed out of the top end and fills its middle", () => {
+    // Turf has no hard material anywhere in it. A resonant bottom with a
+    // bright hiss over it and a hole between the two is not a field being
+    // ploughed — it is a sheet of metal being scoured, which is exactly what
+    // it gets reported as.
+    const rec = recorder();
+    playRoadGrain(rec, { ...ROLLING, surface: "nature" }, 0);
+    const audible = rec.noises.filter((n) => (n.volume ?? 0) > 0);
+    // Nothing out here runs on upward from its corner: the wind is the only
+    // open layer left in the mix.
+    expect(audible.filter((n) => n.filter?.type === "highpass")).toHaveLength(1);
+    const weight = (lo: number, hi: number): number =>
+      audible
+        .filter((n) => n.filter?.type === "bandpass")
+        .filter((n) => (n.filter?.frequency ?? 0) >= lo && (n.filter?.frequency ?? 0) < hi)
+        .reduce((sum, n) => sum + (n.volume ?? 0), 0);
+    // …and the middle carries as much of the voice as the rumble under it,
+    // which is the difference between a surface and a resonance.
+    expect(weight(300, 4000)).toBeGreaterThan(weight(0, 300) * 0.9);
+  });
+
   it("sings on tarmac from the cornering load alone, and digs only on a slide", () => {
     // A tyre protests while it is still winning; a loose surface has nothing
     // to protest WITH and only makes its second noise once the car has gone.
@@ -700,7 +746,7 @@ describe("the weather", () => {
     const mud = WET_SURFACES.gravel as (typeof SURFACES)[string];
     // A wet stone does not rattle. The crunch is the layer that says
     // "loose surface", and water is exactly what takes it away.
-    expect(mud.grain).toBeLessThan(dry.grain * 0.2);
+    expect(mud.grain?.level ?? 0).toBeLessThan((dry.grain?.level ?? 0) * 0.2);
     // The roar drops with it: mud churns where dry grit rushes.
     expect(mud.hz).toBeLessThan(dry.hz);
     // …and the STRAIGHT gets louder, which is the tell that this is a

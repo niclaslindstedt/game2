@@ -9,6 +9,7 @@ import { createRng } from "../lib/prng.ts";
 import {
   compileStage,
   compileTrack,
+  createKerbField,
   createTerrain,
   STAGE_RULES,
   type StageKnobs,
@@ -19,7 +20,7 @@ import {
 import { carById, gearedSpec, type GearboxMode } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 import { launch, stepAirborne, stepGrounded, type GroundContext } from "./car.ts";
-import { collideCar } from "./collision.ts";
+import { clipKerbs, collideCar } from "./collision.ts";
 import {
   crossedFinish,
   crossedLip,
@@ -87,6 +88,7 @@ function freshCar(): CarState {
     ride: 0,
     rideRate: 0,
     pitchLoad: 0,
+    kerbFrom: 0,
     slide: 0,
     drifting: false,
     wheelspin: 0,
@@ -248,6 +250,7 @@ export function createGame(options: CreateGameOptions): GameState {
     spec,
     track,
     terrain: createTerrain(track),
+    kerbs: createKerbField(track),
     car,
     phase: options.skipCountdown ? "racing" : "intro",
     t: 0,
@@ -726,6 +729,10 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // car, and none of them may ever see the end of the world.
   if (track.endless) track.extend?.(state.progressS + STAGE_RULES.endless.horizon);
   terrain.sync(state.progressS);
+  // R26 — the marking keeps up with the road for the same reason the
+  // terrain does, and an endless run forgets what it has driven past.
+  state.kerbs.extend(track.samples.length);
+  if (track.endless) state.kerbs.pruneBefore(state.progressS - 400);
 
   // Jump lips are keyed to progress so a lip cannot be skipped by a fast
   // step; the grounded step already applied ground-follow, so takeoff here
@@ -814,6 +821,14 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
         collideCar(state.spec, car, solids, events, state.stats, terrain.fell);
       }
     }
+  }
+  // R26 — and the anti-cut blocks, which are tested WHEREVER the car is.
+  // A block's inner edge sits inside the road's own edge, so the wheel that
+  // mounts one belongs to a car whose centre is still on the road and whose
+  // `offRoad` is still false: gating this on leaving the road would make
+  // every apex on the stage free to cut by exactly the margin that matters.
+  if (!crashed) {
+    clipKerbs(state.spec, car, state.t, state.kerbs.blocksNear(car.x, car.z, 2.5), events);
   }
   // A wreck is driven, not teleported: wear reaching 1 leaves a car with
   // nothing left to give still sitting where it stopped. Only the wedge

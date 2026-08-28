@@ -17,10 +17,10 @@
 // when the car's panels would have touched it.
 
 import * as THREE from "three";
-import { TUNING, type GameState, type Track } from "@engine";
+import { type GameState, type Track } from "@engine";
 
 import { rightOf } from "./ribbon.ts";
-import { stepTumble, tumbleFrom, type TumbleBody } from "./tumble.ts";
+import { drivingThrough, outOfBody, stepTumble, tumbleFrom, type TumbleBody } from "./tumble.ts";
 
 /** Cone dimensions, m — base radius and height. */
 const CONE_R = 0.45;
@@ -33,10 +33,6 @@ const LYING = CONE_R * 0.5;
 /** How far out the contact test grows the car's body box, m — a cone is a
  * circle rather than a point, and a wheel brushing one is still a hit. */
 const REACH = CONE_R;
-/** Cones further than this from the car are not even tested for a hit, m. A
- * cone already in the air is stepped wherever it is: a piece frozen mid-flight
- * because the car drove on is the whole fault this module exists to avoid. */
-const NEAR = 12;
 /** Below this the car is not driving through anything, m/s — without it a
  * cone lying under a parked car is re-launched every frame. */
 const KNOCK_FROM = 1.2;
@@ -69,8 +65,10 @@ export type ConeField = {
   plant: (x: number, y: number, z: number, s: number) => void;
   /** Cones the endless prune has left behind: everything up to `s`. */
   retireBefore: (s: number) => void;
-  /** Knock whatever the car is driving through, and tumble what is loose. */
-  update: (state: GameState, dt: number) => void;
+  /** Knock whatever the car is driving through, and tumble what is loose.
+   * `knocked` is raised once per cone sent flying, with the speed it left
+   * at — a cone makes a noise, and the engine has never heard of one. */
+  update: (state: GameState, dt: number, knocked?: (speed: number) => void) => void;
   dispose: () => void;
 };
 
@@ -95,7 +93,7 @@ export function createConeField(): ConeField {
   /** Send one cone on its way, at the speed and in the direction the car was
    * going, pushed out along the line from the car's flank to the cone so a
    * clipped one goes sideways rather than straight down the road. */
-  const knock = (cone: Cone, state: GameState, outX: number, outZ: number): void => {
+  const knock = (cone: Cone, state: GameState, outX: number, outZ: number): number => {
     const car = state.car;
     const sinH = Math.sin(car.heading);
     const cosH = Math.cos(car.heading);
@@ -118,34 +116,26 @@ export function createConeField(): ConeField {
       (Math.random() - 0.5) * speed * SPIN,
     );
     cone.live = true;
+    return speed;
   };
 
-  const update = (state: GameState, dt: number): void => {
+  const update = (state: GameState, dt: number, knocked?: (speed: number) => void): void => {
     const car = state.car;
     const ground = state.terrain.groundAt;
-    const sinH = Math.sin(car.heading);
-    const cosH = Math.cos(car.heading);
-    const hl = TUNING.collision.halfLength + REACH;
-    const hw = TUNING.collision.halfWidth + REACH;
-
     const driving = !car.airborne && Math.hypot(car.u, car.w) > KNOCK_FROM;
 
     for (const cone of cones) {
       const p = cone.body.object.position;
-      const dx = p.x - car.x;
-      const dz = p.z - car.z;
-      if (driving && Math.abs(dx) <= NEAR && Math.abs(dz) <= NEAR) {
-        // The cone in the car's own frame: `fwd` along the nose, `right`
-        // along its side — the same box the engine collides the body with,
-        // so what knocks a cone over is what would have touched it.
-        const fwd = dx * sinH + dz * cosH;
-        const right = dx * cosH - dz * sinH;
-        if (Math.abs(fwd) < hl && Math.abs(right) < hw && Math.abs(p.y - car.y) < CONE_H) {
-          // Out of the body along whichever face is nearest — the flank for
-          // a cone beside the car, the nose for one dead ahead.
-          const outRight = hw - Math.abs(right) < hl - Math.abs(fwd) ? Math.sign(right) : 0;
-          const outFwd = outRight === 0 ? Math.sign(fwd) : 0;
-          knock(cone, state, outRight * cosH + outFwd * sinH, outFwd * cosH - outRight * sinH);
+      if (driving) {
+        const hit = drivingThrough(car, p.x, p.y, p.z, REACH, CONE_H);
+        if (hit) {
+          const out = outOfBody(car, hit, REACH);
+          // The knock happens whether or not anybody is listening: an
+          // optional call does not evaluate its arguments, so putting the
+          // work inside `knocked?.(…)` would leave the cones standing
+          // wherever the caller passed no handler.
+          const speed = knock(cone, state, out.x, out.z);
+          knocked?.(speed);
         }
       }
       if (cone.live && !stepTumble(cone.body, dt, ground)) cone.live = false;

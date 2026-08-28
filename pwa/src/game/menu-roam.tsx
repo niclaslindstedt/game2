@@ -218,18 +218,12 @@ export function RoamPage({
         <section className="roam-pane roam-pane-stage">
           {/* The way back and the page's name ride on the stage pane's own
               header rather than a bar above it: a row that carries two words
-              is a row taken off the map, which is the page. The way back is
-              the arrow alone — the word beside it is a second label for the
-              page the arrow already points at. */}
+              is a row taken off the map, which is the page. The button says
+              where it GOES, in the same chrome every other page's does — an
+              arrow on its own is a shorthand only this page speaks. */}
           <div className="roam-pane-head">
-            <button
-              type="button"
-              className="menu-back roam-back"
-              onClick={onBack}
-              aria-label="Main menu"
-              title="Main menu"
-            >
-              ‹
+            <button type="button" className="menu-back" onClick={onBack}>
+              ‹ MAIN MENU
             </button>
             <span className="roam-title">ROAM</span>
             <span className="roam-seed">

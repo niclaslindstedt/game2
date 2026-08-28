@@ -409,7 +409,7 @@ export function buildSkirts(samples: Ribbon[], width: number): THREE.Mesh {
  * rally borrowed rather than a differently-colored stripe.
  *
  * A gravel road gets NONE. Nobody paints a forest road, and what marks a
- * rally stage is the rally's own red and white — which R26 puts at the
+ * rally stage is the rally's own striped marking — which R26 puts at the
  * corners that need it rather than down the whole stage, and which is
  * therefore not a line at all but a run of objects. That lives in
  * `kerbs.ts`. Fords and bridge decks carry nothing either way. Markings run

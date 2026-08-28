@@ -33,7 +33,17 @@ export {
 } from "./road.ts";
 export { SPUR, buildSpur, spurReach, type Spur, type SpurSample } from "./spurs.ts";
 export { createGuardField, type CornerGuard, type GuardField } from "./guards.ts";
-export { buildKerbs, type KerbRole, type KerbZone } from "./kerbs.ts";
+export {
+  buildKerbs,
+  createKerbField,
+  KERB_MARKER,
+  markersBetween,
+  roleAt,
+  type KerbField,
+  type KerbMarker,
+  type KerbRole,
+  type KerbZone,
+} from "./kerbs.ts";
 export { createStandField, type Stand, type StandField } from "./stands.ts";
 export {
   createTerrain,

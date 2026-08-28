@@ -637,6 +637,18 @@ every solid is a circle, and a hit does several things at once:
 - **The springs.** Every contact also loads them (`TUNING.suspension`):
   the wheels stop and the body does not, so the car rocks and the nose dips
   for a beat afterwards. See [Weight: the springs](#weight-the-springs).
+- **The anti-cut blocks are the exception to all of it.** R26 lays a low
+  slab of concrete along the inside of a hard corner, exactly where a
+  driver wants to put two wheels, and it is resolved by `clipKerbs`
+  (`TUNING.collision.kerb`) rather than as a solid — because it is a thing
+  the car rides OVER rather than into. It costs a share of the speed the
+  car was carrying, rolls the body away from the wheels that mounted it,
+  loads the springs, shoves the car back out of the inside of the corner
+  and drags the nose round after it. What it never does is fold a panel or
+  put the car in the air: cutting an apex has to be PAID FOR, not punished
+  with the run, or every corner on the stage becomes one nobody goes near.
+  A marker post is the opposite extreme — it stops nothing, never reaches
+  the physics at all, and is knocked flat renderer-side like a cone.
 - **The wear.** Every crush adds structural wear; wear 1 is the wreck — a
   car with nothing left to give, which keeps driving exactly where it is.
   Nothing recovers it: a wreck is driven home, and the chassis is patched

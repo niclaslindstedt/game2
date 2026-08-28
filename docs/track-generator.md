@@ -40,7 +40,7 @@ The generator respects rally reality. Verbatim from the rule book, each enforced
 - **R23** No two pieces of road share ground. The terrain lays its shelf under ONE road (`terrain.ts` picks the nearest), so a second corridor over the same country is left hanging in the air with nothing under it and nothing to drive on — a wall of road you can see through and drive through. So the clearance is measured centerline to centerline and sized from the road's own width: both corridors' full reach plus `roadClear.margin` of bare country between them. It binds the route against itself (R10) and it binds the abandoned branches (R17), which turn away from the stage the way they turn away from a lake and stop where they cannot.
 - **R24** The START is a PLACE, not a line. The grid, the APRON of dirt behind it — real road, with a terrain shelf under it and physics on it — and R23's clearance around both belong to the start: on a sprint the route may not come back into it, no branch may cross it, and the finish's run-out may not land in it. A road floating over the start is the first thing a run ever sees. A circuit is the exception the shape makes: it closes onto its own start line along the apron rather than across it (R22). Past the apron, at either end of a sprint, the stage is simply over and the terrain owns the ground.
 - **R25** A SPRINT's finish line is not the end of its road. It carries on past the gate for a RUN-OUT (`runOut`, 220 m) — road the car coasts down after the clock has stopped, so the finish is a line drawn across a road rather than the cliff edge of a world that ran out of budget. The run-out is NOT part of the raced stage: R11's length band measures the road up to the line, and `track.finishS` is where that line is. Crossing it puts the run into its `rollout` phase, and the car is driven home from there (`TUNING.rollOut`) with the camera planted at the gate. A circuit needs none — its finish is its own start line, with a whole lap of road already the other side of it — so it finishes at the line the way it always has.
-- **R26** Red-and-white KERBING goes where a driver needs it and nowhere else. See [the placement guide](#kerb-placement-r26) below.
+- **R26** KERBING goes where a driver needs it and nowhere else. See [the placement guide](#kerb-placement-r26) below.
 - **R27** A stage is WATCHED. Spectators gather where a rally crowd actually gathers — at the finish, and at the corners worth standing at — on ground clear of the road, on the OUTSIDE of the bend where nothing leaving the road is coming at them. Driving past a stand at pace is heard (`cheer`).
 - **R28** A stage is SPLIT INTO CHECKPOINTS, roughly a quarter-minute of driving apart, and every one of them stands just past the EXIT of a corner — the tighter the better. A checkpoint is both a split (where the run is measured against whoever it is racing) and the place a lost, drowned or crashed car is put back on the road, so it belongs where the road has just asked the driver a question rather than in the middle of a straight where it would cost nothing. See [checkpoint placement](#checkpoint-placement-r28) below.
 - **R31** The road and the ground beside it are RIDEABLE. Within a BENCH of a road — the route's or an abandoned branch's — the landscape never stands above that road's own corridor, and past the bench it may only rise at a grade the car can climb (`verge.climb`). Whatever the country was doing there is CUT where it would otherwise be a wall a car sliding off the road stops dead against, or a hillside the ground lattice drags up through the tarmac. The bench is a LATTICE CELL DIAGONAL wide (`verge.bench`, against `GROUND_CELL`) because that is the reach of the triangles the ground is drawn and driven on: pin every corner that could sit over a road, and no triangle can cut up through one. It is a CEILING and nothing else — a valley, a ford's dip and the ravine under a bridge are all still exactly as deep as the landscape made them. R23 gains a height clause from it: a branch standing tens of metres above the stage needs the room for the stage's cone to climb to it, or the hillside that carried it there is gone and the branch is in the air.
@@ -144,14 +144,16 @@ belong to the LAP and are driven through again on each one.
 
 ## Kerb placement (R26)
 
-Red-and-white kerbing is placed for a reason, and there are only four of
-them. A stage edged in stripes from end to end is a bobsleigh run with trees
+Kerbing is placed for a reason, and there are only four of them. A stage edged in stripes from end to end is a bobsleigh run with trees
 behind it; kerbing at the corners that earn it is a road with a rally on it,
 and it is also readable — a driver at 160 km/h has about a second to take in
 what the road is telling them, so the marking has to mean something.
 
-`engine/mapgen/kerbs.ts` decides WHERE (returning arc-span zones per side);
-`pwa/src/game/kerbs.ts` decides what stands there.
+`engine/mapgen/kerbs.ts` decides WHERE — arc-span zones per side, and the
+list of MARKERS those zones become; `pwa/src/game/kerbs.ts` decides what one
+looks like. The placement is engine-side because one of the markers is
+solid: the contact model collides the same list the renderer draws, so the
+slab that throws a cut apex is a slab the player could see coming.
 
 | Role       | Where it goes                                                           | What it says                                                                                      |
 | ---------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
@@ -168,9 +170,24 @@ the one hairpin reads from a long way out. Only corners past
 **What is built there depends on the surface.** Tarmac gets a low-profile
 continuous kerb running through the whole zone. Gravel does not: a poured
 concrete kerb down the side of a forest road is a lie, so a dirt stage is
-marked with a run of red-and-white marker posts at `kerb.postSpacing`, and
-anti-cut blocks at an apex where cutting is the temptation. Discrete objects
-with country between them, never a painted band.
+marked with a run of orange-and-white marker posts at `kerb.postSpacing`, and
+anti-cut blocks at an apex (`kerb.blockSpacing`) where cutting is the
+temptation. Discrete objects with country between them, never a painted band.
+
+Orange rather than the rally red the real thing is painted in, and the reason
+is what the colour SAYS at speed: red is this game's colour for something
+having gone wrong — the tape across a closed branch, the damage instrument,
+the marker on the map — so a corner lined in it reads as a reprimand for a
+line the player has not even taken yet.
+
+**A post and a block part company at the contact model.** A post stops
+nothing and never reaches the physics: the renderer knocks it flat off the
+same body box the engine would have used, like a marshal's cone. A block is
+SOLID, and the one piece of scenery in the game the car may hit with nothing
+breaking — it costs speed, rolls the body, shoves the car back out of the
+inside of the corner and thuds, and it never folds a panel
+(`TUNING.collision.kerb`, resolved by `clipKerbs`). Cutting an apex has to be
+paid for, not punished with the run.
 
 ## Rolling elevation
 

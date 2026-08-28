@@ -97,6 +97,12 @@ export type GameRenderer = {
    * heard elsewhere: the renderer knows WHEN and how far away, the audio
    * knows what that sounds like. */
   onThunder: (play: (clap: Clap) => void) => void;
+  /** ...and the same arrangement for the light things the car drives
+   * through — a marshal's cone, a marker post. Neither is an engine prop,
+   * so nothing in `step()` ever reports one: the renderer is where they are
+   * knocked over and therefore the only place that knows they made a noise.
+   * `speed` is how fast the piece left, m/s. */
+  onKnock: (play: (speed: number) => void) => void;
   /** Put a ghost on the road — the best run on this stage, replaying its
    * own game beside the player's. The renderer keeps the reference and
    * draws whatever it says every frame; null takes it off again. */
@@ -181,6 +187,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   chase.camera.layers.enable(TAG_LAYER);
 
   let world: World | null = null;
+  /** Where a knocked cone or marker post goes to be heard. Held across
+   * stages, because the world is rebuilt for every run and the wiring to
+   * the audio is not. */
+  let knockPlay: ((speed: number) => void) | null = null;
   /** The season the standing world was PLANTED in — the year's colours are
    * baked into its geometry, so this is what a re-light compares against
    * to know whether the ground it is lighting is still the right ground. */
@@ -791,7 +801,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // An endless run streams its world: the road chunks and terrain tiles
     // ahead get built here, the ones far behind get dropped.
     world?.sync(state, dt);
-    world?.update(state, dt);
+    world?.update(state, dt, knockPlay ?? undefined);
     celebration.update(dt);
     car?.update(state, dt);
     if (ghost && ghostCar) ghostCar.update(ghost, dt);
@@ -971,6 +981,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     resetMap: () => chase.resetMap(),
     setConditions,
     onThunder: environment.onThunder,
+    onKnock: (play) => {
+      knockPlay = play;
+    },
     setGhost,
     onGhostEvents,
     field,
