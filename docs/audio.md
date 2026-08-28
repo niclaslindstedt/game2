@@ -39,7 +39,7 @@ and hold instead of just stopping), filters SWEEP, and oscillators DISTORT.
 | `pwa/src/game/audio/bank-ui.ts`    | The interface's own sounds — a separate bank because the menu is on the startup path.                                                                                                                 |
 | `pwa/src/game/audio/route.ts`      | Which sound a `GameEvent` makes, and how big.                                                                                                                                                         |
 | `pwa/src/game/audio/engine-bed.ts` | The engine, as overlapping grains.                                                                                                                                                                    |
-| `pwa/src/game/audio/road-grain.ts` | The tyres, the wind and the drift's scrub.                                                                                                                                                            |
+| `pwa/src/game/audio/road-grain.ts` | The tyres, the wind, the weather and the drift's scrub.                                                                                                                                               |
 | `pwa/src/game/audio/drive-bed.ts`  | The scheduler, and the start lights' ticks.                                                                                                                                                           |
 | `pwa/src/game/audio/music.ts`      | The single player: which theme is up, and the per-track dynamic import.                                                                                                                               |
 | `pwa/src/game/audio/scores/`       | The scores themselves.                                                                                                                                                                                |
@@ -188,6 +188,29 @@ against `LAT_LIMIT` in `drive-bed.ts`): zero on a straight at any speed, zero at
 a standstill on full lock, largest exactly where a tyre is loudest. It is
 smoothed with a time constant rather than a per-frame fraction, so the bed
 responds the same way on a 40 Hz phone as on a 120 Hz display.
+
+### What the rain does to it
+
+Water does not add a layer to a surface, it changes what the surface IS, so
+every row of `SURFACES` has a twin in `WET_SURFACES` and the bed reads
+somewhere between the two (`surfaceUnder`, mixed by `RoadVoice.wet` — 0
+clear, 0.6 rain, 1 storm, from `WETNESS` in `drive-bed.ts`). Two things move
+in opposite directions on every wet row. The `grain` all but disappears — a
+wet stone does not rattle, and gravel in the rain is MUD — while the `level`
+goes UP, because the loudest thing about a wet road is the water being
+squeezed out from under the tread; the `corner` multipliers come down to pay
+for it, since a wet surface is loud whichever way the car is pointing. Wet
+tarmac is the one surface the rain makes brighter: a film of water the tread
+has to cut through, a hiss where the dry road has only its bass drumming.
+A wet tyre also stops SINGING — the squeal is rubber gripping and releasing
+against the road, and a film of water is precisely what stops that.
+
+The rain itself is a bed like any other, and the only one that has nothing to
+do with the car: it plays over a stationary car and over one in mid-air. Two
+layers — the sheet of it in the air (pink, highpassed at 2.6 kHz) and the
+patter of the drops striking the car (brown, a narrow band around 620 Hz) —
+both lifting with speed, because a car at 140 km/h is driving INTO the rain
+rather than being rained on.
 
 The **scrub** is the drift, and it is the loudest thing in the bed. On gravel it
 is proportional to `car.slide`, the engine's own measure of how far past

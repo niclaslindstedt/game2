@@ -167,7 +167,7 @@ Generated stages roll (`STAGE_RULES.elevation` — long climbs, medium rollers, 
 
 | Surface     | Effect                                                                                                                                                                                                                                               |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Gravel      | The baseline: full power, honest grip, dust off the rear when sideways                                                                                                                                                                               |
+| Gravel      | The baseline: full power, honest grip, dust off the rear when sideways — and a plume towed behind the car from 30 km/h up                                                                                                                            |
 | **Asphalt** | A third more lateral grip and a third of the breakaway angle: the corner that needed a slide is driven round, the drift has to be ASKED for and stays small when it comes — and it throws nothing at all until a tire is overwhelmed, then smokes it |
 | Water       | Fords and shallows: a splash on entry, heavy drag, reduced grip and power                                                                                                                                                                            |
 | Nature      | The open landscape off the road: loose grip, fast — up to ~150 km/h                                                                                                                                                                                  |
@@ -192,15 +192,41 @@ The tarmac sections are laid as long runs joined to the stage at planned
 junctions (R15/R17 in [track-generator.md](track-generator.md)), so a
 stretch of grip is an event in the stage rather than a texture swap.
 
+### The plume, and what the rain does to it
+
+A loose surface gives up two separate things and they are separate systems.
+The GRIT is thrown by the wheels — the rooster tail off a slide, the plume
+off the line, the scatter under braking — and it is over inside a second.
+The CLOUD is towed: the fine stuff the whole underside lifts, which does not
+arc anywhere. It starts at 30 km/h (`PLUME.from` in `pwa/src/game/dust.ts`,
+spawned by `plume.ts`) and thickens with pace the whole way to the top of
+the stage's speeds, and it is dragged along in the low pressure behind the
+car at a fraction of the car's own velocity — signed, so reversing tows it
+backwards. Off the road it takes the same `WILD_THROW` cut the grit does:
+turf holds together where a graded road does not.
+
+Rain takes it away completely. Water is what binds a loose surface, so
+there is no dust left to lift: what a wheel picks up in the wet is dark
+clods of mud (the `MUD` style, and `MUD_CLODS` in `ground-tint.ts`), thrown
+harder and on the ground again inside a second. The wet stage sounds
+different too — see [audio.md](audio.md).
+
 A sealed road has nothing lying on it to pick up, so it is also the one
 surface that throws nothing for ordinary driving, however hard it is being
 driven. What it gives instead is TIRE SMOKE, and only at the three moments a
 tire is genuinely overwhelmed: the wheels spinning up off the line, a
 committed drift (`car.drifting`, the settled angle — not `car.slide`, which
 moves in every corner), and braking hard from real speed. Sparingly at each
-— the policy is `TARMAC_SMOKE` in `pwa/src/game/dust.ts`, and the three
+— the policy is `TARMAC_SMOKE` in `pwa/src/game/dust.ts`, and the four
 `shot-tarmac-*` screenshot scenes are its acceptance test, one of which
 exists to show that flat out on tarmac leaves nothing behind the car.
+
+A tyre also COOKS. Smoke off a tyre that has only just let go is clean and
+white; one that has been sliding for a second or more is burning, and the
+cloud behind it goes black (`SOOT` in `pwa/src/game/ground-tint.ts` — the
+renderer keeps the heat, because it is the one thing about a tyre that is a
+history rather than an instant). The soot builds slowly on purpose: it is
+the reward for committing to a slide, not the price of turning the wheel.
 
 ## The road's cross-section
 

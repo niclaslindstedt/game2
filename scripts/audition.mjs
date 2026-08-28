@@ -300,8 +300,10 @@ const page = `<!doctype html>
 
   <h2>The road</h2>
   <p class="sub">
-    The continuous bed: the engine, the tyres, the wind and the drift. None of it is a clip — all
-    four are functions of the numbers below, so the only honest way to judge them is to move them.
+    The continuous bed: the engine, the tyres, the wind, the drift and the weather. None of it is a
+    clip — all five are functions of the numbers below, so the only honest way to judge them is to
+    move them. <b>Rain</b> is the one that changes what a surface IS rather than adding to it: take
+    gravel up to 1 and the stones stop rattling and start squelching.
   </p>
   <div class="panel">
     <div class="switches"><button id="road" class="primary" type="button">Start the car</button></div>
@@ -425,6 +427,7 @@ const CONTROLS = [
   ["corner", "Cornering", 0],
   ["slide", "Sideways", 0],
   ["wear", "Damage", 0],
+  ["wet", "Rain", 0],
 ];
 const value = { surface: "gravel", airborne: false };
 const sliders = document.getElementById("sliders");
@@ -504,6 +507,7 @@ roadBtn.addEventListener("click", () => {
           slide: value.slide,
           sideways: -value.slide * 10,
           airborne: value.airborne,
+          wet: value.wet,
         },
         nextAt,
       );

@@ -22,7 +22,10 @@ import {
 import { LAMP_MATERIAL, buildCar, type CarVisual } from "./car-mesh.ts";
 import { hoodEyeFor } from "./car-styles.ts";
 import {
+  AXLE,
   createDust,
+  MUD,
+  WET_THROW,
   LAUNCH,
   launchThrow,
   paceScale,
@@ -31,9 +34,11 @@ import {
   TIRE_SMOKE,
   WATER_FOAM,
   WILD_THROW,
+  type Dust,
   type DustTint,
 } from "./dust.ts";
-import { biomeFor } from "./biome.ts";
+import { groundTint, SOOT, sootySmoke, STONE_DUST } from "./ground-tint.ts";
+import { createPlume } from "./plume.ts";
 import { createEnvironment } from "./environment.ts";
 import { TRUNK_COLOR } from "./flora.ts";
 import { createFumes, EXHAUST } from "./fumes.ts";
@@ -52,13 +57,6 @@ import { buildWorld, type World } from "./world.ts";
 const MAP_FOG_NEAR = 1.15;
 const MAP_FOG_FAR = 2.2;
 
-/** Dry grit: the loose stuff lying on top of a graded road. */
-const GRIT = 0xb29268;
-/** Water, thrown as a blue sheet. */
-const SPRAY = 0x4fa0f0;
-/** Tire smoke — boiled off the rubber, so it is the one cloud in the game
- * that has nothing to do with the ground under the car. */
-const SMOKE = 0xd8d5cf;
 /** Water thrown by the car itself, rather than off a wheel. A displaced
  * mass of water is not one color: it is lake with white torn through it,
  * and the white is what makes a column read as a splash instead of a blue
@@ -70,29 +68,6 @@ const FOAM: DustTint = { base: 0xeaf5ff, fleck: 0xb6d6f0, fleckMix: 0.35 };
 /** How fast a car has to meet water for the splash to be as big as it
  * gets, m/s. */
 const SPLASH_FULL = 26;
-/** Off the road there is turf on top of the earth, and a wheel brings up
- * both: mostly torn grass with dark clods of the dirt under it. The green
- * is the biome's own meadow taken a shade down — a blade in the air is not
- * lit like the field it came out of — and the clods are earth, the one tone
- * the ground palette has no name for, because nothing is that color until
- * something digs it up. */
-const WILD_DUST: DustTint = {
-  base: new THREE.Color(biomeFor().ground.grass).multiplyScalar(0.86).getHex(),
-  fleck: 0x4a3520,
-  fleckMix: 0.28,
-};
-
-/** What a mountain gives instead. Above the tree line and on the steep
- * flanks there is no turf to tear — a wheel scrabbles on bedrock and throws
- * the stone itself, the biome's own rock with the darker shade of it
- * through the cloud. Lighter than the rock face it comes off, because
- * shattered grit catches the sky where a flat face does not. */
-const STONE_DUST: DustTint = {
-  base: new THREE.Color(biomeFor().ground.bedrock).multiplyScalar(1.06).getHex(),
-  fleck: biomeFor().ground.bedrockDark,
-  fleckMix: 0.32,
-};
-
 /** A trunk giving way: pale splintered wood with the bark's own brown torn
  * through it. Nothing else in the game throws wood, and a stone-grey burst
  * off a tree reads as the tree having been made of concrete. */
@@ -168,6 +143,14 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   // them instead of letting go under them.
   const smoke = createDust(TIRE_SMOKE);
   scene.add(smoke.points);
+  // The towed cloud, and the wet road's answer to it. Exactly one of the
+  // two is ever shown on a given stage — the weather decides which when
+  // the conditions are set — so the pair costs one draw call, not two.
+  const plume = createPlume();
+  scene.add(plume.points);
+  const mud = createDust(MUD);
+  mud.points.visible = false;
+  scene.add(mud.points);
   // Water the CAR throws, which is a different cloud from the sheet a
   // rolling wheel sprays: the column an entry displaces, and the froth it
   // leaves working on the surface afterwards.
@@ -230,6 +213,15 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
    * frame timing instead of with the throttle. */
   let accelSmooth = 0;
   let fumeClock = 0;
+  /** HOW HOT THE TIRES ARE, 0..1 — the soot in the tarmac smoke rides on
+   * it. Nothing in `GameState` carries it: heat is the one thing about a
+   * tire that is a HISTORY rather than an instant, so the renderer keeps
+   * it, building while the car is sliding and bleeding away when it is
+   * not. */
+  let rubberHeat = 0;
+  /** True while the ground is too wet to lift: set with the conditions,
+   * because the weather does not change inside a run. */
+  let wetGround = false;
   /** Beat for the water working around a hull that is going down. */
   let drownClock = 0;
 
@@ -256,6 +248,8 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     ghostCar?.setLights(environment.lampsLit());
     (dust.points.material as THREE.PointsMaterial).color.copy(tint);
     (smoke.points.material as THREE.PointsMaterial).color.copy(tint);
+    (plume.points.material as THREE.PointsMaterial).color.copy(tint);
+    (mud.points.material as THREE.PointsMaterial).color.copy(tint);
     (fumes.points.material as THREE.PointsMaterial).color.copy(tint);
     life.setTint(tint);
   };
@@ -324,6 +318,12 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     environment.apply(state.env);
     const wet = state.env.weather === "storm" ? 1 : state.env.weather === "rain" ? 0.55 : 0;
     rain.setIntensity(fxScale() > 0 ? wet : 0);
+    // Rain settles the stage. There is no cloud to tow once the surface is
+    // soaked — what the wheels lift is clods — so the two swap over here,
+    // once, rather than being decided per frame per particle.
+    wetGround = wet > 0;
+    plume.points.visible = !wetGround;
+    mud.points.visible = wetGround;
     applyRange();
     applyTint();
   };
@@ -449,20 +449,43 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     applyTint();
   };
 
-  /** What a wheel throws where. The road's is one tone of dry grit; the
-   * WILD's is two, because a verge is grass with earth under it — the wheel
-   * tears the turf and both come up together, mostly green with dark clods
-   * through it. But the wild is not one ground: a mountain flank has no turf
-   * on it, and green grit coming off bare rock is the tell. So off the road
-   * the cloud is chosen from the ground the car is actually standing on, by
-   * the same rule the terrain is PAINTED with, and a burst at a time rather
-   * than blended — a hillside going over to rock throws some of each, which
-   * reads as the ground changing instead of the effect switching. */
-  const groundDust = (state: GameState): number | DustTint => {
-    if (state.surface === "water") return SPRAY;
-    if (state.surface !== "nature") return GRIT;
-    const rock = rockAt(state.terrain.groundAt, state.car.x, state.car.z);
-    return Math.random() < rock ? STONE_DUST : WILD_DUST;
+  /** The ground under the car right now, as the tint anything thrown off
+   * it takes. The rock test is deferred: it is a terrain lookup, and only
+   * one of the branches ever asks for it. */
+  const groundDust = (state: GameState): number | DustTint =>
+    groundTint(state.surface, wetGround, () =>
+      rockAt(state.terrain.groundAt, state.car.x, state.car.z),
+    );
+
+  /** A burst off ALL FOUR contact patches at once — which is what a
+   * landing and a take-off are: four tyres meeting or leaving the ground
+   * together, not one event in the middle of the car. `total` is the whole
+   * burst and each wheel takes a quarter of it, so the count means the
+   * same thing it did when this came out of a single point. */
+  const atWheels = (
+    cloud: Dust,
+    state: GameState,
+    color: number | DustTint,
+    total: number,
+    spread: number,
+  ): void => {
+    const c = state.car;
+    const fwdX = Math.sin(c.heading);
+    const fwdZ = Math.cos(c.heading);
+    const rightX = Math.cos(c.heading);
+    const rightZ = -Math.sin(c.heading);
+    const each = Math.round(total / 4);
+    if (each <= 0) return;
+    for (const along of [AXLE.front, -AXLE.rear])
+      for (const side of [-AXLE.side, AXLE.side])
+        cloud.spawn(
+          c.x + fwdX * along + rightX * side,
+          c.y + AXLE.height,
+          c.z + fwdZ * along + rightZ * side,
+          color,
+          each,
+          spread,
+        );
   };
 
   const onEvents = (state: GameState, events: GameEvent[]): void => {
@@ -471,14 +494,8 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     for (const ev of events) {
       if (ev.type === "landing") {
         chase.kick(ev.clean ? 0.25 : 0.5);
-        dust.spawn(
-          c.x,
-          c.y + 0.2,
-          c.z,
-          groundDust(state),
-          Math.round((ev.clean ? 14 : 26) * fx),
-          4,
-        );
+        // Four tyres hitting the ground at once, and each of them throws.
+        atWheels(wetGround ? mud : dust, state, groundDust(state), (ev.clean ? 14 : 26) * fx, 3.5);
       } else if (ev.type === "splash") {
         // How much water the car moved. A ford taken at pace throws a
         // sheet off the nose; a car going into a lake throws a COLUMN, and
@@ -518,7 +535,8 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         spray.spawn(c.x, surface, c.z, WATER_DROPS, Math.round(46 * fx), 2.2);
         foam.spawn(c.x, surface, c.z, FOAM, Math.round(30 * fx), 2.4);
       } else if (ev.type === "takeoff") {
-        dust.spawn(c.x, c.y + 0.1, c.z, groundDust(state), Math.round(10 * fx), 3);
+        // The scuff the wheels leave on the lip on their way off it.
+        atWheels(wetGround ? mud : dust, state, groundDust(state), 10 * fx, 3);
       } else if (ev.type === "finish") {
         // R25 — the salute, sized by where the time placed. Fourth and
         // worse fire nothing, and `fire` knows it.
@@ -589,11 +607,27 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     const accel = dt > 0 ? (c.u - lastSpeed) / dt : 0;
     lastSpeed = c.u;
     accelSmooth += (accel - accelSmooth) * Math.min(1, 8 * dt);
+    // THE TOWED CLOUD, which is the other half of a loose surface and comes
+    // up on its own terms: not thrown by a wheel, so not part of the wheel
+    // logic below, and off entirely where the ground has nothing to give —
+    // a sealed road, water, or a stage the rain has settled.
+    const lifts = sealed || wetGround || state.surface === "water";
+    plume.update(state, dt, fx, lifts ? null : groundDust(state));
+
+    // How hot the tires are, which only tarmac has any use for. A tire
+    // cooks while it is sliding and cools the moment it hooks back up, and
+    // the soot in its smoke follows it up and down.
+    rubberHeat = Math.max(
+      0,
+      Math.min(1, rubberHeat + (sealed && c.drifting ? c.slide * SOOT.heat : -SOOT.cool) * dt),
+    );
     dustClock += dt;
     if (fx > 0 && !c.airborne && dustClock > (sealed ? TARMAC_SMOKE.every : 0.03)) {
       dustClock = 0;
-      const cloud = sealed ? smoke : dust;
-      const color = sealed ? SMOKE : groundDust(state);
+      // A wet stage throws clods where a dry one throws grit: same wheel
+      // logic, same tuning, different matter under it.
+      const cloud = sealed ? smoke : wetGround ? mud : dust;
+      const color = sealed ? sootySmoke(rubberHeat) : groundDust(state);
       // Smoke is boiled off the tire and left behind; grit is thrown by it.
       // So the wake it inherits is gentler, and it spreads instead of arcing.
       const wake = sealed ? 0.12 : 0.35;
@@ -614,21 +648,30 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       // than the road does. Neither applies to smoke, which is made of the
       // tire rather than the ground.
       const pace = sealed ? 1 : Math.max(paceScale(c.u), launch);
-      const thrown = sealed ? 1 : pace * (state.surface === "nature" ? WILD_THROW : 1);
+      const thrown = sealed
+        ? 1
+        : pace * (state.surface === "nature" ? WILD_THROW : 1) * (wetGround ? WET_THROW : 1);
       const grains = (count: number): number => {
         grainDebt += count * fx * thrown;
         const whole = Math.floor(grainDebt);
         grainDebt -= whole;
         return whole;
       };
-      /** One wheel's worth. `push` is a backward throw of the wheel's own,
-       * m/s, for the case where the car is not yet moving fast enough to
-       * carry its grains away for it. */
-      const rear = (side: number, count: number, spread: number, push = 0): void =>
+      /** How far forward of the car's middle the DRIVEN wheels are — the
+       * rear axle on everything but a front-driver, which spins up under
+       * its own nose. Only the launch cares: a scrubbing tyre throws
+       * whether or not anything is turning it, but a wheel LIT UP off the
+       * line is by definition one the engine is driving. */
+      const drivenAt = state.spec.drive === "fwd" ? AXLE.front : -AXLE.rear;
+      /** One wheel's worth, off `at` metres forward of the middle. `push`
+       * is a backward throw of the wheel's own, m/s, for the case where
+       * the car is not yet moving fast enough to carry its grains away
+       * for it. */
+      const wheel = (at: number, side: number, count: number, spread: number, push = 0): void =>
         cloud.spawn(
-          c.x - fwdX * 1.5 + rightX * side * 0.8,
-          c.y + 0.15,
-          c.z - fwdZ * 1.5 + rightZ * side * 0.8,
+          c.x + fwdX * at + rightX * side * AXLE.side,
+          c.y + AXLE.height,
+          c.z + fwdZ * at + rightZ * side * AXLE.side,
           color,
           grains(count),
           spread * pace,
@@ -641,8 +684,8 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
           // Off the line: the driven wheels are ahead of the car for a
           // moment, and that is the whole of it — it stops the instant
           // they hook up.
-          rear(-1, T.launch.puffs, T.spread);
-          rear(1, T.launch.puffs, T.spread);
+          wheel(drivenAt, -1, T.launch.puffs, T.spread);
+          wheel(drivenAt, 1, T.launch.puffs, T.spread);
         } else if (c.drifting) {
           // `drifting`, not `slide`: the readout is the settled ANGLE with
           // hysteresis behind it, so smoke comes up for the drift a player
@@ -650,10 +693,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
           // sliding tire on tarmac makes a few big puffs where gravel
           // throws grains, and they hang where they were made.
           const puffs = T.drift.puffs + Math.round(c.slide * 3);
-          rear(-1, puffs, T.spread);
-          rear(1, puffs, T.spread);
+          wheel(-AXLE.rear, -1, puffs, T.spread);
+          wheel(-AXLE.rear, 1, puffs, T.spread);
         } else if (c.braking && c.u > T.brake.speed) {
-          rear(Math.random() < 0.5 ? -1 : 1, T.brake.puffs, T.spread);
+          wheel(-AXLE.rear, Math.random() < 0.5 ? -1 : 1, T.brake.puffs, T.spread);
         }
       } else if (sideways || (state.offRoad && c.u > 6)) {
         // The drift plume also blows toward the slide, off the outside
@@ -661,11 +704,11 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         // the same speed a slide does — a car picking its way back to the
         // track at walking pace is not excavating anything.
         const perWheel = 4 + Math.round(c.slide * 5);
-        rear(-1, perWheel, 3.5);
-        rear(1, perWheel, 3.5);
+        wheel(-AXLE.rear, -1, perWheel, 3.5);
+        wheel(-AXLE.rear, 1, perWheel, 3.5);
       } else if (c.braking && c.u > 8) {
-        rear(-1, 4, 2.5);
-        rear(1, 4, 2.5);
+        wheel(-AXLE.rear, -1, 4, 2.5);
+        wheel(-AXLE.rear, 1, 4, 2.5);
       } else if (launch > 0) {
         // Both driven wheels, digging in and throwing straight back: the
         // plume that says the car LEFT rather than rolled away. As big as
@@ -674,12 +717,12 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         // cloud back up.
         const perWheel = 4 + Math.round(launch * 6);
         const push = LAUNCH.push * launch;
-        rear(-1, perWheel, 3, push);
-        rear(1, perWheel, 3, push);
+        wheel(drivenAt, -1, perWheel, 3, push);
+        wheel(drivenAt, 1, perWheel, 3, push);
       } else if (c.u > 15) {
         // Rolling kickup is loose-surface only: a sealed road has nothing
         // lying on it to pick up.
-        rear(Math.random() < 0.5 ? -1 : 1, 2, 1.6);
+        wheel(-AXLE.rear, Math.random() < 0.5 ? -1 : 1, 2, 1.6);
       }
     }
 
@@ -761,6 +804,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     }
 
     dust.update(dt);
+    mud.update(dt);
     smoke.update(dt);
     spray.update(dt);
     foam.update(dt);
@@ -897,6 +941,8 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     ghostCar?.dispose();
     dust.dispose();
     smoke.dispose();
+    plume.dispose();
+    mud.dispose();
     spray.dispose();
     foam.dispose();
     fumes.dispose();
