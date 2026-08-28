@@ -51,6 +51,35 @@ function revs(spec: CarSpec, car: CarState, speed: number): number {
   return clamp(speed / spec.gearTop[car.gear], 0, 1);
 }
 
+/** How much of the torque the driven axle spins AWAY rather than putting
+ * down, as a fraction of `gearAccel`. One driven axle carrying all the
+ * torque on a loose surface spins where four driven wheels hook up and go,
+ * and it spins worst exactly where the torque is highest: the bottom of the
+ * gear. This is the whole cost of a rear-drive launch on gravel, and it is
+ * gone by the time the gear runs out.
+ *
+ * It is a function rather than four lines inside `engineAccel` because the
+ * renderer needs the same number: wheels that are drawn spinning while the
+ * engine believes they are hooked up would be a lie the picture tells about
+ * the physics. `CarState.wheelspin` carries it out, normalized. */
+function wheelspinLoss(spec: CarSpec, car: CarState, surfaceGrip: number, rev: number): number {
+  const bite = clamp(spec.traction * T.drivetrain[spec.drive].bite * surfaceGrip, 0, 1);
+  return (1 - bite) * T.engine.wheelspin * spec.torque * (1 - rev);
+}
+
+/** The readout half of the same number, 0..1: how far the DRIVEN wheels are
+ * outrunning the road, with the pedal they answer to already in it. Only
+ * the renderer reads it — the handling has already spent the loss above. */
+function wheelspinShown(
+  spec: CarSpec,
+  car: CarState,
+  surfaceGrip: number,
+  throttle: number,
+): number {
+  const loss = wheelspinLoss(spec, car, surfaceGrip, revs(spec, car, car.u));
+  return clamp(loss / T.engine.wheelspin, 0, 1) * throttle;
+}
+
 function engineAccel(spec: CarSpec, car: CarState, surfaceGrip: number): number {
   // Full torque through most of the gear, smoothly tapering to zero at the
   // gear's top speed. The taper starts late (last ~18%) so the equilibrium
@@ -66,14 +95,10 @@ function engineAccel(spec: CarSpec, car: CarState, surfaceGrip: number): number 
   // ever adding any — two cars with the same gearing reach the same place by
   // different routes, and which route suits the stage is the point.
   const curve = clamp(1 + T.engine.torqueSpan * (spec.torque - 1) * (1 - 2 * rev), 0.2, 2);
-  // ...and how much of it reaches the ground. One driven axle carrying all
-  // the torque on a loose surface spins where four driven wheels hook up and
-  // go, and it spins worst exactly where the torque is highest: the bottom
-  // of the gear. This is the whole cost of a rear-drive launch on gravel,
-  // and it is gone by the time the gear runs out.
-  const bite = clamp(spec.traction * T.drivetrain[spec.drive].bite * surfaceGrip, 0, 1);
-  const spin = (1 - bite) * T.engine.wheelspin * spec.torque * (1 - rev);
-  return spec.gearAccel[car.gear] * taper * curve * (1 - spin);
+  // ...and how much of it reaches the ground.
+  return (
+    spec.gearAccel[car.gear] * taper * curve * (1 - wheelspinLoss(spec, car, surfaceGrip, rev))
+  );
 }
 
 function stepGearbox(
@@ -589,6 +614,13 @@ export function stepGrounded(
   const accel =
     engineAccel(spec, car, surfaceGrip) * input.throttle * surfacePower * shiftCut * damagePower;
   car.u += accel * dt;
+  // ...and how that same torque LOOKS, for the wheels the renderer draws.
+  // A tyre lights up over a few frames and hooks back up about as fast, so
+  // the readout is chased rather than snapped: a bouncing throttle would
+  // otherwise strobe the drawn wheels between spun-up and gripping. An
+  // engaging shift takes the pedal away, and with it the spin.
+  const spinning = wheelspinShown(spec, car, surfaceGrip, input.throttle * shiftCut);
+  car.wheelspin += (spinning - car.wheelspin) * clamp(T.engine.spinSettle * dt, 0, 1);
   if (car.reversing) {
     // Backing out. The brake's own retardation is off while this runs, or the
     // two would fight over the same pedal and the car would sit still. Once
@@ -968,6 +1000,11 @@ export function stepAirborne(
   car.steer += (input.steer - car.steer) * clamp(T.steering.rackRate * dt, 0, 1);
   car.braking = false;
   car.reversing = false; // nothing to back out of in the air
+  // Nothing is holding the driven wheels back off the ground, so they answer
+  // the throttle and nothing else — the undriven pair keeps turning at the
+  // speed the road handed them at take-off. Renderer readout.
+  const spinning = input.throttle > 0 ? 1 : 0;
+  car.wheelspin += (spinning - car.wheelspin) * clamp(T.engine.spinSettle * dt, 0, 1);
 
   car.yawRate += car.steer * T.air.yawAuthority * dt;
   // A bounce is not a flight: the car is settling onto the ground it has

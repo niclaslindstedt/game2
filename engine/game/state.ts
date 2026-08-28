@@ -140,6 +140,13 @@ export type CarState = {
   slide: number;
   /** True while `slide` reads as a drift at pace — dust, HUD, stats. */
   drifting: boolean;
+  /** How far the DRIVEN wheels are outrunning the road, 0..1 — 0 hooked up,
+   * 1 fully lit. Which wheels those are is the car's `drive` layout: an
+   * undriven wheel has nothing to spin it, so it only ever turns at the
+   * speed of the ground under it. Renderer readout (the handling has
+   * already spent the same number as torque that never reached the road);
+   * the physics never reads it back. */
+  wheelspin: number;
   /** How much weight is currently thrown across the car by a flick, 0..1.
    * The hands are only over the other side for a few frames; the LOAD they
    * threw is what the tires feel for the next half second, so it is held
