@@ -31,6 +31,7 @@
 // each difficulty actually does to the clock.
 
 import { clamp } from "../lib/math.ts";
+import type { GearboxMode } from "../game/defs/cars.ts";
 import { RALLY_BOT, type BotProfile } from "./bot.ts";
 
 /** The six things a rally driver can be good at, as this game's bot has
@@ -132,6 +133,26 @@ export function profileFor(skill: BotSkill): BotProfile {
     profile[knob] = novice + (ace - novice) * at;
   }
   return profile;
+}
+
+/** Points on `hands` from which a crew takes the gears themselves.
+ *
+ * The manual is the racing set — taller and pulling harder, for a beat of
+ * throttle at every shift (TUNING.gearbox) — and it is the crews with the
+ * car control who are trusted with it, so the box is part of a character
+ * rather than a rank: the one with the hands drives their own box at every
+ * difficulty, and a crew who spent their points on eyes and nerve leaves it
+ * to the automatic however quick they are. It is also why the head of the
+ * field gets FASTER as the difficulty climbs by more than their plan alone:
+ * a hard field is a field driving its own gearboxes.
+ *
+ * Set where the ladder READS: nobody on easy, the two crews who bought
+ * hands on medium, and six of the fourteen on hard. */
+export const MANUAL_HANDS = 5.5;
+
+/** Which box a crew drives, from what they are worth. */
+export function gearboxFor(skill: BotSkill): GearboxMode {
+  return skill.hands >= MANUAL_HANDS ? "manual" : "auto";
 }
 
 /** What a crew is WORTH, in points — the sum of its axes. */

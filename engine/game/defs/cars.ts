@@ -19,6 +19,8 @@
 // TUNING.surfaces.drag every car levels out a few m/s under its final
 // gear's ceiling on flat gravel.
 
+import { TUNING } from "./tuning.ts";
+
 /** Which box the driver is being handed. Not a property of the CAR: every
  * car in the roster can be driven either way, and which one is a player
  * setting carried on `CarState.gearbox` for the run. */
@@ -207,4 +209,27 @@ export function carById(id: string): CarSpec {
   const car = CARS.find((c) => c.id === id);
   if (!car) throw new Error(`unknown car: ${id}`);
   return car;
+}
+
+/** The catalog row as the chosen BOX delivers it — the spec a run actually
+ * drives (`GameState.spec`), and the one the pre-race card quotes.
+ *
+ * The gearbox is the driver's, not the car's, so it cannot be a column in
+ * `CARS`; folding it in here is what makes it a decision with a number on
+ * it instead of a label. The manual's taller ratios and its lower losses
+ * (TUNING.gearbox.set) become gearing and acceleration, and every reader
+ * downstream — car.ts's shift points and taper, the bot's target speed, the
+ * boost's overrun cap, the rev counter, the engine note, car-stats.ts —
+ * sees one spec and needs to know nothing about transmissions.
+ *
+ * The catalog row is returned untouched when the box asks for nothing, so
+ * the automatic drives the numbers as authored. */
+export function gearedSpec(spec: CarSpec, gearbox: GearboxMode): CarSpec {
+  const box = TUNING.gearbox.set[gearbox];
+  if (box.gearing === 1 && box.power === 1) return spec;
+  return {
+    ...spec,
+    gearTop: spec.gearTop.map((top) => top * box.gearing),
+    gearAccel: spec.gearAccel.map((accel) => accel * box.power),
+  };
 }

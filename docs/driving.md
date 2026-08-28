@@ -744,10 +744,26 @@ pins both the ranking and the spread.
 **The gearbox is the driver's, not the car's.** Every car in the roster takes
 either box; which one is a player setting — offered on the pre-race card
 where the car is chosen, and again under OPTIONS → CONTROLS — carried for
-the run on `CarState.gearbox` and defaulting to the automatic. A manual
-shift cuts throttle briefly while it engages. The bot shifts by the same
-thresholds the auto box uses, so both are simulated fairly (see
-[simulation.md](simulation.md)).
+the run on `CarState.gearbox` and defaulting to the automatic. The bot
+shifts a manual by the same thresholds the auto box uses, so both are
+simulated fairly (see [simulation.md](simulation.md)).
+
+**The box is a TRADE, and it has numbers on it** (`TUNING.gearbox.set`). The
+automatic is the road box: the catalog's ratios, taken for you, never
+fluffed. The manual is the racing set — every gear 6% taller and pulling 5%
+harder, worth about **+6% top speed in any car** (204 → 216 km/h in the
+Vireo, 242 → 256 in the Kestrel) — paid for with `shiftCut` (0.1 s of
+throttle) at every shift the driver now has to take themselves. Off the line
+the two are within a tenth of each other to 100 km/h, and which way depends
+on how many shifts the car needs to get there.
+
+`gearedSpec(spec, gearbox)` (`defs/cars.ts`) folds the box into the run's
+`GameState.spec` once, at `createGame`. Everything downstream — the shift
+points, the taper, the bot's target speed, the boost's overrun cap, the rev
+counter, the engine note, the pre-race card's spec sheet — reads one spec
+and knows nothing about transmissions. Both boxes are multipliers on the
+same catalog row, so no car is handed a better box than another and the
+roster's spread stays the roster's.
 
 **Balance is measured, not asserted.** `npm run sim -- --sweep` races the
 whole roster over five stage archetypes and ranks them per archetype; one

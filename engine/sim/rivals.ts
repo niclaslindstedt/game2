@@ -21,7 +21,15 @@
 // cannot describe in a sentence is a crew that is not actually different
 // from the one above it.
 
-import { budgetFor, profileFor, spend, type BotSkill, type Difficulty } from "./skill.ts";
+import type { GearboxMode } from "../game/defs/cars.ts";
+import {
+  budgetFor,
+  gearboxFor,
+  profileFor,
+  spend,
+  type BotSkill,
+  type Difficulty,
+} from "./skill.ts";
 import type { BotProfile } from "./bot.ts";
 
 /** Seconds between cars leaving the start control. One minute's interval is
@@ -232,6 +240,10 @@ export type RivalEntry = {
   number: number;
   skill: BotSkill;
   profile: BotProfile;
+  /** The box this crew drives — the hands they were given, not the car
+   * (`gearboxFor`). Whoever enters them is expected to hand it to
+   * `createGame`, or the crew drives the road box by default. */
+  gearbox: GearboxMode;
 };
 
 /** The player's own start number — last car on the road (R29). */
@@ -246,6 +258,12 @@ export function rivalField(difficulty: Difficulty): RivalEntry[] {
     .sort((a, b) => b.standing - a.standing)
     .map((crew, index) => {
       const skill = spend(budgetFor(difficulty, crew.standing), crew.weights);
-      return { crew, number: index + 1, skill, profile: profileFor(skill) };
+      return {
+        crew,
+        number: index + 1,
+        skill,
+        profile: profileFor(skill),
+        gearbox: gearboxFor(skill),
+      };
     });
 }

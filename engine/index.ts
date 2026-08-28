@@ -62,6 +62,7 @@ export {
 export {
   CARS,
   carById,
+  gearedSpec,
   type CarSpec,
   type DriveLayout,
   type GearboxMode,
@@ -164,8 +165,10 @@ export {
   SKILL_AXES,
   SKILL_MAX,
   budgetFor,
+  gearboxFor,
   profileFor,
   skillPoints,
+  MANUAL_HANDS,
   spend,
   type BotSkill,
   type Difficulty,

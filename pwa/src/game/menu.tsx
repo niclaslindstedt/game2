@@ -222,8 +222,9 @@ export function GearboxRow({
     <div className="menu-gearbox">
       <OptionRow label={label} options={GEARBOX_OPTIONS} value={gearbox} onPick={onGearbox} />
       <div className="opt-note">
-        Manual holds the gear you chose — quicker in hands that keep the engine on song, and one
-        more thing to get wrong. It applies to every car in the roster.
+        The manual is the racing set: taller gears and more of the engine reaching the road, worth
+        about 6% more top speed in any car — paid for with a beat of throttle at every shift, and a
+        gear you have to pick yourself. The automatic never fluffs one.
       </div>
     </div>
   );

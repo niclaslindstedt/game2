@@ -315,6 +315,9 @@ export type DrownState = {
 
 export type GameState = {
   seed: number;
+  /** The car as the run's GEARBOX delivers it — the catalog row with the
+   * chosen box's ratios and losses already in it (`gearedSpec`). Read this,
+   * never `carById`, for anything that cares how fast the car goes. */
   spec: CarSpec;
   track: Track;
   /** The landscape around the road — the ground the car rides once it
