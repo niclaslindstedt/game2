@@ -1204,6 +1204,12 @@ if (only.length === 0 || only.some((f) => "shot-campaign shot-start".includes(f)
   // and nothing else, so the ends are waited for rather than timed. The
   // middle frame is the one honest timeout in the scene, and it only has to
   // land somewhere in the sweep.
+  //
+  // It is also the one deterministic look at a NAME TAG (name-tag.ts): car
+  // 14 is stood on the line a few metres away wearing its plate. Mid-stage
+  // there is no honest scene for one — the stagger keeps the field hundreds
+  // of metres apart, so whether anybody is close enough and in sight at a
+  // given clock reading is a different answer on every machine.
   await page.waitForSelector(".hud-start-shot", { timeout: FINISH_WAIT });
   await page.screenshot({ path: join(outDir, "shot-start-open.png") });
   console.log("previews/shot-start-open.png");
