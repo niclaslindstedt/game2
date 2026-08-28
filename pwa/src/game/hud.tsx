@@ -174,6 +174,9 @@ type HudProps = {
   live: LiveRun;
   onPause: () => void;
   onCamera: () => void;
+  /** Take a picture. Null where there is none to take — the player has
+   * switched screenshots off. */
+  onShot: (() => void) | null;
   /** The stage after this one, once this one is over — null on a run with
    * nowhere to go on to (Roam, and the end of the ladder). */
   nextStage: NextStage | null;
@@ -916,6 +919,19 @@ function CameraGlyph() {
   );
 }
 
+/** The shutter's glyph: a camera body with its lens, and the flash hump on
+ * the shoulder. A camera and not a circle, because a round button on the
+ * top bar next to a round-ish camera button is two of the same thing. */
+function ShutterGlyph() {
+  return (
+    <svg className="hud-glyph" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M 9 3 h 6 l 1.2 2.2 H 20 a 2 2 0 0 1 2 2 v 11 a 2 2 0 0 1 -2 2 H 4 a 2 2 0 0 1 -2 -2 v -11 a 2 2 0 0 1 2 -2 h 3.8 Z" />
+      <circle cx="12" cy="13" r="4.4" fill="#123069" />
+      <circle cx="12" cy="13" r="2.3" />
+    </svg>
+  );
+}
+
 /** R29 — where the run stands in the field. Only two numbers, and only one
  * of them is big: the place is what is read at speed, the field size is the
  * caption that makes it mean something. It holds its value between split
@@ -971,6 +987,7 @@ export function Hud({
   touchLayout,
   onPause,
   onCamera,
+  onShot,
   nextStage,
   onRetry,
   onRetire,
@@ -1016,6 +1033,23 @@ export function Hud({
           {show.timer && split && snap.phase === "racing" && <SplitBoard split={split} />}
         </div>
         <div className="hud-actions pointer-events-auto">
+          {/* TOUCH ONLY, and that is the whole of its case: a device with a
+              keyboard already has the bind, and a fourth thing on the one
+              row a thumb reaches for mid-stage is clutter for somebody who
+              does not need it. Without this button the feature simply could
+              not be REACHED on a phone — everything else about it already
+              worked there. */}
+          {onShot && thumbs && (
+            <button
+              type="button"
+              className="hud-mini hud-mini-icon"
+              onClick={onShot}
+              title="Screenshot"
+              aria-label="Take a screenshot"
+            >
+              <ShutterGlyph />
+            </button>
+          )}
           {show.cameraButton && (
             <button
               type="button"

@@ -49,6 +49,7 @@ import {
 } from "./championship.ts";
 import { ResultsModal } from "./results-table.tsx";
 import { CarSetupPage } from "./menu-car.tsx";
+import { GalleryPage } from "./menu-gallery.tsx";
 import { DebugLogPage, DeveloperPage } from "./menu-dev.tsx";
 import { DIFFICULTY_OPTIONS, MenuHead, OptionRow, type RaceSettings } from "./menu.tsx";
 import { OptionsPage, type OptionsTab } from "./menu-options.tsx";
@@ -69,6 +70,7 @@ export type MenuPage =
    * what decides which grid BACK returns to. */
   | { page: "car"; levelId: string; mode: "campaign" | "timetrial" }
   | { page: "scores" }
+  | { page: "gallery" }
   | { page: "roam" }
   | { page: "options"; tab: OptionsTab }
   | { page: "developer" }
@@ -272,6 +274,14 @@ function RootPage({
         <button type="button" className="menu-item" onClick={() => onNavigate({ page: "roam" })}>
           ROAM
           <span className="menu-item-sub">Any seed, any length — drive whatever it builds</span>
+        </button>
+        <button
+          type="button"
+          className="menu-item menu-item-quiet"
+          onClick={() => onNavigate({ page: "gallery" })}
+        >
+          GALLERY
+          <span className="menu-item-sub">The pictures you took, to look at and send on</span>
         </button>
         <button
           type="button"
@@ -609,6 +619,7 @@ const DEPTH: Record<MenuPage["page"], number> = {
   campaign: 1,
   timetrial: 1,
   roam: 1,
+  gallery: 1,
   options: 1,
   developer: 1,
   location: 2,
@@ -753,6 +764,9 @@ export function MainMenu(props: MainMenuProps) {
           />
         )}
         {page.page === "scores" && <ScoresPage progress={props.progress} onNavigate={navigate} />}
+        {page.page === "gallery" && (
+          <GalleryPage settings={props.settings} onBack={() => navigate({ page: "root" })} />
+        )}
         {roam && (
           <RoamPage
             race={props.race}

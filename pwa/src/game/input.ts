@@ -25,7 +25,7 @@ import { DEFAULT_KEYS, type KeyAction, type KeyBindings } from "./settings.ts";
 
 /** The presses the app reacts to rather than the car: they leave, reload or
  * reframe the run instead of driving it. */
-export type InputAction = "restart" | "menu" | "camera" | "pause";
+export type InputAction = "restart" | "menu" | "camera" | "pause" | "screenshot";
 
 export type InputManager = {
   /** Produce this step's input; advances steering smoothing by `dt`. */
@@ -224,7 +224,12 @@ export function createInput(target: Window = window): InputManager {
       if (action === "shiftUp") shiftUp = true;
       else if (action === "shiftDown") shiftDown = true;
       else if (action === "reset") reset = true;
-      else if (action === "restart" || action === "camera" || action === "pause") {
+      else if (
+        action === "restart" ||
+        action === "camera" ||
+        action === "pause" ||
+        action === "screenshot"
+      ) {
         actionHandler?.(action);
       } else if (action === "menu") actionHandler?.("menu");
       if (SWALLOWED.includes(action)) e.preventDefault();

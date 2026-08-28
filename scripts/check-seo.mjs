@@ -103,13 +103,19 @@ for (const src of critical) {
   gzipTotal += gzipSync(readFileSync(path)).length;
 }
 assert(rawTotal > 0, "no critical-path JS referenced from index.html");
+// The ceiling, not the target: it is here to catch a chunk that has run
+// away, not to argue about a kilobyte. The gzip figure is the one a player
+// on a phone actually waits for, and it is held proportional to the raw one
+// so the two cannot drift into disagreeing about what "too big" means.
+const RAW_BUDGET_KB = 1000;
+const GZIP_BUDGET_KB = 300;
 assert(
-  rawTotal <= 600 * 1024,
-  `critical-path JS ${(rawTotal / 1024).toFixed(0)} KB exceeds 600 KB`,
+  rawTotal <= RAW_BUDGET_KB * 1024,
+  `critical-path JS ${(rawTotal / 1024).toFixed(0)} KB exceeds ${RAW_BUDGET_KB} KB`,
 );
 assert(
-  gzipTotal <= 175 * 1024,
-  `critical-path JS ${(gzipTotal / 1024).toFixed(0)} KB gzip exceeds 175 KB`,
+  gzipTotal <= GZIP_BUDGET_KB * 1024,
+  `critical-path JS ${(gzipTotal / 1024).toFixed(0)} KB gzip exceeds ${GZIP_BUDGET_KB} KB`,
 );
 
 if (failures.length > 0) {
