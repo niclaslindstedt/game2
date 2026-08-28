@@ -401,14 +401,43 @@ body {
 
 /* The start gantry: a black bar of lamps on the stage line, the way a rally
    start is actually signalled. Sized off the viewport's short side so it
-   reads the same on a phone held up as on a desktop. */
+   reads the same on a phone held up as on a desktop.
+
+   It hangs ABOVE the middle of the screen, because the middle of the screen
+   is where the car is: the chase camera puts the roof almost exactly on the
+   centre line, and a bank of lamps parked there reads as a light pod bolted
+   to the car rather than as a gantry over the road. Up in the band between
+   the car and the START banner it is where the eye already is on the grid —
+   looking up the stage — and it is where the real thing hangs. Taken out of
+   the centre column's flow to get there; the finish card, which is the only
+   other thing in that column, is never up at the same time. Centred with
+   auto margins rather than a translate, because lights-out pops the bar with
+   a `transform` and a centring transform is exactly what that would eat. */
 .hud-lights {
+  position: absolute;
+  /* Wide, the banner is up near the top of the frame and the band under it
+     is deep; portrait crops that band to a strip, so the bar sits lower to
+     stay inside it — see the portrait override further down. */
+  top: 33%;
+  left: 0;
+  right: 0;
+  width: fit-content;
+  margin-inline: auto;
   display: flex;
   gap: clamp(0.5rem, 2.2vmin, 1.3rem);
   padding: clamp(0.5rem, 2vmin, 1.1rem) clamp(0.7rem, 2.6vmin, 1.5rem);
   border: 0.15rem solid rgb(255 255 255 / 14%);
   border-radius: 999px;
   background: rgb(6 12 24 / 82%);
+}
+
+/* A phone held up sees a tall, narrow slice of the same shot: the banner
+   hangs lower and the car's roof is higher, leaving a strip rather than a
+   band between them. The bar drops to the middle of THAT. */
+@media (orientation: portrait) {
+  .hud-lights {
+    top: 42%;
+  }
 }
 
 /* An unlit lamp is a dead bulb behind glass, not a hole: it has to be
