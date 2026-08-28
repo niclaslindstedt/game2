@@ -89,7 +89,8 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | A piece of MUSIC                                            | `pwa/src/game/audio/scores/` — the `soundtrack` skill                                                                     |
 | HUD / touch controls                                        | `pwa/src/game/hud.tsx` + `pwa/src/styles.css` (a thumb zone's grip on a finger: `thumb-guard.ts`)                         |
 | Input mapping                                               | `pwa/src/game/input.ts` (bindings in `settings.ts`)                                                                       |
-| Main menu pages / routing                                   | `pwa/src/game/main-menu.tsx` (+ `menu-roam`, `menu-options`)                                                              |
+| Main menu pages / routing                                   | `pwa/src/game/main-menu.tsx` (+ `menu-roam`, `menu-options`, `menu-car`)                                                  |
+| The pre-race card: car, spec sheet, gearbox                 | `pwa/src/game/menu-car.tsx`; the numbers on it in `car-stats.ts` (derived from the catalog)                               |
 | Campaign stages, locations, unlocks                         | `pwa/src/game/campaign.ts`                                                                                                |
 | The points a stage pays, and what opens the next location   | `pwa/src/game/championship.ts`; the sheet is drawn by `results-table.tsx`                                                 |
 | The time trial's high score board and its initials          | `pwa/src/game/scores.ts` (storage) + `score-board.tsx` / `hud-initials.tsx`                                               |

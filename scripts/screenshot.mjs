@@ -855,6 +855,33 @@ for (const [name, viewport] of [
   );
 }
 
+// The pre-race card: the stage picked, the car being chosen against its
+// spec sheet. Three shapes, because the sheet's two columns collapse to one
+// on a phone and the turntable has to keep its share of a 390px-tall
+// landscape screen.
+for (const [name, viewport] of [
+  ["shot-menu-car", { width: 1280, height: 720 }],
+  ["shot-menu-car-portrait", { width: 390, height: 844 }],
+  ["shot-menu-car-landscape", { width: 844, height: 390 }],
+]) {
+  await capture(
+    name,
+    viewport,
+    async (page) => {
+      await menuUp(page);
+      await page.getByText("CAMPAIGN", { exact: false }).first().click();
+      await page.waitForTimeout(300);
+      await page.locator(".menu-location").first().click();
+      await page.waitForTimeout(600);
+      await page.locator(".menu-level-open").first().click();
+      // The turntable is a dynamic import that builds its own body: the
+      // card is up long before there is a car standing on it.
+      await page.waitForTimeout(3000);
+    },
+    { menu: "1" },
+  );
+}
+
 // Roam: the split view, with the stage drawn into its own pane.
 for (const [name, viewport] of [
   ["shot-menu-roam", { width: 1280, height: 720 }],
@@ -1163,6 +1190,9 @@ if (only.length === 0 || only.some((f) => "shot-campaign shot-start".includes(f)
   await page.screenshot({ path: join(outDir, "shot-campaign-stages.png") });
   console.log("previews/shot-campaign-stages.png");
   await page.getByText("Loggers' Run", { exact: false }).first().click();
+  // A stage press opens the pre-race card, not the stage: the car and the
+  // gearbox are chosen there, and START is what begins the run.
+  await page.getByRole("button", { name: "START" }).click();
   // THE ESTABLISHING SHOT, which only exists here for the same reason the
   // position board does: it is the crew in front LEAVING, and there is only
   // a crew in front in a campaign field. Three moments, because what has to

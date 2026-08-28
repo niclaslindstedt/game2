@@ -1965,6 +1965,37 @@ body {
   background: rgb(255 255 255 / 20%);
 }
 
+/* The page head: the way back and what the page IS, on ONE row. Stacked,
+   those are three rows of chrome above the content — on the stage grid that
+   is a row of boxes pushed off the bottom of a laptop screen for no
+   information at all.
+
+   The button is centred against the whole text block rather than against
+   the title, so a head with a subtitle and one without both look aimed. */
+.menu-head {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.6rem, 2.5vmin, 1.1rem);
+}
+
+.menu-head .menu-back {
+  align-self: center;
+  flex: none;
+}
+
+.menu-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+/* Loose in a card the subtitle pulls itself up under the title against the
+   card's own row gap; inside the head that gap is already gone. */
+.menu-head .menu-sub {
+  margin-top: 0;
+}
+
 .menu-section {
   display: flex;
   flex-direction: column;
@@ -2329,6 +2360,142 @@ a.menu-version:focus-visible {
   font-size: clamp(0.55rem, 1.8vmin, 0.7rem);
   letter-spacing: 0.22em;
   opacity: 0.65;
+}
+
+/* ── The pre-race card ───────────────────────────────────────────────────
+   The car on its stand beside its spec sheet. Two columns while the card is
+   wide enough for both to be read, one when it is not — `auto-fit` does that
+   off the CARD's width rather than the viewport's, which is what actually
+   decides whether the sheet fits (the card is capped at 52rem however wide
+   the screen gets). */
+
+.car-setup {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: clamp(0.6rem, 2.5vmin, 1.2rem);
+  align-items: start;
+}
+
+/* The stand carries this card rather than sitting under a stage grid as a
+   row, so it gets the height to be a car and not a thumbnail. Specificity
+   over the shared `.car-pick-stage` rule, which is sized for the row. */
+.car-setup .car-pick-stage {
+  height: clamp(8rem, 26vmin, 13rem);
+}
+
+.car-spec {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.car-spec-blurb {
+  font-size: clamp(0.62rem, 2.1vmin, 0.82rem);
+  font-style: normal;
+  font-weight: 500;
+  line-height: 1.3;
+  opacity: 0.85;
+}
+
+/* The hard numbers. They flow into as many columns as the panel is wide
+   enough for rather than sitting on a fixed grid: at one column per fact on
+   a phone this is four short lines, and four short lines is fine. */
+.car-spec-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr));
+  gap: 0.35rem;
+}
+
+.car-spec-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+}
+
+.car-spec-fact-label {
+  font-size: clamp(0.5rem, 1.6vmin, 0.62rem);
+  letter-spacing: 0.14em;
+  opacity: 0.65;
+}
+
+.car-spec-fact-value {
+  font-size: clamp(0.72rem, 2.4vmin, 0.95rem);
+  letter-spacing: 0.04em;
+  color: var(--hud-good);
+}
+
+.car-spec-bars {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0.3rem 0.6rem;
+}
+
+.car-spec-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.car-spec-bar-label {
+  font-size: clamp(0.48rem, 1.55vmin, 0.6rem);
+  letter-spacing: 0.14em;
+  opacity: 0.7;
+}
+
+.car-spec-bar-track {
+  display: block;
+  height: 0.4rem;
+  border-radius: 0.2rem;
+  background: rgb(255 255 255 / 14%);
+  overflow: hidden;
+}
+
+.car-spec-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--hud-good);
+}
+
+.car-spec-note {
+  font-size: clamp(0.5rem, 1.65vmin, 0.64rem);
+  font-style: normal;
+  font-weight: 500;
+  opacity: 0.55;
+}
+
+.menu-gearbox {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+/* A phone held sideways. START has to be on screen without a drag, so the
+   two footnotes go: the bars and the two boxes say what they say, and a
+   sentence nobody can see is not an explanation. The stand goes back to the
+   row's height — the shared rule is out-specified above, so the override
+   has to name the same two classes. */
+@media (orientation: landscape) and (max-height: 34rem) {
+  .car-setup {
+    gap: 0.6rem;
+  }
+
+  .car-setup .car-pick-stage {
+    height: clamp(4.5rem, 20vh, 6rem);
+  }
+
+  .car-spec {
+    gap: 0.35rem;
+  }
+
+  .car-spec-bars {
+    gap: 0.2rem 0.5rem;
+  }
+
+  .car-spec-note,
+  .menu-gearbox .opt-note {
+    display: none;
+  }
 }
 
 /* ── Roam ────────────────────────────────────────────────────────────────

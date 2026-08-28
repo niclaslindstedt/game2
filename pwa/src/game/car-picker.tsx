@@ -12,6 +12,7 @@ import { useEffect, useRef } from "react";
 import { CARS, carById } from "@engine";
 
 import type { CarTurntable } from "./car-turntable.ts";
+import { DRIVE_LABELS } from "./car-stats.ts";
 import { DEV_TAPS, DEV_TAP_WINDOW_MS } from "./settings.ts";
 
 export function CarPicker({
@@ -118,9 +119,13 @@ export function CarPicker({
         </button>
       </div>
       <span className="car-pick-name">{spec.name.toUpperCase()}</span>
-      {/* The drivetrain is a label, not a handling difference — but it is
-          the one thing about a rally car a player expects to be told. */}
-      <span className="car-pick-drive">{spec.drive.toUpperCase()}</span>
+      {/* Which wheels are driven is REAL physics here (TUNING.drivetrain),
+          and it is the first thing about a rally car a player wants told.
+          Three letters on the card, the words behind them on hover, for
+          everyone who has never had to know them. */}
+      <span className="car-pick-drive" title={DRIVE_LABELS[spec.drive].long}>
+        {DRIVE_LABELS[spec.drive].short}
+      </span>
     </div>
   );
 }

@@ -4,12 +4,18 @@
 // before a run starts hangs off here:
 //
 //   Campaign   → a location (Taiga) → its stages, each unlocked by the one
-//                before it.
+//                before it → the car (menu-car).
 //   Time trial → the same stages, behind a stricter gate: a stage opens
 //                here once it has been FINISHED, because a time is something
 //                you chase on a road you have already driven to the end.
+//                Then the same car card.
 //   Roam       → any seed at all, previewed as the map itself (menu-roam).
 //   Options    → HUD, video and controls (menu-options).
+//
+// Picking a stage does not start it: both grids hand off to the pre-race
+// card, which is where the car and the gearbox are chosen and where START
+// is. A road and a car are two decisions, and asking for both on one screen
+// is what buried the car picker under six stage boxes.
 //
 // The pages are a plain tagged union rather than a router: there is no URL
 // to keep in step, and the whole menu is one component tree over one canvas.
@@ -23,6 +29,7 @@ import {
   LOCATIONS,
   PODIUM,
   bestPlace,
+  findLevel,
   levelCompleted,
   levelLaps,
   levelUnlocked,
@@ -31,7 +38,6 @@ import {
   type CampaignLocation,
   type CampaignProgress,
 } from "./campaign.ts";
-import { CarPicker } from "./car-picker.tsx";
 import {
   championshipWon,
   locationUnlocked,
@@ -42,8 +48,9 @@ import {
   type Championship,
 } from "./championship.ts";
 import { ResultsModal } from "./results-table.tsx";
+import { CarSetupPage } from "./menu-car.tsx";
 import { DebugLogPage, DeveloperPage } from "./menu-dev.tsx";
-import { DIFFICULTY_OPTIONS, OptionRow, type RaceSettings } from "./menu.tsx";
+import { DIFFICULTY_OPTIONS, MenuHead, OptionRow, type RaceSettings } from "./menu.tsx";
 import { OptionsPage, type OptionsTab } from "./menu-options.tsx";
 import { unlockAudio } from "./audio/bus.ts";
 import { playUi } from "./audio/ui.ts";
@@ -57,6 +64,10 @@ export type MenuPage =
   | { page: "campaign" }
   | { page: "location"; locationId: string }
   | { page: "timetrial" }
+  /** The pre-race card for one stage — the car, its spec sheet, the
+   * gearbox and START. `mode` is how the stage will be entered, and it is
+   * what decides which grid BACK returns to. */
+  | { page: "car"; levelId: string; mode: "campaign" | "timetrial" }
   | { page: "scores" }
   | { page: "roam" }
   | { page: "options"; tab: OptionsTab }
@@ -111,14 +122,6 @@ function VersionStamp() {
     >
       {label} · {sha}
     </a>
-  );
-}
-
-function BackButton({ onClick, label }: { onClick: () => void; label: string }) {
-  return (
-    <button type="button" className="menu-back" onClick={onClick}>
-      ‹ {label}
-    </button>
   );
 }
 
@@ -236,30 +239,6 @@ function LevelGrid({
   );
 }
 
-/** The car, on every page that starts a stage. The campaign's conditions
- * are authored into each level, but the car is always the player's call.
- * The chassis is also where the developer menu is hidden. */
-function CarRow({
-  race,
-  onRace,
-  onDeveloper,
-}: {
-  race: RaceSettings;
-  onRace: (r: RaceSettings) => void;
-  onDeveloper: () => void;
-}) {
-  return (
-    <div className="menu-row">
-      <span className="menu-label">CAR</span>
-      <CarPicker
-        carId={race.carId}
-        onPick={(carId) => onRace({ ...race, carId })}
-        onDeveloper={onDeveloper}
-      />
-    </div>
-  );
-}
-
 function RootPage({
   developer,
   onNavigate,
@@ -328,9 +307,12 @@ function CampaignPage({
 }) {
   return (
     <div className="menu-card">
-      <BackButton label="MAIN MENU" onClick={() => onNavigate({ page: "root" })} />
-      <div className="menu-title">CAMPAIGN</div>
-      <div className="menu-sub">Pick a location</div>
+      <MenuHead
+        back={() => onNavigate({ page: "root" })}
+        backLabel="MAIN MENU"
+        title="CAMPAIGN"
+        sub="Pick a location"
+      />
       <div className="menu-locations">
         {LOCATIONS.map((location, index) => {
           const cleared = location.levels.filter((l) => progress.cleared.includes(l.id)).length;
@@ -380,7 +362,9 @@ function CampaignPage({
 /** R30 — THE SEASON PANEL. The location's table is the thing the player is
  * actually playing for once the stages are open, so it sits on the location
  * page with the three presses it is worth: pick the season back up, read the
- * whole table, or tear it up and start again.
+ * whole table, or tear it up and start again. CONTINUE goes to the same
+ * pre-race card the grid does — it names the stage, and the car is still
+ * a decision.
  *
  * CONTINUE walks FORWARD first — the next stage never driven — and only then
  * back to the first stage not yet WON. That is the shape of a points
@@ -390,13 +374,13 @@ function SeasonPanel({
   location,
   progress,
   season,
-  onPlayLevel,
+  onPick,
   onReset,
 }: {
   location: CampaignLocation;
   progress: CampaignProgress;
   season: Championship;
-  onPlayLevel: (level: CampaignLevel, mode: PlayMode) => void;
+  onPick: (level: CampaignLevel) => void;
   onReset: (locationId: string) => void;
 }) {
   const [table, setTable] = useState(false);
@@ -434,14 +418,7 @@ function SeasonPanel({
       )}
       <div className="menu-season-acts">
         {next && (
-          <button
-            type="button"
-            className="menu-opt menu-season-go"
-            onClick={() => {
-              playUi("start");
-              onPlayLevel(next, "campaign");
-            }}
-          >
+          <button type="button" className="menu-opt menu-season-go" onClick={() => onPick(next)}>
             CONTINUE: {next.name.toUpperCase()}
           </button>
         )}
@@ -498,9 +475,7 @@ function LocationPage({
   race,
   onRace,
   onNavigate,
-  onPlayLevel,
   onSeasonReset,
-  onDeveloper,
 }: {
   locationId: string;
   progress: CampaignProgress;
@@ -508,65 +483,63 @@ function LocationPage({
   race: RaceSettings;
   onRace: (race: RaceSettings) => void;
   onNavigate: (page: MenuPage) => void;
-  onPlayLevel: (level: CampaignLevel, mode: PlayMode) => void;
   onSeasonReset: (locationId: string) => void;
-  onDeveloper: () => void;
 }) {
   const location = locationById(locationId);
+  const pick = (level: CampaignLevel): void =>
+    onNavigate({ page: "car", levelId: level.id, mode: "campaign" });
   return (
     <div className="menu-card menu-card-wide">
-      <BackButton label="CAMPAIGN" onClick={() => onNavigate({ page: "campaign" })} />
-      <div className="menu-title">{location.name.toUpperCase()}</div>
-      <div className="menu-sub">{location.blurb}</div>
+      <MenuHead
+        back={() => onNavigate({ page: "campaign" })}
+        backLabel="CAMPAIGN"
+        title={location.name.toUpperCase()}
+        sub={location.blurb}
+      />
       <LevelGrid
         location={location}
         progress={progress}
         open={(_level, index) => levelUnlocked(location, index, progress)}
         hint="Podium on the stage before this one"
         difficulty={race.difficulty}
-        onPlay={(level) => onPlayLevel(level, "campaign")}
+        onPlay={pick}
       />
       <SeasonPanel
         location={location}
         progress={progress}
         season={season}
-        onPlayLevel={onPlayLevel}
+        onPick={pick}
         onReset={onSeasonReset}
       />
       {/* R29 — how good the fourteen crews you are running against are. It
-          sits with the car because it is the same kind of choice: the two
-          things the player brings to an authored stage. */}
+          stays on the GRID rather than moving to the pre-race card with the
+          car, because it is what the boxes' best-result lines are measured
+          against: change it here and the whole ladder is re-read at once. */}
       <OptionRow
         label="RIVALS"
         options={DIFFICULTY_OPTIONS}
         value={race.difficulty}
         onPick={(difficulty) => onRace({ ...race, difficulty })}
       />
-      <CarRow race={race} onRace={onRace} onDeveloper={onDeveloper} />
     </div>
   );
 }
 
 function TimeTrialPage({
   progress,
-  race,
-  onRace,
   onNavigate,
-  onPlayLevel,
-  onDeveloper,
 }: {
   progress: CampaignProgress;
-  race: RaceSettings;
-  onRace: (race: RaceSettings) => void;
   onNavigate: (page: MenuPage) => void;
-  onPlayLevel: (level: CampaignLevel, mode: PlayMode) => void;
-  onDeveloper: () => void;
 }) {
   return (
     <div className="menu-card menu-card-wide">
-      <BackButton label="MAIN MENU" onClick={() => onNavigate({ page: "root" })} />
-      <div className="menu-title">TIME TRIAL</div>
-      <div className="menu-sub">Finish a stage in the campaign to run it here</div>
+      <MenuHead
+        back={() => onNavigate({ page: "root" })}
+        backLabel="MAIN MENU"
+        title="TIME TRIAL"
+        sub="Finish a stage in the campaign to run it here"
+      />
       {LOCATIONS.map((location) => (
         <div key={location.id} className="menu-section">
           <div className="menu-section-title">{location.name.toUpperCase()}</div>
@@ -575,7 +548,7 @@ function TimeTrialPage({
             progress={progress}
             open={(level) => levelCompleted(level, progress)}
             hint="Finish this stage in the campaign"
-            onPlay={(level) => onPlayLevel(level, "timetrial")}
+            onPlay={(level) => onNavigate({ page: "car", levelId: level.id, mode: "timetrial" })}
           />
         </div>
       ))}
@@ -583,7 +556,6 @@ function TimeTrialPage({
         HIGH SCORES
         <span className="menu-item-sub">The ten best times on every stage you have finished</span>
       </button>
-      <CarRow race={race} onRace={onRace} onDeveloper={onDeveloper} />
     </div>
   );
 }
@@ -606,9 +578,12 @@ function ScoresPage({
   );
   return (
     <div className="menu-card menu-card-wide">
-      <BackButton label="TIME TRIAL" onClick={() => onNavigate({ page: "timetrial" })} />
-      <div className="menu-title">HIGH SCORES</div>
-      <div className="menu-sub">The ten best times on every stage you have finished</div>
+      <MenuHead
+        back={() => onNavigate({ page: "timetrial" })}
+        backLabel="TIME TRIAL"
+        title="HIGH SCORES"
+        sub="The ten best times on every stage you have finished"
+      />
       {open.length === 0 ? (
         <div className="menu-empty">Drive a stage to the end in the campaign first.</div>
       ) : (
@@ -639,6 +614,9 @@ const DEPTH: Record<MenuPage["page"], number> = {
   location: 2,
   debuglog: 2,
   scores: 2,
+  // Deeper than either grid that reaches it, so arriving at the pre-race
+  // card sounds like going IN from both of them.
+  car: 3,
 };
 
 /** Where BACK goes from a page — the same step that page's own back button
@@ -648,11 +626,33 @@ function parentOf(page: MenuPage): MenuPage | null {
   if (page.page === "root") return null;
   if (page.page === "location") return { page: "campaign" };
   if (page.page === "scores") return { page: "timetrial" };
+  if (page.page === "car") return carParent(page.levelId, page.mode);
   return { page: "root" };
 }
 
+/** The grid the pre-race card was reached from. A campaign stage goes back
+ * to its own location's ladder; a time trial goes back to the one page that
+ * lists every stage. A level id with no location behind it cannot happen
+ * from the grids, but a stale one out of a reload should land somewhere
+ * real rather than on a blank card. */
+function carParent(levelId: string, mode: "campaign" | "timetrial"): MenuPage {
+  if (mode === "timetrial") return { page: "timetrial" };
+  const found = findLevel(levelId);
+  return found ? { page: "location", locationId: found.location.id } : { page: "campaign" };
+}
+
 export function MainMenu(props: MainMenuProps) {
-  const { page, onNavigate } = props;
+  const { onNavigate } = props;
+  // The stage the pre-race card is for. A card whose level id is not in the
+  // catalog (a build that dropped a stage, under a page state that still
+  // names it) shows the grid it came from rather than an empty card — a
+  // substitution rather than a navigation, because a render is not the
+  // place to change what page the app thinks it is on.
+  const found = props.page.page === "car" ? findLevel(props.page.levelId) : null;
+  const page =
+    props.page.page === "car" && found === null
+      ? carParent(props.page.levelId, props.page.mode)
+      : props.page;
   /** Every navigation in the menu passes through here, so the interface's
    * sounds are wired in ONE place rather than on forty buttons. */
   const navigate = (next: MenuPage): void => {
@@ -730,18 +730,25 @@ export function MainMenu(props: MainMenuProps) {
             race={props.race}
             onRace={props.onRace}
             onNavigate={navigate}
-            onPlayLevel={props.onPlayLevel}
             onSeasonReset={props.onSeasonReset}
-            onDeveloper={props.onDeveloper}
           />
         )}
         {page.page === "timetrial" && (
-          <TimeTrialPage
+          <TimeTrialPage progress={props.progress} onNavigate={navigate} />
+        )}
+        {page.page === "car" && found !== null && (
+          <CarSetupPage
+            location={found.location}
+            level={found.level}
+            mode={page.mode}
+            billing={lengthLabel(found.level)}
             progress={props.progress}
             race={props.race}
             onRace={props.onRace}
-            onNavigate={navigate}
-            onPlayLevel={props.onPlayLevel}
+            settings={props.settings}
+            onSettings={props.onSettings}
+            onBack={() => navigate(carParent(page.levelId, page.mode))}
+            onStart={() => props.onPlayLevel(found.level, page.mode)}
             onDeveloper={props.onDeveloper}
           />
         )}
