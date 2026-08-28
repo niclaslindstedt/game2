@@ -128,11 +128,22 @@ function upcomingPacenotes(state: GameState, mem: PaceMemory): HudPacenote[] {
 
 /** Tach reading, 0..1 of the dial: the engine's own revs over an idle floor
  * so the needle never falls off the bottom. The revs themselves are the
- * engine's (`car.rev`) — gearing plus forward speed on the move, and the
- * throttle itself on the grid, where a driver waiting for the lights can
- * still blip it. */
+ * engine's (`car.rev`) — the driven wheels through the gearing on the move,
+ * so the needle flares with a lit-up axle, and the throttle itself on the
+ * grid, where a driver waiting for the lights can still blip it. */
 function tachometer(state: GameState): number {
   return Math.min(1, 0.18 + 0.82 * state.car.rev);
+}
+
+/** ...and the same dial as the GEARBOX reads it: road speed through the
+ * gearing, with no wheelspin in it. The shift light hangs off this rather
+ * than off the needle, because a needle flared by a lit-up axle is not a
+ * gear that has run out — a car spinning its wheels in second wants the
+ * throttle backed off, never third. */
+function gearedRev(state: GameState): number {
+  const top = state.spec.gearTop[state.car.gear];
+  const geared = Math.min(Math.max(0, state.car.u) / top, TUNING.revs.limiter);
+  return Math.min(1, 0.18 + 0.82 * geared);
 }
 
 /** The damage ledger flipped into SCREEN space for the HUD's 2D car: the
@@ -209,7 +220,9 @@ export function takeSnapshot(
     rpm,
     // Nothing to shift on the grid, however hard the driver leans on it.
     shiftUp:
-      state.phase === "racing" && rpm > 0.83 && state.car.gear < state.spec.gearTop.length - 1,
+      state.phase === "racing" &&
+      gearedRev(state) > 0.83 &&
+      state.car.gear < state.spec.gearTop.length - 1,
     airborne: state.car.airborne,
     minimap: buildMinimap(state),
     // The co-driver stops calling corners the moment the car is in the

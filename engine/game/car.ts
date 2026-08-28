@@ -67,17 +67,45 @@ function wheelspinLoss(spec: CarSpec, car: CarState, surfaceGrip: number, rev: n
   return (1 - bite) * T.engine.wheelspin * spec.torque * (1 - rev);
 }
 
-/** The readout half of the same number, 0..1: how far the DRIVEN wheels are
- * outrunning the road, with the pedal they answer to already in it. Only
- * the renderer reads it — the handling has already spent the loss above. */
-function wheelspinShown(
+/** How LIT the driven axle is, 0..1, with the pedal it answers to already in
+ * it. Two things spin a driven wheel faster than the road, and they cover
+ * different parts of the stage: the torque the axle cannot put down, which
+ * is a launch and is gone by the top of the gear, and a tyre spending its
+ * grip sideways, which is a drift and is not. */
+function wheelspinShare(
   spec: CarSpec,
   car: CarState,
   surfaceGrip: number,
   throttle: number,
 ): number {
   const loss = wheelspinLoss(spec, car, surfaceGrip, revs(spec, car, car.u));
-  return clamp(loss / T.engine.wheelspin, 0, 1) * throttle;
+  const lit = clamp(loss / T.engine.wheelspin, 0, 1);
+  return clamp(lit + T.engine.slideSpin * car.slide, 0, 1) * throttle;
+}
+
+/** How much room the gear leaves for the driven wheels to outrun the road,
+ * m/s. A wheel with a gear engaged cannot turn faster than the engine can
+ * spin it, so a fully lit axle winds to the top of the gear it is in and no
+ * further: first gear spins away from a standstill, and top gear cannot spin
+ * at all. `CarState.rev` is this same wheel speed read back through the
+ * gearing (step.ts) — needle, engine note and drawn wheels are one number,
+ * as they are in a car. */
+function spinHeadroom(spec: CarSpec, car: CarState): number {
+  return Math.max(0, spec.gearTop[car.gear] * T.revs.limiter - Math.max(0, car.u));
+}
+
+/** Move the readout toward the spin the axle is asking for, and hold it
+ * inside what the gear allows. The chase is what a tyre does — it lights up
+ * over a few frames and hooks back up about as fast, and without the lag a
+ * bouncing throttle would strobe both the drawn wheels and the needle
+ * between spun-up and gripping. The ceiling has to be applied AFTER it: a
+ * downshift, or the car simply accelerating, shrinks the headroom under a
+ * spin that was sized against the old one, and a wheel turning faster than
+ * its own engine is exactly what this model exists to rule out. */
+function settleWheelspin(spec: CarSpec, car: CarState, share: number, dt: number): void {
+  const room = spinHeadroom(spec, car);
+  car.wheelspin += (room * share - car.wheelspin) * clamp(T.engine.spinSettle * dt, 0, 1);
+  car.wheelspin = clamp(car.wheelspin, 0, room);
 }
 
 function engineAccel(spec: CarSpec, car: CarState, surfaceGrip: number): number {
@@ -614,13 +642,6 @@ export function stepGrounded(
   const accel =
     engineAccel(spec, car, surfaceGrip) * input.throttle * surfacePower * shiftCut * damagePower;
   car.u += accel * dt;
-  // ...and how that same torque LOOKS, for the wheels the renderer draws.
-  // A tyre lights up over a few frames and hooks back up about as fast, so
-  // the readout is chased rather than snapped: a bouncing throttle would
-  // otherwise strobe the drawn wheels between spun-up and gripping. An
-  // engaging shift takes the pedal away, and with it the spin.
-  const spinning = wheelspinShown(spec, car, surfaceGrip, input.throttle * shiftCut);
-  car.wheelspin += (spinning - car.wheelspin) * clamp(T.engine.spinSettle * dt, 0, 1);
   if (car.reversing) {
     // Backing out. The brake's own retardation is off while this runs, or the
     // two would fight over the same pedal and the car would sit still. Once
@@ -897,6 +918,15 @@ export function stepGrounded(
   const groundJolt = car.airborne ? 0 : car.vy - prevVy;
   const joltCap = T.suspension.joltMax * dt;
   stepSuspension(spec, car, clamp(groundJolt, -joltCap, joltCap), (car.u - prevU) / dt);
+
+  // ── The driven wheels ────────────────────────────────────────────────────
+  // How far ahead of the road the engine is spinning them, once the step has
+  // settled. It goes LAST because it is measured against the speed the car
+  // ended up at and the slide it ended up in: sized against the speed it
+  // started from, a step that accelerated hard would leave the wheels
+  // turning faster than their own engine could turn them. An engaging shift
+  // takes the pedal away, and with it the spin.
+  settleWheelspin(spec, car, wheelspinShare(spec, car, surfaceGrip, input.throttle * shiftCut), dt);
 }
 
 /**
@@ -1000,11 +1030,6 @@ export function stepAirborne(
   car.steer += (input.steer - car.steer) * clamp(T.steering.rackRate * dt, 0, 1);
   car.braking = false;
   car.reversing = false; // nothing to back out of in the air
-  // Nothing is holding the driven wheels back off the ground, so they answer
-  // the throttle and nothing else — the undriven pair keeps turning at the
-  // speed the road handed them at take-off. Renderer readout.
-  const spinning = input.throttle > 0 ? 1 : 0;
-  car.wheelspin += (spinning - car.wheelspin) * clamp(T.engine.spinSettle * dt, 0, 1);
 
   car.yawRate += car.steer * T.air.yawAuthority * dt;
   // A bounce is not a flight: the car is settling onto the ground it has
@@ -1021,6 +1046,14 @@ export function stepAirborne(
   rotateFrame(car, delta);
   car.u -= T.air.drag * car.u * dt;
   updateSlip(car);
+
+  // Nothing is holding the driven wheels back off the ground, so they answer
+  // the throttle alone and wind straight to the limiter — the undriven pair
+  // keeps turning at whatever the road handed them at take-off. It goes after
+  // the yaw: a car spinning in the air trades sideways speed for forward
+  // speed every step, and a spin sized against the old one would leave the
+  // wheels turning faster than the engine driving them.
+  settleWheelspin(spec, car, input.throttle > 0 ? 1 : 0, dt);
 
   const sinH = Math.sin(car.heading);
   const cosH = Math.cos(car.heading);
