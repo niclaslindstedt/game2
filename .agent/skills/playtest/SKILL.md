@@ -51,6 +51,14 @@ flick, screenshot), so staging a moment means scripting the drive into it —
 see the `test-scenario` skill for the staging mindset. A surface no scene
 captures is a surface no future sweep will ever look at.
 
+**A new STEP in an existing flow owes an edit to every scene that walks it.**
+Several scenes click through the menu the way a player does rather than
+jumping in on `?start=1` — the campaign field's whole sweep is one of them —
+so a page inserted between a press and a run does not fail loudly: the scene
+sits on a `waitForSelector` until its timeout and the surface it was meant to
+photograph never happens. `grep` the harness for the labels the flow prints
+before assuming only the new page needs a scene.
+
 ## Running
 
 ```sh

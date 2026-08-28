@@ -1,5 +1,5 @@
 ---
-title: A media-query override written EARLIER in styles.css than its base rule silently loses
+title: A responsive override in styles.css loses silently — to source order, and to a more specific base rule
 date: 2026-08-27
 scope: pwa/src/styles.css
 concepts: [css, cascade, portrait, responsive]
@@ -11,11 +11,9 @@ damage-instrument section loses to the plain `.hud-gears` rule 180 lines below
 it in the touch-controls section — the declaration is in the stylesheet, the
 devtools show it struck through, and nothing about the source hints at it.
 
-This is not hypothetical: the manual car's gear taps overlapped the upright
-booster in every portrait width, the override read exactly right, and two
-rounds of build-and-measure returned byte-identical numbers before the cause
-turned up. (The rule it replaced had the same bug, so the previous override had
-never worked either.)
+Not hypothetical: the manual car's gear taps overlapped the upright booster in
+every portrait width, the override read exactly right, and two rounds of
+build-and-measure returned byte-identical numbers before the cause turned up.
 
 **Put a responsive override immediately AFTER the base rule it overrides**, in
 that component's own section, even when it means a second `@media` block with
@@ -29,6 +27,13 @@ declared below it, so the grid override applied and the padding and min-width
 did nothing. It measured as a partial improvement, which is the worst outcome
 — an obvious no-op gets investigated, a partial one gets accepted. Split the
 block, or put it after the LAST base rule it touches.
+
+**SPECIFICITY is the other half of the same trap, and order will not save you
+from it.** A `@media` block adds none, so a landscape override written as
+`.car-pick-stage` cannot beat a `.car-setup .car-pick-stage` sizing rule
+however far below it sits — the override has to name the same two classes. Any
+time a component restyles a shared element through a parent class, its
+responsive overrides have to carry that parent too.
 
 And when a CSS fix produces no change in a measurement, suspect the cascade
 before suspecting the measurement — an override that never applied and a fix

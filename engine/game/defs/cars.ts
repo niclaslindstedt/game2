@@ -47,6 +47,11 @@ export type TyreSpec = {
 export type CarSpec = {
   id: string;
   name: string;
+  /** One line of billing, for the menu that asks the player to choose one.
+   * It says what the car IS to drive — the block comment above each row
+   * says why the numbers under it are what they are, which is a different
+   * question and far too long to put on a card. */
+  blurb: string;
   drive: DriveLayout;
   /** Kerb mass, kg — what the car WEIGHS. Read against
    * TUNING.collision.refMass: a heavier car is harder for a clipped tree
@@ -116,6 +121,7 @@ export const CARS: CarSpec[] = [
     // tarmac stage is its day out; a loose, open, fast one is not.
     id: "compact",
     name: "Vireo GT",
+    blurb: "Pointy and grippy on tarmac — rotate it on the lift, never the throttle",
     drive: "fwd",
     mass: 1020,
     gearTop: [12, 20, 28, 38, 49, 62],
@@ -147,6 +153,7 @@ export const CARS: CarSpec[] = [
     // that.
     id: "classic",
     name: "Sable 1600",
+    blurb: "Short gears and a tail that steps out at walking pace",
     drive: "rwd",
     mass: 1080,
     gearTop: [11, 18, 26, 35, 45, 57],
@@ -176,6 +183,7 @@ export const CARS: CarSpec[] = [
     // pointy as the hatch, and quicker than both wherever the road opens.
     id: "coupe",
     name: "Kestrel RS",
+    blurb: "Heavy, tall-geared, and puts its power down on anything",
     drive: "awd",
     mass: 1300,
     gearTop: [13, 22, 31, 42, 55, 72],

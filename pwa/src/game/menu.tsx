@@ -15,6 +15,7 @@ import {
   DIFFICULTY_IDS,
   STAGE_RULES,
   type Difficulty,
+  type GearboxMode,
   type StageKnobs,
   type StageLength,
   type Season,
@@ -165,6 +166,68 @@ export const WEATHERS: { id: Weather; label: string }[] = [
   { id: "rain", label: "RAIN" },
   { id: "storm", label: "STORM" },
 ];
+
+/** The head of a menu page: the way back, and what the page IS, on ONE
+ * line. Stacked — a back button, then a title, then a subtitle — those
+ * three rows eat the top third of a card and say nothing the one line does
+ * not, which on a stage grid is a row of boxes pushed off the bottom.
+ *
+ * The back button keeps its own `.menu-back` chrome so a page that has not
+ * been converted still looks like the same menu. */
+export function MenuHead({
+  back,
+  backLabel,
+  title,
+  sub,
+}: {
+  back: () => void;
+  backLabel: string;
+  title: string;
+  /** The page's one line of billing. Omitted on pages whose title says it
+   * all — the head then holds the title alone, still on one row. */
+  sub?: string;
+}) {
+  return (
+    <div className="menu-head">
+      <button type="button" className="menu-back" onClick={back}>
+        ‹ {backLabel}
+      </button>
+      <div className="menu-head-text">
+        <div className="menu-title">{title}</div>
+        {sub !== undefined && <div className="menu-sub">{sub}</div>}
+      </div>
+    </div>
+  );
+}
+
+/** The two boxes, and the one sentence that says what choosing the second
+ * one costs. Shared by OPTIONS and the pre-race card, which offer the same
+ * setting: two surfaces wording the same choice differently is two
+ * settings as far as the player is concerned. */
+export const GEARBOX_OPTIONS: { id: GearboxMode; label: string }[] = [
+  { id: "auto", label: "AUTO" },
+  { id: "manual", label: "MANUAL" },
+];
+
+export function GearboxRow({
+  label,
+  gearbox,
+  onGearbox,
+}: {
+  label: string;
+  gearbox: GearboxMode;
+  onGearbox: (gearbox: GearboxMode) => void;
+}) {
+  return (
+    <div className="menu-gearbox">
+      <OptionRow label={label} options={GEARBOX_OPTIONS} value={gearbox} onPick={onGearbox} />
+      <div className="opt-note">
+        Manual holds the gear you chose — quicker in hands that keep the engine on song, and one
+        more thing to get wrong. It applies to every car in the roster.
+      </div>
+    </div>
+  );
+}
 
 export function OptionRow<T extends string>({
   label,

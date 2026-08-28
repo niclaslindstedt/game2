@@ -23,7 +23,7 @@
 import { useEffect, useState } from "react";
 
 import { deviceControls } from "./input.ts";
-import { OptionRow, ToggleRow } from "./menu.tsx";
+import { GearboxRow, MenuHead, OptionRow, ToggleRow } from "./menu.tsx";
 import {
   DEFAULT_KEYS,
   DEFAULT_TOUCH,
@@ -318,24 +318,17 @@ function TouchSection({ settings, onSettings }: Pick<OptionsProps, "settings" | 
 /** The gearbox, offered for every car in the roster rather than baked into
  * one of them. It is the one control choice that changes what the CAR does
  * rather than what a button does, so it sits at the top of the tab and on
- * its own, above the bindings. */
+ * its own, above the bindings — and again on the pre-race card, which is
+ * where the same question is actually being asked. */
 function GearboxSection({ settings, onSettings }: Pick<OptionsProps, "settings" | "onSettings">) {
   return (
     <div className="opt-section">
       <div className="opt-section-title">GEARBOX</div>
-      <OptionRow
+      <GearboxRow
         label="SHIFTING"
-        options={[
-          { id: "auto", label: "AUTO" },
-          { id: "manual", label: "MANUAL" },
-        ]}
-        value={settings.gearbox}
-        onPick={(gearbox) => onSettings({ ...settings, gearbox })}
+        gearbox={settings.gearbox}
+        onGearbox={(gearbox) => onSettings({ ...settings, gearbox })}
       />
-      <div className="opt-note">
-        Manual holds the gear you chose — quicker in hands that keep the engine on song, and one
-        more thing to get wrong. Applies to every car, from the next stage you start.
-      </div>
     </div>
   );
 }
@@ -356,10 +349,7 @@ function ControlsTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "
 export function OptionsPage({ tab, onTab, settings, onSettings, onBack }: OptionsProps) {
   return (
     <div className="menu-card menu-card-wide">
-      <button type="button" className="menu-back" onClick={onBack}>
-        ‹ MAIN MENU
-      </button>
-      <div className="menu-title">OPTIONS</div>
+      <MenuHead back={onBack} backLabel="MAIN MENU" title="OPTIONS" />
       <div className="opt-tabs">
         {TABS.map((entry) => (
           <button
