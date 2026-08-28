@@ -15,6 +15,7 @@ import { createCarDamage } from "./car-damage.ts";
 import { createCarDirt, wheelSpray } from "./car-dirt.ts";
 import type { Livery } from "./car-livery.ts";
 import { bodySpecFor } from "./car-styles.ts";
+import { drivenAxles, wheelSurfaceSpeed } from "./car-wheels.ts";
 import { glowTexture } from "./textures.ts";
 
 /** The tail lamps' own light: a red bloom laid over each lens so the lamp
@@ -115,6 +116,8 @@ export function tintCar(visual: CarVisual, tint: THREE.Color, lampsLit: boolean)
 
 export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
   const group = new THREE.Group();
+  // Which wheels the engine can spin, and which ones only the road turns.
+  const driven = drivenAxles(spec.drive);
   const bodySpec = bodySpecFor(spec, options.paint);
   const body = buildCarBody(bodySpec);
   // Panels, parts and wheels share one material, so a ghost is one flag.
@@ -208,14 +211,22 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     body.chassis.position.y = car.ride;
     body.chassis.rotation.x = -car.pitchLoad;
 
-    // Wheels: spin with road speed, front pair points where the driver
-    // points them — counter-steer in a drift shows because the input does.
-    const spin = (car.u * dt) / bodySpec.wheelRadius;
+    // Wheels: the front pair points where the driver points them —
+    // counter-steer in a drift shows because the input does — and each wheel
+    // turns at the speed of its own contact patch, plus, on the driven axles
+    // only, whatever the engine is spinning it beyond that (car-wheels.ts).
     const wantSteer = clamp(car.steer * WHEEL_STEER_LOCK, -WHEEL_STEER_MAX, WHEEL_STEER_MAX);
     steerVisual += (wantSteer - steerVisual) * clamp(WHEEL_STEER_RATE * dt, 0, 1);
     for (let i = 0; i < body.wheelSpin.length; i++) {
-      body.wheelSpin[i].rotation.x += spin;
-      if (i < 2) body.wheelGroups[i].rotation.y = steerVisual;
+      const front = i < 2;
+      const speed = wheelSurfaceSpeed(
+        car,
+        body.wheelGroups[i].position,
+        front ? steerVisual : 0,
+        front ? driven.front : driven.rear,
+      );
+      body.wheelSpin[i].rotation.x += (speed * dt) / bodySpec.wheelRadius;
+      if (front) body.wheelGroups[i].rotation.y = steerVisual;
     }
 
     dirt.update(state, dt);

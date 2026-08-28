@@ -681,6 +681,15 @@ What the layout decides:
   driven wheels hook up, worst at the bottom of the gear and gone by the top
   of it. It is the four-wheel-drive's whole case and the rear-driver's whole
   cost — a standing start through water keeps well under half its dry pace.
+- **Which wheels are SEEN to spin.** The same torque loss above is carried
+  out to the renderer as `CarState.wheelspin` (0..1, chased at
+  `TUNING.engine.spinSettle` so a throttle fed in and out of a corner cannot
+  strobe the drawn wheels), and the app spins the DRIVEN axle by it and no
+  other. Every wheel otherwise turns at the speed of its own contact patch —
+  the car's velocity at that corner of it, projected onto the way the wheel
+  points — so an undriven pair can only ever report the road: a front-driver
+  lighting its tyres up on the line still has two wheels standing still, and a
+  rear-driver's fronts visibly slow when opposite lock drags them sideways.
 - **How hard the rear weathervanes the nose straight** (`snap` ×
   `TUNING.drift.releaseSnap`) — which is what decides how long a slide
   LINGERS once the wheel is centred. Not `release`: a slower release holds

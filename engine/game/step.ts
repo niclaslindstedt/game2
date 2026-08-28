@@ -89,6 +89,7 @@ function freshCar(): CarState {
     pitchLoad: 0,
     slide: 0,
     drifting: false,
+    wheelspin: 0,
     flick: 0,
     flickDir: 1,
     gear: 0,
@@ -316,6 +317,7 @@ function respawn(state: GameState, events: GameEvent[], home: WayHome): void {
   car.pitchLoad = 0;
   car.slide = 0;
   car.drifting = false;
+  car.wheelspin = 0;
   // The service crew get to a wreck the moment it is back at the road: the
   // chassis is patched to a drivable fraction, and the dents, the torn-off
   // parts and the hurt systems all stay.

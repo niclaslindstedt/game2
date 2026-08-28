@@ -187,6 +187,12 @@ export const TUNING = {
      * top of it — which is why the loose-surface launch is where a
      * one-axle car loses to a four-wheel-drive and nowhere else. */
     wheelspin: 0.5,
+    /** How fast `CarState.wheelspin` — the readout the drawn wheels turn on
+     * — builds and dies, 1/s. A tyre lights up in a few frames and hooks
+     * back up about as fast; the lag is what keeps a throttle being fed in
+     * and out of a corner from strobing the wheels between spun-up and
+     * gripping. Presentation only: the torque loss itself is instant. */
+    spinSettle: 9,
   },
 
   /** THE DRIVETRAIN — what changes about a car when the power goes to a
