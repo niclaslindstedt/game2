@@ -175,9 +175,14 @@ describe("the ground as a solid", () => {
     expect(car.u).toBeLessThan(12); // and it cost real pace
     expect(car.damage.zones[0]).toBeGreaterThan(0.02); // nose folded
     expect(car.damage.systems.engine).toBeGreaterThan(0);
-    // Never inside the mountain: the car sits ON the face it stopped against.
+    // Never inside the mountain: the car sits ON the face it stopped
+    // against. It is not pinned to the height under its middle — a nose
+    // against a rising face holds the body up (see seatOn), by at most the
+    // rise its own footprint can claim — but it is never under the rock.
     expect(car.x).toBeLessThan(wall + 3);
-    expect(car.y).toBeLessThanOrEqual(face(car.x) + 0.01);
+    const hold = Math.hypot(TUNING.collision.halfLength, TUNING.collision.halfWidth);
+    expect(car.y).toBeGreaterThanOrEqual(face(car.x) - 1e-6);
+    expect(car.y - face(car.x)).toBeLessThanOrEqual(hold * TUNING.collision.climbLimit);
   });
 
   it("a bank the wheels can climb is a hill, not a crash", () => {

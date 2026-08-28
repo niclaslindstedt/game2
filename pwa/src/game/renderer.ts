@@ -729,7 +729,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // An endless run streams its world: the road chunks and terrain tiles
     // ahead get built here, the ones far behind get dropped.
     world?.sync(state, dt);
-    world?.update(dt, c.x, c.z);
+    world?.update(state, dt);
     celebration.update(dt);
     car?.update(state, dt);
     if (ghost && ghostCar) ghostCar.update(ghost, dt);

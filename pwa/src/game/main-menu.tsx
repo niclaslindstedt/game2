@@ -36,6 +36,8 @@ import { OptionsPage, type OptionsTab } from "./menu-options.tsx";
 import { unlockAudio } from "./audio/bus.ts";
 import { playUi } from "./audio/ui.ts";
 import { RoamPage, type MapRect, type MapView } from "./menu-roam.tsx";
+import { ScoreBoard } from "./score-board.tsx";
+import { loadBoard } from "./scores.ts";
 import type { Settings } from "./settings.ts";
 
 export type MenuPage =
@@ -43,6 +45,7 @@ export type MenuPage =
   | { page: "campaign" }
   | { page: "location"; locationId: string }
   | { page: "timetrial" }
+  | { page: "scores" }
   | { page: "roam" }
   | { page: "options"; tab: OptionsTab }
   | { page: "developer" }
@@ -380,7 +383,49 @@ function TimeTrialPage({
           />
         </div>
       ))}
+      <button type="button" className="menu-item" onClick={() => onNavigate({ page: "scores" })}>
+        HIGH SCORES
+        <span className="menu-item-sub">The ten best times on every stage you have finished</span>
+      </button>
       <CarRow race={race} onRace={onRace} onDeveloper={onDeveloper} />
+    </div>
+  );
+}
+
+/** THE HIGH SCORES — every stage the player has driven to the end, with its
+ * ten best times. A stage nobody has finished has no board to read yet and is
+ * left off entirely: ten dotted rows under a name you have never seen is a
+ * wall, where the same ten rows under a stage you know is an invitation. */
+function ScoresPage({
+  progress,
+  onNavigate,
+}: {
+  progress: CampaignProgress;
+  onNavigate: (page: MenuPage) => void;
+}) {
+  const open = LOCATIONS.flatMap((location) =>
+    location.levels
+      .filter((level) => levelCompleted(level, progress))
+      .map((level) => ({ location, level })),
+  );
+  return (
+    <div className="menu-card menu-card-wide">
+      <BackButton label="TIME TRIAL" onClick={() => onNavigate({ page: "timetrial" })} />
+      <div className="menu-title">HIGH SCORES</div>
+      <div className="menu-sub">The ten best times on every stage you have finished</div>
+      {open.length === 0 ? (
+        <div className="menu-empty">Drive a stage to the end in the campaign first.</div>
+      ) : (
+        <div className="score-stages">
+          {open.map(({ location, level }) => (
+            <div key={level.id} className="score-stage">
+              <div className="score-stage-name">{level.name.toUpperCase()}</div>
+              <div className="score-stage-where">{location.name}</div>
+              <ScoreBoard entries={loadBoard(level.id)} />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -397,6 +442,7 @@ const DEPTH: Record<MenuPage["page"], number> = {
   developer: 1,
   location: 2,
   debuglog: 2,
+  scores: 2,
 };
 
 /** Where BACK goes from a page — the same step that page's own back button
@@ -405,6 +451,7 @@ const DEPTH: Record<MenuPage["page"], number> = {
 function parentOf(page: MenuPage): MenuPage | null {
   if (page.page === "root") return null;
   if (page.page === "location") return { page: "campaign" };
+  if (page.page === "scores") return { page: "timetrial" };
   return { page: "root" };
 }
 
@@ -500,6 +547,7 @@ export function MainMenu(props: MainMenuProps) {
             onDeveloper={props.onDeveloper}
           />
         )}
+        {page.page === "scores" && <ScoresPage progress={props.progress} onNavigate={navigate} />}
         {roam && (
           <RoamPage
             race={props.race}

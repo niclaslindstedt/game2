@@ -51,6 +51,15 @@ import { stageQuery, traceLine, type DebugContext } from "./game/debug-info.ts";
 import { debugLogging, log as debugLog, logRunStart, setDebugLogging } from "./game/debug-log.ts";
 import type { GameRenderer } from "./game/renderer.ts";
 import { Hud, type HudFlash, type HudSnapshot } from "./game/hud.tsx";
+import type { FinishScores } from "./game/hud-finish.tsx";
+import {
+  lastInitials,
+  loadBoard,
+  placeOn,
+  recordScore,
+  rememberInitials,
+  type ScoreEntry,
+} from "./game/scores.ts";
 import { createLive, readLive, takeSnapshot, type RunBook } from "./game/snapshot.ts";
 import {
   DEFAULT_STAGE_KNOBS,
@@ -68,6 +77,7 @@ import type { MapRect, MapView } from "./game/menu-roam.tsx";
 import {
   levelLaps,
   loadProgress,
+  nextLevel,
   recordFinish,
   unlockEverything,
   type CampaignLevel,
@@ -332,12 +342,6 @@ let flashId = 0;
  * in a row is the HUD talking over the game. */
 const REAL_AIR = 0.5;
 
-/** How long the results card stays up AFTER the car has finally stopped
- * rolling, ms. The whole roll-out past the gate is already card time, so
- * this only has to be the last beat — long enough to read the placing, short
- * enough that the stage does not end with everybody waiting for a menu. */
-const RESULT_LINGER = 2600;
-
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<GameRenderer | null>(null);
@@ -363,6 +367,15 @@ export function App() {
    * is, so a finish can record the clear. */
   const [run, setRun] = useState<{ mode: PlayMode; levelId?: string }>({ mode: "roam" });
   const [snap, setSnap] = useState<HudSnapshot | null>(null);
+  /** THE TIME TRIAL'S BOARD, for the run that has just ended. `pending` is the
+   * run waiting on its three letters; it is what holds the results card's ways
+   * on back until they are typed. Cleared with every start, so a board never
+   * outlives the stage it belongs to. */
+  const [scores, setScores] = useState<{
+    board: readonly ScoreEntry[];
+    place: number;
+    pending: { levelId: string; time: number; carId: string; offer: string } | null;
+  } | null>(null);
   /** The clock and the start lights, at frame rate. One object for the life
    * of the app, rewritten in place — the HUD holds its identity and reads it
    * on its own animation frame, so neither instrument waits for a snapshot. */
@@ -470,6 +483,10 @@ export function App() {
       };
     }
     finishTimeRef.current = null;
+    // The board belongs to the run that set it. Cleared here rather than in
+    // `startStage` so a RESTART — which comes straight through this and never
+    // through that — drops the last attempt's table too.
+    setScores(null);
     const state = createGame({
       seed: spec.seed,
       carId: spec.carId,
@@ -558,6 +575,7 @@ export function App() {
    * not a time, and the demo behind the cards races nobody. */
   const goMainMenu = (): void => {
     setPaused(false);
+    setScores(null);
     recorderRef.current = null;
     ghostRef.current = null;
     rendererRef.current?.setGhost(null);
@@ -574,6 +592,11 @@ export function App() {
     // A new run inherits nothing from the last one: the engine's note would
     // otherwise glide from wherever the previous car left it.
     audioRef.current?.reset();
+    // The finish sting silenced the score (see the finish handler). Starting
+    // the next stage from the results card never passes through the menu, so
+    // the theme is re-armed here rather than by the menu's own effect; it is
+    // a no-op when the score is already the one playing.
+    playMusic("taiga");
     setPaused(false);
     setRun({ mode, levelId });
     runRef.current = { mode, levelId };
@@ -752,6 +775,17 @@ export function App() {
     return undefined;
   }, [inMenu]);
 
+  // WHILE THE BOARD IS BEING TYPED INTO, THE KEYBOARD IS NOT THE CAR'S. The
+  // bindings are letters — `R` restarts the run, `M` walks out to the main
+  // menu — and both listeners sit on the same target, so the entry's own
+  // `preventDefault` cannot stop them. The input manager hands the keyboard
+  // over for as long as the three letters are outstanding.
+  const typingScore = scores?.pending != null;
+  useEffect(() => {
+    input.setTyping(typingScore);
+    return () => input.setTyping(false);
+  }, [input, typingScore]);
+
   // The pause card freezes the score where it stands rather than stopping it:
   // a theme that restarted every time somebody checked the map would be a
   // reason not to check the map.
@@ -812,10 +846,6 @@ export function App() {
 
       const restart = (): void => {
         setPaused(false);
-        // A restart cancels a finish that was on its way back to the menu:
-        // without this the new run is interrupted by the last one's timer.
-        if (nextStageTimer) clearTimeout(nextStageTimer);
-        nextStageTimer = null;
         const spec = stageRef.current;
         if (!spec) return;
         applyStageRef.current(spec, true);
@@ -844,11 +874,6 @@ export function App() {
         } else camera();
       });
 
-      let nextStageTimer: ReturnType<typeof setTimeout> | null = null;
-
-      cleanups.push(() => {
-        if (nextStageTimer) clearTimeout(nextStageTimer);
-      });
       const handleEvents = (state: GameState, events: GameEvent[]): void => {
         renderer.onEvents(state, events);
         if (debugLogging() && menuRef.current === null) {
@@ -916,12 +941,37 @@ export function App() {
               }
               recorderRef.current = null;
               setProgress(recordFinish(active.levelId, ev.time));
+              // THE BOARD IS THE TIME TRIAL'S, and only its. The campaign is a
+              // ladder you climb once; the trial is the stage you come back to,
+              // which is the only place ten rows of other people's initials
+              // mean anything.
+              if (active.mode === "timetrial") {
+                const board = loadBoard(active.levelId);
+                const at = placeOn(board, ev.time);
+                setScores({
+                  board,
+                  place: at + 1,
+                  pending:
+                    at >= 0
+                      ? {
+                          levelId: active.levelId,
+                          time: ev.time,
+                          carId: stageRef.current?.carId ?? "",
+                          // Read ONCE, here: the card re-renders a dozen times
+                          // a second off the HUD snapshot, and the offered name
+                          // must not be a storage read on every one of them.
+                          offer: lastInitials(),
+                        }
+                      : null,
+                });
+              }
             }
             // The card goes up NOW — the clock has stopped — but the run
             // is not over: the car is still coasting down R25's run-out with
             // the camera planted at the gate, and that beat IS the
-            // celebration. The frame loop below sends everyone back to the
-            // menu once the car has actually come to rest.
+            // celebration. Where the run goes next is the PLAYER's press on
+            // the card, not a countdown: a stage that threw you back to the
+            // menu on its own was the ladder taking the next rung away.
             continue;
           }
           if (demo) continue;
@@ -1026,17 +1076,6 @@ export function App() {
             if (ghostEvents.length > 0) renderer.onGhostEvents(ghost.state, ghostEvents);
           }
         }
-        // A stage ends where it started: back to the menu, once the car has
-        // come to rest past the finish AND the result has been on screen
-        // long enough to read.
-        if (
-          finishTimeRef.current !== null &&
-          !page &&
-          nextStageTimer === null &&
-          state.phase === "finished"
-        ) {
-          nextStageTimer = setTimeout(goMainMenu, RESULT_LINGER);
-        }
         // The road bed belongs to a run the player is IN. Behind the menu the
         // stage is scenery under a theme, and an engine bed over the top of
         // that is two pieces of music at once.
@@ -1100,6 +1139,37 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // WHERE THE RESULTS CARD GOES ON TO. Only the ladder has a next rung:
+  // Roam is one stage and a time trial is one stage repeated, so both offer
+  // the way out and nothing else.
+  const upNext = run.mode === "campaign" && run.levelId ? nextLevel(run.levelId) : null;
+  const nextStage = upNext
+    ? { name: upNext.name, go: (): void => playLevel(upNext, "campaign") }
+    : null;
+
+  // The board the results card shows, and the three letters it is waiting on.
+  // Entering them writes the row and hands the new board straight back, so the
+  // player sees where they landed without the card being rebuilt around them.
+  const finishScores: FinishScores | null = scores && {
+    board: scores.board,
+    place: scores.place,
+    entering: scores.pending && {
+      initial: scores.pending.offer,
+      onDone: (who: string): void => {
+        const posted = scores.pending;
+        if (!posted) return;
+        rememberInitials(who);
+        const board = recordScore(posted.levelId, {
+          who,
+          time: posted.time,
+          carId: posted.carId,
+          at: Date.now(),
+        });
+        setScores({ board, place: scores.place, pending: null });
+      },
+    },
+  };
+
   return (
     <div className="app-root">
       <canvas
@@ -1125,6 +1195,9 @@ export function App() {
           touchLayout={options.touch}
           onPause={() => setPaused(true)}
           onCamera={() => actionsRef.current.camera()}
+          nextStage={nextStage}
+          onRetire={goMainMenu}
+          scores={finishScores}
         />
       )}
       {/* Outside the HUD on purpose: ALT takes the game's chrome off so a

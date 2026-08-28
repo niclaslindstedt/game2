@@ -133,3 +133,73 @@ export type Synth = {
    * Absolute `at` times are measured on this clock. */
   now: () => number | null;
 };
+
+// ── The envelope ─────────────────────────────────────────────────────────
+
+/**
+ * THE SHORTEST ONSET A VOICE MAY HAVE, ms — and the reason the music does not
+ * tick.
+ *
+ * A gain that jumps from nothing to full scale between two samples is a step,
+ * and a step is broadband: what the ear gets is a CLICK sitting on top of the
+ * note, loudest in the treble because that is where a step's energy is. Worse,
+ * a step is also what makes a resonant filter RING at its own cutoff — so on a
+ * hi-hat (a few milliseconds of noise highpassed at 8 kHz, five a second under
+ * the stage theme) the ring IS the sound the player hears, and it reads as a
+ * broken speaker rather than as a cymbal.
+ *
+ * A millisecond and a half of ramp is far below the ~10 ms the ear resolves as
+ * an attack, so nothing is softened and every percussive voice keeps its snap;
+ * it is purely the discontinuity that goes. It is only ever a FLOOR — a voice
+ * that asked for a real attack keeps its own — and it is bounded by the
+ * voice's own length, so a two-millisecond tick is still a tick.
+ */
+export const MIN_ATTACK_MS = 1.5;
+
+/** One point on a gain curve: where it is going, when it gets there, and how
+ * it travels — an immediate jump, or a ramp of one of the two shapes. */
+export type EnvelopeStep = { at: number; value: number; ramp: "set" | "exp" | "lin" };
+
+/**
+ * THE GAIN CURVE OF ONE VOICE, as data — attack, hold, decay — so the shape a
+ * sound has can be read (and tested) without a browser in the room.
+ *
+ * `decay` is the difference between the two shapes the instrument plays. An
+ * EXPONENTIAL fall is a voice with a tail: a note, a grain of a bed, anything
+ * that has to sit under something else. A LINEAR one falls evenly across its
+ * whole length and is a HIT — a stick, a hat, a stone off the floorpan.
+ */
+export function envelopeShape(
+  peak: number,
+  t0: number,
+  t1: number,
+  attackMs: number,
+  holdMs: number,
+  decay: "exp" | "lin",
+): EnvelopeStep[] {
+  const durationMs = (t1 - t0) * 1000;
+  // An exponential ramp may not touch zero — WebAudio throws rather than
+  // silently flooring it — and a voice CAN legitimately arrive at zero: a
+  // muted track in the audition page is a patch whose volume is 0. The floor
+  // is far below anything audible, so a voice that lands on it is silence
+  // either way; what it buys is that no caller has to know the rule.
+  const floor = decay === "exp" ? 0.0001 : 0;
+  const top = decay === "exp" ? Math.max(1e-5, peak) : peak;
+  const rise = Math.min(Math.max(attackMs, MIN_ATTACK_MS), durationMs * 0.5) / 1000;
+  const level = t0 + rise;
+  const steps: EnvelopeStep[] = [
+    { at: t0, value: floor, ramp: "set" },
+    { at: level, value: top, ramp: decay === "exp" ? "exp" : "lin" },
+  ];
+  // THE HOLD NEEDS ITS OWN EVENT TO EXIST AT ALL: a ramp starts from the time
+  // of the PREVIOUS automation point, so without this the decay below would
+  // begin at the top of the attack and the voice would fall through the
+  // sustain rather than sitting on it. A hair of the duration is always left
+  // for the decay itself.
+  if (holdMs > 0) {
+    const decayFrom = Math.min(level + holdMs / 1000, t1 - 0.005);
+    if (decayFrom > level) steps.push({ at: decayFrom, value: top, ramp: "set" });
+  }
+  steps.push({ at: t1, value: floor, ramp: decay });
+  return steps;
+}

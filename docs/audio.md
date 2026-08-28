@@ -83,6 +83,18 @@ is putt … putt … putt. Three things together fix it:
 Noise beds want a deeper stack than pitched ones (five grains against three),
 because uncorrelated noise sums in power rather than in level.
 
+**No voice ever starts on a step.** A gain that jumps from nothing to full
+scale between two samples is broadband — the ear gets a click on top of the
+note — and it is also what makes a resonant filter ring at its own cutoff, so
+on something like a hi-hat (a few milliseconds of noise highpassed at 8 kHz,
+several a second under both scores) the ring IS what the player hears, and it
+reads as a broken speaker. Every voice therefore ramps on over at least
+`MIN_ATTACK_MS`, which is far below the ~10 ms the ear resolves as an attack:
+nothing is softened, only the discontinuity goes. The whole gain curve —
+attack, hold, decay, and which of the two decay shapes a voice gets — is
+`envelopeShape()` in the DOM-free `voice.ts`, so it can be read and tested
+without a browser; `synth.ts` only writes it onto a real node.
+
 The grains are booked **ahead on the audio clock**, a quarter of a second in
 advance, not fired from the animation frame — a bed fired per frame breathes
 with the frame rate, and a breathing engine is the most obvious tell there is
@@ -91,11 +103,18 @@ that a game's audio is being generated.
 Two things keep that true over a long session, and both are the difference
 between a bed and a stutter:
 
-- **A grain is never booked in the past.** WebAudio starts a source whose time
-  has already gone the instant it is handed over, so a stall that leaves the
-  scheduler's anchor behind the clock does not delay the bed — it fires every
-  missed grain at once, on top of the next one. The bed re-anchors the moment
-  it is late instead: its phase means nothing, its regularity is everything.
+- **A grain is never booked in the past — and never far in the future
+  either.** WebAudio starts a source whose time has already gone the instant it
+  is handed over, so a stall that leaves the scheduler's anchor behind the
+  clock does not delay the bed: it fires every missed grain at once, on top of
+  the next one. The bed re-anchors the moment it is late instead — its phase
+  means nothing, its regularity is everything. An anchor far AHEAD of the clock
+  is the same fault from the other side, and it is what an app switch leaves
+  behind: iOS hands back a dead context, the synth replaces it, and the fresh
+  clock starts near zero while the anchor still holds a time minutes into the
+  old one's. An anchor in the future is never late, so nothing re-times it and
+  the bed simply stops — silence until the new clock catches up. Both ends are
+  re-anchored (`STALE_S`).
 - **Noise is generated once, not once per voice.** The road bed alone asks for
   about twenty seconds of noise per second of play, so synthesising a buffer
   per grain churned ~4 MB of `Float32Array` a second on the renderer's own

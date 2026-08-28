@@ -29,6 +29,11 @@ const LOOKAHEAD_S = 0.24;
  * the browser has built it. */
 const ANCHOR_S = 0.05;
 
+/** An anchor further ahead of the clock than this belongs to a context that no
+ * longer exists — see the re-anchor in `update`. Comfortably past anything the
+ * lookahead can book. */
+const STALE_S = 2;
+
 /**
  * HOW HARD THE TYRES ARE BEING ASKED TO TURN THE CAR, as a lateral
  * acceleration, m/s² — the point at which they are working flat out.
@@ -206,7 +211,17 @@ export function createDriveBed(synth: Synth): DriveBed {
       // every missed grain fires at once, on top of the next one, and what
       // comes out is a lurch. Re-anchor the moment the bed is late — its phase
       // means nothing and its regularity is everything.
-      if (bed.nextAt < now) bed.nextAt = now + ANCHOR_S;
+      //
+      // An anchor far in the FUTURE is the same fault seen from the other
+      // side, and it is what an app switch leaves behind: iOS hands back a
+      // dead context, the synth replaces it, and the new context's clock
+      // starts near zero while this anchor still holds a time minutes into
+      // the old one's. Nothing is ever booked legitimately past one lookahead
+      // plus a grain, so anything beyond that is a clock that has been
+      // rebuilt under us — and left alone it is SILENCE until the new clock
+      // catches up, which is the "came back from another app and the engine
+      // is gone" bug.
+      if (bed.nextAt < now || bed.nextAt > now + STALE_S) bed.nextAt = now + ANCHOR_S;
       while (bed.nextAt < now + LOOKAHEAD_S) {
         grain(state, bed.nextAt);
         bed.nextAt += GRAIN_MS / 1000;

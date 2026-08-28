@@ -221,6 +221,19 @@ export function levelCompleted(level: CampaignLevel, progress: CampaignProgress)
   return progress.cleared.includes(level.id);
 }
 
+/** The stage after this one, or null at the end of the ladder — what the
+ * results card offers when a campaign stage is cleared. The ladder carries on
+ * into the next LOCATION rather than stopping at the end of one, so a finished
+ * location hands the player straight into the next country. */
+export function nextLevel(id: string): CampaignLevel | null {
+  const found = findLevel(id);
+  if (!found) return null;
+  const after = found.location.levels[found.index + 1];
+  if (after) return after;
+  const nextLocation = LOCATIONS[LOCATIONS.indexOf(found.location) + 1];
+  return nextLocation?.levels[0] ?? null;
+}
+
 /** Where a level id sits, for the finish handler that has only the id. */
 export function findLevel(
   id: string,

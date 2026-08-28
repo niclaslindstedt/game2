@@ -35,7 +35,13 @@ import { MENU_TRACK } from "../pwa/src/game/audio/scores/menu.ts";
 import { TAIGA_TRACK } from "../pwa/src/game/audio/scores/taiga.ts";
 import type { SoundBank } from "../pwa/src/game/audio/types.ts";
 import { flattenTrack, noteFrequency, trackSeconds } from "../pwa/src/lib/tracker.ts";
-import type { NoiseOptions, Synth, ToneOptions } from "../pwa/src/lib/voice.ts";
+import {
+  MIN_ATTACK_MS,
+  envelopeShape,
+  type NoiseOptions,
+  type Synth,
+  type ToneOptions,
+} from "../pwa/src/lib/voice.ts";
 
 /** A synth that plays nothing and remembers everything, with a clock the test
  * drives by hand. */
@@ -389,6 +395,27 @@ describe("the road bed", () => {
     expect(Math.min(...booked)).toBeGreaterThanOrEqual(rec.clock);
   });
 
+  it("re-anchors onto a REBUILT clock rather than going silent for minutes", () => {
+    // THE APP-SWITCH GUARD. iOS hands a backgrounded PWA a dead AudioContext
+    // and the synth replaces it; the new context's clock starts near zero
+    // while this bed's anchor still holds a time minutes into the old one's.
+    // An anchor in the FUTURE is never late, so nothing re-times it and the
+    // road bed simply stops — which is the "came back from another app and
+    // the engine is gone" silence.
+    const rec = recorder();
+    const bed = createDriveBed(rec);
+    const state = rolling();
+    rec.clock = 240;
+    bed.update(state, 1 / 60);
+    rec.tones.length = 0;
+    rec.noises.length = 0;
+    rec.clock = 0.01; // a fresh context
+    bed.update(state, 1 / 60);
+    const booked = [...rec.tones, ...rec.noises].map((v) => v.at ?? 0);
+    expect(booked.length).toBeGreaterThan(0);
+    expect(Math.max(...booked)).toBeLessThan(rec.clock + 1);
+  });
+
   it("says nothing while the audio clock is locked", () => {
     const rec = recorder();
     const bed = createDriveBed(rec);
@@ -525,5 +552,48 @@ describe("the tyres", () => {
     expect(scrub({ surface: "asphalt", corner: 0 })).toBe(0);
     expect(scrub({ surface: "gravel", corner: 1 })).toBe(0);
     expect(scrub({ surface: "gravel", corner: 1, slide: 0.8 })).toBeGreaterThan(0);
+  });
+});
+
+describe("the shape of a voice", () => {
+  // THE CLICK GUARD. A gain that jumps from nothing to full scale between two
+  // samples is a STEP, and a step is broadband — worse, it is what makes a
+  // resonant filter ring at its own cutoff. On a hi-hat (fourteen milliseconds
+  // of noise highpassed at 8 kHz, five a second under the stage theme) the
+  // ring IS what the player hears, and it reads as a broken speaker rather
+  // than as a cymbal.
+  const SHAPES: [string, ReturnType<typeof envelopeShape>][] = [
+    ["a held pad", envelopeShape(0.05, 0, 0.9, 300, 400, "exp")],
+    ["a plucked note", envelopeShape(0.06, 0, 0.045, 0, 0, "exp")],
+    ["a bare hi-hat burst", envelopeShape(0.009, 0, 0.014, 0, 0, "lin")],
+    ["a grain of a bed", envelopeShape(0.03, 0, 0.4, 40, 200, "exp")],
+  ];
+
+  it("never starts a voice at full scale, however short or unshaped", () => {
+    for (const [name, steps] of SHAPES) {
+      expect(steps[0].value, name).toBeLessThanOrEqual(0.0001);
+      expect(steps[0].ramp, name).toBe("set");
+      // …and it RAMPS to the peak rather than stepping onto it a moment later.
+      expect(steps[1].at, name).toBeGreaterThan(steps[0].at);
+      expect(steps[1].ramp, name).not.toBe("set");
+    }
+  });
+
+  it("gets up to its peak fast enough that nothing is softened", () => {
+    for (const [name, steps] of SHAPES) {
+      if (name === "a held pad" || name === "a grain of a bed") continue;
+      // A percussive voice is up inside the couple of milliseconds the ear
+      // cannot resolve — the snap is the sound, and only the step goes.
+      expect(steps[1].at, name).toBeLessThanOrEqual(MIN_ATTACK_MS / 1000 + 1e-9);
+      expect(steps[1].value, name).toBeGreaterThan(0);
+    }
+  });
+
+  it("holds a pad at its peak instead of falling through the sustain", () => {
+    const pad = envelopeShape(0.05, 0, 0.9, 300, 400, "exp");
+    const peaks = pad.filter((p) => p.value > 0.001);
+    expect(peaks.length).toBe(2); // up to the peak, then held there
+    expect(peaks[1].at - peaks[0].at).toBeCloseTo(0.4, 3);
+    expect(pad[pad.length - 1].value).toBeLessThanOrEqual(0.0001);
   });
 });

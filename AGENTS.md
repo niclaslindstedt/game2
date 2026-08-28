@@ -68,6 +68,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | Collision / damage (crush, parts, wreck, systems)      | `engine/game/collision.ts` — the `collision` skill                                                                        |
 | Bot behavior                                           | `engine/sim/bot.ts`                                                                                                       |
 | Anything drawn (meshes, textures, camera, effects)     | `pwa/src/game/` (renderer.ts and friends)                                                                                 |
+| Things the car knocks loose (cones, torn-off parts)    | `pwa/src/game/cones.ts`, `car-damage.ts`, over `tumble.ts` — renderer-side; the engine knows nothing of them              |
 | Anything HEARD (a hit, a landing, a menu click)        | `pwa/src/game/audio/bank.ts` (+ a rung in `route.ts`) — the `sound-effects` skill                                         |
 | A continuous sound (engine, tyres, wind, the slide)    | `engine-bed.ts` / `road-grain.ts` in `pwa/src/game/audio/`                                                                |
 | A piece of MUSIC                                       | `pwa/src/game/audio/scores/` — the `soundtrack` skill                                                                     |
@@ -75,6 +76,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | Input mapping                                          | `pwa/src/game/input.ts` (bindings in `settings.ts`)                                                                       |
 | Main menu pages / routing                              | `pwa/src/game/main-menu.tsx` (+ `menu-roam`, `menu-options`)                                                              |
 | Campaign stages, locations, unlocks                    | `pwa/src/game/campaign.ts`                                                                                                |
+| The time trial's high score board and its initials     | `pwa/src/game/scores.ts` (storage) + `score-board.tsx` / `hud-initials.tsx`                                               |
 | The time trial's ghost: recording, replay, storage     | `pwa/src/game/ghost.ts`                                                                                                   |
 | A player option (HUD, video, controls)                 | `pwa/src/game/settings.ts`, then its reader                                                                               |
 | The debug overlay, god mode, the debug log             | `pwa/src/game/debug-*.ts(x)`, `camera-free.ts`, `menu-dev.tsx` — the `debug-tools` skill                                  |
