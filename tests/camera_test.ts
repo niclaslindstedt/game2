@@ -266,8 +266,15 @@ describe("the two shots the game is driven from", () => {
     // shared follow rate and swing spring in CHASE_RIGS buy. Stood back is
     // allowed to be a different FRAMING; it is not allowed to be a rockier
     // picture.
-    expect(chase.heave).toBeLessThanOrEqual(close.heave);
-    expect(chase.pitch).toBeLessThanOrEqual(close.pitch);
+    //
+    // Within a fraction of a percent the two ARE the same number, and which
+    // way a tie falls is decided by the last bits of a standoff nobody is
+    // asserting. A rig that had actually gone rocky would not need a tighter
+    // comparison than this — the failure this guards is a multiple, not a
+    // rounding.
+    const SAME = 1.01;
+    expect(chase.heave).toBeLessThanOrEqual(close.heave * SAME);
+    expect(chase.pitch).toBeLessThanOrEqual(close.pitch * SAME);
   });
 });
 

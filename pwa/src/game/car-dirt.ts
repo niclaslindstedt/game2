@@ -22,11 +22,13 @@ import * as THREE from "three";
 import { clamp } from "../lib/util.ts";
 import type { GameState } from "@engine";
 
-/** `userData` flag for a mesh that paints its own vertex colours frame to
- * frame — the screens' grime film (car/wipers.ts) is the one. The painter
- * bakes from a pristine copy of the whole buffer, so it has to leave those
- * alone: two writers on one attribute is a flicker, not a coat. */
-export const SELF_PAINTED = "selfPainted";
+/** `userData` flag for a mesh the painter must not write. Two kinds carry
+ * it. The screens' grime film (car/wipers.ts) paints its own vertex colours
+ * frame to frame, and the painter bakes from a pristine copy of the whole
+ * buffer — two writers on one attribute is a flicker, not a coat. The CABIN
+ * (car/interior.ts) simply is not out in the weather: gravel does not reach
+ * a headliner, and a brown-flecked seat reads as a modelling mistake. */
+export const NO_DIRT = "noDirt";
 
 /** A point in car space that throws dirt — one per wheel. */
 export type SprayPoint = { x: number; y: number; z: number };
@@ -35,6 +37,10 @@ type DirtTarget = {
   geo: THREE.BufferGeometry;
   /** Pristine copy of the mesh's baked colors. */
   orig: Float32Array;
+  /** Floats per vertex in that buffer. The glass carries alpha and the paint
+   * does not, and a coat written at the wrong stride walks the fourth
+   * channel — a window that turns solid as the car gets dirty, in bands. */
+  stride: number;
   /** Mesh origin in car space, m. Wheel geometry is authored about its own
    * axle, so without this the tires would be tested for dirt as though
    * they sat on the car's centerline. */
@@ -117,7 +123,7 @@ export function createDirtPainter(
   const origin = new THREE.Vector3();
   root.getWorldPosition(origin);
   root.traverse((obj) => {
-    if (!(obj instanceof THREE.Mesh) || obj.userData[SELF_PAINTED]) return;
+    if (!(obj instanceof THREE.Mesh) || obj.userData[NO_DIRT]) return;
     const geo = obj.geometry as THREE.BufferGeometry;
     const color = geo.getAttribute("color");
     if (!color) return;
@@ -126,6 +132,7 @@ export function createDirtPainter(
     byGeo.set(geo, {
       geo,
       orig: byGeo.get(geo)?.orig ?? new Float32Array(color.array as Float32Array),
+      stride: color.itemSize,
       base: base.sub(origin),
     });
   });
@@ -199,7 +206,7 @@ export function createDirtPainter(
         tone.copy(TONES[Math.floor(shade * TONES.length)]);
 
         for (let v = 0; v < 3; v++) {
-          const i = (f + v) * 3;
+          const i = (f + v) * t.stride;
           arr[i] = t.orig[i] + (tone.r - t.orig[i]) * amount;
           arr[i + 1] = t.orig[i + 1] + (tone.g - t.orig[i + 1]) * amount;
           arr[i + 2] = t.orig[i + 2] + (tone.b - t.orig[i + 2]) * amount;

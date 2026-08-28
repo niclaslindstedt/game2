@@ -214,6 +214,15 @@ before the commit is written.
   (`pwa/tsconfig.json` `paths` + the Vite preset), so components and the
   oss-framework's typings keep working without `@types/react`. Do not install
   React.
+- **No TypeScript that a stripper cannot strip.** Everything under
+  `scripts/` runs on `node --experimental-strip-types`, which erases types
+  and refuses anything that EMITS code: parameter properties
+  (`constructor(private readonly x = 1) {}`), enums, and namespaces. Those
+  typecheck, build and run in the browser, so neither `make lint` nor
+  `make test` catches them — the first sign is a preview script dying with
+  `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX` on an import three files from the
+  change. Declare the field and assign it in the constructor body; use a
+  union of string literals instead of an enum.
 - **`@niclaslindstedt/oss-framework` resolves from GitHub Packages**, which
   needs a read token even for public reads — in web sessions
   `.claude/hooks/session-start.sh` handles it; locally the token lives in

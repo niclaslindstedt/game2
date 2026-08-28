@@ -5,10 +5,10 @@
 //   THE FILM. Each screen carries a pane of its own, laid a hair proud of
 //   the glass and tessellated into a grid whose VERTICES carry the coat:
 //   the pale smear water leaves, road-brown once a gravel stage has been
-//   throwing filth at it. A clean vertex is painted the glass's own baked
-//   colour, so a dry screen is invisible and the pane costs nothing but its
-//   triangles. Colours interpolate across a cell, so a wiped edge is a
-//   gradient rather than a staircase.
+//   throwing filth at it. The coat is the vertex's ALPHA, so a clean vertex
+//   is not there at all — which is what lets the glass under it be seen
+//   through. Colours and alpha both interpolate across a cell, so a wiped
+//   edge is a gradient rather than a staircase.
 //
 //   THE BLADES. A tandem pair on the windscreen and a single arm on the
 //   backlight, each a rigid body pivoting in the plane of its own screen.
@@ -24,12 +24,14 @@
 // something on the glass, take a stroke per squall, and always finish the
 // stroke they are on so they park where they started.
 //
-// Everything here is baked vertex colours on the body's own fullbright
-// material, so the wipers take the time of day with the rest of the car.
+// The blades are hardware and ride the body's own fullbright material; the
+// film has a material of its own because it is the one part of the car that
+// has to be able to disappear. Both take the time of day with everything
+// else, as a multiply into the material colour.
 
 import * as THREE from "three";
 
-import { SELF_PAINTED } from "../car-dirt.ts";
+import { NO_DIRT } from "../car-dirt.ts";
 import { MeshBuilder, patchAt, patchNormal, shadeFactor, type V3 } from "./builder.ts";
 import { GLASS_LIFT, screenPanes, type ScreenPane } from "./greenhouse.ts";
 import type { CarBodySpec } from "./spec.ts";
@@ -48,8 +50,8 @@ const GRID = { front: { cols: 9, rows: 6 }, rear: { cols: 7, rows: 5 } };
 const FILM_TONE = new THREE.Color(0x9fabb4);
 const MUD_TONE = new THREE.Color(0x6d5a3c);
 
-/** Most of the glass a full coat can take, 0..1 — short of 1, so even a
- * caked screen is still glass rather than a painted panel. */
+/** Most of the film a full coat can reach, 0..1 of opaque — short of 1, so
+ * even a caked screen is still glass rather than a painted panel. */
 const COAT_MAX = 0.76;
 
 /** Coat per second, at a downpour and at a filthy car. Rain films a screen
@@ -102,6 +104,10 @@ const WIPE_EDGE = 0.05;
 
 export type CarWipers = {
   group: THREE.Group;
+  /** The grime pane itself — handed out so the assembly can order it over
+   * the glass it is laid on, which no distance sort can be trusted to get
+   * right for two surfaces three millimetres apart. */
+  film: THREE.Mesh;
   /**
    * Drive the glass one step.
    *
@@ -177,7 +183,6 @@ type Film = {
   soil: { rain: number; road: number };
   /** How much of what is on this screen is mud rather than water, 0..1. */
   mud: number;
-  base: THREE.Color;
   tone: THREE.Color;
   shade: number;
   pivots: Pivot[];
@@ -209,11 +214,14 @@ function bladeGeometry(reach: number): THREE.BufferGeometry {
   return b.geometry();
 }
 
-export function buildWipers(spec: CarBodySpec, material: THREE.Material): CarWipers {
+export function buildWipers(
+  spec: CarBodySpec,
+  material: THREE.Material,
+  filmMaterial: THREE.Material,
+): CarWipers {
   const group = new THREE.Group();
   const panes = screenPanes(spec);
   const armed = spec.cabin.wipers === true;
-  const glass = spec.colors.glass ?? 0x1b2430;
 
   const position: number[] = [];
   const color: number[] = [];
@@ -240,7 +248,7 @@ export function buildWipers(spec: CarBodySpec, material: THREE.Material): CarWip
         const v = pane.rect.v0 + ((pane.rect.v1 - pane.rect.v0) * j) / rows;
         const p = vec(patchAt(pane.patch, u, v)).addScaledVector(frame.normal, FILM_LIFT);
         position.push(p.x, p.y, p.z);
-        color.push(0, 0, 0);
+        color.push(0, 0, 0, 0);
         p.sub(frame.origin);
         local.push(p.dot(frame.right), p.dot(frame.up));
       }
@@ -319,7 +327,6 @@ export function buildWipers(spec: CarBodySpec, material: THREE.Material): CarWip
       bias,
       soil: SOIL[which],
       mud: 0,
-      base: new THREE.Color(glass).multiplyScalar(shade),
       tone: new THREE.Color(),
       shade,
       pivots,
@@ -336,24 +343,24 @@ export function buildWipers(spec: CarBodySpec, material: THREE.Material): CarWip
 
   const filmGeo = new THREE.BufferGeometry();
   filmGeo.setAttribute("position", new THREE.Float32BufferAttribute(position, 3));
-  const colors = new THREE.Float32BufferAttribute(color, 3);
+  const colors = new THREE.Float32BufferAttribute(color, 4);
   filmGeo.setAttribute("color", colors);
   filmGeo.setIndex(index);
-  const film = new THREE.Mesh(filmGeo, material);
+  const film = new THREE.Mesh(filmGeo, filmMaterial);
   // The film paints itself every step it moves; the dirt painter bakes from
   // a pristine copy, and two writers on one buffer is a flicker.
-  film.userData[SELF_PAINTED] = true;
+  film.userData[NO_DIRT] = true;
   group.add(film);
 
   const paint = (f: Film): void => {
     f.tone.copy(FILM_TONE).lerp(MUD_TONE, f.mud).multiplyScalar(f.shade);
     const arr = colors.array as Float32Array;
     for (let k = 0; k < f.count; k++) {
-      const amount = f.coat[k] * COAT_MAX;
-      const i = (f.offset + k) * 3;
-      arr[i] = f.base.r + (f.tone.r - f.base.r) * amount;
-      arr[i + 1] = f.base.g + (f.tone.g - f.base.g) * amount;
-      arr[i + 2] = f.base.b + (f.tone.b - f.base.b) * amount;
+      const i = (f.offset + k) * 4;
+      arr[i] = f.tone.r;
+      arr[i + 1] = f.tone.g;
+      arr[i + 2] = f.tone.b;
+      arr[i + 3] = f.coat[k] * COAT_MAX;
       f.shown[k] = f.coat[k];
     }
     colors.needsUpdate = true;
@@ -429,5 +436,5 @@ export function buildWipers(spec: CarBodySpec, material: THREE.Material): CarWip
     for (const geo of bladeGeos) geo.dispose();
   };
 
-  return { group, update, dispose };
+  return { group, film, update, dispose };
 }

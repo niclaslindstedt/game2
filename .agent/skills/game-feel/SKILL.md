@@ -21,9 +21,20 @@ The proportions, measured off its chase cam:
 
 - **The car anchors the BOTTOM of the frame** — wheels ~80% down the screen,
   roof around the middle. The road and world own the frame, not the car.
-- **The camera is at roof height (~2 m), pitched only ~4–6° down**, close
-  behind (the car spans roughly a quarter of the frame width). Height above
-  the car is what makes a game read slow and toy-like; Sega Rally is low.
+- **The camera stands well OVER the roof and looks down at it** — about 13°
+  of depression from the lens to the top of the car, close behind (the car
+  spans roughly a quarter of the frame width). That angle, not the height, is
+  the number to reason about: it sets how far up the frame the roofline
+  reaches AND how far ahead the sight line grazing it lands, so it is the
+  whole of whether a player can see where they are going. At ~13° the roof
+  sits about three fifths down the frame and the road is visible from a
+  couple of metres past the bumper; under ~8° the car is a wall and a player
+  reports, correctly, that they cannot see the road. Height is therefore a
+  CONSEQUENCE of the standoff — `height = roofY + (dist − roofZ)·tan θ` —
+  which is why a short boom needs proportionally more height over the roof
+  than a long one, and why holding one θ across `close`, `chase` and `far`
+  is what makes them one shot at three lengths. "Low" in a chase cam means a
+  short BOOM and a shallow AIM, never a lens parked at roof height.
 - **The horizon rides high** (top third), so the ground plane streams past at
   a shallow, speed-selling angle.
 - **The camera follows the ROAD, not the nose.** Mid-drift the car sits yawed

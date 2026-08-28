@@ -177,6 +177,16 @@ function VideoTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "onS
         onPick={(effects) => set({ effects })}
       />
       <OptionRow
+        label="CAR INTERIORS"
+        options={[
+          { id: "off", label: "OFF" },
+          { id: "low", label: "LOW" },
+          { id: "full", label: "FULL" },
+        ]}
+        value={video.interior}
+        onPick={(interior) => set({ interior })}
+      />
+      <OptionRow
         label="UNDERGROWTH"
         options={[
           { id: "sparse", label: "SPARSE" },
@@ -186,6 +196,11 @@ function VideoTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "onS
         value={video.flora}
         onPick={(flora) => set({ flora })}
       />
+      <div className="opt-note">
+        INTERIORS is what is behind the glass — trim, seats and a crew on LOW, plus the roll cage
+        and a steering wheel that turns on FULL. OFF puts the old solid windows back. Applies to the
+        next stage you start.
+      </div>
       <div className="opt-note">
         Grass, shrubs and stumps between the trees — the cheapest frames on this page. The trees you
         can HIT are always drawn, so this never makes a stage easier; how thickly the forest itself
