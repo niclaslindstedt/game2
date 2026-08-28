@@ -340,6 +340,14 @@ export function stepGrounded(
   // The throw takes time to cross the car and time to come back, so it is
   // HELD rather than read off the rack each step — see flickSettle.
   car.flick = Math.max(thrown, car.flick - T.steering.flickSettle * dt);
+  // The weight moving forward off the driven axle, chasing the pedal at the
+  // rate the mass actually travels. See `CarState.lift`.
+  const wasLifted = car.lift;
+  car.lift += (1 - input.throttle - car.lift) * clamp(T.grip.liftSettle * dt, 0, 1);
+  /** THE BOOT, 0..1 — how hard the power is coming back on, read off the rate
+   * the weight is moving back onto the driven axle. A stab off a closed
+   * throttle tops this out; a throttle already open cannot move it at all. */
+  const boot = clamp((wasLifted - car.lift) / (T.grip.liftSettle * dt), 0, 1);
   const flick = car.flick;
   // Which way the mass was sent. Latched with the load: by the time the
   // tires feel it the rack has long since arrived, and the lock's own sign
@@ -427,7 +435,13 @@ export function stepGrounded(
   // it through the corner afterwards, which is exactly how the move works:
   // the flick sets the angle up, the wheel then drives it.
   const flickDemand = flick * T.grip.flickThrow * DR.flick * speedFactor;
-  const demand = Math.abs(car.u * steer * steerGain) / gripCeiling + spinDemand + flickDemand;
+  // ...and the weight coming BACK, which is a driven axle being asked for
+  // torque it has no grip left to spend. Enters the same demand the wheel
+  // does, so booting it mid-corner is one more way of asking for the angle
+  // rather than a mode of its own.
+  const bootDemand = boot * T.grip.bootThrow * DR.spin * spec.torque * speedFactor;
+  const demand =
+    Math.abs(car.u * steer * steerGain) / gripCeiling + spinDemand + flickDemand + bootDemand;
   const { asked, sliding, open } = slideFactor(car, demand, {
     floor: D.slideFrom * DR.driftFloor,
     entryAt: D.entryAt * DR.entry,
@@ -447,7 +461,17 @@ export function stepGrounded(
   // without the other would make the paved car's drift sharp-edged instead
   // of small.
   const breakaway = T.surfaces.breakaway[ctx.surface];
-  const askedSlip = D.angleSpan * breakaway * asked;
+  // A CLOSED THROTTLE ASKS FOR MORE ANGLE. Lifting mid-corner throws the
+  // weight onto the nose and takes it off the driven axle, and the tail
+  // comes round: it is the oldest way there is of making a car turn in
+  // harder than the wheel alone will. It has to move the SETPOINT rather
+  // than push against it — every deepening force, the lift's own rotation
+  // included, fades out as the car reaches the angle being asked for, so a
+  // lift applied at the bottom of that band is a lift that does nothing.
+  // With the setpoint moved, the band reopens and the whole machinery
+  // carries the car to the deeper angle, where `liftGrip` is meanwhile
+  // pulling the line tighter — one pedal, both halves of a rally turn-in.
+  const askedSlip = D.angleSpan * breakaway * asked * (1 + D.liftSpan * car.lift);
   const sat = clamp(1 - (Math.abs(car.slip) - askedSlip) / (D.angleBand * breakaway), 0, 1);
   const deepening = Math.sign(steer) === -Math.sign(car.slip) && car.slip !== 0;
   const steerTerm = steer * backwards * (steerGain + spec.driftYaw * speedFactor * asked);
@@ -643,12 +667,49 @@ export function stepGrounded(
   // The lever comes in through the speed floor like everything else that
   // takes the rear away: under it the handbrake stops the car and does not
   // unstick it, so a yank at 40 km/h is a brake and nothing more.
-  const handbrakeGrip = input.handbrake ? 1 + (T.grip.handbrakeGrip - 1) * open : 1;
+  // The lever locks the REAR wheels — the fronts keep rolling and keep
+  // steering, so what the car loses is its tail, not its ability to change
+  // direction. `handbrakeLat` is what the redirect keeps for that reason,
+  // and it sits well above `handbrakeGrip` (which is the rear letting go,
+  // up at the slide threshold): cut the two together and the car pivots
+  // beautifully while carrying straight on past the apex, which is the one
+  // thing the lever is supposed to be for.
+  const leverLat = input.handbrake ? 1 + (T.grip.handbrakeLat - 1) * open : 1;
   // Bent arms, a twisted shell that moves the geometry under load, and the
   // downforce of a wing that is no longer on the car — all three through
   // `hurt.grip`, floored so they can never stack into an unpointable car.
-  const grip = surfaceGrip * lift * handbrakeGrip * hurt.grip;
-  const latRate = (spec.gripLat + (spec.driftLat - spec.gripLat) * sliding) * grip;
+  const grip = surfaceGrip * lift * leverLat * hurt.grip;
+  // THE HANDS ARE WHAT RE-GRIP THE CAR. Sideways, the front tires are as
+  // crossed up as the body is: pointed nowhere near where the car is going,
+  // they have almost nothing to pull against, and it is LOCK — either way,
+  // the held corner or the catch — that aims them back along the travel and
+  // lets them bite. So the redirect keeps its full rate wherever the wheel
+  // is asking for something, and fades to `1 - tailFade` only where a
+  // centred wheel meets a real slip angle.
+  //
+  // That one gate is what makes the exit belong to the driver. Without it,
+  // dropping the wheel mid-slide let the tires eat the car's whole sideways
+  // momentum on their own: the velocity swung thirty degrees back in behind
+  // the nose after the hands came off, so the slide finished the corner by
+  // itself and handed the car back straight, on the road, faster than it
+  // went in. Now letting go leaves the car going where it was already
+  // going — out toward the outside of the road, aimed off the line — and
+  // steering is what tips it back into the middle.
+  //
+  // The angle is sized in the surface's own breakaway, for the same reason
+  // `askedSlip` is: a sealed road's whole slip vocabulary is a few degrees
+  // wide, and a fade sized for gravel would never reach it.
+  const tailAt = clamp(
+    (Math.abs(car.slip) - T.grip.tailPeak * breakaway) / (T.grip.tailBand * breakaway),
+    0,
+    1,
+  );
+  // Through the speed floor like everything else that keeps a car sideways:
+  // under it the wheel steers the car and that is all it does, so a slow
+  // scrabble out of a ditch cannot use a centred wheel to go on sliding.
+  const crossed = tailAt * tailAt * (3 - 2 * tailAt) * (1 - Math.abs(steer)) * open;
+  const tail = 1 - T.grip.tailFade * crossed;
+  const latRate = (spec.gripLat + (spec.driftLat - spec.gripLat) * sliding) * grip * tail;
   // THE TRACTION CEILING. The redirect is a RATE, and a rate times a speed
   // is a force the tires have to find: unbounded, the car pulls whatever
   // lateral acceleration the geometry asks for, which is how it ends up
