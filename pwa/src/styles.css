@@ -577,8 +577,15 @@ body {
 }
 
 /* The condition row: the damage glyph plus whatever the situation has to
-   say. It is allowed to grow — nothing in it is sized to fit. */
+   say. It is allowed to grow — nothing in it is sized to fit.
+
+   It also has to sit ABOVE the touch zones, which come later in the DOM and
+   cover this whole corner: the way back onto the road is a button, and a
+   button under the steering zone is a button that anchors the wheel instead
+   of pressing. */
 .hud-status {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: flex-end;
   gap: 0.5rem;

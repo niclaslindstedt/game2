@@ -3,6 +3,8 @@
 // into the engine's CarInput. Keyboard steering ramps (a held arrow eases
 // to full lock; release snaps back faster), touch steering is a direct
 // axis. Shifts are edge-triggered and consumed by the step they arrive in.
+// The discipline the HUD's thumb zones hold a finger BY is next door in
+// thumb-guard.ts, which stays DOM-free so the tests can read it.
 //
 // Which key does what is the player's to change: the manager holds a
 // code → action index built from the bindings in settings.ts, so a rebind

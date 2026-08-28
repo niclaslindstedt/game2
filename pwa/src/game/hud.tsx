@@ -4,11 +4,12 @@
 // is not), and owns the touch controls, which write straight into the
 // input manager between snapshots.
 
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 
 import type { GamePhase, TurnSeverity } from "@engine";
 
 import { deviceControls, type InputManager } from "./input.ts";
+import { createThumbGuard } from "./thumb-guard.ts";
 import { Minimap, type HudMinimap } from "./minimap.tsx";
 import type { HudSettings, PedalDir, TouchSettings } from "./settings.ts";
 import type { Standing } from "./standings.ts";
@@ -142,6 +143,15 @@ function capturePointer(e: { currentTarget: EventTarget | null; pointerId: numbe
   }
 }
 
+/** Ask the DOM whether a finger is still on the glass. Capture is the only
+ * one who knows: the browser drops it the moment a touch ends, whether or
+ * not it ever told us the touch ended. This is what a zone's guard checks
+ * before refusing a new claim, and what its watchdog ticks on. */
+function stillDown(zone: EventTarget | null): (pointerId: number) => boolean {
+  const el = zone as HTMLElement | null;
+  return (pointerId) => el?.hasPointerCapture(pointerId) ?? false;
+}
+
 /** Thumb travel (px) from the anchor for full steering lock — the wheel's
  * whole throw. Long enough that holding a line is a push, not a switch. */
 const WHEEL_REACH_PX = 70;
@@ -189,7 +199,6 @@ const PEDAL_HINT_WORD: Record<Exclude<PedalMode, "gas">, string> = {
 function SteerZone({ touch, side }: { touch: InputManager["touch"]; side: "left" | "right" }) {
   const wheelRef = useRef<HTMLDivElement>(null);
   const fillRef = useRef<SVGCircleElement>(null);
-  const pointerRef = useRef<number | null>(null);
   const originRef = useRef(0);
   /** Where the thumb is asking the rim to be, and where the rim has got to. */
   const targetRef = useRef(0);
@@ -227,27 +236,32 @@ function SteerZone({ touch, side }: { touch: InputManager["touch"]; side: "left"
     cancelAnimationFrame(frameRef.current);
     frameRef.current = 0;
   };
-  useEffect(() => stopSpin, []);
 
-  const release = (e: { pointerId: number }): void => {
-    if (e.pointerId !== pointerRef.current) return;
-    pointerRef.current = null;
+  /** Centre the wheel and put it away. Everything it touches is a ref, so
+   * the guard can call it from a window event or an unmount just as safely
+   * as the pointerup does. */
+  const letGo = (): void => {
     stopSpin();
     targetRef.current = 0;
     setSteer(0);
     if (wheelRef.current) wheelRef.current.style.display = "none";
   };
+  const letGoRef = useRef(letGo);
+  letGoRef.current = letGo;
+  const guard = useMemo(() => createThumbGuard(() => letGoRef.current(), window), []);
+  useEffect(() => () => guard.dispose(), [guard]);
 
   return (
     <div
       className={`hud-zone hud-zone-${side}`}
       onPointerDown={(e) => {
         // The first finger owns the wheel; a second touch on this half is
-        // ignored rather than re-anchoring the steering under the first.
-        if (pointerRef.current !== null) return;
-        pointerRef.current = e.pointerId;
-        originRef.current = e.clientX;
+        // ignored rather than re-anchoring the steering under the first —
+        // unless the first is a finger the browser never told us about,
+        // which is what the guard refuses to keep believing in.
         capturePointer(e);
+        if (!guard.claim(e.pointerId, stillDown(e.currentTarget))) return;
+        originRef.current = e.clientX;
         const wheel = wheelRef.current;
         if (wheel) {
           const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -261,12 +275,15 @@ function SteerZone({ touch, side }: { touch: InputManager["touch"]; side: "left"
         if (!frameRef.current) frameRef.current = requestAnimationFrame(spin);
       }}
       onPointerMove={(e) => {
-        if (e.pointerId !== pointerRef.current) return;
+        if (!guard.owns(e.pointerId)) return;
         const travel = clamp((e.clientX - originRef.current) / WHEEL_REACH_PX, -1, 1);
         targetRef.current = Math.sign(travel) * Math.abs(travel) ** WHEEL_THROW_CURVE;
       }}
-      onPointerUp={release}
-      onPointerCancel={release}
+      onPointerUp={(e) => guard.release(e.pointerId)}
+      onPointerCancel={(e) => guard.release(e.pointerId)}
+      // Capture taken away mid-drag: whatever the browser does with the rest
+      // of that touch, this zone is no longer hearing about it.
+      onLostPointerCapture={(e) => guard.release(e.pointerId)}
       onContextMenu={(e) => e.preventDefault()}
     >
       <div ref={wheelRef} className="hud-wheel" aria-hidden="true">
@@ -331,7 +348,6 @@ function PedalZone({
     [layout.boost]: "boost",
   };
   const hintRef = useRef<HTMLDivElement>(null);
-  const pointerRef = useRef<number | null>(null);
   const originRef = useRef({ x: 0, y: 0 });
 
   const setMode = (mode: PedalMode | null): void => {
@@ -342,21 +358,24 @@ function PedalZone({
     const hint = hintRef.current;
     if (hint) hint.dataset.mode = mode ?? "";
   };
-  const release = (e: { pointerId: number }): void => {
-    if (e.pointerId !== pointerRef.current) return;
-    pointerRef.current = null;
+  /** Lift every pedal. Like the wheel's, this has to be safe to run when
+   * nothing is held: a lost pointerup here is throttle nobody asked for. */
+  const letGo = (): void => {
     setMode(null);
     if (hintRef.current) hintRef.current.style.display = "none";
   };
+  const letGoRef = useRef(letGo);
+  letGoRef.current = letGo;
+  const guard = useMemo(() => createThumbGuard(() => letGoRef.current(), window), []);
+  useEffect(() => () => guard.dispose(), [guard]);
 
   return (
     <div
       className={`hud-zone hud-zone-${side}`}
       onPointerDown={(e) => {
-        if (pointerRef.current !== null) return;
-        pointerRef.current = e.pointerId;
-        originRef.current = { x: e.clientX, y: e.clientY };
         capturePointer(e);
+        if (!guard.claim(e.pointerId, stillDown(e.currentTarget))) return;
+        originRef.current = { x: e.clientX, y: e.clientY };
         const hint = hintRef.current;
         if (hint) {
           const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -367,7 +386,7 @@ function PedalZone({
         setMode("gas");
       }}
       onPointerMove={(e) => {
-        if (e.pointerId !== pointerRef.current) return;
+        if (!guard.owns(e.pointerId)) return;
         const dx = e.clientX - originRef.current.x;
         const dy = e.clientY - originRef.current.y;
         // Dominant axis picks the direction; the one direction nothing is
@@ -380,8 +399,9 @@ function PedalZone({
         }
         setMode(mode);
       }}
-      onPointerUp={release}
-      onPointerCancel={release}
+      onPointerUp={(e) => guard.release(e.pointerId)}
+      onPointerCancel={(e) => guard.release(e.pointerId)}
+      onLostPointerCapture={(e) => guard.release(e.pointerId)}
       onContextMenu={(e) => e.preventDefault()}
     >
       <div ref={hintRef} className="hud-pedal-hint" aria-hidden="true">

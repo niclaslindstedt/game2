@@ -71,7 +71,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | Anything HEARD (a hit, a landing, a menu click)        | `pwa/src/game/audio/bank.ts` (+ a rung in `route.ts`) — the `sound-effects` skill                                         |
 | A continuous sound (engine, tyres, wind, the slide)    | `engine-bed.ts` / `road-grain.ts` in `pwa/src/game/audio/`                                                                |
 | A piece of MUSIC                                       | `pwa/src/game/audio/scores/` — the `soundtrack` skill                                                                     |
-| HUD / touch controls                                   | `pwa/src/game/hud.tsx` + `pwa/src/styles.css`                                                                             |
+| HUD / touch controls                                   | `pwa/src/game/hud.tsx` + `pwa/src/styles.css` (a thumb zone's grip on a finger: `thumb-guard.ts`)                         |
 | Input mapping                                          | `pwa/src/game/input.ts` (bindings in `settings.ts`)                                                                       |
 | Main menu pages / routing                              | `pwa/src/game/main-menu.tsx` (+ `menu-roam`, `menu-options`)                                                              |
 | Campaign stages, locations, unlocks                    | `pwa/src/game/campaign.ts`                                                                                                |
