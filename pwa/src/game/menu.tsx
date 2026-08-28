@@ -14,6 +14,7 @@ import {
   STAGE_RULES,
   type StageKnobs,
   type StageLength,
+  type Season,
   type StageShape,
   type TimeOfDay,
   type Weather,
@@ -25,6 +26,7 @@ import type { DevSettings } from "./settings.ts";
 export type RaceSettings = {
   timeOfDay: TimeOfDay;
   weather: Weather;
+  season: Season;
   carId: string;
   length: StageLength;
   /** R22 — a sprint from a start to a finish, or a circuit raced over laps. */
@@ -132,6 +134,14 @@ export const TIMES_OF_DAY: { id: TimeOfDay; label: string }[] = [
   { id: "day", label: "DAY" },
   { id: "dusk", label: "DUSK" },
   { id: "night", label: "NIGHT" },
+];
+
+/** The taiga's three. The boreal forest under snow is the arctic biome,
+ * not a fourth season of this one. */
+export const SEASONS: { id: Season; label: string }[] = [
+  { id: "spring", label: "SPRING" },
+  { id: "summer", label: "SUMMER" },
+  { id: "autumn", label: "AUTUMN" },
 ];
 
 export const WEATHERS: { id: Weather; label: string }[] = [

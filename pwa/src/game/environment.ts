@@ -8,7 +8,7 @@
 // presentation: it reads GameState (env, wind, car) and never writes it.
 
 import * as THREE from "three";
-import type { GameState, RaceEnv, TimeOfDay, Weather } from "@engine";
+import type { GameState, RaceEnv, Season, TimeOfDay, Weather } from "@engine";
 
 import { glowTexture } from "./textures.ts";
 
@@ -177,6 +177,98 @@ function weathered(time: TimeOfDay, weather: Weather): Preset {
   p.discSize = weather === "rain" ? p.discSize * 0.7 : 0;
   p.stars *= weather === "rain" ? 0.2 : 0;
   p.cloud = toward(p.cloud);
+  return p;
+}
+
+// ── The seasons, as astronomy rather than art direction ───────────────────
+// The single biggest difference between a May stage and a September one is
+// not the leaves — it is where the sun IS. A taiga rally is run at around
+// 62°N (central Scandinavia), and the sun's noon elevation there is
+// 90° − latitude + declination. The declination runs from +23.44° at the
+// summer solstice down through zero at the equinoxes, so:
+//
+//   mid-May          90 − 62 + 17.5  ≈ 45° above the horizon at noon
+//   summer solstice  90 − 62 + 23.4  ≈ 51°
+//   late September   90 − 62 −  1.8  ≈ 26°
+//
+// Half the height, at the season the north's colour peaks. Everything else
+// here falls out of that one number: longer shadows, a dimmer and warmer
+// beam, and a colder, lower key over the whole landscape.
+
+/** Where the taiga is, degrees north. */
+const LATITUDE = 62;
+
+/** The sun's declination in the middle of each season, degrees — mid-May,
+ * the June solstice, and the last week of September, which is when "ruska"
+ * (the north's autumn colour) peaks. Winter is not a season of this biome:
+ * the boreal forest under snow is the arctic one. */
+const DECLINATION: Record<Season, number> = { spring: 17.5, summer: 23.4, autumn: -1.8 };
+
+/** The sine of the noon solar elevation — which is both how high the sun
+ * gets and, because irradiance on flat ground goes as the cosine of the
+ * zenith angle, how much of its light lands there. */
+function noonSun(season: Season): number {
+  return Math.sin(((90 - LATITUDE + DECLINATION[season]) * Math.PI) / 180);
+}
+
+/** Rayleigh optical depth of the whole clear atmosphere at sea level, per
+ * air mass, at the wavelengths the renderer's three channels stand for
+ * (~650, 550 and 450 nm). Scattering goes as λ⁻⁴, so blue is stripped out
+ * of a beam about four and a half times as fast as red — which is why the
+ * sky is blue, why a low sun is orange, and why a September noon is warmer
+ * than a June one before a single cloud is involved. */
+const RAYLEIGH = { r: 0.049, g: 0.097, b: 0.221 };
+
+/** The season sits UNDER the time of day: it decides how high the sun gets
+ * at all, and the time of day then says where along that arc it is. So the
+ * elevation is SCALED rather than shifted — a dawn sun sits on the horizon
+ * in every season; it is the noon one that moves — and the extra air the
+ * lower beam has to come through is charged once, at the season's own noon,
+ * rather than compounded onto a dawn that is already the length of the
+ * atmosphere. */
+function seasoned(p: Preset, season: Season): Preset {
+  if (season === "summer") return p;
+  const here = noonSun(season);
+  const peak = noonSun("summer");
+  p.sunElevation = Math.asin(Math.min(1, Math.sin(p.sunElevation) * (here / peak)));
+  // Air mass is 1/sin(elevation): the path a beam takes through the
+  // atmosphere, in units of the straight-up one.
+  const extraAir = 1 / here - 1 / peak;
+  const through = (depth: number): number => Math.exp(-depth * extraAir);
+  const tr = through(RAYLEIGH.r);
+  const tg = through(RAYLEIGH.g);
+  const tb = through(RAYLEIGH.b);
+  // What survives the trip, channel by channel. Applied to the sun's COLOR
+  // rather than its intensity because that is what it physically is: a beam
+  // that has lost more blue than red is both warmer and weaker, and one
+  // multiply says both.
+  const sun = new THREE.Color(p.sun);
+  p.sun = sun.setRGB(sun.r * tr, sun.g * tg, sun.b * tb).getHex();
+  const mix = (c: number, toward: number, t: number): number =>
+    new THREE.Color(c).lerp(new THREE.Color(toward), t).getHex();
+  if (season === "autumn") {
+    // September air in the north is dry and clean — the humidity and the
+    // pollen haze of high summer are gone — so the sky reads deeper and
+    // the view opens out, while the low sun warms the horizon band.
+    p.zenith = mix(p.zenith, 0x0f5fb0, 0.22);
+    p.horizon = mix(p.horizon, 0xffd9a8, 0.2);
+    p.fog = mix(p.fog, 0xe8d3ac, 0.18);
+    p.fogFar *= 1.08;
+    // Skylight is the other half of the key, and there is less of it under
+    // a low sun. The ground BOUNCES a different colour too: what comes back
+    // up off a straw-and-bilberry landscape is warm, not green.
+    p.hemiIntensity *= 0.88;
+    p.hemiGround = mix(p.hemiGround, 0xa8843f, 0.5);
+    p.cloud = mix(p.cloud, 0xffe6cc, 0.15);
+  } else {
+    // May: the air still carries haze and birch pollen, so the sky is
+    // milkier and the distance closes in a little.
+    p.zenith = mix(p.zenith, 0x8fb4dc, 0.16);
+    p.fog = mix(p.fog, 0xd8e2e8, 0.12);
+    p.fogFar *= 0.94;
+    p.hemiIntensity *= 0.97;
+    p.hemiGround = mix(p.hemiGround, 0x9a9060, 0.35);
+  }
   return p;
 }
 
@@ -349,43 +441,135 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   disc.renderOrder = -1;
   group.add(halo, disc);
 
-  // ── Distant mountains: two silhouette ridge rings riding the horizon.
-  // Camera-locked like the dome (infinitely far), tinted per preset so they
-  // read through the atmosphere — hazier behind, moodier in front.
-  const buildRidge = (radius: number, lift: number, jag: number): THREE.Mesh => {
-    const STEPS = 110;
-    const positions: number[] = [];
-    const indices: number[] = [];
-    const p1 = Math.random() * Math.PI * 2;
-    const p2 = Math.random() * Math.PI * 2;
-    const p3 = Math.random() * Math.PI * 2;
+  // ── Distant mountains: silhouette rings riding the horizon, camera-locked
+  // like the dome (infinitely far) and tinted per preset so they read
+  // through the atmosphere — hazier behind, moodier in front.
+  //
+  // Four rings, not one: a chain has to have something BEHIND it before
+  // the eye can tell how far away any of it is, and depth on a horizon is
+  // the only sense of scale a stage gets. Farthest carries snow, nearest
+  // is a dark band of forest on the skyline.
+  //
+  // The profile is RIDGED rather than wavy. A sum of sines is a rolling
+  // hill, and rolling hills at that distance read as a bank of cloud;
+  // folding each octave back on itself puts a crease at every summit and a
+  // flat floor in every col, which is what a mountain chain looks like
+  // from the valley below it.
+  /** One ring's profile: where each column's foot, snowline and summit
+   * sit, plus how the atmosphere has eaten into its rock. `haze` is how
+   * much of the sky the ring has dissolved into and `tone` darkens what is
+   * left — the two halves of aerial perspective, because near rock is not
+   * just less hazy, it is darker. `shade` is the per-vertex rock/snow
+   * modulation the profile itself carries. */
+  type Ridge = { haze: number; tone: number };
+  const ridgeShade: number[] = [];
+  const ridgeHaze: number[] = [];
+  const ridgeTone: number[] = [];
+  const ridgePos: number[] = [];
+  const ridgeIndex: number[] = [];
+
+  const addRidge = (
+    ridge: Ridge,
+    radius: number,
+    lift: number,
+    jag: number,
+    /** World height above which the rock is under snow, or null for none. */
+    snowY: number | null,
+  ): void => {
+    const STEPS = 150;
+    const OCTAVES = 4;
+    const phase = Array.from({ length: OCTAVES }, () => Math.random() * Math.PI * 2);
+    const base = ridgePos.length / 3;
     for (let i = 0; i <= STEPS; i++) {
       const a = (i / STEPS) * Math.PI * 2;
-      const wave =
-        Math.sin(a * 3 + p1) * 0.45 + Math.sin(a * 7 + p2) * 0.35 + Math.sin(a * 13 + p3) * 0.2;
+      let shape = 0;
+      let amp = 1;
+      let freq = 3;
+      for (let o = 0; o < OCTAVES; o++) {
+        const n = 0.5 + 0.5 * Math.sin(a * freq + phase[o]);
+        // The fold: 0 at either end of the octave, 1 through the middle.
+        shape += amp * (1 - Math.abs(2 * n - 1));
+        amp *= 0.52;
+        freq *= 2.13;
+      }
+      // Sharpened, so the summits are summits and the cols are broad.
+      shape = Math.pow(shape / 1.9, 1.5) * 2 - 0.55;
       // The ridge opens toward the sun's azimuth — a sea gap, so a low dawn
       // or dusk sun always has a horizon to sit on instead of a rock wall.
       const gap = 1 - 0.92 * Math.pow(Math.max(0, Math.cos(a - SUN_AZIMUTH)), 5);
-      const h = Math.max(3, (lift + wave * jag) * gap);
+      const h = Math.max(3, (lift + shape * jag) * gap);
       const x = Math.sin(a) * radius;
       const z = Math.cos(a) * radius;
-      positions.push(x, -6, z, x, h, z);
+      // Three vertices to a column — foot, snowline, summit — so the snow
+      // caps the peaks that reach it instead of bleeding down the whole
+      // flank. A peak short of the line collapses its top quad to nothing.
+      const line = snowY === null ? h : Math.min(h, snowY);
+      ridgePos.push(x, -6, z, x, line, z, x, h, z);
+      const rock = 0.92 + 0.14 * Math.min(1, h / Math.max(1, lift + jag));
+      const snow = snowY !== null && h > snowY ? 1.7 : rock;
+      ridgeShade.push(rock, rock, snow);
+      for (let k = 0; k < 3; k++) {
+        ridgeHaze.push(ridge.haze);
+        ridgeTone.push(ridge.tone);
+      }
       if (i > 0) {
-        const b = (i - 1) * 2;
-        indices.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
+        const b = base + (i - 1) * 3;
+        ridgeIndex.push(b, b + 1, b + 3, b + 1, b + 4, b + 3);
+        ridgeIndex.push(b + 1, b + 2, b + 4, b + 2, b + 5, b + 4);
       }
     }
-    const ridgeGeo = new THREE.BufferGeometry();
-    ridgeGeo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-    ridgeGeo.setIndex(indices);
-    const ridgeMat = new THREE.MeshBasicMaterial({ fog: false, side: THREE.DoubleSide });
-    const ridge = new THREE.Mesh(ridgeGeo, ridgeMat);
-    ridge.renderOrder = -1;
-    return ridge;
   };
-  const ridgeFar = buildRidge(520, 70, 95);
-  const ridgeNear = buildRidge(430, 38, 70);
-  group.add(ridgeFar, ridgeNear);
+
+  // Every ring stands between the CLOUD RING and the DOME, and there is no
+  // slack in that: a ridge inside the clouds' orbit is an opaque wall drawn
+  // through them; one outside the dome is not drawn at all. So the rings
+  // are packed into the band between the two, and their apparent SIZE is
+  // carried by their heights rather than by how far out they stand — they
+  // ride the camera, so there is no parallax between them to lose. Four
+  // rings, farthest first, because a chain needs something behind it before
+  // the eye can tell how far away any of it is, and depth on a horizon is
+  // the only sense of scale a stage gets. The nearest is a treeline: a low
+  // serrated band of forest on the last rise before the country the stage
+  // is actually in.
+  addRidge({ haze: 0.24, tone: 1 }, 552, 87, 118, 130);
+  addRidge({ haze: 0.4, tone: 0.94 }, 536, 64, 99, 103);
+  addRidge({ haze: 0.58, tone: 0.82 }, 518, 41, 75, null);
+  addRidge({ haze: 0.72, tone: 0.6 }, 500, 16, 20, null);
+
+  // All four in ONE mesh. The atmosphere they are painted with changes with
+  // the conditions, but only then — so the per-ring haze and tone are baked
+  // into the vertex colors on `apply` rather than carried as four materials,
+  // and the whole horizon costs the frame a single draw.
+  const ridgeGeo = new THREE.BufferGeometry();
+  ridgeGeo.setAttribute("position", new THREE.Float32BufferAttribute(ridgePos, 3));
+  ridgeGeo.setAttribute("color", new THREE.Float32BufferAttribute(ridgeShade.length * 3, 3));
+  ridgeGeo.setIndex(ridgeIndex);
+  const ridgeMat = new THREE.MeshBasicMaterial({
+    fog: false,
+    side: THREE.DoubleSide,
+    vertexColors: true,
+  });
+  const ridges = new THREE.Mesh(ridgeGeo, ridgeMat);
+  ridges.renderOrder = -1;
+  group.add(ridges);
+
+  /** Repaint the horizon for the conditions: each ring dissolved into the
+   * sky by its own haze, darkened by its own tone, and the snow picked back
+   * out of whatever that leaves. */
+  const paintRidges = (p: Preset): void => {
+    const fogColor = new THREE.Color(p.fog);
+    const zenith = new THREE.Color(p.zenith);
+    const rock = new THREE.Color();
+    const colors = ridgeGeo.getAttribute("color") as THREE.BufferAttribute;
+    for (let i = 0; i < ridgeShade.length; i++) {
+      rock
+        .copy(fogColor)
+        .lerp(zenith, ridgeHaze[i])
+        .multiplyScalar(ridgeTone[i] * ridgeShade[i]);
+      colors.setXYZ(i, rock.r, rock.g, rock.b);
+    }
+    colors.needsUpdate = true;
+  };
 
   // ── Clouds: cumulus clusters, not single blobs. Each cloud is a handful
   // of overlapping puffs — big lumps in the middle, smaller ones at the
@@ -426,7 +610,9 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   const ORIGIN = new THREE.Vector3();
   const SKY_UP = new THREE.Vector3(0, 1, 0);
   for (let i = 0; i < CLOUDS; i++) {
-    const size = 14 + Math.random() * 26; // whole-cluster scale spread
+    // Whole-cluster scale spread, in metres — read against the ring radius
+    // below, which is what decides how big one looks.
+    const size = 40 + Math.random() * 74;
     const puffCount = 4 + Math.floor(Math.random() * 4);
     const puffs: Puff[] = [];
     const cloudSpin = new THREE.Quaternion().setFromAxisAngle(SKY_UP, Math.random() * Math.PI * 2);
@@ -467,11 +653,25 @@ export function createEnvironment(scene: THREE.Scene): Environment {
         bulk * size * 0.5,
       );
     }
+    // Where the cluster rides. A cloud is SKY: it has to sit beyond every
+    // ridge ring (which top out at 552 m) or it is an opaque white drum
+    // parked on the hills, hard-facetted and half of it sliced away by the
+    // mountain it is standing in. Out here it is farther than the horizon
+    // is, so a cloud the skyline cuts into is one that is genuinely behind
+    // it. Size scales with the distance, so the apparent size is the one
+    // the sky was authored at, and the drift is ANGULAR, so pushing the
+    // ring out does not change how fast the weather crosses the sky.
+    const radius = 620 + Math.random() * 520;
     cloudList.push({
       angle: Math.random() * Math.PI * 2,
-      radius: 190 + Math.random() * 240,
+      radius,
       speed: 0.6 + Math.random() * 0.9,
-      y: 85 + Math.random() * 60,
+      // Height as a fraction of the distance out, i.e. an elevation ANGLE
+      // (about 18° to 39°): clouds belong in a band ABOVE the skyline. A
+      // flat altitude puts the far ones on it, and the ridge ring opens a
+      // gap toward the sun, so anything lower than the mountains shows
+      // through it as a smudge sitting on the horizon.
+      y: radius * (0.32 + Math.random() * 0.48),
       reach: size * 2,
       puffs,
     });
@@ -671,14 +871,13 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     dome.visible = show;
     stars.visible = show;
     cloudGroup.visible = show;
-    ridgeFar.visible = show;
-    ridgeNear.visible = show;
+    ridges.visible = show;
     disc.visible = show;
     halo.visible = show;
   };
 
   const apply = (env: RaceEnv): void => {
-    preset = weathered(env.timeOfDay, env.weather);
+    preset = seasoned(weathered(env.timeOfDay, env.weather), env.season);
     stormy = env.weather === "storm";
     paintDome(preset);
     background.set(preset.zenith);
@@ -692,15 +891,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     const dir = sunDir(preset.sunElevation);
     sunLight.position.copy(dir).multiplyScalar(300);
     starMat.opacity = preset.stars;
-    // Mountains: the far ridge is mostly atmosphere, the near one keeps
-    // more of its own dark mass.
-    (ridgeFar.material as THREE.MeshBasicMaterial).color
-      .set(preset.fog)
-      .lerp(new THREE.Color(preset.zenith), 0.3);
-    (ridgeNear.material as THREE.MeshBasicMaterial).color
-      .set(preset.fog)
-      .lerp(new THREE.Color(preset.zenith), 0.55)
-      .multiplyScalar(0.82);
+    paintRidges(preset);
     cloudMat.color.set(preset.cloud);
     cloudMat.opacity = preset.cloudOpacity;
     cloudBaseMat.color.set(preset.cloud).multiplyScalar(0.8);
@@ -790,10 +981,8 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   };
 
   const dispose = (): void => {
-    for (const ridge of [ridgeFar, ridgeNear]) {
-      ridge.geometry.dispose();
-      (ridge.material as THREE.MeshBasicMaterial).dispose();
-    }
+    ridgeGeo.dispose();
+    ridgeMat.dispose();
     domeGeo.dispose();
     domeMat.dispose();
     starGeo.dispose();
@@ -812,7 +1001,14 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     hemi.dispose();
   };
 
-  apply({ timeOfDay: "day", weather: "clear", windDir: 0, windSpeed: 0, gustPhase: 0 });
+  apply({
+    timeOfDay: "day",
+    weather: "clear",
+    season: "summer",
+    windDir: 0,
+    windSpeed: 0,
+    gustPhase: 0,
+  });
   return {
     apply,
     setRange,

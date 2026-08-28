@@ -6,7 +6,7 @@
 // run and drives the ground-contact and exhaust particle systems.
 
 import * as THREE from "three";
-import { TUNING, type GameEvent, type GameState } from "@engine";
+import { TUNING, isWooden, type GameEvent, type GameState, type Season } from "@engine";
 
 import { createAmbientLife } from "./ambient-life.ts";
 import { createCelebration } from "./celebration.ts";
@@ -193,6 +193,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   chase.camera.add(wayHomeArrow.group);
 
   let world: World | null = null;
+  /** The season the standing world was PLANTED in — the year's colours are
+   * baked into its geometry, so this is what a re-light compares against
+   * to know whether the ground it is lighting is still the right ground. */
+  let builtSeason: Season = "summer";
   let route: MapRoute | null = null;
   let car: CarVisual | null = null;
   let ghost: GameState | null = null;
@@ -304,6 +308,19 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
    * on DRIVE IT would light the run as whatever the page opened in. */
   const setConditions = (state: GameState): void => {
     game = state;
+    // The season is not a light — it is baked into the vertex colors of
+    // every leaf and every square metre of ground, so a stage that changes
+    // season has to be planted again. Roam is where this happens: its map
+    // preview and its run share one compiled track, so a season picked
+    // there arrives here on a world that was built in another one.
+    if (world && state.env.season !== builtSeason) {
+      scene.remove(world.group);
+      world.dispose();
+      builtSeason = state.env.season;
+      world = buildWorld(state.track, FLORA_SCALE[quality.flora], builtSeason);
+      scene.add(world.group);
+      applyIsland();
+    }
     environment.apply(state.env);
     const wet = state.env.weather === "storm" ? 1 : state.env.weather === "rain" ? 0.55 : 0;
     rain.setIntensity(fxScale() > 0 ? wet : 0);
@@ -392,7 +409,8 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     game = state;
     lastSpeed = state.car.u;
     accelSmooth = 0;
-    world = buildWorld(state.track, FLORA_SCALE[quality.flora]);
+    builtSeason = state.env.season;
+    world = buildWorld(state.track, FLORA_SCALE[quality.flora], builtSeason);
     scene.add(world.group);
     route = buildMapRoute(state.track);
     route.group.visible = mapView;
@@ -513,7 +531,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         // world stops drawing it standing and throws it, and the burst here
         // is the splinters and grit that went with it.
         world?.fell(ev.solid, ev.vx, ev.vy, ev.vz);
-        const wooden = ev.solid.kind === "tree" || ev.solid.kind === "stump";
+        const wooden = isWooden(ev.solid.kind);
         dust.spawn(
           ev.solid.x,
           ev.solid.y + ev.solid.height * 0.3,

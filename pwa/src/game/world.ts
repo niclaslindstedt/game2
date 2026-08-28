@@ -14,11 +14,13 @@
 
 import * as THREE from "three";
 import {
+  ROAD_CROSS,
   STAGE_RULES,
   createRng,
   inStream,
   junctionPlatformY,
   type GameState,
+  type Season,
   type Spur,
   type Track,
   SOLID_PROP_HEIGHT,
@@ -30,7 +32,15 @@ import { biomeFor, type Biome, type Community } from "./biome.ts";
 import { createBreakage } from "./breakage.ts";
 import { createConeField, plantJumpCones, type ConeField } from "./cones.ts";
 import { TRUNK_COLOR, buildFlora, swayFlora, type FloraPlacement } from "./flora.ts";
-import { communityByGrove, pickFlora, samePlace, softMix, treePlacement } from "./planting.ts";
+import {
+  RIPARIAN_BAND,
+  communityByGrove,
+  mixAt,
+  pickFlora,
+  samePlace,
+  softMix,
+  treePlacement,
+} from "./planting.ts";
 import { buildWild } from "./wild.ts";
 import { buildTerrain, LAKE_Y, type Terrain } from "./terrain.ts";
 import { buildStreamMeshes } from "./streams.ts";
@@ -112,6 +122,7 @@ function buildScenery(
   guard: Track["samples"],
   drawnTrees: Set<string>,
   density: number,
+  season: Season,
 ): SceneryChunk {
   const group = new THREE.Group();
   const rng = createRng((track.seed ^ 0x5f356495 ^ Math.imul(from, 2246822519)) >>> 0);
@@ -123,6 +134,12 @@ function buildScenery(
 
   const communityAt = (x: number, z: number): Community =>
     communityByGrove(biome, field.groveAt(x, z));
+  /** Inside the green seam a watercourse draws through whatever the quilt
+   * says grows here (R18). */
+  const riparian = (x: number, z: number): boolean => inStream(field.streams, x, z, RIPARIAN_BAND);
+  /** The band between the waterline and dry land — reeds and sedge, the
+   * only things the placement rules let stand below the usual floor. */
+  const onShore = (y: number): boolean => y > LAKE_Y - 0.6 && y < LAKE_Y + 1.5;
 
   // Clearance checks walk the guard samples — the chunk's own road with
   // its aprons plus a margin of neighbours — so nothing grows on the road,
@@ -150,7 +167,7 @@ function buildScenery(
       if (drawnTrees.has(key)) continue;
       drawnTrees.add(key);
       treeKeys.push(key);
-      flora.push(treePlacement(tree, biome));
+      flora.push(treePlacement(tree, biome, riparian(tree.x, tree.z)));
     }
   };
   for (let i = Math.max(0, from); i < to; i += 50) collectTrees(samples[i].x, samples[i].z);
@@ -174,42 +191,56 @@ function buildScenery(
     if (inStream(field.streams, x, z, 1.5)) continue;
     const y = heightAt(x, z);
     if (y < LAKE_Y + 1.2) continue;
-    const soft = softMix(
-      y < LAKE_Y + 4
-        ? biome.lakeshoreTrees
-        : y > 26
-          ? biome.highlandTrees
-          : communityAt(x, z).trees,
-    );
+    const soft = softMix(mixAt(biome, { y, riparian: riparian(x, z), grove: field.groveAt(x, z) }));
     if (!soft) continue;
     flora.push({ id: pickFlora(soft, roll), x, y, z, scale, spin });
   }
 
-  // ── Ground cover: a dense strip just past the shoulder (what the car
-  // actually sees at speed), and a sparser scatter under the treeline —
-  // each clump drawn from its community's mix, so meadows fill with tall
-  // grass and spruce woods with ferns.
+  // ── Ground cover, in three bands out from the road, each clump drawn
+  // from its community's mix so meadows fill with tall grass and spruce
+  // woods with ferns.
+  //
+  // The FLOOR band is the one that matters most and is the easiest to
+  // forget: the trunk field reaches 150 m from the road, so a scatter that
+  // stops at 34 m leaves the middle distance as trees standing in a bare
+  // colour field — which is precisely what a forest never looks like. It
+  // is thinner per square metre than the near bands (it covers eight times
+  // the ground, and at that distance a clump is a few pixels), but it has
+  // to be there.
+  const BANDS: { from: number; to: number; share: number }[] = [
+    { from: half + 1.6, to: clearance + 5, share: 1 },
+    { from: clearance + 5, to: 34, share: 1 },
+    { from: 34, to: 95, share: 0.62 },
+  ];
   for (let i = Math.max(4, from); i < to; i += 2) {
     const s = samples[i];
     const r = rightOf(s.heading);
-    for (const band of [0, 1]) {
+    for (const band of BANDS) {
       const side = rng.chance(0.5) ? 1 : -1;
-      const offset =
-        band === 0 ? rng.range(half + 1.6, clearance + 5) : rng.range(clearance + 5, 34);
+      const offset = rng.range(band.from, band.to);
       const x = s.x + r.x * offset * side + rng.range(-2, 2);
       const z = s.z + r.z * offset * side + rng.range(-2, 2);
       const roll = rng.next();
       const scale = rng.range(0.7, 1.3);
       const spin = rng.range(0, Math.PI * 2);
       const community = communityAt(x, z);
-      const chance = (biome.undergrowthDensity / 2) * (community.groundCover ?? 1) * density;
+      const chance =
+        (biome.undergrowthDensity / 2) * (community.groundCover ?? 1) * density * band.share;
       if (!rng.chance(chance)) continue;
       if (!clearOfRoad(x, z, half + 1.2)) continue;
       if (inStream(terrain.field.streams, x, z, 0.5)) continue;
       const y = heightAt(x, z);
-      if (y < LAKE_Y + 1.2) continue;
+      // A lake that stops on a line is the tell that it was drawn on. In
+      // the band between the waterline and dry land the reeds take over —
+      // the one place anything is allowed to stand below the usual floor,
+      // because standing in the shallows is what a reed does.
+      const shore = onShore(y);
+      if (!shore && y < LAKE_Y + 1.2) continue;
       flora.push({
-        id: pickFlora(community.undergrowth ?? biome.undergrowth, roll),
+        id: pickFlora(
+          shore ? biome.shoreCover : (community.undergrowth ?? biome.undergrowth),
+          roll,
+        ),
         x,
         y,
         z,
@@ -219,7 +250,39 @@ function buildScenery(
     }
   }
 
-  const planted = buildFlora(flora, () => rng.next());
+  // ── The road's own edge. A ribbon that ends on a ruled line reads as
+  // laid on top of the country whatever its colours do; what breaks the
+  // line is stuff STANDING across it. Two passes do it: grass coming back
+  // into the bare shoulder from the field side, and the loose gravel the
+  // blade and the traffic push off the mat. Both are small on purpose —
+  // this is the strip a car running wide actually drives over, and
+  // anything big enough to notice hitting has to be a solid prop instead.
+  for (let i = Math.max(4, from); i < to; i += 3) {
+    const s = samples[i];
+    const r = rightOf(s.heading);
+    for (const side of [-1, 1]) {
+      if (!rng.chance(0.42 * density)) continue;
+      const offset = half + rng.range(0.25, ROAD_CROSS.verge.bareTo + 0.6);
+      const x = s.x + r.x * offset * side + rng.range(-0.6, 0.6);
+      const z = s.z + r.z * offset * side + rng.range(-0.6, 0.6);
+      if (!clearOfRoad(x, z, half + 0.15)) continue;
+      if (inStream(field.streams, x, z, 0.5)) continue;
+      const y = heightAt(x, z);
+      if (y < LAKE_Y + 1.2) continue;
+      // Scrappy: what survives on a graded shoulder is half the size of
+      // what grows a metre further out.
+      flora.push({
+        id: rng.chance(0.75) ? "tallGrass" : "heathShrub",
+        x,
+        y,
+        z,
+        scale: rng.range(0.35, 0.7),
+        spin: rng.range(0, Math.PI * 2),
+      });
+    }
+  }
+
+  const planted = buildFlora(flora, () => rng.next(), season);
   group.add(planted.group);
 
   const m = new THREE.Matrix4();
@@ -232,8 +295,27 @@ function buildScenery(
   // the hood (SOLID_PROP_HEIGHT), which is what makes them safe to plant
   // app-side — the car rides straight over them. Anything a driver could
   // hit is a prop the engine placed, drawn by the wild cells.
-  type Rock = { x: number; y: number; z: number; s: number };
+  type Rock = { x: number; y: number; z: number; s: number; shed?: boolean };
   const rocks: Rock[] = [];
+  // The spill: chippings pushed off the mat, lying along the bare shoulder
+  // where no wheel ever runs. Kept to the small end of the size band —
+  // this is gravel, and the car drives over it.
+  for (let i = Math.max(4, from); i < to; i += 2) {
+    const s = samples[i];
+    const r = rightOf(s.heading);
+    for (const side of [-1, 1]) {
+      if (!rng.chance(0.5 * density)) continue;
+      const offset = half + rng.range(0.1, ROAD_CROSS.verge.bareTo + 0.9);
+      const x = s.x + r.x * offset * side + rng.range(-0.5, 0.5);
+      const z = s.z + r.z * offset * side + rng.range(-0.5, 0.5);
+      const drop = rng.next();
+      if (!clearOfRoad(x, z, half + 0.1)) continue;
+      if (inStream(field.streams, x, z, 0.5)) continue;
+      const y = heightAt(x, z);
+      if (y < LAKE_Y + 1.2) continue;
+      rocks.push({ x, y, z, s: drop, shed: true });
+    }
+  }
   for (let i = Math.max(4, from); i < to; i += 5) {
     const s = samples[i];
     const r = rightOf(s.heading);
@@ -257,7 +339,9 @@ function buildScenery(
   rocks.forEach((p, i) => {
     // A squashed lump sunk a third in: its top sits at 1.05 × scale, so
     // the biggest of them still passes under the bumper.
-    const scale = PEBBLE_MIN + p.s * (PEBBLE_MAX - PEBBLE_MIN);
+    const scale = p.shed
+      ? PEBBLE_MIN * (0.55 + p.s * 0.75)
+      : PEBBLE_MIN + p.s * (PEBBLE_MAX - PEBBLE_MIN);
     q.setFromAxisAngle(UP, p.s * 20);
     m.compose(v.set(p.x, p.y + scale * 0.35, p.z), q, sc.set(scale, scale * 0.7, scale));
     rockMesh.setMatrixAt(i, m);
@@ -602,11 +686,11 @@ function disposeGroup(group: THREE.Group): void {
  * scatter chances. The video options set it; the ENGINE's trunk field is
  * never thinned by it, because those trees are solid and one you can hit
  * but cannot see is worse than any frame it would buy. */
-export function buildWorld(track: Track, density = 1): World {
+export function buildWorld(track: Track, density = 1, season: Season = "summer"): World {
   const group = new THREE.Group();
   const biome = biomeFor();
   const waterTex = waterTexture();
-  const terrain = buildTerrain(track, biome, waterTex);
+  const terrain = buildTerrain(track, biome, waterTex, season);
   group.add(terrain.group);
   terrain.sync(track, 0, track.samples[0].x, track.samples[0].z);
   // A finite stage's road is known in full before the first tree is planted,
@@ -614,7 +698,7 @@ export function buildWorld(track: Track, density = 1): World {
   // the road ahead is unwritten when the props beside it go in, and
   // `clearNear` is what retires the ones it later claims.
   const fullGuard = track.endless ? null : chunkSamples(track, 0, track.samples.length);
-  const wild = buildWild(track, biome, terrain, density);
+  const wild = buildWild(track, biome, terrain, density, season);
   group.add(wild.group);
   wild.sync(track.samples[0].x, track.samples[0].z);
   // The cones live OUTSIDE the road chunks: a chunk drops the moment the car
@@ -685,7 +769,17 @@ export function buildWorld(track: Track, density = 1): World {
       ...track.samples.slice(Math.max(0, from - 120), Math.max(0, from - 1)),
       ...track.samples.slice(to, Math.min(track.samples.length, to + 120)),
     ];
-    const scenery = buildScenery(track, biome, terrain, from, to, guard, drawnTrees, density);
+    const scenery = buildScenery(
+      track,
+      biome,
+      terrain,
+      from,
+      to,
+      guard,
+      drawnTrees,
+      density,
+      season,
+    );
     chunkGroup.add(scenery.group);
     plantJumpCones(cones, track, from, to);
     // A circuit's start line IS its finish line (R22), so it gets one gate

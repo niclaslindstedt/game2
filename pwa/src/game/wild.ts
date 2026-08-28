@@ -12,11 +12,20 @@
 // does.
 
 import * as THREE from "three";
-import { createRng, inStream, type Track, type WildObstacle } from "@engine";
+import { createRng, inStream, type Season, type Track, type WildObstacle } from "@engine";
 
 import { buildFloraField, type FloraPlacement } from "./flora.ts";
 import type { Biome, Community } from "./biome.ts";
-import { communityByGrove, pickFlora, samePlace, softMix, treePlacement } from "./planting.ts";
+import {
+  RIPARIAN_BAND,
+  communityByGrove,
+  mixAt,
+  pickFlora,
+  propPlacement,
+  samePlace,
+  softMix,
+  treePlacement,
+} from "./planting.ts";
 import { LAKE_Y, type Terrain } from "./terrain.ts";
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -114,7 +123,13 @@ export type Wild = {
  * variants, so a mesh per cell per variant comes out as a draw call for
  * every two or three plants; and there is nothing to be gained by keeping
  * them apart, because the wild only ever reaches as far as the fog does. */
-export function buildWild(track: Track, biome: Biome, terrain: Terrain, density: number): Wild {
+export function buildWild(
+  track: Track,
+  biome: Biome,
+  terrain: Terrain,
+  density: number,
+  season: Season,
+): Wild {
   const group = new THREE.Group();
   const communityAt = (x: number, z: number): Community =>
     communityByGrove(biome, terrain.field.groveAt(x, z));
@@ -122,7 +137,7 @@ export function buildWild(track: Track, biome: Biome, terrain: Terrain, density:
   const heightAt = terrain.heightAt;
   const field = terrain.field;
 
-  const plants = buildFloraField();
+  const plants = buildFloraField(season);
   group.add(plants.group);
   const stoneGeo = new THREE.DodecahedronGeometry(1);
   const stoneMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(biome.ground.bedrock) });
@@ -190,10 +205,14 @@ export function buildWild(track: Track, biome: Biome, terrain: Terrain, density:
           Math.floor(t.z / WILD_CELL) === cz &&
           field.roadDistanceAt(t.x, t.z) >= 150,
       );
-    for (const tree of treesHere) placements.push(treePlacement(tree, biome));
+    const riparian = (x: number, z: number): boolean =>
+      inStream(field.streams, x, z, RIPARIAN_BAND);
+    for (const tree of treesHere) {
+      placements.push(treePlacement(tree, biome, riparian(tree.x, tree.z)));
+    }
 
     // The soft small stuff between the trunks — a light app-side scatter.
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 45; i++) {
       const x = originX + rng.range(0, WILD_CELL);
       const z = originZ + rng.range(0, WILD_CELL);
       const roll = rng.next();
@@ -205,17 +224,16 @@ export function buildWild(track: Track, biome: Biome, terrain: Terrain, density:
       const y = heightAt(x, z);
       if (y < LAKE_Y + 1.2) continue;
       const soft = softMix(
-        y < LAKE_Y + 4
-          ? biome.lakeshoreTrees
-          : y > 26
-            ? biome.highlandTrees
-            : communityAt(x, z).trees,
+        mixAt(biome, { y, riparian: riparian(x, z), grove: field.groveAt(x, z) }),
       );
       if (!soft) continue;
       placements.push({ id: pickFlora(soft, roll), x, y, z, scale, spin });
     }
-    // Ground cover barely reads at exploring pace — a light scatter.
-    for (let i = 0; i < 20; i++) {
+    // Ground cover out in the country. Thinner per square metre than the
+    // road bands — nobody is doing 140 km/h past it — but not absent: a
+    // wood with nothing on its floor reads as trees standing on a lawn
+    // from any distance at all.
+    for (let i = 0; i < 150; i++) {
       const x = originX + rng.range(0, WILD_CELL);
       const z = originZ + rng.range(0, WILD_CELL);
       const roll = rng.next();
@@ -248,10 +266,10 @@ export function buildWild(track: Track, biome: Biome, terrain: Terrain, density:
     // stone pool.
     const props = new Set<string>();
     for (const ob of obstacles) {
-      const id = ob.kind === "log" ? "fallenLog" : ob.kind === "stump" ? "stump" : null;
-      if (!id) continue;
+      const wooden = propPlacement(ob);
+      if (!wooden) continue;
       props.add(propKey(ob.x, ob.z));
-      placements.push({ id, x: ob.x, y: ob.y, z: ob.z, scale: ob.size, spin: ob.spin });
+      placements.push(wooden);
     }
     return {
       plants: placements,

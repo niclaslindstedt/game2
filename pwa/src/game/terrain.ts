@@ -14,15 +14,17 @@ import {
   APRON,
   GROUND_CELL,
   LAKE_Y,
+  REGIONS,
   createRng,
   createTerrain,
   inStream,
+  type Season,
   type TerrainField,
   type Track,
 } from "@engine";
 
 import { hash2, valueNoise } from "../lib/noise.ts";
-import type { Biome } from "./biome.ts";
+import type { Biome, RegionGround } from "./biome.ts";
 import { detailTexture } from "./textures.ts";
 
 export { APRON, LAKE_Y };
@@ -94,7 +96,12 @@ export type Terrain = {
   dispose: () => void;
 };
 
-export function buildTerrain(track: Track, biome: Biome, waterTexture: THREE.Texture): Terrain {
+export function buildTerrain(
+  track: Track,
+  biome: Biome,
+  waterTexture: THREE.Texture,
+  season: Season,
+): Terrain {
   const field = createTerrain(track);
   const heightAt = field.heightAt;
   const samples = track.samples;
@@ -119,16 +126,31 @@ export function buildTerrain(track: Track, biome: Biome, waterTexture: THREE.Tex
     opacity: 0.92,
   });
 
-  const grass = new THREE.Color(biome.ground.grass);
-  const grassDark = new THREE.Color(biome.ground.grassDark);
-  const moss = new THREE.Color(biome.ground.moss);
-  const heath = new THREE.Color(biome.ground.heath);
-  const floor = new THREE.Color(biome.ground.forestFloor);
-  const rock = new THREE.Color(biome.ground.bedrock);
-  const rockDark = new THREE.Color(biome.ground.bedrockDark);
-  const shore = new THREE.Color(biome.ground.shore);
-  const bed = new THREE.Color(biome.ground.lakeBed);
+  // The year moves the living half of the palette and leaves the rock and
+  // the water where they are.
+  const palette = { ...biome.ground, ...biome.seasons[season] };
+  const grass = new THREE.Color(palette.grass);
+  const grassDark = new THREE.Color(palette.grassDark);
+  const moss = new THREE.Color(palette.moss);
+  const heath = new THREE.Color(palette.heath);
+  const floor = new THREE.Color(palette.forestFloor);
+  const rock = new THREE.Color(palette.bedrock);
+  const rockDark = new THREE.Color(palette.bedrockDark);
+  const dryGrass = new THREE.Color(palette.dryGrass);
+  const soil = new THREE.Color(palette.soil);
+  const shore = new THREE.Color(palette.shore);
+  const bed = new THREE.Color(palette.lakeBed);
   const c = new THREE.Color();
+
+  /** Each sub-region's ground, resolved once against the engine's REGIONS
+   * order so a vertex costs an array index rather than a record lookup and
+   * a Color allocation. A region the biome has no row for paints the plain
+   * palette — the zeroed row below. */
+  const PLAIN: RegionGround = { soil: palette.grass, soilMix: 0, moss: 0, dry: 0, bare: 0 };
+  const regionGround = REGIONS.map((region) => {
+    const look = biome.regions[region.id] ?? PLAIN;
+    return { look, ground: new THREE.Color(look.soil) };
+  });
 
   // The water is ONE mesh for the whole ground: a pane per flooded tile,
   // all at the same height and never overlapping, so instancing them costs
@@ -239,16 +261,27 @@ export function buildTerrain(track: Track, biome: Biome, waterTexture: THREE.Tex
         else if (y < LAKE_Y + 3) c.copy(shore);
         else if (carved[hi]) c.copy(shore).lerp(bed, 0.35);
         else {
-          // The meadow base, broken by big soft patches of moss, heath and
-          // bare forest floor so no two hillsides read the same.
+          // The meadow base, broken by big soft patches of moss, heath, dry
+          // grass and bare forest floor so no two hillsides read the same —
+          // and then leaned toward whatever SOIL this sub-region stands on,
+          // which is what makes a bog dark, a logging block churned and an
+          // old burn ashy without any of them needing a palette of its own.
+          const { look, ground } = regionGround[field.regionAt(x, z)];
           const blend = valueNoise(x, z, 27, noiseSeed + 31);
           c.copy(grass).lerp(grassDark, blend);
+          if (look.soilMix > 0) c.lerp(ground, look.soilMix);
           const m = valueNoise(x, z, 90, noiseSeed + 37);
-          if (m > 0.6) c.lerp(moss, clamp01((m - 0.6) / 0.4) * 0.85);
+          if (m > 0.6 - look.moss) c.lerp(moss, clamp01((m - 0.6 + look.moss) / 0.4) * 0.85);
           const h = valueNoise(x, z, 130, noiseSeed + 41);
           if (h > 0.64) c.lerp(heath, clamp01((h - 0.64) / 0.36) * 0.8);
+          const d = valueNoise(x, z, 68, noiseSeed + 53);
+          if (d > 0.72 - look.dry) c.lerp(dryGrass, clamp01((d - 0.72 + look.dry) / 0.28) * 0.7);
           const f = valueNoise(x, z, 55, noiseSeed + 43);
-          if (f > 0.68) c.lerp(floor, clamp01((f - 0.68) / 0.32) * 0.6);
+          if (f > 0.66) c.lerp(floor, clamp01((f - 0.66) / 0.34) * 0.75);
+          // ...and the bare earth under all of it, which is what a region
+          // that has been churned, felled or burnt over actually shows.
+          const e = valueNoise(x, z, 38, noiseSeed + 59);
+          if (e > 0.82 - look.bare) c.lerp(soil, clamp01((e - 0.82 + look.bare) / 0.18) * 0.8);
           c.lerp(rock, clamp01((y - ROCK_LINE.from) / (ROCK_LINE.to - ROCK_LINE.from)));
         }
         // Bedrock breaks through wherever the ground is steep — mountain

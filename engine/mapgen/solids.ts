@@ -56,7 +56,19 @@ export type WildObstacle = {
   grove?: number;
 };
 
-export type SolidKind = "boulder" | "log" | "tree" | "rock" | "slab" | "stump";
+export type SolidKind =
+  | "boulder"
+  | "log"
+  /** A trunk blown over rather than rotted off: it still holds its root
+   * plate up on end at the butt, which is a metre and a half of solid wood
+   * standing over a thing you could otherwise drive across. */
+  | "rootlog"
+  | "tree"
+  | "rock"
+  | "slab"
+  | "stump"
+  /** Cut timber stacked at the roadside for the lorry. */
+  | "timber";
 
 /** A prop standing this tall over its foot is SOLID — the car hits it.
  * The catalog's bonnets sit about 0.87 m over the ground, so this is the
@@ -95,10 +107,22 @@ const MATERIAL: Record<SolidKind, { of: keyof typeof DENSITY; rooted: number }> 
   tree: { of: "wood", rooted: 1 },
   stump: { of: "wood", rooted: 1 },
   log: { of: "wood", rooted: 0.08 },
+  // A root plate is still half in the ground it came out of.
+  rootlog: { of: "wood", rooted: 0.2 },
+  // Several tonnes of timber, bedded on its bearers but not rooted at all.
+  timber: { of: "wood", rooted: 0.35 },
   rock: { of: "stone", rooted: 0.3 },
   boulder: { of: "stone", rooted: 0.55 },
   slab: { of: "stone", rooted: 1 },
 };
+
+/** Is this thing made of WOOD? What breaks off it, what colour the
+ * splinters are and what it sounds like all follow from the material, and
+ * the material is already stated once in the table above — so nothing else
+ * in the tree gets to keep its own list of which kinds are trees. */
+export function isWooden(kind: SolidKind): boolean {
+  return MATERIAL[kind].of === "wood";
+}
 
 /** HOW BIG EACH KIND STANDS at a given `size`: the collision circle in the
  * ground plane and the height over its foot. One table for the whole world,
@@ -119,6 +143,13 @@ export function solidShape(kind: SolidKind, size: number): { radius: number; hei
     case "log":
       // A trunk lying down: the circle is the length it covers.
       return { radius: 2.6 * size, height: 0.75 * size };
+    case "rootlog":
+      // The same trunk, but the plate at its butt stands well over it.
+      return { radius: 2.6 * size, height: 1.9 * size };
+    case "timber":
+      // A stack of five-metre logs: the circle covers their length, and
+      // four courses stand about waist-high on the car.
+      return { radius: 2.6 * size, height: 1.9 * size };
     case "rock":
       // Loose stone: a squashed lump a third of itself in the ground.
       return { radius: 0.85 * size, height: 1.05 * size };
@@ -157,6 +188,18 @@ function solidVolume(ob: {
       // A trunk lying down: its collision circle is the length it covers,
       // its height the thickness of the bole.
       return Math.PI * (height / 2) * (height / 2) * (radius * 2);
+    case "rootlog": {
+      // Its height is the PLATE standing on end, not the bole, so the
+      // trunk is measured from its own drawn radius instead — plus the
+      // disc of roots at the butt.
+      const bole = 0.32 * size;
+      const plate = 1 * size;
+      return Math.PI * bole * bole * (radius * 2) + Math.PI * plate * plate * (0.34 * size);
+    }
+    case "timber":
+      // Fourteen logs of a quarter-metre radius over the stack's length —
+      // the courses the renderer actually builds.
+      return 14 * Math.PI * 0.25 * 0.25 * (radius * 2) * size * size;
     case "stump":
       // What is left of a felled trunk IS its bole: the collision circle
       // is the wood.

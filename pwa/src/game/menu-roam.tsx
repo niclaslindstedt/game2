@@ -23,6 +23,7 @@ import {
   STAGE_DIALS,
   STAGE_LENGTH_OPTIONS,
   STAGE_SHAPES,
+  SEASONS,
   TIMES_OF_DAY,
   WEATHERS,
   dialStop,
@@ -310,6 +311,12 @@ export function RoamPage({
               options={WEATHERS}
               value={race.weather}
               onPick={(weather) => onRace({ ...race, weather })}
+            />
+            <OptionRow
+              label="SEASON"
+              options={SEASONS}
+              value={race.season}
+              onPick={(season) => onRace({ ...race, season })}
             />
           </section>
 

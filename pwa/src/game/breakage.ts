@@ -13,9 +13,15 @@
 // that is cartwheeling past the window.
 
 import * as THREE from "three";
-import type { WildObstacle } from "@engine";
+import { isWooden, type SolidKind, type WildObstacle } from "@engine";
 
 import { stepTumble, tumbleFrom, type TumbleBody } from "./tumble.ts";
+
+/** The kinds that already lie DOWN in the world — a fallen trunk, one still
+ * holding its root plate, a stack of cut timber. Their long axis is the
+ * collision circle they cover, not the height they stand to, so the
+ * stand-in has to be laid over the same way or a log takes off vertically. */
+const LYING = new Set<SolidKind>(["log", "rootlog", "timber"]);
 
 /** How many pieces are kept in the air at once. Past it the oldest is
  * retired: a stage-long drive through the forest must not accumulate a
@@ -55,18 +61,18 @@ export function createBreakage(bark: number, stone: number): Breakage {
   };
 
   const spawn = (solid: WildObstacle, vx: number, vy: number, vz: number): void => {
-    const wooden = solid.kind === "tree" || solid.kind === "stump" || solid.kind === "log";
+    const wooden = isWooden(solid.kind);
     const mesh = new THREE.Mesh(wooden ? trunkGeo : lumpGeo, wooden ? barkMat : stoneMat);
     // The BOLE of a tree, not its canopy: what falls is the trunk the car
     // met, and a felled trunk lying in the grass is a trunk, not a shrub.
     const bole = solid.kind === "tree" ? solid.radius * 0.45 : solid.radius;
-    const long = solid.kind === "log" ? solid.radius * 2 : solid.height;
+    const long = LYING.has(solid.kind) ? solid.radius * 2 : solid.height;
     if (wooden) mesh.scale.set(bole, long, bole);
     else mesh.scale.set(solid.radius, solid.height * 0.7, solid.radius * 0.85);
     // A standing trunk goes over from where it stood; a lump leaves from
     // its own middle.
     mesh.position.set(solid.x, solid.y + (wooden ? long / 2 : solid.height * 0.35), solid.z);
-    mesh.rotation.set(0, solid.spin, solid.kind === "log" ? Math.PI / 2 : 0);
+    mesh.rotation.set(0, solid.spin, LYING.has(solid.kind) ? Math.PI / 2 : 0);
     group.add(mesh);
     const speed = Math.hypot(vx, vy, vz);
     pieces.push({

@@ -194,10 +194,16 @@ export function updateSlip(car: CarState): void {
  * engine itself only cares about weather (which sets the wind). */
 export type TimeOfDay = "dawn" | "day" | "dusk" | "night";
 export type Weather = "clear" | "rain" | "storm";
+/** Which season a stage is driven in. The taiga has three: the boreal
+ * forest under snow is a different biome (arctic), not a fourth season of
+ * this one, so winter is not on this list and the presentation would have
+ * nothing truthful to draw for it. */
+export type Season = "spring" | "summer" | "autumn";
 
 export type RaceEnv = {
   timeOfDay: TimeOfDay;
   weather: Weather;
+  season: Season;
   /** Mean bearing the air moves TOWARD, radians (heading convention). */
   windDir: number;
   /** Mean wind speed, m/s — gusts breathe around it (TUNING.wind.gust). */
