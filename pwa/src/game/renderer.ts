@@ -40,9 +40,9 @@ import {
 import { groundTint, SOOT, sootySmoke, STONE_DUST } from "./ground-tint.ts";
 import { createPlume } from "./plume.ts";
 import { createEnvironment } from "./environment.ts";
+import type { Clap } from "./weather.ts";
 import { TRUNK_COLOR } from "./flora.ts";
 import { createFumes, EXHAUST } from "./fumes.ts";
-import { createRain } from "./rain.ts";
 import { createWayHomeArrow } from "./way-home.ts";
 import { islandPlanes } from "./map-island.ts";
 import { buildMapRoute, type MapRoute } from "./map-route.ts";
@@ -96,6 +96,10 @@ export type GameRenderer = {
   /** Re-light an already-built stage (the pre-race menu flipping time of
    * day / weather) without rebuilding its geometry. */
   setConditions: (state: GameState) => void;
+  /** What to do when a clap of thunder arrives. The storm is drawn here and
+   * heard elsewhere: the renderer knows WHEN and how far away, the audio
+   * knows what that sounds like. */
+  onThunder: (play: (clap: Clap) => void) => void;
   /** Put a ghost on the road — the best run on this stage, replaying its
    * own game beside the player's. The renderer keeps the reference and
    * draws whatever it says every frame; null takes it off again. */
@@ -165,8 +169,6 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   scene.add(foam.points);
   const fumes = createFumes();
   scene.add(fumes.points);
-  const rain = createRain();
-  scene.add(rain.lines);
   const life = createAmbientLife();
   scene.add(life.group);
   // The finish's salute. Its clouds live in the scene for the whole run and
@@ -321,12 +323,12 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       applyIsland();
     }
     environment.apply(state.env);
-    const wet = state.env.weather === "storm" ? 1 : state.env.weather === "rain" ? 0.55 : 0;
-    rain.setIntensity(fxScale() > 0 ? wet : 0);
     // Rain settles the stage. There is no cloud to tow once the surface is
     // soaked — what the wheels lift is clods — so the two swap over here,
-    // once, rather than being decided per frame per particle.
-    wetGround = wet > 0;
+    // once, rather than being decided per frame per particle. How hard it
+    // is actually coming down is the environment's per-frame business: the
+    // squall breathes, and the sheet has to breathe with it.
+    wetGround = state.env.weather !== "clear";
     plume.points.visible = !wetGround;
     mud.points.visible = wetGround;
     applyRange();
@@ -840,14 +842,12 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     if (driving) wayHomeArrow.update(state, chase.camera, dt);
     chase.update(state, dt);
     environment.setGrime(car?.grime() ?? 0);
+    // The weather is the environment's, the FX budget is the renderer's.
+    environment.setEffects(fx);
     environment.update(state, chase.camera, dt);
     const cam = chase.camera.position;
-    if (fx > 0) {
-      rain.update(cam.x, cam.y, cam.z, state.wind.x, state.wind.z, dt);
-      life.update(cam.x, cam.z, state.wind.x, state.wind.z, dt);
-    }
+    if (fx > 0) life.update(cam.x, cam.z, state.wind.x, state.wind.z, dt);
     life.group.visible = fx > 0;
-    rain.lines.visible = fx > 0;
     // The map framing changes with the stage and the pane, and the fog rides
     // it — see MAP_FOG_NEAR.
     if (mapView) {
@@ -954,7 +954,6 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     spray.dispose();
     foam.dispose();
     fumes.dispose();
-    rain.dispose();
     life.dispose();
     celebration.dispose();
     wayHomeArrow.dispose();
@@ -972,6 +971,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     nudgeMap: (dAz, dPitch, zoomBy) => chase.nudgeMap(dAz, dPitch, zoomBy),
     resetMap: () => chase.resetMap(),
     setConditions,
+    onThunder: environment.onThunder,
     setGhost,
     onGhostEvents,
     setStanding: (place) => {

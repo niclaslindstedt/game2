@@ -98,6 +98,38 @@ Never tune an effect blind:
    `npm run dev` and drive into it.
 4. Judge, refine the worst beat, re-shoot. Repeat until every beat reads.
 
+**A shutter cannot race the thing it is photographing**, and every effect
+worth this skill is transient. Three ways a scene lies, and the fix for
+each:
+
+- **A blinking element.** Waiting for its lit half still loses — the
+  shutter fires after the predicate resolves and the blink has flipped.
+  Kill the animation for the shot
+  (`page.evaluate("document.querySelector('.x').style.animation = 'none'")`),
+  which parks it on its base style. A still cannot show a blink anyway.
+- **A beat that only exists while something loads.** Reach it by holding
+  its dependency back (`page.route("**/renderer-*.js", …)` with a delay
+  before `route.continue()`), never by timing: the world builds fast enough
+  here that a "loading" scene reliably caught the READY card. A scene that
+  names one state and captures another is worse than no scene — do not ship
+  it.
+- **A beat a few tenths of SIM time long.** `atStageTime` is the honest
+  cursor a second or more in, but under software rendering one frame can
+  carry most of a second of sim, so it overshoots badly down there (a 0.35 s
+  wait for the launch landed at 0.81 s and 32 km/h). Ask for the FIRST frame
+  that qualifies at all (`.hud-speed-num > 0`) — the earliest frame the
+  predicate can see is the closest a still gets to the instant.
+
+**Some effects have no run screenshot that can review them** — the sky is
+the standing example: the weather is chosen per stage, so a shot of a run
+can only ever show one of them, and the difference between the white rain
+sky and the black storm one is a COMPARISON. Those get a contact sheet
+instead: `make sky` renders every weather against every time of day and
+waits for a near lightning strike. If an effect you are adding has that
+shape (one instance per run, or a beat too brief to catch), build it a
+harness page under `pwa/src/tools/` with a `scripts/*.mjs` driver, the way
+`make cars` and `make sky` are built.
+
 ## Ship checklist
 
 - [ ] Effect is presentation-only — no simulation state touched, no state-RNG

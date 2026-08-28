@@ -17,6 +17,7 @@ make track        # render stages to previews/track-<seed>.png
 make cars         # render the car models to previews/cars.png (chase-cam + turntable sheet)
 make liveries     # render one body in the field's paint schemes to previews/liveries.png
 make field        # render the campaign's fourteen rivals in their own cars and colours
+make sky          # render the atmosphere to previews/sky.png (every weather x time, plus a strike)
 make audition     # build previews/audition.html — every sound and both scores, playable
 make screenshots  # drive the built app headlessly, screenshot key moments
 make profile      # meter a frame's draw calls / triangles / binds — REQUIRED before/after any rendering change
@@ -75,6 +76,10 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | What a rival is PAINTED (colour, pattern, door number)      | `RIVAL_SCHEMES` in `pwa/src/game/car-livery.ts` — the `car-design` skill                                                  |
 | The field on the road, and what place a run is in           | `pwa/src/game/standings.ts` (+ `campaign.ts` for the podium rule)                                                         |
 | Anything drawn (meshes, textures, camera, effects)          | `pwa/src/game/` (renderer.ts and friends)                                                                                 |
+| What colour the sky is under given conditions               | `pwa/src/game/sky.ts` (the presets and the weather/season colour maths)                                                   |
+| What is IN the sky (cumulus, the overcast deck, scud)       | `pwa/src/game/clouds.ts`                                                                                                  |
+| Lightning and the thunder behind it                         | `pwa/src/game/storm.ts` (drawn) + `thunder_*` in `audio/bank.ts` (heard)                                                  |
+| How heavy the weather is, and how hard it is coming down    | `pwa/src/game/weather.ts` — read off the wind, and DOM-free so the road bed shares it                                     |
 | Things the car knocks loose (cones, torn-off parts)         | `pwa/src/game/cones.ts`, `car-damage.ts`, over `tumble.ts` — renderer-side; the engine knows nothing of them              |
 | Anything HEARD (a hit, a landing, a menu click)             | `pwa/src/game/audio/bank.ts` (+ a rung in `route.ts`) — the `sound-effects` skill                                         |
 | A continuous sound (engine, tyres, wind, the slide)         | `engine-bed.ts` / `road-grain.ts` in `pwa/src/game/audio/`                                                                |
@@ -112,6 +117,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | Generator rules (`engine/mapgen/rules.ts`) | `docs/track-generator.md` (rules are listed verbatim)                                        |
 | Bot, sim harness, rival skill model        | `docs/simulation.md`                                                                         |
 | The sound bank, the beds, or a score       | `docs/audio.md`                                                                              |
+| The sky, the weather, or the storm         | `docs/architecture.md` (the atmosphere bullet), then `make sky` and read the sheet           |
 | Commands / npm scripts / Make targets      | README Usage table + this file's command block                                               |
 | The debug overlay's REPRO line             | `App.tsx`'s URL readers — writer and reader move together, or a screenshot stops reproducing |
 | App identity, domain, deploy slots         | `pwa/src/identity.ts`, README, `docs/configuration.md`, `pwa/public/*` SEO files             |

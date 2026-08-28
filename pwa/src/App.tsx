@@ -949,6 +949,13 @@ export function App() {
       const renderer = createRenderer(canvas, optionsRef.current.video);
       rendererRef.current = renderer;
       renderer.setMapRect(mapRectRef.current);
+      // Thunder arrives seconds after the flash that made it (storm.ts), so
+      // the renderer decides WHEN and the bank decides what it sounds like.
+      // Muted behind a menu for the same reason every other run sound is:
+      // the demo is scenery under a theme.
+      renderer.onThunder((clap) => {
+        if (menuRef.current === null) audioRef.current?.thunder(clap);
+      });
       cleanups.push(() => renderer.dispose());
       const page = menuRef.current;
       if (page) showBackdropRef.current(page);
