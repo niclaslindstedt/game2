@@ -83,6 +83,32 @@ is putt … putt … putt. Three things together fix it:
 Noise beds want a deeper stack than pitched ones (five grains against three),
 because uncorrelated noise sums in power rather than in level.
 
+**No filter is ever asked for a cutoff above Nyquist.** A biquad's
+coefficients come from its cutoff divided by half the sample rate; at or past 1
+that is not a bright filter, it is undefined, and WebKit answers with a loud
+harsh burst once per note. The catch is that the sample rate is not a constant:
+a desktop context runs at 44.1 or 48 kHz, where nothing this game authors comes
+close, but **iOS picks the rate from the live audio ROUTE** and a Bluetooth
+headset in hands-free mode drops the whole session to 16 kHz. Nyquist is then
+8 kHz — under the 8.2 kHz highpass both scores' hi-hats are built on, which is
+a fault nobody can hear on a laptop, arriving four to five times a second.
+`safeCutoff()` in `voice.ts` holds every cutoff at `MAX_CUTOFF_RATIO` of the
+LIVE context's rate, and `tests/audio_test.ts` walks every authored filter in
+both banks and both scores against every rate a context comes back at.
+
+**No filter is ever asked for a cutoff above Nyquist.** A biquad's
+coefficients come from its cutoff divided by half the sample rate; at or past 1
+that is not a bright filter, it is undefined, and WebKit answers with a loud
+harsh burst once per note. The catch is that the sample rate is not a constant:
+a desktop context runs at 44.1 or 48 kHz, where nothing this game authors comes
+close, but **iOS picks the rate from the live audio ROUTE**, and a Bluetooth
+headset in hands-free mode drops the whole session to 16 kHz. Nyquist is then
+8 kHz — under the 8.2 kHz highpass both scores' hi-hats are built on, which is
+a fault nobody can hear on a laptop, arriving four to five times a second.
+`safeCutoff()` in `voice.ts` holds every cutoff at `MAX_CUTOFF_RATIO` of the
+LIVE context's rate, and `tests/audio_test.ts` walks every authored filter in
+both banks and both scores against every rate a context comes back at.
+
 **No voice ever starts on a step.** A gain that jumps from nothing to full
 scale between two samples is broadband — the ear gets a click on top of the
 note — and it is also what makes a resonant filter ring at its own cutoff, so

@@ -35,7 +35,13 @@
 // only `ToneOptions` would pull this whole file — and `AudioContext` with it —
 // into builds that have no browser. Everything that merely DESCRIBES a sound
 // imports from `voice.ts`; this file is for making one.
-import { envelopeShape, type FilterOptions, type NoiseColor, type Synth } from "./voice.ts";
+import {
+  envelopeShape,
+  safeCutoff,
+  type FilterOptions,
+  type NoiseColor,
+  type Synth,
+} from "./voice.ts";
 
 // The shared echo: a filtered feedback delay every voice can send into. One
 // instance per context keeps overlapping sounds in the same room. Short and
@@ -391,13 +397,18 @@ export function createSynth(): Synth {
     if (!filter) return source;
     const node = c.createBiquadFilter();
     node.type = filter.type;
-    const from = Math.max(20, filter.frequency);
+    // HELD UNDER NYQUIST, and the rate is the LIVE context's — see
+    // `safeCutoff`. A cutoff past half the sample rate is not a bright filter,
+    // it is undefined coefficients, and on the 16 kHz session iOS hands a
+    // Bluetooth headset that is every hi-hat in the game screaming.
+    const from = safeCutoff(filter.frequency, c.sampleRate);
     node.frequency.setValueAtTime(from, t0);
-    if (filter.to !== undefined && filter.to !== filter.frequency) {
+    const to = filter.to === undefined ? from : safeCutoff(filter.to, c.sampleRate);
+    if (to !== from) {
       // Exponential, because cutoff is heard in octaves: a linear sweep from
       // 200 to 6000 Hz spends nine tenths of its travel above the octave the
       // ear was following.
-      node.frequency.exponentialRampToValueAtTime(Math.max(20, filter.to), t1);
+      node.frequency.exponentialRampToValueAtTime(to, t1);
     }
     if (filter.q !== undefined) node.Q.value = filter.q;
     source.connect(node);

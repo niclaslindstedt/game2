@@ -28,12 +28,6 @@ export function setAudioVolumes(v: { music: number; sfx: number }): void {
   sfxVolume = clamp01(v.sfx);
 }
 
-/** The music volume right now — read by the music player so a theme asked for
- * while the slider is at zero never starts a scheduler nobody can hear. */
-export function musicLevel(): number {
-  return musicVolume;
-}
-
 /**
  * A synth view whose every sound is scaled by a live master volume.
  *

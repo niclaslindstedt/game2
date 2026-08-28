@@ -156,6 +156,36 @@ export type Synth = {
  */
 export const MIN_ATTACK_MS = 1.5;
 
+/**
+ * THE HIGHEST CUTOFF A FILTER MAY BE ASKED FOR, as a fraction of the sample
+ * rate — and the reason the hi-hat does not scream on a phone.
+ *
+ * A biquad's coefficients are computed from its cutoff divided by Nyquist
+ * (half the sample rate). At or past 1 that maths is degenerate and what comes
+ * out is not a filter: WebKit hands back a loud, harsh burst, once per note.
+ *
+ * The catch is that the sample rate is NOT a constant. A desktop context runs
+ * at 44.1 or 48 kHz, where nothing this game authors comes close. iOS picks
+ * the rate from the live audio ROUTE, and a Bluetooth headset in hands-free
+ * mode drops the whole session to 16 kHz — Nyquist 8000, under the 8200 Hz
+ * highpass both scores' hi-hats are built on. That is a fault nobody can hear
+ * on a laptop, that arrives four to five times a second, and that sounds
+ * exactly like a broken speaker.
+ *
+ * 0.45 rather than 0.5 because a biquad sitting exactly on Nyquist is still
+ * numerically nasty; a tenth of an octave of headroom costs nothing anywhere.
+ * On a 48 kHz context the ceiling is 21.6 kHz, which is above anything a score
+ * or a bank would ever ask for, so this is invisible until it is load-bearing.
+ */
+export const MAX_CUTOFF_RATIO = 0.45;
+
+/** The cutoff a filter actually gets on a context running at `sampleRate`:
+ * what it asked for, held inside the band that rate can represent. */
+export function safeCutoff(hz: number, sampleRate: number): number {
+  const ceiling = sampleRate * MAX_CUTOFF_RATIO;
+  return Math.min(Math.max(20, hz), ceiling);
+}
+
 /** One point on a gain curve: where it is going, when it gets there, and how
  * it travels — an immediate jump, or a ramp of one of the two shapes. */
 export type EnvelopeStep = { at: number; value: number; ramp: "set" | "exp" | "lin" };

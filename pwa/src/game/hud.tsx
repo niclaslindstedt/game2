@@ -13,7 +13,6 @@ import { createThumbGuard } from "./thumb-guard.ts";
 import { FinishCard, type FinishScores, type NextStage } from "./hud-finish.tsx";
 import { Minimap, type HudMinimap } from "./minimap.tsx";
 import type { HudSettings, PedalDir, TouchSettings } from "./settings.ts";
-import type { Standing } from "./standings.ts";
 import { clamp } from "../lib/util.ts";
 import { RaceClock, StartLights } from "./hud-clock.tsx";
 import type { LiveRun } from "./snapshot.ts";
@@ -75,9 +74,6 @@ export type HudSnapshot = {
   finishTime: number | null;
   /** Set on the finish overlay when the run beat the stored record. */
   record: boolean;
-  /** Where that time placed on the stage's start list — null until the car
-   * has crossed the line. */
-  standing: Standing | null;
   /** Booster tank readout, seconds left / full tank. */
   boostLeft: number;
   boostMax: number;
@@ -948,7 +944,6 @@ export function Hud({
           <FinishCard
             time={snap.finishTime}
             record={snap.record}
-            standing={snap.standing}
             laps={snap.laps}
             lapTimes={snap.lapTimes}
             nextStage={nextStage}
