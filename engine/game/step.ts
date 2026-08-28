@@ -25,6 +25,7 @@ import {
   crossedLip,
   curvatureAt,
   locate,
+  locatePoint,
   slopeAt,
   trackLost,
   wayHome,
@@ -152,17 +153,20 @@ function buildEnv(seed: number, timeOfDay: TimeOfDay, weather: Weather): RaceEnv
   };
 }
 
-/** The wind at sim time `t`: the mean vector breathing through two slow
- * sine gusts and veering a little around its bearing — deterministic, so
- * replays and sim digests hold. */
-function windAt(env: RaceEnv, t: number): { x: number; z: number } {
+/** Blow the wind at sim time `t` into `into`: the mean vector breathing
+ * through two slow sine gusts and veering a little around its bearing —
+ * deterministic, so replays and sim digests hold. Writes rather than
+ * returns, because the only caller is the step that runs 120 times a
+ * second and already owns the vector it wants filled. */
+function blowWind(env: RaceEnv, t: number, into: { x: number; z: number }): void {
   const gust =
     1 +
     T.wind.gust *
       (0.7 * Math.sin(t * 0.9 + env.gustPhase) + 0.3 * Math.sin(t * 2.3 + env.gustPhase * 1.7));
   const dir = env.windDir + T.wind.veer * Math.sin(t * 0.13 + env.gustPhase);
   const speed = env.windSpeed * gust;
-  return { x: Math.sin(dir) * speed, z: Math.cos(dir) * speed };
+  into.x = Math.sin(dir) * speed;
+  into.z = Math.cos(dir) * speed;
 }
 
 export function createGame(options: CreateGameOptions): GameState {
@@ -190,6 +194,10 @@ export function createGame(options: CreateGameOptions): GameState {
     options.env?.timeOfDay ?? "day",
     options.env?.weather ?? "clear",
   );
+  // The grid already stands in the wind — its flags and fumes drift before
+  // the lights go green, so the vector starts at its t = 0 value.
+  const wind = { x: 0, z: 0 };
+  blowWind(env, 0, wind);
   status(
     track.endless
       ? `Stage ${options.seed}: endless — ${spec.name}`
@@ -223,7 +231,7 @@ export function createGame(options: CreateGameOptions): GameState {
     drowning: null,
     surface: "gravel",
     env,
-    wind: windAt(env, 0),
+    wind,
     stats: freshStats(),
     rng: createRng((options.seed ^ 0x9e3779b9) >>> 0),
   };
@@ -382,8 +390,12 @@ function stepStuck(state: GameState, input: CarInput, events: GameEvent[]): void
   // a bot — working the brake to get out of it must not stop the clock by
   // trying: without this the reverse attempt is unbounded.
   const asking = (input.throttle > 0.5 || car.reversing) && !car.airborne;
-  const moved = Math.hypot(car.x - state.stuck.x, car.z - state.stuck.z);
-  if (!asking || moved > T.offTrack.stuck.radius) {
+  // The distance is only ever needed to decide whether a car that IS asking
+  // has got anywhere, so a car that is not asking never measures it.
+  if (
+    !asking ||
+    Math.hypot(car.x - state.stuck.x, car.z - state.stuck.z) > T.offTrack.stuck.radius
+  ) {
     state.stuck.x = car.x;
     state.stuck.z = car.z;
     state.stuck.since = state.t;
@@ -432,6 +444,24 @@ function cheerFor(state: GameState, events: GameEvent[]): void {
   }
 }
 
+/** The ground under the car, refilled every step. `stepGrounded` and
+ * `stepAirborne` read this and never keep a reference, and a run is 120
+ * steps a second, so the whole run shares one record instead of allocating
+ * one per step. Every field is written on both paths below — an off-road
+ * step must not leave its terrain probe behind for the next road step. */
+const GROUND: GroundContext = {
+  surface: "gravel",
+  groundY: 0,
+  slope: 0,
+  slopeLat: 0,
+  roadCurve: 0,
+  windX: 0,
+  windZ: 0,
+  t: 0,
+  rng: createRng(0),
+  groundAt: undefined,
+};
+
 /** Advance the run by one fixed timestep. Returns the events it emitted. */
 export function step(state: GameState, input: CarInput): GameEvent[] {
   const events: GameEvent[] = [];
@@ -439,9 +469,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
 
   // The wind blows through every phase — the grid's flags and fumes drift
   // before the lights go green.
-  const wind = windAt(state.env, state.t);
-  state.wind.x = wind.x;
-  state.wind.z = wind.z;
+  blowWind(state.env, state.t, state.wind);
 
   if (state.phase === "countdown") {
     if (state.t >= T.countdown) {
@@ -512,21 +540,20 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     // The car's right axis in world space is (cos h, -sin h).
     const right = ground(car.x + cosH * grade, car.z - sinH * grade);
     const left = ground(car.x - cosH * grade, car.z + sinH * grade);
-    ctx = {
-      // Off the stage is not always off the ROAD: the asphalt branches the
-      // route abandons at its junctions (R17) are real tarmac, and a car
-      // exploring one gets tarmac grip on it.
-      surface: offRoadSurface(state, car.x, car.z),
-      groundY: here,
-      slope: (ahead - behind) / (2 * grade),
-      slopeLat: (right - left) / (2 * grade),
-      roadCurve: (fwd + back - 2 * here) / (span * span),
-      windX: state.wind.x,
-      windZ: state.wind.z,
-      t: state.t,
-      rng: state.rng,
-      groundAt: ground,
-    };
+    ctx = GROUND;
+    // Off the stage is not always off the ROAD: the asphalt branches the
+    // route abandons at its junctions (R17) are real tarmac, and a car
+    // exploring one gets tarmac grip on it.
+    ctx.surface = offRoadSurface(state, car.x, car.z);
+    ctx.groundY = here;
+    ctx.slope = (ahead - behind) / (2 * grade);
+    ctx.slopeLat = (right - left) / (2 * grade);
+    ctx.roadCurve = (fwd + back - 2 * here) / (span * span);
+    ctx.windX = state.wind.x;
+    ctx.windZ = state.wind.z;
+    ctx.t = state.t;
+    ctx.rng = state.rng;
+    ctx.groundAt = ground;
   } else {
     // How sharply the road brows under the car — what decides whether it
     // throws the car. A jump lip anywhere in that window is NOT a brow: its
@@ -535,17 +562,19 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     const reach = Math.max(1, Math.round(T.air.crestSpan / track.step));
     const lipNear =
       crossedLip(track, Math.max(-1, preFix.index - reach - 1), preFix.index + reach) >= 0;
-    ctx = {
-      surface: preFix.surface,
-      groundY: preFix.elevation,
-      slope: preFix.slope,
-      slopeLat: preFix.slopeLat,
-      roadCurve: lipNear ? 0 : curvatureAt(track, preFix.index, T.air.crestSpan),
-      windX: state.wind.x,
-      windZ: state.wind.z,
-      t: state.t,
-      rng: state.rng,
-    };
+    ctx = GROUND;
+    ctx.surface = preFix.surface;
+    ctx.groundY = preFix.elevation;
+    ctx.slope = preFix.slope;
+    ctx.slopeLat = preFix.slopeLat;
+    ctx.roadCurve = lipNear ? 0 : curvatureAt(track, preFix.index, T.air.crestSpan);
+    ctx.windX = state.wind.x;
+    ctx.windZ = state.wind.z;
+    ctx.t = state.t;
+    ctx.rng = state.rng;
+    // On the road the road IS the ground; the wild's probe must not carry
+    // over from an earlier step.
+    ctx.groundAt = undefined;
   }
 
   if (car.airborne) {
@@ -554,7 +583,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     stepGrounded(state.spec, car, drive, ctx, events, state.stats);
   }
 
-  const fix = locate(track, car.x, car.z, state.progressIndex);
+  const fix = locatePoint(track, car.x, car.z, state.progressIndex);
   // The finish is a LINE across the road, and the move just made is what
   // either crossed it or did not. Asked here rather than at the end of the
   // step, so a respawn cannot teleport the car over the gate and win.

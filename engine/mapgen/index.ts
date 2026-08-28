@@ -67,3 +67,4 @@ export {
   type Pacenote,
 } from "./compile.ts";
 export { traceRivers, type River, type RiverAnchor, type RiverPoint } from "./river.ts";
+export { flatTrack, SURFACES, type FlatTrack } from "./flat.ts";

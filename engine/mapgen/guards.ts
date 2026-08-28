@@ -20,6 +20,7 @@
 // player sees.
 
 import { hash2 } from "../lib/noise.ts";
+import { cellKey } from "../lib/math.ts";
 import type { Track } from "./compile.ts";
 import { STAGE_RULES as R, knobScale } from "./rules.ts";
 
@@ -66,13 +67,13 @@ export type GuardField = {
 
 export function createGuardField(track: Track): GuardField {
   const guards: CornerGuard[] = [];
-  const grid = new Map<string, CornerGuard[]>();
+  const grid = new Map<number, CornerGuard[]>();
   const seed = (track.seed ^ 0x27d4eb2f) >>> 0;
   const half = track.width / 2;
   /** How many pacenotes have been considered — a note is looked at once. */
   let considered = 0;
 
-  const key = (x: number, z: number): string => `${Math.floor(x / CELL)},${Math.floor(z / CELL)}`;
+  const key = (x: number, z: number): number => cellKey(Math.floor(x / CELL), Math.floor(z / CELL));
 
   const add = (guard: CornerGuard): void => {
     guards.push(guard);
@@ -89,7 +90,7 @@ export function createGuardField(track: Track): GuardField {
     const cz = Math.floor(z / CELL);
     for (let dx = -reach; dx <= reach; dx++) {
       for (let dz = -reach; dz <= reach; dz++) {
-        const bucket = grid.get(`${cx + dx},${cz + dz}`);
+        const bucket = grid.get(cellKey(cx + dx, cz + dz));
         if (!bucket) continue;
         for (const guard of bucket) {
           const ddx = guard.x - x;

@@ -8,9 +8,9 @@
 
 import { angleDiff, clamp } from "../lib/math.ts";
 import { TUNING } from "../game/defs/tuning.ts";
-import type { Track } from "../mapgen/index.ts";
+import type { CarSpec } from "../game/defs/cars.ts";
+import { flatTrack, SURFACES, type Track } from "../mapgen/index.ts";
 import type { CarInput, GameState } from "../game/state.ts";
-import type { Surface } from "../mapgen/index.ts";
 
 /** The sample `ahead` steps down the road. On a CIRCUIT (R22) the road runs
  * on past its last sample into its first, so the lookahead runs on with it
@@ -72,13 +72,26 @@ export const RALLY_BOT: BotProfile = {
   reverseSpeed: 4,
 };
 
-/** The lateral grip multiplier this car has on that surface — the
- * surface's own times the rubber the car sits on, exactly as the handling
- * model reads it (car.ts). The bot plans corners off this, so the catalog's
- * tires are felt as PACE and not merely as a number nobody drives. */
-function surfaceGrip(state: GameState, surface: Surface): number {
-  const tyres = state.spec.tyres;
-  return TUNING.surfaces.grip[surface] * (surface === "asphalt" ? tyres.sealed : tyres.loose);
+/** The lateral grip multiplier this car has on each surface, by surface
+ * code — the surface's own times the rubber the car sits on, exactly as the
+ * handling model reads it (car.ts). The bot plans corners off this, so the
+ * catalog's tires are felt as PACE and not merely as a number nobody
+ * drives.
+ *
+ * Resolved once per car rather than per sample: the corner scan below asks
+ * for it dozens of times on every one of a run's 120 steps a second, and
+ * the answer only depends on the car's rubber. */
+const GRIP_BY_CAR = new WeakMap<CarSpec, readonly number[]>();
+
+function gripBySurface(spec: CarSpec): readonly number[] {
+  let grip = GRIP_BY_CAR.get(spec);
+  if (grip) return grip;
+  const tyres = spec.tyres;
+  grip = SURFACES.map(
+    (kind) => TUNING.surfaces.grip[kind] * (kind === "asphalt" ? tyres.sealed : tyres.loose),
+  );
+  GRIP_BY_CAR.set(spec, grip);
+  return grip;
 }
 
 /** Compute this step's input for the current state. Pure and stateless —
@@ -90,10 +103,15 @@ export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): Car
   const samples = track.samples;
   const step = track.step;
 
+  // The road as flat arrays (mapgen/flat.ts). The scan below walks dozens
+  // of samples on EVERY physics step, so both the sample objects and the
+  // string key into the tuning table are worth staying out of.
+  const { curvature, surface, arc, toNextCurve, x: roadX, z: roadZ } = flatTrack(track);
+
   // Aim point: a speed-scaled distance down the centerline.
   const aheadMeters = Math.max(8, car.u * profile.lookahead);
-  const aim = samples[aheadOf(track, state.progressIndex, Math.round(aheadMeters / step))];
-  const desired = Math.atan2(aim.x - car.x, aim.z - car.z);
+  const aim = aheadOf(track, state.progressIndex, Math.round(aheadMeters / step));
+  const desired = Math.atan2(roadX[aim] - car.x, roadZ[aim] - car.z);
   const error = angleDiff(car.heading, desired);
   let steer = clamp(error * profile.steerGain, -1, 1);
 
@@ -108,21 +126,55 @@ export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): Car
   let targetSpeed = state.spec.gearTop[state.spec.gearTop.length - 1];
   let hardDistance = Infinity;
   let hardCap = 0;
-  for (let ahead = 1; ahead <= scan; ahead++) {
-    const i = aheadOf(track, state.progressIndex, ahead);
-    const k = Math.abs(samples[i].curvature);
-    if (k < 1e-4) continue;
+  const gripOf = gripBySurface(state.spec);
+  const braking = 2 * state.spec.brake * 0.7;
+  const hotEntry = profile.hotEntry * rotation;
+  const progressS = state.progressS;
+  const trackLength = track.length;
+  const count = samples.length;
+  const from = state.progressIndex;
+  // How near a hard corner has to be before the flick below can fire. Past
+  // it the scan has nothing left to learn about the handbrake, which is
+  // what lets the plan stop early.
+  const flickReach = Math.max(12, car.u * 0.5);
+  let ahead = 1;
+  while (ahead <= scan) {
+    // The sample `ahead` down the road — see `aheadOf`, inlined because
+    // this loop is the bot's whole cost. `scan` never exceeds one lap, so
+    // a circuit wraps at most once.
+    let i = from + ahead;
+    if (i >= count) i = track.circuit ? i - count : count - 1;
+    // Straight road has nothing to plan around, and two fifths of a stage
+    // is straight — so the scan steps over a whole straight at once instead
+    // of asking each of its samples in turn.
+    const straight = toNextCurve[i];
+    if (straight > 0) {
+      ahead += straight;
+      continue;
+    }
+    // Arc distance to it — round the lap on a circuit, where a sample the
+    // bot is planning for can sit at a smaller `s` than the car does.
+    const s = arc[i];
+    const distance = s - progressS + (s < progressS ? trackLength : 0);
+    // Nothing further out can lower the plan or move the flick: `distance`
+    // only grows from here, and by the far end of the scan the car has room
+    // to brake to any corner speed at all. The 1e-9 slack keeps the bound
+    // strictly conservative against the squaring's rounding, so this can
+    // only ever stop the scan LATER than the exact test would.
+    if (
+      (hardDistance < Infinity || distance > flickReach) &&
+      braking * (distance - 10) > targetSpeed * targetSpeed * (1 + 1e-9)
+    ) {
+      break;
+    }
+    const k = curvature[i];
     // The grip the car will actually HAVE at that corner, not the number on
     // its spec sheet: the surface it is paved with and the rubber this car
     // is on both scale it, and a driver reads the road ahead. Without this
     // the plan is blind to the whole surface half of a car's character — a
     // road-tired car would brake for a sealed corner as if it were gravel,
     // and no amount of tire in the catalog would ever show up as pace.
-    const cap = Math.sqrt((latAccel * surfaceGrip(state, samples[i].surface)) / k);
-    // Arc distance to it — round the lap on a circuit, where a sample the
-    // bot is planning for can sit at a smaller `s` than the car does.
-    const distance =
-      samples[i].s - state.progressS + (samples[i].s < state.progressS ? track.length : 0);
+    const cap = Math.sqrt((latAccel * gripOf[surface[i]]) / k);
     // Rally style: a hard corner is entered HOT — the plan deliberately
     // carries extra speed there and the drift scrubs it, instead of braking
     // down to the geometric cap like a grip line would.
@@ -132,16 +184,15 @@ export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): Car
     // smallest. How much of it a car is trusted with is its ROTATION: the
     // slide is what brings the nose round in there, so a car that rotates
     // freely can carry more in than one that pushes.
-    const planCap = hard ? cap + profile.hotEntry * rotation : cap;
+    const planCap = hard ? cap + hotEntry : cap;
     // Distance-discounted: a far corner allows more speed now than a near one.
-    const allowed = Math.sqrt(
-      planCap * planCap + 2 * state.spec.brake * 0.7 * Math.max(0, distance - 10),
-    );
+    const allowed = Math.sqrt(planCap * planCap + braking * Math.max(0, distance - 10));
     if (allowed < targetSpeed) targetSpeed = allowed;
     if (hard && distance < hardDistance) {
       hardDistance = distance;
       hardCap = cap;
     }
+    ahead += 1;
   }
 
   let throttle = car.u < targetSpeed ? 1 : 0;
@@ -152,10 +203,7 @@ export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): Car
   // the slide, breathe when the angle gets deep, and blend counter-steer
   // into the aim so the car neither spins down nor runs wide.
   const handbrake =
-    !car.drifting &&
-    !car.airborne &&
-    hardDistance < Math.max(12, car.u * 0.5) &&
-    car.u > hardCap + 2;
+    !car.drifting && !car.airborne && hardDistance < flickReach && car.u > hardCap + 2;
   if (car.drifting) {
     throttle = Math.abs(car.slip) > 0.5 ? 0.5 : 1;
     brake = 0;

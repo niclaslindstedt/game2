@@ -24,6 +24,7 @@
 // and where it cannot, it stops.
 
 import { createRng } from "../lib/prng.ts";
+import { cellKey } from "../lib/math.ts";
 import type { Surface } from "./compile.ts";
 import { LAKE_Y, type LandField } from "./land.ts";
 import { ROAD_CROSS, roadClearance } from "./road.ts";
@@ -187,10 +188,11 @@ export function buildSpur(
    * gets above the water table anywhere inside the look-ahead, m. Negative
    * is a lake in the way. */
   const clearance = (px: number, pz: number, bearing: number): number => {
+    const sin = Math.sin(bearing);
+    const cos = Math.cos(bearing);
     let worst = Infinity;
     for (const ahead of [SPUR.step, SPUR.shoreLook * 0.22, SPUR.shoreLook * 0.5, SPUR.shoreLook]) {
-      const h =
-        land.heightAt(px + Math.sin(bearing) * ahead, pz + Math.cos(bearing) * ahead) - LAKE_Y;
+      const h = land.heightAt(px + sin * ahead, pz + cos * ahead) - LAKE_Y;
       if (h < worst) worst = h;
     }
     return worst;
@@ -203,9 +205,11 @@ export function buildSpur(
    * branch's own position is not in it — the caller has that already, and
    * it is the same for every bearing. */
   const room = (px: number, pz: number, bearing: number): number => {
+    const sin = Math.sin(bearing);
+    const cos = Math.cos(bearing);
     let worst = Infinity;
     for (const ahead of [SPUR.stageLook * 0.35, SPUR.stageLook * 0.7, SPUR.stageLook]) {
-      const d = roadDistance(px + Math.sin(bearing) * ahead, pz + Math.cos(bearing) * ahead);
+      const d = roadDistance(px + sin * ahead, pz + cos * ahead);
       if (d < worst) worst = d;
     }
     return worst;
@@ -214,6 +218,10 @@ export function buildSpur(
   /** Steps still covered by the last keep-out query's promise — see the
    * walk below. */
   let stageSkip = 0;
+  /** The room straight ahead, measured once per step and then read by the
+   * swing that follows it — three grid probes, and the swing used to take
+   * them all over again before its first comparison. */
+  let straightRoom = Infinity;
 
   for (let s = 0; s <= length; s += SPUR.step) {
     // A branch may only stop where a road could: past the edge of the
@@ -226,9 +234,10 @@ export function buildSpur(
     // the branch turns to follow the water. Boxed in — a headland, a bay
     // it has driven into — it gives up on the map's edge and simply ends,
     // but only once it is standing on dry ground.
-    if (s > 0 && wet(x, z, heading)) {
+    const straightClear = s > 0 ? clearance(x, z, heading) : Infinity;
+    if (straightClear < SPUR.shoreFreeboard) {
       let best = 0;
-      let bestClear = clearance(x, z, heading);
+      let bestClear = straightClear;
       for (const swing of [0.5, -0.5, 1.0, -1.0, 1.6, -1.6, 2.4, -2.4, Math.PI]) {
         const clear = clearance(x, z, heading + swing);
         if (clear <= bestClear) continue;
@@ -260,9 +269,9 @@ export function buildSpur(
       const here = roadDistance(x, z);
       const slack = here - keepOut - SPUR.stageLook;
       if (slack > 0) stageSkip = Math.floor(slack / SPUR.step);
-      else if (room(x, z, heading) < keepOut) {
+      else if ((straightRoom = room(x, z, heading)) < keepOut) {
         let best = 0;
-        let bestRoom = room(x, z, heading);
+        let bestRoom = straightRoom;
         for (const swing of [0.4, -0.4, 0.9, -0.9, 1.5, -1.5, 2.2, -2.2, Math.PI]) {
           const open = room(x, z, heading + swing);
           if (open <= bestRoom) continue;
@@ -382,9 +391,9 @@ const INDEX_CELL = 24;
 
 export function createSpurIndex(): SpurIndex {
   const spurs: Spur[] = [];
-  const grid = new Map<string, { spur: Spur; sample: SpurSample }[]>();
-  const key = (x: number, z: number): string =>
-    `${Math.floor(x / INDEX_CELL)},${Math.floor(z / INDEX_CELL)}`;
+  const grid = new Map<number, { spur: Spur; sample: SpurSample }[]>();
+  const key = (x: number, z: number): number =>
+    cellKey(Math.floor(x / INDEX_CELL), Math.floor(z / INDEX_CELL));
 
   const add = (spur: Spur): void => {
     spurs.push(spur);
@@ -406,10 +415,17 @@ export function createSpurIndex(): SpurIndex {
     // being flattened at the cell boundary instead of at the blend's end.
     for (let dx = -3; dx <= 3; dx++) {
       for (let dz = -3; dz <= 3; dz++) {
-        const bucket = grid.get(`${cx + dx},${cz + dz}`);
+        const bucket = grid.get(cellKey(cx + dx, cz + dz));
         if (!bucket) continue;
         for (const entry of bucket) {
-          const d = Math.hypot(entry.sample.x - x, entry.sample.z - z);
+          const dx = entry.sample.x - x;
+          const dz = entry.sample.z - z;
+          // Squared first — see the road-distance field in compile.ts:
+          // three rings of branch is a lot of road to take a root of, and
+          // almost none of it is nearer than what the search already holds.
+          const d2 = dx * dx + dz * dz;
+          if (best && d2 > best.d * best.d * (1 + 1e-9)) continue;
+          const d = Math.hypot(dx, dz);
           if (!best || d < best.d) best = { spur: entry.spur, sample: entry.sample, d };
         }
       }

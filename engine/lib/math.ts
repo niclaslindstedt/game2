@@ -38,3 +38,19 @@ export function dist2(ax: number, az: number, bx: number, bz: number): number {
   const dz = bz - az;
   return dx * dx + dz * dz;
 }
+
+/** Pack a pair of spatial-hash cell indices into one integer key.
+ *
+ * Every spatial index in the engine — the corridor grid, the branch index,
+ * the guard field, the route's point field — is probed tens of thousands of
+ * times per stage, most of them from inside a ring scan that touches dozens
+ * of cells per query. A `${ix},${iz}` template key allocates a string on
+ * every one of those probes and then hashes it; an integer key allocates
+ * nothing and compares in one instruction.
+ *
+ * Injective while |iz| < 4096, which at the engine's cell sizes (24–48 m)
+ * is a world tens of kilometres across — orders of magnitude past anything
+ * the generator builds. */
+export function cellKey(ix: number, iz: number): number {
+  return ix * 8192 + iz;
+}

@@ -12,6 +12,7 @@
 // analytic noise, so the ground under the car never stairsteps.
 
 import { createRng } from "../lib/prng.ts";
+import { cellKey } from "../lib/math.ts";
 import { hash2, smooth, valueNoise } from "../lib/noise.ts";
 import type { Surface, Track, TrackSample } from "./compile.ts";
 import { createGuardField, type CornerGuard, type GuardField } from "./guards.ts";
@@ -437,37 +438,67 @@ export function createTerrain(track: Track): TerrainField {
   // query never snaps to road the world has already forgotten.
   const samples = track.samples;
   const GRID = 48;
-  let grid = new Map<string, number[]>();
+  /** A grid cell's road: the sample indices in it, with their positions
+   * alongside. The search below walks a hundred-odd of these per query and
+   * only ever wants the two coordinates, so they are kept out here rather
+   * than fetched through a sample object each time. */
+  type Cell = { index: number[]; x: number[]; z: number[] };
+  let grid = new Map<number, Cell>();
   let firstIndexed = 0;
   let indexed = 0;
 
   const indexSamples = (from: number, to: number): void => {
     for (let i = from; i < to; i++) {
-      const key = `${Math.floor(samples[i].x / GRID)},${Math.floor(samples[i].z / GRID)}`;
+      const s = samples[i];
+      const key = cellKey(Math.floor(s.x / GRID), Math.floor(s.z / GRID));
       let cell = grid.get(key);
-      if (!cell) grid.set(key, (cell = []));
-      cell.push(i);
+      if (!cell) grid.set(key, (cell = { index: [], x: [], z: [] }));
+      cell.index.push(i);
+      cell.x.push(s.x);
+      cell.z.push(s.z);
     }
+    nearCx = NaN;
   };
+
+  // The neighbourhood a query last looked at. Everything that asks where the
+  // road is asks about points a few meters apart — the four lattice corners
+  // under a wheel, the six probes a ground reading takes around itself, the
+  // candidate props in a cell — and at 48 m to a cell those keep landing in
+  // the same 7x7 block. Holding that block's non-empty buckets turns a
+  // repeat query from forty-nine map lookups into a walk of the two or three
+  // that actually hold road. Invalidated whenever the index changes shape.
+  let nearCx = NaN;
+  let nearCz = NaN;
+  const nearCells: Cell[] = [];
 
   type Near = { d: number; index: number; lateral: number };
   const nearestSample = (x: number, z: number): Near | null => {
     const cx = Math.floor(x / GRID);
     const cz = Math.floor(z / GRID);
+    if (cx !== nearCx || cz !== nearCz) {
+      nearCx = cx;
+      nearCz = cz;
+      nearCells.length = 0;
+      for (let dx = -3; dx <= 3; dx++) {
+        for (let dz = -3; dz <= 3; dz++) {
+          const cell = grid.get(cellKey(cx + dx, cz + dz));
+          if (cell) nearCells.push(cell);
+        }
+      }
+    }
     let best = -1;
     let bestD2 = Infinity;
-    for (let dx = -3; dx <= 3; dx++) {
-      for (let dz = -3; dz <= 3; dz++) {
-        const cell = grid.get(`${cx + dx},${cz + dz}`);
-        if (!cell) continue;
-        for (const i of cell) {
-          const ddx = x - samples[i].x;
-          const ddz = z - samples[i].z;
-          const d2 = ddx * ddx + ddz * ddz;
-          if (d2 < bestD2) {
-            bestD2 = d2;
-            best = i;
-          }
+    for (let c = 0; c < nearCells.length; c++) {
+      const cell = nearCells[c];
+      const cellX = cell.x;
+      const cellZ = cell.z;
+      for (let k = 0; k < cellX.length; k++) {
+        const ddx = x - cellX[k];
+        const ddz = z - cellZ[k];
+        const d2 = ddx * ddx + ddz * ddz;
+        if (d2 < bestD2) {
+          bestD2 = d2;
+          best = cell.index[k];
         }
       }
     }
@@ -1099,6 +1130,7 @@ export function createTerrain(track: Track): TerrainField {
     if (samples[firstIndexed]?.s < floorS - 400) {
       while (firstIndexed < samples.length - 1 && samples[firstIndexed].s < floorS) firstIndexed++;
       grid = new Map();
+      nearCx = NaN;
       indexSamples(firstIndexed, samples.length);
       while (streams.length > 0 && streams[0].centerS < floorS) streams.shift();
       guards.pruneBefore(floorS);

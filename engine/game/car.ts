@@ -580,10 +580,16 @@ export function stepGrounded(
     if (car.boostLeft === 0) events.push({ type: "boostEmpty" });
   }
 
+  // The nose, as a vector. Nothing below turns the car — the yaw is long
+  // since integrated — so the wind's head/tail component and the move at
+  // the bottom are the same heading read once.
+  const sinH = Math.sin(car.heading);
+  const cosH = Math.cos(car.heading);
+
   // ── Wind ─────────────────────────────────────────────────────────────────
   // Head/tailwind on the top end; the sideways carry is applied in the move.
   {
-    const along = ctx.windX * Math.sin(car.heading) + ctx.windZ * Math.cos(car.heading);
+    const along = ctx.windX * sinH + ctx.windZ * cosH;
     car.u += along * T.wind.longForce * dt;
   }
 
@@ -637,7 +643,9 @@ export function stepGrounded(
   const heldRate = demanded > 1e-6 ? (latRate * held) / demanded : latRate;
   if (car.u > 1) {
     const swung = car.slip * Math.exp(-heldRate * dt);
-    const kept = Math.hypot(car.u, car.w) * Math.exp(-T.grip.scrub * Math.sin(car.slip) ** 2 * dt);
+    // `travel` is this same speed: nothing between there and here moves the
+    // car, and the magnitude is what the redirect keeps.
+    const kept = travel * Math.exp(-T.grip.scrub * Math.sin(car.slip) ** 2 * dt);
     car.u = kept * Math.cos(swung);
     car.w = kept * Math.sin(swung);
   } else {
@@ -680,8 +688,6 @@ export function stepGrounded(
   car.drifting = drifting;
 
   // ── Move ─────────────────────────────────────────────────────────────────
-  const sinH = Math.sin(car.heading);
-  const cosH = Math.cos(car.heading);
   const carry = windCarry(car);
   // Where the step started: what the ground has to be measured against to
   // tell a hill the wheels climb from a wall that refuses them.

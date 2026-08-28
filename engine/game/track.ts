@@ -6,6 +6,7 @@
 // — a car that leaves the road keeps its last on-road progress for respawn.
 
 import { STAGE_RULES, finishIndex, type Surface, type Track } from "../mapgen/index.ts";
+import { flatTrack, GROUP, GROUP_SHIFT, type FlatTrack } from "../mapgen/flat.ts";
 import { corridorOffset, crossOffset } from "../mapgen/road.ts";
 import { TUNING } from "./defs/tuning.ts";
 import type { GameState } from "./state.ts";
@@ -83,7 +84,9 @@ export function trackLost(state: GameState): boolean {
   return home.distance > guide.near && Math.abs(home.bearing) > guide.away;
 }
 
-export type TrackFix = {
+/** Where the car sits against the centerline: everything a fix knows that
+ * costs only the search. */
+export type TrackPoint = {
   index: number;
   s: number;
   /** Signed lateral offset, meters; positive toward the car's map-view right
@@ -92,6 +95,9 @@ export type TrackFix = {
   /** True when the car is beyond the road edge plus the verge. */
   offRoad: boolean;
   surface: Surface | "nature";
+};
+
+export type TrackFix = TrackPoint & {
   /** Road height under the car, interpolated between samples AND across the
    * road's own cross-section (road.ts) — the road is a ramp with a crown
    * and a pair of worn wheel tracks in it, not a flat staircase. */
@@ -131,9 +137,11 @@ export function crossedFinish(
   x1: number,
   z1: number,
 ): boolean {
-  const s = track.samples[finishIndex(track)];
-  const fwdX = Math.sin(s.heading);
-  const fwdZ = Math.cos(s.heading);
+  const at = finishIndex(track);
+  const s = track.samples[at];
+  const flat = flatTrack(track);
+  const fwdX = flat.sinHeading[at];
+  const fwdZ = flat.cosHeading[at];
   const before = (x0 - s.x) * fwdX + (z0 - s.z) * fwdZ;
   const after = (x1 - s.x) * fwdX + (z1 - s.z) * fwdZ;
   if (before >= 0 || after < 0) return false;
@@ -142,35 +150,81 @@ export function crossedFinish(
   const t = after === before ? 0 : -before / (after - before);
   const cx = x0 + (x1 - x0) * t;
   const cz = z0 + (z1 - z0) * t;
-  const lateral = (cx - s.x) * Math.cos(s.heading) + (cz - s.z) * -Math.sin(s.heading);
+  const lateral = (cx - s.x) * fwdZ + (cz - s.z) * -fwdX;
   return Math.abs(lateral) <= gateHalfWidth(track);
 }
 
-/** Locate the car against the centerline, searching near `hint`. */
-export function locate(track: Track, x: number, z: number, hint: number): TrackFix {
+/** Locate the car against the centerline, searching near `hint` — POSITION
+ * ONLY. The road profile over it (the height the car rides, the slope along
+ * and the camber across) is half a dozen cross-section evaluations, and
+ * most of a run's fixes never read one: the fix taken after the move only
+ * wants to know which sample the car is at, how far off line, and whether
+ * that counts as off the road. `locate` is this plus the profile.
+ *
+ * The object is allocated with the profile's fields already on it, at zero,
+ * so both callers hand the same shape to everything downstream. */
+export function locatePoint(track: Track, x: number, z: number, hint: number): TrackPoint {
   const samples = track.samples;
   const lo = Math.max(0, hint - 15);
   const hi = Math.min(samples.length - 1, hint + 45);
   let best = lo;
   let bestD2 = Infinity;
-  for (let i = lo; i <= hi; i++) {
-    const s = samples[i];
-    const dx = x - s.x;
-    const dz = z - s.z;
+  // Over the flat arrays, not the sample objects: this window is sixty-odd
+  // samples and the run walks it twice per physics step, which is the
+  // single hottest loop in the engine. Whole groups of eight are stepped
+  // over when their bounding circle proves none of them can beat the
+  // distance the walk is already holding — which is most of the window,
+  // most of the time: it reaches ninety meters up the road for the rare
+  // step that needs it, not for the ordinary one that does not.
+  const flat = flatTrack(track);
+  const fx = flat.x;
+  const fz = flat.z;
+  // The bound the groups are tested against. It starts at the hint's own
+  // sample, which is IN the window, so it is an upper bound on the nearest
+  // one — and a group further off than an upper bound cannot hold the
+  // answer, so the far end of the window is dropped without being walked.
+  // Only ever read at a group boundary, so the root is taken there rather
+  // than on every improvement along the way.
+  const seed = lo > hint ? lo : hint > hi ? hi : hint;
+  const seedX = x - fx[seed];
+  const seedZ = z - fz[seed];
+  let bound = Math.sqrt(seedX * seedX + seedZ * seedZ);
+  let bounded = true;
+  let i = lo;
+  while (i <= hi) {
+    if ((i & (GROUP - 1)) === 0 && i + GROUP - 1 <= hi) {
+      if (!bounded) {
+        const found = Math.sqrt(bestD2);
+        if (found < bound) bound = found;
+        bounded = true;
+      }
+      const g = i >> GROUP_SHIFT;
+      const gx = x - flat.groupX[g];
+      const gz = z - flat.groupZ[g];
+      const reach = bound + flat.groupR[g];
+      // Strictly conservative: the margin can only ever keep a group in the
+      // walk that could have been dropped, never drop one that holds the
+      // answer.
+      if (gx * gx + gz * gz > reach * reach * (1 + 1e-9)) {
+        i += GROUP;
+        continue;
+      }
+    }
+    const dx = x - fx[i];
+    const dz = z - fz[i];
     const d2 = dx * dx + dz * dz;
     if (d2 < bestD2) {
       bestD2 = d2;
       best = i;
+      bounded = false;
     }
+    i++;
   }
   const s = samples[best];
   // Project the offset onto the sample's right axis for a signed lateral.
   const dx = x - s.x;
   const dz = z - s.z;
-  const rightX = Math.cos(s.heading);
-  const rightZ = -Math.sin(s.heading);
-  const lateral = dx * rightX + dz * rightZ;
-  const halfRoad = track.width / 2;
+  const lateral = dx * flat.cosHeading[best] + dz * -flat.sinHeading[best];
   // Off the END of the road is off the road too. The nearest sample at
   // either end of the stage stays the nearest however far past it the car
   // gets, and its lateral offset alone would report a car a kilometre
@@ -179,20 +233,52 @@ export function locate(track: Track, x: number, z: number, hint: number): TrackF
   // valleys and through hillsides. Road is drawn and shelved for one apron
   // past each end (R24); past that the terrain owns the ground. A circuit
   // has no such end — its road runs back into its own start line.
-  const offEnd = pastApron(track, best, s, dx, dz);
-  const offRoad = offEnd || Math.abs(lateral) > halfRoad + TUNING.offTrack.verge;
-  const surface = offRoad ? "nature" : s.surface;
+  // Only the two end samples can be run off the end of, so the test itself
+  // is only reached there — every other fix skips the call.
+  const offEnd =
+    (best === 0 || best === samples.length - 1) && pastApron(track, best, flat, best, dx, dz);
+  const offRoad = offEnd || Math.abs(lateral) > track.width / 2 + TUNING.offTrack.verge;
+  // Allocated at the full width so `locate` can fill the profile in place
+  // and everything downstream sees one object shape.
+  const fix: TrackFix = {
+    index: best,
+    s: s.s,
+    lateral,
+    offRoad,
+    surface: offRoad ? "nature" : s.surface,
+    elevation: 0,
+    slope: 0,
+    slopeLat: 0,
+  };
+  return fix;
+}
+
+/** Locate the car against the centerline, and read the road's profile under
+ * where it lands. */
+export function locate(track: Track, x: number, z: number, hint: number): TrackFix {
+  // `locatePoint` allocates the profile's fields zeroed; this is the one
+  // function that fills them, which is why it may look at them.
+  const fix = locatePoint(track, x, z, hint) as TrackFix;
+  const flat = flatTrack(track);
+  const samples = track.samples;
+  const best = fix.index;
+  const s = samples[best];
+  const dx = x - s.x;
+  const dz = z - s.z;
+  const halfRoad = track.width / 2;
   // Ground height and slope come from BETWEEN the samples. The nearest
   // sample alone quantizes the road to the 2 m sample grid, and on a graded
   // road that staircase reads as the ground falling away — a car that hops
   // its way up every ramp and phantom-launches at every sample crossing.
   // Project onto the sample's forward axis, then blend toward the neighbour
   // the car is heading for.
-  const along = dx * Math.sin(s.heading) + dz * Math.cos(s.heading);
+  const along = dx * flat.sinHeading[best] + dz * flat.cosHeading[best];
   const next = clampIndex(samples, best + Math.sign(along));
   const f = Math.min(1, Math.abs(along) / track.step);
-  const crown = s.elevation + (samples[next].elevation - s.elevation) * f;
-  const slope = slopeAt(track, best) + (slopeAt(track, next) - slopeAt(track, best)) * f;
+  const here = flat.elevation[best];
+  const crown = here + (flat.elevation[next] - here) * f;
+  const hereSlope = slopeOn(flat, best);
+  const slope = hereSlope + (slopeOn(flat, next) - hereSlope) * f;
   // Across the road: the sample's elevation is the CROWN, and where the car
   // actually sits depends on how far out it is — down the camber, or in one
   // of the two tracks every car before it wore into the gravel. Past the mat
@@ -204,27 +290,22 @@ export function locate(track: Track, x: number, z: number, hint: number): TrackF
   // at the boundary. A bridge is the exception — past a deck's edge is air,
   // not a verge, and a car with two wheels on the parapet is still on the
   // deck.
-  const onRoad = Math.max(-halfRoad, Math.min(halfRoad, lateral));
+  const onRoad = Math.max(-halfRoad, Math.min(halfRoad, fix.lateral));
   const cross =
-    s.deck != null ? crossOffset(s, onRoad, track.width) : corridorOffset(s, lateral, track.width);
+    s.deck != null
+      ? crossOffset(s, onRoad, track.width)
+      : corridorOffset(s, fix.lateral, track.width);
   // The camber the car SITS on is the mat's, read at the edge at furthest:
   // the chamfer off a paved edge is a curb, and rolling the body onto it
   // would tip the car over a step a few centimeters wide.
   const probe = 0.5;
-  const slopeLat =
+  fix.elevation = crown + cross;
+  fix.slope = slope;
+  fix.slopeLat =
     (crossOffset(s, Math.min(halfRoad, onRoad + probe), track.width) -
       crossOffset(s, Math.max(-halfRoad, onRoad - probe), track.width)) /
     (2 * probe);
-  return {
-    index: best,
-    s: s.s,
-    lateral,
-    offRoad,
-    surface,
-    elevation: crown + cross,
-    slope,
-    slopeLat,
-  };
+  return fix;
 }
 
 /** True when the car has run off one of the stage's ENDS — past the apron
@@ -239,7 +320,8 @@ export function locate(track: Track, x: number, z: number, hint: number): TrackF
 function pastApron(
   track: Track,
   index: number,
-  sample: Track["samples"][number],
+  flat: FlatTrack,
+  at: number,
   dx: number,
   dz: number,
 ): boolean {
@@ -247,7 +329,7 @@ function pastApron(
   const first = index === 0;
   const last = index === track.samples.length - 1 && !track.endless;
   if (!first && !last) return false;
-  const along = dx * Math.sin(sample.heading) + dz * Math.cos(sample.heading);
+  const along = dx * flat.sinHeading[at] + dz * flat.cosHeading[at];
   const past = first ? -along : along;
   return past > STAGE_RULES.startZone.apron;
 }
@@ -270,15 +352,15 @@ export function crossedLip(track: Track, fromIndex: number, toIndex: number): nu
  * short window reads that road TEXTURE as a series of launches at pace, when
  * what decides a takeoff is the shape of the hill. */
 export function curvatureAt(track: Track, index: number, span: number): number {
+  const { elevation, arc } = flatTrack(track);
   const reach = Math.max(1, Math.round(span / track.step));
-  const back = track.samples[clampIndex(track.samples, index - reach)];
-  const mid = track.samples[index];
-  const fwd = track.samples[clampIndex(track.samples, index + reach)];
-  const behind = mid.s - back.s;
-  const ahead = fwd.s - mid.s;
+  const back = clampIndex(track.samples, index - reach);
+  const fwd = clampIndex(track.samples, index + reach);
+  const behind = arc[index] - arc[back];
+  const ahead = arc[fwd] - arc[index];
   if (behind < 1e-6 || ahead < 1e-6) return 0;
-  const rise = (fwd.elevation - mid.elevation) / ahead;
-  const fall = (mid.elevation - back.elevation) / behind;
+  const rise = (elevation[fwd] - elevation[index]) / ahead;
+  const fall = (elevation[index] - elevation[back]) / behind;
   return (2 * (rise - fall)) / (behind + ahead);
 }
 
@@ -286,9 +368,14 @@ export function curvatureAt(track: Track, index: number, span: number): number {
  * backward-looking on purpose, so a jump lip reports the RAMP that throws
  * the car rather than averaging in the drop on its far side. */
 export function slopeAt(track: Track, index: number): number {
-  const samples = track.samples;
+  return slopeOn(flatTrack(track), index);
+}
+
+/** `slopeAt` against a flat table already in hand — `locate` reads it twice
+ * per call and has no reason to look the table up again for each. */
+function slopeOn(flat: FlatTrack, index: number): number {
   const i1 = Math.max(0, index - 2);
-  const rise = samples[index].elevation - samples[i1].elevation;
-  const run = Math.max(1e-6, samples[index].s - samples[i1].s);
+  const rise = flat.elevation[index] - flat.elevation[i1];
+  const run = Math.max(1e-6, flat.arc[index] - flat.arc[i1]);
   return rise / run;
 }
