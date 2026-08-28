@@ -9,7 +9,7 @@
 import { DAMAGE_ZONES, TUNING, wayHome, type GameState } from "@engine";
 
 import { buildMinimap } from "./minimap.tsx";
-import type { HudDamage, HudPacenote, HudSnapshot } from "./hud.tsx";
+import type { HudDamage, HudPacenote, HudSnapshot, HudStanding } from "./hud.tsx";
 
 /** The two instruments the ~12 Hz snapshot cannot carry, and why they are
  * their own channel:
@@ -181,6 +181,7 @@ export function takeSnapshot(
   finishTime: number | null,
   ghostS: number | null = null,
   book: RunBook | null = null,
+  standing: HudStanding | null = null,
 ): HudSnapshot {
   const rpm = tachometer(state);
   // The rendered world is a mirror of the engine's map view, so the wind
@@ -232,5 +233,6 @@ export function takeSnapshot(
     windScreenAngle,
     damage: damageSnapshot(state),
     ghostGap: ghostS === null ? null : state.progressS - ghostS,
+    standing,
   };
 }

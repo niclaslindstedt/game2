@@ -104,6 +104,11 @@ export type GameRenderer = {
    * sheds parts the way the run did, and throws no dust, no camera kick
    * and no sound, because none of that happened here. */
   onGhostEvents: (state: GameState, events: GameEvent[]) => void;
+  /** R29 — where the run stands in the field, for R25's salute at the line:
+   * how big the cannons go IS how good the result was. Null on a run with
+   * nobody entered, where the size falls back to where the TIME would have
+   * placed on the derived list (standings.ts). */
+  setStanding: (place: number | null) => void;
   cycleCamera: () => CameraMode;
   /** God mode's controls for this frame — what the free camera should do
    * with `dt` worth of held keys and mouse travel. Written straight into
@@ -440,6 +445,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     setConditions(state);
   };
 
+  /** The field's verdict, set by the app as the boards go by. */
+  let standing: number | null = null;
+
   const setGhost = (state: GameState | null): void => {
     dropGhost();
     if (!state) return;
@@ -540,7 +548,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       } else if (ev.type === "finish") {
         // R25 — the salute, sized by where the time placed. Fourth and
         // worse fire nothing, and `fire` knows it.
-        celebration.fire(classify(state.track, ev.time).place, world?.muzzles() ?? []);
+        celebration.fire(standing ?? classify(state.track, ev.time).place, world?.muzzles() ?? []);
       } else if (ev.type === "respawn") {
         chase.kick(0.3);
       } else if (ev.type === "solidBreak") {
@@ -966,6 +974,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     setConditions,
     setGhost,
     onGhostEvents,
+    setStanding: (place) => {
+      standing = place;
+    },
     cycleCamera: () => chase.cycle(),
     flyCamera: (move) => {
       // The look deltas and the wheel steps ACCUMULATE until the camera

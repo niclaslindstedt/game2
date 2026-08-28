@@ -67,6 +67,9 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | Run orchestration (phases, laps, respawn, events)           | `engine/game/step.ts`                                                                                                     |
 | Collision / damage (crush, parts, wreck, systems)           | `engine/game/collision.ts` — the `collision` skill                                                                        |
 | Bot behavior                                                | `engine/sim/bot.ts`                                                                                                       |
+| How GOOD a bot is (difficulty, skill budgets)               | `engine/sim/skill.ts` — the `bot-improvement` skill                                                                       |
+| Who the campaign's rivals ARE (aliases, cars, characters)   | `engine/sim/rivals.ts` — the `bot-improvement` skill                                                                      |
+| The field on the road, and what place a run is in           | `pwa/src/game/standings.ts` (+ `campaign.ts` for the podium rule)                                                         |
 | Anything drawn (meshes, textures, camera, effects)          | `pwa/src/game/` (renderer.ts and friends)                                                                                 |
 | Things the car knocks loose (cones, torn-off parts)         | `pwa/src/game/cones.ts`, `car-damage.ts`, over `tumble.ts` — renderer-side; the engine knows nothing of them              |
 | Anything HEARD (a hit, a landing, a menu click)             | `pwa/src/game/audio/bank.ts` (+ a rung in `route.ts`) — the `sound-effects` skill                                         |
@@ -79,7 +82,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | The time trial's high score board and its initials          | `pwa/src/game/scores.ts` (storage) + `score-board.tsx` / `hud-initials.tsx`                                               |
 | The time trial's ghost: recording, replay, storage          | `pwa/src/game/ghost.ts`                                                                                                   |
 | Where the split boards stand on a stage (R28)               | `STAGE_RULES.checkpoint` + the placement in `engine/mapgen/compile.ts` — the `mapgen-improvement` skill                   |
-| What a split is measured against, and where a respawn lands | `engine/game/track.ts` (`lastCheckpoint`) + `pwa/src/game/standings.ts` (campaign rivals)                                 |
+| What a split is measured against, and where a respawn lands | `engine/game/track.ts` (`lastCheckpoint`) + `pwa/src/game/standings.ts` (the field's leader)                              |
 | A player option (HUD, video, controls)                      | `pwa/src/game/settings.ts`, then its reader                                                                               |
 | The debug overlay, god mode, the debug log                  | `pwa/src/game/debug-*.ts(x)`, `camera-free.ts`, `menu-dev.tsx` — the `debug-tools` skill                                  |
 | The studio card / boot cover                                | `pwa/src/game/splash.ts` (policy) + `splash-screen.tsx`                                                                   |
@@ -103,7 +106,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | ------------------------------------------ | -------------------------------------------------------------------------------------------- |
 | Handling model / tuning                    | `docs/driving.md`                                                                            |
 | Generator rules (`engine/mapgen/rules.ts`) | `docs/track-generator.md` (rules are listed verbatim)                                        |
-| Bot or sim harness                         | `docs/simulation.md`                                                                         |
+| Bot, sim harness, rival skill model        | `docs/simulation.md`                                                                         |
 | The sound bank, the beds, or a score       | `docs/audio.md`                                                                              |
 | Commands / npm scripts / Make targets      | README Usage table + this file's command block                                               |
 | The debug overlay's REPRO line             | `App.tsx`'s URL readers — writer and reader move together, or a screenshot stops reproducing |

@@ -29,8 +29,12 @@ precision and not toward deliberate mistakes:
   drift scrubs the excess), power through the slide and counter-steer out,
   breathe the throttle when the angle gets deep, line the nose up with travel
   before landing, and slow right down to recover when off the road.
-- **Don't** add artificial imperfection (steering jitter, reaction delay). We
-  want the bot to STOP doing dumb things, not to fake being bad.
+- **Don't** add artificial imperfection (steering jitter, reaction delay,
+  time penalties, rubber banding). We want the bot to STOP doing dumb things,
+  not to fake being bad. This holds for the campaign's EASY field too: an
+  easy rival is slow because it plans corners at a speed a nervous driver
+  plans them at and makes a nervous driver's mistakes, not because anything
+  was taken away from it after the fact.
 - **Don't** let it do what a human never would: brake mid-air, hold full
   throttle into a hairpin without a plan, fight a drift with full counter from
   the first degree of slip, or grind along the grass at pace.
@@ -55,11 +59,29 @@ human one (same seed + car + profile → identical digest —
 
 ## The knobs: `BotProfile`
 
-The tunables live as data on `BotProfile` (`latAccel`, `steerGain`,
-`lookahead`, `planHorizon`, `hardCurvature`, `brakeMargin`), with `RALLY_BOT`
-as the shipped default. Slower or faster brains are **new profiles, not code
-forks** — a "cautious" or "flat-out" probe is a profile literal handed to
-`simulateStage`, and the decision code stays one function.
+The tunables live as data on `BotProfile` (`latFraction`, `steerGain`,
+`lookahead`, `planHorizon`, `hardCurvature`, `hotEntry`, `rotationRef`,
+`brakeMargin`, `brakeUse`, `reverseAfter`, `reverseSpeed`, `offRoadGiveUp`),
+with `RALLY_BOT` as the shipped default. Slower or faster brains are **new
+profiles, not code forks** — a "cautious" or "flat-out" probe is a profile
+literal handed to `simulateStage`, and the decision code stays one function.
+
+**A profile is never hand-written for the game itself.** The campaign's
+fourteen rivals come out of the SKILL MODEL (`engine/sim/skill.ts`): six
+skill axes with a points budget in front of them, a difficulty being one
+number and a crew being a way of spending it (`engine/sim/rivals.ts`). Adding
+a knob to `BotProfile` is the moment to ask which axis owns it — a knob no
+axis moves is a knob no rival can ever have. Measure a change to either with
+`npm run sim -- --field`.
+
+Before an axis is given a range, SWEEP THE KNOB it moves: one knob at a time
+against `RALLY_BOT` over several stages and all three cars, printing the time
+as a ratio. Half of what looks like a skill turns out to be flat (the bot's
+`planHorizon` does nothing above about a second, because the corner plan is
+already distance-discounted) and some of it runs the other way (a bigger
+`brakeMargin` is FASTER — on gravel the quick crews barely brake, the slide
+scrubs the speed). An axis built on a guess is a difficulty dial that does
+not move.
 
 Prefer moving a magic number out of `botInput`'s body into the profile over
 hard-coding it, so it's tunable (and sweepable) next time. Keep the profile to

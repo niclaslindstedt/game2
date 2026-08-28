@@ -17,3 +17,12 @@ export function formatTime(seconds: number): string {
   const cs = Math.floor((clamped - m * 60 - s) * 100);
   return `${m}'${String(s).padStart(2, "0")}"${String(cs).padStart(2, "0")}`;
 }
+
+/** A finishing position, the way a results sheet writes one: 1ST, 2ND, 3RD,
+ * 4TH — and 11TH through 13TH, which are the three every naive version of
+ * this gets wrong. */
+export function ordinal(place: number): string {
+  const teens = place % 100;
+  if (teens >= 11 && teens <= 13) return `${place}TH`;
+  return `${place}${["TH", "ST", "ND", "RD"][place % 10] ?? "TH"}`;
+}

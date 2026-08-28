@@ -1131,5 +1131,41 @@ await capture(
   },
 );
 
+// R29 — THE CAMPAIGN AND ITS FIELD, which is the one part of the game a
+// `?start=1` link cannot reach: a stage entered from the menu is the only
+// one with fourteen rivals on the road, and everything the field puts on
+// screen — the position board, the split against the leader, the card that
+// says the podium was missed — exists only there. So this scene walks in
+// the way a player does, and the bot drives it.
+//
+// HARD on purpose. The reference bot is quick enough to win EASY outright,
+// and a results card that always says STAGE CLEAR photographs half the
+// feature.
+if (only.length === 0 || only.some((f) => "shot-campaign".includes(f))) {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  page.on("pageerror", (err) => console.error(`[pageerror] ${err.message}`));
+  // `splash=0` rather than a press: the attract card only takes one once the
+  // world has landed, and a scripted click that arrives a frame early is a
+  // scene that fails on a fast machine and passes on a slow one.
+  await page.goto(`${url}?bot=1&splash=0`, { waitUntil: "load" });
+  await page.waitForSelector("canvas.game-canvas");
+  await page.getByText("CAMPAIGN", { exact: false }).first().click();
+  await page.getByText("TAIGA", { exact: false }).first().click();
+  await page.getByText("HARD", { exact: true }).first().click();
+  await page.screenshot({ path: join(outDir, "shot-campaign-stages.png") });
+  console.log("previews/shot-campaign-stages.png");
+  await page.getByText("Loggers' Run", { exact: false }).first().click();
+  // The first split board: the one moment a staggered rally knows where
+  // anybody is, so the position and the gap to the leader arrive together.
+  await page.waitForSelector(".hud-split", { timeout: FINISH_WAIT });
+  await page.screenshot({ path: join(outDir, "shot-campaign-split.png") });
+  console.log("previews/shot-campaign-split.png");
+  await page.waitForSelector(".hud-finish", { timeout: FINISH_WAIT });
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: join(outDir, "shot-campaign-result.png") });
+  console.log("previews/shot-campaign-result.png");
+  await page.close();
+}
+
 await browser.close();
 server.close();

@@ -14,7 +14,46 @@ A deterministic player stand-in that reads the same `GameState` the HUD reads an
 6. **Backing out** — pinned against something with the throttle buried for `reverseAfter`, the bot stops pushing and reverses off it, wheel straight, until the car is properly moving (`reverseSpeed`); then it takes another run at the line. Being WEDGED is no longer a reason to reset: a driver backs off the trunk first, and the respawn is what happens when that fails too. The manoeuvre latches on the car's own `reversing` state so a single wedged tick cannot flicker it, and reversing counts as asking to move (`stepStuck`), so a car pinned both ways still reaches the engine's wedge rescue on time instead of braking forever.
 7. **Gears** — reads `car.gearbox` (the run's box, not the car's) and shifts a manual by the same thresholds the auto box uses, so both simulate fairly.
 
-Bot profiles are data (`BotProfile`); `RALLY_BOT` is the default. Slower/faster brains are new profiles, not code forks.
+Two of the knobs are estimates the driver makes rather than reflexes: `brakeUse` is how much of the car's braking the corner plan assumes it will get (a driver who trusts the brakes stays on the throttle later), and `offRoadGiveUp` is how long an excursion runs before the bot accepts the reset instead of ploughing on.
+
+Bot profiles are data (`BotProfile`); `RALLY_BOT` is the default and the profile every table in this document is measured with. Slower/faster brains are new profiles, not code forks — and they are not hand-written either: see the skill model below.
+
+## The skill model (`engine/sim/skill.ts`)
+
+A `BotProfile` is ten numbers, and nothing about them says which of two profiles is the better crew. The skill model puts a BUDGET in front of them so that it does.
+
+Skill is spent on six **axes**, each worth up to `AXIS_MAX` (10) points, and each axis moves one or two profile numbers from what a novice does to what the best crew in the game does:
+
+| Axis         | What it buys                                                    | Knobs                                           | Authority |
+| ------------ | --------------------------------------------------------------- | ----------------------------------------------- | --------- |
+| `commitment` | How much of the car's grip they lean on                         | `latFraction`                                   | ±20%      |
+| `attack`     | How hot they arrive, and how much road is worth a flick         | `hotEntry`, `hardCurvature`                     | ±15%      |
+| `vision`     | How far through the corner they are already looking             | `lookahead`                                     | ±15%      |
+| `hands`      | How much authority the wheel has                                | `steerGain`                                     | ±10%      |
+| `nerve`      | How far over their own plan they run before touching the brakes | `brakeMargin`, `brakeUse`                       | ±14%      |
+| `recovery`   | What a mistake COSTS once it has happened                       | `reverseAfter`, `reverseSpeed`, `offRoadGiveUp` | —         |
+
+**Every axis is monotone in pace** — more points is a quicker driver, never a slower one — and that is a measurement rather than an assumption: each range was swept one knob at a time against `RALLY_BOT` over four campaign stages and all three cars before it was written down, and the authority column is what that sweep found. An axis whose knob turned out to do nothing (`planHorizon`, which is flat above about a second of horizon) is not an axis. `recovery` has no pace authority at all on a clean run and whole minutes of it on a bad one, which is exactly what it is for.
+
+`spend(budget, weights)` distributes a budget in the proportions a crew asks for, **water-filling**: an axis that fills up keeps its cap and hands its share back to the pot, so a crew that wanted everything in one place still ends up with a complete car. That is what makes a lopsided character a SHAPE at low budgets and merely a lean at high ones.
+
+`RALLY_BOT` is worth about 38 of the 60 points on this scale.
+
+## The campaign field (`engine/sim/rivals.ts`)
+
+R29 — the campaign is raced against **fourteen crews**, and the player is the fifteenth and last car out, `START_INTERVAL` seconds behind the one in front. Each crew is data: an alias, a car, a `standing` (where they sit in the field's budget band) and a set of weights (how they spend what they are given), plus notes describing what they are good at and what lets them down. The shape is fixed and the budget is not, so the field keeps its characters at every difficulty: Blink is always the one with the hands and no eyes, Metronome always the one who never makes a mistake and never makes a move.
+
+A difficulty is one number — the points the middle of the field gets — plus a spread:
+
+| Setting  | Budget | Spread | P3 pace, as a ratio to `RALLY_BOT`            |
+| -------- | ------ | ------ | --------------------------------------------- |
+| `easy`   | 11     | ±7.5   | ≈ 1.16 (the podium is 16% off reference pace) |
+| `medium` | 19     | ±8.5   | ≈ 1.04                                        |
+| `hard`   | 28     | ±8     | ≈ 0.93                                        |
+
+The bands overlap: the quickest EASY crew is about as good as the slowest MEDIUM one, which is what makes stepping up a difficulty feel like the field closing in rather than a different game.
+
+**The rivals are not a table of times.** The app builds fourteen more `GameState`s on the same compiled track and steps them beside the player's, so the field cannot drift away from the handling — it IS the handling. See `pwa/src/game/standings.ts`.
 
 ## The harness (`engine/sim/simulate.ts`)
 
@@ -35,6 +74,7 @@ npm run sim -- --gearbox manual       # drive the bot with a manual box
 npm run sim -- --asphalt 0.8          # the generator's dials, each 0..1:
                                       # --elevation --water --trees --asphalt
 npm run sim -- --sweep                # the ROSTER BALANCE table (see below)
+npm run sim -- --field                # the CAMPAIGN FIELD table (see below)
 npm run sim -- --json report.json     # machine-readable dump
 ```
 
@@ -62,6 +102,16 @@ The five: `tarmac` (fully sealed, flowing), `mountain` (a sealed pass, steep),
 flat). A healthy roster has every car winning at least one, the specialists
 winning their home ground by more than the all-rounder wins the middle, and
 nobody worst everywhere. **Any change to `cars.ts` owes this table.**
+
+## The campaign field table (`--field`)
+
+The tuning loop for the rival difficulties. It drives every crew at every setting through the real engine and prints what the budgets in `skill.ts` actually buy — three seeds by default, because fourteen crews at three settings is already 126 runs and a fourth seed buys less than it costs (`--seeds` overrides).
+
+Everything is quoted as a **ratio to `RALLY_BOT`** on the same seed and car, because that profile is the reference every other table here is measured with and the one number that does not move when a stage changes length. Read the **P3** column: it is the podium, and the podium is what a difficulty IS. Above 1.00 the field is slower than the reference bot, so a reference-pace run wins the podium; below it, it does not.
+
+The per-crew line under each difficulty is the field in finishing order with each crew's points and mean ratio, and a `!` on anybody who failed to finish. That line is how a character is checked: if two crews on the same points are never in a different order on a different stage, one of them is not actually a different driver.
+
+**Any change to `skill.ts` or `rivals.ts` owes this table.**
 
 ## What the tests pin down
 

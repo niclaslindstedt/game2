@@ -10,6 +10,7 @@ import type { GamePhase, TurnSeverity } from "@engine";
 
 import { deviceControls, type InputManager } from "./input.ts";
 import { createThumbGuard } from "./thumb-guard.ts";
+import { PODIUM as PODIUM_PLACES } from "./campaign.ts";
 import { FinishCard, type FinishScores, type NextStage } from "./hud-finish.tsx";
 import { Minimap, type HudMinimap } from "./minimap.tsx";
 import type { HudSettings, PedalDir, TouchSettings } from "./settings.ts";
@@ -86,6 +87,20 @@ export type HudSnapshot = {
   /** Metres of road the run is ahead of (positive) or behind (negative)
    * the ghost it is racing, or null when there is no ghost out there. */
   ghostGap: number | null;
+  /** R29 — where the run stands in the field, as of the last split board.
+   * Null on every run with nobody else entered: a time trial and a Roam
+   * stage are raced against the clock, and a position over an empty road
+   * would be a number with nothing behind it. */
+  standing: HudStanding | null;
+};
+
+/** R29 — the position board: which place, out of how many cars. Moves only
+ * at a split (and at the line), because that is the only moment a rally
+ * actually knows: everybody is on the road at once, ten seconds apart, and
+ * the timing point is where the times meet. */
+export type HudStanding = {
+  place: number;
+  of: number;
 };
 
 /** The damage readout, already flipped into SCREEN space by the snapshot
@@ -872,6 +887,23 @@ function CameraGlyph() {
   );
 }
 
+/** R29 — where the run stands in the field. Only two numbers, and only one
+ * of them is big: the place is what is read at speed, the field size is the
+ * caption that makes it mean something. It holds its value between split
+ * boards rather than counting — a position that ticked over continuously
+ * would be claiming knowledge a staggered rally does not have. */
+function PositionBoard({ standing }: { standing: HudStanding }) {
+  return (
+    <div
+      className={`hud-place ${standing.place <= PODIUM_PLACES ? "hud-place-podium" : ""}`}
+      aria-label={`Position ${standing.place} of ${standing.of}`}
+    >
+      <span className="hud-place-no">{standing.place}</span>
+      <span className="hud-place-of">/{standing.of}</span>
+    </div>
+  );
+}
+
 function TouchButton({
   label,
   className,
@@ -962,6 +994,11 @@ export function Hud({
           >
             <CameraGlyph />
           </button>
+          {/* R29 — the position board, between the camera and the map. It is
+              the last thing on the row, which puts it hard against the
+              minimap: place and route are the two things a driver glances
+              right for, and they should be one glance. */}
+          {snap.standing && <PositionBoard standing={snap.standing} />}
         </div>
       </div>
 
@@ -1018,6 +1055,12 @@ export function Hud({
             record={snap.record}
             laps={snap.laps}
             lapTimes={snap.lapTimes}
+            standing={
+              snap.standing && {
+                ...snap.standing,
+                podium: snap.standing.place <= PODIUM_PLACES,
+              }
+            }
             nextStage={nextStage}
             onRetry={onRetry}
             onRetire={onRetire}
