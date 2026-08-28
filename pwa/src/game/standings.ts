@@ -21,8 +21,14 @@
 //     so a clean run is a podium and a scruffy one is not — which is what
 //     makes the confetti at the finish mean something.
 //
-// Nothing here is presentation: the HUD renders the placing and the finish
-// cannons are sized by it, but both ask this module rather than deciding.
+// NOTHING SHOWS THE PLACING TO THE PLAYER. It was on the results card and it
+// read as a lie — twelve crews on a start list nobody can see is a number the
+// player has no way to make sense of — so the card says the time and the board
+// says who else has driven it. What is left reading this module is R25's
+// finish cannons: how big the salute is IS how good the time was, and that is
+// a judgement the derived field can honestly make without ever claiming there
+// was somebody to beat. When there are real opponents to place against, this
+// is where they go.
 
 import { createRng, finishAt, type Track } from "@engine";
 

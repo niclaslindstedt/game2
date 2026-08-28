@@ -494,19 +494,39 @@ body {
   border-radius: 1rem;
   padding: 0.85rem 1.8rem;
   /* The card grew a ten-row board and two buttons, and a phone held sideways
-     is 390 px tall: it has to be able to scroll rather than run off the
-     bottom edge with the way out below the fold. Pointer events come with
-     that — nothing under the card is being driven anyway, since the run-out
-     drives itself (R25). */
+     is 390 px tall. Capping its height and letting it scroll is not enough on
+     its own: what ends up under the fold is the BOARD's last rows and then
+     the way out, and a results card whose RETIRE has to be scrolled to is a
+     card the player is stuck on. So it is a COLUMN — the time at the top and
+     the buttons at the bottom hold their size, and the board in the middle is
+     the only thing that gives. Pointer events come with the scroll; nothing
+     under the card is being driven anyway, since the run-out drives itself
+     (R25). */
+  display: flex;
+  flex-direction: column;
   max-height: 86%;
   overflow-y: auto;
   overscroll-behavior: contain;
   pointer-events: auto;
 }
 
+/* The two ends of that column never shrink. */
+.hud-finish-title,
+.hud-finish-time,
+.hud-finish-acts {
+  flex: 0 0 auto;
+}
+
 /* …and the board scrolls INSIDE it, so the ways on never leave the frame
    however deep the table is. */
+/* …and the board is what gives. `min-height` has to be stated: a flex item
+   defaults to `auto`, which refuses to shrink below its own content, and a
+   board that will not shrink pushes the buttons out of the card however tall
+   the card is allowed to be. Two rows is the floor — below that it is not a
+   table any more, and the card would rather scroll. */
 .hud-finish .score-board {
+  flex: 0 1 auto;
+  min-height: 3.2em;
   max-height: min(13rem, 32vh);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -527,35 +547,6 @@ body {
   font-size: clamp(1.8rem, 7.5vmin, 3.4rem);
   font-variant-numeric: tabular-nums;
   line-height: 1.05;
-}
-
-/* The classification: the placing is the loud half of it, the field size
-   and the gap the quiet half, all on one baseline so the card stays three
-   lines tall on a phone. */
-.hud-finish-place {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 0.5em;
-  margin: 0.15rem 0 0.3rem;
-}
-
-.hud-place {
-  font-size: clamp(1.1rem, 4.4vmin, 1.9rem);
-  font-variant-numeric: tabular-nums;
-}
-
-/* A podium place is the whole reason the cannons went off; it wears the
-   same gold the STAGE CLEAR title does. Everything else stays plain. */
-.hud-place.is-podium {
-  color: var(--hud-good);
-}
-
-.hud-finish-of,
-.hud-finish-gap {
-  font-size: clamp(0.7rem, 2.2vmin, 0.95rem);
-  opacity: 0.8;
-  font-variant-numeric: tabular-nums;
 }
 
 .hud-finish-record {

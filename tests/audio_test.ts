@@ -36,8 +36,10 @@ import { TAIGA_TRACK } from "../pwa/src/game/audio/scores/taiga.ts";
 import type { SoundBank } from "../pwa/src/game/audio/types.ts";
 import { flattenTrack, noteFrequency, trackSeconds } from "../pwa/src/lib/tracker.ts";
 import {
+  MAX_CUTOFF_RATIO,
   MIN_ATTACK_MS,
   envelopeShape,
+  safeCutoff,
   type NoiseOptions,
   type Synth,
   type ToneOptions,
@@ -595,5 +597,85 @@ describe("the shape of a voice", () => {
     expect(peaks.length).toBe(2); // up to the peak, then held there
     expect(peaks[1].at - peaks[0].at).toBeCloseTo(0.4, 3);
     expect(pad[pad.length - 1].value).toBeLessThanOrEqual(0.0001);
+  });
+});
+
+describe("what a filter may be asked for", () => {
+  /**
+   * THE SAMPLE RATES AN AUDIOCONTEXT ACTUALLY COMES BACK AT. A desktop gives
+   * 44.1 or 48 kHz and nothing here is ever near the edge — which is exactly
+   * why this fault cannot be heard while developing. iOS picks the rate from
+   * the live audio ROUTE, and a Bluetooth headset in hands-free mode drops the
+   * whole session to 16 kHz, or 8 kHz on an old one.
+   */
+  const RATES = [48000, 44100, 32000, 24000, 16000, 8000];
+
+  /** Every filter any sound in the game can ask for, by where it is written. */
+  function authoredCutoffs(): { where: string; hz: number }[] {
+    const out: { where: string; hz: number }[] = [];
+    for (const [name, bank] of BANKS) {
+      for (const [id, def] of Object.entries(bank)) {
+        for (const voice of def.voices) {
+          if (!voice.filter) continue;
+          out.push({ where: `${name}/${id}`, hz: voice.filter.frequency });
+          if (voice.filter.to !== undefined)
+            out.push({ where: `${name}/${id} sweep`, hz: voice.filter.to });
+        }
+      }
+    }
+    for (const [name, track] of [
+      ["menu", MENU_TRACK],
+      ["taiga", TAIGA_TRACK],
+    ] as const) {
+      for (const [voice, patch] of Object.entries(track.instruments)) {
+        if (!patch.filter) continue;
+        out.push({ where: `${name}/${voice}`, hz: patch.filter.frequency });
+        if (patch.filter.to !== undefined)
+          out.push({ where: `${name}/${voice} sweep`, hz: patch.filter.to });
+      }
+    }
+    return out;
+  }
+
+  it("holds every authored cutoff under Nyquist at every rate a context comes back at", () => {
+    // THE HI-HAT GUARD. A biquad's coefficients come from cutoff / Nyquist;
+    // past 1 that is not a bright filter, it is undefined, and WebKit answers
+    // with a harsh burst once per note. Both scores' hats are highpassed at
+    // 8.2 kHz and play about five times a second, which is what the fault
+    // sounds like: a broken speaker, four or five times a second, on iOS only.
+    const cutoffs = authoredCutoffs();
+    expect(cutoffs.length).toBeGreaterThan(20);
+    for (const rate of RATES) {
+      for (const { where, hz } of cutoffs) {
+        const safe = safeCutoff(hz, rate);
+        expect(safe, `${where} @ ${rate} Hz`).toBeLessThan(rate / 2);
+        expect(safe, `${where} @ ${rate} Hz`).toBeGreaterThanOrEqual(20);
+      }
+    }
+  });
+
+  it("leaves every authored cutoff untouched at desktop rates", () => {
+    // The clamp must be invisible where the rate is normal, or it is a
+    // retune of every sound in the game rather than a guard.
+    for (const rate of [44100, 48000]) {
+      for (const { where, hz } of authoredCutoffs()) {
+        expect(safeCutoff(hz, rate), `${where} @ ${rate} Hz`).toBe(Math.max(20, hz));
+      }
+    }
+  });
+
+  it("actually bites on the hi-hat at the rate iOS hands a headset", () => {
+    // The specific case, pinned: without the clamp this is the one number in
+    // the whole game that goes over.
+    const HAT_HZ = 8200;
+    expect(TAIGA_TRACK.instruments.hat?.filter?.frequency).toBe(HAT_HZ);
+    expect(MENU_TRACK.instruments.hat?.filter?.frequency).toBe(HAT_HZ);
+    expect(HAT_HZ).toBeGreaterThan(16000 / 2); // over Nyquist on that session
+    expect(safeCutoff(HAT_HZ, 16000)).toBe(16000 * MAX_CUTOFF_RATIO);
+  });
+
+  it("still floors a cutoff nobody should ask for", () => {
+    expect(safeCutoff(0, 48000)).toBe(20);
+    expect(safeCutoff(-5, 48000)).toBe(20);
   });
 });
