@@ -21,8 +21,14 @@ export {
 } from "./output.ts";
 
 // The simulation.
-export { createGame, step, type CreateGameOptions } from "./game/step.ts";
-export { collideCar, damageZoneAt, landingDamage } from "./game/collision.ts";
+export { createGame, skipIntro, startsIn, step, type CreateGameOptions } from "./game/step.ts";
+export {
+  collideCar,
+  collideCars,
+  damageZoneAt,
+  landingDamage,
+  type ContactSide,
+} from "./game/collision.ts";
 export {
   NEUTRAL_INPUT,
   DAMAGE_ZONES,

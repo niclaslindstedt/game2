@@ -743,11 +743,59 @@ to these numbers owes that table.
 forward speed — there is no crank in the model, and reading them off the
 speed the gearbox itself shifts on is what keeps the tachometer, the shift
 light and the engine note from ever disagreeing. The one exception is the
-GRID: during the countdown nothing is geared (the HUD reads **N**) and the
-car is not moving, so the throttle drives the revs directly, up at
-`TUNING.revs.blip` and down at `settle`. Blipping it on the line is the only
-thing the player can do while they wait, and the needle and the engine both
-answer.
+START CONTROL: through both of its beats nothing is geared (the HUD reads
+**N**) and the car is not moving, so the throttle drives the revs directly,
+up at `TUNING.revs.blip` and down at `settle`. Blipping it on the line is the
+only thing the player can do while they wait, and the needle and the engine
+both answer.
+
+## The start control
+
+A run opens held, in two beats, and neither is driveable:
+
+- **`intro`** (`TUNING.intro`, 7 s) — the establishing shot. The camera
+  circles the start control and comes down onto the car
+  (`pwa/src/game/camera-start.ts`), and the crew in front leaves the line and
+  drives away up the road. Any deliberate pedal, the handbrake or a shift
+  skips it (`skipIntro`), which jumps the field on by the same seconds so the
+  stagger is not quietly shortened.
+- **`countdown`** (`TUNING.countdown`, 3 s) — the gantry. One red per second,
+  a tick on each, then green. Nobody skips this one.
+
+The two are sized to sum to `START_INTERVAL`, so the player's green light
+lands exactly one interval after the car ahead of them left — the stagger the
+classification is read off is a thing the player WATCHES rather than a rule
+they are told about. `startsIn(state)` counts through both; `skipCountdown`
+(the sim, the menu's demo, every rival) skips them both.
+
+## Car against car
+
+Everything above is the car against the world. The one contact where nothing
+is anchored is the car against ANOTHER car — the crew in front, once you have
+caught them (`collideCars`, `TUNING.collision.cars`).
+
+The body is a CAPSULE here rather than the oriented box the wild's solids
+meet: a spine down the middle of the car with the box's own half-width as its
+radius. Two boxes need a separating-axis solve, and the normal it yields
+snaps between faces as they slide past each other — which is exactly the
+contact that has to feel smooth, the long scrape down a flank. Two capsules
+give one continuous normal and round the corners off, which is what a bumper
+is anyway.
+
+The exchange is a proper two-body one, contact point and all: an impulse
+along the normal with `cars.restitution`, a friction term across it that
+keeps `cars.tangentKeep` of the relative slide, separation shared out by
+inverse mass, and a yaw kick on each body from its own lever arm. The
+velocity is read AT the contact, so a car swinging its tail into the one
+beside it delivers the tail's speed. Both cars pay: crush lands on both, at
+`cars.crushShare` of what the same closing speed into a tree would fold,
+because a post does not deform and a car does. Under `scuffSpeed` it is a
+nudge — separated, undamaged, no event.
+
+Contacts exist only between cars that are both ON THE ROAD: a car still in
+the start control cannot be touched, which is what lets the whole field be
+built on one grid sample. Rivals never resolve against each other — see
+[simulation.md](simulation.md).
 
 ## Tuning etiquette
 

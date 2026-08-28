@@ -210,6 +210,21 @@ await scene("grid", { start: "1" }, async (page) => {
   await page.waitForSelector(".hud-lights", { timeout: 120000 });
 });
 
+// R29 — the same stage with a FIELD on it, which a `?start=1` link cannot
+// reach: only a campaign run enters fourteen rivals, and only they put
+// another car on the road. Ten seconds of stagger means the crew in front
+// is usually the one in range, so this is what one extra body costs against
+// the `driving` row above. Walked in from the menu the way a player does.
+await scene("field", { menu: "1", splash: "0", bot: "1" }, async (page) => {
+  await page.waitForSelector(".menu-card", { timeout: 120000 });
+  await page.getByText("CAMPAIGN", { exact: false }).first().click();
+  await page.getByText("TAIGA", { exact: false }).first().click();
+  await page.getByText("HARD", { exact: true }).first().click();
+  await page.getByText("Loggers' Run", { exact: false }).first().click();
+  await racing(page);
+  await atStageTime(page, 12);
+});
+
 // The menu's backdrop: the same world under the drone camera, which is
 // what the player looks at for as long as they are choosing a car.
 await scene("menu", { menu: "1", splash: "0" }, async (page) => {

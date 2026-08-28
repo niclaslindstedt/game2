@@ -13,7 +13,7 @@
 // The pause card holds the run where it stands. The heavy state lives in
 // refs; the HUD re-renders from a ~12 Hz snapshot. URL params (?seed=,
 // ?tod=, ?weather=, ?car=, ?length=, ?shape=, ?laps=, the four generator dials ?elevation=
-// ?water= ?trees= ?asphalt=, ?start=1 and ?bot=1) pin a run for tooling and
+// ?water= ?trees= ?asphalt=, ?start=1, ?shot=1 and ?bot=1) pin a run for tooling and
 // screenshots, and the developer tools add ?debug=1, ?god=1 and the free
 // camera's pose (?gx= ?gy= ?gz= ?gyaw= ?gpitch=) — the repro line the debug
 // overlay prints is exactly that set, so a screenshot reproduces as a URL.
@@ -24,9 +24,11 @@ import {
   TUNING,
   botInput,
   carById,
+  collideCars,
   compileStage,
   createGame,
   resolveKnobs,
+  skipIntro,
   status,
   step,
   type CarInput,
@@ -55,8 +57,12 @@ import type { GameRenderer } from "./game/renderer.ts";
 import { Hud, type HudFlash, type HudSnapshot, type HudSplit } from "./game/hud.tsx";
 import type { FinishChampionship, FinishScores } from "./game/hud-finish.tsx";
 import {
+  advanceField,
+  catchUpField,
   createField,
+  drainField,
   fieldResults,
+  onRoad,
   placeAtFinish,
   placeAtSplit,
   settleField,
@@ -228,6 +234,20 @@ function driving(input: CarInput): boolean {
     Math.abs(input.steer) > 0
   );
 }
+
+/** The driver asking to get on with it during the establishing shot. A
+ * pedal, the handbrake or a gear — anything a foot or a hand deliberately
+ * does. NOT the wheel: a stick resting a hair off centre would cut the shot
+ * before it had started, and a wobble on the line is a driver settling in.
+ * The countdown itself is never skipped, so the lights are always seen. */
+function wantsOff(input: CarInput): boolean {
+  return input.throttle > 0.5 || input.brake > 0.5 || input.handbrake || input.shiftUp;
+}
+
+/** How near a rival has to be before the contact model is asked about it, m.
+ * Two capsules reach at most `halfLength × 2` centre to centre, and nothing
+ * covers the slack in one 120 Hz step. */
+const RUB_RANGE = 5;
 
 /** Initial race settings: URL params (tooling) beat the stored choice beats
  * the defaults. Storage can be unavailable (private mode) — defaults are
@@ -684,18 +704,24 @@ export function App() {
     settleRef.current = null;
     setResult(null);
     rendererRef.current?.setStanding(null);
+    rendererRef.current?.field.clear();
     if (!trackRef.current || menuRef.current) return;
     if (mode !== "campaign" || spec.length === "endless") return;
-    fieldRef.current = createField(trackRef.current.track, raceRef.current.difficulty, {
+    const field = createField(trackRef.current.track, raceRef.current.difficulty, {
       seed: spec.seed,
       laps: spec.laps,
       timeOfDay: spec.timeOfDay,
       weather: spec.weather,
       season: spec.season,
     });
+    fieldRef.current = field;
+    // The cars themselves. Nothing is built until a crew comes within reach
+    // (field-cars.ts), so entering a field costs the fourteen games and no
+    // geometry at all until one of them is actually somewhere you can see.
+    rendererRef.current?.field.set(field.runs);
     // Last car on the road until a board says otherwise — which is the truth
     // on the grid, not a placeholder.
-    standingRef.current = { place: fieldRef.current.playerNumber, of: fieldRef.current.of };
+    standingRef.current = { place: field.playerNumber, of: field.of };
   };
   const armFieldRef = useRef(armField);
   armFieldRef.current = armField;
@@ -766,6 +792,7 @@ export function App() {
     settleRef.current = null;
     setResult(null);
     rendererRef.current?.setGhost(null);
+    rendererRef.current?.field.clear();
     setMenu({ page: "root" });
   };
 
@@ -1034,6 +1061,13 @@ export function App() {
           skipCountdown: false,
         };
         applyStageRef.current(spec, true);
+        // The establishing shot is ten seconds of camera before a tooling
+        // run has done anything, and every screenshot scene would sit
+        // through it. A `?start=1` link therefore lands straight on the
+        // lights; `?shot=1` is how the scenes that want to LOOK at the shot
+        // ask for it.
+        const wantsShot = new URLSearchParams(location.search).get("shot") === "1";
+        if (!wantsShot && gameRef.current) skipIntro(gameRef.current);
         // A `?start=1` run never passes through `startStage`, and a debug log
         // with no run section is one COPY LATEST RUN can say nothing about —
         // which is exactly the run a tooling link is most likely to be
@@ -1083,6 +1117,44 @@ export function App() {
         } else camera();
       });
 
+      /** R29 — the player against everybody else on the road. A rally stage
+       * is driven alone right up until you catch the crew in front, and from
+       * there they are a car: one you can lean on out of a corner, and one
+       * you can put into the trees.
+       *
+       * Rivals are never resolved against EACH OTHER. What a rival's time
+       * means is a stage they drove alone, and a result decided by a shunt
+       * between two cars the player never saw is not one they can read — so
+       * the player is the only disruption on the road, and the only one who
+       * has to live with it. */
+      const rubField = (field: RivalField, state: GameState): void => {
+        // The player is in the start control until the lights go out, and a
+        // car in the control is not somewhere the world can reach: it is why
+        // the crew in front can leave from the line the player is sat on.
+        if (state.phase !== "racing" && state.phase !== "rollout") return;
+        let mine: GameEvent[] | null = null;
+        for (const run of field.runs) {
+          if (!onRoad(run)) continue;
+          const them = run.state.car;
+          if (Math.abs(them.x - state.car.x) > RUB_RANGE) continue;
+          if (Math.abs(them.z - state.car.z) > RUB_RANGE) continue;
+          const theirs: GameEvent[] = [];
+          mine ??= [];
+          collideCars(
+            { spec: state.spec, car: state.car, events: mine, stats: state.stats },
+            { spec: run.state.spec, car: them, events: theirs, stats: run.state.stats },
+          );
+          // Their half of it lands on their body alone: they crumple and shed
+          // parts, and make no sound and throw no dust, because the hit
+          // happened over there.
+          if (theirs.length > 0) renderer.field.events(run, theirs);
+        }
+        // The player's half goes through the same door every other impact
+        // does — the sound, the camera's kick and the damage instrument all
+        // hang off it.
+        if (mine && mine.length > 0) handleEvents(state, mine);
+      };
+
       const handleEvents = (state: GameState, events: GameEvent[]): void => {
         // R25's salute is sized by where the time placed, and the renderer
         // fires it off the finish event itself — so the field's verdict has
@@ -1091,7 +1163,16 @@ export function App() {
         let home: number | null = null;
         for (const ev of events) if (ev.type === "finish") home = ev.time;
         if (field && home !== null && menuRef.current === null) {
-          standingRef.current = { place: placeAtFinish(field), of: field.of };
+          // The classification cannot be read while a crew is still owed
+          // road: the stagger means the only rival who could still beat this
+          // time is one nobody has driven yet. The establishing shot has
+          // normally paid the whole field off long before here — this is the
+          // guarantee, not the usual path.
+          drainField(field);
+          // Everybody else left BEFORE the player, so anybody still out
+          // there has already been driving for longer than this time and
+          // cannot beat it: the count of the crews who did is final.
+          standingRef.current = { place: placeAtFinish(field, home), of: field.of };
           renderer.setStanding(standingRef.current.place);
           const active = runRef.current;
           const where =
@@ -1235,11 +1316,12 @@ export function App() {
           // — captioning them is noise over the top of the game.
           if (ev.type === "checkpoint") {
             // R29 — the one moment a staggered rally actually knows where
-            // anybody is: the board. Your place is every car already through
-            // it, plus you.
+            // anybody is: the board. Your place is every car through it in
+            // less than you took, plus you.
             let measured: { time: number; against: string } | null = null;
             if (field) {
-              standingRef.current = { place: placeAtSplit(field, ev.split), of: field.of };
+              const place = placeAtSplit(field, ev.split, ev.time);
+              standingRef.current = { place, of: field.of };
               const leader = splitLeader(field, ev.split);
               if (leader) measured = { time: leader.time, against: leader.alias.toUpperCase() };
             }
@@ -1331,12 +1413,25 @@ export function App() {
           const driven = page || autopilot ? botInput(state) : human;
           // R29 — the field takes the same tick, and takes it FIRST: the
           // player is the last car on the road, so a rival through a board on
-          // this step was through it before them. Held while the lights are
-          // still on, because every crew's clock starts at their own.
-          const racing = fieldRef.current;
-          if (racing && state.phase === "racing") stepField(racing);
+          // this step was through it before them. They run from the FIRST
+          // step of the establishing shot, which is car 14 leaving the
+          // control; every crew's own clock started at their own green, and
+          // the offset between the fifteen of them is carried by the head
+          // start each one was entered owing (standings.ts).
+          const running = fieldRef.current;
+          if (running) stepField(running);
+          // The driver's own way out of the ceremony. Taken before the step,
+          // so the frame that skips is already a countdown frame — and the
+          // field is pushed on by exactly what the player jumped, or the
+          // stagger the whole classification rests on quietly shrinks.
+          if (state.phase === "intro" && wantsOff(human)) {
+            const jumped = skipIntro(state);
+            if (running) advanceField(running, jumped);
+          }
           const events = step(state, driven);
           if (events.length > 0) handleEvents(state, events);
+          // …and then the one place two cars can be in at once.
+          if (running) rubField(running, state);
           if (page) continue;
           // The tape is what the ENGINE was handed, so a replay drives the
           // same road; the ghost's own game steps beside it off its own.
@@ -1347,6 +1442,10 @@ export function App() {
             if (ghostEvents.length > 0) renderer.onGhostEvents(ghost.state, ghostEvents);
           }
         }
+        // The head start the field is still owed, in whatever slice of this
+        // frame it is allowed. Runs under the establishing shot, which is
+        // exactly what the shot is long enough for.
+        if (fieldRef.current) catchUpField(fieldRef.current);
         // R30 — the stragglers, driven home behind the results card. A
         // bounded slice of the frame, and the classification is booked the
         // moment the road is clear: the card is watching a run-out, so it has

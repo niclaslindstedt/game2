@@ -184,7 +184,9 @@ async function captureElement(name, selector, script, params = {}) {
   await page.close();
 }
 
-// Start grid, landscape + portrait.
+// Start grid, landscape + portrait. A `?start=1` link lands on the lights:
+// the establishing shot is ten seconds of camera every scene would otherwise
+// sit through, and it has scenes of its own below.
 await capture("shot-grid", { width: 1280, height: 720 }, async (page) => {
   await page.waitForTimeout(800);
 });
@@ -1147,7 +1149,7 @@ await capture(
 // HARD on purpose. The reference bot is quick enough to win EASY outright,
 // and a results card that always says STAGE CLEAR photographs half the
 // feature.
-if (only.length === 0 || only.some((f) => "shot-campaign".includes(f))) {
+if (only.length === 0 || only.some((f) => "shot-campaign shot-start".includes(f))) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   page.on("pageerror", (err) => console.error(`[pageerror] ${err.message}`));
   // `splash=0` rather than a press: the attract card only takes one once the
@@ -1161,6 +1163,28 @@ if (only.length === 0 || only.some((f) => "shot-campaign".includes(f))) {
   await page.screenshot({ path: join(outDir, "shot-campaign-stages.png") });
   console.log("previews/shot-campaign-stages.png");
   await page.getByText("Loggers' Run", { exact: false }).first().click();
+  // THE ESTABLISHING SHOT, which only exists here for the same reason the
+  // position board does: it is the crew in front LEAVING, and there is only
+  // a crew in front in a campaign field. Three moments, because what has to
+  // be judged is a MOVE rather than a frame — the camera comes round the
+  // start control from ahead of the car to behind it while car 14 pulls
+  // away, and hands over to the camera the stage will be driven from.
+  //
+  // The caption is the cursor into it: it is on screen for exactly the shot
+  // and nothing else, so the ends are waited for rather than timed. The
+  // middle frame is the one honest timeout in the scene, and it only has to
+  // land somewhere in the sweep.
+  await page.waitForSelector(".hud-start-shot", { timeout: FINISH_WAIT });
+  await page.screenshot({ path: join(outDir, "shot-start-open.png") });
+  console.log("previews/shot-start-open.png");
+  await page.waitForTimeout(4000);
+  await page.screenshot({ path: join(outDir, "shot-start-sweep.png") });
+  console.log("previews/shot-start-sweep.png");
+  // The lights are up: the blend is finished and this IS the driving
+  // camera's own framing, which is what makes the hand-over seamless.
+  await page.waitForSelector(".hud-lights", { timeout: FINISH_WAIT });
+  await page.screenshot({ path: join(outDir, "shot-start-land.png") });
+  console.log("previews/shot-start-land.png");
   // The first split board: the one moment a staggered rally knows where
   // anybody is, so the position and the gap to the leader arrive together.
   await page.waitForSelector(".hud-split", { timeout: FINISH_WAIT });

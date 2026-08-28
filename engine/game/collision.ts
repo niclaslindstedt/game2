@@ -406,3 +406,219 @@ export function collideSlope(
   }
   return bite;
 }
+
+// ── THE OTHER CAR ─────────────────────────────────────────────────────────
+// Everything above is the car against something the world is holding. This
+// is the car against something that is DRIVING: the crew you have caught,
+// or the one that has caught you. It is a different problem — neither side
+// is anchored, so the momentum has to go somewhere real — and it is the one
+// contact in the game where both ledgers are written at once.
+//
+// The body is a CAPSULE here rather than the box the solids meet: a segment
+// down the middle of the car with the box's own half-width as its radius.
+// Two boxes need a separating-axis solve to find a normal, and the normal
+// it yields snaps between faces as they slide past each other, which is
+// exactly the contact that must feel smooth — the long scrape down a flank.
+// Two capsules give one continuous normal and round the corners off, which
+// is what a bumper actually is.
+
+/** One side of a car-to-car contact: the car, and where its half of the
+ * damage is booked. */
+export type ContactSide = {
+  spec: CarSpec;
+  car: CarState;
+  events: GameEvent[];
+  stats: RunStats;
+};
+
+/** Half the length of the capsule's spine, m — the box's half-length with
+ * the cap radius taken off, so the capsule ends where the box does. */
+const SPINE = T.collision.halfLength - T.collision.halfWidth;
+
+/** Where two spines come closest, as the parameters along each (0..1 from
+ * `-SPINE` to `+SPINE`). Ericson's segment-to-segment solve, flattened to
+ * the ground plane and to two segments of equal, non-zero length — which is
+ * every pair of cars, so the degenerate branches are not needed. */
+function nearestOnSpines(
+  ax: number,
+  az: number,
+  adx: number,
+  adz: number,
+  bx: number,
+  bz: number,
+  bdx: number,
+  bdz: number,
+): { s: number; t: number } {
+  // The spines as (start, direction × full length).
+  const ux = adx * 2 * SPINE;
+  const uz = adz * 2 * SPINE;
+  const vx = bdx * 2 * SPINE;
+  const vz = bdz * 2 * SPINE;
+  const wx = ax - adx * SPINE - (bx - bdx * SPINE);
+  const wz = az - adz * SPINE - (bz - bdz * SPINE);
+  const a = ux * ux + uz * uz;
+  const b = ux * vx + uz * vz;
+  const c = vx * vx + vz * vz;
+  const d = ux * wx + uz * wz;
+  const e = vx * wx + vz * wz;
+  const det = a * c - b * b;
+  // Parallel spines — two cars nose to tail in the same line — leave the
+  // solve singular. Pin one end and slide the other along it.
+  let s = det < 1e-8 ? 0 : clamp((b * e - c * d) / det, 0, 1);
+  let t = clamp((b * s + e) / c, 0, 1);
+  s = clamp((b * t - d) / a, 0, 1);
+  return { s, t };
+}
+
+/** Resolve one pair of cars. Mutates both: position (pushed apart by the
+ * share of the overlap each one's mass earns), velocity (a two-body impulse
+ * with a friction term along the contact), yaw rate (the lever arm on each
+ * body), the springs, and both damage ledgers.
+ *
+ * Contacts are only ever resolved between cars that are both ON THE ROAD.
+ * A car still in the start control is not somewhere the world can reach —
+ * which is what lets the whole field spawn on one start line. */
+export function collideCars(a: ContactSide, b: ContactSide): void {
+  const C = T.collision.cars;
+  const carA = a.car;
+  const carB = b.car;
+  // One of them is over the other: a landing on somebody's roof is not this
+  // model's contact to resolve.
+  if (Math.abs(carA.y - carB.y) > C.reach) return;
+
+  const sinA = Math.sin(carA.heading);
+  const cosA = Math.cos(carA.heading);
+  const sinB = Math.sin(carB.heading);
+  const cosB = Math.cos(carB.heading);
+  const { s, t } = nearestOnSpines(carA.x, carA.z, sinA, cosA, carB.x, carB.z, sinB, cosB);
+  // Back from the parameters to the world points, as offsets from each
+  // car's own centre: the lever arms the yaw kick needs.
+  const raF = (s * 2 - 1) * SPINE;
+  const rbF = (t * 2 - 1) * SPINE;
+  const pax = carA.x + sinA * raF;
+  const paz = carA.z + cosA * raF;
+  const pbx = carB.x + sinB * rbF;
+  const pbz = carB.z + cosB * rbF;
+
+  let nx = pbx - pax;
+  let nz = pbz - paz;
+  let d = Math.hypot(nx, nz);
+  const reach = T.collision.halfWidth * 2;
+  if (d >= reach) return;
+  // How far inside each other they are, read off the spines BEFORE any
+  // fallback normal replaces the measurement — a car that has been put
+  // inside another one is fully overlapped, not somehow further apart.
+  const penetration = reach - d;
+  if (d < 1e-6) {
+    // Spines lying along each other (two cars nose to tail on one line, or
+    // one dropped on top of the other): there is no direction between the
+    // closest points to take, so use the line between the two centres, and
+    // failing that an arbitrary axis — anything but a zero normal, which
+    // would push nothing apart forever.
+    nx = carB.x - carA.x;
+    nz = carB.z - carA.z;
+    d = Math.hypot(nx, nz);
+    if (d < 1e-6) {
+      nx = 1;
+      nz = 0;
+      d = 1;
+    }
+  }
+  nx /= d;
+  nz /= d;
+
+  // World velocities, contact point included: a car swinging its tail into
+  // the one beside it delivers the tail's speed, not the hub's. The engine's
+  // right axis is (cos h, -sin h), so a point `r` ahead of centre moves at
+  // `yawRate × r` along it as the heading grows.
+  const vax = carA.u * sinA + carA.w * cosA + carA.yawRate * raF * cosA;
+  const vaz = carA.u * cosA - carA.w * sinA - carA.yawRate * raF * sinA;
+  const vbx = carB.u * sinB + carB.w * cosB + carB.yawRate * rbF * cosB;
+  const vbz = carB.u * cosB - carB.w * sinB - carB.yawRate * rbF * sinB;
+  const relX = vax - vbx;
+  const relZ = vaz - vbz;
+  const closing = relX * nx + relZ * nz;
+  if (closing <= 0) return;
+
+  const mA = a.spec.mass;
+  const mB = b.spec.mass;
+  const invA = 1 / mA;
+  const invB = 1 / mB;
+  const invSum = invA + invB;
+  // Along the normal: the exchange. Across it: friction, which bleeds the
+  // relative slide by whatever `tangentKeep` does not keep.
+  const jn = ((1 + C.restitution) * closing) / invSum;
+  const tanX = relX - closing * nx;
+  const tanZ = relZ - closing * nz;
+  const jt = (1 - C.tangentKeep) / invSum;
+  const impX = -(jn * nx + jt * tanX);
+  const impZ = -(jn * nz + jt * tanZ);
+
+  // Out of each other, by the share of the overlap each one's mass earns —
+  // the lighter car gives more ground, exactly as it takes more speed.
+  carA.x -= nx * penetration * (invA / invSum);
+  carA.z -= nz * penetration * (invA / invSum);
+  carB.x += nx * penetration * (invB / invSum);
+  carB.z += nz * penetration * (invB / invSum);
+
+  applyContact(a, impX * invA, impZ * invA, sinA, cosA, raF, nx, nz);
+  applyContact(b, -impX * invB, -impZ * invB, sinB, cosB, rbF, -nx, -nz);
+
+  // What each side PAID, m/s: the share of the closing speed its own mass
+  // could not refuse. It is what the panels fold around, and — unlike the
+  // closing speed itself — it is what makes a heavy car shrug off the light
+  // one that ran into it.
+  const share = C.crushShare * T.collision.crushPerSpeed;
+  dealContactCrush(a, closing * (mB / (mA + mB)), share, sinA, cosA, nx, nz);
+  dealContactCrush(b, closing * (mA / (mA + mB)), share, sinB, cosB, -nx, -nz);
+}
+
+/** Spend one side's half of a car-to-car impulse: the velocity change into
+ * the body frame, the lever arm's yaw kick, and the springs. `dvx/dvz` is
+ * the world velocity change, `(nx, nz)` the contact normal pointing AWAY
+ * from this car, and `rF` how far ahead of its centre the contact sits. */
+function applyContact(
+  side: ContactSide,
+  dvx: number,
+  dvz: number,
+  sinH: number,
+  cosH: number,
+  rF: number,
+  nx: number,
+  nz: number,
+): void {
+  const car = side.car;
+  // Into the car frame: `dU` along the nose, `dW` along the right axis.
+  const dU = dvx * sinH + dvz * cosH;
+  const dW = dvx * cosH - dvz * sinH;
+  car.u += dU;
+  car.w += dW;
+  updateSlip(car);
+  // The contact sits on the spine, so its only lever is along the nose —
+  // sideways velocity change at a point ahead of centre swings the nose
+  // that way, which is the tap that puts a car round.
+  car.yawRate += (T.collision.cars.yawKick / massRatio(side.spec)) * dW * rF;
+  const ez = nx * sinH + nz * cosH;
+  loadSprings(car, Math.hypot(dU, dW), ez);
+}
+
+/** Book one side's bodywork. `paid` is the closing speed this car's mass
+ * could not refuse, m/s; `perSpeed` the metres of fold each of them costs. */
+function dealContactCrush(
+  side: ContactSide,
+  paid: number,
+  perSpeed: number,
+  sinH: number,
+  cosH: number,
+  nx: number,
+  nz: number,
+): void {
+  const crush = perSpeed * Math.max(0, paid - T.collision.scuffSpeed) * massRatio(side.spec);
+  if (crush <= 0) return;
+  // The struck zone: the contact normal read in the car's own frame, where
+  // `ez` is along the nose and `ex` along the right axis.
+  const ez = nx * sinH + nz * cosH;
+  const ex = nx * cosH - nz * sinH;
+  const angle = Math.atan2(ex, ez);
+  dealCrush(side.car, damageZoneAt(angle), crush, angle, paid, side.events, side.stats);
+}

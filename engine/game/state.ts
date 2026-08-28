@@ -283,12 +283,19 @@ export type RunStats = {
   topSpeed: number;
 };
 
-/** The run's arc. `rollout` is the beat after the flying finish: the clock
- * has stopped and the result is already on screen, but the car is still
- * doing what a car crossing a finish line at 180 km/h does — carrying on
- * down R22's run-out road, off the throttle, slowing to a stop. Nothing the
- * player does reaches the car any more; it is being driven home. */
-export type GamePhase = "countdown" | "racing" | "rollout" | "finished";
+/** The run's arc.
+ *
+ * `intro` is the beat BEFORE the lights: the car is in the start control,
+ * the camera is circling the start area, and the crew in front is pulling
+ * away down the road. It runs for `TUNING.intro` and is the reason the
+ * player's green light lands exactly one `START_INTERVAL` after theirs.
+ *
+ * `rollout` is the beat after the flying finish: the clock has stopped and
+ * the result is already on screen, but the car is still doing what a car
+ * crossing a finish line at 180 km/h does — carrying on down R22's run-out
+ * road, off the throttle, slowing to a stop. Nothing the player does
+ * reaches the car any more; it is being driven home. */
+export type GamePhase = "intro" | "countdown" | "racing" | "rollout" | "finished";
 
 /** A car in the water it cannot drive out of. While this is set the run is
  * not being driven: input is ignored, nothing progresses, and the only

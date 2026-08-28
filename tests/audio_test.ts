@@ -506,7 +506,7 @@ describe("the road bed", () => {
     const state = createGame({ seed: 7, length: "short" });
     let ticks = 0;
     const before = () => rec.tones.filter((t) => t.type === "square").length;
-    while (state.t < TUNING.countdown) {
+    while (state.t < TUNING.intro + TUNING.countdown) {
       const was = before();
       bed.update(state, TUNING.dt);
       rec.clock += TUNING.dt;

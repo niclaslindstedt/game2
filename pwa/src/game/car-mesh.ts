@@ -96,6 +96,23 @@ function lampSpread(bodySpec: Parameters<typeof frontLampAnchors>[0]): {
   return { front: off(frontLampAnchors(bodySpec)), rear: off(rearLampAnchors(bodySpec)) };
 }
 
+/** Push the environment's light onto one body. Everything on a car carries
+ * BAKED vertex colours on fullbright materials, so the time of day arrives
+ * as a multiply into `material.color` rather than as a light — except a
+ * LAMP, which is the one thing the failing light makes brighter, and is
+ * therefore switched rather than tinted. */
+export function tintCar(visual: CarVisual, tint: THREE.Color, lampsLit: boolean): void {
+  visual.group.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh) && !(obj instanceof THREE.Points)) return;
+    const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+    for (const mat of mats) {
+      const painted = mat instanceof THREE.MeshBasicMaterial || mat instanceof THREE.PointsMaterial;
+      if (painted && mat.name !== LAMP_MATERIAL) mat.color.copy(tint);
+    }
+  });
+  visual.setLights(lampsLit);
+}
+
 export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
   const group = new THREE.Group();
   const bodySpec = bodySpecFor(spec, options.paint);

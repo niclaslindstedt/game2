@@ -10,7 +10,7 @@
 // and a breathing engine is the most obvious tell there is that a game's audio
 // is being generated rather than played.
 
-import { TUNING, type GameState, type Weather } from "@engine";
+import { startsIn, type GameState, type Weather } from "@engine";
 
 import { squallOf } from "../weather.ts";
 
@@ -206,7 +206,7 @@ export function createDriveBed(synth: Synth): DriveBed {
       // from an event because the countdown is a CLOCK rather than a moment —
       // nothing happens in the simulation when a light changes.
       if (state.phase === "countdown") {
-        const light = Math.ceil(TUNING.countdown - state.t);
+        const light = Math.ceil(startsIn(state));
         if (light !== bed.lastLight && light > 0) {
           bed.lastLight = light;
           playSound(synth, RUN_BANK, "countdown_tick");

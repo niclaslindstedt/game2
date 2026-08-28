@@ -6,7 +6,7 @@
 // calls, the wind arrow and the damage ledger are all flipped into SCREEN
 // space here, once, exactly as input.ts flips steering once.
 
-import { DAMAGE_ZONES, TUNING, wayHome, type GameState } from "@engine";
+import { DAMAGE_ZONES, TUNING, startsIn, wayHome, type GameState } from "@engine";
 
 import { buildMinimap } from "./minimap.tsx";
 import type { HudDamage, HudPacenote, HudSnapshot, HudStanding } from "./hud.tsx";
@@ -26,7 +26,8 @@ import type { HudDamage, HudPacenote, HudSnapshot, HudStanding } from "./hud.tsx
  * text node instead of a re-render of every dial on the screen. */
 export type LiveRun = {
   phase: GameState["phase"];
-  /** Seconds left before the off; 0 once the lights are out. */
+  /** Seconds left before the off, counting through the establishing shot as
+   * well as the lights; 0 once the lights are out. */
   countdown: number;
   /** Total race time and the current lap's, seconds. */
   time: number;
@@ -34,14 +35,14 @@ export type LiveRun = {
 };
 
 export function createLive(): LiveRun {
-  return { phase: "countdown", countdown: TUNING.countdown, time: 0, lapTime: 0 };
+  return { phase: "intro", countdown: TUNING.intro + TUNING.countdown, time: 0, lapTime: 0 };
 }
 
 /** Re-read the live face from the run. In place, every frame: the object's
  * identity is what the HUD holds on to. */
 export function readLive(live: LiveRun, state: GameState): void {
   live.phase = state.phase;
-  live.countdown = Math.max(0, TUNING.countdown - state.t);
+  live.countdown = startsIn(state);
   live.time = state.raceTime;
   live.lapTime = state.raceTime - state.lapStart;
 }
