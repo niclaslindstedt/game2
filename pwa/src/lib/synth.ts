@@ -511,6 +511,7 @@ export function createSynth(): Synth {
       echo = 0,
       filter,
       drive = 0,
+      bed = false,
     }) {
       const c = ensure();
       if (!c) return;
@@ -526,7 +527,13 @@ export function createSynth(): Synth {
       const peak = detunes.length > 1 ? volume * 0.6 : volume;
 
       const gain = c.createGain();
-      envelope(gain, peak, t0, t1, attackMs, holdMs);
+      // Silent until the envelope's own first point: a bed grain starts its
+      // oscillator up to one cycle BEFORE `t0`, and the gain's default of 1
+      // would let that lead-in through at full scale.
+      gain.gain.value = 0;
+      // A grain gets LINEAR ramps so consecutive copies cross-fade — see
+      // `bed`. Everything else keeps the exponential fall a note wants.
+      envelope(gain, peak, t0, t1, attackMs, holdMs, bed ? "lin" : "exp");
 
       const mix = c.createGain(); // oscillators sum here, pre-shaper
       // Drive BEFORE the filter, which is the order a real signal chain uses
@@ -548,7 +555,17 @@ export function createSynth(): Synth {
         const osc = c.createOscillator();
         osc.type = type;
         osc.detune.value = cents;
-        osc.frequency.setValueAtTime(Math.max(1, from), t0);
+        // WHERE THE CYCLE IS ALLOWED TO BEGIN — see `bed`. An oscillator
+        // starts at the top of its cycle, so a grain is started however much
+        // of one cycle early it takes to arrive at `t0` in the phase a
+        // never-stopping oscillator of the same pitch would be in. The lead-in
+        // is under one period (33 ms at a 30 Hz idle) and the envelope holds
+        // it at nothing, so nothing is heard of it — what it buys is that
+        // overlapping grains can only add.
+        const hz = Math.max(1, from) * Math.pow(2, cents / 1200);
+        const lead = bed ? ((t0 * hz) % 1) / hz : 0;
+        const start = t0 - lead >= c.currentTime ? t0 - lead : t0;
+        osc.frequency.setValueAtTime(Math.max(1, from), start);
         osc.frequency.exponentialRampToValueAtTime(Math.max(1, to), t1);
 
         if (vibrato) {
@@ -565,7 +582,7 @@ export function createSynth(): Synth {
         }
 
         osc.connect(mix);
-        osc.start(t0);
+        osc.start(start);
         osc.stop(t1);
       }
     },

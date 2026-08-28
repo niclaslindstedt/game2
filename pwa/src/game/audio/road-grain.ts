@@ -42,12 +42,25 @@ import type { NoiseColor, Synth } from "../../lib/voice.ts";
 
 import { GRAIN_MS } from "./engine-bed.ts";
 
-/** The tyre and wind grains run longer than the engine's, because uncorrelated
- * noise sums in POWER rather than in level: a broadband bed needs a deeper
- * stack of grains than a pitched one before it stops fluttering. */
+/**
+ * ONE GRAIN SHAPE FOR EVERY LAYER OF THE ROAD, and it is a cross-fade: the
+ * attack and the tail are each exactly one cadence, so what one grain gives up
+ * the next has already taken, and the hold is three more on top — a deeper
+ * stack than the engine's, because uncorrelated noise sums in POWER rather
+ * than in level and a broadband bed needs more copies before it stops
+ * fluttering.
+ *
+ * THE TEMPTATION IS TO GIVE THE BRIGHT LAYERS A SHORTER ONE so they sound
+ * tighter — the crunch, the spray, the rain's patter were all written as a
+ * fraction of this. They held for barely more than a cadence each, so each was
+ * up on its own half the time and its level swung about 3 dB nine times a
+ * second: on a bright band that is not a surface being thrown, it is a maraca,
+ * and it plays for the whole run. A layer's character is its BAND, never its
+ * envelope.
+ */
 const NOISE_LIFE_MS = GRAIN_MS * 5;
-const NOISE_ATTACK_MS = GRAIN_MS * 0.6;
-const NOISE_HOLD_MS = GRAIN_MS * 2.4;
+const NOISE_ATTACK_MS = GRAIN_MS;
+const NOISE_HOLD_MS = GRAIN_MS * 3;
 
 /** Below this the wheels are turning too slowly to make a rolling sound at
  * all, m/s — a car being nudged around at walking pace is engine and nothing
@@ -99,23 +112,27 @@ export const SURFACES: Record<string, SurfaceVoice> = {
   // no crunch at all, and a level that leaves the straight to the engine.
   // What tarmac HAS is the corner — the singing tyre further down, which is
   // where all of this surface's drama is kept.
-  asphalt: { color: "brown", hz: 125, q: 0.7, level: 0.0026, corner: 2.4, grain: 0 },
+  asphalt: { color: "brown", hz: 125, q: 0.7, level: 0.0016, corner: 2.4, grain: 0 },
   // Graded gravel: the game's home surface. Broad and busy, but a RUSH rather
   // than a roar until the car turns — then it is the surface being thrown.
-  // The cruise is deliberately half of what it once was and the corner twice
-  // the multiplier, which leaves a corner exactly as loud as it was and a
-  // straight half as loud: the bed has to say something by CHANGING, and a
-  // dirt road that is as busy pointed straight as it is sideways says
-  // nothing for the whole run.
-  gravel: { color: "pink", hz: 340, q: 0.8, level: 0.0055, corner: 6.8, grain: 0.003 },
+  // The bed has to say something by CHANGING, and a dirt road as busy pointed
+  // straight as it is sideways says nothing for the whole run, so the cruise
+  // is kept quiet and the corner carries the multiplier.
+  //
+  // AND IT IS THE THING THE PLAYER HEARS MOST, so it is mixed UNDER the
+  // engine rather than over it: this is the surface a whole rally is driven
+  // on, and a rush that has to be shouted over is one nobody can enjoy for
+  // twenty minutes. Its band sits low too — a dirt road is a rumble with grit
+  // on top, not a hiss.
+  gravel: { color: "pink", hz: 250, q: 0.8, level: 0.0034, corner: 5.2, grain: 0.0013 },
   // Water: a hiss with weight behind it and no crunch at all. Barely cares
   // which way the car is pointing — a ford is loud because it is being ploughed
   // through, not because it is being cornered on.
-  water: { color: "pink", hz: 900, q: 0.6, level: 0.036, corner: 1.3, grain: 0 },
+  water: { color: "pink", hz: 900, q: 0.6, level: 0.024, corner: 1.3, grain: 0 },
   // Off the road entirely — turf, moss, rutted forest floor. Low, muffled and
   // rough: most of the energy is the suspension rather than the tread, so it
   // stays loud on the straight. Being off the road should sound like a mistake.
-  nature: { color: "brown", hz: 190, q: 0.7, level: 0.026, corner: 1.6, grain: 0.011 },
+  nature: { color: "brown", hz: 190, q: 0.7, level: 0.017, corner: 1.6, grain: 0.006 },
 };
 
 /**
@@ -135,19 +152,19 @@ export const WET_SURFACES: Record<string, SurfaceVoice> = {
   // dry road's busy mid-range rush drops most of an octave into a heavy
   // wet churn with no stones in it at all, and the corner is the surface
   // being thrown in lumps rather than sprayed in grains.
-  gravel: { color: "pink", hz: 210, q: 0.75, level: 0.0125, corner: 4.2, grain: 0.0004 },
+  gravel: { color: "pink", hz: 190, q: 0.75, level: 0.0078, corner: 3.4, grain: 0.0002 },
   // Wet tarmac: the one surface the rain makes BRIGHTER. A sealed road
   // holds a film of water the tread has to cut through, and that hiss is
   // the whole sound of a wet sealed stage — the dull bass drumming of the
   // dry road is still under it, but it is no longer the only thing there.
-  asphalt: { color: "pink", hz: 1150, q: 0.6, level: 0.0135, corner: 1.9, grain: 0 },
+  asphalt: { color: "pink", hz: 1150, q: 0.6, level: 0.0084, corner: 1.9, grain: 0 },
   // Sodden turf: heavier and duller still, and squelching rather than
   // rough. Being off the road in the rain should sound like a worse
   // mistake than being off it in the dry.
-  nature: { color: "brown", hz: 155, q: 0.7, level: 0.032, corner: 1.4, grain: 0.0035 },
+  nature: { color: "brown", hz: 155, q: 0.7, level: 0.02, corner: 1.4, grain: 0.0018 },
   // Water is already water. Left identical on purpose, so a ford sounds
   // like a ford whatever the sky is doing.
-  water: { color: "pink", hz: 900, q: 0.6, level: 0.036, corner: 1.3, grain: 0 },
+  water: { color: "pink", hz: 900, q: 0.6, level: 0.024, corner: 1.3, grain: 0 },
 };
 
 /** The dry surface and its wet twin, mixed. `wet` is 0 on a clear stage,
@@ -177,7 +194,7 @@ function surfaceUnder(surface: string, wet: number): SurfaceVoice {
  * car. Both lift with speed — a car standing still is rained on, a car at
  * 140 km/h is driving INTO the rain, and the difference is most of what
  * makes weather feel like part of the driving rather than a backdrop. */
-const RAIN = { sheet: 0.0115, patter: 0.0075, pace: 0.55 };
+const RAIN = { sheet: 0.0102, patter: 0.0067, pace: 0.55 };
 
 /** How much of the rain's level the squall owns. Rain does not fall at one
  * rate: it comes in waves, and a sheet that holds a constant level for two
@@ -191,7 +208,7 @@ const SQUALL_SWING = 0.45;
  * player lifts. Two layers, because a gale is a low roar with something
  * thin on top of it — the roar is the mass of air, the whistle is what it
  * is being dragged over. */
-const GALE = { roar: 0.014, whistle: 0.005 };
+const GALE = { roar: 0.0125, whistle: 0.0044 };
 
 /** The road under one car at one instant. Everything the grain needs, and
  * nothing about where any of it came from. */
@@ -246,7 +263,7 @@ export function playRoadGrain(synth: Synth, voice: RoadVoice, at: number): void 
     attackMs: NOISE_ATTACK_MS,
     holdMs: NOISE_HOLD_MS,
     color: "pink",
-    volume: (0.003 + 0.026 * air * air) * (airborne ? 1.35 : 1),
+    volume: (0.0027 + 0.023 * air * air) * (airborne ? 1.35 : 1),
     filter: { type: "highpass", frequency: 400 + 1500 * air },
   });
 
@@ -274,9 +291,9 @@ export function playRoadGrain(synth: Synth, voice: RoadVoice, at: number): void 
     // not.
     synth.noise({
       at,
-      durationMs: NOISE_LIFE_MS * 0.7,
-      attackMs: NOISE_ATTACK_MS * 0.7,
-      holdMs: NOISE_HOLD_MS * 0.7,
+      durationMs: NOISE_LIFE_MS,
+      attackMs: NOISE_ATTACK_MS,
+      holdMs: NOISE_HOLD_MS,
       color: "brown",
       volume: RAIN.patter * wet * drive,
       filter: { type: "bandpass", frequency: 620 + 260 * air, q: 1.1 },
@@ -341,11 +358,11 @@ export function playRoadGrain(synth: Synth, voice: RoadVoice, at: number): void 
     // hit harder.
     synth.noise({
       at,
-      durationMs: NOISE_LIFE_MS * 0.5,
-      attackMs: NOISE_ATTACK_MS * 0.5,
-      holdMs: NOISE_HOLD_MS * 0.5,
+      durationMs: NOISE_LIFE_MS,
+      attackMs: NOISE_ATTACK_MS,
+      holdMs: NOISE_HOLD_MS,
       volume: road.grain * lean * roll,
-      filter: { type: "highpass", frequency: 2200 + 2600 * roll },
+      filter: { type: "highpass", frequency: 1500 + 1300 * roll },
     });
   }
 
@@ -392,6 +409,7 @@ export function playRoadGrain(synth: Synth, voice: RoadVoice, at: number): void 
       drive: 0.35,
       vibrato: { rateHz: 7.5, depthCents: 22, delayMs: 40 },
       filter: { type: "bandpass", frequency: sing * 1.6, q: 3 },
+      bed: true,
     });
     return;
   }
@@ -409,16 +427,16 @@ export function playRoadGrain(synth: Synth, voice: RoadVoice, at: number): void 
     attackMs: NOISE_ATTACK_MS,
     holdMs: NOISE_HOLD_MS,
     color: "pink",
-    volume: 0.05 * scrub,
-    filter: { type: "bandpass", frequency: 700 + 900 * scrub, to: 1600 + 1400 * scrub, q: 0.7 },
+    volume: 0.038 * scrub,
+    filter: { type: "bandpass", frequency: 520 + 680 * scrub, to: 1250 + 1050 * scrub, q: 0.7 },
   });
   synth.noise({
     at,
-    durationMs: NOISE_LIFE_MS * 0.6,
-    attackMs: NOISE_ATTACK_MS * 0.6,
-    holdMs: NOISE_HOLD_MS * 0.6,
-    volume: 0.022 * scrub,
-    filter: { type: "highpass", frequency: 3000 + 2000 * scrub },
+    durationMs: NOISE_LIFE_MS,
+    attackMs: NOISE_ATTACK_MS,
+    holdMs: NOISE_HOLD_MS,
+    volume: 0.014 * scrub,
+    filter: { type: "highpass", frequency: 2150 + 1250 * scrub },
     // Thrown to the outside of the slide, so a drift is a drift the player can
     // hear the direction of with the camera behind the car.
     pan: Math.max(-0.6, Math.min(0.6, -sideways / 12)),

@@ -36,10 +36,16 @@ const args = process.argv.slice(2);
 const outArg = args.indexOf("--out");
 const out = outArg >= 0 ? args[outArg + 1] : join(root, "previews", "audition.html");
 
-// The modules the page needs at RUNTIME, in dependency order. Every one of
-// them imports only types from the others, so once `tsc` has erased those the
-// emitted files have no imports left and can simply be concatenated.
+// The modules the page needs at RUNTIME, in dependency order — and the order
+// is load-bearing: concatenation is all the linking there is, so a module has
+// to be listed BEFORE the ones that call into it.
+//
+// `voice.ts` is mostly types, which is exactly the trap: it also holds
+// `envelopeShape` and `safeCutoff`, which every voice the synth plays goes
+// through. Leave it out and `tsc` erases the import, the page builds clean,
+// and the first button anyone presses throws `envelopeShape is not defined`.
 const RUNTIME = [
+  "pwa/src/lib/voice.ts",
   "pwa/src/lib/synth.ts",
   "pwa/src/lib/tracker.ts",
   "pwa/src/game/audio/play.ts",
@@ -487,7 +493,13 @@ roadBtn.addEventListener("click", () => {
   bed = setInterval(() => {
     const now = synth.now();
     if (now === null) return;
-    if (nextAt === 0 || nextAt < now - 0.5) nextAt = now + 0.05;
+    // Re-anchor the moment the bed is LATE, exactly as drive-bed.ts does —
+    // WebAudio starts a source whose time has already gone the instant it is
+    // handed over, so grains booked half a second into the past do not wait,
+    // they all fire at once on top of the next one. Tolerating that here made
+    // the page peak two and a half times higher than the mix it is supposed
+    // to be a fair copy of, which is the one thing this page may not do.
+    if (nextAt < now || nextAt > now + 2) nextAt = now + 0.05;
     while (nextAt < now + 0.24) {
       const rpm = rpmAt(value.rev);
       const hz = noteHz(rpm);

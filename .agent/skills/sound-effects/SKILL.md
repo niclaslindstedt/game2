@@ -77,18 +77,33 @@ longer `durationMs` makes a sound RING rather than sustain. That is exactly
 right for a hit, a click or a shift.
 
 A bed is not made of hits. It is one grain fired over and over so the copies
-fuse into something continuous, and **three things are needed, not one**:
+fuse into something continuous, and **four things are needed, not one**:
 
 1. the grain **holds** its peak (`holdMs`),
-2. the cadence is a **fraction** of the hold, so three grains are always up
-   together and their holds tile end to end,
+2. the grain is a **cross-fade**: `attackMs` and the tail
+   (`durationMs - attackMs - holdMs`) are each **exactly one cadence** and the
+   hold is a whole number of them, so what one grain gives up is exactly what
+   the next has not taken yet. Near enough is not enough — a layer holding for
+   1.2 cadences is up on its own half the time and its level swings ~3 dB at
+   the grain rate. **Never write a layer's envelope as a fraction of the
+   bed's** (`holdMs: HOLD * 0.5`) to make it sound tighter: a layer's character
+   is its BAND, never its envelope.
 3. the cadence is **constant** — a cadence that quickens with the revs makes
    the rate of the putter the thing the ear follows, when the rate the engine
    is actually turning at is the PITCH.
+4. a PITCHED grain is marked **`bed: true`**, which phase-locks it to the
+   absolute clock and gives it linear ramps. An oscillator starts at the top of
+   its own cycle, so same-note grains on a fixed cadence reinforce where the
+   note and the cadence divide evenly and CANCEL where they land half a cycle
+   apart — and the note moves while the cadence does not, so a bed walks
+   through both. Once they DO add, the exponential ramps a one-shot wants stop
+   cross-fading and the sum dips between grains, which is why the flag does
+   both. Noise grains need neither: each reads a random window of the pool.
 
-Get any one wrong and what comes out of the speaker is putt … putt … putt.
-`tests/audio_test.ts` guards the tiling; the audition page's sliders are how
-you hear it.
+Get any one wrong and what comes out of the speaker is putt … putt … putt, or
+a shimmer at the grain rate that a player reports as DISTORTION.
+`tests/audio_test.ts` guards the tiling and the alignment; the audition page's
+sliders are how you hear it.
 
 Noise beds want a DEEPER stack than pitched ones (five grains against three):
 uncorrelated noise sums in power rather than in level, so a broadband bed

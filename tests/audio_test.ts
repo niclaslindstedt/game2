@@ -430,6 +430,57 @@ describe("the road bed", () => {
     expect(hum?.holdMs ?? 0).toBeGreaterThan(GRAIN_MS * 1.5);
   });
 
+  it("holds every layer long enough that none of them is a shaker", () => {
+    // THE SHAKER GUARD, and the one that shipped broken. The hum's hold is
+    // asserted above; the trap is the layers written as a FRACTION of it —
+    // the crunch, the spray, the rain's patter, all once shortened so they
+    // would sound tighter. A layer holding for less than two cadences is up
+    // on its own half the time, so its level swings at the grain rate, and
+    // on a bright band nine hertz of that is not a surface being thrown, it
+    // is somebody shaking a maraca over the whole run.
+    const rec = recorder();
+    const bed = createDriveBed(rec);
+    const state = rolling();
+    state.env.weather = "rain";
+    bed.update(state, 1 / 60);
+    const grains = [...rec.tones, ...rec.noises].filter((v) => (v.holdMs ?? 0) > 0);
+    expect(grains.length).toBeGreaterThan(6);
+    for (const grain of grains) {
+      expect(grain.holdMs ?? 0, `a grain holds only ${grain.holdMs} ms`).toBeGreaterThanOrEqual(
+        GRAIN_MS * 2,
+      );
+      // …and the hold has to fit inside the grain, or the envelope clamps it
+      // back and the guard above measures a number nobody plays.
+      expect((grain.attackMs ?? 0) + (grain.holdMs ?? 0)).toBeLessThan(grain.durationMs);
+    }
+  });
+
+  it("cross-fades every pitched grain into the one before it", () => {
+    // Two halves of one fault. An oscillator starts at the top of its own
+    // cycle, so same-note grains fired on a fixed cadence reinforce where the
+    // note and the cadence divide evenly and CANCEL where they land half a
+    // cycle apart — the note moves and the cadence does not, so an unmarked
+    // engine loses several decibels at some revs (a 7 dB bounce across the
+    // band, flat once every grain is a `bed`). And once they DO add, the
+    // summed level is the summed envelope, so the attack and the tail have to
+    // be one cadence each: what one grain gives up is then exactly what the
+    // next has not taken yet. Off by a little and the bed wobbles 14% at the
+    // grain rate; right, under 1%.
+    const rec = recorder();
+    const drive = createDriveBed(rec);
+    drive.update(rolling(), 1 / 60);
+    const pitched = rec.tones.filter((t) => (t.holdMs ?? 0) > 0);
+    expect(pitched.length).toBeGreaterThan(2);
+    for (const grain of pitched) {
+      const at = `a ${grain.type} grain at ${Math.round(grain.from)} Hz`;
+      expect(grain.bed, `${at} is not marked as a bed grain`).toBe(true);
+      expect(grain.attackMs, `${at} does not fade in over a cadence`).toBe(GRAIN_MS);
+      const tail = grain.durationMs - (grain.attackMs ?? 0) - (grain.holdMs ?? 0);
+      expect(tail, `${at} fades out over ${tail} ms, not a cadence`).toBeCloseTo(GRAIN_MS, 6);
+      expect((grain.holdMs ?? 0) % GRAIN_MS, `${at} holds for a part-cadence`).toBeCloseTo(0, 6);
+    }
+  });
+
   it("re-anchors after a stall rather than booking grains in the past", () => {
     // THE JITTER GUARD. WebAudio starts a source whose time has already gone
     // the instant it is handed over, so a stall that leaves the anchor behind
