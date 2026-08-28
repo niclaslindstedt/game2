@@ -1,8 +1,8 @@
 ---
-title: Measure water bugs against the RIDDEN ground and split the count by road proximity — the analytic field always says the river is fine
+title: State every ground invariant against the RIDDEN lattice — the analytic field passes them all by construction
 date: 2026-08-28
 scope: engine/mapgen/river.ts, engine/mapgen/terrain.ts
-concepts: [terrain, water, off-road, measurement]
+concepts: [terrain, water, off-road, measurement, verge]
 ---
 
 `heightAt` is the analytic field; `groundAt` is the 14 m lattice the tiles are
@@ -23,3 +23,12 @@ The probe worth keeping: for every road sample that is neither `surface ===
 `terrain.streams`, compare `groundAt` against the point's own `y`. Both run in
 seconds over a dozen seeds and both moved by two orders of magnitude on this
 fix (1061 → 2 flooded road samples).
+
+The same trap outside the water: the ground LATTICE is 14 m between corners
+and half a road corridor is 14.6 m, so a road crossing a cell diagonally can
+have no corner inside its own corridor — and the tile triangles then run
+straight across the road at hillside height. `heightAt` never once stands
+above the mat; the lattice did, on 0.2-0.3% of the road surface and by up to
+7.3 m. Rebuild the lattice in the probe (and in the test) the way
+`buildTile` does — `heightAt` at the cell corners, interpolated across the
+same two triangles — or the measurement is of a surface nobody sees.
