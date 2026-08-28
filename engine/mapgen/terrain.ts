@@ -16,7 +16,7 @@ import { hash2, smooth, valueNoise } from "../lib/noise.ts";
 import type { Surface, Track, TrackSample } from "./compile.ts";
 import { createGuardField, type CornerGuard, type GuardField } from "./guards.ts";
 import { createStandField, type Stand, type StandField } from "./stands.ts";
-import { traceRivers, type River, type RiverAnchor } from "./river.ts";
+import { BANK, traceRivers, type River, type RiverAnchor, type RoadClear } from "./river.ts";
 import {
   corridorOffset,
   junctionFlat,
@@ -71,8 +71,9 @@ export type Stream = {
 
 /** How far below the water surface a ford's bed is carved, meters. */
 const BED_DEPTH = 0.45;
-/** Bank blend distance from the water's edge back to the landscape, m. */
-const BANK = 9;
+/** How far a surface may stand over water and still be IN it, m — a ford's
+ * crown sheds the water it wades, and a road's camber is not a bank. */
+const WADE_LIP = 0.2;
 /** Points per sliced piece of river — enough that a bounding box is worth
  * testing, few enough that a test which passes has little left to walk. */
 const RIVER_CHUNK = 8;
@@ -166,8 +167,9 @@ export function computeStreams(
   seed: number,
   anchors: RiverAnchor[],
   farHeight: (x: number, z: number) => number,
+  roadClear?: RoadClear,
 ): Stream[] {
-  return traceRivers(seed, anchors, farHeight, LAKE_Y).flatMap(sliceRiver);
+  return traceRivers(seed, anchors, farHeight, LAKE_Y, roadClear).flatMap(sliceRiver);
 }
 
 /** Distance from a point to the water's centerline, plus the surface
@@ -675,22 +677,25 @@ export function createTerrain(track: Track): TerrainField {
   // Each lattice cell splits into two triangles along the same diagonal the
   // renderer's tile indexing uses — (i+1,j) to (i,j+1) — so this is the
   // exact drawn surface, not an approximation of it.
-  const groundAt = (x: number, z: number): number => {
+  const latticeAt = (x: number, z: number): number => {
     const gx = x / GROUND_CELL;
     const gz = z / GROUND_CELL;
     const i = Math.floor(gx);
     const j = Math.floor(gz);
     const fx = gx - i;
     const fz = gz - j;
-    let lattice: number;
     if (fx + fz <= 1) {
       const h00 = cornerHeight(i, j);
-      lattice = h00 + fx * (cornerHeight(i + 1, j) - h00) + fz * (cornerHeight(i, j + 1) - h00);
-    } else {
-      const h11 = cornerHeight(i + 1, j + 1);
-      lattice =
-        h11 + (1 - fx) * (cornerHeight(i, j + 1) - h11) + (1 - fz) * (cornerHeight(i + 1, j) - h11);
+      return h00 + fx * (cornerHeight(i + 1, j) - h00) + fz * (cornerHeight(i, j + 1) - h00);
     }
+    const h11 = cornerHeight(i + 1, j + 1);
+    return (
+      h11 + (1 - fx) * (cornerHeight(i, j + 1) - h11) + (1 - fz) * (cornerHeight(i + 1, j) - h11)
+    );
+  };
+
+  const groundAt = (x: number, z: number): number => {
+    const lattice = latticeAt(x, z);
     // Beside a road the DRAWN surface is the ribbon, not the tile under it
     // — its shoulder, its ditch, the lip past it (R16). The lattice is 14 m
     // between corners and could not hold a ditch if it tried, so within the
@@ -700,12 +705,33 @@ export function createTerrain(track: Track): TerrainField {
     return corridor.y * corridor.weight + lattice * (1 - corridor.weight);
   };
 
+  /** The ROAD standing over a point: the height of the ribbon the car
+   * drives there, or null where no road covers the point — and null on a
+   * BRIDGE, because a deck is a road over the water rather than ground
+   * over it, and what runs under one is still the river it spans (R13). */
+  const roadTopAt = (x: number, z: number): number | null => {
+    const near = nearestSample(x, z);
+    if (near && near.d < shelfEnd + 3 && samples[near.index].deck !== null) return null;
+    const corridor = corridorGround(x, z);
+    return corridor && corridor.weight > 0.5 ? corridor.y : null;
+  };
+
   const waterAt = (x: number, z: number): number | null => {
-    const ground = heightAt(x, z);
-    if (ground < LAKE_Y) return LAKE_Y;
-    const stream = streamWaterAt(streams, x, z);
-    if (stream !== null && ground < stream - 0.02) return stream;
-    return null;
+    // The ground the question is asked of is the one the world SHOWS: the
+    // lattice the tiles are drawn on, not the analytic field between its
+    // corners. A channel too narrow for the lattice to hold runs UNDER a
+    // hillside the tiles never dip into, and a car up there is on the
+    // hillside — there is nothing to drown in.
+    const ground = latticeAt(x, z);
+    const surface = ground < LAKE_Y ? LAKE_Y : streamWaterAt(streams, x, z);
+    if (surface === null || ground >= surface - 0.02) return null;
+    // ...and a road over it is another layer again: an embankment across a
+    // lake, or a shelf cut above a stream, is dry road with water below,
+    // not water. Only a ford — whose ribbon lies AT the water it wades —
+    // is still wet.
+    const road = roadTopAt(x, z);
+    if (road !== null && road > surface + WADE_LIP) return null;
+    return surface;
   };
 
   // ── Wild props: one seeded candidate per cell, validated on demand ─────
@@ -721,6 +747,19 @@ export function createTerrain(track: Track): TerrainField {
     if (spurs.spurs.length === 0) return Infinity;
     const spur = spurs.nearest(x, z);
     return spur ? spur.d - spur.spur.width / 2 : Infinity;
+  };
+
+  /** Distance from a point to the nearest road's outer EDGE — stage or
+   * abandoned branch, ribbon and verge included — negative on the road
+   * itself. R18's water steers by it: a watercourse crosses a road where
+   * the road was built to cross it, and keeps its bank off it everywhere
+   * else. */
+  const roadClear: RoadClear = (x, z) => {
+    const near = nearestSample(x, z);
+    const stage = near ? near.d - shelfEnd : Infinity;
+    const spur = spurs.spurs.length > 0 ? spurs.nearest(x, z) : null;
+    const branch = spur ? spur.d - spur.spur.width / 2 - ROAD_CROSS.reach : Infinity;
+    return Math.min(stage, branch);
   };
 
   const spurSurfaceAt = (x: number, z: number): Surface | null => {
@@ -1056,7 +1095,9 @@ export function createTerrain(track: Track): TerrainField {
       // all), not the bare far field: a watercourse routed against a
       // landscape the road does not stand on would refuse every reach
       // between two crossings that the road itself made possible.
-      streams.push(...computeStreams(track.seed, collectAnchors(track, streamScan), rawHeight));
+      streams.push(
+        ...computeStreams(track.seed, collectAnchors(track, streamScan), rawHeight, roadClear),
+      );
       streamScan = samples.length;
       // The branches the compiler forked off at the paving junctions (R17),
       // and the guards that shut the corners the road has now committed

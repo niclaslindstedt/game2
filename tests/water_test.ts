@@ -132,6 +132,60 @@ describe("the river (R18)", () => {
     expect(crossings).toBeGreaterThan(courses);
   });
 
+  it("crosses a road where the road crosses it, and nowhere else", () => {
+    // A watercourse routed under the corridor between two crossings carves
+    // the ground out from under the ribbon and draws a sheet of water
+    // through it — the road standing on a bank of nothing, which is what
+    // "the water is below the road" looks like from the driver's seat.
+    let flooded = 0;
+    let dry = 0;
+    for (const seed of SEEDS) {
+      const track = compileStage(seed, "long", { water: 0.9 });
+      const terrain = createTerrain(track);
+      const anchors = collectAnchors(track, 0);
+      for (const s of track.samples) {
+        // The crossings themselves are water at the road ON PURPOSE, and
+        // so is the last of the road that eases down into a ford.
+        if (s.surface === "water" || s.deck !== null) continue;
+        const toCrossing = Math.min(
+          ...anchors.map((a) => Math.hypot(a.x - s.x, a.z - s.z)),
+          Infinity,
+        );
+        if (toCrossing < 60) continue;
+        if (terrain.waterAt(s.x, s.z) !== null) flooded += 1;
+        else dry += 1;
+      }
+    }
+    expect(dry).toBeGreaterThan(1000);
+    expect(flooded).toBe(0);
+  });
+
+  it("keeps the water under the ground the car rides, never over it", () => {
+    // The physics and the renderer both ask the field what is water. A
+    // channel too narrow for the ground lattice to hold runs UNDER a
+    // hillside the tiles never dip into: answering "water" up there drowns
+    // a car driving over a mountain, and draws a slab of water on it.
+    for (const seed of SEEDS) {
+      const track = compileStage(seed, "long", { water: 0.9 });
+      const terrain = createTerrain(track);
+      const b = track.bounds;
+      for (let i = 0; i < 40; i++) {
+        for (let j = 0; j < 40; j++) {
+          const x = b.minX + ((b.maxX - b.minX) * i) / 39;
+          const z = b.minZ + ((b.maxZ - b.minZ) * j) / 39;
+          const water = terrain.waterAt(x, z);
+          if (water === null) continue;
+          // Out in the country, where the ground the car rides IS the
+          // ground: over a road the surface under the wheels is the
+          // ribbon, and a bridge deck stands metres over the river it
+          // spans on purpose (R13).
+          if (terrain.roadDistanceAt(x, z) < track.width / 2 + 12) continue;
+          expect(terrain.groundAt(x, z)).toBeLessThan(water + 0.25);
+        }
+      }
+    }
+  });
+
   it("answers the water dial, from dry country to lakeland", () => {
     const wetness = (water: number): number => {
       let wet = 0;

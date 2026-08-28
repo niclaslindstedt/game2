@@ -17,6 +17,12 @@
 // The road's crossings are its ANCHORS: the generator decided where the
 // stage fords or bridges water (R7/R13), and the river is routed through
 // exactly those points at exactly the water level the road was built for.
+//
+// And it meets the road THERE AND NOWHERE ELSE. Two crossings are joined
+// by a reach that keeps clear of the corridor between them, because this
+// generator has no culverts: water routed under a road it does not cross
+// digs the ground out from under the ribbon and leaves the road standing
+// on a bank of nothing, with a sheet of water drawn through it.
 
 import { createRng } from "../lib/prng.ts";
 
@@ -83,8 +89,35 @@ const DOWNHILL_PULL = 0.4;
 /** Clearance the water surface keeps under the surrounding ground, m —
  * the water is IN the landscape, never running along the top of it. */
 const SINK = 0.4;
+/** Bank blend distance from the water's edge back to the landscape, m —
+ * how far out from the water the channel is cut into the ground. */
+export const BANK = 9;
+/** Room a watercourse keeps between its own edge and a road's, m: the
+ * bank it cuts, and then some. Inside this the carve would be eating the
+ * ground the ribbon stands on. */
+const ROAD_KEEP = BANK + 4;
+/** ...and how much of a reach either end of it the rule lets go of, m. The
+ * last stretch into a ford — or under a deck — is water running at a road
+ * ON PURPOSE, and it has to be able to reach it. */
+const CROSS_WINDOW = 40;
+/** How hard a road pushes the course off it, against the anchor it is
+ * steering for. Firmer than the valley's pull: a river bends toward low
+ * ground, but it does not run down a road. */
+const ROAD_PUSH = 2.2;
+/** How many steps a walk may spend inside a road's keep-out before the
+ * road is what ends it. A step or two is the push working — the course
+ * bending back out of the corridor — and longer than this is water that
+ * would have to run down the road to get where it is going. */
+const PUSH_GRACE = 4;
 
 type Field = (x: number, z: number) => number;
+/** Distance from a point to the nearest road's EDGE, m — negative on the
+ * road itself, Infinity where no road is near. The water asks it before
+ * committing to a step (R18). */
+export type RoadClear = (x: number, z: number) => number;
+
+/** No road anywhere: what a caller with no road to report hands in. */
+const OPEN_COUNTRY: RoadClear = () => Infinity;
 
 function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
@@ -133,9 +166,45 @@ function downhill(field: Field, x: number, z: number): { x: number; z: number } 
   return { x: -gx / len, z: -gz / len };
 }
 
+/** The way OFF a road at a point, as a unit vector — the direction road
+ * clearance grows fastest. Null where the road is already far enough away
+ * to have no opinion, or where the clearance field is flat (nothing near
+ * enough to measure a gradient against). */
+function awayFromRoad(
+  roadClear: RoadClear,
+  x: number,
+  z: number,
+  need: number,
+): { x: number; z: number } | null {
+  if (roadClear(x, z) >= need) return null;
+  const probe = 12;
+  const gx = roadClear(x + probe, z) - roadClear(x - probe, z);
+  const gz = roadClear(x, z + probe) - roadClear(x, z - probe);
+  const len = Math.hypot(gx, gz);
+  if (!Number.isFinite(len) || len < 1e-3) return null;
+  return { x: gx / len, z: gz / len };
+}
+
+/** One walk's memory of a road it is being pushed off: hands back true
+ * once the road has ended the walk, either because the water is ON it or
+ * because the push has failed to clear it for PUSH_GRACE steps. */
+function roadBlock(): (clear: number, need: number) => boolean {
+  let blocked = 0;
+  return (clear, need) => {
+    blocked = clear < need ? blocked + 1 : 0;
+    return clear < 0 || blocked > PUSH_GRACE;
+  };
+}
+
 /** Trace one watercourse through its anchors, with a source above the
  * first and a mouth below the last. */
-function traceCourse(seed: number, anchors: RiverAnchor[], field: Field, lakeY: number): River {
+function traceCourse(
+  seed: number,
+  anchors: RiverAnchor[],
+  field: Field,
+  lakeY: number,
+  roadClear: RoadClear,
+): River {
   const rng = createRng((seed ^ (Math.round(anchors[0].s) * 2654435761)) >>> 0);
   const amplitude = rng.range(MEANDER.amplitude.min, MEANDER.amplitude.max);
   const wave = rng.range(MEANDER.wave.min, MEANDER.wave.max);
@@ -162,16 +231,25 @@ function traceCourse(seed: number, anchors: RiverAnchor[], field: Field, lakeY: 
     const head = anchors[0];
     const run = rng.range(SOURCE_RUN.min, SOURCE_RUN.max);
     const climb: RiverPoint[] = [];
+    const block = roadBlock();
     let x = head.x;
     let z = head.z;
     let y = head.waterY;
     for (let d = 0; d < run; d += STEP) {
       const grade = downhill(field, x, z);
-      // Walk INTO the slope: upstream is uphill, by definition.
-      const dx = grade ? -grade.x : Math.sin(phase);
-      const dz = grade ? -grade.z : Math.cos(phase);
+      // Walk INTO the slope: upstream is uphill, by definition — bending
+      // off the road the crossing below it stands on, and giving up on the
+      // climb rather than running up the corridor.
+      const away =
+        d < CROSS_WINDOW ? null : awayFromRoad(roadClear, x, z, head.halfWidth + ROAD_KEEP);
+      let dx = (grade ? -grade.x : Math.sin(phase)) + (away ? away.x * ROAD_PUSH : 0);
+      let dz = (grade ? -grade.z : Math.cos(phase)) + (away ? away.z * ROAD_PUSH : 0);
+      const len = Math.hypot(dx, dz) || 1;
+      dx /= len;
+      dz /= len;
       x += dx * STEP;
       z += dz * STEP;
+      if (d >= CROSS_WINDOW && block(roadClear(x, z), head.halfWidth + ROAD_KEEP)) break;
       // Going upstream the surface only ever RISES, and never above the
       // ground it is cut into. Ground that fails to rise is not upstream of
       // anything: the spring is here, and the climb ends.
@@ -212,12 +290,17 @@ function traceCourse(seed: number, anchors: RiverAnchor[], field: Field, lakeY: 
     const to = anchors[i];
     const from = anchors[i - 1];
     const total = Math.hypot(to.x - from.x, to.z - from.z);
+    // The widest the water gets anywhere on this reach — what the road
+    // clearance is measured against, so the rule does not tighten and
+    // loosen as the channel gathers.
+    const legWidth = Math.max(from.halfWidth, to.halfWidth) + total * GATHER;
     const leg: { x: number; z: number; y: number; w: number; dx: number; dz: number }[] = [];
     let x = from.x;
     let z = from.z;
     let level = from.waterY;
     let travelledLeg = 0;
     let refused = false;
+    const block = roadBlock();
     let guard = 0;
     while (guard++ < 400) {
       const toX = to.x - x;
@@ -227,16 +310,28 @@ function traceCourse(seed: number, anchors: RiverAnchor[], field: Field, lakeY: 
       const aimX = toX / left;
       const aimZ = toZ / left;
       const grade = downhill(field, x, z);
+      // Clear of the road between its two crossings — but not at them: the
+      // reach leaves one corridor and arrives at the next, and inside those
+      // windows the water is where it is supposed to be.
+      const atCrossing = travelledLeg < CROSS_WINDOW || left < CROSS_WINDOW;
+      const away = atCrossing ? null : awayFromRoad(roadClear, x, z, legWidth + ROAD_KEEP);
       // Water finds the valley — but it has an anchor to reach, so the
       // pull toward low ground only bends the course, never steers it.
-      let dx = aimX + (grade ? grade.x * DOWNHILL_PULL : 0);
-      let dz = aimZ + (grade ? grade.z * DOWNHILL_PULL : 0);
+      let dx = aimX + (grade ? grade.x * DOWNHILL_PULL : 0) + (away ? away.x * ROAD_PUSH : 0);
+      let dz = aimZ + (grade ? grade.z * DOWNHILL_PULL : 0) + (away ? away.z * ROAD_PUSH : 0);
       const len = Math.hypot(dx, dz) || 1;
       dx /= len;
       dz /= len;
       x += dx * STEP;
       z += dz * STEP;
       travelledLeg += STEP;
+      // Pushed at, and still on the road: this reach would have to run
+      // down the corridor to get there, so the two crossings are not on
+      // the same water any more than a ridge between them would make them.
+      if (!atCrossing && block(roadClear(x, z), legWidth + ROAD_KEEP)) {
+        refused = true;
+        break;
+      }
       const t = clamp(1 - left / Math.max(1, total), 0, 1);
       const ground = field(x, z);
       // The surface FOLLOWS THE GROUND down and never climbs — that is the
@@ -285,6 +380,7 @@ function traceCourse(seed: number, anchors: RiverAnchor[], field: Field, lakeY: 
   // swallows it. This is where a river is ALLOWED to leave the map.
   {
     const tail = anchors[joined - 1];
+    const block = roadBlock();
     const run = rng.range(MOUTH_RUN.min, MOUTH_RUN.max);
     let x = tail.x;
     let z = tail.z;
@@ -294,10 +390,18 @@ function traceCourse(seed: number, anchors: RiverAnchor[], field: Field, lakeY: 
     width = Math.max(width, ...anchors.slice(0, joined).map((a) => a.halfWidth));
     for (let d = 0; d < run; d += STEP) {
       const grade = downhill(field, x, z);
-      const dx = grade ? grade.x : -Math.sin(phase);
-      const dz = grade ? grade.z : -Math.cos(phase);
+      // Downhill, bending off any road it runs at — and ending at one it
+      // cannot get around, because the water below the last crossing has
+      // nowhere it has to be.
+      const away = d < CROSS_WINDOW ? null : awayFromRoad(roadClear, x, z, width + ROAD_KEEP);
+      let dx = (grade ? grade.x : -Math.sin(phase)) + (away ? away.x * ROAD_PUSH : 0);
+      let dz = (grade ? grade.z : -Math.cos(phase)) + (away ? away.z * ROAD_PUSH : 0);
+      const len = Math.hypot(dx, dz) || 1;
+      dx /= len;
+      dz /= len;
       x += dx * STEP;
       z += dz * STEP;
+      if (d >= CROSS_WINDOW && block(roadClear(x, z), width + ROAD_KEEP)) break;
       travelled += STEP;
       width += STEP * GATHER;
       const ground = field(x, z);
@@ -337,6 +441,7 @@ export function traceRivers(
   anchors: RiverAnchor[],
   field: Field,
   lakeY: number,
+  roadClear: RoadClear = OPEN_COUNTRY,
 ): River[] {
   if (anchors.length === 0) return [];
   const rivers: River[] = [];
@@ -347,7 +452,7 @@ export function traceRivers(
   let guard = 0;
   while (pending.length > 0 && guard++ < 64) {
     const course = pending.shift() as RiverAnchor[];
-    const river = traceCourse(seed, course, field, lakeY);
+    const river = traceCourse(seed, course, field, lakeY, roadClear);
     rivers.push(river);
     if (river.rest.length > 0) pending.push(river.rest);
   }
