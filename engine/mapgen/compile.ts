@@ -445,8 +445,11 @@ const ROAD_DISTANCE_REACH = 220;
 
 /** Arc either side of a junction where the route IS the branch's own road,
  * m: inside it the two carriageways are one, so the branch is not measured
- * against them. Wide enough to cover the corner the junction sits on and
- * the run out of it. */
+ * against them while it is still LEAVING. Wide enough to cover the corner
+ * the junction sits on and the run out of it — and it lapses the moment the
+ * branch is properly clear of the stage (spurs.ts), because a branch that
+ * has wandered a kilometre and folded back has no claim on the road beside
+ * its own junction. */
 const SPUR_JUNCTION_WINDOW = 240;
 
 /** The incremental heart: walks plans into samples, bounds, and pacenotes,
@@ -721,7 +724,7 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
     const first = endOf(track.samples[0], -1);
     const last = endOf(track.samples[track.samples.length - 1], 1);
     return (ignoreFrom: number, ignoreTo: number) =>
-      (x: number, z: number): number => {
+      (x: number, z: number, ignoring = true): number => {
         let best = apronDistance(first, x, z);
         if (!track.endless) best = Math.min(best, apronDistance(last, x, z));
         const cx = Math.floor(x / CELL);
@@ -747,7 +750,7 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
               const bucket = grid.get(key(cx + dx, cz + dz));
               if (bucket === undefined) continue;
               for (const sample of bucket) {
-                if (sample.s > ignoreFrom && sample.s < ignoreTo) continue;
+                if (ignoring && sample.s > ignoreFrom && sample.s < ignoreTo) continue;
                 const ddx = sample.x - x;
                 const ddz = sample.z - z;
                 // Squared first: most of the road in reach is further off
@@ -767,6 +770,39 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
       };
   };
 
+  /** R23 + R31 — is the ground still there for a road standing at this
+   * point and height? The STAGE'S OWN VERGE CONE takes it away where it
+   * would be a wall. Two roads far enough apart on
+   * the map can still be tens of metres apart in HEIGHT, and the hillside
+   * that used to carry one up to the other is exactly the wall R31 cuts
+   * away — which leaves the branch on top of it hanging in the air, forty
+   * metres over a road the player is driving. So the room a branch needs
+   * from the stage is not its width alone: it is also its height above it,
+   * at the grade the verge is allowed to climb.
+   *
+   * Strided over the stage the same way the keep-out field is; the branch
+   * asks it in the same pass that cuts it against the horizontal
+   * clearance, so the junction's own exemption covers both. */
+  const shelfHolds = (x: number, z: number, y: number): boolean => {
+    const STRIDE = 8;
+    const bench = Math.max(track.width / 2 + ROAD_CROSS.reach, R.verge.bench);
+    const all = track.samples;
+    for (let k = 0; k < all.length; k += STRIDE) {
+      const road = all[k];
+      const over = y - road.elevation;
+      if (over <= 0) continue;
+      // The cone is flat out to the bench and opens at `climb` past it, so
+      // the room this much height needs is the height itself at that grade
+      // — plus half the stride's own spacing, since a sample eight steps
+      // from the one measured could be that much nearer.
+      const need = bench + over / R.verge.climb + STRIDE * SAMPLE_STEP * 0.5;
+      const dx = road.x - x;
+      const dz = road.z - z;
+      if (dx * dx + dz * dz < need * need) return false;
+    }
+    return true;
+  };
+
   /** Build the branch every noted junction earns, now that the road they
    * hang off is compiled. A finite stage hands each branch the stage's own
    * bounding box to escape; a streamed one has no box, so the branch just
@@ -783,24 +819,24 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
             maxZ: junction.z + STREAMED_ESCAPE,
           }
         : track.bounds;
-      track.spurs.push(
-        buildSpur(
-          track.seed,
-          {
-            x: junction.x,
-            z: junction.z,
-            heading: junction.heading,
-            elevation: junction.elevation,
-            slope: junction.slope,
-          },
-          junction.s,
-          junction.joining ? "entry" : "exit",
-          box,
-          land,
-          track.width,
-          roadDistance(junction.s - SPUR_JUNCTION_WINDOW, junction.s + SPUR_JUNCTION_WINDOW),
-        ),
+      const spur = buildSpur(
+        track.seed,
+        {
+          x: junction.x,
+          z: junction.z,
+          heading: junction.heading,
+          elevation: junction.elevation,
+          slope: junction.slope,
+        },
+        junction.s,
+        junction.joining ? "entry" : "exit",
+        box,
+        land,
+        track.width,
+        roadDistance(junction.s - SPUR_JUNCTION_WINDOW, junction.s + SPUR_JUNCTION_WINDOW),
+        shelfHolds,
       );
+      track.spurs.push(spur);
     }
     junctions.length = 0;
     // R17 — and the first stretch of every branch lies on its junction's

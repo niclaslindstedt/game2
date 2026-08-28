@@ -25,6 +25,7 @@ import {
   junctionFlat,
   junctionPlatformY,
   ROAD_CROSS,
+  vergeOffset,
   type RoadShape,
 } from "./road.ts";
 import { createLandField, LAKE_Y } from "./land.ts";
@@ -350,7 +351,26 @@ export function createTerrain(track: Track): TerrainField {
    * alongside. The search below walks a hundred-odd of these per query and
    * only ever wants the two coordinates, so they are kept out here rather
    * than fetched through a sample object each time. */
-  type Cell = { index: number[]; x: number[]; z: number[] };
+  /** R31 — a cell's road, and the ceiling each sample of it imposes. The
+   * ceiling is a PLANE, not a height: the corridor's own underside at the
+   * sample (`top`), tilting away on the surface the road is actually built
+   * on — its longitudinal grade AND its bank, together in `px`/`pz`. Both
+   * halves matter. Without the grade, a road descending a hillside drags
+   * the ground beside it down to the lowest point it reaches within a
+   * bench; without the bank, a banked corner's high side is cut to the
+   * height of its low one, which is a metre of trench along every fast
+   * turn. `floor` is the lowest value the plane can hand back inside the
+   * bench — the rejection that keeps the root and the dot product off most
+   * of the candidates. */
+  type Cell = {
+    index: number[];
+    x: number[];
+    z: number[];
+    top: number[];
+    px: number[];
+    pz: number[];
+    floor: number[];
+  };
   let grid = new Map<number, Cell>();
   let firstIndexed = 0;
   let indexed = 0;
@@ -360,10 +380,31 @@ export function createTerrain(track: Track): TerrainField {
       const s = samples[i];
       const key = cellKey(Math.floor(s.x / GRID), Math.floor(s.z / GRID));
       let cell = grid.get(key);
-      if (!cell) grid.set(key, (cell = { index: [], x: [], z: [] }));
+      if (!cell) {
+        grid.set(key, (cell = { index: [], x: [], z: [], top: [], px: [], pz: [], floor: [] }));
+      }
+      const top = ceilingOf(s);
+      // The road's own grade here, from its neighbours: one sample step
+      // either side, which is the finest the compiled centerline holds.
+      const back = samples[i > 0 ? i - 1 : i];
+      const fwd = samples[i + 1 < samples.length ? i + 1 : i];
+      const run = fwd.s - back.s;
+      const slope = run > 1e-6 ? (fwd.elevation - back.elevation) / run : 0;
+      // Forward is (sin h, cos h) and the lateral axis (cos h, -sin h), so
+      // the surface `elevation + slope * along - bank * lateral` has this
+      // gradient. One vector, and the query is a dot product.
+      const sinH = Math.sin(s.heading);
+      const cosH = Math.cos(s.heading);
+      const bank = s.bank ?? 0;
+      const px = slope * sinH - bank * cosH;
+      const pz = slope * cosH + bank * sinH;
       cell.index.push(i);
       cell.x.push(s.x);
       cell.z.push(s.z);
+      cell.top.push(top);
+      cell.px.push(px);
+      cell.pz.push(pz);
+      cell.floor.push(top - Math.hypot(px, pz) * BENCH);
     }
     nearCx = NaN;
   };
@@ -379,7 +420,15 @@ export function createTerrain(track: Track): TerrainField {
   let nearCz = NaN;
   const nearCells: Cell[] = [];
 
-  type Near = { d: number; index: number; lateral: number };
+  type Near = {
+    d: number;
+    index: number;
+    lateral: number;
+    /** R31 — the highest the ground may stand here for this road's sake:
+     * the lowest nearby corridor's own underside, opening upward at
+     * `verge.climb` once past the bench. Infinity where no road reaches. */
+    ceiling: number;
+  };
   const nearestSample = (x: number, z: number): Near | null => {
     const cx = Math.floor(x / GRID);
     const cz = Math.floor(z / GRID);
@@ -396,6 +445,12 @@ export function createTerrain(track: Track): TerrainField {
     }
     let best = -1;
     let bestD2 = Infinity;
+    // R31 — the verge cone, taken over every sample in reach rather than
+    // over the nearest one alone. At a hairpin the two arms are a road's
+    // width apart and it is the LOWER one that says how high the ground
+    // between them may stand; answering off whichever happened to be
+    // nearer leaves the other arm walled in.
+    let ceiling = Infinity;
     for (let c = 0; c < nearCells.length; c++) {
       const cell = nearCells[c];
       const cellX = cell.x;
@@ -407,6 +462,24 @@ export function createTerrain(track: Track): TerrainField {
         if (d2 < bestD2) {
           bestD2 = d2;
           best = cell.index[k];
+        }
+        // Nothing this sample could say is lower than what has already been
+        // said — which is most of them, and what keeps the square root and
+        // the dot product off the hot loop.
+        if (cell.floor[k] >= ceiling) continue;
+        if (d2 <= BENCH2) {
+          const flat = cell.top[k] + ddx * cell.px[k] + ddz * cell.pz[k];
+          if (flat < ceiling) ceiling = flat;
+        } else if (d2 < CONE_REACH2) {
+          // Past the bench the plane is held at the bench's own rim and the
+          // cone opens above it. Holding it matters: a road on a 1-in-2 dip
+          // extrapolated over the query's whole reach would carve a trench
+          // a hundred metres out of a hillside it never touches.
+          const d = Math.sqrt(d2);
+          const hold = BENCH / d;
+          const rise =
+            cell.top[k] + (ddx * cell.px[k] + ddz * cell.pz[k]) * hold + (d - BENCH) * VERGE_CLIMB;
+          if (rise < ceiling) ceiling = rise;
         }
       }
     }
@@ -422,7 +495,7 @@ export function createTerrain(track: Track): TerrainField {
       const out = best === firstIndexed ? -lon : lon;
       if (out > 0) d = Math.hypot(lateral, Math.max(0, out - APRON));
     }
-    return { d, index: best, lateral };
+    return { d, index: best, lateral, ceiling };
   };
 
   // The bare landscape the road was laid across (land.ts) — the same
@@ -461,6 +534,35 @@ export function createTerrain(track: Track): TerrainField {
    * landscape, m — inside the branch index's search reach, or the blend
    * would end at a cell boundary instead of where it means to. */
   const SPUR_BLEND = 30;
+
+  // ── R31: the rideable verge ───────────────────────────────────────────
+  // A rally car spends half a stage off the road, and the one thing it must
+  // always be able to do is come back. So the landscape does not get the
+  // last word next to a road: whatever the country was doing there, the
+  // ground is CUT to a cone opening upward off the road's own underside.
+  // Inside the BENCH the cone is flat, which is what pins the ground
+  // lattice under the tarmac; outside it the ground may climb, but only at
+  // a grade the wheels can take.
+  /** Radius of the flat bench, m, measured from a road's centerline. */
+  const BENCH = Math.max(shelfEnd, R.verge.bench);
+  const BENCH2 = BENCH * BENCH;
+  const VERGE_CLIMB = R.verge.climb;
+  /** How far out the cone is still worth asking about, m. By here it stands
+   * tens of metres over the road and binds on nothing but a cliff — and
+   * where it does not bind, dropping it costs the query nothing. */
+  const CONE_REACH2 = CORRIDOR_RANGE * CORRIDOR_RANGE;
+
+  /** The underside of a road's corridor at one sample: where the OUTER
+   * VERGE sits — the lowest line anything drawn there stands on — sunk by
+   * the tile clearance. Measured level, because the bank that tilts it is
+   * carried by the plane the cone is evaluated on; taking the low side's
+   * height as a flat ceiling instead would cut a metre of trench along the
+   * high side of every banked corner. A bridge DECK stands over a ravine on
+   * purpose and pins nothing. */
+  const ceilingOf = (shape: RibbonSample): number =>
+    shape.deck != null
+      ? Infinity
+      : shape.elevation + vergeOffset(ROAD_CROSS.reach, shape.lift, 0) - TILE_SINK;
 
   const streams: Stream[] = [];
   const spurs: SpurIndex = createSpurIndex();
@@ -562,7 +664,27 @@ export function createTerrain(track: Track): TerrainField {
       const flat = apron.y - TILE_SINK;
       base = flat * apron.weight + base * (1 - apron.weight);
     }
-    return base + guards.riseAt(x, z);
+    // R31 — and then the whole lot is CUT to the verge cone. Last, and
+    // over the corner guards too, because it binds on everything above it:
+    // the far field's mountains, the embankment's own grade, the blend
+    // between them, a branch's shelf where the branch owns this ground, and
+    // R14's mounds — a mound the car simply stops against is not a corner
+    // that costs something to cut, it is a wall in the one place a car is
+    // most likely to arrive sideways. Cut to the cone it is still a hill
+    // worth going round. The cone is a min of continuous functions of
+    // position, so this can only ever take ground AWAY: a valley, a ford's
+    // dip and the ravine under a bridge are all still exactly as deep as
+    // the landscape made them.
+    let ceiling = near ? near.ceiling : Infinity;
+    if (spur) {
+      // A branch is never banked and the index carries no signed lateral,
+      // so its cone is the plain one: its own underside, opening upward
+      // past the bench.
+      const branch = ceilingOf(spur.sample) + Math.max(0, spur.d - BENCH) * VERGE_CLIMB;
+      if (branch < ceiling) ceiling = branch;
+    }
+    const raised = base + guards.riseAt(x, z);
+    return raised < ceiling ? raised : ceiling;
   };
 
   const heightAt = (x: number, z: number): number => carveGround(streams, x, z, rawHeight(x, z));
