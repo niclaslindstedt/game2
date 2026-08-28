@@ -6,7 +6,7 @@
 // — a car that leaves the road keeps its last on-road progress for respawn.
 
 import { STAGE_RULES, finishIndex, type Surface, type Track } from "../mapgen/index.ts";
-import { flatTrack, GROUP, type FlatTrack } from "../mapgen/flat.ts";
+import { flatTrack, GROUP, GROUP_SHIFT, type FlatTrack } from "../mapgen/flat.ts";
 import { corridorOffset, crossOffset } from "../mapgen/road.ts";
 import { TUNING } from "./defs/tuning.ts";
 import type { GameState } from "./state.ts";
@@ -198,7 +198,7 @@ export function locatePoint(track: Track, x: number, z: number, hint: number): T
         if (found < bound) bound = found;
         bounded = true;
       }
-      const g = i / GROUP;
+      const g = i >> GROUP_SHIFT;
       const gx = x - flat.groupX[g];
       const gz = z - flat.groupZ[g];
       const reach = bound + flat.groupR[g];

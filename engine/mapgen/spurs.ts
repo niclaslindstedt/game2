@@ -418,7 +418,14 @@ export function createSpurIndex(): SpurIndex {
         const bucket = grid.get(cellKey(cx + dx, cz + dz));
         if (!bucket) continue;
         for (const entry of bucket) {
-          const d = Math.hypot(entry.sample.x - x, entry.sample.z - z);
+          const dx = entry.sample.x - x;
+          const dz = entry.sample.z - z;
+          // Squared first — see the road-distance field in compile.ts:
+          // three rings of branch is a lot of road to take a root of, and
+          // almost none of it is nearer than what the search already holds.
+          const d2 = dx * dx + dz * dz;
+          if (best && d2 > best.d * best.d * (1 + 1e-9)) continue;
+          const d = Math.hypot(dx, dz);
           if (!best || d < best.d) best = { spur: entry.spur, sample: entry.sample, d };
         }
       }

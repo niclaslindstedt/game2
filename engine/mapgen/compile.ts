@@ -726,7 +726,16 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
               if (bucket === undefined) continue;
               for (const sample of bucket) {
                 if (sample.s > ignoreFrom && sample.s < ignoreTo) continue;
-                const d = Math.hypot(sample.x - x, sample.z - z);
+                const ddx = sample.x - x;
+                const ddz = sample.z - z;
+                // Squared first: most of the road in reach is further off
+                // than the nearest found so far and cannot win, and the
+                // root is the expensive half. The margin keeps the reject
+                // strictly conservative — a sample it lets through is
+                // measured exactly as before.
+                const d2 = ddx * ddx + ddz * ddz;
+                if (d2 > best * best * (1 + 1e-9)) continue;
+                const d = Math.hypot(ddx, ddz);
                 if (d < best) best = d;
               }
             }

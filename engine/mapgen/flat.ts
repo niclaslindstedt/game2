@@ -21,9 +21,10 @@ export const SURFACES: readonly Surface[] = ["gravel", "asphalt", "water"];
 
 const CODE_OF: Record<Surface, number> = { gravel: 0, asphalt: 1, water: 2 };
 
-/** Samples per bounding group — a power of two, so the walk can test
- * alignment and pick a group with shifts. */
-export const GROUP = 8;
+/** Samples per bounding group, as a power of two: the walk tests alignment
+ * with a mask and picks a group with a shift, both on every step it takes. */
+export const GROUP_SHIFT = 3;
+export const GROUP = 1 << GROUP_SHIFT;
 
 /** Below this, a sample is straight: no corner plan has anything to say
  * about it. The same threshold the bot's scan used inline. */

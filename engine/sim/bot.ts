@@ -103,10 +103,15 @@ export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): Car
   const samples = track.samples;
   const step = track.step;
 
+  // The road as flat arrays (mapgen/flat.ts). The scan below walks dozens
+  // of samples on EVERY physics step, so both the sample objects and the
+  // string key into the tuning table are worth staying out of.
+  const { curvature, surface, arc, toNextCurve, x: roadX, z: roadZ } = flatTrack(track);
+
   // Aim point: a speed-scaled distance down the centerline.
   const aheadMeters = Math.max(8, car.u * profile.lookahead);
-  const aim = samples[aheadOf(track, state.progressIndex, Math.round(aheadMeters / step))];
-  const desired = Math.atan2(aim.x - car.x, aim.z - car.z);
+  const aim = aheadOf(track, state.progressIndex, Math.round(aheadMeters / step));
+  const desired = Math.atan2(roadX[aim] - car.x, roadZ[aim] - car.z);
   const error = angleDiff(car.heading, desired);
   let steer = clamp(error * profile.steerGain, -1, 1);
 
@@ -121,11 +126,6 @@ export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): Car
   let targetSpeed = state.spec.gearTop[state.spec.gearTop.length - 1];
   let hardDistance = Infinity;
   let hardCap = 0;
-  // The road as flat arrays (mapgen/flat.ts), and the car's grip per
-  // surface. The scan below walks dozens of samples on EVERY physics step,
-  // so both the sample objects and the string key into the tuning table are
-  // worth staying out of.
-  const { curvature, surface, arc, toNextCurve } = flatTrack(track);
   const gripOf = gripBySurface(state.spec);
   const braking = 2 * state.spec.brake * 0.7;
   const hotEntry = profile.hotEntry * rotation;

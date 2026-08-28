@@ -343,10 +343,18 @@ export type JunctionPlatform = {
 export function junctionFlat(platform: JunctionPlatform, x: number, z: number): number {
   const dx = x - platform.x;
   const dz = z - platform.z;
+  // Nowhere near it. The ellipse below is gone by d = 1.12, and a rotation
+  // does not change a distance, so nothing further from the platform than
+  // the ellipse's own bounding radius — 1.13² of its two semi-axes squared,
+  // rounded up — can be inside it. Almost every point the terrain asks
+  // about is further off than that, and it asks this of every junction on
+  // the stage for every height it reads.
+  const half = platform.width * 0.85;
+  if (dx * dx + dz * dz > 1.2769 * (platform.reach * platform.reach + half * half)) return 0;
   const along = dx * Math.sin(platform.heading) + dz * Math.cos(platform.heading);
   const across = dx * Math.cos(platform.heading) - dz * Math.sin(platform.heading);
   const reach = along >= 0 ? platform.reach : platform.reach * 0.42;
-  const d = Math.hypot(along / reach, across / (platform.width * 0.85));
+  const d = Math.hypot(along / reach, across / half);
   // Full inside the core, then off over the last quarter: a junction has
   // an edge in life too, and a blend that runs for a hundred meters is a
   // road with no camber for a hundred meters. Hermite, not linear — the
