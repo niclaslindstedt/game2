@@ -27,10 +27,11 @@ STAND, and **`test-scenario`** for staging exact contacts.
 | The ledger: `CarState.damage` (zones, belly, wear, systems, broken, version), impact/partBreak/crash events | `engine/game/state.ts`                                                  |
 | Damaged-handling effects (power, grip, shift cuts, steering, landing tolerance)                             | `engine/game/car.ts` — reads `car.damage.systems`, never writes         |
 | When collision runs, the wedge check that is the only way home, deep-water crash                            | `engine/game/step.ts`                                                   |
-| Solid trunks + grove quilt (`treesNear`, `groveAt`, `GROVES`); boulders/logs (`obstaclesNear`)              | `engine/mapgen/terrain.ts`                                              |
+| Solid trunks + grove quilt (`treesNear`); every other solid (`obstaclesNear`) + the `SOLID_PROP_HEIGHT` bar | `engine/mapgen/terrain.ts`                                              |
 | Bending the polygons, scuff darkening, debris                                                               | `pwa/src/game/car-damage.ts` (+ `car-body.ts` `breakables`)             |
 | Drawing the springs: the sprung-mass group the heave and dive move                                          | `pwa/src/game/car-body.ts` (`chassis`) + `car-mesh.ts`                  |
 | Drawing the engine's trunks as trees (species stays app-side)                                               | `pwa/src/game/world.ts` (`treePlacement`, `solidMix`)                   |
+| Drawing the engine's stone (boulders, rocks, outcrops) where its circles are                                | `pwa/src/game/world.ts` (`buildWild`, `stoneMatrix`)                    |
 | The HUD damage instrument                                                                                   | `pwa/src/game/hud.tsx` (`DamagePanel`) + `App.tsx` snapshot             |
 | Tests                                                                                                       | `tests/collision_test.ts` (+ the boulder scenario in `explore_test.ts`) |
 
@@ -43,8 +44,11 @@ STAND, and **`test-scenario`** for staging exact contacts.
   where the engine put them (`treesNear`/`obstaclesNear`) — never the
   reverse, and never a drawn solid without a collider or a collider
   without a drawing. Species/looks stay app-side (the tree's `roll` +
-  `grove` pick them); only SOFT flora (stumps, shrubs, junipers — see
-  `SOFT_FLORA` in world.ts) may be app-placed, because it is driven over.
+  `grove` pick them); the only things the renderer may PLACE are the ones
+  that stand under `SOLID_PROP_HEIGHT` (0.45 m — the middle of the hood):
+  brush (`SOFT_FLORA` in world.ts), ground cover, and stone litter capped
+  by `PEBBLE_MAX`. Anything taller is an engine prop, drawn where the
+  field put it.
 - **Zones are ENGINE space; the screen flips once.** Zone 0 is the nose,
   indices grow clockwise in map view. The rendered world MIRRORS the map
   view, so the HUD snapshot (`damageSnapshot` in App.tsx) flips zones and

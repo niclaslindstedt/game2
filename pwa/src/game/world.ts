@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Builds the 3D world for one stage: the road ribbon with its red/white
 // edge strips and dirt skirts, the fords and the streams that feed them,
-// the biome's forest and ground cover (flora.ts), boulders and bedrock
-// outcrops, jump cones, and the start/finish gates. Everything is low-poly,
+// the biome's forest and ground cover (flora.ts), the stone litter under
+// the wheels, jump cones, and the start/finish gates. Everything the car
+// can HIT — trunks, boulders, rocks, stumps, bedrock outcrops — is placed
+// by the engine and only DRAWN here (see buildWild). Everything is low-poly,
 // vertex-colored, and Lambert-lit — the environment module's hemisphere +
 // sun set the mood, the chunky speckle textures keep the arcade grain — and
 // everything derives from the same compiled track samples the physics
@@ -21,6 +23,7 @@ import {
   type Spur,
   type Track,
   type WildObstacle,
+  SOLID_PROP_HEIGHT,
 } from "@engine";
 
 import { biomeFor, type Biome, type Community, type FloraMix } from "./biome.ts";
@@ -43,6 +46,13 @@ import {
 } from "./road-mesh.ts";
 
 const UP = new THREE.Vector3(0, 1, 0);
+
+/** The stone litter the renderer is allowed to scatter for itself: lumps
+ * squashed flat and sunk a third in, so a lump of scale `s` tops out at
+ * 1.05 s. The biggest of them stays a hair under the engine's solid bar —
+ * nothing drawn app-side is ever something the car should have hit. */
+const PEBBLE_MAX = (SOLID_PROP_HEIGHT / 1.05) * 0.95;
+const PEBBLE_MIN = PEBBLE_MAX * 0.35;
 
 /** Endless: unbuilt samples accumulate to this count before a chunk is cut
  * (2 m samples → 200 m of road), and chunks fully this far behind the car
@@ -78,16 +88,21 @@ function communityByGrove(biome: Biome, grove: number): Community {
   return biome.communities.find((c) => c.id === id) ?? biome.communities[0];
 }
 
-/** Flora that never stands a solid trunk — the engine's tree field must not
- * dress a collision circle as one of these, and conversely they are free to
- * be planted app-side as drive-over dressing. */
-const SOFT_FLORA = new Set(["stump", "fallenLog", "heathShrub", "juniper", "willowShrub"]);
+/** Brush the car drives THROUGH: the only flora still planted app-side,
+ * because nothing about it stands over the middle of the hood. Everything
+ * else that reads as solid — trunks, stumps, fallen logs — comes from the
+ * engine's prop fields, where the physics can collide with it. */
+const SOFT_FLORA = new Set(["heathShrub", "juniper", "willowShrub"]);
+
+/** ...and what a solid TRUNK may never be dressed as: the brush above plus
+ * the dead wood the engine plants as props of its own. */
+const NOT_A_TRUNK = new Set([...SOFT_FLORA, "stump", "fallenLog"]);
 
 /** A mix stripped to the species that read as solid trees (falls back to
  * the whole mix if nothing tall grows there). */
 function solidMix(mix: FloraMix): FloraMix {
   const out: FloraMix = {};
-  for (const id in mix) if (!SOFT_FLORA.has(id)) out[id] = mix[id];
+  for (const id in mix) if (!NOT_A_TRUNK.has(id)) out[id] = mix[id];
   return Object.keys(out).length > 0 ? out : mix;
 }
 
@@ -142,8 +157,8 @@ type SceneryChunk = {
 };
 
 /** The living landscape for one chunk of road: the biome's forest scattered
- * over the hills, a ground-cover band hugging the verge, loose boulders,
- * and bedrock outcrops shouldering out of the cut walls. Placement is
+ * over the hills, a ground-cover band hugging the verge, and the loose
+ * stone litter the wheels ride over. Placement is
  * seeded by the track seed and chunk, validated against the road built so
  * far (aprons included) and the stream valleys, and everything stands on
  * the terrain height under it. On an endless run the road ahead is still
@@ -272,18 +287,22 @@ function buildScenery(
   const v = new THREE.Vector3();
   const sc = new THREE.Vector3();
 
-  // ── Loose boulders on the open ground, greyed toward moss at random.
+  // ── Stone litter: the pebbles and cobbles the ground sheds, scattered
+  // right up to the shoulder. Every one of them stays UNDER the middle of
+  // the hood (SOLID_PROP_HEIGHT), which is what makes them safe to plant
+  // app-side — the car rides straight over them. Anything a driver could
+  // hit is a prop the engine placed, drawn by the wild cells.
   type Rock = { x: number; y: number; z: number; s: number };
   const rocks: Rock[] = [];
-  for (let i = Math.max(4, from); i < to; i += 7) {
+  for (let i = Math.max(4, from); i < to; i += 5) {
     const s = samples[i];
     const r = rightOf(s.heading);
     const side = rng.chance(0.5) ? 1 : -1;
-    const offset = rng.range(clearance + 1, 120);
+    const offset = rng.range(half + 1.5, 60);
     const x = s.x + r.x * offset * side + rng.range(-3, 3);
     const z = s.z + r.z * offset * side + rng.range(-3, 3);
     const drop = rng.next();
-    if (!clearOfRoad(x, z, clearance)) continue;
+    if (!clearOfRoad(x, z, half + 1.2)) continue;
     if (inStream(terrain.field.streams, x, z, 0.5)) continue;
     const y = heightAt(x, z);
     if (y < LAKE_Y + 1.2) continue;
@@ -296,54 +315,18 @@ function buildScenery(
   const tint = new THREE.Color();
   const mossy = new THREE.Color(0x87a05a);
   rocks.forEach((p, i) => {
-    const scale = 0.5 + p.s * 1.6;
+    // A squashed lump sunk a third in: its top sits at 1.05 × scale, so
+    // the biggest of them still passes under the bumper.
+    const scale = PEBBLE_MIN + p.s * (PEBBLE_MAX - PEBBLE_MIN);
     q.setFromAxisAngle(UP, p.s * 20);
     m.compose(v.set(p.x, p.y + scale * 0.35, p.z), q, sc.set(scale, scale * 0.7, scale));
     rockMesh.setMatrixAt(i, m);
-    // Every third boulder carries a mossy cast; the rest vary in grey.
+    // Every third stone carries a mossy cast; the rest vary in grey.
     tint.setScalar(0.8 + p.s * 0.35);
     if (i % 3 === 0) tint.lerp(mossy, 0.5);
     rockMesh.setColorAt(i, tint);
   });
   group.add(rockMesh);
-
-  // ── Bedrock outcrops: where the embankment climbs hard beside the road
-  // (the cut between two walls of high ground), big angular slabs push out
-  // of the slope right at the shoulder, doubling the terrain's rock paint.
-  type Slab = { x: number; y: number; z: number; s: number; spin: number };
-  const slabs: Slab[] = [];
-  for (let i = Math.max(6, from); i < to; i += 5) {
-    const s = samples[i];
-    const r = rightOf(s.heading);
-    for (const side of [-1, 1]) {
-      const wall = heightAt(s.x + r.x * 16 * side, s.z + r.z * 16 * side) - s.elevation;
-      if (wall < 6 || !rng.chance(0.55)) continue;
-      const offset = rng.range(half + 2.5, half + 8);
-      const x = s.x + r.x * offset * side + rng.range(-1.5, 1.5);
-      const z = s.z + r.z * offset * side + rng.range(-1.5, 1.5);
-      slabs.push({
-        x,
-        y: heightAt(x, z),
-        z,
-        s: rng.range(1.6, 3.4 + Math.min(wall, 14) * 0.12),
-        spin: rng.range(0, Math.PI * 2),
-      });
-    }
-  }
-  const slabGeo = new THREE.DodecahedronGeometry(1);
-  const slabMat = new THREE.MeshLambertMaterial({
-    color: new THREE.Color(biome.ground.bedrockDark),
-  });
-  const slabMesh = new THREE.InstancedMesh(slabGeo, slabMat, Math.max(1, slabs.length));
-  slabMesh.count = slabs.length;
-  slabs.forEach((p, i) => {
-    q.setFromAxisAngle(UP, p.spin);
-    // Sunk a third in, stretched tall — a face of rock, not a pebble.
-    m.compose(v.set(p.x, p.y + p.s * 0.5, p.z), q, sc.set(p.s, p.s * 1.3, p.s * 0.8));
-    slabMesh.setMatrixAt(i, m);
-    slabMesh.setColorAt(i, tint.setScalar(0.85 + ((i * 37) % 10) * 0.03));
-  });
-  group.add(slabMesh);
 
   const zero = new THREE.Matrix4().makeScale(0, 0, 0);
   const clearNear = (t: Track, nFrom: number, nTo: number): void => {
@@ -363,15 +346,7 @@ function buildScenery(
       rockMesh.setMatrixAt(i, zero);
       touched = true;
     });
-    slabs.forEach((p, i) => {
-      if (!hits(p.x, p.z)) return;
-      slabMesh.setMatrixAt(i, zero);
-      touched = true;
-    });
-    if (touched) {
-      rockMesh.instanceMatrix.needsUpdate = true;
-      slabMesh.instanceMatrix.needsUpdate = true;
-    }
+    if (touched) rockMesh.instanceMatrix.needsUpdate = true;
   };
 
   return { group, update: planted.update, clearNear, treeKeys };
@@ -637,14 +612,62 @@ export type World = {
 const WILD_CELL = 224;
 /** Wild cells dressed within this range of the car, m. */
 const WILD_FAR = 430;
+/** The prop kinds drawn as instanced rock — everything the ground made of
+ * stone. The wooden ones (fallen trunks, cut stumps) go through flora. */
+const STONE_KINDS = new Set<WildObstacle["kind"]>(["boulder", "rock", "slab"]);
+
+/** How one stone prop sits in the ground. Each kind has its own seat, and
+ * each formula is the one the engine wrote its collision circle and its
+ * height from — what is drawn IS what the car hits. */
+function stoneMatrix(
+  ob: WildObstacle,
+  m: THREE.Matrix4,
+  q: THREE.Quaternion,
+  v: THREE.Vector3,
+  sc: THREE.Vector3,
+): THREE.Matrix4 {
+  if (ob.kind === "slab") {
+    // An outcrop: sunk near half its depth and stretched tall, a face of
+    // rock rather than a pebble.
+    return m.compose(
+      v.set(ob.x, ob.y + ob.size * 0.5, ob.z),
+      q,
+      sc.set(ob.size, ob.size * 1.3, ob.size * 0.8),
+    );
+  }
+  if (ob.kind === "rock") {
+    // Loose stone: a squashed lump a third of itself in the ground.
+    return m.compose(
+      v.set(ob.x, ob.y + ob.size * 0.35, ob.z),
+      q,
+      sc.set(ob.size, ob.size * 0.7, ob.size),
+    );
+  }
+  // A deep-wild boulder, sunk near half in and matched to its circle.
+  return m.compose(
+    v.set(ob.x, ob.y + ob.height * 0.42, ob.z),
+    q,
+    sc.set(ob.radius * 0.95, ob.height * 0.85, ob.radius * 0.8),
+  );
+}
+
 /** Cells dressed per sync at most — the forest streams in, never hitches. */
 const WILD_BUDGET = 2;
 
 type WildCell = {
   group: THREE.Group;
   flora: Flora;
-  boulders: { mesh: THREE.InstancedMesh; list: WildObstacle[] } | null;
+  stones: { mesh: THREE.InstancedMesh; list: WildObstacle[] } | null;
+  /** Which of this cell's plants are ENGINE props rather than app-side
+   * dressing, by position — they are retired on the engine's word, not on
+   * a radius of our own. */
+  props: Set<string>;
 };
+
+/** A prop's position as a key both sides agree on. */
+function propKey(x: number, z: number): string {
+  return `${x.toFixed(2)},${z.toFixed(2)}`;
+}
 
 type Wild = {
   group: THREE.Group;
@@ -659,8 +682,9 @@ type Wild = {
  * tile grid stream in around the CAR (wherever it is, road or not), each
  * planting the same biome quilt the road bands plant, thinner — plus the
  * engine terrain's solid props, drawn exactly where the physics collides
- * with them: fallen trunks join the flora instancing, boulders get their
- * own instanced rock. Deterministic per seed and cell. */
+ * with them: the wooden ones (fallen trunks, cut stumps) join the flora
+ * instancing, the stone ones (boulders, rocks, outcrops) share one
+ * instanced rock. Deterministic per seed and cell. */
 function buildWild(track: Track, biome: Biome, terrain: Terrain, density: number): Wild {
   const group = new THREE.Group();
   const communityAt = (x: number, z: number): Community =>
@@ -749,44 +773,40 @@ function buildWild(track: Track, biome: Biome, terrain: Terrain, density: number
     const obstacles = field
       .obstaclesNear(originX + WILD_CELL / 2, originZ + WILD_CELL / 2, WILD_CELL * 0.71)
       .filter((ob) => Math.floor(ob.x / WILD_CELL) === cx && Math.floor(ob.z / WILD_CELL) === cz);
+    // The wooden ones are flora variants; the stone ones share one
+    // instanced rock below.
+    const props = new Set<string>();
     for (const ob of obstacles) {
-      if (ob.kind === "log") {
-        placements.push({
-          id: "fallenLog",
-          x: ob.x,
-          y: ob.y,
-          z: ob.z,
-          scale: ob.size,
-          spin: ob.spin,
-        });
-      }
+      const id = ob.kind === "log" ? "fallenLog" : ob.kind === "stump" ? "stump" : null;
+      if (!id) continue;
+      props.add(propKey(ob.x, ob.z));
+      placements.push({ id, x: ob.x, y: ob.y, z: ob.z, scale: ob.size, spin: ob.spin });
     }
     const flora = buildFlora(placements, () => rng.next());
     cellGroup.add(flora.group);
 
-    const boulderList = obstacles.filter((ob) => ob.kind === "boulder");
-    let boulders: WildCell["boulders"] = null;
-    if (boulderList.length > 0) {
+    const stoneList = obstacles.filter((ob) => STONE_KINDS.has(ob.kind));
+    let stones: WildCell["stones"] = null;
+    if (stoneList.length > 0) {
       const geo = new THREE.DodecahedronGeometry(1);
       const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color(biome.ground.bedrock) });
-      const mesh = new THREE.InstancedMesh(geo, mat, boulderList.length);
-      boulderList.forEach((ob, i) => {
+      const mesh = new THREE.InstancedMesh(geo, mat, stoneList.length);
+      const dark = new THREE.Color(biome.ground.bedrockDark);
+      stoneList.forEach((ob, i) => {
         q.setFromAxisAngle(UP, ob.spin);
-        // Sunk near half in, matched to the collision circle — a face of
-        // rock the size the physics says it is.
-        m.compose(
-          v.set(ob.x, ob.y + ob.height * 0.42, ob.z),
-          q,
-          sc.set(ob.radius * 0.95, ob.height * 0.85, ob.radius * 0.8),
-        );
+        stoneMatrix(ob, m, q, v, sc);
         mesh.setMatrixAt(i, m);
-        mesh.setColorAt(i, tint.setScalar(0.75 + (ob.spin % 1) * 0.35));
+        tint.setScalar(0.75 + (ob.spin % 1) * 0.35);
+        // An outcrop is the bedrock itself showing through, not a stone
+        // that rolled here: it takes the darker face.
+        if (ob.kind === "slab") tint.lerp(dark, 0.6);
+        mesh.setColorAt(i, tint);
       });
       cellGroup.add(mesh);
-      boulders = { mesh, list: boulderList };
+      stones = { mesh, list: stoneList };
     }
     group.add(cellGroup);
-    return { group: cellGroup, flora, boulders };
+    return { group: cellGroup, flora, stones, props };
   };
 
   const dropCell = (key: string): void => {
@@ -834,16 +854,22 @@ function buildWild(track: Track, biome: Biome, terrain: Terrain, density: number
       }
       return false;
     };
+    // An engine prop goes when the ENGINE drops it — road built later has
+    // claimed the ground it stood on and its field stopped placing it.
+    // Asking the field beats guessing at a radius: a stone still solid but
+    // no longer drawn is exactly the bug the props were moved to fix.
+    const gone = (x: number, z: number): boolean =>
+      !field.obstaclesNear(x, z, 0.5).some((ob) => ob.x === x && ob.z === z);
     for (const cell of cells.values()) {
-      cell.flora.retire(hits);
-      if (!cell.boulders) continue;
+      cell.flora.retire((x, z) => (cell.props.has(propKey(x, z)) ? gone(x, z) : hits(x, z)));
+      if (!cell.stones) continue;
       let touched = false;
-      cell.boulders.list.forEach((ob, i) => {
-        if (!hits(ob.x, ob.z)) return;
-        cell.boulders?.mesh.setMatrixAt(i, zero);
+      cell.stones.list.forEach((ob, i) => {
+        if (!gone(ob.x, ob.z)) return;
+        cell.stones?.mesh.setMatrixAt(i, zero);
         touched = true;
       });
-      if (touched) cell.boulders.mesh.instanceMatrix.needsUpdate = true;
+      if (touched) cell.stones.mesh.instanceMatrix.needsUpdate = true;
     }
   };
 

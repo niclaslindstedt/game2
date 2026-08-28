@@ -301,13 +301,24 @@ not a mistake anymore; it is exploration:
   same as if the car had driven off the side. Reverse away from the start
   line for long enough and the country takes over, hills and all.
 - **Solid props and the forest** — the wild scatters boulders and fallen
-  trunks (`terrain.obstaclesNear`), and the forest's trees stand on solid
-  trunks of their own (`terrain.treesNear`, placed by the same engine-side
-  grove quilt the renderer picks species from) — everything seeded, kept
-  off the road, and drawn exactly where the physics collides with it.
-  Contact does not teleport the car anywhere: it bends it — see the
-  collision model below. A fallen trunk lies low enough to jump; a tree is
-  not.
+  trunks, loose rock litter, cut stumps under the woods, and the bedrock
+  outcrops that shoulder out of a cut wall beside the road
+  (`terrain.obstaclesNear`); the forest's trees stand on solid trunks of
+  their own (`terrain.treesNear`, placed by the same engine-side grove
+  quilt the renderer picks species from) — everything seeded, kept off the
+  road, and drawn exactly where the physics collides with it. Contact does
+  not teleport the car anywhere: it bends it — see the collision model
+  below. A fallen trunk lies low enough to jump; a tree is not.
+- **What counts as an obstacle** — `SOLID_PROP_HEIGHT` (0.45 m) is the
+  bar, and it is the MIDDLE OF THE HOOD: the catalog's bonnets sit about
+  0.87 m over the ground, so anything standing higher than half of that
+  meets the body and is placed as a solid. Stone shorter than the bar is
+  litter the renderer scatters for itself and the wheels ride straight
+  over, and it is the only stone the renderer is allowed to plant. Nothing
+  solid stands inside the road ribbon's own reach (`ROAD_CROSS.reach`,
+  6.5 m past the mat) — rim included, not just centre — so the shoulder
+  and the ditch stay as survivable as they ever were, and the first thing
+  a car running wide can hit is out where the trees already stood.
 
 ### Going under
 

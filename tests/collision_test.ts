@@ -2,7 +2,8 @@
 // The contact model: the car as an oriented box against the wild's circular
 // solids — the impulse that bounces and scrapes, the yaw kick that spins a
 // clipped car, the crush that bends the body and tears parts off, and the
-// wear that spends the chassis for good. Plus the forest's trunk field:
+// wear that spends the chassis for good. Plus the fields that stand the
+// solids up: the forest's trunks, and the litter and outcrops beside them —
 // deterministic, dense where the groves are, and never on the road.
 
 import { describe, expect, it } from "vitest";
@@ -10,6 +11,8 @@ import { describe, expect, it } from "vitest";
 import {
   DAMAGE_ZONES,
   NEUTRAL_INPUT,
+  ROAD_CROSS,
+  SOLID_PROP_HEIGHT,
   TUNING,
   collideCar,
   compileTrack,
@@ -323,5 +326,83 @@ describe("the forest's trunks", () => {
         expect(d).toBeGreaterThan(track.width / 2 + 4);
       }
     }
+  });
+});
+
+describe("the wild's litter and outcrops", () => {
+  /** Every solid the prop field stands along one stage, deduplicated. */
+  function propsAlong(seed: number): WildObstacle[] {
+    const track = compileTrack(seed);
+    const terrain = createTerrain(track);
+    const seen = new Map<string, WildObstacle>();
+    for (let i = 0; i < track.samples.length; i += 5) {
+      const s = track.samples[i];
+      for (const ob of terrain.obstaclesNear(s.x, s.z, 60)) {
+        seen.set(`${ob.x},${ob.z}`, ob);
+      }
+    }
+    return [...seen.values()];
+  }
+
+  it("stands rocks, stumps and outcrops along a stage", () => {
+    const kinds = new Set(propsAlong(11).map((ob) => ob.kind));
+    expect(kinds.has("rock")).toBe(true);
+    expect(kinds.has("stump")).toBe(true);
+    expect(kinds.has("slab")).toBe(true);
+  });
+
+  it("never places one below the middle of the hood", () => {
+    // The bar is what makes app-side litter safe to drive over: anything
+    // the field stands up reaches the body, so anything shorter is the
+    // renderer's dressing and never a solid.
+    for (const seed of [11, 23]) {
+      for (const ob of propsAlong(seed)) {
+        expect(ob.height).toBeGreaterThanOrEqual(SOLID_PROP_HEIGHT);
+        expect(ob.radius).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("keeps litter and outcrops off the road ribbon, rim and all", () => {
+    // Trees stand past the ribbon's reach and so must these: the shoulder
+    // and the ditch the road mesh draws stay clear, so a line that used to
+    // be survivable still is.
+    const track = compileTrack(11);
+    const terrain = createTerrain(track);
+    const free = track.width / 2 + ROAD_CROSS.reach;
+    for (let i = 0; i < track.samples.length; i += 10) {
+      const s = track.samples[i];
+      for (const ob of terrain.obstaclesNear(s.x, s.z, 40)) {
+        if (ob.kind !== "rock" && ob.kind !== "slab" && ob.kind !== "stump") continue;
+        const d = Math.hypot(ob.x - s.x, ob.z - s.z);
+        expect(d - ob.radius).toBeGreaterThanOrEqual(free);
+      }
+    }
+  });
+
+  it("a rock at exactly the bar still stops a car on the ground", () => {
+    const state = freshState();
+    const car = state.car;
+    car.u = 26;
+    const events: GameEvent[] = [];
+    collideCar(
+      state.spec,
+      car,
+      [
+        solid({
+          kind: "rock",
+          x: car.x,
+          z: car.z + TUNING.collision.halfLength + 0.6,
+          y: car.y,
+          radius: 0.8,
+          height: SOLID_PROP_HEIGHT,
+        }),
+      ],
+      events,
+      state.stats,
+    );
+    expect(car.u).toBeLessThan(0);
+    expect(car.damage.zones[0]).toBeGreaterThan(0);
+    expect(events.some((e) => e.type === "impact")).toBe(true);
   });
 });
