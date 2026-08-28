@@ -98,9 +98,26 @@ export function createCarTurntable(canvas: HTMLCanvasElement): CarTurntable {
     pivot.add(body.group);
   };
 
+  /** The box the buffer was last cut to, in CSS pixels. */
+  const cut = new THREE.Vector2();
+
+  /** Match the buffer to the canvas box, unless it already is. Checked in
+   * DEVICE pixels as well as CSS ones: a backing store a mobile browser
+   * reclaimed while the app was away still reads back the size three last
+   * asked for, and only the pixels show it. */
   const resize = (): void => {
     const w = canvas.clientWidth || 1;
     const h = canvas.clientHeight || 1;
+    const ratio = renderer.getPixelRatio();
+    renderer.getSize(cut);
+    if (
+      cut.x === w &&
+      cut.y === h &&
+      canvas.width === Math.floor(w * ratio) &&
+      canvas.height === Math.floor(h * ratio)
+    ) {
+      return;
+    }
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
@@ -120,6 +137,11 @@ export function createCarTurntable(canvas: HTMLCanvasElement): CarTurntable {
 
   const frame = (now: number): void => {
     raf = requestAnimationFrame(frame);
+    // Every frame, because a resize EVENT is not the only way a canvas
+    // changes size: an iOS PWA comes back from the background into a box it
+    // never announced, and a stand that trusted the last event would show
+    // the car stretched across the wrong buffer until something rotated.
+    resize();
     if (pending) {
       const spec = pending;
       pending = null;

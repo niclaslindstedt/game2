@@ -790,12 +790,44 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     drawScene();
   };
 
+  /** The box the buffer was last cut to, in CSS pixels — three's own answer,
+   * asked for rather than remembered so nothing can be remembered wrong. */
+  const cut = new THREE.Vector2();
+
+  /** Cut the drawing buffer to a canvas box `w`x`h` CSS pixels, and re-frame
+   * the camera on it — but only when it is not already that. The buffer is
+   * checked in DEVICE pixels too: a canvas whose backing store was resized
+   * out from under the page (a mobile browser reclaiming it while the app was
+   * away) still reads back the size three last asked for, and the pixels are
+   * the only place that shows. */
+  const syncSize = (w: number, h: number): void => {
+    const ratio = renderer.getPixelRatio();
+    renderer.getSize(cut);
+    const sameBox = cut.x === w && cut.y === h;
+    const sameBuffer =
+      canvas.width === Math.floor(w * ratio) && canvas.height === Math.floor(h * ratio);
+    if (sameBox && sameBuffer) return;
+    renderer.setSize(w, h, false);
+    applyAspect();
+  };
+
   /** One frame, into the whole canvas or into the map pane. Scissoring the
    * pane leaves the rest of the canvas painted flat sky, which is what the
    * Roam page's cards sit on. */
   const drawScene = (): void => {
     const w = canvas.clientWidth || 1;
     const h = canvas.clientHeight || 1;
+    // The viewport below is measured fresh every frame; the BUFFER it lands
+    // in is cut once per resize. Let those two drift apart and the frame is
+    // drawn into a corner of a canvas that is a different size — the game in
+    // a band down one side, flat page colour through the rest of it, which is
+    // exactly what an iOS PWA does on the way back from the background: it
+    // comes back to a box it never announced with a `resize` event, so
+    // nothing re-cuts the buffer and only a rotation (which does announce
+    // itself) puts it right. So the frame checks its own canvas instead of
+    // trusting the last event: same measurement for both, every frame, or
+    // the size is re-applied here before anything is drawn.
+    syncSize(w, h);
     if (!mapView || !mapRect) {
       renderer.setScissorTest(false);
       renderer.setViewport(0, 0, w, h);
@@ -816,10 +848,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   };
 
   const resize = (): void => {
-    const w = canvas.clientWidth || 1;
-    const h = canvas.clientHeight || 1;
-    renderer.setSize(w, h, false);
-    applyAspect();
+    syncSize(canvas.clientWidth || 1, canvas.clientHeight || 1);
   };
 
   const dispose = (): void => {
