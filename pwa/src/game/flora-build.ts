@@ -21,7 +21,10 @@ export const BIRCH_BARK = new THREE.Color(0xe8e4da);
 export const BIRCH_BAND = new THREE.Color(0x3a3a38);
 export const ASPEN_BARK = new THREE.Color(0xb4bba4);
 export const DEAD_WOOD = new THREE.Color(0x8f857a);
-export const CUT_WOOD = new THREE.Color(0xc9b892); // the pale face of a fresh cut
+/** The pale face of a fresh cut — and of a trunk snapped by a rally car,
+ * which is why this one is exported as a NUMBER too (see TRUNK_COLOR). */
+export const CUT_WOOD_COLOR = 0xc9b892;
+export const CUT_WOOD = new THREE.Color(CUT_WOOD_COLOR);
 
 export const SPRUCE = new THREE.Color(0x2e6b38);
 export const SPRUCE_DARK = new THREE.Color(0x1f4d2a);

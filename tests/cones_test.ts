@@ -22,6 +22,7 @@
 // three's scene graph and maths, and nothing in the field reaches for a DOM.
 // Anything about how a cone LOOKS is a screenshot's job, not this file's.
 
+import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -35,6 +36,7 @@ import {
 } from "@engine";
 
 import { createConeField } from "../pwa/src/game/cones.ts";
+import { stepTumble, tumbleFrom } from "../pwa/src/game/tumble.ts";
 
 const LONG_STRAIGHT: SegmentPlan[] = [{ kind: "straight", length: 6000, feature: "none" }];
 
@@ -169,5 +171,66 @@ describe("driving through the cones", () => {
     // A parked car is not driving through anything: the cone stays put
     // rather than being kicked once per frame forever.
     expect(cone.position.y).toBeCloseTo(20 + 0.55, 5);
+  });
+});
+
+describe("a long thing coming to rest", () => {
+  /** Step one body until it settles, or give up. Returns the steps it took. */
+  function settle(body: ReturnType<typeof tumbleFrom>, groundY: number): number {
+    const dt = 1 / 120;
+    for (let i = 0; i < 1200; i++) if (!stepTumble(body, dt, () => groundY)) return i;
+    return -1;
+  }
+
+  /** Where the body's own length points, in the world. */
+  function longAxis(object: THREE.Object3D): THREE.Vector3 {
+    return new THREE.Vector3(0, 1, 0).applyQuaternion(object.quaternion);
+  }
+
+  it("lays a snapped trunk down instead of leaving it standing in the ground", () => {
+    // A trunk stood on end, nudged: the case that used to leave a bare pole
+    // sticking out of the hillside, because a body that never tumbled far
+    // sank to its resting height still upright.
+    const trunk = new THREE.Object3D();
+    trunk.position.set(0, 20 + 4, 0);
+    const body = tumbleFrom(
+      trunk,
+      new THREE.Vector3(1.5, 0, 0),
+      new THREE.Vector3(0, 0, -2.4),
+      0.3,
+      true,
+    );
+
+    expect(settle(body, 20)).toBeGreaterThan(0);
+    expect(Math.abs(longAxis(trunk).y)).toBeLessThan(0.05);
+    expect(trunk.position.y).toBeCloseTo(20.3, 5);
+  });
+
+  it("lays one down whatever it was hit at, at rest on the ground it fell on", () => {
+    for (const speed of [0.2, 6, 24]) {
+      const trunk = new THREE.Object3D();
+      trunk.position.set(0, 12 + 3, 0);
+      const body = tumbleFrom(
+        trunk,
+        new THREE.Vector3(speed, speed * 0.3, 0),
+        new THREE.Vector3(0, 0, -2.4 - speed * 0.2),
+        0.25,
+        true,
+      );
+      expect(settle(body, 12)).toBeGreaterThan(0);
+      expect(Math.abs(longAxis(trunk).y)).toBeLessThan(0.05);
+      expect(trunk.position.y).toBeCloseTo(12.25, 5);
+    }
+  });
+
+  it("leaves a body that is not long to settle however it landed", () => {
+    // The cones and the torn-off panels: nothing about them is long, so
+    // nothing turns them — a panel that landed on edge stays on edge.
+    const panel = new THREE.Object3D();
+    panel.position.set(0, 8 + 2, 0);
+    panel.rotation.set(0.7, 0, 0);
+    const body = tumbleFrom(panel, new THREE.Vector3(), new THREE.Vector3(), 0.2, false);
+    expect(settle(body, 8)).toBeGreaterThan(0);
+    expect(panel.rotation.x).toBeCloseTo(0.7, 5);
   });
 });

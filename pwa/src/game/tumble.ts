@@ -13,8 +13,17 @@
 // the car is on a hillside.
 //
 // So the floor is sampled from the terrain under the object every step, and a
-// body that has run out of energy goes to SLEEP: it keeps whatever attitude it
-// landed in, stops being stepped, and lies there as scenery.
+// body that has run out of energy goes to SLEEP: it stops being stepped and
+// lies there as scenery.
+//
+// What attitude it keeps is the other half of that. A cone or a torn panel is
+// roughly as wide as it is tall and may sleep however it landed; a SNAPPED
+// TRUNK may not. A body eight metres long that settles standing up is a pole
+// sticking out of the ground with no crown on it, and one that settles at
+// forty degrees is a log hanging in the air — both of which read instantly as
+// broken, from a long way off, for as long as the player can see the hillside
+// they are on. So a long body is marked `lays`, and every step it spends in
+// contact with the ground turns it toward horizontal.
 
 import * as THREE from "three";
 
@@ -45,6 +54,11 @@ export type TumbleBody = {
    * to rest, m. A cone's origin is its middle, a torn panel's is wherever the
    * body had it — neither is the contact point. */
   rest: number;
+  /** LONG things come to rest lying down. A body marked this way is turned
+   * toward horizontal — around its own long axis, keeping the bearing it
+   * fell on — every step it touches the ground, and is exactly flat by the
+   * time it sleeps. */
+  lays: boolean;
   /** Stopped, and no longer worth stepping. */
   asleep: boolean;
 };
@@ -55,8 +69,41 @@ export function tumbleFrom(
   vel: THREE.Vector3,
   spin: THREE.Vector3,
   rest: number,
+  lays = false,
 ): TumbleBody {
-  return { object, vel, spin, rest, asleep: false };
+  return { object, vel, spin, rest, lays, asleep: false };
+}
+
+/** How much of the way to flat a laying body turns per second of contact —
+ * as a rate, so it is frame-rate independent. Fast enough that a trunk is
+ * down within a bounce or two, slow enough that it reads as falling over
+ * rather than snapping flat. */
+const LAY_RATE = 7;
+/** ...and how hard the ground kills the spin of one, per second of contact.
+ * Without it a trunk that landed spinning stands itself back up between the
+ * steps that are trying to lay it down. */
+const LAY_SPIN_DRAG = 9;
+
+const UP = new THREE.Vector3(0, 1, 0);
+const axis = new THREE.Vector3();
+const lying = new THREE.Quaternion();
+
+/** Turn a long body toward lying flat, keeping the compass bearing its own
+ * long axis is already pointing along. `t` is 0 (leave it) to 1 (flat now). */
+function layDown(body: TumbleBody, t: number): void {
+  const object = body.object;
+  // Where the body's own length points, flattened onto the ground. Dead
+  // upright has no bearing to keep, so it goes over the way it is leaning
+  // and, failing that, along its own yaw.
+  axis.copy(UP).applyEuler(object.rotation);
+  axis.y = 0;
+  if (axis.lengthSq() < 1e-4) axis.set(Math.sin(object.rotation.y), 0, Math.cos(object.rotation.y));
+  lying.setFromUnitVectors(UP, axis.normalize());
+  // Object3D keeps its Euler and its quaternion in step with each other, so
+  // writing one is writing both — and the next step's spin picks up from
+  // whatever attitude this left.
+  if (t >= 1) object.quaternion.copy(lying);
+  else object.quaternion.setFromEuler(object.rotation).slerp(lying, t);
 }
 
 /**
@@ -89,6 +136,10 @@ export function stepTumble(
   body.vel.x *= SKID;
   body.vel.z *= SKID;
   body.spin.multiplyScalar(SPIN_KEEP);
+  if (body.lays) {
+    layDown(body, 1 - Math.exp(-LAY_RATE * dt));
+    body.spin.multiplyScalar(Math.exp(-LAY_SPIN_DRAG * dt));
+  }
   // On the ground and still moving: the ground drags it down rather than
   // letting it slide forever across a hillside.
   const drag = Math.exp(-GROUND_DRAG * dt);
@@ -98,6 +149,7 @@ export function stepTumble(
   if (body.vel.length() < SLEEP_SPEED && body.spin.length() < SLEEP_SPIN) {
     body.vel.set(0, 0, 0);
     body.spin.set(0, 0, 0);
+    if (body.lays) layDown(body, 1);
     body.asleep = true;
     return false;
   }

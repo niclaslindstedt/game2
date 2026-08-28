@@ -40,6 +40,7 @@ import {
   samePlace,
   softMix,
   treePlacement,
+  understoryAround,
 } from "./planting.ts";
 import { buildWild } from "./wild.ts";
 import { buildTerrain, LAKE_Y, type Terrain } from "./terrain.ts";
@@ -160,6 +161,17 @@ function buildScenery(
   // physics collides — the band within 150 m of the road belongs to the
   // road chunks, the deeper wild to the wild cells. Ownership over chunk
   // seams is settled by the shared `drawnTrees` set.
+  // ...and the skirt of saplings, junipers and moss each mature trunk keeps
+  // around its own foot. The road walk is the expensive half of `blocked`,
+  // so it is only asked where a skirt could actually reach the ribbon.
+  const understory = {
+    biome,
+    rng: () => rng.next(),
+    groundAt: heightAt,
+    blocked: (x: number, z: number): boolean =>
+      (field.roadDistanceAt(x, z) < clearance + 6 && !clearOfRoad(x, z, clearance)) ||
+      inStream(field.streams, x, z, 1),
+  };
   const collectTrees = (x: number, z: number): void => {
     for (const tree of field.treesNear(x, z, 190)) {
       if (field.roadDistanceAt(tree.x, tree.z) >= 150) continue;
@@ -167,7 +179,9 @@ function buildScenery(
       if (drawnTrees.has(key)) continue;
       drawnTrees.add(key);
       treeKeys.push(key);
-      flora.push(treePlacement(tree, biome, riparian(tree.x, tree.z)));
+      const rip = riparian(tree.x, tree.z);
+      flora.push(treePlacement(tree, biome, rip));
+      for (const plant of understoryAround(tree, rip, understory)) flora.push(plant);
     }
   };
   for (let i = Math.max(0, from); i < to; i += 50) collectTrees(samples[i].x, samples[i].z);

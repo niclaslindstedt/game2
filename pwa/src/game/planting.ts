@@ -122,10 +122,75 @@ const WOODEN: Partial<Record<WildObstacle["kind"], string>> = {
   timber: "logPile",
 };
 
+/** The two variants that are AUTHORED lying down along their own −x (the
+ * fallen trunks). For those the engine's `spin` is not a free yaw but the
+ * compass BEARING the trunk lies along — it puts a blown-over tree down the
+ * fall line — and the yaw that points a −x axis along a bearing is π minus
+ * it. Everything else spins freely and the two are the same number. */
+const LAID_ALONG_X = new Set(["fallenLog", "rootLog"]);
+
 export function propPlacement(ob: WildObstacle): FloraPlacement | null {
   const id = WOODEN[ob.kind];
   if (!id) return null;
-  return { id, x: ob.x, y: ob.y, z: ob.z, scale: ob.size, spin: ob.spin };
+  const spin = LAID_ALONG_X.has(id) ? Math.PI - ob.spin : ob.spin;
+  return { id, x: ob.x, y: ob.y, z: ob.z, scale: ob.size, spin };
+}
+
+/** The share of mature trunks that carry a skirt of low growth, and the most
+ * plants one carries. A wood where every trunk stands in mown grass is the
+ * same lawn-with-poles the ground cover was widened to fix, one scale in:
+ * what actually grows at the foot of a spruce is its own seedlings, a
+ * juniper and a cushion of moss, and it is the thing the eye reads as depth
+ * when the car is close enough to see the bottom two metres of a forest. */
+const UNDERSTORY_SHARE = 0.45;
+const UNDERSTORY_MAX = 2;
+/** How far out from the trunk's own rim it stands, m — inside the crown's
+ * drip line, which is exactly where a real one is. */
+const UNDERSTORY_NEAR = 1.2;
+const UNDERSTORY_FAR = 4.2;
+/** How much of the skirt is young TREES rather than ground cover. */
+const UNDERSTORY_SAPLINGS = 0.55;
+
+/** What the ground under one trunk has to say about whether a plant may
+ * stand on it, and everything the skirt needs to place one. */
+export type Understory = {
+  biome: Biome;
+  rng: () => number;
+  groundAt: (x: number, z: number) => number;
+  /** Ground nothing may grow on — the road with its aprons, the streams. */
+  blocked: (x: number, z: number) => boolean;
+};
+
+/** The saplings, junipers and moss growing in the shelter of one mature
+ * trunk. Soft to a car, like every other app-side plant: what is solid here
+ * is the trunk it grows around, which the engine placed. */
+export function understoryAround(
+  tree: WildObstacle,
+  riparian: boolean,
+  ctx: Understory,
+): FloraPlacement[] {
+  const { biome, rng, groundAt, blocked } = ctx;
+  const out: FloraPlacement[] = [];
+  if (rng() > UNDERSTORY_SHARE) return out;
+  const grove = tree.grove ?? 0;
+  const soft = softMix(mixAt(biome, { y: tree.y, riparian, grove }));
+  const cover = communityByGrove(biome, grove).undergrowth ?? biome.undergrowth;
+  const count = 1 + Math.floor(rng() * UNDERSTORY_MAX);
+  for (let i = 0; i < count; i++) {
+    const a = rng() * Math.PI * 2;
+    const d = tree.radius + UNDERSTORY_NEAR + rng() * (UNDERSTORY_FAR - UNDERSTORY_NEAR);
+    const x = tree.x + Math.cos(a) * d;
+    const z = tree.z + Math.sin(a) * d;
+    const mix = soft && rng() < UNDERSTORY_SAPLINGS ? soft : cover;
+    const roll = rng();
+    const scale = 0.7 + rng() * 0.55;
+    const spin = rng() * Math.PI * 2;
+    if (blocked(x, z)) continue;
+    const y = groundAt(x, z);
+    if (y < LAKE_Y + 1.2) continue;
+    out.push({ id: pickFlora(mix, roll), x, y, z, scale, spin });
+  }
+  return out;
 }
 
 /** Draw one flora variant id from a weighted mix. */
