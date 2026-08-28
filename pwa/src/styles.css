@@ -362,10 +362,13 @@ body {
   font-size: clamp(0.75rem, 2.8vmin, 1.2rem);
 }
 
+/* The corner AFTER this one, when it arrives inside the same lead: smaller,
+   and half transparent, so the strip reads as one call with something behind
+   it rather than as two calls competing to be the one being driven. */
 .hud-pace-next {
   transform: scale(0.58);
   transform-origin: top center;
-  opacity: 0.92;
+  opacity: 0.5;
   background: rgb(18 48 105 / 45%);
 }
 

@@ -62,7 +62,13 @@ import {
   rememberInitials,
   type ScoreEntry,
 } from "./game/scores.ts";
-import { createLive, readLive, takeSnapshot, type RunBook } from "./game/snapshot.ts";
+import {
+  createLive,
+  createPaceMemory,
+  readLive,
+  takeSnapshot,
+  type RunBook,
+} from "./game/snapshot.ts";
 import {
   DEFAULT_STAGE_KNOBS,
   PauseMenu,
@@ -401,6 +407,10 @@ export function App() {
    * of the app, rewritten in place — the HUD holds its identity and reads it
    * on its own animation frame, so neither instrument waits for a snapshot. */
   const liveRef = useRef(createLive());
+  /** The co-driver's latch, one object for the life of the app: which corner
+   * is already on the strip, so a call cannot be taken back down by the
+   * braking that follows it. */
+  const paceRef = useRef(createPaceMemory());
   /** The attract card is up until a press clears it; `booted` is the moment
    * the render stack has landed and the first stage is standing, which is what
    * the card is covering — and what it waits for before it puts its title up
@@ -560,7 +570,7 @@ export function App() {
     if (!previous || previous.track !== state.track) renderer.setGame(state);
     else if (previous.spec.id !== spec.carId) renderer.setCar(state);
     else renderer.setConditions(state);
-    setSnap(takeSnapshot(state, null, null, bookRef.current));
+    setSnap(takeSnapshot(state, paceRef.current, null, null, bookRef.current));
   };
   const applyStageRef = useRef(applyStage);
   applyStageRef.current = applyStage;
@@ -1165,6 +1175,7 @@ export function App() {
             setSnap(
               takeSnapshot(
                 state,
+                paceRef.current,
                 finishTimeRef.current,
                 ghostRef.current?.state.progressS ?? null,
                 bookRef.current,

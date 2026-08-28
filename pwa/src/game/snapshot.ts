@@ -46,25 +46,74 @@ export function readLive(live: LiveRun, state: GameState): void {
   live.lapTime = state.raceTime - state.lapStart;
 }
 
-/** How far ahead the co-driver calls, meters — four seconds at pace, with a
- * floor so slow corners still get called and a ceiling so a long straight
- * is not spent staring at the far end's turn. */
+/** How long before a corner the co-driver calls it, seconds. Short on
+ * purpose: a sign hung out four seconds early spends most of its life
+ * describing a corner the driver cannot see yet, and on anything but a
+ * straight it means a SECOND corner is always in the window too — which is
+ * what turns the strip into a thing that shuffles rather than a thing that
+ * is read. Two seconds is the sign going up as the braking point arrives. */
+const CALL_LEAD = 2;
+
+/** The same lead in metres, floor and ceiling. Seconds alone call a hairpin
+ * taken at walking pace from inside it, and a flat-out straight from the far
+ * end of the county. */
+const CALL_LEAD_MIN = 40;
+const CALL_LEAD_MAX = 180;
+
 function callDistance(u: number): number {
-  return Math.min(320, Math.max(150, u * 4));
+  return Math.min(CALL_LEAD_MAX, Math.max(CALL_LEAD_MIN, u * CALL_LEAD));
+}
+
+/** The co-driver's memory between HUD ticks: how far up the road the calls
+ * already made reach.
+ *
+ * A call LATCHES — once made it stays up until the car is through the
+ * corner — and that latch is the whole reason this state exists. The lead is
+ * measured in SECONDS, and the seconds it covers are the ones the driver
+ * spends BRAKING: an unlatched window shrinks with the speed it is measured
+ * from, walks back past its own sign, and takes the call down at exactly the
+ * moment it is being read — then puts it up again on the throttle out. */
+export type PaceMemory = {
+  /** Arc position of the furthest corner already called, meters. */
+  calledS: number;
+  /** Progress at the last read. A respawn, a restart or a new stage moves it
+   * BACKWARDS, which is the one thing that clears the latch. */
+  lastS: number;
+};
+
+export function createPaceMemory(): PaceMemory {
+  return { calledS: -Infinity, lastS: 0 };
 }
 
 /** Turn angle past which a call earns the LONG modifier, radians (~100°). */
 const LONG_NOTE_ANGLE = 1.75;
 
-/** The next co-driver calls: the note under or ahead of the car plus the
- * one after it (so combinations read as "hard left INTO easy right"). The
- * engine's positive dir grows the heading, which the mirrored screen shows
- * as a LEFT turn — the same one-flip rule input.ts applies to steering. */
-function upcomingPacenotes(state: GameState): HudPacenote[] {
+/** The corner calls on the strip: the one being driven or about to be, plus
+ * the one after it ONLY when it follows CLOSE — within the same lead of the
+ * first corner's exit, which is a genuine combination and what the HUD draws
+ * faint underneath ("hard left INTO easy right"). A corner with real road in
+ * front of it is not on the strip at all; it gets its own sign when the car
+ * reaches it, which is the difference between a strip that is read and one
+ * that is a queue.
+ *
+ * The engine's positive dir grows the heading, which the mirrored screen
+ * shows as a LEFT turn — the same one-flip rule input.ts applies to
+ * steering. */
+function upcomingPacenotes(state: GameState, mem: PaceMemory): HudPacenote[] {
+  if (state.progressS < mem.lastS) mem.calledS = -Infinity;
+  mem.lastS = state.progressS;
+  const lead = callDistance(state.car.u);
   const out: HudPacenote[] = [];
+  /** What the lead is measured FROM: the car, and then the exit of each
+   * corner already on the strip — a combination is close to the corner it
+   * follows, not to the car that has yet to reach either. */
+  let from = state.progressS;
   for (const note of state.track.pacenotes) {
     if (note.endS <= state.progressS) continue;
-    if (note.s - state.progressS > callDistance(state.car.u)) break;
+    // Close enough to call, or called already and not yet driven through.
+    if (note.s - from > lead && note.s > mem.calledS) break;
+    mem.calledS = Math.max(mem.calledS, note.s);
+    from = Math.max(from, note.endS);
     out.push({
       dir: note.dir > 0 ? "left" : "right",
       severity: note.severity,
@@ -128,6 +177,7 @@ export type RunBook = { best: number | null };
  * needs no lookup table and reads instantly at speed: metres of road. */
 export function takeSnapshot(
   state: GameState,
+  pace: PaceMemory,
   finishTime: number | null,
   ghostS: number | null = null,
   book: RunBook | null = null,
@@ -163,7 +213,7 @@ export function takeSnapshot(
     // The co-driver stops calling corners the moment the car is in the
     // water: the next one is not going to be taken, and reading it out
     // over a sinking car is the same wrong note as the way-home prompt.
-    pacenotes: state.phase === "racing" && !state.drowning ? upcomingPacenotes(state) : [],
+    pacenotes: state.phase === "racing" && !state.drowning ? upcomingPacenotes(state, pace) : [],
     seed: state.seed,
     carName: state.spec.name,
     // Both of these are DRIVING aids — the co-driver's way-home call, and

@@ -653,8 +653,11 @@ function SplitBoard({ split }: { split: HudSplit }) {
   );
 }
 
-/** The co-driver strip: the current call big, the following call small —
- * "HARD LEFT … into easy right", the way a crew reads a stage.
+/** The co-driver strip: the current call big, and — only when the next
+ * corner lands inside the same lead — that one small and half transparent
+ * underneath, "HARD LEFT … into easy right", the way a crew reads a stage.
+ * A corner further out than that is not on the strip at all; the snapshot
+ * hands it over when the car gets to it.
  *
  * With the words switched off it is the ARROWS alone. The arrow already
  * carries severity in its shape and direction in its mirroring, so nothing
@@ -670,7 +673,7 @@ function Pacenotes({ notes, words }: { notes: HudPacenote[]; words: boolean }) {
         <PacenoteArrow severity={now.severity} dir={now.dir} />
         <span className="hud-pace-text">
           {words && pacenoteText(now)}
-          {now.distance >= 45 && (
+          {now.distance >= 10 && (
             <span className="hud-pace-dist">{Math.round(now.distance / 10) * 10}m</span>
           )}
         </span>
