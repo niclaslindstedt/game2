@@ -134,7 +134,7 @@ const TAIGA: CampaignLocation = {
     },
     {
       id: "taiga-6",
-      name: "Wolverine Loop",
+      name: "Marten Loop",
       seed: 6,
       length: "long",
       shape: "circuit",

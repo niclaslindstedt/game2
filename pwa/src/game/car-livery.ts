@@ -242,9 +242,9 @@ const RIVAL_SCHEMES: Record<string, RivalScheme> = {
   // Electric blue with a pink line, and the stripe runs the length of the
   // car: all hands, all speed, and no interest in what is coming.
   blink: { palette: PALETTE.neon, pattern: "bands", roof: "accent" },
-  // Burnt orange with a run of teeth along the rocker. She attacks it and
-  // she gets out of it.
-  wolverine: { palette: PALETTE.ember, pattern: "chequer", roof: "accent" },
+  // Burnt orange with a run of knuckles along the rocker. She attacks it,
+  // and she gets herself out of it.
+  scrapper: { palette: PALETTE.ember, pattern: "chequer", roof: "accent" },
   // Three fine lines, evenly spaced, on the cleanest paint in the field.
   metronome: { palette: PALETTE.clinic, pattern: "pinstripe", roof: "paint" },
   // The cormorant: dark back, pale belly, and it holds that line for miles.
