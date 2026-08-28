@@ -22,6 +22,8 @@ import { LAMP_MATERIAL, buildCar, type CarVisual } from "./car-mesh.ts";
 import { hoodEyeFor } from "./car-styles.ts";
 import {
   createDust,
+  LAUNCH,
+  launchThrow,
   paceScale,
   SPLASH_WATER,
   TARMAC_SMOKE,
@@ -32,7 +34,7 @@ import {
 } from "./dust.ts";
 import { biomeFor } from "./biome.ts";
 import { createEnvironment } from "./environment.ts";
-import { createFumes } from "./fumes.ts";
+import { createFumes, EXHAUST } from "./fumes.ts";
 import { createRain } from "./rain.ts";
 import { createWayHomeArrow } from "./way-home.ts";
 import { islandPlanes } from "./map-island.ts";
@@ -198,6 +200,11 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   /** Last frame's forward speed — the launch's wheelspin is read off the
    * change in it. */
   let lastSpeed = 0;
+  /** ...and that change, low-passed. A single frame's difference of two
+   * speeds is noise as much as it is acceleration, and the launch cloud
+   * scales CONTINUOUSLY off it: unsmoothed, the plume flickers with the
+   * frame timing instead of with the throttle. */
+  let accelSmooth = 0;
   let fumeClock = 0;
   /** Beat for the water working around a hull that is going down. */
   let drownClock = 0;
@@ -344,6 +351,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     }
     game = state;
     lastSpeed = state.car.u;
+    accelSmooth = 0;
     world = buildWorld(state.track, FLORA_SCALE[quality.flora]);
     scene.add(world.group);
     route = buildMapRoute(state.track);
@@ -364,6 +372,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   const setCar = (state: GameState): void => {
     game = state;
     lastSpeed = state.car.u;
+    accelSmooth = 0;
     fitCar(state);
     // The island is solved from `game`, and `game` was just rebound. The
     // planes come out the same — a car swap only happens over a stage whose
@@ -506,6 +515,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // it, so the renderer differentiates the speed it is handed anyway.
     const accel = dt > 0 ? (c.u - lastSpeed) / dt : 0;
     lastSpeed = c.u;
+    accelSmooth += (accel - accelSmooth) * Math.min(1, 8 * dt);
     dustClock += dt;
     if (fx > 0 && !c.airborne && dustClock > (sealed ? TARMAC_SMOKE.every : 0.03)) {
       dustClock = 0;
@@ -520,11 +530,17 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       // number, so the plume comes up the instant the car is asked for more
       // grip than it has, not once the angle has already developed.
       const sideways = c.slide > 0.15 && c.u > 6;
+      // Off the line the driven wheels are spinning rather than rolling, so
+      // they move far more ground than their road speed says they should.
+      // The launch takes the pace scale OVER until the tires hook up (it
+      // never lowers it), which keeps the standing start the one moment a
+      // slow car is allowed a big cloud.
+      const launch = sealed ? 0 : launchThrow(c.u, accelSmooth);
       // How much ground this wheel is actually moving: pace decides the
       // size of any thrown cloud, and the wild gives up far less of itself
       // than the road does. Neither applies to smoke, which is made of the
       // tire rather than the ground.
-      const pace = sealed ? 1 : paceScale(c.u);
+      const pace = sealed ? 1 : Math.max(paceScale(c.u), launch);
       const thrown = sealed ? 1 : pace * (state.surface === "nature" ? WILD_THROW : 1);
       const grains = (count: number): number => {
         grainDebt += count * fx * thrown;
@@ -532,7 +548,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         grainDebt -= whole;
         return whole;
       };
-      const rear = (side: number, count: number, spread: number): void =>
+      /** One wheel's worth. `push` is a backward throw of the wheel's own,
+       * m/s, for the case where the car is not yet moving fast enough to
+       * carry its grains away for it. */
+      const rear = (side: number, count: number, spread: number, push = 0): void =>
         cloud.spawn(
           c.x - fwdX * 1.5 + rightX * side * 0.8,
           c.y + 0.15,
@@ -540,8 +559,8 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
           color,
           grains(count),
           spread * pace,
-          wakeX,
-          wakeZ,
+          wakeX - fwdX * push,
+          wakeZ - fwdZ * push,
         );
       if (sealed) {
         const T = TARMAC_SMOKE;
@@ -574,6 +593,16 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       } else if (c.braking && c.u > 8) {
         rear(-1, 4, 2.5);
         rear(1, 4, 2.5);
+      } else if (launch > 0) {
+        // Both driven wheels, digging in and throwing straight back: the
+        // plume that says the car LEFT rather than rolled away. As big as
+        // the deepest drift's at a standstill, thinning with the wheelspin
+        // and gone by 50 km/h, where the rolling kickup below picks the
+        // cloud back up.
+        const perWheel = 4 + Math.round(launch * 6);
+        const push = LAUNCH.push * launch;
+        rear(-1, perWheel, 3, push);
+        rear(1, perWheel, 3, push);
       } else if (c.u > 15) {
         // Rolling kickup is loose-surface only: a sealed road has nothing
         // lying on it to pick up.
@@ -581,21 +610,38 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       }
     }
 
-    // Exhaust: puffs off the tailpipe, faster and sootier on throttle and
-    // boost, handed to the wind the moment they leave the pipe.
+    // Exhaust: puffs off the tailpipe, faster and sootier the more fuel the
+    // engine is drinking, handed to the wind the moment they leave the pipe.
+    // A car revving on the grid is drinking plenty and turning none of it
+    // into road speed, so it smokes harder than one at pace — `car.rev` is
+    // the throttle itself during the countdown, and gearing plus speed at
+    // every other moment, which is why the revving read is phase-gated.
+    const X = EXHAUST;
+    const revving =
+      state.phase === "countdown" ? Math.max(0, (c.rev - X.rev.from) / (1 - X.rev.from)) : 0;
     fumeClock += dt;
-    const fumeEvery = (c.boosting ? 0.02 : c.u > 1 ? 0.045 : 0.12) / Math.max(0.2, fx);
+    const idling = c.boosting ? X.every.boost : c.u > 1 ? X.every.rolling : X.every.idle;
+    const fumeEvery = (idling + (X.rev.every - idling) * revving) / Math.max(0.2, fx);
     if (fx > 0 && !c.airborne && fumeClock > fumeEvery) {
       fumeClock = 0;
-      const shade = c.boosting ? 0.9 : 0.35 + 0.4 * Math.min(1, c.u / 30);
-      fumes.spawn(
-        c.x - fwdX * 1.9 + rightX * 0.35,
-        c.y + 0.32,
-        c.z - fwdZ * 1.9 + rightZ * 0.35,
-        -fwdX * c.u * 0.15 + state.wind.x * 0.85,
-        -fwdZ * c.u * 0.15 + state.wind.z * 0.85,
-        shade,
-      );
+      const rolling = X.shade.base + X.shade.pace * Math.min(1, c.u / X.shade.paceAt);
+      const shade = c.boosting ? X.shade.boost : rolling + (X.rev.shade - rolling) * revving;
+      // A blip is a BURST — one puff a tick reads as an engine ticking
+      // over however fast the ticks come.
+      const puffs = 1 + Math.round((X.rev.puffs - 1) * revving);
+      // Standing still there is no car pulling away from the cloud, so what
+      // pushes it out of the pipe is the pressure behind it.
+      const out = c.u * 0.15 + X.rev.blast * revving;
+      for (let i = 0; i < puffs; i++) {
+        fumes.spawn(
+          c.x - fwdX * 1.9 + rightX * 0.35,
+          c.y + 0.32,
+          c.z - fwdZ * 1.9 + rightZ * 0.35,
+          -fwdX * out + state.wind.x * 0.85,
+          -fwdZ * out + state.wind.z * 0.85,
+          shade,
+        );
+      }
     }
 
     // A car going down keeps the water working the whole time. While the

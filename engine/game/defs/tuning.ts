@@ -585,17 +585,15 @@ export const TUNING = {
      * a bank or a nudge off a rock is never mistaken for it. */
     stuck: { after: 2, radius: 1.5 },
     /** WHEN THE PLAYER IS ACTUALLY LOST — what the co-driver's RETURN TO
-     * TRACK strip, the arrow over the car and the TRACK button all wait
-     * for. Two wheels on the verge is not lost, and neither is a car
-     * crossing a clearing with the road out to one side: the guidance owes
-     * the player the moment they are LEAVING, not a sign that lights every
-     * time the stage is briefly beside them rather than under them.
-     * Hysteresis, because both tests are things a wandering car crosses
-     * back and forth over, and an instrument that blinks is worse than one
-     * that is late. Angles are radians off the car's nose — `away` is past
-     * 110°, comfortably beyond the 90° of driving PERPENDICULAR to the
-     * road, and it clears again at 90° itself. */
-    guide: { near: 20, nearClear: 15, away: 1.92, awayClear: Math.PI / 2 },
+     * TRACK strip and the arrow under it wait for. Two wheels on the verge
+     * is not lost, and neither is a car crossing a clearing with the road
+     * out to one side: the guidance owes the player the moment they are
+     * LEAVING, not a sign that lights every time the stage is briefly
+     * beside them rather than under them. `away` is radians off the car's
+     * nose, past 110° — comfortably beyond the 90° of driving
+     * PERPENDICULAR to the road. These bring the sign ON only; what takes
+     * it off is the car being back on the road (`trackLost`). */
+    guide: { near: 20, away: 1.92 },
   },
 
   /** R25 — the roll-out past the finish gate: what drives the car once the

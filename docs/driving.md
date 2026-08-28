@@ -357,12 +357,14 @@ The respawn is at the far end, and it is the only thing that clears
   the whole time the car is off the road — a driver two metres into a ditch
   should not have to be lost first — but the ALERT waits for the car to
   actually be lost (`trackLost`, `TUNING.offTrack.guide`): more than 20 m
-  out AND pointed more than 110° away from the way home, with hysteresis on
-  both so a wandering car does not blink it on and off. Two wheels on the
+  out AND pointed more than 110° away from the way home. Two wheels on the
   verge is not lost, and neither is a clearing crossed perpendicular with the
   stage running alongside. Once it is, the co-driver's strip reads RETURN TO
   TRACK with the distance, and an arrow hangs over the car pointing at the
-  spot itself.
+  spot itself. Going OFF has no threshold of its own: the alert is an
+  instruction, so the only thing that clears it is the track being back
+  under the wheels. Nearing the road or aiming at it leaves it up, which is
+  also what stops a wandering car blinking it on and off.
 
 ## Weight: the springs
 
