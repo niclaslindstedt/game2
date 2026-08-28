@@ -22,9 +22,8 @@
 
 import { useEffect, useState } from "react";
 
-import { playToggle } from "./audio/ui.ts";
 import { deviceControls } from "./input.ts";
-import { OptionRow } from "./menu.tsx";
+import { OptionRow, ToggleRow } from "./menu.tsx";
 import {
   DEFAULT_KEYS,
   DEFAULT_TOUCH,
@@ -77,41 +76,6 @@ type OptionsProps = {
   onSettings: (settings: Settings) => void;
   onBack: () => void;
 };
-
-function ToggleRow({
-  label,
-  hint,
-  on,
-  onToggle,
-}: {
-  label: string;
-  hint: string;
-  on: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      className={`opt-toggle ${on ? "opt-toggle-on" : ""}`}
-      onClick={() => {
-        // The switch sounds like what it is about to BECOME, which is the
-        // whole reason the pitch moves: a toggle whose two states sound the
-        // same tells the player nothing they could not already see.
-        playToggle(!on);
-        onToggle();
-      }}
-      aria-pressed={on}
-    >
-      <span className="opt-toggle-text">
-        <b>{label}</b>
-        <span className="opt-toggle-hint">{hint}</span>
-      </span>
-      <span className="opt-switch" aria-hidden="true">
-        <span className="opt-switch-knob" />
-      </span>
-    </button>
-  );
-}
 
 function HudTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "onSettings">) {
   const camera = PLAY_CAMERAS.find((cam) => cam.id === settings.camera) ?? PLAY_CAMERAS[0];

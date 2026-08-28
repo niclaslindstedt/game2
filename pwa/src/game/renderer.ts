@@ -11,6 +11,7 @@ import { TUNING, type GameEvent, type GameState } from "@engine";
 import { createAmbientLife } from "./ambient-life.ts";
 import { createCelebration } from "./celebration.ts";
 import { createGameCamera, type CameraMode } from "./camera.ts";
+import type { FreeFlyMove, FreeFlyPose } from "./camera-free.ts";
 import {
   DRAW_DISTANCE_SCALE,
   EFFECTS_SCALE,
@@ -123,6 +124,16 @@ export type GameRenderer = {
    * and no sound, because none of that happened here. */
   onGhostEvents: (state: GameState, events: GameEvent[]) => void;
   cycleCamera: () => CameraMode;
+  /** God mode's controls for this frame — what the free camera should do
+   * with `dt` worth of held keys and mouse travel. Written straight into
+   * the camera's own channel; ignored in every other mode. */
+  flyCamera: (move: FreeFlyMove) => void;
+  /** God mode's rig, so a URL can put it somewhere exactly. */
+  placeCamera: (pose: Partial<FreeFlyPose>) => void;
+  /** Which camera is up, where it is standing and how fast god mode is
+   * cruising — the debug overlay's readout, and the repro line's
+   * coordinates. */
+  cameraPose: () => FreeFlyPose & { speed: number; mode: CameraMode };
   render: (state: GameState, dt: number) => void;
   onEvents: (state: GameState, events: GameEvent[]) => void;
   resize: () => void;
@@ -313,6 +324,17 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
 
   const setCamera = (mode: CameraMode): void => {
     const wasMap = mapView;
+    // God mode takes over from whatever was standing, so something has to
+    // BE standing: on a run that starts in free mode the camera has never
+    // been placed, and the hand-over would read an identity matrix and put
+    // the pilot at the world origin facing backwards. One placing update at
+    // no elapsed time costs nothing and means a flight always begins on the
+    // car — from the map view via a chase rig, because a hand-over from a
+    // satellite kilometres up is a flight that begins nowhere useful.
+    if (mode === "free" && chase.mode() !== "free" && game) {
+      if (chase.mode() === "map") chase.setMode("chase");
+      chase.update(game, 0);
+    }
     chase.setMode(mode);
     mapView = mode === "map";
     // The sky is for a camera standing IN the world; the map view is a
@@ -712,16 +734,17 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     car?.update(state, dt);
     if (ghost && ghostCar) ghostCar.update(ghost, dt);
     // The way home is a DRIVING aid, bolted to the camera. Under the menu's
-    // drone and the map view there is nobody lost and nobody to point: left
-    // running, it would hang a compass needle over the middle of the menu.
-    // And there is nobody to point while the water is taking the car
-    // either: a compass needle over a sinking wreck is an instruction the
-    // player has no way to act on.
+    // drone, the map view and god mode's free camera there is nobody lost
+    // and nobody to point: left running, it would hang a compass needle over
+    // the middle of the menu, or over a stage nobody is driving. And there
+    // is nobody to point while the water is taking the car either: a compass
+    // needle over a sinking wreck is an instruction the player has no way to
+    // act on.
     //
-    // Stated as "not the two overhead views" rather than as a list of the
-    // play cameras, because that list grows: naming them is how the arrow
-    // quietly stops appearing in the next camera somebody adds.
-    const driving = view !== "drone" && view !== "map" && !state.drowning;
+    // Stated as "not the views nobody drives from" rather than as a list of
+    // the play cameras, because that list grows: naming them is how the
+    // arrow quietly stops appearing in the next camera somebody adds.
+    const driving = view !== "drone" && view !== "map" && view !== "free" && !state.drowning;
     wayHomeArrow.group.visible = driving;
     if (driving) wayHomeArrow.update(state, chase.camera, dt);
     chase.update(state, dt);
@@ -830,6 +853,20 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     setGhost,
     onGhostEvents,
     cycleCamera: () => chase.cycle(),
+    flyCamera: (move) => {
+      // The look deltas and the wheel steps ACCUMULATE until the camera
+      // consumes them, so a frame the camera skipped is a nudge that still
+      // arrives rather than one that is lost.
+      chase.freeMove.forward = move.forward;
+      chase.freeMove.right = move.right;
+      chase.freeMove.up = move.up;
+      chase.freeMove.fast = move.fast;
+      chase.freeMove.yawDelta += move.yawDelta;
+      chase.freeMove.pitchDelta += move.pitchDelta;
+      chase.freeMove.speedSteps += move.speedSteps;
+    },
+    placeCamera: (pose) => chase.free.place(pose),
+    cameraPose: () => ({ ...chase.pose(), speed: chase.free.speed(), mode: chase.mode() }),
     render,
     onEvents,
     resize,

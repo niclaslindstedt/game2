@@ -20,6 +20,7 @@ import {
 } from "@engine";
 
 import { playToggle, playUi } from "./audio/ui.ts";
+import type { DevSettings } from "./settings.ts";
 
 export type RaceSettings = {
   timeOfDay: TimeOfDay;
@@ -172,9 +173,53 @@ export function OptionRow<T extends string>({
   );
 }
 
+/** A switch with its cost written under it. Shared by OPTIONS and the
+ * developer menu, which both ask the same question — on or off, and what
+ * does that buy me. */
+export function ToggleRow({
+  label,
+  hint,
+  on,
+  onToggle,
+}: {
+  label: string;
+  hint: string;
+  on: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`opt-toggle ${on ? "opt-toggle-on" : ""}`}
+      onClick={() => {
+        // The switch sounds like what it is about to BECOME, which is the
+        // whole reason the pitch moves: a toggle whose two states sound the
+        // same tells the player nothing they could not already see.
+        playToggle(!on);
+        onToggle();
+      }}
+      aria-pressed={on}
+    >
+      <span className="opt-toggle-text">
+        <b>{label}</b>
+        <span className="opt-toggle-hint">{hint}</span>
+      </span>
+      <span className="opt-switch" aria-hidden="true">
+        <span className="opt-switch-knob" />
+      </span>
+    </button>
+  );
+}
+
 type PauseProps = {
   seed: number;
   carName: string;
+  /** The developer tools, offered here as well as in the menu: the moment
+   * you want to fly to something is the moment you are looking at it, and
+   * that moment is behind the pause card, not four screens away. Null when
+   * the developer menu has never been let out. */
+  dev: DevSettings | null;
+  onDev: (dev: DevSettings) => void;
   onResume: () => void;
   onRestart: () => void;
   onMainMenu: () => void;
@@ -182,7 +227,15 @@ type PauseProps = {
 
 /** The in-race menu, opened by tapping the minimap. The backdrop resumes:
  * a menu you opened by mis-aiming for the map must cost one tap to leave. */
-export function PauseMenu({ seed, carName, onResume, onRestart, onMainMenu }: PauseProps) {
+export function PauseMenu({
+  seed,
+  carName,
+  dev,
+  onDev,
+  onResume,
+  onRestart,
+  onMainMenu,
+}: PauseProps) {
   return (
     <div className="hud-menu-wrap pointer-events-auto" onPointerDown={onResume} role="presentation">
       <div className="hud-menu hud-pause" onPointerDown={(e) => e.stopPropagation()}>
@@ -220,6 +273,22 @@ export function PauseMenu({ seed, carName, onResume, onRestart, onMainMenu }: Pa
         >
           MAIN MENU
         </button>
+        {dev && (
+          <div className="hud-pause-dev">
+            <ToggleRow
+              label="GOD MODE"
+              hint="Fly the camera off the car"
+              on={dev.god}
+              onToggle={() => onDev({ ...dev, god: !dev.god })}
+            />
+            <ToggleRow
+              label="DEBUG OVERLAY"
+              hint="Where you are, and the line that gets anyone back here"
+              on={dev.debug}
+              onToggle={() => onDev({ ...dev, debug: !dev.debug })}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

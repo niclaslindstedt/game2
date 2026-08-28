@@ -25,6 +25,9 @@ Updates are prompt-gated: the new build installs in the background and asks befo
 **Installed app opens the wrong variant (preview vs release).**
 The three deploy slots are separate installs with separate identities. Check which slot the tile's name says — "(preview)" / "(branch)" — and install from the slot you want.
 
+**Something looks wrong at one place on a stage, and a seed alone does not find it.**
+Switch on **DEVELOPER → DEBUG OVERLAY** (and **GOD MODE** to fly to it), then screenshot it. The REPRO line along the bottom of the overlay is a URL that reopens that exact frame — paste it into a bug report, or into `make debug-shot REPRO='…'` to capture it yourself. Hold Alt while you take the shot to get the game's own HUD out of the way.
+
 **Touch controls don't show on a laptop.**
 By design: devices with a fine pointer + hover get keyboard controls only. Touch pads appear on touch devices.
 

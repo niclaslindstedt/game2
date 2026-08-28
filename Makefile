@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim track cars audition screenshots profile shellcheck actionlint changelog bump hooks docs
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim track cars audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
 
 build:
 	npm run build
@@ -66,6 +66,17 @@ screenshots:
 # `screenshots`. Run it before and after any rendering change.
 profile:
 	npm run profile
+
+# Stand where a screenshot was taken: paste the REPRO line off the in-game
+# debug overlay and this captures that exact frame, plus the overlay's rows
+# as text. The before/after tool for anything reported with a picture.
+# `make debug-shot REPRO='?seed=42&…' OUT=before`
+debug-shot:
+	@test -n "$(REPRO)" || { \
+		echo "usage: make debug-shot REPRO='<repro line from the debug overlay>' [OUT=name]"; \
+		exit 2; \
+	}
+	node scripts/debug-shot.mjs '$(REPRO)' $(if $(OUT),--out $(OUT),)
 
 shellcheck:
 	shellcheck scripts/*.sh .githooks/* .claude/hooks/*.sh

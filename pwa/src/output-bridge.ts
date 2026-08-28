@@ -7,6 +7,8 @@
 import { createLogStore } from "@niclaslindstedt/oss-framework/logging";
 import { setDebugEnabled, setOutputSink, type OutputLevel } from "@engine";
 
+import { log as debugLog } from "./game/debug-log.ts";
+
 export const logStore = createLogStore({ logsKey: "scandi-flick:logs" });
 logStore.setEnabled(true);
 logStore.setCaptureEnabled(true);
@@ -19,6 +21,10 @@ export function connectOutput(): void {
     if (level === "warn") engineLog.warn(message);
     else if (level === "error") engineLog.error(message);
     else engineLog.info(message);
+    // And into the debug log, so a copy taken out of the developer menu has
+    // the engine's own account of the run beside the app's. A no-op unless
+    // debug mode is on.
+    debugLog(`engine:${level}`, message);
     if (import.meta.env.DEV) {
       console.log(`[engine:${level}] ${message}`);
     }

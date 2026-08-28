@@ -48,10 +48,22 @@ import { angleLerp, clamp } from "../lib/angles.ts";
 import type { GameState } from "@engine";
 
 import type { HoodEye } from "./car-styles.ts";
+import {
+  NEUTRAL_MOVE,
+  createFreeFly,
+  poseOf,
+  type FreeFlyMove,
+  type FreeFlyPose,
+  type FreeFlyRig,
+} from "./camera-free.ts";
 import { ISLAND_MARGIN } from "./map-island.ts";
 import { PLAY_CAMERAS, type PlayCamera } from "./settings.ts";
 
-export type CameraMode = PlayCamera | "drone" | "map";
+/** `free` is god mode: the developer tool that takes the lens off the car
+ * and flies it (camera-free.ts). It is not on the ladder the camera key
+ * walks, for the same reason the drone and the map are not — it is placed
+ * deliberately or not at all. */
+export type CameraMode = PlayCamera | "drone" | "map" | "free";
 /** The modes the camera key walks, in the order it walks them — the same
  * inside-out ladder the options screen lists, so the key and the setting
  * never disagree about what "the next camera" means. */
@@ -111,6 +123,13 @@ const DRIVING_FAR = 900;
  * Pulling it in costs depth precision that nothing at this range spends. */
 const DRIVING_NEAR = 0.25;
 const HOOD_NEAR = 0.1;
+/** God mode's field of view, deg — the same register the chase rigs sit in
+ * at rest, so a distance judged while flying reads the same as one judged
+ * from behind the car. Fixed rather than speed-stretched: the free camera
+ * has no speed worth dramatising, and a fov that breathed would make two
+ * screenshots of one spot disagree about how far away things are. */
+const FREE_FOV = 58;
+
 /** How far down the road the hood cam's aim point is thrown, m. Only the
  * DIRECTION matters — far enough out that the pitch and the glance read as
  * angles rather than as a point being circled. */
@@ -581,6 +600,15 @@ export type GameCamera = {
   resetMap: () => void;
   /** Advance to the next PLAYABLE mode; a no-op read while overhead. */
   cycle: () => CameraMode;
+  /** God mode's rig, and the channel its controls write into. The move is
+   * rewritten by the app every frame and CONSUMED by `update` — the look
+   * deltas and the wheel steps are per-frame accumulators, so leaving them
+   * standing would spin the camera forever. */
+  free: FreeFlyRig;
+  freeMove: FreeFlyMove;
+  /** Where the camera is standing and what it is looking at, whatever mode
+   * is up — what the debug overlay prints and the repro line carries. */
+  pose: () => FreeFlyPose;
   /** Where the hood camera sits on the car now on the stage, body-local m —
    * pushed when the car's meshes are built, because the mount is read off
    * that car's own silhouette. */
@@ -653,6 +681,8 @@ export function createGameCamera(width: number, height: number): GameCamera {
   let mapAz = 0;
   let mapPitch = MAP_PITCH;
   let mapZoom = 1;
+  const free = createFreeFly();
+  const freeMove: FreeFlyMove = { ...NEUTRAL_MOVE };
   /** Seconds since the player last moved the map themselves. */
   let mapHeld = MAP_HOLD;
 
@@ -1100,13 +1130,24 @@ export function createGameCamera(width: number, height: number): GameCamera {
       camera.near = inCar ? HOOD_NEAR : DRIVING_NEAR;
       camera.far = DRIVING_FAR;
     }
-    if (watching && mode !== "drone" && mode !== "map") {
+    // God mode is nobody's shot but the pilot's: the finish never takes it,
+    // and it keeps flying whatever phase the run beneath it is in.
+    if (watching && mode !== "free" && mode !== "drone" && mode !== "map") {
       updateFinish(state, dt);
       camera.fov = verticalFovFor(fov, camera.aspect);
       camera.updateProjectionMatrix();
       return;
     }
     if (!watching) planted = null;
+    if (mode === "free") {
+      free.update(camera, freeMove, dt);
+      freeMove.yawDelta = 0;
+      freeMove.pitchDelta = 0;
+      freeMove.speedSteps = 0;
+      camera.fov = verticalFovFor(FREE_FOV, camera.aspect);
+      camera.updateProjectionMatrix();
+      return;
+    }
     if (mode === "hood") updateHood(state, dt);
     else if (mode === "drone") updateDrone(state, dt);
     else if (mode === "map") updateMap(state, dt);
@@ -1119,7 +1160,14 @@ export function createGameCamera(width: number, height: number): GameCamera {
     camera,
     mode: () => mode,
     mapRange: () => mapRange,
+    free,
+    freeMove,
+    pose: () => poseOf(camera),
     setMode: (next) => {
+      // Entering god mode is a HAND-OVER, not a cut: the flight starts from
+      // the frame that was already on screen, so the first thing the pilot
+      // sees is the thing they were just looking at.
+      if (next === "free" && mode !== "free") free.takeOver(camera);
       mode = next;
     },
     nudgeMap: (dAz, dPitch, zoomBy) => {

@@ -14,7 +14,9 @@
 // refs; the HUD re-renders from a ~12 Hz snapshot. URL params (?seed=,
 // ?tod=, ?weather=, ?car=, ?length=, ?shape=, ?laps=, the four generator dials ?elevation=
 // ?water= ?trees= ?asphalt=, ?start=1 and ?bot=1) pin a run for tooling and
-// screenshots.
+// screenshots, and the developer tools add ?debug=1, ?god=1 and the free
+// camera's pose (?gx= ?gy= ?gz= ?gyaw= ?gpitch=) — the repro line the debug
+// overlay prints is exactly that set, so a screenshot reproduces as a URL.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePwaUpdate } from "@niclaslindstedt/oss-framework/pwa";
@@ -43,6 +45,10 @@ import { cacheIdForBase } from "./app-pwa.ts";
 import { connectOutput } from "./output-bridge.ts";
 import { createInput } from "./game/input.ts";
 import type { CameraMode } from "./game/camera.ts";
+import type { FreeFlyPose } from "./game/camera-free.ts";
+import { DebugHud } from "./game/debug-hud.tsx";
+import { stageQuery, traceLine, type DebugContext } from "./game/debug-info.ts";
+import { debugLogging, log as debugLog, logRunStart, setDebugLogging } from "./game/debug-log.ts";
 import type { GameRenderer } from "./game/renderer.ts";
 import { Hud, type HudFlash, type HudSnapshot } from "./game/hud.tsx";
 import { createLive, readLive, takeSnapshot, type RunBook } from "./game/snapshot.ts";
@@ -81,6 +87,7 @@ import {
   PLAY_CAMERAS,
   loadSettings,
   saveSettings,
+  type DevSettings,
   type PlayCamera,
   type Settings,
 } from "./game/settings.ts";
@@ -127,6 +134,43 @@ function lapsOverride(): number | null {
   const raw = Number(new URLSearchParams(location.search).get("laps"));
   return Number.isFinite(raw) && raw >= 1 ? Math.round(raw) : null;
 }
+
+/** ?debug=1 / ?god=1 (tooling, and the repro line the debug overlay prints):
+ * force the developer tools on for this launch whatever is in storage. A
+ * screenshot has to reproduce on a machine that has never had the developer
+ * menu let out — otherwise the one person who can check a repro is the one
+ * who reported it. */
+function devFromUrl(): Partial<DevSettings> {
+  const params = new URLSearchParams(location.search);
+  const dev: Partial<DevSettings> = {};
+  if (params.get("debug") === "1") dev.debug = true;
+  if (params.get("god") === "1") dev.god = true;
+  return dev;
+}
+
+/** ?gx= ?gy= ?gz= ?gyaw= ?gpitch= — where to park god mode's camera, in the
+ * units camera-free.ts flies in (meters, radians). Absent components are
+ * left wherever the rig already was; a URL with none of them just turns
+ * flying on where the run starts. */
+function poseFromUrl(): Partial<FreeFlyPose> {
+  const params = new URLSearchParams(location.search);
+  const num = (key: string): number | undefined => {
+    const raw = params.get(key);
+    if (raw === null) return undefined;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : undefined;
+  };
+  return { x: num("gx"), y: num("gy"), z: num("gz"), yaw: num("gyaw"), pitch: num("gpitch") };
+}
+
+/** The build this frame came out of — the first thing to check when a
+ * screenshot and the current tree disagree about what the game does. */
+const BUILD = `v${__APP_VERSION__} ${__COMMIT_SHA__}`;
+
+/** How often the debug log writes a position line while a run is going,
+ * seconds. One a second is a readable trace of a two-minute stage; faster
+ * turns the copy into a wall nobody reads to the end of. */
+const TRACE_PERIOD = 1;
 
 /** Whether the player is actually asking for anything this step. */
 function driving(input: CarInput): boolean {
@@ -180,6 +224,25 @@ function initialRace(): RaceSettings {
   race.knobs = resolveKnobs(race.knobs);
   return race;
 }
+
+/** The player's options, with the URL's developer flags laid over them. A
+ * repro link arrives on a machine that has never drummed on the chassis, so
+ * it lets the developer menu out as well as the tools — otherwise the boxes
+ * come up and there is no way to switch them off again. */
+function initialSettings(): Settings {
+  const settings = loadSettings();
+  const forced = devFromUrl();
+  if (forced.debug || forced.god) {
+    settings.developer = true;
+    settings.dev = { ...settings.dev, ...forced };
+  }
+  return settings;
+}
+
+/** Where a `?g…=` link wants god mode's camera parked. Read once: it names
+ * the frame the link was made from, and re-applying it every time the
+ * camera came back would make the flight impossible to leave. */
+const URL_POSE = poseFromUrl();
 
 /** Everything that decides WHICH stage is standing: change any of it and
  * the run is rebuilt. */
@@ -281,7 +344,7 @@ export function App() {
   const gameRef = useRef<GameState | null>(null);
   const input = useMemo(() => createInput(), []);
   const [race, setRace] = useState<RaceSettings>(initialRace);
-  const [options, setOptions] = useState<Settings>(loadSettings);
+  const [options, setOptions] = useState<Settings>(initialSettings);
   const [progress, setProgress] = useState<CampaignProgress>(loadProgress);
   const [menu, setMenu] = useState<MenuPage | null>(() => {
     // ?start=1 launches straight into a run (tooling); everyone else gets
@@ -311,6 +374,14 @@ export function App() {
   const [splashUp, setSplashUp] = useState(() => !splashSkipped(location.search));
   const [booted, setBooted] = useState(false);
   const [paused, setPaused] = useState(false);
+  /** True while ALT is held: the game's chrome comes off so a frame can be
+   * judged on the pixels alone. The debug overlay is NOT part of it — a
+   * screenshot with nothing to say where it was taken is the one thing the
+   * overlay exists to prevent. */
+  const [hudHidden, setHudHidden] = useState(false);
+  /** What the debug overlay is reading, refreshed on the HUD's own tick and
+   * only while the overlay is up. */
+  const [debugCtx, setDebugCtx] = useState<DebugContext | null>(null);
   const [flashes, setFlashes] = useState<HudFlash[]>([]);
   const finishTimeRef = useRef<number | null>(null);
   /** The controls of the run being driven, written down step by step so a
@@ -348,6 +419,15 @@ export function App() {
   runRef.current = run;
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
+  /** The camera the run would be watched from if god mode landed right now.
+   * Tracked here rather than read back off the renderer because the free
+   * camera has REPLACED the mode there — the ladder the camera key walks is
+   * the app's memory, not the renderer's. */
+  const playCameraRef = useRef<PlayCamera>(options.camera);
+  /** God mode and the overlay, as the frame loop sees them. */
+  const godRef = useRef(false);
+  const debugRef = useRef(options.dev.debug);
+  debugRef.current = options.dev.debug;
   /** The compiled stage, cached under everything that decides what it IS:
    * the seed, the length band, and the dials. */
   const audioRef = useRef<RunAudio | null>(null);
@@ -399,7 +479,11 @@ export function App() {
       gearbox: optionsRef.current.gearbox,
       track: trackRef.current.track,
       laps: spec.laps,
-      skipCountdown: spec.skipCountdown,
+      // The countdown is the start line's ceremony for a DRIVER. In god
+      // mode there is nobody on the grid — the car is handed neutral input
+      // and stays there — so the lights would only hang over the middle of
+      // every frame the free camera was flown out to take.
+      skipCountdown: spec.skipCountdown || godRef.current,
       env: { timeOfDay: spec.timeOfDay, weather: spec.weather },
     });
     const previous = gameRef.current;
@@ -497,7 +581,11 @@ export function App() {
     menuRef.current = null;
     applyStage(spec, true);
     armGhost(spec, mode, levelId);
-    rendererRef.current?.setCamera(startCamera(optionsRef.current.camera));
+    playCameraRef.current = startCamera(optionsRef.current.camera);
+    // The god-mode effect owns the camera while it is flying; setting a play
+    // camera here as well would land the flight every time a run started.
+    if (!godRef.current) rendererRef.current?.setCamera(playCameraRef.current);
+    logRunStart(`${mode} ${stageQuery(spec)}`);
   };
 
   const playLevel = (level: CampaignLevel, mode: PlayMode): void => {
@@ -584,10 +672,66 @@ export function App() {
     rendererRef.current?.setVideo(next.video);
   };
 
+  /** The debug snapshot the overlay renders and the log quotes. Null before
+   * the renderer has landed or while no stage is standing. */
+  const debugContext = (fps: number): DebugContext | null => {
+    const renderer = rendererRef.current;
+    const spec = stageRef.current;
+    if (!renderer || !spec) return null;
+    const pose = renderer.cameraPose();
+    return {
+      stage: spec,
+      view: pose.mode,
+      playCamera: playCameraRef.current,
+      pose,
+      god: pose.mode === "free",
+      fps,
+      build: BUILD,
+    };
+  };
+  const debugContextRef = useRef(debugContext);
+  debugContextRef.current = debugContext;
+
   // The menu's backdrop follows the page, the seed and the demo's roll.
   useEffect(() => {
     if (menu) showBackdropRef.current(menu);
   }, [menu, seed, demoSeed]);
+
+  // GOD MODE IS A RUN'S CAMERA, not the menu's. Behind a menu page the
+  // drone and the map own the view, so flying is held until the cards come
+  // down — and switching it on from the pause card takes effect the moment
+  // that card is dismissed, which is the same rule stated once.
+  const godActive = options.dev.god && menu === null;
+  godRef.current = godActive;
+  useEffect(() => {
+    input.setFreeFly(godActive);
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    // The menu places its own backdrop camera (the drone, or Roam's map) and
+    // this effect runs AFTER the one that does it: reaching for a play
+    // camera here would leave the demo behind the cards framed as if
+    // somebody were driving it.
+    if (menuRef.current) return;
+    renderer.setCamera(godActive ? "free" : playCameraRef.current);
+    if (!godActive) {
+      debugLog("god", "landed");
+      return;
+    }
+    // A link that named a pose is answered AFTER the hand-over, which has
+    // just seeded the rig from the camera that was standing.
+    renderer.placeCamera(URL_POSE);
+    const p = renderer.cameraPose();
+    debugLog(
+      "god",
+      `flying from ${p.x.toFixed(1)} ${p.y.toFixed(1)} ${p.z.toFixed(1)} yaw ${p.yaw.toFixed(3)}`,
+    );
+  }, [godActive, input]);
+
+  // The log fills only while the overlay is up: the two are one tool, and a
+  // ring buffer nobody asked for is a leak in a shipped game.
+  useEffect(() => {
+    setDebugLogging(options.dev.debug);
+  }, [options.dev.debug]);
 
   // The volumes the player last chose, applied before anything can make a
   // noise — including the theme the menu arms on its very first paint.
@@ -644,21 +788,26 @@ export function App() {
       if (page) showBackdropRef.current(page);
       else {
         const r = raceRef.current;
-        applyStageRef.current(
-          {
-            seed: seedRef.current,
-            length: r.length,
-            shape: r.shape,
-            laps: lapsOverride() ?? raceLaps(r),
-            knobs: r.knobs,
-            carId: r.carId,
-            timeOfDay: r.timeOfDay,
-            weather: r.weather,
-            skipCountdown: false,
-          },
-          true,
-        );
-        renderer.setCamera(startCamera(optionsRef.current.camera));
+        const spec: StageSpec = {
+          seed: seedRef.current,
+          length: r.length,
+          shape: r.shape,
+          laps: lapsOverride() ?? raceLaps(r),
+          knobs: r.knobs,
+          carId: r.carId,
+          timeOfDay: r.timeOfDay,
+          weather: r.weather,
+          skipCountdown: false,
+        };
+        applyStageRef.current(spec, true);
+        // A `?start=1` run never passes through `startStage`, and a debug log
+        // with no run section is one COPY LATEST RUN can say nothing about —
+        // which is exactly the run a tooling link is most likely to be
+        // capturing.
+        logRunStart(`url ${stageQuery(spec)}`);
+        playCameraRef.current = startCamera(optionsRef.current.camera);
+        renderer.setCamera(godRef.current ? "free" : playCameraRef.current);
+        if (godRef.current) renderer.placeCamera(URL_POSE);
       }
 
       const restart = (): void => {
@@ -675,8 +824,16 @@ export function App() {
       };
       const camera = (): void => {
         if (menuRef.current) return;
+        // Genuinely nothing to do while flying: god mode is not on the
+        // ladder, and walking off it would land the camera by accident.
+        if (godRef.current) return;
         const mode = renderer.cycleCamera();
-        flash(`${PLAY_CAMERAS.find((cam) => cam.id === mode)?.label ?? "CHASE"} CAM`, "info");
+        const play = PLAY_CAMERAS.find((cam) => cam.id === mode);
+        // Remembered only when it IS a play camera: the ladder never walks
+        // onto the overhead views, and the one god mode lands back on has to
+        // be a camera somebody can drive from.
+        if (play) playCameraRef.current = play.id;
+        flash(`${play?.label ?? "CHASE"} CAM`, "info");
       };
       actionsRef.current = { restart, menu: goMainMenu, camera };
       input.onAction((action) => {
@@ -694,6 +851,21 @@ export function App() {
       });
       const handleEvents = (state: GameState, events: GameEvent[]): void => {
         renderer.onEvents(state, events);
+        if (debugLogging() && menuRef.current === null) {
+          for (const ev of events) {
+            // Every event but the crowd, which fires at every stand on the
+            // stage and would bury the ones that mean something.
+            if (ev.type === "cheer") continue;
+            const { type, ...rest } = ev as GameEvent & Record<string, unknown>;
+            const detail = Object.entries(rest)
+              .map(([k, v]) => `${k}=${typeof v === "number" ? v.toFixed(2) : String(v)}`)
+              .join(" ");
+            debugLog(
+              "event",
+              `${state.raceTime.toFixed(2)}s ${type}${detail ? ` ${detail}` : ""} @ s=${state.progressS.toFixed(0)}`,
+            );
+          }
+        }
         // The demo is scenery: it gets no flashes, no "next stage" countdown
         // and NO SOUND — the menu has a theme of its own, and a bot crashing
         // behind the card would be the loudest thing in it.
@@ -779,13 +951,43 @@ export function App() {
       let last = performance.now();
       let acc = 0;
       let hudClock = 0;
+      /** Frames and seconds since the rate was last worked out, and the
+       * answer — the debug overlay's only performance number. */
+      let fpsFrames = 0;
+      let fpsSeconds = 0;
+      let fps = 0;
+      let traceClock = 0;
+      let altWas = false;
       const frame = (now: number): void => {
         raf = requestAnimationFrame(frame);
         const dtFrame = Math.min(0.1, (now - last) / 1000);
         last = now;
+        fpsFrames++;
+        fpsSeconds += dtFrame;
+        if (fpsSeconds >= 0.5) {
+          fps = fpsFrames / fpsSeconds;
+          fpsFrames = 0;
+          fpsSeconds = 0;
+        }
         const state = gameRef.current;
         if (!state) return;
         const page = menuRef.current;
+        // ALT is a HOLD on the chrome, read here rather than dispatched: it
+        // is a state the screen is in, and a press that fired an event would
+        // leave the HUD off for good on an alt-tab.
+        if (input.altHeld() !== altWas) {
+          altWas = input.altHeld();
+          setHudHidden(altWas);
+        }
+        // God mode flies before anything else can return early, and its
+        // controls are DRAINED even when they cannot be used: mouse travel
+        // and key repeats banked behind a pause card would otherwise all
+        // arrive at once the moment the run resumed.
+        const flying = godRef.current && page === null;
+        if (flying) {
+          const move = input.flyMove(dtFrame);
+          if (!pausedRef.current) renderer.flyCamera(move);
+        }
         // The pause card is a run that must not tick while the player is
         // reading it — and a paused run is a FROZEN one: rendered with no
         // time passing, so the wheels stop turning, the dust hangs and the
@@ -856,6 +1058,20 @@ export function App() {
                 bookRef.current,
               ),
             );
+            // The overlay reads its own snapshot: it needs the CAMERA, which
+            // the HUD's has no reason to carry, and it is off entirely for
+            // everyone who never let the developer menu out.
+            if (debugRef.current) setDebugCtx(debugContextRef.current(fps));
+          }
+        }
+        // The trace: one position line a second, so the log says how the run
+        // ARRIVED at whatever the screenshot caught it doing.
+        if (!page && debugLogging()) {
+          traceClock += dtFrame;
+          if (traceClock >= TRACE_PERIOD) {
+            traceClock = 0;
+            const ctx = debugContextRef.current(fps);
+            if (ctx) debugLog("trace", traceLine(ctx, state));
           }
         }
       };
@@ -886,8 +1102,20 @@ export function App() {
 
   return (
     <div className="app-root">
-      <canvas ref={canvasRef} className="game-canvas" onPointerDown={unlockAudio} />
-      {snap && !menu && (
+      <canvas
+        ref={canvasRef}
+        className="game-canvas"
+        onPointerDown={(e) => {
+          unlockAudio();
+          // Mouse look needs the pointer, and the browser only hands it over
+          // inside a gesture. A refusal is not worth reporting: the arrow
+          // keys steer the same camera, and they are what a scripted pass
+          // uses anyway.
+          if (!godRef.current || menuRef.current || pausedRef.current) return;
+          void (e.currentTarget as HTMLCanvasElement).requestPointerLock?.();
+        }}
+      />
+      {snap && !menu && !hudHidden && (
         <Hud
           snap={snap}
           live={liveRef.current}
@@ -899,10 +1127,18 @@ export function App() {
           onCamera={() => actionsRef.current.camera()}
         />
       )}
+      {/* Outside the HUD on purpose: ALT takes the game's chrome off so a
+          frame can be judged on its pixels, and a frame nobody can place is
+          worth nothing to whoever has to fix it. */}
+      {options.dev.debug && debugCtx && gameRef.current && !menu && (
+        <DebugHud ctx={debugCtx} state={gameRef.current} hudHidden={hudHidden} />
+      )}
       {paused && !menu && (
         <PauseMenu
           seed={stageRef.current?.seed ?? seed}
           carName={carById(race.carId).name}
+          dev={options.developer ? options.dev : null}
+          onDev={(dev) => applyOptions({ ...options, dev })}
           onResume={() => setPaused(false)}
           onRestart={() => actionsRef.current.restart()}
           onMainMenu={goMainMenu}

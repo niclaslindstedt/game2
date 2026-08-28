@@ -215,6 +215,28 @@ export type Settings = {
    * out: a player who found it deliberately does not want to find it again
    * every time they open the game. */
   developer: boolean;
+  /** The developer tools themselves — only reachable once `developer` is
+   * true, and only ever switched on deliberately. */
+  dev: DevSettings;
+};
+
+/** The two developer tools, and what each one is FOR.
+ *
+ * Both exist to make a problem somebody saw reproducible by somebody else:
+ * god mode puts the camera anywhere on the stage, and the debug overlay
+ * writes down exactly where "anywhere" was, in the form a URL can carry.
+ * That pair is the whole loop — fly to the bad spot, screenshot it, and the
+ * boxes in the corner of that screenshot are enough to put anyone else on
+ * the same square metre of road. */
+export type DevSettings = {
+  /** The debug overlay: the boxes naming the stage, the place, the camera
+   * and the car, plus the repro line that reproduces the frame. Stays on
+   * screen while ALT hides the rest of the HUD — a screenshot with the HUD
+   * out of the way still has to say where it was taken. */
+  debug: boolean;
+  /** God mode: the camera comes off the car and flies, and the car is handed
+   * neutral input so it sits where it was left. */
+  god: boolean;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -241,6 +263,7 @@ export const DEFAULT_SETTINGS: Settings = {
   // something else to manage while the road is coming at them.
   gearbox: "auto",
   developer: false,
+  dev: { debug: false, god: false },
 };
 
 /** Taps on the car's chassis that let the developer menu out, and how long
@@ -290,6 +313,7 @@ export function loadSettings(): Settings {
     touch: { ...DEFAULT_SETTINGS.touch },
     gearbox: DEFAULT_SETTINGS.gearbox,
     developer: false,
+    dev: { ...DEFAULT_SETTINGS.dev },
   };
   try {
     const stored = localStorage.getItem(SETTINGS_KEY);
@@ -310,6 +334,10 @@ export function loadSettings(): Settings {
     migratePedalDirs(settings.touch);
     if (parsed.gearbox === "manual") settings.gearbox = "manual";
     if (parsed.developer === true) settings.developer = true;
+    if (parsed.dev) Object.assign(settings.dev, parsed.dev);
+    // A tool nobody can reach is a tool nobody can switch off: if the menu
+    // that owns these was never let out, neither of them is on.
+    if (!settings.developer) settings.dev = { ...DEFAULT_SETTINGS.dev };
   } catch {
     /* storage unavailable — the defaults are a perfectly good game */
   }

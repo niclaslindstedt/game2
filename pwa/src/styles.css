@@ -2923,3 +2923,191 @@ a.menu-version:focus-visible {
     padding-bottom: calc(max(0.9rem, env(safe-area-inset-bottom)) + 9rem);
   }
 }
+
+/* ── The debug overlay ───────────────────────────────────────────────────
+
+   Deliberately unlike everything else on screen. The HUD is arcade chrome
+   in a condensed face with a hard drop shadow, because it is part of the
+   game; this is an INSTRUMENT laid over the top of it — monospace, tight,
+   flat, and readable at whatever scale a screenshot ends up being viewed
+   at. The two must never be mistaken for each other in a picture.
+
+   It sits on the left because the HUD's right side is the minimap and the
+   instrument cluster, and a debug box over either of those hides the thing
+   somebody was trying to photograph. */
+.debug-hud {
+  font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  color: #dff1ff;
+  z-index: 4;
+}
+
+.debug-boxes {
+  position: absolute;
+  top: max(0.5rem, env(safe-area-inset-top));
+  left: max(0.5rem, env(safe-area-inset-left));
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  /* Never past the foot of the screen: the repro strip lives down there and
+     a box that ran under it would hide the one line worth copying. */
+  max-height: calc(100% - 5.5rem);
+  overflow: hidden;
+  /* Wide enough for the longest row (the car's velocity line) at this size,
+     and narrow enough to leave the middle of the frame — the thing being
+     photographed — alone. */
+  width: min(23rem, 52vw);
+}
+
+.debug-box {
+  background: rgb(6 14 30 / 78%);
+  border: 1px solid rgb(159 216 255 / 40%);
+  border-radius: 0.35rem;
+  padding: 0.3rem 0.45rem;
+  font-size: clamp(0.6rem, 1.55vmin, 0.78rem);
+  line-height: 1.35;
+}
+
+.debug-box-title {
+  color: var(--hud-good);
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  margin-bottom: 0.1rem;
+}
+
+.debug-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.debug-row-k {
+  color: rgb(159 216 255 / 75%);
+  width: 5.2rem;
+  flex: none;
+}
+
+/* Values WRAP rather than clip. A truncated row is worse than a tall box:
+   the whole contract of this overlay is that a screenshot of it carries
+   every number needed to stand here again, and "trees 0…" carries none. */
+.debug-row-v {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.debug-badge {
+  align-self: flex-start;
+  background: var(--hud-bad);
+  color: #0b1830;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  border-radius: 0.3rem;
+  padding: 0.15rem 0.4rem;
+  font-size: clamp(0.6rem, 1.55vmin, 0.78rem);
+}
+
+/* The repro strip: the one line in this overlay that is not context but a
+   DELIVERABLE, so it gets the full width of the foot of the screen and is
+   the only part of the overlay a pointer can reach. */
+.debug-repro {
+  position: absolute;
+  left: max(0.5rem, env(safe-area-inset-left));
+  right: max(0.5rem, env(safe-area-inset-right));
+  bottom: max(0.5rem, env(safe-area-inset-bottom));
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  background: rgb(6 14 30 / 88%);
+  border: 1px solid var(--hud-good);
+  border-radius: 0.35rem;
+  padding: 0.3rem 0.45rem;
+  font-size: clamp(0.58rem, 1.5vmin, 0.74rem);
+}
+
+.debug-repro-label {
+  color: var(--hud-good);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  flex: none;
+}
+
+/* Selectable, unlike the rest of the shell: on a desktop, dragging over the
+   line is faster than finding the button. It wraps for the same reason the
+   rows do — this is THE line the whole overlay exists to hand over, and a
+   screenshot of half of it reproduces nothing. */
+.debug-repro-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.debug-repro-copy {
+  flex: none;
+  font: inherit;
+  letter-spacing: 0.08em;
+  color: #0b1830;
+  background: var(--hud-good);
+  border: none;
+  border-radius: 0.25rem;
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+}
+
+/* Where the free camera is actually pointed. Two hairlines rather than a
+   dot: a dot the size of a pixel disappears against tree bark, and a
+   reticle big enough to see would sit on top of the thing being judged. */
+.debug-crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: -0.55rem 0 0 -0.55rem;
+  background:
+    linear-gradient(var(--hud-good), var(--hud-good)) center / 1px 100% no-repeat,
+    linear-gradient(var(--hud-good), var(--hud-good)) center / 100% 1px no-repeat;
+  opacity: 0.7;
+}
+
+/* The debug log's tail, in the developer menu. Selectable for the same
+   reason the repro line is: a clipboard the browser refuses must not be the
+   only way out. */
+.dev-log {
+  margin: 0;
+  max-height: 40vh;
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: rgb(6 14 30 / 70%);
+  border: 1px solid rgb(159 216 255 / 35%);
+  border-radius: 0.4rem;
+  padding: 0.5rem;
+  font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  /* The menu's own face is an oblique condensed one, and a log slanted the
+     same way is a log nobody reads a coordinate out of. */
+  font-style: normal;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* The developer toggles on the pause card, held apart from the three big
+   actions above them so nobody reaches for GOD MODE aiming for RESUME. */
+.hud-pause-dev {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid rgb(255 255 255 / 25%);
+}
+
+/* In portrait the boxes take the width they need and the game keeps the
+   bottom half of the screen, where the road is. */
+@media (max-width: 30rem) {
+  .debug-boxes {
+    width: min(100%, 21rem);
+    max-height: calc(100% - 6rem);
+  }
+}
