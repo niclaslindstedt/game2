@@ -6,7 +6,9 @@
 // greenhouse from a coupe one.
 //
 // Also the small period hardware that lives up here: the rain gutters
-// along the roof edges, and the wipers parked at the base of the screen.
+// along the roof edges. The wipers are their own module (car/wipers.ts) —
+// they move, and they need to know exactly where the glass is, which is
+// why this file hands the two screens out as `screenPanes`.
 
 import type { MeshBuilder, Patch, V3 } from "./builder.ts";
 import { patchQuad, patchSpan } from "./builder.ts";
@@ -63,12 +65,26 @@ function cabinFrame(spec: CarBodySpec): CabinFrame {
   };
 }
 
+/** A sub-rectangle of a patch, in patch (u, v). */
+export type Rect = { u0: number; u1: number; v0: number; v1: number };
+
+/** The opening the GLASS fills, once the seal band has taken its share of
+ * the pillar-to-pillar opening. */
+function glassRect(rect: Rect, seal: number, span: { u: number; v: number }): Rect {
+  return {
+    u0: rect.u0 + seal / span.u,
+    u1: rect.u1 - seal / span.u,
+    v0: rect.v0 + seal / span.v,
+    v1: rect.v1 - seal / span.v,
+  };
+}
+
 /** A window: the seal band first, then the glass inset inside it. Passing
  * seal = 0 lays the glass straight onto the panel. */
 function window(
   b: MeshBuilder,
   patch: Patch,
-  rect: { u0: number; u1: number; v0: number; v1: number },
+  rect: Rect,
   glass: number,
   seal: number,
   span: { u: number; v: number },
@@ -77,19 +93,58 @@ function window(
   if (seal > 0) {
     patchQuad(b, patch, rect, 0x14171c, SEAL_PROUD, mirrored);
   }
-  patchQuad(
-    b,
-    patch,
-    {
-      u0: rect.u0 + seal / span.u,
-      u1: rect.u1 - seal / span.u,
-      v0: rect.v0 + seal / span.v,
-      v1: rect.v1 - seal / span.v,
+  patchQuad(b, patch, glassRect(rect, seal, span), glass, GLASS_PROUD, mirrored);
+}
+
+/** One screen's glass: the panel it is cut into, and where in that panel
+ * the pane actually sits. This is the surface the wipers sweep and the
+ * grime settles on, so it is stated once here rather than guessed at by
+ * anything that has to land something on the glass. */
+export type ScreenPane = { patch: Patch; rect: Rect; span: { u: number; v: number } };
+
+/** How far proud of the panel a screen's glass sits — what anything laid
+ * ON the glass has to clear. */
+export const GLASS_LIFT = GLASS_PROUD;
+
+function screenOpening(p: typeof PILLARS, span: { u: number; v: number }): Rect {
+  return {
+    u0: p.a / span.u,
+    u1: 1 - p.a / span.u,
+    v0: p.sill / span.v,
+    v1: 1 - p.header / span.v,
+  };
+}
+
+function backOpening(p: typeof PILLARS, span: { u: number; v: number }): Rect {
+  return {
+    u0: p.c / span.u,
+    u1: 1 - p.c / span.u,
+    v0: p.header / span.v,
+    v1: 1 - p.sill / span.v,
+  };
+}
+
+/** The windscreen and the backlight, as glass. */
+export function screenPanes(spec: CarBodySpec): { front: ScreenPane; rear: ScreenPane } {
+  const p = { ...PILLARS, ...spec.cabin.pillars };
+  const seal = spec.cabin.seal ?? 0;
+  const { CL, CR, FL, FR, RL, RR, TL, TR } = cabinFrame(spec);
+  const front: Patch = [CL, CR, FR, FL];
+  const frontSpan = patchSpan(front);
+  const rear: Patch = [RL, RR, TR, TL];
+  const rearSpan = patchSpan(rear);
+  return {
+    front: {
+      patch: front,
+      span: frontSpan,
+      rect: glassRect(screenOpening(p, frontSpan), seal, frontSpan),
     },
-    glass,
-    GLASS_PROUD,
-    mirrored,
-  );
+    rear: {
+      patch: rear,
+      span: rearSpan,
+      rect: glassRect(backOpening(p, rearSpan), seal, rearSpan),
+    },
+  };
 }
 
 export function buildGreenhouse(b: MeshBuilder, spec: CarBodySpec): void {
@@ -105,37 +160,13 @@ export function buildGreenhouse(b: MeshBuilder, spec: CarBodySpec): void {
   const screen: Patch = [CL, CR, FR, FL];
   const sSpan = patchSpan(screen);
   patchQuad(b, screen, full, pillar);
-  window(
-    b,
-    screen,
-    {
-      u0: p.a / sSpan.u,
-      u1: 1 - p.a / sSpan.u,
-      v0: p.sill / sSpan.v,
-      v1: 1 - p.header / sSpan.v,
-    },
-    glass,
-    seal,
-    sSpan,
-  );
+  window(b, screen, screenOpening(p, sSpan), glass, seal, sSpan);
 
   // Backlight: u across the car, v roof → deck.
   const back: Patch = [RL, RR, TR, TL];
   const bSpan = patchSpan(back);
   patchQuad(b, back, full, pillar);
-  window(
-    b,
-    back,
-    {
-      u0: p.c / bSpan.u,
-      u1: 1 - p.c / bSpan.u,
-      v0: p.header / bSpan.v,
-      v1: 1 - p.sill / bSpan.v,
-    },
-    glass,
-    seal,
-    bSpan,
-  );
+  window(b, back, backOpening(p, bSpan), glass, seal, bSpan);
 
   patchQuad(b, [FL, FR, RR, RL], full, roofColor);
 
@@ -170,7 +201,6 @@ export function buildGreenhouse(b: MeshBuilder, spec: CarBodySpec): void {
   }
 
   buildGutters(b, spec);
-  buildWipers(b, spec);
 }
 
 /** Rain gutters: a thin rail down each roof edge, running the length of
@@ -192,20 +222,5 @@ function buildGutters(b: MeshBuilder, spec: CarBodySpec): void {
       length,
       color,
     );
-  }
-}
-
-/** Wipers parked across the base of the screen — two flat blades and their
- * arms, laid on the cowl rather than the glass so they never z-fight. */
-function buildWipers(b: MeshBuilder, spec: CarBodySpec): void {
-  if (!spec.cabin.wipers) return;
-  const cowl = sampleProfile(spec.profile, spec.cabin.cowlZ);
-  const color = 0x1a1d22;
-  const y = cowl.topY + 0.012;
-  const z = spec.cabin.cowlZ + 0.03;
-  const span = cowl.half * 0.52;
-  for (const side of [-1, 1]) {
-    b.box(side * span * 0.55, y, z, span * 0.85, 0.014, 0.03, color);
-    b.box(side * span * 0.1, y + 0.006, z - 0.02, 0.03, 0.02, 0.06, color);
   }
 }

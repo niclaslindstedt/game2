@@ -94,7 +94,14 @@ async function main(): Promise<void> {
     const length = Math.max(...zs) - Math.min(...zs);
 
     VIEWS.forEach((view, col) => {
-      if (view.dirt) dirty(view.dirt);
+      if (view.dirt) {
+        dirty(view.dirt);
+        // The screens soil on their own clock (car/wipers.ts), so a dirty
+        // car with showroom glass is a lie the sheet would tell every time.
+        // Nothing drives the blades here — they stay parked, which is what
+        // a car standing in the service park does.
+        car.wipers.update(0, Math.max(view.dirt.dust, view.dirt.mud), 20);
+      }
       camera.fov = view.fov;
       camera.updateProjectionMatrix();
       if (view.game) {

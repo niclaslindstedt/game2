@@ -22,6 +22,12 @@ import * as THREE from "three";
 import { clamp } from "../lib/util.ts";
 import type { GameState } from "@engine";
 
+/** `userData` flag for a mesh that paints its own vertex colours frame to
+ * frame — the screens' grime film (car/wipers.ts) is the one. The painter
+ * bakes from a pristine copy of the whole buffer, so it has to leave those
+ * alone: two writers on one attribute is a flicker, not a coat. */
+export const SELF_PAINTED = "selfPainted";
+
 /** A point in car space that throws dirt — one per wheel. */
 export type SprayPoint = { x: number; y: number; z: number };
 
@@ -111,7 +117,7 @@ export function createDirtPainter(
   const origin = new THREE.Vector3();
   root.getWorldPosition(origin);
   root.traverse((obj) => {
-    if (!(obj instanceof THREE.Mesh)) return;
+    if (!(obj instanceof THREE.Mesh) || obj.userData[SELF_PAINTED]) return;
     const geo = obj.geometry as THREE.BufferGeometry;
     const color = geo.getAttribute("color");
     if (!color) return;

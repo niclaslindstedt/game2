@@ -120,6 +120,16 @@ export class MeshBuilder {
   }
 }
 
+/** The lambert term this file bakes into a face with the given normal.
+ * Anything that has to MATCH a baked colour from outside the builder — the
+ * grime film laid over glass the greenhouse painted — multiplies its own
+ * part colour by this instead of guessing at the shading. */
+export function shadeFactor(n: V3): number {
+  const len = Math.hypot(n[0], n[1], n[2]) || 1;
+  const d = (n[0] * LIGHT.x + n[1] * LIGHT.y + n[2] * LIGHT.z) / len;
+  return AMBIENT + DIFFUSE * Math.max(0, d);
+}
+
 /** Bakes the fake sun into any geometry the same way MeshBuilder does:
  * de-index so every face is flat, then lambert-shade the part color. Round
  * parts come from THREE primitives and pass through here, because
