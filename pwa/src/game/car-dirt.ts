@@ -5,6 +5,11 @@
 // accumulates — a stage ends with the car looking driven — and resets with
 // the next stage's fresh meshes.
 //
+// What lays a coat on is GROUND COVERED, not time passed: the wheels are
+// the sprayers, so a car parked on the gravel with the engine running is a
+// car nothing is being thrown at, and it stays exactly as clean as it
+// arrived. Every rate here is therefore per METRE driven (`groundTravel`).
+//
 // It is SPATTER, not a wash. Every face either takes a fleck or keeps its
 // paint, and a fleck is one of several dirt tones rather than a single
 // tan: real filth is a thousand separate hits in a dozen shades of brown,
@@ -20,7 +25,7 @@
 
 import * as THREE from "three";
 import { clamp } from "../lib/util.ts";
-import type { GameState } from "@engine";
+import type { CarState, GameState } from "@engine";
 
 /** `userData` flag for a mesh the painter must not write. Two kinds carry
  * it. The screens' grime film (car/wipers.ts) paints its own vertex colours
@@ -217,6 +222,34 @@ export function createDirtPainter(
   };
 }
 
+/** How far the car covered over the ground this step, m — the measure both
+ * the paint and the glass soil by, and the whole of what stops a stationary
+ * car getting dirty. Sideways counts: a car crossing a ford broadside is
+ * still travelling through it. Airborne is no distance on any surface —
+ * nothing is under the wheels to be thrown — and a wheel spinning under a
+ * car held on the brakes moves the car nowhere, so it dirties nothing. */
+export function groundTravel(car: CarState, dt: number): number {
+  return car.airborne ? 0 : Math.hypot(car.u, car.w) * dt;
+}
+
+/** What the ground under the car is throwing at it, as coat per METRE
+ * driven. Water and the verge are WET — they throw mud; gravel and a slide
+ * on it only raise dust, and sealed road throws nothing at all: a car that
+ * spends a stage on asphalt finishes it in the paint it started in.
+ *
+ * Exported because these four cases ARE the rule the module exists to
+ * state, and a pure function of the state is the only half of the coat a
+ * test can read without a GPU. */
+export function dirtRate(state: GameState): DirtCoat {
+  if (state.offRoad) return { dust: 0.004, mud: 0.0055 };
+  const surface = state.track.samples[state.progressIndex]?.surface;
+  if (surface === "water") return { dust: 0.01, mud: 0.055 };
+  if (surface !== "gravel") return { dust: 0, mud: 0 };
+  // A slide drags the tires sideways across the loose stuff, so the same
+  // metre of gravel throws several times as much.
+  return { dust: state.car.slide > 0.15 ? 0.0036 : 0.0006, mud: 0 };
+}
+
 export function createCarDirt(root: THREE.Group, spray: readonly SprayPoint[] = []): CarDirt {
   const paint = createDirtPainter(root, spray);
   let dust = 0;
@@ -224,27 +257,13 @@ export function createCarDirt(root: THREE.Group, spray: readonly SprayPoint[] = 
   let applied = -1;
 
   const update = (state: GameState, dt: number): void => {
-    const car = state.car;
-    if (state.phase !== "racing" || car.airborne) return;
-    const surface = state.track.samples[state.progressIndex]?.surface;
-    // Rates are coat per second. Water and the verge are WET — they throw
-    // mud; gravel and a slide only raise dust.
-    let dustRate = 0;
-    let mudRate = 0;
-    if (state.offRoad) {
-      dustRate = 0.09;
-      mudRate = 0.12;
-    } else if (surface === "water") {
-      mudRate = 0.55;
-      dustRate = 0.1;
-    } else if (car.slide > 0.15) {
-      dustRate = 0.08;
-    } else if (car.u > 10) {
-      dustRate = 0.014;
-    }
-    if (dustRate === 0 && mudRate === 0) return;
-    dust = Math.min(1, dust + dustRate * dt);
-    mud = Math.min(1, mud + mudRate * dt);
+    if (state.phase !== "racing") return;
+    const travel = groundTravel(state.car, dt);
+    if (travel <= 0) return;
+    const rate = dirtRate(state);
+    if (rate.dust === 0 && rate.mud === 0) return;
+    dust = Math.min(1, dust + rate.dust * travel);
+    mud = Math.min(1, mud + rate.mud * travel);
     // Re-baking colors is a whole-buffer write — only do it per visible
     // step of grime, not per frame.
     const quantized = Math.round(dust * 18) * 32 + Math.round(mud * 18);
