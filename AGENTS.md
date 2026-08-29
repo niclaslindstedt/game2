@@ -102,6 +102,8 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | A piece of MUSIC                                            | `pwa/src/game/audio/scores/` — the `soundtrack` skill                                                                            |
 | HUD / touch controls                                        | `pwa/src/game/hud.tsx` + `pwa/src/styles.css` (a thumb zone's grip on a finger: `thumb-guard.ts`)                                |
 | Input mapping                                               | `pwa/src/game/input.ts` (bindings in `settings.ts`)                                                                              |
+| A CONTROLLER: its sticks, its triggers, what its buttons do | `pwa/src/game/gamepad.ts` reads a polled pad (DOM-free); `input.ts` does the polling, bindings in `settings.ts`                  |
+| Walking a MENU on a controller                              | `pwa/src/game/menu-nav.ts` (the cards, and `data-nav-back`) over `menu-cursor.ts` (where the cursor goes — DOM-free)             |
 | Main menu pages / routing                                   | `pwa/src/game/main-menu.tsx` (+ `menu-roam`, `menu-options`, `menu-car`)                                                         |
 | The pre-race card: car, spec sheet, gearbox                 | `pwa/src/game/menu-car.tsx`; the numbers on it in `car-stats.ts` (derived from the catalog)                                      |
 | Campaign stages, locations, points, unlocks                 | `pwa/src/game/campaign.ts` — one board: the points a stage pays ARE what opens the next stage and the next location              |

@@ -2993,6 +2993,38 @@ a.menu-version:focus-visible {
   background: rgb(255 90 78 / 35%);
 }
 
+/* Where the pad's CAR rows end and its MENU rows begin. A rule rather than
+   a second heading: the two halves are one list of the same kind of row, and
+   a heading would say they were two lists. */
+.opt-key-divide {
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+  border-top: 2px solid rgb(255 255 255 / 18%);
+}
+
+/* THE CONTROLLER'S CURSOR (menu-nav.ts). A pad has no pointer to point
+   with, so where it is has to be drawn — and drawn hard enough to find at
+   arm's length on a handheld, over cards whose own buttons already glow.
+   It is a class rather than `:focus-visible`, because the browser decides
+   that one from how the press arrived and a gamepad press arrives as
+   nothing: see the note in menu-nav.ts. */
+.nav-cursor {
+  outline: 3px solid var(--hud-good);
+  outline-offset: 3px;
+  border-radius: 0.3rem;
+  box-shadow: 0 0 0.9rem rgb(255 210 62 / 45%);
+}
+
+/* Anything the game moves the cursor onto is worth looking at even before
+   the ring lands — a row that only lights when focused reads as dead. */
+@media (prefers-reduced-motion: no-preference) {
+  .nav-cursor {
+    transition:
+      outline-color 90ms linear,
+      box-shadow 90ms linear;
+  }
+}
+
 /* Portrait: the stage grid drops to two columns rather than one, so all
    four boxes stay countable in a glance without scrolling. */
 @media (orientation: portrait) {

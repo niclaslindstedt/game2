@@ -48,6 +48,7 @@ import {
 import { cacheIdForBase } from "./app-pwa.ts";
 import { connectOutput } from "./output-bridge.ts";
 import { createInput } from "./game/input.ts";
+import { createMenuNav } from "./game/menu-nav.ts";
 import type { CameraMode } from "./game/camera.ts";
 import type { FreeFlyPose } from "./game/camera-free.ts";
 import { DebugHud } from "./game/debug-hud.tsx";
@@ -431,6 +432,10 @@ export function App() {
   const rendererRef = useRef<GameRenderer | null>(null);
   const gameRef = useRef<GameState | null>(null);
   const input = useMemo(() => createInput(), []);
+  /** The controller's way around the menus. It reads the cards off the DOM
+   * rather than off this component's state, so it covers the finish card and
+   * the studio card too — surfaces `menu` and `paused` know nothing about. */
+  const menuNav = useMemo(() => createMenuNav(), []);
   const [race, setRace] = useState<RaceSettings>(initialRace);
   const [options, setOptions] = useState<Settings>(initialSettings);
   /** R29/R30 — the campaign board: what has been driven, what every stage
@@ -488,6 +493,10 @@ export function App() {
    * screenshot with nothing to say where it was taken is the one thing the
    * overlay exists to prevent. */
   const [hudHidden, setHudHidden] = useState(false);
+  /** True while a controller is connected and allowed to drive. The frame
+   * loop asks the pad every frame; this is only written when the answer
+   * CHANGES, because it is a React state and a stage is 90 000 frames. */
+  const [padded, setPadded] = useState(false);
   /** What the debug overlay is reading, refreshed on the HUD's own tick and
    * only while the overlay is up. */
   const [debugCtx, setDebugCtx] = useState<DebugContext | null>(null);
@@ -935,6 +944,7 @@ export function App() {
     saveSettings(next);
     setAudioVolumes(next.audio);
     input.setKeys(next.keys);
+    input.setPad(next.pad);
     rendererRef.current?.setVideo(next.video);
     rendererRef.current?.setMirror(next.hud.mirror);
     rendererRef.current?.setNameTags(next.hud.nameTags);
@@ -1045,6 +1055,7 @@ export function App() {
     let disposed = false;
     const cleanups: (() => void)[] = [];
     input.setKeys(optionsRef.current.keys);
+    input.setPad(optionsRef.current.pad);
     // The render stack — three.js and the whole world builder — loads as
     // its own chunk, keeping the entry script inside the §11.3.9
     // critical-path budget: the shell parses and paints at once, the world
@@ -1146,6 +1157,14 @@ export function App() {
         flash(`${play?.label ?? "CHASE"} CAM`, "info");
       };
       actionsRef.current = { restart, menu: goMainMenu, camera };
+      input.onNav((action) => {
+        if (action === "confirm") menuNav.confirm();
+        else if (action === "back") menuNav.back();
+        else if (action === "navUp") menuNav.move("up");
+        else if (action === "navDown") menuNav.move("down");
+        else if (action === "navLeft") menuNav.move("left");
+        else menuNav.move("right");
+      });
       input.onAction((action) => {
         if (action === "restart") restart();
         else if (action === "menu") goMainMenu();
@@ -1390,10 +1409,26 @@ export function App() {
       let fps = 0;
       let traceClock = 0;
       let altWas = false;
+      let padWas = false;
       const frame = (now: number): void => {
         raf = requestAnimationFrame(frame);
         const dtFrame = Math.min(0.1, (now - last) / 1000);
         last = now;
+        // The pad is ASKED, once a frame, before anything below can return
+        // early: a controller fires no events, so a poll skipped behind the
+        // pause card is a pause card nothing on the pad can dismiss.
+        // A card on screen takes the pad off the car and puts it on the
+        // cursor. Asked before the poll, so the press that opens a menu and
+        // the first press inside it can never be the same one.
+        input.setNavigating(menuNav.active());
+        const padNow = input.pollPads(dtFrame);
+        if (padNow !== padWas) {
+          padWas = padNow;
+          setPadded(padNow);
+        }
+        // The cursor is only ever placed for a pad: a focus ring appearing
+        // under somebody's mouse is the game moving their cursor for them.
+        if (padNow) menuNav.sync();
         fpsFrames++;
         fpsSeconds += dtFrame;
         if (fpsSeconds >= 0.5) {
@@ -1704,6 +1739,7 @@ export function App() {
           input={input}
           show={options.hud}
           touchLayout={options.touch}
+          padDriving={padded && options.pad.hideTouch}
           onPause={() => setPaused(true)}
           onCamera={() => actionsRef.current.camera()}
           onShot={options.screenshots ? () => takeShotRef.current() : null}

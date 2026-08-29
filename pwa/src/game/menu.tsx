@@ -189,7 +189,10 @@ export function MenuHead({
 }) {
   return (
     <div className="menu-head">
-      <button type="button" className="menu-back" onClick={back}>
+      {/* `data-nav-back` is what a controller's B button presses — see
+          menu-nav.ts. Marked rather than guessed at: every surface has a way
+          out, and no two of them look alike in the markup. */}
+      <button type="button" className="menu-back" data-nav-back onClick={back}>
         ‹ {backLabel}
       </button>
       <div className="menu-head-text">
@@ -336,6 +339,7 @@ export function PauseMenu({
         <button
           type="button"
           className="hud-start"
+          data-nav-back
           onClick={() => {
             playUi("back");
             onResume();

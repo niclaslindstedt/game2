@@ -161,6 +161,10 @@ type HudProps = {
   show: HudSettings;
   /** Which thumb steers, and what each drag off the pedal anchor does. */
   touchLayout: TouchSettings;
+  /** Whether a controller has the car. The thumb zones come off when one
+   * does: a handheld with sticks and triggers in its hands does not want a
+   * wheel and a pedal drawn over the road it is already driving on. */
+  padDriving: boolean;
   /** The clock and the start lights read this every frame instead of
    * waiting for the next snapshot. */
   live: LiveRun;
@@ -999,6 +1003,7 @@ export function Hud({
   input,
   show,
   touchLayout,
+  padDriving,
   onPause,
   onCamera,
   onShot,
@@ -1016,8 +1021,9 @@ export function Hud({
   // the pedal zone's whole default is GAS, so anything that can still reach
   // it — a stylus, a hybrid laptop, a browser that reports its pointers
   // oddly — is a way for the car to be given throttle nobody asked for. On a
-  // desktop the throttle key is the only throttle there is.
-  const thumbs = deviceControls().touch;
+  // desktop the throttle key is the only throttle there is, and on a handheld
+  // with a controller in its hands the pad is.
+  const thumbs = deviceControls().touch && !padDriving;
   return (
     <div
       className="hud pointer-events-none absolute inset-0 select-none"
@@ -1051,11 +1057,11 @@ export function Hud({
         </div>
         <div className="hud-actions pointer-events-auto">
           {/* TOUCH ONLY, and that is the whole of its case: a device with a
-              keyboard already has the bind, and a fourth thing on the one
-              row a thumb reaches for mid-stage is clutter for somebody who
-              does not need it. Without this button the feature simply could
-              not be REACHED on a phone — everything else about it already
-              worked there. */}
+              keyboard or a controller already has the bind, and a fourth
+              thing on the one row a thumb reaches for mid-stage is clutter
+              for somebody who does not need it. Without this button the
+              feature simply could not be REACHED on a phone — everything
+              else about it already worked there. */}
           {onShot && thumbs && (
             <button
               type="button"
