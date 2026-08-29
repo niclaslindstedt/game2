@@ -836,9 +836,10 @@ What the layout decides:
 - **Which wheels are SEEN to spin, and how fast.** The driven axle carries
   `CarState.wheelspin` — how far ahead of the road the engine is turning it,
   m/s. Two things put it there: the torque above that never reaches the
-  ground, which is a LAUNCH and fades with `1 - rev` up the gear, and a tyre
-  spending its grip sideways (`TUNING.engine.slideSpin` × `slide`), which is a
-  DRIFT and does not. It is capped by the gear it is in — a wheel with a gear
+  ground, which is a LAUNCH (including whatever the clutch dropped on it —
+  see [the launch](#the-launch)) and fades with `1 - rev` up the gear, and a
+  tyre spending its grip sideways (`TUNING.engine.slideSpin` × `slide`),
+  which is a DRIFT and does not. It is capped by the gear it is in — a wheel with a gear
   engaged cannot turn faster than the engine can spin it, so a fully lit axle
   winds to `gearTop × TUNING.revs.limiter` and no further, which is why first
   gear spins away from a standstill and top gear cannot spin at all — and
@@ -1006,6 +1007,45 @@ lands exactly one interval after the car ahead of them left — the stagger the
 classification is read off is a thing the player WATCHES rather than a rule
 they are told about. `startsIn(state)` counts through both; `skipCountdown`
 (the sim, the menu's demo, every rival) skips them both.
+
+### The launch
+
+Nothing on the grid moves the car, so the throttle there is free REVS
+(`TUNING.revs.blip` / `settle`, into `CarState.rev`) — and those revs are the
+one decision the start line asks for. On the green they are handed to the
+tyres whole (`clutchDump`), because that is what a clutch coming out on a
+standing axle does: everything the engine was carrying arrives at once.
+`CarState.launchSpin` holds how lit the axle is, 0..1, and spins away
+`TUNING.engine.spinLoss` of `gearAccel` for as long as it lasts.
+
+- **Sitting on the revs costs you.** A driver against the limiter when the
+  lights change is 13–17 m behind at five seconds. A driver who waited with
+  the pedal up and took a THIRD OF A SECOND to react is still a few metres
+  ahead of them; one who took half a second has given it all back. The
+  penalty is deliberately sized against a human reaction time and not beyond
+  it — the start is a skill, not a stage.
+- **The pedal alone barely lights anything** (`pedalSpin`, 0.1 of the excess
+  over `pedalHold` × the axle's bite). Torque fed smoothly finds a slip the
+  tyre can live at; only the clutch's step lights an axle properly. Keeping
+  the two apart is what stops the start-line rule from becoming a
+  corner-exit rule, and it is why FLOORING IT REMAINS THE RIGHT CALL — the
+  game is played on binary pedals (a keyboard, a phone's thumb zone) as
+  often as on analogue ones.
+- **What an analogue pedal does buy is a shorter mistake.** A lit axle hooks
+  back up at `spinHook`, and up to `1 + hookLift` times that for a driver
+  easing off — so a launch that went wrong can be gathered up rather than
+  ridden out.
+- **A four-wheel-drive clears it** — its bite is over 1 to begin with, so it
+  can be floored off the line and takes only the clutch's own step. A
+  rear-driver spins its wheels away from a standstill however the start is
+  made.
+
+It shows as much as it costs: `wheelspin` carries it into the drawn wheels
+and the tachometer, the launch cloud is thrown off the same number
+(`launchThrow` in `pwa/src/game/dust.ts`), and the body trembles on its
+mounts while the revs are up and the car is not
+(`pwa/src/game/car-shake.ts` — millimetres, on the sprung mass and on the
+in-car eye, and gone by 50 km/h where the road's own grain takes over).
 
 ## Car against car
 

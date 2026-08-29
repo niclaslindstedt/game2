@@ -12,7 +12,7 @@
 // CARS at the bottom of the file.
 
 import { angleDiff, clamp } from "../lib/math.ts";
-import { latCeiling, slideFloor, wheelSlide } from "../game/limits.ts";
+import { latCeiling, slideFloor, surfaceGripFor, wheelSlide } from "../game/limits.ts";
 import { TUNING } from "../game/defs/tuning.ts";
 import type { CarSpec } from "../game/defs/cars.ts";
 import { flatTrack, SURFACES, type Track } from "../mapgen/index.ts";
@@ -131,10 +131,7 @@ const GRIP_BY_CAR = new WeakMap<CarSpec, readonly number[]>();
 function gripBySurface(spec: CarSpec): readonly number[] {
   let grip = GRIP_BY_CAR.get(spec);
   if (grip) return grip;
-  const tyres = spec.tyres;
-  grip = SURFACES.map(
-    (kind) => TUNING.surfaces.grip[kind] * (kind === "asphalt" ? tyres.sealed : tyres.loose),
-  );
+  grip = SURFACES.map((kind) => surfaceGripFor(spec, kind));
   GRIP_BY_CAR.set(spec, grip);
   return grip;
 }

@@ -217,10 +217,12 @@ await capture("shot-grid-revving", { width: 1280, height: 720 }, async (page) =>
   await atLamps(page, 3);
 });
 
-// Off the line. The driven wheels are spinning under a car that has barely
-// moved, so the acceptance test is a plume off BOTH rear wheels at a road
-// speed where the rolling kickup throws nothing at all — and that it has
-// thinned out by the time the car is up and running.
+// Off the line, THE WRONG WAY: the throttle goes down on the first lamp, so
+// the engine is against the limiter when the clutch comes out and the tyres
+// are lit rather than gripping. The driven wheels are spinning under a car
+// that has barely moved, so the acceptance test is a plume off BOTH rear
+// wheels at a road speed where the rolling kickup throws nothing at all —
+// and that it has thinned out by the time the car is up and running.
 await capture("shot-launch-dust", { width: 1280, height: 720 }, async (page) => {
   await atLamps(page, 1);
   await page.keyboard.down("ArrowUp");
@@ -229,6 +231,25 @@ await capture("shot-launch-dust", { width: 1280, height: 720 }, async (page) => 
   // a stage time, a chosen speed — lands past the moment: a 0.35 s wait
   // came out at 0.81 s and 32 km/h on this machine, with the launch already
   // half handed over to the rolling kickup.
+  await page.waitForFunction(
+    "Number.parseInt(document.querySelector('.hud-speed-num')?.textContent ?? '0', 10) > 0",
+    null,
+    { timeout: 180000 },
+  );
+});
+
+// ...and the SAME launch made properly: the pedal stays up through the whole
+// countdown and goes down on the green. This is the pair that has to be
+// looked at together, because the rule the start line now runs on is only
+// legible as a difference. The acceptance test is the CLOUD: this one is
+// visibly smaller than the shot above at the same road speed, because the
+// tyres are driving the car instead of digging under it. (Only the cloud —
+// the green is found by polling the HUD clock, which under software
+// rendering can land a good fraction of a second late, so the metres this
+// launch is worth are the start tests' business, not the shutter's.)
+await capture("shot-launch-clean", { width: 1280, height: 720 }, async (page) => {
+  await racing(page);
+  await page.keyboard.down("ArrowUp");
   await page.waitForFunction(
     "Number.parseInt(document.querySelector('.hud-speed-num')?.textContent ?? '0', 10) > 0",
     null,

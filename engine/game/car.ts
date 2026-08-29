@@ -13,7 +13,7 @@
 // defs/, not here.
 
 import { clamp } from "../lib/math.ts";
-import { askedSlide, latCeiling, slideFloor } from "./limits.ts";
+import { askedSlide, latCeiling, slideFloor, surfaceGripFor } from "./limits.ts";
 import { damageEffects, type DamageEffects } from "./damage.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
@@ -59,13 +59,89 @@ function revs(spec: CarSpec, car: CarState, speed: number): number {
  * gear. This is the whole cost of a rear-drive launch on gravel, and it is
  * gone by the time the gear runs out.
  *
+ * On top of that standing shortfall sits the LAUNCH: whatever `launchSpin`
+ * the pedal is asking for past the axle's bite, and whatever the clutch
+ * dropped on it at the green. The two are added rather than combined
+ * because they are different failures — one is an axle that never had the
+ * bite, the other is an axle that had it and was overwhelmed.
+ *
  * It is a function rather than four lines inside `engineAccel` because the
  * renderer needs the same number: wheels that are drawn spinning while the
  * engine believes they are hooked up would be a lie the picture tells about
  * the physics. `CarState.wheelspin` carries it out, normalized. */
 function wheelspinLoss(spec: CarSpec, car: CarState, surfaceGrip: number, rev: number): number {
   const bite = clamp(spec.traction * T.drivetrain[spec.drive].bite * surfaceGrip, 0, 1);
-  return (1 - bite) * T.engine.wheelspin * spec.torque * (1 - rev);
+  const standing = (1 - bite) * T.engine.wheelspin * spec.torque * (1 - rev);
+  return clamp(standing + T.engine.spinLoss * car.launchSpin, 0, 1);
+}
+
+/** How much pedal the driven axle will take before the tyres start spinning
+ * rather than gripping, 0..1. Over 1 on a four-wheel-drive standing on
+ * gravel, which is exactly what a four-wheel-drive is for. */
+function pedalHold(spec: CarSpec, surfaceGrip: number): number {
+  return clamp(
+    spec.traction * T.drivetrain[spec.drive].bite * surfaceGrip * T.engine.pedalHold,
+    0,
+    1,
+  );
+}
+
+/** ...and how far past that a given demand is asking, 0..1 — the spin the
+ * axle is being ASKED for. `demand` is the pedal, plus anything else pushing
+ * torque at the tyres. Faded out by the revs for the same reason the
+ * standing loss is: at the top of a gear there is road speed under the wheel
+ * and nothing left to spin it with. */
+function spinAsk(spec: CarSpec, car: CarState, surfaceGrip: number, demand: number): number {
+  const rev = revs(spec, car, car.u);
+  return clamp(demand - pedalHold(spec, surfaceGrip), 0, 1) * (1 - rev);
+}
+
+/** ...and what a PEDAL alone can light, which is only a fraction of it. A
+ * throttle feeds torque at a tyre smoothly, and a tyre fed smoothly finds a
+ * slip it can live at — a bit of scrabble, not a burnout. Only a step of
+ * torque nothing was expecting lights an axle properly, and on a rally car
+ * there is exactly one of those: the clutch. Keeping the two apart is what
+ * stops the start-line rule from quietly becoming a corner-exit rule as
+ * well, and it is why a rear-driver still puts its power down worse than a
+ * front-driver everywhere the launch is not the question. */
+function pedalSpin(spec: CarSpec, car: CarState, surfaceGrip: number, throttle: number): number {
+  return T.engine.pedalSpin * spinAsk(spec, car, surfaceGrip, throttle);
+}
+
+/** THE CLUTCH COMING OUT, 0..1 — how lit the tyres are the instant the
+ * lights go green, from the revs the driver was sitting on. Called once, by
+ * the start control: on the grid nothing is geared and the free revs are the
+ * only thing the player has been doing, so they arrive at the tyres whole.
+ * A driver who waited with the pedal up hands them nothing at all. */
+export function clutchDump(spec: CarSpec, car: CarState, surface: Surface | "nature"): number {
+  const held = clamp((car.rev - T.engine.dumpFrom) / (1 - T.engine.dumpFrom), 0, 1);
+  // Nothing stored, nothing to hand over: the axle is left to the pedal and
+  // the settle below, which is what an idling engine and a raised foot come
+  // to. The pedal is taken as FLOORED here — a driver dropping the clutch on
+  // held revs is going, and one who is not gets the whole of it back inside
+  // a few frames anyway, since the spin decays to whatever the pedal is
+  // actually asking for.
+  if (held <= 0) return 0;
+  return spinAsk(spec, car, surfaceGripFor(spec, surface), 1 + T.engine.dumpSpin * held);
+}
+
+/** Move the launch's own spin toward what the pedal is asking for. It lights
+ * up almost instantly and hooks back up over a second or so — and quicker
+ * for a driver who eases off, which is the whole of what modulating the
+ * throttle off the line buys. */
+function settleLaunchSpin(
+  spec: CarSpec,
+  car: CarState,
+  surfaceGrip: number,
+  throttle: number,
+  dt: number,
+): void {
+  const ask = pedalSpin(spec, car, surfaceGrip, throttle);
+  const rate =
+    ask > car.launchSpin
+      ? T.engine.spinLight
+      : T.engine.spinHook * (1 + T.engine.hookLift * (1 - throttle));
+  car.launchSpin += (ask - car.launchSpin) * clamp(rate * dt, 0, 1);
 }
 
 /** How LIT the driven axle is, 0..1, with the pedal it answers to already in
@@ -374,13 +450,10 @@ export function stepGrounded(
   const dt = T.dt;
   const prevVy = car.vy;
   const prevU = car.u;
-  // The surface's grip and the car's own rubber MULTIPLY: a road tire holds
-  // more on tarmac and skates over gravel, a loose-surface tire is the other
-  // way round, and neither is simply better. Everything downstream — the
-  // slide's ceiling, the lateral rate, and how much torque the driven axle
-  // can put down — reads this one number, so the tires are felt in all three.
-  const tyre = ctx.surface === "asphalt" ? spec.tyres.sealed : spec.tyres.loose;
-  const surfaceGrip = T.surfaces.grip[ctx.surface] * tyre;
+  // The surface and the car's own rubber, as one number: the slide's
+  // ceiling, the lateral rate and how much torque the driven axle can put
+  // down all read it, so the tires are felt in all three.
+  const surfaceGrip = surfaceGripFor(spec, ctx.surface);
   const surfaceDrag = T.surfaces.drag[ctx.surface];
   const surfacePower = T.surfaces.power[ctx.surface];
   // Everything the crashes have done, as the multipliers the rest of this
@@ -686,6 +759,10 @@ export function stepGrounded(
 
   // ── Longitudinal ─────────────────────────────────────────────────────────
   const shiftCut = ctx.t < car.shiftCutUntil ? 0 : 1;
+  // How much of the pedal the tyres are refusing to take. Settled BEFORE the
+  // torque is asked for, so the spin a stab of throttle lights costs that
+  // same stab its shove rather than the next one's.
+  settleLaunchSpin(spec, car, surfaceGrip, input.throttle * shiftCut, dt);
   // A folded radiator starves the engine, and past the misfire threshold the
   // ignition drops beats outright: a badly hurt car lurches up the road
   // instead of pulling up it. It limps, it never parks.

@@ -28,6 +28,7 @@ import type { CrewLook } from "./car-crew.ts";
 import { createCarDamage } from "./car-damage.ts";
 import { createCarDirt, groundTravel, wheelSpray } from "./car-dirt.ts";
 import type { Livery } from "./car-livery.ts";
+import { revTremble, trembleAt } from "./car-shake.ts";
 import { bodySpecFor } from "./car-styles.ts";
 import { drivenAxles, wheelSurfaceSpeed } from "./car-wheels.ts";
 import { glowTexture } from "./textures.ts";
@@ -453,8 +454,15 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     // exactly where the ground put them. This is the whole visible half of
     // the car having weight — the engine decides how far, this just draws
     // it (positive pitchLoad lifts the nose, so it rotates like `pitch`).
-    body.chassis.position.y = car.ride;
-    body.chassis.rotation.x = -car.pitchLoad;
+    //
+    // The engine's own tremble goes on the same sprung mass and for the same
+    // reason: it is the BODY that is shaken by what is bolted under it,
+    // while the wheels stay where the ground put them. Millimetres, and only
+    // while the revs are up and the car is not (car-shake.ts).
+    const tremble = trembleAt(state.t, revTremble(car.rev, car.u));
+    body.chassis.position.y = car.ride + tremble.heave;
+    body.chassis.rotation.x = -car.pitchLoad + tremble.pitch;
+    body.chassis.rotation.z = tremble.roll;
 
     // Wheels: the front pair points where the driver points them —
     // counter-steer in a drift shows because the input does — and each wheel

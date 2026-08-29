@@ -266,14 +266,6 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
    * trickle into silence — a tenth of a grain per spawn has to come out as
    * one grain every ten spawns, not zero forever. */
   let grainDebt = 0;
-  /** Last frame's forward speed — the launch's wheelspin is read off the
-   * change in it. */
-  let lastSpeed = 0;
-  /** ...and that change, low-passed. A single frame's difference of two
-   * speeds is noise as much as it is acceleration, and the launch cloud
-   * scales CONTINUOUSLY off it: unsmoothed, the plume flickers with the
-   * frame timing instead of with the throttle. */
-  let accelSmooth = 0;
   let fumeClock = 0;
   /** HOW HOT THE TIRES ARE, 0..1 — the soot in the tarmac smoke rides on
    * it. Nothing in `GameState` carries it: heat is the one thing about a
@@ -474,8 +466,6 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       layers.dispose();
     }
     game = state;
-    lastSpeed = state.car.u;
-    accelSmooth = 0;
     builtSeason = state.env.season;
     world = buildWorld(state.track, FLORA_SCALE[quality.flora], builtSeason);
     scene.add(world.group);
@@ -505,8 +495,6 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
    * building it again. */
   const setCar = (state: GameState): void => {
     game = state;
-    lastSpeed = state.car.u;
-    accelSmooth = 0;
     fitCar(state);
     // The island is solved from `game`, and `game` was just rebound. The
     // planes come out the same — a car swap only happens over a stage whose
@@ -683,12 +671,6 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // lakes and streams throw the blue spray, and the stage's sealed
     // sections throw nothing at all until the tires start smoking.
     const sealed = state.surface === "asphalt";
-    // How hard the car is gathering speed. Nothing in `GameState` carries
-    // it, and the launch is the one moment that can only be recognised from
-    // it, so the renderer differentiates the speed it is handed anyway.
-    const accel = dt > 0 ? (c.u - lastSpeed) / dt : 0;
-    lastSpeed = c.u;
-    accelSmooth += (accel - accelSmooth) * Math.min(1, 8 * dt);
     // THE TOWED CLOUD, which is the other half of a loose surface and comes
     // up on its own terms: not thrown by a wheel, so not part of the wheel
     // logic below, and off entirely where the ground has no loose dry dust
@@ -724,7 +706,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       // The launch takes the pace scale OVER until the tires hook up (it
       // never lowers it), which keeps the standing start the one moment a
       // slow car is allowed a big cloud.
-      const launch = sealed ? 0 : launchThrow(c.u, accelSmooth);
+      const launch = sealed ? 0 : launchThrow(c.u, c.wheelspin);
       // How much ground this wheel is actually moving: pace decides the
       // size of any thrown cloud, and the wild gives up far less of itself
       // than the road does. Neither applies to smoke, which is made of the
@@ -762,12 +744,15 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         );
       if (sealed) {
         const T = TARMAC_SMOKE;
-        if (c.u < T.launch.speed && accel > T.launch.accel) {
-          // Off the line: the driven wheels are ahead of the car for a
-          // moment, and that is the whole of it — it stops the instant
-          // they hook up.
-          wheel(drivenAt, -1, T.launch.puffs, T.spread);
-          wheel(drivenAt, 1, T.launch.puffs, T.spread);
+        if (c.u < T.launch.speed && c.wheelspin > LAUNCH.from) {
+          // Off the line: the driven wheels are ahead of the car, and that
+          // is the whole of it — it stops the instant they hook up. How far
+          // ahead is how much smoke, so a dropped clutch is a cloud and a
+          // clean getaway is a wisp.
+          const spun = launchThrow(c.u, c.wheelspin);
+          const puffs = T.launch.puffs + Math.round(T.launch.spun * spun);
+          wheel(drivenAt, -1, puffs, T.spread);
+          wheel(drivenAt, 1, puffs, T.spread);
         } else if (c.drifting) {
           // `drifting`, not `slide`: the readout is the settled ANGLE with
           // hysteresis behind it, so smoke comes up for the drift a player
@@ -793,11 +778,14 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         wheel(-AXLE.rear, 1, 4, 2.5);
       } else if (launch > 0) {
         // Both driven wheels, digging in and throwing straight back: the
-        // plume that says the car LEFT rather than rolled away. As big as
-        // the deepest drift's at a standstill, thinning with the wheelspin
-        // and gone by 50 km/h, where the rolling kickup below picks the
-        // cloud back up.
-        const perWheel = 4 + Math.round(launch * 6);
+        // plume that says the car LEFT rather than rolled away. Twice the
+        // deepest drift's under a fully lit axle, thinning with the
+        // wheelspin and gone by 50 km/h, where the rolling kickup below
+        // picks the cloud back up. A launch off the limiter holds it up for
+        // a second and a half, so the pair of them dig a proper hole rather
+        // than flashing once — which is the picture that has to tell the
+        // player why the car ahead is pulling away from them.
+        const perWheel = 6 + Math.round(launch * 10);
         const push = LAUNCH.push * launch;
         wheel(drivenAt, -1, perWheel, 3, push);
         wheel(drivenAt, 1, perWheel, 3, push);
