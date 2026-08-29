@@ -10,6 +10,13 @@
 // code → action index built from the bindings in settings.ts, so a rebind
 // is a call to `setKeys` and nothing here knows about any particular key.
 //
+// A CONTROLLER is the third surface, and the only one that has to be ASKED:
+// the browser fires no events for a stick or a trigger, so `pollPads` reads
+// the pads once a frame and gamepad.ts turns them into the same axis, two
+// pedals and set of presses the other two produce. The pedals arrive
+// analogue and stay that way — a trigger half open is half throttle, which
+// is the whole reason to drive on a pad at all.
+//
 // SIGN BOUNDARY: everything in this file is SCREEN-space — positive steer
 // means "turn right as seen through the chase cam". The engine's positive
 // steer is clockwise in MAP view (+z toward +x), and the renderer maps
@@ -20,8 +27,16 @@
 import type { CarInput } from "@engine";
 
 import { KEY_LOOK_RATE, MOUSE_LOOK_RATE, NEUTRAL_MOVE, type FreeFlyMove } from "./camera-free.ts";
+import { createPadReader, NEUTRAL_HOLD, type PadFrame, type PadHold } from "./gamepad.ts";
 import { snapPedal, snapSteer } from "./ghost.ts";
-import { DEFAULT_KEYS, type KeyAction, type KeyBindings } from "./settings.ts";
+import {
+  DEFAULT_KEYS,
+  DEFAULT_PAD,
+  type KeyAction,
+  type KeyBindings,
+  type PadAction,
+  type PadSettings,
+} from "./settings.ts";
 
 /** The presses the app reacts to rather than the car: they leave, reload or
  * reframe the run instead of driving it. */
@@ -39,6 +54,17 @@ export type InputManager = {
   };
   /** Re-point every key at its action; unbound actions simply go unpressed. */
   setKeys: (bindings: KeyBindings) => void;
+  /** Re-point the controller, and say whether it drives and whether it takes
+   * the thumb zones off the screen. */
+  setPad: (pad: PadSettings) => void;
+  /** Read every connected pad and fold this frame's sticks, triggers and
+   * presses in. Called ONCE a frame — a pad fires no events, so nothing it
+   * does exists until this asks. Returns whether a pad is driving, which is
+   * what the HUD hangs the thumb zones on. */
+  pollPads: () => boolean;
+  /** Whether a pad was connected the last time anyone asked. Read rather
+   * than dispatched: a pad's presence is a state the device is in. */
+  padConnected: () => boolean;
   /**
    * Hand the keyboard over to something that is being TYPED INTO, and take it
    * back afterwards. While it is handed over the bindings do not exist: no
@@ -146,6 +172,46 @@ export function deviceControls(): { keyboard: boolean; touch: boolean } {
   return { keyboard, touch };
 }
 
+/** How many rebinding rows are currently waiting for a press. While any of
+ * them is, the pad belongs to that row and not to the car: binding CAMERA
+ * by pressing START would otherwise ALSO fire pause on the way past, and
+ * every rebind would leave the game somewhere else.
+ *
+ * A module-level latch rather than a manager method because there is only
+ * one pad in the room and the surface holding it is not the one that reads
+ * it — the same shape as the keyboard's answer to the same problem, which
+ * is a capture-phase listener swallowing the event for everyone. */
+let padHolds = 0;
+
+/** Take the pad, and give it back. Symmetrical: every `holdPad(true)` owes
+ * a `holdPad(false)`, which is why the callers are effect cleanups. */
+export function holdPad(on: boolean): void {
+  padHolds = Math.max(0, padHolds + (on ? 1 : -1));
+}
+
+/** Every connected pad, as the plain snapshots gamepad.ts reads. The
+ * browser's `Gamepad` is a live view of the hardware that cannot be held
+ * on to, so this copies what it says the moment it says it.
+ *
+ * Chromium hands nothing back until the page has seen a button press —
+ * privacy, not a bug — which is why a pad appears the instant it is USED
+ * rather than the instant it is plugged in. That is the better moment
+ * anyway: it is when the player is asking for it. */
+export function readPadFrames(): PadFrame[] {
+  if (typeof navigator === "undefined" || !navigator.getGamepads) return [];
+  const frames: PadFrame[] = [];
+  for (const pad of navigator.getGamepads()) {
+    if (!pad?.connected) continue;
+    frames.push({
+      buttons: pad.buttons.map((b) => b.value),
+      axes: [...pad.axes],
+      standard: pad.mapping === "standard",
+      id: pad.id,
+    });
+  }
+  return frames;
+}
+
 export function createInput(target: Window = window): InputManager {
   /** Every bound code, mapped to the actions it fires. A code can serve
    * more than one action — nothing stops a player binding it twice. */
@@ -172,6 +238,15 @@ export function createInput(target: Window = window): InputManager {
   let altHeld = false;
 
   const touch = { steer: 0, throttle: false, brake: false, handbrake: false };
+
+  /** The controller. `padHold` is last frame's sticks and triggers, held
+   * between polls because `sample` runs once per 120 Hz STEP and the pad is
+   * asked once per FRAME — several steps read the same reading, exactly as
+   * several steps read the same key state between two keydowns. */
+  const padReader = createPadReader(DEFAULT_PAD.bindings);
+  let padOptions: PadSettings = DEFAULT_PAD;
+  let padHold: PadHold = NEUTRAL_HOLD;
+  let padPresent = false;
 
   const setKeys = (bindings: KeyBindings): void => {
     const next = new Map<string, KeyAction[]>();
@@ -280,6 +355,10 @@ export function createInput(target: Window = window): InputManager {
     typing = on;
     held.clear();
     downCodes.clear();
+    // The pad goes with it. It has no letters to offer the card asking for
+    // them, and what it does have is a button that throws the stage away.
+    padHold = NEUTRAL_HOLD;
+    padReader.release();
     // Same reason `onBlur` does it: a key that was down when the keyboard
     // changed hands has no release this manager will act on.
     flyDown.clear();
@@ -292,6 +371,39 @@ export function createInput(target: Window = window): InputManager {
   target.addEventListener("mousemove", onMouseMove);
   target.addEventListener("wheel", onWheel, { passive: false });
 
+  const setPad = (pad: PadSettings): void => {
+    padOptions = pad;
+    padReader.setBindings(pad.bindings);
+    padHold = NEUTRAL_HOLD;
+  };
+
+  /** Which edge presses the app acts on rather than the car. The same list
+   * the keyboard fires, minus the two the pad has its own words for. */
+  const PAD_APP_ACTIONS: PadAction[] = ["restart", "camera", "pause", "screenshot", "menu"];
+
+  const pollPads = (): boolean => {
+    const frames = readPadFrames();
+    padPresent = frames.length > 0;
+    // A pad switched off in the options is not read at all: the point of
+    // that switch is a device that reports itself as a gamepad and then
+    // holds an axis over, and a reading taken and discarded would still let
+    // it hide the thumb zones out from under the player's only controls.
+    if (!padOptions.enabled || typing || padHolds > 0) {
+      padHold = NEUTRAL_HOLD;
+      padReader.release();
+      return false;
+    }
+    const { hold, pressed } = padReader.read(frames);
+    padHold = hold;
+    for (const action of pressed) {
+      if (action === "shiftUp") shiftUp = true;
+      else if (action === "shiftDown") shiftDown = true;
+      else if (action === "reset") reset = true;
+      else if (PAD_APP_ACTIONS.includes(action)) actionHandler?.(action as InputAction);
+    }
+    return padPresent;
+  };
+
   const sample = (dt: number): CarInput => {
     // God mode has the controls: the car is given nothing, and the shift
     // and reset edges banked while flying are dropped rather than saved up
@@ -303,11 +415,25 @@ export function createInput(target: Window = window): InputManager {
       return FLYING_INPUT;
     }
     // Screen-space: the right-steer key is +1 here, negated below for the
-    // engine.
-    const keyTarget = (held.has("right") ? 1 : 0) - (held.has("left") ? 1 : 0);
+    // engine. The d-pad joins the KEYS rather than the stick: it is a pair
+    // of digital presses, and a press taken straight to the wheel would be
+    // instant full lock — so it rides the same ramp the arrows do.
+    const keyTarget =
+      (held.has("right") || padHold.steerStep > 0 ? 1 : 0) -
+      (held.has("left") || padHold.steerStep < 0 ? 1 : 0);
     const rate = keyTarget === 0 ? KEY_STEER_RELEASE : KEY_STEER_ATTACK;
     steer += (keyTarget - steer) * Math.min(1, rate * dt);
     if (Math.abs(steer) < KEY_STEER_SNAP && keyTarget === 0) steer = 0;
+
+    // Three surfaces, one wheel. A thumb on the glass wins, then the stick,
+    // then the ramp — each only speaks while the one above it is at rest, so
+    // nothing has to be switched off for the next thing to work. The pedals
+    // take the DEEPEST of the three instead: a trigger and a key are both
+    // asking for throttle, and the answer to both is the one that asks for
+    // more.
+    const wheel = touch.steer !== 0 ? touch.steer : padHold.steer !== 0 ? padHold.steer : steer;
+    const throttle = Math.max(held.has("throttle") || touch.throttle ? 1 : 0, padHold.throttle);
+    const brake = Math.max(held.has("brake") || touch.brake ? 1 : 0, padHold.brake);
 
     // Snapped onto the ghost tape's grid (ghost.ts) on the way out. A run
     // is recorded as the controls it was driven on, and a replay only lands
@@ -316,10 +442,10 @@ export function createInput(target: Window = window): InputManager {
     // set once here at the one place they are produced. It is far finer
     // than a thumb or a key ramp can resolve.
     const input: CarInput = {
-      steer: snapSteer(-(touch.steer !== 0 ? touch.steer : steer)),
-      throttle: snapPedal(held.has("throttle") || touch.throttle ? 1 : 0),
-      brake: snapPedal(held.has("brake") || touch.brake ? 1 : 0),
-      handbrake: held.has("handbrake") || touch.handbrake,
+      steer: snapSteer(-wheel),
+      throttle: snapPedal(throttle),
+      brake: snapPedal(brake),
+      handbrake: held.has("handbrake") || touch.handbrake || padHold.handbrake,
       shiftUp,
       shiftDown,
       reset,
@@ -334,6 +460,9 @@ export function createInput(target: Window = window): InputManager {
     sample,
     touch,
     setKeys,
+    setPad,
+    pollPads,
+    padConnected: () => padPresent && padOptions.enabled,
     setTyping,
     requestShift: (dir) => {
       if (dir === 1) shiftUp = true;
@@ -353,10 +482,14 @@ export function createInput(target: Window = window): InputManager {
       mousePitch = 0;
       speedSteps = 0;
       // The wheel and the pedals are RAMPS, and a ramp left wound on is
-      // what the car would be handed the instant the camera lands.
+      // what the car would be handed the instant the camera lands. The pad's
+      // reading is not a ramp, but it is just as stale: the next poll is the
+      // only honest thing to drive on.
       steer = 0;
       held.clear();
       downCodes.clear();
+      padHold = NEUTRAL_HOLD;
+      padReader.release();
     },
     flyMove: (dt) => {
       if (!flying) return NEUTRAL_MOVE;

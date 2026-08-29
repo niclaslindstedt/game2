@@ -488,6 +488,10 @@ export function App() {
    * screenshot with nothing to say where it was taken is the one thing the
    * overlay exists to prevent. */
   const [hudHidden, setHudHidden] = useState(false);
+  /** True while a controller is connected and allowed to drive. The frame
+   * loop asks the pad every frame; this is only written when the answer
+   * CHANGES, because it is a React state and a stage is 90 000 frames. */
+  const [padded, setPadded] = useState(false);
   /** What the debug overlay is reading, refreshed on the HUD's own tick and
    * only while the overlay is up. */
   const [debugCtx, setDebugCtx] = useState<DebugContext | null>(null);
@@ -935,6 +939,7 @@ export function App() {
     saveSettings(next);
     setAudioVolumes(next.audio);
     input.setKeys(next.keys);
+    input.setPad(next.pad);
     rendererRef.current?.setVideo(next.video);
     rendererRef.current?.setMirror(next.hud.mirror);
     rendererRef.current?.setNameTags(next.hud.nameTags);
@@ -1045,6 +1050,7 @@ export function App() {
     let disposed = false;
     const cleanups: (() => void)[] = [];
     input.setKeys(optionsRef.current.keys);
+    input.setPad(optionsRef.current.pad);
     // The render stack — three.js and the whole world builder — loads as
     // its own chunk, keeping the entry script inside the §11.3.9
     // critical-path budget: the shell parses and paints at once, the world
@@ -1390,10 +1396,19 @@ export function App() {
       let fps = 0;
       let traceClock = 0;
       let altWas = false;
+      let padWas = false;
       const frame = (now: number): void => {
         raf = requestAnimationFrame(frame);
         const dtFrame = Math.min(0.1, (now - last) / 1000);
         last = now;
+        // The pad is ASKED, once a frame, before anything below can return
+        // early: a controller fires no events, so a poll skipped behind the
+        // pause card is a pause card nothing on the pad can dismiss.
+        const padNow = input.pollPads();
+        if (padNow !== padWas) {
+          padWas = padNow;
+          setPadded(padNow);
+        }
         fpsFrames++;
         fpsSeconds += dtFrame;
         if (fpsSeconds >= 0.5) {
@@ -1704,6 +1719,7 @@ export function App() {
           input={input}
           show={options.hud}
           touchLayout={options.touch}
+          padDriving={padded && options.pad.hideTouch}
           onPause={() => setPaused(true)}
           onCamera={() => actionsRef.current.camera()}
           onShot={options.screenshots ? () => takeShotRef.current() : null}

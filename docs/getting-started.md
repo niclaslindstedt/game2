@@ -42,6 +42,23 @@ Picking a stage in the campaign or the time trial does not start it: it opens th
 
 **Phone (touch):** one half of the screen is the wheel — touch anywhere and drag sideways to steer. The rim has weight — it turns toward your thumb rather than snapping to it, so a thumb wobble is not a slide and a slight steer is a real option, while a committed shove takes it to full lock in about a quarter second. A blue arc fills the rim from 12 o'clock to the marker, showing how much lock the car has. The other half is the pedal: touching it is GAS, drag down to BRAKE, drag right for the handbrake (DRIFT — unsticks the rear for tight curves). Pulling the thumb back is the car being reined in, pushing it away is the car being sent — the gesture means what it looks like. Keep the brake held once the car has stopped and it backs up, so a nose in a tree is something you drive out of. Which half steers, and which drag does what, are set in Options → Controls; each direction holds one action, so assigning a taken one swaps them. The manual car adds − / + gear buttons. A **shutter** button sits at the left of the top bar — the phone's way to the screenshot the keyboard takes with Enter, and it is only offered where there is no keyboard to take one with. Tap the **minimap** for the in-race menu (resume, restart, main menu). Works in portrait and landscape — the HUD re-flows to fit.
 
+**Controller (any platform).** Plug in or pair a pad — an Xbox or DualSense controller on a desktop, a phone with a clip-on, or a handheld like a Retroid Pocket that runs the installed PWA on its own buttons — and press one of its buttons. It appears in Options → Controls, and the on-screen wheel and pedal come off the screen while it is connected (there is a switch for that if you want both).
+
+| Control            | Action                                                  |
+| ------------------ | ------------------------------------------------------- |
+| Left stick         | Steer — analogue, so a small lean is a small correction |
+| R2 (right trigger) | Throttle — analogue: half a trigger is half the pedal   |
+| L2 (left trigger)  | Brake — and reverse, stopped                            |
+| A                  | Handbrake — unsticks the rear                           |
+| X                  | Camera: next of six angles                              |
+| B                  | Back to the track (off-road)                            |
+| Y                  | Screenshot                                              |
+| L1 / R1            | Shift down / up (manual car)                            |
+| D-pad ← →          | Steer, for anyone who would rather not use the stick    |
+| Select / Start     | Main menu / in-race menu                                |
+
+The **analogue triggers** are the reason a pad is worth driving on: a slide is caught with a fraction of the throttle, which no key can express. RESTART is deliberately left unbound — every other button is recoverable by pressing it again, and throwing a stage away halfway down it is not — but it is in the list if you want it somewhere. Everything here is rebindable the same way the keys are: tap a row, press the button. If the car wanders down a straight with nobody touching the stick, raise **stick deadzone**. Menus are still driven by touch or mouse.
+
 ### Options
 
 **HUD** switches off anything you do not need on screen — minimap, the rear-view mirror, the on-screen camera button, pacenotes (and separately their WORDS, leaving just the corner arrows to read at a glance), damage glyph, tachometer, stage clock. Speed, gear and the start lights stay: those are the game.

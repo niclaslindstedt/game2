@@ -14,26 +14,37 @@
 //   CONTROLS — the gearbox, which every car in the roster will take either
 //              way, plus only what the device can actually use: a desktop
 //              rebinds keys; a touch device chooses which thumb steers and
-//              what each drag off the pedal anchor does. A laptop with a
-//              touchscreen reports both and is offered both.
+//              what each drag off the pedal anchor does; and a device with a
+//              CONTROLLER on it maps that. A laptop with a touchscreen
+//              reports both and is offered both, and the pad section appears
+//              the moment a pad does.
 //
 // Every change applies the moment it is made and is persisted by the app;
 // there is no OK button to forget to press.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { deviceControls } from "./input.ts";
+import { captureAxis, captureSource, type PadFrame } from "./gamepad.ts";
+import { deviceControls, holdPad, readPadFrames } from "./input.ts";
 import { GearboxRow, MenuHead, OptionRow, ToggleRow } from "./menu.tsx";
 import {
   DEFAULT_KEYS,
+  DEFAULT_PAD,
   DEFAULT_TOUCH,
   HUD_TOGGLES,
   KEY_ACTIONS,
+  PAD_ACTIONS,
+  PAD_DEADZONES,
   PEDAL_DIRS,
   PLAY_CAMERAS,
   assignPedalDir,
+  clonePad,
   keyLabel,
+  padAxisLabel,
+  padSourceLabel,
   type KeyAction,
+  type PadAction,
+  type PadSettings,
   type PedalDir,
   type PlayCamera,
   type Settings,
@@ -329,6 +340,223 @@ function TouchSection({ settings, onSettings }: Pick<OptionsProps, "settings" | 
   );
 }
 
+/** What the browser currently says is plugged in. Polled rather than
+ * listened for: `gamepadconnected` is the only event a pad ever fires, and
+ * a pad that was already there before this page opened never fires it. Ten
+ * times a second is instant to a human and nothing to a phone, and the
+ * summary is compared before it is stored so the card is not re-rendered
+ * for a stick sitting still. */
+function usePadPresence(): { connected: boolean; standard: boolean; name: string } {
+  const [pads, setPads] = useState(() => summarise(readPadFrames()));
+  useEffect(() => {
+    const tick = (): void => {
+      const next = summarise(readPadFrames());
+      setPads((was) =>
+        was.connected === next.connected && was.standard === next.standard && was.name === next.name
+          ? was
+          : next,
+      );
+    };
+    const timer = setInterval(tick, 100);
+    return () => clearInterval(timer);
+  }, []);
+  return pads;
+}
+
+function summarise(frames: PadFrame[]): { connected: boolean; standard: boolean; name: string } {
+  const first = frames[0];
+  if (!first) return { connected: false, standard: false, name: "" };
+  // The id is the driver's own string and can run to sixty characters of
+  // vendor and product hex. The name is a caption, not a datasheet.
+  const name = first.id.replace(/\s*\([^)]*\)\s*$/, "").slice(0, 32);
+  return { connected: true, standard: first.standard, name: name || "Controller" };
+}
+
+/** Wait for the player to move something, and say what they moved. The
+ * baseline is taken the moment the row starts listening, so a trigger that
+ * rests at half travel or a stick that rests off centre is the FLOOR rather
+ * than the answer — only a real move off wherever it was sitting counts.
+ *
+ * rAF rather than the 10 Hz poll above: this one is a person pressing a
+ * button and expecting the row to answer, and a tenth of a second late
+ * reads as a button that did not work. */
+function usePadCapture(active: boolean, onCapture: (frames: PadFrame[], base: PadFrame[]) => void) {
+  const handler = useRef(onCapture);
+  handler.current = onCapture;
+  useEffect(() => {
+    if (!active) return;
+    // The pad is this row's while it listens. Without that, binding CAMERA
+    // to START fires pause on the way past, and the player lands back in
+    // the run holding a card they never asked for.
+    holdPad(true);
+    const baseline = readPadFrames();
+    let raf = 0;
+    const tick = (): void => {
+      raf = requestAnimationFrame(tick);
+      handler.current(readPadFrames(), baseline);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      holdPad(false);
+    };
+  }, [active]);
+}
+
+/** One rebindable pad action. Same shape as the keyboard's row next to it —
+ * the two are the same job, and a player who has just rebound a key should
+ * not have to learn a second idea to rebind a button. */
+function PadRow({
+  label,
+  bound,
+  listening,
+  prompt,
+  onListen,
+}: {
+  label: string;
+  bound: string;
+  listening: boolean;
+  prompt: string;
+  onListen: () => void;
+}) {
+  return (
+    <div className="opt-key">
+      <span className="opt-key-label">{label}</span>
+      <button
+        type="button"
+        className={`opt-key-bind ${listening ? "opt-key-listening" : ""}`}
+        onClick={onListen}
+      >
+        {listening ? prompt : bound}
+      </button>
+    </div>
+  );
+}
+
+/** The controller. It is offered only where there IS one — a pad that has
+ * never been touched has no buttons anyone can name and no rows worth
+ * printing — and in its place there is one line saying how to make it
+ * appear, because a section that is simply absent reads as a feature that
+ * does not exist. */
+function GamepadSection({ settings, onSettings }: Pick<OptionsProps, "settings" | "onSettings">) {
+  const pads = usePadPresence();
+  /** Which row is waiting for a press — an action, `"steer"` for the axis,
+   * or nothing. */
+  const [listening, setListening] = useState<PadAction | "steer" | null>(null);
+  const pad = settings.pad;
+  const setPad = (next: PadSettings): void => onSettings({ ...settings, pad: next });
+
+  // A pad unplugged mid-rebind leaves a row listening to nothing.
+  useEffect(() => {
+    if (!pads.connected) setListening(null);
+  }, [pads.connected]);
+
+  usePadCapture(listening !== null && pads.connected, (frames, base) => {
+    if (listening === null) return;
+    if (listening === "steer") {
+      const found = captureAxis(frames, base);
+      if (!found) return;
+      setListening(null);
+      setPad({
+        ...pad,
+        bindings: { ...pad.bindings, steerAxis: found.axis, steerInvert: found.invert },
+      });
+      return;
+    }
+    const source = captureSource(frames, base);
+    if (!source) return;
+    setListening(null);
+    // The whole binding, replaced by the one control that was offered —
+    // exactly what the keyboard's rows do with the one key that was pressed.
+    setPad({
+      ...pad,
+      bindings: { ...pad.bindings, sources: { ...pad.bindings.sources, [listening]: [source] } },
+    });
+  });
+
+  if (!pads.connected) {
+    return (
+      <div className="opt-section">
+        <div className="opt-section-title">CONTROLLER</div>
+        <div className="opt-note">
+          Plug in or pair a controller and press one of its buttons — it appears here to be mapped.
+          Out of the box the triggers are the pedals (right gas, left brake), A is the handbrake, X
+          switches camera and the shoulders shift.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="opt-section">
+      <div className="opt-section-title">CONTROLLER</div>
+      <div className="opt-note">
+        {pads.name}
+        {pads.standard ? "" : " — this pad reports no standard layout, so its buttons are numbered"}
+      </div>
+      <ToggleRow
+        label="CONTROLLER"
+        hint="Off ignores the pad completely — the way out if one drives by itself"
+        on={pad.enabled}
+        onToggle={() => setPad({ ...pad, enabled: !pad.enabled })}
+      />
+      <ToggleRow
+        label="HIDE TOUCH CONTROLS"
+        hint="Takes the on-screen wheel and pedal away while a controller is connected"
+        on={pad.hideTouch}
+        onToggle={() => setPad({ ...pad, hideTouch: !pad.hideTouch })}
+      />
+      <div className="opt-keys">
+        <PadRow
+          label="STEERING"
+          bound={padAxisLabel(pad.bindings.steerAxis, pad.bindings.steerInvert, pads.standard)}
+          listening={listening === "steer"}
+          prompt="STEER RIGHT…"
+          onListen={() => setListening(listening === "steer" ? null : "steer")}
+        />
+        {PAD_ACTIONS.map((entry) => (
+          <PadRow
+            key={entry.id}
+            label={entry.label}
+            bound={
+              pad.bindings.sources[entry.id]
+                .map((source) => padSourceLabel(source, pads.standard))
+                .join(" / ") || "UNBOUND"
+            }
+            listening={listening === entry.id}
+            prompt="PRESS A BUTTON…"
+            onListen={() => setListening(listening === entry.id ? null : entry.id)}
+          />
+        ))}
+      </div>
+      <OptionRow
+        label="STICK DEADZONE"
+        options={PAD_DEADZONES}
+        value={nearestDeadzone(pad.bindings.deadzone)}
+        onPick={(id) => setPad({ ...pad, bindings: { ...pad.bindings, deadzone: Number(id) } })}
+      />
+      <div className="opt-note">
+        How far the stick has to leave centre before the car turns. Raise it if the car wanders down
+        a straight with nobody touching it. The triggers are analogue — half a trigger is half the
+        pedal, which is what makes a slide catchable on a pad.
+      </div>
+      <button type="button" className="opt-reset" onClick={() => setPad(clonePad(DEFAULT_PAD))}>
+        RESET CONTROLLER
+      </button>
+    </div>
+  );
+}
+
+/** The nearest stop to a stored deadzone, so a value set on another build's
+ * ladder still lights a button. */
+function nearestDeadzone(value: number): string {
+  let best = PAD_DEADZONES[0];
+  for (const stop of PAD_DEADZONES) {
+    if (Math.abs(Number(stop.id) - value) < Math.abs(Number(best.id) - value)) best = stop;
+  }
+  return best.id;
+}
+
 /** The camera the player carries. It is on this tab and not on HUD because
  * what it actually is, is a KEY and a button — the picture it takes has no
  * HUD in it at all. Off stops both; the gallery stays where it is, because
@@ -378,6 +606,7 @@ function ControlsTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "
       <GearboxSection settings={settings} onSettings={onSettings} />
       <ScreenshotSection settings={settings} onSettings={onSettings} />
       {device.keyboard && <KeyboardSection settings={settings} onSettings={onSettings} />}
+      <GamepadSection settings={settings} onSettings={onSettings} />
       {device.touch && <TouchSection settings={settings} onSettings={onSettings} />}
     </div>
   );
