@@ -333,7 +333,22 @@ function buildSeat(b: MeshBuilder, cabin: Cabin, x: number, high: boolean): void
   slab(b, [0.24, 0.14, 0.12], [x, cabin.sillY + 0.17, z - 0.31], TRIM.seat, lean);
   if (!high) return;
   for (const side of [-1, 1]) {
-    slab(b, [0.08, height * 0.9, 0.2], [x + side * 0.19, mid, z - 0.19], TRIM.seatFace, lean);
+    // Cut off at the SHOULDER, not at the top of the seat back. A bucket's
+    // bolsters wrap the torso and stop where the occupant's shoulders come
+    // out of them; run to the full height of the back and the two inner ones
+    // become a pair of pale columns standing between the driver and the map
+    // reader — a slab down the middle of the cabin, over their shoulders,
+    // exactly where anybody looking in through the glass is looking. Below
+    // the sill they still do their job in the cockpit view and vanish from
+    // outside, which is the right trade for a part nobody is meant to notice.
+    const wrap = cabin.sillY - cabin.panY;
+    slab(
+      b,
+      [0.08, wrap, 0.2],
+      [x + side * 0.19, cabin.panY + wrap / 2, z - 0.19],
+      TRIM.seatFace,
+      lean,
+    );
   }
   // Two harness straps over the shoulders — a diagonal pair of red bands is
   // the most rally thing a cabin can carry, and it survives the glass.
