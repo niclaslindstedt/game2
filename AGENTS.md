@@ -15,6 +15,7 @@ make fmt          # prettier in place; fmt-check is what CI runs
 make sim          # headless balance sweep — REQUIRED before/after any handling or generator change
 make record       # record a bot run to a run tape (runs/*.jsonl)
 make replay       # RUN='runs/<file>.jsonl' — replay a tape and place its time against each field
+make heat         # the whole grid on one road — REQUIRED before/after any bot-traffic or temper change
 make track        # render stages to previews/track-<seed>.png
 make cars         # render the car models to previews/cars.png (chase-cam + turntable sheet)
 make liveries     # render one body in the field's paint schemes to previews/liveries.png

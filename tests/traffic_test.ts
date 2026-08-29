@@ -14,14 +14,19 @@ import { describe, expect, it } from "vitest";
 
 import {
   NEUTRAL_INPUT,
+  RALLY_BOT,
   TUNING,
+  botInput,
   collideCars,
   compileTrack,
   createGame,
+  simulateHeat,
   step,
+  type CarInput,
   type ContactSide,
   type GameEvent,
   type GameState,
+  type TrafficCar,
 } from "@engine";
 
 const LONG_STRAIGHT = [{ kind: "straight", length: 4000, feature: "none" } as const];
@@ -238,3 +243,176 @@ describe("a contact inside a real run", () => {
     expect(ahead.stats.impacts).toBe(1);
   });
 });
+
+// ── WHAT A BOT DOES ABOUT IT ──────────────────────────────────────────────
+// The contact model above is what happens once two cars have found each
+// other. This is the half that decides whether they do: the bot's traffic
+// eyes and the two knobs of temperament in front of them (bot.ts). A stage
+// driven alone must come out untouched by any of it — that is the guarantee
+// the whole `make sim` table rests on — and past `AGGRO.clean` a crew has to
+// actually arrive in somebody's door rather than merely intend to.
+
+/** Both cars on one long straight, one of them held at `pace` and blind, the
+ * other closing on it with `profile`'s temper. Returns how close they got,
+ * how far the slow one was shoved off its line, and whether the move was
+ * made. */
+function overtake(aggression: number, overtake: number) {
+  const track = compileTrack(7, [{ kind: "straight", length: 4000, feature: "none" } as const]);
+  const car = (): GameState =>
+    createGame({ seed: 7, carId: "compact", skipCountdown: true, quiet: true, track });
+  const seen = (s: GameState): TrafficCar => ({
+    x: s.car.x,
+    z: s.car.z,
+    u: s.car.u,
+    lateral: s.lateral,
+  });
+  const chaser = car();
+  const held = car();
+  // The car in front is a slow crew driving its own line and looking at
+  // nobody: an obstacle with a steering wheel.
+  const cruise = (s: GameState): CarInput => {
+    const drive = botInput(s);
+    return { ...drive, throttle: s.car.u < 30 ? 0.85 : 0, brake: 0, handbrake: false };
+  };
+  for (let i = 0; i < 600; i++) step(held, cruise(held));
+
+  const profile = { ...RALLY_BOT, aggression, overtake };
+  const line = held.lateral;
+  let apart = Infinity;
+  let shoved = 0;
+  for (let i = 0; i < 3600; i++) {
+    const drive = botInput(chaser, profile, [seen(held)]);
+    // Held six m/s quicker than the car in front — a race's closing speed,
+    // not a straight-line runaway, so the two are alongside long enough for
+    // a temper to be worth having.
+    step(chaser, { ...drive, throttle: chaser.car.u < 36 ? drive.throttle : 0 });
+    step(held, cruise(held));
+    const gap = Math.hypot(chaser.car.x - held.car.x, chaser.car.z - held.car.z);
+    if (gap < 5) {
+      collideCars(
+        { spec: chaser.spec, car: chaser.car, events: [], stats: chaser.stats },
+        { spec: held.spec, car: held.car, events: [], stats: held.stats },
+      );
+    }
+    apart = Math.min(apart, gap);
+    shoved = Math.max(shoved, Math.abs(held.lateral - line));
+  }
+  return { apart, shoved, passed: chaser.progressS > held.progressS };
+}
+
+describe("a bot with cars around it", () => {
+  it("drives a stage handed no traffic exactly as it always did", () => {
+    const state = createGame({
+      seed: 4,
+      carId: "compact",
+      skipCountdown: true,
+      quiet: true,
+      track: compileTrack(4, LONG_STRAIGHT),
+    });
+    const alone = createGame({
+      seed: 4,
+      carId: "compact",
+      skipCountdown: true,
+      quiet: true,
+      track: compileTrack(4, LONG_STRAIGHT),
+    });
+    for (let i = 0; i < 1200; i++) {
+      step(state, botInput(state, RALLY_BOT, []));
+      step(alone, botInput(alone));
+    }
+    expect(state.car.x).toBe(alone.car.x);
+    expect(state.car.z).toBe(alone.car.z);
+    expect(state.car.u).toBe(alone.car.u);
+  });
+
+  it("goes round the car in front without touching it when it is clean", () => {
+    const clean = overtake(0, 0.8);
+    expect(clean.passed).toBe(true);
+    // Two bodies meet at `halfWidth × 2`; a clean crew leaves air outside it.
+    expect(clean.apart).toBeGreaterThan(TUNING.collision.halfWidth * 2 + 0.8);
+    expect(clean.shoved).toBeLessThan(0.2);
+  });
+
+  it("runs closer the more temper it has, and eventually leans on them", () => {
+    const mild = overtake(0.1, 0.8);
+    const firm = overtake(0.5, 0.8);
+    const nasty = overtake(1, 0.8);
+    expect(firm.apart).toBeLessThan(mild.apart);
+    expect(nasty.apart).toBeLessThan(firm.apart);
+    // At the top of the scale it is not a pass any more: the bodies are
+    // touching, and the car being passed ends up somewhere it did not choose.
+    expect(nasty.apart).toBeLessThan(TUNING.collision.halfWidth * 2 + 0.1);
+    expect(nasty.shoved).toBeGreaterThan(1);
+    expect(mild.shoved).toBeLessThan(0.2);
+  });
+
+  it("never crosses through the car it is passing to get to the other side", () => {
+    // The chaser starts on the crown behind a car on the crown, so both
+    // sides of the road are equally open. Whichever it picks, it must not
+    // arrive there through the other car.
+    for (const aggression of [0, 0.5, 1]) {
+      const { apart } = overtake(aggression, 0.8);
+      // Inside a half body is a car that has been driven through rather than
+      // leaned on: the contact model pushes them apart at a full one.
+      expect(apart).toBeGreaterThan(TUNING.collision.halfWidth);
+    }
+  });
+});
+
+// ── THE WHOLE GRID ────────────────────────────────────────────────────────
+// `simulateRace` is the instrument the temper model is tuned with (`make
+// race`), and an instrument that is not deterministic measures nothing.
+
+describe("a headless heat", () => {
+  it("is the same race every time it is run", () => {
+    const one = simulateHeat({ seed: 12, difficulty: "hard", cars: 6, length: "short" });
+    const two = simulateHeat({ seed: 12, difficulty: "hard", cars: 6, length: "short" });
+    expect(one.entries.map((e) => [e.crew.id, e.place, e.time, e.rubs, e.dealt])).toEqual(
+      two.entries.map((e) => [e.crew.id, e.place, e.time, e.rubs, e.dealt]),
+    );
+  });
+
+  it("classifies the finishers by time and the retirements behind them", () => {
+    const heat = simulateHeat({ seed: 12, difficulty: "medium", cars: 6, length: "short" });
+    // `cars` is the GRID the game would stand up, and its back slot is the
+    // player's — empty in a heat, so a six-car grid races five crews.
+    expect(heat.entries).toHaveLength(5);
+    expect(heat.entries.map((e) => e.place)).toEqual([1, 2, 3, 4, 5]);
+    const home = heat.entries.filter((e) => e.finished);
+    expect(home.length).toBeGreaterThan(0);
+    for (let i = 1; i < home.length; i++)
+      expect(home[i].time).toBeGreaterThanOrEqual(home[i - 1].time);
+    // Anybody who never reached the line is behind everybody who did.
+    for (const entry of heat.entries.filter((e) => !e.finished)) {
+      expect(entry.place).toBeGreaterThan(home.length);
+    }
+  });
+
+  it("books what the field did to itself, and books it only once per contact", () => {
+    const heat = simulateHeat({ seed: 12, difficulty: "hard", cars: 8, length: "short" });
+    const rubs = heat.entries.reduce((sum, e) => sum + e.rubs, 0);
+    // A grid this deep cannot get down a stage without finding itself.
+    expect(rubs).toBeGreaterThan(0);
+    // Every contact has two sides, so the field's rubs come in pairs.
+    expect(rubs % 2).toBe(0);
+    for (const entry of heat.entries) {
+      // A crew can only have driven into a contact it was in.
+      expect(entry.shunts).toBeLessThanOrEqual(entry.rubs);
+      expect(entry.dealt).toBeGreaterThanOrEqual(0);
+      expect(entry.taken).toBeGreaterThanOrEqual(0);
+      // Panel only ever lands on the ledger of a crew that drove into
+      // something: no shunts, no damage attributed either way.
+      if (entry.shunts === 0) {
+        expect(entry.dealt).toBe(0);
+        expect(entry.taken).toBe(0);
+      }
+    }
+  });
+});
+
+// How much panel a DIFFICULTY actually folds is an emergent number — a
+// handful of shunts over a whole grid — and one race is one accident. It is
+// measured with `make race` over several seeds and read as a table, not
+// asserted here: the mechanism behind it is what these tests pin (a temper
+// makes contact, above; a difficulty sets the temper, `tests/rivals_test.ts`),
+// and a threshold on the sum would be a flake rather than a guard.

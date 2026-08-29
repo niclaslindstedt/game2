@@ -63,6 +63,7 @@ import {
   createField,
   drainField,
   fieldResults,
+  livePlace,
   placeAtFinish,
   placeAtSplit,
   rubRivals,
@@ -1336,11 +1337,9 @@ export function App() {
        * there they are a car: one you can lean on out of a corner, and one
        * you can put into the trees.
        *
-       * Rivals are never resolved against EACH OTHER. What a rival's time
-       * means is a stage they drove alone, and a result decided by a shunt
-       * between two cars the player never saw is not one they can read — so
-       * the player is the only disruption on the road, and the only one who
-       * has to live with it. */
+       * The field against ITSELF is resolved a step earlier, inside
+       * `stepField`, where the whole road takes one tick together. This is
+       * the player's half of the same model. */
       const rubField = (field: RivalField, state: GameState): void => {
         // Their half of a hit lands on their body alone: they crumple and
         // shed parts, and make no sound and throw no dust, because the hit
@@ -1541,8 +1540,16 @@ export function App() {
             // less than you took, plus you.
             let measured: { time: number; against: string } | null = null;
             if (field) {
-              const place = placeAtSplit(field, ev.split, ev.time);
-              standingRef.current = { place, of: field.of };
+              // A mass start already knows where everybody is on every frame
+              // (`livePlace`, below), and the count of better split times is
+              // the wrong answer there — it places a car that is level with
+              // you but yet to reach the board as though it were behind.
+              if (!field.massStart) {
+                standingRef.current = {
+                  place: placeAtSplit(field, ev.split, ev.time),
+                  of: field.of,
+                };
+              }
               const leader = splitLeader(field, ev.split);
               if (leader) measured = { time: leader.time, against: leader.alias.toUpperCase() };
             }
@@ -1654,7 +1661,11 @@ export function App() {
           // the offset between the fifteen of them is carried by the head
           // start each one was entered owing (standings.ts).
           const running = fieldRef.current;
-          if (running) stepField(running);
+          // …and they can SEE the player while they do it: handed the car
+          // they are racing, a bot goes round it, sits in behind it, or
+          // leans on it, depending on the crew (engine/sim/bot.ts). Their
+          // own events go to their own bodywork and nowhere else.
+          if (running) stepField(running, state, renderer.field.events);
           // The driver's own way out of the ceremony. Taken before the step,
           // so the frame that skips is already a countdown frame — and the
           // field is pushed on by exactly what the player jumped, or the
@@ -1733,6 +1744,15 @@ export function App() {
         if (hudClock > 0.08) {
           hudClock = 0;
           if (!page) {
+            // R29 — a HEADS-UP race is the one discipline that knows the
+            // order of the road at every moment, so its position board reads
+            // live rather than waiting for the next split. Off the HUD's own
+            // clock and not the physics step: it is a number on a screen
+            // that redraws twelve times a second.
+            const racing = fieldRef.current;
+            if (racing?.massStart && state.phase === "racing") {
+              standingRef.current = { place: livePlace(racing, state), of: racing.of };
+            }
             setSnap(
               takeSnapshot(
                 state,

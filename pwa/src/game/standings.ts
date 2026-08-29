@@ -26,6 +26,7 @@ export {
   advanceRun,
   createField,
   fieldResults,
+  livePlace,
   onRoad,
   placeAtFinish,
   placeAtSplit,

@@ -144,11 +144,17 @@ function timeout(stage: TapeStage): number {
  * recording against a field it never met therefore measures the divergence
  * and nothing else.
  *
- * Racing the field alone has none of that in it. Rivals are never resolved
- * against each other (`rubRivals` is the player's alone), so every crew's
- * time is the same time whether or not anybody was out there with them —
- * which makes "where would this drive have placed at hard" an exact
- * question with an exact answer. */
+ * Racing the field alone has none of that in it, and it is still an EXACT
+ * question with an exact answer: a field is deterministic in its seed, its
+ * difficulty and its size, so "what would this time have been worth against
+ * a hard field driving its own race" has one answer and always the same one.
+ *
+ * What it is not — since the crews began to see and to touch each other
+ * (`stepField`) — is a claim about the race the tape was recorded in. A
+ * rival's time now depends on the cars around it, the player's included: one
+ * lean can set off a shunt three cars down the road. That is what a race is,
+ * and it is why the calibration is quoted against the field's own clean race
+ * rather than against a re-run of anybody's. */
 export function placeAmongField(options: {
   stage: TapeStage;
   field: FieldPlan;

@@ -171,7 +171,8 @@ export {
 
 // The headless simulator and its bot driver.
 export { simulateStage, type SimOptions, type SimResult } from "./sim/simulate.ts";
-export { botInput, RALLY_BOT, type BotProfile } from "./sim/bot.ts";
+export { botInput, RALLY_BOT, type BotProfile, type TrafficCar } from "./sim/bot.ts";
+export { simulateHeat, type HeatEntry, type HeatOptions, type HeatResult } from "./sim/heat.ts";
 export {
   AXIS_MAX,
   DIFFICULTIES,
@@ -182,11 +183,13 @@ export {
   gearboxFor,
   profileFor,
   skillPoints,
+  temperFor,
   MANUAL_HANDS,
   spend,
   type BotSkill,
   type Difficulty,
   type SkillAxis,
+  type TemperBand,
 } from "./sim/skill.ts";
 export {
   GRID_DEFAULT,
@@ -218,6 +221,7 @@ export {
   advanceRun,
   createField,
   fieldResults,
+  livePlace,
   onRoad,
   payHeadStart,
   placeAtFinish,
@@ -230,6 +234,7 @@ export {
   stepField,
   stopField,
   type ClassRow,
+  type FieldContact,
   type FieldPlan,
   type FieldStage,
   type RivalField,

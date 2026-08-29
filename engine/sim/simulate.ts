@@ -57,10 +57,26 @@ export type SimResult = {
   /** Ground actually covered by the race: the lap times the laps. */
   raceLength: number;
   stats: GameState["stats"];
+  /** WHAT THE RUN COST THE CAR, in metres of folded panel: every damage zone
+   * plus the floorpan. `stats.impacts` counts the hits; this is what they
+   * actually did, and it is the number that separates a run that clipped
+   * three trees from one that hit a boulder. */
+  crush: number;
+  /** …and its structural wear, 0 (sound) to 1 (the wreck). */
+  wear: number;
   events: GameEvent[];
   /** FNV-1a hash over sampled car positions — the determinism fingerprint. */
   digest: string;
 };
+
+/** How much bodywork a car has lost in total, m — every zone plus the
+ * floorpan taking what the springs could not. */
+function crushOf(state: GameState): number {
+  const damage = state.car.damage;
+  let total = damage.belly;
+  for (const zone of damage.zones) total += zone;
+  return total;
+}
 
 /** Drive one stage headlessly with the bot. */
 export function simulateStage(options: SimOptions): SimResult {
@@ -118,6 +134,8 @@ export function simulateStage(options: SimOptions): SimResult {
     trackLength: raced,
     raceLength: raced * state.laps,
     stats: state.stats,
+    crush: crushOf(state),
+    wear: state.car.damage.wear,
     events,
     digest: hash.toString(16).padStart(8, "0"),
   };

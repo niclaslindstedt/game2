@@ -24,6 +24,10 @@
 //                                        # at all three difficulties, with
 //                                        # what each is worth in points and
 //                                        # what that does to the clock
+//   npm run sim -- --heat                # the HEAT table: the whole grid down
+//                                        # one road AT ONCE, and what the
+//                                        # crews do to each other when there
+//                                        # is somebody in the way
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,6 +36,7 @@ import process from "node:process";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const {
   simulateStage,
+  simulateHeat,
   compileStage,
   CARS,
   STAGE_RULES,
@@ -96,6 +101,8 @@ console.log(
     pad("ford", 5),
     pad("off", 6),
     pad("hit", 4),
+    pad("dmg", 5),
+    pad("wear", 5),
     pad("resp", 5),
     pad("top", 8),
     "  fin",
@@ -120,6 +127,8 @@ for (const seed of seeds) {
         pad(r.stats.splashes, 5),
         pad(r.stats.offRoadTime.toFixed(1), 6),
         pad(r.stats.impacts, 4),
+        pad((r.crush * 100).toFixed(0) + "cm", 5),
+        pad((r.wear * 100).toFixed(0) + "%", 5),
         pad(r.stats.respawns, 5),
         pad((r.stats.topSpeed * 3.6).toFixed(0) + "km/h", 8),
         r.finished ? "  yes" : "   NO",
@@ -146,7 +155,8 @@ console.log(
   `\n${finished}/${rows.length} finished · avg pace ${avg((r) => (r.raceLength / r.time) * 3.6).toFixed(0)} km/h · ` +
     `avg drift time ${avg((r) => r.stats.driftTime).toFixed(1)} s · ` +
     `avg air time ${avg((r) => r.stats.airTime).toFixed(1)} s · ` +
-    `respawns ${rows.reduce((a, r) => a + r.stats.respawns, 0)}`,
+    `respawns ${rows.reduce((a, r) => a + r.stats.respawns, 0)} · ` +
+    `avg damage ${(avg((r) => r.crush) * 100).toFixed(0)} cm / ${(avg((r) => r.wear) * 100).toFixed(0)}% wear`,
 );
 
 /** THE ROSTER BALANCE TABLE. One car being fastest on every stage in the
@@ -328,6 +338,111 @@ if (args.includes("--field")) {
   console.log(
     "\n  P3 is the podium: over 1.00 a reference-pace run wins it, under 1.00 it does not.",
   );
+}
+
+/** THE HEAT TABLE. Every other table in this file drives a car
+ * ALONE, which is the honest instrument for handling and for the generator
+ * and a blind one for the half of the field model that only exists when
+ * there is somebody in the way. The bot's traffic eyes and the crews'
+ * tempers never fire in a lone run, so no amount of `make sim` can say what
+ * a difficulty's MANNERS are worth.
+ *
+ * This stands the whole grid on one road and sends it on one green
+ * (`simulateHeat`). Read three things:
+ *
+ *   RUBS is how often the field found itself — a heat with none of them is
+ *   eight cars driving a stage in convoy rather than racing it.
+ *   DEALT and TAKEN are metres of folded panel, out and in. A crew that
+ *   deals and never takes is bullying the field; one that takes and never
+ *   deals is being bullied by it; and a difficulty where everybody deals
+ *   nothing is a difficulty whose manners do not exist.
+ *   CM PER CONTACT is the header's honest column, and the one to read for a
+ *   temper change. Panel per heat conflates two things — how nasty the field
+ *   is, and how often it meets at all — and those run OPPOSITE ways, because
+ *   a quicker field spreads out and meets less. Per contact divides the
+ *   second one out and leaves the first.
+ *   The `agg` beside each crew is the temper the difficulty gave them
+ *   (`temperFor`), so the columns can be read against the thing that is
+ *   supposed to be causing them.
+ *
+ * Any change to the traffic model in `engine/sim/bot.ts`, to the temper
+ * bands in `skill.ts`, or to a crew's `temper` in `rivals.ts` owes this
+ * table. */
+if (args.includes("--heat")) {
+  const pool = (flag("seeds") ? seeds : seeds.slice(0, 3)).slice(0, 6);
+  const grid = Number(flag("grid") ?? 8);
+  console.log(
+    `\nHEAT — ${length} stages, seeds ${pool.join(",")}, ` +
+      `${grid} cars on one grid, damage in cm of folded panel`,
+  );
+  for (const difficulty of DIFFICULTY_IDS) {
+    const book = new Map();
+    let races = 0;
+    for (const seed of pool) {
+      const heat = simulateHeat({ seed, difficulty, cars: grid, length, weather, knobs, maxTime });
+      races += 1;
+      for (const entry of heat.entries) {
+        const row = book.get(entry.crew.id) ?? {
+          alias: entry.crew.alias,
+          agg: entry.aggression,
+          places: [],
+          rubs: 0,
+          shunts: 0,
+          dealt: 0,
+          taken: 0,
+          dnf: 0,
+        };
+        row.places.push(entry.place);
+        row.rubs += entry.rubs;
+        row.shunts += entry.shunts;
+        row.dealt += entry.dealt;
+        row.taken += entry.taken;
+        if (!entry.finished) row.dnf += 1;
+        book.set(entry.crew.id, row);
+      }
+    }
+    const rowsOut = [...book.values()].map((r) => ({
+      ...r,
+      mean: r.places.reduce((a, b) => a + b, 0) / r.places.length,
+    }));
+    rowsOut.sort((a, b) => a.mean - b.mean);
+    const total = (f) => rowsOut.reduce((a, r) => a + f(r), 0);
+    const contacts = total((r) => r.rubs) / 2;
+    const panel = total((r) => r.dealt) * 100;
+    console.log(
+      `\n  ${difficulty.toUpperCase().padEnd(7)} ${races} heats · ` +
+        `${(contacts / races).toFixed(1)} contacts per heat · ` +
+        `${(panel / races).toFixed(0)} cm of panel per heat · ` +
+        `${(panel / Math.max(1, contacts)).toFixed(2)} cm PER CONTACT · ` +
+        `${total((r) => r.dnf)} retirements`,
+    );
+    console.log(
+      [
+        "    " + "crew".padEnd(11),
+        pad("agg", 5),
+        pad("place", 6),
+        pad("rubs", 5),
+        pad("drove in", 8),
+        pad("dealt", 7),
+        pad("taken", 7),
+        pad("dnf", 4),
+      ].join(" "),
+    );
+    for (const r of rowsOut) {
+      console.log(
+        [
+          "    " + r.alias.padEnd(11),
+          pad(r.agg.toFixed(2), 5),
+          pad(r.mean.toFixed(1), 6),
+          pad(r.rubs, 5),
+          pad(r.shunts, 8),
+          pad((r.dealt * 100).toFixed(0) + "cm", 7),
+          pad((r.taken * 100).toFixed(0) + "cm", 7),
+          pad(r.dnf, 4),
+        ].join(" "),
+      );
+    }
+  }
 }
 
 const jsonOut = flag("json");

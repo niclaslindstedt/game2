@@ -26,6 +26,11 @@
 //     AND later — which is what makes fourteen rivals fourteen characters
 //     rather than one bot at fourteen volumes.
 //
+// What the budget does NOT buy is how a crew behaves around other cars. That
+// is temperament rather than skill — it is not monotone in pace, so no axis
+// can own it — and it comes off the crew's own `temper` through the band a
+// difficulty sets (`temperFor`, and `AGGRO` in bot.ts).
+//
 // Tuning happens here and in rivals.ts, and it is measured with
 // `npm run sim -- --field`, which drives the whole field and prints what
 // each difficulty actually does to the clock.
@@ -205,10 +210,37 @@ export function spend(budget: number, weights: BotSkill): BotSkill {
  * points, which puts it at the head of MEDIUM and in the middle of HARD. */
 export type Difficulty = "easy" | "medium" | "hard";
 
-export const DIFFICULTIES: Record<Difficulty, { label: string; budget: number; spread: number }> = {
-  easy: { label: "EASY", budget: 11, spread: 15 },
-  medium: { label: "MEDIUM", budget: 19, spread: 17 },
-  hard: { label: "HARD", budget: 28, spread: 16 },
+/** How a difficulty's field behaves AROUND OTHER CARS, as the band the
+ * crews' own tempers are spread across (`temperFor`). It is a second dial
+ * beside the budget and deliberately not part of it: `aggression` is not a
+ * skill and is not monotone in pace (bot.ts), so a crew cannot buy it and a
+ * quick field is not automatically a dirty one.
+ *
+ * The bands are read against bot.ts's `AGGRO` thresholds, and they are what
+ * each setting PROMISES:
+ *
+ *   EASY tops out just past `AGGRO.clean`, so the field gives way, the
+ *   worst of it is a nudge from the two or three crews with a temper, and
+ *   nobody on it is trying to put anyone off the road.
+ *   MEDIUM tops out just under `AGGRO.dirty`: half the field will lean on
+ *   you and none of it will end your run on purpose.
+ *   HARD reaches the top of the scale, and its floor is high enough that
+ *   even the mild crews will hold their line. This is where the rear
+ *   quarter gets used. */
+export type TemperBand = {
+  /** What the mildest crew in the field is worth. */
+  calm: number;
+  /** …and the one with the reputation. */
+  wild: number;
+};
+
+export const DIFFICULTIES: Record<
+  Difficulty,
+  { label: string; budget: number; spread: number; aggression: TemperBand }
+> = {
+  easy: { label: "EASY", budget: 11, spread: 15, aggression: { calm: 0, wild: 0.5 } },
+  medium: { label: "MEDIUM", budget: 19, spread: 17, aggression: { calm: 0.1, wild: 0.72 } },
+  hard: { label: "HARD", budget: 28, spread: 16, aggression: { calm: 0.25, wild: 1 } },
 };
 
 export const DIFFICULTY_IDS: Difficulty[] = ["easy", "medium", "hard"];
@@ -218,4 +250,14 @@ export const DIFFICULTY_IDS: Difficulty[] = ["easy", "medium", "hard"];
 export function budgetFor(difficulty: Difficulty, standing: number): number {
   const { budget, spread } = DIFFICULTIES[difficulty];
   return clamp(budget + spread * (clamp(standing, 0, 1) - 0.5), 0, SKILL_MAX);
+}
+
+/** What one crew is worth AROUND OTHER CARS: their own temper (0 is the
+ * mildest driver on the roster, 1 the one with the reputation), placed in
+ * the difficulty's band. A crew keeps its rank in the field's temper at
+ * every setting — Scrapper is always the one to watch — and what moves is
+ * how much the setting lets any of them do about it. */
+export function temperFor(difficulty: Difficulty, temper: number): number {
+  const { calm, wild } = DIFFICULTIES[difficulty].aggression;
+  return calm + (wild - calm) * clamp(temper, 0, 1);
 }

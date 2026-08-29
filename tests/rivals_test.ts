@@ -36,8 +36,12 @@ import {
   SKILL_AXES,
   SKILL_MAX,
   START_INTERVAL,
+  TUNING,
+  botInput,
   budgetFor,
   compileStage,
+  createGame,
+  step,
   profileFor,
   gearboxFor,
   rivalField,
@@ -45,6 +49,7 @@ import {
   simulateStage,
   skillPoints,
   spend,
+  temperFor,
   type BotSkill,
 } from "@engine";
 
@@ -62,6 +67,7 @@ import {
   advanceField,
   createField,
   drainField,
+  livePlace,
   onRoad,
   placeAtFinish,
   placeAtSplit,
@@ -71,6 +77,12 @@ import {
   stopField,
   RALLY_FIELD,
 } from "../pwa/src/game/standings.ts";
+
+/** The two thresholds bot.ts switches its traffic behaviour on. Restated
+ * here rather than exported: they are the bot's own vocabulary, and the
+ * assertions below are about what a DIFFICULTY promises against them. */
+const CLEAN = 0.35;
+const DIRTY = 0.75;
 
 const flat = (n: number): BotSkill => {
   const skill = {} as BotSkill;
@@ -220,6 +232,53 @@ describe("the roster", () => {
     );
     expect(seen.size).toBe(RIVALS.length);
   });
+
+  it("gives every crew a temper, and keeps their order in it at every setting", () => {
+    for (const crew of RIVALS) {
+      expect(crew.temper).toBeGreaterThanOrEqual(0);
+      expect(crew.temper).toBeLessThanOrEqual(1);
+      expect(crew.overtake).toBeGreaterThanOrEqual(0);
+      expect(crew.overtake).toBeLessThanOrEqual(1);
+    }
+    // The pecking order is the crew's, not the difficulty's: Scrapper is the
+    // one to watch on easy as well as on hard, and what changes is only what
+    // any of them is allowed to do about it.
+    const ranked = [...RIVALS].sort((a, b) => b.temper - a.temper).map((c) => c.id);
+    for (const id of DIFFICULTY_IDS) {
+      const byTemper = rivalField(id)
+        .sort((a, b) => b.profile.aggression - a.profile.aggression)
+        .map((e) => e.crew.id);
+      expect(byTemper).toEqual(ranked);
+      // …and the overtake knob is the crew's alone, at every setting.
+      for (const entry of rivalField(id)) {
+        expect(entry.profile.overtake).toBe(entry.crew.overtake);
+        expect(entry.profile.aggression).toBeCloseTo(temperFor(id, entry.crew.temper), 9);
+      }
+    }
+  });
+
+  it("is a ladder of temper, and easy still has somebody who will lean on you", () => {
+    const worst = DIFFICULTY_IDS.map((id) =>
+      Math.max(...rivalField(id).map((e) => e.profile.aggression)),
+    );
+    const mildest = DIFFICULTY_IDS.map((id) =>
+      Math.min(...rivalField(id).map((e) => e.profile.aggression)),
+    );
+    expect(worst[0]).toBeLessThan(worst[1]);
+    expect(worst[1]).toBeLessThan(worst[2]);
+    expect(mildest[0]).toBeLessThan(mildest[1]);
+    expect(mildest[1]).toBeLessThan(mildest[2]);
+    // Easy is NICE — nobody on it goes looking to end a run — but a couple
+    // of crews on it will still arrive in your door.
+    const easy = rivalField("easy").map((e) => e.profile.aggression);
+    expect(easy.filter((a) => a >= CLEAN).length).toBeGreaterThan(0);
+    expect(easy.every((a) => a < DIRTY)).toBe(true);
+    // Medium leans and does not remove; hard does both.
+    expect(rivalField("medium").every((e) => e.profile.aggression < DIRTY)).toBe(true);
+    expect(rivalField("hard").filter((e) => e.profile.aggression >= DIRTY).length).toBeGreaterThan(
+      1,
+    );
+  });
 });
 
 describe("the field on the road", () => {
@@ -356,6 +415,79 @@ describe("the field on the road", () => {
     expect(times.length).toBeGreaterThan(RIVALS.length / 2);
     expect(placeAtFinish(field, Math.max(...times) + 1)).toBe(times.length + 1);
     expect(placeAtFinish(field, Math.min(...times) - 1)).toBe(1);
+  });
+
+  it("puts the whole grid on one road, and keeps them out of each other", () => {
+    // A HEADS-UP race is the case that makes this matter: eight cars leave on
+    // one green, so the queue in front of every one of them is other cars
+    // rather than empty road. Whatever the field does to itself, no two of
+    // them may end a step inside each other — the contact model resolves
+    // every pair, and a pair it did not resolve is fourteen games driving
+    // through one another.
+    const track = compileStage(38, "short");
+    const field = createField(track, { difficulty: "hard", cars: 8, massStart: true }, stage);
+    const reach = TUNING.collision.halfWidth * 2;
+    let closest = Infinity;
+    let met = 0;
+    for (let i = 0; i < 120 * 90; i++) {
+      stepField(field);
+      const live = field.runs.filter(onRoad);
+      for (let a = 0; a < live.length; a++) {
+        for (let b = a + 1; b < live.length; b++) {
+          const one = live[a].state.car;
+          const two = live[b].state.car;
+          if (Math.abs(one.y - two.y) > TUNING.collision.cars.reach) continue;
+          const gap = Math.hypot(one.x - two.x, one.z - two.z);
+          closest = Math.min(closest, gap);
+          if (gap < reach + 0.05) met += 1;
+        }
+      }
+    }
+    // They found each other — a grid this deep cannot get down a stage
+    // without it — and the model held them apart when they did.
+    expect(met).toBeGreaterThan(0);
+    // Half a body of overlap is the most one 120 Hz step can bury them
+    // before the push-apart is asked about it.
+    expect(closest).toBeGreaterThan(TUNING.collision.halfWidth);
+  });
+
+  it("reads a heads-up place off the road, and a rally place off the clock", () => {
+    const track = compileStage(38, "short");
+    const field = createField(track, { difficulty: "medium", cars: 8, massStart: true }, stage);
+    const player = createGame({
+      seed: stage.seed,
+      carId: "compact",
+      track,
+      laps: stage.laps,
+      skipCountdown: true,
+      quiet: true,
+    });
+    // On the line, behind everybody: the back row is the back of the field.
+    expect(livePlace(field, player)).toBe(field.runs.length + 1);
+    for (let i = 0; i < 120 * 40; i++) {
+      stepField(field, player);
+      step(player, botInput(player));
+    }
+    // Mid-stage, with nobody through a split board yet, the place is the
+    // count of the cars actually up the road — which is what a rally start
+    // cannot answer and this one can.
+    const ahead = field.runs.filter(
+      (run) => run.state.progressS > player.progressS && run.time === null,
+    ).length;
+    expect(livePlace(field, player)).toBe(ahead + 1);
+    expect(livePlace(field, player)).toBeGreaterThanOrEqual(1);
+    expect(livePlace(field, player)).toBeLessThanOrEqual(field.of);
+
+    // A car that has finished is ahead of anybody still driving, whatever
+    // road either of them has covered.
+    const home = field.runs[0];
+    home.time = 1;
+    home.done = true;
+    const withHome = livePlace(field, player);
+    const stillOut = field.runs.filter(
+      (run) => onRoad(run) && run.state.progressS > player.progressS,
+    ).length;
+    expect(withHome).toBe(stillOut + 2);
   });
 
   it("runs a crew home even while they still owe their head start", () => {

@@ -14,6 +14,8 @@ A deterministic player stand-in that reads the same `GameState` the HUD reads an
 6. **Backing out** — pinned against something with the throttle buried for `reverseAfter`, the bot stops pushing and reverses off it, wheel straight, until the car is properly moving (`reverseSpeed`); then it takes another run at the line. Being WEDGED is no longer a reason to reset: a driver backs off the trunk first, and the respawn is what happens when that fails too. The manoeuvre latches on the car's own `reversing` state so a single wedged tick cannot flicker it, and reversing counts as asking to move (`stepStuck`), so a car pinned both ways still reaches the engine's wedge rescue on time instead of braking forever.
 7. **Gears** — reads `car.gearbox` (the run's box, not the car's) and shifts a manual by the same thresholds the auto box uses, so both simulate fairly. The box's own ratios are already in `state.spec` (`gearedSpec`), so a crew on a manual plans and shifts around the taller gears without the bot knowing there is a box.
 
+8. **Traffic** — handed the cars near it (`TrafficCar`: a position, a speed and a lateral offset, and nothing else), the bot moves its aim off the crown to go round the car in front, sits in behind it at its pace when there is nowhere to go, and — depending on its temper — leans on it going past. See the traffic model below. Handed nothing, it drives exactly the stage it always drove, which is what keeps `make sim` comparable across a change to this file.
+
 Two of the knobs are estimates the driver makes rather than reflexes: `brakeUse` is how much of the car's braking the corner plan assumes it will get (a driver who trusts the brakes stays on the throttle later), and `offRoadGiveUp` is how long an excursion runs before the bot accepts the reset instead of ploughing on.
 
 Bot profiles are data (`BotProfile`); `RALLY_BOT` is the default and the profile every table in this document is measured with. Slower/faster brains are new profiles, not code forks — and they are not hand-written either: see the skill model below.
@@ -39,21 +41,42 @@ Skill is spent on six **axes**, each worth up to `AXIS_MAX` (10) points, and eac
 
 `RALLY_BOT` is worth about 38 of the 60 points on this scale.
 
+## Traffic: what a bot does about other cars (`engine/sim/bot.ts`)
+
+The corner plan drives a ROAD. Two more knobs decide how a bot drives a RACE, and they are deliberately **not** skill axes: neither is monotone in pace, and a crew who reaches the finish having put three cars in the trees is not a better driver than one who went round them. They are temperament, so they come off the crew (`rivals.ts`) rather than out of the difficulty's budget.
+
+| Knob         | What it decides                                                                                   |
+| ------------ | ------------------------------------------------------------------------------------------------- |
+| `overtake`   | How hard they go for the move: how close they run alongside, how long they sit in somebody's dust |
+| `aggression` | What they are prepared to DO to the car once they are there                                       |
+
+`aggression` runs 0..1 across two thresholds, and the behaviour either side of each is different in kind rather than in degree:
+
+- **Under `AGGRO.clean` (0.35)** — no contact is ever made on purpose. The bot aims a car's width of air outside whatever it is passing, and when the road will not take the move it sits in behind at the other car's pace instead of driving into the back of it.
+- **`AGGRO.clean` to `AGGRO.dirty` (0.35–0.75)** — the air comes out of the gap and the aim eats into the bodywork, which is a target only the contact model can stop. That is what leaning on somebody is: a shove sideways while the two are alongside, hardest where the verge on their far side is nearest, because there is nothing to be won leaning on a car in the middle of a wide road and everything to be won doing it where the trees start.
+- **Over `AGGRO.dirty` (0.75)** — the bot is not passing cars any more, it is removing them. It will take the hit at the **rear quarter** as well as alongside: the contact model turns a sideways impulse into yaw by how far ahead of the struck car's centre it lands (see [architecture.md](architecture.md) and `engine/game/collision.ts`), so a shove behind another car's centre puts it round rather than merely sideways. It costs the attacker the pass it was halfway through, which is why only the nastiest crews think it is worth doing.
+
+Two rules hold at every temper. The move always goes down **the side the bot is already on** — a pass that starts by crossing the car it is passing is a shunt, not a move, and the bot only comes back across from behind and only when its own side has run out of road. And the aim never leaves the road: the offset is clamped to the carriageway with a half body to spare, so a bot cannot avoid or attack anybody by driving onto the verge.
+
 ## The campaign field (`engine/sim/rivals.ts`)
 
 R29 — the campaign is raced against **fourteen crews**, and the player is the fifteenth and last car out, `START_INTERVAL` seconds behind the one in front. Each crew is data: an alias, a car, a `standing` (where they sit in the field's budget band) and a set of weights (how they spend what they are given), plus notes describing what they are good at and what lets them down. The shape is fixed and the budget is not, so the field keeps its characters at every difficulty: Blink is always the one with the hands and no eyes, Metronome always the one who never makes a mistake and never makes a move.
 
 Points buy more than a profile: a crew whose `hands` reach `MANUAL_HANDS` (5.5 of 10) drives the **manual box**, with the taller ratios and the top end that come with it (see [driving.md](driving.md)). Nobody on easy has the hands for it, two crews do on medium, and six of the fourteen do on hard — so the head of a hard field is quicker than its plan alone says, and the box is a character (Blink and Metronome, the two who bought hands) before it is a rank.
 
-A difficulty is one number — the points the middle of the field gets — plus a spread:
+Each crew also has a **temper** and an **overtake** number — what they are like once there is somebody else's bodywork in the way. `overtake` is the crew's own at every setting; `temper` is a place in the field's pecking order (0 for the mildest driver on the roster, 1 for the one with the reputation) which the difficulty's band turns into an actual `aggression` (`temperFor`). Scrapper is the one to watch on easy as well as on hard; what changes is what she is allowed to do about it.
 
-| Setting  | Budget | Spread | P3 pace, as a ratio to `RALLY_BOT`            |
-| -------- | ------ | ------ | --------------------------------------------- |
-| `easy`   | 11     | ±7.5   | ≈ 1.22 (the podium is 22% off reference pace) |
-| `medium` | 19     | ±8.5   | ≈ 1.08                                        |
-| `hard`   | 28     | ±8     | ≈ 0.97                                        |
+A difficulty is one number — the points the middle of the field gets — plus a spread, and a band of temper beside it:
+
+| Setting  | Budget | Spread | Temper band | P3 pace, as a ratio to `RALLY_BOT`            |
+| -------- | ------ | ------ | ----------- | --------------------------------------------- |
+| `easy`   | 11     | ±7.5   | 0 – 0.50    | ≈ 1.22 (the podium is 22% off reference pace) |
+| `medium` | 19     | ±8.5   | 0.10 – 0.72 | ≈ 1.08                                        |
+| `hard`   | 28     | ±8     | 0.25 – 1.00 | ≈ 0.97                                        |
 
 The bands overlap: the quickest EASY crew is about as good as the slowest MEDIUM one, which is what makes stepping up a difficulty feel like the field closing in rather than a different game.
+
+The temper band is what each setting PROMISES against the thresholds above. EASY tops out just past `AGGRO.clean`, so the field gives way and the worst of it is a nudge from the two or three crews with a temper — nobody on it is trying to end anyone's run. MEDIUM tops out just under `AGGRO.dirty`: half the field will lean on you and none of it will put you in a tree on purpose. HARD reaches the top of the scale, and its floor is high enough that even the mild crews hold their line; it is the only setting where the rear quarter gets used.
 
 Each crew is also PAINTED to fit: `RIVAL_SCHEMES` in `pwa/src/game/car-livery.ts` gives every one of them a palette nobody else in the field has and a pattern that says something about how they drive — Sideways wears the drifter's crescent in purple and acid green, Granite is cut stone blocked front and rear, Old Snow runs maroon and gold coachlines. `make field` renders the start list. Each crew is also a PERSON: `pwa/src/game/car-crew.ts` gives every one of them a caricature behind the wheel — Granite is built like the corner she refuses to rotate for, Skarv has the cormorant's neck, Old Snow wears a flat cap — in their own gear colours, with a map reader beside them in the same overalls. `make crew` renders them.
 
@@ -61,7 +84,9 @@ Each crew is also PAINTED to fit: `RIVAL_SCHEMES` in `pwa/src/game/car-livery.ts
 
 **They leave staggered, and they are really out there.** Each crew is entered owing `(PLAYER_NUMBER - 1 - number) × START_INTERVAL` seconds of head start, paid off in budgeted slices while the establishing shot runs; car 14 owes nothing and leaves as the shot opens, which is the car the player watches go. The whole field is entered on one staging slot `GRID_STAGGER` metres to the player's right (`createGame`'s `gridOffset`), so the crew in front pulls away from ALONGSIDE the player rather than out from inside them. A crew still owing is still in the start control: not drawn, and not something the world can touch. On a short stage the front of the field is home before the player's lights go out, which is what a ten-second interval over a two-minute stage actually looks like.
 
-**The player is the only disruption.** Contacts are resolved between the player and each rival on the road (`collideCars`) and never between two rivals: a rival's time has to mean a stage they drove alone, and a result decided by a shunt the player never saw is not one they can read. Catch the crew in front and you can lean on them out of a corner — or put them into the trees, and their time with them.
+**Everybody is a disruption.** Contacts are resolved between the player and each rival on the road, and between the rivals themselves (`collideCars`, both ledgers written at once). Catch the crew in front and you can lean on them out of a corner — or put them into the trees, and their time with them; and they can do the same to each other, and to you.
+
+The field sees itself, too: `stepField` hands every crew the cars around it — the player included — so a queue on the road is a race rather than fourteen games driving through one another. Rival-against-rival contact happens **only in `stepField`**, which is the one place the whole field takes the same tick. `catchUpField` and `settleField` drive each run independently, so a crew being fast-forwarded through its head start is at a different moment of the stage than the one beside it in the array, and a shunt between those two would be between cars that were never on the road together.
 
 ## The mass-start grid (`engine/sim/grid.ts`)
 
@@ -96,7 +121,7 @@ It is deliberately the only assistance: no rubber band, no slipstream, no hand o
 
 ## The harness (`engine/sim/simulate.ts`)
 
-`simulateStage({ seed, carId, gearbox, profile, length, shape, laps, maxTime })` runs a full stage (at a finite stage length band — default medium) and returns: finish state and time, the laps raced and each lap's time, one lap of road (`trackLength`) and the ground the race actually covered (`raceLength`), the whole event log, the run stats (drift count/time/score, jumps, air time, clean landings, splashes, off-road time, impacts, crashes, respawns, top speed), and a **digest** — an FNV hash over sampled positions. Runs are deterministic: same seed + car + profile ⇒ same digest, which is exactly what `tests/simulation_test.ts` asserts. `shape: "circuit"` races a closed lap over three of them (R22); a sprint is one lap of a road that never comes back, and asking for more laps of one does nothing.
+`simulateStage({ seed, carId, gearbox, profile, length, shape, laps, maxTime })` runs a full stage (at a finite stage length band — default medium) and returns: finish state and time, the laps raced and each lap's time, one lap of road (`trackLength`) and the ground the race actually covered (`raceLength`), the whole event log, the run stats (drift count/time/score, jumps, air time, clean landings, splashes, off-road time, impacts, crashes, respawns, top speed), what the run cost the car (`crush`, metres of folded panel, and `wear`, 0..1 structural), and a **digest** — an FNV hash over sampled positions. Runs are deterministic: same seed + car + profile ⇒ same digest, which is exactly what `tests/simulation_test.ts` asserts. `shape: "circuit"` races a closed lap over three of them (R22); a sprint is one lap of a road that never comes back, and asking for more laps of one does nothing.
 
 ## The CLI
 
@@ -114,6 +139,8 @@ npm run sim -- --asphalt 0.8          # the generator's dials, each 0..1:
                                       # --elevation --water --trees --asphalt
 npm run sim -- --sweep                # the ROSTER BALANCE table (see below)
 npm run sim -- --field                # the CAMPAIGN FIELD table (see below)
+make heat                             # the HEAT table: the whole grid at once (see below)
+npm run sim -- --heat --grid 6        # …on a shallower grid
 npm run sim -- --json report.json     # machine-readable dump
 ```
 
@@ -176,9 +203,29 @@ The replay prints two things, and they are different questions:
 - **Reproduced.** The tape put back into the run it came out of, and the **drift** — how far the replayed car ended up from where the recording says it was, at the worst sample. Zero means this build still drives the tape the way it was driven. Anything else means the handling has moved underneath the recording, and nothing below it can be trusted. (This makes a tape a regression test for FEEL: keep one, and any change that moves the car reports itself in metres.)
 - **Placed.** The time, slotted into each field in turn — the calibration. `to win` and `podium` are the gaps to the quickest crew and to the third-place cut, which is the one that decides whether a campaign stage opens the next.
 
-**The field is raced with nobody on the road with it, and the drive is not re-driven against it.** That is deliberate and it is the only honest way round. A tape is a BLIND driver: it steers where it steered, so a car that was not there when it was recorded is a car it drives into and never corrects for — and worse, a shunt that DID happen was steered out of on the recording, so replaying those corrections without it swerves. A rally start puts the crew in front alongside the player, so this bites within two seconds. Racing the crews alone has none of it: rivals are never resolved against each other, so every crew's time is the same time whether or not anybody was out there with them, and "where would this drive have placed at hard" becomes an exact question.
+**The field is raced with nobody on the road with it, and the drive is not re-driven against it.** That is deliberate and it is the only honest way round. A tape is a BLIND driver: it steers where it steered, so a car that was not there when it was recorded is a car it drives into and never corrects for — and worse, a shunt that DID happen was steered out of on the recording, so replaying those corrections without it swerves. A rally start puts the crew in front alongside the player, so this bites within two seconds. Racing the crews alone has none of that in it, and it is still an exact question with an exact answer: the field is deterministic in its seed, its difficulty and its size, so "what would this time have been worth against a hard field driving its own race" has one answer and always the same one.
+
+What it is NOT, since the crews began to see and to touch each other, is a claim about the race the tape was recorded in. A rival's time now depends on the cars around it — including the player's, who can lean on one crew and set off a shunt three cars down the road. That is the point of a race, and it is why the calibration is quoted against the field's own clean race rather than against a re-run of yours.
 
 **The workflow rule: any change to `skill.ts` or `rivals.ts` owes a replay of the same tape before and after**, beside the `--field` table. The table says what the budgets bought; the tape says what that did to a person.
+
+## The heat table (`make heat`, `--heat`)
+
+Every other table on this page drives a car **alone**, which is the honest instrument for handling and for the generator — a lone car's time is the road and the physics and nothing else. It is a blind instrument for the half of the field model that only exists when there is somebody in the way: the bot's traffic eyes and the crews' tempers never fire in a lone run, so no amount of `make sim` can say what a difficulty's MANNERS are worth.
+
+`simulateHeat` (`engine/sim/heat.ts`) is that instrument. It stands the real field on a real mass-start grid, steps every car together through `stepField`, and reports what they did to each other as well as what they did to the clock. Three columns carry it:
+
+| Column            | What it says                                                                                                   |
+| ----------------- | -------------------------------------------------------------------------------------------------------------- |
+| `rubs`            | Contacts with another car. A run of touching steps inside `RUB_GRACE` (half a second) is ONE racing incident   |
+| `drove in`        | How many of those this crew was the one closing on the other — read before the impulse rewrote both velocities |
+| `dealt` / `taken` | Metres of folded panel, counting only the contacts this crew drove into                                        |
+
+The attribution is the whole point of the last two. Two equal cars in a shunt fold about the same amount each, so an unattributed damage column would say nothing more than "was in a crash"; booking the panel to whoever drove in is what separates a crew who leans on the field from one the field leans on. A contact neither of them drove into — two cars shoved together by the road — is nobody's to answer for and counts as a rub and nothing else.
+
+Read the per-difficulty header first: contacts per heat, panel per heat, retirements. A heat with no contacts at all is eight cars driving a stage in convoy rather than racing it; a difficulty where nobody deals any panel is a difficulty whose manners do not exist.
+
+**Any change to the traffic model in `bot.ts`, to the temper bands in `skill.ts`, or to a crew's `temper` in `rivals.ts` owes this table.** The unit tests pin the mechanism (a temper makes contact; a difficulty sets the temper) and deliberately not the emergent totals — a handful of shunts over a whole grid is one accident's worth of noise, which is a flake rather than a guard.
 
 ## What the tests pin down
 
@@ -190,6 +237,8 @@ The replay prints two things, and they are different questions:
 - identical runs produce identical digests; different cars produce different runs.
 
 `tests/tape_test.ts` pins the run tape: every control round-trips through the file, a recorded run replays onto the same metre of road (with a field beside it and without), a time placed against a field alone agrees with the place that run actually scored, and the same lap is never worth a better place against a better field.
+
+`tests/traffic_test.ts` pins the other car: the contact model itself, the bot's traffic eyes (a clean crew passes without touching, a temper closes the gap, and neither ever crosses through the car it is passing), that a stage handed no traffic is driven exactly as it always was, and that a headless heat is deterministic and books its contacts once each. `tests/rivals_test.ts` pins the temper ladder — that a crew keeps its rank in the field's pecking order at every setting, and that easy still has somebody on it who will lean on you.
 
 If a tuning change breaks one of these, the change is wrong or the test's world just moved — decide which explicitly, never silently.
 

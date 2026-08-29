@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim record replay track cars liveries field crew items items-list sky audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim heat record replay track cars liveries field crew items items-list sky audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
 
 build:
 	npm run build
@@ -33,7 +33,7 @@ check-seo:
 	npm run build && npm run check:seo
 
 # Headless balance sweep: bots drive generated stages through the real
-# engine and print the pace / drift / air / respawn table.
+# engine and print the pace / drift / air / respawn / damage table.
 sim:
 	npm run sim
 
@@ -54,6 +54,13 @@ replay:
 		echo "usage: make replay RUN=runs/<file>.jsonl [DIFFICULTY=easy,medium,hard]"; exit 2; \
 	}
 	npm run tape -- replay $(RUN) $(if $(DIFFICULTY),--difficulty $(DIFFICULTY),) $(ARGS)
+
+# The other half of the same instrument: the whole grid down one road AT
+# ONCE, and what the crews do to each other on the way. `make sim` drives a
+# car alone, so the bot's traffic eyes and the field's tempers never fire in
+# it — this is the table that measures them.
+heat:
+	npm run sim -- --heat
 
 # Render generated stages to previews/track-<seed>.png for eyeballing the
 # rules engine's output.
