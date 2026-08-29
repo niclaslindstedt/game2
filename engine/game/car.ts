@@ -13,7 +13,7 @@
 // defs/, not here.
 
 import { clamp } from "../lib/math.ts";
-import { askedSlide, latCeiling, slideFloor } from "./limits.ts";
+import { askedSlide, latCeiling, slideFloor, surfaceGripFor } from "./limits.ts";
 import { damageEffects, type DamageEffects } from "./damage.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
@@ -73,15 +73,6 @@ function wheelspinLoss(spec: CarSpec, car: CarState, surfaceGrip: number, rev: n
   const bite = clamp(spec.traction * T.drivetrain[spec.drive].bite * surfaceGrip, 0, 1);
   const standing = (1 - bite) * T.engine.wheelspin * spec.torque * (1 - rev);
   return clamp(standing + T.engine.spinLoss * car.launchSpin, 0, 1);
-}
-
-/** What the surface and the car's own rubber come to together — the one
- * number the slide's ceiling, the lateral rate and the axle's bite all read.
- * A road tyre holds more on tarmac and skates over gravel, a loose-surface
- * tyre is the other way round, and neither is simply better. */
-function surfaceGripFor(spec: CarSpec, surface: Surface | "nature"): number {
-  const tyre = surface === "asphalt" ? spec.tyres.sealed : spec.tyres.loose;
-  return T.surfaces.grip[surface] * tyre;
 }
 
 /** How much pedal the driven axle will take before the tyres start spinning

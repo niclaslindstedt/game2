@@ -18,11 +18,25 @@
 // limit rather than of a number that only resembles one.)
 
 import { clamp } from "../lib/math.ts";
+import type { Surface } from "../mapgen/index.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 
 const T = TUNING;
 const D = TUNING.drift;
+
+/** WHAT THE GROUND AND THE RUBBER COME TO TOGETHER, as the one number every
+ * ceiling below is quoted against. A road tyre holds more on tarmac and
+ * skates over gravel, a loose-surface tyre is the other way round, and
+ * neither is simply better — so a car's grip is a property of the PAIR and
+ * never of the surface alone. The slide's ceiling, the lateral rate, how
+ * much torque the driven axle can put down and every corner the bot reads
+ * ahead of itself are all quoted against this, which is exactly why it is
+ * stated here: two of them computing the product separately is two cars. */
+export function surfaceGripFor(spec: CarSpec, surface: Surface | "nature"): number {
+  const tyre = surface === "asphalt" ? spec.tyres.sealed : spec.tyres.loose;
+  return T.surfaces.grip[surface] * tyre;
+}
 
 /** THE TRACTION CEILING: the most lateral acceleration this car's tires
  * will actually deliver on a surface of this grip, m/s². Not `gripAccel`,
