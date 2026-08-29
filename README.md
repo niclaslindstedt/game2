@@ -61,6 +61,8 @@ Open the printed URL. The game opens on the main menu, over a stage a bot is dri
 | `make liveries`    | Render one body in the field's paint schemes (`previews/liveries.png`)                                            |
 | `make field`       | Render the campaign's fourteen rivals in their own cars and colours (`previews/field.png`)                        |
 | `make crew`        | Render the sixteen crew characters behind the glass (`previews/crew.png`)                                         |
+| `make items`       | Photograph one thing at a time (`previews/items.png`): a turntable per item, on a metre grid — `ITEMS=`, `GROUP=` |
+| `make items-list`  | List every item the turntable sheet can stand up, by group                                                        |
 | `make sky`         | Render the atmosphere to a contact sheet (`previews/sky.png`): every weather × time of day, and a caught strike   |
 | `make audition`    | Build the audio review page (`previews/audition.html`): every sound, both scores, live                            |
 | `make screenshots` | Drive the built app headlessly and screenshot the key moments                                                     |

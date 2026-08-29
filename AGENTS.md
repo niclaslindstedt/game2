@@ -18,6 +18,8 @@ make cars         # render the car models to previews/cars.png (chase-cam + turn
 make liveries     # render one body in the field's paint schemes to previews/liveries.png
 make field        # render the campaign's fourteen rivals in their own cars and colours
 make crew         # render the sixteen crew characters (previews/crew.png)
+make items        # photograph ONE THING at a time — a turntable per item, on a metre grid
+make items-list   # every item the turntable sheet knows, by group
 make sky          # render the atmosphere to previews/sky.png (every weather x time, plus a strike)
 make audition     # build previews/audition.html — every sound and both scores, playable
 make screenshots  # drive the built app headlessly, screenshot key moments
@@ -39,7 +41,8 @@ This project is tuned by measuring, not guessing:
 1. **`make sim`** before and after every handling/generator change. The table (pace, drifts, clean exits, air time, respawns) is the regression surface — bots must keep finishing and keep drifting.
 2. **`make track`** to LOOK at what the rules engine builds.
 3. **`make screenshots`** to LOOK at the game itself (grid, speed, drift, hood cam, portrait). In Claude web sessions Chromium is preinstalled — `CHROMIUM_PATH=/opt/pw-browsers/chromium make screenshots`.
-4. **`make profile`** before and after every rendering change. Draw calls, triangles and binds are the numbers a real GPU sees; the fps it also prints is software rasterization and means nothing off this machine.
+4. **`make items`** to LOOK at one thing on its own — a stone, a fern, the cabin behind the glass. Most of what the world is made of is six pixels at the speed you pass it; this is where it gets rotated and measured. `ITEMS=` picks the rows, `GROUP=` a whole kind, `TURNTABLE=` the seats to walk round.
+5. **`make profile`** before and after every rendering change. Draw calls, triangles and binds are the numbers a real GPU sees; the fps it also prints is software rasterization and means nothing off this machine.
 
 Both harnesses serve `pwa/dist`, so **`make build` first, every time**: a stale
 dist photographs and meters the last change rather than this one, and the

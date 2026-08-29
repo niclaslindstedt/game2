@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim track cars liveries field crew sky audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim track cars liveries field crew items items-list sky audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
 
 build:
 	npm run build
@@ -66,6 +66,21 @@ crew:
 # field of strangers reads as fourteen teams.
 field:
 	npm run cars -- --field --out field
+
+# Photograph ONE THING at a time (previews/items.png): a row per item, a
+# column per view, every row fitted to its own item and standing on a metre
+# grid. The review surface for everything a run screenshot passes too fast
+# to show — a stone, a fern, the cabin behind the glass. ITEMS picks the
+# rows, GROUP a whole kind, TURNTABLE the number of seats to walk round.
+# `make items ITEMS=interior TURNTABLE=8 OUT=cabin`
+items:
+	npm run items -- $(if $(ITEMS),--items $(ITEMS),) $(if $(GROUP),--group $(GROUP),) \
+		$(if $(TURNTABLE),--turntable $(TURNTABLE),) $(if $(SEASON),--season $(SEASON),) \
+		$(if $(CAR),--car $(CAR),) $(if $(OUT),--out $(OUT),)
+
+# Every item the sheet knows how to stand up, by group.
+items-list:
+	npm run items -- --list
 
 # Render the sky to a labeled contact sheet (previews/sky.png): every
 # weather against every time of day, plus a caught lightning strike. The
