@@ -328,13 +328,6 @@ body {
   display: block;
 }
 
-/* The way home from the wild: appears in the condition row, beside the OFF
-   ROAD flag that calls for it. */
-.hud-mini-alert {
-  background: rgb(160 60 20 / 80%);
-  border-color: rgb(255 210 160 / 80%);
-}
-
 /* ── The rear-view mirror's box ─────────────────────────────────────────── */
 
 /* PARITY with pwa/src/game/mirror.ts: the glass is a canvas pass, so these
@@ -951,8 +944,8 @@ body {
   gap: 0.5rem;
 }
 
-/* The dial row: revs, gear, speed, booster. Fixed cast — every phone width
-   has to hold all four, so nothing conditional is ever added here. */
+/* The dial row: revs, gear, speed. Fixed cast — every phone width has to
+   hold all three, so nothing conditional is ever added here. */
 .hud-cluster {
   display: flex;
   align-items: flex-end;
@@ -1010,6 +1003,35 @@ body {
   transition: transform 90ms linear;
 }
 
+/* Into the red the whole instrument buzzes — an engine sat against its
+   limiter shakes the car it is bolted to. Stepped rather than tweened, and
+   scaled by `--shake` (0 at the red line, 1 at the stop) so it grows with the
+   revs instead of switching on. Around a pixel at its worst: a rattle the eye
+   catches at a glance, not a wobble that costs the needle its reading. */
+@keyframes hud-tach-shake {
+  0% {
+    transform: translate(calc(1.1px * var(--shake)), calc(-0.7px * var(--shake)));
+  }
+
+  25% {
+    transform: translate(calc(-0.9px * var(--shake)), calc(0.9px * var(--shake)));
+  }
+
+  50% {
+    transform: translate(calc(0.8px * var(--shake)), calc(1.1px * var(--shake)));
+  }
+
+  75% {
+    transform: translate(calc(-1.1px * var(--shake)), calc(-0.9px * var(--shake)));
+  }
+}
+
+.hud-tach-hot {
+  --shake: 0;
+
+  animation: hud-tach-shake 80ms steps(1) infinite;
+}
+
 /* Gear and shift light: the chunky arcade plate from the reference. */
 .hud-gearbox {
   display: flex;
@@ -1051,44 +1073,6 @@ body {
   font-size: clamp(2.2rem, 9vmin, 4.5rem);
   font-variant-numeric: tabular-nums;
   line-height: 1;
-}
-
-.hud-boostbar {
-  display: inline-flex;
-  align-items: center;
-  padding-bottom: 0.35rem;
-  gap: 0.35rem;
-  margin-left: 0.5rem;
-}
-
-.hud-boostbar-label {
-  font-size: 0.6rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-}
-
-.hud-boostbar-track {
-  position: relative;
-  width: clamp(4.5rem, 14vmin, 7rem);
-  height: 0.55rem;
-  background: rgb(18 48 105 / 55%);
-  border: 2px solid rgb(255 255 255 / 70%);
-  border-radius: 0.4rem;
-  overflow: hidden;
-}
-
-.hud-boostbar-fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: var(--fill, 0%);
-  background: var(--hud-good);
-  transition:
-    width 120ms linear,
-    height 120ms linear;
-}
-
-.hud-boostbar-hot .hud-boostbar-fill {
-  background: var(--hud-bad);
 }
 
 .hud-speed-unit {
@@ -1320,8 +1304,7 @@ body {
   }
 }
 
-/* ── Portrait ───────────────────────────────────────────────────────────
-   The dial row has no width left lying down, so the booster stands up. */
+/* ── Portrait ─────────────────────────────────────────────────────────── */
 @media (orientation: portrait) {
   /* Below the minimap, always: a percentage top clears the dock on a tall
      phone and slides under it on a short one. */
@@ -1335,25 +1318,6 @@ body {
 
   .hud-cluster {
     width: 100%;
-  }
-
-  .hud-boostbar {
-    margin-left: auto;
-    flex-direction: column-reverse;
-    align-items: center;
-    gap: 0.2rem;
-    padding-bottom: 0;
-  }
-
-  .hud-boostbar-track {
-    width: 0.55rem;
-    height: clamp(3rem, 11vmin, 4.6rem);
-  }
-
-  .hud-boostbar-fill {
-    inset: auto 0 0 0;
-    width: auto;
-    height: var(--fill, 0%);
   }
 }
 
@@ -1430,8 +1394,9 @@ body {
   }
 }
 
-/* The pedal hint: three arrows ringing the right thumb's anchor — up
-   BRAKE, down BOOST, right DRIFT — the active gesture lit via data-mode. */
+/* The pedal hint: an arrow per bound gesture, ringing the thumb's anchor.
+   Which direction holds which gesture is the player's, so the arrows are
+   POSITIONS and `data-dir` lights the one being pulled toward. */
 .hud-pedal-hint {
   position: absolute;
   display: none;
@@ -1475,6 +1440,13 @@ body {
   flex-direction: row;
 }
 
+.hud-hint-left {
+  right: 2.6rem;
+  top: 0;
+  transform: translateY(-50%);
+  flex-direction: row-reverse;
+}
+
 .hud-hint-arrow {
   width: 0;
   height: 0;
@@ -1496,9 +1468,15 @@ body {
   border-left: 10px solid currentcolor;
 }
 
-.hud-pedal-hint[data-mode="brake"] .hud-hint-up,
-.hud-pedal-hint[data-mode="boost"] .hud-hint-down,
-.hud-pedal-hint[data-mode="handbrake"] .hud-hint-right {
+.hud-hint-arrow-left {
+  border-left-width: 0;
+  border-right: 10px solid currentcolor;
+}
+
+.hud-pedal-hint[data-dir="up"] .hud-hint-up,
+.hud-pedal-hint[data-dir="down"] .hud-hint-down,
+.hud-pedal-hint[data-dir="left"] .hud-hint-left,
+.hud-pedal-hint[data-dir="right"] .hud-hint-right {
   opacity: 1;
   color: var(--hud-good);
 }
@@ -1534,11 +1512,11 @@ body {
   pointer-events: none;
 }
 
-/* Portrait puts the booster upright in this same corner, so the taps step up
-   over it. Measured from the CLUSTER's anchor rather than the screen's, so a
-   safe-area inset moves the booster and these together. This rule has to sit
-   after the base one above: a media query adds no specificity, so an override
-   written earlier in the file simply loses. */
+/* Portrait stacks the cluster into this same corner, so the taps step up over
+   it. Measured from the CLUSTER's anchor rather than the screen's, so a
+   safe-area inset moves both together. This rule has to sit after the base one
+   above: a media query adds no specificity, so an override written earlier in
+   the file simply loses. */
 @media (orientation: portrait) {
   .hud-gears {
     bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 4.4rem);
@@ -1588,22 +1566,6 @@ body {
     opacity: 0;
     transform: translateY(-1rem);
   }
-}
-
-/* Wind readout beside the speed cluster: the arrow points where the wind
-   blows in screen space, the number is km/h. */
-.hud-wind {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: clamp(0.85rem, 2.6vmin, 1.2rem);
-  color: var(--hud-info);
-}
-
-.hud-wind-arrow {
-  display: inline-block;
-  line-height: 1;
-  transition: transform 160ms linear;
 }
 
 /* The in-race pause card: chunky arcade chrome over the held run. */
@@ -3240,8 +3202,10 @@ a.menu-version:focus-visible {
    to the menu is the harsher of the two), but it stops sliding in and the
    flags stop flapping — that part is pure flourish, and `finish-flag.ts`
    draws them at rest instead. The prompt stops blinking and stays LIT: a card
-   that waits for a press has to keep the invitation on screen. */
+   that waits for a press has to keep the invitation on screen. The tach stops
+   buzzing and the red band says the same thing on its own. */
 @media (prefers-reduced-motion: reduce) {
+  .hud-tach-hot,
   .splash-card,
   .splash-title,
   .splash-title .splash-game,
@@ -3474,10 +3438,9 @@ a.menu-version:focus-visible {
 
    `.hud` mounts only while a stage is being driven, so it is the honest
    test for "is there a run underneath this". In one, the bottom-left corner
-   is the instrument cluster — revs, gear, speed, boost, damage — and the
-   card gets out of its way: over to the right where there is nothing but
-   road, and in portrait (where it takes the full width) up above the
-   cluster entirely. */
+   is the instrument cluster — revs, gear, speed, damage — and the card gets
+   out of its way: over to the right where there is nothing but road, and in
+   portrait (where it takes the full width) up above the cluster entirely. */
 .app-root:has(.hud) .update-card {
   left: auto;
   right: max(0.8rem, env(safe-area-inset-right));

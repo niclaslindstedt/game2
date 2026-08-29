@@ -99,8 +99,6 @@ function freshCar(): CarState {
     rev: 0,
     gearbox: "auto",
     shiftCutUntil: 0,
-    boostLeft: T.boost.capacity,
-    boosting: false,
     steer: 0,
     braking: false,
     reversing: false,
@@ -198,8 +196,8 @@ function blowWind(env: RaceEnv, t: number, into: { x: number; z: number }): void
 
 export function createGame(options: CreateGameOptions): GameState {
   // The box is folded into the spec once, here: everything that reads
-  // `state.spec` — the shift points, the bot, the boost cap, the rev
-  // counter, the engine note — then drives the gears the player chose.
+  // `state.spec` — the shift points, the bot, the rev counter, the engine
+  // note — then drives the gears the player chose.
   const gearbox = options.gearbox ?? "auto";
   const spec = gearedSpec(carById(options.carId ?? "compact"), gearbox);
   const track =
@@ -364,7 +362,6 @@ function drown(state: GameState, events: GameEvent[], waterY: number): void {
   car.drifting = false;
   car.slide = 0;
   car.braking = false;
-  car.boosting = false;
   car.reversing = false;
   // A body arriving fast enough to reach the bed before it has floated at
   // all skips the whole beat, so the water is allowed to swallow only so

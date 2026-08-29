@@ -670,21 +670,6 @@ export function stepGrounded(
   // past its own first tick.
   if (Math.abs(car.u) < T.standstill && input.throttle === 0 && !car.reversing) car.u = 0;
 
-  // ── Boost ────────────────────────────────────────────────────────────────
-  // The finite booster: raw thrust on top of engine torque, ignoring gearing
-  // and surface, fading to zero toward the overrun cap so it stretches the
-  // top end rather than breaking it. The tank never refills — see freshCar.
-  const burning = input.boost && car.boostLeft > 0;
-  if (burning && !car.boosting) events.push({ type: "boostStart" });
-  car.boosting = burning;
-  if (burning) {
-    const cap = spec.gearTop[spec.gearTop.length - 1] * T.boost.overrun;
-    const headroom = clamp((cap - car.u) / (cap * 0.12), 0, 1);
-    car.u += T.boost.accel * headroom * dt;
-    car.boostLeft = Math.max(0, car.boostLeft - dt);
-    if (car.boostLeft === 0) events.push({ type: "boostEmpty" });
-  }
-
   // The nose, as a vector. Nothing below turns the car — the yaw is long
   // since integrated — so the wind's head/tail component and the move at
   // the bottom are the same heading read once.
@@ -1026,7 +1011,6 @@ export function stepAirborne(
   const descent = car.vy;
   car.airTime += dt;
   if (!car.settling) stats.airTime += dt;
-  car.boosting = false; // no thrust in the air — the velocity is committed
   car.steer += (input.steer - car.steer) * clamp(T.steering.rackRate * dt, 0, 1);
   car.braking = false;
   car.reversing = false; // nothing to back out of in the air

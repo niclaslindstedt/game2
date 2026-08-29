@@ -18,9 +18,6 @@ export type CarInput = {
   /** 0..1. */
   brake: number;
   handbrake: boolean;
-  /** Hold to burn the finite booster (TUNING.boost); no-op when the tank
-   * is dry or the car is airborne. */
-  boost: boolean;
   /** Edge-triggered: consumed by the step they arrive in (manual box). */
   shiftUp: boolean;
   shiftDown: boolean;
@@ -36,7 +33,6 @@ export const NEUTRAL_INPUT: CarInput = {
   throttle: 0,
   brake: 0,
   handbrake: false,
-  boost: false,
   shiftUp: false,
   shiftDown: false,
   reset: false,
@@ -194,10 +190,6 @@ export type CarState = {
   gearbox: GearboxMode;
   /** Sim time until which throttle is cut by an engaging shift. */
   shiftCutUntil: number;
-  /** Boost seconds left in the tank — finite for the whole run. */
-  boostLeft: number;
-  /** True while the booster is burning this step (renderer/HUD readout). */
-  boosting: boolean;
   /** Steer input applied this step, -1..1 (renderer readout: the front
    * wheels point where the driver points them). */
   steer: number;
@@ -249,8 +241,6 @@ export type GameEvent =
    * starts a drowning, as opposed to a ford crossed on the way past. */
   | { type: "splash"; speed: number; deep: boolean }
   | { type: "shift"; gear: number }
-  | { type: "boostStart" }
-  | { type: "boostEmpty" }
   | { type: "offRoad"; off: boolean }
   /** A contact hard enough to matter. `speed` is the closing speed into
    * the surface, m/s; `angle` is where on the body it landed, radians in

@@ -44,11 +44,13 @@ const STEER_STEPS = 127;
  * pedal is an axis in `CarInput` and one day may be driven like one. */
 const PEDAL_STEPS = 255;
 
-/** Bump when the tape's layout changes, OR when what step 0 means changes —
- * a recording whose first step was a different moment of the start control
- * replays every corner at the wrong time, which is worse than no ghost at
- * all. Format 3 is a tape that opens on the establishing shot. */
-const GHOST_FORMAT = 3;
+/** Bump when the tape's layout changes, OR when what the engine DOES with a
+ * tape changes: the same buttons under different physics put the car through
+ * a different metre of road, and a ghost that replays every corner at the
+ * wrong time is worse than no ghost at all. What step 0 MEANS counts as the
+ * layout — a recording whose first step was a different moment of the start
+ * control is out by the whole opening. */
+const GHOST_FORMAT = 4;
 
 const KEY_PREFIX = "scandi-flick-ghost:";
 
@@ -108,7 +110,6 @@ export type GhostRun = GhostStage & {
 };
 
 const FLAG_HANDBRAKE = 1;
-const FLAG_BOOST = 2;
 const FLAG_SHIFT_UP = 4;
 const FLAG_SHIFT_DOWN = 8;
 const FLAG_RESET = 16;
@@ -187,7 +188,6 @@ export function createGhostRecorder(): GhostRecorder {
       brake.push(Math.round(clamp(input.brake, 0, 1) * PEDAL_STEPS));
       flags.push(
         (input.handbrake ? FLAG_HANDBRAKE : 0) |
-          (input.boost ? FLAG_BOOST : 0) |
           (input.shiftUp ? FLAG_SHIFT_UP : 0) |
           (input.shiftDown ? FLAG_SHIFT_DOWN : 0) |
           (input.reset ? FLAG_RESET : 0),
@@ -235,7 +235,6 @@ export function readGhost(run: GhostRun): GhostTape {
       input.throttle = throttle[step] / PEDAL_STEPS;
       input.brake = brake[step] / PEDAL_STEPS;
       input.handbrake = (bits & FLAG_HANDBRAKE) !== 0;
-      input.boost = (bits & FLAG_BOOST) !== 0;
       input.shiftUp = (bits & FLAG_SHIFT_UP) !== 0;
       input.shiftDown = (bits & FLAG_SHIFT_DOWN) !== 0;
       input.reset = (bits & FLAG_RESET) !== 0;

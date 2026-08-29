@@ -270,13 +270,14 @@ await capture(
   { bot: "1" },
 );
 
-/** Off the road and into the wild, and hold it there. The reset chip is the
- * honest cursor: it says the engine agrees the car has left the track, so
- * what is behind the wheels is turf rather than grit. Not the RETURN TO
- * TRACK strip — that one waits for the car to be LOST, which is a stricter
- * thing than being off the road and a scene may never reach it. */
+/** Off the road and into the wild, and hold it there. `data-off` on the HUD
+ * root is the honest cursor: it is the engine's own verdict that the car has
+ * left the track, so what is behind the wheels is turf rather than grit, and
+ * it costs the frame nothing. Not the RETURN TO TRACK strip — that one waits
+ * for the car to be LOST, which is a stricter thing than being off the road
+ * and a scene may never reach it. */
 async function inTheWild(page) {
-  await page.waitForFunction("document.querySelector('.hud-mini-alert')", null, {
+  await page.waitForFunction("document.querySelector('.hud[data-off]')", null, {
     timeout: 120000,
   });
 }

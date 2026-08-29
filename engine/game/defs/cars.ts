@@ -219,8 +219,8 @@ export function carById(id: string): CarSpec {
  * it instead of a label. The manual's taller ratios and its lower losses
  * (TUNING.gearbox.set) become gearing and acceleration, and every reader
  * downstream — car.ts's shift points and taper, the bot's target speed, the
- * boost's overrun cap, the rev counter, the engine note, car-stats.ts —
- * sees one spec and needs to know nothing about transmissions.
+ * rev counter, the engine note, car-stats.ts — sees one spec and needs to
+ * know nothing about transmissions.
  *
  * The catalog row is returned untouched when the box asks for nothing, so
  * the automatic drives the numbers as authored. */

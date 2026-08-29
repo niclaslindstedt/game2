@@ -72,12 +72,6 @@ export function soundForEvent(
     case "shift":
       return { id: event.gear > lastGear ? "shift_up" : "shift_down" };
 
-    case "boostStart":
-      return { id: "boost_start" };
-
-    case "boostEmpty":
-      return { id: "boost_empty" };
-
     case "offRoad":
       return { id: event.off ? "offroad_enter" : "offroad_exit" };
 

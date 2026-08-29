@@ -891,8 +891,8 @@ export function createGameCamera(width: number, height: number): GameCamera {
     dist += (wantDist - dist) * ease;
     height_ += (wantHeight - height_) * ease;
 
-    // Speed lives in the FOV: it stretches hard with pace (capped before
-    // the boost overrun turns the world into a tunnel).
+    // Speed lives in the FOV: it stretches hard with pace, capped before
+    // the stretch turns the world into a tunnel.
     const wantFov = Math.min(rig.fovMax, rig.fov + car.u * rig.fovPerSpeed);
     fov += (wantFov - fov) * clamp(4 * dt, 0, 1);
 

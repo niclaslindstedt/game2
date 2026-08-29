@@ -36,7 +36,6 @@ export type InputManager = {
     throttle: boolean;
     brake: boolean;
     handbrake: boolean;
-    boost: boolean;
   };
   /** Re-point every key at its action; unbound actions simply go unpressed. */
   setKeys: (bindings: KeyBindings) => void;
@@ -115,7 +114,6 @@ const FLYING_INPUT: CarInput = {
   throttle: 0,
   brake: 0,
   handbrake: false,
-  boost: false,
   shiftUp: false,
   shiftDown: false,
   reset: false,
@@ -173,7 +171,7 @@ export function createInput(target: Window = window): InputManager {
   let speedSteps = 0;
   let altHeld = false;
 
-  const touch = { steer: 0, throttle: false, brake: false, handbrake: false, boost: false };
+  const touch = { steer: 0, throttle: false, brake: false, handbrake: false };
 
   const setKeys = (bindings: KeyBindings): void => {
     const next = new Map<string, KeyAction[]>();
@@ -322,7 +320,6 @@ export function createInput(target: Window = window): InputManager {
       throttle: snapPedal(held.has("throttle") || touch.throttle ? 1 : 0),
       brake: snapPedal(held.has("brake") || touch.brake ? 1 : 0),
       handbrake: held.has("handbrake") || touch.handbrake,
-      boost: held.has("boost") || touch.boost,
       shiftUp,
       shiftDown,
       reset,

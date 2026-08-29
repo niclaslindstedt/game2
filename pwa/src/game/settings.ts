@@ -38,8 +38,6 @@ export type HudToggle =
   | "pacenoteText"
   | "damage"
   | "tachometer"
-  | "wind"
-  | "boost"
   | "timer";
 
 export type HudSettings = Record<HudToggle, boolean>;
@@ -64,8 +62,6 @@ export const HUD_TOGGLES: { id: HudToggle; label: string; hint: string }[] = [
   },
   { id: "damage", label: "DAMAGE", hint: "Crush, broken parts, systems" },
   { id: "tachometer", label: "TACHOMETER", hint: "Revs and the shift light" },
-  { id: "boost", label: "BOOST TANK", hint: "How much booster is left" },
-  { id: "wind", label: "WIND", hint: "Strength and bearing" },
   { id: "timer", label: "STAGE CLOCK", hint: "Running time on the top bar" },
 ];
 
@@ -154,7 +150,6 @@ export type KeyAction =
   | "throttle"
   | "brake"
   | "handbrake"
-  | "boost"
   | "shiftUp"
   | "shiftDown"
   | "reset"
@@ -175,7 +170,6 @@ export const KEY_ACTIONS: { id: KeyAction; label: string }[] = [
   { id: "left", label: "STEER LEFT" },
   { id: "right", label: "STEER RIGHT" },
   { id: "handbrake", label: "HANDBRAKE" },
-  { id: "boost", label: "BOOST" },
   { id: "shiftUp", label: "SHIFT UP" },
   { id: "shiftDown", label: "SHIFT DOWN" },
   { id: "reset", label: "BACK TO TRACK" },
@@ -192,7 +186,6 @@ export const DEFAULT_KEYS: KeyBindings = {
   throttle: ["ArrowUp", "KeyW"],
   brake: ["ArrowDown", "KeyS"],
   handbrake: ["Space"],
-  boost: ["ShiftLeft"],
   shiftUp: ["KeyE", "KeyX", "ShiftRight"],
   shiftDown: ["KeyQ", "KeyZ", "ControlRight"],
   reset: ["KeyB"],
@@ -223,16 +216,14 @@ export type TouchSettings = {
   steerSide: "left" | "right";
   brake: PedalDir;
   handbrake: PedalDir;
-  boost: PedalDir;
 };
 
 /** Brake is DOWN because that is what the gesture already means: a thumb
  * pulled back toward the player is the car being reined in, the same way a
- * thumb pushed away is the car sent forward. Boost takes the push. */
+ * thumb pushed away is the car sent forward. */
 export const DEFAULT_TOUCH: TouchSettings = {
   steerSide: "left",
   brake: "down",
-  boost: "up",
   handbrake: "right",
 };
 
@@ -296,8 +287,6 @@ export const DEFAULT_SETTINGS: Settings = {
     pacenoteText: true,
     damage: true,
     tachometer: true,
-    wind: true,
-    boost: true,
     timer: true,
   },
   // The shortest boom outside the car: the car is big in the frame, a drift
@@ -340,17 +329,17 @@ const SETTINGS_KEY = "scandi-flick-options";
 
 /** Merge stored options over the defaults one group at a time, so a build
  * that adds a toggle keeps every choice already made around it. */
-/** The pedal gestures shipped with brake on the push and boost on the pull,
- * which is backwards: pulling the thumb back is what reining a car in feels
- * like. Every player who has ever opened OPTIONS has the old pair stored,
- * and they did not choose it — a default is not a preference. So exactly
- * that pair, and only it, is turned round on load; any other arrangement is
- * a real choice and is left alone. */
-function migratePedalDirs(touch: TouchSettings): void {
-  if (touch.brake === "up" && touch.boost === "down") {
-    touch.brake = "down";
-    touch.boost = "up";
-  }
+/** The pedal gestures shipped with the brake on the PUSH, which is
+ * backwards: pulling the thumb back is what reining a car in feels like.
+ * Every player who has ever opened OPTIONS has that stored, and they did not
+ * choose it — a default is not a preference. So exactly the arrangement that
+ * shipped is turned round on load; any other one is a real choice and is left
+ * alone. `boost` is a gesture the pedal no longer has: its stored key serves
+ * only to identify that shipped arrangement, and is dropped rather than
+ * written back out. */
+function migratePedalDirs(touch: TouchSettings & { boost?: PedalDir }): void {
+  if (touch.brake === "up" && touch.boost === "down") touch.brake = "down";
+  delete touch.boost;
 }
 
 /** C used to be the way OUT of a run and V the way round the cameras, which
@@ -422,13 +411,11 @@ export function saveSettings(settings: Settings): void {
  * that can lock the handbrake away is worse than one that cannot. */
 export function assignPedalDir(
   touch: TouchSettings,
-  action: "brake" | "handbrake" | "boost",
+  action: "brake" | "handbrake",
   dir: PedalDir,
 ): TouchSettings {
   const next = { ...touch };
-  const clash = (["brake", "handbrake", "boost"] as const).find(
-    (a) => a !== action && next[a] === dir,
-  );
+  const clash = (["brake", "handbrake"] as const).find((a) => a !== action && next[a] === dir);
   if (clash) next[clash] = touch[action];
   next[action] = dir;
   return next;
