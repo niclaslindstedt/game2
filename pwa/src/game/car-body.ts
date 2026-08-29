@@ -27,6 +27,7 @@ import { MeshBuilder, patchNormal } from "./car/builder.ts";
 import { buildFront, buildRear } from "./car/fascia.ts";
 import { buildGreenhouse, screenPanes } from "./car/greenhouse.ts";
 import { buildInterior, type InteriorDetail } from "./car/interior.ts";
+import type { CrewLook } from "./car-crew.ts";
 import { LENS_MATERIAL } from "./car/lamps.ts";
 import { buildShell, buildStations } from "./car/shell.ts";
 import { buildTrim } from "./car/trim.ts";
@@ -48,7 +49,7 @@ export type {
 } from "./car/spec.ts";
 export { bodyHalfLength, bodyHalfWidth } from "./car/shell.ts";
 export { LENS_MATERIAL, frontLampAnchors, rearLampAnchors, type LampAnchor } from "./car/lamps.ts";
-export { steeringTurn, type InteriorDetail } from "./car/interior.ts";
+export { crewSeats, steeringTurn, type InteriorDetail } from "./car/interior.ts";
 
 import type { CarBodySpec } from "./car/spec.ts";
 
@@ -121,6 +122,10 @@ export type CarBodyOptions = {
   /** How much cabin is built behind the glass. `off` also leaves the glass
    * solid, which is the car this game shipped with. */
   interior?: InteriorDetail;
+  /** Who is sat in it (car-crew.ts). Left off, it is the player's own crew —
+   * one car on a stage is the player's, and every tool that builds a body
+   * without saying whose it is is looking at that one. */
+  crew?: CrewLook;
 };
 
 export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): CarBodyParts {
@@ -169,7 +174,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   // The cabin goes on BEFORE the glass, because it is what the glass is for.
   const cabin = new THREE.Group();
   chassis.add(cabin);
-  const interior = buildInterior(spec, detail, material);
+  const interior = buildInterior(spec, detail, material, options.crew);
   if (interior.group) cabin.add(interior.group);
 
   // DOUBLE-sided, and drawn without writing depth. Both are about looking

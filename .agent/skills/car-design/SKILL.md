@@ -27,6 +27,8 @@ skill for any code change.
 | `pwa/src/game/car/shell.ts`      | The chassis loft: stations, the ring, wheel-arch openings, shut-line grooves, `flankX`, `sideBand`                               |
 | `pwa/src/game/car/greenhouse.ts` | Windows cut out of a solid cabin; gutters; the two screens as glass (`screenPanes`)                                              |
 | `pwa/src/game/car/wipers.ts`     | The screens' grime film and the blades that sweep it — arms, park and sweep angles, how fast the glass soils                     |
+| `pwa/src/game/car/crew.ts`       | The people, built parametrically: torso, head, helmet styles, hair, face, the wheel hands and the road book                      |
+| `pwa/src/game/car-crew.ts`       | The sixteen characters and their gear colours, plus who drives for which crew. **Pure data, no three.js**                        |
 | `pwa/src/game/car/fascia.ts`     | Nose and tail: grille, lamps, bumpers, air dam, plate, exhaust, the detachable bonnet and boot lid                               |
 | `pwa/src/game/car/trim.ts`       | Arch extensions, mirrors, handles, mud flaps, livery bands, door numbers, spoilers                                               |
 | `pwa/src/game/car/wheels.ts`     | The tire and three rim styles                                                                                                    |
@@ -143,6 +145,42 @@ Two traps, both of which look like rendering bugs:
   over the length puts a crest above each axle) — which is also the shape
   the liveries with a set of lines down the flank actually have.
 
+## The people in the car
+
+Every cabin has two of them, and they come from `car-crew.ts`: sixteen
+characters — the player, the campaign's fourteen crews, and a privateer for
+any slot the campaign never named. A character is a set of MULTIPLIERS on a
+standard adult sat in a bucket seat (stature, shoulders, girth, head, neck,
+lean), what is on the head (`full` lid / `open` lid / flat `cap` / `bare`), a
+hairstyle, optional face hair, and five colours: suit, trim, helmet, skin,
+hair. The first three are the crew's GEAR and are the signature — authored
+beside the paint the car wears rather than copied from it.
+
+What to hold on to when adding or retuning one:
+
+- **The cabin is a 300 mm tray and a helmet is 290 mm across.** There is no
+  room to be tall in, so height is nearly free of effect and WIDTH is not:
+  shoulders, girth and head size are what separate two people through a
+  tinted pane. Author across, not up.
+- **The roof is enforced, not authored around.** `proportions` clamps every
+  head under the headliner, and `buildHair` squashes tall hair into whatever
+  room is left — the face stays at window height and the bouffant flattens.
+  `tests/car_crew_test.ts` holds every character against every catalog body,
+  which is the only way to catch a head through a coupe's roof from a sheet
+  rendered on the hatch.
+- **A `full` lid hides everything.** Hair and face hair are not drawn under
+  one, so the characters carrying the big hair wear an open lid, a cap or
+  nothing. Authoring a moustache under a full-face helmet is authoring
+  nothing.
+- **The map reader is one model for the whole field.** They wear the
+  DRIVER's colours and hold the road book. A co-driver with a silhouette of
+  their own competes with the person whose stage it is.
+
+Judge it with `make crew` (`CREW=blink,diesel` for a subset, `CAR=coupe` for
+the tightest cabin in the catalog): both seats close up with the glass off,
+the driver through it, the pair through the windscreen, and the game view as
+the reminder of how little of any of it survives at range.
+
 Judge it with `make liveries` (`CAR=classic`, `COUNT=12`), and judge it in
 the GAME column first: a field is a success when nine cars read as nine
 teams at 30 px, which is colour and roof before it is ever pattern.
@@ -173,6 +211,8 @@ every scheme on ONE body and the field never looks like that.
       pattern into `car-livery.ts`
 - [ ] `make cars` sheet checked — including the `dirty` column — AND
       `make screenshots` in-game check
+- [ ] `make crew` sheet checked if the people changed — in the COUPE as well,
+      which has the shallowest cabin in the catalog
 - [ ] `npx vitest run tests/car_geometry_test.ts` (the collision box)
 - [ ] `make profile` before AND after, if the change added geometry, a mesh
       or a material — a car is drawn up to fifteen times a frame, so a part

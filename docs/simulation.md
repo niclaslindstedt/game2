@@ -55,7 +55,7 @@ A difficulty is one number — the points the middle of the field gets — plus 
 
 The bands overlap: the quickest EASY crew is about as good as the slowest MEDIUM one, which is what makes stepping up a difficulty feel like the field closing in rather than a different game.
 
-Each crew is also PAINTED to fit: `RIVAL_SCHEMES` in `pwa/src/game/car-livery.ts` gives every one of them a palette nobody else in the field has and a pattern that says something about how they drive — Sideways wears the drifter's crescent in purple and acid green, Granite is cut stone blocked front and rear, Old Snow runs maroon and gold coachlines. `make field` renders the start list.
+Each crew is also PAINTED to fit: `RIVAL_SCHEMES` in `pwa/src/game/car-livery.ts` gives every one of them a palette nobody else in the field has and a pattern that says something about how they drive — Sideways wears the drifter's crescent in purple and acid green, Granite is cut stone blocked front and rear, Old Snow runs maroon and gold coachlines. `make field` renders the start list. Each crew is also a PERSON: `pwa/src/game/car-crew.ts` gives every one of them a caricature behind the wheel — Granite is built like the corner she refuses to rotate for, Skarv has the cormorant's neck, Old Snow wears a flat cap — in their own gear colours, with a map reader beside them in the same overalls. `make crew` renders them.
 
 **The rivals are not a table of times.** The app builds fourteen more `GameState`s on the same compiled track and steps them beside the player's, so the field cannot drift away from the handling — it IS the handling. See `pwa/src/game/standings.ts`.
 
