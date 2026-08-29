@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim track cars liveries field sky audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim track cars liveries field crew sky audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
 
 build:
 	npm run build
@@ -53,6 +53,13 @@ cars:
 # cars or as one car nine times. CAR picks the body, COUNT how many slots.
 liveries:
 	npm run cars -- --liveries $(or $(CAR),compact) --count $(or $(COUNT),9) --out liveries
+
+# The sixteen crew characters (previews/crew.png): each one close up in the
+# cabin with the glass off, then through it, then from the chase camera —
+# the sheet that says whether the fat one reads as the fat one. CREW picks a
+# subset (CREW=blink,diesel), CAR the body they are sat in.
+crew:
+	npm run cars -- --crew $(CREW) --out crew $(if $(CAR),--car $(CAR),)
 
 # R29 — the campaign's fourteen rivals as they actually line up: each crew's
 # own car in their own paint, in start order. The sheet that says whether a

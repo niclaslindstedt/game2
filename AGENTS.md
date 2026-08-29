@@ -17,6 +17,7 @@ make track        # render stages to previews/track-<seed>.png
 make cars         # render the car models to previews/cars.png (chase-cam + turntable sheet)
 make liveries     # render one body in the field's paint schemes to previews/liveries.png
 make field        # render the campaign's fourteen rivals in their own cars and colours
+make crew         # render the sixteen crew characters (previews/crew.png)
 make sky          # render the atmosphere to previews/sky.png (every weather x time, plus a strike)
 make audition     # build previews/audition.html — every sound and both scores, playable
 make screenshots  # drive the built app headlessly, screenshot key moments
@@ -68,6 +69,8 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | What separates one CAR from another                         | `cars.ts` + `TUNING.drivetrain` — the `car-tuning` skill                                                                         |
 | A car's LOOK (silhouette, panels, wheels, livery)           | `pwa/src/game/car-styles.ts` (specs); generator in `pwa/src/game/car/`                                                           |
 | What is BEHIND the glass (trim, seats, crew, cage, wheel)   | `pwa/src/game/car/interior.ts` — the `car-design` skill                                                                          |
+| WHO is behind the wheel (build, hair, helmet, gear colours) | `pwa/src/game/car-crew.ts` (the sixteen, as data); the models are built in `pwa/src/game/car/crew.ts` — the `car-design` skill   |
+| What a MAP READER is, and what the pair are wearing         | `MAP_READER` + the crew's `CrewColors` in `pwa/src/game/car-crew.ts` — one model, in the driver's own colours                    |
 | How see-through a window is, and what it reflects           | `car/greenhouse.ts` bakes the gradient; `car-mesh.ts` adds the per-frame glint                                                   |
 | The head- and tail lamps, and what a LIT one looks like     | `pwa/src/game/car/lamps.ts` builds the bowls; `car-mesh.ts` switches them and blooms them — the `car-design` skill               |
 | A PAINT SCHEME an opponent is dressed in                    | `pwa/src/game/car-livery.ts` (palettes + patterns) — the `car-design` skill                                                      |
@@ -193,7 +196,7 @@ Skills live in `.agent/skills/` (`.claude/skills` symlinks there) — each a `SK
 - **`car-tuning`** — what separates one CAR from another: the catalog, the
   drivetrain and engine tables, and the roster-balance sweep that proves no
   car is best everywhere.
-- **`car-design`** — how the cars LOOK: the parametric body builder, the per-car specs, the field's paint schemes (including what each named rival is painted), and the `make cars` / `make liveries` / `make field` render-compare-iterate loop.
+- **`car-design`** — how the cars LOOK: the parametric body builder, the per-car specs, the field's paint schemes (including what each named rival is painted), the sixteen crew characters behind the glass, and the `make cars` / `make liveries` / `make field` / `make crew` render-compare-iterate loop.
 - **`nature`** — the biomes, trees and flora, ground cover, terrain paint, and the rally-gate dressing: the world the road runs through.
 
 **Maintenance** (each with a `.last-updated` baseline):

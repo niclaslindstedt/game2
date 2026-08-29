@@ -330,3 +330,63 @@ export function patchFade(
   if (mirrored) b.quadFade(c[3], c[2], c[1], c[0], color1, color0, alpha1, alpha0);
   else b.quadFade(c[0], c[1], c[2], c[3], color0, color1, alpha0, alpha1);
 }
+
+/** A three.js primitive, shaded the way the hand-wound faces around it are
+ * and poured into the same buffer. Anything round or tilted comes through
+ * here — hand-winding either fails silently, faces culled rather than
+ * flagged. The geometry is spent. */
+export function solid(b: MeshBuilder, geo: THREE.BufferGeometry, color: number): void {
+  b.absorb(bakeShading(geo, color));
+}
+
+/** A box that is allowed to lean: a seat back, a visor, a harness strap, a
+ * shoulder. Sizes and position are the box's own; `tilt` is about x and
+ * `yaw` about y, applied in that order about the box's centre. */
+export function slab(b: MeshBuilder, size: V3, at: V3, color: number, tilt = 0, yaw = 0): void {
+  const geo = new THREE.BoxGeometry(size[0], size[1], size[2]);
+  if (tilt !== 0) geo.rotateX(tilt);
+  if (yaw !== 0) geo.rotateY(yaw);
+  solid(b, geo.translate(at[0], at[1], at[2]), color);
+}
+
+/** One length of tube, end to end — a cage bar, a forearm, a neck. */
+export function tube(
+  b: MeshBuilder,
+  from: V3,
+  to: V3,
+  radius: number,
+  color: number,
+  sides = 7,
+): void {
+  const a = new THREE.Vector3(...from);
+  const span = new THREE.Vector3(...to).sub(a);
+  const len = span.length();
+  if (len < 1e-4) return;
+  const geo = new THREE.CylinderGeometry(radius, radius, len, sides, 1, true);
+  // CylinderGeometry stands on +y about its own middle; swing that axis onto
+  // the span, then carry it to the span's midpoint.
+  const turn = new THREE.Quaternion().setFromUnitVectors(
+    new THREE.Vector3(0, 1, 0),
+    span.clone().divideScalar(len),
+  );
+  geo.applyQuaternion(turn);
+  geo.translate(a.x + span.x / 2, a.y + span.y / 2, a.z + span.z / 2);
+  solid(b, geo, color);
+}
+
+/** A blob: a sphere allowed to be squashed on any axis, which is what turns
+ * one primitive into a head, a shoulder, a belly and a bouffant. `segments`
+ * is the horizontal count; the vertical is kept to about half it, the way a
+ * sphere reads best at the triangle counts a cabin can afford. */
+export function blob(
+  b: MeshBuilder,
+  at: V3,
+  radius: number,
+  scale: V3,
+  color: number,
+  segments = 7,
+): void {
+  const geo = new THREE.SphereGeometry(radius, segments, Math.max(3, Math.round(segments / 2)));
+  geo.scale(scale[0], scale[1], scale[2]);
+  solid(b, geo.translate(at[0], at[1], at[2]), color);
+}

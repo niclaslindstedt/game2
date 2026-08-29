@@ -20,6 +20,7 @@ import {
   LENS_MATERIAL,
   type InteriorDetail,
 } from "./car-body.ts";
+import type { CrewLook } from "./car-crew.ts";
 import { createCarDamage } from "./car-damage.ts";
 import { createCarDirt, wheelSpray } from "./car-dirt.ts";
 import type { Livery } from "./car-livery.ts";
@@ -149,6 +150,8 @@ export type CarOptions = {
    * than the livery car-styles.ts authored for it — how a car that is not
    * the player's is told apart from the player's. */
   paint?: Livery;
+  /** The crew behind the glass (car-crew.ts). Defaults to the player's. */
+  crew?: CrewLook;
 };
 
 /** How far off the centerline this car's beams hang, front and rear. */
@@ -192,7 +195,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
   // Which wheels the engine can spin, and which ones only the road turns.
   const driven = drivenAxles(spec.drive);
   const bodySpec = bodySpecFor(spec, options.paint);
-  const body = buildCarBody(bodySpec, { interior: options.interior });
+  const body = buildCarBody(bodySpec, { interior: options.interior, crew: options.crew });
   // Panels, parts and wheels share one material, so a ghost is one flag.
   // Its own back faces still occlude its front ones (depth writing stays
   // on): a car you can see through is a ghost, a car you can see the

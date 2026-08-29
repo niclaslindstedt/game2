@@ -39,6 +39,7 @@ import { type GameEvent, type GameState } from "@engine";
 
 import type { InteriorDetail } from "./car-body.ts";
 import { buildCar, tintCar, type CarVisual } from "./car-mesh.ts";
+import { crewLookFor } from "./car-crew.ts";
 import { liveryForCrew } from "./car-livery.ts";
 import { createNameTag, type NameTag } from "./name-tag.ts";
 import { onRoad, type RivalRun } from "./standings.ts";
@@ -148,7 +149,13 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
         if (!existing) {
           if (range > BUILD_RANGE) continue;
           const livery = liveryForCrew(run.entry.crew.id, run.entry.number);
-          const visual = buildCar(run.state.spec, { paint: livery, interior });
+          // Their own paint, and their own crew inside it: the pair of
+          // helmets behind the glass is that crew's, not a copy of yours.
+          const visual = buildCar(run.state.spec, {
+            paint: livery,
+            interior,
+            crew: crewLookFor(run.entry.crew.id),
+          });
           // The plate wears the car's own paint and the number off its door,
           // so the name and the colour coming up the road are one crew.
           const tag = createNameTag(run.entry.crew.alias, livery.number, {
