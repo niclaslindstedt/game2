@@ -627,16 +627,22 @@ await capture(
   { hasTouch: true, isMobile: true },
 );
 
-// The pedal thumb, held on the anchor: the hints around it are the only
-// place the player is ever told which drag does what, so the shot exists to
-// check they say the right words in the right directions. In the MANUAL box
-// the two vertical ones say two things at once — the gear a flick takes and
-// the pedal a hold is — which is the arrangement most likely to collide.
+// The pedal thumb, held on the anchor: the hints around it are the only place
+// the player is ever told which drag does what, so the shot exists to check
+// they say the right words in the right directions — and, in the MANUAL box,
+// that the gear flicks beside the thumb clear every one of them.
+//
+// It is taken with the gear RUN OUT (the throttle held long enough for the
+// shift light) so the arrows are caught in both states at once: the up one
+// lit, because the gear is there to take, and the down one faint, because
+// first has nothing under it.
 await capture(
   "shot-touch-pedals",
   { width: 390, height: 844 },
   async (page) => {
     await racing(page);
+    await page.keyboard.down("ArrowUp");
+    await page.waitForTimeout(3500);
     const zone = await page.locator(".hud-zone-right").boundingBox();
     await page.mouse.move(zone.x + zone.width * 0.5, zone.y + zone.height * 0.55);
     await page.mouse.down();
@@ -647,15 +653,17 @@ await capture(
   { hasTouch: true, isMobile: true },
 );
 
-// The gear flick, caught at full stretch — the frame between the stab and
-// the release that takes the gear. The UP arrow is lit and the throttle is
-// still on: a thumb reaching for a shift never lifts off, which is the whole
-// point of the gesture.
+// The gear flick, caught at full stretch — the frame between the stab and the
+// release that takes the gear. The throttle is still on under it: a thumb
+// reaching for a shift never lifts off, which is the whole point of the
+// gesture.
 await capture(
   "shot-touch-shift",
   { width: 390, height: 844 },
   async (page) => {
     await racing(page);
+    await page.keyboard.down("ArrowUp");
+    await page.waitForTimeout(3500);
     const zone = await page.locator(".hud-zone-right").boundingBox();
     const x = zone.x + zone.width * 0.5;
     const y = zone.y + zone.height * 0.55;

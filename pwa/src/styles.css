@@ -1426,8 +1426,8 @@ body {
 
 .hud-hint-up {
   left: 0;
-  /* Clear of the thumb itself, and of the second word a manual box adds
-     under the arrow. */
+  /* Measured from the anchor's BOTTOM so the label grows upward, away from
+     the thumb, however many lines it runs to. */
   bottom: 2.6rem;
   transform: translateX(-50%);
 }
@@ -1479,24 +1479,62 @@ body {
   border-right: 10px solid currentcolor;
 }
 
-/* The gear a flick in this direction would take. The word is always there —
-   it is how the gesture is learned — and its COLOUR is the only thing that
-   answers whether the revs would take it, so a thumb already on the throttle
-   can read that without trying it.
+/* THE GEAR FLICKS — two chevrons stacked immediately left of the thumb, in
+   the manual box only. Left because that is the slot nothing is bound to by
+   default, and because the thumb's own drag never travels that way: a control
+   the finger passes over would be a control the finger hides.
 
-   Both states are stated outright rather than left to inherit. The
-   pulled-toward rule below paints the whole hint gold, and a gear the engine
-   would refuse must not be lit by the thumb merely pointing at it.
-
-   Colour and nothing else: `.hud-hint` above already carries the resting
-   opacity, and opacity MULTIPLIES down, so a second one here would only make
-   this word fainter than the pedal beside it. */
-.hud-hint-gear {
+   Both arrows are always drawn and the LIT one is the gear the revs will take
+   right now, so the answer is a glance rather than a try. They sit outside
+   `.hud-hint`, and so outside its resting opacity, on purpose: this is the one
+   thing on the pedal read continuously, and a state carried at 40% over a
+   bright sky is a state nobody reads at speed. */
+.hud-flick {
+  position: absolute;
+  right: 2.6rem;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.7rem;
+  transform: translateY(-50%);
   color: var(--hud-ink);
+  filter: drop-shadow(2px 2px 0 rgb(18 48 105 / 70%));
 }
 
-.hud-hint-gear.hud-hint-armed {
+/* Sized as an INSTRUMENT, not a caption: this is decision-driving, glanced at
+   mid-corner over a car and a bright sky, so it is half again the hint ring's
+   arrows and carries a heavier shadow. A gear that is not there yet is still
+   drawn — the pair is how the gesture is learned — but drawn faint enough
+   that the eye skips it and only the lit one reports. */
+.hud-flick-arrow {
+  width: 0;
+  height: 0;
+  border: 13px solid transparent;
+  opacity: 0.35;
+  transition: opacity 90ms steps(2);
+}
+
+.hud-flick-arrow[data-on] {
+  opacity: 1;
   color: var(--hud-good);
+}
+
+.hud-flick-arrow-up {
+  border-top-width: 0;
+  border-bottom: 19px solid currentcolor;
+}
+
+.hud-flick-arrow-down {
+  border-bottom-width: 0;
+  border-top: 19px solid currentcolor;
+}
+
+/* A pedal bound to the left stands off to clear them. It is the right way
+   round: the flicks are read every few seconds, a pedal label once, while
+   the layout is being learned. */
+.hud-pedal-hint[data-flick] .hud-hint-left {
+  right: 6.6rem;
 }
 
 .hud-pedal-hint[data-dir="up"] .hud-hint-up,

@@ -77,14 +77,20 @@ const PEDAL_HINT_WORD: Record<Exclude<PedalMode, "gas">, string> = {
   brake: "BRAKE",
   handbrake: "DRIFT",
 };
-/** ...and what a FLICK in that direction is worth in the manual box. Only
- * the two vertical ones carry one, and they carry it on top of whatever
- * pedal is bound there: the same drag is both, and which one it turns out
- * to be is decided by how long the thumb stays (pedal-gesture.ts). */
-const PEDAL_FLICK_WORD: Partial<Record<PedalDir, string>> = {
-  up: "GEAR +",
-  down: "GEAR −",
-};
+/** The gear flicks, drawn as a pair of chevrons beside the thumb rather than
+ * as words on the hint ring.
+ *
+ * They are the one thing on this surface that is read CONSTANTLY — a driver
+ * glances at them every few seconds to see whether the gear is there yet —
+ * where the ring's pedal labels are read once, while the layout is being
+ * learned. So the flicks get the empty slot beside the thumb and the ring
+ * gives way to them (`data-flick` in styles.css pushes a left-bound pedal's
+ * label further out), and they are SHAPES rather than words: at a glance,
+ * and at speed, an arrow that is lit reads and a word has to be spelled. */
+const FLICK_ARROWS: { dir: "up" | "down"; label: string }[] = [
+  { dir: "up", label: "Flick up for a higher gear" },
+  { dir: "down", label: "Flick down for a lower gear" },
+];
 
 /** The left thumb: touching anywhere anchors a steering wheel under the
  * finger; dragging sideways turns it and releasing recenters. The rim does
@@ -349,38 +355,38 @@ export function PedalZone({
       onLostPointerCapture={(e) => guard.release(e.pointerId)}
       onContextMenu={(e) => e.preventDefault()}
     >
-      <div ref={hintRef} className="hud-pedal-hint" aria-hidden="true">
+      <div
+        ref={hintRef}
+        className="hud-pedal-hint"
+        data-flick={shift ? "1" : undefined}
+        aria-hidden="true"
+      >
         {PEDAL_HINT_DIRS.map((dir) => {
           const mode = byDir[dir];
-          // The gear sits nearest the arrow and the pedal hard against the
-          // thumb, so a direction carrying both reads outward in the order
-          // the thumb performs them: the stab, then the hold.
-          const gear = shift ? PEDAL_FLICK_WORD[dir] : undefined;
-          const words = [gear, mode && PEDAL_HINT_WORD[mode]];
-          const shown = words.filter((word): word is string => Boolean(word));
-          if (shown.length === 0) return null;
-          // A gear the revs will not take is still NAMED — the hint is where
-          // the gesture is taught, and a word that came and went with the
-          // engine speed would teach nothing. It is the colour that says
-          // whether the flick would land, so a thumb already on the throttle
-          // can read the answer without trying it.
-          const armed = shift && ((dir === "up" && shift.up) || (dir === "down" && shift.down));
+          if (!mode) return null;
           return (
             <span key={dir} className={`hud-hint hud-hint-${dir}`}>
               <i className={`hud-hint-arrow hud-hint-arrow-${dir}`} />
-              {shown.map((word) => (
-                <span
-                  key={word}
-                  className={
-                    word === gear ? `hud-hint-gear ${armed ? "hud-hint-armed" : ""}` : undefined
-                  }
-                >
-                  {word}
-                </span>
-              ))}
+              {PEDAL_HINT_WORD[mode]}
             </span>
           );
         })}
+        {/* The gears, beside the thumb. Both arrows are always drawn — they
+            are how the gesture is learned, and a control that came and went
+            with the engine speed would teach nothing — and the LIT one is
+            the gear the revs will actually take right now. */}
+        {shift && (
+          <div className="hud-flick">
+            {FLICK_ARROWS.map(({ dir, label }) => (
+              <i
+                key={dir}
+                className={`hud-flick-arrow hud-flick-arrow-${dir}`}
+                data-on={(dir === "up" ? shift.up : shift.down) ? "1" : undefined}
+                title={label}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
