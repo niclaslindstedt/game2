@@ -1018,6 +1018,30 @@ await capture(
   { tod: "night" },
 );
 
+// THE CLOUD IN THE DARK, which is a different picture from either of the
+// two it is made of. Dust is not in the lit scene — a point sprite has no
+// normals for the sun or the spotlights to reach — so it takes the sky as a
+// flat ambient plus whatever the cars' own lamps put back on it
+// (dust-light.ts), and BOTH halves of that only exist here. The acceptance
+// test is three things at once: the tail lamps painting the near cloud RED
+// where the chase camera is looking straight through it, the headlights
+// throwing a warm cone into anything still hanging in front of the car, and
+// the cloud beyond either of them nearly gone — a night plume the player
+// can see the road through is a plume that is emitting its own light.
+//
+// Driven by the bot to the same stage clock as `shot-gravel-plume`, so the
+// two are one before-and-after of the same cloud under two skies rather
+// than two pictures of different moments.
+await capture(
+  "shot-night-plume",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await racing(page);
+    await atStageTime(page, 14);
+  },
+  { tod: "night", bot: "1" },
+);
+
 // The lap clock: a circuit (R22) driven by the bot until it has crossed the
 // line once, so the shot has a lap in the book, a lap counter reading 2 of
 // 3, and both clocks running — which is the whole instrument and cannot be

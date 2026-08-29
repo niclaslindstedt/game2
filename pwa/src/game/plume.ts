@@ -7,8 +7,19 @@
 // underside lifts, which does not arc anywhere — it swells, hangs, and is
 // dragged along behind the car until the air lets it go.
 //
-// Presentation only, like everything else in this directory: it reads the
-// live `GameState` and never writes a byte of it.
+// A cloud, and ANY NUMBER OF CARS FEEDING IT. The player's is one instance;
+// the field on the road is another, shared by all fourteen crews, because a
+// rally where only one car raises dust is a rally with one car in it. What
+// makes a cloud one cloud is the pool, not the car: every puff in an
+// instance recycles through the same buffer and costs the same single draw,
+// so the field's whole entry list is as expensive as the player alone.
+// `raise` is therefore per CAR and `step` is per FRAME, and the debt each
+// car owes is kept against the car rather than against the cloud (see
+// `debts`) — one shared counter would hand a rival the puffs the player
+// earned.
+//
+// Presentation only, like everything else in this directory: it reads live
+// `GameState`s and never writes a byte of one.
 //
 // WHAT DECIDES WHETHER IT COMES UP AT ALL is not here — ground-tint.ts owns
 // that call (`plumeGround`), because it is the same module that decides what
@@ -34,25 +45,53 @@ import { type PlumeGround } from "./ground-tint.ts";
 
 export type Plume = {
   points: THREE.Points;
+  /** Age the cloud by one frame. Once per frame per CLOUD, however many
+   * cars are feeding it. */
+  step: (dt: number) => void;
   /**
-   * Advance the cloud, and add to it if the car is earning any. `ground` is
-   * what the surface under the wheels has to hang in the air, or null where
-   * it has nothing; `fx` is the effects budget.
+   * Add one car's contribution. `ground` is what the surface under ITS
+   * wheels has to hang in the air, or null where it has nothing; `fx` is
+   * the effects budget. `key` is whatever object identifies the car for as
+   * long as it is on the road — the fractional puff it owes is held against
+   * it, and let go with it.
    */
+  raise: (key: object, state: GameState, dt: number, fx: number, ground: PlumeGround) => void;
+  /** Both of the above, for a cloud with exactly one car in it. */
   update: (state: GameState, dt: number, fx: number, ground: PlumeGround) => void;
   dispose: () => void;
 };
 
-export function createPlume(): Plume {
+/**
+ * A cloud, and how thick the cars feeding it raise it.
+ *
+ * `gain` is not a quality setting — it is how much dust a car OTHER than
+ * the one being driven is worth. The pool is the cloud's whole budget, so
+ * several cars at full rate would recycle each other's puffs and every one
+ * of them would end up with a tail a third the length it should have. Below
+ * one, a field shares the buffer without any of them tearing holes in
+ * anybody's cloud, and a rival two hundred metres up the road — which is
+ * where a staggered rally keeps them — is a smudge over the trees rather
+ * than a wall, which is exactly what it should be.
+ */
+export function createPlume(gain = 1): Plume {
   const cloud: Dust = createDust(GROUND_CLOUD);
-  /** Puffs owed but not yet made. The cloud is written as a RATE, so all
-   * but the fastest frames owe a fraction of a puff; rounding each frame
-   * on its own would turn a wisp into nothing at all rather than into one
-   * puff every few frames. */
-  let debt = 0;
+  /** Puffs owed but not yet made, per car. The cloud is written as a RATE,
+   * so all but the fastest frames owe a fraction of a puff; rounding each
+   * frame on its own would turn a wisp into nothing at all rather than into
+   * one puff every few frames.
+   *
+   * Weak, because the cars come and go: the field builds a crew's car when
+   * they come within range and drops it when the run is over, and a plain
+   * Map would hold every entry list the session ever put on the road. */
+  const debts = new WeakMap<object, number>();
 
-  const update = (state: GameState, dt: number, fx: number, ground: PlumeGround): void => {
-    cloud.update(dt);
+  const raise = (
+    key: object,
+    state: GameState,
+    dt: number,
+    fx: number,
+    ground: PlumeGround,
+  ): void => {
     const car = state.car;
     // Nothing in the air: a car off the ground is not lifting anything off
     // it, and the plume it left is already behind it.
@@ -61,9 +100,10 @@ export function createPlume(): Plume {
     if (pace <= 0) return;
 
     const rate = PLUME.rate.min + (PLUME.rate.max - PLUME.rate.min) * pace;
-    debt += rate * ground.amount * Math.min(dt, PLUME.maxStep) * fx;
+    const debt =
+      (debts.get(key) ?? 0) + rate * gain * ground.amount * Math.min(dt, PLUME.maxStep) * fx;
     const puffs = Math.floor(debt);
-    debt -= puffs;
+    debts.set(key, debt - puffs);
     if (puffs <= 0) return;
 
     const fwdX = Math.sin(car.heading);
@@ -111,5 +151,13 @@ export function createPlume(): Plume {
     }
   };
 
-  return { points: cloud.points, update, dispose: cloud.dispose };
+  /** The one-car cloud, which is what the player's is: the frame's own
+   * ageing and the frame's own contribution, off a key that never changes. */
+  const solo = {};
+  const update = (state: GameState, dt: number, fx: number, ground: PlumeGround): void => {
+    cloud.update(dt);
+    raise(solo, state, dt, fx, ground);
+  };
+
+  return { points: cloud.points, step: cloud.update, raise, update, dispose: cloud.dispose };
 }

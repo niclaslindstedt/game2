@@ -248,6 +248,41 @@ wheels then run through everything the fronts have loosened, and the wake
 that carries a plume at all sits behind the car. The drivetrain tilts the
 split rather than deciding it.
 
+EVERY CAR ON THE ROAD TOWS ONE, not just the one being driven. The field's
+crews raise a cloud of their own from a second instance of the same system
+(`field-cars.ts` over `plume.ts`), and they raise it out to a wider range
+than their bodies are even built at — a rally car is a plume over the road a
+corner before it is a car. It costs nothing to do this: a cloud is one
+pooled `Points` and one draw call however many crews are feeding it, so the
+whole entry list is as expensive as one car, and the pool is shared at half
+rate (`FIELD_PLUME`) so none of them tears a hole in anybody else's tail.
+A run with nobody entered — a time trial, a roam — draws no field cloud at
+all.
+
+### What the light does to a cloud
+
+Dust is not in the lit scene. A particle is a point sprite with no normals,
+so the sun, the sky and the four spotlights on the car all pass straight
+through it — which is the right trade for a thousand puffs, and also why an
+untreated plume is the same tan at midnight that it is at noon. So the
+clouds carry their own two-term lighting instead
+(`pwa/src/game/dust-light.ts`):
+
+- **The sky**, as a flat ambient on the material (`dustTintFor` in
+  `sky.ts`). It is the car's own measurement with a different curve on it:
+  pinned to 1 at noon, so the daylight plume is untouched, and squared under
+  that, so the failing light bites a cloud markedly harder than it bites the
+  paint. The floor under it is barely a floor — a plume you can still see by
+  at midnight is a plume emitting its own light.
+- **The lamps**, from a small register of cones summed per particle in the
+  vertex shader. Every lit car hangs two on it — one throwing forward, one
+  throwing back — so the headlights put a warm cone into anything hanging
+  ahead of the car and the tail lamps turn the near cloud RED, which is the
+  part the chase camera is looking straight through. The player is always on
+  the register; the nearest of the field fill what is left, so a rival ahead
+  of you in the dark is a red glow inside its own dust before it is a car.
+  `shot-night-plume` is the acceptance test.
+
 Off the road it does not come up at all over turf. Grass is what BINDS a
 surface, so a field has no loose dry dust to lift, and a green cloud is a
 substance that does not exist — `plumeGround` in `ground-tint.ts` is the one

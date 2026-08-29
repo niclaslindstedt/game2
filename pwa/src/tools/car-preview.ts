@@ -47,6 +47,17 @@ const VIEWS: View[] = [
     orbit: { az: 0.62, el: 0.26, dist: 1.55 },
     dirt: { dust: 0.85, mud: 0.6 },
   },
+  // Dead astern, because the back window is the one panel of the car the
+  // player looks at for a whole stage — and because the fan a single wiper
+  // cuts out of a caked screen is a SHAPE, which is only a shape from
+  // square on. Every other cell here can be judged at three quarters; this
+  // one cannot.
+  {
+    name: "dirty rear",
+    fov: 35,
+    orbit: { az: Math.PI, el: 0.16, dist: 1.15 },
+    dirt: { dust: 0.9, mud: 0.35 },
+  },
 ];
 
 const CELL_W = 440;
@@ -98,9 +109,22 @@ async function main(): Promise<void> {
         dirty(view.dirt);
         // The screens soil on their own clock (car/wipers.ts), so a dirty
         // car with showroom glass is a lie the sheet would tell every time.
-        // Nothing drives the blades here — they stay parked, which is what
-        // a car standing in the service park does.
-        car.wipers.update(0, Math.max(view.dirt.dust, view.dirt.mud), 20);
+        // A stage's worth of grime in one step, and then a couple of seconds
+        // at a frame at a time so the blades take ONE stroke through it and
+        // park: the swept fan is the whole look of a rally car's glass, and
+        // a screen caked evenly to the edges says nothing about the wipers
+        // it is wearing.
+        // A stage's worth of grime in one step, and then TEN SECONDS a
+        // frame at a time. The blades run on demand and wait between
+        // strokes on a dry screen (car/wipers.ts's `REST.dry`), so a handful
+        // of frames catches them parked in the middle of that wait and the
+        // sheet photographs a screen nobody has wiped. Ten seconds is longer
+        // than the wait, so every cell lands on or just after a stroke —
+        // which is the state worth looking at, because the swept fan is the
+        // whole look of a rally car's glass.
+        const level = Math.max(view.dirt.dust, view.dirt.mud);
+        car.wipers.update(0, level, 20);
+        for (let n = 0; n < 500; n++) car.wipers.update(0, level, 0.02);
       }
       camera.fov = view.fov;
       camera.updateProjectionMatrix();

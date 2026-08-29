@@ -89,7 +89,12 @@ const HELMET = 0xe9ebef;
  * a 2.1 m coupe cabin and a 2.4 m hatch one. `hip` is the seat's hinge, and
  * everything else is placed off it in metres, because a seat, a helmet and a
  * steering wheel are the same size in every car ever built. */
-const LAYOUT = { hip: 0.42, dashBack: 0.6, wheelAhead: 0.4, hoopBehind: 0.42, bulkhead: 0.58 };
+const LAYOUT = { hip: 0.42, dashDepth: 0.34, wheelAhead: 0.4, hoopBehind: 0.42, bulkhead: 0.58 };
+
+/** Clearance between the dash's front face and the glass it leans under, m.
+ * The screen is a warped patch and the dash is a box, so meeting it exactly
+ * is meeting it in one place and crossing it in the others. */
+const DASH_GAP = 0.02;
 
 /** Where the middle of the steering wheel sits relative to the window sill,
  * m. Just under it, so the top of the rim breaks the sill line and shows
@@ -147,6 +152,12 @@ type Cabin = {
   cowlY: number;
   /** Along the car: the cowl, the seat hinge, and the tail, m. */
   cowlZ: number;
+  /** HOW FAR THE WINDSCREEN LEANS BACK, in metres along the car per metre
+   * of height. Negative, because the top of a screen is always behind its
+   * base. Anything built up against the glass from the inside needs it: a
+   * slab whose front face stands at `cowlZ` is a slab whose TOP face is
+   * outside the car, since the glass has already leaned away by then. */
+  rake: number;
   hipZ: number;
   rearZ: number;
 };
@@ -171,6 +182,7 @@ function cabinOf(spec: CarBodySpec): Cabin {
     roofY: roofY - 0.035,
     cowlY,
     cowlZ,
+    rake: roofY > cowlY ? (f.FL[2] - cowlZ) / (roofY - cowlY) : 0,
     hipZ: cowlZ - LAYOUT.hip * length,
     rearZ: baseRearZ,
   };
@@ -282,21 +294,52 @@ function buildLining(b: MeshBuilder, cabin: Cabin): void {
  * and a hood over the instruments in front of the driver. At `high` the
  * console runs back between the seats. */
 function buildDash(b: MeshBuilder, cabin: Cabin, driverX: number, high: boolean): void {
-  const back = cabin.hipZ + LAYOUT.dashBack;
+  // HOW FAR BACK THE DASH REACHES, measured from the SCREEN rather than
+  // forward from the seat hinge. A fixed metre count added to the hinge —
+  // which is itself a fraction of the cabin — lands ahead of the cowl on any
+  // cabin short enough, and then the whole assembly is built out over the
+  // bonnet: the slab through the bottom of the windscreen, and the binnacle
+  // as a black bar hanging in the air in front of the glass. Anchored to the
+  // cowl it cannot happen on any body. The hinge is still the limit at the
+  // other end, so a dash never grows back into the seats.
+  const back = Math.max(cabin.hipZ, cabin.cowlZ - LAYOUT.dashDepth);
   const top = cabin.sillY + 0.07;
-  const depth = cabin.cowlZ - back;
+  // WHERE THE GLASS IS AT THE HEIGHT OF THE DASH'S TOP, not where it is at
+  // the bottom of the screen. A box has one front face for its whole
+  // height, so taking that face to `cowlZ` — the base of the windscreen —
+  // stands the top of the slab a hand's breadth in FRONT of a raked screen,
+  // out in the open air over the scuttle. From outside the car that is a
+  // dark band lying across the bottom of the windscreen: the dash, drawn
+  // over the glass, over the film on it and over the parked wiper under
+  // that, which is why the arm looked like it was floating halfway up the
+  // screen. Leaning the face back with the glass puts the whole slab behind
+  // it; the wedge of air that leaves at the bottom is under the scuttle,
+  // where nothing can see it.
+  // Where the glass has leaned back to by a given height — see `rake`.
+  // Everything built up under the screen has to be placed against THIS, not
+  // against the cowl: the cowl is only where the glass starts.
+  const under = (y: number): number =>
+    cabin.cowlZ + cabin.rake * Math.max(0, y - cabin.cowlY) - DASH_GAP;
+  const front = under(top);
+  const depth = Math.max(0.05, front - back);
   b.box(
     0,
     (top + cabin.panY) / 2,
-    (cabin.cowlZ + back) / 2,
+    (front + back) / 2,
     cabin.inner * 1.98,
     top - cabin.panY,
     depth,
     TRIM.dash,
   );
   // The binnacle: a dark hood over the dials, and the one thing in the cabin
-  // that says which side the car is driven from.
-  b.box(driverX, top + 0.03, back + 0.07, 0.42, 0.09, 0.2, TRIM.binnacle);
+  // that says which side the car is driven from. It stands PROUD of the
+  // dash, so it needs the glass lookup on its own account — placed off the
+  // dash's front face it clears the screen at the dash's height and pokes
+  // through it at its own, which from outside is a black bar lying across
+  // the windscreen in front of the film and the wiper both.
+  const hoodDepth = 0.2;
+  const hoodFront = Math.min(front, under(top + 0.075));
+  b.box(driverX, top + 0.03, hoodFront - hoodDepth / 2, 0.42, 0.09, hoodDepth, TRIM.binnacle);
   if (!high) return;
   b.box(0, cabin.panY + 0.05, cabin.hipZ + 0.1, 0.11, 0.1, 0.66, TRIM.dash);
 }

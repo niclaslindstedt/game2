@@ -16,11 +16,13 @@ import * as THREE from "three";
 import type { GameState, RaceEnv } from "@engine";
 
 import { createClouds } from "./clouds.ts";
+import { lightDust as hangDustLamps } from "./dust-light.ts";
 import { createRain } from "./rain.ts";
 import { createStorm } from "./storm.ts";
 import {
   carTintFor,
   dayLight,
+  dustTintFor,
   DOME_RADIUS,
   rainTone,
   skyFor,
@@ -76,8 +78,16 @@ export type Environment = {
   setSky: (show: boolean) => void;
   /** Current tint for the car's baked vertex lighting. */
   carTint: () => THREE.Color;
+  /** …and the darker one hanging dust takes (sky.ts's `dustTintFor`): a
+   * cloud in the dark is supposed to disappear where a car is not. */
+  dustTint: () => THREE.Color;
   /** Whether the run's light is gone and the car has its lights on. */
   lampsLit: () => boolean;
+  /** …and how much of a beam survives the daylight it is competing with,
+   * 0..1. The environment drives the player's own lamps with it; anything
+   * else that lights something off a car (the field's lamps on the dust)
+   * reads it here rather than keeping a second answer. */
+  lampPower: () => number;
   /** How hard this stage is raining, 0..1 — what anything the weather LANDS
    * on reads, the wipers on the car's glass first among them. */
   rainfall: () => number;
@@ -96,6 +106,11 @@ export type Environment = {
   setGrime: (level: number) => void;
   /** How far off the centerline the car's lamps sit, m — front and rear. */
   setLampSpread: (front: number, rear: number) => void;
+  /** Hang the PLAYER's lamps on the register the dust clouds are lit from
+   * (dust-light.ts), at whatever strength the daylight and the grime on the
+   * lenses leave them. The register is emptied by its one owner, the
+   * renderer, so this only ever adds. */
+  lightDust: (car: { x: number; y: number; z: number; heading: number }) => void;
   update: (state: GameState, camera: THREE.Camera, dt: number) => void;
   dispose: () => void;
 };
@@ -643,7 +658,9 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     withHaze,
     setSky,
     carTint: () => carTintFor(preset),
+    dustTint: () => dustTintFor(preset),
     lampsLit: () => preset.headlights,
+    lampPower,
     rainfall: () => preset.rain,
     flash: () => storm.surge(),
     flashFrom: () => storm.from(),
@@ -655,6 +672,15 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     },
     setGrime,
     setLampSpread,
+    lightDust: (car) => {
+      // The same two switches the beams are on — the lamps are lit or they
+      // are not, and what daylight and a caked lens leave of them is the
+      // same arithmetic the spotlights use. One pair rather than the four
+      // real beams: see dust-light.ts.
+      if (!preset.headlights) return;
+      const power = lampPower();
+      hangDustLamps(car, power * (1 - HEAD_GRIME * grime), power * (1 - TAIL_GRIME * grime));
+    },
     update,
     dispose,
   };

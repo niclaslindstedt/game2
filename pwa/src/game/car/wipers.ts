@@ -21,8 +21,13 @@
 //   a sweep instead of a fade on the whole pane.
 //
 // The blades run on demand, not on a switch: they start when there is
-// something on the glass, take a stroke per squall, and always finish the
-// stroke they are on so they park where they started.
+// something on the glass and always finish the stroke they are on, so they
+// park where they started. What "something" means is two different answers
+// (`WIPE`) — rain is a reason to keep wiping, dust is a reason to clear the
+// screen once and wait — and both are read off the part of the pane the
+// blades can actually REACH (`swept`). Off the whole pane they would never
+// switch off at all: the corners no arm can get to cake solid over a stage
+// and hold the average above any threshold forever.
 //
 // The blades are hardware and ride the body's own fullbright material; the
 // film has a material of its own because it is the one part of the car that
@@ -41,18 +46,34 @@ import type { CarBodySpec } from "./spec.ts";
 const FILM_LIFT = GLASS_LIFT + 0.003;
 const BLADE_LIFT = GLASS_LIFT + 0.014;
 
-/** The grid each screen is tessellated into. Coarse enough to be free,
- * fine enough that a swept arc has a shape. */
-const GRID = { front: { cols: 9, rows: 6 }, rear: { cols: 7, rows: 5 } };
+/** The grid each screen is tessellated into. The resolution is not about
+ * how fine the dirt is — it is about the EDGE of the swept arc, which is
+ * the one line on the whole car the eye reads as "a wiper did that". At a
+ * handful of cells across, a blade's fan comes out as three big triangles
+ * of clean glass and reads as a texture glitch; the arc has to have an arc
+ * in it. Still nothing: two panes of a few hundred flat, unlit,
+ * vertex-coloured triangles. */
+const GRID = { front: { cols: 36, rows: 24 }, rear: { cols: 36, rows: 24 } };
 
-/** What is on the glass: the smear water leaves, and the brown a gravel
- * stage cakes it with. */
-const FILM_TONE = new THREE.Color(0x9fabb4);
+/** WHAT IS ON THE GLASS, and it is three things rather than two.
+ *
+ * `WATER` is the pale smear rain alone leaves. The other two are both ROAD
+ * grime, and the difference between them is the weather: what a dry gravel
+ * stage cakes a screen with is pale SAND — the single loudest thing about a
+ * rally car's back window, and the reason it goes lighter than the paint
+ * around it rather than darker — where the same grime with rain in it is
+ * the dark brown of wet earth. One tone for both is why a dry stage used to
+ * leave a screen looking like it had been through a puddle. */
+const WATER_TONE = new THREE.Color(0x9fabb4);
+const DUST_TONE = new THREE.Color(0xcbb083);
 const MUD_TONE = new THREE.Color(0x6d5a3c);
 
 /** Most of the film a full coat can reach, 0..1 of opaque — short of 1, so
- * even a caked screen is still glass rather than a painted panel. */
-const COAT_MAX = 0.76;
+ * even a caked screen is still glass rather than a painted panel. High: the
+ * back window of a car that has done a gravel stage is a window you cannot
+ * see out of, and the whole point of the blade is that it cuts a hole in
+ * something. */
+const COAT_MAX = 0.88;
 
 /** Coat per second, at a downpour and at a filthy car. Rain films a screen
  * in seconds; road spray takes most of a stage. The BACKLIGHT is the other
@@ -63,34 +84,95 @@ const SOIL = {
   rear: { rain: 0.2, road: 0.11 },
 };
 
-/** What a blade leaves behind, as a fraction of what it found. A blade that
- * cleared to nothing reads as an eraser; the smear is most of why a wiped
- * screen reads as WIPED. */
-const SMEAR = 0.1;
+/** What a blade leaves behind, as a fraction of what it found — and it is
+ * multiplied by the vertex's own soiling bias rather than applied flat. A
+ * blade that cleared to nothing reads as an eraser; a blade that cleared to
+ * an even tenth reads as a stencil. What a real one leaves is STREAKS, in
+ * arcs following the way it went, and taking the smear off the same noise
+ * the coat gathers by is what puts them there for nothing. */
+const SMEAR = 0.11;
 
-/** Seconds for one out-and-back stroke, barely wet through to a downpour,
- * and how long the blades rest at the park between strokes when there is
- * only a little on the glass. */
-const STROKE = { slow: 2.1, fast: 0.85 };
-const INTERMITTENT = 2.4;
+/** Seconds for one out-and-back stroke, barely wet through to a downpour.
+ * A real pair runs somewhere between 45 and 70 cycles a minute, and it is
+ * the SLOW end that gives the effect away: a blade taking two seconds to go
+ * out and come back does not read as a wiper at all, it reads as an arm
+ * being animated. */
+const STROKE = { slow: 1.25, fast: 0.6 };
+
+/** How long the blades sit at the park between strokes, and it is two
+ * numbers because there are two reasons to be wiping.
+ *
+ * `drizzle` is the intermittent setting: water is still arriving, so the
+ * next stroke is a few seconds out at most. `dry` is what a stage's DUST
+ * gets, and it is far longer, because a dry screen is not a problem that
+ * comes back in two seconds — a driver clears it and then leaves it alone
+ * until it is worth clearing again. Without the split, a car filthy enough
+ * to soil its screen at all wipes continuously for the rest of the stage,
+ * which is the same failure as never switching off. */
+const REST = { drizzle: 2.4, dry: 7 };
+
 /** The backlight's arm is the slower of the two, the way a hatch's is. */
 const REAR_RATE = 1.6;
 
-/** Coat (or rainfall) the blades come on at. They only ever switch off at
- * the end of a stroke, so they park where they started. */
-const WIPE_ON = 0.15;
+/** WHAT SWITCHES THE BLADES ON, and it is deliberately not one number.
+ *
+ * Rain is a reason to keep wiping and it starts them at the first hint of
+ * it, because that is what a windscreen in rain looks like. Grime is a
+ * reason to clear the glass ONCE, and the screen has to have properly gone
+ * off before it is worth a stroke — a car on a dry gravel stage is soiling
+ * its screen every second of the run, so a threshold low enough to catch
+ * that is a threshold the blades never come back under.
+ *
+ * `off` is where they give up at the end of a stroke, and it sits under
+ * what one stroke leaves behind (`SMEAR` of what it found), so a wipe that
+ * did its job is always followed by the blades parking. */
+const WIPE = { rain: 0.04, grime: 0.38, off: 0.12 };
 
 /** Where a screen's arms are hung and how far they swing. `pivots` are
  * across the pane as fractions of its half-width and `base` is up from its
  * bottom edge as a fraction of its height; `reach` is the arm's length as a
  * fraction of the pane's height. `park` is the blade's angle at rest and
  * `sweep` how far it swings from there, both measured the way a turn about
- * the screen's own normal runs — from straight up, TOWARD −x. A tandem pair
- * point the same way at rest, which is why one corner of a real windscreen
- * never comes clean. */
+ * the screen's own normal runs — from straight up, TOWARD −x.
+ *
+ * ONE ARM ON EACH SCREEN, ON THE CENTRELINE, LYING FLAT, SWEEPING A HALF
+ * CIRCLE. On the windscreen that is a rally car's answer rather than a road
+ * car's: a tandem pair is what a showroom car wears, and a stage car runs a
+ * single long arm off a pivot in the middle of the scuttle, because one
+ * blade that reaches most of the way across is less to go wrong and less to
+ * lift at speed.
+ *
+ * All three of those choices are the same choice, and it is about the
+ * SHAPE LEFT ON THE GLASS rather than about the arm. What the player looks
+ * at for a whole stage is the back window, and what is on it is a clean
+ * fan cut out of a caked screen. Park the arm flat against the bottom edge,
+ * put its pivot on the centreline, and sweep it the whole way to flat on
+ * the other side, and that fan is a half disc sitting on the sill — the
+ * shape the eye already knows. Any of the three off — a pivot to one side,
+ * a park at forty-five degrees, a sweep that stops short — and it is an
+ * off-centre wedge that reads as a hole in the texture instead.
+ *
+ * `reach` is the arm's length as a fraction of the pane's height MEASURED UP
+ * THE GLASS, and it is the number that decides how far up the screen the fan
+ * gets — which is the thing anybody actually looks at. Just under one: the
+ * arc reaches most of the way to the header and stops short of it, so the
+ * top of the screen and all four corners stay caked, which is the shape a
+ * rally car's back window wears. At one the blade scrubs the header clean
+ * and the cake is a thin frame; much under it and the fan is a bubble in
+ * the middle of a filthy window.
+ *
+ * The same number is also what keeps the arm honest. A blade is never
+ * longer than the window is tall, so it cannot leave the glass at the top
+ * of its arc and read as an aerial — and it is clamped again to the
+ * half-width below, so it cannot swing off the side of the screen it parks
+ * on. The two can pull against each other on a hard-raked backlight, where
+ * a screen that stands half a metre runs the best part of a metre up the
+ * rake: an arm long enough to sweep that screen looks long lying across it.
+ * The fan wins. It is the shape that reads from behind; the parked arm is a
+ * black stick either way. */
 const ARMS = {
-  front: { pivots: [-0.3, 0.28], base: 0.04, reach: 0.92, park: -1.42, sweep: 1.62 },
-  rear: { pivots: [-0.12], base: 0.05, reach: 0.9, park: -1.15, sweep: 2 },
+  front: { pivots: [0], base: 0.02, reach: 0.9, park: -1.52, sweep: 3.04 },
+  rear: { pivots: [0], base: 0.03, reach: 0.9, park: -1.5, sweep: 3 },
 };
 
 /** The arm, the blade and the pivot boss, in metres of arm length. */
@@ -181,8 +263,16 @@ type Film = {
    * arriving as one even wash. */
   bias: Float32Array;
   soil: { rain: number; road: number };
-  /** How much of what is on this screen is mud rather than water, 0..1. */
+  /** The vertices some blade can actually reach — what "how dirty is this
+   * screen" is asked of. See the module note. */
+  swept: Int32Array;
+  /** How much of what is on this screen came off the ROAD rather than out
+   * of the sky, 0..1 — the mix between the water film and the grime. */
   mud: number;
+  /** …and how much water is in that grime, 0..1: dry sand at nothing, wet
+   * earth at one. The two are separate questions and answering them with
+   * one number paints a dry stage's dust the colour of mud. */
+  soak: number;
   tone: THREE.Color;
   shade: number;
   pivots: Pivot[];
@@ -268,7 +358,14 @@ export function buildWipers(
     // own pivot sits rather than to a figure picked for one car.
     const spread = (Math.max(...arm.pivots.map(Math.abs)) * frame.width) / 2;
     const clear = (frame.width / 2 - spread) / Math.max(0.2, Math.abs(Math.sin(arm.park)));
-    const reach = Math.min(frame.height * arm.reach, clear * 0.98);
+    // A shade OVER the half-width rather than under it. The tip of a parked
+    // blade sitting exactly on the glass edge is a blade that looks short;
+    // a real one runs to the edge and disappears under the trim, and the
+    // few centimetres of overhang are what let the fan reach up the screen
+    // instead of stopping halfway. Much more than this and the arm swings
+    // out over the bodywork, which is the one way this reads as wrong from
+    // every angle at once.
+    const reach = Math.min(frame.height * arm.reach, clear * 1.06);
     const pivots: Pivot[] = [];
     const blades: THREE.Object3D[] = [];
     const geo = armed ? bladeGeometry(reach) : null;
@@ -319,6 +416,30 @@ export function buildWipers(
       bias[k] = (0.5 + 0.9 * hash(offset + k)) * (0.7 + 0.6 * down);
     }
 
+    // WHICH VERTICES A BLADE CAN GET TO — the same reach and arc test the
+    // wipe itself runs, taken once at build time over the whole stroke
+    // rather than per frame over the slice of it. It is what the screen's
+    // dirtiness is measured across: a pane's unreachable corners are always
+    // filthy by the end of a stage, and averaging them in is why blades that
+    // are supposed to run on demand end up running for the whole run.
+    const reachable: number[] = [];
+    // Both ends of the stroke, in order — `sweep` is signed (an arm that
+    // parks on the right swings the other way), so the arc's bounds are a
+    // min and a max rather than a start and a start-plus.
+    const swungLo = Math.min(arm.park, arm.park + arm.sweep) - WIPE_EDGE;
+    const swungHi = Math.max(arm.park, arm.park + arm.sweep) + WIPE_EDGE;
+    for (let k = 0; k < count; k++) {
+      for (const p of pivots) {
+        const inner = p.reach * BLADE.from;
+        const r = p.radius[k] as number;
+        if (r < inner || r > p.reach) continue;
+        const a = p.angle[k] as number;
+        if (a < swungLo || a > swungHi) continue;
+        reachable.push(k);
+        break;
+      }
+    }
+
     films.push({
       offset,
       count,
@@ -326,7 +447,9 @@ export function buildWipers(
       shown: new Float32Array(count).fill(-1),
       bias,
       soil: SOIL[which],
+      swept: Int32Array.from(reachable),
       mud: 0,
+      soak: 0,
       tone: new THREE.Color(),
       shade,
       pivots,
@@ -352,8 +475,13 @@ export function buildWipers(
   film.userData[NO_DIRT] = true;
   group.add(film);
 
+  const grime = new THREE.Color();
   const paint = (f: Film): void => {
-    f.tone.copy(FILM_TONE).lerp(MUD_TONE, f.mud).multiplyScalar(f.shade);
+    // What the road put there first — sand, or the same sand with the
+    // weather in it — and then how much of the film is that rather than
+    // rain's own smear.
+    grime.copy(DUST_TONE).lerp(MUD_TONE, f.soak);
+    f.tone.copy(WATER_TONE).lerp(grime, f.mud).multiplyScalar(f.shade);
     const arr = colors.array as Float32Array;
     for (let k = 0; k < f.count; k++) {
       const i = (f.offset + k) * 4;
@@ -367,11 +495,20 @@ export function buildWipers(
   };
   for (const f of films) paint(f);
 
-  /** Advance one screen's arms and clear whatever they passed over. */
-  const sweep = (f: Film, need: number, dt: number): void => {
+  /**
+   * Advance one screen's arms and clear whatever they passed over. `wet` is
+   * the rain falling on the car and `coat` is what is on the part of the
+   * glass the blades can reach — kept apart all the way down, because they
+   * are the two different reasons to be wiping and they ask for two
+   * different behaviours out of the same arm.
+   */
+  const sweep = (f: Film, wet: number, coat: number, dt: number): void => {
     if (f.blades.length === 0) return;
+    // Rain starts them at a hint of it; dry grime has to have properly
+    // built up first. See `WIPE`.
+    const need = Math.max(wet, coat);
     if (!f.running) {
-      if (need < WIPE_ON) return;
+      if (wet < WIPE.rain && coat < WIPE.grime) return;
       f.running = true;
       f.phase = 0;
     }
@@ -384,10 +521,14 @@ export function buildWipers(
     f.phase += (Math.PI * 2 * dt) / period;
     if (f.phase >= Math.PI * 2) {
       // A stroke always finishes: the blades stop at the park, never
-      // halfway up the glass.
+      // halfway up the glass. Where they go from there is the whole switch:
+      // a clean enough screen parks them, rain keeps them going (with a
+      // beat between strokes while it is only spitting), and a DRY screen
+      // that is merely dusty gets one stroke and a long wait.
       f.phase = 0;
-      if (need < WIPE_ON * 0.7) f.running = false;
-      else if (need < 0.4) f.rest = INTERMITTENT * (1 - need);
+      if (need < WIPE.off) f.running = false;
+      else if (wet < WIPE.rain) f.rest = REST.dry;
+      else if (wet < 0.4) f.rest = REST.drizzle * (1 - wet);
     }
     f.angle = f.park + (f.sweep * (1 - Math.cos(f.phase))) / 2;
     for (const blade of f.blades) blade.rotation.z = f.angle;
@@ -401,7 +542,9 @@ export function buildWipers(
         if (r < inner || r > pivot.reach) continue;
         const a = pivot.angle[k];
         if (a < lo || a > hi) continue;
-        f.coat[k] *= SMEAR;
+        // Streaked rather than flat: what a blade leaves is arcs, and the
+        // vertex's own soiling bias is the noise they come off.
+        f.coat[k] *= SMEAR * (0.4 + 1.2 * (f.bias[k] as number));
       }
     }
   };
@@ -413,15 +556,21 @@ export function buildWipers(
       const rate = rain + road;
       if (rate > 0) {
         f.mud += (road / rate - f.mud) * Math.min(1, rate * dt * 5);
+        // Rain is what makes road grime MUD rather than dust, and it takes
+        // a moment either way — a shower does not turn the dust on a screen
+        // brown the instant it starts.
+        f.soak += (Math.min(1, wet * 3) - f.soak) * Math.min(1, dt * 1.5);
         for (let k = 0; k < f.count; k++) {
           f.coat[k] = Math.min(1, f.coat[k] + rate * f.bias[k] * dt);
         }
       }
-      // What the arms answer to is what is actually on the glass, plus the
-      // weather about to put more there.
+      // What the arms answer to is what is on the part of the glass they
+      // can actually clear, and the weather about to put more there — the
+      // two handed over separately, because they mean different things to
+      // the blades (see `sweep`).
       let sum = 0;
-      for (let k = 0; k < f.count; k++) sum += f.coat[k];
-      sweep(f, Math.max(wet, sum / f.count), dt);
+      for (let i = 0; i < f.swept.length; i++) sum += f.coat[f.swept[i] as number] as number;
+      sweep(f, wet, f.swept.length > 0 ? sum / f.swept.length : 0, dt);
 
       let moved = false;
       for (let k = 0; k < f.count && !moved; k++) {
