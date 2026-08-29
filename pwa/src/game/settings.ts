@@ -57,11 +57,14 @@ export type ViewSettings = {
   headMotion: number;
 };
 
+/** The seat ladder stops at HIGH. The screen aperture is fixed and the eye
+ * walks up it, so a stop above this one puts the header rail across the apex
+ * of every corner — a seat setting that costs the player the road is not a
+ * setting, it is a trap with a name on it. */
 export const SEAT_STOPS: { id: string; label: string; value: number }[] = [
   { id: "low", label: "LOW", value: -0.05 },
   { id: "mid", label: "MID", value: 0 },
   { id: "high", label: "HIGH", value: 0.05 },
-  { id: "tall", label: "TALL", value: 0.1 },
 ];
 
 export const REACH_STOPS: { id: string; label: string; value: number }[] = [
@@ -70,11 +73,14 @@ export const REACH_STOPS: { id: string; label: string; value: number }[] = [
   { id: "fwd", label: "FORWARD", value: 0.08 },
 ];
 
+/** The lens ladder stops at WIDE. Past that the cabin this view is framed by
+ * stops being the frame — the pillars fold out to the edges, the fascia
+ * flattens, and what is left is a wide-angle plate of road with a car drawn
+ * round the outside of it. */
 export const FOV_STOPS: { id: string; label: string; value: number }[] = [
   { id: "narrow", label: "NARROW", value: -8 },
   { id: "standard", label: "STANDARD", value: 0 },
   { id: "wide", label: "WIDE", value: 8 },
-  { id: "ultra", label: "ULTRA", value: 16 },
 ];
 
 /** OFF is a real stop, not the bottom of a ramp: a bolted lens is the right
@@ -94,6 +100,22 @@ export function nearestStop(stops: { id: string; value: number }[], value: numbe
     if (Math.abs(stop.value - value) < Math.abs(best.value - value)) best = stop;
   }
   return best.id;
+}
+
+/** A stored knob, put back on its ladder. `nearestStop` is what the menu
+ * highlights with; this is what the camera is actually given, and the two
+ * must not be allowed to disagree — a build that drops a stop otherwise
+ * leaves the player driving on a number no button on the page can restore.
+ * Anything that is not a number at all was never a choice, so it keeps the
+ * default rather than being rounded to the bottom of the ladder. */
+function snapToStop(
+  stops: { id: string; value: number }[],
+  stored: unknown,
+  fallback: number,
+): number {
+  if (typeof stored !== "number" || !Number.isFinite(stored)) return fallback;
+  const id = nearestStop(stops, stored);
+  return stops.find((stop) => stop.id === id)?.value ?? fallback;
 }
 
 export type HudToggle =
@@ -689,7 +711,18 @@ export function loadSettings(): Settings {
     if (PLAY_CAMERAS.some((cam) => cam.id === parsed.camera)) {
       settings.camera = parsed.camera as PlayCamera;
     }
-    if (parsed.view) Object.assign(settings.view, parsed.view);
+    // Snapped to the ladders rather than merged raw, for the same reason the
+    // camera above is checked against its list: the four are stops, not a
+    // slider, so a value off the ladder is a view the player cannot get back
+    // to once they have moved away from it.
+    if (parsed.view) {
+      const view = parsed.view as Partial<Record<keyof ViewSettings, unknown>>;
+      const base = DEFAULT_SETTINGS.view;
+      settings.view.seat = snapToStop(SEAT_STOPS, view.seat, base.seat);
+      settings.view.reach = snapToStop(REACH_STOPS, view.reach, base.reach);
+      settings.view.fov = snapToStop(FOV_STOPS, view.fov, base.fov);
+      settings.view.headMotion = snapToStop(HEAD_STOPS, view.headMotion, base.headMotion);
+    }
     if (parsed.audio) Object.assign(settings.audio, parsed.audio);
     if (parsed.video) Object.assign(settings.video, parsed.video);
     if (parsed.keys) Object.assign(settings.keys, parsed.keys);
