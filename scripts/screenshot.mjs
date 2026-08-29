@@ -527,6 +527,19 @@ await capture(
   TARMAC,
 );
 
+/** Wheels off the ground. `data-air` on the HUD root is the engine's own
+ * verdict that the car is flying, read the same way `data-off` is: nothing
+ * is drawn from it, so the frame is the game rather than the tooling.
+ *
+ * The budget is WALL time and the sim runs at a fraction of it under
+ * software rendering: seed 28's opening lip is ten seconds of stage and a
+ * full minute of waiting on this machine. Too short a wait does not fail —
+ * it photographs the car still on the road and says the jump was never
+ * reachable, which is a jump scene quietly turned into a driving one. */
+async function inTheAir(page) {
+  await page.waitForSelector(".hud[data-air]", { timeout: 120000 });
+}
+
 // In the air, straight and crossed up. Seed 28 opens with a long straight
 // into a lip, so both are a matter of holding the throttle; the sideways one
 // turns into the launch, which is what puts roll in the body. The camera has
@@ -551,7 +564,7 @@ for (const [name, steer] of [
         await page.keyboard.up(steer);
       }
       try {
-        await page.waitForSelector(".hud-air", { timeout: 30000 });
+        await inTheAir(page);
         await page.waitForTimeout(260);
       } catch {
         console.log(`  (${name}: never left the ground)`);
@@ -572,8 +585,8 @@ await capture(
     await racing(page);
     await page.keyboard.down("ArrowUp");
     try {
-      await page.waitForSelector(".hud-air", { timeout: 30000 });
-      await page.waitForSelector(".hud-air", { state: "hidden", timeout: 15000 });
+      await inTheAir(page);
+      await page.waitForSelector(".hud:not([data-air])", { timeout: 60000 });
       // Well under the springs' own period: a shot a beat later catches a
       // settled car, which proves nothing about the beat before it.
       await page.waitForTimeout(90);

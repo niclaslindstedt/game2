@@ -63,6 +63,11 @@ export type HudSnapshot = {
   rpm: number;
   /** True while a higher gear is available and the revs are in the red. */
   shiftUp: boolean;
+  /** Off the ground. Nothing is DRAWN from it — the flight is the biggest
+   * thing on screen and needs no caption saying so — but it goes on the HUD
+   * root as `data-air`, the same way `offRoad` does, so the screenshot
+   * harness can wait for a car in the air without the debug overlay in the
+   * frame. */
   airborne: boolean;
   /** The route, the car on it, and how far through the stage the run is —
    * the top bar has no progress pill; the minimap's frame is the gauge. */
@@ -1028,6 +1033,7 @@ export function Hud({
     <div
       className="hud pointer-events-none absolute inset-0 select-none"
       data-off={snap.offRoad ? "1" : undefined}
+      data-air={snap.airborne && snap.phase === "racing" ? "1" : undefined}
     >
       {/* Top bar: the CLOCK, and the one press that belongs on the road —
           the camera. Which stage this is rides under the minimap instead:
@@ -1159,7 +1165,6 @@ export function Hud({
             locked={locked}
           />
         )}
-        {snap.airborne && snap.phase === "racing" && <div className="hud-air">AIRBORNE</div>}
         <div className="hud-flashes">
           {flashes.map((f) => (
             <div key={f.id} className={`hud-flash hud-flash-${f.tone}`}>

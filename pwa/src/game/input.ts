@@ -508,9 +508,12 @@ export function createInput(target: Window = window): InputManager {
     setNavigating: (on) => {
       if (on === navigating) return;
       navigating = on;
-      // Whatever was down when the card went up or came down is forgotten:
-      // the button that opened a menu must not also press its first row, and
-      // the one that closed it must not also drive away.
+      // Whatever was down when the card went up or came down has to be let
+      // go of before it counts again: the button that opened a menu must not
+      // also press its first row, the one that closed it must not also drive
+      // away, and — the reason the release is a LATCH rather than a
+      // forgetting — a button simply held down must not open the card, close
+      // it, and open it again on three consecutive frames.
       padHold = NEUTRAL_HOLD;
       padReader.release();
     },

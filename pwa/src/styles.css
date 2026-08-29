@@ -553,14 +553,6 @@ body {
   animation: hud-pop 0.42s ease-out 1;
 }
 
-.hud-air {
-  position: absolute;
-  top: 22%;
-  font-size: clamp(1rem, 4vmin, 2rem);
-  color: var(--hud-info);
-  animation: hud-pop 0.8s infinite;
-}
-
 /* The finish card sits HIGH, not in the middle of the screen. Crossing the
    line is a show — the cannons go off, the crowd is there, the car coasts
    away down the run-out with the camera watching it — and a slab of navy

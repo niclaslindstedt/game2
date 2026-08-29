@@ -196,12 +196,15 @@ export type PadReader = {
     pressed: PadAction[];
     nav: NavPress[];
   };
-  /** Re-point the pad at its actions. Whatever was down is forgotten, or an
-   * action rebound with a button held would never see that button rise and
-   * would refuse to fire for the rest of the session. */
+  /** Re-point the pad at its actions. Whatever was down is forgotten and the
+   * edges are re-armed against a RELEASE: an action bound to a button that
+   * is being held at that moment — which is every rebind, because the press
+   * that chose the button is still down — must see that button rise before
+   * it fires. */
   setBindings: (bindings: PadBindings) => void;
-  /** Drop every held edge — used when the pad is taken away from the car
-   * (god mode, a menu, a disconnect) so nothing arrives late. */
+  /** Take the pad away from the car (god mode, a menu, a disconnect) so
+   * nothing arrives late, and re-arm every edge against a release: whatever
+   * is held at the hand-over has to be let go of before it counts again. */
   release: () => void;
 };
 
@@ -223,6 +226,21 @@ export function createPadReader(bindings: PadBindings): PadReader {
    * reset the list's own repeat. */
   const heldNav = { x: 0, y: 0 };
   const navClock = { x: 0, y: 0 };
+  /** Set whenever the pad changes hands. The next read RECORDS what is held
+   * without firing any of it, so a button that was already down when the
+   * game changed out from under it has to be released before it is a press
+   * again.
+   *
+   * The hand-over is what makes this necessary: it forgets what was down, so
+   * without the latch a HELD button arrives fresh on the very next frame. On
+   * a handheld that is a pause card opening under START, the same held START
+   * closing it a frame later, and the card flickering until the thumb comes
+   * off — landing on whichever state the release happened to fall in.
+   *
+   * A fresh reader is NOT latched: a browser hands out no pads at all until
+   * the page has seen a button press, so the first press one ever reports is
+   * a real one the player just made. */
+  let latch = false;
 
   /** One axis of the cursor: fire on the way off centre, then on the repeat
    * clock while it is held over. */
@@ -244,23 +262,33 @@ export function createPadReader(bindings: PadBindings): PadReader {
       const pressed: PadAction[] = [];
       for (const action of EDGE_ACTIONS) {
         const on = actionValue(frames, current, action) >= PRESS;
-        if (on && !down.has(action)) pressed.push(action);
+        if (on && !down.has(action) && !latch) pressed.push(action);
         if (on) down.add(action);
         else down.delete(action);
       }
       const nav: NavPress[] = [];
-      if (stepNav("x", hold.navX, dt)) nav.push(hold.navX > 0 ? "right" : "left");
-      if (stepNav("y", hold.navY, dt)) nav.push(hold.navY > 0 ? "down" : "up");
+      // The directions are stepped either way — the repeat clock has to
+      // learn where the stick already is — but a held one says nothing on
+      // the frame the pad changed hands.
+      const movedX = stepNav("x", hold.navX, dt);
+      const movedY = stepNav("y", hold.navY, dt);
+      if (!latch) {
+        if (movedX) nav.push(hold.navX > 0 ? "right" : "left");
+        if (movedY) nav.push(hold.navY > 0 ? "down" : "up");
+      }
+      latch = false;
       return { hold, pressed, nav };
     },
     setBindings: (next) => {
       current = next;
       down.clear();
+      latch = true;
     },
     release: () => {
       down.clear();
       heldNav.x = 0;
       heldNav.y = 0;
+      latch = true;
     },
   };
 }
