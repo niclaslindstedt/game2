@@ -438,17 +438,40 @@ function SplitBoard({ split }: { split: HudSplit }) {
   );
 }
 
+/** How far out a call is at its faintest, and how close it has to come to
+ * be fully lit, meters. The far end is the co-driver's own lead at speed
+ * (CALL_LEAD_MAX in snapshot.ts); the near end is about where the braking is
+ * already happening, so the call finishes arriving before it matters. */
+const CALL_FADE_FAR = 150;
+const CALL_FADE_NEAR = 30;
+
+/** The faintest the call being driven ever goes. Deliberately ABOVE the
+ * next-corner plate's 0.5: however far off the corner is, the call that is
+ * next is never dimmer than the one queued behind it. */
+const CALL_FADE_FLOOR = 0.62;
+
+/** The call's opacity, as a distance: far is faint, near is solid. */
+function callFade(distance: number): number {
+  const near = clamp((CALL_FADE_FAR - distance) / (CALL_FADE_FAR - CALL_FADE_NEAR), 0, 1);
+  return CALL_FADE_FLOOR + (1 - CALL_FADE_FLOOR) * near;
+}
+
 /** The co-driver strip: the current call big, and — only when the next
  * corner lands inside the same lead — that one small and half transparent
  * underneath, "HARD LEFT … into easy right", the way a crew reads a stage.
  * A corner further out than that is not on the strip at all; the snapshot
  * hands it over when the car gets to it.
  *
+ * HOW FAR OFF the corner is, is the call's OPACITY rather than a number of
+ * metres beside it. A distance printed on a sign has to be read and then
+ * converted into a feeling of imminence; a sign that hardens as the corner
+ * comes IS that feeling, delivered in the corner of an eye already busy with
+ * the road. It also means the strip carries one instruction and no arithmetic.
+ *
  * With the words switched off it is the ARROWS alone. The arrow already
- * carries severity in its shape and direction in its mirroring, so nothing
- * about the call is lost — what goes is the READING, which at rally pace is
- * the expensive part. The distance stays: it is a number glanced at, not a
- * phrase parsed, and there is no glyph that says "in 200 m". */
+ * carries severity in its shape and direction in its mirroring, and the fade
+ * carries the distance, so nothing about the call is lost — what goes is the
+ * READING, which at rally pace is the expensive part. */
 function Pacenotes({
   notes,
   words,
@@ -466,14 +489,12 @@ function Pacenotes({
         belowMirror ? "hud-pace-under-glass" : ""
       }`}
     >
-      <div className={`hud-pace-call hud-pace-${now.severity}`}>
+      <div
+        className={`hud-pace-call hud-pace-${now.severity}`}
+        style={{ opacity: callFade(now.distance) }}
+      >
         <PacenoteArrow severity={now.severity} dir={now.dir} />
-        <span className="hud-pace-text">
-          {words && pacenoteText(now)}
-          {now.distance >= 10 && (
-            <span className="hud-pace-dist">{Math.round(now.distance / 10) * 10}m</span>
-          )}
-        </span>
+        {words && <span className="hud-pace-text">{pacenoteText(now)}</span>}
       </div>
       {next && (
         <div className={`hud-pace-call hud-pace-next hud-pace-${next.severity}`}>

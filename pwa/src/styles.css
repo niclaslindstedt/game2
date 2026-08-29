@@ -373,6 +373,10 @@ body {
   pointer-events: none;
 }
 
+/* The call being driven fades in with the corner — its opacity comes off the
+   distance, inline, so all this has to do is make the change SMOOTH: the
+   snapshot ticks per frame, and an opacity that steps is a flicker in the
+   corner of an eye that is watching the road. */
 .hud-pace-call {
   display: flex;
   align-items: center;
@@ -380,6 +384,7 @@ body {
   background: rgb(18 48 105 / 62%);
   border-radius: 0.7rem;
   padding: 0.3rem 0.8rem 0.3rem 0.45rem;
+  transition: opacity 0.12s linear;
 }
 
 .hud-pace-arrow {
@@ -417,17 +422,12 @@ body {
   gap: 0.25rem;
 }
 
-.hud-pace-glyphs .hud-pace-text:empty {
-  display: none;
-}
-
-.hud-pace-glyphs .hud-pace-dist {
-  font-size: clamp(0.75rem, 2.8vmin, 1.2rem);
-}
-
 /* The corner AFTER this one, when it arrives inside the same lead: smaller,
    and half transparent, so the strip reads as one call with something behind
-   it rather than as two calls competing to be the one being driven. */
+   it rather than as two calls competing to be the one being driven. It does
+   NOT fade with distance — it is the second half of a combination, read off
+   the call in front of it, and a pair that both breathe reads as two calls
+   shuffling. */
 .hud-pace-next {
   transform: scale(0.58);
   transform-origin: top center;
