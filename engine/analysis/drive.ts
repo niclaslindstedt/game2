@@ -85,9 +85,20 @@ export function analyzeDrive(track: Track, v: number[]): MetricReport {
     // speed the profile says the car arrives at: v² times the curvature of
     // the elevation profile. A crest past the budget throws the car; a dip
     // past it puts the floor on the ground.
-    const halfRun = run / 2;
-    const secondDiff =
-      (after.elevation - 2 * here.elevation + before.elevation) / (halfRun * halfRun);
+    //
+    // Measured over a LONG baseline, and that is the whole subtlety. What
+    // this check is about is the road heaving the BODY — and a body on
+    // springs follows the road's long shape and lets the suspension eat
+    // everything shorter. Read over two samples it also reads R33's surface
+    // grain, which is a five-metre wave: the arithmetic then says a hundred
+    // metres per second squared and the truth is that the dampers took it
+    // and the driver felt texture. Anything shorter than the car's own
+    // wheelbase belongs to the suspension, not to this.
+    const span = Math.max(1, Math.round(D.heaveSpan / track.step));
+    const lo = samples[Math.max(0, i - span)];
+    const hi = samples[Math.min(samples.length - 1, i + span)];
+    const halfRun = Math.max(1e-3, (hi.s - lo.s) / 2);
+    const secondDiff = (hi.elevation - 2 * here.elevation + lo.elevation) / (halfRun * halfRun);
     const heave = Math.abs(secondDiff) * v[i] * v[i];
     if (heave > D.heave) {
       heaves++;

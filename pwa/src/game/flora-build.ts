@@ -59,6 +59,22 @@ export const REED_TIP = new THREE.Color(0xa8a35c);
 export const DRIFTWOOD = new THREE.Color(0xb9b2a4); // bleached by a season in the water
 export const BOG_SHRUB = new THREE.Color(0x4d6136); // dwarf birch and bog myrtle, nearly grey
 
+// ── The wetlands ───────────────────────────────────────────────────────────
+// Standing water reads as standing water because of what grows OUT of it,
+// not because of the water itself: a flat blue plane is a texture, and a
+// flat blue plane with dead trunks and reed beds standing in it is a swamp.
+// These are the colours that only ever appear at a waterline.
+export const WILLOW_BARK = new THREE.Color(0x6a5a48); // pale, fissured, always leaning
+export const WILLOW_PALE = new THREE.Color(0x8fb168); // the underside a willow shows in wind
+export const ALDER_LEAF = new THREE.Color(0x3f5c33); // darker and flatter than anything dry
+export const ALDER_BARK = new THREE.Color(0x4a463f);
+export const DROWNED = new THREE.Color(0x7d7468); // wood that has stood in water for years
+export const LILY_PAD = new THREE.Color(0x4f7a3d);
+export const LILY_BLOOM = new THREE.Color(0xf0ead8);
+export const BULRUSH_HEAD = new THREE.Color(0x6b4a2c); // the brown sausage on a cattail
+export const SPHAGNUM = new THREE.Color(0x93b055); // bog moss: brighter and wetter than cushion moss
+export const SPHAGNUM_RUST = new THREE.Color(0xa8894a); // ...and the rust it turns where it is drying
+
 // ── The seasons ────────────────────────────────────────────────────────────
 // What a boreal forest actually does over a year, and — just as important —
 // what it does NOT do. The conifers are evergreen: a spruce in September is

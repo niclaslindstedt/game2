@@ -439,10 +439,14 @@ export const STAGE_RULES = {
       escarpment: { scale: 520, from: 0.52, span: { min: 0.05, max: 0.22 }, rise: 13 },
       /** The sea basins: broad hollows sunk under the lake table. `wetter`
        * and `deeper` are what the `water` dial adds to each. */
-      basin: { scale: 1600, from: 0.86, span: 0.34, depth: 30, wetter: 0.3, deeper: 26 },
+      /** `wetter` and `deeper` are what the `water` dial adds. Both are
+       * modest: `from` is a THRESHOLD ON AN AREA, so a tenth off it is a
+       * large share of the map turning to sea, and at the top of the dial
+       * the land has to still be land. */
+      basin: { scale: 1600, from: 0.86, span: 0.34, depth: 30, wetter: 0.18, deeper: 20 },
       /** ...and the ponds, on a tighter scale — the tarns and lakes the
        * road runs past rather than over. */
-      pond: { scale: 340, from: 0.9, span: 0.1, depth: 10, wetter: 0.14, deeper: 8 },
+      pond: { scale: 340, from: 0.9, span: 0.1, depth: 10, wetter: 0.05, deeper: 8 },
       /** Where sea level sits relative to the rock's own zero. */
       datum: -6,
     },
@@ -453,6 +457,53 @@ export const STAGE_RULES = {
      * to bog. Where the table comes up through the surface the ground is
      * WET, which is what a mire is. */
     groundwater: { depth: 4.5, drain: 42 },
+
+    /** THE PITS — the hollows that hold standing water, and the whole
+     * reason a landscape has lakes in it rather than only rivers.
+     *
+     * They come in three sizes because the water bodies they make are three
+     * different things, and the difference is not scale but the SHAPE of
+     * the hollow. A pit's floor is cut toward the water table, so how far
+     * BELOW that floor lands is what decides what fills it:
+     *
+     *   `mere`  broad and barely under the table — a wide sheet of shallow
+     *           water, which is a SWAMP. Reeds and sedge stand in it, you
+     *           can see the bottom, and a car can wade it. The shallowest
+     *           of the three and by far the widest.
+     *   `tarn`  a few hundred metres across and properly deep — a lake.
+     *   `pool`  small and deep: a kettle hole, a flooded quarry, the pond
+     *           at the bottom of a field.
+     *
+     * `from` is the share of the noise below which no pit forms (so it sets
+     * how much of the country is pitted), `span` how sharp the rim is, and
+     * `depth` how far under the table a fully-formed floor sits.
+     *
+     * A pit only forms where the water table is ALREADY near the surface:
+     * flat lowland. A hollow gouged into a mountainside drains, and one cut
+     * on a summit is a crater. `flat` is how steep the ground may be before
+     * it stops holding water, and `lowland` how far above the table the
+     * ground may stand before pits fade out entirely, m. */
+    pits: {
+      mere: { scale: 620, from: 0.76, span: 0.22, depth: 0.55 },
+      tarn: { scale: 300, from: 0.8, span: 0.12, depth: 7 },
+      pool: { scale: 110, from: 0.86, span: 0.09, depth: 4.5 },
+      flat: 0.3,
+      /** How far above the lake table the ground may stand before pits stop
+       * forming, m. It is a SMALL number on purpose: the country's own datum
+       * sits only a few metres over the table, so a generous reach makes
+       * almost every flat hectare on the map eligible and a wet dial then
+       * drowns the lot. Pits belong in the genuinely low ground. */
+      lowland: 13,
+      /** How much the `water` dial opens the thresholds. Small, because the
+       * thresholds are the share of the map that is pitted and the dial is
+       * multiplying an area: a tenth here is already the difference between
+       * a stage with a tarn on it and a stage in an archipelago. */
+      wetter: 0.06,
+      /** Depth below the water table under which standing water is a SWAMP
+       * rather than a lake, m: shallow enough to see the bottom of, to
+       * grow reeds in, and to drive through. */
+      swamp: 1.2,
+    },
 
     /** The soil lying on the rock. Till and washed sediment: it collects
      * where water slows down and is stripped where it does not, so the
@@ -481,6 +532,59 @@ export const STAGE_RULES = {
        * were. Half of `max`, which is roughly what the cover averages. */
       datum: 1.6,
     },
+  },
+
+  /** R33 — a gravel road is NOT SMOOTH, and a sealed one is.
+   *
+   * The difference is how they are built. Tarmac is LAID: a paving machine
+   * leaves a plane, and a plane is what it should be — a sealed section of a
+   * rally stage is a public road the event borrowed, and it reads as one
+   * precisely because it is the smooth part. Gravel is BLADED, and then
+   * driven on, frozen, thawed and bladed again, and what that leaves is not
+   * a rougher plane: it is a good surface with things wrong with it HERE AND
+   * THERE. A frost heave. A hollow worn at a corner exit. A stone the blade
+   * rode over.
+   *
+   * So the model is sparse, not continuous. A continuous grain — noise added
+   * along the whole stage — is a washboard however small you make it, and it
+   * is wrong in the same way an evenly-sprinkled forest is wrong: real
+   * defects come in ones, with clean road between them.
+   *
+   * Every bump is MARGINAL by design. A few centimetres is what the car
+   * notices as a road with a surface; ten is a pothole, and a generator that
+   * scatters potholes has made a different and worse game. */
+  roughness: {
+    /** One candidate bump per this much arc, m, and the chance it is there.
+     * Together they set the spacing: at 14 m and a third, a bump every forty
+     * metres or so of gravel, which is a road you can feel without a road
+     * that is fighting you. */
+    cell: 14,
+    chance: 0.34,
+    /** How proud or how sunk one is, m — a heave or a hollow, either sign.
+     * The ceiling is the number that keeps this a surface rather than an
+     * obstacle. */
+    height: { min: 0.02, max: 0.065 },
+    /** ...and how long it is, m (half-width, so a bump is twice this end to
+     * end). Longer than the sample spacing by enough that the compiled road
+     * actually draws the shape rather than aliasing it into a step. */
+    halfWidth: { min: 1.6, max: 4.2 },
+
+    /** R33 — and the gravel road's WIDTH wanders too. A blade cuts a road
+     * a little wider on one pass and a little narrower on the next, the
+     * verges creep in where nothing has run wide for a season and get
+     * pushed back at every corner, and the result is a road that breathes
+     * — never the same width for two hundred metres together.
+     *
+     * `vary` is the share of the nominal width it swings either way, so
+     * 0.12 is a road that runs from 12% under to 12% over: enough to see
+     * and to place the car against, nowhere near enough to change what the
+     * corner asks for. `wave` is how far it takes to swing, m — long, so
+     * this reads as the road opening out and pinching in rather than as a
+     * ragged edge.
+     *
+     * SEALED road does not do this. A paving machine lays a constant width,
+     * which is the same reason the tarmac has no bumps on it. */
+    width: { vary: 0.12, wave: { long: 210, short: 74 }, shortShare: 0.35 },
   },
 
   /** R6 — jump placement. */

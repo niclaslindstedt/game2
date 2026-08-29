@@ -267,11 +267,18 @@ export function buildRoad(track: Track, samples: Ribbon[], width: number, bias =
           : "gravel";
     loose.set(ROAD_PAINT[kind].loose);
     worn.set(ROAD_PAINT[kind].worn);
+    // R33 — the road's own width HERE. The station list is built once at the
+    // nominal width and SCALED, rather than rebuilt per sample: the vertex
+    // count and the index buffer have to stay identical down the whole
+    // strip or the triangles cannot be woven, and a scale keeps them so.
+    const here = s.width ?? width;
+    const wide = here / width;
+    const halfHere = here / 2;
     for (const l of cross) {
-      const out = Math.abs(l) - half;
-      const px = s.x + r.x * l;
-      const pz = s.z + r.z * l;
-      const y = s.elevation + corridorOffset(s, l, width) + bias;
+      const out = Math.abs(l * wide) - halfHere;
+      const px = s.x + r.x * l * wide;
+      const pz = s.z + r.z * l * wide;
+      const y = s.elevation + corridorOffset(s, l * wide, here) + bias;
       positions.push(px, y, pz);
       // UVs run meters along and across, so the grain is the same size
       // whatever the road does and never stretches through a corner.
@@ -283,7 +290,7 @@ export function buildRoad(track: Track, samples: Ribbon[], width: number, bias =
         // other is the tell that two ribbons were laid over one another,
         // and a real crossing is scuffed evenly all over anyway.
         const flat = s.flat ?? 0;
-        paint.copy(loose).lerp(worn, wearAt(l, width) * (1 - flat) + 0.55 * flat);
+        paint.copy(loose).lerp(worn, wearAt(l * wide, here) * (1 - flat) + 0.55 * flat);
         // R16 — the road's outer line has to MEET the country, not stop at
         // it. Over the last stretch of the mat the surfacing gives way to
         // the shoulder's dirt, along a line that wanders: a dead straight

@@ -154,6 +154,13 @@ export const GROVES: readonly GroveCommunity[] = [
 /** Meters of grove-noise period — how big one community's patch is. */
 export const GROVE_SCALE = 150;
 
+/** R32 — the community wet ground is always in, and how far the groundwater
+ * has to stand above the surface before it takes over, m. A couple of
+ * centimetres is a damp patch; this is ground you would not walk across in
+ * boots, which is where the sedge and the drowned trunks belong. */
+const BOG_GROVE = GROVES.findIndex((g) => g.id === "bog");
+const BOG_WET = 0.05;
+
 /** Meters of stand-noise period — the clumping inside ONE community. Small
  * enough that a single wood holds several of them, so the car passes a
  * closed stand, a thin patch and a hole in the space of a corner. */
@@ -351,6 +358,10 @@ export type PropContext = {
   spurClearance: (x: number, z: number) => number;
   /** True when a point is inside a stream valley, with margin. */
   inAnyStream: (x: number, z: number, margin: number) => boolean;
+  /** R32 — how far the GROUNDWATER stands above the surface here, m: 0 on
+   * dry ground, positive in a mire. What puts the bog where the water is
+   * rather than where a noise field happened to roll one. */
+  wetAt: (x: number, z: number) => number;
   /** R32 — how deep the SOIL is here, m. What the ground is made of decides
    * what stands on it: a tree needs something to root in, and a boulder is
    * only on the surface where there is not enough cover to have buried it.
@@ -405,6 +416,15 @@ export function createPropField(ctx: PropContext): PropField {
 
   const groveSeed = (ctx.seed ^ 0x9e3779b9) >>> 0;
   const groveAt = (x: number, z: number): number => {
+    // R32 — WET GROUND OVERRULES THE QUILT. The quilt is a noise field that
+    // says what KIND of country a patch is, and it has no idea where the
+    // water is; a bog rolled onto a hillside is a bog nothing feeds, and a
+    // spruce wood rolled onto the edge of a swamp is a wood standing in
+    // water. So wherever the ground is actually within a boot's depth of
+    // the water table, the community is the BOG, whatever the quilt rolled.
+    // This is what makes the reeds, the sedge and the drowned trunks appear
+    // where a player would expect them rather than at random.
+    if (BOG_GROVE >= 0 && ctx.wetAt(x, z) > BOG_WET) return BOG_GROVE;
     const wx = x + (valueNoise(x, z, 47, groveSeed + 1) - 0.5) * 70;
     const wz = z + (valueNoise(z, x, 53, groveSeed + 2) - 0.5) * 70;
     const region = regionAt(x, z);

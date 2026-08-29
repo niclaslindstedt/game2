@@ -46,7 +46,7 @@ export const ANALYSIS = {
     /** How far past the road EDGE the rank still rolls, m. A rally car
      * spends half a stage out here, and R31 promises it is rideable — so
      * it is analyzed exactly like the mat, at a looser tolerance. */
-    verge: 6,
+    verge: 8,
     /** Biggest surface step a lane may take over one stride and still be
      * road, m per m of travel. The paving grade tops out near 0.085
      * (`rules.ts`), a ford's ramp a little more; past this the car is
@@ -73,6 +73,54 @@ export const ANALYSIS = {
      * analytic field is noise, so a handful of marginal strides is the
      * measurement, not the road. */
     tolerated: 0.001,
+
+    /** R33 — HOW OFTEN THE GRAVEL HAS A BUMP IN IT, as a band.
+     *
+     * This is the one measurement in the module where BOTH ends are
+     * defects, and it is worth being explicit about why. Every other check
+     * here looks for damage: less is better and zero is perfect. Bumps are
+     * not damage. A gravel road that measures zero is a ribbon nobody
+     * bladed, drove on or froze — the loudest tell there is, and exactly
+     * what a generator produces if nobody asks it not to. So too SMOOTH
+     * costs as much as too rough.
+     *
+     * Counted in bumps per kilometre OF GRAVEL, not per kilometre of stage:
+     * a mostly-sealed stage has less gravel to put them on and would
+     * otherwise read as under-bumped for having tarmac on it.
+     *
+     * A count and not an average, because the thing being measured is
+     * sparse. A road with one heave in it and a road with a continuous
+     * ripple of the same energy average identically and are nothing alike. */
+    bumpy: { min: 12, max: 45 },
+    bumpySlack: 22,
+    /** The second difference, m, over which a sample counts as being in a
+     * bump. Above the analytic profile's own curvature and well under the
+     * smallest authored bump, so it separates the two cleanly. */
+    bumpFloor: 0.004,
+
+    /** R21 — HOW WIDE THE ROAD IS. A band, because both ends are wrong: at
+     * the bottom of the `width` dial the road is a lane with no room to
+     * place a car sideways, and at the top it is an arcade boulevard where
+     * nothing is a commitment. The dial spans `STAGE_RULES.roadWidth`
+     * (9–22 m) and this is the part of it that is a rally road, so the ends
+     * of the dial are meant to score under 100 — that is what a dial having
+     * ends means. */
+    width: { min: 11, max: 20 },
+    widthSlack: 6,
+
+    /** ...and how much the RIDEABLE CORRIDOR pinches and opens out along
+     * the stage: the standard deviation of how far either side of the
+     * centre the rank keeps finding ground a car could be on, m.
+     *
+     * Note what this is NOT measuring. The mat is a single width for the
+     * whole stage (`track.width`), so none of this variation is the road
+     * changing width — it is the FOREST, the water and the walls crowding
+     * the corridor in places and standing back in others. That is a real
+     * and worthwhile thing to measure, and it is also why a road whose own
+     * width varied would need `track.width` to become per-sample, which is
+     * a change across the physics, the bots and the renderer. */
+    varies: { min: 0.6, max: 5 },
+    variesSlack: 3,
   },
 
   /** The WATER. Every one of these is a rule of nature stated as a number:
@@ -166,6 +214,11 @@ export const ANALYSIS = {
      * crest throws the car and a dip bottoms it — neither of which is the
      * road's decision to make outside a jump. */
     heave: 26,
+    /** ...measured over this baseline either side of the sample, m. Longer
+     * than a wheelbase and than R33's surface grain, so what is measured is
+     * the road heaving the BODY rather than the texture the suspension is
+     * there to absorb. */
+    heaveSpan: 12,
     /** How much of the corner the bank may be tilted the WRONG way before
      * it is adverse camber, m per m. R19 banks INTO the turn; a corner
      * banked out of it is a corner nothing can hold. */
@@ -256,6 +309,11 @@ export const ANALYSIS = {
      * what makes a landscape; a map that is mostly lake is a seascape with
      * a road drawn on it. */
     water: { min: 0.01, max: 0.34 },
+    /** ...and the share past which it is not a wet stage but a SEASCAPE: the
+     * land has gone and what is left is the road standing on its own verge
+     * cone. An error rather than a warning, because no dial position should
+     * be able to produce it. */
+    drowned: 0.5,
     /** Share carrying closed forest. */
     forest: { min: 0.12, max: 0.78 },
     /** Share where the bedrock is at or near the surface — rock, scree and
@@ -283,6 +341,18 @@ export const ANALYSIS = {
      * a patch of rock is rooted in the soil next to it. */
     rootDepth: 0.4,
     rootReach: 3,
+    /** R32 — the SWAMPS: standing water shallower than `deep` metres, which
+     * is water you can see the bottom of, grow reeds out of and drive
+     * through. `share` is how much of the country should be that rather
+     * than open lake — a band, because a landscape with no shallow water
+     * has no reed beds and no mires in it, and one that is all shallow
+     * water is a marsh with no horizon. It sits low: a swamp is a feature
+     * you come across, not the ground you drive on.
+     *
+     * `deep` matches `STAGE_RULES.geology.pits.swamp`, which is what the
+     * generator classifies against — the two are the same claim measured
+     * from opposite sides, so they move together. */
+    swamp: { deep: 1.2, share: { min: 0.004, max: 0.09 } },
     /** Grove density at or above which a patch counts as CLOSED forest
      * (`GROVES` in props.ts: a meadow is 0.06, a spruce wood is 1). */
     closed: 0.8,

@@ -70,6 +70,13 @@ export type GroundSample = {
   table: number;
 };
 
+/** Standing water at a point. `depth` is how far the surface lies under the
+ * lake table, m — 0 on dry ground. */
+export type Wetland = {
+  kind: "dry" | "swamp" | "lake";
+  depth: number;
+};
+
 export type GeologyField = {
   /** Every layer at a point. */
   groundAt: (x: number, z: number) => GroundSample;
@@ -80,6 +87,12 @@ export type GeologyField = {
   /** How far the groundwater stands ABOVE the surface, m: 0 on dry ground,
    * positive in a mire. What decides where the bogs are. */
   wetAt: (x: number, z: number) => number;
+  /** What is standing on this ground, and how deep it is. The difference
+   * between the two wet kinds is depth and nothing else, which is exactly
+   * what it is in the world: a SWAMP is water shallow enough to see the
+   * bottom of, grow reeds out of and drive through; a LAKE is water that is
+   * not. Everything that plants at a waterline reads this. */
+  wetlandAt: (x: number, z: number) => Wetland;
   /** How glacially planed this country is, 0 (alpine, sharp) to 1 (shield,
    * rounded) — drawn from the seed, so every stage is somewhere. */
   smoothness: number;
@@ -183,6 +196,69 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     return { rock, broad, face, sunk };
   };
 
+  /** THE PITS — how far the ground is cut BELOW THE WATER TABLE here, m, and
+   * therefore how deep the water standing in it is. Zero on dry ground.
+   *
+   * A pit is cut toward the table rather than by a fixed depth from the
+   * surface, because that is what a hollow holding water actually is: the
+   * ground goes down, the groundwater does not, and the difference fills.
+   * It is what makes a wide, barely-cut pit a SWAMP and a narrow, deeply cut
+   * one a tarn, out of the same mechanism.
+   *
+   * Two gates keep the pits where water could be. Steep ground DRAINS — a
+   * hollow on a mountainside empties out of its own downhill side — and high
+   * ground is above the table entirely, so a pit gouged into it is a dry
+   * crater. Both fade rather than switch, so a shoreline is a gradient of
+   * shallowing water and not a drawn line. */
+  const pitAt = (
+    x: number,
+    z: number,
+    rock: number,
+    face: number,
+  ): { t: number; full: number; rim: number } => {
+    const P = G.pits;
+    const none = { t: 0, full: 0, rim: 0 };
+    // Flat, and low. Above `lowland` metres over the lake table there is no
+    // groundwater to fill anything. Gated on the ROCK rather than on the
+    // finished surface, which would need the soil, which needs the pit's own
+    // rim — the soil is at most a few metres and the gate fades over tens,
+    // so nothing is lost by asking the layer underneath.
+    const flat = 1 - clamp01(face / P.flat);
+    if (flat <= 0) return none;
+    const lowland = 1 - clamp01((rock - LAKE_Y) / P.lowland);
+    const holds = flat * lowland;
+    if (holds <= 0) return none;
+    const open = ponds * P.wetter;
+    let strength = 0;
+    let full = 0;
+    let rim = 0;
+    const cut = (
+      pit: { scale: number; from: number; span: number; depth: number },
+      salt: number,
+    ): void => {
+      const t = smooth(
+        clamp01((valueNoise(x, z, pit.scale, noiseSeed + salt) - (pit.from - open)) / pit.span),
+      );
+      if (t <= 0) return;
+      // The three take the DEEPEST rather than the sum: a tarn inside a mere
+      // is a tarn, not a tarn plus half a metre. Summing them also makes
+      // every overlap deeper than any pit was authored to be, which is how a
+      // landscape ends up with one enormous hole in it.
+      if (t * pit.depth > strength * full) {
+        strength = t;
+        full = pit.depth;
+      }
+      // ...and the RIM, which is where the ground tips into the hollow.
+      // `t(1-t)` peaks exactly on the shoulder of the smoothstep, which is
+      // the same free-derivative trick the mountain flanks use.
+      rim = Math.max(rim, 4 * t * (1 - t));
+    };
+    cut(P.mere, 41);
+    cut(P.tarn, 43);
+    cut(P.pool, 47);
+    return { t: strength * holds, full, rim: rim * holds };
+  };
+
   /** Soil depth over the rock, m. Till collects where water slows down and
    * is stripped where it does not: deep in the hollows and on the flats,
    * gone on the flanks and the faces, patchy everywhere in between, and
@@ -201,31 +277,57 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     return Math.max(0, S.max * patch * bare * bare * (0.35 + 0.65 * hollow) * alpine * carried);
   };
 
-  const groundAt = (x: number, z: number): GroundSample => {
+  /** The finished ground at a point: the layers, then the pit cut into
+   * them. Everything reads this, because the order is the whole of the
+   * model — the pit's RIM is a slope, and a slope is scoured, so the soil
+   * has to be computed knowing where the rims are or the analysis quite
+   * correctly reports two metres of till lying down the side of every tarn
+   * on the map. */
+  const finish = (
+    x: number,
+    z: number,
+  ): { rock: number; soil: number; surface: number; broad: number; face: number } => {
     const { rock, broad, face } = layers(x, z);
-    const soil = soilOf(x, z, rock, broad, face);
+    const pit = pitAt(x, z, rock, face);
+    const steep = Math.max(face, pit.rim);
+    const soil = soilOf(x, z, rock, broad, steep);
+    const dry = rock + soil - G.soil.datum;
+    // The pit is BLENDED in, not clamped. `Math.min(dry, floor)` looks like
+    // the same thing and is not: a min of two surfaces creases where they
+    // cross, and the crease is a cliff whose position has nothing to do with
+    // the pit's own rim — so the soil model cannot know to strip the soil
+    // off it, and the analysis quite rightly reports till lying down the
+    // side of every tarn on the map. Sinking the ground by the pit's own
+    // smoothstep instead keeps the derivative bounded and puts the steepest
+    // ground exactly where `rim` says it is.
+    const floor = LAKE_Y - pit.full;
+    const surface = pit.t > 0 ? dry - Math.max(0, dry - floor) * pit.t : dry;
+    return { rock, soil, surface, broad, face: steep };
+  };
+
+  const groundAt = (x: number, z: number): GroundSample => {
+    const { rock, soil, surface, broad, face } = finish(x, z);
     const W = G.groundwater;
     // Steep ground drains: the table drops away under a flank far faster
     // than it does under a flat.
     const table = Math.max(LAKE_Y, broad - (W.depth + W.drain * face));
-    return { bedrock: rock, soil, surface: rock + soil - G.soil.datum, table };
+    return { bedrock: rock, soil, surface, table };
   };
 
-  const surfaceAt = (x: number, z: number): number => {
-    const { rock, broad, face } = layers(x, z);
-    return rock + soilOf(x, z, rock, broad, face) - G.soil.datum;
-  };
+  const surfaceAt = (x: number, z: number): number => finish(x, z).surface;
 
   return {
     groundAt,
     surfaceAt,
-    soilAt: (x, z) => {
-      const { rock, broad, face } = layers(x, z);
-      return soilOf(x, z, rock, broad, face);
-    },
+    soilAt: (x, z) => finish(x, z).soil,
     wetAt: (x, z) => {
       const g = groundAt(x, z);
       return Math.max(0, g.table - g.surface);
+    },
+    wetlandAt: (x, z) => {
+      const depth = LAKE_Y - surfaceAt(x, z);
+      if (depth <= 0) return { kind: "dry", depth: 0 };
+      return { kind: depth < G.pits.swamp ? "swamp" : "lake", depth };
     },
     smoothness,
   };

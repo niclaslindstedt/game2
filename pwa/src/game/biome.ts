@@ -333,12 +333,32 @@ export const TAIGA: Biome = {
       groundCover: 1.4,
     },
     {
-      // Peat, standing water and a century-old pine four metres tall.
+      // Peat, standing water and a century-old pine four metres tall. The
+      // drowned trunks and the willows are what separate a bog from a
+      // clearing that happens to be damp: dead wood standing IN water, and
+      // the one tree that likes it there.
       id: "bog",
       weight: 1,
       density: 0.3,
-      trees: { bogPine: 10, bogShrub: 8, deadSnag: 3, spruceSquat: 2, willowShrub: 2 },
-      undergrowth: { sedgeTuft: 12, cottonGrass: 6, bogShrub: 4, mossPatch: 3 },
+      trees: {
+        bogPine: 10,
+        bogShrub: 8,
+        willowYoung: 5,
+        drownedTrunk: 4,
+        deadSnag: 3,
+        willow: 3,
+        spruceSquat: 2,
+        willowShrub: 2,
+      },
+      undergrowth: {
+        sedgeTuft: 12,
+        tussock: 9,
+        bogMoss: 7,
+        cottonGrass: 6,
+        bogShrub: 4,
+        bulrush: 3,
+        mossPatch: 3,
+      },
       groundCover: 1.6,
     },
     {
@@ -355,11 +375,26 @@ export const TAIGA: Biome = {
     birchPair: 5,
     birchYoung: 6,
     willowShrub: 12,
+    // The two trees that actually stand at a waterline rather than near
+    // one: a willow leaning out over it and an alder with its feet in it.
+    willow: 8,
+    alder: 7,
+    willowYoung: 5,
     aspen: 4,
+    drownedTrunk: 3,
     spruceYoung: 3,
     driftwood: 3,
   },
-  shoreCover: { reeds: 10, sedgeTuft: 6, tallGrass: 3, cottonGrass: 1 },
+  shoreCover: {
+    reeds: 10,
+    sedgeTuft: 6,
+    bulrush: 5,
+    tussock: 4,
+    tallGrass: 3,
+    bogMoss: 3,
+    waterLily: 2,
+    cottonGrass: 1,
+  },
   riparianTrees: {
     willowShrub: 10,
     birchYoung: 6,
