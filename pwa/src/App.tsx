@@ -200,6 +200,16 @@ function lapsOverride(): number | null {
   return Number.isFinite(raw) && raw >= 1 ? Math.round(raw) : null;
 }
 
+/** ?mode=headsup (tooling): open a `?start=1` link on a GRID, with the field
+ * entered and the whole of it on the road at once, rather than alone on a
+ * Roam stage. The only discipline a link can ask for — the others hang off a
+ * campaign level, and a run with no level has no book to keep and no points
+ * to pay. The grid's own three settings come from the player's HEADS UP
+ * page, exactly as they do when a person starts one. */
+function headsUpFromUrl(): boolean {
+  return new URLSearchParams(location.search).get("mode") === "headsup";
+}
+
 /** ?debug=1 / ?god=1 (tooling, and the repro line the debug overlay prints):
  * force the developer tools on for this launch whatever is in storage. A
  * screenshot has to reproduce on a machine that has never had the developer
@@ -544,8 +554,11 @@ export function App() {
    * finishes one, so a menu left open keeps showing new road. */
   const [demoSeed, setDemoSeed] = useState(() => dailySeed());
   /** The run in progress: how it was entered, and which campaign level it
-   * is, so a finish can record the clear. */
-  const [run, setRun] = useState<{ mode: PlayMode; levelId?: string }>({ mode: "roam" });
+   * is, so a finish can record the clear. A `?start=1` link never passes
+   * through `startStage`, so the discipline it opens in is settled here. */
+  const [run, setRun] = useState<{ mode: PlayMode; levelId?: string }>(() => ({
+    mode: headsUpFromUrl() ? "headsup" : "roam",
+  }));
   const [snap, setSnap] = useState<HudSnapshot | null>(null);
   /** THE TIME TRIAL'S BOARD, for the run that has just ended. `pending` is the
    * run waiting on its three letters; it is what holds the results card's ways
@@ -1247,6 +1260,7 @@ export function App() {
       if (page) showBackdropRef.current(page);
       else {
         const r = raceRef.current;
+        const mode = runRef.current.mode;
         const spec: StageSpec = {
           seed: seedRef.current,
           length: r.length,
@@ -1258,13 +1272,18 @@ export function App() {
           weather: r.weather,
           season: r.season,
           skipCountdown: false,
-          grid: null,
+          // The back row, on a `?mode=headsup` grid; alone on the line
+          // otherwise, which is every other way into here.
+          grid: mode === "headsup" && r.headsUp.massStart ? playerSlot(r.headsUp.cars) : null,
         };
         applyStageRef.current(spec, true);
+        // The field, on the same link: a heads-up race with nobody entered
+        // is a Roam stage on a grid.
+        armFieldRef.current(spec, mode);
         // …and the run tape, if `?record=1` asked for one: a scripted pass
         // that drives a stage is exactly the drive somebody wants the file
         // for, and this path never reaches `startStage`.
-        armTapeRef.current(spec, runRef.current.mode);
+        armTapeRef.current(spec, mode);
         // The establishing shot is ten seconds of camera before a tooling
         // run has done anything, and every screenshot scene would sit
         // through it. A `?start=1` link therefore lands straight on the
@@ -1272,7 +1291,12 @@ export function App() {
         // ask for it.
         const wantsShot = new URLSearchParams(location.search).get("shot") === "1";
         if (!wantsShot && gameRef.current) {
-          skipIntro(gameRef.current);
+          const jumped = skipIntro(gameRef.current);
+          // The field is pushed on by exactly what the player jumped, or the
+          // grid the whole race is read off quietly comes apart: fourteen
+          // crews would still be sitting through a ceremony the player has
+          // already driven out of.
+          if (fieldRef.current) advanceField(fieldRef.current, jumped);
           // Written down as the driver's own cut, at step 0 — which is what
           // it is. A tape whose header claimed the ceremony was never built
           // would replay ten seconds of camera the run did not sit through.
@@ -1766,6 +1790,7 @@ export function App() {
                 ghostRef.current?.state.progressS ?? null,
                 bookRef.current,
                 standingRef.current,
+                fieldRef.current,
               ),
             );
             // R28 — and the split ages on the race clock beside it.

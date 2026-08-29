@@ -1235,17 +1235,45 @@ await captureElement(
   { length: "short", bot: "1" },
 );
 
-// ...and the pips on the route, close up: a board already driven through
-// reads differently from one still to come.
+// ...and the same map with a RACE on it, close up: `?mode=headsup` enters
+// the grid, so the route carries a numbered plate per crew still out there.
+// Waits for the field to have strung itself out rather than shooting the
+// grid, where fifteen plates stand on one point and the only thing the shot
+// could show is that the topmost is the leader's.
 await captureElement(
-  "shot-instrument-checkpoints",
+  "shot-instrument-field",
   ".hud-minimap-dock",
   async (page) => {
     await racing(page);
-    await page.waitForSelector(".hud-minimap-cp-passed", { timeout: 240000 });
-    await page.waitForTimeout(400);
+    await atStageTime(page, 25);
   },
-  { length: "short", bot: "1" },
+  { length: "short", bot: "1", mode: "headsup" },
+);
+
+// The top bar's two big numbers together — the clock the run is against and
+// the place it stands in the field, which are sized to each other. Shot as
+// the whole strip left of the map, and in PORTRAIT, because that is where a
+// place the size of the total time has the least room to be wrong in.
+await captureElement(
+  "shot-topbar-place",
+  ".hud-top",
+  async (page) => {
+    await racing(page);
+    await atStageTime(page, 25);
+  },
+  { length: "short", bot: "1", mode: "headsup" },
+);
+
+// ...and the same race in the frame it is actually driven in: the field on
+// the map, the place beside it, at a landscape viewport.
+await capture(
+  "shot-headsup",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await racing(page);
+    await atStageTime(page, 25);
+  },
+  { length: "short", bot: "1", mode: "headsup" },
 );
 
 // THE SALUTE, and the run-out behind it (R23/R24/R25). The one scene that

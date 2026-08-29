@@ -6,7 +6,7 @@
 // calls and the damage ledger are both flipped into SCREEN space here,
 // once, exactly as input.ts flips steering once.
 
-import { DAMAGE_ZONES, TUNING, startsIn, wayHome, type GameState } from "@engine";
+import { DAMAGE_ZONES, TUNING, startsIn, wayHome, type GameState, type RivalField } from "@engine";
 
 import { buildMinimap } from "./minimap.tsx";
 import { shiftLightOn, shiftWindow } from "./shift-window.ts";
@@ -176,7 +176,11 @@ export type RunBook = { best: number | null };
 /** `ghostS` is how far the run is up the road on the ghost, and whether
  * there is one to be up the road on. Both cars run the same stage, so the
  * arc position they have each reached IS the gap, in the one unit that
- * needs no lookup table and reads instantly at speed: metres of road. */
+ * needs no lookup table and reads instantly at speed: metres of road.
+ *
+ * `field` is the run's own entry list, or null where nobody else is
+ * entered. Only the map reads it, and only on a mass start — the plates a
+ * heads-up race puts on the route (minimap.tsx). */
 export function takeSnapshot(
   state: GameState,
   pace: PaceMemory,
@@ -184,6 +188,7 @@ export function takeSnapshot(
   ghostS: number | null = null,
   book: RunBook | null = null,
   standing: HudStanding | null = null,
+  field: RivalField | null = null,
 ): HudSnapshot {
   const rpm = tachometer(state);
   return {
@@ -208,7 +213,7 @@ export function takeSnapshot(
     shiftUp: shiftLightOn(state),
     shift: shiftWindow(state),
     airborne: state.car.airborne,
-    minimap: buildMinimap(state),
+    minimap: buildMinimap(state, field),
     // The co-driver stops calling corners the moment the car is in the
     // water: the next one is not going to be taken, and reading it out
     // over a sinking car is the same wrong note as the way-home prompt.

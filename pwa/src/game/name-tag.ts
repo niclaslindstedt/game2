@@ -33,6 +33,7 @@
 import * as THREE from "three";
 
 import { PALETTE } from "../identity.ts";
+import { legible } from "../lib/util.ts";
 
 /** The layer tags are drawn on, and the reason they have one. The rear-view
  * mirror (mirror.ts) is a second pass over this same scene, reversed
@@ -100,33 +101,9 @@ export type TagLook = {
   fade?: number;
 };
 
-/** How bright the colour-coded parts have to end up, 0–1 of perceived
- * luminance. A body colour is chosen to separate from GRAVEL AND GREENS
- * (car-livery.ts), which leaves several of them darker than this plate — a
- * badge in raw oil-and-rust is a hole in the tag. Anything under the floor
- * is mixed toward white until it clears it, which lifts the shade without
- * moving the hue, so the car is still recognisably the dark blue one. */
-const MIN_LUMA = 0.5;
-
 /** The ink on the badge: the plate's own dark, so a numeral is always read
- * against a colour that has been lifted above it. */
+ * against a colour `legible` has lifted above it. */
 const BADGE_INK = "#0c111a";
-
-/** `color`, brightened until it clears `MIN_LUMA`. */
-function legible(color: number): string {
-  const r = (color >> 16) & 0xff;
-  const g = (color >> 8) & 0xff;
-  const b = color & 0xff;
-  // Rec. 709 luma — the weights the eye actually gives the channels, so a
-  // saturated blue is treated as the dark colour it looks like.
-  const luma = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-  if (luma >= MIN_LUMA) return `rgb(${r},${g},${b})`;
-  // How far toward white the mix has to go to land ON the floor: the mix is
-  // linear in each channel, so it is linear in the luma too.
-  const mix = (MIN_LUMA - luma) / (1 - luma);
-  const lift = (c: number): number => Math.round(c + (255 - c) * mix);
-  return `rgb(${lift(r)},${lift(g)},${lift(b)})`;
-}
 
 /** What a car with no paint of its own is dressed in — the time trial's
  * ghost. The cold pale wash that says "not really there" everywhere else in
