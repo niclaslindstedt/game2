@@ -9,7 +9,7 @@ A deterministic player stand-in that reads the same `GameState` the HUD reads an
 1. **Aim** — a lookahead point on the centerline, speed-scaled; steering is proportional to the angle error.
 2. **Corner-speed plan** — scans the curvature ahead; each corner caps speed at `√(a_lat/κ)`, distance-discounted by braking capability. `a_lat` is a FRACTION of the car's own TRACTION CEILING (`latFraction × latCeiling`, off `engine/game/limits.ts` — the same number `car.ts` will apply when the car gets there, rather than a second guess at it), not a fixed number, so the same brain plans honestly in any car — and because the slide comes in relative to that same ceiling, this one knob is what decides whether the bot ever drifts a corner or only ever flicks the handbrake at one. It is scaled by the grip the car will actually HAVE at that corner: the surface AHEAD times the rubber this car is on, exactly as `car.ts` reads it. Without that the plan is blind to the whole surface half of a car's character, and no tire in the catalog ever shows up as pace. Hard corners are planned HOT — rally style, the drift scrubs the excess — by `hotEntry` m/s scaled by how freely the car rotates, which is TWO things: the authority a developed slide hands the wheel (`driftYaw` against the profile's `rotationRef`) and how much slide the wheel finds there at all (`limits.ts`'s `wheelSlide`, 0..1 against the rear-driver). A front-driver has most of the first and little of the second, and a driver who read only the first would carry a rear-driver's entry speed into a car that answers by washing straight on: the slide is what brings the nose round in there, so a car that rotates can carry more in than one that pushes.
 3. **The move** — arriving hot at a hard corner, the bot rotates the car, and WHICH WAY is the car's own answer rather than a rule of the bot's: `limits.ts` says how much slide this layout finds on the wheel alone and how far under the speed floor a move still reaches. A car that rotates on the wheel (the rear-driver) gets the handbrake once, as it always did. One that does not carries a TRAILED BRAKE through the corner instead — the plan had it braking for the corner anyway, and a driver in a car that will not rotate keeps some of that pedal past the turn-in and arrives pointed. The trail is held through the corner rather than dropped the moment the car reads as drifting: dropped, it takes the weight off the nose, the slide it just bought shuts, and one corner comes out as a dozen quarter-second drifts. So bots drift hairpins the way players do, and drift regressions show up in bot stats.
-4. **Drift management** — power through the slide, breathe when the angle gets deep, and steer where the car is GOING rather than where its nose is pointing: sideways, holding the nose on the lookahead puts the velocity off the road by exactly the slip angle, so the aim error is measured against the direction of travel. Counter-steer damps the rotation only once the nose is nearly where it should be (damping earlier is what runs a drift wide).
+4. **Drift management** — power through the slide, breathing the throttle back smoothly as the angle deepens (never off it: lifting entirely mid-drift takes the drive off the rear and the slide shuts), and steer where the car is GOING rather than where its nose is pointing: sideways, holding the nose on the lookahead puts the velocity off the road by exactly the slip angle, so the aim error is measured against the direction of travel. Counter-steer damps the rotation only once the nose is nearly where it should be (damping earlier is what runs a drift wide).
 5. **Recovery** — out in the wild: cruise back toward the road at a pace the nature surface can steer at, and fire the reset input when the excursion is hopeless (out too long), like a player would.
 6. **Backing out** — pinned against something with the throttle buried for `reverseAfter`, the bot stops pushing and reverses off it, wheel straight, until the car is properly moving (`reverseSpeed`); then it takes another run at the line. Being WEDGED is no longer a reason to reset: a driver backs off the trunk first, and the respawn is what happens when that fails too. The manoeuvre latches on the car's own `reversing` state so a single wedged tick cannot flicker it, and reversing counts as asking to move (`stepStuck`), so a car pinned both ways still reaches the engine's wedge rescue on time instead of braking forever.
 7. **Gears** — reads `car.gearbox` (the run's box, not the car's) and shifts a manual by the same thresholds the auto box uses, so both simulate fairly. The box's own ratios are already in `state.spec` (`gearedSpec`), so a crew on a manual plans and shifts around the taller gears without the bot knowing there is a box.
@@ -17,6 +17,10 @@ A deterministic player stand-in that reads the same `GameState` the HUD reads an
 8. **Traffic** — handed the cars near it (`TrafficCar`: a position, a speed and a lateral offset, and nothing else), the bot moves its aim off the crown to go round the car in front, sits in behind it at its pace when there is nowhere to go, and — depending on its temper — leans on it going past. See the traffic model below. Handed nothing, it drives exactly the stage it always drove, which is what keeps `make sim` comparable across a change to this file.
 
 Two of the knobs are estimates the driver makes rather than reflexes: `brakeUse` is how much of the car's braking the corner plan assumes it will get (a driver who trusts the brakes stays on the throttle later), and `offRoadGiveUp` is how long an excursion runs before the bot accepts the reset instead of ploughing on.
+
+**The pedals are pedals.** Both were once switches — full throttle or none, full brake or none, either side of the planned corner speed — and that is not how either is driven. A car held at a corner speed by a throttle snapping between the floor and nothing pitches on its springs every time it crosses the target, and spends the corner answering the pedal instead of the road. Both are now proportional: the throttle eases off across the last few m/s before the plan and holds a maintenance opening at it, the brake comes in across a narrower band past `brakeMargin`, and mid-drift the throttle is breathed back as the slip angle deepens rather than dropping to half in one step. Outside those bands nothing has changed — flat out toward a distant corner, hard on the middle pedal when the car is genuinely far too fast.
+
+This is what makes the top of the skill scale worth having. A crew planning corners at the full traction ceiling only converts that commitment into time if the car is settled when it arrives; with switched pedals the extra speed went off the outside of the road instead, and every attempt to make the field quicker by giving it more corner speed measured as more time in the scenery. `commitment`'s ace end is the ceiling itself for that reason.
 
 Bot profiles are data (`BotProfile`); `RALLY_BOT` is the default and the profile every table in this document is measured with. Slower/faster brains are new profiles, not code forks — and they are not hand-written either: see the skill model below.
 
@@ -28,7 +32,7 @@ Skill is spent on six **axes**, each worth up to `AXIS_MAX` (10) points, and eac
 
 | Axis         | What it buys                                                    | Knobs                                           | Authority |
 | ------------ | --------------------------------------------------------------- | ----------------------------------------------- | --------- |
-| `commitment` | How much of the car's grip they lean on                         | `latFraction`                                   | ±20%      |
+| `commitment` | How much of the car's grip they lean on                         | `latFraction`                                   | ±30%      |
 | `attack`     | How hot they arrive, and how much road is worth a flick         | `hotEntry`, `hardCurvature`                     | ±15%      |
 | `vision`     | How far through the corner they are already looking             | `lookahead`                                     | ±15%      |
 | `hands`      | How much authority the wheel has                                | `steerGain`                                     | ±10%      |
@@ -39,7 +43,7 @@ Skill is spent on six **axes**, each worth up to `AXIS_MAX` (10) points, and eac
 
 `spend(budget, weights)` distributes a budget in the proportions a crew asks for, **water-filling**: an axis that fills up keeps its cap and hands its share back to the pot, so a crew that wanted everything in one place still ends up with a complete car. That is what makes a lopsided character a SHAPE at low budgets and merely a lean at high ones.
 
-`RALLY_BOT` is worth about 38 of the 60 points on this scale.
+`RALLY_BOT` is worth about 30 of the 60 points on this scale — the tail of MEDIUM, and below the whole of HARD.
 
 ## Traffic: what a bot does about other cars (`engine/sim/bot.ts`)
 
@@ -68,11 +72,15 @@ Each crew also has a **temper** and an **overtake** number — what they are lik
 
 A difficulty is one number — the points the middle of the field gets — plus a spread, and a band of temper beside it:
 
-| Setting  | Budget | Spread | Temper band | P3 pace, as a ratio to `RALLY_BOT`            |
-| -------- | ------ | ------ | ----------- | --------------------------------------------- |
-| `easy`   | 11     | ±7.5   | 0 – 0.50    | ≈ 1.22 (the podium is 22% off reference pace) |
-| `medium` | 19     | ±8.5   | 0.10 – 0.72 | ≈ 1.08                                        |
-| `hard`   | 28     | ±8     | 0.25 – 1.00 | ≈ 0.97                                        |
+| Setting  | Budget | Spread | Temper band | P3 pace, as a ratio to `RALLY_BOT` |
+| -------- | ------ | ------ | ----------- | ---------------------------------- |
+| `easy`   | 27     | ±9     | 0 – 0.50    | ≈ 0.86                             |
+| `medium` | 35     | ±9     | 0.10 – 0.72 | ≈ 0.80                             |
+| `hard`   | 42     | ±8     | 0.25 – 1.00 | ≈ 0.75                             |
+
+The budgets are set against a **recorded human drive**, not against the reference bot — a difficulty is a promise made to a person, and the run tape below is the only instrument that asks the question that way. Placed against the stage one was cut on, `hard`'s leader arrives within a handful of seconds of a decent lap, `medium`'s about fifteen behind it, and `easy`'s far enough back to be a comfortable win and near enough to be a race. They used to be a minute and a half, two minutes and two and a half minutes behind the same lap, which is not a difficulty ladder — it is the player alone on the road with a timing screen.
+
+The heads of the fields stop at about 50 of the 60 points on purpose. Past there the axes are spent and the curve goes flat: two crews ten points apart drive the same stage in the same time, and which of them is quicker on any given road is whichever one did not have the accident. A field whose head sits in that region has stopped being a rung on a ladder.
 
 The bands overlap: the quickest EASY crew is about as good as the slowest MEDIUM one, which is what makes stepping up a difficulty feel like the field closing in rather than a different game.
 

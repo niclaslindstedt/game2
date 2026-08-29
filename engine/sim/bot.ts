@@ -99,6 +99,22 @@ export type BotProfile = {
  * much that the corner is arrived at stopped: a trail, not a stop. */
 const TRAIL_BRAKE = 0.35;
 
+/** How many m/s under the corner plan the throttle is already easing off
+ * over, and how many over it the brake comes in across. The throttle's is
+ * the wider of the two — a driver eases up to a corner speed over a good
+ * few km/h and then leans on the middle pedal decisively — and neither is
+ * wide enough to be a driver who never fully commits to either. */
+const THROTTLE_BAND = 4;
+const BRAKE_BAND = 2.5;
+
+/** The slip angle a drift is carried on full throttle up to, rad, the band
+ * over which the pedal is then breathed back, and how little of it is left
+ * at the deepest angle the bot will hold. Never zero: the drive is what
+ * keeps a slide open. */
+const DRIFT_HOLD = 0.35;
+const DRIFT_BAND = 0.45;
+const DRIFT_FLOOR = 0.45;
+
 /** The default rally brain: quick hands, plans ~3 s ahead, drifts hairpins. */
 export const RALLY_BOT: BotProfile = {
   latFraction: 0.5,
@@ -271,8 +287,21 @@ export function botInput(
     ahead += 1;
   }
 
-  let throttle = car.u < targetSpeed ? 1 : 0;
-  let brake = car.u > targetSpeed + profile.brakeMargin ? 1 : 0;
+  // THE PEDALS, and they are pedals rather than switches. Both used to be
+  // on or off, which is not how either one is driven: a car held at a corner
+  // speed by a throttle snapping between the floor and nothing pitches on
+  // its springs every time it crosses the target, and the tires spend the
+  // corner answering the pedal instead of the road. What a driver does is
+  // squeeze — hard while there is a long way to go, feathering as the plan
+  // is approached, and holding a maintenance throttle at it.
+  //
+  // The bands are the width of the squeeze in m/s. Both are narrow: this is
+  // the last few km/h before the plan, not a slow ramp, and outside them the
+  // pedal is where it always was — flat on the way to a distant corner, hard
+  // on the middle one when the car is genuinely far too fast.
+  const over = car.u - targetSpeed;
+  let throttle = clamp(-over / THROTTLE_BAND, 0, 1);
+  let brake = clamp((over - profile.brakeMargin) / BRAKE_BAND, 0, 1);
 
   // DRIFT ENTRY. Arriving hot at a hard corner, rotate the car — and WHICH
   // WAY is the car's own answer, not a rule of the bot's: `game/limits.ts`
@@ -307,7 +336,14 @@ export function botInput(
   const trailing = nearHard && !rotates && hot;
   if (trailing) brake = Math.max(brake, TRAIL_BRAKE);
   if (car.drifting) {
-    throttle = Math.abs(car.slip) > 0.5 ? 0.5 : 1;
+    // Sideways, the throttle is the thing holding the angle where it is, and
+    // it is BREATHED rather than switched: full while the slide is still
+    // building, easing as the angle gets deep enough to be running out of
+    // road, never off — lifting entirely mid-drift takes the drive off the
+    // rear and the slide shuts. A step at one slip angle made the car take
+    // its half-throttle in a lump exactly where it was least settled.
+    const deep = clamp((Math.abs(car.slip) - DRIFT_HOLD) / DRIFT_BAND, 0, 1);
+    throttle = 1 - (1 - DRIFT_FLOOR) * deep;
     // Standing on the middle pedal sideways is not how a driver avoids
     // anything — but a front-driver that let the brake up here would simply
     // stop turning, so what it keeps is the trail and never more.

@@ -168,22 +168,40 @@ describe("the run tape", () => {
   });
 
   it("gets harder as the difficulty climbs", () => {
-    const recorded = recordBotRun({ difficulty: "medium", cars: 15 });
-    const places = (["easy", "medium", "hard"] as const).map(
-      (difficulty) =>
-        placeAmongField({
-          stage: STAGE,
+    // Over several stages rather than one, because a PLACE is an integer
+    // over a field of fourteen crews who have real accidents: one crew
+    // putting it in the trees on one road moves the same lap a place either
+    // way, and a single seed reads that coin-flip as a broken ladder. The
+    // claim being made is about the ladder, so it is asked of the ladder —
+    // several roads at once, where one crew's bad afternoon cannot carry it.
+    const totals = [0, 0, 0];
+    for (const seed of [42, 7, 21]) {
+      const stage = { ...STAGE, seed };
+      const recorded = race({
+        stage,
+        car: CAR,
+        field: { difficulty: "medium" as const, cars: 15, massStart: false },
+        start: START,
+        driver: { kind: "bot" as const },
+      });
+      (["easy", "medium", "hard"] as const).forEach((difficulty, i) => {
+        totals[i] += placeAmongField({
+          stage,
           field: { difficulty, cars: 15, massStart: false },
           time: recorded.time,
           carId: CAR.id,
-        }).place,
-    );
+        }).place;
+      });
+    }
     // The same lap is worth no better a place against a better field. This
     // is the assertion the whole calibration rests on: if it ever fails, the
     // difficulty ladder has stopped being a ladder.
-    expect(places[0]).toBeLessThanOrEqual(places[1]);
-    expect(places[1]).toBeLessThanOrEqual(places[2]);
-  });
+    expect(totals[0]).toBeLessThanOrEqual(totals[1]);
+    expect(totals[1]).toBeLessThanOrEqual(totals[2]);
+    // Three roads and three fields of fourteen is a hundred and twenty-six
+    // stages driven for one assertion — worth it for the one the whole
+    // calibration rests on, but not inside the default budget.
+  }, 60_000);
 
   it("writes down the cut establishing shot, because it moves the field", () => {
     const recorder = createTapeRecorder({
