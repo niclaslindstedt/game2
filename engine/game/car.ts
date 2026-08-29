@@ -1071,8 +1071,18 @@ export function stepGrounded(
  * at the grade the wheels could have climbed to get there, which is the same
  * line the ground-as-a-solid check draws; past it the contact model has the
  * car, not this.
+ *
+ * Exported because anything that PUTS a car on open ground — the beaching at
+ * the end of a drowning, in step.ts — owes it the same seat the driving model
+ * would have given it. Dropping a car at the bare centre height instead
+ * leaves it a body-corner under the surface, and the wall check on the next
+ * step reads that as a face and hits the car with it.
  */
-function seatOn(car: CarState, centre: number, ground: (x: number, z: number) => number): number {
+export function seatOn(
+  car: CarState,
+  centre: number,
+  ground: (x: number, z: number) => number,
+): number {
   const hl = T.collision.halfLength;
   const hw = T.collision.halfWidth;
   const sinH = Math.sin(car.heading);

@@ -289,10 +289,22 @@ describe("the river (R18)", () => {
   });
 });
 
+/** Off the road under full throttle and hard lock, until the car is in
+ * water deep enough to be drowning in it. Returns the step that put it
+ * there. The lakeland dial is turned up so there IS water to find, and the
+ * lock decides WHICH side of the road it is found on — the two answer with
+ * different shorelines, and both beats the water has are wanted. */
+function plunge(seed: number, steer: number): { state: GameState; entry: GameEvent[] } | null {
+  const state = createGame({ seed, length: "long", skipCountdown: true, knobs: { water: 1 } });
+  const input = { ...NEUTRAL_INPUT, throttle: 1, steer };
+  for (let i = 0; i < 120 * 60; i++) {
+    const entry = step(state, input);
+    if (state.drowning) return { state, entry };
+  }
+  return null;
+}
+
 describe("going under (TUNING.crash.drown)", () => {
-  /** Drive a run straight off the side until it finds water deep enough to
-   * drown in, and hand back the state at the moment the water took it. The
-   * lakeland dial is turned up so there IS water to find. */
   /** Seeds to look for a lake in, in order — these lead with ones whose
    * water is known to be deep enough to submerge a car, so the search below
    * usually stops at the first. It is an ORDER and not a guarantee:
@@ -300,21 +312,6 @@ describe("going under (TUNING.crash.drown)", () => {
    * and which shelf it ends up on is decided by the handling that carried
    * it there. `swallows` is what actually holds the scenario still. */
   const DROWNING_SEEDS = [34, 26, ...SEEDS];
-
-  /** Off the road under full throttle and hard lock, until the car is in
-   * water deep enough to be drowning in it. Returns the step that put it
-   * there. */
-  function plunge(seed: number): { state: GameState; entry: GameEvent[] } | null {
-    const state = createGame({ seed, length: "long", skipCountdown: true, knobs: { water: 1 } });
-    // Hard lock and full throttle: off the road, across the verge, and
-    // into whatever the seed put beside it.
-    const input = { ...NEUTRAL_INPUT, throttle: 1, steer: 1 };
-    for (let i = 0; i < 120 * 60; i++) {
-      const entry = step(state, input);
-      if (state.drowning) return { state, entry };
-    }
-    return null;
-  }
 
   /** ...and does that water actually close over the roof? The car sinks to
    * the BED (step.ts), so a shelf shallower than the roof leaves it settled
@@ -326,7 +323,7 @@ describe("going under (TUNING.crash.drown)", () => {
    * puddle. Run on a throwaway state; the drive is deterministic, so the
    * real one replays it exactly. */
   function swallows(seed: number): boolean {
-    const attempt = plunge(seed);
+    const attempt = plunge(seed, 1);
     if (!attempt) return false;
     const { state } = attempt;
     for (let i = 0; i < Math.round(TUNING.crash.drown.duration / TUNING.dt); i++) {
@@ -342,7 +339,7 @@ describe("going under (TUNING.crash.drown)", () => {
   function driveIntoDeepWater(): { state: GameState; entry: GameEvent[] } {
     deepSeed ??= DROWNING_SEEDS.find(swallows);
     if (deepSeed === undefined) throw new Error("no seed put deep enough water beside the road");
-    const attempt = plunge(deepSeed);
+    const attempt = plunge(deepSeed, 1);
     if (!attempt) throw new Error(`seed ${deepSeed} no longer drowns the car`);
     return attempt;
   }
@@ -430,5 +427,101 @@ describe("going under (TUNING.crash.drown)", () => {
     // ...and the clock never stopped while it was ignoring them: the whole
     // penalty is charged to the run, which is what makes it one.
     expect(state.raceTime - raceAtEntry).toBeCloseTo(D.duration, 1);
+  });
+});
+
+describe("driving out again (TUNING.crash.drown.shallows)", () => {
+  /** Not every splash is a drowning. A car that clips a shore at pace
+   * carries that entry back out of the water, and the failure these hold
+   * off is the water keeping it anyway: the body held down at a waterline
+   * the car has already driven past, which finishes the beat buried in the
+   * beach it is standing on. */
+  const SHORE_SEEDS = [3, ...SEEDS];
+
+  /** Take a seed's plunge and run the drowning out. Reports the seed whose
+   * shoreline the car drives back out of — which one that is depends on the
+   * handling that carried it in, exactly as `swallows` does above, so this
+   * searches rather than naming one. */
+  function scrambles(seed: number): boolean {
+    const attempt = plunge(seed, -1);
+    if (!attempt) return false;
+    const { state } = attempt;
+    // The lock that found the water has already been driving off-road for
+    // up to a minute, and the wedge rule may well have fetched the car
+    // once on the way: what marks a car driving ITSELF out is a drowning
+    // that ends without the crew, not a run with no respawns in it.
+    const fetched = state.stats.respawns;
+    for (let i = 0; i < Math.round(TUNING.crash.drown.duration / TUNING.dt); i++) {
+      step(state, NEUTRAL_INPUT);
+      if (!state.drowning) return state.stats.respawns === fetched;
+    }
+    return false;
+  }
+
+  let shoreSeed: number | undefined;
+
+  function driveIntoTheShallows(): GameState {
+    shoreSeed ??= SHORE_SEEDS.find(scrambles);
+    if (shoreSeed === undefined)
+      throw new Error("no seed put a shore the car could drive back out of");
+    const attempt = plunge(shoreSeed, -1);
+    if (!attempt) throw new Error(`seed ${shoreSeed} no longer puts the car in the water`);
+    return attempt.state;
+  }
+
+  it("gives the car back to the driver instead of the crew", () => {
+    const state = driveIntoTheShallows();
+    const D = TUNING.crash.drown;
+    const respawnsAtEntry = state.stats.respawns;
+    const progressAtEntry = state.progressS;
+
+    let out = 0;
+    let sank = 0;
+    let steps = 0;
+    const bail = Math.round(D.float / TUNING.dt);
+    while (state.drowning && steps++ < bail) {
+      for (const ev of step(state, { ...NEUTRAL_INPUT, throttle: 1 })) {
+        if (ev.type === "respawn") out += 1;
+        if (ev.type === "sink") sank += 1;
+      }
+    }
+    // It got out while it was still afloat, on its own momentum: no crew,
+    // no gulp, and the run is standing exactly where it left it rather than
+    // back at the last split board.
+    expect(state.drowning).toBeNull();
+    expect(steps).toBeLessThan(bail);
+    expect(out).toBe(0);
+    expect(sank).toBe(0);
+    expect(state.stats.respawns).toBe(respawnsAtEntry);
+    expect(state.progressS).toBe(progressAtEntry);
+  });
+
+  it("stands it on the ground it beached on, not under it", () => {
+    const state = driveIntoTheShallows();
+    while (state.drowning) step(state, { ...NEUTRAL_INPUT, throttle: 1 });
+
+    // The one that reads as a broken game: a car that drove out and then
+    // spends the rest of the beat sinking through the bank it is standing
+    // on. Give it a second of driving and it must be ON the ground the
+    // whole way — the seat can stand it above a dip under its middle, never
+    // below it.
+    let buried = -Infinity;
+    for (let i = 0; i < Math.round(1 / TUNING.dt); i++) {
+      step(state, { ...NEUTRAL_INPUT, throttle: 1 });
+      buried = Math.max(buried, state.terrain.groundAt(state.car.x, state.car.z) - state.car.y);
+    }
+    expect(buried).toBeLessThan(0.05);
+    // ...and it is DRIVING: the throttle reaches it again, which is the one
+    // thing the drowning takes away.
+    expect(state.car.u).toBeGreaterThan(1);
+    expect(state.drowning).toBeNull();
+  });
+
+  it("asks for shallower water than the depth that took the car", () => {
+    // The bar to get out sits UNDER the bar that put the car in, and it has
+    // to: on the same bar a hull bobbing at the deep-water line would beach
+    // and drown again on alternate steps.
+    expect(TUNING.crash.drown.shallows).toBeGreaterThan(0);
+    expect(TUNING.crash.drown.shallows).toBeLessThan(TUNING.crash.deepWater);
   });
 });

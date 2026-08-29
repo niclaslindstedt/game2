@@ -462,7 +462,8 @@ not a mistake anymore; it is exploration:
 - **Water** — the landscape floods below the water table
   (`terrain.LAKE_Y`): lakes, sea basins, and the rivers that run into them
   (R18). Shallows and fords slow the car and splash; **deep water is the
-  one crash left** — and it is a drowning, not a teleport: see below.
+  one crash left** — and it is a drowning, not a teleport, with a shoreline
+  the car may yet drive back out onto: see below.
   Nothing solid ever crashes the car. The channel under a bridge is cut
   deep enough to qualify, so going over a parapet is a drowning, not a
   shortcut. Water is only water where the ground the car rides is UNDER it
@@ -523,13 +524,12 @@ not a mistake anymore; it is exploration:
 ### Going under
 
 Water more than `TUNING.crash.deepWater` (0.9 m) over the ground the car is
-standing on is water it is not driving out of. The run is lost at that
-instant — a big `splash` (`deep: true`, carrying the entry speed) and the
-`crash` event — but the car is **not** lifted off the lake. `state.drowning`
-is set instead, and for `TUNING.crash.drown.duration` seconds nothing else
-in the run advances: no input is read, no progress accrues, no surface is
-resolved and the wedge clock does not run. The race clock does, and those
-seconds ARE the penalty.
+standing on has the car. It is a crash at that instant — a big `splash`
+(`deep: true`, carrying the entry speed) and the `crash` event — but the car
+is **not** lifted off the lake. `state.drowning` is set instead, and for
+`TUNING.crash.drown.duration` seconds nothing else in the run advances: no
+input is read, no progress accrues, no surface is resolved and the wedge
+clock does not run. The race clock does, and those seconds ARE the penalty.
 
 What happens inside them is three beats, and it needs to be three or it
 reads as a teleport with a delay bolted on:
@@ -554,8 +554,31 @@ reads as a teleport with a delay bolted on:
    is the heavy end. When the roof (`roof`, 1.3 m over the wheels) passes
    under, a one-shot `sink` event fires — the gulp, not the entry.
 
-The respawn is at the far end, and it is the only thing that clears
-`state.drowning`.
+The respawn is at the far end of all three. It is not the only way out,
+though: the first two beats are a race the car is allowed to win.
+
+**Driving out again.** A lake has a shore and a river has a far bank, and an
+entry taken at pace carries the car toward one — `stopIn` gives it half a
+second of real travel, which is metres. While the hull is still afloat
+(before `float`, so before the water has started taking it down), any step
+that finds it over ground carrying no more than
+`deepWater - drown.shallows` (0.7 m) of water **beaches** it: `drowning`
+clears, the wheels go back on the seat the driving model would have given
+them (`seatOn`), the wedge clock re-anchors where the car stands, a shallow
+`splash` marks the car heaving itself out, and the driver has it back. No
+`sink`, no respawn, no checkpoint paid — the run is exactly where it was
+left, and the entry cost it the second or so it spent swimming.
+
+The depth is read over the GROUND rather than over the car, because a
+drowning hull is being held at its waterline and would answer "deep" while
+standing on a beach. The margin is what makes it a different bar from the
+one that started the drowning: on the same bar a car bobbing at the
+deep-water line would beach and drown again on alternate steps.
+
+The check runs BEFORE the depth maths of beats 2 and 3, and has to: those
+pull the body toward a waterline that, for a car which has climbed a bank,
+is metres below the ground it is standing on. A car left to them after it
+has driven out does not drown in the lake, it drowns in the beach.
 
 - **The way home** — exploring never times out, and hitting things never
   ends it: crash into trees for as long as the car still moves. Only two

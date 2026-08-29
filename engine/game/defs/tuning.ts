@@ -1058,14 +1058,28 @@ export const TUNING = {
      * water swallows the entry and the hull corks back up), the float (it
      * rides the surface, rocking less each time, going nowhere), and the
      * sink (the water wins, nose first, until it has closed over the
-     * roof). Cut any one and it reads as a teleport with a delay on it. */
+     * roof). Cut any one and it reads as a teleport with a delay on it.
+     *
+     * The float is a race, though, and the car is allowed to win it: a car
+     * that went in carrying real speed can carry that entry back out — up
+     * a beach, over a shoal, across the shingle of a ford — and one that
+     * reaches ground it could drive from was wading, not drowning. See
+     * `shallows`. */
     drown: {
       /** Entry to back-on-the-road, s. */
       duration: 5,
       /** How long the hull rides the surface before the water starts
        * winning, s — the plunge and the whole settle happen inside this,
-       * and the rest of `duration` is the car going under. */
+       * and the rest of `duration` is the car going under. It is also how
+       * long the car has to drive itself out (`shallows`): once the water
+       * has started taking it down there is nothing left to drive with. */
       float: 2.4,
+      /** How much shallower than `deepWater` the water has to be before a
+       * hull that is still afloat counts as back on ground it can drive
+       * from, m. A MARGIN rather than a depth of its own: the bar to get
+       * out has to sit under the bar that put the car in, or a car bobbing
+       * on that bar beaches and drowns again on alternate steps. */
+      shallows: 0.2,
       /** Time constant the water takes the car's speed over, s — a car
        * that hits a lake at pace still carries its line a few metres in
        * before the water has all of it. */

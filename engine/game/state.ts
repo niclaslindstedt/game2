@@ -291,10 +291,11 @@ export type GameEvent =
    * the two: a snapped trunk comes down where it stood, an uprooted rock
    * leaves at speed. */
   | { type: "solidBreak"; solid: WildObstacle; broke: boolean; vx: number; vy: number; vz: number }
-  /** The car has gone somewhere it cannot drive out of — deep water. A
-   * solid never crashes the car: trees and rocks bend it and let it drive
-   * on, and a wedge is answered by the stuck rule, not by a crash. The
-   * respawn does NOT follow immediately: `state.drowning` runs first. */
+  /** The car has gone into deep water. A solid never crashes the car: trees
+   * and rocks bend it and let it drive on, and a wedge is answered by the
+   * stuck rule, not by a crash. No respawn follows immediately — and on the
+   * entry that the car's own momentum carries back onto a bank, none
+   * follows at all: `state.drowning` runs first and decides. */
   | { type: "crash" }
   /** The water has closed over the roof. Emitted once per drowning, part
    * way through it — the gulp, not the entry. */
@@ -348,10 +349,12 @@ export type RunStats = {
  * reaches the car any more; it is being driven home. */
 export type GamePhase = "intro" | "countdown" | "racing" | "rollout" | "finished";
 
-/** A car in the water it cannot drive out of. While this is set the run is
- * not being driven: input is ignored, nothing progresses, and the only
- * thing happening is the water taking the car (TUNING.crash.drown). It
- * clears on the respawn at the far end. */
+/** A car in water too deep to drive. While this is set the run is not being
+ * driven: input is ignored, nothing progresses, and the only thing
+ * happening is the water taking the car (TUNING.crash.drown). It clears
+ * either way the beat can end — on the respawn once the car has gone down,
+ * or the moment the entry's own momentum has carried it back onto ground it
+ * can drive from, which costs the run the swim and nothing else. */
 export type DrownState = {
   /** Sim time the water took it, s. */
   since: number;
