@@ -114,6 +114,40 @@ export const ROAD_CROSS = {
   reach: 6.5,
 } as const;
 
+/** R16 — THE HAND-OVER: how much of the ribbon's own height still applies
+ * at `out` meters past the road edge, 1 on the road and 0 where the ground
+ * lattice has it entirely.
+ *
+ * A road does not end. It runs out. But the two surfaces that meet here are
+ * sampled 2 m apart and 14 m apart, and for as long as the ribbon insisted
+ * on its own height right up to its outermost vertex, the lattice
+ * underneath was wherever the lattice happened to be: a median of 0.4 m
+ * below it, and on a road crossing a lattice cell diagonally, over ten
+ * metres. That difference is a VERTICAL FACE running the length of every
+ * stage — the dark line down the side of the road in every screenshot of
+ * one, and the thing the drawn skirt exists to hide rather than fix.
+ *
+ * So past the bare shoulder the corridor's surface leans toward the ground
+ * beside it, and by `reach` the two MEET at a shared height instead of one
+ * stopping in the air over the other. What it costs is that the outer slope
+ * sags by the tile sink over the last few metres, which is not a cost: a
+ * shallow ditch at the road's edge is what belongs there.
+ *
+ * The hand-over starts at the bare shoulder's outer limit, so the mat and
+ * the strip the blade keeps bare are untouched — only the grassed slope
+ * past them dissolves. One function, three consumers: the physics rides the
+ * blend, the road mesh draws it, and the analysis measures what is left at
+ * the seam. */
+export function handoverAt(out: number): number {
+  const from = ROAD_CROSS.verge.bareTo;
+  const t = (out - from) / (ROAD_CROSS.reach - from);
+  if (t <= 0) return 1;
+  if (t >= 1) return 0;
+  // Smoothstep: the road's surface has to leave the ribbon's height with
+  // zero slope or the hand-over is itself a crease at the shoulder.
+  return 1 - t * t * (3 - 2 * t);
+}
+
 /** R23 — the room a road of `width` keeps to itself, m, measured
  * CENTERLINE to centerline: both corridors' full reach (mat plus the verge
  * the ribbon draws beside it) plus the bare country between them. The

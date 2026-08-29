@@ -32,8 +32,10 @@ import { describe, expect, it } from "vitest";
 import {
   KERB_MARKER,
   NEUTRAL_INPUT,
+  compileStage,
   compileTrack,
   createGame,
+  createRng,
   step,
   type CarInput,
   type GameState,
@@ -43,6 +45,8 @@ import {
 
 import { createConeField } from "../pwa/src/game/cones.ts";
 import { createPostField } from "../pwa/src/game/kerbs.ts";
+import { buildRoadSpill } from "../pwa/src/game/road-spill.ts";
+import { GROUND_SCALE } from "../pwa/src/game/settings.ts";
 import { stepTumble, tumbleFrom } from "../pwa/src/game/tumble.ts";
 
 const LONG_STRAIGHT: SegmentPlan[] = [{ kind: "straight", length: 6000, feature: "none" }];
@@ -322,5 +326,77 @@ describe("driving through the marker posts", () => {
     const after = poseOf(batch);
     expect(after.at.distanceTo(stood.at)).toBe(0);
     expect(after.tilt).toBeLessThan(0.01);
+  });
+});
+
+// R16 — THE SPILL at the road's edge: the loose stone that makes a gravel
+// road run out into the country instead of ending at a line. It is drawn
+// app-side with no engine state, exactly as the cones are and for the same
+// reason — every piece of it is a few centimetres tall and the car drives
+// straight over it — so this is where it gets tested.
+describe("the stone spilled at the road's edge (R16)", () => {
+  const track = compileStage(4, "medium");
+  /** Where the spill actually put its stones, over 300 samples of road. The
+   * ground is flat and nothing is blocked: what is under test is the
+   * scatter, not the landscape it lands on. */
+  const stones = (density: number): { x: number; z: number; y: number }[] => {
+    const rng = createRng(0x51ed);
+    const spill = buildRoadSpill(
+      track,
+      0,
+      300,
+      rng,
+      density,
+      () => 0,
+      () => false,
+    );
+    const out: { x: number; z: number; y: number }[] = [];
+    const m = new THREE.Matrix4();
+    const at = new THREE.Vector3();
+    for (let i = 0; i < spill.mesh.count; i++) {
+      spill.mesh.getMatrixAt(i, m);
+      at.setFromMatrixPosition(m);
+      out.push({ x: at.x, z: at.z, y: at.y });
+    }
+    spill.dispose();
+    return out;
+  };
+
+  it("thins from the road's edge outward, and never stands on the mat", () => {
+    const placed = stones(1);
+    expect(placed.length).toBeGreaterThan(200);
+    // Every stone is OUTSIDE the mat — the surfacing draws its own gravel,
+    // and a chipping standing on the road is litter the wheels bounce off.
+    // ...and the count falls with distance: that gradient IS the effect.
+    const bands = [0, 0, 0, 0];
+    for (const p of placed) {
+      let nearest = Infinity;
+      let half = track.width / 2;
+      for (const s of track.samples) {
+        const d = Math.hypot(s.x - p.x, s.z - p.z);
+        if (d < nearest) {
+          nearest = d;
+          half = s.width / 2;
+        }
+      }
+      const out = nearest - half;
+      expect(out).toBeGreaterThan(-0.6);
+      const band = Math.min(3, Math.floor(out / 2));
+      if (band >= 0) bands[band] += 1;
+    }
+    expect(bands[0]).toBeGreaterThan(bands[1]);
+    expect(bands[1]).toBeGreaterThan(bands[2]);
+    expect(bands[2]).toBeGreaterThan(bands[3]);
+  });
+
+  it("thins with OPTIONS ▸ VIDEO ▸ GROUND DETAIL, and never to nothing", () => {
+    const rich = stones(GROUND_SCALE.rich).length;
+    const normal = stones(GROUND_SCALE.normal).length;
+    const plain = stones(GROUND_SCALE.plain).length;
+    expect(plain).toBeLessThan(normal);
+    expect(normal).toBeLessThanOrEqual(rich);
+    // The road's edge still TRANSITIONS at the cheapest setting: a hard
+    // line between gravel and grass is a defect, not a level of detail.
+    expect(plain).toBeGreaterThan(normal * 0.15);
   });
 });

@@ -123,6 +123,13 @@
 //       wide because that is the reach of the triangles the ground is drawn
 //       and driven on: pin every corner that could sit over a road, and no
 //       triangle can cut up through one.
+//       What is cut is the LANDSCAPE. A cut is taken against the road the
+//       ground is beside, and it never reaches in under a DIFFERENT road's
+//       own shelf — one road's rideability is not a licence to hollow out
+//       the ground another is standing on. Without that, a branch running
+//       sixty metres away and twenty metres below took fourteen metres of
+//       hillside out from under the route, and left its ribbon hanging in
+//       the air with a vertical face down the side of it.
 
 /** Sample spacing along the compiled centerline, meters. It lives here
  * because it is not only the compiler's business: a search that has to land

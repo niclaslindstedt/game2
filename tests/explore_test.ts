@@ -569,10 +569,48 @@ describe("the terrain field", () => {
       // the road's own underside, opening upward at `climb` past the bench.
       // No tolerance — a hillside, a mountain's toe, a corner guard's mound
       // and the far field's blend are all cut to this exactly.
+      //
+      // What is cut is the LANDSCAPE, and the exemption is the other half of
+      // the rule: a point standing on ANOTHER road's own shelf is not
+      // landscape, and this road's cone has no business cutting it. Without
+      // that exemption the cone from a branch sixty metres off and twenty
+      // metres down reached in under the route and took the ground out from
+      // beneath it. So a probe nearer to some other piece of road than to
+      // the sample it was launched from is skipped — it belongs to that
+      // road, and that road's own cone is what holds it.
       for (const seed of seeds) {
         const track = compileStage(seed, "medium");
         const terrain = createTerrain(track);
         const edge = track.width / 2 + ROAD_CROSS.reach;
+        /** Is this point on an ABANDONED BRANCH's own corridor? The route's
+         * distance field does not know about them, so the branch samples go
+         * into a grid of cells `edge` across and a query reads its own cell
+         * and the ring around it — a walk of every branch per probe is a
+         * hundred thousand distances and times this test out. */
+        const cell = (x: number, z: number): string =>
+          `${Math.floor(x / edge)},${Math.floor(z / edge)}`;
+        const branchCells = new Map<string, { x: number; z: number }[]>();
+        for (const spur of track.spurs) {
+          for (const sample of spur.samples) {
+            const key = cell(sample.x, sample.z);
+            const bucket = branchCells.get(key);
+            if (bucket) bucket.push(sample);
+            else branchCells.set(key, [sample]);
+          }
+        }
+        const onBranch = (x: number, z: number): boolean => {
+          const cx = Math.floor(x / edge);
+          const cz = Math.floor(z / edge);
+          for (let dx = -1; dx <= 1; dx++) {
+            for (let dz = -1; dz <= 1; dz++) {
+              for (const at of branchCells.get(`${cx + dx},${cz + dz}`) ?? []) {
+                if (Math.hypot(at.x - x, at.z - z) < edge) return true;
+              }
+            }
+          }
+          return false;
+        };
+        let probes = 0;
         for (let i = 0; i < track.samples.length; i += 3) {
           const s = track.samples[i];
           if (s.deck) continue;
@@ -581,11 +619,18 @@ describe("the terrain field", () => {
             const top = s.elevation + corridorOffset(s, side * edge, track.width);
             for (let out = 0; out <= 25; out++) {
               const lat = side * (edge + out);
-              const here = terrain.heightAt(s.x + right.x * lat, s.z + right.z * lat);
-              expect(here).toBeLessThanOrEqual(top + R.verge.climb * out);
+              const x = s.x + right.x * lat;
+              const z = s.z + right.z * lat;
+              // On another arm of the route, or on a branch: that road's.
+              if (terrain.roadDistanceAt(x, z) < Math.abs(lat) - 0.5) continue;
+              if (onBranch(x, z)) continue;
+              probes += 1;
+              expect(terrain.heightAt(x, z)).toBeLessThanOrEqual(top + R.verge.climb * out);
             }
           }
         }
+        // The exemption is narrow: almost every probe still gets asked.
+        expect(probes, `seed ${seed}`).toBeGreaterThan(track.samples.length * 10);
       }
     });
 

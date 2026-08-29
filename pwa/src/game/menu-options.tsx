@@ -267,6 +267,16 @@ function VideoTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "onS
         value={video.flora}
         onPick={(flora) => set({ flora })}
       />
+      <OptionRow
+        label="GROUND DETAIL"
+        options={[
+          { id: "plain", label: "PLAIN" },
+          { id: "normal", label: "NORMAL" },
+          { id: "rich", label: "RICH" },
+        ]}
+        value={video.ground}
+        onPick={(ground) => set({ ground })}
+      />
       <div className="opt-note">
         INTERIORS is what is behind the glass — trim, seats and a crew on LOW, plus the roll cage
         and a steering wheel that turns on FULL. OFF puts the old solid windows back. Applies to the
@@ -276,6 +286,12 @@ function VideoTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "onS
         Grass, shrubs and stumps between the trees — the cheapest frames on this page. The trees you
         can HIT are always drawn, so this never makes a stage easier; how thickly the forest itself
         stands is Roam&apos;s FOREST dial. Applies to the next stage you start.
+      </div>
+      <div className="opt-note">
+        GROUND DETAIL is the loose stone: the chippings spilled across the road&apos;s edge, and the
+        cobbles out in the field. Thousands of them a stage, so it is the biggest lever here after
+        RESOLUTION — and the road still runs out into the grass on PLAIN, just with fewer stones
+        doing it. Nothing this thins is anything you could hit. Applies to the next stage you start.
       </div>
     </div>
   );

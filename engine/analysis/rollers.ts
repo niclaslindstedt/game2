@@ -33,8 +33,74 @@
 import { corridorOffset, ROAD_CROSS } from "../mapgen/road.ts";
 import type { Track, TrackSample } from "../mapgen/compile.ts";
 import type { TerrainField } from "../mapgen/terrain.ts";
+import { createKerbField, KERB_MARKER, markersBetween } from "../mapgen/kerbs.ts";
 import { ANALYSIS } from "./budgets.ts";
 import { metricScore, rate, within, type Check, type Finding, type MetricReport } from "./types.ts";
+
+/** A piece of stage FURNITURE, as the rank sees it: a segment on the ground
+ * with a thickness. A marker post is a segment of zero length; a barrier
+ * across a branch is a segment as wide as the road it shuts. Both are the
+ * same question — how near does this thing come to a ball on the mat — and
+ * a point-and-radius cannot ask it of a line without either missing the
+ * ends or inventing a circle the size of the road. */
+type Furniture = {
+  kind: string;
+  ax: number;
+  az: number;
+  bx: number;
+  bz: number;
+  /** How far the thing sticks out from that line, m. */
+  radius: number;
+};
+
+/** Everything standing on the stage that the terrain field does not place:
+ * the barriers shutting the abandoned branches (R17) and the marker posts
+ * down the verge (R26). The anti-cut BLOCKS are left out on purpose — R26
+ * lays them at an apex to be felt by a car cutting it, so a block inside
+ * the mat is the design and not a defect. */
+function roadFurniture(track: Track): Furniture[] {
+  const out: Furniture[] = [];
+  for (const spur of track.spurs) {
+    const block = spur.block;
+    if (!block) continue;
+    const rx = Math.cos(block.heading) * (block.width / 2);
+    const rz = -Math.sin(block.heading) * (block.width / 2);
+    out.push({
+      kind: `${block.kind} barrier`,
+      ax: block.x - rx,
+      az: block.z - rz,
+      bx: block.x + rx,
+      bz: block.z + rz,
+      radius: ANALYSIS.rollers.blockDepth,
+    });
+  }
+  const kerbs = createKerbField(track);
+  for (const marker of markersBetween(kerbs, 0, Infinity)) {
+    if (marker.kind !== "post") continue;
+    out.push({
+      kind: "marker post",
+      ax: marker.x,
+      az: marker.z,
+      bx: marker.x,
+      bz: marker.z,
+      radius: KERB_MARKER.post.width / 2,
+    });
+  }
+  return out;
+}
+
+/** The nearest point of a piece of furniture to a probe, and how far off it
+ * is. */
+function nearestOn(thing: Furniture, x: number, z: number): { x: number; z: number; d: number } {
+  const dx = thing.bx - thing.ax;
+  const dz = thing.bz - thing.az;
+  const len2 = dx * dx + dz * dz;
+  const t =
+    len2 > 0 ? Math.max(0, Math.min(1, ((x - thing.ax) * dx + (z - thing.az) * dz) / len2)) : 0;
+  const px = thing.ax + dx * t;
+  const pz = thing.az + dz * t;
+  return { x: px, z: pz, d: Math.hypot(px - x, pz - z) };
+}
 
 /** One ball's contact at one stride. */
 type Contact = {
@@ -234,38 +300,68 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
     }
   }
 
-  // ── What the rank HITS. On the mat nothing solid may stand at all; a
-  // parapet is the one wall on a stage that is there on purpose (R13), so
-  // it is not counted against the road it edges.
+  // ── What the rank HITS. On the mat nothing stands at all — SOLID OR NOT.
+  //
+  // The "or not" is the half that was missing, and it cost a third of every
+  // stage's junctions. A thing the car passes through still tells the
+  // driver something, and a barrier laid across the road the stage takes
+  // says the exact opposite of what it was put there to say. So the
+  // population is everything that stands ON a stage rather than everything
+  // the contact model knows about: the wild's solids and trunks, the
+  // barriers shutting the abandoned branches (R17), and the marker posts
+  // down the verge (R26).
+  //
+  // Two exemptions, both deliberate furniture rather than accidents: a
+  // parapet is the one wall on a stage that is there on purpose (R13), and
+  // an anti-cut block is laid at an apex precisely to be felt by a car
+  // cutting it (R26) — flagging either would be the analyzer reporting the
+  // design.
   let blocked = 0;
   let checkedMat = 0;
   let worstBlock = 0;
+  const standing = roadFurniture(track);
   for (let k = 0; k < lanes.length; k++) {
     if (!onRibbon(lanes[k], half)) continue;
     const inMat = Math.abs(lanes[k]) <= half;
     if (!inMat) continue;
     for (const contact of rank[k]) {
       checkedMat++;
-      const solids = [
+      const hits: { kind: string; x: number; z: number; gap: number }[] = [];
+      for (const solid of [
         ...terrain.obstaclesNear(contact.x, contact.z, ANALYSIS.rollers.radius),
         ...terrain.treesNear(contact.x, contact.z, ANALYSIS.rollers.radius),
-      ];
-      for (const solid of solids) {
-        const gap =
-          Math.hypot(solid.x - contact.x, solid.z - contact.z) -
-          solid.radius -
-          ANALYSIS.rollers.radius;
-        if (gap >= 0) continue;
+      ]) {
+        hits.push({
+          kind: solid.kind,
+          x: solid.x,
+          z: solid.z,
+          gap:
+            Math.hypot(solid.x - contact.x, solid.z - contact.z) -
+            solid.radius -
+            ANALYSIS.rollers.radius,
+        });
+      }
+      for (const thing of standing) {
+        const near = nearestOn(thing, contact.x, contact.z);
+        hits.push({
+          kind: thing.kind,
+          x: near.x,
+          z: near.z,
+          gap: near.d - thing.radius - ANALYSIS.rollers.radius,
+        });
+      }
+      for (const hit of hits) {
+        if (hit.gap >= 0) continue;
         blocked++;
-        if (-gap > worstBlock) {
-          worstBlock = -gap;
+        if (-hit.gap > worstBlock) {
+          worstBlock = -hit.gap;
           findings.push({
             code: "rollers.clear",
             severity: "error",
-            message: `a ${solid.kind} stands ${(-gap).toFixed(2)} m into the road`,
-            at: { x: solid.x, z: solid.z },
+            message: `a ${hit.kind} stands ${(-hit.gap).toFixed(2)} m into the road`,
+            at: { x: hit.x, z: hit.z },
             s: contact.s,
-            value: -gap,
+            value: -hit.gap,
           });
         }
       }
@@ -295,6 +391,62 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
           at: { x: contact.x, z: contact.z },
           s: contact.s,
           value: depth,
+        });
+      }
+    }
+  }
+
+  // ── THE ROAD'S EDGE. R16 — a gravel road does not END, it RUNS OUT, and
+  // the one thing it may never do is stop at a wall.
+  //
+  // This is its own check rather than a corner of the cross-section one
+  // because it is its own property, and because it is the property with a
+  // photograph attached: every screenshot of the road taken from beside it
+  // showed a dark vertical face running the length of the stage, and the
+  // instrument that should have found it was scoring the whole verge
+  // together and reporting a warning nobody could act on.
+  //
+  // What is measured is the GRADE the ground takes across the corridor's
+  // outer band — from the bare shoulder to the lip where the ribbon and the
+  // ground lattice meet — on both sides of every sample. A road's edge falls
+  // away; that is what an edge is. What it may not do is fall away faster
+  // than a car could drive back up it, which is exactly the bar R31 already
+  // sets for the ground rising beside a road (`verge.climb`), read the other
+  // way round. Signed, and the sign is kept in the message: a road standing
+  // on a wall and a road cut into one look nothing alike and are two
+  // different things to go and fix.
+  let edgesChecked = 0;
+  let edgeFaces = 0;
+  let worstEdge = 0;
+  {
+    const band = ROAD_CROSS.reach - ROAD_CROSS.verge.bareTo;
+    for (let i = 0; i < track.samples.length; i += stride) {
+      if (skip[i]) continue;
+      const sample = track.samples[i];
+      // A deck has no edge to run out at: it is a road over a ravine, and
+      // the drop off the side of it is a parapet's problem (R13).
+      if (sample.deck != null) continue;
+      const rx = Math.cos(sample.heading);
+      const rz = -Math.sin(sample.heading);
+      const hereHalf = sample.width / 2;
+      for (const side of [-1, 1]) {
+        edgesChecked++;
+        const hem = (hereHalf + ROAD_CROSS.verge.bareTo) * side;
+        const lip = (hereHalf + ROAD_CROSS.reach) * side;
+        const inner = terrain.groundAt(sample.x + rx * hem, sample.z + rz * hem);
+        const outer = terrain.groundAt(sample.x + rx * lip, sample.z + rz * lip);
+        const grade = (inner - outer) / band;
+        if (Math.abs(grade) <= ANALYSIS.rollers.edge.grade) continue;
+        edgeFaces++;
+        if (Math.abs(grade) <= Math.abs(worstEdge)) continue;
+        worstEdge = grade;
+        findings.push({
+          code: "rollers.edge",
+          severity: Math.abs(grade) >= ANALYSIS.rollers.edge.fail ? "error" : "warn",
+          message: `the road's edge ${grade > 0 ? "drops away from" : "is walled in beside"} the mat at ${Math.abs(grade).toFixed(2)} m/m over its outer band`,
+          at: { x: sample.x + rx * lip, z: sample.z + rz * lip },
+          s: sample.s,
+          value: Math.abs(grade),
         });
       }
     }
@@ -484,10 +636,18 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
     },
     {
       id: "clear",
-      label: "nothing solid standing in the road",
+      label: "nothing standing in the road the stage takes, solid or not",
       score: rate(blocked, Math.max(1, checkedMat)),
       weight: 2,
       value: worstBlock,
+    },
+    {
+      id: "edge",
+      label: "the road's edge runs out into the ground rather than stopping at a wall",
+      score: rate(edgeFaces, Math.max(1, edgesChecked), ANALYSIS.rollers.tolerated),
+      weight: 1.5,
+      value: Math.abs(worstEdge),
+      budget: ANALYSIS.rollers.edge.grade,
     },
     {
       // R33 — a BAND, not a ceiling. A gravel road with NO bumps is a
@@ -540,6 +700,8 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
       walls,
       blocked,
       drowned,
+      edgeFaces,
+      worstEdge,
       worstGrade,
       worstCross,
       bumpsPerKm: perKm,

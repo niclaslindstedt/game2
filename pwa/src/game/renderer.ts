@@ -15,6 +15,7 @@ import {
   EFFECTS_SCALE,
   INTERIOR_DETAIL,
   FLORA_SCALE,
+  GROUND_SCALE,
   RESOLUTION_SCALE,
   type VideoSettings,
   type ViewSettings,
@@ -349,7 +350,12 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       scene.remove(world.group);
       world.dispose();
       builtSeason = state.env.season;
-      world = buildWorld(state.track, FLORA_SCALE[quality.flora], builtSeason);
+      world = buildWorld(
+        state.track,
+        FLORA_SCALE[quality.flora],
+        builtSeason,
+        GROUND_SCALE[quality.ground],
+      );
       scene.add(world.group);
       applyIsland();
     }
@@ -467,7 +473,12 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     }
     game = state;
     builtSeason = state.env.season;
-    world = buildWorld(state.track, FLORA_SCALE[quality.flora], builtSeason);
+    world = buildWorld(
+      state.track,
+      FLORA_SCALE[quality.flora],
+      builtSeason,
+      GROUND_SCALE[quality.ground],
+    );
     scene.add(world.group);
     route = buildMapRoute(state.track);
     route.group.visible = mapView;

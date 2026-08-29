@@ -23,7 +23,7 @@ import { cellKey } from "../lib/math.ts";
 import { hash2 } from "../lib/noise.ts";
 import { createLandField } from "./land.ts";
 import { junctionFlat, junctionPlatformY, ROAD_CROSS } from "./road.ts";
-import { buildSpur, SPUR, type Spur } from "./spurs.ts";
+import { buildSpur, placeBlock, SPUR, type Spur } from "./spurs.ts";
 
 export type Surface = "gravel" | "asphalt" | "water";
 
@@ -975,6 +975,23 @@ function createCompiler(
         sample.elevation =
           sample.elevation * (1 - flat) + junctionPlatformY(platform, sample.x, sample.z) * flat;
       }
+    }
+    // R17 — and then the barrier that shuts each branch, standing where the
+    // whole line of it is clear of the ROUTE. Last, because it reads the
+    // platform warp above (a barrier on the junction's own plane is a
+    // barrier inside the crossing) and because it is measured against the
+    // route WITHOUT the junction exemption: the branch is allowed to leave
+    // along the road it is leaving, and a driver on that road is not
+    // allowed to meet a stack of tyres doing it.
+    // Measured against the WHOLE route — an empty ignore window rather than
+    // the junction's — because the branch is allowed to leave along the road
+    // it is leaving and a driver on that road is not allowed to meet a stack
+    // of tyres doing it. Only this call's branches: an endless stream
+    // re-walks the list every append, and a block that moves under a chunk
+    // the renderer has already drawn is a barrier in two places.
+    const wholeRoute = roadDistance(0, 0);
+    for (const spur of standing) {
+      spur.block = placeBlock(spur, wholeRoute, track.width / 2, track.seed);
     }
   };
 

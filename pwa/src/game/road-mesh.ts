@@ -16,6 +16,7 @@ import * as THREE from "three";
 import {
   ROAD_CROSS,
   corridorOffset,
+  handoverAt,
   hash2,
   junctionDust,
   junctionFlat,
@@ -24,6 +25,11 @@ import {
   wearAt,
   type Track,
 } from "@engine";
+
+import { valueNoise } from "../lib/noise.ts";
+// The dissolve field is the SPILL's — one field, so the paint's boundary and
+// the scattered stones agree instead of reading as two effects.
+import { DISSOLVE } from "./road-spill.ts";
 
 import { APRON } from "./terrain.ts";
 import { gravelTexture } from "./textures.ts";
@@ -71,14 +77,23 @@ function matStations(width: number): number[] {
   return [...new Set(out.filter((v) => v >= 0 && v <= half))].sort((a, b) => a - b);
 }
 /** ...and past the edge, in meters out from it: the mat's chamfer, the
- * bare shoulder, and the grassed slope tipping away to where the landscape
- * takes over (R16 — no ditch). */
-const VERGE_STATIONS = [
-  ROAD_CROSS.chamfer,
-  ROAD_CROSS.verge.bareTo,
-  ROAD_CROSS.verge.bareTo + (ROAD_CROSS.reach - ROAD_CROSS.verge.bareTo) * 0.45,
-  ROAD_CROSS.reach,
-];
+ * bare shoulder, and then the HAND-OVER band, cut into enough steps to
+ * dissolve in (R16 — no ditch, and no edge either: the road runs out).
+ *
+ * The band gets its own stations rather than the two it used to have,
+ * because what happens across it is no longer a straight lerp between two
+ * colours: it is the road's height leaning onto the ground lattice and the
+ * road's paint dissolving into the ground's, both driven by a noise field.
+ * A dissolve resolved at two vertices is a ruled line with a wobble on it. */
+const DISSOLVE_BANDS = 5;
+const VERGE_STATIONS = ((): number[] => {
+  const from: number = ROAD_CROSS.verge.bareTo;
+  const out: number[] = [ROAD_CROSS.chamfer, from];
+  for (let k = 1; k <= DISSOLVE_BANDS; k++) {
+    out.push(from + ((ROAD_CROSS.reach - from) * k) / DISSOLVE_BANDS);
+  }
+  return [...new Set(out)].sort((a, b) => a - b);
+})();
 
 /** R17 — inside a junction, neither road wears a border: no shoulder, no
  * edge line, no camber. The ribbon builders drop those stations here, and
@@ -210,17 +225,41 @@ export function chunkSamples(track: Track, from: number, to: number): Track["sam
   return base;
 }
 
+/** What the road's outer band hands over TO: the ground beside it, as the
+ * renderer can ask about it — the height of the drawn tile lattice and the
+ * colour the tiles carry there (terrain.ts). Optional on `buildRoad` only
+ * because the previews build a ribbon with no landscape under it. */
+export type GroundBeside = {
+  heightAt: (x: number, z: number) => number;
+  paintAt: (x: number, z: number, out: THREE.Color) => void;
+};
+
 /** The road, across its whole width and a little past it: the mat with its
  * camber and its two worn wheel tracks, the chamfered edge, the shoulder,
- * the ditch, and the lip where the landscape takes over (R16). The SHAPE
- * comes from the engine (road.ts) — the same profile the physics rides and
- * the terrain field hangs its shelf off — so what the car climbs out of is
- * exactly what the player sees it climb out of.
+ * and the band over which the whole thing runs out into the country (R16).
+ * The SHAPE comes from the engine (road.ts) — the same profile the physics
+ * rides and the terrain field hangs its shelf off — so what the car climbs
+ * out of is exactly what the player sees it climb out of.
  *
  * The paint is this module's: gravel worn to hardpack down the tracks and
  * loose at the edges, asphalt burnished where the tires polish it, a
- * shoulder of spilled dirt, and a ditch that greens over. */
-export function buildRoad(track: Track, samples: Ribbon[], width: number, bias = 0.02): THREE.Mesh {
+ * shoulder of spilled dirt, and past that the ground's own colour, dissolved
+ * into rather than met at a line.
+ *
+ * `ground` is the landscape beside the road. With it, R16's hand-over
+ * applies: over the outer band the ribbon's height leans onto the ground
+ * lattice and its paint dissolves into the ground's own, so the two meshes
+ * meet at a shared height and a shared colour instead of the road stopping
+ * in the air at a ruled green line. Without it — the stage previews, which
+ * draw a ribbon and no landscape — the band is the old flat verge, which is
+ * all a preview needs. */
+export function buildRoad(
+  track: Track,
+  samples: Ribbon[],
+  width: number,
+  bias = 0.02,
+  ground?: GroundBeside,
+): THREE.Mesh {
   const half = width / 2;
   const lat = stations(width);
   const matOnly = lat.filter((l) => Math.abs(l) <= half);
@@ -239,6 +278,7 @@ export function buildRoad(track: Track, samples: Ribbon[], width: number, bias =
   const gravelDust = new THREE.Color();
   const looseGravel = new THREE.Color(ROAD_PAINT.gravel.loose);
   const wornGravel = new THREE.Color(ROAD_PAINT.gravel.worn);
+  const country = new THREE.Color();
 
   let lastCount = -1;
   let run = 0;
@@ -278,7 +318,18 @@ export function buildRoad(track: Track, samples: Ribbon[], width: number, bias =
       const out = Math.abs(l * wide) - halfHere;
       const px = s.x + r.x * l * wide;
       const pz = s.z + r.z * l * wide;
-      const y = s.elevation + corridorOffset(s, l * wide, here) + bias;
+      // R16 — the HAND-OVER. Past the bare shoulder the ribbon leans onto
+      // the ground lattice beside it and by the corridor's lip the ground
+      // has it entirely, so the two meshes MEET rather than one stopping in
+      // the air over the other. Inside a junction it does not apply: a
+      // junction is one graded plane out to its rim (R17), and the engine
+      // has already warped both carriageways onto it.
+      const handing = ground !== undefined && out > 0 && (s.flat ?? 0) < 0.25;
+      const hand = handing ? handoverAt(out) : 1;
+      let y = s.elevation + corridorOffset(s, l * wide, here) + bias;
+      if (ground !== undefined && hand < 1) {
+        y = y * hand + (ground.heightAt(px, pz) + bias) * (1 - hand);
+      }
       positions.push(px, y, pz);
       // UVs run meters along and across, so the grain is the same size
       // whatever the road does and never stretches through a corner.
@@ -333,15 +384,32 @@ export function buildRoad(track: Track, samples: Ribbon[], width: number, bias =
         // than two halves of a step.
         paint.copy(shoulder).lerp(loose, 0.28 * (1 - out / ROAD_CROSS.verge.bareTo));
       } else {
-        paint
-          .copy(shoulder)
-          .lerp(
-            verge,
-            Math.min(
-              1,
-              (out - ROAD_CROSS.verge.bareTo) / (ROAD_CROSS.reach - ROAD_CROSS.verge.bareTo),
-            ),
-          );
+        // R16 — THE DISSOLVE. Past the bare shoulder the road runs out into
+        // the country, and this is the half of that a player actually sees.
+        //
+        // What it must not be is a lerp between two colours across a band of
+        // fixed width, because that is a line ruled parallel to the
+        // centerline and a ruled line is legible from the far side of a
+        // valley. So the amount of ground at a vertex is the hand-over
+        // pushed either way by a noise field at the size of the stones being
+        // scattered: fingers of gravel reach out into the grass and tongues
+        // of grass come back in, and the boundary stops being one.
+        //
+        // Both ends stay hard. At the shoulder it is all road — the blade
+        // keeps that strip bare — and at the corridor's lip it is all
+        // ground, whatever the noise says, because that is the vertex the
+        // tile mesh is standing next to.
+        const t = 1 - handoverAt(out);
+        if (ground !== undefined) {
+          const g = valueNoise(px, pz, DISSOLVE.patch, DISSOLVE.seed);
+          const mix = clamp01(t * (1 + DISSOLVE.spread) - g * DISSOLVE.spread);
+          ground.paintAt(px, pz, country);
+          paint.copy(shoulder).lerp(country, mix);
+        } else {
+          // No landscape to hand over to (the stage previews): the old flat
+          // verge, which is all a picture of the road's plan needs.
+          paint.copy(shoulder).lerp(verge, t);
+        }
       }
       colors.push(paint.r, paint.g, paint.b);
     }
