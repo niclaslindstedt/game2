@@ -22,7 +22,7 @@ import { createRng } from "../lib/prng.ts";
 import { cellKey } from "../lib/math.ts";
 import { createLandField } from "./land.ts";
 import { junctionFlat, junctionPlatformY, ROAD_CROSS } from "./road.ts";
-import { buildSpur, type Spur } from "./spurs.ts";
+import { buildSpur, SPUR, type Spur } from "./spurs.ts";
 
 export type Surface = "gravel" | "asphalt" | "water";
 
@@ -445,12 +445,10 @@ const ROAD_DISTANCE_REACH = 220;
 
 /** Arc either side of a junction where the route IS the branch's own road,
  * m: inside it the two carriageways are one, so the branch is not measured
- * against them while it is still LEAVING. Wide enough to cover the corner
- * the junction sits on and the run out of it — and it lapses the moment the
- * branch is properly clear of the stage (spurs.ts), because a branch that
- * has wandered a kilometre and folded back has no claim on the road beside
- * its own junction. */
-const SPUR_JUNCTION_WINDOW = 240;
+ * against them while it is still LEAVING. The window itself is R23's, in
+ * the rule book (`STAGE_RULES.junction.spurWindow`), because the analysis
+ * has to exempt exactly the same stretch. */
+const SPUR_JUNCTION_WINDOW = R.junction.spurWindow;
 
 /** The incremental heart: walks plans into samples, bounds, and pacenotes,
  * carrying the cursor (and the open pacenote, so a turn combination split
@@ -810,6 +808,40 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
   const buildForks = (): void => {
     if (junctions.length === 0) return;
     const roadDistance = roadDistanceField();
+    /** R23 — the branches already standing. A branch measures itself against
+     * the stage and (since it wanders) against its own line, but two
+     * branches off two different junctions are two roads like any other
+     * pair, and nothing was asking them to keep apart: they cross in open
+     * country a kilometre from anything, which is a junction nobody built.
+     *
+     * Strided to match the stage's own coarsening, and the slack is taken
+     * off the answer so this can only ever under-report the room a branch
+     * has, never invent some.
+     */
+    const STRIDE = 8;
+    const slack = (STRIDE * SPUR.step) / 2;
+    const standing: Spur[] = [];
+    const clearOfBranches = (x: number, z: number): number => {
+      let best = Infinity;
+      for (const other of standing) {
+        const b = other.bounds;
+        if (
+          x < b.minX - ROAD_DISTANCE_REACH ||
+          x > b.maxX + ROAD_DISTANCE_REACH ||
+          z < b.minZ - ROAD_DISTANCE_REACH ||
+          z > b.maxZ + ROAD_DISTANCE_REACH
+        ) {
+          continue;
+        }
+        for (let i = 0; i < other.samples.length; i += STRIDE) {
+          const dx = other.samples[i].x - x;
+          const dz = other.samples[i].z - z;
+          const d = Math.hypot(dx, dz);
+          if (d < best) best = d;
+        }
+      }
+      return best === Infinity ? Infinity : Math.max(0, best - slack);
+    };
     for (const junction of junctions) {
       const box = track.endless
         ? {
@@ -833,10 +865,18 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
         box,
         land,
         track.width,
-        roadDistance(junction.s - SPUR_JUNCTION_WINDOW, junction.s + SPUR_JUNCTION_WINDOW),
+        (() => {
+          const stage = roadDistance(
+            junction.s - SPUR_JUNCTION_WINDOW,
+            junction.s + SPUR_JUNCTION_WINDOW,
+          );
+          return (x: number, z: number, ignoringJunction?: boolean) =>
+            Math.min(stage(x, z, ignoringJunction), clearOfBranches(x, z));
+        })(),
         shelfHolds,
       );
       track.spurs.push(spur);
+      standing.push(spur);
     }
     junctions.length = 0;
     // R17 — and the first stretch of every branch lies on its junction's

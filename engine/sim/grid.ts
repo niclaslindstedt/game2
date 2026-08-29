@@ -58,18 +58,23 @@ const M = TUNING.massStart;
 /** The smallest grid worth calling a race. */
 export const GRID_MIN = 2;
 
-/** …and the largest one THE APRON WILL HOLD. The grid stands on the run-up
- * behind the start gate, so the last row has to be inside it with its own
- * bodywork to spare — past the apron's end a car is off the stage entirely
+/** How many cars THE APRON WILL HOLD. The grid stands on the run-up behind
+ * the start gate, so the last row has to be inside it with its own bodywork
+ * to spare — past the apron's end a car is off the stage entirely
  * (`pastApron` in game/track.ts), which is not a place to start a race from.
  *
  * It is derived rather than chosen: lengthen the apron in the rule book and
  * the grid grows with it, and no number here has to be re-checked by hand.
- * Never more than the roster can dress. */
-export const GRID_MAX = Math.min(
-  FIELD_SIZE,
-  Math.floor((STAGE_RULES.startZone.apron - TUNING.collision.halfLength) / M.rowGap) + 1,
-);
+ * This is the GENERATOR's half of the ceiling, which is why it is separate
+ * from `GRID_MAX` — the stage analysis measures the apron against the field
+ * a heads-up race wants, and a roster too small to dress that field is a
+ * different problem in a different module. */
+export const APRON_HOLDS =
+  Math.floor((STAGE_RULES.startZone.apron - TUNING.collision.halfLength) / M.rowGap) + 1;
+
+/** …and the largest grid the game will actually stand up: never more than
+ * the apron holds, and never more than the roster can dress. */
+export const GRID_MAX = Math.min(FIELD_SIZE, APRON_HOLDS);
 
 /** The default grid, and on today's apron also the deepest: eight cars, so
  * seven crews and the player. */

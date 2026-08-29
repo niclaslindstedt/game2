@@ -92,19 +92,36 @@ export const TUNING = {
      * the generator builds — and 3.2 m between centres is a body and a half
      * of daylight between overlapping cars. */
     columnOffset: 1.6,
-    /** How far up the road the catch-up runs, m. Long enough that the extra
-     * drive is felt as a launch rather than as a shove, short enough that it
-     * is spent before the first real corner of any stage. */
-    catchUpS: 200,
+    /** How far up the road the catch-up runs, m. It is sized from the
+     * DEEPEST slot the apron can hold: a grid sixteen rows deep stands its
+     * back row 52.5 m down on pole, and the only two ways to hand that back
+     * are more drive or more road. More drive is a shove — the cap below is
+     * there precisely to stop it — so it is more road. `deficit / (catchUpS
+     * × catchUpYield)` has to come out at or under `catchUpMax` for the last
+     * row on the deepest grid, which is what sets this number; lengthen the
+     * apron and it has to grow with it.
+     *
+     * It is spent over R1's opening straight and the fast corner off it
+     * (`STAGE_RULES.launch`), which is why that straight is sized from the
+     * grid as well: the two numbers are one decision. */
+    catchUpS: 320,
     /** What fraction of the ideal `k·s` a real car actually takes back over
-     * that window — the table above, averaged across the roster. Re-measure
-     * it whenever the engine's torque taper or the gearing moves. */
-    catchUpYield: 0.66,
-    /** Ceiling on a slot's extra drive, as a fraction. Nothing the apron can
-     * hold needs it — it is the guard that keeps a deeper grid, should the
-     * apron ever grow, from launching its back row instead of compensating
-     * it. */
-    catchUpMax: 0.25,
+     * that window — measured, not derived, and averaged across the roster.
+     * Re-measure it whenever the engine's torque taper, the gearing, or
+     * `catchUpS` moves: the yield falls as the window lengthens, because a
+     * car that has reached its terminal speed buys almost nothing with extra
+     * drive, and most of a longer window is spent up there.
+     * `tests/mass_start_test.ts` is what measures it — the back row of the
+     * deepest grid, flat out, against pole. */
+    catchUpYield: 0.52,
+    /** Ceiling on a slot's extra drive, as a fraction: the guard that keeps
+     * the compensation from becoming a launch. It has to sit ABOVE what the
+     * deepest grid the apron holds actually asks for — the back row of a
+     * sixteen-car grid is 52.5 m down and wants 0.30 — because a cap that
+     * binds in normal use stops being a guard and silently becomes the
+     * model, and then the back row is short-changed by however much the two
+     * differ. Raise the apron and this has to be re-checked with it. */
+    catchUpMax: 0.34,
   },
 
   /** Speed under which a coasting car counts as STOPPED and is snapped to

@@ -17,6 +17,7 @@ export {
 export { generateStage, createStageStream, type StageStream } from "./generate.ts";
 export { generateCircuit } from "./circuit.ts";
 export { createLandField, type LandField } from "./land.ts";
+export { createGeology, type GeologyField, type GroundSample } from "./geology.ts";
 export {
   ROAD_CROSS,
   corridorOffset,

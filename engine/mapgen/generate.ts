@@ -91,9 +91,11 @@ function tryGenerateStage(
   };
 
   // R1 — opening straight (never carries a feature: it is the start grid).
+  // Long enough for a heads-up field to string out on: `launch.run` from
+  // the gate, and never shorter than the vocabulary's own opening.
   const opening: SegmentPlan = {
     kind: "straight",
-    length: R.openingStraight + rng.range(0, 40),
+    length: Math.max(R.openingStraight, R.launch.run) + rng.range(0, 40),
     feature: "none",
   };
   {
@@ -135,7 +137,16 @@ function tryGenerateStage(
       const prevWasStraight = plans[plans.length - 1].kind === "straight";
       let plan: SegmentPlan;
       if (kind === "turn") {
-        plan = drawTurn(rng, prevWasStraight, forcedDir, sameDirRun);
+        // R1 — the FIRST corner is capped: a grid the depth of the apron is
+        // still stacked when the front row reaches it.
+        const first = plans.length === 1;
+        plan = drawTurn(
+          rng,
+          prevWasStraight,
+          forcedDir,
+          sameDirRun,
+          first ? R.launch.firstTurn : undefined,
+        );
       } else {
         const length = straightLength(rng);
         plan = {

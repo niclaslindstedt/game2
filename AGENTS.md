@@ -13,6 +13,7 @@ make test         # vitest: generator rules, drift/jump physics, bot sims
 make lint         # eslint + typecheck, zero warnings
 make fmt          # prettier in place; fmt-check is what CI runs
 make sim          # headless balance sweep — REQUIRED before/after any handling or generator change
+make analyze      # SCORE generated stages (water, roads, surface, jumps, ends, ground, cost) — REQUIRED before/after any generator change
 make record       # record a bot run to a run tape (runs/*.jsonl)
 make replay       # RUN='runs/<file>.jsonl' — replay a tape and place its time against each field
 make heat         # the whole grid on one road — REQUIRED before/after any bot-traffic or temper change
@@ -50,11 +51,12 @@ Two rules that apply to every task in this repo, before any subject skill has a 
 This project is tuned by measuring, not guessing:
 
 1. **`make sim`** before and after every handling/generator change. The table (pace, drifts, clean exits, air time, respawns) is the regression surface — bots must keep finishing and keep drifting.
-2. **`make track`** to LOOK at what the rules engine builds.
-3. **`make screenshots`** to LOOK at the game itself (grid, speed, drift, every camera on the ladder, the cockpit by day and by night, portrait). In Claude web sessions Chromium is preinstalled — `CHROMIUM_PATH=/opt/pw-browsers/chromium make screenshots`.
-4. **`make items`** to LOOK at one thing on its own — a stone, a fern, the cabin behind the glass. Most of what the world is made of is six pixels at the speed you pass it; this is where it gets rotated and measured. `ITEMS=` picks the rows, `GROUP=` a whole kind, `TURNTABLE=` the seats to walk round.
-5. **`make profile`** before and after every rendering change. Draw calls, triangles and binds are the numbers a real GPU sees; the fps it also prints is software rasterization and means nothing off this machine.
-6. **`make replay RUN=…`** before and after every DIFFICULTY change. A bot lap says what the bot would do; a recorded human drive (developer menu → COLLECT RACE DATA, or `make record`) replayed against easy/medium/hard says what those words are worth to a person — the `bot-improvement` skill owns reading it.
+2. **`make analyze`** before and after every GENERATOR change. It scores a stage against what a stage has to be — water that runs downhill and ends somewhere, roads that go somewhere and do not double up, a surface with no steps in it, jumps that land on the road, a start that holds the field and a finish with road past it, ground whose layers agree — and prints the findings that explain the score. `make track` is the looking half of the loop; this is the measuring half.
+3. **`make track`** to LOOK at what the rules engine builds.
+4. **`make screenshots`** to LOOK at the game itself (grid, speed, drift, every camera on the ladder, the cockpit by day and by night, portrait). In Claude web sessions Chromium is preinstalled — `CHROMIUM_PATH=/opt/pw-browsers/chromium make screenshots`.
+5. **`make items`** to LOOK at one thing on its own — a stone, a fern, the cabin behind the glass. Most of what the world is made of is six pixels at the speed you pass it; this is where it gets rotated and measured. `ITEMS=` picks the rows, `GROUP=` a whole kind, `TURNTABLE=` the seats to walk round.
+6. **`make profile`** before and after every rendering change. Draw calls, triangles and binds are the numbers a real GPU sees; the fps it also prints is software rasterization and means nothing off this machine.
+7. **`make replay RUN=…`** before and after every DIFFICULTY change. A bot lap says what the bot would do; a recorded human drive (developer menu → COLLECT RACE DATA, or `make record`) replayed against easy/medium/hard says what those words are worth to a person — the `bot-improvement` skill owns reading it.
 
 Both harnesses serve `pwa/dist`, so **`make build` first, every time**: a stale
 dist photographs and meters the last change rather than this one, and the
@@ -70,7 +72,7 @@ picture that comes back is wrong in a way that reads as a bug in the code.
 
 Three layers, one direction of dependency (details: [docs/architecture.md](docs/architecture.md)):
 
-- **`engine/`** — the whole game as a framework-free, renderer-free TypeScript module. Fixed 120 Hz `step(state, input)`, deterministic per seed (no `Math.random` at runtime — everything draws from the seeded RNG in state). Contains the car model (`game/`), the stage rules engine (`mapgen/`), the bot driver + headless simulator (`sim/`), the §19.4 output module (`output.ts`), and data-authored content (`game/defs/`).
+- **`engine/`** — the whole game as a framework-free, renderer-free TypeScript module. Fixed 120 Hz `step(state, input)`, deterministic per seed (no `Math.random` at runtime — everything draws from the seeded RNG in state). Contains the car model (`game/`), the stage rules engine (`mapgen/`), the bot driver + headless simulator (`sim/`), the generator's scoreboard (`analysis/` — dev-time only, never imported by the app), the §19.4 output module (`output.ts`), and data-authored content (`game/defs/`).
 - **`pwa/`** — the browser shell: Preact app, three.js renderer (reads `GameState`, never steps physics), input, HUD, the audio surface (a WebAudio synth, the sound bank, the road bed and the tracker scores — nothing is a file), PWA plumbing (hand-rolled service worker via `pwa-plugin.ts` + the framework's `usePwaUpdate` behind the app's own `update-card.tsx`).
 - **`tests/` + `scripts/`** — root-level vitest suites over the engine, and Node tooling (sim CLI, track previews, screenshots, icons, SEO checks, release plumbing).
 
@@ -96,6 +98,8 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | The wipers, and the grime on the glass they clear           | `pwa/src/game/car/wipers.ts` — the `car-design` skill                                                                            |
 | How dirty the car gets, and where                           | `pwa/src/game/car-dirt.ts`                                                                                                       |
 | Stage generation rules or vocabulary                        | `engine/mapgen/rules.ts` (data); the searches in `generate.ts` (sprint, endless) and `circuit.ts` (R22), over `search.ts`        |
+| What the GROUND is made of (bedrock, soil, groundwater)     | `engine/mapgen/geology.ts` (R32); its numbers in `STAGE_RULES.geology` — the `nature` and `mapgen-improvement` skills            |
+| How a generated stage is SCORED, and against what           | `engine/analysis/` — one module per metric, every threshold in `analysis/budgets.ts` — the `mapgen-improvement` skill            |
 | Track geometry/compilation                                  | `engine/mapgen/compile.ts`                                                                                                       |
 | Run orchestration (phases, laps, respawn, events)           | `engine/game/step.ts`                                                                                                            |
 | Collision / damage (crush, parts, wreck, systems)           | `engine/game/collision.ts` — the `collision` skill                                                                               |

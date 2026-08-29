@@ -60,6 +60,7 @@ Open the printed URL. The game opens on the main menu, over a stage a bot is dri
 | `make record`      | Record a bot run to a run tape (`runs/*.jsonl`) — a whole drive as the controls that drove it                              |
 | `make replay`      | `RUN=runs/<file>.jsonl` — replay a tape and place its time against each difficulty's field                                 |
 | `make track`       | Render generated stages: a schematic map AND a shaded view of the place, to `previews/`                                    |
+| `make analyze`     | Score generated stages: road surface, water flow, road network, drivability, jumps, the two ends, ground, and build cost   |
 | `make cars`        | Render the car models to a contact sheet (`previews/cars.png`)                                                             |
 | `make liveries`    | Render one body in the field's paint schemes (`previews/liveries.png`)                                                     |
 | `make field`       | Render the campaign's fourteen rivals in their own cars and colours (`previews/field.png`)                                 |
