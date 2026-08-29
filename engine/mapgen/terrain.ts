@@ -647,7 +647,7 @@ export function createTerrain(track: Track): TerrainField {
     } else {
       const s = samples[near.index];
       const corridorY =
-        ribbonY(s, sideOf(near.lateral) * Math.min(near.d, shelfEnd), track.width) - TILE_SINK;
+        ribbonY(s, sideOf(near.lateral) * Math.min(near.d, shelfEnd), s.width) - TILE_SINK;
       if (near.d < shelfEnd) {
         base = corridorY;
       } else {
@@ -724,7 +724,7 @@ export function createTerrain(track: Track): TerrainField {
     };
     const near = nearestSample(x, z);
     if (near && near.d < shelfEnd + 3)
-      consider(samples[near.index], near.d, sideOf(near.lateral), track.width);
+      consider(samples[near.index], near.d, sideOf(near.lateral), samples[near.index].width);
     const spur = spurs.spurs.length > 0 ? spurs.nearest(x, z) : null;
     if (spur) consider(spur.sample, spur.d, 1, spur.spur.width);
     // The apron wins over both: at a junction the ground IS the junction.

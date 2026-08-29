@@ -214,35 +214,47 @@ describe("the ground's water (R32)", () => {
 });
 
 describe("the road's surface (R33)", () => {
-  it("is not a perfect ribbon", () => {
+  it("puts bumps in the gravel here and there, and not everywhere", () => {
     // The floor of this band is the point of it. A generated road comes out
     // of the compiler as a plane unless something roughens it, and a plane
     // is the loudest tell there is — so the check that would catch that is
     // worth pinning against the road actually shipping.
     for (const seed of SEEDS) {
-      const texture = report(seed)
+      const bumpy = report(seed)
         .metrics.find((m) => m.id === "rollers")
-        ?.checks.find((c) => c.id === "texture");
-      expect(texture?.value, `seed ${seed}`).toBeGreaterThan(ANALYSIS.rollers.texture.min);
-      expect(texture?.value, `seed ${seed}`).toBeLessThan(ANALYSIS.rollers.texture.max);
+        ?.checks.find((c) => c.id === "bumpy");
+      expect(bumpy?.value, `seed ${seed}`).toBeGreaterThan(ANALYSIS.rollers.bumpy.min);
+      expect(bumpy?.value, `seed ${seed}`).toBeLessThan(ANALYSIS.rollers.bumpy.max);
     }
   });
 
-  it("keeps its grain off the bridges, where the deck is laid flat", () => {
-    const track = compileStage(2, "long", { water: 0.9 });
-    const decks = track.samples.filter((s) => s.deck !== null);
-    if (decks.length < 3) return;
-    // A deck is planks or concrete: its profile is whatever the span is,
-    // with no blade marks in it.
-    let worst = 0;
-    for (let i = 1; i + 1 < track.samples.length; i++) {
-      const s0 = track.samples[i - 1];
-      const s1 = track.samples[i];
-      const s2 = track.samples[i + 1];
-      if (s0.deck === null || s1.deck === null || s2.deck === null) continue;
-      worst = Math.max(worst, Math.abs(s0.elevation - 2 * s1.elevation + s2.elevation));
+  it("wanders the gravel's width and holds the tarmac's exactly", () => {
+    // R33 — a blade cuts a road wider on one pass than the next; a paving
+    // machine does not. So the two surfaces make opposite claims, and both
+    // are worth pinning: one that the gravel actually USES its band rather
+    // than sitting near the nominal, and one that the tarmac does not move
+    // at all.
+    const track = compileStage(2, "long", { asphalt: 0.6 });
+    const band = STAGE_RULES.roughness.width.vary;
+    let lo = Infinity;
+    let hi = 0;
+    for (const s of track.samples) {
+      if (s.deck !== null) continue;
+      if (s.surface === "asphalt") {
+        // Laid, not bladed: exactly the nominal, to the millimetre.
+        expect(s.width).toBeCloseTo(track.width, 6);
+        continue;
+      }
+      if (s.surface !== "gravel") continue;
+      lo = Math.min(lo, s.width);
+      hi = Math.max(hi, s.width);
     }
-    expect(worst).toBeLessThan(ANALYSIS.rollers.texture.min);
+    // Inside the authored band...
+    expect(lo).toBeGreaterThanOrEqual(track.width * (1 - band) - 1e-6);
+    expect(hi).toBeLessThanOrEqual(track.width * (1 + band) + 1e-6);
+    // ...and actually using it. A width that never leaves the middle of its
+    // band is a constant width with extra arithmetic.
+    expect(hi - lo).toBeGreaterThan(track.width * band);
   });
 });
 

@@ -20,6 +20,7 @@ import { SAMPLE_STEP, STAGE_RULES as R, knobScale, resolveKnobs } from "./rules.
 import { createStageStream, generateStage } from "./generate.ts";
 import { createRng } from "../lib/prng.ts";
 import { cellKey } from "../lib/math.ts";
+import { hash2 } from "../lib/noise.ts";
 import { createLandField } from "./land.ts";
 import { junctionFlat, junctionPlatformY, ROAD_CROSS } from "./road.ts";
 import { buildSpur, SPUR, type Spur } from "./spurs.ts";
@@ -113,6 +114,17 @@ export type TrackSample = {
   /** R17 — how much this sample is warped flat onto a junction platform,
    * 0 (open road) to 1 (in the junction). */
   flat: number;
+  /** R33 — the road's FULL WIDTH here, m. `track.width` is the nominal the
+   * stage was built at; a gravel road wanders either side of it, because a
+   * blade cuts wider on one pass than the next and the verges creep in
+   * where nothing has run wide for a season. Sealed road, a bridge deck and
+   * a junction platform hold the nominal exactly — all three are laid or
+   * built rather than bladed.
+   *
+   * Everything that asks how wide the road is HERE reads this; `track.width`
+   * remains the right answer to how wide the road IS, which is what the
+   * placement heuristics and the search's clearances want. */
+  width: number;
 };
 
 /** One co-driver call: a turn (or a run of same-direction turns) with its
@@ -354,36 +366,65 @@ function buildRolling(seed: number, knobs: StageKnobs): (s: number) => number {
   };
 }
 
-/** R33 — the road's own GRAIN: how far out of true the surface is at an arc
- * position, m. Rides on top of the rolling profile and is applied to the
- * driven sample only, never to `rolling` itself — the ford dips, the bridge
- * decks and the grade the banking is solved from all read that, and a
- * two-centimetre ripple in the number a slope is differenced from is a
- * grade that flickers rather than a road that is rough.
+/** R33 — the road's BUMPS: how far out of true the surface is at an arc
+ * position, m. Sparse impulses rather than a continuous field, and gravel
+ * only — see `STAGE_RULES.roughness` for why both of those are the point
+ * rather than a simplification.
  *
- * Two grains: a short one the wheel feels as texture, and a longer one felt
- * as the road heaving gently. Their amplitude is itself modulated along the
- * stage, so the road is washboarded in places and freshly bladed in others.
+ * Applied to the driven sample only, never to `rolling` itself: the ford
+ * dips, the bridge decks and the grade the banking is solved from all read
+ * that, and a bump inside the number a slope is differenced from is a grade
+ * that jumps rather than a road that has a bump in it.
+ *
+ * Three cells are summed at every query, not one. A bump lands at a random
+ * offset inside its cell and reaches `halfWidth` either side of that, so it
+ * routinely crosses a cell boundary — evaluating only the cell the query
+ * falls in would cut those bumps in half at the seam, which is a step, which
+ * is the one thing this must not produce.
  */
-function buildGrain(seed: number): (s: number, surface: Surface, deck: boolean) => number {
-  const rng = createRng((seed ^ 0x51ed270b) >>> 0);
-  const G = R.roughness;
-  const short = Array.from({ length: NOISE_LATTICE }, () => rng.range(-1, 1));
+/** R33 — how wide the gravel is at an arc position, as a multiple of the
+ * nominal. Two slow waves so the road does not breathe on one period, and
+ * nothing short: a width that changes inside a car's length is a ragged
+ * edge, not a road that opens out. */
+function buildWidth(seed: number): (s: number, surface: Surface, shaped: boolean) => number {
+  const rng = createRng((seed ^ 0x2f1e8c3d) >>> 0);
+  const W = R.roughness.width;
   const long = Array.from({ length: NOISE_LATTICE }, () => rng.range(-1, 1));
-  const patch = Array.from({ length: NOISE_LATTICE }, () => rng.range(0, 1));
-  const shortOff = rng.range(0, 1e4);
+  const short = Array.from({ length: NOISE_LATTICE }, () => rng.range(-1, 1));
   const longOff = rng.range(0, 1e4);
-  const patchOff = rng.range(0, 1e4);
-  return (s: number, surface: Surface, deck: boolean): number => {
-    // A deck is planks or concrete laid flat, and water is water.
-    if (deck || surface === "water") return 0;
-    const base = surface === "asphalt" ? G.amplitude.asphalt : G.amplitude.gravel;
-    const how = G.patch.min + (1 - G.patch.min) * valueNoise(patch, s + patchOff, G.patch.scale);
-    const amp = base * how;
-    return (
-      amp * (1 - G.longShare) * valueNoise(short, s + shortOff, G.wave.short) +
-      amp * G.longShare * valueNoise(long, s + longOff, G.wave.long)
-    );
+  const shortOff = rng.range(0, 1e4);
+  return (s: number, surface: Surface, shaped: boolean): number => {
+    // Laid, not bladed: a paving machine and a bridge deck hold their width.
+    if (shaped || surface !== "gravel") return 1;
+    const swing =
+      (1 - W.shortShare) * valueNoise(long, s + longOff, W.wave.long) +
+      W.shortShare * valueNoise(short, s + shortOff, W.wave.short);
+    return 1 + W.vary * swing;
+  };
+}
+
+function buildBumps(seed: number): (s: number, surface: Surface, shaped: boolean) => number {
+  const B = R.roughness;
+  const salt = (seed ^ 0x51ed270b) >>> 0;
+  return (s: number, surface: Surface, shaped: boolean): number => {
+    // Tarmac is laid flat, a deck is planks or concrete, and a ford's water
+    // and its graded apron are shaped by the crossing (R12).
+    if (shaped || surface !== "gravel") return 0;
+    const cell = Math.floor(s / B.cell);
+    let y = 0;
+    for (let c = cell - 1; c <= cell + 1; c++) {
+      if (hash2(c, 0, salt) > B.chance) continue;
+      const at = (c + hash2(c, 1, salt)) * B.cell;
+      const halfWidth = B.halfWidth.min + (B.halfWidth.max - B.halfWidth.min) * hash2(c, 2, salt);
+      const d = (s - at) / halfWidth;
+      if (d <= -1 || d >= 1) continue;
+      const height = B.height.min + (B.height.max - B.height.min) * hash2(c, 3, salt);
+      // A raised cosine: it meets the road at zero height AND zero slope at
+      // both ends, so a bump joins the surface instead of stepping onto it.
+      const shape = Math.cos((d * Math.PI) / 2) ** 2;
+      y += (hash2(c, 4, salt) < 0.5 ? -height : height) * shape;
+    }
+    return y;
   };
 }
 
@@ -490,7 +531,8 @@ function createCompiler(
   track: Track,
   rolling: (s: number) => number,
   paving: Paving,
-  grain: (s: number, surface: Surface, deck: boolean) => number,
+  bumps: (s: number, surface: Surface, shaped: boolean) => number,
+  widthAt: (s: number, surface: Surface, shaped: boolean) => number,
 ): Compiler {
   const cursor: Cursor = { x: 0, z: 0, heading: 0, s: 0, rollS: 0 };
   /** The bare country the stage is laid across — the branches steer by it
@@ -1158,12 +1200,12 @@ function createCompiler(
             // R33 — the grain, last: a ford's flat water and a bridge's deck
             // get none (the builder returns 0 for both), so the only thing
             // it ever roughens is road.
-            // R33 — and the grain keeps off anything a CROSSING shaped. Not
+            // R33 — and the bumps keep off anything a CROSSING shaped. Not
             // just the water and the deck: the ford's APRON is graded down
             // to flat water over tens of metres (R12), and a road that dips
             // a few centimetres below the water it is easing into is water
             // standing on a rise.
-            grain(
+            bumps(
               cursor.s,
               ford ? "water" : paved ? "asphalt" : "gravel",
               bridge || dip !== null || deckY !== null,
@@ -1176,6 +1218,13 @@ function createCompiler(
           curvature,
           bank: 0,
           flat: 0,
+          width:
+            track.width *
+            widthAt(
+              cursor.s,
+              ford ? "water" : paved ? "asphalt" : "gravel",
+              bridge || dip !== null || deckY !== null,
+            ),
         };
         sample.bank = bankRate(curvature, sample);
         track.samples.push(sample);
@@ -1264,15 +1313,18 @@ export function compileStage(
   const dials = resolveKnobs(knobs);
   const rolling = buildRolling(seed, dials);
   const paving = buildPaving(seed, dials.asphalt);
-  const grain = buildGrain(seed);
+  const bumps = buildBumps(seed);
+  const widthAt = buildWidth(seed);
   if (length !== "endless") {
     const circuit = shape === "circuit";
     const track = emptyTrack(seed, false, dials, circuit);
-    createCompiler(track, rolling, paving, grain).append(generateStage(seed, length, dials, shape));
+    createCompiler(track, rolling, paving, bumps, widthAt).append(
+      generateStage(seed, length, dials, shape),
+    );
     return track;
   }
   const track = emptyTrack(seed, true, dials);
-  const compiler = createCompiler(track, rolling, paving, grain);
+  const compiler = createCompiler(track, rolling, paving, bumps, widthAt);
   const stream = createStageStream(seed, dials);
   track.extend = (upToS: number): boolean => {
     if (track.length >= upToS) return false;
@@ -1297,13 +1349,15 @@ export function compileTrack(
   if (segments === undefined) return compileStage(seed, "medium", knobs);
   const dials = resolveKnobs({ asphalt: 0, ...knobs });
   const track = emptyTrack(seed, false, dials);
-  // A synthetic rig is a measuring device: flat, smooth and repeatable, so
-  // a physics test measures the car rather than the road under it.
+  // A synthetic rig is a measuring device: flat, smooth, straight-edged and
+  // repeatable, so a physics test measures the car rather than the road
+  // under it.
   createCompiler(
     track,
     () => 0,
     buildPaving(seed, dials.asphalt),
     () => 0,
+    () => 1,
   ).append(segments);
   return track;
 }

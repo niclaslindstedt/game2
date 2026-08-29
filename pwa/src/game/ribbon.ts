@@ -17,6 +17,10 @@ export type Ribbon = RoadShape & {
   heading: number;
   elevation: number;
   s: number;
+  /** R33 — the road's full width HERE, m, where it differs from the width
+   * the ribbon was asked to draw. Optional: an abandoned branch (R17) has
+   * no per-sample width of its own and simply holds the nominal. */
+  width?: number;
 };
 
 /** The unit vector to the RIGHT of a heading, in world space. Heading 0

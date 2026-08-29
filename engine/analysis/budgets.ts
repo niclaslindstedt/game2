@@ -74,32 +74,29 @@ export const ANALYSIS = {
      * measurement, not the road. */
     tolerated: 0.001,
 
-    /** R33 — HOW ROUGH THE ROAD IS, as a band rather than a ceiling.
+    /** R33 — HOW OFTEN THE GRAVEL HAS A BUMP IN IT, as a band.
      *
-     * This is the one measurement in the whole module where BOTH ends are
+     * This is the one measurement in the module where BOTH ends are
      * defects, and it is worth being explicit about why. Every other check
-     * here is looking for damage: less is always better, and zero is
-     * perfect. Roughness is not damage. A road that measures zero is a
-     * ribbon nobody built, drove on or graded — it is the single loudest
-     * tell that a landscape was generated, and it is exactly what a
-     * generator produces if nobody asks it not to. So the check penalises a
-     * road for being too SMOOTH as hard as for being too rough.
+     * here looks for damage: less is better and zero is perfect. Bumps are
+     * not damage. A gravel road that measures zero is a ribbon nobody
+     * bladed, drove on or froze — the loudest tell there is, and exactly
+     * what a generator produces if nobody asks it not to. So too SMOOTH
+     * costs as much as too rough.
      *
-     * Measured as the RMS SECOND DIFFERENCE along the mat lanes, m — the
-     * same quantity `bump` reads, scored as a level rather than as outliers.
-     * A second difference is a high-pass filter: it cancels any constant
-     * slope and any constant curvature, so hills, ford ramps, crests and
-     * banked corners all vanish from it and what is left is the surface
-     * grain. A perfectly smooth generated ribbon measures around 0.004 —
-     * which is the analytic field's own noise and nothing else — and that
-     * is the number the floor is set above.
+     * Counted in bumps per kilometre OF GRAVEL, not per kilometre of stage:
+     * a mostly-sealed stage has less gravel to put them on and would
+     * otherwise read as under-bumped for having tarmac on it.
      *
-     * The floor matters more than the ceiling here, and it is the reason
-     * the check exists. */
-    texture: { min: 0.012, max: 0.075 },
-    /** How far the RMS may sit outside that band before the check has lost
-     * everything, m. */
-    textureSlack: 0.05,
+     * A count and not an average, because the thing being measured is
+     * sparse. A road with one heave in it and a road with a continuous
+     * ripple of the same energy average identically and are nothing alike. */
+    bumpy: { min: 12, max: 45 },
+    bumpySlack: 22,
+    /** The second difference, m, over which a sample counts as being in a
+     * bump. Above the analytic profile's own curvature and well under the
+     * smallest authored bump, so it separates the two cleanly. */
+    bumpFloor: 0.004,
 
     /** R21 — HOW WIDE THE ROAD IS. A band, because both ends are wrong: at
      * the bottom of the `width` dial the road is a lane with no room to

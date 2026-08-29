@@ -305,35 +305,108 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
   // unvarying width are not clean results, they are the tells that nobody
   // built this. See `ANALYSIS.rollers.texture`.
   //
-  // R33 — TEXTURE, measured on the track's own samples rather than on the
-  // rank. Two reasons, and the first one is a trap worth writing down: the
-  // rank strides every `stride` samples, which at the default is 4 m, and
-  // the road's grain has an 8 m wave — exactly Nyquist, so the grain
-  // ALIASES AWAY and the measurement comes back identical whether the road
-  // has any texture or none. Anything measuring a surface has to sample it
-  // at the surface's own resolution.
+  // ── R33 — THE BUMPS, and the tarmac's lack of them.
   //
-  // The second reason is that it is free here. Along a lane the ribbon is
-  // the sample elevation plus a cross-section offset that does not change
-  // with arc position, and a second difference along the lane cancels that
-  // offset outright — so the elevation profile IS the texture profile, and
-  // no ground probes are needed at all.
+  // Two different questions, because the two surfaces are built differently.
+  // Gravel is bladed and then worn, so it should have defects HERE AND
+  // THERE: what is measured is how OFTEN, not how much on average — an
+  // average is exactly the wrong statistic for something sparse, because a
+  // road with one pothole and a road with a continuous ripple of the same
+  // energy average the same and are nothing alike. Tarmac is laid, so what
+  // is measured there is simply whether anything is on it at all.
   //
-  // A second difference is a high-pass filter: it cancels any constant
-  // slope and any constant curvature, so hills, ford ramps, crests and
-  // banked corners all vanish from it and what is left is the grain.
-  let textureSum = 0;
-  let textureN = 0;
+  // Measured on the samples rather than on the rank: the rank strides every
+  // `stride` samples, which at the default is 4 m, and a bump is 3–8 m long
+  // — coarse enough to skip one entirely or to clip its shoulder and call
+  // it a step. Anything measuring a surface has to sample it at the
+  // surface's own resolution. Along a lane the ribbon is the sample
+  // elevation plus a cross-section offset that does not vary with arc
+  // position, and a second difference cancels that offset outright, so the
+  // elevation profile IS the surface profile and no probes are needed.
+  //
+  // A second difference is also a high-pass filter: it cancels any constant
+  // slope and any constant curvature, so hills, ramps, crests and banked
+  // corners all vanish and what is left is the surface.
+  const T = ANALYSIS.rollers;
+  let gravelRun = 0;
+  let bumpCount = 0;
+  let inBump = false;
+  let worstBump2 = 0;
+  const gravelD2: number[] = [];
+  const sealedD2: number[] = [];
   for (let i = 1; i + 1 < track.samples.length; i++) {
-    if (skip[i] || track.samples[i].deck !== null) continue;
-    const d2 =
-      track.samples[i - 1].elevation -
-      2 * track.samples[i].elevation +
-      track.samples[i + 1].elevation;
-    textureSum += d2 * d2;
-    textureN++;
+    const here = track.samples[i];
+    if (skip[i] || here.deck !== null || here.surface === "water") {
+      inBump = false;
+      continue;
+    }
+    const d2 = Math.abs(
+      track.samples[i - 1].elevation - 2 * here.elevation + track.samples[i + 1].elevation,
+    );
+    const run = Math.abs(track.samples[i + 1].s - track.samples[i - 1].s) / 2;
+    if (here.surface === "asphalt") {
+      sealedD2.push(d2);
+      inBump = false;
+      continue;
+    }
+    gravelRun += run;
+    gravelD2.push(d2);
+    if (d2 > worstBump2) worstBump2 = d2;
+    // One BUMP is one run of samples over the threshold, not one sample:
+    // a bump is several metres long and spans several of them.
+    if (d2 > T.bumpFloor) {
+      if (!inBump) bumpCount++;
+      inBump = true;
+    } else {
+      inBump = false;
+    }
   }
-  const texture = textureN > 0 ? Math.sqrt(textureSum / textureN) : 0;
+  const perKm = gravelRun > 0 ? bumpCount / (gravelRun / 1000) : 0;
+
+  /** The MEDIAN, not the worst. Both surfaces carry the rolling profile's
+   * own curvature — the hills the road is laid over — and a single crest
+   * dominates a maximum, so a worst-case comparison measures the terrain
+   * rather than the surface. The median is what the road is USUALLY doing,
+   * and the bumps only move the gravel's. */
+  const median = (xs: number[]): number => {
+    if (xs.length === 0) return 0;
+    const sorted = [...xs].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
+  };
+  const gravelTypical = median(gravelD2);
+  const sealedTypical = median(sealedD2);
+  // Reported, NOT scored. The obvious check here — "the sealed road is
+  // smoother than the gravel" — cannot be measured this way: both surfaces
+  // sit on the same rolling hills, and which of them happens to have been
+  // laid over the hillier ground is a property of the seed rather than of
+  // either surface. On one seed in three the tarmac comes out the rougher
+  // of the two for exactly that reason, and a check that fires on a third
+  // of all stages for something neither surface did wrong is worse than no
+  // check at all.
+  //
+  // The claim it was reaching for — that R33 adds nothing to sealed road or
+  // to a bridge deck — is true BY CONSTRUCTION and pinned where a
+  // by-construction claim belongs: `tests/analysis_test.ts` asserts that
+  // nothing the size of an authored bump appears on either.
+  const sealedRatio = gravelTypical > 0 ? sealedTypical / gravelTypical : 0;
+
+  if (gravelRun > 0 && perKm < T.bumpy.min) {
+    findings.push({
+      code: "rollers.bumpy",
+      severity: "warn",
+      message: `${perKm.toFixed(
+        1,
+      )} bumps per km of gravel — a bladed road that has never been driven on`,
+      value: T.bumpy.min - perKm,
+    });
+  } else if (perKm > T.bumpy.max) {
+    findings.push({
+      code: "rollers.bumpy",
+      severity: "warn",
+      message: `${perKm.toFixed(1)} bumps per km of gravel — that is a washboard, not a road`,
+      value: perKm - T.bumpy.max,
+    });
+  }
 
   // The RIDEABLE corridor: at each stride, how far either side of the
   // centre the rank keeps finding ground a car could be on. A lane stops
@@ -372,23 +445,6 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
         )
       : 0;
 
-  if (texture < ANALYSIS.rollers.texture.min) {
-    findings.push({
-      code: "rollers.texture",
-      severity: "warn",
-      message: `the road is ${(texture * 1000).toFixed(
-        0,
-      )} mm out of true — that is a ribbon nobody graded, drove on or froze`,
-      value: ANALYSIS.rollers.texture.min - texture,
-    });
-  } else if (texture > ANALYSIS.rollers.texture.max) {
-    findings.push({
-      code: "rollers.texture",
-      severity: "warn",
-      message: `the road is ${(texture * 1000).toFixed(0)} mm out of true — a washboard, not a surface`,
-      value: texture - ANALYSIS.rollers.texture.max,
-    });
-  }
   if (spread < ANALYSIS.rollers.varies.min) {
     findings.push({
       code: "rollers.varies",
@@ -434,13 +490,13 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
       value: worstBlock,
     },
     {
-      // R33 — a BAND, not a ceiling. A road that scores zero here is a
-      // perfect ribbon, and perfect is a defect.
-      id: "texture",
-      label: "the road is a little out of true, and not a washboard",
-      score: within(texture, ANALYSIS.rollers.texture, ANALYSIS.rollers.textureSlack),
+      // R33 — a BAND, not a ceiling. A gravel road with NO bumps is a
+      // ribbon nobody drove on, and perfect is a defect.
+      id: "bumpy",
+      label: "the gravel has bumps here and there, and is not a washboard",
+      score: gravelRun > 0 ? within(perKm, T.bumpy, T.bumpySlack) : 1,
       weight: 1.5,
-      value: texture,
+      value: perKm,
     },
     {
       // R21 — the road's own width, banded at both ends: a lane with no
@@ -486,7 +542,12 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
       drowned,
       worstGrade,
       worstCross,
-      texture,
+      bumpsPerKm: perKm,
+      worstBump: worstBump2,
+      sealedRatio,
+      gravelTypical,
+      sealedTypical,
+      gravelRun,
       corridor,
       corridorVaries: spread,
     },

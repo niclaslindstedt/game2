@@ -534,50 +534,57 @@ export const STAGE_RULES = {
     },
   },
 
-  /** R33 — the road is NOT SMOOTH. A generated ribbon comes out perfect,
-   * and perfect is the loudest tell there is: a real road has been graded,
-   * driven over, frozen, thawed and graded again, and none of that leaves a
-   * plane. So a fine grain rides on top of the rolling profile — small
-   * enough that no grade flips sign under a wheel, big enough that the car
-   * is never still.
+  /** R33 — a gravel road is NOT SMOOTH, and a sealed one is.
    *
-   * The amplitudes are in CENTIMETRES of the thing they are: a gravel road
-   * that has been bladed a few times a year is a couple of centimetres out
-   * of true over a car's length, and reads that way from inside. Past about
-   * a tenth of a metre it stops being a surface and becomes a washboard —
-   * `rules.ts`'s rolling layer has the same warning for the same reason, at
-   * a hundred times the scale.
+   * The difference is how they are built. Tarmac is LAID: a paving machine
+   * leaves a plane, and a plane is what it should be — a sealed section of a
+   * rally stage is a public road the event borrowed, and it reads as one
+   * precisely because it is the smooth part. Gravel is BLADED, and then
+   * driven on, frozen, thawed and bladed again, and what that leaves is not
+   * a rougher plane: it is a good surface with things wrong with it HERE AND
+   * THERE. A frost heave. A hollow worn at a corner exit. A stone the blade
+   * rode over.
    *
-   * `wave` is the SHORT wavelength, in metres: long enough that the 2 m
-   * sample spacing resolves it (four samples to a cycle at the floor), short
-   * enough to be felt as texture rather than as a hill. `patch` is how far
-   * the roughness itself varies along the stage — a road is washboarded in
-   * places and freshly graded in others, and a uniform grain end to end is
-   * only a different kind of perfect. */
+   * So the model is sparse, not continuous. A continuous grain — noise added
+   * along the whole stage — is a washboard however small you make it, and it
+   * is wrong in the same way an evenly-sprinkled forest is wrong: real
+   * defects come in ones, with clean road between them.
+   *
+   * Every bump is MARGINAL by design. A few centimetres is what the car
+   * notices as a road with a surface; ten is a pothole, and a generator that
+   * scatters potholes has made a different and worse game. */
   roughness: {
-    /** Amplitude by surface, m — the NOISE amplitude, before the long/short
-     * split and the patch modulation take roughly a third out of it, so the
-     * grain a wheel actually meets is about 5 cm on gravel. Asphalt is laid
-     * rather than bladed and keeps a third of it; a bridge deck gets none. */
-    amplitude: { gravel: 0.16, asphalt: 0.055 },
-    /** The two grains that make it: a short one felt as texture and a
-     * longer one felt as the road being out of true, m.
+    /** One candidate bump per this much arc, m, and the chance it is there.
+     * Together they set the spacing: at 14 m and a third, a bump every forty
+     * metres or so of gravel, which is a road you can feel without a road
+     * that is fighting you. */
+    cell: 14,
+    chance: 0.34,
+    /** How proud or how sunk one is, m — a heave or a hollow, either sign.
+     * The ceiling is the number that keeps this a surface rather than an
+     * obstacle. */
+    height: { min: 0.02, max: 0.065 },
+    /** ...and how long it is, m (half-width, so a bump is twice this end to
+     * end). Longer than the sample spacing by enough that the compiled road
+     * actually draws the shape rather than aliasing it into a step. */
+    halfWidth: { min: 1.6, max: 4.2 },
+
+    /** R33 — and the gravel road's WIDTH wanders too. A blade cuts a road
+     * a little wider on one pass and a little narrower on the next, the
+     * verges creep in where nothing has run wide for a season and get
+     * pushed back at every corner, and the result is a road that breathes
+     * — never the same width for two hundred metres together.
      *
-     * The SHORT one is near the floor the sampling can carry — samples are
-     * 2 m apart, so under about 4 m a wave aliases instead of being drawn.
-     * It is the wavelength and not the amplitude that decides how much
-     * texture comes out: this is quintic value noise, whose second
-     * derivative goes as one over the lattice spacing SQUARED, so halving
-     * the wave is worth four times the amplitude. Quadrupling the amplitude
-     * at an 8 m wave moved the measured texture by half; going from 8 m to
-     * 5 m tripled it. */
-    wave: { short: 5, long: 27 },
-    /** How much of the amplitude the long grain carries. */
-    longShare: 0.55,
-    /** How the roughness varies ALONG the stage: the noise period, m, and
-     * the least of the amplitude any stretch keeps. A road is never
-     * completely smooth for long, and never uniformly rough. */
-    patch: { scale: 240, min: 0.35 },
+     * `vary` is the share of the nominal width it swings either way, so
+     * 0.12 is a road that runs from 12% under to 12% over: enough to see
+     * and to place the car against, nowhere near enough to change what the
+     * corner asks for. `wave` is how far it takes to swing, m — long, so
+     * this reads as the road opening out and pinching in rather than as a
+     * ragged edge.
+     *
+     * SEALED road does not do this. A paving machine lays a constant width,
+     * which is the same reason the tarmac has no bumps on it. */
+    width: { vary: 0.12, wave: { long: 210, short: 74 }, shortShare: 0.35 },
   },
 
   /** R6 — jump placement. */

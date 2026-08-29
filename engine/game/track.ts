@@ -293,7 +293,7 @@ export function locate(track: Track, x: number, z: number, hint: number): TrackF
   const s = samples[best];
   const dx = x - s.x;
   const dz = z - s.z;
-  const halfRoad = track.width / 2;
+  const halfRoad = s.width / 2;
   // Ground height and slope come from BETWEEN the samples. The nearest
   // sample alone quantizes the road to the 2 m sample grid, and on a graded
   // road that staircase reads as the ground falling away — a car that hops
@@ -320,9 +320,7 @@ export function locate(track: Track, x: number, z: number, hint: number): TrackF
   // deck.
   const onRoad = Math.max(-halfRoad, Math.min(halfRoad, fix.lateral));
   const cross =
-    s.deck != null
-      ? crossOffset(s, onRoad, track.width)
-      : corridorOffset(s, fix.lateral, track.width);
+    s.deck != null ? crossOffset(s, onRoad, s.width) : corridorOffset(s, fix.lateral, s.width);
   // The camber the car SITS on is the mat's, read at the edge at furthest:
   // the chamfer off a paved edge is a curb, and rolling the body onto it
   // would tip the car over a step a few centimeters wide.
@@ -330,8 +328,8 @@ export function locate(track: Track, x: number, z: number, hint: number): TrackF
   fix.elevation = crown + cross;
   fix.slope = slope;
   fix.slopeLat =
-    (crossOffset(s, Math.min(halfRoad, onRoad + probe), track.width) -
-      crossOffset(s, Math.max(-halfRoad, onRoad - probe), track.width)) /
+    (crossOffset(s, Math.min(halfRoad, onRoad + probe), s.width) -
+      crossOffset(s, Math.max(-halfRoad, onRoad - probe), s.width)) /
     (2 * probe);
   return fix;
 }
