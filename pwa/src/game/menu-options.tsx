@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Options, in four tabs:
 //
-//   HUD      — which camera a run opens on, and which instruments are on
+//   HUD      — which camera a run opens on, how the three views taken from
+//              INSIDE the car are set up, and which instruments are on
 //              screen. Speed, gear and the countdown are not offered:
 //              those are the game.
 //   AUDIO    — the two faders, in five steps rather than as a continuous
@@ -31,15 +32,21 @@ import {
   DEFAULT_KEYS,
   DEFAULT_PAD,
   DEFAULT_TOUCH,
+  FOV_STOPS,
+  HEAD_STOPS,
   HUD_TOGGLES,
+  IN_CAR_CAMERAS,
   KEY_ACTIONS,
   PAD_ACTIONS,
   PAD_DEADZONES,
   PEDAL_DIRS,
   PLAY_CAMERAS,
+  REACH_STOPS,
+  SEAT_STOPS,
   assignPedalDir,
   clonePad,
   keyLabel,
+  nearestStop,
   padAxisLabel,
   padSourceLabel,
   type KeyAction,
@@ -48,6 +55,7 @@ import {
   type PedalDir,
   type PlayCamera,
   type Settings,
+  type ViewSettings,
 } from "./settings.ts";
 
 export type OptionsTab = "hud" | "audio" | "video" | "controls";
@@ -88,6 +96,57 @@ type OptionsProps = {
   onBack: () => void;
 };
 
+/** The four knobs the three IN-CAR views are set up with — where the driver
+ * sits, how much lens they look through, and how much their head moves.
+ *
+ * They are on the HUD tab and not on VIDEO because none of them buys a
+ * frame: this is where a player decides what driving from inside the car
+ * FEELS like, which is the same question the camera row above it asks. HEAD
+ * MOTION's OFF stop is the exception that is not about feel — a bolted lens
+ * is what somebody the movement makes ill needs, and it has to be one press
+ * away rather than buried. */
+function ViewSection({ settings, onSettings }: Pick<OptionsProps, "settings" | "onSettings">) {
+  const view = settings.view;
+  const set = (patch: Partial<ViewSettings>): void =>
+    onSettings({ ...settings, view: { ...view, ...patch } });
+  const pick = (stops: { id: string; value: number }[], id: string): number =>
+    (stops.find((stop) => stop.id === id) ?? stops[0]).value;
+  return (
+    <div className="opt-section">
+      <div className="opt-section-title">INSIDE THE CAR</div>
+      <OptionRow
+        label="SEAT"
+        options={SEAT_STOPS}
+        value={nearestStop(SEAT_STOPS, view.seat)}
+        onPick={(id) => set({ seat: pick(SEAT_STOPS, id) })}
+      />
+      <OptionRow
+        label="REACH"
+        options={REACH_STOPS}
+        value={nearestStop(REACH_STOPS, view.reach)}
+        onPick={(id) => set({ reach: pick(REACH_STOPS, id) })}
+      />
+      <OptionRow
+        label="FIELD OF VIEW"
+        options={FOV_STOPS}
+        value={nearestStop(FOV_STOPS, view.fov)}
+        onPick={(id) => set({ fov: pick(FOV_STOPS, id) })}
+      />
+      <OptionRow
+        label="HEAD MOTION"
+        options={HEAD_STOPS}
+        value={nearestStop(HEAD_STOPS, view.headMotion)}
+        onPick={(id) => set({ headMotion: pick(HEAD_STOPS, id) })}
+      />
+      <div className="opt-note">
+        Applies to the {IN_CAR_CAMERAS.length} views taken from inside the car — COCKPIT, HOOD and
+        BUMPER. HEAD MOTION winds the driver&rsquo;s weight, the road coming up through the seat and
+        the throw of a hit down together; OFF bolts the camera to the body.
+      </div>
+    </div>
+  );
+}
+
 function HudTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "onSettings">) {
   const camera = PLAY_CAMERAS.find((cam) => cam.id === settings.camera) ?? PLAY_CAMERAS[0];
   return (
@@ -103,6 +162,7 @@ function HudTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "onSet
         {camera.hint} — every stage starts here, and the camera key still walks the whole ladder
         from wherever you set it.
       </div>
+      <ViewSection settings={settings} onSettings={onSettings} />
       <div className="opt-toggles">
         {HUD_TOGGLES.map((toggle) => (
           <ToggleRow

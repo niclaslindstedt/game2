@@ -40,7 +40,7 @@ This project is tuned by measuring, not guessing:
 
 1. **`make sim`** before and after every handling/generator change. The table (pace, drifts, clean exits, air time, respawns) is the regression surface — bots must keep finishing and keep drifting.
 2. **`make track`** to LOOK at what the rules engine builds.
-3. **`make screenshots`** to LOOK at the game itself (grid, speed, drift, hood cam, portrait). In Claude web sessions Chromium is preinstalled — `CHROMIUM_PATH=/opt/pw-browsers/chromium make screenshots`.
+3. **`make screenshots`** to LOOK at the game itself (grid, speed, drift, every camera on the ladder, the cockpit by day and by night, portrait). In Claude web sessions Chromium is preinstalled — `CHROMIUM_PATH=/opt/pw-browsers/chromium make screenshots`.
 4. **`make items`** to LOOK at one thing on its own — a stone, a fern, the cabin behind the glass. Most of what the world is made of is six pixels at the speed you pass it; this is where it gets rotated and measured. `ITEMS=` picks the rows, `GROUP=` a whole kind, `TURNTABLE=` the seats to walk round.
 5. **`make profile`** before and after every rendering change. Draw calls, triangles and binds are the numbers a real GPU sees; the fps it also prints is software rasterization and means nothing off this machine.
 
@@ -72,6 +72,8 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | What separates one CAR from another                         | `cars.ts` + `TUNING.drivetrain` — the `car-tuning` skill                                                                         |
 | A car's LOOK (silhouette, panels, wheels, livery)           | `pwa/src/game/car-styles.ts` (specs); generator in `pwa/src/game/car/`                                                           |
 | What is BEHIND the glass (trim, seats, crew, cage, wheel)   | `pwa/src/game/car/interior.ts` — the `car-design` skill                                                                          |
+| What the DRIVER sees: fascia, dials, wheel, pedals, mirror  | `pwa/src/game/car/cockpit.ts` — the player's car only; the deck it needs cut out is `OpenCabin` in `car/shell.ts`                |
+| How an IN-CAR camera sits, moves and takes a hit            | `pwa/src/game/camera-eye.ts` (`EYE_RIGS`) — the `game-feel` skill                                                                |
 | WHO is behind the wheel (build, hair, helmet, gear colours) | `pwa/src/game/car-crew.ts` (the sixteen, as data); the models are built in `pwa/src/game/car/crew.ts` — the `car-design` skill   |
 | What a MAP READER is, and what the pair are wearing         | `MAP_READER` + the crew's `CrewColors` in `pwa/src/game/car-crew.ts` — one model, in the driver's own colours                    |
 | How see-through a window is, and what it reflects           | `car/greenhouse.ts` bakes the gradient; `car-mesh.ts` adds the per-frame glint                                                   |
@@ -93,6 +95,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | The rival cars you can see and hit                          | `pwa/src/game/field-cars.ts`; the plate over each one is `name-tag.ts`                                                           |
 | The name over a car that is not the player's                | `pwa/src/game/name-tag.ts` — a label, a colour and a point; it must never learn what a bot is                                    |
 | Anything drawn (meshes, textures, camera, effects)          | `pwa/src/game/` (renderer.ts and friends)                                                                                        |
+| Where the camera stands OUTSIDE the car                     | `CHASE_RIGS` in `pwa/src/game/camera.ts` — one row per angle                                                                     |
 | What colour the sky is under given conditions               | `pwa/src/game/sky.ts` (the presets and the weather/season colour maths)                                                          |
 | What is IN the sky (cumulus, the overcast deck, scud)       | `pwa/src/game/clouds.ts`                                                                                                         |
 | Lightning and the thunder behind it                         | `pwa/src/game/storm.ts` (drawn) + `thunder_*` in `audio/bank.ts` (heard)                                                         |

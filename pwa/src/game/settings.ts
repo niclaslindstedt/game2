@@ -16,18 +16,85 @@ import type { GearboxMode } from "@engine";
  * order the camera key walks and the order the options screen lists, and
  * every entry is a mode the car can be DRIVEN from — the menu's drone and
  * the Roam map are placed by the app and are not offered here. The
- * geometry behind each name lives in camera.ts; this is the vocabulary the
- * player picks from. */
-export type PlayCamera = "hood" | "close" | "chase" | "far" | "heli" | "top";
+ * geometry behind each name lives in camera.ts (the three inside the car in
+ * camera-eye.ts); this is the vocabulary the player picks from. */
+export type PlayCamera = "cockpit" | "hood" | "bumper" | "close" | "chase" | "far" | "heli" | "top";
 
 export const PLAY_CAMERAS: { id: PlayCamera; label: string; hint: string }[] = [
+  { id: "cockpit", label: "COCKPIT", hint: "Behind the wheel — dials, rim and screen pillars" },
   { id: "hood", label: "HOOD", hint: "From the seat, over your own bonnet" },
+  { id: "bumper", label: "BUMPER", hint: "Down at the nose — no bodywork, just road" },
   { id: "close", label: "CLOSE", hint: "Tight behind the bumper, low and fast" },
   { id: "chase", label: "CHASE", hint: "The arcade rally view: roof height, close behind" },
   { id: "far", label: "FAR", hint: "Stood back — more road, more warning" },
   { id: "heli", label: "HELI", hint: "High and behind, as if flown from a drone" },
   { id: "top", label: "TOP", hint: "Straight over the roof, tilted down the road" },
 ];
+
+/** The three views taken from inside the car — the ones OPTIONS ▸ VIEW's
+ * seat, lens and head-motion settings apply to. Nothing outside the car has
+ * a seat to raise or a head to steady. */
+export const IN_CAR_CAMERAS: PlayCamera[] = ["cockpit", "hood", "bumper"];
+
+/** THE IN-CAR VIEW, AS FOUR KNOBS. Every one of them is a ladder of named
+ * stops rather than a slider, for the same reason the volumes are: a value
+ * nobody can quite reproduce is worse than one they can name, and these are
+ * numbers a player will want to come back to.
+ *
+ * They are also the tuning surface this view is DEVELOPED against — the
+ * tooling sweeps the same four from the URL (`?seat=`, `?reach=`, `?vfov=`,
+ * `?headmotion=`), so a contact sheet of variants costs a loop rather than
+ * a rebuild. */
+export type ViewSettings = {
+  /** Seat height over the car's own mount, m. */
+  seat: number;
+  /** Seat reach toward the nose, m. */
+  reach: number;
+  /** Added to whichever in-car view's design field of view, deg. */
+  fov: number;
+  /** How much the driver's head moves at all, as a scale on the neck's
+   * travel, the road grain, the impact jolt and the wobble together. */
+  headMotion: number;
+};
+
+export const SEAT_STOPS: { id: string; label: string; value: number }[] = [
+  { id: "low", label: "LOW", value: -0.05 },
+  { id: "mid", label: "MID", value: 0 },
+  { id: "high", label: "HIGH", value: 0.05 },
+  { id: "tall", label: "TALL", value: 0.1 },
+];
+
+export const REACH_STOPS: { id: string; label: string; value: number }[] = [
+  { id: "back", label: "BACK", value: -0.08 },
+  { id: "mid", label: "MID", value: 0 },
+  { id: "fwd", label: "FORWARD", value: 0.08 },
+];
+
+export const FOV_STOPS: { id: string; label: string; value: number }[] = [
+  { id: "narrow", label: "NARROW", value: -8 },
+  { id: "standard", label: "STANDARD", value: 0 },
+  { id: "wide", label: "WIDE", value: 8 },
+  { id: "ultra", label: "ULTRA", value: 16 },
+];
+
+/** OFF is a real stop, not the bottom of a ramp: a bolted lens is the right
+ * answer for anybody the motion makes ill, and it has to be reachable. */
+export const HEAD_STOPS: { id: string; label: string; value: number }[] = [
+  { id: "off", label: "OFF", value: 0 },
+  { id: "light", label: "LIGHT", value: 0.55 },
+  { id: "standard", label: "STANDARD", value: 1 },
+  { id: "heavy", label: "HEAVY", value: 1.5 },
+];
+
+/** The stop nearest a stored value — a build that moves a ladder must still
+ * show something sensible for a choice made on the old one. */
+export function nearestStop(stops: { id: string; value: number }[], value: number): string {
+  let best = stops[0];
+  for (const stop of stops) {
+    if (Math.abs(stop.value - value) < Math.abs(best.value - value)) best = stop;
+  }
+  return best.id;
+}
 
 export type HudToggle =
   | "minimap"
@@ -418,6 +485,11 @@ export type Settings = {
    * starts, because a player who drives from the hood should not have to
    * press V four times at every start line. */
   camera: PlayCamera;
+  /** Seat, lens and head motion for the three views taken from inside the
+   * car. One set for all three: a player who wants to sit high and see wide
+   * wants it in the cockpit and over the bonnet alike, and each view's own
+   * row in camera-eye.ts is what makes the same offsets read differently. */
+  view: ViewSettings;
   audio: AudioSettings;
   video: VideoSettings;
   keys: KeyBindings;
@@ -485,6 +557,7 @@ export const DEFAULT_SETTINGS: Settings = {
   // has not chosen a view gets the one that asks least of them; the ladder
   // runs both ways from here, one press of the camera key at a time.
   camera: "close",
+  view: { seat: 0, reach: 0, fov: 0, headMotion: 1 },
   // Defaults with headroom on both: the engine bed and the score sum into
   // one limiter, and a game that arrives at full scale has nowhere to go but
   // down. Music sits under the effects, because the effects are what the
@@ -589,6 +662,7 @@ export function loadSettings(): Settings {
   const settings: Settings = {
     hud: { ...DEFAULT_SETTINGS.hud },
     camera: DEFAULT_SETTINGS.camera,
+    view: { ...DEFAULT_SETTINGS.view },
     audio: { ...DEFAULT_SETTINGS.audio },
     video: { ...DEFAULT_SETTINGS.video },
     keys: { ...DEFAULT_SETTINGS.keys },
@@ -610,6 +684,7 @@ export function loadSettings(): Settings {
     if (PLAY_CAMERAS.some((cam) => cam.id === parsed.camera)) {
       settings.camera = parsed.camera as PlayCamera;
     }
+    if (parsed.view) Object.assign(settings.view, parsed.view);
     if (parsed.audio) Object.assign(settings.audio, parsed.audio);
     if (parsed.video) Object.assign(settings.video, parsed.video);
     if (parsed.keys) Object.assign(settings.keys, parsed.keys);
