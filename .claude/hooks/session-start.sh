@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 #
 # SessionStart hook for Claude Code on the web. Installs the npm dependencies
-# in the background so `make lint` / `make test` / `make build` work the
-# moment a web session opens — no waiting for a manual `npm install` first.
+# and builds the project in the background, so `make lint` / `make test` /
+# `make build` work the moment a web session opens — no waiting for a manual
+# `npm install` first, and with the first build already paid for.
 #
 # `@niclaslindstedt/oss-framework` resolves from the GitHub Packages registry,
 # which requires an auth token even for public reads (see AGENTS.md). Web
@@ -61,3 +62,23 @@ npm install --no-audit --no-fund
 npm install --no-save --no-audit --no-fund playwright-core@1 \
   || echo "session-start: playwright-core install failed — make screenshots" \
           "won't run until it's installed; nothing else needs it." >&2
+
+# Build once while nobody is waiting. Two things come out of it, and both are
+# things a session otherwise pays for at the worst moment — the first time it
+# wants to look at something:
+#
+#   The TYPECHECK CACHE (node_modules/.cache/tsc, see tsconfig.json). Nearly
+#   all of a cold `tsc` is re-resolving the .d.ts files under node_modules,
+#   which is work that has nothing to do with the session's own edits; with
+#   it warm, `make build` and `make lint` run in about half the time for the
+#   rest of the session.
+#
+#   `pwa/dist`. The screenshot and profile harnesses both serve it, so
+#   without this the first `make screenshots` is a build plus a browser.
+#
+# Non-fatal on purpose: a session that opens on a branch that does not
+# currently compile still has to start, and the error belongs to whoever runs
+# the build themselves rather than to the hook.
+npm run build \
+  || echo "session-start: build failed — the tree may not compile on this" \
+          "branch. Nothing here depends on it; run 'make build' to see why." >&2

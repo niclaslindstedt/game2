@@ -7,6 +7,15 @@
     "allowImportingTsExtensions": true,
     "strict": true,
     "noEmit": true,
+    // Cache the type graph between runs. Nearly all of a cold check is
+    // re-parsing and re-resolving the `.d.ts` files under node_modules
+    // (three.js, preact, @types/node) rather than this repo's own sources,
+    // so the saving is the same whether one leaf module changed or a module
+    // half the app imports: about half of `make build`. CI checks out fresh
+    // and therefore always runs cold, which is what keeps the cache an
+    // optimisation rather than something `main` could hide behind.
+    "incremental": true,
+    "tsBuildInfoFile": "node_modules/.cache/tsc/root.tsbuildinfo",
     "skipLibCheck": true,
     "types": ["node"],
     "paths": {
