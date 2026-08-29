@@ -14,8 +14,9 @@
 
 import { useState } from "react";
 
-import { LOCATIONS, levelCleared, type CampaignProgress } from "./campaign.ts";
+import { LOCATIONS, levelCleared, type CampaignLevel, type CampaignProgress } from "./campaign.ts";
 import { clearDebugLog, debugLogCounts, debugLogTail, debugLogText } from "./debug-log.ts";
+import { lengthLabel } from "./menu-levels.tsx";
 import { playUi } from "./audio/ui.ts";
 import { ToggleRow } from "./menu.tsx";
 import type { DevSettings } from "./settings.ts";
@@ -112,6 +113,83 @@ export function DebugLogPage({ onBack }: { onBack: () => void }) {
   );
 }
 
+/** THE MAP VIEWER — the campaign's own stages, opened on the map rather than
+ * driven.
+ *
+ * Roam builds a stage from whatever the dials happen to say, which is the
+ * right thing for choosing a seed and the wrong thing for finding a bug in a
+ * SHIPPED map: the fourteen roads a player actually drives are authored, and
+ * a defect in one of them is a defect somebody will meet. This page lists
+ * them by country, and pressing one loads that stage's exact spec — its
+ * seed, its band, its shape, the campaign's own dials and the hour and
+ * weather it is set in — onto the full-screen developer map, where the
+ * layers, the pan, the zoom and the shutter are already waiting.
+ *
+ * The country step is kept even while there is only one country to keep it
+ * for: the biome is the axis this page exists to walk, and a list of one is
+ * a list that becomes right the moment a second one lands. */
+function StageLine({ level, onView }: { level: CampaignLevel; onView: () => void }) {
+  return (
+    <button type="button" className="menu-item menu-item-dev" onClick={onView}>
+      {level.name.toUpperCase()}
+      <span className="menu-item-sub">
+        seed {level.seed} · {lengthLabel(level)} · {level.timeOfDay} {level.weather} ·{" "}
+        {level.season}
+      </span>
+    </button>
+  );
+}
+
+export function MapViewerPage({
+  onView,
+  onBack,
+}: {
+  onView: (level: CampaignLevel) => void;
+  onBack: () => void;
+}) {
+  const [locationId, setLocationId] = useState<string | null>(null);
+  const location = locationId === null ? null : LOCATIONS.find((l) => l.id === locationId);
+  return (
+    <div className="menu-card menu-card-wide">
+      {/* Back steps WITHIN the page before it leaves it, so a controller's B
+          walks the same two steps the presses came in on. */}
+      <button
+        type="button"
+        className="menu-back"
+        data-nav-back
+        onClick={() => (location ? setLocationId(null) : onBack())}
+      >
+        ‹ {location ? "MAP VIEWER" : "DEVELOPER"}
+      </button>
+      <div className="menu-title menu-title-dev">
+        {location ? location.name.toUpperCase() : "MAP VIEWER"}
+      </div>
+      <div className="menu-sub">
+        {location
+          ? "Open a stage on the map — layers, zoom, pan and the shutter"
+          : "Look at the stages the campaign ships, without driving them"}
+      </div>
+      {location
+        ? location.levels.map((level) => (
+            <StageLine key={level.id} level={level} onView={() => onView(level)} />
+          ))
+        : LOCATIONS.map((l) => (
+            <button
+              key={l.id}
+              type="button"
+              className="menu-item menu-item-dev"
+              onClick={() => setLocationId(l.id)}
+            >
+              {l.name.toUpperCase()}
+              <span className="menu-item-sub">
+                {l.blurb} · {l.levels.length} stages
+              </span>
+            </button>
+          ))}
+    </div>
+  );
+}
+
 type DeveloperProps = {
   progress: CampaignProgress;
   dev: DevSettings;
@@ -119,6 +197,7 @@ type DeveloperProps = {
   onUnlockEverything: () => void;
   onBack: () => void;
   onDebugLog: () => void;
+  onMapViewer: () => void;
 };
 
 export function DeveloperPage({
@@ -128,6 +207,7 @@ export function DeveloperPage({
   onUnlockEverything,
   onBack,
   onDebugLog,
+  onMapViewer,
 }: DeveloperProps) {
   const total = LOCATIONS.reduce((n, l) => n + l.levels.length, 0);
   const cleared = LOCATIONS.reduce(
@@ -177,6 +257,13 @@ export function DeveloperPage({
           onToggle={() => onDev({ ...dev, record: !dev.record })}
         />
       </div>
+      <button type="button" className="menu-item menu-item-dev" onClick={onMapViewer}>
+        MAP VIEWER
+        <span className="menu-item-sub">
+          Open the campaign&apos;s own stages on the map — layers, zoom, pan, and a shutter that
+          writes the debug boxes into the picture
+        </span>
+      </button>
       <button type="button" className="menu-item menu-item-dev" onClick={onDebugLog}>
         DEBUG LOG
         <span className="menu-item-sub">

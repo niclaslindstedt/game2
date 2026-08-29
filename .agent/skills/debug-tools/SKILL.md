@@ -33,12 +33,12 @@ out it stays out. The two toggles are also on the **pause card** mid-run,
 which is where they are actually wanted — the moment you want to fly to
 something is the moment you are looking at it.
 
-| Tool                 | What it is                                                                                                                                                                        | Where                                                                      |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| **God mode**         | The camera comes off the car and flies, FPS-style. The car is handed neutral input and sits where it was left.                                                                    | `pwa/src/game/camera-free.ts`, mode `"free"` in `camera.ts`                |
-| **Debug overlay**    | The boxes naming the stage, the place, the camera and the car — and the REPRO line along the bottom.                                                                              | `pwa/src/game/debug-hud.tsx` over `debug-info.ts`                          |
-| **Debug log**        | A ring buffer of every engine event, every engine log line, and a position trace once a second. Copied whole or per-run from DEVELOPER → DEBUG LOG.                               | `pwa/src/game/debug-log.ts`, page in `menu-dev.tsx`                        |
-| **The map's layers** | The stage's own layers painted over the Roam map — bedrock, groundwater, soil, foliage, roads — the pane blown up to the whole screen, and a box saying what the generator built. | `pwa/src/game/map-layers.ts` + `map-debug.ts`, controls in `menu-roam.tsx` |
+| Tool                 | What it is                                                                                                                                                                                                                                                                                           | Where                                                                                                    |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| **God mode**         | The camera comes off the car and flies, FPS-style. The car is handed neutral input and sits where it was left.                                                                                                                                                                                       | `pwa/src/game/camera-free.ts`, mode `"free"` in `camera.ts`                                              |
+| **Debug overlay**    | The boxes naming the stage, the place, the camera and the car — and the REPRO line along the bottom.                                                                                                                                                                                                 | `pwa/src/game/debug-hud.tsx` over `debug-info.ts`                                                        |
+| **Debug log**        | A ring buffer of every engine event, every engine log line, and a position trace once a second. Copied whole or per-run from DEVELOPER → DEBUG LOG.                                                                                                                                                  | `pwa/src/game/debug-log.ts`, page in `menu-dev.tsx`                                                      |
+| **The map's layers** | The stage's own layers painted over the Roam map — bedrock, groundwater, soil, foliage, roads — the pane blown up to the whole screen, a box saying what the generator built, and a shutter that paints that box into the picture. Reaches the campaign's own stages through DEVELOPER → MAP VIEWER. | `pwa/src/game/map-layers.ts` + `map-debug.ts`, controls in `menu-roam.tsx`, the viewer in `menu-dev.tsx` |
 
 **ALT held hides the HUD and leaves the overlay up.** That is the shot to
 ask for when the game's own chrome is in the way of the thing being reported.
@@ -102,7 +102,31 @@ Two things make it a debug tool rather than a picture:
   two screenshots either side of a change are the same picture.
 
 `make screenshots shot-map` captures the whole sheet — the bare map, one
-frame per layer, and one leaned in and panned onto the road.
+frame per layer, one leaned in and panned onto the road, and one after dark.
+
+### The stages a player actually drives
+
+Roam builds a stage from whatever the dials happen to say, which is right for
+choosing a seed and wrong for finding a defect in a SHIPPED map. **DEVELOPER →
+MAP VIEWER → a country → a stage** loads a campaign level's exact spec — its
+seed, its band, its shape, the campaign's own dials, the hour and weather it
+is set in — onto that same full-screen map. Every tool above comes with it,
+and the picture that comes out is of a road somebody is going to drive.
+
+### Asking for a picture instead of a repro
+
+**SCREENSHOT**, on the full-screen map's strip, is the button to point a
+reporter at. It saves the whole screen with the boxes, the layer legend and
+the REPRO line **painted into the pixels** — the overlay is DOM over the
+canvas, so none of it is in the drawing buffer a capture is lifted from, and
+a picture whose caption stayed behind in the browser is a picture nobody can
+act on. The file lands in the roll, which is the main menu's GALLERY, where
+it can be saved or shared.
+
+That is the whole loop this skill exists for, in its shortest form: a person
+who can see the problem presses one button, and what reaches you is a frame
+that already says which seed it is, what is painted on it, where the lens was
+standing, and the link that puts you there.
 
 ## Reading a screenshot you were handed
 
@@ -218,6 +242,20 @@ drive to it and read `stage-s` off the overlay to know when it has arrived.
   Anything drawn over them as an ANNOTATION (the route ribbon) has to be in
   the transparent queue too, or three.js draws it first and the layer tints
   over the very line it is read against.
+- **Every control on the map lives INSIDE the map pane, and the pane captures
+  the pointer.** `setPointerCapture` is what lets a drag survive leaving the
+  pane, and a capture taken on a press that started inside a child redirects
+  that press's pointerup to the pane — so the child never completes a click
+  and the button is dead without ever looking it. Anything interactive added
+  in there needs `data-map-ui` on it or an ancestor. A scene that drives the
+  tools through the URL will not catch this: `shot-map-viewer` and
+  `shot-map-campaign` press the buttons, which is why they exist.
+- **Nothing the map shows may be hidden while its LIGHTS are not.** The car
+  was hidden in the map view on the reasoning that it is a speck at framing
+  distance; its headlights were thrown by the environment regardless, so
+  after dark the map showed a pool of light travelling along an empty road.
+  If something is worth taking out of the frame, take its contribution to the
+  frame out with it.
 
 ## Skill self-improvement
 

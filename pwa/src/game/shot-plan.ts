@@ -113,3 +113,86 @@ export function stampFits(width: number, height: number): boolean {
  * inside a frame. */
 export const STAMP_FONT_STACK =
   '"Avenir Next Condensed", "Arial Narrow", "Roboto Condensed", system-ui';
+
+// ── The developer picture's notes ─────────────────────────────────────────
+//
+// A screenshot of a generator problem is only worth sending if it says which
+// seed it is, which dials built it and where the lens was standing — and the
+// debug overlay that says all that is DOM over the canvas, so none of it is
+// in the drawing buffer the picture is lifted from. So the notes are DRAWN
+// INTO the picture instead of captured from the page: it costs a few
+// rectangles of Canvas2D and buys a file that is still self-describing after
+// it has been pasted into a chat window, saved to a desktop, or handed to
+// somebody who has never opened the game.
+//
+// Same arithmetic-not-graphics split as the stamp above: what goes where is
+// here, the drawing is in screenshots.ts.
+
+/** Where a developer picture's notes go, in picture pixels. */
+export type NotesLayout = {
+  /** Margin from the picture's edges. */
+  pad: number;
+  /** The rows' size, and the title's above them. */
+  font: number;
+  title: number;
+  /** Baseline to baseline. */
+  line: number;
+  /** How wide the key column is — the keys are short and known, and a
+   * column is what makes a stack of rows readable as a table. */
+  key: number;
+  /** How wide the whole block is. */
+  width: number;
+  /** Inside a box, and between two of them. */
+  inset: number;
+  gap: number;
+  /** The legend's colour chips. */
+  chip: number;
+};
+
+/** How much of the SHORT side a note row is set at, and its bounds. Short
+ * side for the same reason the mark is: a phone held sideways and one held
+ * upright have to come out with type of the same weight. The floor is what
+ * keeps a note legible in a chat window; the ceiling stops a 4K frame being
+ * captioned in headlines. */
+const NOTE_OF_SHORT_SIDE = 0.019;
+const NOTE_MIN = 11;
+const NOTE_MAX = 24;
+
+/** The rest of the block's proportions, all off the row's own size — one
+ * panel, one scale, so it cannot come apart at a size nobody tested. */
+const LINE_OF_FONT = 1.42;
+const PAD_OF_FONT = 1.1;
+const INSET_OF_FONT = 0.55;
+const GAP_OF_FONT = 0.5;
+const KEY_OF_FONT = 6.4;
+const CHIP_OF_FONT = 0.85;
+/** ...except the block's WIDTH, which is bounded by the picture as well:
+ * wide enough for the longest row the overlay writes, and never more than
+ * this share of the frame, because the middle of the picture is the thing
+ * being reported. */
+const WIDTH_OF_FONT = 34;
+const WIDTH_OF_PICTURE = 0.46;
+
+export function notesLayout(width: number, height: number): NotesLayout {
+  const short = Math.max(1, Math.min(width, height));
+  const font = Math.round(Math.min(NOTE_MAX, Math.max(NOTE_MIN, short * NOTE_OF_SHORT_SIDE)));
+  return {
+    font,
+    title: Math.round(font * 1.02),
+    line: Math.round(font * LINE_OF_FONT),
+    pad: Math.round(font * PAD_OF_FONT),
+    inset: Math.round(font * INSET_OF_FONT),
+    gap: Math.round(font * GAP_OF_FONT),
+    key: Math.round(font * KEY_OF_FONT),
+    width: Math.round(Math.min(font * WIDTH_OF_FONT, width * WIDTH_OF_PICTURE)),
+    chip: Math.round(font * CHIP_OF_FONT),
+  };
+}
+
+/** Whether a picture is big enough to caption. Under this the notes would be
+ * most of the frame, and a report whose picture has been buried under its own
+ * caption reports nothing. */
+export function notesFit(width: number, height: number): boolean {
+  const layout = notesLayout(width, height);
+  return width >= layout.width * 2 && height >= layout.line * 12;
+}

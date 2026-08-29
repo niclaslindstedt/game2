@@ -1180,6 +1180,67 @@ await capture("shot-map-zoomed", { width: 1280, height: 720 }, mapUp, {
   mpanz: "-63",
 });
 
+// The same place after dark, and the reason the CAR is drawn on the map: the
+// environment throws its lamps whatever is drawn, so a hidden body left a
+// pool of headlight travelling along an empty road. Panned onto the start
+// line, where the Roam page's engine holds the car.
+await capture("shot-map-night", { width: 1280, height: 720 }, mapUp, {
+  menu: "1",
+  roam: "1",
+  mapfull: "1",
+  debug: "1",
+  tod: "night",
+  maz: "0.9",
+  mpitch: "0.7",
+  mzoom: "0.05",
+  mpanx: "503",
+  mpanz: "-484",
+});
+
+// ── The map viewer ──────────────────────────────────────────────────────
+//
+// The campaign's own stages, opened on the map rather than driven — the
+// stages a defect actually reaches a player through. Driven by CLICKING
+// rather than by URL, which is the other half of what these two scenes are
+// for: every control on the developer map lives inside the map pane, and the
+// pane captures the pointer so a drag survives leaving it, so a press that
+// is not excused from that capture is a button that never fires.
+await capture(
+  "shot-map-viewer",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await menuUp(page);
+    await page.locator("[data-menu='developer']").click();
+    await page.waitForTimeout(400);
+    await page.locator(".menu-item", { hasText: "MAP VIEWER" }).first().click();
+    await page.waitForTimeout(400);
+    await page.locator(".menu-item", { hasText: "TAIGA" }).first().click();
+    await page.waitForTimeout(600);
+  },
+  { menu: "1", debug: "1" },
+);
+
+await capture(
+  "shot-map-campaign",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await menuUp(page);
+    await page.locator("[data-menu='developer']").click();
+    await page.waitForTimeout(400);
+    await page.locator(".menu-item", { hasText: "MAP VIEWER" }).first().click();
+    await page.waitForTimeout(400);
+    await page.locator(".menu-item", { hasText: "TAIGA" }).first().click();
+    await page.waitForTimeout(400);
+    // Granite Ridge — the long one, with the jumps and the water in it.
+    await page.locator(".menu-item-dev").nth(2).click();
+    await mapUp(page);
+    // ...and the layer switched on with the BUTTON, not with a URL.
+    await page.locator("[data-map-layer='soil']").click();
+    await page.waitForTimeout(6000);
+  },
+  { menu: "1", debug: "1" },
+);
+
 // The conditions: a dawn run, the dusk sun, storm rain at speed, and night
 // under the headlights.
 await capture(
