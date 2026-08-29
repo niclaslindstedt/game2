@@ -69,6 +69,7 @@ import {
   splitLeader,
   stepField,
   stopField,
+  RALLY_FIELD,
 } from "../pwa/src/game/standings.ts";
 
 const flat = (n: number): BotSkill => {
@@ -231,7 +232,11 @@ describe("the field on the road", () => {
   } as const;
 
   it("enters the field staggered, one interval per start number", () => {
-    const field = createField(compileStage(38, "short"), "hard", stage);
+    const field = createField(
+      compileStage(38, "short"),
+      { ...RALLY_FIELD, difficulty: "hard" },
+      stage,
+    );
     expect(field.of).toBe(FIELD_SIZE);
     expect(field.playerNumber).toBe(PLAYER_NUMBER);
     // The crew directly in front of the player leaves as the establishing
@@ -248,7 +253,11 @@ describe("the field on the road", () => {
   });
 
   it("pays the head start off, and nobody is on the road until theirs is", () => {
-    const field = createField(compileStage(38, "short"), "hard", stage);
+    const field = createField(
+      compileStage(38, "short"),
+      { ...RALLY_FIELD, difficulty: "hard" },
+      stage,
+    );
     const line = field.runs.map((run) => ({ x: run.state.car.x, z: run.state.car.z }));
     drainField(field);
     // Everybody has either spent their whole head start or used it to
@@ -279,7 +288,11 @@ describe("the field on the road", () => {
   });
 
   it("pushes the whole field on when the player skips the shot", () => {
-    const field = createField(compileStage(38, "short"), "hard", stage);
+    const field = createField(
+      compileStage(38, "short"),
+      { ...RALLY_FIELD, difficulty: "hard" },
+      stage,
+    );
     const owedBefore = field.runs.map((run) => run.owed);
     const rolling = field.runs.find((run) => onRoad(run))!;
     const was = rolling.state.t;
@@ -294,7 +307,11 @@ describe("the field on the road", () => {
   });
 
   it("books splits as the crews go through, and places the player by TIME", () => {
-    const field = createField(compileStage(38, "short"), "hard", stage);
+    const field = createField(
+      compileStage(38, "short"),
+      { ...RALLY_FIELD, difficulty: "hard" },
+      stage,
+    );
     // Nobody has been through anything yet, so the first board is the
     // player's to lose whatever time they arrive with.
     expect(placeAtSplit(field, 0, 9999)).toBe(1);
@@ -327,7 +344,11 @@ describe("the field on the road", () => {
   });
 
   it("counts the cars home at the line", () => {
-    const field = createField(compileStage(38, "short"), "easy", stage);
+    const field = createField(
+      compileStage(38, "short"),
+      { ...RALLY_FIELD, difficulty: "easy" },
+      stage,
+    );
     expect(placeAtFinish(field, 0)).toBe(1);
     drainField(field);
     for (let i = 0; i < 120 * 200; i++) stepField(field);
@@ -344,7 +365,11 @@ describe("the field on the road", () => {
     // Their debt is deliberately left standing — `owed` places a car on the
     // road relative to the player, and the player has finished — so they must
     // come home with a real time while never counting as on the road.
-    const field = createField(compileStage(38, "short"), "easy", stage);
+    const field = createField(
+      compileStage(38, "short"),
+      { ...RALLY_FIELD, difficulty: "easy" },
+      stage,
+    );
     const owing = field.runs.filter((run) => run.owed > 0);
     expect(owing.length).toBe(field.runs.length - 1);
     let guard = 0;
@@ -358,7 +383,11 @@ describe("the field on the road", () => {
   });
 
   it("takes a crew off the road the moment they are home", () => {
-    const field = createField(compileStage(38, "short"), "easy", stage);
+    const field = createField(
+      compileStage(38, "short"),
+      { ...RALLY_FIELD, difficulty: "easy" },
+      stage,
+    );
     drainField(field);
     for (let i = 0; i < 120 * 200; i++) stepField(field);
     for (const run of field.runs) {

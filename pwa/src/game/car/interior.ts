@@ -36,7 +36,7 @@ import * as THREE from "three";
 
 import { playerCrewLook, type CrewLook } from "../car-crew.ts";
 import { NO_DIRT } from "../car-dirt.ts";
-import { MeshBuilder, patchQuad, slab, solid, tube, type V3 } from "./builder.ts";
+import { MeshBuilder, patchQuad, plate, slab, solid, tube, type V3 } from "./builder.ts";
 import { buildCrewMember, type CrewSeat } from "./crew.ts";
 import { cabinFrame, cabinPanels, panelMinus } from "./greenhouse.ts";
 import type { CarBodySpec } from "./spec.ts";
@@ -66,7 +66,7 @@ const LINING_LIFT = 0.012;
  * painted again, which is the whole thing this was built to fix. What has to
  * survive is the LADDER: a mid grey shell, seats a step up from it, and the
  * cage and the crew's helmets bright enough to read at a car's length. */
-const TRIM = {
+export const TRIM = {
   lining: 0x565d68,
   floor: 0x3b414a,
   dash: 0x343a43,
@@ -83,7 +83,13 @@ const TRIM = {
  * a 2.1 m coupe cabin and a 2.4 m hatch one. `hip` is the seat's hinge, and
  * everything else is placed off it in metres, because a seat, a helmet and a
  * steering wheel are the same size in every car ever built. */
-const LAYOUT = { hip: 0.42, dashBack: 0.6, wheelAhead: 0.4, hoopBehind: 0.42, bulkhead: 0.58 };
+export const LAYOUT = {
+  hip: 0.42,
+  dashBack: 0.6,
+  wheelAhead: 0.4,
+  hoopBehind: 0.42,
+  bulkhead: 0.58,
+};
 
 /** Where the middle of the steering wheel sits relative to the window sill,
  * m. Just under it, so the top of the rim breaks the sill line and shows
@@ -93,8 +99,16 @@ const LAYOUT = { hip: 0.42, dashBack: 0.6, wheelAhead: 0.4, hoopBehind: 0.42, bu
 const WHEEL_RISE = -0.02;
 
 /** How far off the centreline the two seats sit, as a fraction of the
- * cabin's inner half-width. */
-const SEAT_SIDE = 0.46;
+ * cabin's inner half-width — the DRIVER at +x, the co-driver at −x.
+ *
+ * Which side that puts them on in the picture is not a matter of taste and
+ * not what the sign says: a camera looking down the car's +z has world +x on
+ * the LEFT of the frame (three's basis, and the whole game's cameras aim
+ * that way). So +x is the side the wheel is on as the player sees it, and
+ * everything that has to agree about which side the car is driven from — the
+ * binnacle here, the hood camera's own offset, the cockpit's whole layout —
+ * hangs off this one sign. */
+export const SEAT_SIDE = 0.46;
 
 /** The default sill width the greenhouse uses when a spec does not state
  * one — restated here rather than imported, because it is a PILLAR default
@@ -122,7 +136,7 @@ const WHEEL_RADIUS = 0.17;
  * that deck and the roof, exactly as tall as the glass — which is not a
  * compromise but the actual shape of what a window shows. Everything here is
  * built for that tray. */
-type Cabin = {
+export type Cabin = {
   spec: CarBodySpec;
   /** Inner half-width the furniture is fitted inside, m. */
   inner: number;
@@ -142,7 +156,7 @@ type Cabin = {
   rearZ: number;
 };
 
-function cabinOf(spec: CarBodySpec): Cabin {
+export function cabinOf(spec: CarBodySpec): Cabin {
   const f = cabinFrame(spec);
   const { cowlZ, baseRearZ, roofY, roofHalf } = spec.cabin;
   const length = cowlZ - baseRearZ;
@@ -167,27 +181,6 @@ function cabinOf(spec: CarBodySpec): Cabin {
   };
 }
 
-/** A horizontal panel — the pan, or the headliner. `up` says which way it is
- * seen from: a floor is looked down on, a headliner up at. */
-function deck(
-  b: MeshBuilder,
-  half: number,
-  y: number,
-  zFront: number,
-  zRear: number,
-  color: number,
-  up: boolean,
-): void {
-  const c: V3[] = [
-    [-half, y, zFront],
-    [half, y, zFront],
-    [half, y, zRear],
-    [-half, y, zRear],
-  ];
-  if (up) b.quad(c[0], c[1], c[2], c[3], color);
-  else b.quad(c[3], c[2], c[1], c[0], color);
-}
-
 /** The shell, lined: every cabin panel drawn again from the inside, with the
  * same windows cut out of it. Without this the far flank of the cabin is a
  * set of back faces, and back faces are culled — look through the near
@@ -196,14 +189,14 @@ function deck(
  * `patchQuad`'s `mirrored` flag reverses both the winding and the lift, so
  * passing its opposite is exactly "the same rectangle, facing the other way,
  * on the other side of the panel" — the whole of what an inner face is. */
-function buildLining(b: MeshBuilder, cabin: Cabin): void {
+export function buildLining(b: MeshBuilder, cabin: Cabin, floor = true): void {
   for (const panel of cabinPanels(cabin.spec)) {
     for (const strip of panelMinus(panel.holes)) {
       patchQuad(b, panel.patch, strip, TRIM.lining, LINING_LIFT, !panel.mirrored);
     }
   }
-  deck(b, cabin.inner, cabin.panY, cabin.cowlZ, cabin.rearZ, TRIM.floor, true);
-  deck(
+  if (floor) plate(b, cabin.inner, cabin.panY, cabin.cowlZ, cabin.rearZ, TRIM.floor, true);
+  plate(
     b,
     cabin.spec.cabin.roofHalf - 0.03,
     cabin.roofY,
@@ -358,8 +351,8 @@ function seatAt(cabin: Cabin, x: number): CrewSeat {
 export function crewSeats(spec: CarBodySpec): { driver: CrewSeat; coDriver: CrewSeat } {
   const cabin = cabinOf(spec);
   return {
-    driver: seatAt(cabin, -cabin.inner * SEAT_SIDE),
-    coDriver: seatAt(cabin, cabin.inner * SEAT_SIDE),
+    driver: seatAt(cabin, cabin.inner * SEAT_SIDE),
+    coDriver: seatAt(cabin, -cabin.inner * SEAT_SIDE),
   };
 }
 
@@ -372,8 +365,8 @@ export function buildInterior(
   if (detail === "off") return { group: null, steering: null, dispose: () => undefined };
   const high = detail === "high";
   const cabin = cabinOf(spec);
-  const driverX = -cabin.inner * SEAT_SIDE;
-  const coDriverX = cabin.inner * SEAT_SIDE;
+  const driverX = cabin.inner * SEAT_SIDE;
+  const coDriverX = -cabin.inner * SEAT_SIDE;
   const wheelZ = cabin.hipZ + LAYOUT.wheelAhead;
   const wheelY = cabin.sillY + WHEEL_RISE;
   const b = new MeshBuilder();

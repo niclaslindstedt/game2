@@ -640,20 +640,51 @@ await capture(
   { hasTouch: true, isMobile: true },
 );
 
-// The pedal thumb, held on the anchor: the three gesture hints around it are
-// the only place the player is ever told which drag does what, so the shot
-// exists to check they say the right words in the right directions.
+// The pedal thumb, held on the anchor: the hints around it are the only place
+// the player is ever told which drag does what, so the shot exists to check
+// they say the right words in the right directions — and, in the MANUAL box,
+// that the gear flicks beside the thumb clear every one of them.
+//
+// It is taken with the gear RUN OUT (the throttle held long enough for the
+// shift light) so the arrows are caught in both states at once: the up one
+// lit, because the gear is there to take, and the down one faint, because
+// first has nothing under it.
 await capture(
   "shot-touch-pedals",
   { width: 390, height: 844 },
   async (page) => {
     await racing(page);
+    await page.keyboard.down("ArrowUp");
+    await page.waitForTimeout(3500);
     const zone = await page.locator(".hud-zone-right").boundingBox();
     await page.mouse.move(zone.x + zone.width * 0.5, zone.y + zone.height * 0.55);
     await page.mouse.down();
     await page.waitForTimeout(400);
   },
-  {},
+  { gearbox: "manual" },
+  "load",
+  { hasTouch: true, isMobile: true },
+);
+
+// The gear flick, caught at full stretch — the frame between the stab and the
+// release that takes the gear. The throttle is still on under it: a thumb
+// reaching for a shift never lifts off, which is the whole point of the
+// gesture.
+await capture(
+  "shot-touch-shift",
+  { width: 390, height: 844 },
+  async (page) => {
+    await racing(page);
+    await page.keyboard.down("ArrowUp");
+    await page.waitForTimeout(3500);
+    const zone = await page.locator(".hud-zone-right").boundingBox();
+    const x = zone.x + zone.width * 0.5;
+    const y = zone.y + zone.height * 0.55;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x, y - 60, { steps: 6 });
+  },
+  { gearbox: "manual" },
   "load",
   { hasTouch: true, isMobile: true },
 );
@@ -685,7 +716,7 @@ await capture(
 // the driver. `?camera=` pins the angle rather than counting presses of the
 // camera key — a press count silently shoots the wrong camera the day the
 // ladder grows.
-for (const angle of ["hood", "close", "chase", "far", "heli", "top"]) {
+for (const angle of ["cockpit", "hood", "bumper", "close", "chase", "far", "heli", "top"]) {
   await capture(
     `shot-cam-${angle}`,
     { width: 1280, height: 720 },
@@ -698,19 +729,83 @@ for (const angle of ["hood", "close", "chase", "far", "heli", "top"]) {
   );
 }
 
-// The hood cam on a phone held upright. Its own shot because hor+ opens the
-// frame vertically on a narrow viewport, and every degree of that opening
-// lands half of itself at the BOTTOM — which from the scuttle is bonnet.
+// The two in-car views on a phone held upright. Their own shots because
+// hor+ opens the frame vertically on a narrow viewport, and every degree of
+// that opening lands half of itself at the BOTTOM — which from the scuttle
+// is bonnet and from the seat is fascia.
+for (const angle of ["cockpit", "hood"]) {
+  await capture(
+    `shot-cam-${angle}-portrait`,
+    { width: 390, height: 844 },
+    async (page) => {
+      await racing(page);
+      await page.keyboard.down("ArrowUp");
+      await page.waitForTimeout(4500);
+    },
+    { camera: angle },
+  );
+}
+
+// The cockpit after dark, which is the one condition it is authored for
+// separately: a closed cabin gets no light, so the room goes to almost
+// nothing and the two instruments — which answer to nothing the sky does —
+// are the only lit thing in the car.
 await capture(
-  "shot-cam-hood-portrait",
-  { width: 390, height: 844 },
+  "shot-cam-cockpit-night",
+  { width: 1280, height: 720 },
   async (page) => {
     await racing(page);
     await page.keyboard.down("ArrowUp");
     await page.waitForTimeout(4500);
   },
-  { camera: "hood" },
+  { camera: "cockpit", tod: "night" },
 );
+
+// The cockpit in a corner, which is where three of its four moving parts
+// are: the wheel on lock, the needles up, and the driver's head leaned into
+// the turn against a horizon that is not levelling with the car.
+await capture(
+  "shot-cam-cockpit-turn",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await racing(page);
+    await page.keyboard.down("ArrowUp");
+    await page.waitForTimeout(4000);
+    await page.keyboard.down("ArrowRight");
+    await page.waitForTimeout(950);
+  },
+  { camera: "cockpit" },
+);
+
+// THE VIEW KNOBS, as a contact sheet. The four numbers OPTIONS ▸ VIEW moves
+// are the ones this camera is developed against, so the sweep is the loop:
+// change a default in camera-eye.ts or car/cockpit.ts, shoot the row, look
+// at where the fascia, the rim and the header rail actually land. Every
+// variant is the same seed at the same pace, so only the framing moves.
+for (const variant of [
+  { name: "seat-low", seat: -0.05 },
+  { name: "seat-high", seat: 0.05 },
+  { name: "reach-back", reach: -0.08 },
+  { name: "reach-fwd", reach: 0.08 },
+  { name: "fov-narrow", vfov: -8 },
+  { name: "fov-wide", vfov: 8 },
+  { name: "fov-ultra", vfov: 16 },
+]) {
+  const { name, ...knobs } = variant;
+  await capture(
+    `shot-cockpit-${name}`,
+    { width: 1280, height: 720 },
+    async (page) => {
+      await racing(page);
+      await page.keyboard.down("ArrowUp");
+      await page.waitForTimeout(4500);
+    },
+    {
+      camera: "cockpit",
+      ...Object.fromEntries(Object.entries(knobs).map(([k, v]) => [k, String(v)])),
+    },
+  );
+}
 
 // The same three distant rigs mid-turn, which is where their sway lives:
 // the swing is sprung, so a committed turn should have thrown the camera

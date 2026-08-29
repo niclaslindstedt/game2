@@ -21,7 +21,8 @@
 // face) is what TUNING.collision.halfLength has to contain.
 
 import type { CarSpec } from "@engine";
-import type { CarBodySpec } from "./car-body.ts";
+import type { CarEyes } from "./camera-eye.ts";
+import { cockpitEyeFor, type CarBodySpec } from "./car-body.ts";
 import { applyLivery, type Livery } from "./car-livery.ts";
 
 /** The front-driver: a short, tall, slab-sided two-box hatch. Stubby nose, near
@@ -363,31 +364,37 @@ export function bodySpecFor(car: CarSpec, paint?: Livery): CarBodySpec {
   return paint ? applyLivery(body, paint) : body;
 }
 
-/** Where the hood camera's eye sits on a given car, in body-local metres
- * (+z the nose, +x its right side, y from the ground). */
-export type HoodEye = { x: number; y: number; z: number };
-
-/** How far the eye sits above the deck at the base of the windscreen, m,
- * and how far ahead of that base. Together they are what makes this a view
- * of the BONNET: high enough over the panel that its far corners fall
+/** How far the HOOD eye sits above the deck at the base of the windscreen,
+ * m, and how far ahead of that base. Together they are what makes that view
+ * one of the BONNET: high enough over the panel that its far corners fall
  * inside the frame — a lens skimming the paint projects it as a wall with
  * no shape to it — and ahead of the screen rather than behind it.
  *
- * Behind it is where a driver's eyes really are, and it is the wrong place
- * for a body with no interior modelled: the near cowl and the screen's own
- * glass then eat the bottom of the picture, which on a portrait phone (a
- * frame that opens a long way down — see HEAD.wideAim) is a third of it,
- * and any ray steeper than those finds a floor the shell does not draw from
- * inside. Ahead of the screen every downward ray lands on bonnet. The
- * head's own travel (camera.ts) is bounded well inside the rise, so no
+ * Behind it is where a driver's eyes really are, and that is what the
+ * COCKPIT view is: it works only because car/cockpit.ts builds a cabin to
+ * put there. Without one, the near cowl and the screen's own glass eat the
+ * bottom of the picture and any ray steeper than those finds a floor the
+ * shell does not draw from inside. Ahead of the screen every downward ray
+ * lands on bonnet, which is why this view needs nothing built for it. The
+ * head's own travel (camera-eye.ts) is bounded well inside the rise, so no
  * landing drops the eye into the panel. */
 const EYE_RISE = 0.38;
 const EYE_AHEAD = 0.06;
-/** How far the eye sits left of the centreline, m. A driver is not sat in
- * the middle of the car, and that asymmetry is most of what separates a
- * seat from a lens taped to the middle of the scuttle. Kept to a hint of
- * the real seat offset, because the road still has to read as centred. */
+/** How far the hood eye sits off the centreline, m, on the side the car is
+ * driven from (+x — see SEAT_SIDE in car/interior.ts for why that is the
+ * LEFT of the frame). A driver is not sat in the middle of the car, and that
+ * asymmetry is most of what separates a seat from a lens taped to the middle
+ * of the scuttle. Kept to a hint of the real seat offset, because the road
+ * still has to read as centred. */
 const EYE_SIDE = 0.16;
+
+/** The BUMPER eye: ahead of the nose cap, so no panel of the car is in
+ * frame at all, and level with the top of the bumper bar it is named for.
+ * Ahead rather than on it, because a lens flush with the cap catches the
+ * paint at the edges of a wide frame — which is the one thing this view is
+ * for not having. */
+const NOSE_AHEAD = 0.14;
+const NOSE_RISE = 0.06;
 
 /** The body's top surface at a point along the car, m — the loft the
  * profile stations describe, sampled between the two that bracket `z`. */
@@ -405,11 +412,20 @@ function deckAt(body: CarBodySpec, z: number): number {
   return p[p.length - 1].topY;
 }
 
-/** The hood camera's mount on a catalog car — read off the car's own
- * silhouette, so a low sedan seats the shot lower than an upright hatch
- * does and each one shows its own bonnet. */
-export function hoodEyeFor(car: CarSpec): HoodEye {
+/** Where the three in-car views mount on a catalog car — read off that
+ * car's own silhouette, so a low sedan seats every one of them lower than an
+ * upright hatch does, and each shows its own bonnet, its own dials and its
+ * own nose. One function rather than three, because they are one question
+ * about one body and the renderer asks it once per stage. */
+export function carEyes(car: CarSpec): CarEyes {
   const body = bodySpecFor(car);
   const cowl = body.cabin.cowlZ;
-  return { x: -EYE_SIDE, y: deckAt(body, cowl) + EYE_RISE, z: cowl + EYE_AHEAD };
+  const nose = body.profile[0].z;
+  const bumper = body.front?.bumper;
+  const bumperTop = bumper ? bumper.y + bumper.height : body.beltY * 0.8;
+  return {
+    cockpit: cockpitEyeFor(body),
+    hood: { x: EYE_SIDE, y: deckAt(body, cowl) + EYE_RISE, z: cowl + EYE_AHEAD },
+    bumper: { x: 0, y: bumperTop + NOSE_RISE, z: nose + NOSE_AHEAD },
+  };
 }

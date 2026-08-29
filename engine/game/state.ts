@@ -424,7 +424,22 @@ export type GameState = {
   /** Current gusting wind velocity, world space m/s — updated every step;
    * the renderer reads it for fumes/rain and the HUD for its indicator. */
   wind: { x: number; z: number };
+  /** THE METRES THIS CAR IS OWED off a mass-start grid, as extra drive it
+   * gets to take them back with (TUNING.massStart). Null on every run that
+   * started level — a rally interval start, a time trial, Roam — and null
+   * again the moment it is spent, which is what keeps a lapped circuit from
+   * launching the whole field a second time. */
+  catchUp: CatchUp | null;
   stats: RunStats;
   /** Seeded stream for in-run randomness (airborne turbulence only). */
   rng: Rng;
+};
+
+/** A grid slot's compensation: how much extra drive it gets, and the arc
+ * position along the stage at which it stops getting it. */
+export type CatchUp = {
+  /** Extra drive as a fraction — 0.03 is three percent more acceleration. */
+  gain: number;
+  /** Where up the road it runs out, meters along the stage. */
+  untilS: number;
 };

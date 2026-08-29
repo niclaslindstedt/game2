@@ -12,8 +12,8 @@
 //
 // The pause card holds the run where it stands. The heavy state lives in
 // refs; the HUD re-renders from a ~12 Hz snapshot. URL params (?seed=,
-// ?tod=, ?weather=, ?car=, ?length=, ?shape=, ?laps=, the four generator dials ?elevation=
-// ?water= ?trees= ?asphalt=, ?start=1, ?shot=1 and ?bot=1) pin a run for tooling and
+// ?tod=, ?weather=, ?car=, ?length=, ?shape=, ?laps=, ?gearbox=, the four generator dials
+// ?elevation= ?water= ?trees= ?asphalt=, ?start=1, ?shot=1 and ?bot=1) pin a run for tooling and
 // screenshots, and the developer tools add ?debug=1, ?god=1 and the free
 // camera's pose (?gx= ?gy= ?gz= ?gyaw= ?gpitch=) — the repro line the debug
 // overlay prints is exactly that set, so a screenshot reproduces as a URL.
@@ -35,6 +35,7 @@ import {
   type FiniteStageLength,
   type GameEvent,
   type GameState,
+  type GridSlot,
   type StageKnobs,
   type StageLength,
   type StageShape,
@@ -56,7 +57,7 @@ import { stageQuery, traceLine, type DebugContext } from "./game/debug-info.ts";
 import { debugLogging, log as debugLog, logRunStart, setDebugLogging } from "./game/debug-log.ts";
 import type { GameRenderer } from "./game/renderer.ts";
 import { Hud, type HudFlash, type HudSnapshot, type HudSplit } from "./game/hud.tsx";
-import type { FinishScores, FinishStandings } from "./game/hud-finish.tsx";
+import type { FinishRace, FinishScores, FinishStandings } from "./game/hud-finish.tsx";
 import {
   advanceField,
   catchUpField,
@@ -70,8 +71,11 @@ import {
   splitLeader,
   stepField,
   stopField,
+  playerSlot,
   PLAYER_ID,
+  RALLY_FIELD,
   type ClassRow,
+  type FieldPlan,
   type RivalField,
 } from "./game/standings.ts";
 import {
@@ -90,6 +94,7 @@ import {
   type RunBook,
 } from "./game/snapshot.ts";
 import {
+  DEFAULT_HEADS_UP,
   DEFAULT_STAGE_KNOBS,
   DIFFICULTY_OPTIONS,
   PauseMenu,
@@ -99,10 +104,12 @@ import {
   SEASONS,
   TIMES_OF_DAY,
   WEATHERS,
+  gridSize,
   raceLaps,
+  type PlayMode,
   type RaceSettings,
 } from "./game/menu.tsx";
-import { MainMenu, type MenuPage, type PlayMode } from "./game/main-menu.tsx";
+import { MainMenu, type MenuPage } from "./game/main-menu.tsx";
 import type { MapRect, MapView } from "./game/menu-roam.tsx";
 import {
   PODIUM,
@@ -138,6 +145,7 @@ import {
   type DevSettings,
   type PlayCamera,
   type Settings,
+  type ViewSettings,
 } from "./game/settings.ts";
 import { formatTime } from "./lib/util.ts";
 import { setAudioVolumes, unlockAudio } from "./game/audio/bus.ts";
@@ -253,12 +261,21 @@ function initialRace(): RaceSettings {
     shape: "sprint",
     knobs: { ...DEFAULT_STAGE_KNOBS },
     difficulty: "medium",
+    headsUp: { ...DEFAULT_HEADS_UP },
   };
   try {
     const stored = localStorage.getItem(RACE_KEY);
     if (stored) Object.assign(race, JSON.parse(stored));
   } catch {
     /* storage unavailable — keep defaults */
+  }
+  // A record written before HEADS UP existed has no group at all, and one
+  // written by a build with fewer settings in it has half a group: both are
+  // the defaults with whatever was actually stored laid over them.
+  race.headsUp = { ...DEFAULT_HEADS_UP, ...race.headsUp };
+  race.headsUp.cars = gridSize(race.headsUp.cars);
+  if (!DIFFICULTY_OPTIONS.some((d) => d.id === race.headsUp.difficulty)) {
+    race.headsUp.difficulty = DEFAULT_HEADS_UP.difficulty;
   }
   if (!STAGE_LENGTH_OPTIONS.some((l) => l.id === race.length)) race.length = "medium";
   if (!STAGE_SHAPES.some((s) => s.id === race.shape)) race.shape = "sprint";
@@ -291,17 +308,48 @@ function initialRace(): RaceSettings {
   return race;
 }
 
+/** ?seat= ?reach= ?vfov= ?headmotion= — the in-car view's four knobs, in the
+ * units OPTIONS ▸ VIEW moves them in (metres, metres, degrees, a scale on
+ * the head). The tooling sweeps these to shoot a contact sheet of variants
+ * without a rebuild; a missing one keeps whatever the player has stored. */
+function viewFromUrl(): Partial<ViewSettings> {
+  const params = new URLSearchParams(location.search);
+  const view: Partial<ViewSettings> = {};
+  const num = (key: string): number | undefined => {
+    const raw = params.get(key);
+    if (raw === null) return undefined;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : undefined;
+  };
+  const seat = num("seat");
+  if (seat !== undefined) view.seat = seat;
+  const reach = num("reach");
+  if (reach !== undefined) view.reach = reach;
+  const fov = num("vfov");
+  if (fov !== undefined) view.fov = fov;
+  const head = num("headmotion");
+  if (head !== undefined) view.headMotion = head;
+  return view;
+}
+
 /** The player's options, with the URL's developer flags laid over them. A
  * repro link arrives on a machine that has never drummed on the chassis, so
  * it lets the developer menu out as well as the tools — otherwise the boxes
  * come up and there is no way to switch them off again. */
 function initialSettings(): Settings {
   const settings = loadSettings();
+  Object.assign(settings.view, viewFromUrl());
   const forced = devFromUrl();
   if (forced.debug || forced.god) {
     settings.developer = true;
     settings.dev = { ...settings.dev, ...forced };
   }
+  // The box, pinned the way `?camera=` pins the angle: which gears the HUD
+  // offers and what a thumb flick on the pedal is worth both hang off it, so
+  // a shot of either must not depend on what is in the screenshot machine's
+  // local storage.
+  const gearbox = new URLSearchParams(location.search).get("gearbox");
+  if (gearbox === "auto" || gearbox === "manual") settings.gearbox = gearbox;
   return settings;
 }
 
@@ -327,6 +375,13 @@ type StageSpec = {
   season: Season;
   /** The menu's demo has no grid to sit on — nobody is waiting for it. */
   skipCountdown: boolean;
+  /** Where the player is stood when the whole field leaves together: the
+   * last row of the mass-start grid, deepest into the apron behind the start
+   * gate, and the drive it is owed for the rows in front of it
+   * (engine/sim/grid.ts). Null on every other start — a rally interval, a
+   * time trial, Roam — where the player is on the line on their own and owes
+   * nobody anything. */
+  grid: GridSlot | null;
 };
 
 function sameStage(a: StageSpec | null, b: StageSpec): boolean {
@@ -341,7 +396,9 @@ function sameStage(a: StageSpec | null, b: StageSpec): boolean {
     a.timeOfDay === b.timeOfDay &&
     a.weather === b.weather &&
     a.season === b.season &&
-    a.skipCountdown === b.skipCountdown
+    a.skipCountdown === b.skipCountdown &&
+    a.grid?.number === b.grid?.number &&
+    a.grid?.back === b.grid?.back
   );
 }
 
@@ -360,6 +417,7 @@ function demoStage(race: RaceSettings, seed: number): StageSpec {
     weather: race.weather,
     season: race.season,
     skipCountdown: true,
+    grid: null,
   };
 }
 
@@ -379,11 +437,33 @@ function backdropFor(page: MenuPage, race: RaceSettings, seed: number, demoSeed:
         weather: race.weather,
         season: race.season,
         skipCountdown: true,
+        grid: null,
       } satisfies StageSpec,
       driven: false,
     };
   }
   return { camera: "drone" as CameraMode, stage: demoStage(race, demoSeed), driven: true };
+}
+
+/** What a run is CALLED, for the line the log opens with. */
+const MODE_NAME: Record<PlayMode, string> = {
+  campaign: "Campaign",
+  timetrial: "Time trial",
+  headsup: "Heads up",
+  roam: "Roam",
+};
+
+/** HOW THE FIELD IS ENTERED for a run: the campaign runs the whole roster
+ * a rally interval apart at the campaign's own difficulty (R29), and a
+ * heads-up race runs whatever its three settings say. Nothing else enters
+ * anybody, so nothing else asks. */
+function fieldPlan(race: RaceSettings, mode: PlayMode): FieldPlan {
+  if (mode !== "headsup") return { ...RALLY_FIELD, difficulty: race.difficulty };
+  return {
+    difficulty: race.headsUp.difficulty,
+    cars: gridSize(race.headsUp.cars),
+    massStart: race.headsUp.massStart,
+  };
 }
 
 /** The camera a run opens on: the player's own choice from OPTIONS, unless
@@ -528,6 +608,9 @@ export function App() {
     carId: string;
     /** Race time at which anybody still going is retired where they stand. */
     limit: number;
+    /** Whether the classification goes on the campaign's board. False on a
+     * heads-up race, which is settled to be READ and never written down. */
+    score: boolean;
   } | null>(null);
   /** Where the run stands, as of the last board it went through. Held in a
    * ref because the HUD reads it off the snapshot the frame loop takes, and
@@ -701,6 +784,15 @@ export function App() {
       // and stays there — so the lights would only hang over the middle of
       // every frame the free camera was flown out to take.
       skipCountdown: spec.skipCountdown || godRef.current,
+      // The back row of a mass-start grid, and the metres it is owed. The
+      // rivals are entered off the same grid in `createField`, so the slot
+      // the player takes is the one slot that list does not.
+      gridOffset: spec.grid?.lateral ?? 0,
+      gridBack: spec.grid?.back ?? 0,
+      catchUp:
+        spec.grid && spec.grid.gain > 0
+          ? { gain: spec.grid.gain, untilS: TUNING.massStart.catchUpS }
+          : undefined,
       env: { timeOfDay: spec.timeOfDay, weather: spec.weather, season: spec.season },
     });
     const previous = gameRef.current;
@@ -725,12 +817,14 @@ export function App() {
    *
    * A ghost is only worth building on the finite, fixed-dial campaign
    * stages a time belongs to; nothing here ever runs behind the menu. */
-  /** R29 — enter the field for a campaign run: fourteen crews on the same
-   * compiled track, at the difficulty the player chose. Nobody is entered on
-   * Roam, in a time trial or behind the menu, and an endless stage has no
-   * finish to place at, so all of those race alone. Called on every start
-   * AND every restart — a field carried over from the last attempt would be
-   * fourteen cars already halfway down the road. */
+  /** R29 — enter the field for a run with rivals in it: real crews on the
+   * same compiled track, at the difficulty the player chose. The CAMPAIGN
+   * enters the whole roster one at a time; HEADS UP enters its own grid, its
+   * own size and its own start type. Nobody is entered on Roam, in a time
+   * trial or behind the menu, and an endless stage has no finish to place at,
+   * so all of those race alone. Called on every start AND every restart — a
+   * field carried over from the last attempt would be a dozen cars already
+   * halfway down the road. */
   const armField = (spec: StageSpec, mode: PlayMode): void => {
     fieldRef.current = null;
     standingRef.current = null;
@@ -741,8 +835,9 @@ export function App() {
     rendererRef.current?.setStanding(null);
     rendererRef.current?.field.clear();
     if (!trackRef.current || menuRef.current) return;
-    if (mode !== "campaign" || spec.length === "endless") return;
-    const field = createField(trackRef.current.track, raceRef.current.difficulty, {
+    if ((mode !== "campaign" && mode !== "headsup") || spec.length === "endless") return;
+    const race = raceRef.current;
+    const field = createField(trackRef.current.track, fieldPlan(race, mode), {
       seed: spec.seed,
       laps: spec.laps,
       timeOfDay: spec.timeOfDay,
@@ -862,7 +957,8 @@ export function App() {
   };
 
   const playLevel = (level: CampaignLevel, mode: PlayMode): void => {
-    status(`${mode === "timetrial" ? "Time trial" : "Campaign"} — ${level.name}`);
+    const race = raceRef.current;
+    status(`${MODE_NAME[mode]} — ${level.name}`);
     startStage(
       {
         seed: level.seed,
@@ -872,11 +968,14 @@ export function App() {
         // A campaign stage is the same country for everybody: the dials are
         // Roam's to play with, not the campaign's to inherit.
         knobs: DEFAULT_STAGE_KNOBS,
-        carId: raceRef.current.carId,
+        carId: race.carId,
         timeOfDay: level.timeOfDay,
         weather: level.weather,
         season: level.season,
         skipCountdown: false,
+        // The back row, on a mass start. Everything else puts the player on
+        // the line on their own.
+        grid: mode === "headsup" && race.headsUp.massStart ? playerSlot(race.headsUp.cars) : null,
       },
       mode,
       level.id,
@@ -898,6 +997,7 @@ export function App() {
         weather: r.weather,
         season: r.season,
         skipCountdown: false,
+        grid: null,
       },
       "roam",
     );
@@ -948,6 +1048,7 @@ export function App() {
     rendererRef.current?.setVideo(next.video);
     rendererRef.current?.setMirror(next.hud.mirror);
     rendererRef.current?.setNameTags(next.hud.nameTags);
+    rendererRef.current?.setView(next.view);
   };
 
   /** The debug snapshot the overlay renders and the log quotes. Null before
@@ -1078,6 +1179,7 @@ export function App() {
       if (optionsRef.current.screenshots) armScreenshots();
       renderer.setMirror(optionsRef.current.hud.mirror);
       renderer.setNameTags(optionsRef.current.hud.nameTags);
+      renderer.setView(optionsRef.current.view);
       renderer.setMapRect(mapRectRef.current);
       // Thunder arrives seconds after the flash that made it (storm.ts), so
       // the renderer decides WHEN and the bank decides what it sounds like.
@@ -1107,6 +1209,7 @@ export function App() {
           weather: r.weather,
           season: r.season,
           skipCountdown: false,
+          grid: null,
         };
         applyStageRef.current(spec, true);
         // The establishing shot is ten seconds of camera before a tooling
@@ -1232,21 +1335,26 @@ export function App() {
           standingRef.current = { place: placeAtFinish(field, home), of: field.of };
           renderer.setStanding(standingRef.current.place);
           const active = runRef.current;
-          const where =
-            active.mode === "campaign" && active.levelId ? findLevel(active.levelId) : null;
+          const where = active.levelId ? findLevel(active.levelId) : null;
           if (where) {
-            // R30 — the player is home, but the two places BEHIND them are
-            // worth two points and one to somebody, so the crews still out
-            // there are run home off the card's frames rather than abandoned.
+            // R30 — the player is home, but the places BEHIND them are worth
+            // two points and one to somebody, so the crews still out there are
+            // run home off the card's frames rather than abandoned. A heads-up
+            // race pays nobody and still runs them home: the result sheet is
+            // the whole point of the race, and a sheet that stops at the
+            // player is not one.
             settleRef.current = {
               field,
               levelId: where.level.id,
               time: home,
               carId: stageRef.current?.carId ?? "",
               limit: home * SETTLE_SLACK + SETTLE_GRACE,
+              // R30's points are the CAMPAIGN's board and only its. A heads-up
+              // race is one race and nothing carries out of it.
+              score: active.mode === "campaign",
             };
           } else {
-            // Nobody is keeping points: anybody still out there is behind the
+            // Nobody is entered: anybody still out there is behind the
             // player, and stepping them on would only cost the card frames.
             stopField(field);
           }
@@ -1286,7 +1394,11 @@ export function App() {
             const active = runRef.current;
             // Both modes post a time; only the campaign's clear opens the
             // next stage, and a time trial's level is cleared by definition.
-            if (active.levelId) {
+            // A HEADS-UP race posts nothing at all: it is raced off a grid the
+            // player started on the back row of, over a stage distance that is
+            // therefore not the one the board's times were set over, and a
+            // best time is a promise that both were the same road.
+            if (active.levelId && active.mode !== "headsup") {
               // A ghost IS the best time, so it is kept by the same rule and
               // read before the new time overwrites the old one. Recorded on
               // the campaign too: the board is shared, and a best set there
@@ -1532,7 +1644,7 @@ export function App() {
             time: settling.time,
             carId: settling.carId,
           });
-          setProgress(recordResult(settling.levelId, rows));
+          if (settling.score) setProgress(recordResult(settling.levelId, rows));
           setResult({ levelId: settling.levelId, rows });
         }
         // The road bed belongs to a run the player is IN. Behind the menu the
@@ -1627,7 +1739,8 @@ export function App() {
   // R29 — …and only ON THE PODIUM. A stage finished outside the top three
   // is not cleared, so the card that comes up has nowhere to offer: the way
   // on is the same stage again.
-  const missedPodium = snap?.standing != null && snap.standing.place > PODIUM;
+  const missedPodium =
+    run.mode === "campaign" && snap?.standing != null && snap.standing.place > PODIUM;
   const nextStage =
     upNext && !missedPodium
       ? { name: upNext.name, go: (): void => playLevel(upNext, "campaign") }
@@ -1644,6 +1757,24 @@ export function App() {
   // null until the last car is home (`settleField`), which is what the card's
   // own table waits on.
   const here = run.mode === "campaign" && run.levelId ? findLevel(run.levelId) : null;
+  // …and HEADS UP's own, which is the same sheet with the board taken off:
+  // where everybody finished, and nothing carried out of the race.
+  const headsUp: FinishRace | null =
+    run.mode === "headsup" && run.levelId
+      ? {
+          rows:
+            result?.levelId === run.levelId
+              ? result.rows.map((row) => ({
+                  place: row.place,
+                  name: row.alias,
+                  time: row.time,
+                  you: row.you,
+                }))
+              : null,
+          cars: gridSize(race.headsUp.cars),
+          massStart: race.headsUp.massStart,
+        }
+      : null;
   const campaign: FinishStandings | null = ((): FinishStandings | null => {
     if (!here || !snap?.standing) return null;
     const table = locationStandings(here.location, progress);
@@ -1688,8 +1819,12 @@ export function App() {
   // has just read their time is looking.
   // …and a campaign run that missed the podium wants exactly the same
   // button: the stage is still there, and the field will run it again.
+  // …and a HEADS-UP race wants it for the same reason a time trial does: the
+  // race is the whole thing, and the only way on from one is another.
   const onRetry =
-    run.mode === "timetrial" || missedPodium ? (): void => actionsRef.current.restart() : null;
+    run.mode === "timetrial" || run.mode === "headsup" || missedPodium
+      ? (): void => actionsRef.current.restart()
+      : null;
 
   // The board the results card shows, and the three letters it is waiting on.
   // Entering them writes the row and hands the new board straight back, so the
@@ -1748,6 +1883,7 @@ export function App() {
           onRetire={goMainMenu}
           scores={finishScores}
           campaign={campaign}
+          race={headsUp}
           locked={lockedBehind}
         />
       )}

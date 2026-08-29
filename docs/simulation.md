@@ -63,6 +63,37 @@ Each crew is also PAINTED to fit: `RIVAL_SCHEMES` in `pwa/src/game/car-livery.ts
 
 **The player is the only disruption.** Contacts are resolved between the player and each rival on the road (`collideCars`) and never between two rivals: a rival's time has to mean a stage they drove alone, and a result decided by a shunt the player never saw is not one they can read. Catch the crew in front and you can lean on them out of a corner — or put them into the trees, and their time with them.
 
+## The mass-start grid (`engine/sim/grid.ts`)
+
+HEADS UP races the same crews, the same bot and the same roads with the championship taken off — and, optionally, with the rally start taken off too. A **mass start** puts the whole field on one grid and sends it on one green, which changes four things and nothing else.
+
+**The grid stands behind the start gate.** R24 already lays `STAGE_RULES.startZone.apron` metres of flat dirt road off the back of the first sample — the rally start's run-up, straight, with the terrain shelf held flat under it — and that is where the field goes. Every car is on the road, none of them is off the stage (`pastApron`), and the whole grid drives THROUGH the gate when the lights go green. The apron's length is therefore a hard ceiling on how deep a grid can be, and `GRID_MAX` is derived from it rather than chosen: lengthen the apron in the rule book and the grid grows with it.
+
+**It zig-zags.** One car per row, alternating sides of the centre at `columnOffset`, `rowGap` metres between rows — the way a kart or club grid is actually laid out. The gap is a little under a car's length, so the cars overlap nose to tail and are kept apart across the road instead; that is what a stagger IS, and from the back of it the field reads as a queue running away up the road rather than as rows of pairs.
+
+**The entry list is shorter, and it is a spread.** `entryList(cars)` picks `cars - 1` crews spread evenly across the roster's reputation order rather than skimmed off the top of it. The best seven crews are one tier of driving seven times over, with nothing to pass; a spread keeps Sprat at the tail, Frostbite at the head, and the characters in between as far apart as a short list allows. How hard the whole field is stays the difficulty's job.
+
+**The order is inverted.** `headsUpField` puts the SLOWEST crew on pole and the quickest one on the row in front of the player, who is last. Seed it the rally way — reputation first — and the fast crews drive away from a field that was never going to catch them, and the race is over before the first corner. This way the road ahead is a queue that has to be worked through, by the good bots as much as by the player.
+
+### The catch-up, and why it is not `deficit / s`
+
+A row back is metres given away, and the player is on the back row, so the metres come back as **the only catch-up in the game**: a slot's drive is multiplied by `1 + gain` until it reaches `catchUpS` (200 m) along the stage, and the ledger is torn up the moment it is spent — a circuit's second lap does not launch the field again.
+
+The size of that gain is arithmetic, corrected by measurement. Two cars accelerating at `a` and `a(1+k)` off the same standstill are apart by `½akt²`; the leader covers `s` in `t = √(2s/a)`, so by then the trailing car has taken back `½ak(2s/a) = k·s` metres — independent of `a`, of the car and of the surface. That would make `k = deficit / s`. It does not hold, because `a` is not constant: `engineAccel` tapers to nothing at each gear's top, so most of a 200 m window is spent where a percent more drive buys well under a percent more road. Measured against the real physics — two identical cars flat out on a straight, one boosted, the gap read where the leader reaches the window's end:
+
+| Window | compact | classic | coupe |
+| ------ | ------- | ------- | ----- |
+| 80 m   | 0.75    | 0.67    | 0.90  |
+| 120 m  | 0.65    | 0.68    | 0.82  |
+| 200 m  | 0.65    | 0.52    | 0.80  |
+| 300 m  | 0.51    | 0.49    | 0.76  |
+
+The yield is flat in `k` (the model is linear in it) and falls with the window, which is the taper. `catchUpYield` is that number for the window in use, so `gain = deficit / (catchUpS × catchUpYield)`, capped at `catchUpMax`. On the default eight-car grid the back row is 24.5 m down and gets about 19% more drive for the first two hundred metres, decaying a row at a time to nothing at the front.
+
+It is deliberately the only assistance: no rubber band, no slipstream, no hand on the leader's brake. It reads the grid and never the running order, and it is over before the first real corner of any stage. **`tests/mass_start_test.ts` measures what actually comes back**, so a handling change that moves the torque taper fails there rather than quietly making the back row a worse place to start.
+
+**Everything else is shared.** The same `RivalField`, the same classification, the same solid cars on the road. What differs is that nobody is owed a head start — the grid sits through the same establishing shot and the same lights the player does — so a place read mid-stage is the actual order of the road rather than a count of better split times.
+
 ## The harness (`engine/sim/simulate.ts`)
 
 `simulateStage({ seed, carId, gearbox, profile, length, shape, laps, maxTime })` runs a full stage (at a finite stage length band — default medium) and returns: finish state and time, the laps raced and each lap's time, one lap of road (`trackLength`) and the ground the race actually covered (`raceLength`), the whole event log, the run stats (drift count/time/score, jumps, air time, clean landings, splashes, off-road time, impacts, crashes, respawns, top speed), and a **digest** — an FNV hash over sampled positions. Runs are deterministic: same seed + car + profile ⇒ same digest, which is exactly what `tests/simulation_test.ts` asserts. `shape: "circuit"` races a closed lap over three of them (R22); a sprint is one lap of a road that never comes back, and asking for more laps of one does nothing.

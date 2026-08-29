@@ -9,6 +9,7 @@
 import { DAMAGE_ZONES, TUNING, startsIn, wayHome, type GameState } from "@engine";
 
 import { buildMinimap } from "./minimap.tsx";
+import { shiftLightOn, shiftWindow } from "./shift-window.ts";
 import type { HudDamage, HudPacenote, HudSnapshot, HudStanding } from "./hud.tsx";
 
 /** The two instruments the ~12 Hz snapshot cannot carry, and why they are
@@ -135,17 +136,6 @@ function tachometer(state: GameState): number {
   return Math.min(1, 0.18 + 0.82 * state.car.rev);
 }
 
-/** ...and the same dial as the GEARBOX reads it: road speed through the
- * gearing, with no wheelspin in it. The shift light hangs off this rather
- * than off the needle, because a needle flared by a lit-up axle is not a
- * gear that has run out — a car spinning its wheels in second wants the
- * throttle backed off, never third. */
-function gearedRev(state: GameState): number {
-  const top = state.spec.gearTop[state.car.gear];
-  const geared = Math.min(Math.max(0, state.car.u) / top, TUNING.revs.limiter);
-  return Math.min(1, 0.18 + 0.82 * geared);
-}
-
 /** The damage ledger flipped into SCREEN space for the HUD's 2D car: the
  * rendered world mirrors the engine's map view (the same one-flip rule
  * input.ts applies to steering), so the engine's right-side zones — and its
@@ -212,11 +202,11 @@ export function takeSnapshot(
     reversing: state.car.reversing,
     gearbox: state.car.gearbox,
     rpm,
-    // Nothing to shift on the grid, however hard the driver leans on it.
-    shiftUp:
-      state.phase === "racing" &&
-      gearedRev(state) > 0.83 &&
-      state.car.gear < state.spec.gearTop.length - 1,
+    // Nothing to shift on the grid, however hard the driver leans on it —
+    // shift-window.ts owns that, and both readouts come off it so the lamp
+    // and the gate a flick is held to can never disagree.
+    shiftUp: shiftLightOn(state),
+    shift: shiftWindow(state),
     airborne: state.car.airborne,
     minimap: buildMinimap(state),
     // The co-driver stops calling corners the moment the car is in the

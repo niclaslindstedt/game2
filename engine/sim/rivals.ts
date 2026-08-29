@@ -249,21 +249,40 @@ export type RivalEntry = {
 /** The player's own start number — last car on the road (R29). */
 export const PLAYER_NUMBER = FIELD_SIZE;
 
+/** THE ENTRY LIST for a field of `cars` (the player included), in
+ * REPUTATION ORDER, best first.
+ *
+ * The campaign enters the whole roster and this is simply that list sorted.
+ * A short field — a heads-up race picks its own size — takes `cars - 1` crews
+ * SPREAD evenly across the order rather than skimmed off the top of it: the
+ * best seven crews are one tier of driving repeated seven times, where a
+ * spread keeps Sprat at the tail, Frostbite at the head, and the characters
+ * in between as far apart as the entry list allows. How hard the whole field
+ * is stays the difficulty's job, not the entry list's. */
+export function entryList(cars: number = FIELD_SIZE): RivalCrew[] {
+  const seeded = [...RIVALS].sort((a, b) => b.standing - a.standing);
+  const want = Math.max(0, Math.min(seeded.length, Math.round(cars) - 1));
+  if (want >= seeded.length) return seeded;
+  if (want <= 1) return seeded.slice(0, want);
+  const picked: RivalCrew[] = [];
+  for (let i = 0; i < want; i++) {
+    picked.push(seeded[Math.round((i * (seeded.length - 1)) / (want - 1))]);
+  }
+  return picked;
+}
+
 /** The field entered for a stage, in START ORDER. Seeded the way a gravel
  * rally seeds: the crews with the reputation go first, so the road ahead of
  * the player gets slower as the numbers climb, and the last car out is the
  * one with everything to prove. */
-export function rivalField(difficulty: Difficulty): RivalEntry[] {
-  return [...RIVALS]
-    .sort((a, b) => b.standing - a.standing)
-    .map((crew, index) => {
-      const skill = spend(budgetFor(difficulty, crew.standing), crew.weights);
-      return {
-        crew,
-        number: index + 1,
-        skill,
-        profile: profileFor(skill),
-        gearbox: gearboxFor(skill),
-      };
-    });
+export function rivalField(difficulty: Difficulty, cars: number = FIELD_SIZE): RivalEntry[] {
+  return entryList(cars).map((crew, index) => enter(crew, difficulty, index + 1));
+}
+
+/** One crew, given a difficulty's budget to spend on their own shape and a
+ * number to carry. Shared by both start types — a crew is the same driver
+ * whether they leave the control alone or off a grid. */
+export function enter(crew: RivalCrew, difficulty: Difficulty, number: number): RivalEntry {
+  const skill = spend(budgetFor(difficulty, crew.standing), crew.weights);
+  return { crew, number, skill, profile: profileFor(skill), gearbox: gearboxFor(skill) };
 }
