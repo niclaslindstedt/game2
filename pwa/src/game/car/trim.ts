@@ -135,10 +135,38 @@ function buildMudflaps(b: MeshBuilder, spec: CarBodySpec, axles: number[]): void
   }
 }
 
+/** The panel, if any, a stretch of deck stripe is painted ON — a stripe
+ * crossing the bonnet is paint on the bonnet, not on the car, and when the
+ * bonnet is torn off it has to leave with it rather than hang in the air
+ * over the engine bay. A stretch belongs to a lid only if it is inside it
+ * across its whole width as well as along z. */
+function stripePanel(
+  spec: CarBodySpec,
+  z: number,
+  x0: number,
+  x1: number,
+): "hood" | "hatch" | null {
+  const lids = [
+    ["hood", spec.front?.hood],
+    ["hatch", spec.rear?.deck],
+  ] as const;
+  for (const [name, lid] of lids) {
+    if (!lid) continue;
+    const lo = Math.min(lid.zFrom, lid.zTo);
+    const hi = Math.max(lid.zFrom, lid.zTo);
+    if (z >= lo && z <= hi && x0 >= -lid.half && x1 <= lid.half) return name;
+  }
+  return null;
+}
+
 /** Livery stripes hug the hood/deck by sampling the silhouette. A spec may
  * carry several groups — hood stripes and a boot-lid block are the same
  * vocabulary run twice. */
-function buildStripes(b: MeshBuilder, spec: CarBodySpec): void {
+function buildStripes(
+  b: MeshBuilder,
+  spec: CarBodySpec,
+  part: (name: DamagePart) => MeshBuilder,
+): void {
   if (!spec.stripes) return;
   const groups = Array.isArray(spec.stripes) ? spec.stripes : [spec.stripes];
   const steps = 8;
@@ -149,15 +177,21 @@ function buildStripes(b: MeshBuilder, spec: CarBodySpec): void {
     // that flickers with the camera.
     const lift = 0.03 + gi * 0.004;
     for (const off of st.offsets) {
-      for (let i = 0; i < steps; i++) {
-        const za = st.zFrom + ((st.zTo - st.zFrom) * i) / steps;
-        const zb = st.zFrom + ((st.zTo - st.zFrom) * (i + 1)) / steps;
+      const w = st.width / 2;
+      // The lid edges join the ladder, so a stripe that runs off the end of
+      // the bonnet onto the nose cap is split exactly there instead of
+      // taking a whole step onto whichever panel its midpoint fell on.
+      const zs = stripeSamples(spec, st.zFrom, st.zTo, steps);
+      for (let i = 0; i < zs.length - 1; i++) {
+        const za = zs[i];
+        const zb = zs[i + 1];
         const a = sampleProfile(spec.profile, za);
         const bb = sampleProfile(spec.profile, zb);
-        const w = st.width / 2;
+        const lid = stripePanel(spec, (za + zb) / 2, off - w, off + w);
         // Above the bonnet lid, which is itself 20 mm proud of the deck —
         // a stripe under it would simply disappear.
-        b.quad(
+        const into = lid ? part(lid) : b;
+        into.quad(
           [off - w, a.topY + lift, za],
           [off + w, a.topY + lift, za],
           [off + w, bb.topY + lift, zb],
@@ -167,6 +201,21 @@ function buildStripes(b: MeshBuilder, spec: CarBodySpec): void {
       }
     }
   });
+}
+
+/** A stripe's z ladder: an even run, plus every lid edge that falls inside
+ * it, sorted the way the stripe itself runs. */
+function stripeSamples(spec: CarBodySpec, zFrom: number, zTo: number, steps: number): number[] {
+  const lo = Math.min(zFrom, zTo);
+  const hi = Math.max(zFrom, zTo);
+  const zs = new Set<number>([zFrom, zTo]);
+  for (let i = 1; i < steps; i++) zs.add(zFrom + ((zTo - zFrom) * i) / steps);
+  for (const lid of [spec.front?.hood, spec.rear?.deck]) {
+    if (!lid) continue;
+    for (const edge of [lid.zFrom, lid.zTo]) if (edge > lo && edge < hi) zs.add(edge);
+  }
+  const out = [...zs].sort((a, b) => a - b);
+  return zFrom > zTo ? out.reverse() : out;
 }
 
 /** How far off the flank the roundel's panel floats, and its digits above
@@ -319,7 +368,7 @@ export function buildTrim(
 ): void {
   buildArchTrim(b, spec, axles);
   for (const band of spec.sideBands ?? []) sideBand(b, spec, axles, band, band.color);
-  buildStripes(b, spec);
+  buildStripes(b, spec, part);
   buildRaceNumber(b, spec, axles);
   buildHandles(b, spec, axles);
   buildMudflaps(b, spec, axles);

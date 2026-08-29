@@ -20,7 +20,7 @@
 // the roof. A seated driver and a 320 mm steering wheel do not fit in
 // 350 mm — arrange them however you like, the wheel comes out at eye level
 // with its bottom half sawn off by the floor. So a car built with a cockpit
-// has that deck CUT AWAY under the cabin (`OpenCabin` in car/shell.ts), and
+// has that deck CUT AWAY under the cabin (`DeckOpening` in car/shell.ts), and
 // this file is what closes the hole again: a floor down at footwell height,
 // an inner sill each side, and a bulkhead at each end. Everything else in
 // here is furniture standing on that floor at honest proportions.
@@ -41,7 +41,7 @@ import { NO_DIRT } from "../car-dirt.ts";
 import { MeshBuilder, mixHex, patchAt, plate, slab, solid, tube, type V3 } from "./builder.ts";
 import { screenPanes } from "./greenhouse.ts";
 import { LAYOUT, SEAT_SIDE, TRIM, buildLining, cabinOf, type Cabin } from "./interior.ts";
-import type { OpenCabin } from "./shell.ts";
+import type { DeckOpening } from "./shell.ts";
 import type { CarBodySpec } from "./spec.ts";
 
 /** Where the driver's eyes are, in the same car-local metres everything
@@ -123,7 +123,7 @@ export type CarCockpit = {
 const RIG = {
   /** How far the cabin floor sits over the body's own underside, m. A real
    * footwell is a hand's depth above the road; this is that, and it is what
-   * the cut-open deck (`OpenCabin`) makes room for. */
+   * the cut-open deck (`DeckOpening`) makes room for. */
   floor: 0.1,
   eye: {
     /** Over the sill, m. */
@@ -332,7 +332,7 @@ function roomOf(spec: CarBodySpec): Room {
 /** Where the deck has to be cut for this body to hold a cockpit — handed to
  * car/shell.ts, so the loft and the hull that closes it again are derived
  * from one opening rather than two. */
-export function cabinOpening(spec: CarBodySpec): OpenCabin {
+export function cabinOpening(spec: CarBodySpec): DeckOpening {
   const room = roomOf(spec);
   return { zFrom: room.cabin.cowlZ, zTo: room.cabin.rearZ, half: room.half };
 }
@@ -404,7 +404,7 @@ function wallZ(
 
 /** THE HULL: the floor, the two inner sills and the bulkhead at each end.
  *
- * This is the part that is not decoration. `OpenCabin` takes the middle of
+ * This is the part that is not decoration. The deck opening takes the middle of
  * the body's top deck out between the cowl and the rear bulkhead, and
  * without these four surfaces the car has a hole in it — the underbody's
  * own faces point down and are culled from above, so a look at the footwell

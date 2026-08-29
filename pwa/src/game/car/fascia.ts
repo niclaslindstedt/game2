@@ -148,6 +148,7 @@ export function buildFront(
   spec: CarBodySpec,
   axles: number[],
   part: (name: DamagePart) => MeshBuilder,
+  options: { engineBay?: boolean } = {},
 ): void {
   const b = s.body;
   const f = spec.front;
@@ -190,7 +191,10 @@ export function buildFront(
 
   if (f.lampPods) buildLampPods(s, f.lampPods, trim);
 
-  buildPanel(b, spec, part("hood"), f.hood, "hood");
+  // A car with a real engine bay under the bonnet has the deck cut away
+  // there, and car/engine-bay.ts paints the flange around the hole — so the
+  // flat bay below would be a lid drawn straight over the well.
+  buildPanel(b, spec, part("hood"), f.hood, "hood", !options.engineBay);
 }
 
 export function buildRear(
@@ -229,13 +233,15 @@ export function buildRear(
 
 /** A bonnet or a boot lid: a proud slab following the deck's silhouette,
  * over a dark bay painted straight onto the shell. When the panel is torn
- * off, the bay is what is left showing. */
+ * off, the bay is what is left showing — a painted one where `bay` is set,
+ * and the real well car/engine-bay.ts cuts where it is not. */
 function buildPanel(
   shell: MeshBuilder,
   spec: CarBodySpec,
   panel: MeshBuilder,
   lid: { half: number; zFrom: number; zTo: number } | undefined,
   kind: "hood" | "hatch",
+  bayPaint = true,
 ): void {
   if (!lid) return;
   const steps = 6;
@@ -255,13 +261,15 @@ function buildPanel(
     const yb = topAt(zb);
     // The bay, on the shell: 4 mm proud so it wins the depth test against
     // the deck it is painted over.
-    shell.quad(
-      [-lid.half, ya + 0.004, za],
-      [lid.half, ya + 0.004, za],
-      [lid.half, yb + 0.004, zb],
-      [-lid.half, yb + 0.004, zb],
-      bay,
-    );
+    if (bayPaint) {
+      shell.quad(
+        [-lid.half, ya + 0.004, za],
+        [lid.half, ya + 0.004, za],
+        [lid.half, yb + 0.004, zb],
+        [-lid.half, yb + 0.004, zb],
+        bay,
+      );
+    }
     // The lid, above it, with a skirt down each long edge so it has real
     // thickness where the shut line runs.
     panel.quad(

@@ -27,6 +27,7 @@ import { MeshBuilder, patchNormal } from "./car/builder.ts";
 import { buildFront, buildRear } from "./car/fascia.ts";
 import { buildGreenhouse, screenPanes } from "./car/greenhouse.ts";
 import { buildCockpit, cabinOpening, type CarCockpit } from "./car/cockpit.ts";
+import { bayOpening, buildEngineBay } from "./car/engine-bay.ts";
 import { buildInterior, type InteriorDetail } from "./car/interior.ts";
 import type { CrewLook } from "./car-crew.ts";
 import { LENS_MATERIAL } from "./car/lamps.ts";
@@ -194,17 +195,22 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   // The lit surfaces of every lamp, kept out of the body's buffer because
   // they are switched rather than tinted — one mesh for both ends.
   const l = new MeshBuilder();
-  // A car that is going to be SAT IN has the middle of its top deck taken
-  // out from under the cabin, which is the only way a driver and a wheel fit
-  // in one (car/cockpit.ts). The hole is closed again from the inside: by
-  // the cockpit's own hull while the cockpit camera is up, and by
-  // car/interior.ts's pan in every other view — which is why a cockpit car
-  // is never built with its interior off.
-  buildShell(b, spec, buildStations(spec, axles), {
-    openCabin: options.cockpit ? cabinOpening(spec) : undefined,
+  // TWO HOLES IN THE TOP DECK, and neither is optional to whatever asks for
+  // it. Under the BONNET the deck is cut away so there is an engine bay to
+  // see once an impact tears the panel off (car/engine-bay.ts, which closes
+  // the hole again with a well). Under the CABIN it comes out on a car that
+  // is going to be SAT IN, which is the only way a driver and a wheel fit in
+  // one (car/cockpit.ts) — closed by the cockpit's own hull while that
+  // camera is up and by car/interior.ts's pan in every other view, which is
+  // why a cockpit car is never built with its interior off.
+  const stations = buildStations(spec, axles);
+  const bay = bayOpening(spec);
+  buildShell(b, spec, stations, {
+    openings: [...(options.cockpit ? [cabinOpening(spec)] : []), ...(bay ? [bay] : [])],
   });
+  const engineBay = buildEngineBay(b, spec, stations, axles, detail);
   buildGreenhouse(b, g, spec);
-  buildFront({ body: b, lens: l }, spec, axles, part);
+  buildFront({ body: b, lens: l }, spec, axles, part, { engineBay });
   buildRear({ body: b, lens: l }, spec, axles, part);
   buildTrim(b, spec, axles, part);
 

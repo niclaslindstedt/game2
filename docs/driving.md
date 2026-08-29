@@ -743,8 +743,11 @@ wrong instead of scanning a row of bars.
 Seven pieces can come off: the two bumpers, the two mirrors, the spoiler, and
 the two lids. A bonnet or boot lid is bolted deeper than the bumper in front
 of it (`TUNING.collision.partAt.lid`), so it only lets go once the clip around
-it has folded far enough to pull its hinges — and what is left showing is the
-dark bay the panel was covering.
+it has folded far enough to pull its hinges — and what is left showing is what
+the panel was covering. Behind a boot lid that is a dark bay painted on the
+deck; behind a BONNET it is a real one, a well cut down into the front of the
+body with an engine standing in it (`pwa/src/game/car/engine-bay.ts`), which
+crumples with the nose the same folds do.
 
 ## The drivetrain
 

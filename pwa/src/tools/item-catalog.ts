@@ -177,6 +177,49 @@ const CAR_ITEMS: ItemDef[] = [
     },
   },
   {
+    id: "engine-bay",
+    group: "car",
+    note: "under the bonnet — the panel gone, the way an impact leaves it",
+    build: ({ car }) => {
+      const parts = buildCarBody(car, { interior: "high" });
+      // Exactly what car-damage.ts does on a `partBreak`, minus the tumble:
+      // the bonnet is a mesh of its own, and taking it off the chassis is
+      // the only way to see what is under it.
+      const hood = parts.breakables.hood;
+      hood?.removeFromParent();
+      parts.group.updateMatrixWorld(true);
+      // The bay is a hole in the front of a car, so a turntable that aims
+      // at the car's CENTRE never looks into it. These stand where somebody
+      // opening the bonnet stands.
+      const nose = car.profile[0].z;
+      const deck = car.profile[0].topY;
+      const bay = new THREE.Vector3(0, deck - 0.15, (nose + car.cabin.cowlZ) / 2);
+      return {
+        object: parts.group,
+        views: [
+          {
+            name: "over the wing",
+            eye: { pos: new THREE.Vector3(1.3, deck + 1.0, nose + 1.1), look: bay, fov: 46 },
+          },
+          {
+            name: "straight down",
+            eye: { pos: new THREE.Vector3(0.02, deck + 1.5, bay.z + 0.02), look: bay, fov: 46 },
+          },
+          {
+            name: "over the cowl",
+            eye: {
+              pos: new THREE.Vector3(-0.2, deck + 0.75, car.cabin.cowlZ - 0.5),
+              look: bay,
+              fov: 52,
+            },
+          },
+          { name: "front 3/4", orbit: { az: 0.62, el: 0.5 } },
+        ],
+        dispose: parts.dispose,
+      };
+    },
+  },
+  {
     id: "interior",
     group: "car",
     note: "the cabin with the shell taken off it",
