@@ -7,6 +7,12 @@
 // faces, wrinkled by a deterministic per-vertex crumple, sagged by the
 // underside's belly crush, and scuffed darker where the metal folded. The
 // engine owns every number here; this module only draws what it says.
+//
+// The LENSES bend on the same terms, out of the same routine. They are a
+// separate mesh only because a lamp is lit rather than painted (car-body.ts),
+// and they sit exactly where a nose or a tail gets crushed — left pristine,
+// a lamp would stand out in front of a folded cap as the one undamaged
+// thing on the car. The scuff darkens them too, which is a smashed lamp.
 
 import * as THREE from "three";
 import { DAMAGE_ZONES, type DamagePart, type GameEvent, type GameState } from "@engine";
@@ -44,23 +50,45 @@ export type CarDamageVisual = {
   dispose: () => void;
 };
 
+/** One mesh's vertices, plus the pristine copy every bend is re-derived
+ * from — the shell and the lenses each get one, and `bend` walks them all. */
+type Crumpleable = {
+  pos: THREE.BufferAttribute;
+  col: THREE.BufferAttribute;
+  restPos: Float32Array;
+  restCol: Float32Array;
+};
+
+function crumpleable(mesh: THREE.Mesh): Crumpleable {
+  const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+  const col = mesh.geometry.getAttribute("color") as THREE.BufferAttribute;
+  return {
+    pos,
+    col,
+    restPos: new Float32Array(pos.array as Float32Array),
+    restCol: new Float32Array(col.array as Float32Array),
+  };
+}
+
 export function createCarDamage(body: CarBodyParts): CarDamageVisual {
-  const geo = body.body.geometry;
-  const pos = geo.getAttribute("position") as THREE.BufferAttribute;
-  const col = geo.getAttribute("color") as THREE.BufferAttribute;
-  const restPos = new Float32Array(pos.array as Float32Array);
-  const restCol = new Float32Array(col.array as Float32Array);
+  const panels = [crumpleable(body.body)];
+  if (body.lenses) panels.push(crumpleable(body.lenses));
 
   const debris = new THREE.Group();
   const flying: TumbleBody[] = [];
   const detached = new Set<DamagePart>();
   let bentVersion = 0;
 
-  /** Re-derive every body vertex from its pristine copy and the ledger. */
-  const bend = (state: GameState): void => {
-    const damage = state.car.damage;
-    const zones = damage.zones;
-    const span = (Math.PI * 2) / DAMAGE_ZONES;
+  /** One mesh's worth of that. */
+  const bendPanel = (
+    pos: THREE.BufferAttribute,
+    col: THREE.BufferAttribute,
+    restPos: Float32Array,
+    restCol: Float32Array,
+    damage: GameState["car"]["damage"],
+    zones: readonly number[],
+    span: number,
+  ): void => {
     for (let i = 0; i < pos.count; i++) {
       const x0 = restPos[i * 3];
       const y0 = restPos[i * 3 + 1];
@@ -96,6 +124,16 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     }
     pos.needsUpdate = true;
     col.needsUpdate = true;
+  };
+
+  /** Re-derive every body vertex from its pristine copy and the ledger. */
+  const bend = (state: GameState): void => {
+    const damage = state.car.damage;
+    const zones = damage.zones;
+    const span = (Math.PI * 2) / DAMAGE_ZONES;
+    for (const { pos, col, restPos, restCol } of panels) {
+      bendPanel(pos, col, restPos, restCol, damage, zones, span);
+    }
     bentVersion = damage.version;
   };
 

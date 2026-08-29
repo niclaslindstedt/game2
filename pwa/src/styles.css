@@ -1614,6 +1614,14 @@ body {
   align-items: center;
   justify-content: center;
   padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
+  /* OVER EVERYTHING THE HUD PUTS UP. Coming after the HUD in the DOM is not
+     enough: `.hud-center` claims a layer of its own to clear the thumb
+     zones, and a positioned box with a z-index beats one without whatever
+     the source order says. So the start control's caption — which is on
+     screen for exactly the beat a player is most likely to reach for pause
+     — printed straight through the card. This is the modal tier, the same
+     one the results sheet sits on. */
+  z-index: 50;
 }
 
 .hud-menu {

@@ -5,6 +5,11 @@
 // rectangular, whether the bumper is a thin chrome blade or a deep plastic
 // slab, and how far the air dam hangs under it.
 //
+// The LAMPS themselves are built by car/lamps.ts, because they are the one
+// thing on a face that is lit rather than painted and are drawn across two
+// surfaces instead of one. This module places them and owns everything
+// around them.
+//
 // The bumpers and the bonnet are built through `part`, which makes each of
 // them its own mesh: the engine's damage ledger names them and the damage
 // visual tears that mesh off and tumbles it down the road.
@@ -12,119 +17,20 @@
 import type { DamagePart } from "@engine";
 
 import type { MeshBuilder, V3 } from "./builder.ts";
+import {
+  buildHeadlights,
+  buildIndicators,
+  buildLampPods,
+  buildTailLights,
+  disc,
+  type LampSurfaces,
+} from "./lamps.ts";
 import { flankX, sampleProfile, shade } from "./shell.ts";
-import type { CarBodySpec, Grille, Lights } from "./spec.ts";
+import type { CarBodySpec, Grille } from "./spec.ts";
 
 /** How far a lamp lens, a grille panel or a badge floats off the cap it is
  * laid on, m — enough to beat depth fighting at any camera distance. */
 const PROUD = 0.008;
-
-/** A flat disc in a z-plane. Derived once so the winding is not guessed:
- * with x = r·cos θ and y = r·sin θ, stepping OUTWARD in radius and then
- * FORWARD in angle gives a +z normal, so `facing` −1 reverses the cycle. */
-function disc(
-  b: MeshBuilder,
-  cx: number,
-  cy: number,
-  z: number,
-  r0: number,
-  r1: number,
-  color: number,
-  facing: number,
-  facets = 12,
-): void {
-  const p = (r: number, a: number): V3 => [cx + r * Math.cos(a), cy + r * Math.sin(a), z];
-  for (let i = 0; i < facets; i++) {
-    const a0 = (i / facets) * Math.PI * 2;
-    const a1 = ((i + 1) / facets) * Math.PI * 2;
-    const q = [p(r0, a0), p(r1, a0), p(r1, a1), p(r0, a1)];
-    if (facing > 0) b.quad(q[0], q[1], q[2], q[3], color);
-    else b.quad(q[3], q[2], q[1], q[0], color);
-  }
-}
-
-/** One lamp cluster's place on the car, in car space. */
-export type LampAnchor = { x: number; y: number; z: number; width: number; height: number };
-
-/** Where a car's lamp clusters sit, one per side — the same numbers the
- * lenses below are laid on. The glow over the tail pair (car-mesh.ts) and
- * the beams both ends throw (environment.ts) read these, so restyling a
- * face moves a lamp and its light together instead of leaving a bloom
- * floating off the corner. Empty where a spec has no lamps at that end.
- *
- * On a quad-headlight face the anchor is the cluster's optical CENTRE, not
- * whichever of the pair was authored first: one beam belongs to the pair. */
-export function frontLampAnchors(spec: CarBodySpec): LampAnchor[] {
-  const l = spec.front?.lights;
-  if (!l) return [];
-  const outer = l.pairGap === undefined ? l.x : l.x + l.pairGap;
-  const outerSize = l.pairGap === undefined ? l.size : (l.pairSize ?? l.size);
-  const span = Math.abs(outer - l.x) + l.size + outerSize;
-  return [-1, 1].map((side) => ({
-    x: (side * (l.x + outer)) / 2,
-    y: l.y,
-    z: spec.profile[0].z,
-    width: span,
-    height: (l.kind === "round" ? l.size : (l.height ?? l.size)) * 2,
-  }));
-}
-
-/** ...and the clusters at the other end, where `x` already IS the centre. */
-export function rearLampAnchors(spec: CarBodySpec): LampAnchor[] {
-  const l = spec.rear?.lights;
-  if (!l) return [];
-  return [-1, 1].map((side) => ({
-    x: side * l.x,
-    y: l.y,
-    z: spec.profile[spec.profile.length - 1].z,
-    width: l.width,
-    height: l.height,
-  }));
-}
-
-function buildLights(b: MeshBuilder, lights: Lights, z: number, facing: number): void {
-  const lens = lights.color ?? 0xf7f2dc;
-  const bezel = lights.bezel ?? 0;
-  const bezelColor = lights.bezelColor ?? 0xb9bec6;
-  const lamps: { x: number; size: number }[] = [{ x: lights.x, size: lights.size }];
-  if (lights.pairGap !== undefined) {
-    lamps.push({ x: lights.x + lights.pairGap, size: lights.pairSize ?? lights.size });
-  }
-  for (const side of [-1, 1]) {
-    for (const lamp of lamps) {
-      const x = side * lamp.x;
-      if (lights.kind === "round") {
-        if (bezel > 0) {
-          disc(
-            b,
-            x,
-            lights.y,
-            z + facing * PROUD,
-            lamp.size,
-            lamp.size + bezel,
-            bezelColor,
-            facing,
-          );
-        }
-        disc(b, x, lights.y, z + facing * PROUD * 1.6, 0, lamp.size, lens, facing);
-      } else {
-        const h = lights.height ?? lamp.size * 0.55;
-        if (bezel > 0) {
-          b.box(
-            x,
-            lights.y,
-            z + facing * PROUD,
-            (lamp.size + bezel) * 2,
-            (h + bezel) * 2,
-            0.02,
-            bezelColor,
-          );
-        }
-        b.box(x, lights.y, z + facing * PROUD * 1.6, lamp.size * 2, h * 2, 0.02, lens);
-      }
-    }
-  }
-}
 
 function buildGrille(b: MeshBuilder, g: Grille, z: number, paint: number): void {
   const surround = g.surround ?? 0;
@@ -238,11 +144,12 @@ function buildBumper(
 }
 
 export function buildFront(
-  b: MeshBuilder,
+  s: LampSurfaces,
   spec: CarBodySpec,
   axles: number[],
   part: (name: DamagePart) => MeshBuilder,
 ): void {
+  const b = s.body;
   const f = spec.front;
   if (!f) return;
   const nose = spec.profile[0];
@@ -250,17 +157,14 @@ export function buildFront(
   const trim = spec.colors.trim ?? 0x14181f;
 
   if (f.grille) buildGrille(b, f.grille, z, spec.colors.paint);
-  if (f.lights) buildLights(b, f.lights, z, 1);
+  if (f.lights) buildHeadlights(s, f.lights, z);
 
   if (f.indicators) {
     // Corner lamps sit in the bumper on a car of this era, so they have to
     // be laid on the BUMPER's face — on the nose cap they end up buried
     // inside it and never show at all.
-    const ind = f.indicators;
     const indZ = f.bumper ? z + f.bumper.depth - 0.03 : z + PROUD * 1.6;
-    for (const side of [-1, 1]) {
-      b.box(side * ind.x, ind.y, indZ, ind.width, ind.height, 0.03, ind.color ?? 0xe89b23);
-    }
+    buildIndicators(s, f.indicators, indZ, 1);
   }
 
   if (f.bumper) {
@@ -284,58 +188,25 @@ export function buildFront(
     );
   }
 
-  if (f.lampPods) {
-    const pods = f.lampPods;
-    const color = pods.color ?? 0xf7f2dc;
-    for (const x of pods.offsets) {
-      // A pod is a stub barrel with a lens on the front: the bracket is
-      // implied by the bumper it sits on, which keeps it to four faces.
-      b.box(x, pods.y, pods.z - pods.radius * 0.6, pods.radius * 1.9, pods.radius * 1.9, 0.1, trim);
-      disc(b, x, pods.y, pods.z, 0, pods.radius, color, 1);
-    }
-  }
+  if (f.lampPods) buildLampPods(s, f.lampPods, trim);
 
   buildPanel(b, spec, part("hood"), f.hood, "hood");
 }
 
 export function buildRear(
-  b: MeshBuilder,
+  s: LampSurfaces,
   spec: CarBodySpec,
   axles: number[],
   part: (name: DamagePart) => MeshBuilder,
 ): void {
+  const b = s.body;
   const r = spec.rear;
   if (!r) return;
   const tail = spec.profile[spec.profile.length - 1];
   const z = tail.z;
   const trim = spec.colors.trim ?? 0x14181f;
 
-  if (r.lights) {
-    const l = r.lights;
-    const lower = l.lower ?? 0;
-    for (const side of [-1, 1]) {
-      b.box(
-        side * l.x,
-        l.y + (l.height * lower) / 2,
-        z - PROUD * 1.6,
-        l.width,
-        l.height * (1 - lower),
-        0.03,
-        l.color ?? 0xc4231b,
-      );
-      if (lower > 0) {
-        b.box(
-          side * l.x,
-          l.y - (l.height * (1 - lower)) / 2,
-          z - PROUD * 1.6,
-          l.width,
-          l.height * lower,
-          0.03,
-          l.lowerColor ?? 0xe0a326,
-        );
-      }
-    }
-  }
+  if (r.lights) buildTailLights(s, r.lights, z);
 
   if (r.plate) {
     const p = r.plate;

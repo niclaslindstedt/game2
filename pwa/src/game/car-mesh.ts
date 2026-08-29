@@ -17,6 +17,7 @@ import {
   rearLampAnchors,
   steeringTurn,
   GLASS_OPACITY,
+  LENS_MATERIAL,
   type InteriorDetail,
 } from "./car-body.ts";
 import { createCarDamage } from "./car-damage.ts";
@@ -26,27 +27,51 @@ import { bodySpecFor } from "./car-styles.ts";
 import { drivenAxles, wheelSurfaceSpeed } from "./car-wheels.ts";
 import { glowTexture } from "./textures.ts";
 
-/** The tail lamps' own light: a red bloom laid over each lens so the lamp
- * reads as SWITCHED ON rather than as a red panel. The car is fullbright and
+/** A lamp's own light: a bloom laid over each cluster so the lamp reads as
+ * SWITCHED ON rather than as a coloured panel. The car is fullbright and
  * takes the time of day as a tint (renderer.ts), which is right for paint and
  * wrong for a lamp — a lamp is the one thing on the body that gets brighter
  * as the light goes, not darker. Additive over the lens, and exempt from the
- * tint by name, so the failing light cannot bleach the red out of it. */
+ * tint by name, so the failing light cannot bleach the red out of it.
+ *
+ * The bloom is only half of it: the lens GEOMETRY behind it (car/lamps.ts)
+ * is a reflector bowl with a hot spot on its floor, carrying its own
+ * material for the same reason. The bloom is the light escaping the lamp;
+ * the bowl is the lamp. Neither alone reads as lit. */
 const LAMP_GLOW = 0xff2a14;
+/** ...and the warm white at the other end. A headlamp is pointed AWAY from
+ * the chase camera, so what shows is spill around the rim rather than the
+ * beam — which is why it is a paler, tighter bloom than the tail's. */
+const HEAD_GLOW = 0xffe6b4;
 /** The name that exempts it — matched in the renderer's `applyTint`. */
 export const LAMP_MATERIAL = "car-lamp";
 /** How far the bloom spreads past the lens, as a multiple of the lens size. */
 const LAMP_SPREAD = 3.4;
+const HEAD_SPREAD = 2.6;
 /** Bloom strength with the lights off (daylight) and on (dusk, night). A
  * tail lamp is a marker, not a headlight pointed at the player: at the few
  * car lengths a chase is fought over, a bloom that reads as a lamp from a
  * hundred metres is a red smear over the whole tail up close. */
 const LAMP_DAY = 0.11;
-const LAMP_NIGHT = 0.42;
+const LAMP_NIGHT = 0.55;
+/** The headlamps' pair. Nothing in daylight — a switched-off headlight is
+ * glass, and a lit one competing with the sun is a car with its dipped
+ * beams on, which nobody can see from behind either. */
+const HEAD_DAY = 0;
+const HEAD_NIGHT = 0.5;
 /** How much of the bloom a fully caked lens swallows, 0..1. A stage's worth
  * of gravel on the glass is the reason rally cars carry lamp pods and
  * somebody wipes them at every service. */
 const LAMP_GRIME = 0.6;
+/** What the lenses keep of the world's light when the lamps are OFF. Their
+ * material is driven instead of tinted, so this is the whole of what dusk
+ * does to a dark lamp: enough to sit in the failing light with the paint
+ * around it, and never so little that the glass goes to mud. Lit, they go
+ * to full — the authored colour, whatever the stage is doing. */
+const LENS_DARK = 0.42;
+/** Full brightness, as the lerp target for the above and the colour a lit
+ * lens is multiplied by — the authored vertex colours, untouched. */
+const WHITE = new THREE.Color(1, 1, 1);
 
 /** The glass, per frame. `GLINT` is how much opacity a fully glancing view
  * adds to a clean pane — the baked sky at the top of every window is already
@@ -88,9 +113,11 @@ export type CarVisual = {
    * keeps whatever it had. */
   update: (state: GameState, dt: number, eye?: THREE.Vector3) => void;
   onEvents: (state: GameState, events: GameEvent[]) => void;
-  /** Whether the run's light is gone — the tail lamps burn harder when it
-   * is. Pushed from the environment, which owns that decision. */
-  setLights: (on: boolean) => void;
+  /** Whether the run's light is gone — the lamps burn harder when it is,
+   * and their lenses stop taking the tint the paint takes. Pushed from the
+   * environment, which owns both decisions, along with the tint itself so
+   * an unlit lens can still sit in the light the rest of the car is in. */
+  setLights: (on: boolean, tint?: THREE.Color) => void;
   /** How hard it is raining on this car, 0..1 — what wets its screens and
    * sets its wipers going. Pushed from the environment for the same reason
    * the light is: the weather is the stage's, not the car's. */
@@ -139,7 +166,8 @@ function lampSpread(bodySpec: Parameters<typeof frontLampAnchors>[0]): {
  * fullbright materials, so the time of day arrives as a multiply into
  * `material.color` rather than as a light — except a LAMP, which is the one
  * thing the failing light makes brighter, and is therefore switched rather
- * than tinted. */
+ * than tinted. Both of a lamp's surfaces are exempted here: the bloom over
+ * it, and the lens under that. `setLights` drives them from the same tint. */
 export function tintCar(
   visual: CarVisual,
   tint: THREE.Color,
@@ -151,10 +179,11 @@ export function tintCar(
     const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
     for (const mat of mats) {
       const painted = mat instanceof THREE.MeshBasicMaterial || mat instanceof THREE.PointsMaterial;
-      if (painted && mat.name !== LAMP_MATERIAL) mat.color.copy(tint);
+      const lamp = mat.name === LAMP_MATERIAL || mat.name === LENS_MATERIAL;
+      if (painted && !lamp) mat.color.copy(tint);
     }
   });
-  visual.setLights(lampsLit);
+  visual.setLights(lampsLit, tint);
   visual.setWet(rain);
 }
 
@@ -185,37 +214,98 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
 
   // The lamp blooms ride the SPRUNG body, so they squat and rebound with the
   // panel they are stuck to instead of hovering where the tail used to be.
+  // One material per END, because the two ends neither glow the same colour
+  // nor come on together: a tail lamp is a marker that is faintly there in
+  // daylight, a headlamp is nothing at all until the light goes.
   const lampMap = glowTexture();
-  const lampMat = new THREE.MeshBasicMaterial({
-    name: LAMP_MATERIAL,
-    map: lampMap,
-    color: LAMP_GLOW,
-    transparent: true,
-    opacity: LAMP_DAY * fade,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
+  const bloomMat = (name: string, color: number, opacity: number): THREE.MeshBasicMaterial =>
+    new THREE.MeshBasicMaterial({
+      name,
+      map: lampMap,
+      color,
+      transparent: true,
+      opacity: opacity * fade,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+  const lampMat = bloomMat(LAMP_MATERIAL, LAMP_GLOW, LAMP_DAY);
+  const headMat = bloomMat(LAMP_MATERIAL, HEAD_GLOW, HEAD_DAY);
   const lampGeos: THREE.BufferGeometry[] = [];
-  for (const lamp of rearLampAnchors(bodySpec)) {
-    const geo = new THREE.PlaneGeometry(lamp.width * LAMP_SPREAD, lamp.height * LAMP_SPREAD * 1.5);
-    const glow = new THREE.Mesh(geo, lampMat);
-    // The tail cap faces −z in car space; the bloom sits just off the lens.
-    glow.position.set(lamp.x, lamp.y, lamp.z - 0.05);
-    glow.rotation.y = Math.PI;
-    body.chassis.add(glow);
+  /** Hang the blooms for one END, as ONE mesh holding both quads. A plane
+   * apiece is the obvious way to write this and costs a draw call per lamp:
+   * with fifteen cars on a stage that is thirty draws for four triangles of
+   * additive haze. `dir` is the cap's outward direction — the quads sit just
+   * off the lenses and face the same way. */
+  const hangBlooms = (
+    anchors: ReturnType<typeof rearLampAnchors>,
+    mat: THREE.MeshBasicMaterial,
+    spread: number,
+    dir: number,
+  ): void => {
+    if (anchors.length === 0) return;
+    const pos: number[] = [];
+    const uv: number[] = [];
+    for (const lamp of anchors) {
+      const w = (lamp.width * spread) / 2;
+      const h = (lamp.height * spread * 1.5) / 2;
+      const z = lamp.z + dir * 0.05;
+      // Corners counter-clockwise seen from outside the cap: mirroring
+      // across z reverses the winding, so the tail runs the cycle backwards.
+      const corner = (u: number, v: number): number[] => [
+        lamp.x + (u * 2 - 1) * w * dir,
+        lamp.y + (v * 2 - 1) * h,
+        z,
+      ];
+      const quad: [number, number][] = [
+        [0, 0],
+        [1, 0],
+        [1, 1],
+        [0, 1],
+      ];
+      for (const [a, b, c] of [
+        [0, 1, 2],
+        [0, 2, 3],
+      ]) {
+        for (const i of [a, b, c]) {
+          pos.push(...corner(quad[i][0], quad[i][1]));
+          uv.push(quad[i][0], quad[i][1]);
+        }
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+    body.chassis.add(new THREE.Mesh(geo, mat));
     lampGeos.push(geo);
+  };
+  hangBlooms(rearLampAnchors(bodySpec), lampMat, LAMP_SPREAD, -1);
+  hangBlooms(frontLampAnchors(bodySpec), headMat, HEAD_SPREAD, 1);
+  const lensMat = body.lens;
+  if (lensMat && options.ghost) {
+    lensMat.transparent = true;
+    lensMat.opacity = GHOST_OPACITY;
   }
   let lit = false;
-  const setLights = (on: boolean): void => {
+  const worldLight = new THREE.Color(1, 1, 1);
+  const setLights = (on: boolean, tint?: THREE.Color): void => {
     lit = on;
+    if (tint) worldLight.copy(tint);
   };
   let wet = 0;
   const setWet = (rain: number): void => {
     wet = clamp(rain, 0, 1);
   };
-  /** The bloom, dimmed by whatever the run has thrown at the lens. */
+  /** The blooms, dimmed by whatever the run has thrown at the lenses — and
+   * the lenses themselves, which are switched between the world's light and
+   * their own rather than tinted along with the paint. */
   const shineLamps = (): void => {
-    lampMat.opacity = (lit ? LAMP_NIGHT : LAMP_DAY) * (1 - LAMP_GRIME * dirt.level()) * fade;
+    const clean = 1 - LAMP_GRIME * dirt.level();
+    lampMat.opacity = (lit ? LAMP_NIGHT : LAMP_DAY) * clean * fade;
+    headMat.opacity = (lit ? HEAD_NIGHT : HEAD_DAY) * clean * fade;
+    if (lensMat) {
+      if (lit) lensMat.color.setRGB(1, 1, 1);
+      else lensMat.color.copy(worldLight).lerp(WHITE, LENS_DARK);
+    }
   };
 
   const length = bodySpec.profile[0].z - bodySpec.profile[bodySpec.profile.length - 1].z;
@@ -341,6 +431,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     (blob.material as THREE.MeshBasicMaterial).dispose();
     for (const geo of lampGeos) geo.dispose();
     lampMat.dispose();
+    headMat.dispose();
   };
 
   return {

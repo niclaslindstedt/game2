@@ -734,6 +734,25 @@ for (const [name, viewport] of [
   });
 }
 
+// ...and the same card opened during the ESTABLISHING SHOT, which is the one
+// moment the HUD has something of its own in the middle of the screen — so
+// the scene asks for that shot with `?shot=1`. The acceptance test is that
+// the caption under the establishing shot is BEHIND the card rather than
+// printed through its title, which is what a pause card with no layer of its
+// own does: the HUD's centre column claims one to clear the thumb zones, and
+// coming later in the DOM does not beat that.
+await capture(
+  "shot-pause-start",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await page.waitForSelector(".hud-start-shot");
+    await page.click(".hud-minimap");
+    await page.waitForSelector(".hud-pause");
+    await page.waitForTimeout(400);
+  },
+  { shot: "1" },
+);
+
 // The two new instruments, close up: the minimap with a stage's worth of
 // gauge on it, and the damage glyph on a car that has actually been hurt.
 await captureElement(

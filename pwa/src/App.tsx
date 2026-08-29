@@ -1706,6 +1706,7 @@ export function App() {
         <Hud
           snap={snap}
           live={liveRef.current}
+          paused={paused}
           flashes={flashes}
           split={split}
           input={input}

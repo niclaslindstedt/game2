@@ -9,13 +9,16 @@
 // the root — so the suspension can squat and rebound the body without
 // pushing the tires through the gravel.
 //
-// Three MATERIALS come out of here, not one, and the split is the whole of
-// what makes a window a window. The body, the parts and the wheels share an
-// opaque fullbright material. The GLASS is translucent, so it cannot share a
-// buffer with them — it gets its own, and the cabin car/interior.ts furnishes
-// is drawn behind it as ordinary opaque geometry. The grime FILM on the
-// screens gets a third, because a clean screen has to be invisible now
-// rather than merely the same colour as the glass under it.
+// FOUR MATERIALS come out of here, not one, and each split buys something
+// one material cannot do. The body, the parts and the wheels share an opaque
+// fullbright material. The GLASS is translucent, so it cannot share a buffer
+// with them — it gets its own, and the cabin car/interior.ts furnishes is
+// drawn behind it as ordinary opaque geometry. The grime FILM on the screens
+// gets a third, because a clean screen has to be invisible now rather than
+// merely the same colour as the glass under it. And the LAMP LENSES get a
+// fourth: everything else on the car takes the time of day as a multiply
+// into its material colour, and a lamp is the one surface that has to get
+// BRIGHTER as the light goes (car/lamps.ts explains the rest).
 
 import * as THREE from "three";
 import type { DamagePart } from "@engine";
@@ -24,6 +27,7 @@ import { MeshBuilder, patchNormal } from "./car/builder.ts";
 import { buildFront, buildRear } from "./car/fascia.ts";
 import { buildGreenhouse, screenPanes } from "./car/greenhouse.ts";
 import { buildInterior, type InteriorDetail } from "./car/interior.ts";
+import { LENS_MATERIAL } from "./car/lamps.ts";
 import { buildShell, buildStations } from "./car/shell.ts";
 import { buildTrim } from "./car/trim.ts";
 import { buildWheel } from "./car/wheels.ts";
@@ -39,10 +43,11 @@ export type {
   RearSpec,
   SideBand,
   Spoiler,
+  TailLights,
   WheelStyle,
 } from "./car/spec.ts";
 export { bodyHalfLength, bodyHalfWidth } from "./car/shell.ts";
-export { frontLampAnchors, rearLampAnchors, type LampAnchor } from "./car/fascia.ts";
+export { LENS_MATERIAL, frontLampAnchors, rearLampAnchors, type LampAnchor } from "./car/lamps.ts";
 export { steeringTurn, type InteriorDetail } from "./car/interior.ts";
 
 import type { CarBodySpec } from "./car/spec.ts";
@@ -79,6 +84,13 @@ export type CarBodyParts = {
   wheelSpin: THREE.Object3D[];
   /** The bendable shell — the mesh the damage visual crumples. */
   body: THREE.Mesh;
+  /** The lamp lenses: their own mesh, so their own material, so the light
+   * failing over a stage can make them brighter while it makes the paint
+   * around them darker. It crumples with the shell — a lamp sits exactly
+   * where a nose gets crushed, and one left standing in its pristine place
+   * on a folded cap is the most obvious thing on the car. Null on a spec
+   * with no lamps at either end. */
+  lenses: THREE.Mesh | null;
   /** The pieces an impact can tear off, each its own mesh so the damage
    * visual can detach one and send it flying (the engine names which). */
   breakables: Partial<Record<DamagePart, THREE.Mesh>>;
@@ -89,6 +101,9 @@ export type CarBodyParts = {
    * how much of the cabin shows through it this frame. Null on a spec with
    * no glass at all. */
   glass: THREE.MeshBasicMaterial | null;
+  /** The lenses' own material — what car-mesh.ts switches between the off
+   * and the lit tone. Null alongside `lenses`. */
+  lens: THREE.MeshBasicMaterial | null;
   /** The cabin behind that glass, and the glass itself. Handed out as one
    * object because it is the one part of the car the rear-view mirror must
    * NOT draw: the mirror's lens sits between this car's own seats, so left
@@ -126,10 +141,13 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   // The glass carries alpha and the body does not, which is why they are two
   // builders rather than one mesh with two draw ranges.
   const g = new MeshBuilder(true);
+  // The lit surfaces of every lamp, kept out of the body's buffer because
+  // they are switched rather than tinted — one mesh for both ends.
+  const l = new MeshBuilder();
   buildShell(b, spec, buildStations(spec, axles));
   buildGreenhouse(b, g, spec);
-  buildFront(b, spec, axles, part);
-  buildRear(b, spec, axles, part);
+  buildFront({ body: b, lens: l }, spec, axles, part);
+  buildRear({ body: b, lens: l }, spec, axles, part);
   buildTrim(b, spec, axles, part);
 
   const chassis = new THREE.Group();
@@ -137,6 +155,16 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   const bodyGeo = b.geometry();
   const body = new THREE.Mesh(bodyGeo, material);
   chassis.add(body);
+
+  let lensMat: THREE.MeshBasicMaterial | null = null;
+  let lensGeo: THREE.BufferGeometry | null = null;
+  let lenses: THREE.Mesh | null = null;
+  if (!l.empty) {
+    lensMat = new THREE.MeshBasicMaterial({ name: LENS_MATERIAL, vertexColors: true });
+    lensGeo = l.geometry();
+    lenses = new THREE.Mesh(lensGeo, lensMat);
+    chassis.add(lenses);
+  }
 
   // The cabin goes on BEFORE the glass, because it is what the glass is for.
   const cabin = new THREE.Group();
@@ -220,9 +248,11 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     bodyGeo.dispose();
     for (const geo of partGeos) geo.dispose();
     glassGeo?.dispose();
+    lensGeo?.dispose();
     wheelGeo.dispose();
     material.dispose();
     glassMat?.dispose();
+    lensMat?.dispose();
     filmMat.dispose();
   };
   return {
@@ -231,9 +261,11 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     wheelGroups,
     wheelSpin,
     body,
+    lenses,
     breakables,
     wipers,
     glass: glassMat,
+    lens: lensMat,
     cabin,
     steering: interior.steering,
     dispose,
