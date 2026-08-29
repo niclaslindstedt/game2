@@ -13,7 +13,11 @@ import {
   DEFAULT_KNOBS,
   DIFFICULTIES,
   DIFFICULTY_IDS,
+  GRID_DEFAULT,
+  GRID_MAX,
+  GRID_MIN,
   STAGE_RULES,
+  gridSize,
   type Difficulty,
   type GearboxMode,
   type StageKnobs,
@@ -26,6 +30,12 @@ import {
 
 import { playToggle, playUi } from "./audio/ui.ts";
 import type { DevSettings } from "./settings.ts";
+
+/** How a stage was entered — the campaign is what records a clear, a time
+ * trial is a lap you drive for the clock alone, and a heads-up race is the
+ * campaign's field with the championship taken off: nothing about it is
+ * written down anywhere. */
+export type PlayMode = "campaign" | "timetrial" | "headsup" | "roam";
 
 export type RaceSettings = {
   timeOfDay: TimeOfDay;
@@ -40,7 +50,54 @@ export type RaceSettings = {
   /** R29 — how good the campaign's field is. Nothing else reads it: Roam
    * has nobody entered and a time trial races the clock. */
   difficulty: Difficulty;
+  /** HEADS UP's own three. They are kept apart from the campaign's
+   * `difficulty` on purpose: a player who turns the rivals down for a
+   * knockabout race must not find their championship quietly turned down
+   * with it. */
+  headsUp: HeadsUpSettings;
 };
+
+/** What a heads-up race is set up with: how good the field is, how many cars
+ * are on it, and whether they all leave on the same green. */
+export type HeadsUpSettings = {
+  difficulty: Difficulty;
+  /** Cars on the entry list, the player included. */
+  cars: number;
+  massStart: boolean;
+};
+
+export { gridSize };
+
+export const DEFAULT_HEADS_UP: HeadsUpSettings = {
+  difficulty: "medium",
+  cars: GRID_DEFAULT,
+  massStart: true,
+};
+
+/** The grids a mass start is offered in — every even size the apron behind
+ * the start gate will hold, ending at the deepest one (`GRID_MAX`, which is
+ * also the default). The ceiling is the generator's rather than a choice: a
+ * grid stands on the run-up, and past the end of it a car is off the stage.
+ * A rally start is not offered the row, because nobody there needs room on
+ * the line and a short entry list would only take rivals off the sheet. */
+export const GRID_OPTIONS: { id: string; label: string; cars: number }[] = (() => {
+  const sizes = new Set<number>();
+  for (let cars = 4; cars < GRID_MAX; cars += 2) sizes.add(cars);
+  sizes.add(GRID_MAX);
+  return [...sizes]
+    .filter((cars) => cars >= GRID_MIN)
+    .map((cars) => ({ id: String(cars), label: String(cars), cars }));
+})();
+
+/** The nearest grid on offer to `cars` — what a stored or dialled-in number
+ * lights up. */
+export function gridOption(cars: number): string {
+  let best = GRID_OPTIONS[0];
+  for (const opt of GRID_OPTIONS) {
+    if (Math.abs(opt.cars - cars) < Math.abs(best.cars - cars)) best = opt;
+  }
+  return best.id;
+}
 
 /** R29 — the three settings the campaign's field comes in, labelled from the
  * engine's own table so the menu can never offer one the field does not

@@ -38,6 +38,7 @@ export {
   type CarDamage,
   type CarInput,
   type CarState,
+  type CatchUp,
   type DamagePart,
   type DrownState,
   type GameEvent,
@@ -188,11 +189,22 @@ export {
   type SkillAxis,
 } from "./sim/skill.ts";
 export {
+  GRID_DEFAULT,
+  GRID_MAX,
+  GRID_MIN,
+  catchUpFor,
+  gridSize,
+  headsUpField,
+  massStartGrid,
+  type GridSlot,
+} from "./sim/grid.ts";
+export {
   FIELD_SIZE,
   GRID_STAGGER,
   PLAYER_NUMBER,
   RIVALS,
   START_INTERVAL,
+  entryList,
   rivalField,
   type RivalCrew,
   type RivalEntry,

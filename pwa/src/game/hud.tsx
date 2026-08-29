@@ -13,6 +13,7 @@ import { createThumbGuard } from "./thumb-guard.ts";
 import { PODIUM as PODIUM_PLACES } from "./campaign.ts";
 import {
   FinishCard,
+  type FinishRace,
   type FinishStandings,
   type FinishScores,
   type NextStage,
@@ -193,6 +194,9 @@ type HudProps = {
   /** R30 — the stage's points and the location table they went onto. Null
    * outside the campaign. */
   campaign: FinishStandings | null;
+  /** HEADS UP's own sheet — one race, no board. Null outside that mode, and
+   * never set at the same time as `campaign`. */
+  race: FinishRace | null;
   /** The location whose table stands between this run and the next country,
    * or null when nothing does. */
   locked: string | null;
@@ -1012,6 +1016,7 @@ export function Hud({
   onRetire,
   scores,
   campaign,
+  race,
   locked,
 }: HudProps) {
   const { touch } = input;
@@ -1148,7 +1153,9 @@ export function Hud({
             standing={
               snap.standing && {
                 ...snap.standing,
-                podium: snap.standing.place <= PODIUM_PLACES,
+                // A heads-up race has no podium to miss: it pays nothing, it
+                // opens nothing, and every finish in it is simply the result.
+                podium: race !== null || snap.standing.place <= PODIUM_PLACES,
               }
             }
             nextStage={nextStage}
@@ -1156,6 +1163,7 @@ export function Hud({
             onRetire={onRetire}
             scores={scores}
             campaign={campaign}
+            race={race}
             locked={locked}
           />
         )}

@@ -52,6 +52,7 @@ import {
 } from "../pwa/src/game/campaign.ts";
 import {
   PLAYER_ID,
+  RALLY_FIELD,
   createField,
   fieldResults,
   settleField,
@@ -377,13 +378,17 @@ describe("the stage's classification", () => {
 
   it("runs the stragglers home off the card's frames, and retires the lost", () => {
     const track = compileStage(38, "short");
-    const field = createField(track, "easy", {
-      seed: 38,
-      laps: 1,
-      timeOfDay: "day",
-      weather: "clear",
-      season: "summer",
-    });
+    const field = createField(
+      track,
+      { ...RALLY_FIELD, difficulty: "easy" },
+      {
+        seed: 38,
+        laps: 1,
+        timeOfDay: "day",
+        weather: "clear",
+        season: "summer",
+      },
+    );
     // A budget of nothing settles nothing: the card gets its frame back.
     expect(settleField(field, 0, 400)).toBe(false);
 
@@ -396,13 +401,17 @@ describe("the stage's classification", () => {
 
     // …and the limit is what makes that true: a field given no time at all
     // is retired on the spot rather than driven forever.
-    const stranded = createField(track, "easy", {
-      seed: 38,
-      laps: 1,
-      timeOfDay: "day",
-      weather: "clear",
-      season: "summer",
-    });
+    const stranded = createField(
+      track,
+      { ...RALLY_FIELD, difficulty: "easy" },
+      {
+        seed: 38,
+        laps: 1,
+        timeOfDay: "day",
+        weather: "clear",
+        season: "summer",
+      },
+    );
     expect(settleField(stranded, 10_000, 0)).toBe(true);
     for (const run of stranded.runs) expect(run.time).toBeNull();
   });

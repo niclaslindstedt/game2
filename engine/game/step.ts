@@ -39,6 +39,7 @@ import {
   updateSlip,
   type CarInput,
   type CarState,
+  type CatchUp,
   type GameEvent,
   type GameState,
   type RaceEnv,
@@ -160,6 +161,23 @@ export type CreateGameOptions = {
    * bodywork. It is a starting position and nothing more: the road is
    * driven from it, so a bot is back on its line within a corner. */
   gridOffset?: number;
+  /** How far BEHIND the start gate this car is stood, meters back along the
+   * apron; defaults to the line itself.
+   *
+   * A mass start is a grid and a grid has depth, and all of it goes on the
+   * RUN-UP: R24 lays `startZone.apron` metres of flat dirt road off the back
+   * of the first sample for exactly this, with the terrain shelf held flat
+   * under it, so a car stood there is on the road, is not off the stage
+   * (`pastApron`), and drives THROUGH the gate when the lights go green.
+   * The apron is straight — it is the first sample's heading extrapolated —
+   * so a slot is placed by walking back along it rather than by hunting a
+   * sample, and it lands exactly where the grid said rather than snapped to
+   * the sample spacing. The metres a row gives away come back through
+   * `catchUp` (sim/grid.ts). */
+  gridBack?: number;
+  /** The metres this slot is owed, as extra drive to take them back with
+   * (TUNING.massStart). Only a mass start hands one in. */
+  catchUp?: CatchUp;
 };
 
 /** Wind direction, mean speed, and gust phase are seeded on their own
@@ -213,13 +231,17 @@ export function createGame(options: CreateGameOptions): GameState {
   // gravel (or hovering over it) until the first step snaps it onto the road.
   const grid = track.samples[0];
   const car = freshCar();
-  // …and the slot on that line this car was entered in, across the road.
-  // The right axis is the sample's heading turned a quarter: the same one
-  // `locate` measures a signed `lateral` along, so a positive offset is a
-  // car to the driver's right on the road and reads back as one.
+  // Where on the start zone this car was entered: across the road, and back
+  // down the apron. The right axis is the sample's heading turned a quarter —
+  // the same one `locate` measures a signed `lateral` along, so a positive
+  // offset is a car to the driver's right and reads back as one — and the
+  // forward axis is the heading itself, walked backwards.
   const slot = options.gridOffset ?? 0;
-  car.x = grid.x + Math.cos(grid.heading) * slot;
-  car.z = grid.z - Math.sin(grid.heading) * slot;
+  const back = Math.max(0, options.gridBack ?? 0);
+  car.x = grid.x + Math.cos(grid.heading) * slot - Math.sin(grid.heading) * back;
+  car.z = grid.z - Math.sin(grid.heading) * slot - Math.cos(grid.heading) * back;
+  // The apron is flat under the corridor it carries (terrain.ts), so the
+  // gate's own height is the height of every row behind it.
   car.y = grid.elevation;
   car.heading = grid.heading;
   car.gearbox = gearbox;
@@ -273,6 +295,7 @@ export function createGame(options: CreateGameOptions): GameState {
     surface: "gravel",
     env,
     wind,
+    catchUp: options.catchUp ?? null,
     stats: freshStats(),
     rng: createRng((options.seed ^ 0x9e3779b9) >>> 0),
   };
@@ -544,8 +567,23 @@ const GROUND: GroundContext = {
   windZ: 0,
   t: 0,
   rng: createRng(0),
+  drive: 1,
   groundAt: undefined,
 };
+
+/** What this step multiplies the drive by, and the SPENDING of the mass
+ * start's catch-up: past the end of its window a slot owes nothing more and
+ * the ledger is torn up, so a circuit that winds progress back to the grid
+ * for its second lap cannot launch the whole field a second time. */
+function driveGain(state: GameState): number {
+  const owed = state.catchUp;
+  if (!owed) return 1;
+  if (state.progressS >= owed.untilS) {
+    state.catchUp = null;
+    return 1;
+  }
+  return 1 + owed.gain;
+}
 
 /** Seconds until the lights go out, counting down through the whole start
  * control: `intro + countdown` on the first frame, 0 the moment the stage
@@ -632,6 +670,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // Locate against the centerline BEFORE the move to know the ground ahead;
   // the fix after the move drives progress, lip detection, and respawn.
   const preFix = locate(track, car.x, car.z, state.progressIndex);
+  const gain = driveGain(state);
   let ctx: GroundContext;
   if (preFix.offRoad) {
     // The wild: the terrain owns the ground — the RIDDEN lattice surface
@@ -669,6 +708,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     ctx.windZ = state.wind.z;
     ctx.t = state.t;
     ctx.rng = state.rng;
+    ctx.drive = gain;
     ctx.groundAt = ground;
   } else {
     // How sharply the road brows under the car — what decides whether it
@@ -688,6 +728,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     ctx.windZ = state.wind.z;
     ctx.t = state.t;
     ctx.rng = state.rng;
+    ctx.drive = gain;
     // On the road the road IS the ground; the wild's probe must not carry
     // over from an earlier step.
     ctx.groundAt = undefined;
