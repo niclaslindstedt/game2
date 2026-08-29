@@ -21,6 +21,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePwaUpdate } from "@niclaslindstedt/oss-framework/pwa";
 import {
+  CARS,
   TUNING,
   botInput,
   carById,
@@ -293,7 +294,11 @@ function initialRace(): RaceSettings {
   const season = params.get("season");
   if (SEASONS.some((x) => x.id === season)) race.season = season as Season;
   const car = params.get("car");
-  if (car === "compact" || car === "classic") race.carId = car;
+  // Checked against the catalog rather than against a pair of literals: a
+  // roster this named by hand silently shoots the DEFAULT car for every id
+  // added since, which is a contact sheet that quietly stops covering the
+  // thing it was made to compare.
+  if (CARS.some((c) => c.id === car)) race.carId = car as string;
   const length = params.get("length");
   if (STAGE_LENGTH_OPTIONS.some((l) => l.id === length)) race.length = length as StageLength;
   const shape = params.get("shape");

@@ -167,20 +167,22 @@ const RIG = {
     rake: 0.4,
   },
   dials: {
-    /** The rev counter and the speedometer, m. */
-    /** The rev counter and the speedometer, m. Sized so the PAIR fits inside
-     * the top half of the steering wheel's own opening: that is where a
-     * driver's eye finds them, and instruments that spill past the rim are
-     * instruments the wheel is permanently drawn across. */
-    tacho: 0.055,
-    speedo: 0.048,
-    /** Between their centres, m. */
-    gap: 0.115,
+    /** The rev counter and the speedometer, m. Sized so the PAIR sits inside
+     * the top half of the steering wheel's own opening with air round it:
+     * that is where a driver's eye finds them, and a pair sized to the last
+     * millimetre of the opening is a pair the rim and the hub boss are
+     * permanently cutting the corners off. Two 90 mm dials in a 320 mm wheel
+     * is also about what the real instrument is — anything bigger reads as a
+     * pair of clocks bolted to a toy car. */
+    tacho: 0.045,
+    speedo: 0.04,
+    /** Between their centres, m. Wide enough that the hub boss underneath
+     * clears the bottom of both rather than biting a piece out of each. */
+    gap: 0.105,
     /** The dial centres over the floor, m — just over the steering wheel's
      * own hub, which puts them BEHIND the wheel rather than over it. The
-     * rim's top arc then crosses each dial as a thin line and the rest is
-     * read through the opening, which is where a driver reads a dial in any
-     * car.
+     * pair is then read through the rim's opening with its top arc passing
+     * over them, which is where a driver reads a dial in any car.
      *
      * THE CEILING ON THIS IS THE COWL, not taste. The instrument pod stands
      * `tacho + margin + hood` over the dial centres, and the moment the top
@@ -210,6 +212,20 @@ const RIG = {
      * frame. Those two together are the whole of what fixes it. */
     hub: 0.53,
     ahead: 0.58,
+    /** The least air between the hub's plane and the instrument faces, m —
+     * and the number that actually decides where the wheel ends up on most
+     * bodies.
+     *
+     * `ahead` is measured off the SEAT HINGE, which is a fraction of the
+     * cabin's own length, while the fascia is measured off the COWL. On a
+     * short cabin those two walk toward each other until the reach puts the
+     * hub past the dash face, and a wheel behind the instrument panel is not
+     * a wheel that reads as slightly wrong — it is a wheel drawn INSIDE the
+     * dashboard, with the dials sitting on top of the rim and the top of it
+     * poking out through the fascia. So the reach is the ambition and this is
+     * the stop: whichever puts the wheel nearer the driver wins, and every
+     * body gets a rim standing clear in front of its own instruments. */
+    clear: 0.075,
     /** A 320 mm rim — the size a rally car actually carries, which is only
      * placeable at all because the deck came out. */
     radius: 0.155,
@@ -594,6 +610,13 @@ function buildDial(
   return { mount, needle };
 }
 
+/** Where the instrument faces stand, m. The binnacle is built on it and the
+ * wheel is placed off it, so the two cannot come to different conclusions
+ * about which one of them the driver is looking THROUGH. */
+function faceZOf(cabin: Cabin): number {
+  return cabin.cowlZ - RIG.dash.back - 0.012;
+}
+
 /** The instrument pod and the two dials in it. It stands proud of the dash
  * top, which is where a period rally car's binnacle is and — more to the
  * point — is what puts the tops of the dials above the rim of the wheel in
@@ -611,7 +634,7 @@ function buildBinnacle(
   const dialY = floorY + RIG.dials.over;
   const half = RIG.dials.gap / 2 + RIG.dials.tacho + RIG.binnacle.margin;
   const tall = RIG.dials.tacho + RIG.binnacle.margin;
-  const faceZ = backZ - 0.012;
+  const faceZ = faceZOf(cabin);
   // The pod: a hood over the top and a cheek either side, open toward the
   // driver so nothing of it is drawn between the dials and the eye reading
   // them.
@@ -970,7 +993,7 @@ export function buildCockpit(
   buildFurniture(b, room);
 
   const wheelY = room.floorY + RIG.wheel.hub;
-  const wheelZ = cabin.hipZ + RIG.wheel.ahead;
+  const wheelZ = Math.min(cabin.hipZ + RIG.wheel.ahead, faceZOf(cabin) - RIG.wheel.clear);
   buildFootwell(b, room, wheelY, wheelZ);
 
   const wb = new MeshBuilder();

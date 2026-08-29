@@ -289,9 +289,9 @@ export const EYE_RIGS: Record<InCarCamera, EyeRig> = {
     // and a mirror hanging in the top of it are what say the player is
     // inside something. A narrower lens crops all of that away and leaves a
     // hood cam with a dashboard at the bottom.
-    fov: 68,
+    fov: 58,
     fovPerSpeed: 0.34,
-    fovMax: 84,
+    fovMax: 74,
     fovRate: 5,
     yawRate: 14,
     // The heaviest head on the ladder, and the one that moves least against
@@ -358,9 +358,9 @@ export const EYE_RIGS: Record<InCarCamera, EyeRig> = {
     near: 0.05,
   },
   hood: {
-    fov: 64,
+    fov: 54,
     fovPerSpeed: 0.42,
-    fovMax: 92,
+    fovMax: 82,
     fovRate: 5,
     yawRate: 14,
     // The loosest neck of the three, and it can afford to be: the nearest
@@ -397,9 +397,9 @@ export const EYE_RIGS: Record<InCarCamera, EyeRig> = {
     near: 0.1,
   },
   bumper: {
-    fov: 70,
+    fov: 60,
     fovPerSpeed: 0.44,
-    fovMax: 96,
+    fovMax: 86,
     fovRate: 5,
     yawRate: 16,
     // Barely a neck at all, and chasing a mount that is barely settled: a

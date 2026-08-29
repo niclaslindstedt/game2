@@ -789,7 +789,6 @@ for (const variant of [
   { name: "reach-fwd", reach: 0.08 },
   { name: "fov-narrow", vfov: -8 },
   { name: "fov-wide", vfov: 8 },
-  { name: "fov-ultra", vfov: 16 },
 ]) {
   const { name, ...knobs } = variant;
   await capture(
