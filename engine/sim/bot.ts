@@ -12,6 +12,7 @@
 // CARS at the bottom of the file.
 
 import { angleDiff, clamp } from "../lib/math.ts";
+import { latCeiling, slideFloor, wheelSlide } from "../game/limits.ts";
 import { TUNING } from "../game/defs/tuning.ts";
 import type { CarSpec } from "../game/defs/cars.ts";
 import { flatTrack, SURFACES, type Track } from "../mapgen/index.ts";
@@ -30,10 +31,15 @@ function aheadOf(track: Track, index: number, ahead: number): number {
 }
 
 export type BotProfile = {
-  /** How much of the car's OWN lateral grip the bot plans corners around.
-   * Over 1 on purpose: a rally driver arrives past what the tires can hold
-   * and lets the slide carry the nose round, so a bot that plans under the
-   * ceiling never drifts a corner — it only ever flicks the handbrake. */
+  /** How much of the car's TRACTION CEILING the bot plans corners around —
+   * a fraction of `limits.ts`'s `latCeiling`, which is the same number the
+   * tires will actually deliver when the car gets there. Read against that
+   * and not against `gripAccel`: planning off the spec sheet's grip while
+   * the rubber delivers `latCeiling` times it is not a driver misjudging a
+   * corner, it is a driver in a different car. Well under 1, because the
+   * ceiling is where the tires are OUT: a driver who planned at 1 would
+   * arrive at every corner with nothing left, and the margin between this
+   * and the ceiling is what a rally driver spends on the slide. */
   latFraction: number;
   /** Steering proportional gain on the lookahead angle error. */
   steerGain: number;
@@ -47,8 +53,10 @@ export type BotProfile = {
    * m/s — scaled by how freely the car rotates (see `rotationRef`). */
   hotEntry: number;
   /** The rotational authority (`spec.driftYaw`) that `hotEntry` is quoted
-   * at. A car that rotates more than this is trusted with proportionally
-   * more of it, one that rotates less with less. */
+   * at, in a car whose wheel finds a full slide (`limits.ts`'s `wheelSlide`
+   * of 1 — the rear-driver). A car that rotates more freely than that is
+   * trusted with proportionally more of it, one that rotates less — or one
+   * that has to be ASKED before it rotates at all — with less. */
   rotationRef: number;
   /** Margin over the corner speed that triggers braking, m/s. */
   brakeMargin: number;
@@ -85,9 +93,15 @@ export type BotProfile = {
   aggression: number;
 };
 
+/** How much brake a driver carries PAST the turn-in of a corner the car
+ * will not rotate into on its own, 0..1. Enough to keep the weight on the
+ * nose (`CarState.brakeLoad`, and `drift.brakeDepth` off it) and not so
+ * much that the corner is arrived at stopped: a trail, not a stop. */
+const TRAIL_BRAKE = 0.35;
+
 /** The default rally brain: quick hands, plans ~3 s ahead, drifts hairpins. */
 export const RALLY_BOT: BotProfile = {
-  latFraction: 0.7,
+  latFraction: 0.5,
   steerGain: 2.2,
   lookahead: 0.65,
   planHorizon: 3.0,
@@ -136,8 +150,15 @@ export function botInput(
   traffic: readonly TrafficCar[] = NO_TRAFFIC,
 ): CarInput {
   const { car, track } = state;
-  /** How freely this car rotates, against the profile's reference. */
-  const rotation = state.spec.driftYaw / profile.rotationRef;
+  // How freely this car rotates, against the profile's reference — and it
+  // is TWO things, because a car arrives at a hot corner on both of them:
+  // how much authority a developed slide hands the wheel (`driftYaw`) and
+  // how much slide the wheel finds there in the first place (`wheelSlide`,
+  // 0..1 against the rear-driver, which is the layout the reference is
+  // quoted at). A front-driver has most of the first and little of the
+  // second, and a driver who read only the first would carry a rear-driver's
+  // entry speed into a car that answers by washing straight on.
+  const rotation = (state.spec.driftYaw / profile.rotationRef) * wheelSlide(state.spec);
   const samples = track.samples;
   const step = track.step;
 
@@ -176,7 +197,11 @@ export function botInput(
     Math.round(horizonMeters / step),
     track.circuit ? samples.length - 1 : samples.length - 1 - state.progressIndex,
   );
-  const latAccel = state.spec.gripAccel * profile.latFraction;
+  // What the tires will actually give at a corner, off the handling model's
+  // own ceiling rather than a second guess at it (`game/limits.ts`), taken
+  // at the driver's own fraction of it. `gripBySurface` below scales it for
+  // what the corner is paved with.
+  const latAccel = latCeiling(state.spec, 1) * profile.latFraction;
   let targetSpeed = state.spec.gearTop[state.spec.gearTop.length - 1];
   let hardDistance = Infinity;
   let hardCap = 0;
@@ -252,15 +277,44 @@ export function botInput(
   let throttle = car.u < targetSpeed ? 1 : 0;
   let brake = car.u > targetSpeed + profile.brakeMargin ? 1 : 0;
 
-  // Drift entry: arriving hot at a hard corner, flick the handbrake to
-  // rotate. While the drift runs, manage it like a driver: power through
-  // the slide, breathe when the angle gets deep, and blend counter-steer
-  // into the aim so the car neither spins down nor runs wide.
+  // DRIFT ENTRY. Arriving hot at a hard corner, rotate the car — and WHICH
+  // WAY is the car's own answer, not a rule of the bot's: `game/limits.ts`
+  // says how much slide this layout finds on the wheel alone and how far
+  // under the speed floor a move can still reach, which is exactly what a
+  // driver knows about the car they are sitting in.
+  const nearHard = !car.airborne && hardDistance < flickReach;
+  // A car that already rotates on the wheel needs nothing but the speed to
+  // do it with — that is the rear-driver, and this is the old rule. One that
+  // does not has to be ASKED, and is asked in the corners the wheel would
+  // otherwise wash straight out of.
+  const rotates = wheelSlide(state.spec) > 0.8;
+  const hot = car.u > hardCap + 2;
+  // The LEVER, for a corner too slow for anything else: it is the one move
+  // that reaches under the floor, so the test is whether the slide would be
+  // open at all with it — and, for a car that rotates on its own, whether
+  // the corner is quick enough to be worth one. Yanked to START a rotation
+  // and let go the moment there is one, which is why this one reads
+  // `car.drifting` and the trail below does not.
   const handbrake =
-    !car.drifting && !car.airborne && hardDistance < flickReach && car.u > hardCap + 2;
+    nearHard && !car.drifting && (rotates ? hot : car.u > slideFloor(state.spec, 1) + 1);
+  // ...and the TRAILED BRAKE, which is the same ask made with the pedal that
+  // is already down. The plan has the car braking for the corner anyway; a
+  // driver in a car that will not rotate carries some of that brake PAST the
+  // turn-in instead of releasing it at the target speed, and arrives pointed.
+  //
+  // It is held through the corner and not only into it. Dropped the moment
+  // the car reads as drifting, it takes the weight off the nose, the slide
+  // it just bought shuts, the car is no longer drifting, and the pedal goes
+  // back down: one corner comes out as a dozen quarter-second drifts and a
+  // hatch shuddering through the apex. The move is the whole corner.
+  const trailing = nearHard && !rotates && hot;
+  if (trailing) brake = Math.max(brake, TRAIL_BRAKE);
   if (car.drifting) {
     throttle = Math.abs(car.slip) > 0.5 ? 0.5 : 1;
-    brake = 0;
+    // Standing on the middle pedal sideways is not how a driver avoids
+    // anything — but a front-driver that let the brake up here would simply
+    // stop turning, so what it keeps is the trail and never more.
+    brake = trailing ? TRAIL_BRAKE : 0;
     // Counter-steer only once the nose is nearly where it should be —
     // mid-hairpin the aim error is huge and the car needs every bit of
     // rotation; damping there is what runs a drift wide.

@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim heat record replay track analyze cars liveries field crew items items-list sky glyphs audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift heat record replay track analyze cars liveries field crew items items-list sky glyphs audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
 
 build:
 	npm run build
@@ -36,6 +36,16 @@ check-seo:
 # engine and print the pace / drift / air / respawn / damage table.
 sim:
 	npm run sim
+
+# THE DRIFT LAB — every corner the generator can build (and the sequences
+# that catch a car out), driven through by every technique a driver has, on
+# a scripted fixture rather than the bot. Prints the table and draws
+# previews/drift-<car>.png: the car every sixth of a second with its travel
+# arrow, so the slip angle is something you LOOK at rather than infer.
+# Required before/after any change to the drift model.
+# `make drift CAR=compact` · `make drift ARGS="--surface asphalt --table"`
+drift:
+	npm run drift -- $(if $(CAR),--car $(CAR),) $(if $(CORNERS),--corners $(CORNERS),) $(ARGS)
 
 # Record a bot run to a run tape (runs/*.jsonl): a whole drive written down
 # as the controls that drove it. `make record SEED=42 CAR=compact

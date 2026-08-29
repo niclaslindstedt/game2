@@ -13,6 +13,7 @@
 // defs/, not here.
 
 import { clamp } from "../lib/math.ts";
+import { askedSlide, latCeiling, slideFloor } from "./limits.ts";
 import { damageEffects, type DamageEffects } from "./damage.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
@@ -89,8 +90,14 @@ function wheelspinShare(
  * further: first gear spins away from a standstill, and top gear cannot spin
  * at all. `CarState.rev` is this same wheel speed read back through the
  * gearing (step.ts) — needle, engine note and drawn wheels are one number,
- * as they are in a car. */
-function spinHeadroom(spec: CarSpec, car: CarState): number {
+ * as they are in a car.
+ *
+ * Exported because the handling is not the last thing in a step to touch
+ * `u`: the ground catching a spun car and another car's shunt both land
+ * after it, and a spin sized against the headroom the gear had a moment ago
+ * outlives the speed it was sized for. `step.ts` re-clamps against this
+ * once everything has moved. */
+export function spinHeadroom(spec: CarSpec, car: CarState): number {
   return Math.max(0, spec.gearTop[car.gear] * T.revs.limiter - Math.max(0, car.u));
 }
 
@@ -420,6 +427,12 @@ export function stepGrounded(
   // Brake lights, so only a car being SLOWED lights them — a car backing out
   // of a ditch is under power, not under the brake.
   car.braking = input.brake > 0.2 && car.u > 3;
+  // The weight the BRAKE pitches onto the nose, on the same lag as the lift
+  // and for the same reason. Only while the pedal is actually slowing the
+  // car: backing out of a ditch on the same pedal loads nothing, and neither
+  // does a car already stopped. See `CarState.brakeLoad`.
+  const braked = car.u > T.reverse.engageBelow ? input.brake : 0;
+  car.brakeLoad += (braked - car.brakeLoad) * clamp(T.grip.liftSettle * dt, 0, 1);
   // Which of its two jobs the brake pedal is doing this tick: it slows a car
   // that is still rolling forward, and once it has stopped one the same pedal
   // backs it out. Throttle always wins — gas is the way out of reverse, with
@@ -500,10 +513,34 @@ export function stepGrounded(
   const bootDemand = boot * T.grip.bootThrow * DR.spin * spec.torque * speedFactor;
   const demand =
     Math.abs(car.u * steer * steerGain) / gripCeiling + spinDemand + flickDemand + bootDemand;
+  // WHAT A MOVE BUYS. `depth` is what the WHEEL alone can develop, and on
+  // anything but a rear-driver that is deliberately not much — a front axle
+  // out of grip washes wide, whatever else is happening. The three ways a
+  // driver takes the weight off the rear lift that ceiling toward the
+  // reference slide: the mass thrown by a flick, the nose pitched down on a
+  // trailed brake, and the rear wheels locked outright. The largest one
+  // wins rather than the sum — they are all the same axle letting go, and a
+  // driver doing two at once is not owed twice the angle for it.
+  const asking = Math.max(
+    input.handbrake ? D.leverDepth : 0,
+    flick * D.flickDepth,
+    car.brakeLoad * D.brakeDepth * DR.brake,
+  );
+  // ...and it is HELD once made. The lever comes up in one tick and the
+  // weight it moved does not, so a raw reading would collapse the slide the
+  // car is allowed in a single step — and the exit's spring, which is sized
+  // off exactly that collapse, would fire mid-corner with the lock still on
+  // and stand a hairpin's pivot straight up. See `CarState.provoked`.
+  car.provoked = Math.max(clamp(asking, 0, 1), car.provoked - D.provokeSettle * dt);
+  const provoked = car.provoked;
   const { asked, sliding, open } = slideFactor(car, demand, {
-    floor: D.slideFrom * DR.driftFloor,
+    // Both of these are `limits.ts`, not restatements of it: a move argues
+    // with the speed floor as well as with the depth (the corners that need
+    // one are the slow ones), and the bot has to be able to ask the same
+    // two questions about a corner it has not reached yet.
+    floor: slideFloor(spec, provoked),
     entryAt: D.entryAt * DR.entry,
-    depth: DR.depth,
+    depth: askedSlide(spec, provoked),
     release: D.release * DR.release,
   });
   // The wheel does not just unstick the car — it NAMES the angle. Every
@@ -608,6 +645,14 @@ export function stepGrounded(
   // exactly zero while the wheel is still asking for the angle it has.
   const liftYaw =
     tailDir * T.grip.liftYaw * DR.liftYaw * (1 - input.throttle) * sliding * speedFactor;
+  // ...and the BRAKE swings it harder, because the transfer is bigger: a
+  // lift takes the drive off one axle, a brake stands the whole car on its
+  // nose. It is what turns a trailed brake from a way of arriving slower
+  // into a way of arriving pointed, and — with the depth it opens above —
+  // it is how a front-driver gets round a corner it would otherwise wash
+  // straight out of. Off the lagged load, so a stab on the straight is a
+  // brake and nothing more.
+  const brakeYaw = tailDir * T.grip.brakeYaw * DR.brake * car.brakeLoad * sliding * speedFactor;
   const releasing = clamp(sliding - asked, 0, 1);
   // ...and as it lets go the rear bites again and WEATHERVANES the car:
   // a torque pulling the nose back toward the direction the car is actually
@@ -625,6 +670,7 @@ export function stepGrounded(
     pullIn +
     powerYaw +
     liftYaw * sat +
+    brakeYaw * sat +
     pullStraight +
     straighten -
     car.slip * T.grip.slipYaw * commitment * sat * sliding;
@@ -773,7 +819,7 @@ export function stepGrounded(
   // the instant the demand touches the ceiling, since nothing but slip is
   // left to answer more lock with.
   const travel = Math.hypot(car.u, car.w);
-  const ceiling = spec.gripAccel * T.grip.latCeiling * grip;
+  const ceiling = latCeiling(spec, grip);
   const demanded = travel * latRate * Math.abs(car.slip);
   const over = demanded / ceiling;
   const held = ceiling * (T.grip.latGive * over + (1 - T.grip.latGive) * Math.tanh(over));
@@ -1015,8 +1061,10 @@ export function stepAirborne(
 ): void {
   // Nothing is thrown across a car whose wheels are off the ground: the
   // flick's load settles out in the air rather than waiting to be spent on
-  // whatever the landing finds.
+  // whatever the landing finds. The rear a move had unstuck settles with
+  // it — there is nothing under it to be stuck to.
   car.flick = Math.max(0, car.flick - T.steering.flickSettle * T.dt);
+  car.provoked = Math.max(0, car.provoked - D.provokeSettle * T.dt);
   const dt = T.dt;
   const descent = car.vy;
   car.airTime += dt;

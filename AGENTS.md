@@ -13,6 +13,7 @@ make test         # vitest: generator rules, drift/jump physics, bot sims
 make lint         # eslint + typecheck, zero warnings
 make fmt          # prettier in place; fmt-check is what CI runs
 make sim          # headless balance sweep — REQUIRED before/after any handling or generator change
+make drift        # THE DRIFT LAB: every corner x every technique, tabled and DRAWN — REQUIRED before/after any drift-model change
 make analyze      # SCORE generated stages (water, roads, surface, jumps, ends, ground, cost) — REQUIRED before/after any generator change
 make record       # record a bot run to a run tape (runs/*.jsonl)
 make replay       # RUN='runs/<file>.jsonl' — replay a tape and place its time against each field
@@ -51,12 +52,13 @@ Two rules that apply to every task in this repo, before any subject skill has a 
 This project is tuned by measuring, not guessing:
 
 1. **`make sim`** before and after every handling/generator change. The table (pace, drifts, clean exits, air time, respawns) is the regression surface — bots must keep finishing and keep drifting.
-2. **`make analyze`** before and after every GENERATOR change. It scores a stage against what a stage has to be — water that runs downhill and ends somewhere, roads that go somewhere and do not double up, a surface with no steps in it, jumps that land on the road, a start that holds the field and a finish with road past it, ground whose layers agree — and prints the findings that explain the score. `make track` is the looking half of the loop; this is the measuring half.
-3. **`make track`** to LOOK at what the rules engine builds.
-4. **`make screenshots`** to LOOK at the game itself (grid, speed, drift, every camera on the ladder, the cockpit by day and by night, portrait). In Claude web sessions Chromium is preinstalled — `CHROMIUM_PATH=/opt/pw-browsers/chromium make screenshots`.
-5. **`make items`** to LOOK at one thing on its own — a stone, a fern, the cabin behind the glass. Most of what the world is made of is six pixels at the speed you pass it; this is where it gets rotated and measured. `ITEMS=` picks the rows, `GROUP=` a whole kind, `TURNTABLE=` the seats to walk round.
-6. **`make profile`** before and after every rendering change. Draw calls, triangles and binds are the numbers a real GPU sees; the fps it also prints is software rasterization and means nothing off this machine.
-7. **`make replay RUN=…`** before and after every DIFFICULTY change. A bot lap says what the bot would do; a recorded human drive (developer menu → COLLECT RACE DATA, or `make record`) replayed against easy/medium/hard says what those words are worth to a person — the `bot-improvement` skill owns reading it.
+2. **`make drift`** before and after every change to the DRIFT MODEL. It drives every corner the generator can build — and the sequences that catch a car out — once per technique (wheel, lift, trailed brake, handbrake, flick), prints what each one bought, and draws `previews/drift-<car>.png`: the car every sixth of a second with its travel arrow, so the slip angle is something you look at. `make sim` says what the bot does with the car; this says what the car does.
+3. **`make analyze`** before and after every GENERATOR change. It scores a stage against what a stage has to be — water that runs downhill and ends somewhere, roads that go somewhere and do not double up, a surface with no steps in it, jumps that land on the road, a start that holds the field and a finish with road past it, ground whose layers agree — and prints the findings that explain the score. `make track` is the looking half of the loop; this is the measuring half.
+4. **`make track`** to LOOK at what the rules engine builds.
+5. **`make screenshots`** to LOOK at the game itself (grid, speed, drift, every camera on the ladder, the cockpit by day and by night, portrait). In Claude web sessions Chromium is preinstalled — `CHROMIUM_PATH=/opt/pw-browsers/chromium make screenshots`.
+6. **`make items`** to LOOK at one thing on its own — a stone, a fern, the cabin behind the glass. Most of what the world is made of is six pixels at the speed you pass it; this is where it gets rotated and measured. `ITEMS=` picks the rows, `GROUP=` a whole kind, `TURNTABLE=` the seats to walk round.
+7. **`make profile`** before and after every rendering change. Draw calls, triangles and binds are the numbers a real GPU sees; the fps it also prints is software rasterization and means nothing off this machine.
+8. **`make replay RUN=…`** before and after every DIFFICULTY change. A bot lap says what the bot would do; a recorded human drive (developer menu → COLLECT RACE DATA, or `make record`) replayed against easy/medium/hard says what those words are worth to a person — the `bot-improvement` skill owns reading it.
 
 Both harnesses serve `pwa/dist`, so **`make build` first, every time**: a stale
 dist photographs and meters the last change rather than this one, and the
@@ -82,6 +84,8 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | Handling/feel (drift, jump, grip, gearbox)                  | `engine/game/car.ts`; numbers in `engine/game/defs/`                                                                             |
 | How a turn becomes a drift, and how it lets go              | `TUNING.drift` in `engine/game/defs/tuning.ts` — the `drift-feel` skill                                                          |
+| What a MOVE (flick, trailed brake, lever) buys a slide      | `drift.flickDepth` / `brakeDepth` / `leverDepth` / `provokeFloor` — the `drift-feel` skill                                       |
+| What a car CAN do, for anything that has to plan around it  | `engine/game/limits.ts` — stated once, read by `car.ts` AND `sim/bot.ts`; never restate a ceiling                                |
 | A new car                                                   | A data row in `engine/game/defs/cars.ts` — the `car-tuning` skill                                                                |
 | What separates one CAR from another                         | `cars.ts` + `TUNING.drivetrain` — the `car-tuning` skill                                                                         |
 | A car's LOOK (silhouette, panels, wheels, livery)           | `pwa/src/game/car-styles.ts` (specs); generator in `pwa/src/game/car/`                                                           |

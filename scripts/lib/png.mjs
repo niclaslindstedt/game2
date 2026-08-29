@@ -117,5 +117,102 @@ export function createCanvas(width, height, bg = [0, 0, 0]) {
     }
   };
 
-  return { width, height, rgb, set, disk, poly, toPng: () => encodePng(width, height, rgb) };
+  /** Straight line, for axes, leaders and the arrow off a car's nose. */
+  const line = (x0, y0, x1, y1, color) => {
+    const steps = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0)));
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      set(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, color);
+    }
+  };
+
+  /** A label, in the 3x5 font below, at `scale` pixels per font pixel.
+   * Anything the font does not know is drawn as a blank — a preview is
+   * allowed to be missing a comma, and a generator is not allowed to throw
+   * over one. Returns the width drawn, so captions can be laid out. */
+  const text = (str, x, y, color, scale = 1) => {
+    let cx = x;
+    for (const ch of str.toUpperCase()) {
+      const glyph = FONT_3X5[ch];
+      if (glyph) {
+        for (let row = 0; row < 5; row++) {
+          for (let col = 0; col < 3; col++) {
+            if (!(glyph[row] & (0b100 >> col))) continue;
+            for (let dy = 0; dy < scale; dy++) {
+              for (let dx = 0; dx < scale; dx++) {
+                set(cx + col * scale + dx, y + row * scale + dy, color);
+              }
+            }
+          }
+        }
+      }
+      cx += 4 * scale;
+    }
+    return cx - x;
+  };
+
+  return {
+    width,
+    height,
+    rgb,
+    set,
+    disk,
+    poly,
+    line,
+    text,
+    toPng: () => encodePng(width, height, rgb),
+  };
 }
+
+/** A 3x5 bitmap font, one 3-bit row per scanline, MSB leftmost. Small on
+ * purpose: what a generated preview needs is a corner's NAME on the corner
+ * and a number beside a bar, at a size that never competes with the picture
+ * it is labelling. Upper case only — a caption in a contact sheet is a tag,
+ * not prose. */
+const FONT_3X5 = {
+  A: [0b010, 0b101, 0b111, 0b101, 0b101],
+  B: [0b110, 0b101, 0b110, 0b101, 0b110],
+  C: [0b011, 0b100, 0b100, 0b100, 0b011],
+  D: [0b110, 0b101, 0b101, 0b101, 0b110],
+  E: [0b111, 0b100, 0b110, 0b100, 0b111],
+  F: [0b111, 0b100, 0b110, 0b100, 0b100],
+  G: [0b011, 0b100, 0b101, 0b101, 0b011],
+  H: [0b101, 0b101, 0b111, 0b101, 0b101],
+  I: [0b111, 0b010, 0b010, 0b010, 0b111],
+  J: [0b001, 0b001, 0b001, 0b101, 0b010],
+  K: [0b101, 0b101, 0b110, 0b101, 0b101],
+  L: [0b100, 0b100, 0b100, 0b100, 0b111],
+  M: [0b101, 0b111, 0b111, 0b101, 0b101],
+  N: [0b101, 0b111, 0b111, 0b111, 0b101],
+  O: [0b010, 0b101, 0b101, 0b101, 0b010],
+  P: [0b110, 0b101, 0b110, 0b100, 0b100],
+  Q: [0b010, 0b101, 0b101, 0b110, 0b011],
+  R: [0b110, 0b101, 0b110, 0b101, 0b101],
+  S: [0b011, 0b100, 0b010, 0b001, 0b110],
+  T: [0b111, 0b010, 0b010, 0b010, 0b010],
+  U: [0b101, 0b101, 0b101, 0b101, 0b011],
+  V: [0b101, 0b101, 0b101, 0b010, 0b010],
+  W: [0b101, 0b101, 0b111, 0b111, 0b101],
+  X: [0b101, 0b101, 0b010, 0b101, 0b101],
+  Y: [0b101, 0b101, 0b010, 0b010, 0b010],
+  Z: [0b111, 0b001, 0b010, 0b100, 0b111],
+  0: [0b111, 0b101, 0b101, 0b101, 0b111],
+  1: [0b010, 0b110, 0b010, 0b010, 0b111],
+  2: [0b111, 0b001, 0b111, 0b100, 0b111],
+  3: [0b111, 0b001, 0b011, 0b001, 0b111],
+  4: [0b101, 0b101, 0b111, 0b001, 0b001],
+  5: [0b111, 0b100, 0b111, 0b001, 0b111],
+  6: [0b111, 0b100, 0b111, 0b101, 0b111],
+  7: [0b111, 0b001, 0b010, 0b010, 0b010],
+  8: [0b111, 0b101, 0b111, 0b101, 0b111],
+  9: [0b111, 0b101, 0b111, 0b001, 0b111],
+  "-": [0b000, 0b000, 0b111, 0b000, 0b000],
+  "+": [0b000, 0b010, 0b111, 0b010, 0b000],
+  ".": [0b000, 0b000, 0b000, 0b000, 0b010],
+  ":": [0b000, 0b010, 0b000, 0b010, 0b000],
+  "/": [0b001, 0b001, 0b010, 0b100, 0b100],
+  "%": [0b101, 0b001, 0b010, 0b100, 0b101],
+  "(": [0b001, 0b010, 0b010, 0b010, 0b001],
+  ")": [0b100, 0b010, 0b010, 0b010, 0b100],
+  "°": [0b110, 0b110, 0b000, 0b000, 0b000],
+};

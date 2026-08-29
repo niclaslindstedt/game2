@@ -34,6 +34,24 @@ drama, the camera); this skill is the mechanism under it.
 | `releaseSnap`            | How hard the rear pulls the nose back to the travel direction on the way out     | …gather the car up faster, and (with `hang`) overshoot harder         |
 | `enterSlip` / `exitSlip` | The angle at which the car READS as drifting — dust, HUD, stats                  | …make the readout stingier about calling something a drift            |
 
+And the group under it — **what a MOVE buys**, which is where the angle a
+layout does not find on the wheel alone comes from. Each lifts that layout's
+own `depth` toward the reference slide, so a move is worth most to the car
+with the least of its own:
+
+| Knob            | What it decides                                                           |
+| --------------- | ------------------------------------------------------------------------- |
+| `flickDepth`    | What a full weight throw is worth — the move the game is named after      |
+| `brakeDepth`    | ...and a trailed brake, ×`drivetrain[].brake` — the hatch's whole turn-in |
+| `leverDepth`    | ...and the handbrake, the last resort, which reaches deepest              |
+| `provokeFloor`  | How far a full provocation lowers the SPEED FLOOR — the lever's exception |
+| `provokeSettle` | How fast a provocation the driver has stopped making fades back out       |
+
+None of them ROTATES anything by itself: they open the slide, and
+`grip.flickYaw`, `grip.brakeYaw`, `grip.liftYaw` and `grip.handbrakeYaw` are
+what walk the car through the gap. A demand with no yaw behind it is a car
+that has lost its grip and is still going straight on.
+
 The RADIUS the car ends up holding is not in that group: it belongs to the
 traction ceiling in `TUNING.grip`. `latCeiling` is the most lateral
 acceleration the redirect will deliver, as a multiple of the car's own
@@ -93,6 +111,49 @@ of the throw and then one step to the maximum.
 
 ## Measure it — never tune this by feel alone
 
+### `make drift` — the drift lab, first and last
+
+`make drift` is this skill's own harness and the first thing to run on any
+change in this group. It builds **every corner the generator can build** out
+of `STAGE_RULES.turn` itself — soft / medium / hard, both hands, and the
+sequences that catch a car out (a chicane, a corner that tightens, one that
+opens) — arrives at each one at the speed `limits.ts` says the tyres can
+hold it at, and drives it once per TECHNIQUE: on the wheel alone, on a lift,
+on a trailed brake, on the lever, and off a Scandinavian flick.
+
+It gives back both halves of the loop at once:
+
+- **The table.** Peak and apex slip, min and exit speed, the tightest radius
+  held, apex g, seconds sideways, how far off the crown it ran, and whether
+  the real road was wide enough for the line it took.
+- **`previews/drift-<car>.png`.** One panel per corner × technique: the car
+  drawn every sixth of a second as an oriented body with its TRAVEL arrow,
+  so the slip angle is the visible gap between where the nose points and
+  where the car is going. Tinted by speed, orange while the game calls it a
+  drift, on the real road with the lab's run-off painted around it.
+
+Read it as a comparison, never a single number. The row that matters is
+almost always **what a technique buys over the wheel alone in the same
+corner**: more angle at the apex, a tighter radius, and — the one that
+decides whether the change is any good — a line that still fits on the road.
+A move that adds twenty degrees and puts the car four metres off the crown
+has not helped anybody.
+
+```sh
+make drift                              # every car, every corner
+make drift CAR=compact                  # one car
+make drift CORNERS=hard-left,chicane
+make drift ARGS="--surface asphalt"     # gravel is the default
+make drift ARGS="--table"               # numbers only, no pictures
+make drift ARGS="--over 1.15"           # arrive hot, as a rally driver does
+```
+
+The lab's driver is a scripted fixture, not the bot: it answers what the CAR
+does when a driver asks it something. What the BOT does with the same car is
+`make sim`, and both are owed by any change here.
+
+### ...and a throwaway probe for anything the lab does not ask
+
 Write a throwaway node script and delete it. Node runs the engine's
 TypeScript directly, the same way `scripts/simulate-run.mjs` does, so a probe
 is one file and its output goes straight to the terminal:
@@ -143,15 +204,32 @@ swung. Deep drift a degree or two past; a moderate one not at all.
 
 ## Verify
 
-1. `make test` — `tests/drift_test.ts` encodes this skill's contract: the
-   angle rises with every step of lock and no step is a jump, a gentle turn
-   earns no angle, a deep exit crosses centre and a moderate one does not,
-   and a drift still costs almost no speed. That last one is the budget that
-   catches an `angleSpan` raised too far: a deeper drift scrubs as `sin²`.
-2. `make sim` before and after, both tables in the PR. **`dTime` is a bot
-   statistic, not a player one** — the bot drifts a corner only when it
-   plans it above the grip ceiling (`latFraction × gripAccel` in
-   `bot.ts`), so a change to `entryAt` or `gripAccel` moves that column
-   without anything having happened to how the car feels. Say which it was.
-3. `make screenshots` and LOOK — a drift that measures right and reads wrong
+1. `make drift` before and after, and LOOK at both sheets. It is the only
+   one of these that answers the question this skill is about, and the
+   picture catches what the table cannot: a car that measures right and
+   arrives at the apex pointing somewhere silly.
+2. `make test` — `tests/drift_test.ts` encodes this skill's contract, on the
+   REFERENCE layout (the rear-driver): the angle rises with every step of
+   lock and no step is a jump, a gentle turn earns no angle, a deep exit
+   crosses centre and a moderate one does not, and a drift still costs
+   almost no speed. That last one is the budget that catches an `angleSpan`
+   raised too far: a deeper drift scrubs as `sin²`. The front-driver has its
+   own block — it washes wide on the wheel, rotates on a trailed brake, and
+   gets round what is left on the lever.
+3. `make sim` before and after, both tables in the PR. **`dTime` is a bot
+   statistic, not a player one** — the bot drifts a corner only when its
+   plan puts it past the traction ceiling (`latFraction × latCeiling`, off
+   `game/limits.ts`), so a change to `entryAt` or `gripAccel` moves that
+   column without anything having happened to how the car feels. Say which
+   it was. Watch `off` and the drift COUNT beside it: a bot spending longer
+   in the trees is a car that stopped rotating, and a count that climbs
+   while `dTime` falls is the readout chattering.
+4. `make screenshots` and LOOK — a drift that measures right and reads wrong
    on screen is still wrong.
+
+**The bot reads `game/limits.ts`, so it moves when this group does.** How
+much slide a layout finds on the wheel (`wheelSlide`), what the tyres will
+hold (`latCeiling`) and where the floor sits (`slideFloor`) are stated once
+and read by both the physics and `sim/bot.ts` — which is what stops a bot
+planning corners for a car nobody is driving. Change what a car can do and
+the bot changes with it; change how it is stated and check both.

@@ -70,6 +70,9 @@ export {
   type GearboxMode,
 } from "./game/defs/cars.ts";
 export { TUNING } from "./game/defs/tuning.ts";
+// What a car CAN do, as the handling model itself defines it — the limits
+// the physics enforces and the bot plans around, stated once (limits.ts).
+export { askedSlide, cornerSpeed, latCeiling, slideFloor, wheelSlide } from "./game/limits.ts";
 
 // The stage generator.
 export {
