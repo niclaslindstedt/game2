@@ -35,6 +35,7 @@ import {
   type FiniteStageLength,
   type GameEvent,
   type GameState,
+  type GearboxMode,
   type GridSlot,
   type StageKnobs,
   type StageLength,
@@ -47,6 +48,7 @@ import {
 } from "@engine";
 
 import { cacheIdForBase } from "./app-pwa.ts";
+import { BENCHMARK, runBenchmark, type BenchmarkStatus } from "./game/benchmark.ts";
 import { connectOutput } from "./output-bridge.ts";
 import { createInput } from "./game/input.ts";
 import { createMenuNav } from "./game/menu-nav.ts";
@@ -118,6 +120,7 @@ import {
   type RaceSettings,
 } from "./game/menu.tsx";
 import { MainMenu, type MenuPage } from "./game/main-menu.tsx";
+import { BenchmarkCard } from "./game/menu-dev.tsx";
 import type { MapDebug, MapRect, MapView } from "./game/menu-roam.tsx";
 import { mapDebugBoxes, mapReproQuery } from "./game/map-debug.ts";
 import { MAP_LAYERS, type MapLayerId, type MapLayerInfo } from "./game/map-layers.ts";
@@ -435,6 +438,12 @@ type StageSpec = {
   /** The generator's dials — what KIND of country the seed is built in. */
   knobs: StageKnobs;
   carId: string;
+  /** The box, when the stage insists on one. Normally absent: which gearbox
+   * the car is driven with is the PLAYER's option, read fresh off OPTIONS
+   * every time a stage is built. The benchmark is the exception — the two
+   * boxes scale the gear tops and the drive between them (`gearedSpec`), so
+   * a measurement that inherited one would be timing a different car. */
+  gearbox?: GearboxMode;
   timeOfDay: TimeOfDay;
   weather: Weather;
   season: Season;
@@ -458,6 +467,7 @@ function sameStage(a: StageSpec | null, b: StageSpec): boolean {
     a.laps === b.laps &&
     STAGE_DIALS.every((dial) => a.knobs[dial.key] === b.knobs[dial.key]) &&
     a.carId === b.carId &&
+    a.gearbox === b.gearbox &&
     a.timeOfDay === b.timeOfDay &&
     a.weather === b.weather &&
     a.season === b.season &&
@@ -585,6 +595,15 @@ export function App() {
    * order, which only exists once the last car is home. Null until then, and
    * again the moment the next run starts. */
   const [result, setResult] = useState<{ levelId: string; rows: ClassRow[] } | null>(null);
+  /** The benchmark on screen: where it has got to while it runs, and the
+   * time it took once it is done. Null whenever there is not one, which is
+   * what the HUD, the pause card and the frame loop all read to know the
+   * canvas is not theirs. */
+  const [bench, setBench] = useState<BenchmarkStatus | null>(null);
+  /** …and the way to stop it, which outlives any one frame. Kept beside the
+   * state rather than derived from it because the frame loop and the input
+   * handler are built once and read everything through refs. */
+  const benchRef = useRef<{ stop: () => void } | null>(null);
   const [menu, setMenu] = useState<MenuPage | null>(() => {
     // ?start=1 launches straight into a run (tooling); everyone else gets
     // the main menu. `?roam=1` opens the map page itself — what the map's
@@ -860,8 +879,9 @@ export function App() {
       carId: spec.carId,
       // The box is a player option rather than part of the stage: it is
       // read fresh here so a change in OPTIONS is in the car the next time
-      // one is built, and never mid-run.
-      gearbox: optionsRef.current.gearbox,
+      // one is built, and never mid-run — unless the stage pins one, which
+      // only a measurement does.
+      gearbox: spec.gearbox ?? optionsRef.current.gearbox,
       track: trackRef.current.track,
       laps: spec.laps,
       // The countdown is the start line's ceremony for a DRIVER. In god
@@ -910,7 +930,7 @@ export function App() {
    * so all of those race alone. Called on every start AND every restart — a
    * field carried over from the last attempt would be a dozen cars already
    * halfway down the road. */
-  const armField = (spec: StageSpec, mode: PlayMode): void => {
+  const armField = (spec: StageSpec, mode: PlayMode, plan?: FieldPlan): void => {
     fieldRef.current = null;
     standingRef.current = null;
     // Whatever the last attempt was still running home is over: those cars
@@ -922,7 +942,10 @@ export function App() {
     if (!trackRef.current || menuRef.current) return;
     if ((mode !== "campaign" && mode !== "headsup") || spec.length === "endless") return;
     const race = raceRef.current;
-    const field = createField(trackRef.current.track, fieldPlan(race, mode), {
+    // …unless the caller states the entry list itself. Only the benchmark
+    // does: a measurement cannot be entered off settings the player is free
+    // to move, or two runs of it are two different races.
+    const field = createField(trackRef.current.track, plan ?? fieldPlan(race, mode), {
       seed: spec.seed,
       laps: spec.laps,
       timeOfDay: spec.timeOfDay,
@@ -1045,7 +1068,12 @@ export function App() {
     setMenu({ page: "root" });
   };
 
-  const startStage = (spec: StageSpec, mode: PlayMode, levelId?: string): void => {
+  const startStage = (
+    spec: StageSpec,
+    mode: PlayMode,
+    levelId?: string,
+    plan?: FieldPlan,
+  ): void => {
     playUi("start");
     // The time to beat comes out of the book before the run starts, not
     // after: a clock with nothing to chase is only a stopwatch, and a
@@ -1066,7 +1094,7 @@ export function App() {
     setMenu(null);
     menuRef.current = null;
     applyStage(spec, true);
-    armField(spec, mode);
+    armField(spec, mode, plan);
     armGhost(spec, mode, levelId);
     armTape(spec, mode, levelId);
     playCameraRef.current = startCamera(optionsRef.current.camera);
@@ -1122,6 +1150,71 @@ export function App() {
       "roam",
     );
   };
+
+  /** THE BENCHMARK — the developer menu's stopwatch (game/benchmark.ts).
+   *
+   * It is a RUN in every sense the renderer and the engine care about: the
+   * campaign's first stage, the whole field on one green, and a bot at every
+   * wheel including the player's. What it is not is a run the app is playing
+   * — nothing is recorded, no theme plays over it, no HUD is drawn, and the
+   * frame loop below hands the canvas over for as long as it lasts, because
+   * the benchmark drives its own frames as fast as the machine will draw
+   * them and a second loop rendering between them would be measuring itself.
+   *
+   * Every dial of it is pinned here rather than read off the player's
+   * settings, for the one reason the whole tool exists: two numbers have to
+   * be two numbers about the same race. OPTIONS ▸ VIDEO is the deliberate
+   * exception — finding out what a resolution costs is what running it twice
+   * is FOR. */
+  const benchmarkStage = (level: CampaignLevel): StageSpec => {
+    return {
+      seed: level.seed,
+      length: level.length,
+      shape: level.shape ?? "sprint",
+      laps: levelLaps(level),
+      knobs: DEFAULT_STAGE_KNOBS,
+      carId: BENCHMARK.carId,
+      gearbox: BENCHMARK.gearbox,
+      timeOfDay: level.timeOfDay,
+      weather: level.weather,
+      season: level.season,
+      skipCountdown: false,
+      // The back row of the grid the field is stood on, exactly as a
+      // heads-up race stands it.
+      grid: playerSlot(BENCHMARK.field.cars),
+    };
+  };
+
+  const startBenchmark = (): void => {
+    const renderer = rendererRef.current;
+    const canvas = canvasRef.current;
+    const found = findLevel(BENCHMARK.levelId);
+    if (!renderer || !canvas || !found) return;
+    benchRef.current?.stop();
+    startStage(benchmarkStage(found.level), "headsup", undefined, BENCHMARK.field);
+    // Nothing about a measurement is written down, and the developer switch
+    // that collects race data would otherwise be recording one.
+    tapeRef.current = null;
+    renderer.setCamera(BENCHMARK.camera);
+    const state = gameRef.current;
+    const field = fieldRef.current;
+    if (!state || !field) return;
+    benchRef.current = {
+      stop: runBenchmark({ state, field, renderer, canvas, onStatus: setBench }),
+    };
+  };
+
+  /** Put the canvas back. The frozen last frame goes with it: the way out of
+   * a benchmark is the developer menu it was started from. */
+  const leaveBenchmark = (): void => {
+    benchRef.current?.stop();
+    benchRef.current = null;
+    setBench(null);
+    goMainMenu();
+    setMenu({ page: "developer" });
+  };
+  const leaveBenchmarkRef = useRef(leaveBenchmark);
+  leaveBenchmarkRef.current = leaveBenchmark;
 
   const applyRace = (next: RaceSettings): void => {
     setRace(next);
@@ -1353,11 +1446,19 @@ export function App() {
   // on the first gesture anywhere, so the theme belongs to the menu opening
   // rather than to whichever row the player happens to press first.
   const inMenu = menu !== null;
+  // …with one place that is neither: a BENCHMARK is a race stepped at
+  // whatever rate the machine manages, and a theme playing over it is a
+  // score against a film run at the wrong speed.
+  const benchmarking = bench !== null;
   useEffect(() => {
+    if (benchmarking) {
+      stopMusic();
+      return undefined;
+    }
     if (inMenu) return armMenuMusic();
     playMusic("taiga");
     return undefined;
-  }, [inMenu]);
+  }, [inMenu, benchmarking]);
 
   // WHILE THE BOARD IS BEING TYPED INTO, THE KEYBOARD IS NOT THE CAR'S. The
   // bindings are letters — `R` restarts the run, `M` walks out to the main
@@ -1523,6 +1624,13 @@ export function App() {
         else menuNav.move("right");
       });
       input.onAction((action) => {
+        // A benchmark is not a run: none of the run's own keys mean what
+        // they usually mean over one, and every one of them is somebody
+        // reaching for the way out.
+        if (benchRef.current) {
+          leaveBenchmarkRef.current();
+          return;
+        }
         if (action === "restart") restart();
         else if (action === "menu") goMainMenu();
         else if (action === "screenshot") takeShotRef.current();
@@ -1818,6 +1926,12 @@ export function App() {
           padWas = padNow;
           setPadded(padNow);
         }
+        // THE BENCHMARK OWNS THE CANVAS while one is up. It pumps its own
+        // frames as fast as the machine will draw them, and a frame drawn
+        // here between two of those is time the measurement is charged for
+        // and did not spend. The pad is still polled above, so the way out
+        // of one is a button like anything else.
+        if (benchRef.current) return;
         // The cursor is only ever placed for a pad: a focus ring appearing
         // under somebody's mouse is the game moving their cursor for them.
         if (padNow) menuNav.sync();
@@ -2178,7 +2292,7 @@ export function App() {
           void (e.currentTarget as HTMLCanvasElement).requestPointerLock?.();
         }}
       />
-      {snap && !menu && !hudHidden && (
+      {snap && !menu && !hudHidden && !bench && (
         <Hud
           snap={snap}
           live={liveRef.current}
@@ -2205,10 +2319,11 @@ export function App() {
       {/* Outside the HUD on purpose: ALT takes the game's chrome off so a
           frame can be judged on its pixels, and a frame nobody can place is
           worth nothing to whoever has to fix it. */}
-      {options.dev.debug && debugCtx && gameRef.current && !menu && (
+      {options.dev.debug && debugCtx && gameRef.current && !menu && !bench && (
         <DebugHud ctx={debugCtx} state={gameRef.current} hudHidden={hudHidden} />
       )}
-      {paused && !menu && (
+      {bench && <BenchmarkCard status={bench} onAgain={startBenchmark} onLeave={leaveBenchmark} />}
+      {paused && !menu && !bench && (
         <PauseMenu
           seed={stageRef.current?.seed ?? seed}
           carName={carById(race.carId).name}
@@ -2239,6 +2354,7 @@ export function App() {
           mapView={mapView}
           mapDebug={options.developer ? mapDebug : null}
           onViewLevelMap={viewLevelMap}
+          onBenchmark={startBenchmark}
         />
       )}
       {splashUp && <SplashScreen warm={booted} onDone={() => setSplashUp(false)} />}

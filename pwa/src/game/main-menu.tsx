@@ -110,6 +110,9 @@ export type MainMenuProps = {
   /** Open one of the CAMPAIGN's own stages on that map instead of driving
    * it — the developer's map viewer. */
   onViewLevelMap: (level: CampaignLevel) => void;
+  /** Leave the menu for the developer's stopwatch — a fixed piece of racing,
+   * drawn as fast as the machine will draw it (game/benchmark.ts). */
+  onBenchmark: () => void;
 };
 
 /** The build, bottom right, linking to the exact commit it was cut from.
@@ -720,6 +723,7 @@ export function MainMenu(props: MainMenuProps) {
             onBack={() => navigate({ page: "root" })}
             onDebugLog={() => navigate({ page: "debuglog" })}
             onMapViewer={() => navigate({ page: "mapviewer" })}
+            onBenchmark={props.onBenchmark}
           />
         )}
         {page.page === "debuglog" && (

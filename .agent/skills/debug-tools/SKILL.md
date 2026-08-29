@@ -25,7 +25,7 @@ stated as "it looks like that, over there".
 `node scripts/skill-lessons.mjs debug-tools --list`, then the ones this task
 touches. Load **`skill-reflection`** at both ends of the session.
 
-## The four tools
+## The five tools
 
 They live behind the developer menu, which is behind a secret: seven taps on
 the car's chassis in the menu (`DEV_TAPS`, `pwa/src/game/settings.ts`). Once
@@ -33,12 +33,13 @@ out it stays out. The two toggles are also on the **pause card** mid-run,
 which is where they are actually wanted — the moment you want to fly to
 something is the moment you are looking at it.
 
-| Tool                 | What it is                                                                                                                                                                                                                                                                                           | Where                                                                                                    |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| **God mode**         | The camera comes off the car and flies, FPS-style. The car is handed neutral input and sits where it was left.                                                                                                                                                                                       | `pwa/src/game/camera-free.ts`, mode `"free"` in `camera.ts`                                              |
-| **Debug overlay**    | The boxes naming the stage, the place, the camera and the car — and the REPRO line along the bottom.                                                                                                                                                                                                 | `pwa/src/game/debug-hud.tsx` over `debug-info.ts`                                                        |
-| **Debug log**        | A ring buffer of every engine event, every engine log line, and a position trace once a second. Copied whole or per-run from DEVELOPER → DEBUG LOG.                                                                                                                                                  | `pwa/src/game/debug-log.ts`, page in `menu-dev.tsx`                                                      |
-| **The map's layers** | The stage's own layers painted over the Roam map — bedrock, groundwater, soil, foliage, roads — the pane blown up to the whole screen, a box saying what the generator built, and a shutter that paints that box into the picture. Reaches the campaign's own stages through DEVELOPER → MAP VIEWER. | `pwa/src/game/map-layers.ts` + `map-debug.ts`, controls in `menu-roam.tsx`, the viewer in `menu-dev.tsx` |
+| Tool                 | What it is                                                                                                                                                                                                                                                                                                                                                                                                                             | Where                                                                                                    |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| **God mode**         | The camera comes off the car and flies, FPS-style. The car is handed neutral input and sits where it was left.                                                                                                                                                                                                                                                                                                                         | `pwa/src/game/camera-free.ts`, mode `"free"` in `camera.ts`                                              |
+| **Debug overlay**    | The boxes naming the stage, the place, the camera and the car — and the REPRO line along the bottom.                                                                                                                                                                                                                                                                                                                                   | `pwa/src/game/debug-hud.tsx` over `debug-info.ts`                                                        |
+| **Debug log**        | A ring buffer of every engine event, every engine log line, and a position trace once a second. Copied whole or per-run from DEVELOPER → DEBUG LOG.                                                                                                                                                                                                                                                                                    | `pwa/src/game/debug-log.ts`, page in `menu-dev.tsx`                                                      |
+| **The benchmark**    | A fixed piece of racing — the first stage, fifteen cars off one green, a bot at every wheel — drawn as fast as the machine will draw it, timed with a stopwatch. The answer is SECONDS, and lower is better: a frame rate is a number about one moment, and two of them from two machines are never about the same moment. Pins everything about the race and nothing about the picture, so what it compares is settings and machines. | `pwa/src/game/benchmark.ts`, card in `menu-dev.tsx`                                                      |
+| **The map's layers** | The stage's own layers painted over the Roam map — bedrock, groundwater, soil, foliage, roads — the pane blown up to the whole screen, a box saying what the generator built, and a shutter that paints that box into the picture. Reaches the campaign's own stages through DEVELOPER → MAP VIEWER.                                                                                                                                   | `pwa/src/game/map-layers.ts` + `map-debug.ts`, controls in `menu-roam.tsx`, the viewer in `menu-dev.tsx` |
 
 **ALT held hides the HUD and leaves the overlay up.** That is the shot to
 ask for when the game's own chrome is in the way of the thing being reported.
@@ -67,6 +68,33 @@ photographed.
 
 There is no on-screen key legend: these keys and `FLY_KEYS` are the only
 places they are written down.
+
+### Timing the machine, and how it differs from `make profile`
+
+**DEVELOPER → BENCHMARK** races fifteen cars off one green on the campaign's
+first stage and reports how long this machine took to draw a fixed number of
+frames of it. Every frame advances the game by exactly a sixtieth of a
+second whatever it cost to draw, so the race is the same race every run and
+on every machine; the render loop never waits for anything (no
+`requestAnimationFrame`, no limiter), and each frame ends by reading a pixel
+back so the GPU has actually finished before the clock is read. The
+countdown is the warm-up and is not timed.
+
+The two measurements answer different questions and neither replaces the
+other:
+
+- **`make profile`** counts what a frame ASKS FOR — draw calls, triangles,
+  program and texture binds. Those are the same numbers on every machine, so
+  it is the one that is trustworthy in headless Chromium and the one a PR
+  quotes. Its fps column is software rasterization and means nothing.
+- **The benchmark** is the other half: what a REAL machine, with a real GPU
+  and the player's own video settings, actually takes to draw them. It is
+  therefore worthless headless — this container manages about one frame a
+  second — and it is the number to ask a person on the hardware in question
+  for.
+
+Run it twice, changing one thing between: a video setting, a branch. What it
+compares honestly is two runs on one machine.
 
 ### X-raying the ground
 

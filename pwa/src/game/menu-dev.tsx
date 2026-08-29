@@ -11,10 +11,21 @@
 // aimed at time instead of space. The second is the debug log, which is the
 // other half of a screenshot: the picture says where, the log says what led
 // there.
+//
+// And one card that is not a page: the BENCHMARK's, which goes over the race
+// it is timing rather than into the menu, because the thing being measured
+// is on the canvas underneath it (game/benchmark.ts).
 
 import { useState } from "react";
 
-import { LOCATIONS, levelCleared, type CampaignLevel, type CampaignProgress } from "./campaign.ts";
+import { BENCHMARK, type BenchmarkStatus } from "./benchmark.ts";
+import {
+  LOCATIONS,
+  findLevel,
+  levelCleared,
+  type CampaignLevel,
+  type CampaignProgress,
+} from "./campaign.ts";
 import { clearDebugLog, debugLogCounts, debugLogTail, debugLogText } from "./debug-log.ts";
 import { lengthLabel } from "./menu-levels.tsx";
 import { playUi } from "./audio/ui.ts";
@@ -190,6 +201,87 @@ export function MapViewerPage({
   );
 }
 
+/** THE BENCHMARK'S CARD — over the race while it is being measured, and the
+ * answer once it is. What it says at every moment is one number: how long
+ * this machine took to draw a fixed piece of racing (game/benchmark.ts).
+ *
+ * The buffer it was drawn into is on the card beside the field, because a
+ * time without them is a time that compares to nothing — and it is the
+ * VIDEO options, the one thing the benchmark deliberately does not pin, that
+ * decide both. */
+export function BenchmarkCard({
+  status,
+  onAgain,
+  onLeave,
+}: {
+  status: BenchmarkStatus;
+  onAgain: () => void;
+  onLeave: () => void;
+}) {
+  const done = status.phase === "done";
+  const stage = findLevel(BENCHMARK.levelId)?.level.name ?? BENCHMARK.levelId;
+  /** Seconds of racing the frames add up to — the fixed side of the sum. */
+  const race = BENCHMARK.frames * BENCHMARK.step;
+  const share = Math.min(1, status.frames / BENCHMARK.frames);
+  return (
+    <div className="hud-menu-wrap pointer-events-auto">
+      <div className="hud-menu bench">
+        <div className="hud-menu-title">BENCHMARK</div>
+        <div className="hud-pause-sub">
+          {stage.toUpperCase()} · {status.cars} CARS · {status.width}×{status.height}
+        </div>
+        <div className="bench-time">
+          {status.seconds.toFixed(2)}
+          <span className="bench-unit">s</span>
+        </div>
+        <div className="bench-note">
+          {status.phase === "warmup"
+            ? "WARMING UP — the countdown is drawn, and not timed"
+            : done
+              ? `${BENCHMARK.frames} frames · ${race.toFixed(0)} s of racing at ${(
+                  race / Math.max(status.seconds, 0.001)
+                ).toFixed(2)}× real time`
+              : `${status.frames} of ${BENCHMARK.frames} frames`}
+        </div>
+        {!done && (
+          <>
+            <div className="bench-bar">
+              <div className="bench-bar-fill" style={{ width: `${(share * 100).toFixed(1)}%` }} />
+            </div>
+            {/* A browser stops drawing a page nobody is looking at, and a
+                clock that kept running through it would be timing the
+                machine's screensaver. */}
+            <div className="bench-note">LEAVE THE WINDOW IN FRONT</div>
+          </>
+        )}
+        {done && (
+          <button
+            type="button"
+            className="hud-start"
+            onClick={() => {
+              playUi("select");
+              onAgain();
+            }}
+          >
+            RUN AGAIN
+          </button>
+        )}
+        <button
+          type="button"
+          className="hud-pause-act"
+          data-nav-back
+          onClick={() => {
+            playUi("back");
+            onLeave();
+          }}
+        >
+          {done ? "DEVELOPER" : "STOP"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 type DeveloperProps = {
   progress: CampaignProgress;
   dev: DevSettings;
@@ -198,6 +290,7 @@ type DeveloperProps = {
   onBack: () => void;
   onDebugLog: () => void;
   onMapViewer: () => void;
+  onBenchmark: () => void;
 };
 
 export function DeveloperPage({
@@ -208,6 +301,7 @@ export function DeveloperPage({
   onBack,
   onDebugLog,
   onMapViewer,
+  onBenchmark,
 }: DeveloperProps) {
   const total = LOCATIONS.reduce((n, l) => n + l.levels.length, 0);
   const cleared = LOCATIONS.reduce(
@@ -257,6 +351,21 @@ export function DeveloperPage({
           onToggle={() => onDev({ ...dev, record: !dev.record })}
         />
       </div>
+      <button
+        type="button"
+        className="menu-item menu-item-dev"
+        onClick={onBenchmark}
+        disabled={dev.god}
+      >
+        BENCHMARK
+        <span className="menu-item-sub">
+          {dev.god
+            ? "Switch GOD MODE off first — a free camera over a skipped countdown is not the benchmark's race"
+            : `Race ${BENCHMARK.field.cars} cars off one green and time it. The same ` +
+              `${(BENCHMARK.frames * BENCHMARK.step).toFixed(0)} seconds of racing every run, drawn ` +
+              `as fast as this machine can: the seconds it takes are the score, and lower is better`}
+        </span>
+      </button>
       <button type="button" className="menu-item menu-item-dev" onClick={onMapViewer}>
         MAP VIEWER
         <span className="menu-item-sub">
