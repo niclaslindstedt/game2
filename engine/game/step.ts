@@ -22,6 +22,7 @@ import { TUNING } from "./defs/tuning.ts";
 import {
   clutchDump,
   launch,
+  seatOn,
   spinHeadroom,
   stepAirborne,
   stepGrounded,
@@ -378,10 +379,12 @@ function respawn(state: GameState, events: GameEvent[], home: WayHome): void {
   events.push({ type: "respawn" });
 }
 
-/** The water takes the car. The run is lost here and the crew are already
- * on their way, but the car is not lifted off the lake until it has gone
- * down: `stepDrowning` owns the seconds in between, and the respawn is at
- * the far end of them. */
+/** The water has the car. It is a crash the moment it goes in — the entry
+ * costs the run whatever happens next — but the car is not lifted off the
+ * lake until it has gone down: `stepDrowning` owns the seconds in between,
+ * and the respawn is at the far end of them. The far end is not the only
+ * end: a car whose entry carries it back onto a bank drives out instead
+ * (`beach`), and pays only the seconds it spent swimming. */
 function drown(state: GameState, events: GameEvent[], waterY: number): void {
   const car = state.car;
   state.stats.crashes += 1;
@@ -406,10 +409,46 @@ function drown(state: GameState, events: GameEvent[], waterY: number): void {
   car.vy = Math.min(0, Math.max(car.vy, -T.crash.drown.plunge));
 }
 
+/** Is the car over ground it could drive away from? Measured as the water
+ * standing over the GROUND, not over the car: a drowning hull is being held
+ * at its waterline, so asking how deep the water is over the body would
+ * answer "deep" on a car sitting on a beach with its wheels in a puddle.
+ * The bar is `crash.deepWater` less `drown.shallows` — under the one that
+ * put the car in, so a hull bobbing on that bar cannot beach and drown
+ * again on alternate steps. */
+function aground(state: GameState): boolean {
+  const car = state.car;
+  const water = state.terrain.waterAt(car.x, car.z);
+  if (water === null) return true;
+  return water - state.terrain.groundAt(car.x, car.z) <= T.crash.deepWater - T.crash.drown.shallows;
+}
+
+/** The car drives itself out. No respawn and no checkpoint to pay: the run
+ * is exactly where the car left it, wet and pointing wherever the water
+ * swung it. What this owes is a car the driving model can take back — the
+ * wheels on the ground rather than on a waterline that is now behind it,
+ * and the wedge clock re-anchored where it stands, or the two seconds it
+ * takes to crawl off a beach look to that rule like a car pinned against a
+ * trunk. */
+function beach(state: GameState, events: GameEvent[]): void {
+  const car = state.car;
+  const terrain = state.terrain;
+  state.drowning = null;
+  car.y = seatOn(car, terrain.groundAt(car.x, car.z), terrain.groundAt);
+  car.vy = 0;
+  state.stuck.x = car.x;
+  state.stuck.z = car.z;
+  state.stuck.since = state.t;
+  // A shallow splash, not the deep one: this is the car heaving itself out
+  // rather than the water closing over it, and the beat needs a sound or
+  // the run simply resumes as though nothing had it.
+  events.push({ type: "splash", speed: Math.abs(car.u), deep: false });
+}
+
 /** One step of a car going down. Nothing else in the run advances while
  * this is running — no progress, no surface, no wedge clock, and no input:
  * the seconds ARE the penalty, and a driver who could steer out of them
- * would not be paying it. */
+ * would not be paying it. Unless the car drives itself out — see `beach`. */
 function stepDrowning(state: GameState, events: GameEvent[]): void {
   const car = state.car;
   const d = state.drowning as NonNullable<GameState["drowning"]>;
@@ -429,18 +468,39 @@ function stepDrowning(state: GameState, events: GameEvent[]): void {
   car.z += (cosH * car.u - sinH * car.w) * T.dt;
   updateSlip(car);
 
+  // ...and that line is the car's one way out. A lake has a shore, a river
+  // has a far bank, and an entry taken at pace can carry the car up one
+  // before the water has it: a hull that reaches ground it could drive
+  // from was WADING, and the run goes on. Only while it still floats —
+  // past that the water is already taking it down and there is nothing
+  // left to drive with. Checked before the depth maths below, which is
+  // what would otherwise pull a car standing on a beach down to a
+  // waterline metres out from under it and bury it in the bank.
+  if (age < D.float && aground(state)) {
+    beach(state, events);
+    return;
+  }
+
   // Where the hull wants to sit. For the first `float` seconds that is its
   // waterline; after it, the waterline itself walks down to the bed and
   // takes the car with it. Smoothstepped, so the water starts winning
   // gradually rather than the car dropping on a cue.
   const going = Math.min(1, Math.max(0, (age - D.float) / (D.duration - D.float)));
   const gone = going * going * (3 - 2 * going);
-  // ...and it can only go as deep as there is water: a shallow tarn is a
-  // car settled on the bottom with its roof awash, not a car sinking
+  // Both halves are held off the LAND. The float rides the waterline or the
+  // ground under it, whichever is higher — a car carrying its entry up a
+  // shoal rides the shoal, and holding it at a waterline half a metre
+  // inside that is the hull sinking through the beach rather than into the
+  // lake. It is also what makes the hand-back a step rather than a jump:
+  // by the time the car is aground it is already standing at the height it
+  // will drive away from.
+  const ground = state.terrain.groundAt(car.x, car.z);
+  const afloat = Math.max(d.waterY - D.draft, ground);
+  // ...and the sink can only go as deep as there is water: a shallow tarn
+  // is a car settled on the bottom with its roof awash, not a car sinking
   // through the landscape.
-  const bed = state.terrain.groundAt(car.x, car.z) - D.draft;
-  const bottom = Math.max(bed, d.waterY - D.depth);
-  const rest = (1 - gone) * (d.waterY - D.draft) + gone * bottom;
+  const bottom = Math.max(ground - D.draft, d.waterY - D.depth);
+  const rest = (1 - gone) * afloat + gone * bottom;
 
   // Buoyancy, as an underdamped spring: the entry is swallowed, the hull
   // corks back up past its waterline, and the rocking dies out over the
