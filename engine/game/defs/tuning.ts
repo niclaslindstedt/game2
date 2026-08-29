@@ -816,8 +816,16 @@ export const TUNING = {
      * the spring rate) — a slam is caught, not swallowed... */
     stopRate: 16,
     /** ...and the extra damping they add, 1/s, so the stop absorbs the slam
-     * instead of firing it straight back out. */
+     * instead of firing it straight back out. It is the damping ON THE WAY
+     * IN only... */
     stopDamp: 26,
+    /** ...and this is the share of it still there as the spring comes back
+     * OUT of the stop, which is the rebound of a landing — the body thrown
+     * off its own wheels, and the moment the tires go light. Well under 1
+     * so there IS a rebound; well over 0 so it is one rebound and not a
+     * pogo (the chassis's own bounce, below, is the capped version of that
+     * and the only one allowed to leave the ground). */
+    stopRelease: 0.3,
     /** Hard limits on the body's offset, m — whatever the stops let through
      * never puts the shell through the wheels or up off them. Held at the
      * tightest arch gap on the roster, so the worst landing in the game still
@@ -826,6 +834,42 @@ export const TUNING = {
     /** Cap on spring velocity, m/s. Sized to the travel above: the springs
      * cross their whole compression in about a tenth of a second. */
     rateMax: 3,
+    /** A CAR THAT HAS JUST ARRIVED IS NOT STANDING ON ITS TIRES YET. The
+     * wheels hammer on their own rubber for the better part of a second
+     * after a landing, and a wheel that is intermittently in the air holds
+     * intermittently — so the grip goes with it, and a landing becomes a
+     * MOMENT rather than a bump in the road. `car.settle` carries that, and
+     * this is what a full one costs (`tyreLoad`).
+     *
+     * It is deliberately NOT read off the springs, which is the model that
+     * suggests itself and does not work. `car.ride` cannot tell a landing
+     * from a road: R16's cross-section (the crown, the ruts, the worn
+     * tracks) moves the body 3–5 cm every time the car crosses it, which is
+     * MORE than the ~2 cm rebound out of a bottomed landing. Coupled to
+     * grip, that took a fifth of the tires away in every steered corner on
+     * an ordinary road — the drift lab's hard corners gained 3–4° of slip
+     * and five of its 120 rows ran off the road, none of it anything to do
+     * with a jump. The landing needs a signal that says "a landing", and
+     * that is what `settle` is for.
+     *
+     * The number the BOTS feel, too: they plan every corner against the
+     * static ceiling and cannot see a landing coming, so this is the one
+     * knob here with a sim cost. At 0.45 the 72-run sweep threw two runs
+     * off the road; at 0.38, none, for the same drift time. */
+    loadSkitter: 0.38,
+    /** How hard the wheels have to arrive for the skitter to be full, m/s
+     * of descent, and how fast it settles out, 1/s. Set from the SMALL end
+     * on purpose: R6's shallowest lip (0.9 m over 22 m) comes down at about
+     * 5–6 m/s, and that is the landing this whole model exists for, so the
+     * ramp is sized to have most of the skitter in it by then. Everything
+     * bigger is already at the cap, which is why lowering this costs the
+     * bots nothing. */
+    settleSlam: 5.5,
+    settleFade: 2.6,
+    /** The lightest the tires ever get, 0..1. A floor, because a car that
+     * can be made unpointable by one landing is a car nobody can drive out
+     * of a jump — the slide has to be recoverable. */
+    loadFloor: 0.5,
     /** Nose attitude the springs take per m/s² of longitudinal
      * acceleration, rad — the dive under brakes and the squat on the
      * power. A couple of degrees at full braking: enough to read at the

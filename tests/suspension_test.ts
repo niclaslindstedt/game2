@@ -18,6 +18,8 @@ import {
   createGame,
   standSolid,
   step,
+  tyreLoad,
+  updateSlip,
   type CarInput,
   type GameEvent,
   type GameState,
@@ -149,6 +151,101 @@ describe("the springs", () => {
     // pitch is the BODY's, kept out of `pitch` so the wheels and the shadow
     // never tilt with it.
     expect(Math.abs(state.car.pitch)).toBeLessThan(0.05);
+  });
+});
+
+describe("the weight on the tires", () => {
+  /** A car at 30 m/s, optionally dropped from `height` first and optionally
+   * already carrying `angle` radians of slip when the clock starts. The two
+   * cars in each comparison below get the same speed and the same input;
+   * the only thing that ever differs is what one of them has just been
+   * through, which is the whole point. */
+  function running(height: number, angle: number): GameState {
+    const state = freshState();
+    const car = state.car;
+    car.u = 30;
+    if (height > 0) {
+      car.airborne = true;
+      car.y += height;
+      car.vy = 0;
+      for (let i = 0; i < 120 * 4 && car.airborne; i++) step(state, drive({ throttle: 0.4 }));
+    }
+    if (angle > 0) {
+      car.w = car.u * Math.tan(angle);
+      updateSlip(car);
+    }
+    return state;
+  }
+
+  /** Hold `steer` for `seconds` and report the angle the car ends up at. */
+  function slipAfter(state: GameState, steer: number, seconds: number): number {
+    for (let i = 0; i < Math.round(seconds / TUNING.dt); i++) {
+      step(state, drive({ steer, throttle: 0.4 }));
+    }
+    return Math.abs(state.car.slip);
+  }
+
+  it("a car that lands sideways keeps the angle a car on the flat loses", () => {
+    // 14° on, hands off: on the flat the tires simply take it back. Off a
+    // landing they have far less to take it back WITH, and the car is still
+    // going where it was going a third of a second later.
+    const flat = slipAfter(running(0, 0.25), 0, 0.3);
+    const jumped = slipAfter(running(1.6, 0.25), 0, 0.3);
+    const slammed = slipAfter(running(4, 0.25), 0, 0.3);
+    expect(jumped).toBeGreaterThan(flat * 1.4);
+    // ...and the harder it came down, the more of the angle survives.
+    expect(slammed).toBeGreaterThan(jumped);
+  });
+
+  it("a landing turns lock into a slide sooner than the same lock on the flat", () => {
+    // The other half of the same idea: not a car already sideways, but one
+    // being asked to go. Light tires cross the slide threshold on less.
+    // A smaller effect than the one above, and rightly so: a landing must
+    // not turn a straight car into a spin. What it does is let the slide
+    // arrive about a tenth of a second sooner (~1.2x the angle a fifth of a
+    // second in), after which the tires are back and the two converge.
+    const flat = slipAfter(running(0, 0), 0.6, 0.3);
+    const jumped = slipAfter(running(1.6, 0), 0.6, 0.3);
+    expect(jumped).toBeGreaterThan(flat * 1.15);
+  });
+
+  it("even the smallest jump in the game takes weight off the tires", () => {
+    // R6's shallowest lip: 0.9 m raised over 22 m, taken at 60 km/h. This
+    // is the jump that used to feel like nothing at all.
+    const state = freshState();
+    const car = state.car;
+    car.u = 17;
+    car.airborne = true;
+    car.y += 0.9;
+    car.vy = 1.2;
+    let landed = false;
+    let lightest = 1;
+    for (let i = 0; i < 120 * 2; i++) {
+      step(state, drive({ throttle: 0.4 }));
+      landed ||= !car.airborne;
+      if (landed) lightest = Math.min(lightest, tyreLoad(car));
+    }
+    expect(landed).toBe(true);
+    // A CAR IS HEAVY. Even this arrives with enough of a bang to take most
+    // of a full skitter's worth of grip away for a moment.
+    expect(lightest).toBeLessThan(0.75);
+  });
+
+  it("sizes the skitter by how hard the wheels arrived, and settles it out", () => {
+    const soft = running(0.5, 0);
+    const hard = running(6, 0);
+    expect(hard.car.settle).toBeGreaterThan(soft.car.settle);
+    // ...and neither of them is a permanent handicap: a second later the
+    // car is standing on its tires again.
+    for (let i = 0; i < 120; i++) step(hard, drive({ throttle: 0.4 }));
+    expect(hard.car.settle).toBe(0);
+  });
+
+  it("costs nothing on smooth ground — a flat road is a car at full weight", () => {
+    const state = freshState();
+    state.car.u = 30;
+    for (let i = 0; i < 120; i++) step(state, drive({ throttle: 0.4 }));
+    expect(Math.abs(1 - tyreLoad(state.car))).toBeLessThan(0.05);
   });
 });
 

@@ -124,8 +124,8 @@ describe("event routing", () => {
   const EVERY_EVENT: GameEvent[] = [
     { type: "go" },
     { type: "takeoff", vy: 6 },
-    { type: "landing", airTime: 1.2, clean: true },
-    { type: "landing", airTime: 1.2, clean: false },
+    { type: "landing", airTime: 1.2, slam: 9, clean: true },
+    { type: "landing", airTime: 1.2, slam: 9, clean: false },
     { type: "splash", speed: 12, deep: false },
     { type: "splash", speed: 24, deep: true },
     { type: "shift", gear: 3 },
@@ -205,11 +205,22 @@ describe("event routing", () => {
     expect(lake?.shape?.stretch ?? 1).toBeGreaterThan(ford?.shape?.stretch ?? 1);
   });
 
-  it("makes a bigger landing louder and lower", () => {
-    const hop = soundForEvent({ type: "landing", airTime: 0.4, clean: true }, 0);
-    const flight = soundForEvent({ type: "landing", airTime: 2.5, clean: true }, 0);
+  it("makes a harder landing louder and lower", () => {
+    // The SLAM, not the air time: a short hop off a steep lip arrives
+    // harder than a long floaty flight onto ground running away under it,
+    // and the sound has to be the one the car felt.
+    const hop = soundForEvent({ type: "landing", airTime: 2.5, slam: 2, clean: true }, 0);
+    const flight = soundForEvent({ type: "landing", airTime: 0.4, slam: 12, clean: true }, 0);
     expect(flight?.shape?.gain ?? 0).toBeGreaterThan(hop?.shape?.gain ?? 0);
     expect(flight?.shape?.pitch ?? 1).toBeLessThan(hop?.shape?.pitch ?? 1);
+  });
+
+  it("still gives the gentlest touchdown some weight — a car is heavy", () => {
+    // A landing that registers as nothing at all is the one thing a jump
+    // must never do, however small the jump was.
+    const feather = soundForEvent({ type: "landing", airTime: 0.1, slam: 0.2, clean: true }, 0);
+    const full = soundForEvent({ type: "landing", airTime: 2, slam: 14, clean: true }, 0);
+    expect(feather?.shape?.gain ?? 0).toBeGreaterThan(0.25 * (full?.shape?.gain ?? 1));
   });
 });
 

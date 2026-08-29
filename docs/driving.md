@@ -206,6 +206,7 @@ rewards it, and no drift seconds are counted at the player.
 - **The roll** — a car that leaves the ground crossed up trips over its outside wheels: the take-off puts roll in the body from the slide it was holding plus the rotation already in it, and nothing in the air takes it out. The same trip about the vertical axis puts SPIN in it (`air.yawFromSlide`): the tires that were holding the slide let go all at once, so a car that goes over a ledge sideways keeps turning the way the slide was turning it, all the way down. Straight and level flies flat; properly sideways goes a long way over; the unluckiest launches go all the way round. Landing on your side is never a clean landing. The ground unwinds the roll toward the nearest upright, and then onto the CAMBER under the wheels — level on the road, tipped with the hillside out in the wild.
 - **Airborne** — the velocity vector is committed. Gravity is arcade-heavy (floatier hangs read as slow motion), the nose answers only faintly, and a small seeded turbulence rolls the car — flying, slightly out of control, exactly as intended. No lateral grip: whatever attitude you took off with survives to the ground.
 - **Landing** — straight (slip inside the clean limit) keeps all your speed: `CLEAN AIR`. Landing sideways scrubs speed and wobbles the car. Line up before the lip. Whatever the descent was, the springs take it (below), and a slam past what they can travel through bounces the whole chassis back off the ground for a beat — one landing still happening, not a second flight, so it draws no turbulence and never counts as a jump.
+- **...and the car goes LIGHT on it.** A landing is not over when the wheels touch: the springs bottom and throw the body back up, and the wheels hop on their own rubber for the better part of a second. A wheel that is intermittently in the air holds intermittently, so the grip goes with it (`CarState.settle` → `tyreLoad`, below) — a nose a few degrees off line or a wheel with any lock on it takes the car sideways where the same input on the flat would not. All of it is sized by the SLAM, the descent the springs had to swallow, which is the number the `landing` event carries and the camera, the dust and the sound are all scaled off. Even the shallowest lip R6 can build arrives hard enough to be felt: a car is heavy, and the smallest jump on the stage is still a hit.
 
 ## Reverse
 
@@ -613,16 +614,20 @@ The wheels track the ground exactly; the **body does not**. `TUNING.suspension`
 is a second-order spring the whole sprung mass rides on, deliberately
 under-damped so it OVERSHOOTS and settles rather than easing to rest — a body
 that just cushions reads as a sprite on a plane, and the rebound is what reads
-as mass. Two readouts come out of it, both written by the engine and only ever
-drawn by the renderer:
+as mass. Three readouts come out of it, all written by the engine; the first
+two are drawn and never read back, and the third is what a landing costs the
+car in grip.
 
 - **`CarState.ride`** — how far the body sits from where the wheels put it, m
   (negative is compressed). It is excited by one thing: a change in the
   WHEELS' vertical speed. A dip flattening out at the bottom of a descent, a
   landing, a bank that stops the nose — each arrives as a jolt the springs
   swallow and give back. Past `travel`/`droop` the bump stops catch it, stiff
-  and heavily damped, so a slam is absorbed rather than pogoed. Heavier cars
-  ride the same springs more slowly (ω ∝ √(k/m)).
+  and heavily damped ON THE WAY IN — coming back out they keep only
+  `stopRelease` of that damping, because a rubber stop pushes, and that push
+  is the rebound of a landing. Damped equally both ways the car squatted onto
+  its stops and stayed there, which is a landing with no weight in it.
+  Heavier cars ride the same springs more slowly (ω ∝ √(k/m)).
 
   **The whole envelope is a bodywork measurement.** `heaveMax` is held at the
   tightest gap between arch and tire on the roster (0.08–0.11 m — see
@@ -638,7 +643,35 @@ drawn by the renderer:
   the car's DIRECTION OF TRAVEL, not its heading (`slope` × `u` plus
   `slopeLat` × `w`, which is the ground's gradient dotted with the velocity),
   so a car sliding across a uniform hillside no longer reports a vertical
-  speed that swings with its own yaw.
+  speed that swings with its own yaw. The cap runs in both directions:
+  uncapping the ground falling away reads like the obvious improvement — over
+  a brow nothing is pushing the body — but a brow's fall is already well
+  inside it, and measured on 1.2 m and 2.6 m crests from 16 to 44 m/s the
+  body's travel moved by nothing at all.
+
+- **`CarState.settle`** — how much the car is still SKITTERING after
+  arriving, 0..1: the wheels themselves hopping on their own rubber, which is
+  a beat of the car the one-mass spring model above cannot hold. A landing
+  writes it, sized by the descent the springs had to swallow (`settleSlam`),
+  and it fades at `settleFade`.
+
+- **Weight on the tires** (`tyreLoad`) — `settle`, read back into the
+  handling as one multiplier on `surfaceGrip`, which is the single number the
+  slide threshold, the redirect rate, the traction ceiling and the driven
+  axle's bite all come off. A full skitter costs `loadSkitter` of the grip,
+  and it never falls below `loadFloor`, so a slide out of a jump stays
+  recoverable. It reads exactly 1 everywhere else, so a corner pays nothing
+  for it.
+
+  **Why not off the springs?** Because a body dragging up off its wheels is
+  the obvious signal and the wrong one: `ride` cannot tell a landing from a
+  road. R16's cross-section — the crown, the ruts, the worn tracks — moves
+  the body 3–5 cm every time the car crosses it, which is MORE than the
+  ~2 cm rebound out of a bottomed landing, so a springs-driven version took a
+  fifth of the tires away in every steered corner on an ordinary road: 3–4°
+  more slip on the drift lab's hard corners and five of its 120 rows running
+  off the road, none of it to do with a jump. A landing needs a signal that
+  says "a landing", and `settle` is it.
 
 - **`CarState.pitchLoad`** — the dive under the brakes, the squat on the power
   and the nose-dip an impact throws in. Kept apart from `pitch` (the ground's

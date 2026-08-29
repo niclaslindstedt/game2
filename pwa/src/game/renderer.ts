@@ -78,6 +78,15 @@ const FOAM: DustTint = { base: 0xeaf5ff, fleck: 0xb6d6f0, fleckMix: 0.35 };
 /** How fast a car has to meet water for the splash to be as big as it
  * gets, m/s. */
 const SPLASH_FULL = 26;
+/** How hard the wheels have to arrive for a landing to be as big as it
+ * gets, m/s of descent the springs had to swallow — a proper moon shot off
+ * a two-metre lip comes down at about this. */
+const SLAM_FULL = 11;
+/** ...and the share of that a landing is worth however gently it arrives.
+ * A CAR IS HEAVY: a ton and a half dropping the last few centimetres off a
+ * kerb still lands with a bang, and a small jump that registers as nothing
+ * at all is the one thing a jump must never do. */
+const SLAM_FLOOR = 0.34;
 /** A trunk giving way: pale splintered wood with the bark's own brown torn
  * through it. Nothing else in the game throws wood, and a stone-grey burst
  * off a tree reads as the tree having been made of concrete. */
@@ -551,11 +560,24 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     const fx = fxScale();
     for (const ev of events) {
       if (ev.type === "landing") {
+        // HOW HARD, not how long: the descent the springs just swallowed is
+        // what the car felt, and it is the only number that tells a hop off
+        // a kerb from a moon shot. Air time cannot — a long floaty flight
+        // onto ground running away underneath it arrives softer than a
+        // short one off a steep lip. The floor under it is the weight of
+        // the car: nothing about a landing is ever free.
+        const slam = SLAM_FLOOR + (1 - SLAM_FLOOR) * Math.min(1, Math.abs(ev.slam) / SLAM_FULL);
         // Straight down: the wheels stop falling and the driver's head does
         // not, which is the whole of what a landing feels like from inside.
-        chase.kick(ev.clean ? 0.25 : 0.5, DOWN);
+        chase.kick((ev.clean ? 0.34 : 0.62) * slam, DOWN);
         // Four tyres hitting the ground at once, and each of them throws.
-        atWheels(wetGround ? mud : dust, state, groundDust(state), (ev.clean ? 14 : 26) * fx, 3.5);
+        atWheels(
+          wetGround ? mud : dust,
+          state,
+          groundDust(state),
+          Math.round((ev.clean ? 18 : 32) * slam * fx),
+          3.5,
+        );
       } else if (ev.type === "splash") {
         // How much water the car moved. A ford taken at pace throws a
         // sheet off the nose; a car going into a lake throws a COLUMN, and

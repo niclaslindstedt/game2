@@ -96,6 +96,7 @@ function freshCar(): CarState {
     pitch: 0,
     ride: 0,
     rideRate: 0,
+    settle: 0,
     pitchLoad: 0,
     kerbFrom: 0,
     slide: 0,
@@ -354,6 +355,7 @@ function respawn(state: GameState, events: GameEvent[], home: WayHome): void {
   car.pitch = 0;
   car.ride = 0;
   car.rideRate = 0;
+  car.settle = 0;
   car.pitchLoad = 0;
   car.slide = 0;
   car.drifting = false;

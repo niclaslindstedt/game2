@@ -24,9 +24,15 @@ import type { PlayShape } from "./types.ts";
 const HIT_SPEED = 7;
 const CRUNCH_SPEED = 15;
 
-/** Air time under which a landing is a hop rather than a jump, s — the shape
- * scale is measured from here so a kerb is not a forty-metre flight. */
-const HOP_TIME = 0.35;
+/** How hard the wheels arrive for a landing to be as loud as it gets, m/s of
+ * descent the springs had to swallow, and the share of that the gentlest
+ * touchdown is still worth. A landing is sized by its SLAM rather than by
+ * its air time, because air time is a guess at the same thing and a bad
+ * one: a short hop off a steep lip lands harder than a long floaty flight
+ * that comes down on ground running away underneath it. The floor is the
+ * mass of the car — a small jump has to sound like something. */
+const SLAM_FULL = 11;
+const SLAM_FLOOR = 0.3;
 
 /** Take a value from `lo`..`hi` to 0..1. */
 function ramp(value: number, lo: number, hi: number): number {
@@ -83,10 +89,11 @@ export function soundForEvent(
     }
 
     case "landing": {
-      // Air time is the weight of the landing: a longer flight is more of the
-      // car arriving at once. `clean` picks WHICH landing, because a wheels-on
-      // arrival and a slammed one are not one sound at two sizes.
-      const big = ramp(event.airTime, HOP_TIME, 2.2);
+      // The slam is the weight of the landing: the faster the springs had to
+      // stop the car, the more of it arrives at once. `clean` picks WHICH
+      // landing, because a wheels-on arrival and a slammed one are not one
+      // sound at two sizes.
+      const big = SLAM_FLOOR + (1 - SLAM_FLOOR) * ramp(Math.abs(event.slam), 0, SLAM_FULL);
       return {
         id: event.clean ? "land_clean" : "land_hard",
         shape: { gain: 0.55 + 0.75 * big, pitch: 1.12 - 0.28 * big, stretch: 0.85 + 0.5 * big },

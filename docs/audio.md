@@ -53,7 +53,12 @@ noise. Three kinds of sound come out the other side:
   shift, an impact, going past a stand of spectators, the finish. `route.ts`
   maps the event to a bank id and a `PlayShape` — a scale (`gain`, `pitch`,
   `stretch`, `pan`) applied to the authored voices, so one landing covers a
-  kerb hop and a forty-metre flight, one `cheer` covers a knot of six at a
+  kerb hop and a forty-metre flight — scaled by the SLAM the event carries,
+  the descent the springs had to swallow, because air time only ever guessed
+  at how hard the car arrived and a floaty flight onto ground running away
+  underneath it lands softer than a short hop off a steep lip; the scale has
+  a floor under it, since a car is heavy and no landing sounds like
+  nothing — one `cheer` covers a knot of six at a
   corner and the bank at the finish, and one `splash` covers a ford crossed
   at pace and a car going into a lake it will not be coming out of (an
   octave down, half again as long). Where an event carries what it happened
