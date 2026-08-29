@@ -502,6 +502,41 @@ export function carTintFor(p: Preset): THREE.Color {
   return new THREE.Color(ratio(here.r, noon.r), ratio(here.g, noon.g), ratio(here.b, noon.b));
 }
 
+/** ...and the same question for a cloud of dust, which is answered
+ * differently because a cloud is not a car. The body needs a floor under it
+ * or it stops reading as a car at all; hanging dust in the dark is SUPPOSED
+ * to disappear — a plume you can see by is a plume that is emitting light.
+ * So this floor is barely a floor, and what is left of a night cloud is
+ * whatever the lamps put back on it (dust-light.ts). */
+const DUST_FLOOR = 0.12;
+
+/**
+ * WHAT THE FAILING LIGHT DOES TO A CLOUD.
+ *
+ * Same measurement as the car's, and a different curve on it, because the
+ * two fail differently. A car under a night sky is a shape the player has
+ * to keep steering; a plume under a night sky is a thing that should barely
+ * be there until a lamp finds it.
+ *
+ * So the two ends are pinned and the shape between them is what differs.
+ * At noon this is 1 and the cloud is exactly what it has always been — the
+ * daylight plume was never the complaint. Squaring the ratio is what makes
+ * the failing light bite: dusk takes a cloud down markedly further than it
+ * takes the paint, which is the hour the two are seen side by side. And the
+ * floor under it is barely a floor, because what is left of a night cloud
+ * should be whatever the lamps put back on it (dust-light.ts) — enough that
+ * the mass is still THERE against the road, not enough to see by.
+ */
+export function dustTintFor(p: Preset): THREE.Color {
+  const here = keyLight(p);
+  const noon = keyLight(NOON);
+  const ratio = (a: number, b: number): number => {
+    const lit = Math.min(1, b > 0 ? a / b : 1);
+    return DUST_FLOOR + (1 - DUST_FLOOR) * lit * lit;
+  };
+  return new THREE.Color(ratio(here.r, noon.r), ratio(here.g, noon.g), ratio(here.b, noon.b));
+}
+
 /**
  * HOW MUCH DAYLIGHT THERE IS, 0..1 against a clear noon.
  *

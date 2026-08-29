@@ -246,15 +246,22 @@ export type CarBodySpec = {
       split?: number;
       /** Extra sill under the rear quarter window — the rally kick-up. */
       quarterRise?: number;
+      /** HOW MUCH OF THE CAR'S BACK THE BACKLIGHT TAKES, 0..1 of the
+       * cabin's rear panel — a share rather than the `c` post's metres,
+       * because what reads from behind is the PROPORTION of glass to
+       * bodywork, and that has to hold on a narrow hatch and a wide coupe
+       * alike. The rear post is thin where it crosses the screen and keeps
+       * its width on the flank, which is what a real one does. */
+      backWidth?: number;
     };
     pillarPaint?: "paint" | "accent";
     /** Rain gutters along the roof edges — the detail that dates a car to
      * the era both launch cars come from. Width in m. */
     gutter?: { width: number; color?: number };
-    /** Arms on the glass: a tandem pair on the windscreen and one on the
-     * backlight, which sweep when there is something on the screen to clear
-     * (car/wipers.ts). Off leaves the car with glass that soils and never
-     * comes clean. */
+    /** Arms on the glass: a single centre arm on each screen — the rally
+     * answer rather than the road car's tandem pair — which sweep when
+     * there is something on the screen to clear (car/wipers.ts). Off leaves
+     * the car with glass that soils and never comes clean. */
     wipers?: boolean;
     /** Black-out band around the glass openings, m. Reads as the rubber
      * seal that separates a glass opening from a painted panel. */

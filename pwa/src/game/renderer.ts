@@ -31,6 +31,7 @@ import {
   WILD_THROW,
   type DustTint,
 } from "./dust.ts";
+import { clearDustLamps } from "./dust-light.ts";
 import { SOOT, sootySmoke, STONE_DUST, type PlumeGround } from "./ground-tint.ts";
 import { createCarFx } from "./car-fx.ts";
 import { createEnvironment } from "./environment.ts";
@@ -264,7 +265,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     if (car) tintCar(car, tint, lit, rain);
     if (ghostCar) tintCar(ghostCar, tint, lit, rain);
     field.paint(tint, lit, rain);
-    carFx.setTint(tint);
+    carFx.setTint(tint, environment.dustTint());
   };
 
   /** How thick the transient FX are right now: the effects budget, and
@@ -854,6 +855,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     if (ghost && ghostCar) ghostCar.update(ghost, dt, chase.camera.position);
     // The entry list, off their own games; off under the map view like the
     // player's own body below.
+    field.setDust(wetGround, fx);
     field.update(state, chase.camera, dt, view !== "map");
     // The way home is a DRIVING aid, bolted to the camera. Under the menu's
     // drone, the map view and god mode's free camera there is nobody lost
@@ -874,6 +876,15 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // The weather is the environment's, the FX budget is the renderer's.
     environment.setEffects(fx);
     environment.update(state, chase.camera, dt);
+    // THE LAMPS THE DUST SEES — the register every cloud in the scene is lit
+    // from (dust-light.ts), refilled from scratch each frame. Emptied HERE
+    // rather than by whoever writes to it first, because it is one register
+    // with several contributors and the order they run in is the renderer's
+    // business, not theirs. The player goes on first so a field closing up
+    // can never crowd their own tail lamps out of it.
+    clearDustLamps();
+    environment.lightDust(state.car);
+    field.lightDust(environment.lampPower());
     const cam = chase.camera.position;
     if (fx > 0) life.update(cam.x, cam.z, state.wind.x, state.wind.z, dt);
     life.group.visible = fx > 0;

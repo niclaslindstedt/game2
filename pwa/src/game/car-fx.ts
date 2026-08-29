@@ -54,8 +54,15 @@ export type CarFx = {
    * while it is parked. */
   celebration: Celebration;
   /** The environment's light tint, onto every pool that carries its own
-   * baked or vertex colors. */
-  setTint: (tint: THREE.Color) => void;
+   * baked or vertex colors — and the DARKER one the ground clouds take.
+   *
+   * Two tints rather than one because a cloud is not a car and does not
+   * fail like one (sky.ts's `dustTintFor`): the paint under a night sky has
+   * a floor holding it up so the car still reads as a car, and hanging dust
+   * has almost none, because a plume at midnight is supposed to be
+   * whatever the lamps put back on it. The exhaust and the ambient life
+   * keep the car's: a moth is a lit thing and a puff of soot is a solid. */
+  setTint: (tint: THREE.Color, dust: THREE.Color) => void;
   /** The ground under the car right now, as a color for whatever is about
    * to be thrown off it. The rock test is deferred: it is a terrain lookup,
    * and only one of the branches ever asks for it. */
@@ -105,10 +112,11 @@ export function createCarFx(scene: THREE.Scene): CarFx {
   );
   for (const cloud of celebration.clouds) scene.add(cloud);
 
-  const setTint = (tint: THREE.Color): void => {
-    for (const pool of [dust, smoke, plume, mud, fumes]) {
-      (pool.points.material as THREE.PointsMaterial).color.copy(tint);
+  const setTint = (tint: THREE.Color, dustLight: THREE.Color): void => {
+    for (const pool of [dust, smoke, plume, mud]) {
+      (pool.points.material as THREE.PointsMaterial).color.copy(dustLight);
     }
+    (fumes.points.material as THREE.PointsMaterial).color.copy(tint);
     life.setTint(tint);
   };
 

@@ -20,6 +20,7 @@ import * as THREE from "three";
 
 import { type DriveLayout } from "@engine";
 
+import { DUST_LAMP_UNIFORMS, DUST_LAMPS } from "./dust-light.ts";
 import { billowTexture, puffTexture } from "./textures.ts";
 
 /** How many particles a cloud keeps, unless its style asks for more. Big
@@ -211,10 +212,14 @@ export const GROUND_CLOUD: DustStyle = {
   // the same number of puffs is a slab of fog that starts at full width,
   // which is the one shape a plume never has.
   size: 0.45,
-  // …and thin, because the density has to come from the OVERLAP rather
-  // than from any one puff. A cloud you can pick single puffs out of is a
-  // cloud made of sprites.
-  opacity: 0.42,
+  // …and THIN, because the density has to come from the OVERLAP rather than
+  // from any one puff. A cloud you can pick single puffs out of is a cloud
+  // made of sprites — and one you cannot see the road through is a cloud
+  // that has stopped being an effect and started being the view. This is
+  // low enough that the chase camera keeps the stage ahead through the
+  // thickest part of the tail; the mass is still there, it is just made of
+  // fifty overlapping veils instead of ten opaque ones.
+  opacity: 0.21,
   // LOW, AND STAYING LOW. Barely any lift of its own, and almost none of
   // the spread going upward either (`updraft`) — the cloud opens out
   // sideways along the road instead of climbing. A plume that rises is a
@@ -548,50 +553,117 @@ export type Dust = {
 };
 
 /**
- * THE SMOKE GRAFT — what a `puffy` style's material gets that a grain's
- * does not.
+ * THE GRAFT — what a dust material's shader gets that three's own points
+ * shader does not. Two things, and they are independent: the LIGHT every
+ * cloud takes off the cars' lamps, and the three per-particle attributes
+ * that separate smoke from a sprite.
  *
- * A `PointsMaterial` draws every point at one size and one opacity, and
- * samples its mask at one angle: three constants, and between them they
- * are why an untreated point cloud reads as a sprite however good the
- * sprite is. Grafting three attributes onto three's own points shader —
- * rather than writing a shader from scratch — is what keeps the
- * size-attenuation maths, the fog, the tint and the clipping planes
- * working exactly as they do for everything else in the scene.
+ * THE LIGHT. A point cloud is not in the lit scene: no normals, so the sun
+ * and the four spotlights on the car pass straight through it and a cloud
+ * is whatever colour it was born. What it gets instead is its material's
+ * own colour as an ambient (the sky, via `dustTintFor`) plus the register
+ * in dust-light.ts summed here — a handful of cones with a linear reach,
+ * added into `diffuse` so the fragment's existing multiply by the
+ * particle's vertex colour comes out as albedo x (ambient + lamps). Per
+ * VERTEX is per particle for a point sprite, which is why this is cheap
+ * enough to run on a thousand puffs: a lamp costs a length, a dot and two
+ * multiplies, once per puff rather than once per pixel of it.
+ *
+ * It is written branchlessly on purpose. An empty slot carries a zero
+ * reach and a black colour, so it falls out of the sum through the same
+ * `max` that clamps a lamp's falloff at its edge — no loop bound that
+ * changes with the frame, and no `continue` for a compiler to unroll
+ * badly.
+ *
+ * THE PUFF. A `PointsMaterial` draws every point at one size and one
+ * opacity, and samples its mask at one angle: three constants, and between
+ * them they are why an untreated point cloud reads as a sprite however
+ * good the sprite is. Grafting three attributes onto three's own points
+ * shader — rather than writing a shader from scratch — is what keeps the
+ * size-attenuation maths, the fog, the tint and the clipping planes working
+ * exactly as they do for everything else in the scene.
  *
  * The fourth term is the only one the CPU cannot supply: a puff's distance
  * from the EYE, which is `mvPosition` and exists only inside the vertex
  * shader. It is what fades a cloud out of the lens as the camera runs into
  * it.
  */
-function graftSmoke(mat: THREE.PointsMaterial, near: number): void {
+function graftDust(mat: THREE.PointsMaterial, puffy: boolean, near: number): void {
   mat.onBeforeCompile = (shader) => {
+    // Assigned by REFERENCE, so every dust material in the scene shares one
+    // set of arrays and the register is written once a frame rather than
+    // once per cloud.
+    Object.assign(shader.uniforms, DUST_LAMP_UNIFORMS);
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
         `#include <common>
+        uniform vec4 uDustLampSpot[ ${DUST_LAMPS} ];
+        uniform vec4 uDustLampFace[ ${DUST_LAMPS} ];
+        uniform vec3 uDustLampGlow[ ${DUST_LAMPS} ];
+        varying vec3 vLamp;${
+          puffy
+            ? `
         attribute float aScale;
         attribute float aFade;
         attribute float aSpin;
         varying float vFade;
-        varying float vSpin;`,
+        varying float vSpin;`
+            : ""
+        }`,
       )
       .replace(
         "gl_PointSize = size;",
-        `gl_PointSize = size * aScale;
+        `gl_PointSize = size${puffy ? " * aScale" : ""};${
+          puffy
+            ? `
         vSpin = aSpin;
         vFade = aFade${
           near > 0
             ? ` * smoothstep( ${near.toFixed(2)}, ${(near * 2.4).toFixed(2)}, - mvPosition.z )`
             : ""
-        };`,
+        };`
+            : ""
+        }
+        vLamp = vec3( 0.0 );
+        vec3 dustAt = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;
+        for ( int i = 0; i < ${DUST_LAMPS}; i++ ) {
+          vec4 lamp = uDustLampSpot[ i ];
+          vec3 away = dustAt - lamp.xyz;
+          float gap = length( away );
+          // Linear to the lamp's reach and nothing past it, squared so the
+          // light is concentrated at the tyre rather than spread evenly
+          // over the whole cone.
+          float fall = max( 0.0, 1.0 - gap / max( lamp.w, 0.001 ) );
+          vec4 aim = uDustLampFace[ i ];
+          // Soft-edged: a hard cone edge across a cloud is a straight line
+          // drawn on smoke, which is the one shape smoke never has.
+          float cone = smoothstep(
+            aim.w,
+            mix( aim.w, 1.0, 0.55 ),
+            dot( away / max( gap, 0.001 ), aim.xyz )
+          );
+          vLamp += uDustLampGlow[ i ] * cone * fall * fall;
+        }`,
       );
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\nvarying float vFade;\nvarying float vSpin;")
+      .replace(
+        "#include <common>",
+        `#include <common>
+        varying vec3 vLamp;${
+          puffy
+            ? `
+        varying float vFade;
+        varying float vSpin;`
+            : ""
+        }`,
+      )
       .replace(
         "vec4 diffuseColor = vec4( diffuse, opacity );",
-        "vec4 diffuseColor = vec4( diffuse, opacity * vFade );",
-      )
+        `vec4 diffuseColor = vec4( diffuse + vLamp, opacity${puffy ? " * vFade" : ""} );`,
+      );
+    if (!puffy) return;
+    shader.fragmentShader = shader.fragmentShader
       // The mask, turned about the sprite's middle. Sampling outside the
       // square is safe and wanted: the corners a rotation reaches into are
       // clamped to the mask's own transparent rim.
@@ -608,10 +680,11 @@ function graftSmoke(mat: THREE.PointsMaterial, near: number): void {
         #endif`,
       );
   };
-  // Two puffy styles with different lens fades compile to different
-  // programs. Without this three sees one PointsMaterial cache key for
-  // both and hands the second one the first one's shader.
-  mat.customProgramCacheKey = () => `smoke-${near}`;
+  // Styles that compile to different programs — a grain against a puff, and
+  // two puffy styles with different lens fades — must not share a key.
+  // Without this three sees one PointsMaterial cache key for all of them and
+  // hands the second one the first one's shader.
+  mat.customProgramCacheKey = () => `dust-${puffy ? near : "grain"}`;
 }
 
 export function createDust(style: DustStyle = GRAVEL_DUST): Dust {
@@ -655,8 +728,8 @@ export function createDust(style: DustStyle = GRAVEL_DUST): Dust {
     geo.setAttribute("aScale", new THREE.BufferAttribute(scales, 1));
     geo.setAttribute("aFade", new THREE.BufferAttribute(fades, 1));
     geo.setAttribute("aSpin", new THREE.BufferAttribute(angles, 1));
-    graftSmoke(mat, style.nearFade ?? 0);
   }
+  graftDust(mat, puffy, style.nearFade ?? 0);
   const points = new THREE.Points(geo, mat);
   points.frustumCulled = false;
   const tint = new THREE.Color();

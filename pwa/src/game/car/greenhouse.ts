@@ -38,6 +38,15 @@ const PILLARS = {
   header: 0.045,
   split: 0.5,
   quarterRise: 0,
+  /** The backlight's share of the cabin's rear panel, across the car. A
+   * SHARE and not the `c` post's metres, because what reads from behind is
+   * the proportion of glass to bodywork rather than the width of any post
+   * — and because `c` is a flank measurement: on the side of the car the
+   * rear post carries the roof and has to look like it, while across the
+   * back it is a strip of metal beside a window that ought to be as wide as
+   * the car will allow. Sharing one number between the two gave every car a
+   * letterbox with a hand's breadth of paint either side of it. */
+  backWidth: 0.9,
 };
 
 /** Glass sits this far proud of the cabin metal — enough to beat depth
@@ -204,8 +213,8 @@ export function cabinPanels(spec: CarBodySpec): CabinPanel[] {
       mirrored: false,
       holes: [
         {
-          u0: p.c / bSpan.u,
-          u1: 1 - p.c / bSpan.u,
+          u0: (1 - p.backWidth) / 2,
+          u1: 1 - (1 - p.backWidth) / 2,
           v0: p.header / bSpan.v,
           v1: 1 - p.sill / bSpan.v,
         },
