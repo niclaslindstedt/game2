@@ -44,20 +44,26 @@ Picking a stage in the campaign or the time trial does not start it: it opens th
 
 **Controller (any platform).** Plug in or pair a pad — an Xbox or DualSense controller on a desktop, a phone with a clip-on, or a handheld like a Retroid Pocket that runs the installed PWA on its own buttons — and press one of its buttons. It appears in Options → Controls, and the on-screen wheel and pedal come off the screen while it is connected (there is a switch for that if you want both).
 
-| Control            | Action                                                  |
-| ------------------ | ------------------------------------------------------- |
-| Left stick         | Steer — analogue, so a small lean is a small correction |
-| R2 (right trigger) | Throttle — analogue: half a trigger is half the pedal   |
-| L2 (left trigger)  | Brake — and reverse, stopped                            |
-| A                  | Handbrake — unsticks the rear                           |
-| X                  | Camera: next of six angles                              |
-| B                  | Back to the track (off-road)                            |
-| Y                  | Screenshot                                              |
-| L1 / R1            | Shift down / up (manual car)                            |
-| D-pad ← →          | Steer, for anyone who would rather not use the stick    |
-| Select / Start     | Main menu / in-race menu                                |
+| Control            | Driving                                                 | In a menu |
+| ------------------ | ------------------------------------------------------- | --------- |
+| Left stick         | Steer — analogue, so a small lean is a small correction | Move      |
+| D-pad              | Steer, for anyone who would rather not use the stick    | Move      |
+| R2 (right trigger) | Throttle — analogue: half a trigger is half the pedal   |           |
+| L2 (left trigger)  | Brake — and reverse, stopped                            |           |
+| A                  | Handbrake — unsticks the rear                           | Select    |
+| B                  | Back to the track (off-road)                            | Back      |
+| X                  | Camera: next of six angles                              |           |
+| L1 / R1            | Shift down / up (manual car)                            |           |
+| Select             | Screenshot                                              |           |
+| Start              | In-race menu — and the way back out of it               |           |
 
-The **analogue triggers** are the reason a pad is worth driving on: a slide is caught with a fraction of the throttle, which no key can express. RESTART is deliberately left unbound — every other button is recoverable by pressing it again, and throwing a stage away halfway down it is not — but it is in the list if you want it somewhere. Everything here is rebindable the same way the keys are: tap a row, press the button. If the car wanders down a straight with nobody touching the stick, raise **stick deadzone**. Menus are still driven by touch or mouse.
+The **analogue triggers** are the reason a pad is worth driving on: a slide is caught with a fraction of the throttle, which no key can express.
+
+**The menus work on the pad too** — the stick and the d-pad walk the cards, A presses what the cursor is on, B is the way back. A gold ring shows where the cursor is, and holding a direction repeats it. It covers every surface: the main menu, the pre-race card, options, the pause card, the finish card and the results sheet.
+
+Two actions ship **unbound** on purpose, and for the same reason in each case — there is already a way to do it that cannot be done by accident. **RESTART STAGE**, because it is the one press on the pad that pressing again will not undo. **MAIN MENU**, because Start opens a card that has MAIN MENU on it, and a button that walks out of a run mid-run is the same fumble wearing a different hat. Both are in the list if you want them somewhere.
+
+Everything here is rebindable the same way the keys are: tap a row, press the button. If the car wanders down a straight with nobody touching the stick, raise **stick deadzone**.
 
 ### Options
 

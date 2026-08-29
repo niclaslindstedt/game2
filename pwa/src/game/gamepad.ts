@@ -42,7 +42,33 @@ export type PadHold = {
    * is DIGITAL: it rides input.ts's keyboard ramp rather than going straight
    * to the wheel, or a tap of left would be instant full lock. */
   steerStep: number;
+  /** Which way the MENU cursor is being asked to go, −1 / 0 / +1 on each
+   * axis, from the d-pad and the stick together. `navY` is +1 for DOWN,
+   * which is the sign a stick pushed toward the player already reports —
+   * the screen's sense, not the world's. */
+  navX: number;
+  navY: number;
 };
+
+/** How far the stick has to be pushed before it counts as a menu press. Far
+ * higher than the driving deadzone: a stick resting a little off centre must
+ * never walk a menu on its own, and nobody nudges a stick to pick a row. */
+const NAV_PUSH = 0.55;
+
+/** The menu cursor's key repeat: the wait before a held direction starts
+ * repeating, then the gap between repeats, in seconds. The same shape every
+ * keyboard has, for the same reason — one press is one row, and holding it
+ * walks the list. */
+export const NAV_DELAY = 0.36;
+export const NAV_REPEAT = 0.11;
+
+/** The stick's other half. Pads pair their axes (0/1 left stick, 2/3 right),
+ * so the vertical of whichever stick STEERS is the one beside it — which
+ * means the menu follows the player's steering choice without a second
+ * binding to get wrong. */
+export function pairedAxis(axis: number): number {
+  return axis % 2 === 0 ? axis + 1 : axis - 1;
+}
 
 /** The pedals' floor. A trigger at rest is not always at zero, and a car
  * that creeps off the line under nobody's foot reads as a physics bug. */
@@ -111,12 +137,29 @@ export function readPad(frames: PadFrame[], bindings: PadBindings): PadHold {
     const value = deadzone(axis, bindings.deadzone) * (bindings.steerInvert ? -1 : 1);
     if (Math.abs(value) > Math.abs(steer)) steer = value;
   }
+  // The menu cursor reads the d-pad and the stick as one: sideways is the
+  // same pair that steers, because that is what the d-pad already means, and
+  // up/down are bound in their own right.
+  let stickX = 0;
+  let stickY = 0;
+  for (const frame of frames) {
+    const x = frame.axes[bindings.steerAxis] ?? 0;
+    const y = frame.axes[pairedAxis(bindings.steerAxis)] ?? 0;
+    if (Math.abs(x) > Math.abs(stickX)) stickX = x;
+    if (Math.abs(y) > Math.abs(stickY)) stickY = y;
+  }
+  if (bindings.steerInvert) stickX = -stickX;
+  const push = (value: number): number => (value >= NAV_PUSH ? 1 : value <= -NAV_PUSH ? -1 : 0);
+  const down = actionValue(frames, bindings, "navDown") >= PRESS ? 1 : 0;
+  const up = actionValue(frames, bindings, "navUp") >= PRESS ? 1 : 0;
   return {
     steer,
     throttle: clamp01(deadzone(throttle, TRIGGER_FLOOR)),
     brake: clamp01(deadzone(brake, TRIGGER_FLOOR)),
     handbrake: actionValue(frames, bindings, "handbrake") >= PRESS,
     steerStep: right - left,
+    navX: right - left || push(stickX),
+    navY: down - up || push(stickY),
   };
 }
 
@@ -132,12 +175,27 @@ const EDGE_ACTIONS: PadAction[] = [
   "menu",
   "pause",
   "screenshot",
+  "confirm",
+  "back",
 ];
 
+/** Which way a menu cursor was just asked to move. Not a `PadAction`: it is
+ * not a button, it is the answer a direction gives once the repeat clock has
+ * had its say. */
+export type NavPress = "up" | "down" | "left" | "right";
+
 export type PadReader = {
-  /** Fold this frame's pads in: the holds to apply, and the presses that
-   * happened between the last call and this one. */
-  read: (frames: PadFrame[]) => { hold: PadHold; pressed: PadAction[] };
+  /** Fold this frame's pads in: the holds to apply, the presses that
+   * happened between the last call and this one, and the menu-cursor moves
+   * the repeat clock has let through over `dt` seconds. */
+  read: (
+    frames: PadFrame[],
+    dt: number,
+  ) => {
+    hold: PadHold;
+    pressed: PadAction[];
+    nav: NavPress[];
+  };
   /** Re-point the pad at its actions. Whatever was down is forgotten, or an
    * action rebound with a button held would never see that button rise and
    * would refuse to fire for the rest of the session. */
@@ -153,13 +211,35 @@ export const NEUTRAL_HOLD: PadHold = {
   brake: 0,
   handbrake: false,
   steerStep: 0,
+  navX: 0,
+  navY: 0,
 };
 
 export function createPadReader(bindings: PadBindings): PadReader {
   let current = bindings;
   const down = new Set<PadAction>();
+  /** Last frame's cursor direction, and how long until the held one fires
+   * again. One clock per axis, so holding DOWN while flicking RIGHT does not
+   * reset the list's own repeat. */
+  const heldNav = { x: 0, y: 0 };
+  const navClock = { x: 0, y: 0 };
+
+  /** One axis of the cursor: fire on the way off centre, then on the repeat
+   * clock while it is held over. */
+  const stepNav = (axis: "x" | "y", value: number, dt: number): boolean => {
+    if (value === 0 || value !== heldNav[axis]) {
+      heldNav[axis] = value;
+      navClock[axis] = NAV_DELAY;
+      return value !== 0;
+    }
+    navClock[axis] -= dt;
+    if (navClock[axis] > 0) return false;
+    navClock[axis] = NAV_REPEAT;
+    return true;
+  };
+
   return {
-    read: (frames) => {
+    read: (frames, dt) => {
       const hold = frames.length === 0 ? NEUTRAL_HOLD : readPad(frames, current);
       const pressed: PadAction[] = [];
       for (const action of EDGE_ACTIONS) {
@@ -168,13 +248,20 @@ export function createPadReader(bindings: PadBindings): PadReader {
         if (on) down.add(action);
         else down.delete(action);
       }
-      return { hold, pressed };
+      const nav: NavPress[] = [];
+      if (stepNav("x", hold.navX, dt)) nav.push(hold.navX > 0 ? "right" : "left");
+      if (stepNav("y", hold.navY, dt)) nav.push(hold.navY > 0 ? "down" : "up");
+      return { hold, pressed, nav };
     },
     setBindings: (next) => {
       current = next;
       down.clear();
     },
-    release: () => down.clear(),
+    release: () => {
+      down.clear();
+      heldNav.x = 0;
+      heldNav.y = 0;
+    },
   };
 }
 

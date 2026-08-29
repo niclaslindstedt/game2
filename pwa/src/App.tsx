@@ -48,6 +48,7 @@ import {
 import { cacheIdForBase } from "./app-pwa.ts";
 import { connectOutput } from "./output-bridge.ts";
 import { createInput } from "./game/input.ts";
+import { createMenuNav } from "./game/menu-nav.ts";
 import type { CameraMode } from "./game/camera.ts";
 import type { FreeFlyPose } from "./game/camera-free.ts";
 import { DebugHud } from "./game/debug-hud.tsx";
@@ -431,6 +432,10 @@ export function App() {
   const rendererRef = useRef<GameRenderer | null>(null);
   const gameRef = useRef<GameState | null>(null);
   const input = useMemo(() => createInput(), []);
+  /** The controller's way around the menus. It reads the cards off the DOM
+   * rather than off this component's state, so it covers the finish card and
+   * the studio card too — surfaces `menu` and `paused` know nothing about. */
+  const menuNav = useMemo(() => createMenuNav(), []);
   const [race, setRace] = useState<RaceSettings>(initialRace);
   const [options, setOptions] = useState<Settings>(initialSettings);
   /** R29/R30 — the campaign board: what has been driven, what every stage
@@ -1152,6 +1157,14 @@ export function App() {
         flash(`${play?.label ?? "CHASE"} CAM`, "info");
       };
       actionsRef.current = { restart, menu: goMainMenu, camera };
+      input.onNav((action) => {
+        if (action === "confirm") menuNav.confirm();
+        else if (action === "back") menuNav.back();
+        else if (action === "navUp") menuNav.move("up");
+        else if (action === "navDown") menuNav.move("down");
+        else if (action === "navLeft") menuNav.move("left");
+        else menuNav.move("right");
+      });
       input.onAction((action) => {
         if (action === "restart") restart();
         else if (action === "menu") goMainMenu();
@@ -1404,11 +1417,18 @@ export function App() {
         // The pad is ASKED, once a frame, before anything below can return
         // early: a controller fires no events, so a poll skipped behind the
         // pause card is a pause card nothing on the pad can dismiss.
-        const padNow = input.pollPads();
+        // A card on screen takes the pad off the car and puts it on the
+        // cursor. Asked before the poll, so the press that opens a menu and
+        // the first press inside it can never be the same one.
+        input.setNavigating(menuNav.active());
+        const padNow = input.pollPads(dtFrame);
         if (padNow !== padWas) {
           padWas = padNow;
           setPadded(padNow);
         }
+        // The cursor is only ever placed for a pad: a focus ring appearing
+        // under somebody's mouse is the game moving their cursor for them.
+        if (padNow) menuNav.sync();
         fpsFrames++;
         fpsSeconds += dtFrame;
         if (fpsSeconds >= 0.5) {

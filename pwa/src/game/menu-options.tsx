@@ -411,16 +411,19 @@ function PadRow({
   bound,
   listening,
   prompt,
+  divider,
   onListen,
 }: {
   label: string;
   bound: string;
   listening: boolean;
   prompt: string;
+  /** Draw a rule above this row — where the car's controls end. */
+  divider?: boolean;
   onListen: () => void;
 }) {
   return (
-    <div className="opt-key">
+    <div className={`opt-key ${divider ? "opt-key-divide" : ""}`}>
       <span className="opt-key-label">{label}</span>
       <button
         type="button"
@@ -518,6 +521,10 @@ function GamepadSection({ settings, onSettings }: Pick<OptionsProps, "settings" 
           <PadRow
             key={entry.id}
             label={entry.label}
+            // The menu rows are the same job on the other side of the game,
+            // so they are the same rows — a rule and a word in the note
+            // below say where the car stops and the cards start.
+            divider={entry.menu === true && entry.id === "confirm"}
             bound={
               pad.bindings.sources[entry.id]
                 .map((source) => padSourceLabel(source, pads.standard))
@@ -528,6 +535,13 @@ function GamepadSection({ settings, onSettings }: Pick<OptionsProps, "settings" 
             onListen={() => setListening(listening === entry.id ? null : entry.id)}
           />
         ))}
+      </div>
+      <div className="opt-note">
+        The MENU rows are how a controller walks the cards — the d-pad and the stick move the
+        cursor, SELECT presses what it is on, BACK is the way out. Sideways in a menu is the same
+        pair that steers, so only up and down are listed. MAIN MENU and RESTART STAGE ship unbound
+        on purpose: PAUSE opens a card that has both on it, and neither is a press worth making by
+        accident mid-stage.
       </div>
       <OptionRow
         label="STICK DEADZONE"

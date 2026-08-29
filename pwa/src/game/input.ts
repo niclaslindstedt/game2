@@ -27,7 +27,13 @@
 import type { CarInput } from "@engine";
 
 import { KEY_LOOK_RATE, MOUSE_LOOK_RATE, NEUTRAL_MOVE, type FreeFlyMove } from "./camera-free.ts";
-import { createPadReader, NEUTRAL_HOLD, type PadFrame, type PadHold } from "./gamepad.ts";
+import {
+  createPadReader,
+  NEUTRAL_HOLD,
+  type NavPress,
+  type PadFrame,
+  type PadHold,
+} from "./gamepad.ts";
 import { snapPedal, snapSteer } from "./ghost.ts";
 import {
   DEFAULT_KEYS,
@@ -41,6 +47,11 @@ import {
 /** The presses the app reacts to rather than the car: they leave, reload or
  * reframe the run instead of driving it. */
 export type InputAction = "restart" | "menu" | "camera" | "pause" | "screenshot";
+
+/** The presses that walk a MENU rather than the game behind it. Only a
+ * controller produces these: a keyboard has the mouse and the touchscreen
+ * beside it, and its arrows are already the throttle and the wheel. */
+export type NavAction = "navUp" | "navDown" | "navLeft" | "navRight" | "confirm" | "back";
 
 export type InputManager = {
   /** Produce this step's input; advances steering smoothing by `dt`. */
@@ -58,10 +69,19 @@ export type InputManager = {
    * the thumb zones off the screen. */
   setPad: (pad: PadSettings) => void;
   /** Read every connected pad and fold this frame's sticks, triggers and
-   * presses in. Called ONCE a frame — a pad fires no events, so nothing it
-   * does exists until this asks. Returns whether a pad is driving, which is
-   * what the HUD hangs the thumb zones on. */
-  pollPads: () => boolean;
+   * presses in, advancing the menu cursor's repeat clock by `dt` seconds.
+   * Called ONCE a frame — a pad fires no events, so nothing it does exists
+   * until this asks. Returns whether a pad is driving, which is what the HUD
+   * hangs the thumb zones on. */
+  pollPads: (dt: number) => boolean;
+  /** Hand the pad to a MENU, or take it back. While a card is up the pad
+   * walks it: the cursor moves, SELECT presses what it is on, and nothing
+   * the pad does reaches the car — not the gears, and not the reset that
+   * would otherwise be sitting queued when the card comes down. PAUSE is the
+   * one press that still goes through, because it is the way back out. */
+  setNavigating: (on: boolean) => void;
+  /** Where the menu cursor is being sent, and what is being pressed on it. */
+  onNav: (handler: (action: NavAction) => void) => void;
   /** Whether a pad was connected the last time anyone asked. Read rather
    * than dispatched: a pad's presence is a state the device is in. */
   padConnected: () => boolean;
@@ -247,6 +267,9 @@ export function createInput(target: Window = window): InputManager {
   let padOptions: PadSettings = DEFAULT_PAD;
   let padHold: PadHold = NEUTRAL_HOLD;
   let padPresent = false;
+  /** True while a menu card owns the pad — see `setNavigating`. */
+  let navigating = false;
+  let navHandler: ((action: NavAction) => void) | null = null;
 
   const setKeys = (bindings: KeyBindings): void => {
     const next = new Map<string, KeyAction[]>();
@@ -381,7 +404,15 @@ export function createInput(target: Window = window): InputManager {
    * the keyboard fires, minus the two the pad has its own words for. */
   const PAD_APP_ACTIONS: PadAction[] = ["restart", "camera", "pause", "screenshot", "menu"];
 
-  const pollPads = (): boolean => {
+  /** Which way a cursor move goes as an action name. */
+  const NAV_BY_PRESS: Record<NavPress, NavAction> = {
+    up: "navUp",
+    down: "navDown",
+    left: "navLeft",
+    right: "navRight",
+  };
+
+  const pollPads = (dt: number): boolean => {
     const frames = readPadFrames();
     padPresent = frames.length > 0;
     // A pad switched off in the options is not read at all: the point of
@@ -393,14 +424,26 @@ export function createInput(target: Window = window): InputManager {
       padReader.release();
       return false;
     }
-    const { hold, pressed } = padReader.read(frames);
-    padHold = hold;
+    const { hold, pressed, nav } = padReader.read(frames, dt);
+    // A card is up: the pad is walking it, and the car is given nothing.
+    // Not even the edges — a gear or a reset banked behind a pause card
+    // arrives the instant the card comes down, which reads as the game
+    // doing something on its own.
+    padHold = navigating ? NEUTRAL_HOLD : hold;
     for (const action of pressed) {
+      if (navigating) {
+        if (action === "confirm" || action === "back") navHandler?.(action);
+        // PAUSE still goes through: it is the press that put the card up,
+        // and it has to be the press that takes it down again.
+        else if (action === "pause") actionHandler?.("pause");
+        continue;
+      }
       if (action === "shiftUp") shiftUp = true;
       else if (action === "shiftDown") shiftDown = true;
       else if (action === "reset") reset = true;
       else if (PAD_APP_ACTIONS.includes(action)) actionHandler?.(action as InputAction);
     }
+    if (navigating) for (const press of nav) navHandler?.(NAV_BY_PRESS[press]);
     return padPresent;
   };
 
@@ -462,6 +505,18 @@ export function createInput(target: Window = window): InputManager {
     setKeys,
     setPad,
     pollPads,
+    setNavigating: (on) => {
+      if (on === navigating) return;
+      navigating = on;
+      // Whatever was down when the card went up or came down is forgotten:
+      // the button that opened a menu must not also press its first row, and
+      // the one that closed it must not also drive away.
+      padHold = NEUTRAL_HOLD;
+      padReader.release();
+    },
+    onNav: (handler) => {
+      navHandler = handler;
+    },
     padConnected: () => padPresent && padOptions.enabled,
     setTyping,
     requestShift: (dir) => {

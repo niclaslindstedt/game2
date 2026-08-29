@@ -17,11 +17,24 @@
 
 import { describe, expect, it } from "vitest";
 
-import { captureAxis, captureSource, createPadReader, readPad } from "../pwa/src/game/gamepad.ts";
-import type { PadFrame } from "../pwa/src/game/gamepad.ts";
+import {
+  NAV_DELAY,
+  NAV_REPEAT,
+  captureAxis,
+  captureSource,
+  createPadReader,
+  pairedAxis,
+  readPad,
+} from "../pwa/src/game/gamepad.ts";
+import { pickNeighbour, type NavRect } from "../pwa/src/game/menu-cursor.ts";
+import type { PadFrame, PadReader } from "../pwa/src/game/gamepad.ts";
 import { DEFAULT_PAD, clonePad, loadSettings, type PadSource } from "../pwa/src/game/settings.ts";
 
 const BINDINGS = DEFAULT_PAD.bindings;
+
+/** One frame at 60 Hz — what the reader is handed to run its repeat clock. */
+const DT = 1 / 60;
+const poll = (reader: PadReader, frames: PadFrame[]) => reader.read(frames, DT);
 
 /** A standard-mapping pad at rest, with whatever this case presses. */
 function pad(
@@ -97,51 +110,148 @@ describe("the pad's wheel", () => {
 describe("the pad's presses", () => {
   it("puts the handbrake on A and holds it while A is held", () => {
     const reader = createPadReader(BINDINGS);
-    expect(reader.read([pad({ buttons: { 0: 1 } })]).hold.handbrake).toBe(true);
-    expect(reader.read([pad({ buttons: { 0: 1 } })]).hold.handbrake).toBe(true);
-    expect(reader.read([pad()]).hold.handbrake).toBe(false);
+    expect(poll(reader, [pad({ buttons: { 0: 1 } })]).hold.handbrake).toBe(true);
+    expect(poll(reader, [pad({ buttons: { 0: 1 } })]).hold.handbrake).toBe(true);
+    expect(poll(reader, [pad()]).hold.handbrake).toBe(false);
   });
 
   it("fires the camera on X once per press, however many polls it spans", () => {
     const reader = createPadReader(BINDINGS);
-    expect(reader.read([pad({ buttons: { 2: 1 } })]).pressed).toEqual(["camera"]);
+    expect(poll(reader, [pad({ buttons: { 2: 1 } })]).pressed).toEqual(["camera"]);
     // Held: the same reading arrives every frame and must say nothing.
-    expect(reader.read([pad({ buttons: { 2: 1 } })]).pressed).toEqual([]);
-    expect(reader.read([pad()]).pressed).toEqual([]);
+    expect(poll(reader, [pad({ buttons: { 2: 1 } })]).pressed).toEqual([]);
+    expect(poll(reader, [pad()]).pressed).toEqual([]);
     // Released and pressed again is a second press.
-    expect(reader.read([pad({ buttons: { 2: 1 } })]).pressed).toEqual(["camera"]);
+    expect(poll(reader, [pad({ buttons: { 2: 1 } })]).pressed).toEqual(["camera"]);
   });
 
   it("leaves RESTART unbound, so no face button can throw a stage away", () => {
     expect(BINDINGS.sources.restart).toEqual([]);
     const reader = createPadReader(BINDINGS);
     const every = pad({ buttons: Object.fromEntries([...Array(17).keys()].map((i) => [i, 1])) });
-    expect(reader.read([every]).pressed).not.toContain("restart");
+    expect(poll(reader, [every]).pressed).not.toContain("restart");
   });
 
   it("re-arms every edge when the bindings change under a held button", () => {
     // Otherwise an action rebound while its button is down never sees that
     // button rise, and refuses to fire for the rest of the session.
     const reader = createPadReader(BINDINGS);
-    reader.read([pad({ buttons: { 2: 1 } })]);
+    poll(reader, [pad({ buttons: { 2: 1 } })]);
     reader.setBindings(BINDINGS);
-    expect(reader.read([pad({ buttons: { 2: 1 } })]).pressed).toEqual(["camera"]);
+    expect(poll(reader, [pad({ buttons: { 2: 1 } })]).pressed).toEqual(["camera"]);
   });
 
   it("takes the deepest read of an action across two pads", () => {
     // A handheld in a dock is two pads, and an idle one must not hold the
     // other one's pedal up.
     const reader = createPadReader(BINDINGS);
-    const both = reader.read([pad(), pad({ buttons: { 7: 1 } })]);
+    const both = poll(reader, [pad(), pad({ buttons: { 7: 1 } })]);
     expect(both.hold.throttle).toBe(1);
   });
 
   it("hands back nothing at all when no pad is connected", () => {
     const reader = createPadReader(BINDINGS);
-    const empty = reader.read([]);
+    const empty = poll(reader, []);
     expect(empty.hold.throttle).toBe(0);
     expect(empty.hold.steer).toBe(0);
     expect(empty.pressed).toEqual([]);
+  });
+});
+
+describe("walking a menu", () => {
+  it("moves the cursor from the d-pad and from the stick alike", () => {
+    // Sideways in a menu is the same pair that steers — that is what a
+    // d-pad already means, so it needs no binding of its own.
+    expect(readPad([pad({ buttons: { 15: 1 } })], BINDINGS).navX).toBe(1);
+    expect(readPad([pad({ buttons: { 13: 1 } })], BINDINGS).navY).toBe(1);
+    expect(readPad([pad({ buttons: { 12: 1 } })], BINDINGS).navY).toBe(-1);
+    // The stick's vertical is the axis beside whichever one steers.
+    expect(pairedAxis(BINDINGS.steerAxis)).toBe(1);
+    expect(readPad([pad({ axes: { 1: 0.9 } })], BINDINGS).navY).toBe(1);
+    expect(readPad([pad({ axes: { 0: -0.9 } })], BINDINGS).navX).toBe(-1);
+  });
+
+  it("ignores a stick resting off centre", () => {
+    // Far past the driving deadzone: a worn stick must never walk a menu on
+    // its own while nobody is holding the thing.
+    const drifting = readPad([pad({ axes: { 0: 0.3, 1: 0.3 } })], BINDINGS);
+    expect(drifting.navX).toBe(0);
+    expect(drifting.navY).toBe(0);
+    // ...and it still steers the car, which is what the deadzone is for.
+    expect(drifting.steer).toBeGreaterThan(0);
+  });
+
+  it("moves one row per press, then repeats while it is held", () => {
+    const reader = createPadReader(BINDINGS);
+    const held = pad({ buttons: { 13: 1 } });
+    expect(reader.read([held], DT).nav).toEqual(["down"]);
+    // Nothing until the wait is up — a tap is one row, not a scroll.
+    expect(reader.read([held], NAV_DELAY / 2).nav).toEqual([]);
+    expect(reader.read([held], NAV_DELAY / 2).nav).toEqual(["down"]);
+    // ...and then at the repeat rate.
+    expect(reader.read([held], NAV_REPEAT).nav).toEqual(["down"]);
+    // Let go and the clock is back to a full wait for the next press.
+    expect(reader.read([pad()], DT).nav).toEqual([]);
+    expect(reader.read([held], DT).nav).toEqual(["down"]);
+    expect(reader.read([held], NAV_REPEAT).nav).toEqual([]);
+  });
+
+  it("keeps the two axes on their own clocks", () => {
+    // Holding DOWN while flicking RIGHT must not restart the list's repeat:
+    // the flick fires at once on its own clock, and DOWN still comes due
+    // exactly when it was always going to.
+    const reader = createPadReader(BINDINGS);
+    const down = pad({ buttons: { 13: 1 } });
+    expect(reader.read([down], DT).nav).toEqual(["down"]);
+    expect(reader.read([down], NAV_DELAY / 2).nav).toEqual([]);
+    const both = pad({ buttons: { 13: 1, 15: 1 } });
+    expect(reader.read([both], NAV_DELAY / 2).nav).toEqual(["right", "down"]);
+  });
+
+  it("puts SELECT and BACK on A and B, once per press", () => {
+    const reader = createPadReader(BINDINGS);
+    expect(reader.read([pad({ buttons: { 0: 1 } })], DT).pressed).toEqual(["confirm"]);
+    expect(reader.read([pad({ buttons: { 0: 1 } })], DT).pressed).toEqual([]);
+    expect(reader.read([pad({ buttons: { 1: 1 } })], DT).pressed).toEqual(["reset", "back"]);
+  });
+});
+
+/** A card, as the cursor sees it: a column of rows with a two-button row in
+ * the middle, which is the shape of nearly every menu in this game. */
+const CARD: NavRect[] = [
+  { x: 20, y: 0, w: 200, h: 30 }, // 0 back
+  { x: 20, y: 40, w: 200, h: 30 }, // 1 a row
+  { x: 20, y: 80, w: 95, h: 30 }, // 2 left of a pair
+  { x: 125, y: 80, w: 95, h: 30 }, // 3 right of a pair
+  { x: 20, y: 120, w: 200, h: 30 }, // 4 the last row
+];
+
+describe("the menu cursor's geometry", () => {
+  it("walks a column one row at a time", () => {
+    expect(pickNeighbour(CARD, 0, "down")).toBe(1);
+    expect(pickNeighbour(CARD, 1, "up")).toBe(0);
+  });
+
+  it("prefers the row underneath to a nearer button off to one side", () => {
+    // From the left of the pair, DOWN is the row below — not the button
+    // beside it, which is closer by centre distance alone.
+    expect(pickNeighbour(CARD, 2, "down")).toBe(4);
+    expect(pickNeighbour(CARD, 2, "right")).toBe(3);
+    expect(pickNeighbour(CARD, 3, "left")).toBe(2);
+  });
+
+  it("wraps to the far end rather than stopping dead", () => {
+    // Off the bottom lands on the TOP row, not the one above it: a list that
+    // stops makes a player walk all the way back for the button under their
+    // thumb.
+    expect(pickNeighbour(CARD, 4, "down")).toBe(0);
+    expect(pickNeighbour(CARD, 0, "up")).toBe(4);
+  });
+
+  it("has nowhere to go on an empty card, and starts at the top on a fresh one", () => {
+    expect(pickNeighbour([], 0, "down")).toBeNull();
+    // A cursor that is nowhere yet lands on the first item.
+    expect(pickNeighbour(CARD, -1, "down")).toBe(0);
   });
 });
 

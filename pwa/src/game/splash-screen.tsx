@@ -144,6 +144,10 @@ export function SplashScreen({ warm, onDone }: { warm: boolean; onDone: () => vo
       // A pointer press lands here rather than on the menu: the card covers
       // the screen, so nothing has to be swallowed for it.
       onPointerDown={dismiss}
+      // ...and a CLICK, which is the only press a controller can synthesise
+      // (menu-nav.ts). `dismiss` is idempotent, so a real pointer arriving as
+      // both costs nothing.
+      onClick={dismiss}
       role="presentation"
     >
       <div className="splash-card">

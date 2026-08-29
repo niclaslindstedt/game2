@@ -210,7 +210,13 @@ export type PadSource =
 /** Everything a controller can be asked to do. Steering is not here: a
  * stick is an AXIS and is bound as one (`steerAxis`), while `steerLeft` and
  * `steerRight` are the d-pad — a digital pair that rides the same ramp the
- * keyboard's arrows do. */
+ * keyboard's arrows do.
+ *
+ * The last four are the MENUS, not the car: a pad has to be able to walk a
+ * card and press what it lands on, or half the game is unreachable on a
+ * handheld. `steerLeft`/`steerRight` move the cursor sideways in a menu —
+ * the same d-pad, doing the thing that d-pad means — so only up and down
+ * need names of their own. */
 export type PadAction =
   | "throttle"
   | "brake"
@@ -224,7 +230,11 @@ export type PadAction =
   | "restart"
   | "menu"
   | "pause"
-  | "screenshot";
+  | "screenshot"
+  | "confirm"
+  | "back"
+  | "navUp"
+  | "navDown";
 
 export type PadBindings = {
   /** Sources per action — a list, the way the keyboard's are, so one action
@@ -252,7 +262,9 @@ export type PadSettings = {
   hideTouch: boolean;
 };
 
-export const PAD_ACTIONS: { id: PadAction; label: string }[] = [
+/** The rows on the CONTROLS tab, in the order they are printed: the car
+ * first, then the menus. */
+export const PAD_ACTIONS: { id: PadAction; label: string; menu?: true }[] = [
   { id: "throttle", label: "THROTTLE" },
   { id: "brake", label: "BRAKE" },
   { id: "handbrake", label: "HANDBRAKE" },
@@ -263,9 +275,13 @@ export const PAD_ACTIONS: { id: PadAction; label: string }[] = [
   { id: "reset", label: "BACK TO TRACK" },
   { id: "camera", label: "CAMERA" },
   { id: "restart", label: "RESTART STAGE" },
-  { id: "menu", label: "MAIN MENU" },
   { id: "pause", label: "PAUSE" },
   { id: "screenshot", label: "SCREENSHOT" },
+  { id: "menu", label: "MAIN MENU" },
+  { id: "confirm", label: "MENU: SELECT", menu: true },
+  { id: "back", label: "MENU: BACK", menu: true },
+  { id: "navUp", label: "MENU: UP", menu: true },
+  { id: "navDown", label: "MENU: DOWN", menu: true },
 ];
 
 const button = (index: number): PadSource[] => [{ kind: "button", index }];
@@ -273,13 +289,24 @@ const button = (index: number): PadSource[] => [{ kind: "button", index }];
 /** The W3C standard mapping, laid out the way a driving game wants it: the
  * analogue triggers are the pedals (right gas, left brake, the pair that
  * makes a pad worth driving on at all), A is the handbrake under the thumb
- * that is already there, X switches the camera, and the shoulders shift.
- * The d-pad steers for anyone who would rather not use the stick.
+ * that is already there, X switches the camera, the shoulders shift, and
+ * SELECT — the button nothing on the road wants — takes the picture. The
+ * d-pad steers for anyone who would rather not use the stick.
  *
- * RESTART is deliberately unbound. Every other action on this pad is
- * recoverable by pressing it again; throwing the stage away halfway down it
- * is not, and a face button that does it is one fumble from a ruined run.
- * It is in the list, so anyone who wants it can put it somewhere. */
+ * In a menu the same buttons mean menu things: A selects, B goes back, and
+ * the d-pad and stick walk the card.
+ *
+ * TWO actions are deliberately unbound, and for the same reason in each
+ * case — there is already a way to do it that cannot be done by accident:
+ *
+ * - RESTART, because throwing the stage away halfway down it is the one
+ *   press on this pad that is not recoverable by pressing it again, and a
+ *   face button that does it is one fumble from a ruined run.
+ * - MAIN MENU, because PAUSE opens a card that has MAIN MENU on it. A
+ *   button that walks straight out of a run, in the middle of the run, is
+ *   the same fumble wearing a different hat.
+ *
+ * Both are in the list, so anyone who wants them can put them somewhere. */
 export const DEFAULT_PAD: PadSettings = {
   bindings: {
     sources: {
@@ -293,9 +320,13 @@ export const DEFAULT_PAD: PadSettings = {
       reset: button(1),
       camera: button(2),
       restart: [],
-      menu: button(8),
+      menu: [],
       pause: button(9),
-      screenshot: button(3),
+      screenshot: button(8),
+      confirm: button(0),
+      back: button(1),
+      navUp: button(12),
+      navDown: button(13),
     },
     steerAxis: 0,
     steerInvert: false,

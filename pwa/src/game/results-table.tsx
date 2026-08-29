@@ -79,6 +79,7 @@ export function ResultsModal({ rows, stage, title, sub, onClose }: ResultsModalP
         <button
           type="button"
           className="hud-pause-act"
+          data-nav-back
           onClick={() => {
             playUi("select");
             onClose();
