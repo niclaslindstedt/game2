@@ -13,6 +13,7 @@ import type { FreeFlyMove, FreeFlyPose } from "./camera-free.ts";
 import {
   DRAW_DISTANCE_SCALE,
   EFFECTS_SCALE,
+  INTERIOR_DETAIL,
   FLORA_SCALE,
   RESOLUTION_SCALE,
   type VideoSettings,
@@ -201,6 +202,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   let ghostCar: CarVisual | null = null;
   let ghostTag: NameTag | null = null;
   const field = createFieldCars(scene);
+  field.setInterior(INTERIOR_DETAIL[quality.interior]);
   /** Whether the cars that are not the player's are named. */
   let nameTags = true;
   /** The stage that is standing, as the state it was last shown with —
@@ -334,6 +336,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   const setVideo = (next: VideoSettings): void => {
     quality = next;
     applyResolution();
+    field.setInterior(INTERIOR_DETAIL[quality.interior]);
     if (game) setConditions(game);
     else applyRange();
   };
@@ -399,7 +402,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       scene.remove(car.group, car.shadow, car.debris);
       car.dispose();
     }
-    car = buildCar(state.spec);
+    car = buildCar(state.spec, { interior: INTERIOR_DETAIL[quality.interior] });
     scene.add(car.group, car.shadow, car.debris);
     const eye = hoodEyeFor(state.spec);
     chase.setHoodEye(eye);
@@ -460,7 +463,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     dropGhost();
     if (!state) return;
     ghost = state;
-    ghostCar = buildCar(state.spec, { ghost: true });
+    ghostCar = buildCar(state.spec, { ghost: true, interior: INTERIOR_DETAIL[quality.interior] });
     // The ghost gets the same plate the field does, for the same reason: on
     // a road with two cars on it, which of them is the one to beat is
     // information. Its own colour and its own fade, held under a real
@@ -803,8 +806,8 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     world?.sync(state, dt);
     world?.update(state, dt, knockPlay ?? undefined);
     celebration.update(dt);
-    car?.update(state, dt);
-    if (ghost && ghostCar) ghostCar.update(ghost, dt);
+    car?.update(state, dt, chase.camera.position);
+    if (ghost && ghostCar) ghostCar.update(ghost, dt, chase.camera.position);
     // The entry list, off their own games; off under the map view like the
     // player's own body below.
     field.update(state, chase.camera, dt, view !== "map");
@@ -924,9 +927,18 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         // pointing at nothing. Nothing else in the scene is camera-bound.
         const arrow = wayHomeArrow.group.visible;
         wayHomeArrow.group.visible = false;
+        // The mirror's lens sits between the player's own seats, so the one
+        // other thing the pass has to lose is the cabin around it — left in,
+        // the glass shows the back of the bulkhead and the mirror stops
+        // answering the only question it is there to answer. The RIVALS keep
+        // theirs: those are cars behind you, seen from outside, and their
+        // crews showing through their screens is the point.
+        const cabin = car?.cabin ?? null;
+        if (cabin) cabin.visible = false;
         // The air comes in with the far plane, so the world leaves the
         // mirror's frustum where it had already gone solid — see withHaze.
         environment.withHaze(MIRROR_RANGE, () => mirror.draw(renderer, scene, w, h));
+        if (cabin) cabin.visible = true;
         wayHomeArrow.group.visible = arrow;
       }
       return;

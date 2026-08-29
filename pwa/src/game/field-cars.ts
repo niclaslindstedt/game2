@@ -37,6 +37,7 @@
 import * as THREE from "three";
 import { type GameEvent, type GameState } from "@engine";
 
+import type { InteriorDetail } from "./car-body.ts";
 import { buildCar, tintCar, type CarVisual } from "./car-mesh.ts";
 import { liveryForCrew } from "./car-livery.ts";
 import { createNameTag, type NameTag } from "./name-tag.ts";
@@ -81,6 +82,11 @@ export type FieldCars = {
    * lamps are lit, and how hard it is raining on the glass. Pushed by the
    * renderer, which owns all three. */
   paint: (tint: THREE.Color, lampsLit: boolean, rain: number) => void;
+  /** How much cabin the rivals' own glass has behind it — the player's VIDEO
+   * option, pushed by the renderer. Read when a car is BUILT, so it lands on
+   * the next stage rather than mid-run, which is the same contract the
+   * undergrowth setting keeps. */
+  setInterior: (detail: InteriorDetail) => void;
   /** How many rival cars are being drawn right now (the debug overlay). */
   drawn: () => number;
   dispose: () => void;
@@ -93,6 +99,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
   let runs: RivalRun[] = [];
   const built = new Map<RivalRun, FieldCar>();
   let drawn = 0;
+  let interior: InteriorDetail = "high";
   let tint = new THREE.Color(1, 1, 1);
   let lampsLit = false;
   let rain = 0;
@@ -141,7 +148,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
         if (!existing) {
           if (range > BUILD_RANGE) continue;
           const livery = liveryForCrew(run.entry.crew.id, run.entry.number);
-          const visual = buildCar(run.state.spec, { paint: livery });
+          const visual = buildCar(run.state.spec, { paint: livery, interior });
           // The plate wears the car's own paint and the number off its door,
           // so the name and the colour coming up the road are one crew.
           const tag = createNameTag(run.entry.crew.alias, livery.number, {
@@ -151,7 +158,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
           const fresh = { visual, tag };
           built.set(run, fresh);
           tintCar(visual, tint, lampsLit, rain);
-          visual.update(run.state, 0);
+          visual.update(run.state, 0, camera.position);
           show(fresh, false);
           continue;
         }
@@ -159,9 +166,12 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
         show(existing, near);
         if (!near) continue;
         drawn += 1;
-        existing.visual.update(run.state, dt);
+        existing.visual.update(run.state, dt, camera.position);
         if (named) existing.tag.place(car.x, car.y, car.z, camera);
       }
+    },
+    setInterior: (detail) => {
+      interior = detail;
     },
     setNames: (on) => {
       named = on;

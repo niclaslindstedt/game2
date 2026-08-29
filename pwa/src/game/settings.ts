@@ -86,6 +86,14 @@ export type VideoSettings = {
   drawDistance: "near" | "normal" | "far";
   /** Particles, rain and the ambient life — the transient FX budget. */
   effects: "off" | "low" | "full";
+  /** How much CABIN is built behind the glass. `off` leaves the windows
+   * solid the way they used to be — the cheapest car, and the only level
+   * that costs no extra draw call per car on the road. `low` furnishes the
+   * read: the trim, the dash, the seats and the crew sat in them. `full`
+   * adds the roll cage, the harnesses and a steering wheel that turns with
+   * the front tyres. Applies to the NEXT stage built, like the undergrowth:
+   * a cabin is geometry, and geometry is decided when a car is made. */
+  interior: "off" | "low" | "full";
   /** How thickly the world is planted with the SOFT stuff — undergrowth,
    * shrubs, stumps. Applies to the NEXT stage built. Named UNDERGROWTH in
    * the menu, not FOREST: the forest's own density is a generator dial the
@@ -117,6 +125,15 @@ export const EFFECTS_SCALE: Record<VideoSettings["effects"], number> = {
   off: 0,
   low: 0.45,
   full: 1,
+};
+
+/** The player's option, as the detail level car-body.ts builds against. The
+ * two are not one enum because the setting lives in a module the menus load
+ * and the level lives in one that imports three.js. */
+export const INTERIOR_DETAIL: Record<VideoSettings["interior"], "off" | "low" | "high"> = {
+  off: "off",
+  low: "low",
+  full: "high",
 };
 
 /** Flora density multiplier — the scatter chance for everything the world
@@ -283,8 +300,8 @@ export const DEFAULT_SETTINGS: Settings = {
     boost: true,
     timer: true,
   },
-  // The shortest boom outside the car: the car fills the frame, a drift
-  // still swings it right across, and standing that close is what makes it
+  // The shortest boom outside the car: the car is big in the frame, a drift
+  // swings it right across, and standing that close is what makes it
   // the calmest read at pace — the nearer the camera, the fewer metres of
   // world a given lag in the follow drags across the frame. A player who
   // has not chosen a view gets the one that asks least of them; the ladder
@@ -295,7 +312,13 @@ export const DEFAULT_SETTINGS: Settings = {
   // down. Music sits under the effects, because the effects are what the
   // player is actually driving on.
   audio: { music: 0.7, sfx: 0.9 },
-  video: { resolution: "medium", drawDistance: "normal", effects: "full", flora: "normal" },
+  video: {
+    resolution: "medium",
+    drawDistance: "normal",
+    effects: "full",
+    flora: "normal",
+    interior: "full",
+  },
   keys: DEFAULT_KEYS,
   touch: DEFAULT_TOUCH,
   // The automatic: a player who has not chosen has not asked to be given

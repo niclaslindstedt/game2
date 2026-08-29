@@ -349,11 +349,22 @@ type ChaseRig = {
 };
 
 /** The ladder, in numbers. `chase` is the reference frame — proportions read
- * off Sega Rally: roof-height camera pitched a few degrees down, close
- * behind, so the car anchors the BOTTOM of the frame and the horizon rides
- * high. `close` and `far` are that same shot pulled in and stood back;
+ * off Sega Rally: the car anchors the BOTTOM of the frame and the horizon
+ * rides high. `close` and `far` are that same shot pulled in and stood back;
  * `heli` and `top` trade the drama for what the driver cannot otherwise
  * see, which is the road past the next crest.
+ *
+ * What makes those three ONE shot at three lengths is not the height — it is
+ * the LOOK-OVER ANGLE, the depression from the lens to the top of the car's
+ * own roof, which every one of them holds at about 13°. That angle is the
+ * whole of whether a player can see where they are going, because it is what
+ * decides how far up the frame the roofline reaches and how much road is
+ * left above it: at 13° the roof sits around three fifths of the way down
+ * the frame and the sight line grazing it lands on the road a couple of
+ * metres past the bumper. Height is therefore a CONSEQUENCE of the standoff,
+ * not a free number — a boom half as long needs half as much height over the
+ * roof for the same shot, and a camera set at roof height, whatever its
+ * length, is a camera looking at a roof.
  *
  * `close` and `chase` carry IDENTICAL steadying numbers — the follow rate,
  * the swing spring, the hill lift and duck, the aim's climb. A boom is a
@@ -369,16 +380,16 @@ type ChaseRig = {
  * and it is the one moment the camera should hold its nerve. */
 const CHASE_RIGS: Record<Exclude<PlayCamera, "hood">, ChaseRig> = {
   close: {
-    dist: 3.9,
+    dist: 4.4,
     distPerSpeed: 0.014,
-    height: 1.6,
+    height: 2.15,
     driftWeight: 0.85,
     followRate: 5,
     fov: 60,
     fovPerSpeed: 0.4,
     fovMax: 88,
-    aimAhead: 7,
-    aimHeight: 0.65,
+    aimAhead: 7.5,
+    aimHeight: 0.45,
     aimClimb: 5,
     dropLift: 2.2,
     climbDuck: 1,
@@ -391,16 +402,16 @@ const CHASE_RIGS: Record<Exclude<PlayCamera, "hood">, ChaseRig> = {
     cliff: 1,
   },
   chase: {
-    dist: 5.6,
+    dist: 5.8,
     distPerSpeed: 0.02,
-    height: 2,
+    height: 2.45,
     driftWeight: 0.8,
     followRate: 5,
     fov: 58,
     fovPerSpeed: 0.38,
     fovMax: 86,
-    aimAhead: 8,
-    aimHeight: 0.8,
+    aimAhead: 8.5,
+    aimHeight: 0.65,
     aimClimb: 5,
     dropLift: 2.2,
     climbDuck: 1,

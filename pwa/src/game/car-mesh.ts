@@ -10,7 +10,15 @@ import * as THREE from "three";
 import { clamp } from "../lib/util.ts";
 import type { CarSpec, GameEvent, GameState } from "@engine";
 
-import { buildCarBody, frontLampAnchors, rearLampAnchors } from "./car-body.ts";
+import {
+  backlightNormal,
+  buildCarBody,
+  frontLampAnchors,
+  rearLampAnchors,
+  steeringTurn,
+  GLASS_OPACITY,
+  type InteriorDetail,
+} from "./car-body.ts";
 import { createCarDamage } from "./car-damage.ts";
 import { createCarDirt, wheelSpray } from "./car-dirt.ts";
 import type { Livery } from "./car-livery.ts";
@@ -40,6 +48,15 @@ const LAMP_NIGHT = 0.42;
  * somebody wipes them at every service. */
 const LAMP_GRIME = 0.6;
 
+/** The glass, per frame. `GLINT` is how much opacity a fully glancing view
+ * adds to a clean pane — the baked sky at the top of every window is already
+ * there, and raising the pane's opacity is what brings it forward over the
+ * cabin behind it, so a car thrown sideways flares along its whole
+ * greenhouse. `GRIME` is the same number for filth: a screen nobody has
+ * wiped stops being something you can see a crew through. `CEILING` keeps
+ * both short of solid, because a window that closes completely is a panel. */
+const GLASS = { glint: 0.26, grime: 0.24, ceiling: 0.94, falloff: 3 };
+
 /** Where a car with no authored lamps at one end throws its beam from, m
  * from the centerline — a spec is allowed to have a bare face, and a beam
  * still has to come from somewhere sensible. */
@@ -55,12 +72,21 @@ const WHEEL_STEER_RATE = 14;
 
 export type CarVisual = {
   group: THREE.Group;
+  /** The cabin and the glass over it. Handed out for one reason: the
+   * rear-view mirror's lens sits between this car's own seats, so the mirror
+   * pass has to take both out first or it draws the back of the bulkhead
+   * through the inside of the rear screen instead of the road
+   * (renderer.ts). */
+  cabin: THREE.Object3D;
   /** The blob shadow, in its own group so it can lie on the ground's slope
    * while the car above it pitches, rolls and flies. */
   shadow: THREE.Group;
   /** World-anchored debris (torn-off parts) — scene sibling of the car. */
   debris: THREE.Group;
-  update: (state: GameState, dt: number) => void;
+  /** `eye` is where the camera is standing, in world metres — what decides
+   * how hard the glass catches the light this frame. Left off, the pane
+   * keeps whatever it had. */
+  update: (state: GameState, dt: number, eye?: THREE.Vector3) => void;
   onEvents: (state: GameState, events: GameEvent[]) => void;
   /** Whether the run's light is gone — the tail lamps burn harder when it
    * is. Pushed from the environment, which owns that decision. */
@@ -88,6 +114,10 @@ const GHOST_OPACITY = 0.46;
 export type CarOptions = {
   /** Build the car as a ghost: see-through, and dimmer where it glows. */
   ghost?: boolean;
+  /** How much cabin is built behind the glass — the player's VIDEO option.
+   * Defaults to the full one; the field builds itself down a level, because
+   * fifteen cabins is a different bill from one. */
+  interior?: InteriorDetail;
   /** Repaint the body in one of the field's schemes (car-livery.ts) rather
    * than the livery car-styles.ts authored for it — how a car that is not
    * the player's is told apart from the player's. */
@@ -133,7 +163,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
   // Which wheels the engine can spin, and which ones only the road turns.
   const driven = drivenAxles(spec.drive);
   const bodySpec = bodySpecFor(spec, options.paint);
-  const body = buildCarBody(bodySpec);
+  const body = buildCarBody(bodySpec, { interior: options.interior });
   // Panels, parts and wheels share one material, so a ghost is one flag.
   // Its own back faces still occlude its front ones (depth writing stays
   // on): a car you can see through is a ghost, a car you can see the
@@ -144,6 +174,11 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     shell.transparent = true;
     shell.opacity = GHOST_OPACITY;
   }
+  // The glass is already translucent, so a ghost's glass is a fade ON a
+  // fade: whatever the pane works out to this frame, times the ghost's own.
+  const glassMat = body.glass;
+  const screen = backlightNormal(bodySpec);
+  const view = new THREE.Vector3();
   group.add(body.group);
   const dirt = createCarDirt(body.group, wheelSpray(bodySpec));
   const damage = createCarDamage(body);
@@ -206,7 +241,32 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
   // ground the car left, not to the car.
   let groundPitch = 0;
   let groundRoll = 0;
-  const update = (state: GameState, dt: number): void => {
+  /** How much of itself the glass is showing this frame: its own baked
+   * gradient, brought forward by the angle the eye is standing at and by
+   * whatever the stage has caked on it. The angle is taken in the CAR's own
+   * frame — the pane turns with the car, and a drift is exactly the moment
+   * the two disagree. */
+  const shineGlass = (state: GameState, eye?: THREE.Vector3): void => {
+    if (!glassMat) return;
+    let glint = 0;
+    if (eye) {
+      const dx = eye.x - state.car.x;
+      const dz = eye.z - state.car.z;
+      const h = -state.car.heading;
+      view
+        .set(
+          dx * Math.cos(h) + dz * Math.sin(h),
+          eye.y - state.car.y,
+          -dx * Math.sin(h) + dz * Math.cos(h),
+        )
+        .normalize();
+      glint = Math.pow(1 - Math.abs(view.dot(screen)), GLASS.falloff);
+    }
+    const want = GLASS_OPACITY + GLASS.glint * glint + GLASS.grime * dirt.level();
+    glassMat.opacity = Math.min(want, GLASS.ceiling) * fade;
+  };
+
+  const update = (state: GameState, dt: number, eye?: THREE.Vector3): void => {
     const car = state.car;
     group.position.set(car.x, car.y, car.z);
     group.rotation.y = car.heading;
@@ -247,10 +307,13 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
       if (front) body.wheelGroups[i].rotation.y = steerVisual;
     }
 
+    if (body.steering) body.steering.rotation.z = steeringTurn(steerVisual / WHEEL_STEER_LOCK);
+
     dirt.update(state, dt);
     // The glass answers to both the weather landing on it and the filth the
     // stage has thrown at the rest of the car.
     body.wipers.update(wet, dirt.level(), dt);
+    shineGlass(state, eye);
     shineLamps();
     damage.update(state, dt);
 
@@ -282,6 +345,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
 
   return {
     group,
+    cabin: body.cabin,
     shadow,
     debris: damage.debris,
     update,

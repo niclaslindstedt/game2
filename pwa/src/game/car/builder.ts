@@ -8,6 +8,12 @@
 // term against one constant light direction. That keeps the arcade look —
 // no runtime lights, no shading pops — while hoods, flanks and sills still
 // read as distinct planes.
+//
+// A builder can carry ALPHA as well, which is what the glass and the grime
+// film on it are built with: three.js reads a four-component color attribute
+// as colour-with-alpha and multiplies the material's own opacity by it, so a
+// pane can fade from a nearly solid reflection at its header to a clear one
+// at its sill without a shader or a second material.
 
 import * as THREE from "three";
 
@@ -20,7 +26,9 @@ const LIGHT = new THREE.Vector3(0.35, 1, 0.45).normalize();
 const AMBIENT = 0.62;
 const DIFFUSE = 0.38;
 
-/** Accumulates flat-shaded triangles with baked lambert vertex colors. */
+/** Accumulates flat-shaded triangles with baked lambert vertex colors.
+ * `alpha` opens the fourth colour channel; a builder without it writes three
+ * floats a vertex and the `alpha` argument on every method is ignored. */
 export class MeshBuilder {
   private pos: number[] = [];
   private col: number[] = [];
@@ -28,11 +36,18 @@ export class MeshBuilder {
   private readonly ac = new THREE.Vector3();
   private readonly n = new THREE.Vector3();
   private readonly c = new THREE.Color();
+  private readonly alpha: boolean;
+
+  // A parameter property would say this in one line and cost the repo's Node
+  // tooling the file: `--experimental-strip-types` refuses to parse them.
+  constructor(alpha = false) {
+    this.alpha = alpha;
+  }
 
   /** Degenerate triangles are dropped rather than shaded: the shell's ring
    * collapses several of its points onto each other away from the wheel
    * arches, and a zero-area face has no normal to light it with. */
-  tri(a: V3, b: V3, c: V3, color: number): void {
+  tri(a: V3, b: V3, c: V3, color: number, alpha = 1): void {
     this.ab.set(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
     this.ac.set(c[0] - a[0], c[1] - a[1], c[2] - a[2]);
     this.n.crossVectors(this.ab, this.ac);
@@ -43,13 +58,51 @@ export class MeshBuilder {
     for (const p of [a, b, c]) {
       this.pos.push(p[0], p[1], p[2]);
       this.col.push(this.c.r, this.c.g, this.c.b);
+      if (this.alpha) this.col.push(alpha);
     }
   }
 
   /** Corners counter-clockwise seen from outside the surface. */
-  quad(a: V3, b: V3, c: V3, d: V3, color: number): void {
-    this.tri(a, b, c, color);
-    this.tri(a, c, d, color);
+  quad(a: V3, b: V3, c: V3, d: V3, color: number, alpha = 1): void {
+    this.tri(a, b, c, color, alpha);
+    this.tri(a, c, d, color, alpha);
+  }
+
+  /** A quad that FADES: the a→b edge carries one colour and alpha, the c→d
+   * edge another, and the shader interpolates between them. The one place a
+   * face here is not a single flat tone, and it exists for the glass — a
+   * window's reflection has to run from its header to its sill continuously.
+   * Cut into bands instead, it reads as three panes of different glass, and
+   * no number of bands hides the steps at the angle a car is actually seen
+   * at. Both ends take the same lambert term, because it is one flat face. */
+  quadFade(
+    a: V3,
+    b: V3,
+    c: V3,
+    d: V3,
+    colorAB: number,
+    colorCD: number,
+    alphaAB: number,
+    alphaCD: number,
+  ): void {
+    this.triFade(a, b, c, [colorAB, colorAB, colorCD], [alphaAB, alphaAB, alphaCD]);
+    this.triFade(a, c, d, [colorAB, colorCD, colorCD], [alphaAB, alphaCD, alphaCD]);
+  }
+
+  private triFade(a: V3, b: V3, c: V3, colors: number[], alphas: number[]): void {
+    this.ab.set(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+    this.ac.set(c[0] - a[0], c[1] - a[1], c[2] - a[2]);
+    this.n.crossVectors(this.ab, this.ac);
+    if (this.n.lengthSq() < 1e-12) return;
+    this.n.normalize();
+    const k = AMBIENT + DIFFUSE * Math.max(0, this.n.dot(LIGHT));
+    const p = [a, b, c];
+    for (let i = 0; i < 3; i++) {
+      this.c.set(colors[i]).multiplyScalar(k);
+      this.pos.push(p[i][0], p[i][1], p[i][2]);
+      this.col.push(this.c.r, this.c.g, this.c.b);
+      if (this.alpha) this.col.push(alphas[i]);
+    }
   }
 
   box(cx: number, cy: number, cz: number, sx: number, sy: number, sz: number, color: number): void {
@@ -102,22 +155,42 @@ export class MeshBuilder {
    * whole game is fullbright, so a normal or a uv on the source is vertex
    * data the shader will never read. The source is spent — it is disposed
    * here rather than left for a caller that has no further use for it. */
-  absorb(source: THREE.BufferGeometry): void {
+  absorb(source: THREE.BufferGeometry, alpha = 1): void {
     const pos = source.getAttribute("position");
     const col = source.getAttribute("color");
     for (let i = 0; i < pos.count; i++) {
       this.pos.push(pos.getX(i), pos.getY(i), pos.getZ(i));
       this.col.push(col.getX(i), col.getY(i), col.getZ(i));
+      if (this.alpha) this.col.push(alpha);
     }
     source.dispose();
+  }
+
+  /** Whether anything has been drawn into this builder — a car with no
+   * glass, or none of the parts a level of detail skips, must not be handed
+   * an empty mesh to draw. */
+  get empty(): boolean {
+    return this.pos.length === 0;
   }
 
   geometry(): THREE.BufferGeometry {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(this.pos, 3));
-    geo.setAttribute("color", new THREE.Float32BufferAttribute(this.col, 3));
+    geo.setAttribute("color", new THREE.Float32BufferAttribute(this.col, this.alpha ? 4 : 3));
     return geo;
   }
+}
+
+/** Two hex colours mixed, as a hex colour — the authored way to strike a
+ * tone between two named ones without carrying THREE.Color into data. */
+export function mixHex(a: number, b: number, t: number): number {
+  const k = Math.max(0, Math.min(1, t));
+  const lerp = (shift: number): number => {
+    const from = (a >> shift) & 0xff;
+    const to = (b >> shift) & 0xff;
+    return Math.round(from + (to - from) * k) << shift;
+  };
+  return lerp(16) | lerp(8) | lerp(0);
 }
 
 /** The lambert term this file bakes into a face with the given normal.
@@ -217,6 +290,7 @@ export function patchQuad(
   color: number,
   lift = 0,
   mirrored = false,
+  alpha = 1,
 ): void {
   if (rect.u1 - rect.u0 < 1e-3 || rect.v1 - rect.v0 < 1e-3) return;
   const n = patchNormal(q);
@@ -226,6 +300,33 @@ export function patchQuad(
     return [q0[0] + n[0] * out, q0[1] + n[1] * out, q0[2] + n[2] * out];
   };
   const c = [p(rect.u0, rect.v0), p(rect.u1, rect.v0), p(rect.u1, rect.v1), p(rect.u0, rect.v1)];
-  if (mirrored) b.quad(c[3], c[2], c[1], c[0], color);
-  else b.quad(c[0], c[1], c[2], c[3], color);
+  if (mirrored) b.quad(c[3], c[2], c[1], c[0], color, alpha);
+  else b.quad(c[0], c[1], c[2], c[3], color, alpha);
+}
+
+/** The same rectangle, fading from what its v0 edge carries to what its v1
+ * edge carries. Mirroring reverses the corner order, so the pair of colours
+ * has to travel with it or every window on the left flank fades the wrong
+ * way up. */
+export function patchFade(
+  b: MeshBuilder,
+  q: Patch,
+  rect: { u0: number; u1: number; v0: number; v1: number },
+  color0: number,
+  color1: number,
+  alpha0: number,
+  alpha1: number,
+  lift = 0,
+  mirrored = false,
+): void {
+  if (rect.u1 - rect.u0 < 1e-3 || rect.v1 - rect.v0 < 1e-3) return;
+  const n = patchNormal(q);
+  const out = mirrored ? -lift : lift;
+  const p = (u: number, v: number): V3 => {
+    const q0 = patchAt(q, u, v);
+    return [q0[0] + n[0] * out, q0[1] + n[1] * out, q0[2] + n[2] * out];
+  };
+  const c = [p(rect.u0, rect.v0), p(rect.u1, rect.v0), p(rect.u1, rect.v1), p(rect.u0, rect.v1)];
+  if (mirrored) b.quadFade(c[3], c[2], c[1], c[0], color1, color0, alpha1, alpha0);
+  else b.quadFade(c[0], c[1], c[2], c[3], color0, color1, alpha0, alpha1);
 }
