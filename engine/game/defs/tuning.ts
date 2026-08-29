@@ -300,6 +300,16 @@ export const TUNING = {
      * and the reason one is rotated on the pedal rather than on the wheel.
      * `liftGrip` tightens the line, this swings the nose — one lift, both. */
     liftYaw: 0.5,
+    /** ...and the rotation a TRAILED BRAKE feeds the same slide, rad/s at
+     * full brake, full slide and pace, ×`drivetrain[].brake`. `liftYaw`
+     * above is the weight coming off the driven axle; this is the whole car
+     * pitching onto its nose, which is a bigger transfer and the reason a
+     * brake carried past the turn-in rotates a car that a lift alone only
+     * tightens. Sized over the lift and under the handbrake: it is the move
+     * between the two, and like both of them it is gated by the saturation
+     * band, so it takes the car to the angle `drift.brakeDepth` opened up
+     * and no further. Reads the LAGGED load, so a stab is not a rotation. */
+    brakeYaw: 1.6,
     /** Driven FRONT wheels pull the car toward where they POINT, so the
      * throttle is a front-driver's way OUT of a slide, rad/s per rad of slip
      * at full throttle, full slide and pace. The exact mirror of `powerYaw`
@@ -395,25 +405,32 @@ export const TUNING = {
        * `grip.torqueSpin`. Almost nothing: a front axle that runs out of
        * grip goes STRAIGHT ON, it does not step out. */
       spin: 0.1,
-      /** Where the slide starts, ×`drift.entryAt`. Over 1: a front-driver
-       * understeers up to the limit and has to be provoked past it. */
-      entry: 1.2,
+      /** Where the slide starts, ×`drift.entryAt`. Well over 1: a
+       * front-driver understeers up to the limit and some way past it, and
+       * has to be provoked the rest of the way. */
+      entry: 1.5,
       /** ...and HOW FAR it develops once past it, 0..1 against a fully
        * developed slide — the rear-driver's, which is what every other knob
        * in the group is calibrated against. NEVER over 1: `asked` above the
        * carried `sliding` leaves `releasing` (car.ts) pinned at zero, and the
        * exit stops existing.
        *
-       * Well under 1 here, and this is the number that makes a front-driver a
-       * front-driver: when the fronts give up the car WASHES WIDE. It still
-       * slides — a provoked hatch is a lovely thing — but the angle it holds
-       * is a fraction of a lit-up rear axle's, and reaching it costs a flick,
-       * a lift or the handbrake rather than just the wheel. `entry` alone
-       * cannot say any of that: it moves where the slide begins and nothing
-       * about how deep it goes, so on the loose — where the front-driver's
-       * rubber is the first to give up — `entry` alone leaves the hatch
-       * hanging exactly the same tail out as the saloon, only earlier. */
-      depth: 0.6,
+       * THE LOWEST IN THE ROSTER, and this is the number that makes a
+       * front-driver a front-driver: when the fronts give up the car WASHES
+       * WIDE. Wind more lock into a tightening corner on the throttle and
+       * the hatch simply runs out of road — the angle the wheel alone can
+       * ask for is barely a drift at all, and every degree past it is bought
+       * with a flick, a trailed brake or the lever (`drift.flickDepth`,
+       * `brakeDepth`, `leverDepth`, which is the whole reason those exist).
+       * Provoked, it is a lovely thing; driven like a rear-driver, it is a
+       * car ploughing straight on with its nose washed out.
+       *
+       * `entry` alone cannot say any of that: it moves where the slide
+       * begins and nothing about how deep it goes, so on the loose — where
+       * the front-driver's rubber is the first to give up — `entry` alone
+       * leaves the hatch hanging exactly the same tail out as the saloon,
+       * only earlier. */
+      depth: 0.42,
       /** How fast a slide the wheel has stopped asking for lets go,
        * ×`drift.release`. Fast — it gathers itself up. */
       release: 1.5,
@@ -423,8 +440,16 @@ export const TUNING = {
        * `release` above: a slower release holds the slide up, and the
        * weathervane scales with exactly that, so the two cancel. A rear
        * axle still under power resists being pulled straight; an undriven
-       * one, dragging, does the pulling. */
-      snap: 1.15,
+       * one, dragging, does the pulling.
+       *
+       * Still the strongest in the roster, but no longer by as much as the
+       * dragging rear alone would argue for: this car now reaches its real
+       * angles on the lever and the brake, and a weathervane sized for a
+       * slide the wheel asked for swings a provoked one back through centre
+       * and out the other side — a yank into a hairpin that gathers itself
+       * up, overshoots to nearly straight and then builds a second slide on
+       * its own is a car arguing with the driver rather than answering. */
+      snap: 0.9,
       /** Forward bite: how much torque reaches the ground, ×the car's own
        * `traction`, against the surface's grip. Two driven wheels with the
        * engine sat on top of them hook up well. */
@@ -440,6 +465,12 @@ export const TUNING = {
        * driven rear and a throttle that only ever pulls it straight, the
        * flick is the front-driver's ENTIRE way into a slide. */
       flick: 1,
+      /** ...and by a trailed BRAKE, ×`drift.brakeDepth`. The reference, for
+       * the same reason: with the loaded axle at the front, standing on the
+       * brakes is what finally takes the weight off the back of this car.
+       * Lift and brake together are how a hatch is turned in — the pedals
+       * do the rotating and the wheel only points it. */
+      brake: 1,
     },
     rwd: {
       powerYaw: 0.95,
@@ -465,6 +496,11 @@ export const TUNING = {
       // open by 10 km/h rather than 1% open at it.
       driftFloor: 0.06,
       flick: 0.75,
+      // Least of the three, and not because the brake does less to this car:
+      // a rear axle already loose on the throttle has nothing left for a
+      // trailed brake to unstick. The move is worth most to the layout that
+      // has no other way of asking.
+      brake: 0.5,
     },
     awd: {
       powerYaw: 0.5,
@@ -474,13 +510,16 @@ export const TUNING = {
       spin: 0.4,
       entry: 1,
       // Between the two, as everything about this car is: it slides when
-      // asked and it is never the one hanging furthest out.
-      depth: 0.85,
+      // asked and it is never the one hanging furthest out. Well clear of
+      // the hatch, though — with drive to the rear as well it steps out on
+      // the wheel where the front-driver would only push.
+      depth: 0.75,
       release: 1,
       snap: 1,
       bite: 1.2,
       driftFloor: 1,
       flick: 0.85,
+      brake: 0.8,
     },
   },
 
@@ -506,18 +545,82 @@ export const TUNING = {
      * toward, scaled by how far the slide has come in. It is what makes the
      * angle commanded rather than self-chosen — half the slide is half the
      * angle, and a centred wheel asks for zero, which is grip gathering the
-     * car up. */
-    angleSpan: 0.65,
+     * car up.
+     *
+     * It is the REAR-DRIVER's angle, on the wheel alone, at pace: the one
+     * layout whose `depth` is 1. Every other car in the roster reaches some
+     * fraction of it and has to be provoked for the rest, so this number is
+     * the ceiling on the whole game's drift and not an average of it. */
+    angleSpan: 0.36,
     /** How far past the asked angle the deepening forces take to fade to
      * nothing, rad. Wide enough that the drift is a slope to lean on rather
      * than a wall the car hits: it is the room the throttle, the lift and
      * the handbrake move the car around in. Narrower also means the car
-     * sits closer to exactly the angle asked for. */
-    angleBand: 0.5,
+     * sits closer to exactly the angle asked for.
+     *
+     * WIDER than `angleSpan` now, where it used to be a fraction of it, and
+     * that is the point rather than an accident of the setpoint coming down:
+     * the angle the wheel asks for is deliberately modest on two of the three
+     * layouts, and the moves that make up the difference — the flick, the
+     * trailed brake, the lever — all work by taking the car PAST it. Narrow
+     * the band back and they have nowhere to take it: every deepening force
+     * fades out a few degrees past the wheel's own ask, the provocation
+     * stops paying, and a driver managing a slide finds the car falling out
+     * of it under them. (The sim is unusually loud about this one: at 0.31 a
+     * bot that had driven seed 1 cleanly for a year spent twenty seconds of
+     * it in the trees.) */
+    angleBand: 0.42,
     /** How fast a slide the wheel has stopped asking for lets go, 1/s. The
      * only thing holding a slide up once the lock comes off, so it is what
      * carries one corner's angle into the next instead of snapping back to
      * grip the instant the wheel passes centre. */
+    /** WHAT A MOVE BUYS, 0..1 of the reference slide. `drivetrain[].depth`
+     * is what the WHEEL alone develops, and on anything but a rear-driver
+     * that is deliberately not much: turn into a hairpin in the hatch on
+     * the throttle and it washes wide, which is what a front-driven car
+     * does. These three are the ways a driver takes the weight off the rear
+     * and asks for the angle anyway, each lifting that ceiling toward the
+     * reference — the layout's own `depth` is where the lift starts from,
+     * so the move is worth most to the car that has the least of its own.
+     *
+     * The order they sit in is the order a driver reaches for them: the
+     * flick is free and sets a corner up from a long way out, the brake is
+     * the one that can be trailed all the way to the apex, and the lever is
+     * the last resort that gets a car round something too tight for either.
+     *
+     * None of them ROTATES anything by itself — they open the slide, and
+     * `grip.flickYaw`, `grip.liftYaw` and `grip.handbrakeYaw` are what walk
+     * the car through the gap. A demand with no yaw behind it is a car that
+     * has lost its grip and is still going straight on. */
+    leverDepth: 0.8,
+    flickDepth: 0.85,
+    /** ...and the brake's, ×`drivetrain[].brake`. Trail braking is the move
+     * this game is named after minus the hands: the nose goes down, the rear
+     * goes light, and the corner tightens under a car that was understeering
+     * a moment ago. It reads off the LAGGED brake load (`CarState.brakeLoad`)
+     * and not the pedal, so a stab down the straight does nothing and a
+     * brake carried into the corner does everything. */
+    brakeDepth: 0.8,
+    /** ...and how far a full provocation lowers the SPEED FLOOR under all of
+     * it, ×`slideFrom`. The floor is a rule the player is told — it will not
+     * drift under 70 — and this is the one thing that argues with it,
+     * because the corners that need a move are the slow ones: brake hard
+     * enough to rotate a hatch into a hairpin and the car is under the floor
+     * before the nose has come round, so without this the move that the
+     * tight corner exists to demand is the one move the tight corner will
+     * not allow. Only a MOVE claims it, and only as far as it goes — the
+     * wheel alone never does. A scrabble out of a ditch, a nudge on the
+     * grid and a hairpin taken badly are all still exactly as gripped as
+     * they were: none of them is anybody asking for anything. */
+    provokeFloor: 0.45,
+    /** ...and how fast a provocation the driver has stopped making fades
+     * back out, 1/s. The lever comes up in one tick and the weight it moved
+     * does not: read raw, letting go of it drops the slide the car is
+     * allowed in a single step, and the exit's own spring — which is sized
+     * off exactly that drop — slams a car that is still mid-corner with the
+     * lock still on straight again. Same shape as `steering.flickSettle`
+     * and `grip.liftSettle`, and for the same reason. */
+    provokeSettle: 1.1,
     /** How much DEEPER a fully closed throttle asks the slide to go, as a
      * fraction of `angleSpan`. The lift is the driver's other way into a
      * corner: the weight goes forward, the driven axle unloads, and the tail
@@ -529,8 +632,14 @@ export const TUNING = {
      * had already shut and the pedal would do nothing to the angle at all.
      * Moving the setpoint reopens the band and lets the whole slide carry
      * the car there. `grip.liftGrip` is the same lift's other half, pulling
-     * the line tighter while this takes it further round. */
-    liftSpan: 0.55,
+     * the line tighter while this takes it further round.
+     *
+     * The MILD version of the pedal, deliberately: a bare lift is a driver
+     * breathing the throttle, and the deliberate ask is the brake beside it
+     * (`brakeDepth`). Taken much higher it out-deepens the rear-driver's own
+     * throttle — `tests/drivetrain_test.ts` asserts the throttle deepens a
+     * rear-driven slide and a lift does not, and that inverts around 0.45. */
+    liftSpan: 0.35,
     release: 0.4,
     /** THE OVERSHOOT on the way out, 0..1. How much the car's rotation
      * outlives the lock that made it: while the slide is letting go, the

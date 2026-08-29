@@ -100,10 +100,12 @@ type TunedKnob =
  * five together. What the rest buy is the difference between crews on the
  * same budget — which is the half of the model the player actually meets. */
 const AXIS_KNOBS: { axis: SkillAxis; knob: TunedKnob; novice: number; ace: number }[] = [
-  // ±20%. The corner-speed plan is sqrt(latAccel · latFraction / κ), so this
-  // is most of the difference between a crew that arrives and one that has
-  // already gone.
-  { axis: "commitment", knob: "latFraction", novice: 0.34, ace: 0.86 },
+  // ±20%. The corner-speed plan is sqrt(latCeiling · latFraction / κ), so
+  // this is most of the difference between a crew that arrives and one that
+  // has already gone. Quoted against the TRACTION CEILING (`game/limits.ts`)
+  // — what the tires deliver — rather than against `gripAccel`, which is
+  // where the slide starts easing in and is `1 / latCeiling` of it.
+  { axis: "commitment", knob: "latFraction", novice: 0.24, ace: 0.61 },
   // ±5%: a novice brakes down to the geometric cap and drives round it, an
   // ace arrives over it and lets the slide scrub the rest…
   { axis: "attack", knob: "hotEntry", novice: 0, ace: 5 },

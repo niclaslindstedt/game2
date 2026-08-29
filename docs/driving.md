@@ -26,10 +26,27 @@ one continuous response rather than two modes.
   gate multiplies out to zero, so the wheel steers the car and does nothing
   else. It closes over five km/h (`slideSpan`) rather than at a hard edge,
   it caps a slide already running — a drift that runs out of speed is let go
-  by the floor rather than carried down to a standstill — and every lever
-  that takes the rear away passes through it, the handbrake included. A car
-  going sideways at walking pace is not this game's drama; it is a car that
-  will not go where it is pointed.
+  by the floor rather than carried down to a standstill — and everything the
+  wheel alone can do passes through it. A car going sideways at walking pace
+  is not this game's drama; it is a car that will not go where it is
+  pointed. The one thing that argues with it is a MOVE (below): the corners
+  that need one are the slow ones, so a full provocation lowers the floor by
+  `provokeFloor` — the handbrake, on its own, to about 31 km/h. It costs a
+  deliberate act to claim, so a scrabble out of a ditch and a nudge on the
+  grid are as gripped as they ever were.
+- **What a MOVE buys.** How much slide the WHEEL alone develops is the
+  layout's (`TUNING.drivetrain[].depth`), and on anything but the
+  rear-driver that is deliberately not much. The three ways a driver takes
+  the weight off the rear each lift that ceiling toward the reference slide
+  — the mass thrown by a flick (`drift.flickDepth`), the nose pitched down
+  on a trailed brake (`brakeDepth` × the layout's own `brake`), and the rear
+  wheels locked outright (`leverDepth`). The largest wins rather than the
+  sum; the lift it is worth is the layout's own shortfall, so a move is
+  worth most to the car with the least of its own. And it is HELD once made
+  (`provokeSettle`): the lever comes up in a tick and the weight it moved
+  does not. None of them rotates anything by itself — they open the slide,
+  and `grip.flickYaw`, `brakeYaw`, `liftYaw` and `handbrakeYaw` are what
+  walk the car through the gap.
 - **The demand is what the wheel ASKS for**, never the yaw the car ended up
   with. The slide feeds extra yaw authority back into the car, so measuring
   it off the resulting yaw closes a positive feedback loop with no
@@ -51,14 +68,25 @@ one continuous response rather than two modes.
   (`angleSpan × breakaway × slide`, over a band `angleBand` wide, both
   scaled by the surface — see below). The setpoint moves
   with the wheel, so full lock is a deep drift, half lock a shallower one,
-  and a centred wheel hands the car back. At 119 km/h the compact — the
-  FRONT-driver, so the shallowest slide on the roster (`depth`, below) —
-  answers a lock sweep like this, with no step in it anywhere:
+  and a centred wheel hands the car back. At 119 km/h the classic — the
+  REAR-driver, the layout every knob in the group is calibrated against and
+  so the deepest slide on the roster — answers a lock sweep like this, with
+  no step in it anywhere:
 
-  | lock     | 0.2 | 0.3 | 0.4 | 0.5 | 0.6  | 0.7  | 0.8  | 0.9  | 1.0  |
-  | -------- | --- | --- | --- | --- | ---- | ---- | ---- | ---- | ---- |
-  | slip°    | 1.4 | 2.5 | 4.3 | 7.6 | 12.5 | 17.8 | 22.8 | 27.1 | 30.6 |
-  | radius m | 181 | 112 | 74  | 53  | 41   | 34   | 28   | 24   | 21   |
+  | lock     | 0.2 | 0.3 | 0.4 | 0.5  | 0.6  | 0.7  | 0.8  | 0.9  | 1.0  |
+  | -------- | --- | --- | --- | ---- | ---- | ---- | ---- | ---- | ---- |
+  | slip°    | 1.3 | 2.7 | 6.2 | 12.0 | 18.6 | 24.1 | 28.1 | 31.2 | 33.6 |
+  | radius m | 212 | 115 | 70  | 52   | 44   | 40   | 37   | 34   | 31   |
+
+  ...and the compact, the FRONT-driver, answers the same sweep with about
+  half the angle and a line a third wider, because on the wheel alone it
+  WASHES WIDE — which is the point of it, and what the moves below exist to
+  give it a way out of:
+
+  | lock     | 0.2 | 0.3 | 0.4 | 0.5 | 0.6 | 0.7  | 0.8  | 0.9  | 1.0  |
+  | -------- | --- | --- | --- | --- | --- | ---- | ---- | ---- | ---- |
+  | slip°    | 1.4 | 2.3 | 3.5 | 5.6 | 8.3 | 11.2 | 13.5 | 16.2 | 18.5 |
+  | radius m | 223 | 146 | 104 | 78  | 63  | 51   | 46   | 43   | 41   |
 
 - **The exit overshoots a tad.** Unwinding the lock does not stop the car
   rotating: while the slide lets go, the yaw answers its target more slowly
@@ -784,14 +812,22 @@ What the layout decides:
   a front-driver understeers up to the limit and gathers itself up quickly;
   a rear-driver has gone before it gets there and hangs on afterwards.
 - **How far the slide DEVELOPS once it has started** (`depth`, 0..1 against
-  the rear-driver's fully developed one). Where it begins and how deep it
-  goes are different questions: a front axle that runs out of grip WASHES
-  WIDE, so the hatch crosses the same threshold and then holds roughly half
-  the angle the saloon does at the same lock. Reaching a real angle in it
-  costs a flick, a lift or the handbrake rather than just the wheel — and the
-  handbrake still gets there, because the lever's yaw goes around this. Never
-  set over 1: an asked slide above the carried one pins `releasing` at zero
-  and the exit stops existing.
+  the rear-driver's fully developed one, which is the 1). Where it begins
+  and how deep it goes are different questions: a front axle that runs out
+  of grip WASHES WIDE, so the hatch crosses the same threshold and then
+  holds well under half the angle the saloon does at the same lock, on a
+  line a third wider. Reaching a real angle in it costs a MOVE — a flick, a
+  trailed brake or the lever — and what each of those is worth is the
+  `flickDepth` / `brakeDepth` / `leverDepth` group above: they lift this
+  ceiling toward 1 for as long as the weight is off the rear. Never set over
+  1: an asked slide above the carried one pins `releasing` at zero and the
+  exit stops existing.
+- **How much a TRAILED BRAKE is worth to it** (`brake`, × `drift.brakeDepth`
+  and `grip.brakeYaw`). Biggest on the front-driver, whose loaded axle is at
+  the front, and which has nothing else: the throttle only ever pulls it
+  straight, so the brake is what turns it in. Smallest on the rear-driver —
+  not because the brake does less, but because a rear axle already loose on
+  the throttle has nothing left for it to unstick.
 - **How much torque reaches the ground** (`bite` × `spec.traction` × the
   surface's grip). One driven axle on a loose surface spins where four
   driven wheels hook up, worst at the bottom of the gear and gone by the top
@@ -827,7 +863,9 @@ What the layout decides:
   drifts, and it is a rule the player is told (it will not drift under 70).
   The rear-driver is its ONE exception, down at walking pace — that is what
   makes its tail-out register at all, and it is the whole reason the floor is
-  a per-layout number.
+  a per-layout number. The other exception is not a layout at all: a MOVE
+  lowers the floor for anybody who makes one (`drift.provokeFloor`), because
+  the corner that needs the lever is a hairpin taken at fifty.
 
 ### The flick
 
@@ -844,8 +882,34 @@ wheel's own lateral ask feeds) and puts yaw in (`grip.flickYaw`). The load
 is held on `car.flick` and settles over the better part of half a second
 (`steering.flickSettle`) — the hands are only over the other side for about
 fifty milliseconds, and a torque that lived only that long would do nothing.
-At 25 m/s the front-driver settles at about 8° of slip on a lock it turns
-straight in on, and around 15° on the same lock flicked.
+It also lifts the layout's slide ceiling while the load is across the car
+(`drift.flickDepth`), which is what lets a front-driver reach an angle its
+own `depth` would never allow. On gravel at 30 m/s the hatch holds about 15°
+on 0.85 of lock driven straight in, and peaks near 26° on the same lock
+flicked — the wheel alone cannot get anywhere near that, which is the whole
+reason the move exists and the game is named after it.
+
+### The trailed brake
+
+The other pedal that turns a car, and the front-driver's everyday one. A
+lift takes the drive off the loaded axle; standing on the brakes stands the
+whole car on its nose and leaves the rear light enough to come round. The
+weight is a lagged state (`CarState.brakeLoad`, on `grip.liftSettle`), so a
+stab down the straight is a brake and only a brake carried PAST the turn-in
+is a rotation: it opens the slide (`drift.brakeDepth` × the layout's own
+`brake`) and `grip.brakeYaw` walks the car into it.
+
+On gravel at 30 m/s the hatch takes a corner on the throttle at about 15° of
+slip on a 44 m line, and the same corner trailing the brake at nearly 20° on
+a 26 m one — the angle is the smaller half of it. What the pedal really buys
+is the LINE, which is why a car that will not rotate can still be quick.
+
+### Seeing it
+
+`make drift` drives every corner the generator can build, once per technique,
+and prints what each one bought — plus `previews/drift-<car>.png`, where the
+car is drawn every sixth of a second with its travel arrow, so the slip angle
+is the visible gap between where the nose points and where the car is going.
 
 ## Cars and gearboxes
 
@@ -974,4 +1038,4 @@ built on one staging slot. Rivals never resolve against each other — see
 
 ## Tuning etiquette
 
-Numbers live in `engine/game/defs/tuning.ts` (global feel) and `cars.ts` (per car) — never inline in the model. **`TUNING.drift` is the group that shapes the slide itself** — where it starts, how it comes in, how deep it goes, how it lets go, and when it reads as a drift — and the [`drift-feel`](../.agent/skills/drift-feel/SKILL.md) skill is the map to it: read that before touching any of it. `TUNING.steering` holds the wheel's own response (the rack's rate, the low-speed ramp-in, the high-speed fade, the centred-wheel commitment floor, the tail-torque chatter guard), `TUNING.grip` what is left of the tires (scrub, the slip's self-rotation, power oversteer, the front axle's pull, the lift, the flick, the handbrake), `TUNING.engine` how a car's torque arrives inside a gear and how much of it reaches the ground, and `TUNING.drivetrain` what all of that is worth to each layout. Any change here must run `make sim` before and after, and keep `tests/drift_test.ts` / `tests/jump_test.ts` honest: those tests encode the moments this document describes.
+Numbers live in `engine/game/defs/tuning.ts` (global feel) and `cars.ts` (per car) — never inline in the model. **`TUNING.drift` is the group that shapes the slide itself** — where it starts, how it comes in, how deep it goes, how it lets go, and when it reads as a drift — and the [`drift-feel`](../.agent/skills/drift-feel/SKILL.md) skill is the map to it: read that before touching any of it. `TUNING.steering` holds the wheel's own response (the rack's rate, the low-speed ramp-in, the high-speed fade, the centred-wheel commitment floor, the tail-torque chatter guard), `TUNING.grip` what is left of the tires (scrub, the slip's self-rotation, power oversteer, the front axle's pull, the lift, the flick, the handbrake), `TUNING.engine` how a car's torque arrives inside a gear and how much of it reaches the ground, and `TUNING.drivetrain` what all of that is worth to each layout. Any change here must run `make drift` and `make sim` before and after — the first says what the CAR does when a driver asks it something, the second what the bot does with the same car — and keep `tests/drift_test.ts` / `tests/jump_test.ts` honest: those tests encode the moments this document describes. What a car CAN do (the traction ceiling, how much slide the wheel finds, where the speed floor sits) is stated once in `engine/game/limits.ts` and read by both the physics and the bot; never restate one of those in a second place.

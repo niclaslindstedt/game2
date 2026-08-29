@@ -19,7 +19,7 @@ import {
 } from "../mapgen/index.ts";
 import { carById, gearedSpec, type GearboxMode } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
-import { launch, stepAirborne, stepGrounded, type GroundContext } from "./car.ts";
+import { launch, spinHeadroom, stepAirborne, stepGrounded, type GroundContext } from "./car.ts";
 import { clipKerbs, collideCar } from "./collision.ts";
 import {
   crossedFinish,
@@ -96,6 +96,8 @@ function freshCar(): CarState {
     flick: 0,
     flickDir: 1,
     lift: 0,
+    brakeLoad: 0,
+    provoked: 0,
     gear: 0,
     rev: 0,
     gearbox: "auto",
@@ -756,12 +758,6 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // wheels, which is what wheelspin looks and sounds like in a car. The
   // limiter caps both. The gearbox still shifts on ROAD speed, so a flare
   // can never be mistaken for a gear that has run out.
-  car.rev = clamp(
-    (Math.max(0, car.u) + car.wheelspin) / state.spec.gearTop[car.gear],
-    0,
-    T.revs.limiter,
-  );
-
   // An endless stage keeps the road materialized well past the horizon —
   // the bot's plan, the pacenotes, and the renderer all read ahead of the
   // car, and none of them may ever see the end of the world.
@@ -926,6 +922,28 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   ) {
     state.phase = "finished";
   }
+
+  // Revs on the move: the DRIVEN WHEELS read back through the gearing, which
+  // with a gear engaged is the only thing the crank can be doing. Normally
+  // that is just how far up the gear the road speed is; when the axle is lit
+  // up (`car.wheelspin`) the needle flares away from the road with the
+  // wheels, which is what wheelspin looks and sounds like in a car. The
+  // limiter caps both. The gearbox still shifts on ROAD speed, so a flare
+  // can never be mistaken for a gear that has run out.
+  //
+  // LAST IN THE STEP, both of them, because the handling is not the last
+  // thing in it to move the car: a shunt, the ground catching a car that has
+  // spun round, a respawn — all land after the spin was sized against the
+  // headroom the gear had at the time, and any of them can leave an axle
+  // turning faster than the engine driving it, which is the one thing this
+  // model exists to rule out. Cheap to re-clamp, and nothing later can undo
+  // it.
+  car.wheelspin = Math.min(car.wheelspin, spinHeadroom(state.spec, car));
+  car.rev = clamp(
+    (Math.max(0, car.u) + car.wheelspin) / state.spec.gearTop[car.gear],
+    0,
+    T.revs.limiter,
+  );
 
   return events;
 }

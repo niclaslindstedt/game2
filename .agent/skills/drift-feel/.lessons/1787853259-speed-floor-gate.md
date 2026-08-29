@@ -16,6 +16,13 @@ multiply all three by it; drop `minSpeed` and read `drifting` off `sliding > 0`
 instead — the slide's own gate is the only speed test that can no longer
 disagree with itself.
 
+**Since then the floor has ONE argument: a move** (`drift.provokeFloor`, off
+`CarState.provoked`). The corners that need the lever are the slow ones, so a
+rule that shut it off under 70 shut it off exactly where it is for — a hatch
+braked hard enough to rotate into a hairpin was under the floor before the
+nose came round. It still gates every lever; what changed is that a full
+provocation moves the floor itself, and nothing the wheel alone does can.
+
 Two numbers to expect. The ramp width matters more than it looks: 10 km/h
 (`slideSpan` 2.78) quietly moves the rule to ~80 km/h and cost the sweep 60% of
 its remaining drift time versus 5 km/h (1.39). And a 70 km/h floor is

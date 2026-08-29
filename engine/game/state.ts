@@ -172,6 +172,24 @@ export type CarState = {
    * dozen flickering little drifts. Same reasoning as `flick` above, and
    * the same treatment. Set by the grounded step, read by nothing else. */
   lift: number;
+  /** ...and how far the BRAKE has pitched it forward, 0..1. Its own state
+   * rather than a second reading of `lift`, because the two pedals are not
+   * one axis: coasting into a corner takes the drive off the loaded axle,
+   * standing on the brakes puts the whole car on its nose and leaves the
+   * rear light enough to come round. It is what makes a trailed brake a way
+   * of asking for the angle (`drift.brakeDepth`) instead of only a way of
+   * losing speed. Lagged, for the reason `lift` is: the pedal is a key and
+   * the mass it moves is not. Set by the grounded step, read by nothing
+   * else. */
+  brakeLoad: number;
+  /** How far the rear has been unstuck by a MOVE rather than by the wheel,
+   * 0..1 of a fully developed slide — the flick's weight, the trailed
+   * brake, the lever, whichever is asking for the most. It is what a
+   * layout's own `depth` is lifted toward (`drift.leverDepth` and friends),
+   * and it HOLDS and decays for the reason the flick's load does: the lever
+   * comes up in one tick and the weight it moved takes the better part of a
+   * second to come back. Set by the grounded step, read by nothing else. */
+  provoked: number;
   gear: number;
   /** Engine revs, 0 at idle and 1 at the redline (a shade over is the
    * limiter). On the move it is the DRIVEN WHEELS through the gearing:
