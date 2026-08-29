@@ -190,12 +190,21 @@ export function buildStations(spec: CarBodySpec, axles: number[]): Station[] {
  * whatever — they exist to halve the FACE size, because the dirt coat is
  * decided per face and a flank made of full-height strips takes its
  * spatter in vertical bands instead of specks. */
+/** Half-width of the TOP DECK at a station, m — ring point 7, the fold
+ * where the shoulder turns over into the bonnet/roof/boot surface. Anything
+ * cutting a hole in that deck has to stay inside it, so the number is
+ * shared rather than re-derived. */
+export function deckHalf(spec: CarBodySpec, st: Station): number {
+  const inset = st.seam === "floor" ? SEAM_INSET : 0;
+  return st.half * sideRatios(spec).shoulder + st.flare * 0.25 - inset;
+}
+
 export function ring(spec: CarBodySpec, st: Station): V3[] {
   const inset = st.seam === "floor" ? SEAM_INSET : 0;
   const r = sideRatios(spec);
   const belt = st.half + st.flare - inset;
   const rocker = st.half * r.rocker + st.flare * 0.7 - inset;
-  const top = st.half * r.shoulder + st.flare * 0.25 - inset;
+  const top = deckHalf(spec, st);
   const well = Math.min(st.wellHalf, rocker);
   const lower = (rocker + belt) / 2;
   const lowerY = (st.sillY + spec.beltY) / 2;
@@ -243,30 +252,63 @@ function segmentColor(
   return colors.paint;
 }
 
-/** THE DECK OVER THE CABIN, CUT OPEN.
+/** A HOLE IN THE TOP DECK.
  *
  * The loft is a CLOSED body, so it carries a flat top deck the whole length
  * of the car — ring points 7–9, the two segments either side of the
- * centreline. Under the bonnet and the boot lid that deck is the panel you
- * see. Under the CABIN it is the floor: an opaque surface at about the belt
- * line, which leaves the whole visible interior a tray some 350 mm deep
- * between it and the roof. A driver and a steering wheel do not fit in
- * 350 mm, and no amount of arranging them does.
+ * centreline. That deck is opaque and it is the nearest surface to any
+ * camera above the car, so anything modelled UNDER it is simply not there:
+ * a cabin, an engine bay, a boot. Two things want to be under it and both
+ * have to cut it away first.
  *
- * So a car that is going to be sat in has that deck cut away between the
- * cowl and the rear bulkhead, and only across the middle: the ledge outside
- * `half` stays, because that strip is visible from outside the car as the
- * sill under the side windows. What is left is a cabin a metre deep, which
- * is a cabin. Whatever cuts it is then responsible for closing it again —
- * a floor, two inner sills and a bulkhead at each end — or the car has a
- * hole in it (car/cockpit.ts's hull, and car/interior.ts's own pan for the
- * views that are not taken from inside).
+ * Under the CABIN the deck sits at about the belt line, which leaves the
+ * visible interior a tray some 350 mm deep between it and the roof. A driver
+ * and a steering wheel do not fit in 350 mm, and no amount of arranging them
+ * does. Under the BONNET it is the panel you see — until the bonnet is torn
+ * off, and then it is a painted lid over where the engine ought to be.
  *
- * `zFrom`/`zTo` are the cowl and the rear bulkhead; anything whose whole
- * span lies between them is cut. */
-export type OpenCabin = { zFrom: number; zTo: number; half: number };
+ * So the middle of the deck is cut away between `zFrom` and `zTo`: the ledge
+ * outside `half` stays, because that strip is what the panel around the hole
+ * reads as — the sill under the side windows, the flange the bonnet shuts
+ * onto. Whatever cuts it is then responsible for closing it again — a floor,
+ * two inner walls and a bulkhead at each end — or the car has a hole in it
+ * (car/cockpit.ts's hull and car/interior.ts's pan for the cabin,
+ * car/engine-bay.ts's well for the bonnet).
+ *
+ * Anything whose whole span lies between `zFrom` and `zTo` is cut, so the
+ * hole snaps OUT to the stations either side of it — smaller than asked
+ * for, never bigger. */
+export type DeckOpening = { zFrom: number; zTo: number; half: number };
 
-export type ShellOptions = { openCabin?: OpenCabin };
+export type ShellOptions = { openings?: readonly DeckOpening[] };
+
+/** Which opening, if any, takes the middle of the deck out between each
+ * pair of stations — entry i is the band from `stations[i]` to
+ * `stations[i + 1]`. An opening wider than the deck itself is dropped
+ * rather than inverting the quads it would cut.
+ *
+ * Whatever closes a hole reads this too, so the well it builds lands on
+ * exactly the stations the shell dropped instead of on the metres the
+ * opening asked for. */
+export function deckCuts(
+  spec: CarBodySpec,
+  stations: Station[],
+  openings: readonly DeckOpening[],
+): (DeckOpening | null)[] {
+  return stations.slice(0, -1).map((sa, i) => {
+    const sc = stations[i + 1];
+    const lo = Math.min(sa.z, sc.z);
+    const hi = Math.max(sa.z, sc.z);
+    return (
+      openings.find(
+        (o) =>
+          lo >= o.zTo - 1e-6 &&
+          hi <= o.zFrom + 1e-6 &&
+          o.half < Math.min(deckHalf(spec, sa), deckHalf(spec, sc)),
+      ) ?? null
+    );
+  });
+}
 
 export function buildShell(
   b: MeshBuilder,
@@ -277,17 +319,12 @@ export function buildShell(
   const paint = spec.colors.paint;
   const under = spec.colors.trim ?? 0x14181f;
   const well = spec.colors.shadow ?? 0x191d24;
-  const open = options.openCabin;
+  const cuts = deckCuts(spec, stations, options.openings ?? []);
 
   for (let i = 0; i < stations.length - 1; i++) {
     const sa = stations[i];
     const sc = stations[i + 1];
-    // Both stations inside the cabin: the middle of the deck between them is
-    // floor rather than panel, and comes out.
-    const cut =
-      open !== undefined &&
-      Math.min(sa.z, sc.z) >= open.zTo - 1e-6 &&
-      Math.max(sa.z, sc.z) <= open.zFrom + 1e-6;
+    const open = cuts[i];
     // A band inside the shut line — groove floor or chamfer wall, both
     // painted in shadow. It has to be NARROW as well as seam-ended: the
     // two stations bracketing a whole door are both seam stations too, and
@@ -296,7 +333,7 @@ export function buildShell(
     const a = ring(spec, sa);
     const c = ring(spec, sc);
     // The deck's own two segments run from the right shoulder in to the
-    // centreline (7) and back out to the left one (8). Cutting the cabin
+    // centreline (7) and back out to the left one (8). Cutting the deck
     // open pulls their inner edge out to `half` and drops what is inside it.
     const ledge = (st: Station, side: number): V3 => [side * open!.half, st.topY, st.z];
     for (let k = 0; k < a.length; k++) {
@@ -308,10 +345,9 @@ export function buildShell(
       const painted = base === paint || base === spec.colors.lower;
       const color = gap && painted ? shade(base, SEAM_SHADE) : base;
       // Ring point 8 is the deck's centreline, and it is the k2 end of
-      // segment 7 and the k end of segment 8. Cutting the cabin open moves
-      // exactly that end out to the ledge and leaves the winding alone. A
-      // cabin wider than the deck itself is left whole rather than inverted.
-      if (cut && (k === 7 || k === 8) && open.half < Math.abs(a[7][0])) {
+      // segment 7 and the k end of segment 8. Cutting the deck open moves
+      // exactly that end out to the ledge and leaves the winding alone.
+      if (open && (k === 7 || k === 8)) {
         const side = k === 7 ? 1 : -1;
         const la = ledge(sa, side);
         const lc = ledge(sc, side);

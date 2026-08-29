@@ -30,6 +30,7 @@ skill for any code change.
 | `pwa/src/game/car/crew.ts`       | The people, built parametrically: torso, head, helmet styles, hair, face, the wheel hands and the road book                      |
 | `pwa/src/game/car-crew.ts`       | The sixteen characters and their gear colours, plus who drives for which crew. **Pure data, no three.js**                        |
 | `pwa/src/game/car/fascia.ts`     | Nose and tail: grille, lamps, bumpers, air dam, plate, exhaust, the detachable bonnet and boot lid                               |
+| `pwa/src/game/car/engine-bay.ts` | What is under that bonnet once an impact takes it off: the well cut into the deck, and the engine standing in it                 |
 | `pwa/src/game/car/trim.ts`       | Arch extensions, mirrors, handles, mud flaps, livery bands, door numbers, spoilers                                               |
 | `pwa/src/game/car/wheels.ts`     | The tire and three rim styles                                                                                                    |
 | `pwa/src/game/car-styles.ts`     | The specs — one `CarBodySpec` per catalog id. **Pure data, no three.js import** (Node tooling loads it)                          |
@@ -40,7 +41,7 @@ skill for any code change.
 | `pwa/src/game/car-mesh.ts`       | Scene wrapper: attitude (drift roll / air pitch), wheel spin + steer, blob shadow                                                |
 | `pwa/src/tools/car-preview.ts`   | The harness page the preview tool drives (contact-sheet renderer)                                                                |
 | `scripts/car-preview.mjs`        | The tool: `make cars` / `make liveries` / `make field`; `--variants`, `--cars`, `--liveries`, `--field`, `--out`, `--skip-build` |
-| `scripts/item-preview.mjs`       | The OTHER tool: `make items ITEMS=car,interior,wheel` — one part at a time, fitted and measured, plus a driver's-eye seat        |
+| `scripts/item-preview.mjs`       | The OTHER tool: `make items ITEMS=car,interior,engine-bay,wheel` — one part at a time, fitted and measured, plus a driver's seat |
 | `engine/game/defs/cars.ts`       | NOT this skill's file — handling numbers and the catalog. Only `color`/`accent` feed the default look                            |
 
 ## The loop: generate → render → LOOK → iterate
@@ -51,9 +52,11 @@ skill for any code change.
    (straight + mid-drift, the view that actually matters), then front 3/4,
    side, rear 3/4, top.
    **For a PART rather than a whole car**, `make items ITEMS=interior` (or
-   `car`, `wheel`) frames it on its own, on a metre grid, with a seat behind
-   the wheel — the cabin is the one thing `make cars` cannot review, because
-   at chase-cam range it is behind a tinted pane six metres away.
+   `car`, `engine-bay`, `wheel`) frames it on its own, on a metre grid, with a
+   seat behind the wheel — the cabin is the one thing `make cars` cannot
+   review, because at chase-cam range it is behind a tinted pane six metres
+   away, and the engine bay is the other, because `make cars` never takes the
+   bonnet off.
 2. **Generate candidates, several at a time.** Write a scratch script that
    imports `CAR_BODIES`, clones a spec (`JSON.parse(JSON.stringify(...))`),
    patches ONE axis per variant (silhouette, cabin, glass tone, spoiler…),
