@@ -50,10 +50,10 @@ import { cacheIdForBase } from "./app-pwa.ts";
 import { connectOutput } from "./output-bridge.ts";
 import { createInput } from "./game/input.ts";
 import { createMenuNav } from "./game/menu-nav.ts";
-import type { CameraMode } from "./game/camera.ts";
+import type { CameraMode, MapPose } from "./game/camera.ts";
 import type { FreeFlyPose } from "./game/camera-free.ts";
 import { DebugHud } from "./game/debug-hud.tsx";
-import { stageQuery, traceLine, type DebugContext } from "./game/debug-info.ts";
+import { stageQuery, traceLine, type DebugBox, type DebugContext } from "./game/debug-info.ts";
 import { debugLogging, log as debugLog, logRunStart, setDebugLogging } from "./game/debug-log.ts";
 import type { GameRenderer } from "./game/renderer.ts";
 import { Hud, type HudFlash, type HudSnapshot, type HudSplit } from "./game/hud.tsx";
@@ -118,7 +118,9 @@ import {
   type RaceSettings,
 } from "./game/menu.tsx";
 import { MainMenu, type MenuPage } from "./game/main-menu.tsx";
-import type { MapRect, MapView } from "./game/menu-roam.tsx";
+import type { MapDebug, MapRect, MapView } from "./game/menu-roam.tsx";
+import { mapDebugBoxes, mapReproQuery } from "./game/map-debug.ts";
+import { MAP_LAYERS, type MapLayerId, type MapLayerInfo } from "./game/map-layers.ts";
 import {
   PODIUM,
   findLevel,
@@ -239,6 +241,41 @@ function poseFromUrl(): Partial<FreeFlyPose> {
     return Number.isFinite(value) ? value : undefined;
   };
   return { x: num("gx"), y: num("gy"), z: num("gz"), yaw: num("gyaw"), pitch: num("gpitch") };
+}
+
+/** ?maz= ?mpitch= ?mzoom= ?mpanx= ?mpanz= — where to park the ROAM MAP's
+ * camera, in the units it is steered in (radians, a multiplier on the
+ * framing standoff, metres off the stage's centre). The other half of the
+ * map's own repro line (map-debug.ts): a picture of a generator defect is
+ * only worth taking if somebody else can stand in front of it. */
+function mapPoseFromUrl(): Partial<MapPose> {
+  const params = new URLSearchParams(location.search);
+  const num = (key: string): number | undefined => {
+    const raw = params.get(key);
+    if (raw === null) return undefined;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : undefined;
+  };
+  return {
+    az: num("maz"),
+    pitch: num("mpitch"),
+    zoom: num("mzoom"),
+    panX: num("mpanx"),
+    panZ: num("mpanz"),
+  };
+}
+
+/** ?layer= — which of the generator's layers the map opens painted with,
+ * and `?mapfull=1` for the pane blown up to the whole screen. Both are the
+ * developer's map (map-layers.ts), so both let the developer menu out for
+ * this launch exactly as `?debug=1` does. */
+function mapLayerFromUrl(): MapLayerId | null {
+  const raw = new URLSearchParams(location.search).get("layer");
+  return MAP_LAYERS.some((l) => l.id === raw) ? (raw as MapLayerId) : null;
+}
+
+function mapFullFromUrl(): boolean {
+  return new URLSearchParams(location.search).get("mapfull") === "1";
 }
 
 /** The build this frame came out of — the first thing to check when a
@@ -364,6 +401,9 @@ function initialSettings(): Settings {
     settings.developer = true;
     settings.dev = { ...settings.dev, ...forced };
   }
+  // ...and the map's own repro line, which asks for the same thing by a
+  // different door: a link that names a layer is a link to a developer tool.
+  if (mapLayerFromUrl() || mapFullFromUrl()) settings.developer = true;
   // The box, pinned the way `?camera=` pins the angle: which gears the HUD
   // offers and what a thumb flick on the pedal is worth both hang off it, so
   // a shot of either must not depend on what is in the screenshot machine's
@@ -377,6 +417,11 @@ function initialSettings(): Settings {
  * the frame the link was made from, and re-applying it every time the
  * camera came back would make the flight impossible to leave. */
 const URL_POSE = poseFromUrl();
+
+/** ...and where a `?m…=` link wants the ROAM MAP framed. Read once for the
+ * same reason: it names the picture the link was cut from, and re-applying
+ * it every frame would make the map impossible to move. */
+const URL_MAP_POSE = mapPoseFromUrl();
 
 /** Everything that decides WHICH stage is standing: change any of it and
  * the run is rebuilt. */
@@ -542,8 +587,11 @@ export function App() {
   const [result, setResult] = useState<{ levelId: string; rows: ClassRow[] } | null>(null);
   const [menu, setMenu] = useState<MenuPage | null>(() => {
     // ?start=1 launches straight into a run (tooling); everyone else gets
-    // the main menu.
+    // the main menu. `?roam=1` opens the map page itself — what the map's
+    // repro line points at, and what a screenshot pass of the generator's
+    // layers asks for.
     const params = new URLSearchParams(location.search);
+    if (params.get("roam") === "1") return { page: "roam" };
     return params.get("start") === "1" && params.get("menu") !== "1" ? null : { page: "root" };
   });
   const [seed, setSeed] = useState(() => {
@@ -1087,9 +1135,67 @@ export function App() {
   const mapView = useMemo<MapView>(
     () => ({
       onMove: (dAz, dPitch, zoomBy) => rendererRef.current?.nudgeMap(dAz, dPitch, zoomBy),
+      onPan: (dxFrac, dyFrac) => rendererRef.current?.panMap(dxFrac, dyFrac),
       onReset: () => rendererRef.current?.resetMap(),
     }),
     [],
+  );
+
+  /** THE DEVELOPER'S MAP (map-layers.ts): which of the generator's layers is
+   * painted over the stage, and whether the pane has been blown up to the
+   * whole screen. Neither is persisted — a debug layer that came back next
+   * launch would be a surprise rather than a tool. */
+  const [mapLayer, setMapLayer] = useState<MapLayerId | null>(mapLayerFromUrl);
+  const [mapFull, setMapFull] = useState(mapFullFromUrl);
+  /** What the painted layer measured, kept in a ref as well as in state: the
+   * debug panel reads it four times a second off a closure that must not be
+   * re-made on every frame, and the legend under the map renders off state. */
+  const [mapInfo, setMapInfo] = useState<MapLayerInfo | null>(null);
+  const mapInfoRef = useRef<MapLayerInfo | null>(null);
+  mapInfoRef.current = mapInfo;
+
+  // The layer follows the STAGE as well as the switch: stepping the seed or
+  // moving a dial rebuilds the backdrop, and a layer sampled off the stage
+  // before it is a layer describing a landscape that is no longer there.
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    const onRoam = menu?.page === "roam";
+    setMapInfo(renderer.setMapLayer(onRoam ? mapLayer : null));
+    // The idle turn is the MENU's decoration. Once the map is being read —
+    // blown up to the screen, or with a layer painted on it — it holds
+    // still, because a reading that turns on its own cannot be compared
+    // with the one taken before the change that is under test.
+    renderer.holdMap(onRoam && (mapFull || mapLayer !== null));
+  }, [mapLayer, mapFull, menu, seed, race, booted]);
+
+  /** The boxes over a full-screen map, read fresh: the framing moves under
+   * the hand, so this is a function rather than a value. Null before there
+   * is a stage to describe. */
+  const readMapDebug = (): { boxes: DebugBox[]; repro: string } | null => {
+    const renderer = rendererRef.current;
+    const spec = stageRef.current;
+    const track = trackRef.current?.track;
+    if (!renderer || !spec || !track) return null;
+    const pose = renderer.mapPose();
+    return {
+      boxes: mapDebugBoxes(spec, track, pose, mapInfoRef.current, BUILD),
+      repro: mapReproQuery(spec, pose, mapInfoRef.current?.id ?? null),
+    };
+  };
+  const readMapDebugRef = useRef(readMapDebug);
+  readMapDebugRef.current = readMapDebug;
+
+  const mapDebug = useMemo<MapDebug>(
+    () => ({
+      layer: mapLayer,
+      onLayer: setMapLayer,
+      full: mapFull,
+      onFull: setMapFull,
+      legend: mapInfo?.legend ?? [],
+      read: () => readMapDebugRef.current(),
+    }),
+    [mapLayer, mapFull, mapInfo],
   );
 
   /** The chassis secret, found. It sticks: a player who drummed seven times
@@ -1243,6 +1349,10 @@ export function App() {
       renderer.setNameTags(optionsRef.current.hud.nameTags);
       renderer.setView(optionsRef.current.view);
       renderer.setMapRect(mapRectRef.current);
+      // A link that named a map framing is answered before the first frame,
+      // so the picture it reproduces is the picture it was cut from rather
+      // than the default framing seen for a moment first.
+      renderer.placeMap(URL_MAP_POSE);
       // Thunder arrives seconds after the flash that made it (storm.ts), so
       // the renderer decides WHEN and the bank decides what it sounds like.
       // Muted behind a menu for the same reason every other run sound is:
@@ -2055,6 +2165,7 @@ export function App() {
           onResetPoints={(locationId) => setProgress(resetPoints(locationId))}
           onMapRect={setMapRect}
           mapView={mapView}
+          mapDebug={options.developer ? mapDebug : null}
         />
       )}
       {splashUp && <SplashScreen warm={booted} onDone={() => setSplashUp(false)} />}

@@ -1090,6 +1090,75 @@ await capture(
   { menu: "1" },
 );
 
+// ── The developer's map ─────────────────────────────────────────────────
+//
+// The map pane blown up to the whole screen, with one of the generator's own
+// layers painted over the landscape and the box in the corner saying what
+// the picture is of. These are the sheets to LOOK at when a stage comes out
+// wrong: the ground under a bad stretch of road can be read off them without
+// driving it, and the REPRO line in each one puts anybody else in front of
+// the same map.
+//
+// Everything is pinned through the URL rather than clicked — the framing
+// included — so two passes over the same seed are the same picture and the
+// diff between them is the change under test. The map holds still by itself
+// once it is full screen (see holdMap), which is what makes that true.
+const MAP_FRAME = { maz: "0.9", mpitch: "1.0", mzoom: "1" };
+
+/** The full-screen map is standing, its stage is built, and the debug box
+ * has something to say. Everything here waits on the DOM rather than on a
+ * timeout: the world takes as long as software rendering takes. */
+async function mapUp(page) {
+  await page.waitForSelector(".roam-map-full", { timeout: 120000 });
+  await page.waitForSelector(".map-debug-boxes .debug-box", { timeout: 240000 });
+  // The ground streams in a few tiles a frame, and a map photographed while
+  // it is still arriving is a picture of a half-built island.
+  await page.waitForTimeout(12000);
+}
+
+// The bare map first — the landscape as the generator left it, at the shape
+// every layer below is read against.
+await capture("shot-map-debug", { width: 1280, height: 720 }, mapUp, {
+  menu: "1",
+  roam: "1",
+  mapfull: "1",
+  debug: "1",
+  ...MAP_FRAME,
+});
+
+// ...then one sheet per layer, in the order the country was made: the rock,
+// the water in it, the soil on it, the forest rooted in that, and the road
+// cut through the lot.
+for (const layer of ["bedrock", "water", "soil", "flora", "roads"]) {
+  await capture(`shot-map-layer-${layer}`, { width: 1280, height: 720 }, mapUp, {
+    menu: "1",
+    roam: "1",
+    mapfull: "1",
+    debug: "1",
+    layer,
+    ...MAP_FRAME,
+  });
+}
+
+// The same map leaned all the way in and WALKED to a place, which is the
+// other half of what these layers are for. `mzoom` is a multiplier on the
+// framing that holds the whole stage, so a twenty-fifth of it is a hundred
+// metres of ground; `mpanx`/`mpanz` walk the aim off the stage's centre,
+// which is what makes leaning in worth anything — the defect is never in the
+// middle. This one stands over the road 1.4 km into seed 42.
+await capture("shot-map-zoomed", { width: 1280, height: 720 }, mapUp, {
+  menu: "1",
+  roam: "1",
+  mapfull: "1",
+  debug: "1",
+  layer: "water",
+  maz: "0.9",
+  mpitch: "0.7",
+  mzoom: "0.04",
+  mpanx: "868",
+  mpanz: "-63",
+});
+
 // The conditions: a dawn run, the dusk sun, storm rain at speed, and night
 // under the headlights.
 await capture(

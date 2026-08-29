@@ -38,6 +38,11 @@ const MARKER_SCALE = 1.9;
 
 export type MapRoute = {
   group: THREE.Group;
+  /** How wide the ribbon was drawn, m. It is sized to READ at the framing
+   * that holds the whole stage, which makes it far wider than the road it
+   * stands for — so anything that leans in past that framing has to know
+   * when the annotation has stopped being one (see the renderer). */
+  width: number;
   dispose: () => void;
 };
 
@@ -104,6 +109,11 @@ export function buildMapRoute(track: Track): MapRoute {
     fog: false,
     depthTest: false,
     side: THREE.DoubleSide,
+    // Fully opaque, and still in the TRANSPARENT queue. three.js draws that
+    // queue last, and the debug layers (map-layers.ts) are in it — an opaque
+    // ribbon would be drawn before them and then tinted over by the very
+    // layer it is there to be read against.
+    transparent: true,
   });
   const ribbon = new THREE.Mesh(geo, mat);
   ribbon.renderOrder = 10;
@@ -122,6 +132,7 @@ export function buildMapRoute(track: Track): MapRoute {
 
   return {
     group,
+    width,
     dispose: () => {
       group.traverse((obj) => {
         if (!(obj instanceof THREE.Mesh)) return;

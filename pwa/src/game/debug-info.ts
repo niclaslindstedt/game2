@@ -218,7 +218,11 @@ export function stageQuery(stage: DebugStage): string {
   return `?${stageParams(stage).toString()}`;
 }
 
-function stageParams(stage: DebugStage): URLSearchParams {
+/** Everything that decides what the generator BUILT, as URL parameters —
+ * the half of every repro line that is about the stage rather than about the
+ * frame. Exported so the map view's own line (map-debug.ts) is built from
+ * this one list rather than from a second copy of it that can drift. */
+export function stageParams(stage: DebugStage): URLSearchParams {
   const params = new URLSearchParams({
     seed: String(stage.seed),
     length: stage.length,

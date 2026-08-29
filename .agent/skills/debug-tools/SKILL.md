@@ -25,7 +25,7 @@ stated as "it looks like that, over there".
 `node scripts/skill-lessons.mjs debug-tools --list`, then the ones this task
 touches. Load **`skill-reflection`** at both ends of the session.
 
-## The three tools
+## The four tools
 
 They live behind the developer menu, which is behind a secret: seven taps on
 the car's chassis in the menu (`DEV_TAPS`, `pwa/src/game/settings.ts`). Once
@@ -33,11 +33,12 @@ out it stays out. The two toggles are also on the **pause card** mid-run,
 which is where they are actually wanted — the moment you want to fly to
 something is the moment you are looking at it.
 
-| Tool              | What it is                                                                                                                                          | Where                                                       |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| **God mode**      | The camera comes off the car and flies, FPS-style. The car is handed neutral input and sits where it was left.                                      | `pwa/src/game/camera-free.ts`, mode `"free"` in `camera.ts` |
-| **Debug overlay** | The boxes naming the stage, the place, the camera and the car — and the REPRO line along the bottom.                                                | `pwa/src/game/debug-hud.tsx` over `debug-info.ts`           |
-| **Debug log**     | A ring buffer of every engine event, every engine log line, and a position trace once a second. Copied whole or per-run from DEVELOPER → DEBUG LOG. | `pwa/src/game/debug-log.ts`, page in `menu-dev.tsx`         |
+| Tool                 | What it is                                                                                                                                                                        | Where                                                                      |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **God mode**         | The camera comes off the car and flies, FPS-style. The car is handed neutral input and sits where it was left.                                                                    | `pwa/src/game/camera-free.ts`, mode `"free"` in `camera.ts`                |
+| **Debug overlay**    | The boxes naming the stage, the place, the camera and the car — and the REPRO line along the bottom.                                                                              | `pwa/src/game/debug-hud.tsx` over `debug-info.ts`                          |
+| **Debug log**        | A ring buffer of every engine event, every engine log line, and a position trace once a second. Copied whole or per-run from DEVELOPER → DEBUG LOG.                               | `pwa/src/game/debug-log.ts`, page in `menu-dev.tsx`                        |
+| **The map's layers** | The stage's own layers painted over the Roam map — bedrock, groundwater, soil, foliage, roads — the pane blown up to the whole screen, and a box saying what the generator built. | `pwa/src/game/map-layers.ts` + `map-debug.ts`, controls in `menu-roam.tsx` |
 
 **ALT held hides the HUD and leaves the overlay up.** That is the shot to
 ask for when the game's own chrome is in the way of the thing being reported.
@@ -66,6 +67,42 @@ photographed.
 
 There is no on-screen key legend: these keys and `FLY_KEYS` are the only
 places they are written down.
+
+### X-raying the ground
+
+God mode answers "what does it look like from over there". The map's layers
+answer the other question — **what is the ground MADE of here** — which is
+the one a generator defect is usually about, and the one nothing on the road
+can show you: a bog in the wrong place looks like a bog, a wood that stops
+dead looks like a clearing, and a water table running uphill looks like
+nothing at all until a lake turns up somewhere impossible.
+
+With the developer menu out, the Roam page's map grows a strip along its
+foot: **OFF · BEDROCK · GROUNDWATER · SOIL · FOLIAGE · ROADS · FULL SCREEN**.
+The layers are in the order the country was made (R32), which is also the
+order a defect is chased in — the rock decides where the water goes, the
+water decides where the soil stays, the soil decides where the forest grows,
+and the road is cut through whatever that left. Each is sampled off the SAME
+field the generator plants and paves from, painted as a translucent tint so
+the road, the trees and the relief still read through it, with a legend
+saying what each band is worth.
+
+Two things make it a debug tool rather than a picture:
+
+- **Zoom has no floor and the map pans.** Wheel or pinch leans in until the
+  lens is a few metres off the ground; **⌘/CTRL-drag** (or two fingers, or
+  the middle button) walks the aim to the part of the stage in question. A
+  map that could only zoom into its own centre would be useless — the defect
+  is never in the middle.
+- **FULL SCREEN puts the debug box up**, and the box is the caption:
+  seed, dials, what the stage was assembled from (turns, straights, jumps,
+  crests, fords, bridges), its spread, its spurs and splits, what the painted
+  layer measured over the whole island, where the lens is standing, and the
+  REPRO line. The framing stops turning the moment the map is being read, so
+  two screenshots either side of a change are the same picture.
+
+`make screenshots shot-map` captures the whole sheet — the bare map, one
+frame per layer, and one leaned in and panned onto the road.
 
 ## Reading a screenshot you were handed
 
@@ -154,6 +191,8 @@ Everything the overlay prints, the app reads back (`App.tsx`):
 | `elevation= water= trees= asphalt= width=` | The generator's dials                                         |
 | `tod= weather= car=`                       | Conditions and machine                                        |
 | `start=1`, `bot=1`                         | Skip the menu; let the bot drive there                        |
+| `roam=1`, `layer=`, `mapfull=1`            | Open the map instead, with a layer painted, full screen       |
+| `maz= mpitch= mzoom= mpanx= mpanz=`        | Park the map's framing exactly (radians, ×, metres of pan)    |
 
 `bot=1` is the companion to `god=1`: when the problem is something the CAR
 does at a place rather than something the WORLD looks like there, let the bot
@@ -170,7 +209,15 @@ drive to it and read `stage-s` off the overlay to know when it has arrived.
   no number, which is the one thing this overlay may not do.
 - `make screenshots shot-debug` captures the three scenes that hold the
   tools honest: the overlay over a run, the same frame with the HUD hidden,
-  and god mode parked off the road.
+  and god mode parked off the road. `shot-map` does the same for the map's
+  layers — every one of them on a pinned seed at a pinned framing, so the
+  sheet is comparable across two builds.
+- **The map's layers must stay translucent.** An opaque sheet is a map at
+  framing distance and a flat colour a hundred metres up, with the road, the
+  trees and the relief hidden underneath it — which is a picture of nothing.
+  Anything drawn over them as an ANNOTATION (the route ribbon) has to be in
+  the transparent queue too, or three.js draws it first and the layer tints
+  over the very line it is read against.
 
 ## Skill self-improvement
 

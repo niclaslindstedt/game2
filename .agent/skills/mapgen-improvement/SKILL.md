@@ -113,6 +113,14 @@ npm run track -- --zoom junctions --span 45   # one close-up per junction
   the road at full width, the route in magenta. Judge whether the world reads
   as a world here.
 
+Both are drawn from above at one fixed scale. When a finding names a PLACE
+and the question is what the ground is MADE of there, the third looking tool
+is the **map's debug layers** in the game itself — bedrock, groundwater,
+soil, foliage and roads painted over the live stage, with zoom that runs
+down to a few metres and a pan that reaches the part of the stage in
+question. `make screenshots shot-map` captures the sheet; the
+**`debug-tools`** skill owns it.
+
 **`make analyze` is the measuring half.** Seven metrics, each a set of checks,
 each check a number with a threshold:
 

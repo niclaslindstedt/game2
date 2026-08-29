@@ -60,7 +60,7 @@ import {
 import { OptionsPage, type OptionsTab } from "./menu-options.tsx";
 import { unlockAudio } from "./audio/bus.ts";
 import { playUi } from "./audio/ui.ts";
-import { RoamPage, type MapRect, type MapView } from "./menu-roam.tsx";
+import { RoamPage, type MapDebug, type MapRect, type MapView } from "./menu-roam.tsx";
 import { ScoreBoard } from "./score-board.tsx";
 import { loadBoard } from "./scores.ts";
 import type { Settings } from "./settings.ts";
@@ -103,6 +103,9 @@ export type MainMenuProps = {
   onMapRect: (rect: MapRect | null) => void;
   /** Roam's handle on the map camera — the pane's drags, wheels and pinches. */
   mapView: MapView;
+  /** The developer's map tools on Roam — the generator's layers, the
+   * full-screen pane and the debug box. Null for everybody else. */
+  mapDebug: MapDebug | null;
 };
 
 /** The build, bottom right, linking to the exact commit it was cut from.
@@ -700,6 +703,7 @@ export function MainMenu(props: MainMenuProps) {
             onDeveloper={props.onDeveloper}
             onMapRect={props.onMapRect}
             mapView={props.mapView}
+            map={props.mapDebug}
           />
         )}
         {page.page === "developer" && (

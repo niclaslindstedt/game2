@@ -26,6 +26,7 @@ import { hash2, valueNoise } from "../lib/noise.ts";
 import type { CornerGuard, GuardField } from "./guards.ts";
 import { LAKE_Y } from "./land.ts";
 import { ROAD_CROSS } from "./road.ts";
+import { STAGE_RULES } from "./rules.ts";
 import {
   SOLID_PROP_HEIGHT,
   solidShape,
@@ -203,15 +204,10 @@ const CLUMP_FAR = 4.6;
 
 // ── The deep wild's boulders and fallen trunks ────────────────────────────
 
-/** R32 — what the SOIL decides. A trunk needs a rooting depth (`ROOT_DEPTH`,
- * m) before a cell is forest at all; from there the stand thickens with the
- * cover, from `ROOT_THIN` of its density up to full over `ROOT_FULL` more
- * metres of soil. Bare rock keeps its moss and its grass and grows nothing
- * with a trunk, which is what puts the open ground on the ridges and the
- * mountain flanks rather than scattering it at random. */
-const ROOT_DEPTH = 0.4;
-const ROOT_THIN = 0.35;
-const ROOT_FULL = 1.6;
+/** R32 — what the SOIL decides about a wood, stated in the rules data so
+ * that the map view's FOLIAGE layer paints the same rule the forest is
+ * planted from (pwa/src/game/map-layers.ts) rather than a copy of it. */
+const { depth: ROOT_DEPTH, thin: ROOT_THIN, full: ROOT_FULL } = STAGE_RULES.forest.rooting;
 /** ...and what it BURIES. Loose stone lies on the surface where the cover is
  * thin and is buried where it is deep: `SHED_BURIES` is the soil depth that
  * hides all of it, and `SHED_MIN` the share that shows anyway, because a

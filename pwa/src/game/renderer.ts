@@ -8,7 +8,7 @@
 import * as THREE from "three";
 import { TUNING, isWooden, type GameEvent, type GameState, type Season } from "@engine";
 
-import { createGameCamera, type CameraMode } from "./camera.ts";
+import { createGameCamera, type CameraMode, type MapPose } from "./camera.ts";
 import type { FreeFlyMove, FreeFlyPose } from "./camera-free.ts";
 import {
   DRAW_DISTANCE_SCALE,
@@ -41,11 +41,23 @@ import { TRUNK_COLOR } from "./flora.ts";
 import { EXHAUST } from "./fumes.ts";
 import { createWayHomeArrow } from "./way-home.ts";
 import { islandPlanes } from "./map-island.ts";
+import {
+  buildMapLayers,
+  type MapLayerId,
+  type MapLayerInfo,
+  type MapLayers,
+} from "./map-layers.ts";
 import { createMirror, MIRROR_ASPECT, MIRROR_RANGE } from "./mirror.ts";
 import { createNameTag, GHOST_LOOK, TAG_LAYER, type NameTag } from "./name-tag.ts";
 import { buildMapRoute, type MapRoute } from "./map-route.ts";
 import { classify } from "./standings.ts";
 import { buildWorld, type World } from "./world.ts";
+
+/** How much of the map pane's width the route ribbon may cover before it
+ * stops being an annotation and starts being the picture — see where it is
+ * hidden in the frame loop. An eighth is already a fat line; past that the
+ * ground it is drawn on has disappeared under it. */
+const ROUTE_SHARE = 0.12;
 
 /** The map view's fog, as fractions of the camera's standoff distance. The
  * island's coastline is a deliberate edge (map-island.ts), so the fog is
@@ -95,8 +107,23 @@ export type GameRenderer = {
   setMapRect: (rect: { x: number; y: number; width: number; height: number } | null) => void;
   /** Turn, tilt and zoom the map view — a drag or a wheel over the pane. */
   nudgeMap: (dAz: number, dPitch: number, zoomBy: number) => void;
+  /** Walk the map sideways — a modifier-held drag, or two fingers. The
+   * deltas are fractions of the pane the drag crossed. */
+  panMap: (dxFrac: number, dyFrac: number) => void;
   /** Put the map back on the framing that shows the whole stage. */
   resetMap: () => void;
+  /** Paint one of the stage's own layers over the map view, or null to take
+   * them off (map-layers.ts) — the developer's X-ray on the generator.
+   * Returns what the layer measured, for the debug box to print. */
+  setMapLayer: (id: MapLayerId | null) => MapLayerInfo | null;
+  /** Stop the map's idle turn, and let it go again. The turn is the menu's
+   * decoration; the developer's map is a MEASUREMENT, and two screenshots of
+   * one that kept turning are two different pictures. */
+  holdMap: (held: boolean) => void;
+  /** Park the map view where a link says it was — the map's own repro. */
+  placeMap: (pose: Partial<MapPose>) => void;
+  /** Where the map view is standing, for the debug box and its repro line. */
+  mapPose: () => MapPose;
   /** Re-light an already-built stage (the pre-race menu flipping time of
    * day / weather) without rebuilding its geometry. */
   setConditions: (state: GameState) => void;
@@ -206,6 +233,11 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
    * to know whether the ground it is lighting is still the right ground. */
   let builtSeason: Season = "summer";
   let route: MapRoute | null = null;
+  /** The generator's own layers, painted over the map view on request
+   * (map-layers.ts). Built with every stage but sampled only when one is
+   * actually asked for — see `setMapLayer`. */
+  let layers: MapLayers | null = null;
+  let layerId: MapLayerId | null = null;
   let car: CarVisual | null = null;
   let ghost: GameState | null = null;
   let ghostCar: CarVisual | null = null;
@@ -437,6 +469,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       scene.remove(route.group);
       route.dispose();
     }
+    if (layers) {
+      scene.remove(layers.group);
+      layers.dispose();
+    }
     game = state;
     lastSpeed = state.car.u;
     accelSmooth = 0;
@@ -446,6 +482,12 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     route = buildMapRoute(state.track);
     route.group.visible = mapView;
     scene.add(route.group);
+    // The layers follow the stage they describe. Cheap to stand up — the
+    // sampling waits for a layer to be picked — so a seed the developer is
+    // stepping through carries its X-ray without paying for one.
+    layers = buildMapLayers(state.track, state.terrain, island);
+    scene.add(layers.group);
+    if (layerId) layers.show(layerId);
     fitCar(state);
     // A new stage is a new run: a ghost or a field on it is asked for after,
     // and the establishing shot starts again from the top.
@@ -901,7 +943,19 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // car is a speck that only draws the eye away from the route. Every
     // driving view keeps the body — the hood cam included, because the
     // bonnet under the lens is the whole point of that angle.
-    if (route) route.group.visible = view === "map";
+    // The route ribbon is sized to READ at the framing that holds the whole
+    // stage, which makes it far wider than the road under it — a deliberate
+    // annotation. Leaned in, that annotation becomes a runway painted over
+    // the thing being looked at, so it retires once it would cover more of
+    // the pane than a line has any business covering, and what is left is
+    // the actual road.
+    if (route) {
+      const across = chase.mapPose().across;
+      route.group.visible = view === "map" && (across <= 0 || route.width <= across * ROUTE_SHARE);
+    }
+    // ...and the layers with it: an X-ray of the ground is a thing to read a
+    // map by, not something to drive through.
+    if (layers) layers.group.visible = view === "map" && layerId !== null;
     if (car) {
       car.group.visible = view !== "map";
       car.shadow.visible = view !== "map";
@@ -1044,6 +1098,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   const dispose = (): void => {
     world?.dispose();
     route?.dispose();
+    layers?.dispose();
     car?.dispose();
     ghostCar?.dispose();
     ghostTag?.dispose();
@@ -1079,7 +1134,15 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     },
     setMapRect,
     nudgeMap: (dAz, dPitch, zoomBy) => chase.nudgeMap(dAz, dPitch, zoomBy),
+    panMap: (dxFrac, dyFrac) => chase.panMap(dxFrac, dyFrac),
     resetMap: () => chase.resetMap(),
+    setMapLayer: (id) => {
+      layerId = id;
+      return layers?.show(id) ?? null;
+    },
+    holdMap: (held) => chase.holdMap(held),
+    placeMap: (pose) => chase.placeMap(pose),
+    mapPose: () => chase.mapPose(),
     setConditions,
     onThunder: environment.onThunder,
     onKnock: (play) => {
