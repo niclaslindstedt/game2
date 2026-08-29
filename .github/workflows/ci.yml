@@ -11,28 +11,98 @@ on:
     # red until the next push.
     types: [opened, synchronize, reopened, labeled, unlabeled]
 
+# Every gate below is an independent job rather than a step in one, because
+# the run is only ever as long as its slowest job and none of these need
+# each other's output: formatting, lint, the tests, the production build and
+# the balance sweep all read the same checkout and nothing more. Run in
+# series they cost the sum of their parts; run beside each other they cost
+# the maximum, and the maximum is the sharded test suite.
+
 permissions:
   contents: read
   # npm ci resolves @niclaslindstedt/oss-framework from GitHub Packages.
   packages: read
 
+concurrency:
+  # A second push to a PR makes the run in flight worthless, so cancel it
+  # and free the runners for the commit anyone will actually merge. Pushes
+  # to main are NOT cancelled: a superseded main run leaves the commit it
+  # was verifying unverified for good.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  # The suite is the long pole — around three quarters of the serial run —
+  # so it is the one thing that gets its own runners. `--shard` splits at
+  # FILE granularity, which puts a floor under this: tests/analysis_test.ts
+  # generates and scores real stages and takes ~25s by itself, and no
+  # number of shards makes that file faster. Three is where the curve flattens
+  # (measured: 26s / 11s / 13s at three, and a fourth runner shaves 0.3s off
+  # the total while paying another install), so three is what CI buys.
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      # Let the other shards finish and report. A failure in one slice says
+      # nothing about the other two, and their results are what tell you
+      # whether the break is local or general.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - run: make test SHARD=${{ matrix.shard }}/3
+
+  # One stable check name over a matrix whose width is an implementation
+  # detail. Branch protection requires `tests`; the shard count can then
+  # change without anyone editing the protected-branch rules, which would
+  # otherwise leave a required `test (4)` pending forever.
+  tests:
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify every shard passed
+        if: needs.test.result != 'success'
+        run: |
+          echo "test shards: ${{ needs.test.result }}"
+          exit 1
+
+  # Prettier over the whole tree, on its own runner. It is a cheap job that
+  # was queued behind two expensive ones, and a formatting failure is the
+  # one people most want told immediately — it is a one-command fix.
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - run: make fmt-check
+
+  # eslint plus the typecheck, kept together because `make lint` is the
+  # repo's definition of lint and splitting the target so CI could fan it
+  # out further would make the local command mean something different from
+  # the CI one.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - run: make lint
+
+  # The production build (`tsc --noEmit` across both projects, then vite).
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: ./.github/actions/setup
         with:
-          node-version-file: .nvmrc
-          cache: npm
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@niclaslindstedt"
-      - run: npm ci
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: make fmt-check
-      - run: make lint
-      - run: make test
+          token: ${{ secrets.GITHUB_TOKEN }}
       - run: make build
 
   # Bots must keep finishing what the generator builds — the simulation
@@ -42,15 +112,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: ./.github/actions/setup
         with:
-          node-version-file: .nvmrc
-          cache: npm
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@niclaslindstedt"
-      - run: npm ci
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
       - run: make sim
 
   shell-lint:

@@ -25,6 +25,7 @@ CI runs exactly these Make targets — if they pass locally, they pass in CI:
 ```sh
 make build       # typecheck + production build
 make test        # vitest: generator rules, physics, bot simulations
+                 # (CI slices it three ways with SHARD=i/3; locally, run the lot)
 make lint        # eslint + typecheck (zero warnings)
 make fmt         # prettier, in place
 make fmt-check   # what CI runs
@@ -58,7 +59,7 @@ make sim         # the balance sweep (also a CI job)
 
 ## Review and merging
 
-Every PR needs green CI (build, test, lint, sim, seo, shell-lint, changeset) and maintainer approval. PRs are **squash-merged**, so the PR title must itself be a conventional-commit subject — it becomes the commit on `main`. Review normally lands within a few days; small, focused PRs merge much faster than sprawling ones.
+Every PR needs green CI (`tests`, `format`, `lint`, `build`, `simulate`, `seo`, `shell-lint`, `changeset`) and maintainer approval. Those all run beside each other, so the run costs its slowest job rather than the sum of them; `tests` is one check over a three-way shard of the suite, and it is the one to require rather than the individual `test (1..3)` shards. PRs are **squash-merged**, so the PR title must itself be a conventional-commit subject — it becomes the commit on `main`. Review normally lands within a few days; small, focused PRs merge much faster than sprawling ones.
 
 ## Governance
 

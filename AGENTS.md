@@ -9,7 +9,7 @@ This repository conforms to [`OSS_SPEC.md`](OSS_SPEC.md) (the committed copy is 
 ```sh
 npm install       # needs a GitHub Packages read token — see below
 make build        # typecheck + production build (pwa/dist/)
-make test         # vitest: generator rules, drift/jump physics, bot sims
+make test         # vitest: generator rules, drift/jump physics, bot sims (SHARD=i/N slices it; CI runs three)
 make lint         # eslint + typecheck, zero warnings
 make fmt          # prettier in place; fmt-check is what CI runs
 make sim          # headless balance sweep — REQUIRED before/after any handling or generator change

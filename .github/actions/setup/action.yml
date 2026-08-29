@@ -1,0 +1,30 @@
+name: setup
+description: >
+  Node from .nvmrc plus an installed dependency tree, authenticated against
+  GitHub Packages. Every ci.yml job that runs repo tooling opens with this;
+  it exists because the fan-out repeats the same two steps across five jobs,
+  and a registry or Node change would otherwise have five places to land.
+  Checkout stays in the caller — the changeset job needs full history and
+  the rest do not.
+
+inputs:
+  token:
+    description: >
+      Token for npm.pkg.github.com. @niclaslindstedt/oss-framework is a
+      public package, but GitHub Packages authenticates reads regardless,
+      so `npm ci` fails without it.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version-file: .nvmrc
+        cache: npm
+        registry-url: "https://npm.pkg.github.com"
+        scope: "@niclaslindstedt"
+    - run: npm ci
+      shell: bash
+      env:
+        NODE_AUTH_TOKEN: ${{ inputs.token }}
