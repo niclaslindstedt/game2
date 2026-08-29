@@ -13,6 +13,8 @@ make test         # vitest: generator rules, drift/jump physics, bot sims
 make lint         # eslint + typecheck, zero warnings
 make fmt          # prettier in place; fmt-check is what CI runs
 make sim          # headless balance sweep — REQUIRED before/after any handling or generator change
+make record       # record a bot run to a run tape (runs/*.jsonl)
+make replay       # RUN='runs/<file>.jsonl' — replay a tape and place its time against each field
 make track        # render stages to previews/track-<seed>.png
 make cars         # render the car models to previews/cars.png (chase-cam + turntable sheet)
 make liveries     # render one body in the field's paint schemes to previews/liveries.png
@@ -50,6 +52,7 @@ This project is tuned by measuring, not guessing:
 3. **`make screenshots`** to LOOK at the game itself (grid, speed, drift, every camera on the ladder, the cockpit by day and by night, portrait). In Claude web sessions Chromium is preinstalled — `CHROMIUM_PATH=/opt/pw-browsers/chromium make screenshots`.
 4. **`make items`** to LOOK at one thing on its own — a stone, a fern, the cabin behind the glass. Most of what the world is made of is six pixels at the speed you pass it; this is where it gets rotated and measured. `ITEMS=` picks the rows, `GROUP=` a whole kind, `TURNTABLE=` the seats to walk round.
 5. **`make profile`** before and after every rendering change. Draw calls, triangles and binds are the numbers a real GPU sees; the fps it also prints is software rasterization and means nothing off this machine.
+6. **`make replay RUN=…`** before and after every DIFFICULTY change. A bot lap says what the bot would do; a recorded human drive (developer menu → COLLECT RACE DATA, or `make record`) replayed against easy/medium/hard says what those words are worth to a person — the `bot-improvement` skill owns reading it.
 
 Both harnesses serve `pwa/dist`, so **`make build` first, every time**: a stale
 dist photographs and meters the last change rather than this one, and the
@@ -98,7 +101,8 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | How GOOD a bot is (difficulty, skill budgets)               | `engine/sim/skill.ts` — the `bot-improvement` skill                                                                              |
 | Who the campaign's rivals ARE (aliases, cars, characters)   | `engine/sim/rivals.ts` — the `bot-improvement` skill                                                                             |
 | What a rival is PAINTED (colour, pattern, door number)      | `RIVAL_SCHEMES` in `pwa/src/game/car-livery.ts` — the `car-design` skill                                                         |
-| The field on the road, and what place a run is in           | `pwa/src/game/standings.ts` (+ `campaign.ts` for the podium rule)                                                                |
+| The field on the road, and what place a run is in           | `engine/sim/field.ts`; `pwa/src/game/standings.ts` is the frame's half (+ `campaign.ts` for the podium rule)                     |
+| RECORDING a run, and driving it again to calibrate a field  | `engine/sim/tape.ts` + `race.ts`, over `pwa/src/game/run-tape.ts` — the `bot-improvement` skill                                  |
 | The rival cars you can see and hit                          | `pwa/src/game/field-cars.ts`; the plate over each one is `name-tag.ts`                                                           |
 | The name over a car that is not the player's                | `pwa/src/game/name-tag.ts` — a label, a colour and a point; it must never learn what a bot is                                    |
 | Anything drawn (meshes, textures, camera, effects)          | `pwa/src/game/` (renderer.ts and friends)                                                                                        |
@@ -135,6 +139,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | What a split is measured against, and where a respawn lands | `engine/game/track.ts` (`lastCheckpoint`) + `pwa/src/game/standings.ts` (the field's leader)                                     |
 | A player option (HUD, video, controls)                      | `pwa/src/game/settings.ts`, then its reader                                                                                      |
 | The debug overlay, god mode, the debug log                  | `pwa/src/game/debug-*.ts(x)`, `camera-free.ts`, `menu-dev.tsx` — the `debug-tools` skill                                         |
+| A DEVELOPER switch (god, overlay, collecting race data)     | `DevSettings` in `pwa/src/game/settings.ts` + a row in `menu-dev.tsx`; `devFromUrl` in `App.tsx` pins it for tooling             |
 | The studio card / boot cover                                | `pwa/src/game/splash.ts` (policy) + `splash-screen.tsx`                                                                          |
 | App identity (name, palette, URLs)                          | `pwa/src/identity.ts` (single source)                                                                                            |
 | New CLI tooling                                             | `scripts/*.mjs` (Node, no deps beyond `scripts/lib/`)                                                                            |

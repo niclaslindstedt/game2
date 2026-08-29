@@ -4,11 +4,13 @@
 // rather than playing it, which is the point — it is how the whole thing
 // gets tested without driving four stages first.
 //
-// Two pages. The first is the switchboard: open every stage, and the two
-// tools that make a problem somebody saw into a problem somebody else can
-// stand in front of — god mode and the debug overlay. The second is the
-// debug log, which is the other half of a screenshot: the picture says
-// where, the log says what led there.
+// Two pages. The first is the switchboard: open every stage, and the three
+// tools that make something somebody saw into something somebody else can
+// stand in front of — god mode and the debug overlay for a PLACE, and race
+// data collection for a DRIVE (game/run-tape.ts), which is the same idea
+// aimed at time instead of space. The second is the debug log, which is the
+// other half of a screenshot: the picture says where, the log says what led
+// there.
 
 import { useState } from "react";
 
@@ -167,6 +169,12 @@ export function DeveloperPage({
           hint="Where you are, what the stage is, and the line that gets anyone back here"
           on={dev.debug}
           onToggle={() => onDev({ ...dev, debug: !dev.debug })}
+        />
+        <ToggleRow
+          label="COLLECT RACE DATA"
+          hint="Write the run down as you drive it — save the file at the finish, replay it against any difficulty"
+          on={dev.record}
+          onToggle={() => onDev({ ...dev, record: !dev.record })}
         />
       </div>
       <button type="button" className="menu-item menu-item-dev" onClick={onDebugLog}>

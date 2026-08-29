@@ -210,6 +210,61 @@ export {
   type RivalEntry,
 } from "./sim/rivals.ts";
 
+// The field on the road: entering it, stepping it, and classifying it.
+export {
+  PLAYER_ID,
+  RALLY_FIELD,
+  advanceField,
+  advanceRun,
+  createField,
+  fieldResults,
+  onRoad,
+  payHeadStart,
+  placeAtFinish,
+  placeAtSplit,
+  playerSlot,
+  rubRivals,
+  settleField,
+  settleLimit,
+  splitLeader,
+  stepField,
+  stopField,
+  type ClassRow,
+  type FieldPlan,
+  type FieldStage,
+  type RivalField,
+  type RivalRun,
+} from "./sim/field.ts";
+
+// The run tape: a whole run written down as the controls that drove it,
+// and the headless race that records or replays one.
+export {
+  SAMPLE_EVERY,
+  TAPE_FORMAT,
+  createTapeRecorder,
+  fieldAt,
+  parseTape,
+  readTape,
+  type RunTape,
+  type TapeCar,
+  type TapeHeader,
+  type TapeInput,
+  type TapeRecorder,
+  type TapeResult,
+  type TapeRival,
+  type TapeSample,
+  type TapeStage,
+  type TapeStart,
+} from "./sim/tape.ts";
+export {
+  placeAmongField,
+  race,
+  type RaceDrift,
+  type RaceDriver,
+  type RaceOptions,
+  type RaceOutcome,
+} from "./sim/race.ts";
+
 // Deterministic utilities shared with tooling.
 export { createRng, type Rng } from "./lib/prng.ts";
 export { hash2, smooth, valueNoise } from "./lib/noise.ts";

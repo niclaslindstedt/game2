@@ -24,7 +24,6 @@ import {
   TUNING,
   botInput,
   carById,
-  collideCars,
   compileStage,
   createGame,
   resolveKnobs,
@@ -64,10 +63,11 @@ import {
   createField,
   drainField,
   fieldResults,
-  onRoad,
   placeAtFinish,
   placeAtSplit,
+  rubRivals,
   settleField,
+  settleLimit,
   splitLeader,
   stepField,
   stopField,
@@ -78,6 +78,12 @@ import {
   type FieldPlan,
   type RivalField,
 } from "./game/standings.ts";
+import {
+  createRunTape,
+  saveRunTape,
+  type RunTapeEnd,
+  type RunTapeRecorder,
+} from "./game/run-tape.ts";
 import {
   lastInitials,
   loadBoard,
@@ -202,6 +208,9 @@ function devFromUrl(): Partial<DevSettings> {
   const dev: Partial<DevSettings> = {};
   if (params.get("debug") === "1") dev.debug = true;
   if (params.get("god") === "1") dev.god = true;
+  // …and `?record=1`, so a scripted pass can collect a drive without anybody
+  // having found the developer menu on the machine it runs on.
+  if (params.get("record") === "1") dev.record = true;
   return dev;
 }
 
@@ -242,11 +251,6 @@ function driving(input: CarInput): boolean {
 function wantsOff(input: CarInput): boolean {
   return input.throttle > 0.5 || input.brake > 0.5 || input.handbrake || input.shiftUp;
 }
-
-/** How near a rival has to be before the contact model is asked about it, m.
- * Two capsules reach at most `halfLength × 2` centre to centre, and nothing
- * covers the slack in one 120 Hz step. */
-const RUB_RANGE = 5;
 
 /** Initial race settings: URL params (tooling) beat the stored choice beats
  * the defaults. Storage can be unavailable (private mode) — defaults are
@@ -340,7 +344,7 @@ function initialSettings(): Settings {
   const settings = loadSettings();
   Object.assign(settings.view, viewFromUrl());
   const forced = devFromUrl();
-  if (forced.debug || forced.god) {
+  if (forced.debug || forced.god || forced.record) {
     settings.developer = true;
     settings.dev = { ...settings.dev, ...forced };
   }
@@ -495,13 +499,6 @@ const SPLIT_HOLD = 3.6;
  * rendering a run-out, not a race, so the budget is spare. */
 const SETTLE_STEPS = 800;
 
-/** …and how long anybody is given before they are retired where they stand:
- * this many times the player's own stage time, plus a grace. A bot wedged
- * against a trunk is a car that is never coming home, and the classification
- * cannot wait for it. */
-const SETTLE_SLACK = 1.8;
-const SETTLE_GRACE = 45;
-
 /** Air time under which a landing is not worth a banner, s — every ripple
  * and curb technically leaves the ground, and "CLEAN AIR 0.0s" three times
  * in a row is the HUD talking over the game. */
@@ -626,6 +623,17 @@ export function App() {
    * track, and nothing between them — the cars cannot touch, because
    * neither one is in the other's world. */
   const ghostRef = useRef<{ state: GameState; tape: GhostTape; at: number } | null>(null);
+  /** THE RUN TAPE (game/run-tape.ts): the same controls the ghost writes
+   * down, in a file something outside the browser can drive. Armed only by
+   * the COLLECT RACE DATA switch, on every kind of run — including the ones
+   * that keep no time, because a Roam lap is as good a drive to calibrate
+   * against as a campaign stage. Null the rest of the time, which is always. */
+  const tapeRef = useRef<RunTapeRecorder | null>(null);
+  /** What the run scored, booked at the line. Its presence is also what
+   * STOPS the tape: R25's roll-out is driven past a clock that has already
+   * stopped, and recording it would put a minute of coasting on the end of
+   * every replay. */
+  const tapeEndRef = useRef<Omit<RunTapeEnd, "rows" | "rivalSplits"> | null>(null);
   /** The book this run is being timed against — null on Roam and behind the
    * menu, where nobody is keeping score. The HUD's clock reads it, and so
    * does the results card's NEW RECORD. */
@@ -898,6 +906,40 @@ export function App() {
   const armGhostRef = useRef(armGhost);
   armGhostRef.current = armGhost;
 
+  /** Arm the run tape, when the developer switch asks for one. Called on
+   * every start AND every restart, for the same reason the ghost is: a tape
+   * carried over from the last attempt would be one run's controls under
+   * another run's clock. The FIELD it names is the plan the field was
+   * actually entered on, so a replay races the same crews at the same
+   * difficulty unless it is deliberately asked not to. */
+  const armTape = (spec: StageSpec, mode: PlayMode, levelId?: string): void => {
+    tapeRef.current = null;
+    tapeEndRef.current = null;
+    if (!optionsRef.current.dev.record || menuRef.current) return;
+    const entered = mode === "campaign" || mode === "headsup";
+    tapeRef.current = createRunTape({
+      seed: spec.seed,
+      length: spec.length,
+      shape: spec.shape,
+      laps: spec.laps,
+      knobs: spec.knobs,
+      carId: spec.carId,
+      gearbox: optionsRef.current.gearbox,
+      timeOfDay: spec.timeOfDay,
+      weather: spec.weather,
+      season: spec.season,
+      // What `applyStage` actually handed the engine, god mode included:
+      // a tape has to say what the run WAS, not what the menu asked for.
+      skipCountdown: spec.skipCountdown || godRef.current,
+      grid: spec.grid,
+      mode,
+      ...(levelId ? { levelId } : {}),
+      field: entered && spec.length !== "endless" ? fieldPlan(raceRef.current, mode) : null,
+    });
+  };
+  const armTapeRef = useRef(armTape);
+  armTapeRef.current = armTape;
+
   /** Put the backdrop the current menu page asks for on screen. */
   const showBackdrop = (page: MenuPage): void => {
     const renderer = rendererRef.current;
@@ -949,6 +991,7 @@ export function App() {
     applyStage(spec, true);
     armField(spec, mode);
     armGhost(spec, mode, levelId);
+    armTape(spec, mode, levelId);
     playCameraRef.current = startCamera(optionsRef.current.camera);
     // The god-mode effect owns the camera while it is flying; setting a play
     // camera here as well would land the flight every time a run started.
@@ -1212,13 +1255,23 @@ export function App() {
           grid: null,
         };
         applyStageRef.current(spec, true);
+        // …and the run tape, if `?record=1` asked for one: a scripted pass
+        // that drives a stage is exactly the drive somebody wants the file
+        // for, and this path never reaches `startStage`.
+        armTapeRef.current(spec, runRef.current.mode);
         // The establishing shot is ten seconds of camera before a tooling
         // run has done anything, and every screenshot scene would sit
         // through it. A `?start=1` link therefore lands straight on the
         // lights; `?shot=1` is how the scenes that want to LOOK at the shot
         // ask for it.
         const wantsShot = new URLSearchParams(location.search).get("shot") === "1";
-        if (!wantsShot && gameRef.current) skipIntro(gameRef.current);
+        if (!wantsShot && gameRef.current) {
+          skipIntro(gameRef.current);
+          // Written down as the driver's own cut, at step 0 — which is what
+          // it is. A tape whose header claimed the ceremony was never built
+          // would replay ten seconds of camera the run did not sit through.
+          tapeRef.current?.skipped();
+        }
         // A `?start=1` run never passes through `startStage`, and a debug log
         // with no run section is one COPY LATEST RUN can say nothing about —
         // which is exactly the run a tooling link is most likely to be
@@ -1245,6 +1298,7 @@ export function App() {
         const active = runRef.current;
         armFieldRef.current(spec, active.mode);
         armGhostRef.current(spec, active.mode, active.levelId);
+        armTapeRef.current(spec, active.mode, active.levelId);
       };
       const camera = (): void => {
         if (menuRef.current) return;
@@ -1288,31 +1342,14 @@ export function App() {
        * the player is the only disruption on the road, and the only one who
        * has to live with it. */
       const rubField = (field: RivalField, state: GameState): void => {
-        // The player is in the start control until the lights go out, and a
-        // car in the control is not somewhere the world can reach: it is why
-        // the crew in front can leave from the line the player is sat on.
-        if (state.phase !== "racing" && state.phase !== "rollout") return;
-        let mine: GameEvent[] | null = null;
-        for (const run of field.runs) {
-          if (!onRoad(run)) continue;
-          const them = run.state.car;
-          if (Math.abs(them.x - state.car.x) > RUB_RANGE) continue;
-          if (Math.abs(them.z - state.car.z) > RUB_RANGE) continue;
-          const theirs: GameEvent[] = [];
-          mine ??= [];
-          collideCars(
-            { spec: state.spec, car: state.car, events: mine, stats: state.stats },
-            { spec: run.state.spec, car: them, events: theirs, stats: run.state.stats },
-          );
-          // Their half of it lands on their body alone: they crumple and shed
-          // parts, and make no sound and throw no dust, because the hit
-          // happened over there.
-          if (theirs.length > 0) renderer.field.events(run, theirs);
-        }
+        // Their half of a hit lands on their body alone: they crumple and
+        // shed parts, and make no sound and throw no dust, because the hit
+        // happened over there.
+        const mine = rubRivals(field, state, (run, theirs) => renderer.field.events(run, theirs));
         // The player's half goes through the same door every other impact
         // does — the sound, the camera's kick and the damage instrument all
         // hang off it.
-        if (mine && mine.length > 0) handleEvents(state, mine);
+        if (mine.length > 0) handleEvents(state, mine);
       };
 
       const handleEvents = (state: GameState, events: GameEvent[]): void => {
@@ -1348,7 +1385,7 @@ export function App() {
               levelId: where.level.id,
               time: home,
               carId: stageRef.current?.carId ?? "",
-              limit: home * SETTLE_SLACK + SETTLE_GRACE,
+              limit: settleLimit(home),
               // R30's points are the CAMPAIGN's board and only its. A heads-up
               // race is one race and nothing carries out of it.
               score: active.mode === "campaign",
@@ -1358,6 +1395,22 @@ export function App() {
             // player, and stepping them on would only cost the card frames.
             stopField(field);
           }
+        }
+        // The tape's last line but one: what the run scored, booked at the
+        // line and never after it. The field's own sheet is not in yet —
+        // the stragglers are still coming home — so it is read off the
+        // field when the file is actually asked for.
+        if (home !== null && tapeRef.current && !tapeEndRef.current && menuRef.current === null) {
+          tapeEndRef.current = {
+            finished: true,
+            time: home,
+            laps: state.laps,
+            lapTimes: [...state.lapTimes],
+            splits: [...state.checkpointTimes],
+            place: standingRef.current?.place ?? null,
+            of: standingRef.current?.of ?? null,
+            stats: { ...state.stats },
+          };
         }
         renderer.onEvents(state, events);
         if (debugLogging() && menuRef.current === null) {
@@ -1614,6 +1667,9 @@ export function App() {
             renderer.skipIntroShot();
             const jumped = skipIntro(state);
             if (running) advanceField(running, jumped);
+            // Not an input, but it moves the whole field's clock, so a replay
+            // that missed it would race a stagger nobody drove.
+            if (!tapeEndRef.current) tapeRef.current?.skipped();
           }
           const events = step(state, driven);
           if (events.length > 0) handleEvents(state, events);
@@ -1623,6 +1679,11 @@ export function App() {
           // The tape is what the ENGINE was handed, so a replay drives the
           // same road; the ghost's own game steps beside it off its own.
           recorderRef.current?.record(driven);
+          // …and the same controls again, for the file the developer switch
+          // collects. Both tapes are written HERE, off the one input the
+          // engine actually received, because a recording taken anywhere
+          // else is a recording of something that did not happen.
+          if (!tapeEndRef.current) tapeRef.current?.record(driven, state);
           const ghost = ghostRef.current;
           if (ghost) {
             const ghostEvents = step(ghost.state, ghost.tape.at(ghost.at++));
@@ -1826,6 +1887,27 @@ export function App() {
       ? (): void => actionsRef.current.restart()
       : null;
 
+  /** THE RUN, AS A FILE. Sealed at the press rather than at the line, which
+   * is what lets it carry the field's own result sheet: the stragglers are
+   * still coming home when the card comes up, and a classification read
+   * before the road is clear would name retirements nobody made. Press it
+   * while the sheet still says CARS STILL OUT and the tape simply carries
+   * the drive without one. Null unless a tape was collected AND the run
+   * reached the line — there is nothing to calibrate against otherwise. */
+  const saveRun =
+    options.dev.record && tapeRef.current && tapeEndRef.current
+      ? (): boolean => {
+          const tape = tapeRef.current;
+          const end = tapeEndRef.current;
+          if (!tape || !end) return false;
+          const rivalSplits: Record<string, number[]> = {};
+          const field = fieldRef.current;
+          if (field) for (const run of field.runs) rivalSplits[run.entry.crew.id] = run.splits;
+          const full: RunTapeEnd = { ...end, rows: result?.rows ?? [], rivalSplits };
+          return saveRunTape(tape.seal(full), tape.name(full));
+        }
+      : null;
+
   // The board the results card shows, and the three letters it is waiting on.
   // Entering them writes the row and hands the new board straight back, so the
   // player sees where they landed without the card being rebuilt around them.
@@ -1885,6 +1967,7 @@ export function App() {
           campaign={campaign}
           race={headsUp}
           locked={lockedBehind}
+          onSaveRun={saveRun}
         />
       )}
       {/* Outside the HUD on purpose: ALT takes the game's chrome off so a

@@ -56,6 +56,8 @@ Open the printed URL. The game opens on the main menu, over a stage a bot is dri
 | `make test`        | Full test suite (generator rules, drift/jump physics, bot sims)                                                   |
 | `make lint`        | ESLint + typecheck across engine, app, tests, and tooling                                                         |
 | `make sim`         | Headless balance sweep: bots drive stages, prints the pace table (`--sweep` ranks the roster per stage archetype) |
+| `make record`      | Record a bot run to a run tape (`runs/*.jsonl`) — a whole drive as the controls that drove it                     |
+| `make replay`      | `RUN=runs/<file>.jsonl` — replay a tape and place its time against each difficulty's field                        |
 | `make track`       | Render generated stages: a schematic map AND a shaded view of the place, to `previews/`                           |
 | `make cars`        | Render the car models to a contact sheet (`previews/cars.png`)                                                    |
 | `make liveries`    | Render one body in the field's paint schemes (`previews/liveries.png`)                                            |

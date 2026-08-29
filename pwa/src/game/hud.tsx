@@ -215,6 +215,9 @@ type HudProps = {
   /** The location whose table stands between this run and the next country,
    * or null when nothing does. */
   locked: string | null;
+  /** Save the run as a run tape from the results card. Null unless the
+   * developer switch that collects them is on. */
+  onSaveRun: (() => boolean) | null;
 };
 
 /** The tach dial, laid out like the arcade cluster it comes from: it reads
@@ -716,6 +719,7 @@ export function Hud({
   campaign,
   race,
   locked,
+  onSaveRun,
 }: HudProps) {
   const { touch } = input;
   const pedalSide = touchLayout.steerSide === "left" ? "right" : "left";
@@ -864,6 +868,7 @@ export function Hud({
             campaign={campaign}
             race={race}
             locked={locked}
+            onSaveRun={onSaveRun}
           />
         )}
         <div className="hud-flashes">

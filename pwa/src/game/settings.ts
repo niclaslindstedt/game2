@@ -536,6 +536,11 @@ export type DevSettings = {
   /** God mode: the camera comes off the car and flies, and the car is handed
    * neutral input so it sits where it was left. */
   god: boolean;
+  /** COLLECT RACE DATA: write every run down as the controls that drove it,
+   * and offer the file at the finish (game/run-tape.ts). Separate from the
+   * overlay on purpose — a drive collected for calibration should not have
+   * to be driven with debug boxes across it. */
+  record: boolean;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -578,7 +583,7 @@ export const DEFAULT_SETTINGS: Settings = {
   gearbox: "auto",
   screenshots: true,
   developer: false,
-  dev: { debug: false, god: false },
+  dev: { debug: false, god: false, record: false },
 };
 
 /** Taps on the car's chassis that let the developer menu out, and how long

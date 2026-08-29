@@ -116,7 +116,31 @@ export type FinishCardProps = {
    * named — set only when the ladder's next rung is in a location the points
    * have not opened yet. */
   locked: string | null;
+  /** Save the run just driven as a run tape (game/run-tape.ts). Null unless
+   * the developer switch that collects them is on; returns whether the file
+   * actually reached the disk, so the button can say when it did not. */
+  onSaveRun: (() => boolean) | null;
 };
+
+/** The save button, which is the only control on this card that reports back:
+ * a download is a thing the browser may quietly refuse, and a developer tool
+ * that silently does nothing is worse than no tool. */
+function SaveRunButton({ onSave }: { onSave: () => boolean }) {
+  const [said, setSaid] = useState<string | null>(null);
+  return (
+    <button
+      type="button"
+      className="hud-pause-act"
+      onClick={() => {
+        playUi("select");
+        setSaid(onSave() ? "SAVED" : "SAVE FAILED");
+        setTimeout(() => setSaid(null), 2000);
+      }}
+    >
+      {said ?? "SAVE RUN DATA"}
+    </button>
+  );
+}
 
 export function FinishCard({
   time,
@@ -131,6 +155,7 @@ export function FinishCard({
   campaign,
   race,
   locked,
+  onSaveRun,
 }: FinishCardProps) {
   // The full result sheet is a DELIBERATE look: fifteen rows over the top of
   // the card, opened by the player who wants them and gone again in a press.
@@ -280,6 +305,10 @@ export function FinishCard({
             >
               RETIRE
             </button>
+            {/* The developer switch's payoff: the run just driven, as a file
+              something else can drive. Absent for every player who never
+              turned COLLECT RACE DATA on, which is all of them. */}
+            {onSaveRun && <SaveRunButton onSave={onSaveRun} />}
           </div>
         )}
       </div>
