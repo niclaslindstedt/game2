@@ -54,6 +54,10 @@ const SKIP_PATTERNS = [
   /^\.gitattributes$/,
   /^eslint\.config\.js$/,
   /^vite\.config\.ts$/,
+  // The test RUNNER's config, alongside the tests it runs and the vite
+  // config beside it. `vite.config.ts` above does not cover it — the
+  // pattern is anchored, and these are two different files.
+  /^vitest\.config\.ts$/,
   /^tsconfig.*\.json$/,
   /^package-lock\.json$/,
 ];
