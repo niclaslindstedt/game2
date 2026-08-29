@@ -96,7 +96,12 @@ export function createPlume(gain = 1): Plume {
     // Nothing in the air: a car off the ground is not lifting anything off
     // it, and the plume it left is already behind it.
     if (ground === null || fx <= 0 || car.airborne) return;
-    const pace = plumeScale(car.u);
+    // What the CONTACT PATCH is doing, not what the car is: an axle spun up
+    // off the line tears at the ground as hard as a rolling wheel well up
+    // the road, and it is the only way a car that has not moved yet gets to
+    // hang a cloud over itself. The wheels the plume comes off are the ones
+    // `wheelspin` describes (`DRIVEN_REAR` below leans it the same way).
+    const pace = plumeScale(Math.abs(car.u) + car.wheelspin * PLUME.spin);
     if (pace <= 0) return;
 
     const rate = PLUME.rate.min + (PLUME.rate.max - PLUME.rate.min) * pace;

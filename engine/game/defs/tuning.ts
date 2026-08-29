@@ -377,6 +377,74 @@ export const TUNING = {
      * and out of a corner from strobing the wheels between spun-up and
      * gripping. Presentation only: the torque loss itself is instant. */
     spinSettle: 9,
+
+    /** THE LAUNCH. Everything above is the axle's standing bite; these are
+     * what happens when a driver asks it for more than that off the line.
+     * The rule the whole group exists to write is a start-line one: the
+     * driver who sits on the line with the engine screaming and drops the
+     * clutch on green leaves SLOWER than the one who waits with the pedal
+     * up and picks it up as the light changes — by enough to see, and not
+     * by enough to decide a stage. */
+
+    /** How much of the axle's bite the pedal may claim before the tyres
+     * start spinning instead of gripping, ×`drivetrain.bite` × the car's
+     * own `traction` × the surface. Under 1 because a standing start is
+     * the worst moment a driven axle has: no load on it yet, all of the
+     * torque, and none of the speed that hides it. A four-wheel-drive's
+     * bite is over 1 to begin with, so it clears this outright and can be
+     * floored off the line — which is the whole point of one. */
+    pedalHold: 0.78,
+    /** How much of that excess a PEDAL alone can actually light, 0..1. Well
+     * under 1: torque fed smoothly at a tyre finds a slip the tyre can live
+     * at — a scrabble off the line, not a burnout — where a clutch dropping
+     * a whole flywheel on it does not. Small on purpose, because this is the
+     * one term that reaches past the start line: every hairpin exit in first
+     * gear runs through it, and a rear-driver that lost a third of its shove
+     * every time it opened the throttle would be a different car, not a
+     * car with a launch. What bounds it from above is `drivetrain_test`'s
+     * wet-versus-dry claim — that a four-wheel-drive keeps more of its pace
+     * on a surface with nothing to hold: this term costs a car with GOOD
+     * bite proportionally more of its dry launch than one with poor bite,
+     * so past about `pedalSpin × spinLoss = 0.1` it inverts the layouts. */
+    pedalSpin: 0.1,
+    /** Revs below which dropping the clutch costs nothing, 0..1. A driver
+     * blipping the engine while they wait is not doing anything wrong; one
+     * sat against the limiter for the whole countdown is. */
+    dumpFrom: 0.3,
+    /** How much the revs held at the drop are worth as extra pedal, 0..1 at
+     * the limiter. It stacks straight onto the throttle, so a full-revs
+     * launch asks the tyres for more than any pedal can and lights them up
+     * on every car in the roster — the four-wheel-drive least. */
+    dumpSpin: 0.8,
+    /** How much of `gearAccel` a fully lit axle spins away, 0..1, on top of
+     * the standing `wheelspin` loss above.
+     *
+     * THIS AND `spinHook` ARE SET BY A STOPWATCH, not by feel, and the
+     * benchmark is a reaction time. Against a driver who sat on the
+     * limiter and went the instant it changed, a driver who waited with the
+     * pedal up is worth 13–17 m at five seconds — so the same driver taking
+     * a THIRD OF A SECOND to react is still a few metres ahead, and one
+     * taking half a second has given it all back, on every car in the
+     * roster. That is the whole design: waiting buys a human reaction time
+     * and a car length or two, and nothing beyond it. Bigger and the start
+     * decides stages; smaller and there is no reason to lift. */
+    spinLoss: 0.5,
+    /** How fast the axle lights up, 1/s. Near-instant: a tyre that lets go
+     * lets go now, and the lag that matters is all on the way back. */
+    spinLight: 14,
+    /** ...and how fast it hooks back up under a pedal still on the floor,
+     * 1/s. Slow on purpose — a second or so of the wheels turning faster
+     * than the road is what makes a bad start LOOK like one, in the dust,
+     * the needle and the noise, long enough for the player to read what
+     * they did wrong. */
+    spinHook: 0.9,
+    /** How much FASTER it hooks up for a driver who eases off, ×`spinHook`
+     * at a fully closed throttle. This is the only thing modulation buys,
+     * and it is deliberately the only thing: with a binary pedal — a
+     * keyboard, a phone's thumb zone — there is no feathering to be had, so
+     * flooring it must stay the right call for everyone who cannot do
+     * anything else. What an analogue pedal gets is a shorter mistake. */
+    hookLift: 2,
   },
 
   /** THE DRIVETRAIN — what changes about a car when the power goes to a

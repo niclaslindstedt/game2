@@ -152,6 +152,17 @@ export type CarState = {
    * handling has already spent the same spin as torque that never reached
    * the road); the physics never reads it back. */
   wheelspin: number;
+  /** How lit the driven axle is by more pedal than it will take, 0..1 —
+   * the launch's own wheelspin, and unlike `wheelspin` above this one IS
+   * the physics: it spins away a share of `gearAccel` for as long as it
+   * lasts. Two things set it. Pedal past the axle's bite lights it while
+   * the throttle is down, worst at the bottom of a gear and gone by the top
+   * of it. And the CLUTCH COMING OUT loads it whole: the revs a driver was
+   * holding when the lights went green arrive at the tyres all at once,
+   * which is why a car that sat on the line screaming leaves slower than
+   * one that waited with the pedal up. It hooks back up over a second or
+   * so, faster for a driver who eases off. */
+  launchSpin: number;
   /** How much weight is currently thrown across the car by a flick, 0..1.
    * The hands are only over the other side for a few frames; the LOAD they
    * threw is what the tires feel for the next half second, so it is held

@@ -291,9 +291,11 @@ export const TARMAC_SMOKE = {
   /** Seconds between puffs — a quarter of the loose surface's rate, so a
    * drift leaves a haze hanging in the corner rather than a bank of fog. */
   every: 0.12,
-  /** Pulling away: forward acceleration in m/s² under `speed` m/s that
-   * reads as the driven wheels spinning up before they hook up. */
-  launch: { accel: 4.5, speed: 7, puffs: 3 },
+  /** Pulling away: the driven wheels outrunning the road (`LAUNCH.from`,
+   * m/s) below `speed` m/s, before they hook up. `puffs` per driven wheel,
+   * plus as much again for an axle that is properly lit — a clutch dropped
+   * on a screaming engine smokes where a clean getaway chirps. */
+  launch: { speed: 7, puffs: 3, spun: 4 },
   /** A committed drift: `puffs` per outside wheel, plus a little for how
    * deep the slide has gone. */
   drift: { puffs: 2 },
@@ -414,6 +416,15 @@ export const PLUME = {
   /** …and how far ABOVE the contact patch it may be born, m. Dust starts
    * at the ground because that is where the ground is. */
   lift: 0.3,
+  /** What a metre per second of WHEELSPIN is worth against a metre per
+   * second of road speed, when the cloud is asked how much ground is being
+   * moved. Over 2, because the two do different things to a surface: a
+   * rolling wheel runs over fresh ground and leaves it behind, while a
+   * spinning one stands on one patch and grinds it to powder. Without it a
+   * car standing on the line with its axle lit raises almost nothing —
+   * `from` alone eats the whole of the slip — and the most violent thing a
+   * tyre does all stage would be the one that hangs no dust. */
+  spin: 2.2,
   /** The spread of the birth VELOCITIES at full pace, m/s — the knob that
    * owns the cloud's shape. It is what opens that throat out into a wall a
    * second later: the width is something a plume DEVELOPS behind the car,
@@ -421,9 +432,14 @@ export const PLUME = {
   spread: 2.6,
 };
 
-/** How thick the towed cloud is at this speed, 0..1 — nothing at all under
- * `PLUME.from`. Take it off the ABSOLUTE speed: a car being reversed at
- * 40 km/h is moving as much ground as one going forwards at 40. */
+/** How thick the towed cloud is, 0..1 — nothing at all under `PLUME.from`.
+ *
+ * The argument is the speed the TYRE is moving over the ground, which is not
+ * always the car's: a lit-up axle is shearing the surface at road speed plus
+ * whatever it is spinning beyond it, which is how a car standing still on
+ * the start line manages to hang a cloud over itself at all. Take it off the
+ * ABSOLUTE speed too — a car being reversed at 40 km/h is moving as much
+ * ground as one going forwards at 40. */
 export function plumeScale(u: number): number {
   const speed = Math.abs(u);
   if (speed <= PLUME.from) return 0;
@@ -460,11 +476,14 @@ export function paceScale(u: number): number {
  * wheels hook up and hands the plume straight over to the rolling kickup
  * that owns it from there. */
 export const LAUNCH = {
-  /** Forward acceleration that reads as wheelspin rather than as a car
-   * merely gathering speed, m/s²... */
-  from: 2.5,
-  /** ...and where the wheels are lit up properly, m/s². */
-  to: 6,
+  /** How far the driven wheels have to be outrunning the road before it
+   * reads as spin rather than as a tyre working, m/s... */
+  from: 1.5,
+  /** ...and where they are properly lit, m/s. A launch off the limiter tops
+   * out around 10 m/s of slip and a clean one off idle barely reaches 4, so
+   * the two starts are a different SIZE of cloud and not merely a different
+   * length of one. */
+  lit: 8,
   /** Road speed the tires have found the ground by, m/s — 50 km/h, which
    * is also where the rolling kickup comes in, so the two meet rather than
    * leaving a gap with no cloud in it. */
@@ -476,16 +495,25 @@ export const LAUNCH = {
   push: 6,
 };
 
-/** How hard the driven wheels are digging off the line, 0..1: full at a
- * standstill under wheelspin, nothing once the car is up and running. The
- * road-speed term falls off as a SQUARE rather than a straight line — a
+/** How hard the driven wheels are digging off the line, 0..1: full under a
+ * lit axle at a standstill, nothing once the car is up and running.
+ *
+ * `spin` is `CarState.wheelspin`, the engine's own slip readout — the same
+ * number the wheels are DRAWN turning at (car-wheels.ts), so the cloud and
+ * the wheels above it can never disagree about whether the tyres are
+ * gripping. It has to be the slip and not the speedometer: a car pulling
+ * away is moving far more ground than its road speed suggests, and a car
+ * that dropped the clutch on a screaming engine is moving the most of all
+ * while barely leaving the line.
+ *
+ * The road-speed term falls off as a SQUARE rather than a straight line — a
  * tire loses its slip late and then all at once, and a linear ramp spends
  * the launch's whole budget in the first tenth of a second, where the car
  * is still under the start gantry and the player is watching the lights. */
-export function launchThrow(u: number, accel: number): number {
-  const spin = Math.min(1, Math.max(0, (accel - LAUNCH.from) / (LAUNCH.to - LAUNCH.from)));
+export function launchThrow(u: number, spin: number): number {
+  const lit = Math.min(1, Math.max(0, (spin - LAUNCH.from) / (LAUNCH.lit - LAUNCH.from)));
   const hooked = Math.min(1, Math.max(0, u / LAUNCH.settle));
-  return spin * (1 - hooked * hooked);
+  return lit * (1 - hooked * hooked);
 }
 
 /** What the WILD throws, as a fraction of what the road throws — GRAINS

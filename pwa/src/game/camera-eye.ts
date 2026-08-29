@@ -77,6 +77,7 @@ import type { GameState } from "@engine";
 import { angleLerp, clamp } from "../lib/angles.ts";
 import { MAX_VFOV, verticalFovFor } from "../lib/fov.ts";
 import { createSlack } from "../lib/slack.ts";
+import { revTremble } from "./car-shake.ts";
 
 /** The three views that are taken from inside (or off the nose of) the car,
  * as opposed to the five rigs that stand behind it. */
@@ -503,6 +504,13 @@ const GRAIN = {
    * 1/s. In the air the road stops arriving, and the silence is most of what
    * makes a jump read as flight from inside the car. */
   rate: 7,
+  /** What a FULLY revved standing engine is worth on the same scale — a
+   * quarter of the reference road, which puts a car held on the limiter on
+   * the grid somewhere around a gentle cruise. It is meant to be felt and
+   * not read: past this the cabin starts swimming while the road outside it
+   * stays nailed down, which is the failure this whole module is arranged
+   * to avoid. */
+  revs: 0.25,
 } as const;
 
 /** How far down the road the aim point is thrown, m. Only the DIRECTION
@@ -829,7 +837,14 @@ export function createEyeCamera(): EyeCamera {
     const surface = car.airborne ? 0 : GRAIN.surface[state.surface];
     const wantGrain = soften((speed / GRAIN.pace) * surface, GRAIN.paceMax);
     grain += (wantGrain - grain) * clamp(GRAIN.rate * dt, 0, 1);
-    const drive = grain * rig.grain * motion;
+    // ...and under the grain, the ENGINE. A car being revved on the line has
+    // no road passing under it to shake the seat, and from behind the wheel
+    // that silence is the least convincing frame in the game. The tremble
+    // rides in on the same oscillators the road does — it is the same kind
+    // of thing, arriving from the other end of the car — and it takes the
+    // grain's own scale, so the seat closest to the bodywork feels the least
+    // of it and none of it survives the car actually moving (car-shake.ts).
+    const drive = (grain + revTremble(car.rev, car.u) * GRAIN.revs) * rig.grain * motion;
     const phase = clock * Math.PI * 2;
     const g1 = Math.sin(phase * GRAIN.freq[0]);
     const g2 = Math.sin(phase * GRAIN.freq[1] + 1.7);

@@ -19,7 +19,14 @@ import {
 } from "../mapgen/index.ts";
 import { carById, gearedSpec, type GearboxMode } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
-import { launch, spinHeadroom, stepAirborne, stepGrounded, type GroundContext } from "./car.ts";
+import {
+  clutchDump,
+  launch,
+  spinHeadroom,
+  stepAirborne,
+  stepGrounded,
+  type GroundContext,
+} from "./car.ts";
 import { clipKerbs, collideCar } from "./collision.ts";
 import {
   crossedFinish,
@@ -93,6 +100,7 @@ function freshCar(): CarState {
     slide: 0,
     drifting: false,
     wheelspin: 0,
+    launchSpin: 0,
     flick: 0,
     flickDir: 1,
     lift: 0,
@@ -349,6 +357,7 @@ function respawn(state: GameState, events: GameEvent[], home: WayHome): void {
   car.slide = 0;
   car.drifting = false;
   car.wheelspin = 0;
+  car.launchSpin = 0;
   // The service crew get to a wreck the moment it is back at the road: the
   // chassis is patched to a drivable fraction, and the dents, the torn-off
   // parts and the hurt systems all stay.
@@ -645,6 +654,13 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     const revTarget = clamp(input.throttle, 0, 1);
     const revRate = revTarget > grid.rev ? T.revs.blip : T.revs.settle;
     grid.rev += (revTarget - grid.rev) * clamp(revRate * T.dt, 0, 1);
+    // ...and on the green those revs are handed to the tyres. Everything the
+    // engine was carrying arrives at a standing axle in one go, so the driver
+    // who spent the countdown against the limiter leaves on four spinning
+    // wheels and the one who waited with the pedal up simply drives away.
+    // The seed goes in on the last grid frame, which is this one: the car is
+    // handed to the handling model already lit.
+    if (state.phase === "racing") grid.launchSpin = clutchDump(state.spec, grid, state.surface);
     state.stuck.since = state.t;
     return events;
   }

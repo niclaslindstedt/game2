@@ -11,6 +11,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  CARS,
   NEUTRAL_INPUT,
   START_INTERVAL,
   TUNING,
@@ -18,6 +19,7 @@ import {
   skipIntro,
   startsIn,
   step,
+  type GameState,
 } from "@engine";
 
 /** Seeds whose first sample sits well clear of zero, both ways. */
@@ -95,6 +97,112 @@ describe("the start grid", () => {
     const top = state.spec.gearTop[state.car.gear];
     expect(state.car.rev).toBeCloseTo((state.car.u + state.car.wheelspin) / top, 6);
     expect(state.car.rev).toBeGreaterThanOrEqual(state.car.u / top);
+  });
+});
+
+/** How long a launch is judged over, seconds — long enough for the tyres to
+ * have hooked up and the field to be at pace, short enough that it is still
+ * the START being measured and not the stage. */
+const WINDOW = 5;
+
+/** A launch, driven to a script: `grid` on the throttle through the whole
+ * start control, nothing for `reaction` seconds after the green, then
+ * `pedal` for the rest of the window. Returns how far the car actually
+ * travelled from the line — measured off its own position rather than off
+ * `progressS`, which is quantized to the two-metre samples and cannot see a
+ * car length. */
+function launch(carId: string, grid: number, reaction: number, pedal = 1): number {
+  const state = createGame({ seed: 42, carId });
+  for (let i = 0; i < stepsIn(START); i++) step(state, { ...NEUTRAL_INPUT, throttle: grid });
+  const fromX = state.car.x;
+  const fromZ = state.car.z;
+  for (let i = 0; i < stepsIn(reaction); i++) step(state, NEUTRAL_INPUT);
+  for (let i = 0; i < stepsIn(WINDOW - reaction); i++) {
+    step(state, { ...NEUTRAL_INPUT, throttle: pedal });
+  }
+  return Math.hypot(state.car.x - fromX, state.car.z - fromZ);
+}
+
+/** The state one frame after the lights, with `grid` held through them. */
+function atGreen(carId: string, grid: number): GameState {
+  const state = createGame({ seed: 42, carId });
+  for (let i = 0; i < stepsIn(START); i++) step(state, { ...NEUTRAL_INPUT, throttle: grid });
+  return state;
+}
+
+const CAR_IDS = CARS.map((car) => car.id);
+
+describe("launching off the line", () => {
+  it("lights the tyres for a driver who sat on the revs, and not for one who waited", () => {
+    for (const carId of CAR_IDS) {
+      expect(atGreen(carId, 1).car.launchSpin, carId).toBeGreaterThan(0.7);
+      // Waiting hands the tyres nothing at the drop.
+      expect(atGreen(carId, 0).car.launchSpin, carId).toBe(0);
+    }
+    // What is left after that is the car's own axle under the pedal: a
+    // four-wheel-drive can be floored off the line and a rear-driver never
+    // quite can, which is the difference between the two layouts.
+    const spun = (carId: string): number => {
+      const state = atGreen(carId, 0);
+      for (let i = 0; i < stepsIn(0.5); i++) step(state, { ...NEUTRAL_INPUT, throttle: 1 });
+      return state.car.launchSpin;
+    };
+    expect(spun("coupe")).toBe(0);
+    expect(spun("classic")).toBeGreaterThan(spun("compact"));
+  });
+
+  it("pays a driver who waits — and goes on paying one who takes 0.3 s to react", () => {
+    for (const carId of CAR_IDS) {
+      const revved = launch(carId, 1, 0);
+      // Waiting with the pedal up is worth a good few car lengths...
+      expect(launch(carId, 0, 0) - revved, carId).toBeGreaterThan(8);
+      // ...and the point of the whole thing: it survives a human reaction
+      // time. A third of a second late off a clean launch is still ahead of
+      // an instant one off a screaming engine.
+      expect(launch(carId, 0, 0.3) - revved, carId).toBeGreaterThan(1);
+      // Half a second, and it has all been given back — which is what keeps
+      // this a start-line skill rather than a free gift for anyone who
+      // happened to have their foot up.
+      expect(launch(carId, 0, 0.5) - revved, carId).toBeLessThan(0);
+    }
+  });
+
+  it("does not make the launch worth more than the stage it starts", () => {
+    // The penalty is sized against a reaction time, so it has to stay in the
+    // same order as one. A start worth tens of metres would decide stages
+    // from the line, which no amount of driving afterwards could answer.
+    for (const carId of CAR_IDS) {
+      expect(launch(carId, 0, 0) - launch(carId, 1, 0), carId).toBeLessThan(20);
+    }
+  });
+
+  it("spins the drawn wheels for it, so the picture says what the clock does", () => {
+    // `wheelspin` is the readout the wheels are drawn turning at and the
+    // launch cloud is thrown off. A dumped clutch has to show up in it, or
+    // the player is slower with nothing on screen telling them why.
+    for (const carId of CAR_IDS) {
+      const revved = atGreen(carId, 1);
+      const waited = atGreen(carId, 0);
+      for (let i = 0; i < stepsIn(0.4); i++) {
+        step(revved, { ...NEUTRAL_INPUT, throttle: 1 });
+        step(waited, { ...NEUTRAL_INPUT, throttle: 1 });
+      }
+      expect(revved.car.wheelspin, carId).toBeGreaterThan(waited.car.wheelspin + 1);
+      expect(revved.car.u, carId).toBeLessThan(waited.car.u);
+    }
+  });
+
+  it("hooks the tyres back up sooner for a driver who eases off", () => {
+    // The one thing an analogue pedal buys, and the only thing: a shorter
+    // mistake. Flooring it has to stay the right call — a binary pedal has
+    // no other option — so this is measured on the SPIN, not on the clock.
+    const held = atGreen("classic", 1);
+    const eased = atGreen("classic", 1);
+    for (let i = 0; i < stepsIn(0.6); i++) {
+      step(held, { ...NEUTRAL_INPUT, throttle: 1 });
+      step(eased, { ...NEUTRAL_INPUT, throttle: 0.3 });
+    }
+    expect(eased.car.launchSpin).toBeLessThan(held.car.launchSpin);
   });
 });
 
