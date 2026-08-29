@@ -100,6 +100,25 @@ export const LAYOUT = {
  * is meeting it in one place and crossing it in the others. */
 const DASH_GAP = 0.02;
 
+/** WHERE THE TOP OF THE DASH SITS AGAINST THE WINDOW SILL, m — under it, and
+ * that sign is the whole of it.
+ *
+ * A real fascia stops below the base of the windscreen; a slab whose top
+ * stands proud of the sill is a wall across the cabin, and from outside the
+ * car that is exactly what it reads as. The crew sit with their shoulders
+ * barely a finger over the sill (car/crew.ts), so a dash a hand's breadth
+ * above it hides every one of them from the collarbone down and leaves a
+ * row of helmets balanced on a dark blob — which is the thing anybody
+ * looking through the glass actually sees, long before they notice the
+ * dash. Under the sill the same people read as people sitting in a car.
+ *
+ * The same number as the first-person rig's (`RIG.dash.top` in
+ * car/cockpit.ts), because it is the same dash seen from the other side.
+ * They are two builds — one cheap enough for fifteen cars, one detailed
+ * enough to sit behind — and they have to agree about where the fascia is
+ * or the car has two dashboards at two heights. */
+const DASH_TOP = -0.03;
+
 /** Where the middle of the steering wheel sits relative to the window sill,
  * m. Just under it, so the top of the rim breaks the sill line and shows
  * through the screen: a wheel entirely below the scuttle is a wheel nobody
@@ -257,7 +276,7 @@ function buildDash(b: MeshBuilder, cabin: Cabin, driverX: number, high: boolean)
   // cowl it cannot happen on any body. The hinge is still the limit at the
   // other end, so a dash never grows back into the seats.
   const back = Math.max(cabin.hipZ, cabin.cowlZ - LAYOUT.dashDepth);
-  const top = cabin.sillY + 0.07;
+  const top = cabin.sillY + DASH_TOP;
   // WHERE THE GLASS IS AT THE HEIGHT OF THE DASH'S TOP, not where it is at
   // the bottom of the screen. A box has one front face for its whole
   // height, so taking that face to `cowlZ` — the base of the windscreen —
