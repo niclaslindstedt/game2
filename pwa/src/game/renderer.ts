@@ -733,12 +733,12 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         ? Math.max(0, (c.rev - X.rev.from) / (1 - X.rev.from))
         : 0;
     fumeClock += dt;
-    const idling = c.boosting ? X.every.boost : c.u > 1 ? X.every.rolling : X.every.idle;
+    const idling = c.u > 1 ? X.every.rolling : X.every.idle;
     const fumeEvery = (idling + (X.rev.every - idling) * revving) / Math.max(0.2, fx);
     if (fx > 0 && !c.airborne && fumeClock > fumeEvery) {
       fumeClock = 0;
       const rolling = X.shade.base + X.shade.pace * Math.min(1, c.u / X.shade.paceAt);
-      const shade = c.boosting ? X.shade.boost : rolling + (X.rev.shade - rolling) * revving;
+      const shade = rolling + (X.rev.shade - rolling) * revving;
       // A blip is a BURST — one puff a tick reads as an engine ticking
       // over however fast the ticks come.
       const puffs = 1 + Math.round((X.rev.puffs - 1) * revving);

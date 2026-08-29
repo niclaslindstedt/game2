@@ -120,16 +120,8 @@ export type DriveBed = {
  * engine flutter over every bump — and its slower fall is also what stops a
  * shift's speed dip from reading as a lift.
  */
-function loadFrom(
-  previous: number,
-  accel: number,
-  braking: boolean,
-  boosting: boolean,
-  dt: number,
-): number {
-  const target = braking
-    ? 0.05
-    : Math.min(1, Math.max(0.12, 0.2 + accel * 0.35) + (boosting ? 0.3 : 0));
+function loadFrom(previous: number, accel: number, braking: boolean, dt: number): number {
+  const target = braking ? 0.05 : Math.min(1, Math.max(0.12, 0.2 + accel * 0.35));
   return follow(previous, target, dt);
 }
 
@@ -221,7 +213,7 @@ export function createDriveBed(synth: Synth): DriveBed {
       const frame = Math.max(1 / 240, Math.min(0.1, dt));
       const accel = (state.car.u - lastU) / frame;
       lastU = state.car.u;
-      bed.load = loadFrom(bed.load, accel, state.car.braking, state.car.boosting, frame);
+      bed.load = loadFrom(bed.load, accel, state.car.braking, frame);
       bed.corner = follow(
         bed.corner,
         Math.min(1, Math.abs(state.car.u * state.car.yawRate) / LAT_LIMIT),

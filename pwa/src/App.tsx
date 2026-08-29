@@ -222,13 +222,7 @@ const TRACE_PERIOD = 1;
 
 /** Whether the player is actually asking for anything this step. */
 function driving(input: CarInput): boolean {
-  return (
-    input.throttle > 0 ||
-    input.brake > 0 ||
-    input.handbrake ||
-    input.boost ||
-    Math.abs(input.steer) > 0
-  );
+  return input.throttle > 0 || input.brake > 0 || input.handbrake || Math.abs(input.steer) > 0;
 }
 
 /** The driver asking to get on with it during the establishing shot. A
@@ -1376,8 +1370,6 @@ export function App() {
             );
           } else if (ev.type === "landing" && ev.clean && ev.airTime >= REAL_AIR) {
             flash(`CLEAN AIR ${ev.airTime.toFixed(1)}s`, "good");
-          } else if (ev.type === "boostEmpty") {
-            flash("BOOSTER SPENT", "bad");
           }
         }
       };

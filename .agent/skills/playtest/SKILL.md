@@ -59,6 +59,16 @@ sits on a `waitForSelector` until its timeout and the surface it was meant to
 photograph never happens. `grep` the harness for the labels the flow prints
 before assuming only the new page needs a scene.
 
+**A HUD element REMOVED owes the same grep.** The harness has no view of
+engine state — every wait it makes is a selector over the HUD's own DOM
+(`.hud-timer`, `.hud-speed-num`, `.hud-pace-call`), so a chip deleted from
+`hud.tsx` is a scene that hangs for its full timeout and fails with the
+scene's name, never the selector's. `grep` `scripts/screenshot.mjs` for the
+class before deleting it. When a scene needs something the HUD no longer
+draws, put the engine's own verdict on the HUD ROOT as a data attribute
+(`data-off` for off-road) rather than reaching for `?debug=1` — the overlay
+would be in every frame the scene takes.
+
 ## Running
 
 ```sh

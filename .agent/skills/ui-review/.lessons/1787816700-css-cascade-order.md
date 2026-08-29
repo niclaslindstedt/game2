@@ -11,8 +11,8 @@ damage-instrument section loses to the plain `.hud-gears` rule 180 lines below
 it in the touch-controls section — the declaration is in the stylesheet, the
 devtools show it struck through, and nothing about the source hints at it.
 
-Not hypothetical: the manual car's gear taps overlapped the upright booster in
-every portrait width, the override read exactly right, and two rounds of
+Not hypothetical: the manual car's gear taps overlapped the instrument stack
+in every portrait width, the override read exactly right, and two rounds of
 build-and-measure returned byte-identical numbers before the cause turned up.
 
 **Put a responsive override immediately AFTER the base rule it overrides**, in

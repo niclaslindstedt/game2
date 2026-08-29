@@ -289,7 +289,7 @@ function KeyboardSection({ settings, onSettings }: Pick<OptionsProps, "settings"
 function TouchSection({ settings, onSettings }: Pick<OptionsProps, "settings" | "onSettings">) {
   const touch = settings.touch;
   const pedalSide = touch.steerSide === "left" ? "RIGHT" : "LEFT";
-  const gesture = (action: "brake" | "handbrake" | "boost", label: string) => (
+  const gesture = (action: "brake" | "handbrake", label: string) => (
     <OptionRow
       key={action}
       label={label}
@@ -318,7 +318,6 @@ function TouchSection({ settings, onSettings }: Pick<OptionsProps, "settings" | 
       </div>
       {gesture("brake", "BRAKE")}
       {gesture("handbrake", "HANDBRAKE")}
-      {gesture("boost", "BOOST")}
       <button
         type="button"
         className="opt-reset"

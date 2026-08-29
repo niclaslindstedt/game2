@@ -13,7 +13,7 @@
 // Rendering lives next door in debug-hud.tsx; nothing here touches the DOM,
 // so the debug log can write the same rows into text.
 
-import { TUNING, type GameState, type StageKnobs, type Track } from "@engine";
+import type { GameState, StageKnobs, Track } from "@engine";
 
 import type { FreeFlyPose } from "./camera-free.ts";
 import type { CameraMode } from "./camera.ts";
@@ -184,7 +184,7 @@ function carBox(state: GameState): DebugBox {
       },
       {
         k: "run",
-        v: `${state.phase} · lap ${state.lap}/${state.laps} · t ${state.raceTime.toFixed(2)} s · boost ${c.boostLeft.toFixed(1)}/${TUNING.boost.capacity} s`,
+        v: `${state.phase} · lap ${state.lap}/${state.laps} · t ${state.raceTime.toFixed(2)} s`,
       },
     ],
   };

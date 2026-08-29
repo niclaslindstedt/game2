@@ -189,17 +189,13 @@ The brake pedal has two jobs and no gear to choose between them (`TUNING.reverse
 - **Brake lights stay for braking** (`CarState.braking`), and the HUD's gear reads `R`.
 - **Backing out counts as asking to move**, so the wedge rescue (`TUNING.offTrack.stuck`) keeps its clock running through the attempt: a car pinned in front AND behind still gets dragged home on time, and one that reverses free resets the anchor and drives on. The bot uses exactly this — see [simulation.md](simulation.md).
 
-## The booster
-
-A finite tank of raw thrust (`TUNING.boost`): hold boost to burn it for extra forward acceleration on top of engine torque, unaffected by gearing or surface. The thrust fades to zero approaching an overrun cap just past the car's final gear top, so it stretches the top end rather than breaking it. The tank never refills — not even on respawn — and rationing it across the stage is the game. Grounded only: airborne the velocity is committed, booster included. Emits `boostStart` on ignition and `boostEmpty` once, when the tank runs dry.
-
 ## Wind and weather
 
 Every stage blows a seeded wind (`GameState.env` + the per-step `state.wind` vector). The pre-race weather setting picks the band (`TUNING.wind.speed`): clear is a breeze, rain is a stiff wind, a storm genuinely blows. The wind gusts and veers deterministically with sim time, so replays and sim digests hold. It touches the car three ways (`TUNING.wind`):
 
 - **Head/tailwind** pushes on forward speed (`longForce`) — a storm headwind trims the top end, a tailwind stretches it.
 - **Carry** — a fraction of the wind velocity translates the whole car downwind (`carry`): small while gripping, larger mid-drift, largest airborne, where a storm gust visibly moves a jump sideways. A translation, never a torque — the wind cannot spin the car.
-- The HUD shows an arrow + km/h readout once the wind is worth knowing about.
+- The wind is never drawn as an instrument: what it does to the car is the readout.
 
 Time of day is presentation only; weather is the lever that reaches the physics (through the wind).
 
@@ -501,8 +497,8 @@ The respawn is at the far end, and it is the only thing that clears
 - **The way home** — exploring never times out, and hitting things never
   ends it: crash into trees for as long as the car still moves. Only two
   things put a car back on the road, and they land in DIFFERENT places. The
-  **reset input** (`CarInput.reset`, the B key / the HUD's TRACK button) is
-  the run being given up on, so it costs the road back to the last
+  **reset input** (`CarInput.reset`, the B key) is the run being given up
+  on, so it costs the road back to the last
   checkpoint (`lastCheckpoint`, R28) — the same place a drowning respawns
   at. The **wedge check** — throttle held for `TUNING.offTrack.stuck.after`
   seconds without covering `stuck.radius` meters — is not: nobody asked for
@@ -512,10 +508,9 @@ The respawn is at the far end, and it is the only thing that clears
   the road where the car stands (`wayHome`). A car pinned against a trunk is
   not driving out of it; anything still making ground is left alone. Either
   way `state.progressIndex` comes back with the car: the road in between is
-  road the run has to drive again. The TRACK button is there
-  the whole time the car is off the road — a driver two metres into a ditch
-  should not have to be lost first — but the ALERT waits for the car to
-  actually be lost (`trackLost`, `TUNING.offTrack.guide`): more than 20 m
+  road the run has to drive again. The reset key answers the whole time the
+  car is off the road — a driver two metres into a ditch should not have to
+  be lost first — but the ALERT waits for the car to actually be lost (`trackLost`, `TUNING.offTrack.guide`): more than 20 m
   out AND pointed more than 110° away from the way home. Two wheels on the
   verge is not lost, and neither is a clearing crossed perpendicular with the
   stage running alongside. Once it is, the co-driver's strip reads RETURN TO
@@ -850,8 +845,8 @@ on how many shifts the car needs to get there.
 
 `gearedSpec(spec, gearbox)` (`defs/cars.ts`) folds the box into the run's
 `GameState.spec` once, at `createGame`. Everything downstream — the shift
-points, the taper, the bot's target speed, the boost's overrun cap, the rev
-counter, the engine note, the pre-race card's spec sheet — reads one spec
+points, the taper, the bot's target speed, the rev counter, the engine
+note, the pre-race card's spec sheet — reads one spec
 and knows nothing about transmissions. Both boxes are multipliers on the
 same catalog row, so no car is handed a better box than another and the
 roster's spread stays the roster's.

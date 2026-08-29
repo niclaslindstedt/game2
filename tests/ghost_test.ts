@@ -129,7 +129,6 @@ describe("ghost tape", () => {
         throttle: snapPedal(i < 400 ? 1 : (i % 256) / 255),
         brake: snapPedal(i % 7 === 0 ? 0.5 : 0),
         handbrake: i % 3 === 0,
-        boost: i > 700,
         shiftUp: i === 123,
         shiftDown: i === 456,
         reset: i === 789,

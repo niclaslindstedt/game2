@@ -490,9 +490,10 @@ export const TUNING = {
     /** How far past the redline the limiter lets a gear go, ×`gearTop`. It
      * is the ceiling on the DRIVEN wheels as much as on the needle: with a
      * gear engaged the tyre cannot turn faster than the engine can spin it,
-     * so it is what stops a lit-up axle winding away to nothing. The booster
-     * can push a gear past its own top, which is the other reason it is not
-     * exactly 1. */
+     * so it is what stops a lit-up axle winding away to nothing. It sits
+     * just over 1 because a gear genuinely runs a little past its own top —
+     * a tailwind or a descent pushes it there — and a ceiling exactly at the
+     * top would clamp the needle flat every time it happened. */
     limiter: 1.06,
   },
 
@@ -674,19 +675,6 @@ export const TUNING = {
     natureTop: 42,
     /** How hard the wild claws back each m/s over that cap, 1/s. */
     natureOverDrag: 3,
-  },
-
-  boost: {
-    /** The whole tank, seconds of burn. Spent is spent — it never refills,
-     * not even on respawn; rationing it across the stage is the game. */
-    capacity: 5,
-    /** Extra forward acceleration while burning, m/s² — on top of engine
-     * torque, unaffected by gearing or surface. */
-    accel: 9,
-    /** Boost pushes past gearing up to this factor of the car's final
-     * gear top, m/m — the thrust fades to zero approaching that cap so the
-     * top end stretches instead of breaking. */
-    overrun: 1.12,
   },
 
   hills: {
@@ -1183,9 +1171,8 @@ export const TUNING = {
      *
      * `gearedSpec` (defs/cars.ts) folds these into the run's `spec`, so
      * everything downstream — the shift points, the bot's target speed, the
-     * boost's overrun cap, the rev counter, the engine note, the card's
-     * spec sheet — reads the box the player chose without knowing there is
-     * a box at all. Both are multipliers on the catalog row, so no car is
+     * rev counter, the engine note, the card's spec sheet — reads the box
+     * the player chose without knowing there is a box at all. Both are multipliers on the catalog row, so no car is
      * handed a different box from any other: the spread stays the roster's.
      */
     set: {

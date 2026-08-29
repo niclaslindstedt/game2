@@ -282,5 +282,5 @@ export function botInput(state: GameState, profile: BotProfile = RALLY_BOT): Car
     else if (car.gear > 0 && car.u < top[car.gear - 1] * TUNING.gearbox.downAt) shiftDown = true;
   }
 
-  return { steer, throttle, brake, handbrake, boost: false, shiftUp, shiftDown, reset };
+  return { steer, throttle, brake, handbrake, shiftUp, shiftDown, reset };
 }

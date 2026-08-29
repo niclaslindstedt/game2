@@ -282,64 +282,6 @@ export const RUN_BANK: SoundBank = {
     ],
   },
 
-  boost_start: {
-    description:
-      "The booster lighting: a spool — white hiss climbing through a resonant " +
-      "bandpass — with a low pressure surge under it. It is a rush of air with " +
-      "something behind it, not a laser.",
-    voices: [
-      {
-        call: "noise",
-        durationMs: 520,
-        volume: 0.036,
-        attackMs: 90,
-        holdMs: 200,
-        filter: { type: "bandpass", frequency: 900, to: 5200, q: 4 },
-      },
-      {
-        call: "tone",
-        type: "sine",
-        from: 70,
-        to: 180,
-        durationMs: 480,
-        volume: 0.04,
-        attackMs: 60,
-        holdMs: 220,
-      },
-      {
-        call: "noise",
-        durationMs: 260,
-        volume: 0.02,
-        color: "brown",
-        delayMs: 40,
-        filter: { type: "lowpass", frequency: 420 },
-      },
-    ],
-  },
-
-  boost_empty: {
-    description:
-      "The tank running dry mid-burn. The spool played backwards and given up " +
-      "on: the hiss falls away through the filter and a dry valve click closes " +
-      "it. No alarm, no tone — the sound of a thing stopping.",
-    voices: [
-      {
-        call: "noise",
-        durationMs: 420,
-        volume: 0.03,
-        holdMs: 60,
-        filter: { type: "bandpass", frequency: 4200, to: 600, q: 3 },
-      },
-      {
-        call: "noise",
-        durationMs: 26,
-        volume: 0.024,
-        delayMs: 330,
-        filter: { type: "bandpass", frequency: 1900, q: 3.2 },
-      },
-    ],
-  },
-
   // ── Leaving the road, and the ground under it ────────────────────────────
   offroad_enter: {
     description:

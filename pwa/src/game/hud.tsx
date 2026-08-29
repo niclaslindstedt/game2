@@ -71,14 +71,14 @@ export type HudSnapshot = {
   pacenotes: HudPacenote[];
   seed: number;
   carName: string;
-  /** Two wheels past the verge — what the reset button offers itself for. */
+  /** Two wheels past the verge. Nothing is drawn from it — it goes on the
+   * HUD root as `data-off`, which is what lets the screenshot harness wait
+   * for turf under the wheels without the debug overlay in the frame. */
   offRoad: boolean;
   /** True while the car is LOST — off the road, well away from it and
    * pointed away rather than merely beside it. The co-driver's way-home
-   * strip waits for this rather than for `offRoad`: a sign that fires every
-   * time a wheel clips the verge is one the player stops reading. The
-   * BUTTON does not wait for it — a driver who wants out of the ditch they
-   * are two metres into should not have to be lost first. */
+   * strip waits for this rather than for a wheel merely clipping the verge:
+   * a sign that fires every time it does is one the player stops reading. */
   lost: boolean;
   /** Ground distance back to the point the reset would put the car, m —
    * only meaningful while `lost`. */
@@ -86,14 +86,6 @@ export type HudSnapshot = {
   finishTime: number | null;
   /** Set on the finish overlay when the run beat the stored record. */
   record: boolean;
-  /** Booster tank readout, seconds left / full tank. */
-  boostLeft: number;
-  boostMax: number;
-  boosting: boolean;
-  /** Wind readout: strength plus the arrow's screen-space rotation
-   * (degrees; 0 = blowing up-screen with the car). */
-  windKmh: number;
-  windScreenAngle: number;
   damage: HudDamage;
   /** Metres of road the run is ahead of (positive) or behind (negative)
    * the ghost it is racing, or null when there is no ghost out there. */
@@ -246,7 +238,6 @@ const PEDAL_DEAD_PX = 28;
 const PEDAL_HINT_DIRS: PedalDir[] = ["up", "down", "left", "right"];
 const PEDAL_HINT_WORD: Record<Exclude<PedalMode, "gas">, string> = {
   brake: "BRAKE",
-  boost: "BOOST",
   handbrake: "DRIFT",
 };
 
@@ -387,13 +378,13 @@ function SteerZone({ touch, side }: { touch: InputManager["touch"]; side: "left"
   );
 }
 
-type PedalMode = "gas" | "brake" | "boost" | "handbrake";
+type PedalMode = "gas" | "brake" | "handbrake";
 
 /** The pedal thumb: touching anywhere is GAS; dragging off the anchor does
  * whatever the player has bound to that direction (gas stays on through
- * boost and handbrake — that is what makes the handbrake a drift tool).
- * Sliding back inside the deadzone returns to plain gas; releasing lets
- * everything go. Three anchored hint arrows light the active gesture. */
+ * the handbrake — that is what makes it a drift tool). Sliding back inside
+ * the deadzone returns to plain gas; releasing lets everything go. The
+ * anchored hint arrows light the active gesture. */
 function PedalZone({
   touch,
   layout,
@@ -404,12 +395,11 @@ function PedalZone({
   side: "left" | "right";
 }) {
   /** The player's direction map, inverted: which action each drag means.
-   * Plain gas is never in here — it is what a drag that lands on the one
-   * unbound direction falls back to. */
+   * Plain gas is never in here — it is what a drag that lands on a direction
+   * nothing is bound to falls back to. */
   const byDir: Partial<Record<PedalDir, Exclude<PedalMode, "gas">>> = {
     [layout.brake]: "brake",
     [layout.handbrake]: "handbrake",
-    [layout.boost]: "boost",
   };
   const hintRef = useRef<HTMLDivElement>(null);
   const originRef = useRef({ x: 0, y: 0 });
@@ -417,10 +407,13 @@ function PedalZone({
   const setMode = (mode: PedalMode | null): void => {
     touch.throttle = mode !== null && mode !== "brake";
     touch.brake = mode === "brake";
-    touch.boost = mode === "boost";
     touch.handbrake = mode === "handbrake";
     const hint = hintRef.current;
-    if (hint) hint.dataset.mode = mode ?? "";
+    // The arrow that lights is the one the thumb is pulling TOWARD, not the
+    // action it triggers: the arrows are drawn per direction, so keying the
+    // highlight off the action would light the wrong one for every player
+    // who moved a gesture off where it shipped.
+    if (hint) hint.dataset.dir = mode === null || mode === "gas" ? "" : layout[mode];
   };
   /** Lift every pedal. Like the wheel's, this has to be safe to run when
    * nothing is held: a lost pointerup here is throttle nobody asked for. */
@@ -453,8 +446,8 @@ function PedalZone({
         if (!guard.owns(e.pointerId)) return;
         const dx = e.clientX - originRef.current.x;
         const dy = e.clientY - originRef.current.y;
-        // Dominant axis picks the direction; the one direction nothing is
-        // bound to stays gas, so a sloppy thumb never brakes by accident.
+        // Dominant axis picks the direction; a direction nothing is bound
+        // to stays gas, so a sloppy thumb never brakes by accident.
         let mode: PedalMode = "gas";
         if (Math.max(Math.abs(dx), Math.abs(dy)) >= PEDAL_DEAD_PX) {
           const dir: PedalDir =
@@ -496,6 +489,9 @@ const DIAL_LEAD = 50;
 const DIAL_SPAN = 205;
 const DIAL_KNEE = 4;
 const DIAL_MAX = 9;
+/** Where the red band starts, thousands — and the reading at which the whole
+ * instrument starts shaking. */
+const DIAL_RED = 7.5;
 
 function dialAngle(value: number): number {
   if (value <= DIAL_KNEE) return DIAL_START + (value / DIAL_KNEE) * DIAL_LEAD;
@@ -516,11 +512,22 @@ function dialArc(radius: number, from: number, to: number): string {
 
 function Tachometer({ rpm }: { rpm: number }) {
   const value = clamp(rpm, 0, 1) * DIAL_MAX;
+  // An engine held up against its limiter shakes the car it is bolted to,
+  // and the instrument bolted to that — the buzz IS the reading, which is
+  // why it is on the dial and not on the needle alone. It grows across the
+  // red band rather than switching on at it, so a gear revving out trembles
+  // and a throttle pinned on the start line really buzzes.
+  const heat = clamp((value - DIAL_RED) / (DIAL_MAX - DIAL_RED), 0, 1);
   return (
-    <svg className="hud-tach" viewBox="0 0 100 100" aria-hidden="true">
+    <svg
+      className={`hud-tach ${heat > 0 ? "hud-tach-hot" : ""}`}
+      style={heat > 0 ? ({ "--shake": heat.toFixed(2) } as CSSProperties) : undefined}
+      viewBox="0 0 100 100"
+      aria-hidden="true"
+    >
       <circle className="hud-tach-face" cx="50" cy="50" r="46" />
       <path className="hud-tach-track" d={dialArc(41, 0, DIAL_MAX)} />
-      <path className="hud-tach-red" d={dialArc(41, 7.5, DIAL_MAX)} />
+      <path className="hud-tach-red" d={dialArc(41, DIAL_RED, DIAL_MAX)} />
       {[0, 4, 5, 6, 7, 8, 9].map((tick) => {
         const [tx, ty] = dialPoint(26, tick);
         const [ax, ay] = dialPoint(34, tick);
@@ -622,7 +629,7 @@ function pacenoteText(note: HudPacenote): string {
  * corner to call — the road itself is the thing that has to be found again —
  * so the strip stops reading the stage and starts reading the way back. The
  * metres are the distance to the exact point the arrow over the car points
- * at, and that the TRACK button hands you directly. */
+ * at, and that the reset key hands you directly. */
 function WayHomeCall({ distance, belowMirror }: { distance: number; belowMirror: boolean }) {
   return (
     <div className={`hud-pace ${belowMirror ? "hud-pace-under-glass" : ""}`}>
@@ -644,10 +651,10 @@ function WayHomeCall({ distance, belowMirror }: { distance: number; belowMirror:
         <span className="hud-pace-text">
           RETURN TO TRACK
           <span className="hud-pace-dist">{Math.round(distance)}m</span>
-          {/* What the way-home BUTTON does, which is no longer the same as
-              what the arrow points at: driving back keeps the road, and the
-              button hands it back to the last checkpoint (R28). A driver
-              deciding between the two has to be told the price. */}
+          {/* What the RESET key does, which is not the same as what the
+              arrow points at: driving back keeps the road, and the key hands
+              it back to the last checkpoint (R28). A driver deciding between
+              the two has to be told the price. */}
           <span className="hud-pace-cost">↺ LAST CP</span>
         </span>
       </div>
@@ -1005,7 +1012,10 @@ export function Hud({
   // desktop the throttle key is the only throttle there is.
   const thumbs = deviceControls().touch;
   return (
-    <div className="hud pointer-events-none absolute inset-0 select-none">
+    <div
+      className="hud pointer-events-none absolute inset-0 select-none"
+      data-off={snap.offRoad ? "1" : undefined}
+    >
       {/* Top bar: the CLOCK, and the one press that belongs on the road —
           the camera. Which stage this is rides under the minimap instead:
           the top-left corner belongs to the time, because the time is what
@@ -1146,42 +1156,14 @@ export function Hud({
         </div>
       </div>
 
-      {/* Bottom-left: the instrument panel, in two rows. The top row is the
-          car's CONDITION — the damage glyph, and everything that comes and
-          goes with the situation, the way back onto the road included.
-          Keeping those out of the dial row is what stops a phone from losing
-          the booster off the right edge the moment the car puts two wheels in
-          the grass: a row that grows with the situation cannot also be a row
-          sized to fit. The top bar is the same bargain — it holds the stage,
-          the clock and the camera, and nothing that appears mid-run. */}
+      {/* Bottom-left: the instrument panel, in two rows. The car's CONDITION
+          sits in its own row above the dials rather than among them: the dial
+          row is a fixed cast sized to the narrowest phone, and anything that
+          can appear or grow mid-run would push an instrument off the right
+          edge. The top bar is the same bargain — it holds the stage, the clock
+          and the camera, and nothing that comes and goes. */}
       <div className="hud-speed">
-        <div className="hud-status">
-          {show.damage && <DamagePanel damage={snap.damage} />}
-          {/* Off the road the co-driver's strip says WHERE the road is and
-              the arrow over the car says which way; all this row owes is the
-              button that takes you there. */}
-          {snap.offRoad && (
-            <button
-              type="button"
-              className="hud-mini hud-mini-alert pointer-events-auto"
-              onClick={() => input.requestReset()}
-              title="Back to track (B)"
-            >
-              TRACK
-            </button>
-          )}
-          {show.wind && snap.windKmh >= 4 && (
-            <span className="hud-wind" title="Wind">
-              <span
-                className="hud-wind-arrow"
-                style={{ transform: `rotate(${snap.windScreenAngle.toFixed(0)}deg)` }}
-              >
-                ↑
-              </span>
-              {Math.round(snap.windKmh)}
-            </span>
-          )}
-        </div>
+        <div className="hud-status">{show.damage && <DamagePanel damage={snap.damage} />}</div>
         <div className="hud-cluster">
           {show.tachometer && <Tachometer rpm={snap.rpm} />}
           <div className={`hud-gearbox ${snap.shiftUp ? "hud-gearbox-shift" : ""}`}>
@@ -1195,30 +1177,12 @@ export function Hud({
           </div>
           <span className="hud-speed-num">{Math.round(snap.speedKmh)}</span>
           <span className="hud-speed-unit">km/h</span>
-          {/* The booster tank. `--fill` drives the bar in whichever direction
-              the layout runs — a width in landscape, a height in portrait,
-              where the cluster has no room left sideways. */}
-          {show.boost && (
-            <span className={`hud-boostbar ${snap.boosting ? "hud-boostbar-hot" : ""}`}>
-              <span className="hud-boostbar-label">BOOST</span>
-              <span className="hud-boostbar-track">
-                <span
-                  className="hud-boostbar-fill"
-                  style={
-                    {
-                      "--fill": `${((snap.boostLeft / snap.boostMax) * 100).toFixed(1)}%`,
-                    } as CSSProperties
-                  }
-                />
-              </span>
-            </span>
-          )}
         </div>
       </div>
 
       {/* Touch controls — one half of the screen anchors a steering wheel
           under the thumb, the other is the gesture pedal (gas / brake /
-          boost / handbrake). Which half is which is the player's choice.
+          handbrake). Which half is which is the player's choice.
           Manual gear taps float above the pedal zone. */}
       <div className="hud-touch">
         {thumbs && <SteerZone touch={touch} side={touchLayout.steerSide} />}

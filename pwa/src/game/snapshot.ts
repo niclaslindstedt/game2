@@ -3,8 +3,8 @@
 // GameState once per HUD tick (~12 Hz — the canvas is the 60 fps surface,
 // the HUD is not). This is also where the app layer's SIGN BOUNDARY is
 // paid: the rendered world mirrors the engine's map view, so the co-driver
-// calls, the wind arrow and the damage ledger are all flipped into SCREEN
-// space here, once, exactly as input.ts flips steering once.
+// calls and the damage ledger are both flipped into SCREEN space here,
+// once, exactly as input.ts flips steering once.
 
 import { DAMAGE_ZONES, TUNING, startsIn, wayHome, type GameState } from "@engine";
 
@@ -147,8 +147,8 @@ function gearedRev(state: GameState): number {
 }
 
 /** The damage ledger flipped into SCREEN space for the HUD's 2D car: the
- * rendered world mirrors the engine's map view (the same one-flip rule as
- * steering and the wind arrow), so the engine's right-side zones — and its
+ * rendered world mirrors the engine's map view (the same one-flip rule
+ * input.ts applies to steering), so the engine's right-side zones — and its
  * right mirror — sit on the LEFT of the car the player sees. */
 function damageSnapshot(state: GameState): HudDamage {
   const damage = state.car.damage;
@@ -196,12 +196,6 @@ export function takeSnapshot(
   standing: HudStanding | null = null,
 ): HudSnapshot {
   const rpm = tachometer(state);
-  // The rendered world is a mirror of the engine's map view, so the wind
-  // arrow's screen angle is the NEGATED car-relative bearing (the same
-  // one-flip rule input.ts applies to steering).
-  const windKmh = Math.hypot(state.wind.x, state.wind.z) * 3.6;
-  const windScreenAngle =
-    -(Math.atan2(state.wind.x, state.wind.z) - state.car.heading) * (180 / Math.PI);
   return {
     phase: state.phase,
     time: state.raceTime,
@@ -231,20 +225,15 @@ export function takeSnapshot(
     pacenotes: state.phase === "racing" && !state.drowning ? upcomingPacenotes(state, pace) : [],
     seed: state.seed,
     carName: state.spec.name,
-    // Both of these are DRIVING aids — the co-driver's way-home call, and
-    // the button that takes it there — so a car the water has already
-    // taken is neither off-road nor lost as far as the HUD is concerned:
-    // nothing the player asks for over the next few seconds reaches it.
+    // The co-driver's way-home call is a DRIVING aid, so a car the water
+    // has already taken is neither off-road nor lost as far as the HUD is
+    // concerned: nothing the player asks for over the next few seconds
+    // reaches it.
     offRoad: state.offRoad && !state.drowning,
     lost: state.lost && !state.drowning,
     homeDistance: state.lost && !state.drowning ? wayHome(state).distance : 0,
     finishTime,
     record: book !== null && finishTime !== null && (book.best === null || finishTime < book.best),
-    boostLeft: state.car.boostLeft,
-    boostMax: TUNING.boost.capacity,
-    boosting: state.car.boosting,
-    windKmh,
-    windScreenAngle,
     damage: damageSnapshot(state),
     ghostGap: ghostS === null ? null : state.progressS - ghostS,
     standing,

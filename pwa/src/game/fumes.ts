@@ -21,19 +21,18 @@ const POOL = 384;
  * the stage.
  */
 export const EXHAUST = {
-  /** Seconds between puffs: sitting at idle, rolling, and on the boost —
-   * the richest the engine ever runs. */
-  every: { idle: 0.12, rolling: 0.045, boost: 0.02 },
+  /** Seconds between puffs: sitting at idle, and rolling. */
+  every: { idle: 0.12, rolling: 0.045 },
   /** How sooty the cloud is, 0 pale .. 1 black. `base` is a cold idle,
    * darkening by `pace` as road speed comes up to `paceAt` m/s. */
-  shade: { base: 0.35, pace: 0.4, paceAt: 30, boost: 0.9 },
+  shade: { base: 0.35, pace: 0.4, paceAt: 30 },
   /** REVVING ON THE GRID: the throttle blipped against a car that cannot
    * move. None of the fuel it drinks becomes road speed, so all of it
    * leaves through the pipe — the one moment the exhaust is the loudest
    * thing on screen. Below `from` on the rev counter the engine is merely
    * idling and none of this applies; at the redline the puffs come `every`
-   * seconds (quicker than the boost's), `puffs` at a time so a blip reads
-   * as a BURST rather than a tick, at `shade` soot. `blast` is what pushes
+   * seconds, `puffs` at a time so a blip reads as a BURST rather than a
+   * tick, at `shade` soot. `blast` is what pushes
    * them out of the pipe, m/s, in place of a car pulling away from them:
    * gentle, because a stationary car's cloud has to BILLOW and hang around
    * the back of it — anything jetted hard streams straight past the chase
@@ -44,7 +43,7 @@ export const EXHAUST = {
 export type Fumes = {
   points: THREE.Points;
   /** One puff at the pipe. `vx`/`vz` seed the base velocity (wake + wind);
-   * `shade` 0–1 picks idle-pale → boost-dark soot. */
+   * `shade` 0–1 picks idle-pale → redline-dark soot. */
   spawn: (x: number, y: number, z: number, vx: number, vz: number, shade: number) => void;
   update: (dt: number) => void;
   dispose: () => void;

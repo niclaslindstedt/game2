@@ -403,7 +403,6 @@ describe("going under (TUNING.crash.drown)", () => {
       throttle: 1,
       brake: 1,
       handbrake: true,
-      boost: true,
       reset: true,
     };
     // Run the penalty out by STEPS rather than by comparing the clock to
