@@ -22,6 +22,7 @@ import { createStandField, type Stand, type StandField } from "./stands.ts";
 import { BANK, traceRivers, type River, type RiverAnchor, type RoadClear } from "./river.ts";
 import {
   corridorOffset,
+  handoverAt,
   junctionFlat,
   junctionPlatformY,
   ROAD_CROSS,
@@ -283,6 +284,13 @@ export type TerrainField = {
    * lattice points disagrees with the mesh by up to a meter on curved
    * slopes — riding it buries the car in every concave hillside. */
   groundAt: (x: number, z: number) => number;
+  /** The GROUND TILES on their own — `heightAt` at the GROUND_CELL corners,
+   * interpolated across the same two triangles the renderer draws, with no
+   * road ribbon laid over it. This is the surface the road's outer band
+   * hands over TO (R16's `handoverAt`), so the road mesh reads it to put
+   * its outermost vertices exactly where the ground beside them is; the
+   * analysis reads it to measure whatever is left at the seam. */
+  latticeAt: (x: number, z: number) => number;
   /** The landscape far from any road (mountains and sea included) — what
    * streams read to find their downhill side, and tooling can preview. */
   farHeightAt: (x: number, z: number) => number;
@@ -447,6 +455,11 @@ export function createTerrain(track: Track): TerrainField {
      * the lowest nearby corridor's own underside, opening upward at
      * `verge.climb` once past the bench. Infinity where no road reaches. */
     ceiling: number;
+    /** ...and the same cone over the road this point is BESIDE alone. A cone
+     * may cut the country between two arms of a stage; it may not cut the
+     * ground out from under one of them, and this is the floor that says so
+     * — see `rawHeight`. */
+    own: number;
   };
   const nearestSample = (x: number, z: number): Near | null => {
     const cx = Math.floor(x / GRID);
@@ -470,6 +483,11 @@ export function createTerrain(track: Track): TerrainField {
     // between them may stand; answering off whichever happened to be
     // nearer leaves the other arm walled in.
     let ceiling = Infinity;
+    // The winning sample's own cell and slot, so its own cone can be taken
+    // after the walk: the loop skips the arithmetic for most candidates on
+    // purpose, and the nearest one is often among them.
+    let bestCell: Cell | null = null;
+    let bestSlot = -1;
     for (let c = 0; c < nearCells.length; c++) {
       const cell = nearCells[c];
       const cellX = cell.x;
@@ -481,6 +499,8 @@ export function createTerrain(track: Track): TerrainField {
         if (d2 < bestD2) {
           bestD2 = d2;
           best = cell.index[k];
+          bestCell = cell;
+          bestSlot = k;
         }
         // Nothing this sample could say is lower than what has already been
         // said — which is most of them, and what keeps the square root and
@@ -506,6 +526,51 @@ export function createTerrain(track: Track): TerrainField {
     const s = samples[best];
     const lateral = (x - s.x) * Math.cos(s.heading) - (z - s.z) * Math.sin(s.heading);
     let d = Math.sqrt(bestD2);
+    // The NEARBY cone: the same min, over the road this point is actually
+    // beside rather than over every corridor in reach. `rawHeight` uses it
+    // as a floor, so that a road sixty metres off and twenty metres down
+    // cannot take the hillside out from under this one.
+    //
+    // A min and not the nearest SAMPLE's plane alone: samples are 2 m apart
+    // and the point at a corner's outer lip is nearest to a neighbour whose
+    // plane extrapolates a few centimetres over the verge here. Smoothing
+    // that is half of what the full min was doing, and a floor that undid
+    // it would put a lip back along the outside of every corner.
+    //
+    // Only computed where a distant cone is actually cutting below the
+    // nearest road's own plane, which is rare: everywhere else the answer is
+    // the ceiling itself and the second walk never happens.
+    let own = Infinity;
+    if (bestCell && bestSlot >= 0) {
+      const ddx = x - bestCell.x[bestSlot];
+      const ddz = z - bestCell.z[bestSlot];
+      const tilt = ddx * bestCell.px[bestSlot] + ddz * bestCell.pz[bestSlot];
+      own =
+        bestD2 <= BENCH2
+          ? bestCell.top[bestSlot] + tilt
+          : bestCell.top[bestSlot] + (tilt * BENCH) / d + (d - BENCH) * VERGE_CLIMB;
+      if (ceiling < own) {
+        const window = d + LOCAL_CONE;
+        const window2 = window * window;
+        for (let c = 0; c < nearCells.length; c++) {
+          const cell = nearCells[c];
+          for (let k = 0; k < cell.x.length; k++) {
+            const ddx2 = x - cell.x[k];
+            const ddz2 = z - cell.z[k];
+            const d2 = ddx2 * ddx2 + ddz2 * ddz2;
+            if (d2 > window2) continue;
+            const t = ddx2 * cell.px[k] + ddz2 * cell.pz[k];
+            let here: number;
+            if (d2 <= BENCH2) here = cell.top[k] + t;
+            else {
+              const dk = Math.sqrt(d2);
+              here = cell.top[k] + (t * BENCH) / dk + (dk - BENCH) * VERGE_CLIMB;
+            }
+            if (here < own) own = here;
+          }
+        }
+      }
+    }
     // Past either stage end, distance to the end sample would swing the
     // shelf away under the road apron — measure from the apron's spine
     // instead while within its reach.
@@ -514,7 +579,7 @@ export function createTerrain(track: Track): TerrainField {
       const out = best === firstIndexed ? -lon : lon;
       if (out > 0) d = Math.hypot(lateral, Math.max(0, out - APRON));
     }
-    return { d, index: best, lateral, ceiling };
+    return { d, index: best, lateral, ceiling, own };
   };
 
   // The bare landscape the road was laid across (land.ts) — the same
@@ -570,6 +635,11 @@ export function createTerrain(track: Track): TerrainField {
    * tens of metres over the road and binds on nothing but a cliff — and
    * where it does not bind, dropping it costs the query nothing. */
   const CONE_REACH2 = CORRIDOR_RANGE * CORRIDOR_RANGE;
+  /** How much further than the nearest road a corridor may be and still
+   * count as the road this point is BESIDE, m — see `Near.own`. Comfortably
+   * over the sample spacing, so a corner's whole neighbourhood is in; well
+   * under R23's `roadClear`, so a second road never is. */
+  const LOCAL_CONE = 8;
 
   /** The underside of a road's corridor at one sample: where the OUTER
    * VERGE sits — the lowest line anything drawn there stands on — sunk by
@@ -695,14 +765,62 @@ export function createTerrain(track: Track): TerrainField {
     // position, so this can only ever take ground AWAY: a valley, a ford's
     // dip and the ravine under a bridge are all still exactly as deep as
     // the landscape made them.
+    // ...but a cone may not cut the ground out from under a road's OWN
+    // CORRIDOR. The ceiling is a min over every corridor in reach, which is
+    // right for the country between two arms of a stage — the lower one says
+    // how high the ground between them may stand — and wrong for the ground
+    // one of them is standing on. Where an abandoned branch ran sixty metres
+    // away and twenty below, its cone reached in under the route and took
+    // fourteen metres of hillside out from beneath it, leaving the ribbon in
+    // the air with a skirt hanging off its edge: the dark face down the side
+    // of the road in every screenshot of one.
+    //
+    // So inside a corridor the road standing there is the floor on the
+    // ceiling, fading out over the same three metres the drawn corridor
+    // fades over. Past its own lip the ground is free to fall away — that is
+    // what an embankment is — and the min over every cone is right again.
+    // Inside the corridor the nearest road IS this road: two roads keep
+    // `roadClear` apart (R23), which is more than two corridors' width, so
+    // nothing else can be nearer to a point on this one's shelf.
     let ceiling = near ? near.ceiling : Infinity;
+    /** How much of this point is a ROAD's ground rather than the country's:
+     * 1 inside a corridor, spent one ground cell past its lip. That reach is
+     * the same argument R31's bench is built on — a lattice triangle spans a
+     * cell, so a corner within a cell of the corridor is one a triangle can
+     * carry straight across the road, and a corner the far cone hollowed out
+     * takes the road's own edge down with it. */
+    const holdOf = (d: number, edge: number): number =>
+      1 - smooth(clamp01((d - edge) / GROUND_CELL));
+    /** ...and the level it is held at: the road's own underside, FALLING
+     * away past its lip at the grade the verge is allowed to climb. Falling,
+     * not rising with the cone, because past its own edge a road stands on
+     * an embankment and an embankment has a side — this only says the side
+     * is a slope a car could come back up, which is R31 read the other way
+     * round. `own` carries the cone's rise past the bench, so that is taken
+     * back off before the fall is applied. */
+    const floorOf = (level: number, d: number, edge: number): number =>
+      level - Math.max(0, d - BENCH) * VERGE_CLIMB - Math.max(0, d - edge) * VERGE_CLIMB;
+    let hold = near ? holdOf(near.d, shelfEnd) : 0;
+    let floor = near ? floorOf(near.own, near.d, shelfEnd) : -Infinity;
     if (spur) {
       // A branch is never banked and the index carries no signed lateral,
       // so its cone is the plain one: its own underside, opening upward
       // past the bench.
       const branch = ceilingOf(spur.sample) + Math.max(0, spur.d - BENCH) * VERGE_CLIMB;
       if (branch < ceiling) ceiling = branch;
+      // ...and where the point is on the BRANCH's ground, the branch is the
+      // road it is beside and the floor is its own.
+      const edge = spur.spur.width / 2 + ROAD_CROSS.reach;
+      if (!near || spur.d < near.d) {
+        hold = holdOf(spur.d, edge);
+        floor = floorOf(branch, spur.d, edge);
+      }
     }
+    // It only ever RAISES the ceiling, so this takes no ground away and
+    // fills nothing in: `raised` still bounds the result from above, and a
+    // valley, a ford's dip and the ravine under a bridge are all exactly as
+    // deep as the landscape made them.
+    if (hold > 0 && floor > ceiling) ceiling += (floor - ceiling) * hold;
     const raised = base + guards.riseAt(x, z);
     return raised < ceiling ? raised : ceiling;
   };
@@ -710,30 +828,48 @@ export function createTerrain(track: Track): TerrainField {
   const heightAt = (x: number, z: number): number => carveGround(streams, x, z, rawHeight(x, z));
 
   /** The DRAWN corridor surface at a point — the ribbon the road mesh
-   * builds, with no tile sink under it — plus how much of it applies (1 on
-   * the road, fading to 0 where the ground lattice takes over). Null when
-   * the point is nowhere near a road. */
-  const corridorGround = (x: number, z: number): { y: number; weight: number } | null => {
-    let best: { y: number; weight: number } | null = null;
+   * builds, with no tile sink under it — and two different weights on it.
+   * Null when the point is nowhere near a road.
+   *
+   * `cover` is whether a road is DRAWN over this point at all: 1 anywhere
+   * inside the corridor, fading out past its lip. It answers "is the thing
+   * under the wheels here a road", which is what the water check wants.
+   *
+   * `hand` is R16's HAND-OVER — how much of the ribbon's own HEIGHT still
+   * applies. It leaves 1 at the bare shoulder and is spent by the corridor's
+   * outer lip, so the ribbon and the ground lattice meet there at a shared
+   * height rather than one stopping in the air over the other
+   * (`handoverAt`). The two are not the same question and used to be the
+   * same number, which is why the road had a vertical face down each side. */
+  type Corridor = { y: number; cover: number; hand: number };
+  const corridorGround = (x: number, z: number): Corridor | null => {
+    let best: Corridor | null = null;
     const consider = (s: RibbonSample, d: number, side: number, width: number): void => {
       const edge = width / 2 + ROAD_CROSS.reach;
       if (d > edge + 3) return;
-      const weight = 1 - smooth(clamp01((d - edge) / 3));
-      if (best && best.weight >= weight) return;
-      best = { y: ribbonY(s, side * Math.min(d, edge), width), weight };
+      const cover = 1 - smooth(clamp01((d - edge) / 3));
+      if (best && best.cover >= cover) return;
+      best = {
+        y: ribbonY(s, side * Math.min(d, edge), width),
+        cover,
+        hand: handoverAt(d - width / 2),
+      };
     };
     const near = nearestSample(x, z);
     if (near && near.d < shelfEnd + 3)
       consider(samples[near.index], near.d, sideOf(near.lateral), samples[near.index].width);
     const spur = spurs.spurs.length > 0 ? spurs.nearest(x, z) : null;
     if (spur) consider(spur.sample, spur.d, 1, spur.spur.width);
-    // The apron wins over both: at a junction the ground IS the junction.
+    // The apron wins over both: at a junction the ground IS the junction —
+    // one graded plane, right out to its rim, with no hand-over of its own
+    // to make (R17).
     const apron = apronAt(x, z);
     if (apron && apron.weight > 0) {
-      const under: { y: number; weight: number } = best ?? { y: apron.y, weight: apron.weight };
+      const under: Corridor = best ?? { y: apron.y, cover: apron.weight, hand: apron.weight };
       return {
         y: apron.y * apron.weight + under.y * (1 - apron.weight),
-        weight: Math.max(apron.weight, under.weight),
+        cover: Math.max(apron.weight, under.cover),
+        hand: Math.max(apron.weight, under.hand),
       };
     }
     return best;
@@ -776,12 +912,13 @@ export function createTerrain(track: Track): TerrainField {
   const groundAt = (x: number, z: number): number => {
     const lattice = latticeAt(x, z);
     // Beside a road the DRAWN surface is the ribbon, not the tile under it
-    // — its shoulder, its ditch, the lip past it (R16). The lattice is 14 m
-    // between corners and could not hold a ditch if it tried, so within the
-    // corridor the physics rides the ribbon and blends out to the tiles.
+    // — its crown, its wheel tracks, its shoulder (R16). The lattice is 14 m
+    // between corners and could not hold any of that, so out to the shoulder
+    // the physics rides the ribbon; past it R16's hand-over leans onto the
+    // tiles, and by the corridor's lip they have it.
     const corridor = corridorGround(x, z);
     if (!corridor) return lattice;
-    return corridor.y * corridor.weight + lattice * (1 - corridor.weight);
+    return corridor.y * corridor.hand + lattice * (1 - corridor.hand);
   };
 
   /** The ROAD standing over a point: the height of the ribbon the car
@@ -792,7 +929,7 @@ export function createTerrain(track: Track): TerrainField {
     const near = nearestSample(x, z);
     if (near && near.d < shelfEnd + 3 && samples[near.index].deck !== null) return null;
     const corridor = corridorGround(x, z);
-    return corridor && corridor.weight > 0.5 ? corridor.y : null;
+    return corridor && corridor.cover > 0.5 ? corridor.y : null;
   };
 
   const waterAt = (x: number, z: number): number | null => {
@@ -989,6 +1126,7 @@ export function createTerrain(track: Track): TerrainField {
   return {
     heightAt,
     groundAt,
+    latticeAt,
     farHeightAt: farField,
     geology: land.geology,
     waterAt,

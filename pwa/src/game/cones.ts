@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // THE MARSHAL'S CONES — the plastic beside the road, and the one thing a
-// player expects of plastic: that it goes flying.
+// player expects of plastic: that it goes flying. And, on the same terms,
+// everything else a marshal puts down that a car is allowed to scatter: the
+// tyre stacks, round bales and oil drums shutting an abandoned branch, which
+// `blockade.ts` builds and plants here.
 //
 // A cone is NOT an engine prop. Everything the physics collides with is
 // placed by the engine and only drawn app-side (world.ts), because collision
@@ -55,6 +58,13 @@ type Cone = {
   /** Awake bodies are stepped every frame; a settled one only wakes if the
    * car comes back and hits it again. */
   live: boolean;
+  /** How far out from the object's own centre the contact test reaches, and
+   * how tall it stands — a cone's, unless the caller planted something else.
+   * A stack of tyres is four times the cone's footprint and a hay bale
+   * twice its height, and a barrier the car drives THROUGH without touching
+   * is not a barrier. */
+  reach: number;
+  height: number;
 };
 
 export type ConeField = {
@@ -63,6 +73,12 @@ export type ConeField = {
   group: THREE.Group;
   /** Stand a cone up at a world point, `s` metres into the stage. */
   plant: (x: number, y: number, z: number, s: number) => void;
+  /** ...and stand something that is NOT a cone: a stack of tyres, a round
+   * bale, an oil drum (blockade.ts). The object is taken over whole — the
+   * caller has already built and placed it — and from here it is knocked,
+   * tumbled and pruned exactly as a cone is. `rest` is how far its centre
+   * sits over the ground once it has stopped rolling. */
+  plantProp: (object: THREE.Object3D, s: number, shape: PropShape) => void;
   /** Cones the endless prune has left behind: everything up to `s`. */
   retireBefore: (s: number) => void;
   /** Knock whatever the car is driving through, and tumble what is loose.
@@ -71,6 +87,11 @@ export type ConeField = {
   update: (state: GameState, dt: number, knocked?: (speed: number) => void) => void;
   dispose: () => void;
 };
+
+/** What a planted thing is, to the contact test and to gravity: how far out
+ * its footprint reaches, how tall it stands, and how far its centre sits
+ * over the ground once it has come to rest lying down. */
+export type PropShape = { reach: number; height: number; rest: number };
 
 export function createConeField(): ConeField {
   const group = new THREE.Group();
@@ -87,6 +108,19 @@ export function createConeField(): ConeField {
       body: tumbleFrom(mesh, new THREE.Vector3(), new THREE.Vector3(), LYING),
       s,
       live: false,
+      reach: REACH,
+      height: CONE_H,
+    });
+  };
+
+  const plantProp = (object: THREE.Object3D, s: number, shape: PropShape): void => {
+    group.add(object);
+    cones.push({
+      body: tumbleFrom(object, new THREE.Vector3(), new THREE.Vector3(), shape.rest),
+      s,
+      live: false,
+      reach: shape.reach,
+      height: shape.height,
     });
   };
 
@@ -108,7 +142,6 @@ export function createConeField(): ConeField {
     const dirZ = ((vz / (Math.hypot(vx, vz) || 1)) * 2 + outZ / push) / 3;
     const body = cone.body;
     body.asleep = false;
-    body.rest = LYING;
     body.vel.set(dirX * speed, LOFT_MIN + speed * LOFT, dirZ * speed);
     body.spin.set(
       (Math.random() - 0.5) * speed * SPIN,
@@ -127,9 +160,9 @@ export function createConeField(): ConeField {
     for (const cone of cones) {
       const p = cone.body.object.position;
       if (driving) {
-        const hit = drivingThrough(car, p.x, p.y, p.z, REACH, CONE_H);
+        const hit = drivingThrough(car, p.x, p.y, p.z, cone.reach, cone.height);
         if (hit) {
-          const out = outOfBody(car, hit, REACH);
+          const out = outOfBody(car, hit, cone.reach);
           // The knock happens whether or not anybody is listening: an
           // optional call does not evaluate its arguments, so putting the
           // work inside `knocked?.(…)` would leave the cones standing
@@ -161,7 +194,7 @@ export function createConeField(): ConeField {
     material.dispose();
   };
 
-  return { group, plant, retireBefore, update, dispose };
+  return { group, plant, plantProp, retireBefore, update, dispose };
 }
 
 /** The pairs flanking every jump lip in a stretch of road. */

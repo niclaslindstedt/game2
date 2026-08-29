@@ -3,9 +3,12 @@
 // the route: it is a public road the stage borrows. The gravel arrives at
 // a junction, joins the tarmac, runs it for a kilometer, and turns off it
 // again — and at both junctions the branch the route does NOT take is
-// still there, running away into the country, taped off with cones and a
+// still there, running away into the country, shut off with a barrier and a
 // chevron board so nobody in the field is in any doubt which way the stage
-// goes.
+// goes. WHERE that barrier stands is this module's too, and it is not a
+// detail: it has to clear the road the stage actually takes, at both ends
+// of its line, or the sign telling a driver which way to go is the thing
+// they hit going that way.
 //
 // This module builds those abandoned branches: a SPUR is a short road that
 // leaves a junction on the tarmac's own line, curves away over a few
@@ -24,6 +27,7 @@
 // and where it cannot, it stops.
 
 import { createRng } from "../lib/prng.ts";
+import { hash2 } from "../lib/noise.ts";
 import { cellKey } from "../lib/math.ts";
 import type { Surface } from "./compile.ts";
 import { LAKE_Y, type LandField } from "./land.ts";
@@ -46,6 +50,46 @@ export type SpurSample = {
   flat: number;
 };
 
+/** What a branch is shut with. Four kinds because one kind, repeated at
+ * every junction of every stage, stops being a signal and becomes wallpaper
+ * — and because a marshal shuts a road with whatever the organisers had on
+ * the lorry that morning. None of them is a wall: the tape is a statement,
+ * and a player who wants to see where the branch goes drives through it and
+ * scatters it. */
+export type BlockKind =
+  /** A line of plastic cones, taped between two posts. */
+  | "cones"
+  /** Stacks of scrap tyres — the loudest thing a rally can put on a road,
+   * and the one nobody mistakes for scenery. */
+  | "tyres"
+  /** Round bales off the field next to the junction. */
+  | "bales"
+  /** Empty oil drums, laid down in a row. */
+  | "drums";
+
+/** R17 — the BLOCK across an abandoned branch: where the barrier stands,
+ * how wide the line is, and what it is built of. Placed by the generator
+ * rather than by the renderer, for the one reason that matters — the thing
+ * standing in front of a driver is part of the stage, so it has to be
+ * placed where both the analysis and the drawing can see it. Half the
+ * blocks on a sweep of seeds used to stand across the road the stage
+ * actually takes, and nothing was measuring it because nothing but the
+ * renderer knew where they were. */
+export type RoadBlock = {
+  /** Centre of the barrier line, on the branch's own centerline. */
+  x: number;
+  z: number;
+  /** Road height there, m. */
+  y: number;
+  /** The branch's heading through it — the barrier stands ACROSS this. */
+  heading: number;
+  /** How wide the line is, m: the branch's full width. */
+  width: number;
+  /** How far up the branch it stands, m. */
+  s: number;
+  kind: BlockKind;
+};
+
 export type Spur = {
   /** Arc position of its junction on the stage. */
   atS: number;
@@ -63,6 +107,11 @@ export type Spur = {
    * the lake on an embankment — or over the road it left (R23). */
   endsAt: "map" | "water" | "stage";
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
+  /** R17 — where the branch is shut. Null on a branch so short, or so
+   * closely folded against the route, that no barrier fits across it
+   * without standing in the road the stage takes: nothing is better there
+   * than something in the way. */
+  block: RoadBlock | null;
 };
 
 /** Spur geometry, meters. A branch is not a stub: it runs until it is OUT
@@ -119,6 +168,19 @@ export const SPUR = {
   /** Fraction of the branch that is still sealed — past it the tarmac has
    * run out and the road carries on as gravel. */
   sealed: 0.68,
+
+  /** R17 — where the barrier across the branch may stand. `from` keeps it
+   * off the junction's own platform, where it would be buried under the
+   * crossing; `to` keeps it in sight of a driver arriving at the junction,
+   * because a block nobody sees until they are past the turn is not a
+   * sign. `clear` is the bare country the whole barrier LINE — both ends of
+   * it, not its middle — has to leave between itself and the route's outer
+   * lip: a driver on the correct road must never have to steer around the
+   * thing telling them which road is correct. `least` is the fallback bar
+   * for a branch that runs alongside the route the whole window: room past
+   * the route's MAT rather than past its whole corridor, which still leaves
+   * the road a car is driving on untouched. */
+  block: { from: 18, to: 200, clear: 4, least: 2.5 },
 } as const;
 
 /** Build the branch a junction leaves behind. `junction` is the point on
@@ -418,7 +480,88 @@ export function buildSpur(
     if (sample.z < box.minZ) box.minZ = sample.z;
     if (sample.z > box.maxZ) box.maxZ = sample.z;
   }
-  return { atS, end, samples, width, endsAt, bounds: box };
+  return { atS, end, samples, width, endsAt, bounds: box, block: null };
+}
+
+/** R17 — stand the barrier that shuts a branch.
+ *
+ * The place is not "a little way up the branch": it is the first point at
+ * which the WHOLE LINE clears the route. A branch leaves its junction along
+ * the main road's own tangent and the route turns off it, so for the first
+ * stretch the two carriageways are still one piece of ground — put the
+ * barrier there and it stands square across the road the stage takes, which
+ * is what a third of them did.
+ *
+ * `routeClear` is the same road-distance field the branch was steered by:
+ * distance from a point to the nearest piece of the route (capped out in the
+ * country the branch has to itself). Every point along the line is tested,
+ * because a line is not its midpoint — the end nearer the route is the one
+ * a driver hits.
+ *
+ * Two bars, not one. The first asks for the whole corridor plus a margin,
+ * and the EARLIEST point that clears it wins, because a barrier is a sign
+ * and a sign belongs where it is read. Where a branch runs alongside the
+ * route far enough that no point in the window clears that, the fallback is
+ * the ROOMIEST point in the window — accepted only if it still leaves the
+ * mat itself untouched, and otherwise not placed at all. An open fork reads
+ * as a choice; a barrier in the road reads as a bug, and of the two the
+ * choice is the cheaper mistake.
+ */
+export function placeBlock(
+  spur: Spur,
+  routeClear: (x: number, z: number) => number,
+  /** Half the ROUTE's width, m — what the barrier has to clear. */
+  routeHalf: number,
+  seed: number,
+): RoadBlock | null {
+  const want = routeHalf + ROAD_CROSS.reach + SPUR.block.clear;
+  const least = routeHalf + SPUR.block.least;
+  const half = spur.width / 2;
+  /** The least room the whole barrier line leaves the route, m. */
+  const room = (sample: SpurSample): number => {
+    const rx = Math.cos(sample.heading);
+    const rz = -Math.sin(sample.heading);
+    let worst = Infinity;
+    for (const k of [-1, -0.5, 0, 0.5, 1]) {
+      const d = routeClear(sample.x + rx * half * k, sample.z + rz * half * k);
+      if (d < worst) worst = d;
+    }
+    return worst;
+  };
+
+  let best: SpurSample | null = null;
+  let bestRoom = -Infinity;
+  for (const sample of spur.samples) {
+    if (sample.s < SPUR.block.from) continue;
+    if (sample.s > SPUR.block.to) break;
+    // Off the junction's own plane first: a barrier warped onto the
+    // platform is a barrier inside the crossing.
+    if (sample.flat > 0) continue;
+    const here = room(sample);
+    if (here >= want) {
+      best = sample;
+      bestRoom = here;
+      break;
+    }
+    if (here > bestRoom) {
+      best = sample;
+      bestRoom = here;
+    }
+  }
+  if (!best || bestRoom < least) return null;
+  // Deterministic per branch, and stable under an endless stream's repeated
+  // appends: the junction's arc position and which arm it is.
+  const roll = hash2(Math.round(spur.atS), spur.end === "entry" ? 1 : 0, (seed ^ 0x7f4a) >>> 0);
+  const kinds: BlockKind[] = ["cones", "tyres", "bales", "drums"];
+  return {
+    x: best.x,
+    z: best.z,
+    y: best.elevation,
+    heading: best.heading,
+    width: spur.width,
+    s: best.s,
+    kind: kinds[Math.min(kinds.length - 1, Math.floor(roll * kinds.length))],
+  };
 }
 
 /** Half the width a spur's corridor occupies, m — the mat plus the verge

@@ -18,6 +18,7 @@ import {
   createLandField,
   createTerrain,
   crossOffset,
+  handoverAt,
   junctionFlat,
   createGame,
   junctionMainEdge,
@@ -149,6 +150,79 @@ describe("the road's cross-section (R16)", () => {
     expect(vergeOffset(ROAD_CROSS.chamfer + 0.1, 0, edge)).toBeGreaterThan(
       vergeOffset(ROAD_CROSS.chamfer + 0.1, lift, edge),
     );
+  });
+
+  // R16 — THE HAND-OVER. The road does not END, it RUNS OUT, and the whole
+  // of that promise is this one curve: the ribbon owns its own height out to
+  // the bare shoulder, and the ground beside it owns everything by the
+  // corridor's lip. Three consumers read it — the physics, the road mesh
+  // and the analysis — so a change to it moves all three together, which is
+  // the point of it being one function.
+  it("hands the road's surface over to the ground beside it, from the shoulder to the lip", () => {
+    // The mat and the bare shoulder are the ROAD's, entirely.
+    expect(handoverAt(0)).toBe(1);
+    expect(handoverAt(ROAD_CROSS.verge.bareTo)).toBe(1);
+    // ...and by the corridor's own lip the ground has it, entirely. This is
+    // the assertion the whole thing exists for: anything less than zero
+    // here is a step between two meshes, which is the vertical face down
+    // the side of every road that this replaced.
+    expect(handoverAt(ROAD_CROSS.reach)).toBe(0);
+    expect(handoverAt(ROAD_CROSS.reach + 5)).toBe(0);
+    // Monotonic in between, and smooth at both ends rather than a straight
+    // ramp with a crease at each: a hand-over that creases at the shoulder
+    // is a smaller version of the edge it is meant to remove.
+    const band = ROAD_CROSS.reach - ROAD_CROSS.verge.bareTo;
+    let last = 1;
+    for (let k = 1; k <= 20; k++) {
+      const here = handoverAt(ROAD_CROSS.verge.bareTo + (band * k) / 20);
+      expect(here).toBeLessThanOrEqual(last);
+      last = here;
+    }
+    const step = band / 40;
+    const atShoulder = 1 - handoverAt(ROAD_CROSS.verge.bareTo + step);
+    const atMiddle =
+      handoverAt(ROAD_CROSS.verge.bareTo + band / 2 - step / 2) -
+      handoverAt(ROAD_CROSS.verge.bareTo + band / 2 + step / 2);
+    expect(atShoulder).toBeLessThan(atMiddle * 0.5);
+  });
+
+  it("meets the ground the tiles are drawn on at the corridor's lip", () => {
+    // The measurement the check above only promises in the abstract, taken
+    // on a real stage: at the outer lip the surface the car rides IS the
+    // drawn ground lattice, so the road mesh's outermost vertices and the
+    // tile mesh's nearest ones agree and there is nothing to hide.
+    for (const seed of [1, 4, 7]) {
+      const track = compileStage(seed, "medium");
+      const terrain = createTerrain(track);
+      const gaps: number[] = [];
+      for (let i = 0; i < track.samples.length; i += 13) {
+        const s = track.samples[i];
+        if (s.deck != null) continue;
+        const rx = Math.cos(s.heading);
+        const rz = -Math.sin(s.heading);
+        for (const side of [-1, 1]) {
+          const lip = (s.width / 2 + ROAD_CROSS.reach) * side;
+          const x = s.x + rx * lip;
+          const z = s.z + rz * lip;
+          gaps.push(Math.abs(terrain.groundAt(x, z) - terrain.latticeAt(x, z)));
+        }
+        // ...while the mat itself is still entirely the ribbon's — to
+        // within the road's own grain between two samples (R33), which is
+        // what a query landing between them reads.
+        const mid = terrain.groundAt(s.x, s.z);
+        expect(Math.abs(mid - (s.elevation + corridorOffset(s, 0, s.width)))).toBeLessThan(0.1);
+      }
+      expect(gaps.length).toBeGreaterThan(150);
+      gaps.sort((a, b) => a - b);
+      // Typically nothing at all: the two surfaces are the same surface out
+      // here. The corridor is found by the nearest 2 m SAMPLE, so a corner
+      // and a junction rim each leave a few centimetres — hence a ceiling
+      // rather than an equality, and the ceiling is the assertion that
+      // matters. This gap used to run to thirteen metres, and every
+      // centimetre of it was drawn as a vertical face down the road's side.
+      expect(gaps[Math.floor(gaps.length * 0.9)]).toBeLessThan(0.02);
+      expect(gaps[gaps.length - 1], `worst lip gap on seed ${seed}`).toBeLessThan(0.5);
+    }
   });
 });
 
@@ -434,6 +508,54 @@ describe("junctions (R17)", () => {
       expect(state.car.airborne).toBe(false);
       expect(state.offRoad).toBe(true);
       expect(state.surface).toBe(surface);
+    }
+  });
+
+  // R17 — THE BLOCK. The barrier shutting an abandoned branch is a thing
+  // standing in front of a driver at speed, so where it stands is a
+  // generator decision and not a drawing one. It used to be neither: the
+  // renderer put it at the branch's first sample off the junction platform,
+  // which on a third of a sweep of seeds was square across the road the
+  // stage actually takes.
+  it("stands every branch's barrier clear of the road the stage takes", () => {
+    let placed = 0;
+    for (const seed of seeds) {
+      const track = compileStage(seed, "medium", { asphalt: 0.4 });
+      const half = track.width / 2;
+      for (const spur of track.spurs) {
+        const block = spur.block;
+        if (!block) continue;
+        placed += 1;
+        expect(block.width).toBeCloseTo(spur.width, 6);
+        expect(block.s).toBeGreaterThanOrEqual(SPUR.block.from);
+        expect(block.s).toBeLessThanOrEqual(SPUR.block.to);
+        // Every point along the LINE, not its midpoint: the end nearer the
+        // route is the one a driver hits.
+        const rx = Math.cos(block.heading);
+        const rz = -Math.sin(block.heading);
+        for (const k of [-1, -0.5, 0, 0.5, 1]) {
+          const x = block.x + rx * k * (block.width / 2);
+          const z = block.z + rz * k * (block.width / 2);
+          let nearest = Infinity;
+          for (const sample of track.samples) {
+            const d = Math.hypot(sample.x - x, sample.z - z);
+            if (d < nearest) nearest = d;
+          }
+          expect(nearest, `${block.kind} barrier at s=${block.s} on seed ${seed}`).toBeGreaterThan(
+            half + SPUR.block.least - 0.01,
+          );
+        }
+      }
+    }
+    // A sweep where nothing is placed proves nothing about placement.
+    expect(placed).toBeGreaterThan(seeds.length);
+  });
+
+  it("builds the same barrier, of the same kind, every time it compiles a seed", () => {
+    for (const seed of seeds) {
+      const a = compileStage(seed, "medium", { asphalt: 0.4 });
+      const b = compileStage(seed, "medium", { asphalt: 0.4 });
+      expect(a.spurs.map((s) => s.block)).toEqual(b.spurs.map((s) => s.block));
     }
   });
 });

@@ -64,6 +64,21 @@ export const ANALYSIS = {
      * pimple between two otherwise even strides — the thing a slope
      * measurement misses because both its sides are legal. */
     bump: { mat: 0.16, verge: 0.55 },
+    /** R16 — THE ROAD'S EDGE: the grade the ground may take across the
+     * corridor's outer band, m per m, and where it stops being an edge and
+     * becomes a face. The budget is R31's `verge.climb` read the other way
+     * round — a road's edge may fall away no harder than a car could drive
+     * back up it — and the failure bar is a slope nothing gets back off.
+     * Kept here rather than derived from the rule book so that changing
+     * what counts as a good edge is a visible line in a diff. */
+    edge: { grade: 0.45, fail: 1.2 },
+    /** How thick a barrier across an abandoned branch (R17) is, measured
+     * along the branch, m — half of it either side of the line it stands
+     * on. A line of cones is a hand's width and a row of round bales is
+     * over a metre; this is the deep end of the vocabulary, because what
+     * is being asked is whether the road the stage takes is clear, and the
+     * answer has to hold for whichever furniture the seed rolled. */
+    blockDepth: 0.9,
     /** How far past a jump lip the surface is not analyzed, m. The lip IS
      * a drop and the landing IS a step: they are the feature, and R6
      * already owns whether they are placed legally. */

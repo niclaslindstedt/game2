@@ -190,6 +190,53 @@ describe("the rollers", () => {
     expect(lanes).toBe(want * 2 + 1);
     expect(rollers?.stats.probes ?? 0).toBeGreaterThan(lanes);
   });
+
+  // R17 — the check that would have caught the barriers laid across the
+  // road the stage takes, tested the only way a "nothing is wrong" check can
+  // be: by putting something wrong there. A clean sweep proves the
+  // generator; only a sabotaged stage proves the instrument.
+  it("sees a barrier standing in the road, solid or not", () => {
+    const track = compileStage(3, "medium", { asphalt: 0.4 });
+    const terrain = createTerrain(track);
+    const clean = analyzeTrack(track, terrain, { perf: false });
+    expect(clean.findings.filter((f) => f.code === "rollers.clear")).toHaveLength(0);
+
+    // Drag one branch's barrier onto the route's centerline and across it —
+    // exactly where the renderer used to put a third of them.
+    const spur = track.spurs.find((s) => s.block);
+    expect(spur, "seed 3 has a branch with a barrier on it").toBeDefined();
+    const onRoad = track.samples.find((s) => s.s > (spur?.atS ?? 0));
+    const block = spur?.block;
+    if (!block || !onRoad) throw new Error("unreachable");
+    block.x = onRoad.x;
+    block.z = onRoad.z;
+    block.heading = onRoad.heading + Math.PI / 2;
+    const hit = analyzeTrack(track, terrain, { perf: false }).findings.filter(
+      (f) => f.code === "rollers.clear",
+    );
+    expect(hit.length).toBeGreaterThan(0);
+    expect(hit[0].severity).toBe("error");
+    expect(hit[0].message).toContain("barrier");
+  }, 20_000);
+
+  // R16 — the road's EDGE, as its own scored property. What it measures is
+  // the grade the ground takes across the corridor's outer band, and the
+  // reason it is separate from the cross-section check is that it is the
+  // one with a photograph attached.
+  it("scores the road's edge, and calls a wall a wall", () => {
+    for (const seed of SEEDS) {
+      const edge = report(seed)
+        .metrics.find((m) => m.id === "rollers")
+        ?.checks.find((c) => c.id === "edge");
+      expect(edge, `seed ${seed}`).toBeDefined();
+      expect(edge?.budget).toBe(ANALYSIS.rollers.edge.grade);
+      // A road whose edges are all walls scores zero; one that runs out into
+      // the country scores near one. Neither end is asserted exactly — the
+      // stage a seed happens to build is not this test's business — but a
+      // check that never leaves the floor is measuring nothing.
+      expect(edge?.score, `seed ${seed}`).toBeGreaterThan(0.9);
+    }
+  }, 20_000);
 });
 
 describe("the water", () => {

@@ -184,6 +184,16 @@ export type VideoSettings = {
    * the menu, not FOREST: the forest's own density is a generator dial the
    * player sets per stage, and this one never touches it. */
   flora: "sparse" | "normal" | "lush";
+  /** How much LOOSE STONE the ground is scattered with — the chippings
+   * spilled across the road's edge that make it run out into the country
+   * instead of ending at a line (R16, road-spill.ts), and the cobbles out in
+   * the field beyond them. Its own row rather than a share of UNDERGROWTH
+   * because it is the one detail setting that is not decoration: what it
+   * thins is the transition at the road's edge, which is the thing a driver
+   * looks straight down for a whole stage. Thousands of small instances, so
+   * it is also the row with the most frames in it after RESOLUTION. Applies
+   * to the NEXT stage built, like the undergrowth. */
+  ground: "plain" | "normal" | "rich";
 };
 
 /** Pixel-ratio ceilings. Below 1 the canvas renders smaller than the screen
@@ -229,6 +239,18 @@ export const FLORA_SCALE: Record<VideoSettings["flora"], number> = {
   sparse: 0.4,
   normal: 1,
   lush: 1.5,
+};
+
+/** Loose-stone density multiplier — the road's spill and the litter beyond
+ * it. `plain` is a third rather than nothing: the road's edge still has to
+ * TRANSITION at every setting, because a hard line between gravel and grass
+ * is a defect and not a level of detail. Everything this scales is a few
+ * centimetres tall and drives straight over, so thinning it can never
+ * change what a car hits. */
+export const GROUND_SCALE: Record<VideoSettings["ground"], number> = {
+  plain: 0.33,
+  normal: 1,
+  rich: 1.6,
 };
 
 /** Everything the keyboard can be asked to do. `menu` leaves the run for
@@ -595,6 +617,7 @@ export const DEFAULT_SETTINGS: Settings = {
     drawDistance: "normal",
     effects: "full",
     flora: "normal",
+    ground: "normal",
     interior: "full",
   },
   keys: DEFAULT_KEYS,

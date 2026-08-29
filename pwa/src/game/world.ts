@@ -34,6 +34,7 @@ import {
 
 import { isShared } from "../lib/shared-gpu.ts";
 import { biomeFor, type Biome, type Community } from "./biome.ts";
+import { buildBlockade } from "./blockade.ts";
 import { createBreakage } from "./breakage.ts";
 import { createConeField, plantJumpCones, type ConeField } from "./cones.ts";
 import { TRUNK_COLOR, buildFlora, swayFlora, type FloraPlacement } from "./flora.ts";
@@ -47,10 +48,11 @@ import {
   treePlacement,
   understoryAround,
 } from "./planting.ts";
+import { buildRoadSpill } from "./road-spill.ts";
 import { buildWild } from "./wild.ts";
 import { buildTerrain, LAKE_Y, type Terrain } from "./terrain.ts";
 import { buildStreamMeshes } from "./streams.ts";
-import { chevronTexture, gravelTexture, waterTexture } from "./textures.ts";
+import { gravelTexture, waterTexture } from "./textures.ts";
 import { buildFinishGate, buildStartGate, type FinishGate, type Muzzle } from "./finish-gate.ts";
 import { buildKerbing, createPostField } from "./kerbs.ts";
 import { buildCrowd, type Crowd } from "./crowd.ts";
@@ -63,6 +65,7 @@ import {
   buildRoad,
   buildSkirts,
   chunkSamples,
+  type GroundBeside,
 } from "./road-mesh.ts";
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -128,6 +131,10 @@ function buildScenery(
   guard: Track["samples"],
   drawnTrees: Set<string>,
   density: number,
+  /** OPTIONS ▸ VIDEO ▸ GROUND DETAIL, as a multiplier on the loose stone:
+   * the road's spill and the cobbles beyond it. Separate from `density`
+   * because the two thin different things and a player sets them apart. */
+  stone: number,
   season: Season,
 ): SceneryChunk {
   const group = new THREE.Group();
@@ -314,29 +321,26 @@ function buildScenery(
   // the hood (SOLID_PROP_HEIGHT), which is what makes them safe to plant
   // app-side — the car rides straight over them. Anything a driver could
   // hit is a prop the engine placed, drawn by the wild cells.
-  type Rock = { x: number; y: number; z: number; s: number; shed?: boolean };
+  type Rock = { x: number; y: number; z: number; s: number };
   const rocks: Rock[] = [];
-  // The spill: chippings pushed off the mat, lying along the bare shoulder
-  // where no wheel ever runs. Kept to the small end of the size band —
-  // this is gravel, and the car drives over it.
-  for (let i = Math.max(4, from); i < to; i += 2) {
-    const s = samples[i];
-    const r = rightOf(s.heading);
-    for (const side of [-1, 1]) {
-      if (!rng.chance(0.5 * density)) continue;
-      const offset = half + rng.range(0.1, ROAD_CROSS.verge.bareTo + 0.9);
-      const x = s.x + r.x * offset * side + rng.range(-0.5, 0.5);
-      const z = s.z + r.z * offset * side + rng.range(-0.5, 0.5);
-      const drop = rng.next();
-      if (!clearOfRoad(x, z, half + 0.1)) continue;
-      if (inStream(field.streams, x, z, 0.5)) continue;
-      const y = heightAt(x, z);
-      if (y < LAKE_Y + 1.2) continue;
-      rocks.push({ x, y, z, s: drop, shed: true });
-    }
-  }
+  // R16 — THE SPILL: the chippings that ran off the mat, thinning out across
+  // the whole hand-over band until there is no road left. Its own module,
+  // because it is the half of the road's edge a player actually reads (see
+  // road-spill.ts) and because it is thousands of stones rather than the
+  // handful of cobbles below.
+  const spill = buildRoadSpill(
+    track,
+    Math.max(4, from),
+    to,
+    rng,
+    stone,
+    field.groundAt,
+    (x, z) => inStream(field.streams, x, z, 0.5) || field.groundAt(x, z) < LAKE_Y + 1.2,
+  );
+  group.add(spill.mesh);
   for (let i = Math.max(4, from); i < to; i += 5) {
     const s = samples[i];
+    if (stone < 1 && !rng.chance(stone)) continue;
     const r = rightOf(s.heading);
     const side = rng.chance(0.5) ? 1 : -1;
     const offset = rng.range(half + 1.5, 60);
@@ -358,9 +362,7 @@ function buildScenery(
   rocks.forEach((p, i) => {
     // A squashed lump sunk a third in: its top sits at 1.05 × scale, so
     // the biggest of them still passes under the bumper.
-    const scale = p.shed
-      ? PEBBLE_MIN * (0.55 + p.s * 0.75)
-      : PEBBLE_MIN + p.s * (PEBBLE_MAX - PEBBLE_MIN);
+    const scale = PEBBLE_MIN + p.s * (PEBBLE_MAX - PEBBLE_MIN);
     q.setFromAxisAngle(UP, p.s * 20);
     m.compose(v.set(p.x, p.y + scale * 0.35, p.z), q, sc.set(scale, scale * 0.7, scale));
     rockMesh.setMatrixAt(i, m);
@@ -383,6 +385,7 @@ function buildScenery(
       return false;
     };
     planted.retire(hits);
+    spill.retire(hits);
     let touched = false;
     rocks.forEach((p, i) => {
       if (!hits(p.x, p.z)) return;
@@ -614,60 +617,25 @@ function buildBridges(
   return group;
 }
 
-/** An abandoned branch (R17), drawn like any other road — and the junction
- * dressing that says the stage does not go this way: a line of cones, tape
- * between two posts, and a chevron board facing whoever arrives. Nothing
- * here is solid. A player who wants to see where the road goes is allowed
- * to find out; the tape is a statement, not a wall. */
-function buildSpur(track: Track, spur: Spur, cones: ConeField): THREE.Group {
+/** An abandoned branch (R17), drawn like any other road — and the barrier
+ * that says the stage does not go this way, wherever the generator stood it
+ * (`spur.block`, and see blockade.ts). Nothing about it is solid. A player
+ * who wants to see where the road goes is allowed to find out; the tape is a
+ * statement, not a wall. */
+function buildSpur(track: Track, spur: Spur, cones: ConeField, beside: GroundBeside): THREE.Group {
   const group = new THREE.Group();
   group.add(buildSkirts(spur.samples, spur.width));
   // A hair under the stage's own mat: inside a junction the two are warped
   // onto the SAME plane (R17), and two coplanar meshes tear each other
   // apart in the depth buffer.
-  group.add(buildRoad(track, spur.samples, spur.width, 0.012));
+  group.add(buildRoad(track, spur.samples, spur.width, 0.012, beside));
   group.add(buildMarkings(track, spur.samples, spur.width));
   const chippings = buildChippings(track, spur.samples, spur.width);
   if (chippings) group.add(chippings);
-
-  // The block, standing just clear of the junction's own platform — where
-  // a marshal would put it, and where it is not buried under the crossing.
-  const at =
-    spur.samples.find((sample) => sample.flat <= 0) ?? spur.samples[spur.samples.length - 1];
-  const r = rightOf(at.heading);
-  const half = spur.width / 2;
-  for (let k = -2; k <= 2; k++) {
-    const lat = (k / 2.4) * half;
-    cones.plant(at.x + r.x * lat, at.elevation, at.z + r.z * lat, spur.atS);
-  }
-  const postMat = new THREE.MeshLambertMaterial({ color: "#f6f3ea" });
-  const tapeMat = new THREE.MeshLambertMaterial({ color: "#e23c2c" });
-  for (const side of [-1, 1]) {
-    const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.6, 0.18), postMat);
-    post.position.set(at.x + r.x * half * side, at.elevation + 0.8, at.z + r.z * half * side);
-    group.add(post);
-  }
-  const tape = new THREE.Mesh(new THREE.BoxGeometry(spur.width, 0.18, 0.06), tapeMat);
-  tape.position.set(at.x, at.elevation + 1.25, at.z);
-  tape.rotation.y = at.heading;
-  group.add(tape);
-  // The board: chevrons pointing back the way the stage actually goes.
-  const board = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.9, 0.12), [
-    postMat,
-    postMat,
-    postMat,
-    postMat,
-    new THREE.MeshLambertMaterial({ map: chevronTexture(), color: "#ffffff" }),
-    new THREE.MeshLambertMaterial({ map: chevronTexture(), color: "#ffffff" }),
-  ]);
-  board.position.set(at.x, at.elevation + 1.9, at.z);
-  board.rotation.y = at.heading;
-  group.add(board);
-  for (const side of [-1, 1]) {
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.9, 0.14), postMat);
-    leg.position.set(at.x + r.x * side, at.elevation + 0.95, at.z + r.z * side);
-    group.add(leg);
-  }
+  // A branch too short, or too closely folded against the route, to take a
+  // barrier that clears the road the stage takes is left open on purpose:
+  // nothing in the way beats something in the way (spurs.ts, `placeBlock`).
+  if (spur.block) group.add(buildBlockade(spur.block, cones));
   return group;
 }
 
@@ -804,13 +772,17 @@ function disposeGroup(group: THREE.Group): void {
  * scatter chances. The video options set it; the ENGINE's trunk field is
  * never thinned by it, because those trees are solid and one you can hit
  * but cannot see is worse than any frame it would buy. */
-export function buildWorld(track: Track, density = 1, season: Season = "summer"): World {
+export function buildWorld(track: Track, density = 1, season: Season = "summer", stone = 1): World {
   const group = new THREE.Group();
   const biome = biomeFor();
   const waterTex = waterTexture();
   const terrain = buildTerrain(track, biome, waterTex, season);
   group.add(terrain.group);
   terrain.sync(track, 0, track.samples[0].x, track.samples[0].z);
+  // R16 — what the road's outer band hands over TO. The ribbon reads the
+  // ground's height so the two meshes meet at the corridor's lip, and its
+  // colour so they meet in the same green as well as at the same height.
+  const beside: GroundBeside = { heightAt: terrain.latticeAt, paintAt: terrain.paintAt };
   // A finite stage's road is known in full before the first tree is planted,
   // so every slice keeps its scenery off ALL of it. An endless one cannot:
   // the road ahead is unwritten when the props beside it go in, and
@@ -865,7 +837,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer")
     const ribbon = chunkSamples(track, from, to);
     const bare = track.samples.slice(Math.max(0, from - 1), to);
     chunkGroup.add(buildSkirts(ribbon, track.width));
-    chunkGroup.add(buildRoad(track, ribbon, track.width));
+    chunkGroup.add(buildRoad(track, ribbon, track.width, undefined, beside));
     chunkGroup.add(buildMarkings(track, bare, track.width));
     // R25 — the rally's own striped marking, at the corners that earn it.
     // The window is half-open at the top and starts at this chunk's FIRST
@@ -893,7 +865,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer")
     for (; spurScan < track.spurs.length; spurScan++) {
       const spur = track.spurs[spurScan];
       if (spur.atS > track.samples[to - 1].s) break;
-      chunkGroup.add(buildSpur(track, spur, cones));
+      chunkGroup.add(buildSpur(track, spur, cones, beside));
     }
     const fords = buildFords(track, fordScan, to, waterTex);
     fordScan = fords.next;
@@ -919,6 +891,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer")
       guard,
       drawnTrees,
       density,
+      stone,
       season,
     );
     chunkGroup.add(scenery.group);

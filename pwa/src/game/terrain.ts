@@ -87,6 +87,15 @@ export type Terrain = {
   field: TerrainField;
   /** Landscape height at a world position (what scenery stands on). */
   heightAt: (x: number, z: number) => number;
+  /** The GROUND TILES' own surface at a point, m — the drawn lattice, with
+   * no road ribbon over it. R16's hand-over gives the road's outer band
+   * this height, so the two meshes meet instead of one stopping in the air
+   * over the other. */
+  latticeAt: (x: number, z: number) => number;
+  /** The ground's own COLOUR at a point, into `out` — the same paint the
+   * tiles carry. The road's outer band fades into it, so the corridor ends
+   * in the country rather than at a line ruled against it. */
+  paintAt: (x: number, z: number, out: THREE.Color) => void;
   /** Catch the ground up with the track and the car: index new samples,
    * cut new stream valleys, build the tiles the road and the car now
    * need, and drop the ones both have left behind. `budget` caps how many
@@ -179,6 +188,67 @@ export function buildTerrain(
   type Tile = { ground: THREE.Mesh; lake: boolean };
   const tiles = new Map<string, Tile>();
 
+  /** THE GROUND'S OWN COLOUR at a point, into `out`: the altitude band, the
+   * soft patches of moss, heath, dry grass and forest floor that break it
+   * up, this sub-region's soil, the bedrock breaking through where the
+   * ground is steep, and the per-vertex speckle over all of it.
+   *
+   * A function rather than a block inside `buildTile` because the ROAD asks
+   * it too. R16's hand-over gives the ribbon's outer band the ground's own
+   * height; giving it a colour of its own would put the seam straight back
+   * where the geometry just took it out of — a ruled line of one green
+   * against another, which is the boundary you can see from a kilometre
+   * away in every screenshot of the road. Two callers, one palette.
+   *
+   * `y` and `normalY` are passed in rather than sampled here: the tile has
+   * both already, off a lattice it built for the purpose, and the road has
+   * its own answers. `carved` is a stream bed. */
+  const paintGround = (
+    x: number,
+    z: number,
+    y: number,
+    normalY: number,
+    carved: boolean,
+    out: THREE.Color,
+  ): void => {
+    const speck = 0.88 + hash2(Math.round(x * 2), Math.round(z * 2), noiseSeed + 29) * 0.24;
+    if (y < LAKE_Y + 0.6) out.copy(bed);
+    else if (y < LAKE_Y + 3) out.copy(shore);
+    else if (carved) out.copy(shore).lerp(bed, 0.35);
+    else {
+      // The meadow base, broken by big soft patches of moss, heath, dry
+      // grass and bare forest floor so no two hillsides read the same —
+      // and then leaned toward whatever SOIL this sub-region stands on,
+      // which is what makes a bog dark, a logging block churned and an
+      // old burn ashy without any of them needing a palette of its own.
+      const { look, ground } = regionGround[field.regionAt(x, z)];
+      const blend = valueNoise(x, z, 27, noiseSeed + 31);
+      out.copy(grass).lerp(grassDark, blend);
+      if (look.soilMix > 0) out.lerp(ground, look.soilMix);
+      const m = valueNoise(x, z, 90, noiseSeed + 37);
+      if (m > 0.6 - look.moss) out.lerp(moss, clamp01((m - 0.6 + look.moss) / 0.4) * 0.85);
+      const h = valueNoise(x, z, 130, noiseSeed + 41);
+      if (h > 0.64) out.lerp(heath, clamp01((h - 0.64) / 0.36) * 0.8);
+      const d = valueNoise(x, z, 68, noiseSeed + 53);
+      if (d > 0.72 - look.dry) out.lerp(dryGrass, clamp01((d - 0.72 + look.dry) / 0.28) * 0.7);
+      const f = valueNoise(x, z, 55, noiseSeed + 43);
+      if (f > 0.66) out.lerp(floor, clamp01((f - 0.66) / 0.34) * 0.75);
+      // ...and the bare earth under all of it, which is what a region
+      // that has been churned, felled or burnt over actually shows.
+      const e = valueNoise(x, z, 38, noiseSeed + 59);
+      if (e > 0.82 - look.bare) out.lerp(soil, clamp01((e - 0.82 + look.bare) / 0.18) * 0.8);
+      out.lerp(rock, clamp01((y - ROCK_LINE.from) / (ROCK_LINE.to - ROCK_LINE.from)));
+    }
+    // Bedrock breaks through wherever the ground is steep — mountain
+    // flanks, and the cut walls where the road runs between high rock.
+    const steep = clamp01((ROCK_SLOPE.from - normalY) / ROCK_SLOPE.band);
+    if (steep > 0) {
+      const band = valueNoise(x, z, 18, noiseSeed + 47);
+      out.lerp(band > 0.5 ? rock : rockDark, steep);
+    }
+    out.multiplyScalar(speck);
+  };
+
   /** Rewrite the water from every tile standing. Grown in blocks so a tile
    * arriving does not reallocate the buffer each time. */
   const flushLakes = (): void => {
@@ -256,42 +326,7 @@ export function buildTerrain(
         normals[v * 3 + 2] = dz * inv;
         // Color by altitude band with a per-vertex speckle — the same
         // chunky grain the road textures carry, on top of the detail map.
-        const speck = 0.88 + hash2(Math.round(x * 2), Math.round(z * 2), noiseSeed + 29) * 0.24;
-        if (y < LAKE_Y + 0.6) c.copy(bed);
-        else if (y < LAKE_Y + 3) c.copy(shore);
-        else if (carved[hi]) c.copy(shore).lerp(bed, 0.35);
-        else {
-          // The meadow base, broken by big soft patches of moss, heath, dry
-          // grass and bare forest floor so no two hillsides read the same —
-          // and then leaned toward whatever SOIL this sub-region stands on,
-          // which is what makes a bog dark, a logging block churned and an
-          // old burn ashy without any of them needing a palette of its own.
-          const { look, ground } = regionGround[field.regionAt(x, z)];
-          const blend = valueNoise(x, z, 27, noiseSeed + 31);
-          c.copy(grass).lerp(grassDark, blend);
-          if (look.soilMix > 0) c.lerp(ground, look.soilMix);
-          const m = valueNoise(x, z, 90, noiseSeed + 37);
-          if (m > 0.6 - look.moss) c.lerp(moss, clamp01((m - 0.6 + look.moss) / 0.4) * 0.85);
-          const h = valueNoise(x, z, 130, noiseSeed + 41);
-          if (h > 0.64) c.lerp(heath, clamp01((h - 0.64) / 0.36) * 0.8);
-          const d = valueNoise(x, z, 68, noiseSeed + 53);
-          if (d > 0.72 - look.dry) c.lerp(dryGrass, clamp01((d - 0.72 + look.dry) / 0.28) * 0.7);
-          const f = valueNoise(x, z, 55, noiseSeed + 43);
-          if (f > 0.66) c.lerp(floor, clamp01((f - 0.66) / 0.34) * 0.75);
-          // ...and the bare earth under all of it, which is what a region
-          // that has been churned, felled or burnt over actually shows.
-          const e = valueNoise(x, z, 38, noiseSeed + 59);
-          if (e > 0.82 - look.bare) c.lerp(soil, clamp01((e - 0.82 + look.bare) / 0.18) * 0.8);
-          c.lerp(rock, clamp01((y - ROCK_LINE.from) / (ROCK_LINE.to - ROCK_LINE.from)));
-        }
-        // Bedrock breaks through wherever the ground is steep — mountain
-        // flanks, and the cut walls where the road runs between high rock.
-        const steep = clamp01((ROCK_SLOPE.from - normals[v * 3 + 1]) / ROCK_SLOPE.band);
-        if (steep > 0) {
-          const band = valueNoise(x, z, 18, noiseSeed + 47);
-          c.lerp(band > 0.5 ? rock : rockDark, steep);
-        }
-        c.multiplyScalar(speck);
+        paintGround(x, z, y, normals[v * 3 + 1], carved[hi] === 1, c);
         colors[v * 3] = c.r;
         colors[v * 3 + 1] = c.g;
         colors[v * 3 + 2] = c.b;
@@ -437,7 +472,20 @@ export function buildTerrain(
     waterMat.dispose();
   };
 
-  return { group, field, heightAt, sync, update, dispose };
+  /** The ground's colour where the ROAD asks for it — at the corridor's own
+   * edge, where there is no tile lattice built yet and no normal to hand.
+   * The slope is taken off the drawn lattice with the same central
+   * difference the tiles use, so a road running along a rock face ends in
+   * rock and one across a meadow ends in grass. */
+  const paintAt = (x: number, z: number, out: THREE.Color): void => {
+    const lattice = field.latticeAt;
+    const y = lattice(x, z);
+    const dx = (lattice(x - CELL, z) - lattice(x + CELL, z)) / (2 * CELL);
+    const dz = (lattice(x, z - CELL) - lattice(x, z + CELL)) / (2 * CELL);
+    paintGround(x, z, y, 1 / Math.hypot(dx, 1, dz), inStream(field.streams, x, z, 0), out);
+  };
+
+  return { group, field, heightAt, latticeAt: field.latticeAt, paintAt, sync, update, dispose };
 }
 
 function parseKey(key: string): [number, number] {

@@ -22,6 +22,7 @@ export {
   ROAD_CROSS,
   corridorOffset,
   crossOffset,
+  handoverAt,
   vergeOffset,
   wearAt,
   rutAt,
@@ -32,7 +33,16 @@ export {
   roadClearance,
   type RoadShape,
 } from "./road.ts";
-export { SPUR, buildSpur, spurReach, type Spur, type SpurSample } from "./spurs.ts";
+export {
+  SPUR,
+  buildSpur,
+  placeBlock,
+  spurReach,
+  type BlockKind,
+  type RoadBlock,
+  type Spur,
+  type SpurSample,
+} from "./spurs.ts";
 export { createGuardField, type CornerGuard, type GuardField } from "./guards.ts";
 export {
   buildKerbs,
