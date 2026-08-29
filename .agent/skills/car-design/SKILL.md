@@ -174,6 +174,9 @@ every scheme on ONE body and the field never looks like that.
 - [ ] `make cars` sheet checked — including the `dirty` column — AND
       `make screenshots` in-game check
 - [ ] `npx vitest run tests/car_geometry_test.ts` (the collision box)
+- [ ] `make profile` before AND after, if the change added geometry, a mesh
+      or a material — a car is drawn up to fifteen times a frame, so a part
+      that costs one draw call costs fifteen
 - [ ] `npx tsc --noEmit -p pwa/tsconfig.json` + eslint on touched files
 - [ ] A changeset fragment (a car's look is player-visible — `changelog` skill)
 - [ ] docs/architecture.md still describes the car pipeline truthfully

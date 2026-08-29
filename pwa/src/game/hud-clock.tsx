@@ -149,7 +149,7 @@ function gantry(live: LiveRun): number {
  * car in front is still leaving and there is nothing to be ready for yet.
  * What it puts up instead is the one thing a driver who has seen the shot
  * before needs — how to leave it. */
-export function StartLights({ live }: { live: LiveRun }) {
+export function StartLights({ live, muted }: { live: LiveRun; muted: boolean }) {
   const [state, setState] = useState(() => gantry(live));
   useFrame(() =>
     setState((was) => {
@@ -159,6 +159,10 @@ export function StartLights({ live }: { live: LiveRun }) {
   );
   if (state === AWAY) return null;
   if (state === SHOT) {
+    // Held: the caption's whole job is telling a player how to leave the
+    // shot, and a paused run is not leaving anything. The pause card stands
+    // in the same place and is translucent, so left up it prints through.
+    if (muted) return null;
     return (
       <div className="hud-start-shot">
         <span className="hud-start-control">START CONTROL</span>

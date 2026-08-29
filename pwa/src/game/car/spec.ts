@@ -121,18 +121,51 @@ export type Lights = {
    * face). Distance from the inner lamp, m. */
   pairGap?: number;
   pairSize?: number;
-  /** Chrome or black ring around each lamp, m of extra radius. */
+  /** Chrome or black ring around each lamp, m of extra radius. On a
+   * rectangular face it is the housing FRAME, and its own thickness. */
   bezel?: number;
   bezelColor?: number;
   color?: number;
+  /** How far the reflector bowl sinks into the cap, m. */
+  depth?: number;
+  /** Rect lamps only — how many cells the opening is divided into across
+   * its width. Two is a low/high pair; one is a single sealed unit. */
+  cells?: number;
 };
+
+/** The tail cluster: one framed opening per side, divided into cells. */
+export type TailLights = {
+  /** Center of each cluster from the centerline, m. */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color?: number;
+  /** A second stripe under the red one — the amber/white of a period
+   * cluster. Fraction of the cluster height, 0 disables. */
+  lower?: number;
+  lowerColor?: number;
+  /** The housing frame around the cluster and between its cells, m. */
+  bezel?: number;
+  bezelColor?: number;
+  /** How many cells the lens is divided into across its width. */
+  cells?: number;
+  /** How far the reflector bowls sink into the cap, m. */
+  depth?: number;
+};
+
+/** Amber corner lamps, laid on the bumper's own face. */
+export type Indicators = { y: number; x: number; width: number; height: number; color?: number };
+
+/** The tow-hook lamp bar a rally car carries, x offsets in m. */
+export type LampPods = { y: number; z: number; radius: number; offsets: number[]; color?: number };
 
 /** The front clip: everything laid onto the nose cap. */
 export type FrontSpec = {
   grille?: Grille;
   lights?: Lights;
   /** Amber corner lamps, sized as a fraction of the nose half-width. */
-  indicators?: { y: number; x: number; width: number; height: number; color?: number };
+  indicators?: Indicators;
   /** The bumper bar. `wrap` runs it back along the flanks around the
    * corners; a shallow `height` reads as a 70s chrome blade, a deep one
    * as the plastic slab of an 80s car. */
@@ -142,23 +175,12 @@ export type FrontSpec = {
   /** Bonnet shut line: the hood's half-width and how far back it runs. */
   hood?: { half: number; zFrom: number; zTo: number };
   /** A tow hook / lamp bar the rally cars carry, x offsets in m. */
-  lampPods?: { y: number; z: number; radius: number; offsets: number[]; color?: number };
+  lampPods?: LampPods;
 };
 
 /** The rear clip: everything laid onto the tail cap. */
 export type RearSpec = {
-  lights?: {
-    /** Center of each cluster from the centerline, m. */
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    color?: number;
-    /** A second stripe under the red one — the amber/white of a period
-     * cluster. Fraction of the cluster height, 0 disables. */
-    lower?: number;
-    lowerColor?: number;
-  };
+  lights?: TailLights;
   bumper?: { y: number; height: number; depth: number; wrap?: number; color?: number };
   /** Recessed number plate, m. */
   plate?: { y: number; width: number; height: number; color?: number };

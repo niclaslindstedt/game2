@@ -164,6 +164,12 @@ type HudProps = {
   /** The clock and the start lights read this every frame instead of
    * waiting for the next snapshot. */
   live: LiveRun;
+  /** Whether the pause card is up over this HUD. The gantry is the one
+   * instrument that has to know: the establishing shot's caption stands in
+   * the middle of the screen, exactly where the card does, and the card is
+   * translucent enough to print it through its own title. Held, there is
+   * nothing to leave the shot with anyway. */
+  paused: boolean;
   onPause: () => void;
   onCamera: () => void;
   /** Take a picture. Null where there is none to take — the player has
@@ -987,6 +993,7 @@ function TouchButton({
 export function Hud({
   snap,
   live,
+  paused,
   flashes,
   split,
   input,
@@ -1125,7 +1132,7 @@ export function Hud({
 
       {/* Center: countdown / finish / event flashes. */}
       <div className="hud-center">
-        <StartLights live={live} />
+        <StartLights live={live} muted={paused} />
         {(snap.phase === "rollout" || snap.phase === "finished") && snap.finishTime !== null && (
           <FinishCard
             time={snap.finishTime}
