@@ -129,9 +129,36 @@ knobs the code actually reads.
    scripts keyboard input), but the sim's drift/air columns are the style
    read — a bot that finishes without drifting has stopped playing the game.
 
+## Calibrating a DIFFICULTY (`skill.ts`, `rivals.ts`)
+
+A different question from "does the bot drive well", and the sim table cannot
+answer it: a difficulty is a promise made to a PERSON, and every column above
+is bots measuring bots. Use a **run tape** — one whole run written down as the
+controls that drove it (`docs/simulation.md`):
+
+```sh
+make record SEED=42 CAR=compact DIFFICULTY=hard   # a reference lap, one command
+make replay RUN=runs/<file>.jsonl DIFFICULTY=easy,medium,hard
+```
+
+Better still, drive one yourself: developer menu → **COLLECT RACE DATA**, then
+SAVE RUN DATA on the results card. Read the PLACE column and the gap to the
+podium cut: hard is right when a good drive is off the podium and a great one
+is on it, and wrong when it is unreachable or free.
+
+Two things about the tool that are true every time. **The `drift` on the
+reproduced line is the validity check** — anything but ~0 m means the handling
+moved under the recording and every place below it is somebody else's car.
+And **a tape is never re-driven against a field it did not meet**: it is a
+blind driver, so `placeAmongField` races the crews alone and slots the time
+in instead. Do not "fix" that by re-racing it.
+
 ## After a change
 
 - `make lint && make test` green; `make sim` table in the PR (before/after).
+- A `skill.ts` or `rivals.ts` change owes the `--field` table AND the same
+  tape replayed before and after — the table says what the budgets bought,
+  the tape says what that did to a person.
 - Bot changes are usually `no-changelog` (players never see the bot today —
   it exists headless); the moment a bot drives something player-facing (a
   demo mode, a ghost car), that changes.

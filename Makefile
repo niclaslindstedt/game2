@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim track cars liveries field crew items items-list sky audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim record replay track cars liveries field crew items items-list sky audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
 
 build:
 	npm run build
@@ -36,6 +36,24 @@ check-seo:
 # engine and print the pace / drift / air / respawn table.
 sim:
 	npm run sim
+
+# Record a bot run to a run tape (runs/*.jsonl): a whole drive written down
+# as the controls that drove it. `make record SEED=42 CAR=compact
+# DIFFICULTY=hard OUT=runs/ref.jsonl`
+record:
+	npm run tape -- record $(if $(SEED),--seed $(SEED),) $(if $(CAR),--car $(CAR),) \
+		$(if $(DIFFICULTY),--difficulty $(DIFFICULTY),) $(if $(LENGTH),--length $(LENGTH),) \
+		$(if $(OUT),--out $(OUT),) $(ARGS)
+
+# Replay a run tape and place its time against each field — the difficulty
+# calibration. RUN is the file, off `make record` or the game's SAVE RUN DATA
+# button (developer menu → COLLECT RACE DATA).
+# `make replay RUN=runs/my-run.jsonl DIFFICULTY=easy,medium,hard`
+replay:
+	@test -n "$(RUN)" || { \
+		echo "usage: make replay RUN=runs/<file>.jsonl [DIFFICULTY=easy,medium,hard]"; exit 2; \
+	}
+	npm run tape -- replay $(RUN) $(if $(DIFFICULTY),--difficulty $(DIFFICULTY),) $(ARGS)
 
 # Render generated stages to previews/track-<seed>.png for eyeballing the
 # rules engine's output.

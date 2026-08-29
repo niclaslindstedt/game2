@@ -152,6 +152,34 @@ The per-crew line under each difficulty is the field in finishing order with eac
 
 **Any change to `skill.ts` or `rivals.ts` owes this table.**
 
+## Run tapes: a human drive, measured (`engine/sim/tape.ts`, `race.ts`)
+
+The tables above are bots measuring bots. That is the right measurement for handling and for the generator, and the wrong one for a DIFFICULTY: a difficulty is a promise made to a person, and a bot lap only ever says what the bot would do. A **run tape** closes that gap — one whole run written down as the controls that drove it, in a JSONL file that replays exactly.
+
+Recording one:
+
+- **In the game.** Developer menu → **COLLECT RACE DATA**, drive, then **SAVE RUN DATA** on the results card. (`?record=1` forces the switch on for a scripted pass, which is how `scripts/` collects one without anybody finding the menu.)
+- **Headlessly.** `make record SEED=42 CAR=compact DIFFICULTY=hard` drives the bot and writes the same file — a reference lap in one command.
+
+Reading one back:
+
+```sh
+make replay RUN=runs/my-run.jsonl DIFFICULTY=easy,medium,hard
+npm run tape -- replay runs/my-run.jsonl --splits   # where the time went
+npm run tape -- show runs/my-run.jsonl              # the header and the field, no replay
+```
+
+The file is one JSON object per line: a `run` header (stage, car, field, start), `in` lines each holding until the next one (so a pedal buried down a straight is one line and not nine hundred), a `skip` line where the driver cut the establishing shot, a `sample` a second, and a `result` plus one `rival` line per crew. Being JSONL means `grep`, `jq` and a diff all work on it, and a line can be edited by hand to ask "what if I had lifted here".
+
+The replay prints two things, and they are different questions:
+
+- **Reproduced.** The tape put back into the run it came out of, and the **drift** — how far the replayed car ended up from where the recording says it was, at the worst sample. Zero means this build still drives the tape the way it was driven. Anything else means the handling has moved underneath the recording, and nothing below it can be trusted. (This makes a tape a regression test for FEEL: keep one, and any change that moves the car reports itself in metres.)
+- **Placed.** The time, slotted into each field in turn — the calibration. `to win` and `podium` are the gaps to the quickest crew and to the third-place cut, which is the one that decides whether a campaign stage opens the next.
+
+**The field is raced with nobody on the road with it, and the drive is not re-driven against it.** That is deliberate and it is the only honest way round. A tape is a BLIND driver: it steers where it steered, so a car that was not there when it was recorded is a car it drives into and never corrects for — and worse, a shunt that DID happen was steered out of on the recording, so replaying those corrections without it swerves. A rally start puts the crew in front alongside the player, so this bites within two seconds. Racing the crews alone has none of it: rivals are never resolved against each other, so every crew's time is the same time whether or not anybody was out there with them, and "where would this drive have placed at hard" becomes an exact question.
+
+**The workflow rule: any change to `skill.ts` or `rivals.ts` owes a replay of the same tape before and after**, beside the `--field` table. The table says what the budgets bought; the tape says what that did to a person.
+
 ## What the tests pin down
 
 `tests/simulation_test.ts` encodes the contract between generator and handling:
@@ -160,6 +188,8 @@ The per-crew line under each difficulty is the field in finishing order with eac
 - stage pace stays in rally territory;
 - stages with hard corners get drifted, stages with jumps get flown;
 - identical runs produce identical digests; different cars produce different runs.
+
+`tests/tape_test.ts` pins the run tape: every control round-trips through the file, a recorded run replays onto the same metre of road (with a field beside it and without), a time placed against a field alone agrees with the place that run actually scored, and the same lap is never worth a better place against a better field.
 
 If a tuning change breaks one of these, the change is wrong or the test's world just moved — decide which explicitly, never silently.
 

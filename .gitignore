@@ -22,5 +22,9 @@ pwa/dist/
 # regenerated on demand with `make track` / `make screenshots`.
 previews/
 
+# Recorded runs (`make record`, and the SAVE RUN DATA button) — a drive is
+# somebody's own measurement, not repository content.
+runs/
+
 # Release scratch
 .release-notes.md
