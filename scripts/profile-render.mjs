@@ -196,6 +196,16 @@ await scene("driving", { start: "1", bot: "1" }, async (page) => {
   await atStageTime(page, 12);
 });
 
+// The same stage from the driver's seat. Its own scene because the cockpit
+// is the one view that draws a whole second cabin — a fascia, two lit dials
+// with needles, a wheel, a sun strip and a mirror with the rear-view pass's
+// picture in it — and the one that STOPS drawing something, since the rear
+// view goes into that mirror instead of into the HUD's strip.
+await scene("cockpit", { start: "1", bot: "1", camera: "cockpit" }, async (page) => {
+  await racing(page);
+  await atStageTime(page, 12);
+});
+
 // The same stage under a thunderstorm: the overcast deck, the scud tearing
 // along under it, the rain sheet and both pairs of lamps, all of which are
 // off on a clear day. The one scene that meters what the WEATHER costs.

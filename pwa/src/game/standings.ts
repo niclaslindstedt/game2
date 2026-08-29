@@ -37,6 +37,15 @@
 // catch the crew in front and it is a car — one you can lean on, and one you
 // can put off the road.
 //
+// A HEADS-UP RACE IS THE OTHER DISCIPLINE. Same crews, same bot, same road —
+// but everybody leaves on one green off a grid (engine/sim/grid.ts), so there
+// is no stagger to pay off, nobody is owed a head start, and a place read
+// mid-stage is the actual order of the road rather than a count of better
+// split times. The player is on the back row, and the metres that costs come
+// back as the drive to take them back with; that is the whole of the catch-up
+// and there is no other. Everything below is shared between the two: one
+// field, one classification, one set of cars on the road.
+//
 // Time trial and Roam have no field — nobody else is entered — so the one
 // judgement those runs still need, how big R25's finish salute should be,
 // comes from the derived start list at the bottom of this file.
@@ -46,15 +55,19 @@ import {
   createGame,
   finishAt,
   createRng,
+  gridSize,
+  headsUpField,
+  massStartGrid,
   rivalField,
+  skipIntro,
   step,
   FIELD_SIZE,
   GRID_STAGGER,
   TUNING,
-  PLAYER_NUMBER,
   START_INTERVAL,
   type Difficulty,
   type GameState,
+  type GridSlot,
   type RivalEntry,
   type Season,
   type TimeOfDay,
@@ -87,10 +100,34 @@ export type RivalField = {
   difficulty: Difficulty;
   /** Everybody on the start list, the player included. */
   of: number;
-  /** The player's start number — last car on the road. */
+  /** The player's start number — last car on the road either way: the back
+   * of a rally's running order, or the back row of a grid. */
   playerNumber: number;
-  /** Seconds between cars leaving the start control. */
+  /** Seconds between cars leaving the start control. Zero on a mass start,
+   * where nobody is owed anything and the whole field leaves together. */
   interval: number;
+  /** Everybody on one grid, on one green (`engine/sim/grid.ts`). It changes
+   * what a start MEANS, so it is carried on the field rather than inferred:
+   * a mass start has no stagger to pay off, its rivals sit through the same
+   * ceremony the player does, and a place read mid-stage is the real order
+   * of the road rather than a count of better split times. */
+  massStart: boolean;
+};
+
+/** How a field is entered: how good it is, how many cars are on it, and
+ * whether they leave together. */
+export type FieldPlan = {
+  difficulty: Difficulty;
+  /** Cars on the entry list, the player included. */
+  cars: number;
+  massStart: boolean;
+};
+
+/** The campaign's own plan — the whole roster, one at a time (R29). */
+export const RALLY_FIELD: FieldPlan = {
+  difficulty: "medium",
+  cars: FIELD_SIZE,
+  massStart: false,
 };
 
 /** The conditions a rival is entered under: the player's, exactly. The
@@ -104,6 +141,11 @@ export type FieldStage = {
   season: Season;
 };
 
+/** How far up the road a mass start's catch-up runs, m — one number for the
+ * whole field, so every slot's compensation ends at the same place on the
+ * stage and the grid is level from there on. */
+const CATCH_UP_S = TUNING.massStart.catchUpS;
+
 /** How long the catch-up may spend per frame, ms. Sized against the beat it
  * runs under: the establishing shot is `TUNING.intro` long, so even a
  * device managing 30 fps has a couple of hundred slices to spend the
@@ -116,46 +158,79 @@ const CATCHUP_MS = 4;
 const CATCHUP_GRAIN = 64;
 
 /** Enter the field for a stage. The compiled track is SHARED with the
- * player's run: it is read-only, so fourteen more cars on it cost fourteen
- * cars and not fourteen worlds. */
-export function createField(track: Track, difficulty: Difficulty, stage: FieldStage): RivalField {
-  const runs = rivalField(difficulty).map((entry) => ({
-    entry,
-    // The rivals' clocks start at their own green light, not the player's,
-    // so they skip the whole start control: their stage time is measured
-    // from their first step, and the offset between the fifteen clocks is
-    // carried by `owed` instead.
-    state: createGame({
-      seed: stage.seed,
-      carId: entry.crew.carId,
-      // The crews with the hands take their own gears (`gearboxFor`), which
-      // is where the head of a hard field finds its top end.
-      gearbox: entry.gearbox,
-      track,
-      laps: stage.laps,
-      skipCountdown: true,
-      quiet: true,
-      // Off to one side of the line, because the player is on it. Only the
-      // crew immediately in front is ever visible from the control, and
-      // this is the metre and a bit of road that has them pulling away
-      // ALONGSIDE the player instead of out from inside their bodywork.
-      gridOffset: GRID_STAGGER,
-      env: { timeOfDay: stage.timeOfDay, weather: stage.weather, season: stage.season },
-    }),
-    splits: [] as number[],
-    time: null as number | null,
-    done: false,
-    // Car 14 leaves as the establishing shot opens and owes nothing; every
-    // car ahead of them owes another interval.
-    owed: (PLAYER_NUMBER - 1 - entry.number) * START_INTERVAL,
-  }));
+ * player's run: it is read-only, so more cars on it cost cars and not
+ * worlds.
+ *
+ * Two start types, one field. A RALLY start sends them out `START_INTERVAL`
+ * apart and carries the offset between their clocks as head start each one
+ * still owes (`owed`); a MASS start stands them on a grid, hands every one of
+ * them the same establishing shot and the same lights, and owes nobody
+ * anything. Everything downstream — the classification, the splits, the
+ * collision, the cars on the road — reads the same two structures either
+ * way. */
+export function createField(track: Track, plan: FieldPlan, stage: FieldStage): RivalField {
+  const cars = plan.massStart ? gridSize(plan.cars) : FIELD_SIZE;
+  const grid = plan.massStart ? massStartGrid(cars) : null;
+  const entries = plan.massStart
+    ? headsUpField(plan.difficulty, cars)
+    : rivalField(plan.difficulty);
+  const runs = entries.map((entry) => {
+    // Where this crew is stood. A rally start is one slot beside the player,
+    // taken in turn; a grid is a row and a column of its own.
+    const slot = grid?.[entry.number - 1];
+    return {
+      entry,
+      state: createGame({
+        seed: stage.seed,
+        carId: entry.crew.carId,
+        // The crews with the hands take their own gears (`gearboxFor`), which
+        // is where the head of a hard field finds its top end.
+        gearbox: entry.gearbox,
+        track,
+        laps: stage.laps,
+        // A rally rival's clock starts at their own green, which is why they
+        // skip the whole start control and carry the offset as `owed`. A grid
+        // shares ONE green, so its cars sit through the same shot and the same
+        // lights the player does and every clock starts together.
+        skipCountdown: !plan.massStart,
+        quiet: true,
+        // Off to one side of the line, because the player is on it. Only the
+        // crew immediately in front is ever visible from a rally control, and
+        // this is the metre and a bit of road that has them pulling away
+        // ALONGSIDE the player instead of out from inside their bodywork. On a
+        // grid it is the column of their row.
+        gridOffset: slot ? slot.lateral : GRID_STAGGER,
+        gridBack: slot?.back ?? 0,
+        // …and the metres that row is giving away, as the drive to take them
+        // back with. Pole is owed nothing and gets nothing.
+        catchUp: slot && slot.gain > 0 ? { gain: slot.gain, untilS: CATCH_UP_S } : undefined,
+        env: { timeOfDay: stage.timeOfDay, weather: stage.weather, season: stage.season },
+      }),
+      splits: [] as number[],
+      time: null as number | null,
+      done: false,
+      // Car 14 leaves as the establishing shot opens and owes nothing; every
+      // car ahead of them owes another interval. A grid owes nothing at all.
+      owed: plan.massStart ? 0 : (cars - 1 - entry.number) * START_INTERVAL,
+    };
+  });
   return {
     runs,
-    difficulty,
-    of: FIELD_SIZE,
-    playerNumber: PLAYER_NUMBER,
-    interval: START_INTERVAL,
+    difficulty: plan.difficulty,
+    of: cars,
+    playerNumber: cars,
+    interval: plan.massStart ? 0 : START_INTERVAL,
+    massStart: plan.massStart,
   };
+}
+
+/** WHERE THE PLAYER STANDS on a grid of `cars` — the last slot, on the back
+ * row and on the start line itself. The one place that reads it is the run
+ * the player is sat in, and it has to agree with `createField` exactly or the
+ * player would be entered in a slot somebody else is already stood on. */
+export function playerSlot(cars: number): GridSlot {
+  const grid = massStartGrid(cars);
+  return grid[grid.length - 1];
 }
 
 /** A crew the world can reach: out of the control, still on the stage. What
@@ -224,6 +299,14 @@ export function drainField(field: RivalField): void {
  * the whole classification rests on quietly shrinks. */
 export function advanceField(field: RivalField, seconds: number): void {
   if (seconds <= 0) return;
+  // A MASS START jumps the same beat the player jumped rather than driving
+  // through it: the whole grid is sat in the same establishing shot, so
+  // stepping them on would send the field down the road while the player is
+  // still watching their own lights.
+  if (field.massStart) {
+    for (const run of field.runs) if (!run.done) skipIntro(run.state);
+    return;
+  }
   const steps = Math.round(seconds / TUNING.dt);
   for (const run of field.runs) {
     if (run.done) continue;

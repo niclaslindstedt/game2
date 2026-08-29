@@ -34,8 +34,10 @@
 
 import * as THREE from "three";
 
+import { playerCrewLook, type CrewLook } from "../car-crew.ts";
 import { NO_DIRT } from "../car-dirt.ts";
-import { MeshBuilder, bakeShading, patchQuad, type V3 } from "./builder.ts";
+import { MeshBuilder, patchQuad, plate, slab, solid, tube, type V3 } from "./builder.ts";
+import { buildCrewMember, type CrewSeat } from "./crew.ts";
 import { cabinFrame, cabinPanels, panelMinus } from "./greenhouse.ts";
 import type { CarBodySpec } from "./spec.ts";
 
@@ -64,7 +66,7 @@ const LINING_LIFT = 0.012;
  * painted again, which is the whole thing this was built to fix. What has to
  * survive is the LADDER: a mid grey shell, seats a step up from it, and the
  * cage and the crew's helmets bright enough to read at a car's length. */
-const TRIM = {
+export const TRIM = {
   lining: 0x565d68,
   floor: 0x3b414a,
   dash: 0x343a43,
@@ -74,22 +76,24 @@ const TRIM = {
   harness: 0xc4353a,
   cage: 0xe4e8ee,
   wheel: 0x25292f,
-  suit: 0x525c6b,
-  visor: 0x1b2027,
 };
-
-/** The driver's helmet. Held light and neutral rather than taken from the
- * livery: it is the single highest-contrast thing in the cabin and the one
- * that has to read on every car in the field, including the white ones. The
- * co-driver takes the car's accent, so the pair still says whose car it is. */
-const HELMET = 0xe9ebef;
 
 /** Seat, crew and wheel, as fractions of the cabin's own length back from
  * the cowl — the one set of proportions that has to survive being applied to
  * a 2.1 m coupe cabin and a 2.4 m hatch one. `hip` is the seat's hinge, and
  * everything else is placed off it in metres, because a seat, a helmet and a
  * steering wheel are the same size in every car ever built. */
-const LAYOUT = { hip: 0.42, dashDepth: 0.34, wheelAhead: 0.4, hoopBehind: 0.42, bulkhead: 0.58 };
+export const LAYOUT = {
+  hip: 0.42,
+  /** How far the dash reaches BACK from the screen. Back from the screen and
+   * not forward from the seat hinge: a metre count added to the hinge — which
+   * is itself a fraction of the cabin — lands ahead of the cowl on any cabin
+   * short enough, and builds the whole dash out over the bonnet. */
+  dashDepth: 0.34,
+  wheelAhead: 0.4,
+  hoopBehind: 0.42,
+  bulkhead: 0.58,
+};
 
 /** Clearance between the dash's front face and the glass it leans under, m.
  * The screen is a warped patch and the dash is a box, so meeting it exactly
@@ -104,8 +108,16 @@ const DASH_GAP = 0.02;
 const WHEEL_RISE = -0.02;
 
 /** How far off the centreline the two seats sit, as a fraction of the
- * cabin's inner half-width. */
-const SEAT_SIDE = 0.46;
+ * cabin's inner half-width — the DRIVER at +x, the co-driver at −x.
+ *
+ * Which side that puts them on in the picture is not a matter of taste and
+ * not what the sign says: a camera looking down the car's +z has world +x on
+ * the LEFT of the frame (three's basis, and the whole game's cameras aim
+ * that way). So +x is the side the wheel is on as the player sees it, and
+ * everything that has to agree about which side the car is driven from — the
+ * binnacle here, the hood camera's own offset, the cockpit's whole layout —
+ * hangs off this one sign. */
+export const SEAT_SIDE = 0.46;
 
 /** The default sill width the greenhouse uses when a spec does not state
  * one — restated here rather than imported, because it is a PILLAR default
@@ -120,9 +132,6 @@ const WHEEL_TURN = 1.5;
 /** How far the wheel's top leans back toward the driver, rad. */
 const WHEEL_RAKE = 0.35;
 const WHEEL_RADIUS = 0.17;
-/** A helmet, m. Generous by a centimetre or two: it is the one shape in here
- * that has to be legible through tinted glass at a car's length. */
-const HELMET_RADIUS = 0.145;
 
 /** Everything the layout is derived from, resolved once.
  *
@@ -136,7 +145,7 @@ const HELMET_RADIUS = 0.145;
  * that deck and the roof, exactly as tall as the glass — which is not a
  * compromise but the actual shape of what a window shows. Everything here is
  * built for that tray. */
-type Cabin = {
+export type Cabin = {
   spec: CarBodySpec;
   /** Inner half-width the furniture is fitted inside, m. */
   inner: number;
@@ -162,7 +171,7 @@ type Cabin = {
   rearZ: number;
 };
 
-function cabinOf(spec: CarBodySpec): Cabin {
+export function cabinOf(spec: CarBodySpec): Cabin {
   const f = cabinFrame(spec);
   const { cowlZ, baseRearZ, roofY, roofHalf } = spec.cabin;
   const length = cowlZ - baseRearZ;
@@ -188,61 +197,6 @@ function cabinOf(spec: CarBodySpec): Cabin {
   };
 }
 
-/** A three.js primitive, shaded the way the hand-wound faces around it are
- * and poured into the same buffer. Anything round or tilted comes through
- * here — hand-winding either fails silently, faces culled rather than
- * flagged. The geometry is spent. */
-function solid(b: MeshBuilder, geo: THREE.BufferGeometry, color: number): void {
-  b.absorb(bakeShading(geo, color));
-}
-
-/** A box that is allowed to lean: a seat back, a visor, a harness strap. */
-function slab(b: MeshBuilder, size: V3, at: V3, color: number, tilt = 0, yaw = 0): void {
-  const geo = new THREE.BoxGeometry(size[0], size[1], size[2]);
-  if (tilt !== 0) geo.rotateX(tilt);
-  if (yaw !== 0) geo.rotateY(yaw);
-  solid(b, geo.translate(at[0], at[1], at[2]), color);
-}
-
-/** One length of cage tube, end to end. */
-function tube(b: MeshBuilder, from: V3, to: V3, radius: number, color: number, sides = 7): void {
-  const a = new THREE.Vector3(...from);
-  const span = new THREE.Vector3(...to).sub(a);
-  const len = span.length();
-  if (len < 1e-4) return;
-  const geo = new THREE.CylinderGeometry(radius, radius, len, sides, 1, true);
-  // CylinderGeometry stands on +y about its own middle; swing that axis onto
-  // the span, then carry it to the span's midpoint.
-  const turn = new THREE.Quaternion().setFromUnitVectors(
-    new THREE.Vector3(0, 1, 0),
-    span.clone().divideScalar(len),
-  );
-  geo.applyQuaternion(turn);
-  geo.translate(a.x + span.x / 2, a.y + span.y / 2, a.z + span.z / 2);
-  solid(b, geo, color);
-}
-
-/** A horizontal panel — the pan, or the headliner. `up` says which way it is
- * seen from: a floor is looked down on, a headliner up at. */
-function deck(
-  b: MeshBuilder,
-  half: number,
-  y: number,
-  zFront: number,
-  zRear: number,
-  color: number,
-  up: boolean,
-): void {
-  const c: V3[] = [
-    [-half, y, zFront],
-    [half, y, zFront],
-    [half, y, zRear],
-    [-half, y, zRear],
-  ];
-  if (up) b.quad(c[0], c[1], c[2], c[3], color);
-  else b.quad(c[3], c[2], c[1], c[0], color);
-}
-
 /** The shell, lined: every cabin panel drawn again from the inside, with the
  * same windows cut out of it. Without this the far flank of the cabin is a
  * set of back faces, and back faces are culled — look through the near
@@ -251,14 +205,14 @@ function deck(
  * `patchQuad`'s `mirrored` flag reverses both the winding and the lift, so
  * passing its opposite is exactly "the same rectangle, facing the other way,
  * on the other side of the panel" — the whole of what an inner face is. */
-function buildLining(b: MeshBuilder, cabin: Cabin): void {
+export function buildLining(b: MeshBuilder, cabin: Cabin, floor = true): void {
   for (const panel of cabinPanels(cabin.spec)) {
     for (const strip of panelMinus(panel.holes)) {
       patchQuad(b, panel.patch, strip, TRIM.lining, LINING_LIFT, !panel.mirrored);
     }
   }
-  deck(b, cabin.inner, cabin.panY, cabin.cowlZ, cabin.rearZ, TRIM.floor, true);
-  deck(
+  if (floor) plate(b, cabin.inner, cabin.panY, cabin.cowlZ, cabin.rearZ, TRIM.floor, true);
+  plate(
     b,
     cabin.spec.cabin.roofHalf - 0.03,
     cabin.roofY,
@@ -376,37 +330,6 @@ function buildSeat(b: MeshBuilder, cabin: Cabin, x: number, high: boolean): void
   }
 }
 
-/** A crew member: shoulders out of the pan, a helmet, and a visor band
- * across it. The helmet is the read — a pale sphere in a dark cabin, at
- * exactly the height a head sits, from any angle the car is ever seen at. */
-function buildCrew(b: MeshBuilder, cabin: Cabin, x: number, color: number, high: boolean): void {
-  const z = cabin.hipZ - 0.06;
-  const top = cabin.sillY + 0.03;
-  slab(b, [0.38, top - cabin.panY, 0.26], [x, (top + cabin.panY) / 2, z + 0.02], TRIM.suit, 0.1);
-  const y = cabin.sillY + 0.14;
-  solid(
-    b,
-    new THREE.SphereGeometry(HELMET_RADIUS, high ? 8 : 6, high ? 5 : 3).translate(x, y, z + 0.02),
-    color,
-  );
-  slab(b, [0.2, 0.09, 0.03], [x, y, z + HELMET_RADIUS + 0.02], TRIM.visor, -0.1);
-}
-
-/** The driver's hands on the wheel — two forearms from the shoulders to the
- * rim, which is what stops the crew reading as two dummies sat upright. */
-function buildArms(b: MeshBuilder, cabin: Cabin, driverX: number, wheelZ: number, y: number): void {
-  for (const side of [-1, 1]) {
-    tube(
-      b,
-      [driverX + side * 0.17, cabin.sillY - 0.04, cabin.hipZ - 0.02],
-      [driverX + side * 0.13, y, wheelZ - 0.04],
-      0.045,
-      TRIM.suit,
-      5,
-    );
-  }
-}
-
 /** The wheel itself, about its own centre and in its own plane, so a mount
  * can rake it and a transform can turn it. */
 function wheelGeometry(b: MeshBuilder, high: boolean): void {
@@ -461,16 +384,36 @@ function buildCage(b: MeshBuilder, cabin: Cabin): void {
   }
 }
 
+/** The seat one of the crew is sat in, as car/crew.ts wants it. The people
+ * are built against the cabin's own tray — the pan under them, the sill they
+ * have to clear to be seen at all, and the headliner they must not come
+ * through — because the same character sits in every body in the catalog. */
+function seatAt(cabin: Cabin, x: number): CrewSeat {
+  return { x, z: cabin.hipZ - 0.06, panY: cabin.panY, sillY: cabin.sillY, roofY: cabin.roofY };
+}
+
+/** Where the two of them are sat in a given body. Handed out so a camera can
+ * be aimed at a PERSON rather than at a car: a crew is 300 mm of head inside
+ * a 4 m body, and a frame that fits the car cannot judge one. */
+export function crewSeats(spec: CarBodySpec): { driver: CrewSeat; coDriver: CrewSeat } {
+  const cabin = cabinOf(spec);
+  return {
+    driver: seatAt(cabin, cabin.inner * SEAT_SIDE),
+    coDriver: seatAt(cabin, -cabin.inner * SEAT_SIDE),
+  };
+}
+
 export function buildInterior(
   spec: CarBodySpec,
   detail: InteriorDetail,
   material: THREE.Material,
+  crew: CrewLook = playerCrewLook(),
 ): CarInterior {
   if (detail === "off") return { group: null, steering: null, dispose: () => undefined };
   const high = detail === "high";
   const cabin = cabinOf(spec);
-  const driverX = -cabin.inner * SEAT_SIDE;
-  const coDriverX = cabin.inner * SEAT_SIDE;
+  const driverX = cabin.inner * SEAT_SIDE;
+  const coDriverX = -cabin.inner * SEAT_SIDE;
   const wheelZ = cabin.hipZ + LAYOUT.wheelAhead;
   const wheelY = cabin.sillY + WHEEL_RISE;
   const b = new MeshBuilder();
@@ -479,12 +422,17 @@ export function buildInterior(
   buildDash(b, cabin, driverX, high);
   buildSeat(b, cabin, driverX, high);
   buildSeat(b, cabin, coDriverX, high);
-  buildCrew(b, cabin, driverX, HELMET, high);
-  buildCrew(b, cabin, coDriverX, spec.colors.accent, high);
-  if (high) {
-    buildArms(b, cabin, driverX, wheelZ, wheelY);
-    buildCage(b, cabin);
-  }
+  // The driver's hands go on the wheel wherever the cabin put it; the map
+  // reader's go on the book they are holding, which they place themselves.
+  buildCrewMember(
+    b,
+    seatAt(cabin, driverX),
+    crew.driver,
+    { hands: "wheel", wheel: { y: wheelY, z: wheelZ } },
+    high,
+  );
+  buildCrewMember(b, seatAt(cabin, coDriverX), crew.coDriver, { hands: "book" }, high);
+  if (high) buildCage(b, cabin);
   // The column, whatever the wheel on the end of it is doing.
   tube(b, [driverX, wheelY, wheelZ], [driverX, wheelY + 0.1, wheelZ + 0.26], 0.028, TRIM.dash, 5);
 

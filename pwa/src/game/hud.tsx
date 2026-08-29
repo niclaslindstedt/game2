@@ -1,24 +1,30 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The HUD: chunky arcade chrome over the canvas. Reads a low-rate snapshot
 // (the app refreshes it ~12×/s — the canvas is the 60 fps surface, the HUD
-// is not), and owns the touch controls, which write straight into the
-// input manager between snapshots.
+// is not), and lays out everything drawn over the road.
+//
+// The thumb zones it hangs at the bottom are next door in hud-touch.tsx:
+// they are the one part of this screen that does NOT run off the snapshot —
+// they write into the input manager at pointer rate — and that is a
+// different job from drawing a readout.
 
-import { useEffect, useMemo, useRef, type CSSProperties } from "react";
+import type { CSSProperties } from "react";
 
 import type { GamePhase, TurnSeverity } from "@engine";
 
 import { deviceControls, type InputManager } from "./input.ts";
-import { createThumbGuard } from "./thumb-guard.ts";
+import { PedalZone, SteerZone } from "./hud-touch.tsx";
 import { PODIUM as PODIUM_PLACES } from "./campaign.ts";
 import {
   FinishCard,
+  type FinishRace,
   type FinishStandings,
   type FinishScores,
   type NextStage,
 } from "./hud-finish.tsx";
 import { Minimap, type HudMinimap } from "./minimap.tsx";
-import type { HudSettings, PedalDir, TouchSettings } from "./settings.ts";
+import type { HudSettings, TouchSettings } from "./settings.ts";
+import type { ShiftWindow } from "./shift-window.ts";
 import { clamp, formatTime } from "../lib/util.ts";
 import { RaceClock, StartLights } from "./hud-clock.tsx";
 import type { LiveRun } from "./snapshot.ts";
@@ -61,8 +67,13 @@ export type HudSnapshot = {
   gearbox: "auto" | "manual";
   /** Tachometer reading, 0..1 of the redline. */
   rpm: number;
-  /** True while a higher gear is available and the revs are in the red. */
+  /** True while a higher gear is available and the revs are in the red: the
+   * shift light on the cluster. */
   shiftUp: boolean;
+  /** Which gears a GUARDED shift may take — the thumb flick's window, and
+   * what colours the gear words on the pedal hint. Both false in the
+   * automatic box, which picks its own. See shift-window.ts. */
+  shift: ShiftWindow;
   airborne: boolean;
   /** The route, the car on it, and how far through the stage the run is —
    * the top bar has no progress pill; the minimap's frame is the gauge. */
@@ -161,6 +172,10 @@ type HudProps = {
   show: HudSettings;
   /** Which thumb steers, and what each drag off the pedal anchor does. */
   touchLayout: TouchSettings;
+  /** Whether a controller has the car. The thumb zones come off when one
+   * does: a handheld with sticks and triggers in its hands does not want a
+   * wheel and a pedal drawn over the road it is already driving on. */
+  padDriving: boolean;
   /** The clock and the start lights read this every frame instead of
    * waiting for the next snapshot. */
   live: LiveRun;
@@ -189,299 +204,13 @@ type HudProps = {
   /** R30 — the stage's points and the location table they went onto. Null
    * outside the campaign. */
   campaign: FinishStandings | null;
+  /** HEADS UP's own sheet — one race, no board. Null outside that mode, and
+   * never set at the same time as `campaign`. */
+  race: FinishRace | null;
   /** The location whose table stands between this run and the next country,
    * or null when nothing does. */
   locked: string | null;
 };
-
-/** Capture the pointer so a drag that leaves the zone keeps steering; a
- * pointer that cannot be captured (synthetic, already released) is fine —
- * the zone still tracks it by id. */
-function capturePointer(e: { currentTarget: EventTarget | null; pointerId: number }): void {
-  try {
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  } catch {
-    /* see above */
-  }
-}
-
-/** Ask the DOM whether a finger is still on the glass. Capture is the only
- * one who knows: the browser drops it the moment a touch ends, whether or
- * not it ever told us the touch ended. This is what a zone's guard checks
- * before refusing a new claim, and what its watchdog ticks on. */
-function stillDown(zone: EventTarget | null): (pointerId: number) => boolean {
-  const el = zone as HTMLElement | null;
-  return (pointerId) => el?.hasPointerCapture(pointerId) ?? false;
-}
-
-/** Thumb travel (px) from the anchor for full steering lock — the wheel's
- * whole throw. Long enough that holding a line is a push, not a switch. */
-const WHEEL_REACH_PX = 70;
-/** The throw is shaped `travel ** this`, so the first centimetre of thumb
- * buys less lock than the last. A slight steer is then a target a thumb can
- * actually hit instead of the twitch either side of centre — but only just
- * past linear: the car's own response carries the rest, and a stronger curve
- * here only makes the top of the throw feel like a cliff of its own. */
-const WHEEL_THROW_CURVE = 1.15;
-/** The rim has weight: it never teleports to the thumb, it turns toward it.
- * This is the floor rate in lock/second — what a fingertip nudge earns... */
-const WHEEL_TURN_FLOOR = 1.8;
-/** ...and this is what each unit of gap between thumb and rim adds on top,
- * so a committed shove reaches full lock in about a sixth of a second while
- * a wobble that is corrected before the rim catches up barely steers at all.
- * The engine's own rack (TUNING.steering.rackRate) lags again behind this,
- * and the two delays STACK: what the thumb feels is the sum, so neither can
- * be tuned for weight on its own. */
-const WHEEL_TURN_GAIN = 12;
-/** Rim rotation at full lock, degrees — also the fill arc's full sweep. */
-const WHEEL_LOCK_DEG = 120;
-/** Drag (px) from the anchor before a pedal gesture beats plain gas. */
-const PEDAL_DEAD_PX = 28;
-
-/** The directions a hint arrow can be drawn in, and what each bound action
- * is called on it — "DRIFT" rather than "HANDBRAKE", because that is what
- * the player is reaching for it to do. */
-const PEDAL_HINT_DIRS: PedalDir[] = ["up", "down", "left", "right"];
-const PEDAL_HINT_WORD: Record<Exclude<PedalMode, "gas">, string> = {
-  brake: "BRAKE",
-  handbrake: "DRIFT",
-};
-
-/** The left thumb: touching anywhere anchors a steering wheel under the
- * finger; dragging sideways turns it and releasing recenters. The rim does
- * not snap to the thumb — it chases it at a rate set by the gap between the
- * two, which is what makes a small drag a small steer and a hard one
- * unambiguous. A blue arc fills the rim from 12 o'clock to the marker, so
- * the lock actually commanded is readable at a glance mid-drift.
- * Screen-space: right = +1 (input.ts flips the sign for the engine once).
- * Written straight into the input manager and the wheel's DOM from the
- * pointer events and one rAF loop; the 12 Hz HUD re-render never touches
- * these styles. */
-function SteerZone({ touch, side }: { touch: InputManager["touch"]; side: "left" | "right" }) {
-  const wheelRef = useRef<HTMLDivElement>(null);
-  const fillRef = useRef<SVGCircleElement>(null);
-  const originRef = useRef(0);
-  /** Where the thumb is asking the rim to be, and where the rim has got to. */
-  const targetRef = useRef(0);
-  const steerRef = useRef(0);
-  const frameRef = useRef(0);
-  const lastRef = useRef(0);
-
-  const setSteer = (value: number): void => {
-    steerRef.current = value;
-    touch.steer = value;
-    const deg = value * WHEEL_LOCK_DEG;
-    wheelRef.current?.style.setProperty("--turn", `${deg.toFixed(1)}deg`);
-    const fill = fillRef.current;
-    if (fill) {
-      // pathLength=360 makes the dash units degrees. SVG's zero is 3
-      // o'clock and sweeps clockwise, so a right turn starts a -90° arc at
-      // 12; a left turn starts where the marker now is and sweeps back up
-      // to 12, which paints the same wedge on the other side.
-      fill.setAttribute("transform", `rotate(${(deg < 0 ? -90 + deg : -90).toFixed(1)} 50 50)`);
-      fill.setAttribute("stroke-dasharray", `${Math.abs(deg).toFixed(1)} 360`);
-    }
-  };
-
-  /** Turn the rim toward the thumb. Runs only while a finger is down — the
-   * thumb can hold still, so pointer events alone would stall the chase. */
-  const spin = (now: number): void => {
-    frameRef.current = requestAnimationFrame(spin);
-    const dt = Math.min(0.05, (now - lastRef.current) / 1000);
-    lastRef.current = now;
-    const gap = targetRef.current - steerRef.current;
-    const step = (WHEEL_TURN_FLOOR + WHEEL_TURN_GAIN * Math.abs(gap)) * dt;
-    setSteer(Math.abs(gap) <= step ? targetRef.current : steerRef.current + Math.sign(gap) * step);
-  };
-  const stopSpin = (): void => {
-    cancelAnimationFrame(frameRef.current);
-    frameRef.current = 0;
-  };
-
-  /** Centre the wheel and put it away. Everything it touches is a ref, so
-   * the guard can call it from a window event or an unmount just as safely
-   * as the pointerup does. */
-  const letGo = (): void => {
-    stopSpin();
-    targetRef.current = 0;
-    setSteer(0);
-    if (wheelRef.current) wheelRef.current.style.display = "none";
-  };
-  const letGoRef = useRef(letGo);
-  letGoRef.current = letGo;
-  const guard = useMemo(() => createThumbGuard(() => letGoRef.current(), window), []);
-  useEffect(() => () => guard.dispose(), [guard]);
-
-  return (
-    <div
-      className={`hud-zone hud-zone-${side}`}
-      onPointerDown={(e) => {
-        // The first finger owns the wheel; a second touch on this half is
-        // ignored rather than re-anchoring the steering under the first —
-        // unless the first is a finger the browser never told us about,
-        // which is what the guard refuses to keep believing in.
-        capturePointer(e);
-        if (!guard.claim(e.pointerId, stillDown(e.currentTarget))) return;
-        originRef.current = e.clientX;
-        const wheel = wheelRef.current;
-        if (wheel) {
-          const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
-          wheel.style.left = `${e.clientX - box.left}px`;
-          wheel.style.top = `${e.clientY - box.top}px`;
-          wheel.style.display = "block";
-        }
-        targetRef.current = 0;
-        setSteer(0);
-        lastRef.current = performance.now();
-        if (!frameRef.current) frameRef.current = requestAnimationFrame(spin);
-      }}
-      onPointerMove={(e) => {
-        if (!guard.owns(e.pointerId)) return;
-        const travel = clamp((e.clientX - originRef.current) / WHEEL_REACH_PX, -1, 1);
-        targetRef.current = Math.sign(travel) * Math.abs(travel) ** WHEEL_THROW_CURVE;
-      }}
-      onPointerUp={(e) => guard.release(e.pointerId)}
-      onPointerCancel={(e) => guard.release(e.pointerId)}
-      // Capture taken away mid-drag: whatever the browser does with the rest
-      // of that touch, this zone is no longer hearing about it.
-      onLostPointerCapture={(e) => guard.release(e.pointerId)}
-      onContextMenu={(e) => e.preventDefault()}
-    >
-      <div ref={wheelRef} className="hud-wheel" aria-hidden="true">
-        {/* The rim is a circle: rotating it would show nothing, so it stays
-            in the still layer and carries the fill arc, which measures from
-            a fixed 12 o'clock. Only the spokes and the marker turn. */}
-        <svg className="hud-wheel-svg" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="43" fill="none" stroke="currentColor" strokeWidth="11" />
-          <circle
-            ref={fillRef}
-            className="hud-wheel-fill"
-            cx="50"
-            cy="50"
-            r="43"
-            fill="none"
-            strokeWidth="11"
-            pathLength={360}
-            strokeDasharray="0 360"
-            transform="rotate(-90 50 50)"
-          />
-        </svg>
-        <svg className="hud-wheel-svg hud-wheel-spokes" viewBox="0 0 100 100">
-          {/* Three spokes in a T: the bar across 9–3 and the stem down to
-              6, the way a flat-bottom sport wheel is built. It leaves the
-              top of the rim clear, which is where the fill arc starts. */}
-          <path
-            d="M11 50 L89 50 M50 50 L50 89"
-            stroke="currentColor"
-            strokeWidth="9"
-            strokeLinecap="round"
-          />
-          <circle cx="50" cy="50" r="10" fill="currentColor" />
-          <rect x="46" y="1" width="8" height="12" rx="2" fill="currentColor" />
-        </svg>
-      </div>
-    </div>
-  );
-}
-
-type PedalMode = "gas" | "brake" | "handbrake";
-
-/** The pedal thumb: touching anywhere is GAS; dragging off the anchor does
- * whatever the player has bound to that direction (gas stays on through
- * the handbrake — that is what makes it a drift tool). Sliding back inside
- * the deadzone returns to plain gas; releasing lets everything go. The
- * anchored hint arrows light the active gesture. */
-function PedalZone({
-  touch,
-  layout,
-  side,
-}: {
-  touch: InputManager["touch"];
-  layout: TouchSettings;
-  side: "left" | "right";
-}) {
-  /** The player's direction map, inverted: which action each drag means.
-   * Plain gas is never in here — it is what a drag that lands on a direction
-   * nothing is bound to falls back to. */
-  const byDir: Partial<Record<PedalDir, Exclude<PedalMode, "gas">>> = {
-    [layout.brake]: "brake",
-    [layout.handbrake]: "handbrake",
-  };
-  const hintRef = useRef<HTMLDivElement>(null);
-  const originRef = useRef({ x: 0, y: 0 });
-
-  const setMode = (mode: PedalMode | null): void => {
-    touch.throttle = mode !== null && mode !== "brake";
-    touch.brake = mode === "brake";
-    touch.handbrake = mode === "handbrake";
-    const hint = hintRef.current;
-    // The arrow that lights is the one the thumb is pulling TOWARD, not the
-    // action it triggers: the arrows are drawn per direction, so keying the
-    // highlight off the action would light the wrong one for every player
-    // who moved a gesture off where it shipped.
-    if (hint) hint.dataset.dir = mode === null || mode === "gas" ? "" : layout[mode];
-  };
-  /** Lift every pedal. Like the wheel's, this has to be safe to run when
-   * nothing is held: a lost pointerup here is throttle nobody asked for. */
-  const letGo = (): void => {
-    setMode(null);
-    if (hintRef.current) hintRef.current.style.display = "none";
-  };
-  const letGoRef = useRef(letGo);
-  letGoRef.current = letGo;
-  const guard = useMemo(() => createThumbGuard(() => letGoRef.current(), window), []);
-  useEffect(() => () => guard.dispose(), [guard]);
-
-  return (
-    <div
-      className={`hud-zone hud-zone-${side}`}
-      onPointerDown={(e) => {
-        capturePointer(e);
-        if (!guard.claim(e.pointerId, stillDown(e.currentTarget))) return;
-        originRef.current = { x: e.clientX, y: e.clientY };
-        const hint = hintRef.current;
-        if (hint) {
-          const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
-          hint.style.left = `${e.clientX - box.left}px`;
-          hint.style.top = `${e.clientY - box.top}px`;
-          hint.style.display = "block";
-        }
-        setMode("gas");
-      }}
-      onPointerMove={(e) => {
-        if (!guard.owns(e.pointerId)) return;
-        const dx = e.clientX - originRef.current.x;
-        const dy = e.clientY - originRef.current.y;
-        // Dominant axis picks the direction; a direction nothing is bound
-        // to stays gas, so a sloppy thumb never brakes by accident.
-        let mode: PedalMode = "gas";
-        if (Math.max(Math.abs(dx), Math.abs(dy)) >= PEDAL_DEAD_PX) {
-          const dir: PedalDir =
-            Math.abs(dy) >= Math.abs(dx) ? (dy < 0 ? "up" : "down") : dx > 0 ? "right" : "left";
-          mode = byDir[dir] ?? "gas";
-        }
-        setMode(mode);
-      }}
-      onPointerUp={(e) => guard.release(e.pointerId)}
-      onPointerCancel={(e) => guard.release(e.pointerId)}
-      onLostPointerCapture={(e) => guard.release(e.pointerId)}
-      onContextMenu={(e) => e.preventDefault()}
-    >
-      <div ref={hintRef} className="hud-pedal-hint" aria-hidden="true">
-        {PEDAL_HINT_DIRS.map((dir) => {
-          const mode = byDir[dir];
-          if (!mode) return null;
-          return (
-            <span key={dir} className={`hud-hint hud-hint-${dir}`}>
-              <i className={`hud-hint-arrow hud-hint-arrow-${dir}`} />
-              {PEDAL_HINT_WORD[mode]}
-            </span>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 /** The tach dial, laid out like the arcade cluster it comes from: it reads
  * 0–9 (thousands) counter-clockwise from the bottom, red from 7.5 up, and
@@ -962,34 +691,6 @@ function PositionBoard({ standing }: { standing: HudStanding }) {
   );
 }
 
-function TouchButton({
-  label,
-  className,
-  onPress,
-  onRelease,
-}: {
-  label: string;
-  className: string;
-  onPress: () => void;
-  onRelease: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      className={`hud-btn ${className}`}
-      onPointerDown={(e) => {
-        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-        onPress();
-      }}
-      onPointerUp={onRelease}
-      onPointerCancel={onRelease}
-      onContextMenu={(e) => e.preventDefault()}
-    >
-      {label}
-    </button>
-  );
-}
-
 export function Hud({
   snap,
   live,
@@ -999,6 +700,7 @@ export function Hud({
   input,
   show,
   touchLayout,
+  padDriving,
   onPause,
   onCamera,
   onShot,
@@ -1007,6 +709,7 @@ export function Hud({
   onRetire,
   scores,
   campaign,
+  race,
   locked,
 }: HudProps) {
   const { touch } = input;
@@ -1016,8 +719,9 @@ export function Hud({
   // the pedal zone's whole default is GAS, so anything that can still reach
   // it — a stylus, a hybrid laptop, a browser that reports its pointers
   // oddly — is a way for the car to be given throttle nobody asked for. On a
-  // desktop the throttle key is the only throttle there is.
-  const thumbs = deviceControls().touch;
+  // desktop the throttle key is the only throttle there is, and on a handheld
+  // with a controller in its hands the pad is.
+  const thumbs = deviceControls().touch && !padDriving;
   return (
     <div
       className="hud pointer-events-none absolute inset-0 select-none"
@@ -1051,11 +755,11 @@ export function Hud({
         </div>
         <div className="hud-actions pointer-events-auto">
           {/* TOUCH ONLY, and that is the whole of its case: a device with a
-              keyboard already has the bind, and a fourth thing on the one
-              row a thumb reaches for mid-stage is clutter for somebody who
-              does not need it. Without this button the feature simply could
-              not be REACHED on a phone — everything else about it already
-              worked there. */}
+              keyboard or a controller already has the bind, and a fourth
+              thing on the one row a thumb reaches for mid-stage is clutter
+              for somebody who does not need it. Without this button the
+              feature simply could not be REACHED on a phone — everything
+              else about it already worked there. */}
           {onShot && thumbs && (
             <button
               type="button"
@@ -1142,7 +846,9 @@ export function Hud({
             standing={
               snap.standing && {
                 ...snap.standing,
-                podium: snap.standing.place <= PODIUM_PLACES,
+                // A heads-up race has no podium to miss: it pays nothing, it
+                // opens nothing, and every finish in it is simply the result.
+                podium: race !== null || snap.standing.place <= PODIUM_PLACES,
               }
             }
             nextStage={nextStage}
@@ -1150,6 +856,7 @@ export function Hud({
             onRetire={onRetire}
             scores={scores}
             campaign={campaign}
+            race={race}
             locked={locked}
           />
         )}
@@ -1189,26 +896,18 @@ export function Hud({
 
       {/* Touch controls — one half of the screen anchors a steering wheel
           under the thumb, the other is the gesture pedal (gas / brake /
-          handbrake). Which half is which is the player's choice.
-          Manual gear taps float above the pedal zone. */}
+          handbrake, and the gears on a flick). Which half is which is the
+          player's choice. */}
       <div className="hud-touch">
         {thumbs && <SteerZone touch={touch} side={touchLayout.steerSide} />}
-        {thumbs && <PedalZone touch={touch} layout={touchLayout} side={pedalSide} />}
-        {thumbs && snap.gearbox === "manual" && (
-          <div className="hud-gears">
-            <TouchButton
-              label="−"
-              className="hud-shift"
-              onPress={() => input.requestShift(-1)}
-              onRelease={() => undefined}
-            />
-            <TouchButton
-              label="+"
-              className="hud-shift"
-              onPress={() => input.requestShift(1)}
-              onRelease={() => undefined}
-            />
-          </div>
+        {thumbs && (
+          <PedalZone
+            touch={touch}
+            layout={touchLayout}
+            side={pedalSide}
+            shift={snap.gearbox === "manual" ? snap.shift : null}
+            onShift={input.requestShift}
+          />
         )}
       </div>
     </div>

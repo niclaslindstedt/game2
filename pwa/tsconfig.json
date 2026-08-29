@@ -24,6 +24,12 @@
     },
     "strict": true,
     "noEmit": true,
+    // The second half of `make build`'s typecheck — see the root tsconfig
+    // for why this is cached and why CI still runs cold. Its own file, in
+    // the workspace root's cache: two projects sharing one buildinfo would
+    // each invalidate the other's every run.
+    "incremental": true,
+    "tsBuildInfoFile": "../node_modules/.cache/tsc/pwa.tsbuildinfo",
     "skipLibCheck": true,
     "types": ["node"]
   },

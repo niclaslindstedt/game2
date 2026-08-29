@@ -13,13 +13,18 @@ import type { CarSpec, GameEvent, GameState } from "@engine";
 import {
   backlightNormal,
   buildCarBody,
+  cockpitWheelTurn,
+  dialAngle,
   frontLampAnchors,
   rearLampAnchors,
   steeringTurn,
+  DIAL_TOP_SPEED,
   GLASS_OPACITY,
+  INSTRUMENT_MATERIAL,
   LENS_MATERIAL,
   type InteriorDetail,
 } from "./car-body.ts";
+import type { CrewLook } from "./car-crew.ts";
 import { createCarDamage } from "./car-damage.ts";
 import { createCarDirt, wheelSpray } from "./car-dirt.ts";
 import type { Livery } from "./car-livery.ts";
@@ -82,6 +87,25 @@ const WHITE = new THREE.Color(1, 1, 1);
  * both short of solid, because a window that closes completely is a panel. */
 const GLASS = { glint: 0.26, grime: 0.24, ceiling: 0.94, falloff: 3 };
 
+/** What the glass keeps of that when the camera is INSIDE the car. Every
+ * number above is authored for a pane read from outside — a baked sky
+ * gradient brought forward by the angle and the filth on it — and from the
+ * driver's seat the same pane is a wash of pale blue over the top half of
+ * the road. A windscreen looked THROUGH is nearly clear, and the little that
+ * is left is what keeps the window from reading as an empty hole. */
+const GLASS_INSIDE = 0.25;
+
+/** WHAT THE CABIN KEEPS OF THE WORLD'S LIGHT, by day and once the lamps are
+ * on. A closed box gets no sun: even in daylight the room around the driver
+ * is a clear step darker than the paint outside it, which is most of what
+ * makes the road through the windscreen read as bright. At night it goes to
+ * almost nothing — a rally car's cabin is unlit, and the two instruments are
+ * the only things in it that are not. Those keep their authored colours
+ * whatever the sky is doing (INSTRUMENT_MATERIAL is exempted from the tint
+ * the same way a lamp is), so the darker the stage the more they are the
+ * only thing there is to see. */
+const CABIN_LIGHT = { day: 0.78, night: 0.16 };
+
 /** Where a car with no authored lamps at one end throws its beam from, m
  * from the centerline — a spec is allowed to have a bare face, and a beam
  * still has to come from somewhere sensible. */
@@ -97,6 +121,11 @@ const WHEEL_STEER_RATE = 14;
 
 export type CarVisual = {
   group: THREE.Group;
+  /** The first-person cabin, when this car was built with one. Handed out
+   * for the same reason the cabin is: the rear-view mirror looks back from
+   * between the seats, and a fascia in the way answers nothing. Null on
+   * every car but the player's. */
+  cockpit: THREE.Object3D | null;
   /** The cabin and the glass over it. Handed out for one reason: the
    * rear-view mirror's lens sits between this car's own seats, so the mirror
    * pass has to take both out first or it draws the back of the bulkhead
@@ -112,6 +141,15 @@ export type CarVisual = {
    * how hard the glass catches the light this frame. Left off, the pane
    * keeps whatever it had. */
   update: (state: GameState, dt: number, eye?: THREE.Vector3) => void;
+  /** Whether the camera is sat INSIDE this car. It swaps the cabin the
+   * player is looking at — the interior's furniture out, the cockpit in,
+   * because from the driver's seat the two occupy the same space — and
+   * thins the glass down to what a windscreen looked through actually is.
+   * A no-op on a car built without a cockpit. */
+  setInside: (inside: boolean) => void;
+  /** Whether the rear view is live this frame — what puts a picture in the
+   * cockpit mirror's pane rather than leaving it dark glass. */
+  setRearView: (on: boolean) => void;
   onEvents: (state: GameState, events: GameEvent[]) => void;
   /** Whether the run's light is gone — the lamps burn harder when it is,
    * and their lenses stop taking the tint the paint takes. Pushed from the
@@ -141,6 +179,11 @@ const GHOST_OPACITY = 0.46;
 export type CarOptions = {
   /** Build the car as a ghost: see-through, and dimmer where it glows. */
   ghost?: boolean;
+  /** The rear view, for the pane in the cockpit mirror's glass. */
+  rearView?: { texture: THREE.Texture; aspect: number };
+  /** Also build the first-person cabin (car/cockpit.ts) — the player's car
+   * only. Fifteen fascias nobody will ever sit behind is fifteen fascias. */
+  cockpit?: boolean;
   /** How much cabin is built behind the glass — the player's VIDEO option.
    * Defaults to the full one; the field builds itself down a level, because
    * fifteen cabins is a different bill from one. */
@@ -149,6 +192,8 @@ export type CarOptions = {
    * than the livery car-styles.ts authored for it — how a car that is not
    * the player's is told apart from the player's. */
   paint?: Livery;
+  /** The crew behind the glass (car-crew.ts). Defaults to the player's. */
+  crew?: CrewLook;
 };
 
 /** How far off the centerline this car's beams hang, front and rear. */
@@ -179,8 +224,15 @@ export function tintCar(
     const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
     for (const mat of mats) {
       const painted = mat instanceof THREE.MeshBasicMaterial || mat instanceof THREE.PointsMaterial;
-      const lamp = mat.name === LAMP_MATERIAL || mat.name === LENS_MATERIAL;
-      if (painted && !lamp) mat.color.copy(tint);
+      // Three names are driven rather than tinted: the lamp bloom and its
+      // lens, which get BRIGHTER as the light goes, and the cockpit's own
+      // instruments, which do not answer to the sky at all. The cabin is
+      // tinted here and then darkened again by `setLights`.
+      const driven =
+        mat.name === LAMP_MATERIAL ||
+        mat.name === LENS_MATERIAL ||
+        mat.name === INSTRUMENT_MATERIAL;
+      if (painted && !driven) mat.color.copy(tint);
     }
   });
   visual.setLights(lampsLit, tint);
@@ -192,7 +244,12 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
   // Which wheels the engine can spin, and which ones only the road turns.
   const driven = drivenAxles(spec.drive);
   const bodySpec = bodySpecFor(spec, options.paint);
-  const body = buildCarBody(bodySpec, { interior: options.interior });
+  const body = buildCarBody(bodySpec, {
+    interior: options.interior,
+    crew: options.crew,
+    cockpit: options.cockpit,
+    rearView: options.rearView,
+  });
   // Panels, parts and wheels share one material, so a ghost is one flag.
   // Its own back faces still occlude its front ones (depth writing stays
   // on): a car you can see through is a ghost, a car you can see the
@@ -306,6 +363,12 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
       if (lit) lensMat.color.setRGB(1, 1, 1);
       else lensMat.color.copy(worldLight).lerp(WHITE, LENS_DARK);
     }
+    // The cabin: the world's light, taken down again by how much of it gets
+    // into a closed box. `tintCar` has already put the raw tint on it.
+    const cabinMat = body.cockpitMaterial;
+    if (cabinMat) {
+      cabinMat.color.copy(worldLight).multiplyScalar(lit ? CABIN_LIGHT.night : CABIN_LIGHT.day);
+    }
   };
 
   const length = bodySpec.profile[0].z - bodySpec.profile[bodySpec.profile.length - 1].z;
@@ -353,7 +416,21 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
       glint = Math.pow(1 - Math.abs(view.dot(screen)), GLASS.falloff);
     }
     const want = GLASS_OPACITY + GLASS.glint * glint + GLASS.grime * dirt.level();
-    glassMat.opacity = Math.min(want, GLASS.ceiling) * fade;
+    glassMat.opacity = Math.min(want, GLASS.ceiling) * fade * (inside ? GLASS_INSIDE : 1);
+  };
+
+  /** Whether the lens is inside this car this frame — what the glass and
+   * the two cabins are swapped by. */
+  let inside = false;
+  const setInside = (next: boolean): void => {
+    if (!body.cockpit || inside === next) return;
+    inside = next;
+    body.cockpit.group.visible = next;
+    if (body.cabinTrim) body.cabinTrim.visible = !next;
+  };
+
+  const setRearView = (on: boolean): void => {
+    if (body.cockpit?.mirrorGlass) body.cockpit.mirrorGlass.visible = on;
   };
 
   const update = (state: GameState, dt: number, eye?: THREE.Vector3): void => {
@@ -397,7 +474,18 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
       if (front) body.wheelGroups[i].rotation.y = steerVisual;
     }
 
-    if (body.steering) body.steering.rotation.z = steeringTurn(steerVisual / WHEEL_STEER_LOCK);
+    const lock = steerVisual / WHEEL_STEER_LOCK;
+    if (body.steering) body.steering.rotation.z = steeringTurn(lock);
+    // The cockpit's own wheel goes further than the one behind the glass —
+    // it is read at arm's length rather than through a tinted pane — and its
+    // two needles are the only instruments in the game that are GEOMETRY.
+    // Both are driven off the same numbers the HUD reads, so a glance down
+    // at the dials and a glance up at the readout never disagree.
+    if (body.cockpit && inside) {
+      body.cockpit.steering.rotation.z = cockpitWheelTurn(lock);
+      body.cockpit.tacho.rotation.z = dialAngle(car.rev);
+      body.cockpit.speedo.rotation.z = dialAngle(Math.abs(car.u) / DIAL_TOP_SPEED);
+    }
 
     dirt.update(state, dt);
     // The glass answers to both the weather landing on it and the filth the
@@ -437,9 +525,12 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
   return {
     group,
     cabin: body.cabin,
+    cockpit: body.cockpit?.group ?? null,
     shadow,
     debris: damage.debris,
     update,
+    setInside,
+    setRearView,
     onEvents: damage.onEvents,
     setLights,
     setWet,

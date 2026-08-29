@@ -17,6 +17,9 @@ make track        # render stages to previews/track-<seed>.png
 make cars         # render the car models to previews/cars.png (chase-cam + turntable sheet)
 make liveries     # render one body in the field's paint schemes to previews/liveries.png
 make field        # render the campaign's fourteen rivals in their own cars and colours
+make crew         # render the sixteen crew characters (previews/crew.png)
+make items        # photograph ONE THING at a time — a turntable per item, on a metre grid
+make items-list   # every item the turntable sheet knows, by group
 make sky          # render the atmosphere to previews/sky.png (every weather x time, plus a strike)
 make audition     # build previews/audition.html — every sound and both scores, playable
 make screenshots  # drive the built app headlessly, screenshot key moments
@@ -31,14 +34,22 @@ make hooks        # install pre-commit + commit-msg hooks
 
 **Verify with `make test` / `make lint` — never a bare `npx vitest run` habit**: the Make targets are the definition of green that CI enforces.
 
+## How work is done here
+
+Two rules that apply to every task in this repo, before any subject skill has a say. Both are the `write-code` skill's, restated here because a session that gets them wrong gets them wrong from its first tool call:
+
+- **Change files with the file tools — Read, then Edit or Write. Never through the shell.** No `sed -i`, no `python3 - <<'PY'`, no `cat > file <<'EOF'`. A shell rewrite hides the actual change behind a script, and this repo's prose comments are full of `$`, backticks, em dashes and backslashes that a heredoc quietly eats. The shell stays the right tool for READING (`grep`, `wc -l`, `git show`) and for running the checks.
+- **Lint, typecheck and format ONCE, at the gate — not after every edit.** `make fmt` / `make lint` / `make test` are the commit's gate (the `commit` skill owns the split). Re-running them between one edit and the next re-checks code nobody touched and tells you nothing; batch the whole coherent change, then check it. Mid-loop, if a specific answer is genuinely needed, check only the files you touched (`npx eslint <paths>`, `npx tsc --noEmit -p pwa/tsconfig.json`) — never a whole-repo pass, and never `prettier`, whose every finding `make fmt` fixes at the end for free.
+
 ## The iteration workflow: simulate, screenshot, look
 
 This project is tuned by measuring, not guessing:
 
 1. **`make sim`** before and after every handling/generator change. The table (pace, drifts, clean exits, air time, respawns) is the regression surface — bots must keep finishing and keep drifting.
 2. **`make track`** to LOOK at what the rules engine builds.
-3. **`make screenshots`** to LOOK at the game itself (grid, speed, drift, hood cam, portrait). In Claude web sessions Chromium is preinstalled — `CHROMIUM_PATH=/opt/pw-browsers/chromium make screenshots`.
-4. **`make profile`** before and after every rendering change. Draw calls, triangles and binds are the numbers a real GPU sees; the fps it also prints is software rasterization and means nothing off this machine.
+3. **`make screenshots`** to LOOK at the game itself (grid, speed, drift, every camera on the ladder, the cockpit by day and by night, portrait). In Claude web sessions Chromium is preinstalled — `CHROMIUM_PATH=/opt/pw-browsers/chromium make screenshots`.
+4. **`make items`** to LOOK at one thing on its own — a stone, a fern, the cabin behind the glass. Most of what the world is made of is six pixels at the speed you pass it; this is where it gets rotated and measured. `ITEMS=` picks the rows, `GROUP=` a whole kind, `TURNTABLE=` the seats to walk round.
+5. **`make profile`** before and after every rendering change. Draw calls, triangles and binds are the numbers a real GPU sees; the fps it also prints is software rasterization and means nothing off this machine.
 
 Both harnesses serve `pwa/dist`, so **`make build` first, every time**: a stale
 dist photographs and meters the last change rather than this one, and the
@@ -68,6 +79,10 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | What separates one CAR from another                         | `cars.ts` + `TUNING.drivetrain` — the `car-tuning` skill                                                                         |
 | A car's LOOK (silhouette, panels, wheels, livery)           | `pwa/src/game/car-styles.ts` (specs); generator in `pwa/src/game/car/`                                                           |
 | What is BEHIND the glass (trim, seats, crew, cage, wheel)   | `pwa/src/game/car/interior.ts` — the `car-design` skill                                                                          |
+| What the DRIVER sees: fascia, dials, wheel, pedals, mirror  | `pwa/src/game/car/cockpit.ts` — the player's car only; the deck it needs cut out is `OpenCabin` in `car/shell.ts`                |
+| How an IN-CAR camera sits, moves and takes a hit            | `pwa/src/game/camera-eye.ts` (`EYE_RIGS`) — the `game-feel` skill                                                                |
+| WHO is behind the wheel (build, hair, helmet, gear colours) | `pwa/src/game/car-crew.ts` (the sixteen, as data); the models are built in `pwa/src/game/car/crew.ts` — the `car-design` skill   |
+| What a MAP READER is, and what the pair are wearing         | `MAP_READER` + the crew's `CrewColors` in `pwa/src/game/car-crew.ts` — one model, in the driver's own colours                    |
 | How see-through a window is, and what it reflects           | `car/greenhouse.ts` bakes the gradient; `car-mesh.ts` adds the per-frame glint                                                   |
 | The head- and tail lamps, and what a LIT one looks like     | `pwa/src/game/car/lamps.ts` builds the bowls; `car-mesh.ts` switches them and blooms them — the `car-design` skill               |
 | A PAINT SCHEME an opponent is dressed in                    | `pwa/src/game/car-livery.ts` (palettes + patterns) — the `car-design` skill                                                      |
@@ -87,6 +102,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | The rival cars you can see and hit                          | `pwa/src/game/field-cars.ts`; the plate over each one is `name-tag.ts`                                                           |
 | The name over a car that is not the player's                | `pwa/src/game/name-tag.ts` — a label, a colour and a point; it must never learn what a bot is                                    |
 | Anything drawn (meshes, textures, camera, effects)          | `pwa/src/game/` (renderer.ts and friends)                                                                                        |
+| Where the camera stands OUTSIDE the car                     | `CHASE_RIGS` in `pwa/src/game/camera.ts` — one row per angle                                                                     |
 | What colour the sky is under given conditions               | `pwa/src/game/sky.ts` (the presets and the weather/season colour maths)                                                          |
 | What is IN the sky (cumulus, the overcast deck, scud)       | `pwa/src/game/clouds.ts`                                                                                                         |
 | Lightning and the thunder behind it                         | `pwa/src/game/storm.ts` (drawn) + `thunder_*` in `audio/bank.ts` (heard)                                                         |
@@ -97,11 +113,17 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | Anything HEARD (a hit, a landing, a menu click)             | `pwa/src/game/audio/bank.ts` (+ a rung in `route.ts`) — the `sound-effects` skill                                                |
 | A continuous sound (engine, tyres, wind, the slide)         | `engine-bed.ts` / `road-grain.ts` in `pwa/src/game/audio/`                                                                       |
 | A piece of MUSIC                                            | `pwa/src/game/audio/scores/` — the `soundtrack` skill                                                                            |
-| HUD / touch controls                                        | `pwa/src/game/hud.tsx` + `pwa/src/styles.css` (a thumb zone's grip on a finger: `thumb-guard.ts`)                                |
+| HUD readouts (dials, boards, calls)                         | `pwa/src/game/hud.tsx` + `pwa/src/styles.css`                                                                                    |
+| The TOUCH controls — the wheel and the pedal thumb zones    | `pwa/src/game/hud-touch.tsx`; a zone's grip on a finger is `thumb-guard.ts`, what a drag MEANS is `pedal-gesture.ts`             |
+| Which gears a thumb flick may take, and why a key may not   | `pwa/src/game/shift-window.ts` — DOM-free, and the shift light reads off it too                                                  |
 | Input mapping                                               | `pwa/src/game/input.ts` (bindings in `settings.ts`)                                                                              |
+| A CONTROLLER: its sticks, its triggers, what its buttons do | `pwa/src/game/gamepad.ts` reads a polled pad (DOM-free); `input.ts` does the polling, bindings in `settings.ts`                  |
+| Walking a MENU on a controller                              | `pwa/src/game/menu-nav.ts` (the cards, and `data-nav-back`) over `menu-cursor.ts` (where the cursor goes — DOM-free)             |
 | Main menu pages / routing                                   | `pwa/src/game/main-menu.tsx` (+ `menu-roam`, `menu-options`, `menu-car`)                                                         |
 | The pre-race card: car, spec sheet, gearbox                 | `pwa/src/game/menu-car.tsx`; the numbers on it in `car-stats.ts` (derived from the catalog)                                      |
 | Campaign stages, locations, points, unlocks                 | `pwa/src/game/campaign.ts` — one board: the points a stage pays ARE what opens the next stage and the next location              |
+| The mass-start GRID, and the only catch-up in the game      | `engine/sim/grid.ts` + `TUNING.massStart` — the zig-zag on the apron, and the drive a row back is owed                           |
+| The HEADS UP page and its three settings                    | `pwa/src/game/menu-headsup.tsx`; the stage boxes all three grids share are `pwa/src/game/menu-levels.tsx`                        |
 | The standings sheet, drawn                                  | `pwa/src/game/results-table.tsx` (the results card's modal and the menu's own table)                                             |
 | The time trial's high score board and its initials          | `pwa/src/game/scores.ts` (storage) + `score-board.tsx` / `hud-initials.tsx`                                                      |
 | The time trial's ghost: recording, replay, storage          | `pwa/src/game/ghost.ts`                                                                                                          |
@@ -193,7 +215,7 @@ Skills live in `.agent/skills/` (`.claude/skills` symlinks there) — each a `SK
 - **`car-tuning`** — what separates one CAR from another: the catalog, the
   drivetrain and engine tables, and the roster-balance sweep that proves no
   car is best everywhere.
-- **`car-design`** — how the cars LOOK: the parametric body builder, the per-car specs, the field's paint schemes (including what each named rival is painted), and the `make cars` / `make liveries` / `make field` render-compare-iterate loop.
+- **`car-design`** — how the cars LOOK: the parametric body builder, the per-car specs, the field's paint schemes (including what each named rival is painted), the sixteen crew characters behind the glass, and the `make cars` / `make liveries` / `make field` / `make crew` render-compare-iterate loop.
 - **`nature`** — the biomes, trees and flora, ground cover, terrain paint, and the rally-gate dressing: the world the road runs through.
 
 **Maintenance** (each with a `.last-updated` baseline):

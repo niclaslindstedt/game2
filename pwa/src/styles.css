@@ -1394,9 +1394,12 @@ body {
   }
 }
 
-/* The pedal hint: an arrow per bound gesture, ringing the thumb's anchor.
-   Which direction holds which gesture is the player's, so the arrows are
-   POSITIONS and `data-dir` lights the one being pulled toward. */
+/* The pedal hint: an arrow per gesture that direction carries, ringing the
+   thumb's anchor. Which direction holds which pedal is the player's, so the
+   arrows are POSITIONS and `data-dir` lights the one being pulled toward.
+   A vertical one can name two things at once in the manual box — the gear
+   the flick takes and the pedal the hold is — so each word is its own line
+   in the stack rather than a run of text that would widen the anchor. */
 .hud-pedal-hint {
   position: absolute;
   display: none;
@@ -1411,7 +1414,8 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.2rem;
+  gap: 0.15rem;
+  white-space: nowrap;
   font-size: 0.6rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -1422,7 +1426,9 @@ body {
 
 .hud-hint-up {
   left: 0;
-  top: -4.8rem;
+  /* Measured from the anchor's BOTTOM so the label grows upward, away from
+     the thumb, however many lines it runs to. */
+  bottom: 2.6rem;
   transform: translateX(-50%);
 }
 
@@ -1473,60 +1479,70 @@ body {
   border-right: 10px solid currentcolor;
 }
 
+/* THE GEAR FLICKS — two chevrons stacked immediately left of the thumb, in
+   the manual box only. Left because that is the slot nothing is bound to by
+   default, and because the thumb's own drag never travels that way: a control
+   the finger passes over would be a control the finger hides.
+
+   Both arrows are always drawn and the LIT one is the gear the revs will take
+   right now, so the answer is a glance rather than a try. They sit outside
+   `.hud-hint`, and so outside its resting opacity, on purpose: this is the one
+   thing on the pedal read continuously, and a state carried at 40% over a
+   bright sky is a state nobody reads at speed. */
+.hud-flick {
+  position: absolute;
+  right: 2.6rem;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.7rem;
+  transform: translateY(-50%);
+  color: var(--hud-ink);
+  filter: drop-shadow(2px 2px 0 rgb(18 48 105 / 70%));
+}
+
+/* Sized as an INSTRUMENT, not a caption: this is decision-driving, glanced at
+   mid-corner over a car and a bright sky, so it is half again the hint ring's
+   arrows and carries a heavier shadow. A gear that is not there yet is still
+   drawn — the pair is how the gesture is learned — but drawn faint enough
+   that the eye skips it and only the lit one reports. */
+.hud-flick-arrow {
+  width: 0;
+  height: 0;
+  border: 13px solid transparent;
+  opacity: 0.35;
+  transition: opacity 90ms steps(2);
+}
+
+.hud-flick-arrow[data-on] {
+  opacity: 1;
+  color: var(--hud-good);
+}
+
+.hud-flick-arrow-up {
+  border-top-width: 0;
+  border-bottom: 19px solid currentcolor;
+}
+
+.hud-flick-arrow-down {
+  border-bottom-width: 0;
+  border-top: 19px solid currentcolor;
+}
+
+/* A pedal bound to the left stands off to clear them. It is the right way
+   round: the flicks are read every few seconds, a pedal label once, while
+   the layout is being learned. */
+.hud-pedal-hint[data-flick] .hud-hint-left {
+  right: 6.6rem;
+}
+
 .hud-pedal-hint[data-dir="up"] .hud-hint-up,
 .hud-pedal-hint[data-dir="down"] .hud-hint-down,
 .hud-pedal-hint[data-dir="left"] .hud-hint-left,
 .hud-pedal-hint[data-dir="right"] .hud-hint-right {
   opacity: 1;
   color: var(--hud-good);
-}
-
-.hud-btn {
-  pointer-events: auto;
-  font: inherit;
-  font-weight: 800;
-  color: var(--hud-ink);
-  background: rgb(18 48 105 / 55%);
-  border: 3px solid rgb(255 255 255 / 70%);
-  border-radius: 1rem;
-  cursor: pointer;
-  touch-action: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.hud-btn:active {
-  background: rgb(255 210 62 / 75%);
-  color: var(--hud-shadow);
-}
-
-/* Manual gear taps float over the pedal zone's top-right corner — later in
-   the DOM than the zones, so a tap lands on the button, not the pedal. */
-.hud-gears {
-  position: absolute;
-  right: max(1rem, env(safe-area-inset-right));
-  bottom: max(4.5rem, calc(env(safe-area-inset-bottom) + 4rem));
-  display: flex;
-  gap: 0.5rem;
-  pointer-events: none;
-}
-
-/* Portrait stacks the cluster into this same corner, so the taps step up over
-   it. Measured from the CLUSTER's anchor rather than the screen's, so a
-   safe-area inset moves both together. This rule has to sit after the base one
-   above: a media query adds no specificity, so an override written earlier in
-   the file simply loses. */
-@media (orientation: portrait) {
-  .hud-gears {
-    bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 4.4rem);
-  }
-}
-
-.hud-shift {
-  width: clamp(2.6rem, 9vmin, 3.6rem);
-  height: clamp(2.6rem, 9vmin, 3.6rem);
-  font-size: 1.4rem;
 }
 
 /* Desktop with a mouse: the touch pads are noise; keyboard drives. */
@@ -2993,6 +3009,38 @@ a.menu-version:focus-visible {
   background: rgb(255 90 78 / 35%);
 }
 
+/* Where the pad's CAR rows end and its MENU rows begin. A rule rather than
+   a second heading: the two halves are one list of the same kind of row, and
+   a heading would say they were two lists. */
+.opt-key-divide {
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+  border-top: 2px solid rgb(255 255 255 / 18%);
+}
+
+/* THE CONTROLLER'S CURSOR (menu-nav.ts). A pad has no pointer to point
+   with, so where it is has to be drawn — and drawn hard enough to find at
+   arm's length on a handheld, over cards whose own buttons already glow.
+   It is a class rather than `:focus-visible`, because the browser decides
+   that one from how the press arrived and a gamepad press arrives as
+   nothing: see the note in menu-nav.ts. */
+.nav-cursor {
+  outline: 3px solid var(--hud-good);
+  outline-offset: 3px;
+  border-radius: 0.3rem;
+  box-shadow: 0 0 0.9rem rgb(255 210 62 / 45%);
+}
+
+/* Anything the game moves the cursor onto is worth looking at even before
+   the ring lands — a row that only lights when focused reads as dead. */
+@media (prefers-reduced-motion: no-preference) {
+  .nav-cursor {
+    transition:
+      outline-color 90ms linear,
+      box-shadow 90ms linear;
+  }
+}
+
 /* Portrait: the stage grid drops to two columns rather than one, so all
    four boxes stay countable in a glance without scrolling. */
 @media (orientation: portrait) {
@@ -3737,6 +3785,12 @@ a.menu-version:focus-visible {
    everybody has. */
 .results-table.is-standings .results-row {
   grid-template-columns: 1.8em 1fr 3.6em;
+}
+
+/* …and a HEADS-UP race is the other way round: a stage, a time, and no board
+   behind either of them. */
+.results-table.is-race .results-row {
+  grid-template-columns: 1.8em 1fr 4.4em;
 }
 
 .results-pos {

@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim track cars liveries field sky audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim track cars liveries field crew items items-list sky audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
 
 build:
 	npm run build
@@ -54,11 +54,33 @@ cars:
 liveries:
 	npm run cars -- --liveries $(or $(CAR),compact) --count $(or $(COUNT),9) --out liveries
 
+# The sixteen crew characters (previews/crew.png): each one close up in the
+# cabin with the glass off, then through it, then from the chase camera —
+# the sheet that says whether the fat one reads as the fat one. CREW picks a
+# subset (CREW=blink,diesel), CAR the body they are sat in.
+crew:
+	npm run cars -- --crew $(CREW) --out crew $(if $(CAR),--car $(CAR),)
+
 # R29 — the campaign's fourteen rivals as they actually line up: each crew's
 # own car in their own paint, in start order. The sheet that says whether a
 # field of strangers reads as fourteen teams.
 field:
 	npm run cars -- --field --out field
+
+# Photograph ONE THING at a time (previews/items.png): a row per item, a
+# column per view, every row fitted to its own item and standing on a metre
+# grid. The review surface for everything a run screenshot passes too fast
+# to show — a stone, a fern, the cabin behind the glass. ITEMS picks the
+# rows, GROUP a whole kind, TURNTABLE the number of seats to walk round.
+# `make items ITEMS=interior TURNTABLE=8 OUT=cabin`
+items:
+	npm run items -- $(if $(ITEMS),--items $(ITEMS),) $(if $(GROUP),--group $(GROUP),) \
+		$(if $(TURNTABLE),--turntable $(TURNTABLE),) $(if $(SEASON),--season $(SEASON),) \
+		$(if $(CAR),--car $(CAR),) $(if $(OUT),--out $(OUT),)
+
+# Every item the sheet knows how to stand up, by group.
+items-list:
+	npm run items -- --list
 
 # Render the sky to a labeled contact sheet (previews/sky.png): every
 # weather against every time of day, plus a caught lightning strike. The

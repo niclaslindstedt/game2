@@ -47,16 +47,19 @@ const STONE_KINDS = new Set<WildObstacle["kind"]>(["boulder", "rock", "slab"]);
 const MOSSY_SHARE = 0.45;
 const MOSS_COLOR = 0x86a84e;
 
-/** The lump every wild stone is drawn from, with moss laid over the faces
- * that look at the sky. The colours are absolute, so the material carries
- * none of its own and the per-instance tint still varies the grey under the
- * green. Facets are flat at this detail, so each one is either a top, an
- * upper flank or a side, and the moss line falls where the rock turns over:
- * the caps go fully over, the flanks most of the way, the sides not at all.
- * A cap alone is not enough — it is a few pixels of a stone seen from a car,
+/** The lump every wild stone is drawn from. Bare, it carries no colour of
+ * its own and takes the bedrock's off the material; mossed, the moss is
+ * laid over the faces that look at the sky in absolute colours, so the
+ * per-instance tint still varies the grey under the green.
+ *
+ * Facets are flat at this detail, so each one is either a top, an upper
+ * flank or a side, and the moss line falls where the rock turns over: the
+ * caps go fully over, the flanks most of the way, the sides not at all. A
+ * cap alone is not enough — it is a few pixels of a stone seen from a car,
  * and what has to read is the whole UPPER HALF being green. */
-function mossyStone(rock: number): THREE.BufferGeometry {
+export function stoneGeometry(rock: number, mossy: boolean): THREE.BufferGeometry {
   const geo = new THREE.DodecahedronGeometry(1);
+  if (!mossy) return geo;
   const normal = geo.getAttribute("normal");
   const base = new THREE.Color(rock);
   const moss = new THREE.Color(MOSS_COLOR);
@@ -82,7 +85,7 @@ function mossGrows(ob: WildObstacle): boolean {
 /** How one stone prop sits in the ground. Each kind has its own seat, and
  * each formula is the one the engine wrote its collision circle and its
  * height from — what is drawn IS what the car hits. */
-function stoneMatrix(
+export function stoneMatrix(
   ob: WildObstacle,
   m: THREE.Matrix4,
   q: THREE.Quaternion,
@@ -182,9 +185,9 @@ export function buildWild(
 
   const plants = buildFloraField(season);
   group.add(plants.group);
-  const stoneGeo = new THREE.DodecahedronGeometry(1);
+  const stoneGeo = stoneGeometry(biome.ground.bedrock, false);
   const stoneMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(biome.ground.bedrock) });
-  const mossGeo = mossyStone(biome.ground.bedrock);
+  const mossGeo = stoneGeometry(biome.ground.bedrock, true);
   const mossMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   let stoneMesh: THREE.InstancedMesh | null = null;
   let mossMesh: THREE.InstancedMesh | null = null;

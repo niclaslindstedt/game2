@@ -14,8 +14,14 @@ nose or a tail: it walks the camera inside the car with the cap at the edge of
 frame. To judge a face, the scratch view needs its TARGET moved to the cap
 (`z = ±length * 0.44`) as well as its distance pulled in. Do that as a
 temporary edit to `pwa/src/tools/car-preview.ts` and `git checkout` the file
-afterward — the harness has no per-view target field, and adding one widens
-every sheet forever.
+afterward, for a NOSE or a TAIL — a one-off target does not earn a permanent
+field on every sheet.
+
+The cabin is the exception, and it now has one: `--crew` (`make crew`) is a
+mode of its own with its own view list, aimed at a SEAT (`crewSeats(spec)`
+hands out where the two of them sit) at a distance in metres, with a `bare`
+flag that takes the glass off. Anything about the people goes through that
+rather than through a scratch edit.
 
 And the sheet is lit for daylight with the body material at its default white,
 so it says nothing about a part whose whole point is being LIT. The acceptance

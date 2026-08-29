@@ -22,8 +22,14 @@ import type { GameState } from "@engine";
 
 /** Width over height of the glass. Wide and shallow, like the real thing:
  * what a mirror is for is who is beside and behind, and the sky above them
- * is not information. */
-const ASPECT = 3.2;
+ * is not information.
+ *
+ * Exported because the COCKPIT hangs a physical mirror in the top of its
+ * windscreen and shows this same image in it (car/cockpit.ts): a pane built
+ * at any other shape stretches the picture, and the mirror camera only ever
+ * renders one.  */
+export const MIRROR_ASPECT = 3.2;
+const ASPECT = MIRROR_ASPECT;
 
 /** How wide the glass is, as a fraction of the canvas — one number for a
  * landscape frame and one for a portrait one. They are not the same number
@@ -99,8 +105,17 @@ export type RearMirror = {
   aim: (state: GameState, driverEyeY: number, far: number) => void;
   /** Where the glass sits on a `w`×`h` canvas, CSS px from its top-left. */
   rect: (w: number, h: number) => MirrorRect;
-  /** Draw the mirror over the frame already in the buffer. */
-  draw: (renderer: THREE.WebGLRenderer, scene: THREE.Scene, w: number, h: number) => void;
+  /** Render the road behind into the mirror's own target. Split from the
+   * composite below because the picture has TWO homes now: the HUD's strip,
+   * which is drawn over the finished frame, and the cockpit's physical
+   * mirror, which is geometry inside the scene and therefore needs the
+   * texture ready BEFORE the frame is drawn rather than after. */
+  fill: (renderer: THREE.WebGLRenderer, scene: THREE.Scene, w: number, h: number) => void;
+  /** Draw the strip over the frame already in the buffer. */
+  composite: (renderer: THREE.WebGLRenderer, w: number, h: number) => void;
+  /** The image itself, for the cockpit's pane to sample. Already reversed
+   * left-for-right by the texture's own transform. */
+  texture: THREE.Texture;
   dispose: () => void;
 };
 
@@ -190,16 +205,14 @@ export function createMirror(): RearMirror {
     camera.updateProjectionMatrix();
   };
 
-  const draw = (renderer: THREE.WebGLRenderer, scene: THREE.Scene, w: number, h: number): void => {
+  const fill = (renderer: THREE.WebGLRenderer, scene: THREE.Scene, w: number, h: number): void => {
     const box = rect(w, h);
-    if (box.width < 2 || box.height < 2) return;
-
     const ratio = renderer.getPixelRatio();
-    const px = Math.min(MAX_WIDTH, Math.max(2, Math.round(box.width * ratio)));
+    const px = Math.min(MAX_WIDTH, Math.max(2, Math.round(Math.max(box.width, 8) * ratio)));
     const py = Math.max(2, Math.round(px / ASPECT));
     if (target.width !== px || target.height !== py) target.setSize(px, py);
-    if (camera.aspect !== box.width / box.height) {
-      camera.aspect = box.width / box.height;
+    if (camera.aspect !== ASPECT) {
+      camera.aspect = ASPECT;
       // three's fov is VERTICAL; the number worth holding steady across
       // viewports is how much road the glass shows to either side.
       camera.fov = (Math.atan(Math.tan((FOV_H * Math.PI) / 360) / camera.aspect) * 360) / Math.PI;
@@ -211,7 +224,11 @@ export function createMirror(): RearMirror {
     renderer.setRenderTarget(target);
     renderer.render(scene, camera);
     renderer.setRenderTarget(previousTarget);
+  };
 
+  const composite = (renderer: THREE.WebGLRenderer, w: number, h: number): void => {
+    const box = rect(w, h);
+    if (box.width < 2 || box.height < 2) return;
     // WebGL's origin is the BOTTOM-left; the rect is measured from the top.
     const y = h - box.y - box.height;
     const inset = Math.min(BEZEL, Math.floor(box.height / 4));
@@ -234,5 +251,5 @@ export function createMirror(): RearMirror {
     glassMaterial.dispose();
   };
 
-  return { camera, aim, rect, draw, dispose };
+  return { camera, aim, rect, fill, composite, texture: glassMap, dispose };
 }

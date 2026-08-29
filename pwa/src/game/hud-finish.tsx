@@ -76,6 +76,18 @@ export type FinishStandings = {
   won: boolean;
 };
 
+/** A HEADS-UP result: the race's own classification, and nothing behind it.
+ * There is no table, no points and no ladder — the sheet IS the result, which
+ * is the whole difference between this mode and the campaign. */
+export type FinishRace = {
+  /** Places and times, the player included. Null until the last car is home. */
+  rows: readonly ResultRow[] | null;
+  /** Cars that started, the player included. */
+  cars: number;
+  /** How they started, for the one line that says what kind of race it was. */
+  massStart: boolean;
+};
+
 export type FinishCardProps = {
   /** Total time, seconds. */
   time: number;
@@ -97,6 +109,9 @@ export type FinishCardProps = {
   standing: FinishStanding | null;
   /** R30 — the points, and the location table they go onto. */
   campaign: FinishStandings | null;
+  /** The heads-up race's own sheet — set only on that mode, and never at the
+   * same time as `campaign`: a race is one or the other. */
+  race: FinishRace | null;
   /** The location whose table stands between the player and the next country,
    * named — set only when the ladder's next rung is in a location the points
    * have not opened yet. */
@@ -114,6 +129,7 @@ export function FinishCard({
   scores,
   standing,
   campaign,
+  race,
   locked,
 }: FinishCardProps) {
   // The full result sheet is a DELIBERATE look: fifteen rows over the top of
@@ -126,7 +142,9 @@ export function FinishCard({
   return (
     <>
       <div className={`hud-finish ${slow ? "hud-finish-slow" : ""}`}>
-        <div className="hud-finish-title">{slow ? "TOO SLOW" : "STAGE CLEAR"}</div>
+        <div className="hud-finish-title">
+          {race ? (standing?.place === 1 ? "WON" : "FINISHED") : slow ? "TOO SLOW" : "STAGE CLEAR"}
+        </div>
         {standing && (
           <div className="hud-finish-place">
             <span className="hud-finish-place-no">{ordinal(standing.place)}</span>
@@ -185,6 +203,27 @@ export function FinishCard({
               }}
             >
               {campaign.rows === null ? "CARS STILL OUT…" : "FULL RESULTS"}
+            </button>
+          </div>
+        )}
+        {/* …and the heads-up race's own sheet. Same press, same wait for the
+          last car — but the line above it says what the race WAS rather than
+          what it paid, because it paid nothing and was never going to. */}
+        {race && (
+          <div className="hud-finish-standings">
+            <div className="hud-finish-standings-line">
+              {race.cars} CARS — {race.massStart ? "MASS START" : "RALLY START"}
+            </div>
+            <button
+              type="button"
+              className="hud-pause-act hud-finish-sheet"
+              disabled={race.rows === null}
+              onClick={() => {
+                playUi("select");
+                setSheet(true);
+              }}
+            >
+              {race.rows === null ? "CARS STILL OUT…" : "FULL RESULTS"}
             </button>
           </div>
         )}
@@ -250,6 +289,16 @@ export function FinishCard({
           sub={`${campaign.location.toUpperCase()} STANDINGS — POINTS AFTER THIS STAGE`}
           rows={campaign.rows}
           stage
+          onClose={() => setSheet(false)}
+        />
+      )}
+      {sheet && race?.rows && (
+        <ResultsModal
+          title="CLASSIFICATION"
+          sub={`${race.cars} cars, ${race.massStart ? "one grid, one green" : "one at a time"}`}
+          rows={race.rows}
+          stage
+          board={false}
           onClose={() => setSheet(false)}
         />
       )}

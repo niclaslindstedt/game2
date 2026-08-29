@@ -21,20 +21,15 @@
 // to keep in step, and the whole menu is one component tree over one canvas.
 
 import { useEffect, useRef, useState } from "react";
-import { FIELD_SIZE, STAGE_RULES, type Difficulty } from "@engine";
 
 import { APP_NAME, REPO_URL } from "../identity.ts";
-import { formatTime, ordinal } from "../lib/util.ts";
+import { ordinal } from "../lib/util.ts";
 import {
   LOCATIONS,
-  PODIUM,
-  POINTS,
-  bestPlace,
   continueAt,
   findLevel,
   levelCleared,
   levelCompleted,
-  levelLaps,
   levelUnlocked,
   locationById,
   locationComplete,
@@ -42,18 +37,25 @@ import {
   locationUnlocked,
   locationWon,
   playerStanding,
-  stagePoints,
   stagesDriven,
   type CampaignLevel,
   type CampaignLocation,
   type CampaignProgress,
 } from "./campaign.ts";
+import { LevelGrid, LockGlyph, lengthLabel } from "./menu-levels.tsx";
 import { ResultsModal } from "./results-table.tsx";
-import { PLAYER_ID } from "./standings.ts";
 import { CarSetupPage } from "./menu-car.tsx";
 import { GalleryPage } from "./menu-gallery.tsx";
 import { DebugLogPage, DeveloperPage } from "./menu-dev.tsx";
-import { DIFFICULTY_OPTIONS, MenuHead, OptionRow, type RaceSettings } from "./menu.tsx";
+import { HeadsUpPage } from "./menu-headsup.tsx";
+import {
+  DIFFICULTY_OPTIONS,
+  MenuHead,
+  OptionRow,
+  gridSize,
+  type PlayMode,
+  type RaceSettings,
+} from "./menu.tsx";
 import { OptionsPage, type OptionsTab } from "./menu-options.tsx";
 import { unlockAudio } from "./audio/bus.ts";
 import { playUi } from "./audio/ui.ts";
@@ -67,20 +69,17 @@ export type MenuPage =
   | { page: "campaign" }
   | { page: "location"; locationId: string }
   | { page: "timetrial" }
+  | { page: "headsup" }
   /** The pre-race card for one stage — the car, its spec sheet, the
    * gearbox and START. `mode` is how the stage will be entered, and it is
    * what decides which grid BACK returns to. */
-  | { page: "car"; levelId: string; mode: "campaign" | "timetrial" }
+  | { page: "car"; levelId: string; mode: PlayMode }
   | { page: "scores" }
   | { page: "gallery" }
   | { page: "roam" }
   | { page: "options"; tab: OptionsTab }
   | { page: "developer" }
   | { page: "debuglog" };
-
-/** How a stage was entered — the campaign is what records a clear, and a
- * time trial is a lap you drive for the clock alone. */
-export type PlayMode = "campaign" | "timetrial" | "roam";
 
 export type MainMenuProps = {
   page: MenuPage;
@@ -127,138 +126,6 @@ function VersionStamp() {
   );
 }
 
-/** The padlock on a locked stage box. Drawn rather than lettered so it
- * stays a lock at every box size and in every font the shell falls back to. */
-function LockGlyph() {
-  return (
-    <svg className="menu-lock" viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M7.5 10.5V7.5a4.5 4.5 0 0 1 9 0v3"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-      />
-      <rect x="4.5" y="10.5" width="15" height="10.5" rx="2.4" fill="currentColor" />
-    </svg>
-  );
-}
-
-/** A stage's billing without compiling it: the band's name, the minutes it
- * is sized for, and — on a circuit — the laps it is cut into, which is the
- * one thing about a level a player has to know before pressing it. */
-function lengthLabel(level: CampaignLevel): string {
-  const laps = levelLaps(level);
-  const shape = laps > 1 ? `${laps} LAPS` : level.length.toUpperCase();
-  return `${shape} · ${STAGE_RULES.stageLengths[level.length].minutes} MIN`;
-}
-
-type LevelBoxProps = {
-  level: CampaignLevel;
-  index: number;
-  unlocked: boolean;
-  /** What a locked box asks for — the two pages lock a stage for different
-   * reasons, and a padlock with no reason on it is just a wall. */
-  hint: string;
-  best: number | undefined;
-  /** R29 — the best position this stage has ever been finished in at the
-   * difficulty currently selected, or undefined if it never has been.
-   * Undefined ALSO on the time trial's grid, which races nobody. */
-  place: number | undefined;
-  /** R30 — what the stage is currently paying the player's table, or
-   * undefined where points are not the point (the time trial). A stage that
-   * has been driven and paid NOTHING says so: nought is the reason the box
-   * after it is still shut. */
-  points: number | undefined;
-  onPlay: () => void;
-};
-
-/** One stage box. Locked boxes wear a grey border and a padlock, name
- * nothing about the stage behind them and cannot be pressed; open ones wear
- * green and say what they are. */
-function LevelBox({ level, index, unlocked, hint, best, place, points, onPlay }: LevelBoxProps) {
-  if (!unlocked) {
-    return (
-      <div className="menu-level menu-level-locked" aria-label={`Stage ${index + 1}, locked`}>
-        <span className="menu-level-no">{index + 1}</span>
-        <LockGlyph />
-        <span className="menu-level-hint">{hint}</span>
-      </div>
-    );
-  }
-  return (
-    <button type="button" className="menu-level menu-level-open" onClick={onPlay}>
-      <span className="menu-level-no">{index + 1}</span>
-      <span className="menu-level-name">{level.name}</span>
-      <span className="menu-level-meta">{lengthLabel(level)}</span>
-      <span className="menu-level-blurb">{level.blurb}</span>
-      {/* R30 — what this stage is worth on the location's table, which is the
-          same board the next box is locked to. It leads the two bests because
-          it is the thing that is actually being played for; the result and the
-          time ride underneath it. */}
-      {points !== undefined && (
-        <span
-          className={`menu-level-points ${points === POINTS[0] ? "menu-level-points-win" : ""}`}
-        >
-          {points} {points === 1 ? "PT" : "PTS"}
-        </span>
-      )}
-      {/* Two bests, and the RESULT is the one that matters: a stage is
-          cleared by beating the field, not by beating the clock. The time
-          rides underneath it as the thing to chase once it is. */}
-      {place !== undefined && (
-        <span
-          className={`menu-level-place ${place <= PODIUM ? "menu-level-place-podium" : ""}`}
-          title={`Best finish: ${place} of ${FIELD_SIZE}`}
-        >
-          BEST {ordinal(place)}
-        </span>
-      )}
-      {best !== undefined && <span className="menu-level-best">BEST {formatTime(best)}</span>}
-    </button>
-  );
-}
-
-/** The same grid serves both pages, so which stages it opens is passed in
- * rather than assumed: the campaign opens the next stage up the ladder, the
- * time trial only stages already driven to the end. */
-function LevelGrid({
-  location,
-  progress,
-  open,
-  hint,
-  difficulty,
-  onPlay,
-}: {
-  location: CampaignLocation;
-  progress: CampaignProgress;
-  open: (level: CampaignLevel, index: number) => boolean;
-  hint: string;
-  /** Which field's results to show on the boxes. Absent on the time trial's
-   * grid, where there is no field, so a placing would be a fiction and the
-   * points belong to the campaign rather than to the clock. */
-  difficulty?: Difficulty;
-  onPlay: (level: CampaignLevel, index: number) => void;
-}) {
-  return (
-    <div className="menu-grid">
-      {location.levels.map((level, index) => (
-        <LevelBox
-          key={level.id}
-          level={level}
-          index={index}
-          unlocked={open(level, index)}
-          hint={hint}
-          best={progress.best[level.id]}
-          place={difficulty === undefined ? undefined : bestPlace(progress, level.id, difficulty)}
-          points={difficulty === undefined ? undefined : stagePoints(level.id, progress)[PLAYER_ID]}
-          onPlay={() => onPlay(level, index)}
-        />
-      ))}
-    </div>
-  );
-}
-
 function RootPage({
   developer,
   onNavigate,
@@ -288,6 +155,12 @@ function RootPage({
         >
           TIME TRIAL
           <span className="menu-item-sub">Chase the clock on stages you have finished</span>
+        </button>
+        <button type="button" className="menu-item" onClick={() => onNavigate({ page: "headsup" })}>
+          HEADS UP
+          <span className="menu-item-sub">
+            One race against the field, for nothing but the race
+          </span>
         </button>
         <button type="button" className="menu-item" onClick={() => onNavigate({ page: "roam" })}>
           ROAM
@@ -629,6 +502,7 @@ const DEPTH: Record<MenuPage["page"], number> = {
   root: 0,
   campaign: 1,
   timetrial: 1,
+  headsup: 1,
   roam: 1,
   gallery: 1,
   options: 1,
@@ -657,8 +531,9 @@ function parentOf(page: MenuPage): MenuPage | null {
  * lists every stage. A level id with no location behind it cannot happen
  * from the grids, but a stale one out of a reload should land somewhere
  * real rather than on a blank card. */
-function carParent(levelId: string, mode: "campaign" | "timetrial"): MenuPage {
+function carParent(levelId: string, mode: PlayMode): MenuPage {
   if (mode === "timetrial") return { page: "timetrial" };
+  if (mode === "headsup") return { page: "headsup" };
   const found = findLevel(levelId);
   return found ? { page: "location", locationId: found.location.id } : { page: "campaign" };
 }
@@ -756,6 +631,17 @@ export function MainMenu(props: MainMenuProps) {
         )}
         {page.page === "timetrial" && (
           <TimeTrialPage progress={props.progress} onNavigate={navigate} />
+        )}
+        {page.page === "headsup" && (
+          <HeadsUpPage
+            progress={props.progress}
+            headsUp={props.race.headsUp}
+            onHeadsUp={(headsUp) =>
+              props.onRace({ ...props.race, headsUp: { ...headsUp, cars: gridSize(headsUp.cars) } })
+            }
+            onBack={() => navigate({ page: "root" })}
+            onPlay={(level) => navigate({ page: "car", levelId: level.id, mode: "headsup" })}
+          />
         )}
         {page.page === "car" && found !== null && (
           <CarSetupPage

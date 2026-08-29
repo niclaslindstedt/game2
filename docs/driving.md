@@ -595,12 +595,14 @@ drawn by the renderer:
   and so does the shadow.
 
 The renderer draws both on a `chassis` group that holds every panel and no
-wheel (`pwa/src/game/car-body.ts`). The hood cam's mount is bolted to the body
-and rides all of it — though what the player looks through is the driver's
-HEAD, a damped spring chasing that mount, so the picture lags every jolt the
-body takes and settles a beat after it does. The cameras close behind share a
-little of the heave so a landing lands in the FRAME too, and the ones flown
-high above the car share none.
+wheel (`pwa/src/game/car-body.ts`). The three in-car cameras — the cockpit,
+the bonnet and the nose — mount on that body and ride all of it, though what
+the player looks through is the driver's HEAD: a damped spring chasing the
+mount, so the picture lags every jolt the body takes and settles a beat after
+it does, and a hit throws it along the direction the blow came from
+(`pwa/src/game/camera-eye.ts`). The cameras close behind share a little of the
+heave so a landing lands in the FRAME too, and the ones flown high above the
+car share none.
 
 Each car's `mass` (kg, in `engine/game/defs/cars.ts`) is read against
 `TUNING.collision.refMass`: a heavier car is harder for a clipped tree to

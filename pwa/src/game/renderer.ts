@@ -17,9 +17,10 @@ import {
   FLORA_SCALE,
   RESOLUTION_SCALE,
   type VideoSettings,
+  type ViewSettings,
 } from "./settings.ts";
 import { buildCar, tintCar, type CarVisual } from "./car-mesh.ts";
-import { hoodEyeFor } from "./car-styles.ts";
+import { carEyes } from "./car-styles.ts";
 import {
   AXLE,
   WET_THROW,
@@ -40,7 +41,7 @@ import { TRUNK_COLOR } from "./flora.ts";
 import { EXHAUST } from "./fumes.ts";
 import { createWayHomeArrow } from "./way-home.ts";
 import { islandPlanes } from "./map-island.ts";
-import { createMirror, MIRROR_RANGE } from "./mirror.ts";
+import { createMirror, MIRROR_ASPECT, MIRROR_RANGE } from "./mirror.ts";
 import { createNameTag, GHOST_LOOK, TAG_LAYER, type NameTag } from "./name-tag.ts";
 import { buildMapRoute, type MapRoute } from "./map-route.ts";
 import { classify } from "./standings.ts";
@@ -84,6 +85,10 @@ export type GameRenderer = {
   /** Show or hide the rear-view mirror — the player's HUD option. Off is
    * a whole render pass the frame does not pay for. */
   setMirror: (on: boolean) => void;
+  /** Seat, lens and head motion for the three views taken from inside the
+   * car (OPTIONS ▸ VIEW). Applies to the frame after it, every time: these
+   * are numbers a player moves while looking at what they do. */
+  setView: (view: ViewSettings) => void;
   /** Confine the map view to a rectangle of the canvas, in CSS pixels from
    * its top-left — the Roam page's map pane. The rest of the canvas is left
    * as flat sky for the DOM cards to sit on. Null draws full-bleed. */
@@ -170,6 +175,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
    * once, after `render` has decided it against the state and the view. */
   let mirrorOption = true;
   let mirrorUp = false;
+  /** ...and whether it is drawn as the HUD's strip over the frame, as
+   * opposed to into the cockpit's own mirror inside it. */
+  let mirrorStrip = false;
   /** The driver's eye height on the car now on the road, body-local m. The
    * mirror hangs off it so a tall body's glass clears a tall body's roof. */
   let driverEyeY = 1.21;
@@ -403,11 +411,20 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       scene.remove(car.group, car.shadow, car.debris);
       car.dispose();
     }
-    car = buildCar(state.spec, { interior: INTERIOR_DETAIL[quality.interior] });
+    // The player's car is the one car on the stage with a first-person
+    // cabin: it is the only one anybody will ever sit in.
+    car = buildCar(state.spec, {
+      interior: INTERIOR_DETAIL[quality.interior],
+      cockpit: true,
+      // The rear view goes IN the cockpit's mirror rather than only into the
+      // HUD's strip, so the mirror pass's texture is handed to the body that
+      // hangs the glass.
+      rearView: { texture: mirror.texture, aspect: MIRROR_ASPECT },
+    });
     scene.add(car.group, car.shadow, car.debris);
-    const eye = hoodEyeFor(state.spec);
-    chase.setHoodEye(eye);
-    driverEyeY = eye.y;
+    const eyes = carEyes(state.spec);
+    chase.setEyes(eyes);
+    driverEyeY = eyes.hood.y;
     environment.setLampSpread(car.lampSpread.front, car.lampSpread.rear);
   };
 
@@ -484,12 +501,18 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
    * the air behind a car. */
   const plumeDust = (state: GameState): PlumeGround => carFx.plumeDust(state, wetGround);
 
+  /** Straight down, for the events whose blow has no direction round the
+   * car — a landing, a belly slam. */
+  const DOWN = { x: 0, y: -1, z: 0 };
+
   const onEvents = (state: GameState, events: GameEvent[]): void => {
     const c = state.car;
     const fx = fxScale();
     for (const ev of events) {
       if (ev.type === "landing") {
-        chase.kick(ev.clean ? 0.25 : 0.5);
+        // Straight down: the wheels stop falling and the driver's head does
+        // not, which is the whole of what a landing feels like from inside.
+        chase.kick(ev.clean ? 0.25 : 0.5, DOWN);
         // Four tyres hitting the ground at once, and each of them throws.
         atWheels(wetGround ? mud : dust, state, groundDust(state), (ev.clean ? 14 : 26) * fx, 3.5);
       } else if (ev.type === "splash") {
@@ -504,7 +527,11 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         // front of the car and carries part of its way in with it.
         const nose = c.heading;
         const reach = ev.deep ? 1.4 : 1;
-        chase.kick(ev.deep ? 0.45 + 0.25 * force : 0.2 + 0.2 * force);
+        chase.kick(ev.deep ? 0.45 + 0.25 * force : 0.2 + 0.2 * force, {
+          x: Math.sin(nose),
+          y: -0.4,
+          z: Math.cos(nose),
+        });
         spray.spawn(
           c.x + Math.sin(nose) * reach,
           surface,
@@ -537,6 +564,16 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         // R25 — the salute, sized by where the time placed. Fourth and
         // worse fire nothing, and `fire` knows it.
         celebration.fire(standing ?? classify(state.track, ev.time).place, world?.muzzles() ?? []);
+      } else if (ev.type === "kerbHit") {
+        // R26 — a block on the inside of an apex. Nothing folds and nothing
+        // breaks, so there is no burst and no shake: what there IS, from
+        // inside, is the car being thrown off its line, and the head going
+        // with it a beat late.
+        chase.kick(Math.min(0.22, 0.06 + ev.speed * 0.004), {
+          x: Math.cos(c.heading),
+          y: 0.5,
+          z: -Math.sin(c.heading),
+        });
       } else if (ev.type === "respawn") {
         chase.kick(0.3);
       } else if (ev.type === "solidBreak") {
@@ -556,9 +593,16 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         );
       } else if (ev.type === "impact") {
         // The hit lands where the engine says it did: a debris-grey burst
-        // at that point on the body, and a camera jolt sized to the speed.
-        chase.kick(Math.min(0.9, 0.25 + ev.speed * 0.02));
+        // at that point on the body, a camera jolt sized to the speed, and
+        // — from inside the car — the driver's head thrown at the part of
+        // the body that took it. A shunt on the nose throws the head
+        // forward, one on the left throws it left, and a belly slam throws
+        // it down, because the car stopped and the driver did not.
         const a = c.heading + ev.angle;
+        chase.kick(
+          Math.min(0.9, 0.25 + ev.speed * 0.02),
+          ev.belly ? DOWN : { x: Math.sin(a), y: 0.15, z: Math.cos(a) },
+        );
         const reach = ev.belly ? 0 : 1.6;
         dust.spawn(
           c.x + Math.sin(a) * reach,
@@ -861,6 +905,18 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     if (car) {
       car.group.visible = view !== "map";
       car.shadow.visible = view !== "map";
+      // Behind the wheel the player is looking at the FIRST-PERSON cabin,
+      // not the one authored to be read through glass from a car's length
+      // back — the two stand in the same space, so only one of them is ever
+      // up. The finish takes the camera out of the car and plants it on the
+      // road, so the swap follows the shot rather than the mode.
+      const inside = view === "cockpit" && driving;
+      car.setInside(inside);
+      // From the seat the road behind is read off the mirror hanging in the
+      // windscreen, so the strip at the top of the frame stands down and the
+      // pane lights up instead. One rear view, in whichever of the two homes
+      // the player is actually looking at.
+      car.setRearView(inside && mirrorUp);
     }
     // The ghost is the one car the hood cam must keep: it is out there on
     // the road being chased, not wrapped around the camera.
@@ -880,6 +936,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // from have nothing behind them worth showing, and neither does a run
     // the water has already taken or a car being paraded past the line.
     mirrorUp = mirrorOption && driving && state.phase !== "finished";
+    // The cockpit shows the same picture in its own mirror (car/cockpit.ts),
+    // so the strip over the frame is not drawn as well.
+    mirrorStrip = mirrorUp && view !== "cockpit";
     if (mirrorUp) mirror.aim(state, driverEyeY, environment.fogFar() * MIRROR_RANGE);
     // The road and its scenery are built for the WHOLE stage; the frame
     // only pays for the part the air is still clear enough to show. Last,
@@ -929,9 +988,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // the size is re-applied here before anything is drawn.
     syncSize(w, h);
     if (!mapView || !mapRect) {
-      renderer.setScissorTest(false);
-      renderer.setViewport(0, 0, w, h);
-      renderer.render(scene, chase.camera);
+      // THE REAR VIEW IS DRAWN FIRST, because one of its two homes is inside
+      // the frame rather than over it: the cockpit's mirror is geometry, and
+      // geometry samples a texture that has to already exist. The strip over
+      // the top of the screen does not care either way.
       if (mirrorUp) {
         // The way home is parented to the FORWARD camera, so in the mirror
         // pass it would hang in mid-air beside the car with its needle
@@ -941,17 +1001,27 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         // The mirror's lens sits between the player's own seats, so the one
         // other thing the pass has to lose is the cabin around it — left in,
         // the glass shows the back of the bulkhead and the mirror stops
-        // answering the only question it is there to answer. The RIVALS keep
-        // theirs: those are cars behind you, seen from outside, and their
-        // crews showing through their screens is the point.
+        // answering the only question it is there to answer. That now means
+        // BOTH cabins, the cockpit included: a mirror drawing the fascia it
+        // is bolted to would also be sampling its own texture. The RIVALS
+        // keep theirs — those are cars behind you, seen from outside, and
+        // their crews showing through their screens is the point.
         const cabin = car?.cabin ?? null;
+        const cockpit = car?.cockpit ?? null;
+        const cockpitUp = cockpit?.visible ?? false;
         if (cabin) cabin.visible = false;
+        if (cockpit) cockpit.visible = false;
         // The air comes in with the far plane, so the world leaves the
         // mirror's frustum where it had already gone solid — see withHaze.
-        environment.withHaze(MIRROR_RANGE, () => mirror.draw(renderer, scene, w, h));
+        environment.withHaze(MIRROR_RANGE, () => mirror.fill(renderer, scene, w, h));
         if (cabin) cabin.visible = true;
+        if (cockpit) cockpit.visible = cockpitUp;
         wayHomeArrow.group.visible = arrow;
       }
+      renderer.setScissorTest(false);
+      renderer.setViewport(0, 0, w, h);
+      renderer.render(scene, chase.camera);
+      if (mirrorStrip) mirror.composite(renderer, w, h);
       return;
     }
     // Clear the whole canvas first, then draw only inside the pane. WebGL's
@@ -993,6 +1063,14 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     setCamera,
     setMirror: (on) => {
       mirrorOption = on;
+    },
+    setView: (view) => {
+      chase.setViewTuning({
+        rise: view.seat,
+        ahead: view.reach,
+        fov: view.fov,
+        motion: view.headMotion,
+      });
     },
     setNameTags: (on) => {
       nameTags = on;

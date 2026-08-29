@@ -18,7 +18,7 @@ import { formatTime } from "../lib/util.ts";
 import type { CampaignLevel, CampaignLocation, CampaignProgress } from "./campaign.ts";
 import { CarPicker } from "./car-picker.tsx";
 import { carBars, carFacts } from "./car-stats.ts";
-import { GearboxRow, MenuHead, type RaceSettings } from "./menu.tsx";
+import { GearboxRow, MenuHead, type PlayMode, type RaceSettings } from "./menu.tsx";
 import type { Settings } from "./settings.ts";
 
 /** The spec sheet. The bars compare the car to the REST OF THE ROSTER
@@ -26,9 +26,9 @@ import type { Settings } from "./settings.ts";
  * of each other on an absolute scale are three identical full bars, which
  * is a picture of nothing.
  *
- * The FIGURES are quoted through the box the transmission row below is set
- * to, so choosing the manual visibly moves the top speed and the sprint on
- * the same card the choice is made on. */
+ * Everything on it — the figures AND the bars — is quoted through the box
+ * the transmission row below is set to, so choosing the manual visibly
+ * lengthens the top speed on the same card the choice is made on. */
 function CarSpecPanel({ spec, gearbox }: { spec: CarSpec; gearbox: GearboxMode }) {
   return (
     <div className="car-spec">
@@ -42,7 +42,7 @@ function CarSpecPanel({ spec, gearbox }: { spec: CarSpec; gearbox: GearboxMode }
         ))}
       </div>
       <div className="car-spec-bars">
-        {carBars(spec).map((bar) => (
+        {carBars(spec, gearbox).map((bar) => (
           <div key={bar.key} className="car-spec-bar">
             <span className="car-spec-bar-label">{bar.label}</span>
             <span className="car-spec-bar-track">
@@ -54,17 +54,26 @@ function CarSpecPanel({ spec, gearbox }: { spec: CarSpec; gearbox: GearboxMode }
           </div>
         ))}
       </div>
-      <div className="car-spec-note">Bars compare this car with the rest of the roster.</div>
+      <div className="car-spec-note">
+        Bars compare this car with the rest of the roster, in either gearbox.
+      </div>
     </div>
   );
 }
+
+/** Which page the card came from, named. The campaign's is the location
+ * itself, so it is the one this table does not hold. */
+const BACK_TO: Partial<Record<PlayMode, string>> = {
+  timetrial: "TIME TRIAL",
+  headsup: "HEADS UP",
+};
 
 export type CarSetupPageProps = {
   location: CampaignLocation;
   level: CampaignLevel;
   /** What the stage is being entered AS — it decides where BACK goes and
    * what the button under the card promises. */
-  mode: "campaign" | "timetrial";
+  mode: PlayMode;
   /** The stage's billing, built by the level grid so the two rows agree. */
   billing: string;
   progress: CampaignProgress;
@@ -97,7 +106,7 @@ export function CarSetupPage({
     <div className="menu-card menu-card-wide">
       <MenuHead
         back={onBack}
-        backLabel={mode === "campaign" ? location.name.toUpperCase() : "TIME TRIAL"}
+        backLabel={BACK_TO[mode] ?? location.name.toUpperCase()}
         title={level.name.toUpperCase()}
         sub={`${location.name} · ${billing}${best === undefined ? "" : ` · BEST ${formatTime(best)}`}`}
       />

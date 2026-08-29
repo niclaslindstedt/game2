@@ -26,6 +26,87 @@ export const TUNING = {
   /** Countdown before control is handed over, seconds. */
   countdown: 3,
 
+  /** THE MASS START — the grid a heads-up race lines up on, and the only
+   * catch-up this game has (sim/grid.ts).
+   *
+   * A rally start is one car at a time and the classification is a list of
+   * times (rivals.ts). A heads-up race is the other thing entirely: everybody
+   * leaves on the same green, so the road ahead is full of cars and the
+   * result is decided by who is in front at the line.
+   *
+   * THE GRID STANDS BEHIND THE START GATE, on the apron R24 already lays
+   * there for exactly this — `startZone.apron` metres of flat dirt road
+   * extrapolated straight off the first sample, with the terrain shelf held
+   * flat under it. So the whole field drives THROUGH the gate at the green
+   * rather than half of it starting up the road, and the apron's length is a
+   * hard ceiling on how deep a grid can be.
+   *
+   * It ZIG-ZAGS: one car per row, alternating sides of the centre, which is
+   * how a kart or club grid is actually laid out. Two abreast wastes the road
+   * on a rally stage — the cars are the same distance back and there is
+   * nothing to pick between the pair — where a stagger gives every car its
+   * own metre of road and reads, from the back row, as a queue.
+   *
+   * A row back is metres given away, and the player is on the BACK row, so
+   * the metres have to come back. `catchUp` is how: a slot's drive is
+   * multiplied by `1 + gain` until it reaches `catchUpS` along the stage, and
+   * `gain` is sized to return exactly the deficit.
+   *
+   * THE ARITHMETIC, and then the correction it needs. Two cars accelerating
+   * at a and a(1+k) off the same standstill are apart by ½akt²; the leader
+   * covers s in t = sqrt(2s/a), so by then the trailing car has taken back
+   * ½ak(2s/a) = k·s metres — independent of a, of the car and of the surface.
+   * That would make k = deficit/s and nothing else.
+   *
+   * It does not hold, because a is not constant: `engineAccel` tapers to
+   * nothing at each gear's top, so most of a 200 m window is spent where a
+   * percent more drive buys well under a percent more distance. Measured
+   * against the real physics — two identical cars flat out on a straight, one
+   * boosted, gap read where the leader reaches the window's end:
+   *
+   *   window   compact   classic   coupe
+   *    80 m     0.75      0.67      0.90
+   *   120 m     0.65      0.68      0.82
+   *   200 m     0.65      0.52      0.80
+   *   300 m     0.51      0.49      0.76
+   *
+   * The yield is flat in k (the model is linear in it) and falls with the
+   * window, which is the taper. `catchUpYield` is that number for the window
+   * below; `tests/mass_start_test.ts` measures what actually comes back, so a
+   * handling change that moves the taper fails there rather than quietly
+   * making the back row a worse place to start.
+   *
+   * It is deliberately the ONLY catch-up: no rubber band, no slipstream, no
+   * hand on the leader's brake. It looks at the grid and never at who is
+   * winning, and it is over by the first corner. */
+  massStart: {
+    /** Gap between rows, m. A little under a car's length
+     * (`collision.halfLength` × 2), which is what makes a stagger a stagger:
+     * the cars overlap nose to tail and are kept apart by the zig-zag
+     * instead, which is the whole reason to lay a grid out this way. */
+    rowGap: 3.5,
+    /** How far off the road's centre a row stands, m — alternating sides, so
+     * two cars in consecutive rows are twice this apart across the road. The
+     * road is 7 m wide at R21's floor, which leaves 2.58 m for a half-body of
+     * 0.92 m, so a grid stands clear of both verges on the narrowest stage
+     * the generator builds — and 3.2 m between centres is a body and a half
+     * of daylight between overlapping cars. */
+    columnOffset: 1.6,
+    /** How far up the road the catch-up runs, m. Long enough that the extra
+     * drive is felt as a launch rather than as a shove, short enough that it
+     * is spent before the first real corner of any stage. */
+    catchUpS: 200,
+    /** What fraction of the ideal `k·s` a real car actually takes back over
+     * that window — the table above, averaged across the roster. Re-measure
+     * it whenever the engine's torque taper or the gearing moves. */
+    catchUpYield: 0.66,
+    /** Ceiling on a slot's extra drive, as a fraction. Nothing the apron can
+     * hold needs it — it is the guard that keeps a deeper grid, should the
+     * apron ever grow, from launching its back row instead of compensating
+     * it. */
+    catchUpMax: 0.25,
+  },
+
   /** Speed under which a coasting car counts as STOPPED and is snapped to
    * rest, m/s. It is what keeps a parked car from creeping down a slope,
    * and the threshold reverse hands the car back at. */

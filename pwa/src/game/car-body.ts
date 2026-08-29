@@ -26,7 +26,9 @@ import type { DamagePart } from "@engine";
 import { MeshBuilder, patchNormal } from "./car/builder.ts";
 import { buildFront, buildRear } from "./car/fascia.ts";
 import { buildGreenhouse, screenPanes } from "./car/greenhouse.ts";
+import { buildCockpit, cabinOpening, type CarCockpit } from "./car/cockpit.ts";
 import { buildInterior, type InteriorDetail } from "./car/interior.ts";
+import type { CrewLook } from "./car-crew.ts";
 import { LENS_MATERIAL } from "./car/lamps.ts";
 import { buildShell, buildStations } from "./car/shell.ts";
 import { buildTrim } from "./car/trim.ts";
@@ -48,7 +50,16 @@ export type {
 } from "./car/spec.ts";
 export { bodyHalfLength, bodyHalfWidth } from "./car/shell.ts";
 export { LENS_MATERIAL, frontLampAnchors, rearLampAnchors, type LampAnchor } from "./car/lamps.ts";
-export { steeringTurn, type InteriorDetail } from "./car/interior.ts";
+export { crewSeats, steeringTurn, type InteriorDetail } from "./car/interior.ts";
+export {
+  DIAL_TOP_SPEED,
+  cabinOpening,
+  cockpitEyeFor,
+  cockpitWheelTurn,
+  dialAngle,
+  type CarCockpit,
+  type CockpitEye,
+} from "./car/cockpit.ts";
 
 import type { CarBodySpec } from "./car/spec.ts";
 
@@ -59,6 +70,13 @@ import type { CarBodySpec } from "./car/spec.ts";
  * reads through it — the sill end of every pane fades further still — and
  * high enough that a window is never a hole in the car. */
 export const GLASS_OPACITY = 0.44;
+
+/** The name that marks the cockpit's own cabin, and the one that marks its
+ * instruments. Both are DRIVEN rather than tinted (car-mesh.ts): a closed
+ * cabin is darker than the paint around it and goes to almost nothing at
+ * night, and a backlit dial does not go dark at all. */
+export const COCKPIT_MATERIAL = "car-cockpit";
+export const INSTRUMENT_MATERIAL = "car-instrument";
 
 /** The backlight's outward normal in car-local metres. This is the pane the
  * game is actually watched through — every driving camera but the hood one
@@ -111,9 +129,21 @@ export type CarBodyParts = {
    * screen instead of the road. Every other car on the stage keeps both —
    * those are seen from outside, which is the whole point of them. */
   cabin: THREE.Object3D;
+  /** Just the FURNITURE inside that cabin — the lining, the seats, the crew.
+   * Handed out apart from `cabin` because the cockpit view replaces it: from
+   * the driver's own seat this is the wrong cabin (it is authored to be read
+   * through glass at a car's length), while the GLASS beside it in `cabin`
+   * is still wanted. Null at the `off` detail level. */
+  cabinTrim: THREE.Object3D | null;
   /** The steering wheel, at the `high` detail level — null below it, where
    * the wheel is baked in where it stands. */
   steering: THREE.Object3D | null;
+  /** The first-person cabin, built only when a car asks for one — one car on
+   * the stage ever does. Hidden until the cockpit camera is up. */
+  cockpit: CarCockpit | null;
+  /** The cabin's own material, so the night can black the room out without
+   * touching the paint outside it. Null on a car with no cockpit. */
+  cockpitMaterial: THREE.MeshBasicMaterial | null;
   dispose: () => void;
 };
 
@@ -121,10 +151,30 @@ export type CarBodyOptions = {
   /** How much cabin is built behind the glass. `off` also leaves the glass
    * solid, which is the car this game shipped with. */
   interior?: InteriorDetail;
+  /** Who is sat in it (car-crew.ts). Left off, it is the player's own crew —
+   * one car on a stage is the player's, and every tool that builds a body
+   * without saying whose it is is looking at that one. */
+  crew?: CrewLook;
+  /** Also build the first-person cabin (car/cockpit.ts), and cut the deck
+   * out from under it so there is a cabin to build. The player's car only:
+   * it is a fascia, two live dials and a wheel at arm's length, and nothing
+   * that is only ever seen from outside has any use for it. */
+  cockpit?: boolean;
+  /** The rear view, for the pane in the cockpit's mirror — the mirror
+   * pass's own texture (mirror.ts), and the aspect it renders at. Left off,
+   * the mirror is a dark housing with no picture in it. */
+  rearView?: { texture: THREE.Texture; aspect: number };
 };
 
 export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): CarBodyParts {
-  const detail = options.interior ?? "high";
+  // A cockpit car keeps an interior whatever the video option says: it is
+  // the interior's pan that closes the cut-open deck in every view the
+  // cockpit itself is not up in, and `off` would also solidify the glass.
+  const detail = options.cockpit
+    ? options.interior === "off"
+      ? "low"
+      : (options.interior ?? "high")
+    : (options.interior ?? "high");
   const group = new THREE.Group();
   const material = new THREE.MeshBasicMaterial({ vertexColors: true });
   const shift = spec.axleShift ?? 0;
@@ -144,7 +194,15 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   // The lit surfaces of every lamp, kept out of the body's buffer because
   // they are switched rather than tinted — one mesh for both ends.
   const l = new MeshBuilder();
-  buildShell(b, spec, buildStations(spec, axles));
+  // A car that is going to be SAT IN has the middle of its top deck taken
+  // out from under the cabin, which is the only way a driver and a wheel fit
+  // in one (car/cockpit.ts). The hole is closed again from the inside: by
+  // the cockpit's own hull while the cockpit camera is up, and by
+  // car/interior.ts's pan in every other view — which is why a cockpit car
+  // is never built with its interior off.
+  buildShell(b, spec, buildStations(spec, axles), {
+    openCabin: options.cockpit ? cabinOpening(spec) : undefined,
+  });
   buildGreenhouse(b, g, spec);
   buildFront({ body: b, lens: l }, spec, axles, part);
   buildRear({ body: b, lens: l }, spec, axles, part);
@@ -169,7 +227,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   // The cabin goes on BEFORE the glass, because it is what the glass is for.
   const cabin = new THREE.Group();
   chassis.add(cabin);
-  const interior = buildInterior(spec, detail, material);
+  const interior = buildInterior(spec, detail, material, options.crew);
   if (interior.group) cabin.add(interior.group);
 
   // DOUBLE-sided, and drawn without writing depth. Both are about looking
@@ -225,6 +283,40 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   wipers.film.renderOrder = 2;
   chassis.add(wipers.group);
 
+  // The cockpit hangs off the same sprung chassis as everything else, so it
+  // squats into a landing with the panels around it — and so the camera's
+  // own mount, which is worked out from the same body-local metres, stays
+  // exactly where the wheel and the dials are.
+  let cockpit: CarCockpit | null = null;
+  let tintMat: THREE.MeshBasicMaterial | null = null;
+  let cockpitMat: THREE.MeshBasicMaterial | null = null;
+  let instrumentMat: THREE.MeshBasicMaterial | null = null;
+  let mirrorMat: THREE.MeshBasicMaterial | null = null;
+  if (options.cockpit) {
+    // The sun strip's own material rather than the grime film's: the film is
+    // painted per frame by the wipers, and a band of tint that came and went
+    // with the weather is not what a strip on a screen does.
+    tintMat = new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      depthWrite: false,
+    });
+    cockpitMat = new THREE.MeshBasicMaterial({ name: COCKPIT_MATERIAL, vertexColors: true });
+    instrumentMat = new THREE.MeshBasicMaterial({ name: INSTRUMENT_MATERIAL, vertexColors: true });
+    if (options.rearView) {
+      mirrorMat = new THREE.MeshBasicMaterial({
+        name: INSTRUMENT_MATERIAL,
+        map: options.rearView.texture,
+      });
+    }
+    cockpit = buildCockpit(
+      spec,
+      { shell: cockpitMat, instrument: instrumentMat, tint: tintMat, mirror: mirrorMat },
+      options.rearView?.aspect ?? 3.2,
+    );
+    chassis.add(cockpit.group);
+  }
+
   const wheelGroups: THREE.Group[] = [];
   const wheelSpin: THREE.Object3D[] = [];
   // All four wheels share one geometry — only their transforms differ, so
@@ -245,6 +337,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   const dispose = (): void => {
     wipers.dispose();
     interior.dispose();
+    cockpit?.dispose();
     bodyGeo.dispose();
     for (const geo of partGeos) geo.dispose();
     glassGeo?.dispose();
@@ -254,6 +347,10 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     glassMat?.dispose();
     lensMat?.dispose();
     filmMat.dispose();
+    tintMat?.dispose();
+    cockpitMat?.dispose();
+    instrumentMat?.dispose();
+    mirrorMat?.dispose();
   };
   return {
     group,
@@ -267,7 +364,10 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     glass: glassMat,
     lens: lensMat,
     cabin,
+    cabinTrim: interior.group,
+    cockpitMaterial: cockpitMat,
     steering: interior.steering,
+    cockpit,
     dispose,
   };
 }

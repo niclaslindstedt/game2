@@ -15,6 +15,9 @@
 //   ... car-preview.mjs --field --out field
 //     # R29 — the campaign's fourteen rivals, each in their OWN car and
 //     # their own paint, labelled by start number and alias
+//   ... car-preview.mjs --crew --out crew
+//     # the sixteen characters (car-crew.ts), one row each, close up on the
+//     # cabin with the glass off; `--crew blink,diesel` renders a subset
 //   ... car-preview.mjs --variants my-candidates.json --out candidates
 //     # candidates: { "cars": [{ "id": "...", "spec": { CarBodySpec } }] }
 //   ... car-preview.mjs --skip-build
@@ -37,6 +40,12 @@ const flag = (name) => {
   return i >= 0 && i + 1 < args.length ? args[i + 1] : null;
 };
 const has = (name) => args.includes(`--${name}`);
+/** A flag's value only when it HAS one — `--crew --out crew` passes no list,
+ * and the next flag is not it. */
+const value = (name) => {
+  const v = flag(name);
+  return v === null || v.startsWith("--") ? null : v;
+};
 
 const outName = flag("out") ?? "cars";
 const variantsPath = flag("variants");
@@ -44,7 +53,28 @@ const variantsPath = flag("variants");
 const liveryCar = flag("liveries");
 
 let variants;
-if (has("field")) {
+if (has("crew")) {
+  // THE PEOPLE. One body for all of them, in the crew's own paint where the
+  // campaign gave them one, so the sixteen characters are compared against
+  // each other rather than against sixteen different cabins.
+  const { CAR_BODIES } = await import("../pwa/src/game/car-styles.ts");
+  const { applyLivery, liveryForCrew } = await import("../pwa/src/game/car-livery.ts");
+  const { CREW_CHARACTERS, crewLookFor } = await import("../pwa/src/game/car-crew.ts");
+  const { RIVALS } = await import("../engine/index.ts");
+  const base = CAR_BODIES[flag("car") ?? "compact"];
+  const wanted = value("crew");
+  const ids = wanted ? wanted.split(",").map((id) => id.trim()) : null;
+  const rivals = new Map(RIVALS.map((crew, i) => [crew.id, i + 1]));
+  variants = {
+    mode: "crew",
+    cars: CREW_CHARACTERS.filter((c) => !ids || ids.includes(c.id)).map((c) => ({
+      id: `${c.id} — ${c.name}`,
+      spec: rivals.has(c.id) ? applyLivery(base, liveryForCrew(c.id, rivals.get(c.id))) : base,
+      crew: crewLookFor(c.id),
+    })),
+  };
+  if (variants.cars.length === 0) throw new Error(`no such character: ${wanted}`);
+} else if (has("field")) {
   // R29 — THE ACTUAL START LIST. `--liveries` answers "do these schemes read
   // apart on one body"; this answers the question that decides whether the
   // field works: does the car you are chasing say WHOSE it is, across three
