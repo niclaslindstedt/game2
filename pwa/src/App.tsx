@@ -12,8 +12,8 @@
 //
 // The pause card holds the run where it stands. The heavy state lives in
 // refs; the HUD re-renders from a ~12 Hz snapshot. URL params (?seed=,
-// ?tod=, ?weather=, ?car=, ?length=, ?shape=, ?laps=, the four generator dials ?elevation=
-// ?water= ?trees= ?asphalt=, ?start=1, ?shot=1 and ?bot=1) pin a run for tooling and
+// ?tod=, ?weather=, ?car=, ?length=, ?shape=, ?laps=, ?gearbox=, the four generator dials
+// ?elevation= ?water= ?trees= ?asphalt=, ?start=1, ?shot=1 and ?bot=1) pin a run for tooling and
 // screenshots, and the developer tools add ?debug=1, ?god=1 and the free
 // camera's pose (?gx= ?gy= ?gz= ?gyaw= ?gpitch=) — the repro line the debug
 // overlay prints is exactly that set, so a screenshot reproduces as a URL.
@@ -344,6 +344,12 @@ function initialSettings(): Settings {
     settings.developer = true;
     settings.dev = { ...settings.dev, ...forced };
   }
+  // The box, pinned the way `?camera=` pins the angle: which gears the HUD
+  // offers and what a thumb flick on the pedal is worth both hang off it, so
+  // a shot of either must not depend on what is in the screenshot machine's
+  // local storage.
+  const gearbox = new URLSearchParams(location.search).get("gearbox");
+  if (gearbox === "auto" || gearbox === "manual") settings.gearbox = gearbox;
   return settings;
 }
 

@@ -9,18 +9,19 @@
 
 import { describe, expect, it } from "vitest";
 
-import { CARS, TUNING, carById } from "@engine";
+import { CARS, TUNING, carById, type GearboxMode } from "@engine";
 
 import { carBars, carFacts, sprintTime, topSpeedKph } from "../pwa/src/game/car-stats.ts";
 
-/** Where one car sits on one axis. */
-function bar(carId: string, key: string): number {
-  const found = carBars(carById(carId)).find((b) => b.key === key);
+/** Where one car sits on one axis, through one box. */
+function bar(carId: string, key: string, gearbox: GearboxMode = "auto"): number {
+  const found = carBars(carById(carId), gearbox).find((b) => b.key === key);
   if (!found) throw new Error(`no bar: ${key}`);
   return found.value;
 }
 
-/** Which car tops an axis. */
+/** Which car tops an axis — asked of one box, since every car is being read
+ * through the same one and the ORDER is what is being checked. */
 function best(key: string): string {
   return CARS.map((spec) => ({ id: spec.id, value: bar(spec.id, key) })).sort(
     (a, b) => b.value - a.value,
@@ -30,7 +31,7 @@ function best(key: string): string {
 describe("car spec sheet", () => {
   it("bills every car on every axis, and nobody at zero", () => {
     for (const spec of CARS) {
-      const bars = carBars(spec);
+      const bars = carBars(spec, "auto");
       expect(bars.length).toBeGreaterThan(0);
       for (const entry of bars) {
         expect(entry.value).toBeGreaterThan(0);
@@ -44,10 +45,14 @@ describe("car spec sheet", () => {
   });
 
   it("fills the roster's best car on an axis, and never empties its worst", () => {
-    for (const key of carBars(CARS[0]).map((b) => b.key)) {
-      const values = CARS.map((spec) => bar(spec.id, key));
+    // The scale spans both boxes, so the full bar belongs to whichever one
+    // the axis is worth something in — and the floor to the other.
+    for (const key of carBars(CARS[0], "auto").map((b) => b.key)) {
+      const values = CARS.flatMap((spec) =>
+        (["auto", "manual"] as GearboxMode[]).map((box) => bar(spec.id, key, box)),
+      );
       expect(Math.max(...values)).toBeCloseTo(1, 6);
-      expect(Math.min(...values)).toBeGreaterThanOrEqual(0.3);
+      expect(Math.min(...values)).toBeCloseTo(0.3, 6);
     }
   });
 
@@ -81,6 +86,21 @@ describe("car spec sheet", () => {
         (first / TUNING.gearbox.set.manual.power) * TUNING.gearbox.set.manual.gearing,
         6,
       );
+    }
+  });
+
+  it("lengthens the top speed bar when the driver takes the racing set", () => {
+    for (const spec of CARS) {
+      // The box the player is choosing under the sheet has to be visible IN
+      // the sheet, not only in the figures above it.
+      expect(bar(spec.id, "top", "manual")).toBeGreaterThan(bar(spec.id, "top", "auto"));
+      // And it is a trade, drawn as one — the shifts the driver now has to
+      // take are charged to the sprint.
+      expect(bar(spec.id, "accel", "manual")).toBeLessThan(bar(spec.id, "accel", "auto"));
+      // A box cannot fit different tires or a bigger brake to a car.
+      for (const key of ["traction", "brake", "sealed", "loose", "turn", "slide"]) {
+        expect(bar(spec.id, key, "manual"), key).toBe(bar(spec.id, key, "auto"));
+      }
     }
   });
 

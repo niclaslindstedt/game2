@@ -144,25 +144,57 @@ often a live statement about how the code behaves today, and that one stays.
 
 ---
 
+## How an edit is MADE
+
+**Change files with the file tools — Read, then Edit or Write. Never through
+the shell.** No `sed -i`, no `python3 - <<'PY'`, no `cat > file <<'EOF'`, no
+`perl -pe`. This is not a style preference:
+
+- **A shell rewrite is unreviewable.** The diff the user sees is the script,
+  not the change. Edit shows the before and after of the actual text.
+- **A heredoc silently mangles this repo's prose.** The comments here are full
+  of `$`, backticks, `—` and `\`, and every one of them is a shell or Python
+  escape waiting to eat a character nobody will notice until it ships.
+- **A failed match is louder than a wrong one.** Edit refuses when `old_string`
+  is missing or ambiguous; `sed` happily matches nothing, reports success, and
+  leaves you believing a change landed.
+- **Write for a new file, Edit for an existing one.** Rewriting a whole file to
+  change three lines buries the change and risks dropping what you did not
+  re-type.
+
+The shell is still the right tool for READING (`grep`, `wc -l`, `git show`) and
+for running the checks below. It is the WRITE that goes through Edit.
+
 ## The edit loop
 
 Whole-repo checks cost the same whether one file changed or four hundred did.
-**They are the GATE on the commit, not a step on the way to it.** While
-iterating, check only what you touched; all of these are fast:
+**They are the GATE on the commit, not a step on the way to it.**
+
+**Do not lint or format after every edit.** A whole-repo `eslint`/`tsc` pass
+between one Edit and the next is minutes of a session spent re-checking code
+nobody touched, and it teaches nothing an edit later would not have found.
+Batch instead: make the whole coherent change — every file the feature needs —
+and check once at the end of it.
+
+Inside that batch, when a specific answer is genuinely needed (a type you are
+unsure of, a test whose subject you just rewrote), check only what you touched:
 
 | Just edited                  | Run                                                           |
 | ---------------------------- | ------------------------------------------------------------- |
 | a `.ts`/`.tsx`/`.mjs` file   | `npx eslint <paths>`                                          |
 | anything type-bearing        | `npx tsc --noEmit -p tsconfig.json` (or `pwa/tsconfig.json`)  |
 | a test's subject             | `npx vitest run tests/<that-one>_test.ts`                     |
-| formatting you are unsure of | `npx prettier --check <paths>`                                |
 | handling / generator numbers | `npm run sim -- --seeds 1,2,3` — a slice, not the whole sweep |
 
+**Never run `prettier` or `make fmt` mid-loop.** Formatting is not information:
+it cannot tell you whether the code is right, and `make fmt` once before the
+commit fixes everything it would have found. Same for `npx eslint` over a whole
+directory — name the files you changed, or leave it to the gate.
+
 The full gate, split by cost, belongs to the `commit` skill — load it when the
-work is done. Two of its rules are worth carrying into the edit loop: verify
+work is done. One of its rules is worth carrying into the edit loop: verify
 with `make test` / `make lint`, **never** a bare ad-hoc invocation habit (the
-Make targets are the definition of green CI enforces), and run `make fmt`
-before the commit is written.
+Make targets are the definition of green CI enforces).
 
 ---
 
@@ -243,5 +275,6 @@ before the commit is written.
       before it became a fragment, and the comment is now gone
 - [ ] Every warning the session saw is fixed, not stepped around
 - [ ] Files still under 1000 lines; tests in `tests/`, `_test.ts`, via `@engine`
-- [ ] Iterated with the fast checks; the whole-repo gate ran ONCE, at the end
+- [ ] Every file was changed with Edit/Write, never through a shell rewrite
+- [ ] No `prettier`/`make fmt` mid-loop; the whole-repo gate ran ONCE, at the end
 - [ ] `skill-reflection` CLOSE pass run for every skill loaded

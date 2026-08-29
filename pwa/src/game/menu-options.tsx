@@ -384,8 +384,10 @@ function TouchSection({ settings, onSettings }: Pick<OptionsProps, "settings" | 
         onPick={(steerSide) => onSettings({ ...settings, touch: { ...touch, steerSide } })}
       />
       <div className="opt-note">
-        Touching the {pedalSide.toLowerCase()} half is the throttle. Drag off it to do these instead
-        — each direction can only hold one, so picking a taken one swaps them.
+        Touching the {pedalSide.toLowerCase()} half is the throttle. Drag off it and HOLD to do
+        these instead — each direction can only hold one, so picking a taken one swaps them. In the
+        manual gearbox a quick flick up or down, without holding, takes a gear instead — whenever
+        the revs will hold it.
       </div>
       {gesture("brake", "BRAKE")}
       {gesture("handbrake", "HANDBRAKE")}

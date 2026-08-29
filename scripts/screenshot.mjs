@@ -627,9 +627,11 @@ await capture(
   { hasTouch: true, isMobile: true },
 );
 
-// The pedal thumb, held on the anchor: the three gesture hints around it are
-// the only place the player is ever told which drag does what, so the shot
-// exists to check they say the right words in the right directions.
+// The pedal thumb, held on the anchor: the hints around it are the only
+// place the player is ever told which drag does what, so the shot exists to
+// check they say the right words in the right directions. In the MANUAL box
+// the two vertical ones say two things at once — the gear a flick takes and
+// the pedal a hold is — which is the arrangement most likely to collide.
 await capture(
   "shot-touch-pedals",
   { width: 390, height: 844 },
@@ -640,7 +642,28 @@ await capture(
     await page.mouse.down();
     await page.waitForTimeout(400);
   },
-  {},
+  { gearbox: "manual" },
+  "load",
+  { hasTouch: true, isMobile: true },
+);
+
+// The gear flick, caught at full stretch — the frame between the stab and
+// the release that takes the gear. The UP arrow is lit and the throttle is
+// still on: a thumb reaching for a shift never lifts off, which is the whole
+// point of the gesture.
+await capture(
+  "shot-touch-shift",
+  { width: 390, height: 844 },
+  async (page) => {
+    await racing(page);
+    const zone = await page.locator(".hud-zone-right").boundingBox();
+    const x = zone.x + zone.width * 0.5;
+    const y = zone.y + zone.height * 0.55;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x, y - 60, { steps: 6 });
+  },
+  { gearbox: "manual" },
   "load",
   { hasTouch: true, isMobile: true },
 );
