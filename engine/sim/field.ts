@@ -45,7 +45,7 @@ import { TUNING } from "../game/defs/tuning.ts";
 import type { GameEvent, GameState, Season, TimeOfDay, Weather } from "../game/state.ts";
 import { createGame, skipIntro, step } from "../game/step.ts";
 import type { Track } from "../mapgen/index.ts";
-import { botInput } from "./bot.ts";
+import { botInput, type TrafficCar } from "./bot.ts";
 import { gridSize, headsUpField, massStartGrid, type GridSlot } from "./grid.ts";
 import { FIELD_SIZE, GRID_STAGGER, START_INTERVAL, rivalField } from "./rivals.ts";
 import type { RivalEntry } from "./rivals.ts";
@@ -209,9 +209,17 @@ export function onRoad(run: RivalRun): boolean {
   return !run.done && run.owed <= 0;
 }
 
-/** Advance one rival by one step and book whatever they went through. */
-export function advanceRun(run: RivalRun): void {
-  const events = step(run.state, botInput(run.state, run.entry.profile));
+/** Advance one rival by one step and book whatever they went through.
+ * `traffic` is the cars they can see; empty is a crew driving alone, which
+ * is what every path except `stepField` hands them — see the note on
+ * `stepField` for why that is the only honest answer there. */
+export function advanceRun(run: RivalRun, traffic?: readonly TrafficCar[]): void {
+  const events = step(run.state, botInput(run.state, run.entry.profile, traffic));
+  bookRun(run, events);
+}
+
+/** Book one crew's step: the boards they went through, and the line. */
+function bookRun(run: RivalRun, events: readonly GameEvent[]): void {
   for (const event of events) {
     if (event.type === "checkpoint") run.splits.push(event.time);
     else if (event.type === "finish") {
@@ -223,12 +231,165 @@ export function advanceRun(run: RivalRun): void {
   }
 }
 
+/** One car as a bot's eyes see it — no more than a driver reads out of a
+ * mirror, and nothing at all about who is in it. */
+function seenAs(state: GameState): TrafficCar {
+  const car = state.car;
+  return { x: car.x, z: car.z, u: car.u, lateral: state.lateral };
+}
+
+/** How much bodywork this car has lost in total, m — every zone plus the
+ * floorpan. Read either side of a contact, the difference is what that
+ * contact cost it. */
+function folded(state: GameState): number {
+  const damage = state.car.damage;
+  let total = damage.belly;
+  for (let i = 0; i < damage.zones.length; i++) total += damage.zones[i];
+  return total;
+}
+
+/** How fast `state` is travelling toward the point `(px, pz)`, m/s. The
+ * engine's forward axis is `(sin h, cos h)` and its right axis
+ * `(cos h, -sin h)`, so the world velocity is both of those weighted by the
+ * car's own `u` and `w`. */
+function closingOn(state: GameState, px: number, pz: number): number {
+  const car = state.car;
+  const sinH = Math.sin(car.heading);
+  const cosH = Math.cos(car.heading);
+  let dx = px - car.x;
+  let dz = pz - car.z;
+  const d = Math.hypot(dx, dz);
+  if (d < 1e-6) return 0;
+  dx /= d;
+  dz /= d;
+  return (car.u * sinH + car.w * cosH) * dx + (car.u * cosH - car.w * sinH) * dz;
+}
+
+/** WHO DROVE INTO WHOM — the one closing on the other faster, and only if
+ * either was closing at all. Read BEFORE the impulse rewrites both
+ * velocities. The crush is near enough symmetric between equal cars, so
+ * this is the only thing that separates a crew who leans on the field from
+ * one the field leans on. */
+function drivenInto(a: RivalRun, b: RivalRun): RivalRun | null {
+  const toB = closingOn(a.state, b.state.car.x, b.state.car.z);
+  const toA = closingOn(b.state, a.state.car.x, a.state.car.z);
+  if (toB <= 0 && toA <= 0) return null;
+  return toB >= toA ? a : b;
+}
+
+/** Told about every pair of RIVALS the step resolved, who drove in, and what
+ * the meeting cost each of them in metres of folded panel. Fires on every
+ * step the two are touching, so counting episodes is the caller's job. */
+export type FieldContact = (
+  a: RivalRun,
+  b: RivalRun,
+  by: RivalRun | null,
+  crushA: number,
+  crushB: number,
+) => void;
+
+/** Scratch for `stepField`, which runs 120 times a second for as long as a
+ * stage lasts and has no business allocating three lists every time. Only
+ * that function touches them, and it never re-enters itself. */
+const LIVE: RivalRun[] = [];
+const TRAFFIC: TrafficCar[] = [];
+const EVENTS: GameEvent[][] = [];
+
 /** Drive the whole field one physics step, and book whatever they went
  * through. Called from the frame loop BEFORE the player's own step: the
  * player is last on the road, so a rival reaching a board on the same tick
- * reached it first. */
-export function stepField(field: RivalField): void {
-  for (const run of field.runs) if (onRoad(run)) advanceRun(run);
+ * reached it first.
+ *
+ * THREE THINGS HAPPEN HERE, in this order and no other:
+ *
+ *   1. EVERYBODY LOOKS, off ONE snapshot. Each crew is handed the others as
+ *      `TrafficCar`s read before anything moved, so no car reacts to a
+ *      position another car has already been given this step — which is what
+ *      makes the result independent of the order of the array. `player` is
+ *      the car they are RACING: handed in so the bots can see it, never
+ *      driven and never resolved here, because a thumb steers it and its
+ *      contacts are `rubRivals`' on its own step.
+ *   2. EVERYBODY DRIVES.
+ *   3. EVERYBODY MEETS. Every pair near enough is resolved through
+ *      `collideCars` — both ledgers written at once, both bodies folded.
+ *
+ * Step 3 happens HERE AND NOWHERE ELSE, because this is the only place the
+ * whole field takes the same tick. `payHeadStart` and `settleField` drive
+ * each run on its own clock: a crew being fast-forwarded through its head
+ * start is at a different moment of the stage than the one beside it in the
+ * array, and a shunt between those two is a shunt that never happened.
+ *
+ * `theirs` receives each crew's own events, for anything drawing them.
+ * `contact` receives the pairs, for anything counting them (`heat.ts`). */
+export function stepField(
+  field: RivalField,
+  player: GameState | null = null,
+  theirs?: (run: RivalRun, events: GameEvent[]) => void,
+  contact?: FieldContact,
+): void {
+  LIVE.length = 0;
+  for (const run of field.runs) if (onRoad(run)) LIVE.push(run);
+  const count = LIVE.length;
+  if (count === 0) return;
+
+  // 1 — one snapshot, taken before anybody moves.
+  TRAFFIC.length = 0;
+  for (let i = 0; i < count; i++) TRAFFIC.push(seenAs(LIVE[i].state));
+  if (player && (player.phase === "racing" || player.phase === "rollout")) {
+    TRAFFIC.push(seenAs(player));
+  }
+
+  // 2 — everybody drives. Each crew is handed the list with its OWN entry
+  // swapped out from under it: a fresh array per car per step is a hundred
+  // and something allocations a second for a list that is the same list
+  // every time.
+  const last = TRAFFIC.length - 1;
+  for (let i = 0; i < count; i++) {
+    const run = LIVE[i];
+    const self = TRAFFIC[i];
+    const end = TRAFFIC[last];
+    TRAFFIC[i] = end;
+    TRAFFIC.length = last;
+    const events = step(run.state, botInput(run.state, run.entry.profile, TRAFFIC));
+    TRAFFIC.length = last + 1;
+    TRAFFIC[last] = end;
+    TRAFFIC[i] = self;
+    bookRun(run, events);
+    if (theirs && events.length > 0) theirs(run, events);
+  }
+
+  // 3 — everybody meets.
+  for (let i = 0; i < count; i++) {
+    const a = LIVE[i];
+    for (let j = i + 1; j < count; j++) {
+      const b = LIVE[j];
+      if (Math.abs(a.state.car.x - b.state.car.x) > RUB_RANGE) continue;
+      if (Math.abs(a.state.car.z - b.state.car.z) > RUB_RANGE) continue;
+      // Read the bodywork either side only when somebody is listening: it is
+      // a walk of both damage rings, and on most of the steps that get this
+      // far the two cars merely passed close.
+      const beforeA = contact ? folded(a.state) : 0;
+      const beforeB = contact ? folded(b.state) : 0;
+      const by = contact ? drivenInto(a, b) : null;
+      let hersAt = EVENTS[i];
+      if (!hersAt) EVENTS[i] = hersAt = [];
+      let hisAt = EVENTS[j];
+      if (!hisAt) EVENTS[j] = hisAt = [];
+      hersAt.length = 0;
+      hisAt.length = 0;
+      const met = collideCars(
+        { spec: a.state.spec, car: a.state.car, events: hersAt, stats: a.state.stats },
+        { spec: b.state.spec, car: b.state.car, events: hisAt, stats: b.state.stats },
+      );
+      if (theirs) {
+        if (hersAt.length > 0) theirs(a, hersAt);
+        if (hisAt.length > 0) theirs(b, hisAt);
+      }
+      if (met && contact) {
+        contact(a, b, by, folded(a.state) - beforeA, folded(b.state) - beforeB);
+      }
+    }
+  }
 }
 
 /** Pay the head start the field is still owed, or as much of it as `budget`
@@ -391,6 +552,52 @@ export function placeAtSplit(field: RivalField, split: number, at: number): numb
 export function placeAtFinish(field: RivalField, at: number): number {
   let ahead = 0;
   for (const run of field.runs) if (run.time !== null && run.time < at) ahead += 1;
+  return ahead + 1;
+}
+
+/** HOW FAR ROUND THE STAGE a run has got, m: the laps already in the book
+ * plus the road covered on this one. `progressS` restarts at every lap, so a
+ * circuit needs the laps adding back or the leader would drop to last every
+ * time they crossed the line. */
+function covered(state: GameState): number {
+  return (state.lap - 1) * state.track.length + state.progressS;
+}
+
+/** How little road two cars can be apart and still count as level, m. Small
+ * enough that it only ever fires where it is meant to — a grid, where the
+ * whole field's arc position is the start gate's — and inside a car's own
+ * bodywork anywhere else, where a frame settles it either way. */
+const GRID_TIE = 0.05;
+
+/** R29 — WHERE A CAR IS RIGHT NOW, on a road everybody left together.
+ *
+ * A staggered rally cannot answer this and does not try: the cars are minutes
+ * apart, and the only moment anybody's position is actually known is a split
+ * board (`placeAtSplit`). A HEADS-UP race can answer it on every frame,
+ * because there is no stagger to reason about — the order of the road IS the
+ * order of the race. So the position board reads live there, and a place
+ * taken in a corner is on the HUD before the car is straight again.
+ *
+ * Everybody home is ahead of everybody still driving; everybody still driving
+ * is placed by how much road they have covered, with the GRID as the
+ * tie-break, because a stage's arc position is measured from the start gate
+ * and a grid stands behind it: on the line every car reads the same road
+ * covered, and the order there is the order they are stood in. */
+export function livePlace(field: RivalField, state: GameState): number {
+  const mine = covered(state);
+  let ahead = 0;
+  for (const run of field.runs) {
+    if (!onRoad(run)) {
+      // Home already, or not out of the control yet. A crew with a time is
+      // ahead of anybody who has not finished; one still owed a head start
+      // is not on the road at all — and a mass start owes nobody anything.
+      if (run.time !== null) ahead += 1;
+      continue;
+    }
+    const theirs = covered(run.state);
+    if (theirs > mine + GRID_TIE) ahead += 1;
+    else if (theirs > mine - GRID_TIE && run.entry.number < field.playerNumber) ahead += 1;
+  }
   return ahead + 1;
 }
 

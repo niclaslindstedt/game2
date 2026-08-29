@@ -61,18 +61,33 @@ human one (same seed + car + profile → identical digest —
 
 The tunables live as data on `BotProfile` (`latFraction`, `steerGain`,
 `lookahead`, `planHorizon`, `hardCurvature`, `hotEntry`, `rotationRef`,
-`brakeMargin`, `brakeUse`, `reverseAfter`, `reverseSpeed`, `offRoadGiveUp`),
-with `RALLY_BOT` as the shipped default. Slower or faster brains are **new
-profiles, not code forks** — a "cautious" or "flat-out" probe is a profile
-literal handed to `simulateStage`, and the decision code stays one function.
+`brakeMargin`, `brakeUse`, `reverseAfter`, `reverseSpeed`, `offRoadGiveUp`,
+`overtake`, `aggression`), with `RALLY_BOT` as the shipped default. Slower or
+faster brains are **new profiles, not code forks** — a "cautious" or
+"flat-out" probe is a profile literal handed to `simulateStage`, and the
+decision code stays one function.
 
 **A profile is never hand-written for the game itself.** The campaign's
 fourteen rivals come out of the SKILL MODEL (`engine/sim/skill.ts`): six
 skill axes with a points budget in front of them, a difficulty being one
-number and a crew being a way of spending it (`engine/sim/rivals.ts`). Adding
-a knob to `BotProfile` is the moment to ask which axis owns it — a knob no
-axis moves is a knob no rival can ever have. Measure a change to either with
-`npm run sim -- --field`.
+number and a crew being a way of spending it (`engine/sim/rivals.ts`).
+
+Adding a knob to `BotProfile` is the moment to ask **whether it is a skill at
+all**, and there are only two right answers:
+
+- **It makes the car quicker, monotonically.** Then an axis owns it, and a
+  knob no axis moves is a knob no rival can ever have. Measure with
+  `npm run sim -- --field`.
+- **It is TEMPERAMENT** — true of `overtake` and `aggression`, the two that
+  say what a crew does about other cars. Neither is monotone in pace (a crew
+  who finishes having put three cars in the trees is not a better driver), so
+  neither can be an axis without breaking the budget's one promise. It comes
+  off the CREW instead (`RivalCrew.overtake` / `.temper`), scaled by a band
+  the difficulty sets (`temperFor`). Measure with `make heat`.
+
+Forcing a temperament knob onto an axis is the failure mode here: it makes
+the hard field the polite one or the easy field the vicious one, and no
+amount of budget tuning fixes it.
 
 Before an axis is given a range, SWEEP THE KNOB it moves: one knob at a time
 against `RALLY_BOT` over several stages and all three cars, printing the time
@@ -107,6 +122,10 @@ knobs the code actually reads.
    no throttle, no brake.
 7. **Gears** — shifts the manual by the same speed thresholds the auto box
    uses (`TUNING.gearbox.upAt`/`downAt`), so both cars simulate fairly.
+8. **Traffic** — handed the cars near it, the bot moves its aim off the crown
+   to go round the one in front, queues behind it when the road will not take
+   the move, and leans on it if its temper says so. Handed nothing, every one
+   of the seven steps above runs exactly as it always did.
 
 ## The iterate loop
 
@@ -159,6 +178,11 @@ in instead. Do not "fix" that by re-racing it.
 - A `skill.ts` or `rivals.ts` change owes the `--field` table AND the same
   tape replayed before and after — the table says what the budgets bought,
   the tape says what that did to a person.
+- **A traffic or temper change owes `make heat` instead** — and owes a
+  `make sim` table that has not moved AT ALL. A bot handed no traffic must
+  drive the stage it always drove, so a byte-identical sweep is the proof the
+  change is contained; `make heat` is the only table where the behaviour
+  actually fires.
 - Bot changes are usually `no-changelog` (players never see the bot today —
   it exists headless); the moment a bot drives something player-facing (a
   demo mode, a ghost car), that changes.

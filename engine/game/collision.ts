@@ -568,18 +568,20 @@ function nearestOnSpines(
 /** Resolve one pair of cars. Mutates both: position (pushed apart by the
  * share of the overlap each one's mass earns), velocity (a two-body impulse
  * with a friction term along the contact), yaw rate (the lever arm on each
- * body), the springs, and both damage ledgers.
+ * body), the springs, and both damage ledgers. Returns whether the two
+ * actually met — false is a pair that was merely near each other, which is
+ * most of the pairs anything bothers to ask about.
  *
  * Contacts are only ever resolved between cars that are both ON THE ROAD.
  * A car still in the start control is not somewhere the world can reach —
  * which is what lets the whole field spawn on one start line. */
-export function collideCars(a: ContactSide, b: ContactSide): void {
+export function collideCars(a: ContactSide, b: ContactSide): boolean {
   const C = T.collision.cars;
   const carA = a.car;
   const carB = b.car;
   // One of them is over the other: a landing on somebody's roof is not this
   // model's contact to resolve.
-  if (Math.abs(carA.y - carB.y) > C.reach) return;
+  if (Math.abs(carA.y - carB.y) > C.reach) return false;
 
   const sinA = Math.sin(carA.heading);
   const cosA = Math.cos(carA.heading);
@@ -599,7 +601,7 @@ export function collideCars(a: ContactSide, b: ContactSide): void {
   let nz = pbz - paz;
   let d = Math.hypot(nx, nz);
   const reach = T.collision.halfWidth * 2;
-  if (d >= reach) return;
+  if (d >= reach) return false;
   // How far inside each other they are, read off the spines BEFORE any
   // fallback normal replaces the measurement — a car that has been put
   // inside another one is fully overlapped, not somehow further apart.
@@ -633,7 +635,7 @@ export function collideCars(a: ContactSide, b: ContactSide): void {
   const relX = vax - vbx;
   const relZ = vaz - vbz;
   const closing = relX * nx + relZ * nz;
-  if (closing <= 0) return;
+  if (closing <= 0) return false;
 
   const mA = a.spec.mass;
   const mB = b.spec.mass;
@@ -666,6 +668,7 @@ export function collideCars(a: ContactSide, b: ContactSide): void {
   const share = C.crushShare * T.collision.crushPerSpeed;
   dealContactCrush(a, closing * (mB / (mA + mB)), share, sinA, cosA, nx, nz);
   dealContactCrush(b, closing * (mA / (mA + mB)), share, sinB, cosB, -nx, -nz);
+  return true;
 }
 
 /** Spend one side's half of a car-to-car impulse: the velocity change into
