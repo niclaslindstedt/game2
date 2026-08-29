@@ -53,7 +53,7 @@ Open the printed URL. The game opens on the main menu, over a stage a bot is dri
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
 | `npm run dev`      | Dev server (no service worker)                                                                                             |
 | `make build`       | Typecheck + production build to `pwa/dist/`                                                                                |
-| `make test`        | Full test suite (generator rules, drift/jump physics, bot sims)                                                            |
+| `make test`        | Full test suite (generator rules, drift/jump physics, bot sims) — `SHARD=i/N` runs one slice, which is how CI fans it out  |
 | `make lint`        | ESLint + typecheck across engine, app, tests, and tooling                                                                  |
 | `make sim`         | Headless balance sweep: bots drive stages, prints the pace / damage table (`--sweep` ranks the roster per stage archetype) |
 | `make drift`       | The drift lab: every corner the generator builds × every technique, tabled and drawn to `previews/drift-<car>.png`         |
