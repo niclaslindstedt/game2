@@ -3771,6 +3771,12 @@ a.menu-version:focus-visible {
   grid-template-columns: 1.8em 1fr 3.6em;
 }
 
+/* …and a HEADS-UP race is the other way round: a stage, a time, and no board
+   behind either of them. */
+.results-table.is-race .results-row {
+  grid-template-columns: 1.8em 1fr 4.4em;
+}
+
 .results-pos {
   text-align: right;
   opacity: 0.75;

@@ -337,6 +337,11 @@ export type GroundContext = {
   windZ: number;
   t: number;
   rng: Rng;
+  /** What the drive is multiplied by this step — 1 everywhere except inside
+   * a mass start's catch-up, where a car giving away grid rows is given back
+   * the metres (state.catchUp). It multiplies the engine's pull and nothing
+   * else: the grip, the slide and the top end are all still the car's. */
+  drive: number;
   /** Off the road only: the terrain height under any world position. When
    * set, ground-follow and landings ride this instead of extrapolating the
    * road's slope — a slide across a hillside tracks the hillside. */
@@ -640,7 +645,12 @@ export function stepGrounded(
   // instead of pulling up it. It limps, it never parks.
   const damagePower = hurt.power * hurt.firing;
   const accel =
-    engineAccel(spec, car, surfaceGrip) * input.throttle * surfacePower * shiftCut * damagePower;
+    engineAccel(spec, car, surfaceGrip) *
+    input.throttle *
+    surfacePower *
+    shiftCut *
+    damagePower *
+    ctx.drive;
   car.u += accel * dt;
   if (car.reversing) {
     // Backing out. The brake's own retardation is off while this runs, or the

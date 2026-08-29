@@ -18,7 +18,7 @@ import { formatTime } from "../lib/util.ts";
 import type { CampaignLevel, CampaignLocation, CampaignProgress } from "./campaign.ts";
 import { CarPicker } from "./car-picker.tsx";
 import { carBars, carFacts } from "./car-stats.ts";
-import { GearboxRow, MenuHead, type RaceSettings } from "./menu.tsx";
+import { GearboxRow, MenuHead, type PlayMode, type RaceSettings } from "./menu.tsx";
 import type { Settings } from "./settings.ts";
 
 /** The spec sheet. The bars compare the car to the REST OF THE ROSTER
@@ -59,12 +59,19 @@ function CarSpecPanel({ spec, gearbox }: { spec: CarSpec; gearbox: GearboxMode }
   );
 }
 
+/** Which page the card came from, named. The campaign's is the location
+ * itself, so it is the one this table does not hold. */
+const BACK_TO: Partial<Record<PlayMode, string>> = {
+  timetrial: "TIME TRIAL",
+  headsup: "HEADS UP",
+};
+
 export type CarSetupPageProps = {
   location: CampaignLocation;
   level: CampaignLevel;
   /** What the stage is being entered AS — it decides where BACK goes and
    * what the button under the card promises. */
-  mode: "campaign" | "timetrial";
+  mode: PlayMode;
   /** The stage's billing, built by the level grid so the two rows agree. */
   billing: string;
   progress: CampaignProgress;
@@ -97,7 +104,7 @@ export function CarSetupPage({
     <div className="menu-card menu-card-wide">
       <MenuHead
         back={onBack}
-        backLabel={mode === "campaign" ? location.name.toUpperCase() : "TIME TRIAL"}
+        backLabel={BACK_TO[mode] ?? location.name.toUpperCase()}
         title={level.name.toUpperCase()}
         sub={`${location.name} · ${billing}${best === undefined ? "" : ` · BEST ${formatTime(best)}`}`}
       />
