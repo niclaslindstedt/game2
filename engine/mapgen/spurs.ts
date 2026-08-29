@@ -28,7 +28,7 @@
 
 import { createRng } from "../lib/prng.ts";
 import { hash2 } from "../lib/noise.ts";
-import { cellKey } from "../lib/math.ts";
+import { blockOffsets, cellKey } from "../lib/math.ts";
 import type { Surface } from "./compile.ts";
 import { LAKE_Y, type LandField } from "./land.ts";
 import { ROAD_CROSS, roadClearance } from "./road.ts";
@@ -586,48 +586,109 @@ export type SpurIndex = {
 /** Cell edge of the branch lookup, m — a couple of samples per cell. */
 const INDEX_CELL = 24;
 
+/** One cell of the branch index: the samples in it, and the box they
+ * occupy. A branch crosses a cell as a ribbon, so its box is a fraction of
+ * the 24 m square — which is what makes it worth testing before the
+ * samples. Splicing a spent branch out only ever shrinks what the box
+ * holds, so a box left as it was stays a superset and costs work rather
+ * than correctness. */
+type SpurCell = {
+  entries: { spur: Spur; sample: SpurSample }[];
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+};
+
+/** Three rings out — 72 m, comfortably past the corridor AND the shelf blend
+ * beyond it. Cutting the search off inside the blend is what leaves fans of
+ * shading radiating from a branch: the ground stops being flattened at the
+ * cell boundary instead of at the blend's end. */
+const NEAR_BLOCK = blockOffsets(3);
+
 export function createSpurIndex(): SpurIndex {
   const spurs: Spur[] = [];
-  const grid = new Map<number, { spur: Spur; sample: SpurSample }[]>();
+  const grid = new Map<number, SpurCell>();
   const key = (x: number, z: number): number =>
     cellKey(Math.floor(x / INDEX_CELL), Math.floor(z / INDEX_CELL));
+
+  /** The block the last query looked at, held for the next one. Every height
+   * query asks this index, and they arrive in clusters a few metres apart —
+   * the lattice corners under a wheel, the probes around a ground reading —
+   * so the forty-nine map lookups are paid once per cell rather than once
+   * per query. Dropped whenever the grid changes shape. */
+  let nearCx = NaN;
+  let nearCz = NaN;
+  const nearCells: SpurCell[] = [];
 
   const add = (spur: Spur): void => {
     spurs.push(spur);
     for (const sample of spur.samples) {
       const k = key(sample.x, sample.z);
-      const bucket = grid.get(k);
-      if (bucket) bucket.push({ spur, sample });
-      else grid.set(k, [{ spur, sample }]);
+      let cell = grid.get(k);
+      if (!cell) {
+        grid.set(
+          k,
+          (cell = {
+            entries: [],
+            minX: Infinity,
+            maxX: -Infinity,
+            minZ: Infinity,
+            maxZ: -Infinity,
+          }),
+        );
+      }
+      cell.entries.push({ spur, sample });
+      if (sample.x < cell.minX) cell.minX = sample.x;
+      if (sample.x > cell.maxX) cell.maxX = sample.x;
+      if (sample.z < cell.minZ) cell.minZ = sample.z;
+      if (sample.z > cell.maxZ) cell.maxZ = sample.z;
     }
+    nearCx = NaN;
   };
 
   const nearest = (x: number, z: number): SpurHit | null => {
-    let best: SpurHit | null = null;
+    if (spurs.length === 0) return null;
     const cx = Math.floor(x / INDEX_CELL);
     const cz = Math.floor(z / INDEX_CELL);
-    // Three rings out — 72 m, comfortably past the corridor AND the shelf
-    // blend beyond it. Cutting the search off inside the blend is what
-    // leaves fans of shading radiating from a branch: the ground stops
-    // being flattened at the cell boundary instead of at the blend's end.
-    for (let dx = -3; dx <= 3; dx++) {
-      for (let dz = -3; dz <= 3; dz++) {
-        const bucket = grid.get(cellKey(cx + dx, cz + dz));
-        if (!bucket) continue;
-        for (const entry of bucket) {
-          const dx = entry.sample.x - x;
-          const dz = entry.sample.z - z;
-          // Squared first — see the road-distance field in compile.ts:
-          // three rings of branch is a lot of road to take a root of, and
-          // almost none of it is nearer than what the search already holds.
-          const d2 = dx * dx + dz * dz;
-          if (best && d2 > best.d * best.d * (1 + 1e-9)) continue;
-          const d = Math.hypot(dx, dz);
-          if (!best || d < best.d) best = { spur: entry.spur, sample: entry.sample, d };
-        }
+    if (cx !== nearCx || cz !== nearCz) {
+      nearCx = cx;
+      nearCz = cz;
+      nearCells.length = 0;
+      for (let i = 0; i < NEAR_BLOCK.length; i += 2) {
+        const cell = grid.get(cellKey(cx + NEAR_BLOCK[i], cz + NEAR_BLOCK[i + 1]));
+        if (cell) nearCells.push(cell);
       }
     }
-    return best;
+    let bestSpur: Spur | null = null;
+    let bestSample: SpurSample | null = null;
+    let bestD2 = Infinity;
+    // Squared throughout, and the winner built once at the end: this runs
+    // under every height query the terrain answers, and a root per candidate
+    // and an object per improvement are both pure waste there.
+    for (let c = 0; c < nearCells.length; c++) {
+      const cell = nearCells[c];
+      // The block reaches 72 m and the branch the point is beside is
+      // normally in the middle cell, so most of these boxes are already
+      // further off than the answer in hand — see `blockOffsets` for why
+      // the ring order is what makes that true this early.
+      const bx = x < cell.minX ? cell.minX - x : x > cell.maxX ? x - cell.maxX : 0;
+      const bz = z < cell.minZ ? cell.minZ - z : z > cell.maxZ ? z - cell.maxZ : 0;
+      if (bx * bx + bz * bz >= bestD2) continue;
+      const entries = cell.entries;
+      for (let i = 0; i < entries.length; i++) {
+        const sample = entries[i].sample;
+        const dx = sample.x - x;
+        const dz = sample.z - z;
+        const d2 = dx * dx + dz * dz;
+        if (d2 >= bestD2) continue;
+        bestD2 = d2;
+        bestSpur = entries[i].spur;
+        bestSample = sample;
+      }
+    }
+    if (!bestSpur || !bestSample) return null;
+    return { spur: bestSpur, sample: bestSample, d: Math.sqrt(bestD2) };
   };
 
   const pruneBefore = (atS: number): void => {
@@ -636,13 +697,14 @@ export function createSpurIndex(): SpurIndex {
     if (cut === 0) return;
     for (let i = 0; i < cut; i++) {
       for (const sample of spurs[i].samples) {
-        const bucket = grid.get(key(sample.x, sample.z));
-        if (!bucket) continue;
-        const at = bucket.findIndex((e) => e.sample === sample);
-        if (at >= 0) bucket.splice(at, 1);
+        const cell = grid.get(key(sample.x, sample.z));
+        if (!cell) continue;
+        const at = cell.entries.findIndex((e) => e.sample === sample);
+        if (at >= 0) cell.entries.splice(at, 1);
       }
     }
     spurs.splice(0, cut);
+    nearCx = NaN;
   };
 
   return { spurs, add, nearest, pruneBefore };

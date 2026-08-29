@@ -531,7 +531,14 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     dropGhost();
     if (!state) return;
     ghost = state;
-    ghostCar = buildCar(state.spec, { ghost: true, interior: INTERIOR_DETAIL[quality.interior] });
+    ghostCar = buildCar(state.spec, {
+      ghost: true,
+      interior: INTERIOR_DETAIL[quality.interior],
+      // A ghost is a picture of a lap, drawn half-transparent: a film of
+      // grime on ITS screens is a third of its triangles spent on something
+      // nothing can see through anyway.
+      screens: false,
+    });
     // The ghost gets the same plate the field does, for the same reason: on
     // a road with two cars on it, which of them is the one to beat is
     // information. Its own colour and its own fade, held under a real

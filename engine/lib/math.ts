@@ -48,9 +48,31 @@ export function dist2(ax: number, az: number, bx: number, bz: number): number {
  * every one of those probes and then hashes it; an integer key allocates
  * nothing and compares in one instruction.
  *
- * Injective while |iz| < 4096, which at the engine's cell sizes (24–48 m)
+ * Injective while |iz| < 4096, which at the engine's cell sizes (10–120 m)
  * is a world tens of kilometres across — orders of magnitude past anything
  * the generator builds. */
 export function cellKey(ix: number, iz: number): number {
   return ix * 8192 + iz;
+}
+
+/** The (dx, dz) offsets of a `(2r+1)²` block of cells, flattened in pairs
+ * and ordered by RING — the middle cell, then the eight around it, and so
+ * on out to `radius`.
+ *
+ * The order is the point. A ring scan that walks its block row by row meets
+ * the far corners before the middle, so it carries a useless bound through
+ * most of the block; walking outward from the query's own cell means the
+ * nearest road is measured first, and every rejection past that ring has a
+ * tight bound to reject against. Built once per index, because it is the
+ * same handful of offsets on every query. */
+export function blockOffsets(radius: number): number[] {
+  const offsets: number[] = [];
+  for (let r = 0; r <= radius; r++) {
+    for (let dx = -r; dx <= r; dx++) {
+      for (let dz = -r; dz <= r; dz++) {
+        if (Math.max(Math.abs(dx), Math.abs(dz)) === r) offsets.push(dx, dz);
+      }
+    }
+  }
+  return offsets;
 }

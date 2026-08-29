@@ -51,8 +51,14 @@ const BLADE_LIFT = GLASS_LIFT + 0.014;
  * the one line on the whole car the eye reads as "a wiper did that". At a
  * handful of cells across, a blade's fan comes out as three big triangles
  * of clean glass and reads as a texture glitch; the arc has to have an arc
- * in it. Still nothing: two panes of a few hundred flat, unlit,
- * vertex-coloured triangles. */
+ * in it.
+ *
+ * It is not free, though, and it is the reason `film` exists: at this
+ * resolution the two panes are 3,456 triangles — more than a third of the
+ * whole car — drawn in the transparent pass, with their colours rewritten
+ * and re-uploaded on every frame the coat moves. On the car being driven
+ * that is the right bill for the one surface the player looks THROUGH; on
+ * anybody else's it buys nothing at any distance a rival is ever seen at. */
 const GRID = { front: { cols: 36, rows: 24 }, rear: { cols: 36, rows: 24 } };
 
 /** WHAT IS ON THE GLASS, and it is three things rather than two.
@@ -195,8 +201,10 @@ export type CarWipers = {
   group: THREE.Group;
   /** The grime pane itself — handed out so the assembly can order it over
    * the glass it is laid on, which no distance sort can be trusted to get
-   * right for two surfaces three millimetres apart. */
-  film: THREE.Mesh;
+   * right for two surfaces three millimetres apart. Null on a car built
+   * without one, where the arms still sweep and there is simply nothing on
+   * the glass for them to take off. */
+  film: THREE.Mesh | null;
   /**
    * Drive the glass one step.
    *
@@ -259,11 +267,21 @@ function frameOf(pane: ScreenPane): Frame {
 type Pivot = { reach: number; radius: Float32Array; angle: Float32Array };
 
 /** One screen's film: the slice of the shared buffers it owns, the coat on
- * each of its vertices, and the arm(s) that clear it. */
+ * each of its vertices, and the arm(s) that clear it.
+ *
+ * On a car built with no film `count` is zero and every per-vertex array is
+ * empty, so all four of the loops below fall through; `level` is what the
+ * arms read instead. The arms and their beat are shared between the two: a
+ * rival's wipers still come on in the rain, they just have nothing drawn
+ * for them to clear. */
 type Film = {
   offset: number;
   count: number;
   coat: Float32Array;
+  /** The screen's coat as ONE number, 0..1 — the same reading the swept
+   * average gives, kept for the filmless car where there are no vertices to
+   * average. Maintained either way, so `sweep` reads one field. */
+  level: number;
   /** Painted coat, quantised — the buffer is only rewritten when the glass
    * has visibly moved. */
   shown: Float32Array;
@@ -312,10 +330,15 @@ function bladeGeometry(reach: number): THREE.BufferGeometry {
   return b.geometry();
 }
 
+/** Build the arms, and — when `film` is set — the grime pane they clear.
+ * Only the car the player is IN needs the pane: it is the surface they look
+ * through, and it is also a third of the car's triangles and a colour buffer
+ * rewritten as the coat moves. Everyone else gets the arms alone. */
 export function buildWipers(
   spec: CarBodySpec,
   material: THREE.Material,
   filmMaterial: THREE.Material,
+  film = true,
 ): CarWipers {
   const group = new THREE.Group();
   const panes = screenPanes(spec);
@@ -335,29 +358,31 @@ export function buildWipers(
     const offset = position.length / 3;
     const cols = grid.cols;
     const rows = grid.rows;
-    const count = (cols + 1) * (rows + 1);
+    const count = film ? (cols + 1) * (rows + 1) : 0;
 
     // The film follows the patch's own warp rather than a plane through it,
     // so it lies on the glass at the corners as well as the middle.
     const local: number[] = [];
-    for (let j = 0; j <= rows; j++) {
-      for (let i = 0; i <= cols; i++) {
-        const u = pane.rect.u0 + ((pane.rect.u1 - pane.rect.u0) * i) / cols;
-        const v = pane.rect.v0 + ((pane.rect.v1 - pane.rect.v0) * j) / rows;
-        const p = vec(patchAt(pane.patch, u, v)).addScaledVector(frame.normal, FILM_LIFT);
-        position.push(p.x, p.y, p.z);
-        color.push(0, 0, 0, 0);
-        p.sub(frame.origin);
-        local.push(p.dot(frame.right), p.dot(frame.up));
+    if (film) {
+      for (let j = 0; j <= rows; j++) {
+        for (let i = 0; i <= cols; i++) {
+          const u = pane.rect.u0 + ((pane.rect.u1 - pane.rect.u0) * i) / cols;
+          const v = pane.rect.v0 + ((pane.rect.v1 - pane.rect.v0) * j) / rows;
+          const p = vec(patchAt(pane.patch, u, v)).addScaledVector(frame.normal, FILM_LIFT);
+          position.push(p.x, p.y, p.z);
+          color.push(0, 0, 0, 0);
+          p.sub(frame.origin);
+          local.push(p.dot(frame.right), p.dot(frame.up));
+        }
       }
-    }
-    for (let j = 0; j < rows; j++) {
-      for (let i = 0; i < cols; i++) {
-        const a = offset + j * (cols + 1) + i;
-        const b = a + 1;
-        const c = a + cols + 1;
-        const d = c + 1;
-        index.push(a, b, d, a, d, c);
+      for (let j = 0; j < rows; j++) {
+        for (let i = 0; i < cols; i++) {
+          const a = offset + j * (cols + 1) + i;
+          const b = a + 1;
+          const c = a + cols + 1;
+          const d = c + 1;
+          index.push(a, b, d, a, d, c);
+        }
       }
     }
 
@@ -452,6 +477,7 @@ export function buildWipers(
       offset,
       count,
       coat: new Float32Array(count),
+      level: 0,
       shown: new Float32Array(count).fill(-1),
       bias,
       soil: SOIL[which],
@@ -472,19 +498,25 @@ export function buildWipers(
     });
   }
 
-  const filmGeo = new THREE.BufferGeometry();
-  filmGeo.setAttribute("position", new THREE.Float32BufferAttribute(position, 3));
-  const colors = new THREE.Float32BufferAttribute(color, 4);
-  filmGeo.setAttribute("color", colors);
-  filmGeo.setIndex(index);
-  const film = new THREE.Mesh(filmGeo, filmMaterial);
-  // The film paints itself every step it moves; the dirt painter bakes from
-  // a pristine copy, and two writers on one buffer is a flicker.
-  film.userData[NO_DIRT] = true;
-  group.add(film);
+  let filmGeo: THREE.BufferGeometry | null = null;
+  let colors: THREE.Float32BufferAttribute | null = null;
+  let filmMesh: THREE.Mesh | null = null;
+  if (film) {
+    filmGeo = new THREE.BufferGeometry();
+    filmGeo.setAttribute("position", new THREE.Float32BufferAttribute(position, 3));
+    colors = new THREE.Float32BufferAttribute(color, 4);
+    filmGeo.setAttribute("color", colors);
+    filmGeo.setIndex(index);
+    filmMesh = new THREE.Mesh(filmGeo, filmMaterial);
+    // The film paints itself every step it moves; the dirt painter bakes from
+    // a pristine copy, and two writers on one buffer is a flicker.
+    filmMesh.userData[NO_DIRT] = true;
+    group.add(filmMesh);
+  }
 
   const grime = new THREE.Color();
   const paint = (f: Film): void => {
+    if (!colors) return;
     // What the road put there first — sand, or the same sand with the
     // weather in it — and then how much of the film is that rather than
     // rain's own smear.
@@ -534,6 +566,11 @@ export function buildWipers(
       // beat between strokes while it is only spitting), and a DRY screen
       // that is merely dusty gets one stroke and a long wait.
       f.phase = 0;
+      // With no pane there is nothing per-vertex to smear, so the stroke
+      // takes its share off the one number the arms are reading instead —
+      // which is what stops a filmless car's wipers running for the rest of
+      // the stage on a coat that never comes down.
+      if (f.count === 0) f.level *= SMEAR;
       if (need < WIPE.off) f.running = false;
       else if (wet < WIPE.rain) f.rest = REST.dry;
       else if (wet < 0.4) f.rest = REST.drizzle * (1 - wet);
@@ -571,6 +608,7 @@ export function buildWipers(
         // a moment either way — a shower does not turn the dust on a screen
         // brown the instant it starts.
         f.soak += (Math.min(1, wet * 3) - f.soak) * Math.min(1, dt * 1.5);
+        f.level = Math.min(1, f.level + laid);
         for (let k = 0; k < f.count; k++) {
           f.coat[k] = Math.min(1, f.coat[k] + laid * f.bias[k]);
         }
@@ -579,9 +617,12 @@ export function buildWipers(
       // can actually clear, and the weather about to put more there — the
       // two handed over separately, because they mean different things to
       // the blades (see `sweep`).
-      let sum = 0;
-      for (let i = 0; i < f.swept.length; i++) sum += f.coat[f.swept[i] as number] as number;
-      sweep(f, wet, f.swept.length > 0 ? sum / f.swept.length : 0, dt);
+      if (f.count > 0) {
+        let sum = 0;
+        for (let i = 0; i < f.swept.length; i++) sum += f.coat[f.swept[i] as number] as number;
+        f.level = f.swept.length > 0 ? sum / f.swept.length : 0;
+      }
+      sweep(f, wet, f.level, dt);
 
       let moved = false;
       for (let k = 0; k < f.count && !moved; k++) {
@@ -592,9 +633,9 @@ export function buildWipers(
   };
 
   const dispose = (): void => {
-    filmGeo.dispose();
+    filmGeo?.dispose();
     for (const geo of bladeGeos) geo.dispose();
   };
 
-  return { group, film, update, dispose };
+  return { group, film: filmMesh, update, dispose };
 }

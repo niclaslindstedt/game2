@@ -240,6 +240,20 @@ await scene("field", { menu: "1", splash: "0", bot: "1" }, async (page) => {
   await atStageTime(page, 12);
 });
 
+// R29 — a HEADS-UP grid, which is the worst frame the game can draw and the
+// one the `field` row above says nothing about. A rally start puts ONE crew
+// in range; a mass start puts the whole grid inside a hundred metres and
+// leaves it there, so every rival is built, drawn, named and lit at once.
+// Metered at the same stage time as `driving`, on the same seed and the same
+// road, so the two rows SUBTRACT: what is left is the field and nothing else.
+// The pack has not strung out by then — the whole grid is still inside a few
+// hundred metres — so this is close to the worst frame the game draws.
+// `?mode=headsup` stands the grid up straight off a link.
+await scene("headsup", { start: "1", bot: "1", mode: "headsup" }, async (page) => {
+  await racing(page);
+  await atStageTime(page, 12);
+});
+
 // The menu's backdrop: the same world under the drone camera, which is
 // what the player looks at for as long as they are choosing a car.
 await scene("menu", { menu: "1", splash: "0" }, async (page) => {

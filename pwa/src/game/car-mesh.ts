@@ -195,6 +195,10 @@ export type CarOptions = {
   paint?: Livery;
   /** The crew behind the glass (car-crew.ts). Defaults to the player's. */
   crew?: CrewLook;
+  /** Whether the screens carry the grime film the wipers clear
+   * (car/wipers.ts). The player's car only — see `CarBodyOptions.screens`.
+   * Defaults on. */
+  screens?: boolean;
 };
 
 /** How far off the centerline this car's beams hang, front and rear. */
@@ -250,6 +254,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     crew: options.crew,
     cockpit: options.cockpit,
     rearView: options.rearView,
+    screens: options.screens,
   });
   // Panels, parts and wheels share one material, so a ghost is one flag.
   // Its own back faces still occlude its front ones (depth writing stays

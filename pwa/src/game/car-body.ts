@@ -165,6 +165,13 @@ export type CarBodyOptions = {
    * pass's own texture (mirror.ts), and the aspect it renders at. Left off,
    * the mirror is a dark housing with no picture in it. */
   rearView?: { texture: THREE.Texture; aspect: number };
+  /** Whether the screens carry the GRIME FILM the wipers clear
+   * (car/wipers.ts). The arms are built either way; the pane is a third of
+   * the car's triangles, drawn transparent, with a colour buffer rewritten
+   * as the coat moves — a bill worth paying for the screen the player looks
+   * through, and for nobody else's. Defaults on, so every tool that builds a
+   * body without saying whose it is gets the full one. */
+  screens?: boolean;
 };
 
 export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): CarBodyParts {
@@ -270,6 +277,14 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   const partGeos: THREE.BufferGeometry[] = [];
   for (const [name, builder] of partBuilders) {
     const geo = builder.geometry();
+    // A part a spec never authored builds no triangles, and an empty mesh is
+    // still an object to transform, cull, sort and issue a draw for on every
+    // pass of every frame — on every car on a grid. There is nothing there
+    // to break off either, so it is simply not made.
+    if ((geo.getAttribute("position")?.count ?? 0) === 0) {
+      geo.dispose();
+      continue;
+    }
     const mesh = new THREE.Mesh(geo, material);
     chassis.add(mesh);
     breakables[name] = mesh;
@@ -285,8 +300,8 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     transparent: true,
     depthWrite: false,
   });
-  const wipers = buildWipers(spec, material, filmMat);
-  wipers.film.renderOrder = 2;
+  const wipers = buildWipers(spec, material, filmMat, options.screens ?? true);
+  if (wipers.film) wipers.film.renderOrder = 2;
   chassis.add(wipers.group);
 
   // The cockpit hangs off the same sprung chassis as everything else, so it

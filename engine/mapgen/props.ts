@@ -22,6 +22,7 @@
 // each community grows, and what its ground cover looks like, is the
 // renderer's business (the biome in the app maps these ids to flora).
 
+import { cellKey } from "../lib/math.ts";
 import { hash2, valueNoise } from "../lib/noise.ts";
 import type { CornerGuard, GuardField } from "./guards.ts";
 import { LAKE_Y } from "./land.ts";
@@ -452,12 +453,21 @@ export function createPropField(ctx: PropContext): PropField {
   // What the car has taken down. Keyed by position, because that is the one
   // thing every field's props agree on — and the caches are dropped and
   // rebuilt as the road streams, so the flag cannot live on the prop.
-  const felled = new Set<string>();
-  const propKey = (ob: WildObstacle): string => `${ob.x.toFixed(2)},${ob.z.toFixed(2)}`;
+  //
+  // Position to the CENTIMETRE, packed into one integer. `standing` is asked
+  // about every candidate of every cell of every gather — thousands of times
+  // a step, most of them about props nothing has ever touched — and a
+  // template key would allocate two strings and a join on each of those.
+  // Injective while the world is inside ±167 km, which is the same kind of
+  // bound `cellKey` carries and just as far past anything the generator
+  // builds.
+  const felled = new Set<number>();
+  const propKey = (ob: WildObstacle): number =>
+    Math.round(ob.x * 100) * 33554432 + Math.round(ob.z * 100);
   const fell = (ob: WildObstacle): void => {
     felled.add(propKey(ob));
   };
-  const standing = (ob: WildObstacle): boolean => !felled.has(propKey(ob));
+  const standing = (ob: WildObstacle): boolean => felled.size === 0 || !felled.has(propKey(ob));
 
   /** True when a prop of `radius` standing here leaves the road ribbon —
    * mat, shoulder and ditch — entirely to itself. */
@@ -509,7 +519,7 @@ export function createPropField(ctx: PropContext): PropField {
   };
 
   const obSeed = (ctx.seed ^ 0x45d9f3b3) >>> 0;
-  let obCache = new Map<string, WildObstacle[]>();
+  let obCache = new Map<number, WildObstacle[]>();
 
   /** How badly the wind has been through this wood, 0 outside a blowdown and
    * up to 1 in the middle of one — the same shape of field as `bouldery`
@@ -525,7 +535,7 @@ export function createPropField(ctx: PropContext): PropField {
   const galeBearing = hash2(0, 0, (obSeed + 12) >>> 0) * Math.PI * 2;
 
   const obstacleInCell = (cx: number, cz: number): WildObstacle[] => {
-    const key = `${cx},${cz}`;
+    const key = cellKey(cx, cz);
     const hit = obCache.get(key);
     if (hit !== undefined) return hit;
     if (obCache.size > 4096) obCache = new Map();
@@ -591,7 +601,7 @@ export function createPropField(ctx: PropContext): PropField {
   // an obstacle (SOLID_PROP_HEIGHT) and the renderer scatters it itself.
 
   const rockSeed = (ctx.seed ^ 0x517cc1b7) >>> 0;
-  let rockCache = new Map<string, WildObstacle[]>();
+  let rockCache = new Map<number, WildObstacle[]>();
 
   /** How stony this ground is, 0 off a boulder field and up to 1 in the
    * middle of one. The same field drives both how many stones the ground
@@ -603,7 +613,7 @@ export function createPropField(ctx: PropContext): PropField {
   };
 
   const litterInCell = (cx: number, cz: number): WildObstacle[] => {
-    const key = `${cx},${cz}`;
+    const key = cellKey(cx, cz);
     const hit = rockCache.get(key);
     if (hit !== undefined) return hit;
     if (rockCache.size > 8192) rockCache = new Map();
@@ -659,10 +669,10 @@ export function createPropField(ctx: PropContext): PropField {
   // that it never comes alone: a bed of stone breaks surface as a knot of
   // boulders strung along the contour, half-buried, biggest in the middle.
   const outcropSeed = (ctx.seed ^ 0x9e3d7c11) >>> 0;
-  let outcropCache = new Map<string, WildObstacle[]>();
+  let outcropCache = new Map<number, WildObstacle[]>();
 
   const outcropInCell = (cx: number, cz: number): WildObstacle[] => {
-    const key = `${cx},${cz}`;
+    const key = cellKey(cx, cz);
     const hit = outcropCache.get(key);
     if (hit !== undefined) return hit;
     if (outcropCache.size > 2048) outcropCache = new Map();
@@ -717,10 +727,10 @@ export function createPropField(ctx: PropContext): PropField {
   };
 
   const slabSeed = (ctx.seed ^ 0x2545f491) >>> 0;
-  let slabCache = new Map<string, WildObstacle[]>();
+  let slabCache = new Map<number, WildObstacle[]>();
 
   const slabInCell = (cx: number, cz: number): WildObstacle[] => {
-    const key = `${cx},${cz}`;
+    const key = cellKey(cx, cz);
     const hit = slabCache.get(key);
     if (hit !== undefined) return hit;
     if (slabCache.size > 8192) slabCache = new Map();
@@ -770,10 +780,10 @@ export function createPropField(ctx: PropContext): PropField {
 
   // ── Human traces: the cut timber a logging block leaves behind ────────
   const timberSeed = (ctx.seed ^ 0x7feb352d) >>> 0;
-  let timberCache = new Map<string, WildObstacle[]>();
+  let timberCache = new Map<number, WildObstacle[]>();
 
   const timberInCell = (cx: number, cz: number): WildObstacle[] => {
-    const key = `${cx},${cz}`;
+    const key = cellKey(cx, cz);
     const hit = timberCache.get(key);
     if (hit !== undefined) return hit;
     if (timberCache.size > 2048) timberCache = new Map();
@@ -844,7 +854,7 @@ export function createPropField(ctx: PropContext): PropField {
 
   // ── The forest: one seeded trunk candidate per tree cell ───────────────
   const treeSeed = (ctx.seed ^ 0x1d2c6fe1) >>> 0;
-  let treeCache = new Map<string, WildObstacle[]>();
+  let treeCache = new Map<number, WildObstacle[]>();
 
   /** Stand one trunk of a clump, if the ground where it landed will have it.
    * Every stem is checked on its own account: a clump thrown across the edge
@@ -870,7 +880,7 @@ export function createPropField(ctx: PropContext): PropField {
   };
 
   const treeInCell = (cx: number, cz: number): WildObstacle[] => {
-    const key = `${cx},${cz}`;
+    const key = cellKey(cx, cz);
     const hit = treeCache.get(key);
     if (hit !== undefined) return hit;
     if (treeCache.size > 16384) treeCache = new Map();
