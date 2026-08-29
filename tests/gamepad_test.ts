@@ -132,13 +132,48 @@ describe("the pad's presses", () => {
     expect(poll(reader, [every]).pressed).not.toContain("restart");
   });
 
-  it("re-arms every edge when the bindings change under a held button", () => {
-    // Otherwise an action rebound while its button is down never sees that
-    // button rise, and refuses to fire for the rest of the session.
+  it("waits for a release when the bindings change under a held button", () => {
+    // Rebinding is done by PRESSING the button to bind, so the button is
+    // always still down when the new binding lands. Firing on that would
+    // mean assigning CAMERA to a button and cycling the camera on the way
+    // out of the options card — and the edge must not be dead afterwards
+    // either, which is what forgetting it without re-arming would risk.
     const reader = createPadReader(BINDINGS);
     poll(reader, [pad({ buttons: { 2: 1 } })]);
     reader.setBindings(BINDINGS);
+    expect(poll(reader, [pad({ buttons: { 2: 1 } })]).pressed).toEqual([]);
+    poll(reader, [pad()]);
     expect(poll(reader, [pad({ buttons: { 2: 1 } })]).pressed).toEqual(["camera"]);
+  });
+
+  it("will not re-fire a button that was held when the pad changed hands", () => {
+    // The pause flicker, in miniature. START opens the card, which takes the
+    // pad off the car and hands it to the cursor — and a hand-over forgets
+    // what was down. If a still-held START then reads as a fresh press, the
+    // card it just opened closes a frame later, opens again the frame after
+    // that, and where it lands is decided by whenever the thumb comes off.
+    const reader = createPadReader(BINDINGS);
+    const start = pad({ buttons: { 9: 1 } });
+    expect(poll(reader, [start]).pressed).toEqual(["pause"]);
+    reader.release();
+    expect(poll(reader, [start]).pressed).toEqual([]);
+    expect(poll(reader, [start]).pressed).toEqual([]);
+    // Let go, and START is a way back out of the card again.
+    poll(reader, [pad()]);
+    expect(poll(reader, [start]).pressed).toEqual(["pause"]);
+  });
+
+  it("holds a latched button back however long it is leant on", () => {
+    // A second of START held down over a card is still one press, and the
+    // press is the RISE after it — not the moment the latch happens to lift.
+    const reader = createPadReader(BINDINGS);
+    const start = pad({ buttons: { 9: 1 } });
+    reader.release();
+    for (let frame = 0; frame < 60; frame += 1) {
+      expect(poll(reader, [start]).pressed).toEqual([]);
+    }
+    poll(reader, [pad()]);
+    expect(poll(reader, [start]).pressed).toEqual(["pause"]);
   });
 
   it("takes the deepest read of an action across two pads", () => {
@@ -194,6 +229,20 @@ describe("walking a menu", () => {
     expect(reader.read([pad()], DT).nav).toEqual([]);
     expect(reader.read([held], DT).nav).toEqual(["down"]);
     expect(reader.read([held], NAV_REPEAT).nav).toEqual([]);
+  });
+
+  it("will not walk the new card with the direction that opened it", () => {
+    // Same rule as the buttons: a d-pad held through a hand-over has to be
+    // let go of. Holding DOWN as a card comes up must not move its cursor
+    // off the first row before the player has seen the card.
+    const reader = createPadReader(BINDINGS);
+    const down = pad({ buttons: { 13: 1 } });
+    expect(reader.read([down], DT).nav).toEqual(["down"]);
+    reader.release();
+    expect(reader.read([down], DT).nav).toEqual([]);
+    // ...and the repeat clock starts from the hand-over, not from before it.
+    expect(reader.read([down], NAV_DELAY / 2).nav).toEqual([]);
+    expect(reader.read([down], NAV_DELAY).nav).toEqual(["down"]);
   });
 
   it("keeps the two axes on their own clocks", () => {
