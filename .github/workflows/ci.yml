@@ -24,11 +24,18 @@ permissions:
   packages: read
 
 concurrency:
-  # A second push to a PR makes the run in flight worthless, so cancel it
-  # and free the runners for the commit anyone will actually merge. Pushes
-  # to main are NOT cancelled: a superseded main run leaves the commit it
-  # was verifying unverified for good.
-  group: ci-${{ github.ref }}
+  # A second push to a PR makes the run in flight worthless, so PRs group by
+  # ref and cancel: only the commit anyone will actually merge is worth a
+  # runner.
+  #
+  # A push groups by SHA instead, which puts every main commit in a group of
+  # its own — never queued behind another, never evicted from one. Grouping
+  # main by ref does NOT work, and `cancel-in-progress: false` does not save
+  # it: that keeps the RUNNING run alive, but a group holds only one PENDING
+  # run, so each new merge evicts the one waiting and cancels it outright.
+  # Four merges inside thirty seconds took main from 23c16af1 to 177a3000
+  # and left c0b09323 and d007b406 with no CI run at all.
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
