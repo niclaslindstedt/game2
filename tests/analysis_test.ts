@@ -28,11 +28,35 @@ import {
 
 const SEEDS = [1, 2, 3, 5, 8];
 
-/** One report, built the way the tooling builds one. Perf is off: it times a
- * cold rebuild, which doubles the suite and measures the machine rather than
- * the generator. */
-function report(seed: number, knobs?: Record<string, number>): StageReport {
+/** One report, built the way the tooling builds one — and then KEPT. Perf is
+ * off: it times a cold rebuild, which doubles the suite and measures the
+ * machine rather than the generator.
+ *
+ * The cache is what makes this file affordable. A dozen tests below ask about
+ * the same handful of seeds, and without it every one of them regenerates
+ * every stage from nothing — the same work, over and over, for an instrument
+ * that is a pure function of its seed. Which is not an assumption here: it is
+ * the claim `freshReport` exists to check. Nothing below mutates a report.
+ *
+ * The tests that sweep seeds carry an explicit 20 s timeout for the same
+ * reason `circuit_test` does. Building a stage and rolling a rank of balls
+ * down it is a second of real work on a quiet machine and rather more on a
+ * shared runner, so vitest's 5 s default is not a timeout on this file — it is
+ * a coin toss, and it came up tails on CI. */
+const kept = new Map<string, StageReport>();
+
+function freshReport(seed: number, knobs?: Record<string, number>): StageReport {
   return analyzeSeed(seed, { length: "medium", knobs, perf: false });
+}
+
+function report(seed: number, knobs?: Record<string, number>): StageReport {
+  const key = `${seed}:${JSON.stringify(knobs ?? null)}`;
+  let held = kept.get(key);
+  if (!held) {
+    held = freshReport(seed, knobs);
+    kept.set(key, held);
+  }
+  return held;
 }
 
 describe("the stage report", () => {
@@ -54,7 +78,7 @@ describe("the stage report", () => {
       expect(r.score, `seed ${seed}`).toBeGreaterThanOrEqual(0);
       expect(r.score, `seed ${seed}`).toBeLessThanOrEqual(100);
     }
-  });
+  }, 20_000);
 
   it("counts its own findings, worst first", () => {
     for (const seed of SEEDS) {
@@ -77,18 +101,20 @@ describe("the stage report", () => {
         expect(finding.message.length, `seed ${seed} ${finding.code}`).toBeGreaterThan(0);
       }
     }
-  });
+  }, 20_000);
 
   it("is deterministic: the same seed scores the same twice", () => {
+    // The one test that must not take the cache — handing back the same
+    // object twice would prove nothing except that a Map works.
     for (const seed of [1, 7]) {
-      const a = report(seed);
-      const b = report(seed);
+      const a = freshReport(seed);
+      const b = freshReport(seed);
       expect(a.score, `seed ${seed}`).toBe(b.score);
       expect(a.findings.map((f) => f.code).join(), `seed ${seed}`).toBe(
         b.findings.map((f) => f.code).join(),
       );
     }
-  });
+  }, 20_000);
 
   it("reads the dials: a wet stage measures as wetter than a dry one", () => {
     const dry = report(4, { water: 0 });
@@ -96,7 +122,7 @@ describe("the stage report", () => {
     const share = (r: StageReport): number =>
       (r.metrics.find((m) => m.id === "ground")?.stats.waterShare ?? 0) as number;
     expect(share(wet)).toBeGreaterThan(share(dry));
-  });
+  }, 20_000);
 });
 
 describe("the two ends (pass or fail)", () => {
@@ -113,7 +139,7 @@ describe("the two ends (pass or fail)", () => {
         ?.checks.find((c) => c.id === "grid");
       expect(grid?.score, `seed ${seed}`).toBe(1);
     }
-  });
+  }, 20_000);
 
   it("passes the finish only when there is run-out past the line (R25)", () => {
     for (const seed of SEEDS) {
@@ -129,7 +155,7 @@ describe("the two ends (pass or fail)", () => {
         STAGE_RULES.runOut * ANALYSIS.ends.runOutShare,
       );
     }
-  });
+  }, 20_000);
 
   it("fails a stage whose finish gate has no road past it", () => {
     // Cut the run-out off and the check has to notice. A gate the analyzer
@@ -175,14 +201,14 @@ describe("the water", () => {
       const water = report(seed, { water: 0.9 }).metrics.find((m) => m.id === "water");
       expect(water?.stats.climbs, `seed ${seed}`).toBe(0);
     }
-  });
+  }, 20_000);
 
   it("finds every crossing with water under it", () => {
     for (const seed of SEEDS) {
       const water = report(seed, { water: 0.9 }).metrics.find((m) => m.id === "water");
       expect(water?.stats.dryCrossings, `seed ${seed}`).toBe(0);
     }
-  });
+  }, 20_000);
 });
 
 describe("the ground's water (R32)", () => {
@@ -200,7 +226,7 @@ describe("the ground's water (R32)", () => {
       expect(mean, `seed ${seed}`).toBeGreaterThan(0);
       expect(mean, `seed ${seed}`).toBeLessThan(ANALYSIS.ground.swamp.deep);
     }
-  });
+  }, 20_000);
 
   it("does not drown the country at the top of the water dial", () => {
     // The dial has to stay a dial. A position that turns the map into a sea
@@ -210,7 +236,7 @@ describe("the ground's water (R32)", () => {
       const ground = report(seed, { water: 1 }).metrics.find((m) => m.id === "ground");
       expect(ground?.stats.waterShare, `seed ${seed}`).toBeLessThan(ANALYSIS.ground.drowned);
     }
-  });
+  }, 20_000);
 });
 
 describe("the road's surface (R33)", () => {
@@ -226,7 +252,7 @@ describe("the road's surface (R33)", () => {
       expect(bumpy?.value, `seed ${seed}`).toBeGreaterThan(ANALYSIS.rollers.bumpy.min);
       expect(bumpy?.value, `seed ${seed}`).toBeLessThan(ANALYSIS.rollers.bumpy.max);
     }
-  });
+  }, 20_000);
 
   it("wanders the gravel's width and holds the tarmac's exactly", () => {
     // R33 — a blade cuts a road wider on one pass than the next; a paving
@@ -269,5 +295,5 @@ describe("the jumps", () => {
       expect(jumps?.stats.maxLength, `seed ${seed}`).toBeGreaterThan(0);
       expect(jumps?.stats.maxHeight, `seed ${seed}`).toBeGreaterThan(0);
     }
-  });
+  }, 20_000);
 });
