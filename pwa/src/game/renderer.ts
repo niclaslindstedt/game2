@@ -939,10 +939,6 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       // slice raised this frame has materials that have never seen the cut.
       clipWorld();
     }
-    // The map view is looking at a stage, not a car, and at that range the
-    // car is a speck that only draws the eye away from the route. Every
-    // driving view keeps the body — the hood cam included, because the
-    // bonnet under the lens is the whole point of that angle.
     // The route ribbon is sized to READ at the framing that holds the whole
     // stage, which makes it far wider than the road under it — a deliberate
     // annotation. Leaned in, that annotation becomes a runway painted over
@@ -956,9 +952,15 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // ...and the layers with it: an X-ray of the ground is a thing to read a
     // map by, not something to drive through.
     if (layers) layers.group.visible = view === "map" && layerId !== null;
+    // THE CAR IS DRAWN IN EVERY VIEW, the map included — the hood cam because
+    // the bonnet under the lens is the whole point of that angle, and the map
+    // because its LAMPS were never hidden with it. The environment throws
+    // those whatever is drawn, so hiding the body after dark left a pool of
+    // headlight travelling along an empty road, which is a stranger thing to
+    // see than a small car; and now that the map leans in to a few metres, it
+    // also hid the one thing on the stage that is actually moving. Nothing
+    // here has to switch it on: the body is built visible and stays that way.
     if (car) {
-      car.group.visible = view !== "map";
-      car.shadow.visible = view !== "map";
       // Behind the wheel the player is looking at the FIRST-PERSON cabin,
       // not the one authored to be read through glass from a car's length
       // back — the two stand in the same space, so only one of them is ever

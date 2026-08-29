@@ -162,7 +162,7 @@ import { setAudioVolumes, unlockAudio } from "./game/audio/bus.ts";
 import { playUi } from "./game/audio/ui.ts";
 import { armMenuMusic, pauseMusic, playMusic, resumeMusic, stopMusic } from "./game/audio/music.ts";
 import type { RunAudio } from "./game/audio/index.ts";
-import { armScreenshots, captureFrame } from "./game/screenshots.ts";
+import { armScreenshots, captureFrame, type ShotNotes } from "./game/screenshots.ts";
 import { splashSkipped } from "./game/splash.ts";
 import { SplashScreen } from "./game/splash-screen.tsx";
 import { UpdateCard } from "./game/update-card.tsx";
@@ -749,8 +749,18 @@ export function App() {
    * is only readable inside the animation callback that drew it — the frame
    * loop is the only place in the app that is (screenshots.ts) — and
    * because a press must never stop the car. Null means nothing pending;
-   * a second press before the first has been served simply relabels it. */
-  const shotRef = useRef<string | null>(null);
+   * a second press before the first has been served simply relabels it.
+   *
+   * `notes` is the developer map's caption, painted INTO the picture rather
+   * than left on the page (screenshots.ts) — null on a player's own shot,
+   * which is the frame and nothing else. `done` is how the button that asked
+   * for it finds out: the capture happens frames later, in the loop, and a
+   * menu has no HUD to flash the receipt on. */
+  const shotRef = useRef<{
+    label: string;
+    notes: ShotNotes | null;
+    done?: (ok: boolean) => void;
+  } | null>(null);
 
   const pwa = usePwaUpdate({
     base: import.meta.env.BASE_URL,
@@ -791,7 +801,7 @@ export function App() {
     // arrived a beat after the button would read as lag rather than as a
     // camera.
     playUi("select");
-    shotRef.current = shotLabel();
+    shotRef.current = { label: shotLabel(), notes: null };
   };
   const takeShotRef = useRef(takeShot);
   takeShotRef.current = takeShot;
@@ -1186,6 +1196,29 @@ export function App() {
   const readMapDebugRef = useRef(readMapDebug);
   readMapDebugRef.current = readMapDebug;
 
+  /** THE DEVELOPER MAP'S SHUTTER. The same request the driving shutter
+   * leaves behind — the drawing buffer can only be read inside the frame
+   * loop — with the boxes and the legend attached, so what lands in the roll
+   * is a picture that already says which seed it is and what is painted on
+   * it. Deliberately NOT behind the player's SCREENSHOTS option: that switch
+   * is about the game's own camera, and a developer who opened this page has
+   * asked for this one. Resolves once the frame has been filed, which is how
+   * the button reports back. */
+  const takeMapShot = (): Promise<boolean> =>
+    new Promise((resolve) => {
+      const read = readMapDebugRef.current();
+      const info = mapInfoRef.current;
+      const spec = stageRef.current;
+      playUi("select");
+      shotRef.current = {
+        label: `Map ${spec?.seed ?? seedRef.current}${info ? ` · ${info.label}` : ""}`,
+        notes: read ? { boxes: read.boxes, repro: read.repro, legend: info?.legend ?? [] } : null,
+        done: resolve,
+      };
+    });
+  const takeMapShotRef = useRef(takeMapShot);
+  takeMapShotRef.current = takeMapShot;
+
   const mapDebug = useMemo<MapDebug>(
     () => ({
       layer: mapLayer,
@@ -1194,9 +1227,36 @@ export function App() {
       onFull: setMapFull,
       legend: mapInfo?.legend ?? [],
       read: () => readMapDebugRef.current(),
+      onShot: () => takeMapShotRef.current(),
     }),
     [mapLayer, mapFull, mapInfo],
   );
+
+  /** THE MAP VIEWER: a campaign stage, opened on the map instead of driven.
+   * A level is a seed, a band, a shape and the hour it is set in — exactly
+   * what Roam's own settings are — so viewing one is LOADING it into the
+   * map rather than a second stage pipeline, and every tool already on that
+   * page (the layers, the pan, the zoom, the shutter) comes with it. */
+  const viewLevelMap = (level: CampaignLevel): void => {
+    status(`Map viewer — ${level.name}`);
+    seedRef.current = level.seed;
+    setSeed(level.seed);
+    applyRace({
+      ...raceRef.current,
+      length: level.length,
+      shape: level.shape ?? "sprint",
+      // The campaign's stages are the same country for everybody: they are
+      // built off the default dials, not off whatever Roam was last left on
+      // (see `playLevel`), and a viewer that inherited the dials would be
+      // looking at a stage no player has ever driven.
+      knobs: DEFAULT_STAGE_KNOBS,
+      timeOfDay: level.timeOfDay,
+      weather: level.weather,
+      season: level.season,
+    });
+    setMapFull(true);
+    setMenu({ page: "roam" });
+  };
 
   /** The chassis secret, found. It sticks: a player who drummed seven times
    * on purpose does not want to do it again next launch. */
@@ -1721,6 +1781,27 @@ export function App() {
       let traceClock = 0;
       let altWas = false;
       let padWas = false;
+      /** The picture, if one was asked for.
+       *
+       * It has to be lifted off the drawing buffer in the SAME TASK as the
+       * render that filled it — the context keeps no back buffer for anyone
+       * who asks later (screenshots.ts) — so this is called after every
+       * render the loop does, and there are three: the driving one, the
+       * frozen one behind a pause card, and the Roam page's map. That last
+       * one is the whole point of the developer map's shutter, and it is
+       * exactly the branch that used to return before ever reaching here.
+       * Everything after the grab can wait, and does. */
+      const servePendingShot = (): void => {
+        const wanted = shotRef.current;
+        if (wanted === null) return;
+        shotRef.current = null;
+        void captureFrame(canvas, wanted.label, wanted.notes).then((capture) => {
+          // The HUD's flash is the receipt while driving; behind a menu there
+          // is no HUD, so whoever asked gets told directly instead.
+          if (wanted.done) wanted.done(capture !== null);
+          else flash(capture ? "PICTURE SAVED" : "PICTURE FAILED", capture ? "good" : "bad");
+        });
+      };
       const frame = (now: number): void => {
         raf = requestAnimationFrame(frame);
         const dtFrame = Math.min(0.1, (now - last) / 1000);
@@ -1776,11 +1857,13 @@ export function App() {
         if (page === null && pausedRef.current) {
           acc = 0;
           renderer.render(state, 0);
+          servePendingShot();
           return;
         }
         if (page?.page === "roam") {
           acc = 0;
           renderer.render(state, dtFrame);
+          servePendingShot();
           return;
         }
         acc += dtFrame;
@@ -1863,18 +1946,7 @@ export function App() {
         // that is two pieces of music at once.
         if (!page) audioRef.current?.frame(state, dtFrame);
         renderer.render(state, dtFrame);
-        // The picture, if one was asked for. It has to be lifted off the
-        // drawing buffer HERE — same task as the render that filled it —
-        // because the context keeps no back buffer for anyone who asks
-        // later (screenshots.ts). Everything after the grab can wait, and
-        // does: the run has already stepped on.
-        const wanted = shotRef.current;
-        if (wanted !== null) {
-          shotRef.current = null;
-          void captureFrame(canvas, wanted).then((capture) => {
-            flash(capture ? "PICTURE SAVED" : "PICTURE FAILED", capture ? "good" : "bad");
-          });
-        }
+        servePendingShot();
         // Every frame, ahead of the throttled snapshot: the clock's
         // hundredths and the start lights are the two things a run cannot
         // read at 12 Hz.
@@ -2166,6 +2238,7 @@ export function App() {
           onMapRect={setMapRect}
           mapView={mapView}
           mapDebug={options.developer ? mapDebug : null}
+          onViewLevelMap={viewLevelMap}
         />
       )}
       {splashUp && <SplashScreen warm={booted} onDone={() => setSplashUp(false)} />}

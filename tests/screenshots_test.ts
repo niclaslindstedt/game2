@@ -15,7 +15,14 @@
 
 import { describe, expect, it } from "vitest";
 
-import { shotFileName, shotSize, stampFits, stampLayout } from "../pwa/src/game/shot-plan.ts";
+import {
+  notesFit,
+  notesLayout,
+  shotFileName,
+  shotSize,
+  stampFits,
+  stampLayout,
+} from "../pwa/src/game/shot-plan.ts";
 import { shotId, shotMeta, withShot, withStored, type Shot } from "../pwa/src/lib/shot-roll.ts";
 import { DEFAULT_SETTINGS, loadSettings } from "../pwa/src/game/settings.ts";
 
@@ -139,6 +146,50 @@ describe("the stamp", () => {
   it("stands aside on a picture too small to sign", () => {
     expect(stampFits(1920, 1080)).toBe(true);
     expect(stampFits(120, 68)).toBe(false);
+  });
+});
+
+describe("the developer picture's notes", () => {
+  it("leaves the middle of the frame alone", () => {
+    // The caption is context; the thing being reported is the picture. Half
+    // the width would make it the other way round.
+    for (const [width, height] of [
+      [1280, 720],
+      [1920, 1080],
+      [3840, 2160],
+      [844, 390],
+    ]) {
+      expect(notesLayout(width, height).width).toBeLessThan(width / 2);
+    }
+  });
+
+  it("keeps a row legible on a small picture and modest on a huge one", () => {
+    expect(notesLayout(844, 390).font).toBeGreaterThanOrEqual(11);
+    // A 4K frame captioned in headlines is a caption nobody asked for.
+    expect(notesLayout(3840, 2160).font).toBeLessThanOrEqual(24);
+  });
+
+  it("is measured off the SHORT side, so a wide window does not enlarge it", () => {
+    expect(notesLayout(3840, 1080).font).toBe(notesLayout(1920, 1080).font);
+  });
+
+  it("keeps a key column the value can be read beside", () => {
+    for (const [width, height] of [
+      [1280, 720],
+      [3840, 2160],
+    ]) {
+      const layout = notesLayout(width, height);
+      // Whatever is left over after the key column and the panel's own
+      // inset is where the values wrap, and a column narrower than the keys
+      // is a caption that wraps every row.
+      expect(layout.width - layout.inset * 2 - layout.key).toBeGreaterThan(layout.key);
+      expect(layout.line).toBeGreaterThan(layout.font);
+    }
+  });
+
+  it("stands aside on a picture too small to caption", () => {
+    expect(notesFit(1280, 720)).toBe(true);
+    expect(notesFit(240, 135)).toBe(false);
   });
 });
 

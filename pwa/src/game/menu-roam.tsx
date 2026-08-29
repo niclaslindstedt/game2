@@ -68,6 +68,11 @@ export type MapDebug = {
    * hand, so the panel asks again a few times a second rather than being
    * handed a snapshot that is stale by the time it is painted. */
   read: () => { boxes: DebugBox[]; repro: string } | null;
+  /** TAKE THE PICTURE: the whole screen, with the boxes and the repro line
+   * painted INTO the pixels rather than left on the page — so what lands in
+   * the roll is a report somebody can be handed, not a screenshot that needs
+   * a caption typed under it. Resolves true once it is filed. */
+  onShot: () => Promise<boolean>;
 };
 
 type RoamProps = {
@@ -175,7 +180,22 @@ function MapPane({
     const paneW = (): number => el.clientWidth || 1;
     const paneH = (): number => el.clientHeight || 1;
 
+    /** Whether a press landed on one of the map's own CONTROLS rather than
+     * on the map.
+     *
+     * This is load-bearing, and its absence is invisible until somebody
+     * presses a button: the pane captures the pointer so a drag survives
+     * leaving it (setPointerCapture), and a capture taken on a press that
+     * started inside a child redirects that press's pointerup to the PANE —
+     * so the child never completes a click, and the button is dead without
+     * ever looking it. The developer strip lives inside the pane precisely
+     * so it moves with it into full screen, which puts every one of its
+     * buttons behind this check. */
+    const onControl = (e: Event): boolean =>
+      e.target instanceof Element && e.target.closest("[data-map-ui]") !== null;
+
     const onDown = (e: PointerEvent): void => {
+      if (onControl(e)) return;
       // The middle button is a pan here, not the browser's autoscroll.
       if (e.button === 1) e.preventDefault();
       el.setPointerCapture(e.pointerId);
@@ -230,7 +250,11 @@ function MapPane({
       // (above) rather than on inverting the wheel.
       viewRef.current.onMove(0, 0, Math.exp(e.deltaY * WHEEL_ZOOM));
     };
-    const onDouble = (): void => viewRef.current.onReset();
+    // ...and two quick presses on a control are two presses of that control,
+    // not a request to reframe the map underneath it.
+    const onDouble = (e: MouseEvent): void => {
+      if (!onControl(e)) viewRef.current.onReset();
+    };
 
     el.addEventListener("pointerdown", onDown);
     el.addEventListener("pointermove", onMove);
@@ -272,7 +296,7 @@ function MapPane({
  * every row of controls under it is a row the landscape does not get. */
 function MapTools({ map }: { map: MapDebug }) {
   return (
-    <div className="map-tools">
+    <div className="map-tools" data-map-ui>
       <div className="map-tool-row">
         <span className="map-tool-label">LAYER</span>
         <button
@@ -303,6 +327,12 @@ function MapTools({ map }: { map: MapDebug }) {
         >
           {map.full ? "SHRINK" : "FULL SCREEN"}
         </button>
+        {/* The shutter is offered only on the FULL SCREEN map, and that is
+            the honest limit rather than a tidiness rule: a picture is the
+            whole drawing buffer, and in the small pane most of that buffer
+            is the flat sky the menu's cards sit on with the map in a hole in
+            the corner of it. */}
+        {map.full && <MapShotButton map={map} />}
       </div>
       {map.legend.length > 0 && (
         <div className="map-legend">
@@ -315,6 +345,41 @@ function MapTools({ map }: { map: MapDebug }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** How long the shutter says what happened before going back to being a
+ * button, ms. */
+const SHOT_SAID = 2400;
+
+/** The shutter, and the receipt. It says where the picture WENT as well as
+ * that it was taken: this page is a menu, so the HUD's own flash — where
+ * every other capture in the game reports itself — is not on screen, and a
+ * button that silently did something is a button nobody presses twice. */
+function MapShotButton({ map }: { map: MapDebug }) {
+  const [said, setSaid] = useState<string | null>(null);
+  return (
+    <button
+      type="button"
+      className={said ? "map-tool map-tool-on" : "map-tool"}
+      title="Save this map, with the debug boxes painted into the picture — it lands in the gallery"
+      data-map-shot
+      onClick={() => {
+        setSaid("TAKING…");
+        void map.onShot().then(
+          (ok) => {
+            setSaid(ok ? "SAVED TO GALLERY" : "FAILED");
+            setTimeout(() => setSaid(null), SHOT_SAID);
+          },
+          () => {
+            setSaid("FAILED");
+            setTimeout(() => setSaid(null), SHOT_SAID);
+          },
+        );
+      }}
+    >
+      {said ?? "SCREENSHOT"}
+    </button>
   );
 }
 
@@ -338,7 +403,7 @@ function MapDebugPanel({ map }: { map: MapDebug }) {
   }, []);
   if (!seen) return null;
   return (
-    <div className="map-debug">
+    <div className="map-debug" data-map-ui>
       <div className="map-debug-boxes">
         {seen.boxes.map((box) => (
           <div key={box.title} className="debug-box">

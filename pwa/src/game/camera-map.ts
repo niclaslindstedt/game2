@@ -158,7 +158,16 @@ export function createMapCamera(): MapCamera {
     // The turn is the page's idle state, not a mode: a drag interrupts it and
     // it picks up again from wherever the drag finished, so nothing ever
     // snaps back to a framing the player did not choose.
-    if (!pinned && held >= HOLD) az += SPIN * dt;
+    //
+    // ...and it only picks up AT ALL when the map is framing the whole stage.
+    // Zoom is what says whether this is still the page's idle backdrop or a
+    // place somebody has leaned in on: at a hundred metres out the same
+    // gentle azimuth rate walks the ground past under the lens, so a map left
+    // alone for four seconds drifts off the thing it was pointed at. Wheeling
+    // back out lands exactly on ZOOM_MAX (`nudge` clamps to it, `update`
+    // clamps to it, and `reset` sets it), so the equality is reachable rather
+    // than something a gesture can only approach.
+    if (!pinned && held >= HOLD && zoom >= ZOOM_MAX) az += SPIN * dt;
     const b = state.track.bounds;
     const cx = (b.minX + b.maxX) / 2;
     const cz = (b.minZ + b.maxZ) / 2;

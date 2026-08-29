@@ -47,7 +47,7 @@ import { LevelGrid, lengthLabel } from "./menu-levels.tsx";
 import { ResultsModal } from "./results-table.tsx";
 import { CarSetupPage } from "./menu-car.tsx";
 import { GalleryPage } from "./menu-gallery.tsx";
-import { DebugLogPage, DeveloperPage } from "./menu-dev.tsx";
+import { DebugLogPage, DeveloperPage, MapViewerPage } from "./menu-dev.tsx";
 import { HeadsUpPage } from "./menu-headsup.tsx";
 import {
   DIFFICULTY_OPTIONS,
@@ -80,7 +80,8 @@ export type MenuPage =
   | { page: "roam" }
   | { page: "options"; tab: OptionsTab }
   | { page: "developer" }
-  | { page: "debuglog" };
+  | { page: "debuglog" }
+  | { page: "mapviewer" };
 
 export type MainMenuProps = {
   page: MenuPage;
@@ -106,6 +107,9 @@ export type MainMenuProps = {
   /** The developer's map tools on Roam — the generator's layers, the
    * full-screen pane and the debug box. Null for everybody else. */
   mapDebug: MapDebug | null;
+  /** Open one of the CAMPAIGN's own stages on that map instead of driving
+   * it — the developer's map viewer. */
+  onViewLevelMap: (level: CampaignLevel) => void;
 };
 
 /** The build, bottom right, linking to the exact commit it was cut from.
@@ -532,6 +536,7 @@ const DEPTH: Record<MenuPage["page"], number> = {
   developer: 1,
   location: 2,
   debuglog: 2,
+  mapviewer: 2,
   scores: 2,
   // Deeper than either grid that reaches it, so arriving at the pre-race
   // card sounds like going IN from both of them.
@@ -714,10 +719,17 @@ export function MainMenu(props: MainMenuProps) {
             onUnlockEverything={props.onUnlockEverything}
             onBack={() => navigate({ page: "root" })}
             onDebugLog={() => navigate({ page: "debuglog" })}
+            onMapViewer={() => navigate({ page: "mapviewer" })}
           />
         )}
         {page.page === "debuglog" && (
           <DebugLogPage onBack={() => navigate({ page: "developer" })} />
+        )}
+        {page.page === "mapviewer" && (
+          <MapViewerPage
+            onView={props.onViewLevelMap}
+            onBack={() => navigate({ page: "developer" })}
+          />
         )}
         {page.page === "options" && (
           <OptionsPage
