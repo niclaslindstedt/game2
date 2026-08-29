@@ -439,10 +439,14 @@ export const STAGE_RULES = {
       escarpment: { scale: 520, from: 0.52, span: { min: 0.05, max: 0.22 }, rise: 13 },
       /** The sea basins: broad hollows sunk under the lake table. `wetter`
        * and `deeper` are what the `water` dial adds to each. */
-      basin: { scale: 1600, from: 0.86, span: 0.34, depth: 30, wetter: 0.3, deeper: 26 },
+      /** `wetter` and `deeper` are what the `water` dial adds. Both are
+       * modest: `from` is a THRESHOLD ON AN AREA, so a tenth off it is a
+       * large share of the map turning to sea, and at the top of the dial
+       * the land has to still be land. */
+      basin: { scale: 1600, from: 0.86, span: 0.34, depth: 30, wetter: 0.18, deeper: 20 },
       /** ...and the ponds, on a tighter scale — the tarns and lakes the
        * road runs past rather than over. */
-      pond: { scale: 340, from: 0.9, span: 0.1, depth: 10, wetter: 0.14, deeper: 8 },
+      pond: { scale: 340, from: 0.9, span: 0.1, depth: 10, wetter: 0.05, deeper: 8 },
       /** Where sea level sits relative to the rock's own zero. */
       datum: -6,
     },
@@ -453,6 +457,53 @@ export const STAGE_RULES = {
      * to bog. Where the table comes up through the surface the ground is
      * WET, which is what a mire is. */
     groundwater: { depth: 4.5, drain: 42 },
+
+    /** THE PITS — the hollows that hold standing water, and the whole
+     * reason a landscape has lakes in it rather than only rivers.
+     *
+     * They come in three sizes because the water bodies they make are three
+     * different things, and the difference is not scale but the SHAPE of
+     * the hollow. A pit's floor is cut toward the water table, so how far
+     * BELOW that floor lands is what decides what fills it:
+     *
+     *   `mere`  broad and barely under the table — a wide sheet of shallow
+     *           water, which is a SWAMP. Reeds and sedge stand in it, you
+     *           can see the bottom, and a car can wade it. The shallowest
+     *           of the three and by far the widest.
+     *   `tarn`  a few hundred metres across and properly deep — a lake.
+     *   `pool`  small and deep: a kettle hole, a flooded quarry, the pond
+     *           at the bottom of a field.
+     *
+     * `from` is the share of the noise below which no pit forms (so it sets
+     * how much of the country is pitted), `span` how sharp the rim is, and
+     * `depth` how far under the table a fully-formed floor sits.
+     *
+     * A pit only forms where the water table is ALREADY near the surface:
+     * flat lowland. A hollow gouged into a mountainside drains, and one cut
+     * on a summit is a crater. `flat` is how steep the ground may be before
+     * it stops holding water, and `lowland` how far above the table the
+     * ground may stand before pits fade out entirely, m. */
+    pits: {
+      mere: { scale: 620, from: 0.76, span: 0.22, depth: 0.55 },
+      tarn: { scale: 300, from: 0.8, span: 0.12, depth: 7 },
+      pool: { scale: 110, from: 0.86, span: 0.09, depth: 4.5 },
+      flat: 0.3,
+      /** How far above the lake table the ground may stand before pits stop
+       * forming, m. It is a SMALL number on purpose: the country's own datum
+       * sits only a few metres over the table, so a generous reach makes
+       * almost every flat hectare on the map eligible and a wet dial then
+       * drowns the lot. Pits belong in the genuinely low ground. */
+      lowland: 13,
+      /** How much the `water` dial opens the thresholds. Small, because the
+       * thresholds are the share of the map that is pitted and the dial is
+       * multiplying an area: a tenth here is already the difference between
+       * a stage with a tarn on it and a stage in an archipelago. */
+      wetter: 0.06,
+      /** Depth below the water table under which standing water is a SWAMP
+       * rather than a lake, m: shallow enough to see the bottom of, to
+       * grow reeds in, and to drive through. */
+      swamp: 1.2,
+    },
 
     /** The soil lying on the rock. Till and washed sediment: it collects
      * where water slows down and is stripped where it does not, so the
@@ -481,6 +532,52 @@ export const STAGE_RULES = {
        * were. Half of `max`, which is roughly what the cover averages. */
       datum: 1.6,
     },
+  },
+
+  /** R33 — the road is NOT SMOOTH. A generated ribbon comes out perfect,
+   * and perfect is the loudest tell there is: a real road has been graded,
+   * driven over, frozen, thawed and graded again, and none of that leaves a
+   * plane. So a fine grain rides on top of the rolling profile — small
+   * enough that no grade flips sign under a wheel, big enough that the car
+   * is never still.
+   *
+   * The amplitudes are in CENTIMETRES of the thing they are: a gravel road
+   * that has been bladed a few times a year is a couple of centimetres out
+   * of true over a car's length, and reads that way from inside. Past about
+   * a tenth of a metre it stops being a surface and becomes a washboard —
+   * `rules.ts`'s rolling layer has the same warning for the same reason, at
+   * a hundred times the scale.
+   *
+   * `wave` is the SHORT wavelength, in metres: long enough that the 2 m
+   * sample spacing resolves it (four samples to a cycle at the floor), short
+   * enough to be felt as texture rather than as a hill. `patch` is how far
+   * the roughness itself varies along the stage — a road is washboarded in
+   * places and freshly graded in others, and a uniform grain end to end is
+   * only a different kind of perfect. */
+  roughness: {
+    /** Amplitude by surface, m — the NOISE amplitude, before the long/short
+     * split and the patch modulation take roughly a third out of it, so the
+     * grain a wheel actually meets is about 5 cm on gravel. Asphalt is laid
+     * rather than bladed and keeps a third of it; a bridge deck gets none. */
+    amplitude: { gravel: 0.16, asphalt: 0.055 },
+    /** The two grains that make it: a short one felt as texture and a
+     * longer one felt as the road being out of true, m.
+     *
+     * The SHORT one is near the floor the sampling can carry — samples are
+     * 2 m apart, so under about 4 m a wave aliases instead of being drawn.
+     * It is the wavelength and not the amplitude that decides how much
+     * texture comes out: this is quintic value noise, whose second
+     * derivative goes as one over the lattice spacing SQUARED, so halving
+     * the wave is worth four times the amplitude. Quadrupling the amplitude
+     * at an 8 m wave moved the measured texture by half; going from 8 m to
+     * 5 m tripled it. */
+    wave: { short: 5, long: 27 },
+    /** How much of the amplitude the long grain carries. */
+    longShare: 0.55,
+    /** How the roughness varies ALONG the stage: the noise period, m, and
+     * the least of the amplitude any stretch keeps. A road is never
+     * completely smooth for long, and never uniformly rough. */
+    patch: { scale: 240, min: 0.35 },
   },
 
   /** R6 — jump placement. */

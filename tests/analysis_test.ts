@@ -185,6 +185,67 @@ describe("the water", () => {
   });
 });
 
+describe("the ground's water (R32)", () => {
+  it("makes both lakes and swamps, and the swamps are the shallow ones", () => {
+    for (const seed of SEEDS) {
+      const ground = report(seed, { water: 0.6 }).metrics.find((m) => m.id === "ground");
+      const swampShare = (ground?.stats.swampShare ?? 0) as number;
+      const lakeShare = (ground?.stats.lakeShare ?? 0) as number;
+      // A country with lakes and no shallow water has no reed beds in it.
+      expect(swampShare, `seed ${seed}`).toBeGreaterThan(0);
+      expect(lakeShare, `seed ${seed}`).toBeGreaterThan(0);
+      // ...and a swamp is shallow BY DEFINITION, which is the whole basis
+      // of the classification: it is the same water, sorted by depth.
+      const mean = (ground?.stats.meanSwampDepth ?? 0) as number;
+      expect(mean, `seed ${seed}`).toBeGreaterThan(0);
+      expect(mean, `seed ${seed}`).toBeLessThan(ANALYSIS.ground.swamp.deep);
+    }
+  });
+
+  it("does not drown the country at the top of the water dial", () => {
+    // The dial has to stay a dial. A position that turns the map into a sea
+    // with a causeway across it is not a wet stage, and no dial position
+    // should be able to reach one.
+    for (const seed of [1, 4]) {
+      const ground = report(seed, { water: 1 }).metrics.find((m) => m.id === "ground");
+      expect(ground?.stats.waterShare, `seed ${seed}`).toBeLessThan(ANALYSIS.ground.drowned);
+    }
+  });
+});
+
+describe("the road's surface (R33)", () => {
+  it("is not a perfect ribbon", () => {
+    // The floor of this band is the point of it. A generated road comes out
+    // of the compiler as a plane unless something roughens it, and a plane
+    // is the loudest tell there is — so the check that would catch that is
+    // worth pinning against the road actually shipping.
+    for (const seed of SEEDS) {
+      const texture = report(seed)
+        .metrics.find((m) => m.id === "rollers")
+        ?.checks.find((c) => c.id === "texture");
+      expect(texture?.value, `seed ${seed}`).toBeGreaterThan(ANALYSIS.rollers.texture.min);
+      expect(texture?.value, `seed ${seed}`).toBeLessThan(ANALYSIS.rollers.texture.max);
+    }
+  });
+
+  it("keeps its grain off the bridges, where the deck is laid flat", () => {
+    const track = compileStage(2, "long", { water: 0.9 });
+    const decks = track.samples.filter((s) => s.deck !== null);
+    if (decks.length < 3) return;
+    // A deck is planks or concrete: its profile is whatever the span is,
+    // with no blade marks in it.
+    let worst = 0;
+    for (let i = 1; i + 1 < track.samples.length; i++) {
+      const s0 = track.samples[i - 1];
+      const s1 = track.samples[i];
+      const s2 = track.samples[i + 1];
+      if (s0.deck === null || s1.deck === null || s2.deck === null) continue;
+      worst = Math.max(worst, Math.abs(s0.elevation - 2 * s1.elevation + s2.elevation));
+    }
+    expect(worst).toBeLessThan(ANALYSIS.rollers.texture.min);
+  });
+});
+
 describe("the jumps", () => {
   it("measures every lip's flight, and lands them all on the road", () => {
     for (const seed of SEEDS) {

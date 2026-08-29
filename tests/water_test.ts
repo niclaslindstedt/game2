@@ -17,8 +17,10 @@ import {
   TUNING,
   collectAnchors,
   compileStage,
+  createLandField,
   createGame,
   createTerrain,
+  resolveKnobs,
   step,
   traceRivers,
   type GameEvent,
@@ -257,19 +259,23 @@ describe("the river (R18)", () => {
   });
 
   it("answers the water dial, from dry country to lakeland", () => {
+    // Measured on the BARE LANDSCAPE over a fixed box, which is what the
+    // claim is about. Sampling `terrain.heightAt` inside `track.bounds`
+    // instead asks a different question: the bounds move with the dial —
+    // a wetter seed generates a differently shaped stage — so the window
+    // slides over different country at every dial position and the trend
+    // it reports is partly the stage moving rather than the water rising.
     const wetness = (water: number): number => {
       let wet = 0;
       let n = 0;
       for (const seed of [1, 3, 5]) {
-        const track = compileStage(seed, "medium", { water });
-        const terrain = createTerrain(track);
-        const b = track.bounds;
-        for (let i = 0; i < 24; i++) {
-          for (let j = 0; j < 24; j++) {
-            const x = b.minX + ((b.maxX - b.minX) * i) / 23;
-            const z = b.minZ + ((b.maxZ - b.minZ) * j) / 23;
+        const land = createLandField(seed, resolveKnobs({ water }));
+        for (let i = 0; i < 40; i++) {
+          for (let j = 0; j < 40; j++) {
+            const x = -1500 + (3000 * i) / 39;
+            const z = -1500 + (3000 * j) / 39;
             n += 1;
-            if (terrain.heightAt(x, z) < LAKE_Y) wet += 1;
+            if (land.heightAt(x, z) < LAKE_Y) wet += 1;
           }
         }
       }

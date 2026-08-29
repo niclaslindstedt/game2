@@ -18,8 +18,18 @@ import {
   ASPEN_BARK,
   BERRY,
   BERRY_LEAF,
+  ALDER_BARK,
+  ALDER_LEAF,
   BOG_SHRUB,
+  BULRUSH_HEAD,
   COTTON,
+  DROWNED,
+  LILY_BLOOM,
+  LILY_PAD,
+  SPHAGNUM,
+  SPHAGNUM_RUST,
+  WILLOW_BARK,
+  WILLOW_PALE,
   DRIFTWOOD,
   GROUND_MOSS,
   REED,
@@ -493,6 +503,129 @@ export const VARIANTS: Record<string, VariantDef> = {
       b.blob(BOG_SHRUB, 0.45, 0, 0.34, 0, { sy: 0.75 });
       b.blob(BOG_SHRUB, 0.32, 0.5, 0.26, 0.28, { sy: 0.75 });
       b.blob(BOG_SHRUB, 0.28, -0.42, 0.3, -0.3, { sy: 0.75 });
+    },
+  },
+
+  // ── The wetlands ────────────────────────────────────────────────────────
+  // What makes a sheet of water read as a swamp rather than as a blue plane.
+  // The water itself carries almost none of it: what says "wet" is the stuff
+  // standing IN it and leaning OVER it, and every one of these exists only
+  // at a waterline.
+
+  /** WILLOW: the tree of wet ground everywhere in the north. Short, thick,
+   * always leaning out over the water, with a crown that hangs rather than
+   * stands — the droop is the whole silhouette, so the crown blobs sit low
+   * and wide and the outer ones hang below the ones inboard of them. */
+  willow: {
+    build: (b) => {
+      b.cyl(WILLOW_BARK, 0.34, 0.55, 3.4, 0, { tiltZ: 0.22 });
+      b.cyl(WILLOW_BARK, 0.16, 0.26, 1.8, 2.6, { x: -0.8, tiltZ: 0.5 });
+      b.blob(WILLOW, 2.5, -0.5, 4.1, 0, { sy: 0.62 });
+      b.blob(WILLOW_PALE, 1.7, 1.5, 3.5, 0.6, { sy: 0.7 });
+      b.blob(WILLOW, 1.5, -2.1, 3.2, -0.5, { sy: 0.75 });
+      // The hanging fringe: the lowest leaves are nearly at head height.
+      b.blob(WILLOW, 1.1, 2.4, 2.4, 0, { sy: 0.95 });
+      b.blob(WILLOW_PALE, 0.9, -2.6, 2.2, 0.8, { sy: 1 });
+    },
+  },
+  /** A young willow, or one cut back: multi-stemmed from the base, which is
+   * what a willow does when it is browsed or coppiced. */
+  willowYoung: {
+    build: (b) => {
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2;
+        b.cyl(WILLOW_BARK, 0.09, 0.14, 1.9, 0, {
+          x: Math.cos(a) * 0.18,
+          z: Math.sin(a) * 0.18,
+          tiltZ: 0.18 + (i % 2) * 0.14,
+          ry: a,
+        });
+      }
+      b.blob(WILLOW, 1.2, 0, 2.2, 0, { sy: 0.7 });
+      b.blob(WILLOW_PALE, 0.85, 0.9, 1.9, 0.4, { sy: 0.8 });
+    },
+  },
+  /** ALDER: the other wet-ground tree, and the one that actually stands in
+   * the water rather than beside it. Dark, flat-topped, several stems from
+   * one stool — a black alder carr is a wall of them along a shore. */
+  alder: {
+    build: (b) => {
+      b.cyl(ALDER_BARK, 0.16, 0.24, 5.5, 0, { tiltZ: 0.05 });
+      b.cyl(ALDER_BARK, 0.12, 0.19, 4.6, 0, { x: 0.5, tiltZ: -0.16 });
+      b.blob(ALDER_LEAF, 1.7, 0.1, 5.6, 0, { sy: 0.72 });
+      b.blob(ALDER_LEAF, 1.3, 1.1, 4.9, 0.5, { sy: 0.7 });
+      b.blob(ALDER_LEAF, 1.1, -0.9, 5.1, -0.4, { sy: 0.7 });
+    },
+  },
+  /** A DROWNED TRUNK: a tree the water rose around and killed, still
+   * standing in it years later, bark gone and branches broken back to
+   * stubs. One of these in open water is worth more than any amount of
+   * reed — it is the single thing that says this water is OLD. */
+  drownedTrunk: {
+    build: (b) => {
+      b.cyl(DROWNED, 0.11, 0.3, 4.2, 0, { tiltZ: 0.09 });
+      const stub = new THREE.BoxGeometry(1.1, 0.11, 0.11);
+      stub.translate(0.5, 2.9, 0);
+      b.add(stub, DROWNED, { tiltZ: -0.42 });
+      const stub2 = new THREE.BoxGeometry(0.8, 0.09, 0.09);
+      stub2.translate(-0.35, 3.6, 0.08);
+      b.add(stub2, DROWNED, { tiltZ: 0.5 });
+    },
+  },
+  /** BULRUSH / cattail: reeds with the brown seed head. Taller and stiffer
+   * than the reed bed and read from much further off, because the heads are
+   * a colour nothing else at a waterline has. */
+  bulrush: {
+    twoSided: true,
+    build: (b) => {
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2 + (i % 2) * 0.5;
+        const x = Math.cos(a) * 0.2;
+        const z = Math.sin(a) * 0.2;
+        const h = 1.7 + (i % 3) * 0.3;
+        b.blade(REED, REED_TIP, 0.08, h, { ry: a, tiltZ: 0.07 + (i % 3) * 0.08, x, z });
+        if (i % 2 === 0) b.blob(BULRUSH_HEAD, 0.075, x, h * 0.92, z, { sy: 2.6 });
+      }
+    },
+  },
+  /** A TUSSOCK: the raised hummock of sedge a bog surface is actually made
+   * of. Standing water between them, a foot of dry-ish peat on top of each,
+   * and a car crossing a bog rides the tussocks rather than the water. */
+  tussock: {
+    twoSided: true,
+    build: (b) => {
+      b.blob(SPHAGNUM_RUST, 0.55, 0, 0.2, 0, { sy: 0.5 });
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * Math.PI * 2;
+        b.blade(SEDGE, SEDGE_TIP, 0.055, 0.5 + (i % 3) * 0.18, {
+          ry: a,
+          tiltZ: 0.7 + (i % 4) * 0.2,
+          x: Math.cos(a) * 0.24,
+          z: Math.sin(a) * 0.34,
+        });
+      }
+    },
+  },
+  /** SPHAGNUM: the bog moss carpet — brighter, wetter and yellower than the
+   * cushion moss of a spruce wood, and rusting to orange wherever the bog
+   * is drying out. Laid flat and wide: this is a floor, not an object. */
+  bogMoss: {
+    build: (b) => {
+      b.blob(SPHAGNUM, 0.95, 0, 0.13, 0, { sy: 0.16 });
+      b.blob(SPHAGNUM_RUST, 0.6, 0.8, 0.11, 0.4, { sy: 0.16 });
+      b.blob(SPHAGNUM, 0.55, -0.7, 0.12, -0.5, { sy: 0.16 });
+    },
+  },
+  /** WATER LILY pads: flat discs on the surface with the odd bloom. They
+   * only work on still water, which is exactly the point — a scatter of
+   * these says the water is not going anywhere. */
+  waterLily: {
+    twoSided: true,
+    build: (b) => {
+      b.blob(LILY_PAD, 0.42, 0, 0.03, 0, { sy: 0.06 });
+      b.blob(LILY_PAD, 0.3, 0.7, 0.03, 0.35, { sy: 0.06 });
+      b.blob(LILY_PAD, 0.26, -0.55, 0.03, 0.6, { sy: 0.06 });
+      b.blob(LILY_BLOOM, 0.11, 0.2, 0.08, -0.5, { sy: 0.7 });
     },
   },
 };

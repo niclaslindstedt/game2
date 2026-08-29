@@ -59,6 +59,9 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
   let steepCells = 0;
   let treesOnRock = 0;
   let bareCells = 0;
+  let swamp = 0;
+  let lake = 0;
+  let swampDepth = 0;
   let soilSum = 0;
   let worstSoilOnCliff = 0;
 
@@ -72,6 +75,17 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       soilSum += ground.soil;
       if (ground.surface < LAKE_Y) {
         flooded++;
+        // R32 — WHAT KIND of water. Depth is the whole difference between a
+        // lake and a swamp, and it is worth measuring separately because
+        // they are not interchangeable: a country of nothing but open water
+        // has no reeds in it, and one of nothing but swamp has no horizon.
+        const depth = LAKE_Y - ground.surface;
+        if (depth < ANALYSIS.ground.swamp.deep) {
+          swamp++;
+          swampDepth += depth;
+        } else {
+          lake++;
+        }
         continue;
       }
       if (ground.table > ground.surface) wet++;
@@ -124,13 +138,26 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
   const rockShare = rock / Math.max(1, total);
   const cliffShare = cliffs / Math.max(1, total);
   const wetShare = wet / Math.max(1, total);
+  const swampShare = swamp / Math.max(1, total);
+  const lakeShare = lake / Math.max(1, total);
+  const meanSwampDepth = swamp > 0 ? swampDepth / swamp : 0;
   const meanSoil = soilSum / Math.max(1, total);
 
   if (waterShare > G.water.max) {
+    // Past the DROWNED ceiling this is not a wet stage, it is a seascape
+    // with a causeway drawn on it — the road stands up out of the water on
+    // its own verge cone and everything else has gone. That is an error, not
+    // a matter of taste, and it is the one ground finding that can be true
+    // of a stage every other metric likes.
+    const drowned = waterShare > G.drowned;
     findings.push({
       code: "ground.drowned",
-      severity: "warn",
-      message: `${(waterShare * 100).toFixed(0)}% of the country is under water`,
+      severity: drowned ? "error" : "warn",
+      message: drowned
+        ? `${(waterShare * 100).toFixed(
+            0,
+          )}% of the country is under water — the stage is a causeway across a sea`
+        : `${(waterShare * 100).toFixed(0)}% of the country is under water`,
       value: waterShare,
     });
   }
@@ -140,6 +167,16 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       severity: "warn",
       message: `${relief.toFixed(0)} m of relief across the whole map — the country is a table`,
       value: G.relief.min - relief,
+    });
+  }
+  if (swampShare < G.swamp.share.min) {
+    findings.push({
+      code: "ground.swamp",
+      severity: "note",
+      message: `only ${(swampShare * 100).toFixed(
+        1,
+      )}% of the country is shallow standing water — a landscape with lakes but no swamps has no reed beds in it`,
+      value: G.swamp.share.min - swampShare,
     });
   }
   if (treesOnRock > 0) {
@@ -155,10 +192,16 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
 
   const checks: Check[] = [
     {
+      // The heaviest check here by some way. How much of a landscape is
+      // under water is the first thing anybody sees about it, and it is the
+      // property a single dial can destroy from end to end — a map that is
+      // four fifths lake still has plausible soil, forest and relief on the
+      // fifth that is left, so every other check in this metric goes on
+      // reporting a healthy country.
       id: "water",
       label: "some of the country is water, and not most of it",
       score: within(waterShare, G.water, G.slack),
-      weight: 1.5,
+      weight: 3,
       value: waterShare,
     },
     {
@@ -188,6 +231,18 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       score: within(cliffShare, { min: 0, max: G.cliff.max }, G.slack),
       weight: 1,
       value: cliffShare,
+    },
+    {
+      // R32 — the SWAMPS. Their own check rather than a share of the water,
+      // because a swamp is a different place from a lake and the generator
+      // can produce one without the other: pits that are all deep make
+      // tarns and no mires, and pits that are all shallow make a marsh with
+      // nothing to drive past. The band wants both on the map.
+      id: "swamp",
+      label: "the country has shallow water as well as deep (R32)",
+      score: within(swampShare, G.swamp.share, G.slack * 0.3),
+      weight: 1,
+      value: swampShare,
     },
     {
       id: "soil",
@@ -222,6 +277,9 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       rockShare,
       cliffShare,
       wetShare,
+      swampShare,
+      lakeShare,
+      meanSwampDepth,
       meanSoil,
       soilOnCliffs,
       bareCells,

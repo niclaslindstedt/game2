@@ -54,6 +54,43 @@ information. A sweep that reports twenty errors and a mean of 94 is a working
 instrument pointing at a queue of work; the same sweep reporting zero after
 somebody doubled the tolerances is a broken one.
 
+### If it can be measured, the ask comes with a CHECK
+
+**When somebody asks for something to be added or fixed here, and no existing
+check can tell whether it is right, writing that check is part of the job —
+not a follow-up.** Ship the change and the instrument together, in the same
+pass.
+
+The reason is that this generator has no other memory. A stage is built fresh
+from its seed every time, so a quality nobody measures is a quality that
+survives exactly until the next tuning pass moves a number underneath it. "The
+road should be bumpy" without a bumpiness check is a number somebody will
+smooth out in six weeks, on a seed that looked better for it, with nothing to
+say it got worse.
+
+So, for any ask:
+
+1. **Name the property in one sentence** — "water ends somewhere", "the road is
+   not a perfect ribbon", "swamps are shallow and wide".
+2. **Ask whether an existing check already covers it.** Extend the check if it
+   nearly does; a new one if it does not. `--checks` prints every check that
+   ran, which is how you find out.
+3. **Decide the shape of the check before the threshold.** Most defects are
+   `under()` (a step, a climb, a cost). Anything with a RIGHT AMOUNT is
+   `within()` — a band that penalises too little as well as too much. Water
+   share, forest share, bumpiness and corridor width are all bands: a stage
+   with no bumps is as wrong as one that is all bumps, and only a band says so.
+4. **Put the threshold in `budgets.ts` with the reason next to it**, and the
+   weight in `ANALYSIS.weights`.
+5. **Then build the thing** — and use the check to tell you when it is right,
+   which is the entire point of having built it first.
+
+A property that genuinely cannot be measured — "does this stage feel like a
+rally stage" — is what `make track` and the sim are for. Say so out loud when
+that is the answer, rather than inventing a number that stands in for it
+badly; a check measuring a proxy nobody believes is worse than no check,
+because it will be optimised against.
+
 ---
 
 ## The two halves: LOOK and MEASURE

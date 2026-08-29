@@ -856,6 +856,7 @@ export function createTerrain(track: Track): TerrainField {
     spurClearance,
     inAnyStream: (x, z, margin) => inStream(streams, x, z, margin),
     soilAt: land.geology.soilAt,
+    wetAt: land.geology.wetAt,
     guards,
   });
 

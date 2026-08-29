@@ -34,7 +34,7 @@ import { corridorOffset, ROAD_CROSS } from "../mapgen/road.ts";
 import type { Track, TrackSample } from "../mapgen/compile.ts";
 import type { TerrainField } from "../mapgen/terrain.ts";
 import { ANALYSIS } from "./budgets.ts";
-import { metricScore, rate, type Check, type Finding, type MetricReport } from "./types.ts";
+import { metricScore, rate, within, type Check, type Finding, type MetricReport } from "./types.ts";
 
 /** One ball's contact at one stride. */
 type Contact = {
@@ -300,6 +300,106 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
     }
   }
 
+  // ── HOW ROUGH, AND HOW WIDE. Both bands rather than ceilings, because
+  // both have a right amount: a road with no texture and a corridor of
+  // unvarying width are not clean results, they are the tells that nobody
+  // built this. See `ANALYSIS.rollers.texture`.
+  //
+  // R33 — TEXTURE, measured on the track's own samples rather than on the
+  // rank. Two reasons, and the first one is a trap worth writing down: the
+  // rank strides every `stride` samples, which at the default is 4 m, and
+  // the road's grain has an 8 m wave — exactly Nyquist, so the grain
+  // ALIASES AWAY and the measurement comes back identical whether the road
+  // has any texture or none. Anything measuring a surface has to sample it
+  // at the surface's own resolution.
+  //
+  // The second reason is that it is free here. Along a lane the ribbon is
+  // the sample elevation plus a cross-section offset that does not change
+  // with arc position, and a second difference along the lane cancels that
+  // offset outright — so the elevation profile IS the texture profile, and
+  // no ground probes are needed at all.
+  //
+  // A second difference is a high-pass filter: it cancels any constant
+  // slope and any constant curvature, so hills, ford ramps, crests and
+  // banked corners all vanish from it and what is left is the grain.
+  let textureSum = 0;
+  let textureN = 0;
+  for (let i = 1; i + 1 < track.samples.length; i++) {
+    if (skip[i] || track.samples[i].deck !== null) continue;
+    const d2 =
+      track.samples[i - 1].elevation -
+      2 * track.samples[i].elevation +
+      track.samples[i + 1].elevation;
+    textureSum += d2 * d2;
+    textureN++;
+  }
+  const texture = textureN > 0 ? Math.sqrt(textureSum / textureN) : 0;
+
+  // The RIDEABLE corridor: at each stride, how far either side of the
+  // centre the rank keeps finding ground a car could be on. A lane stops
+  // counting at the first one that is a wall, a hole, under water or has
+  // something solid standing in it — which is what "how much road is there"
+  // actually means to a driver.
+  const widths: number[] = [];
+  const centre = (lanes.length - 1) / 2;
+  const strideCount = rank[0]?.length ?? 0;
+  for (let i = 0; i < strideCount; i++) {
+    const rideable = (step: number): number => {
+      let out = 0;
+      for (let k = Math.round(centre) + step; k >= 0 && k < lanes.length; k += step) {
+        const a = rank[k][i];
+        const b = rank[k - step][i];
+        if (!a || !b) break;
+        const mat = Math.abs(lanes[k]) <= half && Math.abs(lanes[k - step]) <= half;
+        const limit = mat ? ANALYSIS.rollers.cross.mat : ANALYSIS.rollers.cross.verge;
+        const modelled =
+          a.want !== null && b.want !== null ? (b.want as number) - (a.want as number) : 0;
+        if (Math.abs(a.y - b.y - modelled) > limit) break;
+        const water = terrain.waterAt(a.x, a.z);
+        if (water !== null && water - a.y > 0.15) break;
+        if (terrain.obstaclesNear(a.x, a.z, ANALYSIS.rollers.radius).length > 0) break;
+        out += ANALYSIS.rollers.spacing;
+      }
+      return out;
+    };
+    widths.push(rideable(1) + rideable(-1));
+  }
+  const corridor = widths.length > 0 ? widths.reduce((a, b) => a + b, 0) / widths.length : 0;
+  const spread =
+    widths.length > 1
+      ? Math.sqrt(
+          widths.reduce((sum, w) => sum + (w - corridor) * (w - corridor), 0) / widths.length,
+        )
+      : 0;
+
+  if (texture < ANALYSIS.rollers.texture.min) {
+    findings.push({
+      code: "rollers.texture",
+      severity: "warn",
+      message: `the road is ${(texture * 1000).toFixed(
+        0,
+      )} mm out of true — that is a ribbon nobody graded, drove on or froze`,
+      value: ANALYSIS.rollers.texture.min - texture,
+    });
+  } else if (texture > ANALYSIS.rollers.texture.max) {
+    findings.push({
+      code: "rollers.texture",
+      severity: "warn",
+      message: `the road is ${(texture * 1000).toFixed(0)} mm out of true — a washboard, not a surface`,
+      value: texture - ANALYSIS.rollers.texture.max,
+    });
+  }
+  if (spread < ANALYSIS.rollers.varies.min) {
+    findings.push({
+      code: "rollers.varies",
+      severity: "note",
+      message: `the rideable corridor is ${corridor.toFixed(1)} m wide from end to end (±${spread.toFixed(
+        1,
+      )} m) — a road that never pinches or opens out`,
+      value: ANALYSIS.rollers.varies.min - spread,
+    });
+  }
+
   const tolerated = ANALYSIS.rollers.tolerated;
   const checks: Check[] = [
     {
@@ -334,6 +434,32 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
       value: worstBlock,
     },
     {
+      // R33 — a BAND, not a ceiling. A road that scores zero here is a
+      // perfect ribbon, and perfect is a defect.
+      id: "texture",
+      label: "the road is a little out of true, and not a washboard",
+      score: within(texture, ANALYSIS.rollers.texture, ANALYSIS.rollers.textureSlack),
+      weight: 1.5,
+      value: texture,
+    },
+    {
+      // R21 — the road's own width, banded at both ends: a lane with no
+      // room to place the car and a boulevard where nothing is a
+      // commitment are both wrong, in opposite directions.
+      id: "width",
+      label: "the road is wide enough to drive and narrow enough to matter",
+      score: within(track.width, ANALYSIS.rollers.width, ANALYSIS.rollers.widthSlack),
+      weight: 1,
+      value: track.width,
+    },
+    {
+      id: "varies",
+      label: "the corridor pinches and opens out along the stage",
+      score: within(spread, ANALYSIS.rollers.varies, ANALYSIS.rollers.variesSlack),
+      weight: 1,
+      value: spread,
+    },
+    {
       id: "dry",
       label: "no water on road that is not a crossing",
       score: rate(drowned, Math.max(1, checkedMat)),
@@ -360,6 +486,9 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
       drowned,
       worstGrade,
       worstCross,
+      texture,
+      corridor,
+      corridorVaries: spread,
     },
     ms: Date.now() - started,
   };

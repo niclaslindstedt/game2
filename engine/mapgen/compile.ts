@@ -354,6 +354,39 @@ function buildRolling(seed: number, knobs: StageKnobs): (s: number) => number {
   };
 }
 
+/** R33 — the road's own GRAIN: how far out of true the surface is at an arc
+ * position, m. Rides on top of the rolling profile and is applied to the
+ * driven sample only, never to `rolling` itself — the ford dips, the bridge
+ * decks and the grade the banking is solved from all read that, and a
+ * two-centimetre ripple in the number a slope is differenced from is a
+ * grade that flickers rather than a road that is rough.
+ *
+ * Two grains: a short one the wheel feels as texture, and a longer one felt
+ * as the road heaving gently. Their amplitude is itself modulated along the
+ * stage, so the road is washboarded in places and freshly bladed in others.
+ */
+function buildGrain(seed: number): (s: number, surface: Surface, deck: boolean) => number {
+  const rng = createRng((seed ^ 0x51ed270b) >>> 0);
+  const G = R.roughness;
+  const short = Array.from({ length: NOISE_LATTICE }, () => rng.range(-1, 1));
+  const long = Array.from({ length: NOISE_LATTICE }, () => rng.range(-1, 1));
+  const patch = Array.from({ length: NOISE_LATTICE }, () => rng.range(0, 1));
+  const shortOff = rng.range(0, 1e4);
+  const longOff = rng.range(0, 1e4);
+  const patchOff = rng.range(0, 1e4);
+  return (s: number, surface: Surface, deck: boolean): number => {
+    // A deck is planks or concrete laid flat, and water is water.
+    if (deck || surface === "water") return 0;
+    const base = surface === "asphalt" ? G.amplitude.asphalt : G.amplitude.gravel;
+    const how = G.patch.min + (1 - G.patch.min) * valueNoise(patch, s + patchOff, G.patch.scale);
+    const amp = base * how;
+    return (
+      amp * (1 - G.longShare) * valueNoise(short, s + shortOff, G.wave.short) +
+      amp * G.longShare * valueNoise(long, s + longOff, G.wave.long)
+    );
+  };
+}
+
 /** How fast the rolling layers advance through a sample, 0–1. Grades live
  * on the straights and flatten through corners — partly stage-design taste
  * (Sega Rally climbs between turns, not through them), but load-bearing
@@ -453,7 +486,12 @@ const SPUR_JUNCTION_WINDOW = R.junction.spurWindow;
 /** The incremental heart: walks plans into samples, bounds, and pacenotes,
  * carrying the cursor (and the open pacenote, so a turn combination split
  * across two endless sections still merges into one call). */
-function createCompiler(track: Track, rolling: (s: number) => number, paving: Paving): Compiler {
+function createCompiler(
+  track: Track,
+  rolling: (s: number) => number,
+  paving: Paving,
+  grain: (s: number, surface: Surface, deck: boolean) => number,
+): Compiler {
   const cursor: Cursor = { x: 0, z: 0, heading: 0, s: 0, rollS: 0 };
   /** The bare country the stage is laid across — the branches steer by it
    * so none of them drives out into a lake (R17). */
@@ -1113,9 +1151,23 @@ function createCompiler(track: Track, rolling: (s: number) => number, paving: Pa
           z: cursor.z,
           heading: cursor.heading,
           elevation:
-            dip ??
-            deckY ??
-            rolling(cursor.rollS) + (jump ? (built.lipHeight ?? 2) : segmentElevation(built, u)),
+            (dip ??
+              deckY ??
+              rolling(cursor.rollS) +
+                (jump ? (built.lipHeight ?? 2) : segmentElevation(built, u))) +
+            // R33 — the grain, last: a ford's flat water and a bridge's deck
+            // get none (the builder returns 0 for both), so the only thing
+            // it ever roughens is road.
+            // R33 — and the grain keeps off anything a CROSSING shaped. Not
+            // just the water and the deck: the ford's APRON is graded down
+            // to flat water over tens of metres (R12), and a road that dips
+            // a few centimetres below the water it is easing into is water
+            // standing on a rise.
+            grain(
+              cursor.s,
+              ford ? "water" : paved ? "asphalt" : "gravel",
+              bridge || dip !== null || deckY !== null,
+            ),
           surface: ford ? "water" : paved ? "asphalt" : "gravel",
           deck: bridge ? ((built.crossing ?? "timber") as BridgeDeck) : null,
           lift: 0,
@@ -1212,14 +1264,15 @@ export function compileStage(
   const dials = resolveKnobs(knobs);
   const rolling = buildRolling(seed, dials);
   const paving = buildPaving(seed, dials.asphalt);
+  const grain = buildGrain(seed);
   if (length !== "endless") {
     const circuit = shape === "circuit";
     const track = emptyTrack(seed, false, dials, circuit);
-    createCompiler(track, rolling, paving).append(generateStage(seed, length, dials, shape));
+    createCompiler(track, rolling, paving, grain).append(generateStage(seed, length, dials, shape));
     return track;
   }
   const track = emptyTrack(seed, true, dials);
-  const compiler = createCompiler(track, rolling, paving);
+  const compiler = createCompiler(track, rolling, paving, grain);
   const stream = createStageStream(seed, dials);
   track.extend = (upToS: number): boolean => {
     if (track.length >= upToS) return false;
@@ -1244,7 +1297,14 @@ export function compileTrack(
   if (segments === undefined) return compileStage(seed, "medium", knobs);
   const dials = resolveKnobs({ asphalt: 0, ...knobs });
   const track = emptyTrack(seed, false, dials);
-  createCompiler(track, () => 0, buildPaving(seed, dials.asphalt)).append(segments);
+  // A synthetic rig is a measuring device: flat, smooth and repeatable, so
+  // a physics test measures the car rather than the road under it.
+  createCompiler(
+    track,
+    () => 0,
+    buildPaving(seed, dials.asphalt),
+    () => 0,
+  ).append(segments);
   return track;
 }
 
