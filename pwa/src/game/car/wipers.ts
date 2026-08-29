@@ -75,13 +75,20 @@ const MUD_TONE = new THREE.Color(0x6d5a3c);
  * something. */
 const COAT_MAX = 0.88;
 
-/** Coat per second, at a downpour and at a filthy car. Rain films a screen
- * in seconds; road spray takes most of a stage. The BACKLIGHT is the other
- * way round — it sits out of the rain and in the wake, which is exactly why
- * it is the window that ends a rally caked. */
+/** What soils a screen, at a downpour and at a filthy car — and the two
+ * are measured against different things, which is the whole of why they
+ * are separate numbers rather than one. Rain falls on a car whether or not
+ * it is moving, so `rain` is coat per SECOND and films a screen in seconds.
+ * Road spray is thrown by the wheels, so `road` is coat per METRE driven
+ * and takes most of a stage: a car standing still on the gravel has nothing
+ * arriving at its glass, however filthy the rest of it already is.
+ *
+ * The BACKLIGHT is the other way round from the windscreen — it sits out of
+ * the rain and in the wake, which is exactly why it is the window that ends
+ * a rally caked. */
 const SOIL = {
-  front: { rain: 0.5, road: 0.05 },
-  rear: { rain: 0.2, road: 0.11 },
+  front: { rain: 0.5, road: 0.0023 },
+  rear: { rain: 0.2, road: 0.005 },
 };
 
 /** What a blade leaves behind, as a fraction of what it found — and it is
@@ -195,9 +202,10 @@ export type CarWipers = {
    *
    * `wet` is how hard it is raining on the car, 0..1 (the environment owns
    * that number); `dirt` is how filthy the car has got, which is the same
-   * reading the lamps are dimmed by.
+   * reading the lamps are dimmed by; `travel` is how far it drove this step,
+   * m, which is what decides how much of that filth reaches the glass.
    */
-  update: (wet: number, dirt: number, dt: number) => void;
+  update: (wet: number, dirt: number, travel: number, dt: number) => void;
   dispose: () => void;
 };
 
@@ -549,19 +557,22 @@ export function buildWipers(
     }
   };
 
-  const update = (wet: number, dirt: number, dt: number): void => {
+  const update = (wet: number, dirt: number, travel: number, dt: number): void => {
     for (const f of films) {
-      const rain = f.soil.rain * wet;
-      const road = f.soil.road * dirt;
-      const rate = rain + road;
-      if (rate > 0) {
-        f.mud += (road / rate - f.mud) * Math.min(1, rate * dt * 5);
+      // The two arrivals are metered by different things (see `SOIL`), so
+      // they are resolved into this step's COAT before they are added: one
+      // over the seconds that passed, the other over the metres driven.
+      const rain = f.soil.rain * wet * dt;
+      const road = f.soil.road * dirt * travel;
+      const laid = rain + road;
+      if (laid > 0) {
+        f.mud += (road / laid - f.mud) * Math.min(1, laid * 5);
         // Rain is what makes road grime MUD rather than dust, and it takes
         // a moment either way — a shower does not turn the dust on a screen
         // brown the instant it starts.
         f.soak += (Math.min(1, wet * 3) - f.soak) * Math.min(1, dt * 1.5);
         for (let k = 0; k < f.count; k++) {
-          f.coat[k] = Math.min(1, f.coat[k] + rate * f.bias[k] * dt);
+          f.coat[k] = Math.min(1, f.coat[k] + laid * f.bias[k]);
         }
       }
       // What the arms answer to is what is on the part of the glass they

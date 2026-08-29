@@ -26,7 +26,7 @@ import {
 } from "./car-body.ts";
 import type { CrewLook } from "./car-crew.ts";
 import { createCarDamage } from "./car-damage.ts";
-import { createCarDirt, wheelSpray } from "./car-dirt.ts";
+import { createCarDirt, groundTravel, wheelSpray } from "./car-dirt.ts";
 import type { Livery } from "./car-livery.ts";
 import { bodySpecFor } from "./car-styles.ts";
 import { drivenAxles, wheelSurfaceSpeed } from "./car-wheels.ts";
@@ -488,9 +488,11 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     }
 
     dirt.update(state, dt);
-    // The glass answers to both the weather landing on it and the filth the
-    // stage has thrown at the rest of the car.
-    body.wipers.update(wet, dirt.level(), dt);
+    // The glass answers to the weather landing on it, the filth the stage
+    // has thrown at the rest of the car, and — because road spray is thrown
+    // by the wheels rather than settling out of the air — how far the car
+    // actually drove while it was being thrown.
+    body.wipers.update(wet, dirt.level(), groundTravel(car, dt), dt);
     shineGlass(state, eye);
     shineLamps();
     damage.update(state, dt);

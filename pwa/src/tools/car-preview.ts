@@ -162,8 +162,10 @@ async function main(): Promise<void> {
         dirty(view.dirt);
         // The screens soil on their own clock (car/wipers.ts), so a dirty
         // car with showroom glass is a lie the sheet would tell every time.
-        // A stage's worth of grime in one step, and then TEN SECONDS a
-        // frame at a time. The blades run on demand and wait between
+        // Half a kilometre of gravel in one step — the screens soil by the
+        // METRE, so a step with no distance in it puts nothing on them —
+        // and then TEN SECONDS parked, a frame at a time, wiping what that
+        // drive left. The blades run on demand and wait between
         // strokes on a dry screen (car/wipers.ts's `REST.dry`), so a handful
         // of frames catches them parked in the middle of that wait and the
         // sheet photographs a screen nobody has wiped. Ten seconds is longer
@@ -171,8 +173,8 @@ async function main(): Promise<void> {
         // which is the state worth looking at, because the swept fan is the
         // whole look of a rally car's glass.
         const level = Math.max(view.dirt.dust, view.dirt.mud);
-        car.wipers.update(0, level, 20);
-        for (let n = 0; n < 500; n++) car.wipers.update(0, level, 0.02);
+        car.wipers.update(0, level, 500, 20);
+        for (let n = 0; n < 500; n++) car.wipers.update(0, level, 0, 0.02);
       }
       camera.fov = view.fov;
       camera.updateProjectionMatrix();
