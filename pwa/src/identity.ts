@@ -8,10 +8,15 @@ export const APP_NAME = "Scandinavian Flick";
 /** The house, on the studio card the app opens on. Drawn upper-cased, so
  * write it however it is written everywhere else. */
 export const PUBLISHER = "Agilator Games";
-export const APP_TITLE = "Scandinavian Flick — arcade rally drifting in your browser";
-/** The home-screen name: a launcher gives it about twelve characters, and
- * the flick is the half of the name that means anything on its own. */
-export const APP_SHORT_NAME = "Flick";
+/** What the browser tab and the installed app are called. Just the name: a
+ * tab shows about thirty characters before it cuts, so a tagline bolted on
+ * after a dash is a tagline nobody finishes reading. The share card is a
+ * different surface with room for one, and keeps its own. */
+export const APP_TITLE = APP_NAME;
+/** The home-screen name: a launcher gives it about twelve characters before
+ * it starts cutting, and this is nine. Both halves of the name survive, which
+ * "Flick" on its own did not — an icon captioned Flick could be anything. */
+export const APP_SHORT_NAME = "ScanFlick";
 export const APP_DESCRIPTION =
   "A drift-first arcade rally game that runs in your browser. Low-poly 3D stages " +
   "generated fresh every day — hairpins, jumps, fords — playable on your phone " +
