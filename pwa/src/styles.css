@@ -260,9 +260,13 @@ body {
   color: var(--hud-bad);
 }
 
+/* The row is aligned to its own top rather than stretched: the position
+   board is the tallest thing on it by a long way, and a camera button
+   stretched to match would be a button the size of a place. */
 .hud-actions {
   margin-left: auto;
   display: flex;
+  align-items: flex-start;
   gap: 0.4rem;
   flex: none;
 }
@@ -284,8 +288,13 @@ body {
   flex: none;
 }
 
+/* Sized to the TOTAL TIME, digit for digit — the two numbers that decide
+   whether a run is going well are the clock in one corner and the place in
+   the other, and a place read at a glance has to weigh what the clock
+   weighs. Any change to `.hud-clock-total` moves this one with it, here and
+   in the small-phone block below. */
 .hud-place-no {
-  font-size: clamp(1rem, 3.4vmin, 1.5rem);
+  font-size: clamp(1.7rem, 5.6vmin, 3.1rem);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1210,18 +1219,33 @@ body {
   transition: transform 120ms linear;
 }
 
-/* R28 — the split boards on the route. A dim pip until the run has been
-   through it and a lit one after, so the map says both where the next board
-   is and how much of the stage is already in the book. */
-.hud-minimap-cp {
-  fill: rgb(9 24 52 / 85%);
-  stroke: rgb(255 255 255 / 72%);
-  stroke-width: 1.2;
+/* A rival's plate on the route: their door number, in their own paint, on a
+   point standing where their car is. The dark outline is what keeps two
+   crews running nose to tail readable as two plates rather than one blob —
+   the fill is per-car and set on the element, so it must not be named here
+   or a presentation attribute would lose to it. */
+.hud-minimap-pin {
+  /* Tweened between the HUD's 12 Hz snapshots, like the car's own arrowhead
+     — a grid of plates stepping in unison twelve times a second reads as a
+     stutter rather than as a race. */
+  transition: transform 120ms linear;
 }
 
-.hud-minimap-cp-passed {
-  fill: var(--hud-good);
+.hud-minimap-pin path {
   stroke: rgb(9 24 52 / 85%);
+  stroke-width: 1.1;
+  stroke-linejoin: round;
+}
+
+.hud-minimap-pin-no {
+  fill: #0c111a;
+  text-anchor: middle;
+  dominant-baseline: central;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  /* The HUD's outline is drawn for white type over a landscape; on a numeral
+     this size, over its own plate, it is a smudge. */
+  text-shadow: none;
 }
 
 .hud-minimap-ring-track {
@@ -1268,7 +1292,7 @@ body {
   }
 
   .hud-place-no {
-    font-size: 0.95rem;
+    font-size: 1.5rem;
   }
 
   .hud-chip {

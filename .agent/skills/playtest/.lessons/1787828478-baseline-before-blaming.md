@@ -17,3 +17,10 @@ cheap: the screenshot harness takes bare-word scene filters, so re-shooting one
 scene is seconds; and it drives `pwa/dist`, so a stash + `make build` is the
 whole setup. Rename the baseline (`mv previews/shot-x.png previews/base-x.png`)
 before `git stash pop`, or the next run overwrites it.
+
+**`git stash pop` does not rebuild.** The dist left standing is the BASELINE's,
+so the next screenshot photographs the stashed-away tree while every file on
+disk says otherwise, and the frame reads as a change that did nothing. Same
+trap after a stash-and-build done only to compare bundle sizes. `make build`
+again before the next capture; the tell is a frame still showing something the
+change REMOVED.
