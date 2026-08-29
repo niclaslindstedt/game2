@@ -10,7 +10,13 @@
 
 import type { Rng } from "../lib/prng.ts";
 import { cellKey } from "../lib/math.ts";
-import { STAGE_RULES as R, knobScale, type SegmentPlan, type StageKnobs } from "./rules.ts";
+import {
+  STAGE_RULES as R,
+  knobScale,
+  type SegmentPlan,
+  type StageKnobs,
+  type TurnSeverity,
+} from "./rules.ts";
 
 export type Cursor = { x: number; z: number; heading: number; arc: number };
 
@@ -283,20 +289,27 @@ export function assignFeature(
   return { feature: "none" };
 }
 
+const SEVERITY_ORDER: TurnSeverity[] = ["soft", "medium", "hard"];
+
 export function drawTurn(
   rng: Rng,
   prevWasStraight: boolean,
   forcedDir: 1 | -1 | 0,
   sameDirRun: SameDirRun,
+  /** R1 — the tightest severity this corner may be drawn from. Only the
+   * first corner off the start passes one: a heads-up grid arrives at it
+   * still stacked, so the stage may not open into a hairpin. */
+  cap?: TurnSeverity,
 ): SegmentPlan {
   // R3/R4 — pick the severity bucket. Hard turns need the braking zone a
   // preceding straight provides; drawn mid-combination the hard share
   // becomes a medium instead, so corner density survives without ambushes.
   const roll = rng.next();
-  let severity: "soft" | "medium" | "hard";
+  let severity: TurnSeverity;
   if (roll < R.severityChance.hard) severity = prevWasStraight ? "hard" : "medium";
   else if (roll < R.severityChance.hard + R.severityChance.medium) severity = "medium";
   else severity = "soft";
+  if (cap && SEVERITY_ORDER.indexOf(severity) > SEVERITY_ORDER.indexOf(cap)) severity = cap;
   const vocab = R.turn[severity];
   const radius = rng.range(vocab.radius.min, vocab.radius.max);
   const angle = rng.range(vocab.angle.min, vocab.angle.max);

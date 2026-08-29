@@ -192,6 +192,7 @@ export {
   type TemperBand,
 } from "./sim/skill.ts";
 export {
+  APRON_HOLDS,
   GRID_DEFAULT,
   GRID_MAX,
   GRID_MIN,
@@ -269,6 +270,20 @@ export {
   type RaceOptions,
   type RaceOutcome,
 } from "./sim/race.ts";
+
+// The generator's scoreboard: a stage measured against what a stage has to
+// be, so tuning the rules is a loop with a number at the end of it.
+export {
+  ANALYSIS,
+  analyzeSeed,
+  analyzeTrack,
+  type AnalyzeOptions,
+  type Check,
+  type Finding,
+  type MetricReport,
+  type Severity,
+  type StageReport,
+} from "./analysis/index.ts";
 
 // Deterministic utilities shared with tooling.
 export { createRng, type Rng } from "./lib/prng.ts";

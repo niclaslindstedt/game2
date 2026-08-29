@@ -196,6 +196,22 @@ const CLUMP_FAR = 4.6;
 
 // ── The deep wild's boulders and fallen trunks ────────────────────────────
 
+/** R32 — what the SOIL decides. A trunk needs a rooting depth (`ROOT_DEPTH`,
+ * m) before a cell is forest at all; from there the stand thickens with the
+ * cover, from `ROOT_THIN` of its density up to full over `ROOT_FULL` more
+ * metres of soil. Bare rock keeps its moss and its grass and grows nothing
+ * with a trunk, which is what puts the open ground on the ridges and the
+ * mountain flanks rather than scattering it at random. */
+const ROOT_DEPTH = 0.4;
+const ROOT_THIN = 0.35;
+const ROOT_FULL = 1.6;
+/** ...and what it BURIES. Loose stone lies on the surface where the cover is
+ * thin and is buried where it is deep: `SHED_BURIES` is the soil depth that
+ * hides all of it, and `SHED_MIN` the share that shows anyway, because a
+ * field always turns up a few. */
+const SHED_BURIES = 2.6;
+const SHED_MIN = 0.18;
+
 /** One obstacle candidate per grid cell of this edge, m. */
 const OB_CELL = 56;
 /** Fraction of cells that actually hold one. */
@@ -335,6 +351,12 @@ export type PropContext = {
   spurClearance: (x: number, z: number) => number;
   /** True when a point is inside a stream valley, with margin. */
   inAnyStream: (x: number, z: number, margin: number) => boolean;
+  /** R32 — how deep the SOIL is here, m. What the ground is made of decides
+   * what stands on it: a tree needs something to root in, and a boulder is
+   * only on the surface where there is not enough cover to have buried it.
+   * Reading it here rather than inventing a second "how stony is it" noise
+   * is what makes the geology visible instead of merely present. */
+  soilAt: (x: number, z: number) => number;
   /** R14 — the corner guards, whose groves grow trunks of their own. */
   guards: GuardField;
 };
@@ -572,8 +594,14 @@ export function createPropField(ctx: PropContext): PropField {
     const found: WildObstacle[] = [];
     const x = (cx + 0.1 + hash2(cx, cz, rockSeed + 1) * 0.8) * ROCK_CELL;
     const z = (cz + 0.1 + hash2(cx, cz, rockSeed + 2) * 0.8) * ROCK_CELL;
+    // R32 — stone SURFACES where the cover is thin. Deep soil has buried
+    // whatever the ice left on it; a metre of till is why a Swedish forest
+    // floor is soft and a Norwegian fell is a boulder field. A stump is the
+    // exception: it is the remains of a tree, so it belongs wherever a tree
+    // could have stood rather than wherever the rock shows.
     const field = bouldery(x, z);
-    if (hash2(cx, cz, rockSeed) < ROCK_DENSITY * (1 + field * (BOULDER_DENSITY - 1))) {
+    const shed = Math.max(SHED_MIN, 1 - ctx.soilAt(x, z) / SHED_BURIES);
+    if (hash2(cx, cz, rockSeed) < ROCK_DENSITY * shed * (1 + field * (BOULDER_DENSITY - 1))) {
       const roll = hash2(cx, cz, rockSeed + 3);
       const grove = GROVES[groveAt(x, z)];
       const cutOver = FELLED_GROVES.has(grove.id);
@@ -835,6 +863,17 @@ export function createPropField(ctx: PropContext): PropField {
     const z = (cz + 0.1 + hash2(cx, cz, treeSeed + 2) * 0.8) * TREE_CELL;
     const grove = groveAt(x, z);
     const stand = standDensity(x, z);
+    // R32 — a tree needs something to root in. Bare rock carries moss,
+    // grass and flowers and nothing with a trunk; thin cover grows a
+    // struggling stand; deep soil grows a wood. Below `ROOT_DEPTH` the
+    // cell is simply not forest, which is what puts the open ground on the
+    // ridges and the mountain flanks instead of scattering it at random.
+    const soil = ctx.soilAt(x, z);
+    if (soil < ROOT_DEPTH) {
+      treeCache.set(key, found);
+      return found;
+    }
+    const rooting = Math.min(1, ROOT_THIN + (soil - ROOT_DEPTH) / ROOT_FULL);
     // How many stems this candidate grows, and — because the clump has to
     // cost the landscape nothing — the number the cell's own chance is then
     // divided by. Thick ground grows the big knots; the ceiling is what
@@ -849,7 +888,8 @@ export function createPropField(ctx: PropContext): PropField {
           ctx.forestScale *
           REGIONS[regionAt(x, z)].forest *
           GROVES[grove].density *
-          stand,
+          stand *
+          rooting,
       ) / mean;
     if (hash2(cx, cz, treeSeed) < chance) {
       for (let i = 0; i < stems; i++) {

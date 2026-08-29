@@ -18,6 +18,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   GRID_DEFAULT,
+  APRON_HOLDS,
+  ANALYSIS,
   GRID_MAX,
   GRID_MIN,
   NEUTRAL_INPUT,
@@ -139,9 +141,15 @@ describe("the mass-start grid", () => {
     const deepest = massStartGrid(GRID_MAX);
     const tail = deepest[deepest.length - 1].back + TUNING.collision.halfLength;
     expect(tail).toBeLessThanOrEqual(STAGE_RULES.startZone.apron);
-    // …and one more row would not be.
-    const over = GRID_MAX * M.rowGap + TUNING.collision.halfLength;
+    // …and one more row than THE APRON HOLDS would not be. The ceiling is
+    // measured against `APRON_HOLDS` rather than `GRID_MAX`, because the two
+    // are different questions: the apron says how much road there is, the
+    // roster says how many crews there are to stand on it, and only the
+    // first of them is the generator's to answer.
+    const over = APRON_HOLDS * M.rowGap + TUNING.collision.halfLength;
     expect(over).toBeGreaterThan(STAGE_RULES.startZone.apron);
+    // A heads-up field fits: that is what the apron is sized for.
+    expect(APRON_HOLDS).toBeGreaterThanOrEqual(ANALYSIS.ends.grid);
   });
 
   it("puts every car of it ON the road, behind the gate and never in front", () => {

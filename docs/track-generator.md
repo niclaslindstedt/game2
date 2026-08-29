@@ -15,7 +15,7 @@ Stages are built by a rules engine (`engine/mapgen/`), not authored by hand. The
 
 The generator respects rally reality. Verbatim from the rule book, each enforced in the search (or realized in the compiler) and asserted across seeds in `tests/mapgen_test.ts`:
 
-- **R1** A stage opens with a straight — a start grid plus room to build speed.
+- **R1** A stage opens with a straight — a start grid plus room to build speed. The length is set by what the straight has to hold: a heads-up race stands its whole field on the apron behind the gate (`startZone.apron`, sized from `TUNING.massStart.rowGap` for a sixteen-car grid), so the road off the line carries the grid's own depth plus `launch.run` before the first corner, and that first corner is drawn from the `launch.firstTurn` severity or easier. A grid sixteen rows deep arriving at a hairpin still stacked is a pile-up, not a start.
 - **R2** A finite stage closes with a straight — a visible finish, no blind final turn. (An endless stage never closes.)
 - **R3** Turns come in three severities with distinct radius/angle vocabularies: soft (fast, open), medium (a real corner), and hard (slow, tight — up to hairpin).
 - **R4** A hard turn only follows a straight: there is always a braking zone.
@@ -43,6 +43,7 @@ The generator respects rally reality. Verbatim from the rule book, each enforced
 - **R26** KERBING goes where a driver needs it and nowhere else. See [the placement guide](#kerb-placement-r26) below.
 - **R27** A stage is WATCHED. Spectators gather where a rally crowd actually gathers — at the finish, and at the corners worth standing at — on ground clear of the road, on the OUTSIDE of the bend where nothing leaving the road is coming at them. Driving past a stand at pace is heard (`cheer`).
 - **R28** A stage is SPLIT INTO CHECKPOINTS, roughly a quarter-minute of driving apart, and every one of them stands just past the EXIT of a corner — the tighter the better. A checkpoint is both a split (where the run is measured against whoever it is racing) and the place a lost, drowned or crashed car is put back on the road, so it belongs where the road has just asked the driver a question rather than in the middle of a straight where it would cost nothing. See [checkpoint placement](#checkpoint-placement-r28) below.
+- **R32** The GROUND comes in LAYERS, laid in the order the country was made (`engine/mapgen/geology.ts`). First BEDROCK — broad swell, hills, mountain chains along their ridges, and the fault steps between them — carrying a per-seed SMOOTHNESS that says which country the stage is in: Sweden and Norway are the same rock, and what separates them is that the ice sat on one and ran off the other, so a smooth country is planed into whaleback summits, filled valleys and worn-back slopes with none of the fine grain left, and a rough one keeps its crests, its cliffs and its texture. Then GROUNDWATER: a table that follows the land without its detail, shallow under flats and hollows and deep under anything steep, because steep ground drains — where it surfaces the ground is a mire. Then SOIL on top: till and washed sediment, collecting in the hollows and stripped off the mountain flanks and the escarpment faces. What the layers decide is what is ON them: a tree needs a rooting depth and bare rock grows moss, grass and flowers and nothing with a trunk; loose stone lies on the surface where the cover is thin and is buried where it is deep. Everything is analytic and computed in one pass over shared noise, because `surfaceAt` is read for every ground lattice corner, every prop and every water query in the running game.
 - **R31** The road and the ground beside it are RIDEABLE. Within a BENCH of a road — the route's or an abandoned branch's — the landscape never stands above that road's own corridor, and past the bench it may only rise at a grade the car can climb (`verge.climb`). Whatever the country was doing there is CUT where it would otherwise be a wall a car sliding off the road stops dead against, or a hillside the ground lattice drags up through the tarmac. The bench is a LATTICE CELL DIAGONAL wide (`verge.bench`, against `GROUND_CELL`) because that is the reach of the triangles the ground is drawn and driven on: pin every corner that could sit over a road, and no triangle can cut up through one. It is a CEILING and nothing else — a valley, a ford's dip and the ravine under a bridge are all still exactly as deep as the landscape made them. R23 gains a height clause from it: a branch standing tens of metres above the stage needs the room for the stage's cone to climb to it, or the hillside that carried it there is gone and the branch is in the air.
 
 ## The dials
@@ -217,6 +218,40 @@ and writes TWO pictures per seed:
 A whole stage's frame resolves a junction, a bridge or a guarded hairpin as a few dozen pixels — not enough to tell a built place from a collision of two ribbons. `--zoom junctions` re-frames the same renderer tightly around each junction the seed produced, which is the loop for working on them: change a number, re-render, LOOK.
 
 The frame fits the road and lets the nature fill the rest, so a longer stage renders from further up. Dials pass straight through (`npm run track -- --elevation 1 --water 0.9`), which is the fastest way to see what one does. Pair with `make sim` (`--length` picks the band) — a rules change must keep bots finishing (see [simulation.md](simulation.md)).
+
+## Scoring the output
+
+Looking catches what a picture shows. `make analyze` catches the rest — the
+things that are only visible as a number, or only visible on the seed nobody
+rendered:
+
+```sh
+make analyze                                # seeds 1..8, medium sprints
+make analyze SEEDS=7 ARGS=--checks          # one seed, every check it ran
+make analyze COUNT=24                       # a sweep, with the finding tally
+npm run analyze -- --water 1 --elevation 1  # the dials
+npm run analyze -- --json out.json          # the whole report, machine-readable
+```
+
+Seven metrics, each a set of checks scored 0..1, weighted into one number out
+of a hundred. Every threshold is data in `engine/analysis/budgets.ts`, so
+moving one is a visible change to the definition of good rather than a number
+quietly widened inside a check:
+
+| Metric    | What it measures                                                                                                                                                                                        |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rollers` | A rank of balls the width of a wheel, rolled down the stage side by side over the mat and both verges: steps along a lane, walls and trenches across the rank, hollows, solids in the road, water on it |
+| `water`   | R18 as measurements: never climbs, gathers as it runs, lies in the ground rather than over it, ends in bigger water or off the map, keeps off the road except where it crosses                          |
+| `roads`   | R17/R23 as a network: every branch runs off the map, no two roads share ground, none run side by side, and how the roads are spread over the country                                                    |
+| `drive`   | The geometry against a modest reference car on a speed profile: grades, crests and compressions, adverse camber, corners that arrive with no run-up                                                     |
+| `jumps`   | Every lip flown ballistically in world space: how far, how high, how hard it lands, what is in the flight path — and whether the road is still there when the car comes down                            |
+| `ends`    | Pass or fail: the apron holds a heads-up field, the grid stands on road and level, the field has a straight to string out on, the finish line spans road, and R25's run-out is there and clear          |
+| `ground`  | R32's layers as shares: water, forest, bare rock, relief, and whether the soil lies in the hollows and the trees stand on the soil                                                                      |
+| `perf`    | What it COST: the cold build (plan, compile, terrain) and the per-call cost of `groundAt`, `waterAt` and `obstaclesNear`. The analyzer is dev-time and may be slow; the generator runs in the game      |
+
+The score is a compass, not a grade — read the FINDINGS. A run that scores 92
+with an error in it needs the error fixed, not the score improved. The exit
+code is non-zero on any error, so a change can be gated on it.
 
 ## Extending the vocabulary
 

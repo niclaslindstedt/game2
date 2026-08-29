@@ -292,6 +292,20 @@ export const STAGE_RULES = {
   openingStraight: 110,
   closingStraight: 80,
 
+  /** R1 — and what the opening straight has to be long enough FOR. A rally
+   * start is one car and needs nothing; a HEADS-UP start is the whole field
+   * stood on the apron behind the gate, and the back row is `startZone.apron`
+   * metres further from the first corner than pole is. So the road off the
+   * line has to hold the grid's own depth plus a run for it to string out
+   * on, and the first corner may not be a slow one — sixteen cars arriving
+   * at a hairpin still stacked is a pile-up, not a start.
+   *
+   * `launch` is the run measured from the GATE (the apron is behind it and
+   * is added on top); the opening straight is drawn at least this long.
+   * `firstTurn` is the tightest severity the corner at the end of it may be
+   * drawn from. */
+  launch: { run: 150, firstTurn: "soft" as TurnSeverity },
+
   /** R25 — the RUN-OUT: road built past a sprint's finish gate, meters. The clock
    * stops at the line and the car keeps going, so there has to be
    * somewhere for it to go. Long enough to shed rally pace without using
@@ -379,14 +393,117 @@ export const STAGE_RULES = {
     knob: { min: 0.4, max: 2 },
   },
 
+  /** R32 — THE GROUND, IN LAYERS. What the country beside the road is made
+   * of, laid in the order it was made: rock, then the water in it, then the
+   * soil on top. `geology.ts` builds the field; these are its numbers, and
+   * every one of them is in meters unless it says otherwise.
+   *
+   * The single most important number here is `smoothness`. It is drawn per
+   * seed rather than read off a dial, because it says which COUNTRY a stage
+   * is in — how long the ice sat on it — and that is not a slider anybody
+   * was asked about. At the low end the rock keeps its sharp crests, its
+   * cliffs and its fine grain; at the high end it is planed into whaleback
+   * summits, filled valleys and worn-back slopes. */
+  geology: {
+    /** How glacially planed a country may be, 0 (alpine) to 1 (shield).
+     * Neither end is reached: a stage with no texture at all reads as a
+     * heightmap, and one with nothing worn is a set of teeth. */
+    smoothness: { min: 0.15, max: 0.95 },
+
+    /** How much of the finest octave the ice planes off at full
+     * smoothness — the grain that separates a weathered hillside from a
+     * scoured one. */
+    grain: { planed: 0.72 },
+
+    /** The mountain's height band across the smoothness range: sharp
+     * country stands its crests higher than the shield does, and the two
+     * crest SHAPES (a cube against a smoothstep) do the rest. */
+    mountain: { tall: 1.3, planed: 0.5 },
+
+    bedrock: {
+      /** The broad swell of the country — the wave a stage crosses two or
+       * three of. `amp` is peak to trough. */
+      swell: { scale: 430, amp: 52 },
+      /** Hills riding on it... */
+      hills: { scale: 150, amp: 16 },
+      /** ...and the fine grain the ice takes away. */
+      grain: { scale: 46, amp: 4 },
+      /** Where a mountain chain stands (`from` is the share of the mask
+       * below which there is none) and how high its crest gets. */
+      mountain: { scale: 1150, from: 0.58, height: 70 },
+      /** ...and where its crest RUNS. */
+      ridge: { scale: 300 },
+      /** The fault steps: a wandering line the ground drops over. `span`
+       * is how much of the noise the step is spread across — narrow is a
+       * cliff, wide is a hillside, and the smoothness reads between them. */
+      escarpment: { scale: 520, from: 0.52, span: { min: 0.05, max: 0.22 }, rise: 13 },
+      /** The sea basins: broad hollows sunk under the lake table. `wetter`
+       * and `deeper` are what the `water` dial adds to each. */
+      basin: { scale: 1600, from: 0.86, span: 0.34, depth: 30, wetter: 0.3, deeper: 26 },
+      /** ...and the ponds, on a tighter scale — the tarns and lakes the
+       * road runs past rather than over. */
+      pond: { scale: 340, from: 0.9, span: 0.1, depth: 10, wetter: 0.14, deeper: 8 },
+      /** Where sea level sits relative to the rock's own zero. */
+      datum: -6,
+    },
+
+    /** The groundwater. The table is the broad shape of the land dropped by
+     * `depth`, plus `drain` times how steep the ground is — steep ground
+     * sheds its water and stands dry, flats and hollows hold theirs and go
+     * to bog. Where the table comes up through the surface the ground is
+     * WET, which is what a mire is. */
+    groundwater: { depth: 4.5, drain: 42 },
+
+    /** The soil lying on the rock. Till and washed sediment: it collects
+     * where water slows down and is stripped where it does not, so the
+     * flanks and the escarpment faces come out bare and the valley floors
+     * come out deep. Trees need it, big rocks only surface where it is
+     * thin, and bare rock carries moss and grass and nothing with a root. */
+    soil: {
+      /** Deepest the cover ever gets, m. */
+      max: 3.2,
+      /** How far below the country's broad shape counts as a full hollow,
+       * m — the depth over which the till gets from thin to deep. */
+      hollow: 14,
+      /** The patchiness of the cover: its noise scale, and the least of it
+       * a patch may keep, so nowhere is scoured to nothing by chance
+       * alone. */
+      patch: { scale: 210, min: 0.3 },
+      /** Height above which the ice scoured the ground bare, m, and the
+       * band it does it over — the treeline, in effect. */
+      alpine: { from: 46, over: 40 },
+      /** How much a glaciated country moves off its highs and into its
+       * hollows, over and above what slope alone does. */
+      glacial: 0.5,
+      /** Subtracted from the surface so that adding a soil layer does not
+       * raise the whole country by its own mean depth — the water table
+       * and every number tuned against the old ground stay where they
+       * were. Half of `max`, which is roughly what the cover averages. */
+      datum: 1.6,
+    },
+  },
+
   /** R6 — jump placement. */
   jump: {
     minStraight: 90, // segment must be at least this long to carry a lip
     runUp: 35, // meters of straight before the lip
     landing: 50, // meters of straight after the lip
     minSpacing: 200, // meters of stage between two lips
-    lipHeight: { min: 1.4, max: 2.4 },
-    rampLength: { min: 10, max: 16 },
+    /** The ramp, as a height and the run it is raised over. What matters is
+     * the RATIO — that is the launch angle, and the flight off a lip is
+     * ballistics from there: at rally pace a car leaves at `v·sin(θ)` and is
+     * in the air for `2v·sin(θ)/g`, so a tenth of a radian either way is
+     * thirty metres of flight.
+     *
+     * The bands are deliberately WIDE and overlapping, so that jumps differ
+     * from each other: a stage whose every lip is drawn from the same narrow
+     * ratio has one jump on it, repeated. The steep end is where the moon
+     * shots come from, so it is capped by the landing zone below rather than
+     * chosen for its own sake — `make analyze` reports the flight, the air
+     * and the height under the car for every lip on the stage, and that is
+     * the measurement this band is set against. */
+    lipHeight: { min: 0.9, max: 2.2 },
+    rampLength: { min: 12, max: 22 },
   },
 
   /** R7/R12 — ford placement and the dip it sits in. The apron is the
@@ -623,6 +740,18 @@ export const STAGE_RULES = {
      * a seam, not an island, and paving over it is what keeps a junction
      * from ending in a knife edge of grass. */
     goreNose: 7,
+    /** R23's exemption around a junction, m of stage arc either side of it.
+     * A branch leaves a junction ON the road it is leaving, so it cannot be
+     * measured against that road while it is still LEAVING. Wide enough to
+     * cover the corner the junction sits on and the run out of it — and it
+     * lapses the moment the branch is properly clear of the stage
+     * (spurs.ts), because a branch that has wandered a kilometre and folded
+     * back has no claim on the road beside its own junction.
+     *
+     * The branch builder measures against it and the analysis exempts the
+     * same window, so a junction is not reported as two roads sharing
+     * ground by the one instrument that would otherwise see every one. */
+    spurWindow: 240,
   },
 
   /** R19 — SUPERELEVATION: how far a turn is banked into itself. A road
@@ -709,7 +838,21 @@ export const STAGE_RULES = {
    * stage. `fromArc` is how far the route has to have travelled before it
    * counts as coming BACK to the start — inside it the road is simply
    * leaving, which is not a violation of anything. */
-  startZone: { apron: 30, fromArc: 160 },
+  startZone: {
+    /** Meters of dirt extrapolated straight off each stage end. Its length
+     * is set by the HEADS-UP GRID, because that is the only thing that
+     * needs it long: a mass start stands the whole field on it behind the
+     * gate, one car per row (`sim/grid.ts`), so the apron is
+     * `(field - 1) * TUNING.massStart.rowGap` plus a car's own length. At
+     * 3.5 m a row and a sixteen-car field that is 55 m, rounded up — and
+     * the apron is what `GRID_MAX` is derived FROM, so lengthening it here
+     * is how a deeper grid gets built. A rally start uses the same road as
+     * a run-up and does not care how much of it there is. */
+    apron: 56,
+    /** How far the route has to have travelled before it counts as coming
+     * BACK to the start (R24) — inside it the road is simply leaving. */
+    fromArc: 160,
+  },
 
   /** Feature probabilities per eligible straight. The water entry is the
    * chance of ANY crossing; the `water` knob scales it and splits it into

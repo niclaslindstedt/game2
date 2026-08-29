@@ -29,6 +29,7 @@ import {
   type RoadShape,
 } from "./road.ts";
 import { createLandField, LAKE_Y } from "./land.ts";
+import type { GeologyField } from "./geology.ts";
 import { STAGE_RULES as R, knobScale } from "./rules.ts";
 import { createSpurIndex, type SpurIndex } from "./spurs.ts";
 import { createPropField } from "./props.ts";
@@ -176,7 +177,9 @@ export function collectAnchors(track: Track, fromIndex: number): RiverAnchor[] {
 }
 
 /** Trace the watercourses a batch of crossings implies and cut them into
- * queryable pieces — the one entry point the terrain field uses. */
+ * queryable pieces. The field itself keeps the traced courses as well as
+ * the pieces, so it does the two steps separately; this is the one-call
+ * version for tooling that only wants water it can query. */
 export function computeStreams(
   seed: number,
   anchors: RiverAnchor[],
@@ -283,6 +286,11 @@ export type TerrainField = {
   /** The landscape far from any road (mountains and sea included) — what
    * streams read to find their downhill side, and tooling can preview. */
   farHeightAt: (x: number, z: number) => number;
+  /** R32 — what the ground is MADE of: the rock, the soil on it and the
+   * groundwater in it. The road shapes the SURFACE and nothing under it,
+   * so this is the bare country's own layering wherever it is asked —
+   * which is what everything that plants, paints or judges wants. */
+  geology: GeologyField;
   /** Water surface height over this point — lake/sea table or a stream's
    * local level — or null on dry ground. */
   waterAt: (x: number, z: number) => number | null;
@@ -296,6 +304,12 @@ export type TerrainField = {
   spurSurfaceAt: (x: number, z: number) => Surface | null;
   /** The stream valleys cut so far (the renderer draws their water). */
   streams: Stream[];
+  /** ...and the whole watercourses they were sliced from, source point
+   * first (R18). Nothing in the game needs a river end to end — every
+   * query is local, which is what the slices are for — but judging one
+   * does: whether it climbs, gathers, and arrives anywhere are all
+   * questions about the whole course. */
+  rivers: River[];
   /** The corner guards placed so far (R14) — the renderer reads them to
    * dress the mounds, the tooling to draw them on a preview. */
   guards: CornerGuard[];
@@ -570,6 +584,7 @@ export function createTerrain(track: Track): TerrainField {
       : shape.elevation + vergeOffset(ROAD_CROSS.reach, shape.lift, 0) - TILE_SINK;
 
   const streams: Stream[] = [];
+  const rivers: River[] = [];
   const spurs: SpurIndex = createSpurIndex();
   /** How many of `track.spurs` are in the index — an ingest cursor, so it
    * never rewinds when an endless run prunes the branches behind it. */
@@ -840,6 +855,7 @@ export function createTerrain(track: Track): TerrainField {
     sampleAt: (index) => samples[index],
     spurClearance,
     inAnyStream: (x, z, margin) => inStream(streams, x, z, margin),
+    soilAt: land.geology.soilAt,
     guards,
   });
 
@@ -896,9 +912,26 @@ export function createTerrain(track: Track): TerrainField {
       // all), not the bare far field: a watercourse routed against a
       // landscape the road does not stand on would refuse every reach
       // between two crossings that the road itself made possible.
-      streams.push(
-        ...computeStreams(track.seed, collectAnchors(track, streamScan), rawHeight, roadClear),
-      );
+      // Traced, then sliced: the field queries the slices, and the whole
+      // watercourses are kept beside them because a river is only judgeable
+      // end to end — the analysis walks one from its source to its mouth to
+      // ask whether it ever climbs, whether it gathers, and whether it ends
+      // in anything.
+      for (const river of traceRivers(
+        track.seed,
+        collectAnchors(track, streamScan),
+        rawHeight,
+        LAKE_Y,
+        roadClear,
+        // The country the stage occupies: a mouth that gets clear of it has
+        // left the map, which is one of the two ways a river is allowed to
+        // end. Without it every course that would have run off the frame
+        // pools instead, and the map fills with tarns nothing feeds.
+        track.bounds,
+      )) {
+        rivers.push(river);
+        streams.push(...sliceRiver(river));
+      }
       streamScan = samples.length;
       // The branches the compiler forked off at the paving junctions (R17),
       // and the guards that shut the corners the road has now committed
@@ -956,10 +989,12 @@ export function createTerrain(track: Track): TerrainField {
     heightAt,
     groundAt,
     farHeightAt: farField,
+    geology: land.geology,
     waterAt,
     roadDistanceAt,
     spurSurfaceAt,
     streams,
+    rivers,
     guards: guards.guards,
     stands: stands.stands,
     obstaclesNear: props.obstaclesNear,

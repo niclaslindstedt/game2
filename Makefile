@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim heat record replay track cars liveries field crew items items-list sky glyphs audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim heat record replay track analyze cars liveries field crew items items-list sky glyphs audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
 
 build:
 	npm run build
@@ -66,6 +66,16 @@ heat:
 # rules engine's output.
 track:
 	npm run track
+
+# SCORE generated stages instead of looking at them: the rollers over the
+# road surface, the water's flow, the road network, drivability, the jumps,
+# the two ends, the ground's layers, and what the whole thing COST to build.
+# The measuring half of the generator loop — `make track` is the looking
+# half. Exits non-zero on any error finding.
+# `make analyze SEEDS=7` · `make analyze COUNT=24 ARGS=--checks`
+analyze:
+	npm run analyze -- $(if $(SEEDS),--seeds $(SEEDS),) $(if $(COUNT),--count $(COUNT),) \
+		$(if $(LENGTH),--length $(LENGTH),) $(if $(SHAPE),--shape $(SHAPE),) $(ARGS)
 
 # Render the car models to a labeled contact sheet (previews/cars.png):
 # the chase-cam gaming angle plus turntable views, for the car-design

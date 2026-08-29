@@ -82,6 +82,13 @@ export const SPUR = {
   step: 4,
   /** Radius the branch's own wandering never turns tighter than, m. */
   minRadius: 55,
+  /** R23 against itself — how far apart along the branch two samples have
+   * to be before being near each other counts as a FOLD rather than as a
+   * corner, m. A hairpin's two arms are a road's width apart by definition;
+   * a kilometre of branch coming back over its own line is a second
+   * carriageway. Generous, because a branch's tightest corner is
+   * `minRadius` and half a turn of that is under 180 m of road. */
+  selfWindow: 220,
   /** How often the wander redraws its curvature, m. */
   bend: 55,
   /** ...and how far it holds the main road's line first, m. A junction
@@ -346,6 +353,31 @@ export function buildSpur(
     if (!departed) {
       if (roadDistance(at.x, at.z, true) >= keepOut) continue;
     } else if (clear >= keepOut && shelfHolds(at.x, at.z, at.elevation)) continue;
+    samples.length = i;
+    endsAt = "stage";
+    break;
+  }
+  // ...and R23 against ITSELF. The wander is a random walk with a minimum
+  // radius and a pull toward the edge of the map, and neither of those
+  // stops it folding back over ground it has already used — which is the
+  // same defect as two roads sharing ground, with the two roads being one
+  // road. Cut at the first sample that comes back, for the same reason as
+  // above: everything past it was reached across ground this branch had
+  // already spent.
+  //
+  // The window is what makes it a FOLD rather than a curve: samples a few
+  // dozen metres apart along the branch are near each other because that is
+  // what a road is.
+  for (let i = 0; i < samples.length; i++) {
+    const at = samples[i];
+    let folded = false;
+    for (let k = 0; k < i && !folded; k++) {
+      if (at.s - samples[k].s < SPUR.selfWindow) break;
+      const dx = at.x - samples[k].x;
+      const dz = at.z - samples[k].z;
+      folded = dx * dx + dz * dz < keepOut * keepOut;
+    }
+    if (!folded) continue;
     samples.length = i;
     endsAt = "stage";
     break;
