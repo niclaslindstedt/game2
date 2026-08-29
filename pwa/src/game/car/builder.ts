@@ -340,8 +340,8 @@ export function solid(b: MeshBuilder, geo: THREE.BufferGeometry, color: number):
 }
 
 /** A box that is allowed to lean: a seat back, a visor, a harness strap, a
- * shoulder. Sizes and position are the box's own; `tilt` is about x and
- * `yaw` about y, applied in that order about the box's centre. */
+ * shoulder, a dash face. Sizes and position are the box's own; `tilt` is
+ * about x and `yaw` about y, applied in that order about the box's centre. */
 export function slab(b: MeshBuilder, size: V3, at: V3, color: number, tilt = 0, yaw = 0): void {
   const geo = new THREE.BoxGeometry(size[0], size[1], size[2]);
   if (tilt !== 0) geo.rotateX(tilt);
@@ -349,7 +349,8 @@ export function slab(b: MeshBuilder, size: V3, at: V3, color: number, tilt = 0, 
   solid(b, geo.translate(at[0], at[1], at[2]), color);
 }
 
-/** One length of tube, end to end — a cage bar, a forearm, a neck. */
+/** One length of tube, end to end — a cage bar, a forearm, a neck, a
+ * steering column. */
 export function tube(
   b: MeshBuilder,
   from: V3,
@@ -389,4 +390,26 @@ export function blob(
   const geo = new THREE.SphereGeometry(radius, segments, Math.max(3, Math.round(segments / 2)));
   geo.scale(scale[0], scale[1], scale[2]);
   solid(b, geo.translate(at[0], at[1], at[2]), color);
+}
+
+/** A horizontal panel — a cabin floor, a headliner, a parcel shelf. `up`
+ * says which way it is seen from: a floor is looked down on, a headliner up
+ * at, and a single-sided face drawn the wrong way round is not there. */
+export function plate(
+  b: MeshBuilder,
+  half: number,
+  y: number,
+  zFront: number,
+  zRear: number,
+  color: number,
+  up: boolean,
+): void {
+  const c: V3[] = [
+    [-half, y, zFront],
+    [half, y, zFront],
+    [half, y, zRear],
+    [-half, y, zRear],
+  ];
+  if (up) b.quad(c[0], c[1], c[2], c[3], color);
+  else b.quad(c[3], c[2], c[1], c[0], color);
 }

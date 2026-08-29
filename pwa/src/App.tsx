@@ -145,6 +145,7 @@ import {
   type DevSettings,
   type PlayCamera,
   type Settings,
+  type ViewSettings,
 } from "./game/settings.ts";
 import { formatTime } from "./lib/util.ts";
 import { setAudioVolumes, unlockAudio } from "./game/audio/bus.ts";
@@ -307,12 +308,37 @@ function initialRace(): RaceSettings {
   return race;
 }
 
+/** ?seat= ?reach= ?vfov= ?headmotion= — the in-car view's four knobs, in the
+ * units OPTIONS ▸ VIEW moves them in (metres, metres, degrees, a scale on
+ * the head). The tooling sweeps these to shoot a contact sheet of variants
+ * without a rebuild; a missing one keeps whatever the player has stored. */
+function viewFromUrl(): Partial<ViewSettings> {
+  const params = new URLSearchParams(location.search);
+  const view: Partial<ViewSettings> = {};
+  const num = (key: string): number | undefined => {
+    const raw = params.get(key);
+    if (raw === null) return undefined;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : undefined;
+  };
+  const seat = num("seat");
+  if (seat !== undefined) view.seat = seat;
+  const reach = num("reach");
+  if (reach !== undefined) view.reach = reach;
+  const fov = num("vfov");
+  if (fov !== undefined) view.fov = fov;
+  const head = num("headmotion");
+  if (head !== undefined) view.headMotion = head;
+  return view;
+}
+
 /** The player's options, with the URL's developer flags laid over them. A
  * repro link arrives on a machine that has never drummed on the chassis, so
  * it lets the developer menu out as well as the tools — otherwise the boxes
  * come up and there is no way to switch them off again. */
 function initialSettings(): Settings {
   const settings = loadSettings();
+  Object.assign(settings.view, viewFromUrl());
   const forced = devFromUrl();
   if (forced.debug || forced.god) {
     settings.developer = true;
@@ -1016,6 +1042,7 @@ export function App() {
     rendererRef.current?.setVideo(next.video);
     rendererRef.current?.setMirror(next.hud.mirror);
     rendererRef.current?.setNameTags(next.hud.nameTags);
+    rendererRef.current?.setView(next.view);
   };
 
   /** The debug snapshot the overlay renders and the log quotes. Null before
@@ -1146,6 +1173,7 @@ export function App() {
       if (optionsRef.current.screenshots) armScreenshots();
       renderer.setMirror(optionsRef.current.hud.mirror);
       renderer.setNameTags(optionsRef.current.hud.nameTags);
+      renderer.setView(optionsRef.current.view);
       renderer.setMapRect(mapRectRef.current);
       // Thunder arrives seconds after the flash that made it (storm.ts), so
       // the renderer decides WHEN and the bank decides what it sounds like.

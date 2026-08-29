@@ -243,14 +243,51 @@ function segmentColor(
   return colors.paint;
 }
 
-export function buildShell(b: MeshBuilder, spec: CarBodySpec, stations: Station[]): void {
+/** THE DECK OVER THE CABIN, CUT OPEN.
+ *
+ * The loft is a CLOSED body, so it carries a flat top deck the whole length
+ * of the car — ring points 7–9, the two segments either side of the
+ * centreline. Under the bonnet and the boot lid that deck is the panel you
+ * see. Under the CABIN it is the floor: an opaque surface at about the belt
+ * line, which leaves the whole visible interior a tray some 350 mm deep
+ * between it and the roof. A driver and a steering wheel do not fit in
+ * 350 mm, and no amount of arranging them does.
+ *
+ * So a car that is going to be sat in has that deck cut away between the
+ * cowl and the rear bulkhead, and only across the middle: the ledge outside
+ * `half` stays, because that strip is visible from outside the car as the
+ * sill under the side windows. What is left is a cabin a metre deep, which
+ * is a cabin. Whatever cuts it is then responsible for closing it again —
+ * a floor, two inner sills and a bulkhead at each end — or the car has a
+ * hole in it (car/cockpit.ts's hull, and car/interior.ts's own pan for the
+ * views that are not taken from inside).
+ *
+ * `zFrom`/`zTo` are the cowl and the rear bulkhead; anything whose whole
+ * span lies between them is cut. */
+export type OpenCabin = { zFrom: number; zTo: number; half: number };
+
+export type ShellOptions = { openCabin?: OpenCabin };
+
+export function buildShell(
+  b: MeshBuilder,
+  spec: CarBodySpec,
+  stations: Station[],
+  options: ShellOptions = {},
+): void {
   const paint = spec.colors.paint;
   const under = spec.colors.trim ?? 0x14181f;
   const well = spec.colors.shadow ?? 0x191d24;
+  const open = options.openCabin;
 
   for (let i = 0; i < stations.length - 1; i++) {
     const sa = stations[i];
     const sc = stations[i + 1];
+    // Both stations inside the cabin: the middle of the deck between them is
+    // floor rather than panel, and comes out.
+    const cut =
+      open !== undefined &&
+      Math.min(sa.z, sc.z) >= open.zTo - 1e-6 &&
+      Math.max(sa.z, sc.z) <= open.zFrom + 1e-6;
     // A band inside the shut line — groove floor or chamfer wall, both
     // painted in shadow. It has to be NARROW as well as seam-ended: the
     // two stations bracketing a whole door are both seam stations too, and
@@ -258,6 +295,10 @@ export function buildShell(b: MeshBuilder, spec: CarBodySpec, stations: Station[
     const gap = sa.seam !== undefined && sc.seam !== undefined && sa.z - sc.z < SEAM_WALL * 2.2;
     const a = ring(spec, sa);
     const c = ring(spec, sc);
+    // The deck's own two segments run from the right shoulder in to the
+    // centreline (7) and back out to the left one (8). Cutting the cabin
+    // open pulls their inner edge out to `half` and drops what is inside it.
+    const ledge = (st: Station, side: number): V3 => [side * open!.half, st.topY, st.z];
     for (let k = 0; k < a.length; k++) {
       const k2 = (k + 1) % a.length;
       const base = segmentColor(k, spec.colors, under, well);
@@ -266,6 +307,18 @@ export function buildShell(b: MeshBuilder, spec: CarBodySpec, stations: Station[
       // OWN shade, or the groove reads as a stripe of the wrong color.
       const painted = base === paint || base === spec.colors.lower;
       const color = gap && painted ? shade(base, SEAM_SHADE) : base;
+      // Ring point 8 is the deck's centreline, and it is the k2 end of
+      // segment 7 and the k end of segment 8. Cutting the cabin open moves
+      // exactly that end out to the ledge and leaves the winding alone. A
+      // cabin wider than the deck itself is left whole rather than inverted.
+      if (cut && (k === 7 || k === 8) && open.half < Math.abs(a[7][0])) {
+        const side = k === 7 ? 1 : -1;
+        const la = ledge(sa, side);
+        const lc = ledge(sc, side);
+        if (k === 7) b.quad(la, a[7], c[7], lc, color);
+        else b.quad(a[9], la, lc, c[9], color);
+        continue;
+      }
       b.quad(a[k2], a[k], c[k], c[k2], color);
     }
   }
