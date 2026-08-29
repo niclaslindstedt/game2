@@ -144,15 +144,13 @@ export function GalleryPage({ settings, onBack }: { settings: Settings; onBack: 
   const key = settings.keys.screenshot.map(keyLabel).join(" / ") || "the screenshot key";
   return (
     <div className="menu-card menu-card-wide">
+      {/* An empty roll has the card's own empty state under it saying how a
+          picture gets here; the head does not say it a second time. */}
       <MenuHead
         back={onBack}
-        backLabel="MAIN MENU"
+        backLabel="MENU"
         title="GALLERY"
-        sub={
-          shots.length === 0
-            ? "Pictures you take during a run land here"
-            : `${shots.length}/${MAX_SHOTS} kept — the oldest falls off`
-        }
+        sub={shots.length === 0 ? undefined : `${shots.length}/${MAX_SHOTS} — the oldest falls off`}
       />
       {shots.length === 0 ? (
         <div className="menu-empty">

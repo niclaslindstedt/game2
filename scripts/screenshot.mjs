@@ -901,6 +901,26 @@ async function menuUp(page) {
   await page.waitForTimeout(5000);
 }
 
+/** Press a front-door tile by its `data-menu` name. The tiles carry no
+ * description any more, so matching on text would match the page's own
+ * heading a moment later; the attribute is the stable handle. */
+async function tile(page, name) {
+  await page.locator(`[data-menu='${name}']`).first().click();
+  await page.waitForTimeout(300);
+}
+
+/** The campaign's stage grid. CAMPAIGN opens the country list only while
+ * there is more than one country to list (see `campaignEntry` in
+ * main-menu.tsx), so the list step is taken only if it is actually there. */
+async function stageGrid(page) {
+  await tile(page, "campaign");
+  const list = page.locator(".menu-location");
+  if ((await list.count()) > 0) {
+    await list.first().click();
+    await page.waitForTimeout(400);
+  }
+}
+
 /** Playwright's per-click actionability checks outlast the chassis secret's
  * own window while a stage is being built, so the developer drum is
  * dispatched in one go. What is under test here is the menu, not the
@@ -974,9 +994,7 @@ for (const [name, viewport] of [
     viewport,
     async (page) => {
       await menuUp(page);
-      await page.getByText("CAMPAIGN", { exact: false }).first().click();
-      await page.waitForTimeout(300);
-      await page.locator(".menu-location").first().click();
+      await stageGrid(page);
       await page.waitForTimeout(2500);
     },
     { menu: "1" },
@@ -997,10 +1015,7 @@ for (const [name, viewport] of [
     viewport,
     async (page) => {
       await menuUp(page);
-      await page.getByText("CAMPAIGN", { exact: false }).first().click();
-      await page.waitForTimeout(300);
-      await page.locator(".menu-location").first().click();
-      await page.waitForTimeout(600);
+      await stageGrid(page);
       await page.locator(".menu-level-open").first().click();
       // The turntable is a dynamic import that builds its own body: the
       // card is up long before there is a car standing on it.
@@ -1020,7 +1035,7 @@ for (const [name, viewport] of [
     viewport,
     async (page) => {
       await menuUp(page);
-      await page.getByText("ROAM", { exact: false }).first().click();
+      await tile(page, "roam");
       await page.waitForTimeout(14000);
     },
     { menu: "1" },
@@ -1037,8 +1052,7 @@ for (const tab of ["HUD", "AUDIO", "VIDEO", "CONTROLS"]) {
       viewport,
       async (page) => {
         await menuUp(page);
-        await page.getByText("OPTIONS", { exact: false }).first().click();
-        await page.waitForTimeout(300);
+        await tile(page, "options");
         await page.locator(".opt-tab", { hasText: tab }).click();
         await page.waitForTimeout(500);
       },
@@ -1066,12 +1080,12 @@ await capture(
   { width: 1280, height: 720 },
   async (page) => {
     await menuUp(page);
-    await page.getByText("ROAM", { exact: false }).first().click();
+    await tile(page, "roam");
     await page.waitForTimeout(3000);
     await drumChassis(page);
-    await page.locator(".menu-back").click();
+    await page.locator("[data-nav-back]").first().click();
     await page.waitForTimeout(600);
-    await page.locator(".menu-item-dev").click();
+    await page.locator("[data-menu='developer']").click();
     await page.waitForTimeout(400);
   },
   { menu: "1" },
@@ -1336,8 +1350,7 @@ if (only.length === 0 || only.some((f) => "shot-campaign shot-start".includes(f)
   // scene that fails on a fast machine and passes on a slow one.
   await page.goto(`${url}?bot=1&splash=0`, { waitUntil: "load" });
   await page.waitForSelector("canvas.game-canvas");
-  await page.getByText("CAMPAIGN", { exact: false }).first().click();
-  await page.getByText("TAIGA", { exact: false }).first().click();
+  await stageGrid(page);
   await page.getByText("HARD", { exact: true }).first().click();
   await page.screenshot({ path: join(outDir, "shot-campaign-stages.png") });
   console.log("previews/shot-campaign-stages.png");

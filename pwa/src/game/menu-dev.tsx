@@ -79,7 +79,7 @@ export function DebugLogPage({ onBack }: { onBack: () => void }) {
   const [cleared, setCleared] = useState(0);
   return (
     <div className="menu-card menu-card-wide">
-      <button type="button" className="menu-back" onClick={onBack}>
+      <button type="button" className="menu-back" data-nav-back onClick={onBack}>
         ‹ DEVELOPER
       </button>
       <div className="menu-title menu-title-dev">DEBUG LOG</div>
@@ -137,8 +137,8 @@ export function DeveloperPage({
   const allOpen = cleared >= total;
   return (
     <div className="menu-card menu-card-wide">
-      <button type="button" className="menu-back" onClick={onBack}>
-        ‹ MAIN MENU
+      <button type="button" className="menu-back" data-nav-back onClick={onBack}>
+        ‹ MENU
       </button>
       <div className="menu-title menu-title-dev">DEVELOPER</div>
       <div className="menu-sub">

@@ -220,10 +220,14 @@ export function RoamPage({
               header rather than a bar above it: a row that carries two words
               is a row taken off the map, which is the page. The button says
               where it GOES, in the same chrome every other page's does — an
-              arrow on its own is a shorthand only this page speaks. */}
+              arrow on its own is a shorthand only this page speaks.
+
+              `data-nav-back` is what a controller's B button presses — see
+              menu-nav.ts. This page does not use MenuHead, so it has to
+              carry the mark itself; without it B is dead on Roam. */}
           <div className="roam-pane-head">
-            <button type="button" className="menu-back" onClick={onBack}>
-              ‹ MAIN MENU
+            <button type="button" className="menu-back" data-nav-back onClick={onBack}>
+              ‹ MENU
             </button>
             <span className="roam-title">ROAM</span>
             <span className="roam-seed">

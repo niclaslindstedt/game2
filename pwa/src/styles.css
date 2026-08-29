@@ -1779,25 +1779,29 @@ body {
    is made smaller. */
 @media (orientation: landscape) and (max-height: 34rem) {
   .menu-card {
-    gap: 0.55rem;
-    padding: clamp(0.55rem, 2.4vh, 1.5rem) clamp(0.7rem, 2vw, 1.5rem);
+    gap: 0.5rem;
+    padding: clamp(0.5rem, 2.2vh, 1.5rem) clamp(0.7rem, 2vw, 1.5rem);
   }
 }
 
+/* The front door is a BLOCK, not a full-width card: six tiles two abreast
+   want to be square-ish and close together, and a card stretched to the
+   width of a laptop turns them into six letterboxes. */
 .menu-card-root {
+  width: min(24rem, 100%);
   background: rgb(18 48 105 / 62%);
-  gap: 1.1rem;
+  gap: 0.9rem;
 }
 
 .menu-brand {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.1rem;
+  gap: 0.15rem;
 }
 
 .menu-brand-name {
-  font-size: clamp(1.7rem, 7.5vmin, 3rem);
+  font-size: clamp(1.5rem, 6.4vmin, 2.4rem);
   letter-spacing: 0.04em;
   line-height: 0.94;
   text-align: center;
@@ -1816,6 +1820,125 @@ body {
   font-weight: 600;
 }
 
+/* Every mark from menu-glyphs.tsx. It is sized in `em` so a glyph is
+   whatever the row it sits in is: one rule, and a mark that never has to be
+   re-sized when the text around it is. */
+.menu-glyph {
+  flex: none;
+  display: block;
+  width: 1em;
+  height: 1em;
+}
+
+/* ── The front door ──────────────────────────────────────────────────────
+   Six tiles, each a mark and a name. The rows this replaced each carried a
+   sentence explaining the mode, and six explanations is a card that fills a
+   phone — with nothing on it that survives the second visit.
+
+   Two columns is the shape the front door is designed AT: three rows of two
+   on a portrait phone, and the same block on a laptop rather than a column
+   stretched to the card's width. */
+.menu-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.menu-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 4.6rem;
+  font: inherit;
+  font-size: clamp(0.85rem, 3.2vmin, 1.15rem);
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 10%);
+  border: 2px solid rgb(255 255 255 / 40%);
+  border-radius: 0.7rem;
+  padding: 0.7rem 0.5rem;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.menu-tile .menu-glyph {
+  width: 2.1em;
+  height: 2.1em;
+  color: var(--hud-good);
+}
+
+.menu-tile-quiet .menu-glyph {
+  color: rgb(255 255 255 / 60%);
+}
+
+.menu-tile:hover,
+.menu-tile:focus-visible {
+  background: rgb(255 210 62 / 22%);
+  border-color: var(--hud-good);
+}
+
+.menu-tile:hover .menu-glyph,
+.menu-tile:focus-visible .menu-glyph {
+  color: var(--hud-good);
+}
+
+.menu-tile:active {
+  transform: translateY(1px);
+}
+
+.menu-tile-name {
+  line-height: 1;
+}
+
+/* An odd count (the developer tile is out) would leave a hole; the last one
+   takes the whole row instead of sitting beside it. */
+.menu-tiles > .menu-tile:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  min-height: 0;
+  gap: 0.5rem;
+}
+
+.menu-tiles > .menu-tile:last-child:nth-child(odd) .menu-glyph {
+  width: 1.25em;
+  height: 1.25em;
+}
+
+/* A one-line entry with its mark: a page that hangs off another page rather
+   than off the front door (HIGH SCORES under the time trial). */
+.menu-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font: inherit;
+  font-size: clamp(0.8rem, 2.8vmin, 1rem);
+  letter-spacing: 0.1em;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 10%);
+  border: 2px solid rgb(255 255 255 / 40%);
+  border-radius: 0.6rem;
+  padding: 0.5rem 0.8rem;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.menu-line .menu-glyph {
+  color: var(--hud-good);
+  width: 1.2em;
+  height: 1.2em;
+}
+
+.menu-line:hover,
+.menu-line:focus-visible {
+  background: rgb(255 210 62 / 22%);
+  border-color: var(--hud-good);
+}
+
+/* The developer surfaces still describe themselves — they are tools, and a
+   tool nobody can name is a tool nobody uses. Those rows are `.menu-item`. */
 .menu-items {
   display: flex;
   flex-direction: column;
@@ -1866,17 +1989,20 @@ body {
 
 /* A phone held sideways: wide and very short. The root menu is the ONE
    screen that must never scroll — a player who cannot see OPTIONS without
-   dragging the front door has not found the game yet — so the column
-   becomes a 2x2 block and the brand lays its tagline out beside the name
-   instead of under it. Everything sizes off the WIDTH here: `vmin` is the
-   height on this shape, and the height is exactly what is scarce.
+   dragging the front door has not found the game yet — so the two columns
+   become three and the brand lays its tagline out beside the name instead of
+   under it. Everything sizes off the WIDTH here: `vmin` is the height on
+   this shape, and the height is exactly what is scarce.
 
    Written immediately after the rules it overrides. A `@media` block adds
    no specificity, so one placed earlier in this file than its base rule is
    in the stylesheet and does nothing. */
 @media (orientation: landscape) and (max-height: 34rem) {
   .menu-card-root {
-    width: min(46rem, 100%);
+    /* Wide enough to hold the title and its tagline on ONE line: the block
+       of tiles under it is what the width is really for, and a two-line
+       wordmark beside a two-line tagline reads as a squeeze. */
+    width: min(40rem, 100%);
     gap: clamp(0.6rem, 3vh, 1.1rem);
   }
 
@@ -1888,7 +2014,7 @@ body {
   }
 
   .menu-brand-name {
-    font-size: clamp(1.6rem, 4.4vw, 3rem);
+    font-size: clamp(1.35rem, 3.1vw, 2.2rem);
   }
 
   .menu-brand-tag {
@@ -1896,16 +2022,27 @@ body {
     letter-spacing: 0.2em;
   }
 
-  .menu-items {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.5rem;
+  .menu-tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.45rem;
   }
 
-  /* An odd count (the developer entry is out) leaves a hole in the grid;
-     the last one takes the whole row rather than sitting beside it. */
-  .menu-items > .menu-item:last-child:nth-child(odd) {
-    grid-column: 1 / -1;
+  .menu-tile {
+    min-height: 0;
+    font-size: clamp(0.8rem, 1.8vw, 1.05rem);
+    padding: 0.5rem 0.4rem;
+  }
+
+  /* Three across leaves no hole to fill, so the odd-one-out rule that turns
+     the last tile into a row must not fire on this shape. */
+  .menu-tiles > .menu-tile:last-child:nth-child(odd) {
+    grid-column: auto;
+    flex-direction: column;
+  }
+
+  .menu-tiles > .menu-tile:last-child:nth-child(odd) .menu-glyph {
+    width: 2.1em;
+    height: 2.1em;
   }
 
   .menu-item {
@@ -2046,39 +2183,54 @@ body {
   margin-top: 0.2rem;
 }
 
+/* The stage grid. Wide columns rather than narrow ones: a location's six
+   stages want to read as two rows of three at every shape that has the room
+   — the same rhythm a phone held sideways gets — instead of four across and
+   a ragged pair under them. */
 .menu-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
   gap: 0.6rem;
 }
 
-/* Landscape on a phone: narrower boxes so a location's four stages stay on
-   ONE row. A second row of boxes costs more height than the width it saves
-   is worth on a screen this short. */
+/* Portrait: two columns rather than one, so a location's six stages stay
+   countable in a glance. */
+@media (orientation: portrait) {
+  .menu-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Landscape on a phone: six boxes in two rows of three, which is what fits
+   under a head and above the standings on a 390px-tall screen. */
 @media (orientation: landscape) and (max-height: 34rem) {
   .menu-grid {
-    /* Wide enough for a dial's three chips to sit on ONE line: a column that
-     wraps them turns five short dials into fifteen lines of chips, which is
-     the stack this layout exists to get rid of. */
-    grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.45rem;
   }
 }
 
 /* A stage box. The BORDER carries the state — lit and open, grey and shut —
-   because at a glance across four boxes the frame is what the eye counts,
+   because at a glance across six boxes the frame is what the eye counts,
    not the text inside it. The lit one is the menu's yellow: the whole shell
    runs on white frames with a yellow accent, and a third hue for "open"
-   read as a different UI rather than a state of this one. */
+   read as a different UI rather than a state of this one.
+
+   The box is HALF the height it was. The stage blurb and the locked box's
+   reason came off (they are in menu-levels.tsx's `title`/`aria-label` where
+   a reader that needs them can still get at them), and the three results
+   share one wrapping row instead of three stacked lines. That is what puts
+   a location's six stages on a phone held sideways. */
 .menu-level {
   position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
-  min-height: 7.5rem;
+  min-height: 5.4rem;
   font: inherit;
   color: var(--hud-ink);
   border-radius: 0.7rem;
-  padding: 0.65rem 0.75rem;
+  padding: 0.55rem 0.7rem;
   text-align: left;
   text-shadow: none;
 }
@@ -2101,10 +2253,20 @@ body {
 .menu-level-locked {
   align-items: center;
   justify-content: center;
+  gap: 0.3rem;
   text-align: center;
   background: rgb(255 255 255 / 5%);
   border: 3px solid rgb(190 198 210 / 45%);
   color: rgb(224 232 244 / 55%);
+}
+
+/* The number and the shape the stage comes in, on one line above the name:
+   an arrow to a finish line, or a track that returns to its own start. */
+.menu-level-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
 }
 
 .menu-level-no {
@@ -2114,24 +2276,22 @@ body {
   opacity: 0.9;
 }
 
+.menu-level-shape {
+  width: clamp(0.85rem, 2.8vmin, 1.05rem);
+  height: clamp(0.85rem, 2.8vmin, 1.05rem);
+  color: var(--hud-good);
+  opacity: 0.75;
+}
+
 .menu-level-locked .menu-level-no {
   color: inherit;
   opacity: 0.7;
 }
 
 .menu-lock {
-  width: clamp(1.6rem, 6vmin, 2.3rem);
-  height: clamp(1.6rem, 6vmin, 2.3rem);
+  width: clamp(1.5rem, 5.5vmin, 2.1rem);
+  height: clamp(1.5rem, 5.5vmin, 2.1rem);
   color: rgb(214 224 238 / 70%);
-  margin: 0.25rem 0;
-}
-
-.menu-level-hint {
-  font-size: clamp(0.52rem, 1.7vmin, 0.66rem);
-  font-style: normal;
-  font-weight: 500;
-  line-height: 1.25;
-  opacity: 0.8;
 }
 
 .menu-level-name {
@@ -2145,66 +2305,50 @@ body {
   opacity: 0.72;
 }
 
-.menu-level-blurb {
-  font-size: clamp(0.56rem, 1.9vmin, 0.72rem);
-  font-style: normal;
-  font-weight: 500;
-  opacity: 0.8;
-  line-height: 1.25;
+/* What has been got out of this stage: the points it pays the location's
+   table, the best finish, the best time — each behind the mark that says
+   which it is, all on one wrapping row at the bottom of the box. Three
+   stacked lines was three lines of height on every box, driven or not. */
+.menu-level-marks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.1rem 0.55rem;
+  margin-top: auto;
+  padding-top: 0.25rem;
+  font-size: clamp(0.58rem, 2vmin, 0.76rem);
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
 }
 
-.menu-level-best {
-  margin-top: auto;
-  font-size: clamp(0.56rem, 1.9vmin, 0.72rem);
-  letter-spacing: 0.12em;
+.menu-level-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  color: rgb(255 255 255 / 78%);
+}
+
+.menu-level-mark .menu-glyph {
+  width: 1.2em;
+  height: 1.2em;
+  opacity: 0.9;
+}
+
+.menu-level-mark-lit {
   color: var(--hud-good);
 }
 
-/* R30 — what the stage is paying the location's table, at the bottom of the
-   box above the two bests: the points are what the next box is locked to, so
-   they lead. Whichever of the three is FIRST takes the bottom of the box (and
-   the others' `margin-top` with it). */
-.menu-level-points {
-  margin-top: auto;
-  font-size: clamp(0.6rem, 2.1vmin, 0.8rem);
-  letter-spacing: 0.12em;
-  color: rgb(255 255 255 / 72%);
-}
-
-.menu-level-points-win {
-  color: var(--hud-good);
-}
-
-.menu-level-points + .menu-level-place,
-.menu-level-points + .menu-level-best {
-  margin-top: 0;
-  opacity: 0.8;
-}
-
-/* R29 — the best RESULT on the stage, under the points. A campaign box is
-   cleared by beating the field, so the placing is what the box reports and
-   the clock is what you chase once it is. */
-.menu-level-place {
-  margin-top: auto;
-  font-size: clamp(0.6rem, 2.1vmin, 0.8rem);
-  letter-spacing: 0.12em;
-  color: rgb(255 255 255 / 72%);
-}
-
-.menu-level-place-podium {
-  color: var(--hud-good);
-}
-
-.menu-level-place + .menu-level-best {
-  margin-top: 0;
-  opacity: 0.75;
-}
-
-/* Landscape on a phone: four boxes already sit side by side across the wide
+/* Landscape on a phone: six boxes already sit three abreast across the wide
    card, so the box height is pure cost. */
 @media (orientation: landscape) and (max-height: 34rem) {
   .menu-level {
-    min-height: 5.5rem;
+    min-height: 4.2rem;
+    padding: 0.4rem 0.55rem;
+  }
+
+  .menu-lock {
+    width: 1.35rem;
+    height: 1.35rem;
   }
 }
 
@@ -2244,6 +2388,41 @@ body {
   background: var(--hud-good);
   border-color: var(--hud-ink);
   color: var(--hud-shadow);
+}
+
+/* A MODE page's own settings, grouped (heads-up's rivals, mass start and
+   grid size). A column on any screen with the height for one. */
+.menu-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Landscape on a phone: an option row standing on a page (a stage grid's
+   RIVALS) puts its chips on the same line as its label, and a grouped set
+   pairs up two abreast. Three full-width rows under two rows of stage boxes
+   is one row more than a 390px-tall screen holds — the same cut OPTIONS'
+   own rows already take, written here rather than there because the
+   selector is different: these rows are not in an `.opt-list`. */
+@media (orientation: landscape) and (max-height: 34rem) {
+  .menu-card > .menu-row,
+  .menu-settings .menu-row {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.7rem;
+  }
+
+  .menu-card > .menu-row .menu-opts,
+  .menu-settings .menu-row .menu-opts {
+    justify-content: flex-end;
+  }
+
+  .menu-settings {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: center;
+    gap: 0.4rem 0.9rem;
+  }
 }
 
 .menu-start {
@@ -2881,6 +3060,18 @@ a.menu-version:focus-visible {
   opacity: 0.7;
 }
 
+/* Landscape on a phone: a switch standing loose on a MODE page (heads-up's
+   MASS START) loses its hint, the way the gearbox note already does on this
+   shape — the switch still names itself, and the stage boxes above it are
+   what the screen is for. The switches inside OPTIONS keep theirs: a
+   settings page is where a hint is the whole point, and it is a page that
+   may honestly scroll. */
+@media (orientation: landscape) and (max-height: 34rem) {
+  .menu-settings .opt-toggle .opt-toggle-hint {
+    display: none;
+  }
+}
+
 .opt-switch {
   flex: none;
   position: relative;
@@ -3033,17 +3224,7 @@ a.menu-version:focus-visible {
   }
 }
 
-/* Portrait: the stage grid drops to two columns rather than one, so all
-   four boxes stay countable in a glance without scrolling. */
 @media (orientation: portrait) {
-  .menu-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .menu-level {
-    min-height: 6.5rem;
-  }
-
   .opt-keys {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -3932,7 +4113,7 @@ a.menu-version:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  padding: 0.6rem 0.8rem;
+  padding: 0.5rem 0.7rem;
   border: 2px solid rgb(255 255 255 / 30%);
   border-left: 6px solid var(--hud-good);
   border-radius: 0.6rem;
@@ -3941,14 +4122,20 @@ a.menu-version:focus-visible {
 
 .menu-standings-line {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   flex-wrap: wrap;
   gap: 0.3rem 0.7rem;
   font-variant-numeric: tabular-nums;
 }
 
+.menu-standings-line .menu-glyph {
+  width: 1.1em;
+  height: 1.1em;
+  color: var(--hud-good);
+}
+
 .menu-standings-place {
-  font-size: clamp(0.85rem, 3vmin, 1.2rem);
+  font-size: clamp(0.8rem, 2.8vmin, 1.1rem);
   letter-spacing: 0.08em;
 }
 
@@ -3957,7 +4144,7 @@ a.menu-version:focus-visible {
 }
 
 .menu-standings-points {
-  font-size: clamp(0.85rem, 3vmin, 1.2rem);
+  font-size: clamp(0.8rem, 2.8vmin, 1.1rem);
   color: var(--hud-good);
 }
 
@@ -3968,10 +4155,15 @@ a.menu-version:focus-visible {
   opacity: 0.72;
 }
 
+/* The one gate a padlock cannot teach: a country whose stages are all
+   driven still needs its table topped. It rides on the same line as the
+   figures rather than owning a row, and it is only there when it applies. */
 .menu-standings-hint {
+  flex-basis: 100%;
   font-size: clamp(0.55rem, 1.8vmin, 0.72rem);
   letter-spacing: 0.1em;
-  opacity: 0.75;
+  color: var(--hud-good);
+  opacity: 0.85;
 }
 
 .menu-standings-acts {
@@ -3980,14 +4172,27 @@ a.menu-version:focus-visible {
   gap: 0.35rem;
 }
 
+/* Landscape on a phone: the panel's own chrome comes off before anything on
+   it does — six stage boxes and a table on a 390px-tall screen leaves the
+   padding as the only slack there is. */
+@media (orientation: landscape) and (max-height: 34rem) {
+  .menu-standings {
+    gap: 0.3rem;
+    padding: 0.4rem 0.6rem;
+  }
+}
+
 .menu-standings-go {
   border-color: var(--hud-good);
   color: var(--hud-good);
 }
 
 /* A country still behind the table before it: the tile is a wall with the
-   reason written on it, not a button. */
+   reason written on it, not a button. The padlock leads, because it is what
+   the eye needs first — the sentence answers the question it raises. */
 .menu-location-locked {
+  align-items: center;
+  text-align: center;
   cursor: default;
 }
 

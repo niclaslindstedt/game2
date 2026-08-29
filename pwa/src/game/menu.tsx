@@ -282,9 +282,8 @@ export function GearboxRow({
     <div className="menu-gearbox">
       <OptionRow label={label} options={GEARBOX_OPTIONS} value={gearbox} onPick={onGearbox} />
       <div className="opt-note">
-        The manual is the racing set: taller gears and more of the engine reaching the road, worth
-        about 6% more top speed in any car — paid for with a beat of throttle at every shift, and a
-        gear you have to pick yourself. The automatic never fluffs one.
+        The manual is the racing set — about 6% more top speed, paid for with a beat of throttle at
+        every shift.
       </div>
     </div>
   );

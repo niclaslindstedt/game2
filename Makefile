@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim heat record replay track cars liveries field crew items items-list sky audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim heat record replay track cars liveries field crew items items-list sky glyphs audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
 
 build:
 	npm run build
@@ -114,6 +114,12 @@ items-list:
 # Chromium requirements as `screenshots`.
 sky:
 	npm run sky
+
+# Render the menu's glyphs to a contact sheet at the three sizes they are
+# read at (previews/glyphs.png). A mark is judged small — see the header of
+# pwa/src/tools/glyph-preview.tsx.
+glyphs:
+	npm run glyphs
 
 # Build the audio review page: every sound in the bank on a button, both
 # scores under the real sequencer with per-voice mutes, and the continuous

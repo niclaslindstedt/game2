@@ -104,11 +104,17 @@ export function CarSetupPage({
   const best = progress.best[level.id];
   return (
     <div className="menu-card menu-card-wide">
+      {/* The stage's own line lives HERE rather than on the grid it was
+          picked from. Six of them stacked in six boxes is six sentences to
+          read past while choosing a road; one of them, on the card where the
+          road is already chosen and the car is not, is the last thing worth
+          knowing before driving it. The location is not repeated — the way
+          back names it. */}
       <MenuHead
         back={onBack}
         backLabel={BACK_TO[mode] ?? location.name.toUpperCase()}
         title={level.name.toUpperCase()}
-        sub={`${location.name} · ${billing}${best === undefined ? "" : ` · BEST ${formatTime(best)}`}`}
+        sub={`${level.blurb} · ${billing}${best === undefined ? "" : ` · BEST ${formatTime(best)}`}`}
       />
       <div className="car-setup">
         <CarPicker
