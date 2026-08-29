@@ -122,10 +122,21 @@ export type CarState = {
    * rebound. The wheels are always ON the ground (`y`); this is the sprung
    * mass lagging behind them, and it is what a landing, a dip or a bank
    * actually LOOKS like. Renderer readout: the physics never reads it back
-   * into the handling. */
+   * into the handling — see `tyreLoad` for why the grip a landing costs is
+   * NOT taken off this, tempting as that looks. */
   ride: number;
   /** ...and the speed it is travelling at, m/s. */
   rideRate: number;
+  /** How much the car is still SKITTERING after arriving, 0..1 — the
+   * wheels themselves hopping on their own tires, which is a beat of the
+   * car the body-on-springs model above has no way to hold: it has one
+   * vertical mass and the real car has five. A landing writes it, sized by
+   * the descent the springs had to swallow, and it fades out over about
+   * half a second. While it is up the tires are only intermittently on the
+   * ground, so they hold less — which is why a car that lands with any
+   * angle on it, or with the wheel turned, gets away from the driver
+   * instead of tracking straight out of the jump. */
+  settle: number;
   /** Load pitch, rad — the dive under brakes, the squat on the power and
    * the nose-dip a hit throws in, positive lifting the nose. Kept apart
    * from `pitch` (the ground's own attitude) because only the BODY takes
@@ -264,7 +275,13 @@ export type RaceEnv = {
 export type GameEvent =
   | { type: "go" }
   | { type: "takeoff"; vy: number }
-  | { type: "landing"; airTime: number; clean: boolean }
+  /** The wheels arriving. `slam` is the descent the springs had to swallow,
+   * m/s — HOW HARD the car landed, which air time only ever guessed at: a
+   * short hop off a two-metre lip arrives harder than a long floaty flight
+   * that comes down on a slope running away from it. It is what the camera,
+   * the dust and the sound are all sized off, so that a small jump is a
+   * small hit rather than no hit at all. */
+  | { type: "landing"; airTime: number; slam: number; clean: boolean }
   /** Water taken at speed. `speed` is how fast the car went in, m/s;
    * `deep` marks water it will not be driving out of — the entry that
    * starts a drowning, as opposed to a ford crossed on the way past. */

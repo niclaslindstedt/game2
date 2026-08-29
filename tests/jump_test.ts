@@ -140,6 +140,26 @@ describe("the jump", () => {
     expect(state.stats.cleanLandings).toBe(1);
   });
 
+  it("reports how hard the wheels arrived, not just how long they were up", () => {
+    const state = game();
+    driveToLip(state);
+    let landing: GameEvent | undefined;
+    for (let i = 0; i < 120 * 3 && !landing; i++) {
+      landing = step(state, { ...NEUTRAL_INPUT }).find((e) => e.type === "landing");
+    }
+    expect(landing).toBeDefined();
+    if (landing && landing.type === "landing") {
+      // The slam is what the springs had to swallow, and it is what the
+      // camera, the dust and the sound are all sized off — so a flight off
+      // a two-metre lip has to come back with a real number on it rather
+      // than leaving the arrival to be guessed at from the air time.
+      expect(landing.slam).toBeGreaterThan(8);
+    }
+    // ...and the car goes light on it: the wheels hop, and for the next
+    // half second there is less car standing on the road.
+    expect(state.car.settle).toBeGreaterThan(0.5);
+  });
+
   it("midair the nose barely answers — the velocity is committed", () => {
     const state = game();
     driveToLip(state);

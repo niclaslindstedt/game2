@@ -388,7 +388,16 @@ function stepSuspension(spec: CarSpec, car: CarState, jolt: number, longAccel: n
   if (over > 0) {
     const dir = Math.sign(car.ride);
     accel -= dir * over * w * w * S.stopRate;
-    accel -= car.rideRate * S.stopDamp;
+    // The stop's damping is what it takes OUT of the slam, and a rubber
+    // stop takes it out on the way IN. Coming back out it is a spring like
+    // any other and it PUSHES — which is the whole rebound of a landing,
+    // the body being thrown back off its own wheels. Damped equally in both
+    // directions, the car squatted onto its stops and stayed there: every
+    // landing in the game, from a hop off a kerb to a two-metre lip, ended
+    // at the same flat 9 cm of squat and eased quietly back to rest with no
+    // rebound in it at all. That is what "the suspension didn't act" is.
+    const into = car.rideRate * dir > 0;
+    accel -= car.rideRate * S.stopDamp * (into ? 1 : S.stopRelease);
   }
   car.rideRate = clamp(car.rideRate + accel * dt, -S.rateMax, S.rateMax);
   car.ride = clamp(car.ride + car.rideRate * dt, -S.heaveMax, S.heaveMax);
@@ -399,6 +408,24 @@ function stepSuspension(spec: CarSpec, car: CarState, jolt: number, longAccel: n
   // the nose coming back up, not the tail going down next.
   const want = clamp(longAccel * S.pitchPerAccel, -T.attitude.pitchMax, T.attitude.pitchMax);
   car.pitchLoad += (want - car.pitchLoad) * clamp(S.pitchRate * dt, 0, 1);
+}
+
+/** HOW MUCH CAR IS STANDING ON THE ROAD right now, as a multiplier on grip.
+ * A tire is worth the weight on it and nothing else, and a car that has
+ * just arrived is not standing on its tires yet: the wheels hammer on their
+ * own rubber for the better part of a second, and a wheel intermittently in
+ * the air holds intermittently. That is `car.settle`, written by the landing
+ * and sized by how hard it was, and it is what turns a landing into a MOMENT
+ * — a nose a few degrees off line, or a wheel with any lock on it, takes the
+ * car sideways where the same input on the flat would not.
+ *
+ * A wheel hopping is the only thing here, and NOT because the springs would
+ * be the wrong physics — see the tuning for why `car.ride` cannot tell a
+ * landing from an ordinary rutted road. It reads 1 everywhere else, so this
+ * costs a corner nothing. */
+export function tyreLoad(car: CarState): number {
+  const S = T.suspension;
+  return Math.max(S.loadFloor, 1 - S.loadSkitter * car.settle);
 }
 
 export type GroundContext = {
@@ -453,7 +480,17 @@ export function stepGrounded(
   // The surface and the car's own rubber, as one number: the slide's
   // ceiling, the lateral rate and how much torque the driven axle can put
   // down all read it, so the tires are felt in all three.
-  const surfaceGrip = surfaceGripFor(spec, ctx.surface);
+  //
+  // ...times how much of the car is actually STANDING on them, which for
+  // the half second after a landing is not all of it. It multiplies in HERE
+  // rather than inside `surfaceGripFor`, and the reason is who else reads
+  // that: the bot quotes every corner it plans against it, and nobody plans
+  // around a landing — what a car of this kind holds on this surface is a
+  // standing fact, and what THIS car has under it right now is not. From
+  // this one line the slide threshold, the redirect rate, the traction
+  // ceiling and the driven axle's bite all go light together, which is why
+  // a landing unsticks the car instead of playing an animation at it.
+  const surfaceGrip = surfaceGripFor(spec, ctx.surface) * tyreLoad(car);
   const surfaceDrag = T.surfaces.drag[ctx.surface];
   const surfacePower = T.surfaces.power[ctx.surface];
   // Everything the crashes have done, as the multipliers the rest of this
@@ -1033,9 +1070,19 @@ export function stepGrounded(
   // the whole car rides the ground up instead, which is what a bottomed
   // suspension actually does. Landings and impacts arrive as their own
   // velocity steps below and are not capped here.
+  //
+  // Both ways. Uncapping the ground FALLING AWAY reads like the obvious
+  // improvement — nothing is pushing the body over a brow, so why cap it —
+  // but a brow's fall is well inside the cap already: measured on 1.2 m and
+  // 2.6 m crests from 16 to 44 m/s, the body's own travel moved by nothing.
+  // What that half actually lets through is the road's cross-section.
   const groundJolt = car.airborne ? 0 : car.vy - prevVy;
   const joltCap = T.suspension.joltMax * dt;
   stepSuspension(spec, car, clamp(groundJolt, -joltCap, joltCap), (car.u - prevU) / dt);
+  // The hopping dies down with them. Only on the ground: a car back in the
+  // air off its own rebound is still the same landing, and it has nothing
+  // to settle against up there.
+  car.settle = Math.max(0, car.settle - T.suspension.settleFade * dt);
 
   // ── The driven wheels ────────────────────────────────────────────────────
   // How far ahead of the road the engine is spinning them, once the step has
@@ -1215,12 +1262,19 @@ export function stepAirborne(
     // The ground hits back: descent the suspension cannot absorb crushes
     // the underside — or the flank the car came down on (collision.ts).
     const slam = car.u * ctx.slope - car.vy;
+    // ...and the wheels start hopping on their own tires. That is what the
+    // car is doing for the next half second, and until it stops the tires
+    // are only intermittently holding anything (`tyreLoad`). It takes the
+    // HARDEST arrival so far rather than adding: a slam followed by its own
+    // small rebound is ONE landing, and a chassis bounce must not stack its
+    // way into a car with no grip at all.
+    car.settle = Math.max(car.settle, clamp(slam / T.suspension.settleSlam, 0, 1));
     landingDamage(spec, car, slam, events, stats);
     // Pick the road's own vertical speed back up instead of zeroing: land on
     // a brow and the car may be off the ground again next step, and a stale
     // zero there is a bounce where there should be a flight.
     car.vy = car.u * ctx.slope;
-    events.push({ type: "landing", airTime: car.airTime, clean });
+    events.push({ type: "landing", airTime: car.airTime, slam, clean });
     car.airTime = 0;
     // Past what the springs can travel through, the CHASSIS comes back off
     // the ground — a real bounce, small and capped, that lands again a beat
