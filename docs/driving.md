@@ -597,9 +597,17 @@ drawn by the renderer:
 The renderer draws both on a `chassis` group that holds every panel and no
 wheel (`pwa/src/game/car-body.ts`). The three in-car cameras — the cockpit,
 the bonnet and the nose — mount on that body and ride all of it, though what
-the player looks through is the driver's HEAD: a damped spring chasing the
-mount, so the picture lags every jolt the body takes and settles a beat after
-it does, and a hit throws it along the direction the blow came from
+the player looks through is the driver's HEAD: a stiff, well damped neck
+hinged below the eyes, leaned by the LOAD the driver is under rather than by
+where the shell has got to. The brakes throw it toward the nose, the power
+tips it back, a corner leans it out, and the arc it swings on bounds all of
+it — about four centimetres, approached and never reached, whatever the car
+hits. What the head does NOT do is chase the shell's own chatter, and that is
+what makes the view drivable rather than merely accurate: a head moving
+against the shell moves the CABIN, half a metre from the lens, not the road
+twenty metres out, so travel that reads as weight from the bonnet reads as the
+dashboard swimming from the seat. A hit throws the head along the direction
+the blow came from and rings a wave on the gaze that says how hard it was
 (`pwa/src/game/camera-eye.ts`). The cameras close behind share a little of the
 heave so a landing lands in the FRAME too, and the ones flown high above the
 car share none.

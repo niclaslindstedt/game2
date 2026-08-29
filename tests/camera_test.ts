@@ -434,3 +434,111 @@ describe("the road's own cross-section", () => {
     expect(Math.max(...run.camY) - Math.min(...run.camY)).toBeGreaterThan(rise - 0.75);
   });
 });
+
+/** THE HEAD ON THE NECK. The three in-car views are the only ones with the
+ * car's own furniture in frame, which changes what "steady" means: a head
+ * moving against the shell moves the fascia a hand's reach from the lens,
+ * not the road twenty metres out. So what these lock is not how far the
+ * picture travels but what it is ALLOWED to — the arc a neck swings on, the
+ * direction a load throws it, and the fact that none of it is a reading of
+ * the machine's frame rate. */
+const NECK_SETTLE = 1.5;
+const NECK_LOAD = 0.8;
+
+/** Drive dead straight and flat at `u` m/s for a while, then apply `load`
+ * (m/s² along the nose) for the rest of it, and report where the lens ends
+ * up in the car's own axes relative to where it settled before the load. */
+function neckRun(
+  mode: "cockpit" | "hood" | "bumper",
+  frame: number,
+  load: number,
+  kick?: { at: number; strength: number; dir: { x: number; y: number; z: number } },
+): { fwd: number; up: number; side: number; worst: number } {
+  const state = game();
+  const cam = createGameCamera(1600, 900);
+  cam.setMode(mode);
+  cam.skipStartShot();
+  const car = state.car;
+  state.terrain = { ...state.terrain, groundAt: () => car.y, waterAt: () => null };
+  car.heading = 0;
+  car.yawRate = 0;
+  car.u = 34;
+  const at = (): { fwd: number; up: number; side: number } => ({
+    // Heading is pinned at zero, so the car's axes are the world's.
+    fwd: cam.camera.position.z - car.z,
+    up: cam.camera.position.y - car.y,
+    side: cam.camera.position.x - car.x,
+  });
+  // Both halves are counted in SECONDS, not frames: the whole point of one
+  // of these is that two machines running at different rates see the same
+  // drive, and a fixed frame count would hand them different ones.
+  const settle = Math.round(NECK_SETTLE / frame);
+  const frames = settle + Math.round(NECK_LOAD / frame);
+  let datum = at();
+  let worst = 0;
+  for (let f = 0; f < frames; f++) {
+    if (f === settle) datum = at();
+    if (f >= settle) car.u = Math.max(0, car.u + load * frame);
+    if (kick && f === settle + kick.at) cam.kick(kick.strength, kick.dir);
+    car.z += car.u * frame;
+    cam.update(state, frame);
+    if (f >= settle) {
+      const now = at();
+      worst = Math.max(
+        worst,
+        Math.hypot(now.fwd - datum.fwd, now.up - datum.up, now.side - datum.side),
+      );
+    }
+  }
+  const end = at();
+  return {
+    fwd: end.fwd - datum.fwd,
+    up: end.up - datum.up,
+    side: end.side - datum.side,
+    worst,
+  };
+}
+
+describe("the head behind the wheel", () => {
+  it("is thrown toward the nose by the brakes and back by the power", () => {
+    // A driver's own inertia, and the only two directions a straight road
+    // can push them in. The sizes are a tad each — this is a stiff neck in a
+    // harness, not a bobblehead — but the SIGNS are the whole point, and a
+    // model that reads its load off the mount's position instead gets them
+    // from the road speed rather than from the driver and can have both
+    // pointing the same way.
+    const braking = neckRun("cockpit", FRAME, -20, undefined);
+    const power = neckRun("cockpit", FRAME, 6, undefined);
+    expect(braking.fwd).toBeGreaterThan(0.004);
+    expect(power.fwd).toBeLessThan(-0.001);
+  });
+
+  it("never swings further than a neck reaches, whatever it is hit with", () => {
+    // The hardest blow the game can land (`kick` saturates at 0.9) on the
+    // frame after the brakes go on, so the impulse lands on a head already
+    // leaning. `soften` makes the arc a bound that is approached rather than
+    // a wall that is hit, so this holds for anything: there is no input that
+    // buys more picture.
+    for (const mode of ["cockpit", "hood", "bumper"] as const) {
+      const hit = neckRun(mode, FRAME, -20, {
+        at: 1,
+        strength: 0.9,
+        dir: { x: 1, y: 0.15, z: 1 },
+      });
+      expect(hit.worst, mode).toBeLessThan(0.09);
+    }
+  });
+
+  it("lands in the same place on a 144 Hz machine as on a 60 Hz one", () => {
+    // The engine steps at a fixed 120 Hz off an accumulator, so a display
+    // rate 120 does not divide steps some frames twice and some not at all.
+    // Anything the camera reads by differencing the MOUNT alternates between
+    // double speed and a dead stop across those frames and hands the neck
+    // metres a second of motion the car never made — which is why the load
+    // is read off the car's own rates instead. Same drive, same lean.
+    const sixty = neckRun("cockpit", FRAME, -20, undefined);
+    const fast = neckRun("cockpit", 1 / 144, -20, undefined);
+    expect(fast.fwd).toBeGreaterThan(sixty.fwd * 0.75);
+    expect(fast.fwd).toBeLessThan(sixty.fwd * 1.25);
+  });
+});

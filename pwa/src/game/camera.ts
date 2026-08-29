@@ -951,7 +951,10 @@ export function createGameCamera(width: number, height: number): GameCamera {
       camera.updateProjectionMatrix();
       return;
     }
-    if (inCar) fov = eye.update(inCar, state, dt, camera, shake);
+    // The in-car rigs take no rattle: a kick reaches them as the directional
+    // jolt `kick` already handed the neck, and a random offset per frame on
+    // top of that is the cabin jumping about rather than the car being hit.
+    if (inCar) fov = eye.update(inCar, state, dt, camera);
     else if (mode === "drone") updateDrone(state, dt);
     else if (mode === "map") updateMap(state, dt);
     else updateChase(CHASE_RIGS[mode as Exclude<PlayCamera, InCarCamera>], state, dt);
