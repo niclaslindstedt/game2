@@ -979,7 +979,16 @@ export const STAGE_RULES = {
   },
 
   /** The `trees` knob multiplies the solid trunk field's density. */
-  forest: { density: { min: 0.2, max: 2 } },
+  forest: {
+    density: { min: 0.2, max: 2 },
+    /** R32 — what the SOIL decides about a wood. A trunk needs `depth`
+     * metres of cover before a cell is forest at all; from there the stand
+     * thickens with the soil, from `thin` of its density up to full over
+     * `full` more metres. Bare rock keeps its moss and its grass and grows
+     * nothing with a trunk, which is what puts the open ground on the ridges
+     * and the mountain flanks rather than scattering it at random. */
+    rooting: { depth: 0.4, thin: 0.35, full: 1.6 },
+  },
 
   /** Chance the next segment is a turn rather than a straight. */
   turnChance: 0.72,

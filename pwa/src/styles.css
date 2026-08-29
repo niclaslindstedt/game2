@@ -2804,6 +2804,154 @@ a.menu-version:focus-visible {
   cursor: grabbing;
 }
 
+/* ── The developer's map ─────────────────────────────────────────────────
+
+   Blown up to the whole viewport. The pane measures itself and hands its
+   rectangle up (see MapPane), and the renderer scissors the map view into
+   whatever it is told — so making the hole the size of the screen is the
+   whole of "full screen", and nothing in the renderer knows about it. It
+   sits over the roam column rather than replacing it: leaving the page
+   standing underneath is what makes SHRINK a press rather than a reload. */
+.roam-map-full {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  min-height: 0;
+  border: none;
+  border-radius: 0;
+}
+
+/* The pane paints NOTHING — that is the whole design (see above) — so
+   blowing it up to the screen does not by itself hide anything: the car
+   stand and the dials go on showing straight through the map they are
+   supposed to have got out of the way of. They are taken off explicitly.
+   The stage pane's own header stays: the seed stepper is exactly what
+   somebody reading these layers reaches for next. */
+.roam-full .roam-column,
+.roam-full .roam-length {
+  display: none;
+}
+
+/* The layer switch, along the foot of the map it paints. Its own row of
+   buttons is deaf-by-default like the hint (the pane owns the drag), so
+   only the controls themselves take a pointer. */
+.map-tools {
+  position: absolute;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  pointer-events: none;
+  font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+}
+
+.map-tool-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.map-tool-label {
+  color: var(--hud-good);
+  letter-spacing: 0.14em;
+  font-size: clamp(0.55rem, 1.5vmin, 0.68rem);
+  margin-right: 0.2rem;
+}
+
+.map-tool {
+  pointer-events: auto;
+  font: inherit;
+  font-size: clamp(0.55rem, 1.5vmin, 0.68rem);
+  letter-spacing: 0.08em;
+  color: #dff1ff;
+  background: rgb(6 14 30 / 78%);
+  border: 1px solid rgb(159 216 255 / 40%);
+  border-radius: 0.3rem;
+  padding: 0.15rem 0.45rem;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.map-tool:hover,
+.map-tool:focus-visible {
+  border-color: var(--hud-good);
+}
+
+.map-tool-on {
+  color: #0b1830;
+  background: var(--hud-good);
+  border-color: var(--hud-good);
+}
+
+/* The ramp, spelled out: a colour is only a reading if the numbers beside
+   it say what it is worth. */
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.5rem;
+  background: rgb(6 14 30 / 78%);
+  border: 1px solid rgb(159 216 255 / 30%);
+  border-radius: 0.3rem;
+  padding: 0.2rem 0.4rem;
+  align-self: flex-start;
+  color: #dff1ff;
+  font-size: clamp(0.52rem, 1.4vmin, 0.66rem);
+  text-shadow: none;
+}
+
+.map-legend-stop {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.map-legend-stop i {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 0.15rem;
+  border: 1px solid rgb(0 0 0 / 45%);
+}
+
+/* The box in the corner of a full-screen map. It borrows the driving
+   overlay's own boxes (.debug-box and friends) rather than restating them:
+   the two are one instrument pointed at two subjects, and a screenshot of
+   either has to read the same way. */
+.map-debug {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  color: #dff1ff;
+  text-shadow: none;
+}
+
+/* Under the page's own header rather than across it: the way back and the
+   seed stepper stay reachable in full screen, and a box laid over them
+   would hide the two controls this view is actually driven from. */
+.map-debug-boxes {
+  position: absolute;
+  top: calc(max(0.5rem, env(safe-area-inset-top)) + 2.6rem);
+  left: max(0.5rem, env(safe-area-inset-left));
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: min(26rem, 56vw);
+  max-height: calc(100% - 11rem);
+  overflow: hidden;
+}
+
+/* Clear of the layer switch along the bottom, which is the one thing on
+   this page a pointer has to be able to reach. Written through `.map-debug`
+   so it outranks the driving overlay's own `.debug-repro`, which sits later
+   in this file and pins the strip to the foot of the screen. */
+.map-debug .debug-repro {
+  bottom: 4.6rem;
+  pointer-events: auto;
+}
+
 .roam-seed {
   display: flex;
   align-items: center;

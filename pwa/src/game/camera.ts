@@ -23,7 +23,9 @@
 //   drone — high overhead, trailing and slowly circling: the menu's living
 //           backdrop, where a bot is driving and nobody is watching the apex.
 //   map   — the whole stage framed from the sky, turning: the Roam page's
-//           look at what a seed actually builds.
+//           look at what a seed actually builds. Its own rig, in
+//           camera-map.ts — it frames a FOOTPRINT rather than following a
+//           body, so it shares nothing with the chase rigs but the lens.
 //
 // The five outside cameras are the SAME rig with different proportions —
 // one table of numbers (CHASE_RIGS), one update function — so an angle is a
@@ -75,8 +77,8 @@ import {
   type FreeFlyPose,
   type FreeFlyRig,
 } from "./camera-free.ts";
+import { createMapCamera, type MapPose } from "./camera-map.ts";
 import { createStartCamera } from "./camera-start.ts";
-import { ISLAND_MARGIN } from "./map-island.ts";
 import { DEFAULT_SETTINGS, PLAY_CAMERAS, type PlayCamera } from "./settings.ts";
 
 /** `free` is god mode: the developer tool that takes the lens off the car
@@ -98,41 +100,6 @@ const IN_CAR: InCarCamera[] = ["cockpit", "hood", "bumper"];
  * other, and the per-rig `jolt` scales it again. */
 const JOLT_PER_KICK = 5;
 
-/** The map view's design fov, deg — tight enough that the stage reads as a
- * model on a table rather than a fisheyed globe. */
-const MAP_FOV = 42;
-/** How far above the horizon the map camera sits by default, radians (~57°).
- * Steeper flattens the hills and lakeshores into a paint job and the map
- * stops being worth looking at; shallower and the far half of the stage
- * starts hiding behind the near ridges. The player can tilt away from it —
- * see `nudgeMap` — and these are the ends of that travel: never overhead,
- * where relief disappears, and never so low that the stage is a strip of
- * land seen edge-on. */
-const MAP_PITCH = 1.0;
-const MAP_PITCH_MIN = 0.16;
-const MAP_PITCH_MAX = 1.45;
-/** How close the map view can be pulled in, as a fraction of the distance
- * that frames the whole stage. A third of the way in is a valley filling the
- * pane; closer than that and there is no map left to read. */
-const MAP_ZOOM_MIN = 0.3;
-const MAP_ZOOM_MAX = 1;
-/** How long the map holds still after the player last touched it, s, before
- * the slow turn picks up again from wherever they left it. */
-const MAP_HOLD = 4;
-/** Vertical slack around the framed footprint, m — hills, trees and gates
- * stand above the ground plane the fit is solved in, and the near and far
- * planes are cut from that footprint (see updateMap). */
-const MAP_RELIEF = 140;
-/** Landscape kept around the stage's bounds, meters. The map view cuts the
- * world to the route dilated by `ISLAND_MARGIN` (map-island.ts), so that IS
- * what there is to frame — anything further out has been clipped away. A
- * little over, so the coastline is not flush with the frame. */
-const MAP_MARGIN = ISLAND_MARGIN * 1.08;
-/** Azimuth rate, rad/s — a full turn every ~70 s. */
-const MAP_SPIN = 0.09;
-/** How far short of the map's centre the view aims, as a fraction of the
- * standoff — the correction a pitched frustum needs (see updateMap). */
-const MAP_LEAN = 0.06;
 /** How far to the side the drone flies, m. The menu's cards sit in the
  * middle of the screen, so a drone parked squarely behind the car puts the
  * one thing worth watching underneath them. Offsetting the CAMERA walks the
@@ -547,18 +514,23 @@ const FINISH = {
   aimUp: 0.7,
 };
 
+export type { MapPose };
+
 export type GameCamera = {
   camera: THREE.PerspectiveCamera;
   mode: () => CameraMode;
-  /** The map view's standoff distance, m (0 until it has framed a stage). */
+  /** THE MAP VIEW (camera-map.ts): the whole stage from the sky, and the
+   * handles the Roam page steers it by — turn, tilt, zoom, pan, and the
+   * framing a link can park it on. Exposed one method at a time rather than
+   * as the rig itself, so the app talks to ONE camera whatever mode is up. */
   mapRange: () => number;
   setMode: (mode: CameraMode) => void;
-  /** Turn, tilt and zoom the map view by hand: azimuth and pitch in radians,
-   * zoom as a MULTIPLIER on the standoff (below 1 pulls in). The slow turn
-   * holds for `MAP_HOLD` after every nudge and then picks up from there. */
   nudgeMap: (dAz: number, dPitch: number, zoomBy: number) => void;
-  /** Put the map back on its framing: whole stage, default tilt. */
+  panMap: (dxFrac: number, dyFrac: number) => void;
   resetMap: () => void;
+  placeMap: (pose: Partial<MapPose>) => void;
+  holdMap: (held: boolean) => void;
+  mapPose: () => MapPose;
   /** Advance to the next PLAYABLE mode; a no-op read while overhead. */
   cycle: () => CameraMode;
   /** God mode's rig, and the channel its controls write into. The move is
@@ -626,14 +598,12 @@ export function createGameCamera(width: number, height: number): GameCamera {
    * that stands over the car is built from, with the road's own SURFACE
    * taken out of it. */
   const groundSlack = createSlack(SLACK.ground);
-  /** Seconds the camera has been alive — the drone's circling and the map
-   * view's azimuth both walk off it, so neither depends on frame rate. */
+  /** Seconds the camera has been alive — the drone's circling walks off it,
+   * so it does not depend on frame rate. */
   let orbit = 0;
-  /** How far the map view stands off the stage to FRAME it, m — the renderer
-   * hangs the fog off it so the built ground always dissolves before its
-   * edge. Zoom moves the camera, never this: fog that closed in as the
-   * player leaned in would grey out the thing they leaned in to see. */
-  let mapRange = 0;
+  /** THE MAP VIEW, as its own rig — it shares nothing with the chase
+   * cameras but the lens (camera-map.ts). */
+  const map = createMapCamera();
   /** The three in-car views, and the player's own seat and lens settings —
    * one rig with a head on it (camera-eye.ts). */
   const eye = createEyeCamera();
@@ -643,15 +613,8 @@ export function createGameCamera(width: number, height: number): GameCamera {
    * the camera back in the player's hands. */
   let planted: { x: number; y: number; z: number; back: THREE.Vector3 } | null = null;
   const aim = new THREE.Vector3();
-  /** Where the map is being looked at from: the azimuth the turn has walked
-   * to, the tilt, and how far in it is zoomed (1 frames the whole stage). */
-  let mapAz = 0;
-  let mapPitch = MAP_PITCH;
-  let mapZoom = 1;
   const free = createFreeFly();
   const freeMove: FreeFlyMove = { ...NEUTRAL_MOVE };
-  /** Seconds since the player last moved the map themselves. */
-  let mapHeld = MAP_HOLD;
 
   /** The highest thing under the camera's footprint — ground or water,
    * whichever is nearer the lens — over a square of FLOOR.span about the
@@ -815,62 +778,6 @@ export function createGameCamera(width: number, height: number): GameCamera {
     );
   };
 
-  /** The whole stage from the sky, turning: frame the built landscape and
-   * walk the azimuth around it. The distance is solved from the camera's
-   * ACTUAL half-angles after the hor+ correction, so the map fills its pane
-   * at any shape of pane. */
-  const updateMap = (state: GameState, dt: number): void => {
-    mapHeld += dt;
-    // The turn is the page's idle state, not a mode: a drag interrupts it and
-    // it picks up again from wherever the drag finished, so nothing ever
-    // snaps back to a framing the player did not choose.
-    if (mapHeld >= MAP_HOLD) mapAz += MAP_SPIN * dt;
-    const b = state.track.bounds;
-    const cx = (b.minX + b.maxX) / 2;
-    const cz = (b.minZ + b.maxZ) / 2;
-    fov = MAP_FOV;
-    const vHalf = (verticalFovFor(MAP_FOV, camera.aspect) * Math.PI) / 360;
-    const hHalf = Math.atan(Math.tan(vHalf) * camera.aspect);
-    // The island is the route dilated by a margin, so what has to fit is a
-    // circle on the bounds' own DIAGONAL — not on its longer side. Fitting
-    // the side instead runs the two nearest corners of a squarish stage off
-    // the bottom of the pane, which is exactly where the start line tends to
-    // be.
-    const radius = Math.max(100, Math.hypot(b.maxX - b.minX, b.maxZ - b.minZ) / 2) + MAP_MARGIN;
-    // Fit BOTH axes, and only the depth axis is foreshortened. The map lies
-    // in the ground plane and the camera looks down it at MAP_PITCH, so what
-    // the pane must hold vertically is the footprint's depth SQUASHED by
-    // sin(pitch). Fitting the raw span to the vertical angle instead — as a
-    // fit that ignored the pitch would — pushes the camera a fifth too far
-    // out and leaves the map floating in a paneful of sky.
-    mapRange = Math.max((radius * Math.sin(mapPitch)) / Math.tan(vHalf), radius / Math.tan(hHalf));
-    const range = mapRange * mapZoom;
-    const az = mapAz;
-    const ground = Math.cos(mapPitch) * range;
-    camera.position.set(
-      cx + Math.sin(az) * ground,
-      Math.sin(mapPitch) * range,
-      cz + Math.cos(az) * ground,
-    );
-    // Aimed a little SHORT of the centre, on the camera's own side. The fit
-    // above is symmetric in ANGLE, and a pitched frustum spends more of its
-    // vertical angle on the near half of the ground than on the far one — so
-    // an aim on the exact middle runs the nearest coast off the bottom of the
-    // pane while leaving empty sky at the top.
-    const lean = range * MAP_LEAN;
-    camera.lookAt(cx + Math.sin(az) * lean, 0, cz + Math.cos(az) * lean);
-    // The frustum is cut to the footprint it is actually looking at. A stage
-    // is kilometres across, and a driving near plane a quarter of a metre out
-    // under a far plane that distant leaves the depth buffer barely a metre
-    // of resolution out where the map is — which is a lake and the lakebed
-    // under it swapping places every time the view turns. Everything drawn
-    // lies within `reach` of the centre, so those two distances ARE the
-    // planes, and the buffer spends its whole range on the map.
-    const reach = radius + MAP_RELIEF;
-    camera.near = Math.max(1, range - reach);
-    camera.far = range + reach;
-  };
-
   /**
    * The flying finish: the camera stops where it is and watches the car go.
    *
@@ -925,7 +832,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
     const watching = state.phase === "rollout" || state.phase === "finished";
     const inCar = !watching && IN_CAR.includes(mode as InCarCamera) ? (mode as InCarCamera) : null;
     // The map view solves BOTH of its planes from the stage it is framing
-    // (see updateMap); every other camera stands in the world and takes the
+    // (camera-map.ts); every other camera stands in the world and takes the
     // driving pair. The finish camera is standing on the ground outside the
     // car whichever view it planted from, so it takes the outside near plane
     // even when the player was behind the wheel a moment ago.
@@ -956,7 +863,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
     // top of that is the cabin jumping about rather than the car being hit.
     if (inCar) fov = eye.update(inCar, state, dt, camera);
     else if (mode === "drone") updateDrone(state, dt);
-    else if (mode === "map") updateMap(state, dt);
+    else if (mode === "map") fov = map.update(camera, state, dt);
     else updateChase(CHASE_RIGS[mode as Exclude<PlayCamera, InCarCamera>], state, dt);
     // The establishing shot rides OVER the driving camera rather than
     // instead of it: the rig has just written the pose the player will be
@@ -975,7 +882,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
   return {
     camera,
     mode: () => mode,
-    mapRange: () => mapRange,
+    mapRange: map.range,
     free,
     freeMove,
     pose: () => poseOf(camera),
@@ -986,17 +893,12 @@ export function createGameCamera(width: number, height: number): GameCamera {
       if (next === "free" && mode !== "free") free.takeOver(camera);
       mode = next;
     },
-    nudgeMap: (dAz, dPitch, zoomBy) => {
-      mapHeld = 0;
-      mapAz += dAz;
-      mapPitch = clamp(mapPitch + dPitch, MAP_PITCH_MIN, MAP_PITCH_MAX);
-      mapZoom = clamp(mapZoom * zoomBy, MAP_ZOOM_MIN, MAP_ZOOM_MAX);
-    },
-    resetMap: () => {
-      mapHeld = 0;
-      mapPitch = MAP_PITCH;
-      mapZoom = 1;
-    },
+    nudgeMap: map.nudge,
+    panMap: map.pan,
+    resetMap: map.reset,
+    placeMap: map.place,
+    holdMap: map.hold,
+    mapPose: map.pose,
     skipStartShot: startShot.skip,
     resetStartShot: startShot.reset,
     cycle: () => {
