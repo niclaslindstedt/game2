@@ -100,12 +100,22 @@ type TunedKnob =
  * five together. What the rest buy is the difference between crews on the
  * same budget — which is the half of the model the player actually meets. */
 const AXIS_KNOBS: { axis: SkillAxis; knob: TunedKnob; novice: number; ace: number }[] = [
-  // ±20%. The corner-speed plan is sqrt(latCeiling · latFraction / κ), so
-  // this is most of the difference between a crew that arrives and one that
-  // has already gone. Quoted against the TRACTION CEILING (`game/limits.ts`)
-  // — what the tires deliver — rather than against `gripAccel`, which is
-  // where the slide starts easing in and is `1 / latCeiling` of it.
-  { axis: "commitment", knob: "latFraction", novice: 0.24, ace: 0.61 },
+  // The corner-speed plan is sqrt(latCeiling · latFraction / κ), so this is
+  // most of the difference between a crew that arrives and one that has
+  // already gone. Quoted against the TRACTION CEILING (`game/limits.ts`) —
+  // what the tires deliver — rather than against `gripAccel`, which is where
+  // the slide starts easing in and is `1 / latCeiling` of it.
+  //
+  // The ace end is the ceiling ITSELF, and that is the whole difference
+  // between a fast field and a polite one. A crew that plans under it drives
+  // a grip line and arrives with something in hand; the best crew in the
+  // game plans AT it and spends what is left on the slide, which is what a
+  // rally driver is doing. It only measures faster than planning under it
+  // now that the pedals are pedals (`bot.ts`): with a throttle that snapped
+  // between the floor and nothing, a car planned at the limit spent every
+  // corner answering the pedal instead of the road, and the extra commitment
+  // went off the outside of the road rather than onto the clock.
+  { axis: "commitment", knob: "latFraction", novice: 0.24, ace: 1.0 },
   // ±5%: a novice brakes down to the geometric cap and drives round it, an
   // ace arrives over it and lets the slide scrub the rest…
   { axis: "attack", knob: "hotEntry", novice: 0, ace: 5 },
@@ -116,8 +126,11 @@ const AXIS_KNOBS: { axis: SkillAxis; knob: TunedKnob; novice: number; ace: numbe
   // the wheel all the way round, an ace is already looking at the exit and
   // the car takes the shorter line for free.
   { axis: "vision", knob: "lookahead", novice: 0.34, ace: 1.2 },
-  // ±10%. Below about 1.6 the wheel is not answering the road any more.
-  { axis: "hands", knob: "steerGain", novice: 0.8, ace: 2.4 },
+  // Below about 1.6 the wheel is not answering the road any more; past
+  // about 4 it answers the road's every ripple and the car saws itself off
+  // it — swept over eight seeds and all three cars, 3.2 is the top of the
+  // useful range rather than a round number.
+  { axis: "hands", knob: "steerGain", novice: 0.8, ace: 3.2 },
   // ±14% together. Nerve is how LITTLE they brake: the margin they will run
   // over their own plan before the pedal is touched, and how much of the
   // car's braking that plan trusts it will get if it is. On gravel the
@@ -153,9 +166,11 @@ export function profileFor(skill: BotSkill): BotProfile {
  * field gets FASTER as the difficulty climbs by more than their plan alone:
  * a hard field is a field driving its own gearboxes.
  *
- * Set where the ladder READS: nobody on easy, the two crews who bought
- * hands on medium, and six of the fourteen on hard. */
-export const MANUAL_HANDS = 5.5;
+ * Set where the ladder READS: nobody on easy, the three crews who bought
+ * hands on medium, and six of the fourteen on hard. It moves with the
+ * budgets — it is a point on the same scale, so a field given more points to
+ * spend puts more hands on the lever unless this comes up with them. */
+export const MANUAL_HANDS = 8;
 
 /** Which box a crew drives, from what they are worth. */
 export function gearboxFor(skill: BotSkill): GearboxMode {
@@ -208,8 +223,17 @@ export function spend(budget: number, weights: BotSkill): BotSkill {
  * The bands overlap on purpose: the quickest easy crew is about as good as
  * the slowest medium one, which is what makes stepping up a difficulty feel
  * like the field closing in rather than a different game. `RALLY_BOT` — the
- * profile the repo's sim tables are measured with — is worth about 44
- * points, which puts it at the head of MEDIUM and in the middle of HARD. */
+ * profile the repo's sim tables are measured with — is worth about 30
+ * points, which puts it at the tail of MEDIUM and below the whole of HARD.
+ *
+ * WHAT THE NUMBERS ARE SET AGAINST, because a budget is meaningless on its
+ * own: a recorded human drive, replayed against each field (`make replay`,
+ * and the `bot-improvement` skill). The field used to finish a minute and a
+ * half behind a decent lap at HARD, which is not a difficulty — it is the
+ * player alone on the road with a timing screen. Set so that on the stage
+ * that tape was cut on, HARD arrives with the leader on the same second as
+ * a decent drive, MEDIUM about ten behind it, and EASY far enough back to
+ * be a win and near enough to be a race. */
 export type Difficulty = "easy" | "medium" | "hard";
 
 /** How a difficulty's field behaves AROUND OTHER CARS, as the band the
@@ -240,9 +264,9 @@ export const DIFFICULTIES: Record<
   Difficulty,
   { label: string; budget: number; spread: number; aggression: TemperBand }
 > = {
-  easy: { label: "EASY", budget: 11, spread: 15, aggression: { calm: 0, wild: 0.5 } },
-  medium: { label: "MEDIUM", budget: 19, spread: 17, aggression: { calm: 0.1, wild: 0.72 } },
-  hard: { label: "HARD", budget: 28, spread: 16, aggression: { calm: 0.25, wild: 1 } },
+  easy: { label: "EASY", budget: 27, spread: 18, aggression: { calm: 0, wild: 0.5 } },
+  medium: { label: "MEDIUM", budget: 35, spread: 18, aggression: { calm: 0.1, wild: 0.72 } },
+  hard: { label: "HARD", budget: 42, spread: 16, aggression: { calm: 0.25, wild: 1 } },
 };
 
 export const DIFFICULTY_IDS: Difficulty[] = ["easy", "medium", "hard"];

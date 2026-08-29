@@ -337,13 +337,25 @@ describe("the field on the road", () => {
     expect(went(field.runs[last], last)).toBe(false);
     // …and in start order: an earlier number has had longer, so it is
     // further down the stage (or already home).
+    //
+    // Unless it threw that head start away. A crew that has been off in the
+    // scenery has lost more than an interval to it, and the car that left
+    // ten seconds later is legitimately past them — that is a rally, not a
+    // broken start. So the claim is made of the crews still having a clean
+    // run of it, which is the claim the head start actually makes.
+    const clean = (run: (typeof field.runs)[number]): boolean =>
+      run.state.stats.offRoadTime < START_INTERVAL && run.state.stats.respawns === 0;
     const inOrder = [...field.runs].sort((a, b) => a.entry.number - b.entry.number);
+    let compared = 0;
     for (let i = 1; i < inOrder.length; i++) {
       const ahead = inOrder[i - 1];
       const behind = inOrder[i];
-      if (ahead.done || behind.done) continue;
+      if (ahead.done || behind.done || !clean(ahead) || !clean(behind)) continue;
       expect(ahead.state.progressS).toBeGreaterThan(behind.state.progressS);
+      compared += 1;
     }
+    // …and the exemption above has not quietly eaten the whole assertion.
+    expect(compared).toBeGreaterThan(0);
   });
 
   it("pushes the whole field on when the player skips the shot", () => {
@@ -464,13 +476,19 @@ describe("the field on the road", () => {
     });
     // On the line, behind everybody: the back row is the back of the field.
     expect(livePlace(field, player)).toBe(field.runs.length + 1);
-    for (let i = 0; i < 120 * 40; i++) {
+    for (let i = 0; i < 120 * 25; i++) {
       stepField(field, player);
       step(player, botInput(player));
     }
     // Mid-stage, with nobody through a split board yet, the place is the
     // count of the cars actually up the road — which is what a rally start
     // cannot answer and this one can.
+    //
+    // The window is stated rather than assumed: the point of the assertion
+    // below is the case where NOBODY is home, and a field quick enough to
+    // have finished a short stage by now would be answering a different
+    // question (the one the `home` case underneath asks on purpose).
+    expect(field.runs.every((run) => run.time === null)).toBe(true);
     const ahead = field.runs.filter(
       (run) => run.state.progressS > player.progressS && run.time === null,
     ).length;
