@@ -34,6 +34,13 @@ make hooks        # install pre-commit + commit-msg hooks
 
 **Verify with `make test` / `make lint` — never a bare `npx vitest run` habit**: the Make targets are the definition of green that CI enforces.
 
+## How work is done here
+
+Two rules that apply to every task in this repo, before any subject skill has a say. Both are the `write-code` skill's, restated here because a session that gets them wrong gets them wrong from its first tool call:
+
+- **Change files with the file tools — Read, then Edit or Write. Never through the shell.** No `sed -i`, no `python3 - <<'PY'`, no `cat > file <<'EOF'`. A shell rewrite hides the actual change behind a script, and this repo's prose comments are full of `$`, backticks, em dashes and backslashes that a heredoc quietly eats. The shell stays the right tool for READING (`grep`, `wc -l`, `git show`) and for running the checks.
+- **Lint, typecheck and format ONCE, at the gate — not after every edit.** `make fmt` / `make lint` / `make test` are the commit's gate (the `commit` skill owns the split). Re-running them between one edit and the next re-checks code nobody touched and tells you nothing; batch the whole coherent change, then check it. Mid-loop, if a specific answer is genuinely needed, check only the files you touched (`npx eslint <paths>`, `npx tsc --noEmit -p pwa/tsconfig.json`) — never a whole-repo pass, and never `prettier`, whose every finding `make fmt` fixes at the end for free.
+
 ## The iteration workflow: simulate, screenshot, look
 
 This project is tuned by measuring, not guessing:
@@ -106,7 +113,9 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | Anything HEARD (a hit, a landing, a menu click)             | `pwa/src/game/audio/bank.ts` (+ a rung in `route.ts`) — the `sound-effects` skill                                                |
 | A continuous sound (engine, tyres, wind, the slide)         | `engine-bed.ts` / `road-grain.ts` in `pwa/src/game/audio/`                                                                       |
 | A piece of MUSIC                                            | `pwa/src/game/audio/scores/` — the `soundtrack` skill                                                                            |
-| HUD / touch controls                                        | `pwa/src/game/hud.tsx` + `pwa/src/styles.css` (a thumb zone's grip on a finger: `thumb-guard.ts`)                                |
+| HUD readouts (dials, boards, calls)                         | `pwa/src/game/hud.tsx` + `pwa/src/styles.css`                                                                                    |
+| The TOUCH controls — the wheel and the pedal thumb zones    | `pwa/src/game/hud-touch.tsx`; a zone's grip on a finger is `thumb-guard.ts`, what a drag MEANS is `pedal-gesture.ts`             |
+| Which gears a thumb flick may take, and why a key may not   | `pwa/src/game/shift-window.ts` — DOM-free, and the shift light reads off it too                                                  |
 | Input mapping                                               | `pwa/src/game/input.ts` (bindings in `settings.ts`)                                                                              |
 | A CONTROLLER: its sticks, its triggers, what its buttons do | `pwa/src/game/gamepad.ts` reads a polled pad (DOM-free); `input.ts` does the polling, bindings in `settings.ts`                  |
 | Walking a MENU on a controller                              | `pwa/src/game/menu-nav.ts` (the cards, and `data-nav-back`) over `menu-cursor.ts` (where the cursor goes — DOM-free)             |

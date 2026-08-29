@@ -13,6 +13,10 @@
 // willing to go sideways — so the roster's own spread is the scale, and
 // `BAR_FLOOR` keeps the worst car's bar a bar rather than an empty slot.
 //
+// The roster is every car through EITHER GEARBOX, so the transmission the
+// player is choosing under the sheet moves the bars it is worth something
+// on as well as the figures above them.
+//
 // DOM-free: it is imported by a test, and the root test project has no DOM
 // lib in it.
 
@@ -68,16 +72,26 @@ function gripOn(spec: CarSpec, surface: "sealed" | "loose"): number {
   return spec.gripAccel * spec.tyres[surface];
 }
 
-/** The axes a car is billed on, each a function of the catalog row. Order
- * is the order they are drawn in: what the car DOES down the road first,
- * then what it does in a corner. */
-// The gearbox is deliberately absent: both boxes scale every car by the
-// same factors, so a bar drawn through either one lands in the same place.
-// The bars answer WHICH CAR, and the facts above them answer which box.
-const AXES: { key: string; label: string; of: (spec: CarSpec) => number }[] = [
+/** Every box a car can be handed, which is the OTHER axis the bars are
+ * scaled across (see `carBars`). */
+const GEARBOXES: GearboxMode[] = ["auto", "manual"];
+
+/** The axes a car is billed on, each a function of the catalog row and the
+ * box it is driven through. Order is the order they are drawn in: what the
+ * car DOES down the road first, then what it does in a corner.
+ *
+ * Most of them ignore the box, because a transmission only decides the
+ * gearing and how much of the engine survives the trip to the road: the
+ * tires, the brakes and the chassis are the car's whichever box is bolted
+ * behind the engine. */
+const AXES: {
+  key: string;
+  label: string;
+  of: (spec: CarSpec, gearbox: GearboxMode) => number;
+}[] = [
   // Quicker is better, so the bar reads the reciprocal of the time.
-  { key: "accel", label: "ACCELERATION", of: (spec) => 1 / sprintTime(spec, "auto") },
-  { key: "top", label: "TOP SPEED", of: (spec) => topSpeedKph(spec, "auto") },
+  { key: "accel", label: "ACCELERATION", of: (spec, gearbox) => 1 / sprintTime(spec, gearbox) },
+  { key: "top", label: "TOP SPEED", of: topSpeedKph },
   { key: "traction", label: "TRACTION", of: (spec) => spec.traction },
   { key: "brake", label: "BRAKING", of: (spec) => spec.brake },
   { key: "sealed", label: "TARMAC GRIP", of: (spec) => gripOn(spec, "sealed") },
@@ -96,15 +110,25 @@ export type CarBar = {
   value: number;
 };
 
-/** Where every axis of one car sits against the rest of the roster. */
-export function carBars(spec: CarSpec): CarBar[] {
+/** Where every axis of one car, through one box, sits against the rest of
+ * the roster.
+ *
+ * The scale spans every car through EVERY box rather than through the one
+ * being asked about. That is what makes the transmission row visible up
+ * here as well as in the figures: the manual's taller set is worth six
+ * percent of top speed, and a scale rebuilt per box would renormalize that
+ * away and draw the same bar for both. So the roster's best car in the
+ * racing set is the full bar, and picking the automatic visibly gives some
+ * of it back — while the sprint, charged for every shift the driver now has
+ * to take, moves the other way. */
+export function carBars(spec: CarSpec, gearbox: GearboxMode): CarBar[] {
   return AXES.map((axis) => {
-    const all = CARS.map(axis.of);
+    const all = CARS.flatMap((car) => GEARBOXES.map((box) => axis.of(car, box)));
     const low = Math.min(...all);
     const high = Math.max(...all);
     // A roster with one car, or an axis every car shares, is a full bar
     // rather than a division by zero.
-    const share = high > low ? (axis.of(spec) - low) / (high - low) : 1;
+    const share = high > low ? (axis.of(spec, gearbox) - low) / (high - low) : 1;
     return { key: axis.key, label: axis.label, value: BAR_FLOOR + (1 - BAR_FLOOR) * share };
   });
 }

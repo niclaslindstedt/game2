@@ -26,9 +26,9 @@ import type { Settings } from "./settings.ts";
  * of each other on an absolute scale are three identical full bars, which
  * is a picture of nothing.
  *
- * The FIGURES are quoted through the box the transmission row below is set
- * to, so choosing the manual visibly moves the top speed and the sprint on
- * the same card the choice is made on. */
+ * Everything on it — the figures AND the bars — is quoted through the box
+ * the transmission row below is set to, so choosing the manual visibly
+ * lengthens the top speed on the same card the choice is made on. */
 function CarSpecPanel({ spec, gearbox }: { spec: CarSpec; gearbox: GearboxMode }) {
   return (
     <div className="car-spec">
@@ -42,7 +42,7 @@ function CarSpecPanel({ spec, gearbox }: { spec: CarSpec; gearbox: GearboxMode }
         ))}
       </div>
       <div className="car-spec-bars">
-        {carBars(spec).map((bar) => (
+        {carBars(spec, gearbox).map((bar) => (
           <div key={bar.key} className="car-spec-bar">
             <span className="car-spec-bar-label">{bar.label}</span>
             <span className="car-spec-bar-track">
@@ -54,7 +54,9 @@ function CarSpecPanel({ spec, gearbox }: { spec: CarSpec; gearbox: GearboxMode }
           </div>
         ))}
       </div>
-      <div className="car-spec-note">Bars compare this car with the rest of the roster.</div>
+      <div className="car-spec-note">
+        Bars compare this car with the rest of the roster, in either gearbox.
+      </div>
     </div>
   );
 }

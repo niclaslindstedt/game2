@@ -12,9 +12,10 @@ sweep that catches all of it at once — **look at every surface, judge it, fix
 it, look again**. Never evaluate UI from code alone; the failures (clipping,
 overlap, illegibility over a bright sky) only show up in pixels.
 
-The UI surface today is small — `pwa/src/game/hud.tsx` (the HUD is also the
-touch control surface), `pwa/src/styles.css`, and the framework's update toast
-— which is exactly why a sweep is cheap enough to run on every UI change.
+The UI surface today is small — `pwa/src/game/hud.tsx` (the readouts),
+`hud-touch.tsx` (the thumb zones, which are the phone's only controls),
+`pwa/src/styles.css`, and the framework's update toast — which is exactly why a
+sweep is cheap enough to run on every UI change.
 
 **Before starting, read this skill's lessons** —
 `node scripts/skill-lessons.mjs ui-review --list`, then the ones this task

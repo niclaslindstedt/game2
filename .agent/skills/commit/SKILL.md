@@ -82,6 +82,12 @@ ITERATING, check only what you touched — the sub-second table lives in the
 `write-code` skill. A whole-repo check is the GATE on the commit, not a step on
 the way to it.
 
+**`make fmt` in particular runs HERE and nowhere else.** Formatting carries no
+information about whether the code is right, so a session that runs it after
+every edit spends minutes re-formatting files it already formatted and learns
+nothing for them. Once, at the gate, fixes every one of those edits at the same
+cost.
+
 **Verify with `make test` / `make lint`, never a bare `npx vitest run` habit** —
 the Make targets are the definition of green that CI enforces.
 
