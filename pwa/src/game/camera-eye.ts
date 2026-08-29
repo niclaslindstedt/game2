@@ -16,23 +16,55 @@
 // scuttle does not move at all, and the picture in front of it is a painted
 // slab. Two things put the motion back, and both live here:
 //
-//   THE HEAD HAS MASS. The eye is not on the mount: it rides a neck, and
-//   the neck is a damped spring chasing the mount. That one model produces
-//   the whole effect — the head plunges and rebounds into a rut, is thrown
-//   forward under the brakes and sideways through a corner, and settles a
-//   beat after the car does. The spring damps RELATIVE motion (head against
-//   seat), never motion against the world: damped against the world the
-//   head would trail metres behind the car at pace.
+//   THERE IS A HEAD ON A NECK. The eye is not bolted to the mount: it sits
+//   on top of a neck hinged at the base of it, and it is pushed off upright
+//   by what the driver is being pushed by — thrown toward the nose under the
+//   brakes, tipped back under power, leaned out of a corner, dropped into a
+//   dip. The neck is a stiff, well damped spring, so it arrives a beat after
+//   the car and settles without bouncing, and the arc it swings on bounds
+//   the whole thing: at 22 cm and ten degrees, nothing in the game can move
+//   the picture more than about four centimetres. Not a landing, not a shunt
+//   into a boulder.
+//
+//   What pushes it is read off the CAR'S OWN RATES — `u`, `w`, `vy`,
+//   `yawRate`, which the engine keeps — and never off where the mount has
+//   got to. That is the difference between a neck and a rattle, and it is
+//   not obvious from outside. At 120 km/h the mount covers half a metre
+//   between frames, so a head that chases it has every quantity dominated by
+//   road speed rather than by load: a fraction of a percent of disagreement
+//   is centimetres of lean nothing asked for, parked in one direction, in
+//   proportion to SPEED, leaving the brakes nothing left to move. Worse, the
+//   engine steps at a fixed 120 Hz off an accumulator, so on a display whose
+//   rate 120 is not a multiple of — 144 being the common one — some frames
+//   step twice and some not at all, and a chased mount hands the neck tens
+//   of metres a second of phantom motion several times a second. The machine
+//   it was tuned on is steady and somebody else's shakes itself apart.
+//   Differencing a VELOCITY has no such term: the error is bounded by the
+//   acceleration, so the same missed step is worth a fraction of one bump.
+//
+//   The load is then smoothed by a critically damped follower before the
+//   neck sees it, and that smoothing IS the head's inertia: everything the
+//   car does faster than it is carried rigidly instead of answered. Carried
+//   is what a player wants. A head moving against the shell moves the fascia
+//   a hand's reach from the lens, not the road twenty metres out — the road
+//   barely stirs while the dashboard swims, which is read, correctly, as the
+//   camera shaking. Carried, the cabin and the road move together, which is
+//   read as the car moving.
 //
 //   THE ROAD HAS GRAIN. Under the big motions the surface arrives as a
-//   vibration the neck has already filtered, so it is applied as MOTION
-//   rather than shaken into the spring — a mass on a spring at ~2 Hz answers
-//   a 10 Hz road with almost nothing.
+//   vibration, applied as MOTION rather than as load — a mass on a spring at
+//   ~3 Hz answers a 10 Hz road with almost nothing. It is the one thing here
+//   nothing filters, so it is also the one that moves the cabin freely, and
+//   the seat with bodywork closest to the lens takes the LEAST of it.
 //
 // And a HIT throws the head. An impact hands the neck a directional impulse
 // and rings a small rotational wobble on top of it, so the picture waves and
 // recovers rather than jittering: that wave is the only thing in the frame
-// that says the car hit something, once the bodywork is behind the lens.
+// that says the car hit something, once the bodywork is behind the lens. It
+// is also the ONLY thing a hit does to this camera. The chase rigs answer a
+// kick with a decaying random rattle, and from a boom four metres back that
+// reads as a knock; applied to a lens with a dashboard under it, a fresh
+// random offset every frame is not a knock, it is the cabin teleporting.
 //
 // Every number is a ROW in `EYE_RIGS`, and the player owns four of them
 // (`EyeTuning`, from OPTIONS ▸ VIEW): seat height, seat reach, field of
@@ -78,29 +110,66 @@ export type EyeTuning = {
 
 export const NEUTRAL_TUNING: EyeTuning = { rise: 0, ahead: 0, fov: 0, motion: 1 };
 
-/** The neck, per axis. Under a sustained load the head sits `accel / stiff²`
- * off the seat: 10 m/s² of braking against 11 rad/s is 8 cm of lean, which
- * reads as somebody bracing rather than as a toy on a dashboard. Damping
- * under 1 lets it overshoot and settle, and one visible rebound off a bump
- * IS the effect; far under 0.4 it rings like a spring toy for the rest of
- * the straight. Vertical is the best damped, because vertical is the axis
- * the road feeds continuously — a neck that rings at every rut adds a second
- * bump to every bump the car actually hit. */
+/** THE NECK, AS ANATOMY. The eye does not float about on the end of three
+ * independent springs: it sits on top of a neck, the neck is hinged at the
+ * base of it, and everything the picture is allowed to do follows from those
+ * two facts. So the travel is not a free number here — it is `length` and
+ * `leanMax`, and the furthest the view can ever move is the arc between
+ * them. A stiff neck at 22 cm and 10° reaches under four centimetres, and
+ * NOTHING in the game can push it past that: not a landing, not a shunt into
+ * a boulder, not a frame the machine took a quarter of a second over.
+ *
+ * The arc is also why the axes are not independent. Lean the neck any
+ * direction and the eye comes DOWN a little, because it is swinging, not
+ * sliding — which is most of what makes the motion read as a head rather
+ * than as a camera on rails. The spine's own give is the one genuinely
+ * vertical part, and it is small: a spine is stiff in compression.
+ *
+ * Stiffness is then tuned against the SUSTAINED load, not against the reach.
+ * A rally car corners and brakes at 10-17 m/s² for most of a stage, and the
+ * head sits `accel / stiff²` off upright under it: soft enough to make that
+ * look dramatic is soft enough to spend the stage jammed at the end of the
+ * arc, where every change of load throws the head from one stop to the
+ * other. Sized so the everyday corner lands around half the lean, the same
+ * corner reads as bracing and what is left is there for the moments that
+ * deserve it. Damping at or just under 1 settles without a second bump; far
+ * under it the head rings like a spring toy for the rest of the straight and
+ * every rut adds a bounce the car never made. */
 type Neck = {
+  /** How far the eye sits above the hinge at the base of the neck, m. With
+   * `leanMax` this is the whole of the geometry: the arc's radius. */
+  length: number;
+  /** How far off upright the neck may lean, rad. Approached and never
+   * reached (see `soften`), so it is a bound on the picture rather than a
+   * wall for it to hit. */
+  leanMax: number;
+  /** How far the spine gives, m — the only travel that is not the arc. */
+  squash: number;
   stiffLong: number;
   stiffLat: number;
   stiffVert: number;
   dampLong: number;
   dampLat: number;
   dampVert: number;
-  /** How far the head is allowed off the mount, m. */
-  limLong: number;
-  limLat: number;
-  limVert: number;
-  /** Ceiling on how fast the head may travel relative to the car, m/s. A
+  /** The corner the LOAD is smoothed at before the neck is allowed to
+   * answer it, rad/s — the head's INERTIA, and the knob that decides whether
+   * the cabin sits still. Everything the car does faster than this is
+   * carried rather than answered (see the head's note at the top of the
+   * file). It wants to sit between the two things it has to tell apart: a
+   * load builds over about a third of a second, and a stage's chatter is
+   * several times a second, so a few rad/s keeps the brakes and the corner
+   * and lets the rest through to the shell alone. The follower is second
+   * order, which is what makes that gap wide enough to aim at — a single
+   * ease slow enough to reject the chatter is also slow enough to make the
+   * brakes arrive late, and a driver feels that at once. */
+  settle: number;
+  /** Ceiling on how fast the head may travel relative to the mount, m/s. A
    * slammed landing hands the neck ten metres a second of relative speed in
    * one step; ungoverned the head would cross its whole travel inside a
-   * frame, which reads as a glitch rather than as a hit. */
+   * frame, which reads as a glitch rather than as a hit. It is an emergency
+   * stop and nothing else: set anywhere near the speed the head reaches
+   * under an ordinary corner it stops being a governor and becomes a
+   * second, harsher travel limit, on all the motion that was fine. */
   maxSpeed: number;
 };
 
@@ -120,7 +189,11 @@ type Wobble = {
   pitch: number;
   roll: number;
   /** Ceiling on each, rad — a head-on shunt at 30 m/s must still leave a
-   * picture somebody can drive out of. */
+   * picture somebody can drive out of. Set close to what an everyday landing
+   * already asks for, it stops being a ceiling and becomes the answer to
+   * every hit: a clipped kerb, a heavy landing and a shunt into a boulder
+   * all arrive at exactly the same size, and the wave stops saying anything
+   * about what was hit. */
   max: number;
 };
 
@@ -135,9 +208,14 @@ export type EyeRig = {
    * head on a neck looking down a road, not a camera on a boom. */
   yawRate: number;
   neck: Neck;
-  /** Radians of gaze per metre the head is thrown forward and sideways —
-   * braking pitches a head down as well as forward, and the neck pivots at
-   * its base, so the top of the head leads a lean. */
+  /** How much of the neck's own lean the GAZE takes, 0..1 — a share, not a
+   * rate, because the head is sitting on the thing that leaned. Well under 1
+   * in every row: a driver whose eyes rode the full lean would be studying
+   * the floor every time they touched the brakes, so the head rolls back on
+   * the neck and keeps most of the road. What is left over is the part worth
+   * having — the car goes down on its nose under the brakes and the view
+   * tips a little further than the car did, tips back a little under power,
+   * and leans into the corner with the driver. A tad of each. */
   nod: number;
   tilt: number;
   /** How much of the body's attitude the gaze takes, 0..1. Under 1 because
@@ -165,10 +243,14 @@ export type EyeRig = {
   glance: number;
   glanceMax: number;
   glanceRate: number;
-  /** Scale on the road's grain, on the random impact shake, and on the
-   * directional jolt a hit hands the neck. */
+  /** Scale on the road's grain, and on the directional jolt a hit hands the
+   * neck. The grain is the one motion here applied straight to the head
+   * rather than through the neck, so it is also the one that moves the cabin
+   * with nothing filtering it: from a seat with a fascia under the lens a
+   * centimetre of it at 8 Hz is a dashboard visibly buzzing, and the view
+   * that needs the LEAST of it is the one that looks like it needs the
+   * most. */
   grain: number;
-  shake: number;
   jolt: number;
   wobble: Wobble;
   /** The play the horizon is hung on, rad (see `ROLL_PLAY`). */
@@ -212,20 +294,31 @@ export const EYE_RIGS: Record<InCarCamera, EyeRig> = {
     fovMax: 84,
     fovRate: 5,
     yawRate: 14,
+    // The heaviest head on the ladder, and the one that moves least against
+    // what it is sitting in. Everything a head does here is measured against
+    // a dashboard a hand's reach away, so the same centimetre that reads as
+    // weight from the scuttle reads as the cabin sliding about from the
+    // seat: the neck is stiff enough to keep the everyday load inside a
+    // third of its reach, damped so nothing rebounds twice, and given the
+    // slowest mount on the ladder to chase.
     neck: {
-      stiffLong: 10,
-      stiffLat: 9,
-      stiffVert: 11.5,
-      dampLong: 0.6,
-      dampLat: 0.56,
-      dampVert: 0.58,
-      limLong: 0.14,
-      limLat: 0.1,
-      limVert: 0.11,
-      maxSpeed: 2.4,
+      // A real one: the eye about 22 cm over the hinge at the base of it,
+      // and a STIFF one — ten degrees of lean, which is under four
+      // centimetres of picture, and a spine that gives a couple more.
+      length: 0.22,
+      leanMax: 0.175,
+      squash: 0.028,
+      stiffLong: 24,
+      stiffLat: 23,
+      stiffVert: 22,
+      dampLong: 1,
+      dampLat: 0.95,
+      dampVert: 1,
+      settle: 3.5,
+      maxSpeed: 2.2,
     },
-    nod: 0.55,
-    tilt: 0.6,
+    nod: 0.3,
+    tilt: 0.35,
     rollFollow: 0.62,
     pitchFollow: 0.8,
     // Aimed further down than the other two, and for the cabin's sake rather
@@ -249,10 +342,18 @@ export const EYE_RIGS: Record<InCarCamera, EyeRig> = {
     glance: 0.36,
     glanceMax: 0.27,
     glanceRate: 5,
-    grain: 1.15,
-    shake: 0.3,
-    jolt: 1.25,
-    wobble: { freq: 8, damp: 0.45, yaw: 0.075, pitch: 0.06, roll: 0.095, max: 0.17 },
+    // The least grain on the ladder, for the same reason the neck is the
+    // stiffest: this is the only seat with bodywork close enough for a
+    // centimetre of head travel to be a large movement, and it is also the
+    // seat that needs the grain least — the shell's own buzz already arrives
+    // here, carried whole.
+    grain: 0.4,
+    jolt: 0.85,
+    // Waves once and is done. The gaze swing a ring this size makes is the
+    // same number of degrees whatever is in frame, but from inside the car
+    // it sweeps a screen pillar across the road, so it is worth less here
+    // than it is from the bonnet and has to be spent faster.
+    wobble: { freq: 9, damp: 0.75, yaw: 0.045, pitch: 0.04, roll: 0.055, max: 0.12 },
     rollPlay: { reach: 0.16, recover: 0.35 },
     near: 0.05,
   },
@@ -262,20 +363,25 @@ export const EYE_RIGS: Record<InCarCamera, EyeRig> = {
     fovMax: 92,
     fovRate: 5,
     yawRate: 14,
+    // The loosest neck of the three, and it can afford to be: the nearest
+    // thing to this lens is the car's own bonnet, a metre out and low in the
+    // frame, so head travel here reads as the weight of the shot rather than
+    // as the furniture moving.
     neck: {
-      stiffLong: 11,
-      stiffLat: 10,
-      stiffVert: 12,
-      dampLong: 0.62,
-      dampLat: 0.58,
-      dampVert: 0.58,
-      limLong: 0.12,
-      limLat: 0.1,
-      limVert: 0.1,
-      maxSpeed: 2.4,
+      length: 0.22,
+      leanMax: 0.21,
+      squash: 0.038,
+      stiffLong: 20,
+      stiffLat: 19,
+      stiffVert: 18,
+      dampLong: 0.85,
+      dampLat: 0.8,
+      dampVert: 0.85,
+      settle: 5,
+      maxSpeed: 2.2,
     },
-    nod: 0.5,
-    tilt: 0.5,
+    nod: 0.28,
+    tilt: 0.32,
     rollFollow: 0.55,
     pitchFollow: 0.75,
     aimDown: 0.05,
@@ -284,10 +390,9 @@ export const EYE_RIGS: Record<InCarCamera, EyeRig> = {
     glance: 0.4,
     glanceMax: 0.32,
     glanceRate: 5,
-    grain: 1,
-    shake: 0.4,
+    grain: 0.9,
     jolt: 1,
-    wobble: { freq: 9, damp: 0.5, yaw: 0.055, pitch: 0.05, roll: 0.07, max: 0.13 },
+    wobble: { freq: 9, damp: 0.65, yaw: 0.055, pitch: 0.05, roll: 0.07, max: 0.14 },
     rollPlay: { reach: 0.16, recover: 0.35 },
     near: 0.1,
   },
@@ -297,20 +402,28 @@ export const EYE_RIGS: Record<InCarCamera, EyeRig> = {
     fovMax: 96,
     fovRate: 5,
     yawRate: 16,
+    // Barely a neck at all, and chasing a mount that is barely settled: a
+    // lens bolted to the nose has no head to give inertia to, so what little
+    // travel there is exists to stop a landing driving the lens through the
+    // bumper rather than to describe anybody bracing.
     neck: {
-      stiffLong: 16,
-      stiffLat: 15,
-      stiffVert: 17,
-      dampLong: 0.7,
-      dampLat: 0.68,
-      dampVert: 0.7,
-      limLong: 0.06,
-      limLat: 0.05,
-      limVert: 0.05,
-      maxSpeed: 2.4,
+      // Nobody's neck: a short stiff mount with barely five degrees in it,
+      // which is what keeps a landing from driving the lens through the
+      // bumper without pretending there is a driver down here.
+      length: 0.18,
+      leanMax: 0.09,
+      squash: 0.018,
+      stiffLong: 26,
+      stiffLat: 25,
+      stiffVert: 24,
+      dampLong: 0.9,
+      dampLat: 0.88,
+      dampVert: 0.9,
+      settle: 9,
+      maxSpeed: 1.2,
     },
-    nod: 0.25,
-    tilt: 0.25,
+    nod: 0.15,
+    tilt: 0.15,
     rollFollow: 0.9,
     pitchFollow: 0.95,
     aimDown: 0.012,
@@ -319,10 +432,9 @@ export const EYE_RIGS: Record<InCarCamera, EyeRig> = {
     glance: 0.24,
     glanceMax: 0.22,
     glanceRate: 6,
-    grain: 0.8,
-    shake: 0.5,
+    grain: 0.7,
     jolt: 0.8,
-    wobble: { freq: 12, damp: 0.6, yaw: 0.03, pitch: 0.04, roll: 0.04, max: 0.09 },
+    wobble: { freq: 12, damp: 0.7, yaw: 0.03, pitch: 0.04, roll: 0.04, max: 0.09 },
     rollPlay: { reach: 0.1, recover: 0.5 },
     near: 0.1,
   },
@@ -429,15 +541,13 @@ export type EyeCamera = {
   jolt: (x: number, y: number, z: number, speed: number) => void;
   /** Put the head back on the seat: a fresh car, a fresh stage, a respawn. */
   reseat: () => void;
-  /** Drive the camera for one frame. `shake` is the decaying random rattle
-   * camera.ts keeps for every mode. Returns the DESIGN fov (horizontal
+  /** Drive the camera for one frame. Returns the DESIGN fov (horizontal
    * reference) the shot wants, for the caller to blend and convert. */
   update: (
     view: InCarCamera,
     state: GameState,
     dt: number,
     camera: THREE.PerspectiveCamera,
-    shake: number,
   ) => number;
   /** Which rig is up — what the caller reads the near plane off. */
   rigOf: (view: InCarCamera) => EyeRig;
@@ -458,13 +568,24 @@ export function createEyeCamera(): EyeCamera {
   let tuning: EyeTuning = { ...NEUTRAL_TUNING };
   /** Which view the standing head belongs to — a change re-seats it. */
   let seatedOn: InCarCamera | null = null;
-  /** The mount in the world, this frame and last — the neck needs the seat's
-   * own velocity to damp against. */
+  /** The mount in the world, and where it was last frame — the second only
+   * to catch it being picked up and put down somewhere else. */
   const seat = new THREE.Vector3();
   const seatWas = new THREE.Vector3();
-  /** The driver's head: where it is and how fast it is going, world m. */
-  const head = new THREE.Vector3();
-  const headVel = new THREE.Vector3();
+  /** Where the head has swung to and how fast it is going — in the CAR's
+   * axes, and measured from where a head that was bolted down would be.
+   * Both are small numbers by construction: centimetres, not the metres of
+   * road that pass under the car while they are being worked out. */
+  const lean = { long: 0, lat: 0, vert: 0 };
+  const leanVel = { long: 0, lat: 0, vert: 0 };
+  /** The load the driver is under, m/s², smoothed — the head's inertia —
+   * and the rate that smoothing is moving at. */
+  const load = { long: 0, lat: 0, vert: 0 };
+  const loadVel = { long: 0, lat: 0, vert: 0 };
+  /** Last frame's rates, for the one difference the load needs. */
+  let wasU = 0;
+  let wasW = 0;
+  let wasVy = 0;
   let yaw = 0;
   let fov = 64;
   /** How far into the slide the driver is looking, rad off the nose. */
@@ -518,7 +639,6 @@ export function createEyeCamera(): EyeCamera {
     state: GameState,
     dt: number,
     camera: THREE.PerspectiveCamera,
-    shake: number,
   ): number => {
     const rig = EYE_RIGS[view];
     const car = state.car;
@@ -533,18 +653,24 @@ export function createEyeCamera(): EyeCamera {
       // A fresh stage, a respawn, or a press of the camera key: the seat has
       // been picked up and put down somewhere else, and no neck stretches
       // across that.
-      head.copy(seat);
-      headVel.set(0, 0, 0);
+      lean.long = lean.lat = lean.vert = 0;
+      leanVel.long = leanVel.lat = leanVel.vert = 0;
+      load.long = load.lat = load.vert = 0;
+      loadVel.long = loadVel.lat = loadVel.vert = 0;
+      wasU = car.u;
+      wasW = car.w;
+      wasVy = car.vy;
       seatWas.copy(seat);
       wob.yaw = wob.pitch = wob.roll = 0;
       wobVel.yaw = wobVel.pitch = wobVel.roll = 0;
       if (seatedOn !== view) rollSlack = createSlack(rig.rollPlay);
       seatedOn = view;
     }
-    const step = Math.max(dt, 1e-4);
-    const svx = (seat.x - seatWas.x) / step;
-    const svy = (seat.y - seatWas.y) / step;
-    const svz = (seat.z - seatWas.z) / step;
+    // Every frame, and not only in the branch above: this is the only thing
+    // the mount's position is still used for, and left behind it is a datum
+    // the car drives away from — the jump test then passes a few frames
+    // later and goes on passing, resetting the neck for the rest of the
+    // stage. A head that is reseated every frame is a head bolted down.
     seatWas.copy(seat);
 
     // The neck works in the CAR's axes: a head is thrown back under power
@@ -554,27 +680,90 @@ export function createEyeCamera(): EyeCamera {
     const rightX = fwdZ;
     const rightZ = -fwdX;
     const n = rig.neck;
+
+    // WHAT THE DRIVER IS BEING PUSHED BY, in their own axes, m/s². This is
+    // the only thing that moves the head, and where it is read from is the
+    // whole difference between a neck and a wobble.
+    //
+    // The tempting way is to watch the MOUNT and have the head chase it. It
+    // does not work, and not for a subtle reason: at 120 km/h the mount
+    // covers half a metre between frames, so every quantity in the chase is
+    // dominated by road speed rather than by load, and a fraction of a
+    // percent of disagreement between the head's path and the mount's — a
+    // finite step, an exponential taken over one — is centimetres of lean
+    // that nothing asked for. It parks the head at one end of its arc, in
+    // proportion to SPEED, leaving the brakes nothing to move it with. It is
+    // also a reading of the display: the engine steps at a fixed 120 Hz off
+    // an accumulator, so on a monitor whose rate 120 is not a multiple of,
+    // some frames step twice and some not at all, and a mount differenced
+    // across them alternates between double speed and a dead stop.
+    //
+    // So the load is read off the car's own RATES instead, which the engine
+    // keeps and which no camera has to reconstruct. Only velocities are
+    // differenced, never positions, and the error in differencing a velocity
+    // is bounded by the acceleration itself rather than by how fast the car
+    // happens to be going — the same missed step that was worth 30 m/s of
+    // phantom motion is worth a fraction of one bump.
+    const perSec = 1 / Math.max(dt, 1e-4);
+    // The CAR's vertical speed, and deliberately not the body's on top of
+    // it. `rideRate` is the shell working on its springs — the chatter — and
+    // a head given it back answers every rut twice: once carried, once on
+    // the neck, the second one moving the cabin against the road. What is
+    // left is the ground the wheels are actually following, which is what
+    // lifts a driver over a crest and drops them into a dip.
+    const mountUp = car.vy;
+    // Turning is an acceleration even at a constant speed, and it is the
+    // biggest one a rally driver spends their day under: the `u·yawRate`
+    // term IS the corner.
+    const rawLong = (car.u - wasU) * perSec - car.w * car.yawRate;
+    const rawLat = (car.w - wasW) * perSec + car.u * car.yawRate;
+    const rawVert = (mountUp - wasVy) * perSec;
+    wasU = car.u;
+    wasW = car.w;
+    wasVy = mountUp;
     for (let left = dt; left > 0; left -= SPRING_STEP) {
       const h = Math.min(left, SPRING_STEP);
-      const dx = head.x - seat.x;
-      const dy = head.y - seat.y;
-      const dz = head.z - seat.z;
-      const rvx = headVel.x - svx;
-      const rvy = headVel.y - svy;
-      const rvz = headVel.z - svz;
-      const aLong =
-        -n.stiffLong * n.stiffLong * (dx * fwdX + dz * fwdZ) -
-        2 * n.dampLong * n.stiffLong * (rvx * fwdX + rvz * fwdZ);
-      const aLat =
-        -n.stiffLat * n.stiffLat * (dx * rightX + dz * rightZ) -
-        2 * n.dampLat * n.stiffLat * (rvx * rightX + rvz * rightZ);
-      const aUp = -n.stiffVert * n.stiffVert * dy - 2 * n.dampVert * n.stiffVert * rvy;
-      headVel.x += (aLong * fwdX + aLat * rightX) * h;
-      headVel.z += (aLong * fwdZ + aLat * rightZ) * h;
-      headVel.y += aUp * h;
-      head.x += headVel.x * h;
-      head.y += headVel.y * h;
-      head.z += headVel.z * h;
+      // ...and SMOOTHED, which is the head's inertia. A body does not answer
+      // a spike of load; it answers what the spike settles into. Everything
+      // the car does faster than this is carried rigidly instead — and
+      // carried is what a player wants, because it moves the cabin and the
+      // road TOGETHER, where a head answering it moves one against the other,
+      // which is what reads as the camera shaking.
+      //
+      // Two poles rather than one, and it matters more than the rate does. A
+      // single ease steep enough to keep a rough stage's chatter out of the
+      // neck is also slow enough to make the brakes take half a second to
+      // reach the head, and a driver notices that immediately; a critically
+      // damped follower at the same corner rejects an order of magnitude
+      // more of the fast stuff while still arriving on a sustained load in a
+      // third of a second. Loads are slow and chatter is not, and this is
+      // the shape that can tell them apart.
+      const wf = n.settle;
+      loadVel.long += (wf * wf * (rawLong - load.long) - 2 * wf * loadVel.long) * h;
+      loadVel.lat += (wf * wf * (rawLat - load.lat) - 2 * wf * loadVel.lat) * h;
+      loadVel.vert += (wf * wf * (rawVert - load.vert) - 2 * wf * loadVel.vert) * h;
+      load.long += loadVel.long * h;
+      load.lat += loadVel.lat * h;
+      load.vert += loadVel.vert * h;
+      // The head, in the frame of the car it is being carried in: a spring
+      // back toward upright, a damper, and the load pushing it the other
+      // way. Nothing here knows how fast the car is going.
+      const accLong =
+        -n.stiffLong * n.stiffLong * lean.long -
+        2 * n.dampLong * n.stiffLong * leanVel.long -
+        load.long;
+      const accLat =
+        -n.stiffLat * n.stiffLat * lean.lat - 2 * n.dampLat * n.stiffLat * leanVel.lat - load.lat;
+      const accVert =
+        -n.stiffVert * n.stiffVert * lean.vert -
+        2 * n.dampVert * n.stiffVert * leanVel.vert -
+        load.vert;
+      leanVel.long += accLong * h;
+      leanVel.lat += accLat * h;
+      leanVel.vert += accVert * h;
+      lean.long += leanVel.long * h;
+      lean.lat += leanVel.lat * h;
+      lean.vert += leanVel.vert * h;
       // The ring a hit left, spent: a damped oscillator per gaze axis.
       const w2 = rig.wobble.freq * rig.wobble.freq;
       const damp = 2 * rig.wobble.damp * rig.wobble.freq;
@@ -584,32 +773,51 @@ export function createEyeCamera(): EyeCamera {
       }
     }
 
-    // Govern the neck's own speed, then its reach. A slam hands the spring
-    // ten metres a second of relative velocity in a single step: uncapped
-    // the head crosses its whole travel inside one frame, which reads as the
-    // picture glitching rather than as the car landing.
-    let rvx = headVel.x - svx;
-    let rvy = headVel.y - svy;
-    let rvz = headVel.z - svz;
-    const rel = Math.hypot(rvx, rvy, rvz);
+    // Govern how fast the head may move on the neck. A slam hands the spring
+    // ten metres a second in a single step: uncapped the head crosses its
+    // whole arc inside one frame, which reads as the picture glitching
+    // rather than as the car landing. It is a bound on a body, so it is
+    // stated as one — how fast a head goes, not how fast the car does.
+    const rel = Math.hypot(leanVel.long, leanVel.lat, leanVel.vert);
     if (rel > n.maxSpeed) {
       const k = n.maxSpeed / rel;
-      rvx *= k;
-      rvy *= k;
-      rvz *= k;
-      headVel.set(svx + rvx, svy + rvy, svz + rvz);
+      leanVel.long *= k;
+      leanVel.lat *= k;
+      leanVel.vert *= k;
     }
-    const offLong = soften((head.x - seat.x) * fwdX + (head.z - seat.z) * fwdZ, n.limLong * motion);
-    const offLat = soften(
-      (head.x - seat.x) * rightX + (head.z - seat.z) * rightZ,
-      n.limLat * motion,
-    );
-    const offUp = soften(head.y - seat.y, n.limVert * motion);
-    head.set(
-      seat.x + offLong * fwdX + offLat * rightX,
-      seat.y + offUp,
-      seat.z + offLong * fwdZ + offLat * rightZ,
-    );
+    // WHERE THE NECK HAS LEANED TO. The spring works in metres, which is the
+    // right way to answer a load; the neck it is standing in works in
+    // degrees off upright, which is the right way to bound one. So the
+    // spring's displacement is read against the arc.
+    //
+    // `soften` is what makes the bound anatomy rather than a wall — the arc
+    // is approached and never reached, at any speed, from any hit, on any
+    // frame. Wound down by the player's own motion setting, the reach goes
+    // to nothing and the head is simply bolted to the shell.
+    const swing = n.length * Math.sin(n.leanMax) * motion;
+    const offLong = soften(lean.long, swing);
+    const offLat = soften(lean.lat, swing);
+    const leanFwd = Math.asin(offLong / n.length);
+    const leanSide = Math.asin(offLat / n.length);
+    // A neck SWINGS, so leaning any direction also lowers the eye — the sag
+    // off the arc. It is small (a centimetre at full lean) and it is most of
+    // what separates a head from a camera sliding on rails, because it
+    // couples the axes the way a body does: brake hard and the view drops as
+    // well as pitching. The spine's own give is added to it, and is the only
+    // part of the vertical that is not the arc.
+    const sag = n.length * (1 - Math.cos(Math.hypot(leanFwd, leanSide)));
+    const offUp = soften(lean.vert, n.squash * motion) - sag;
+    // The spring's own state is put back inside the arc it is bounded by, so
+    // the neck cannot wind up a lean it is never allowed to show and then
+    // spend it later.
+    lean.long = offLong;
+    lean.lat = offLat;
+    // ...and the lens is put at the mount, plus that lean. The shell's own
+    // shake goes to it whole, where it moves the cabin and the road
+    // together; only the lean moves one against the other.
+    const drawX = seat.x + offLong * fwdX + offLat * rightX;
+    const drawY = seat.y + offUp;
+    const drawZ = seat.z + offLong * fwdZ + offLat * rightZ;
 
     const speed = Math.hypot(car.u, car.w);
     const slip = speed > 3 ? Math.atan2(car.w, Math.max(0.001, car.u)) : 0;
@@ -632,10 +840,7 @@ export function createEyeCamera(): EyeCamera {
     const heave = (g1 * 0.55 + g2 * 0.3 + g3 * 0.15) * GRAIN.heave * drive;
     const sway = (g4 * 0.6 + g3 * 0.4) * GRAIN.sway * drive;
 
-    const rattle = shake * rig.shake;
-    const sx = (Math.random() - 0.5) * rattle;
-    const sy = (Math.random() - 0.5) * rattle;
-    camera.position.set(head.x + sx + sway * rightX, head.y + sy + heave, head.z + sway * rightZ);
+    camera.position.set(drawX + sway * rightX, drawY + heave, drawZ + sway * rightZ);
     const look = yaw + glance + wob.yaw;
     // A narrow viewport buys back its horizontal field by opening the frame
     // vertically (hor+), and every degree of that lands half at the top and
@@ -646,11 +851,12 @@ export function createEyeCamera(): EyeCamera {
     const widen =
       (((verticalFovFor(fov, camera.aspect, rig.vfovMax) - fov) * Math.PI) / 360) * rig.wideAim;
     // The gaze rides the body's attitude, less what a driver levels out, and
-    // nods with the head's own lean — braking tips a head down as well as
-    // forward.
+    // takes a share of the neck's own lean on top: the head is sitting on
+    // the thing that leaned, so the brakes tip it forward and down and the
+    // power tips it back, by a few degrees at the very most.
     const pitch =
       (car.pitch + car.pitchLoad) * rig.pitchFollow -
-      rig.nod * offLong -
+      rig.nod * leanFwd -
       rig.aimDown +
       widen +
       wob.pitch +
@@ -671,7 +877,7 @@ export function createEyeCamera(): EyeCamera {
     // horizon every time the car wanders across the crown.
     camera.rotateZ(
       rollSlack(car.roll, dt) * rig.rollFollow -
-        rig.tilt * offLat +
+        rig.tilt * leanSide +
         wob.roll +
         (g1 * 0.5 + g3 * 0.5) * GRAIN.tilt * drive,
     );
@@ -695,18 +901,19 @@ export function createEyeCamera(): EyeCamera {
       const ux = (x / len) * push;
       const uy = (y / len) * push;
       const uz = (z / len) * push;
-      // The head keeps going where the car stopped: the impulse is added to
-      // its own velocity and the neck spends it, which is why the recovery
-      // needs no code of its own.
-      headVel.x += ux;
-      headVel.y += uy;
-      headVel.z += uz;
-      // ...and the same impulse, read in the car's axes, rings the gaze. A
-      // hit from the side turns and rolls the head; one from ahead nods it.
+      // Read in the car's axes, which is where the neck lives.
       const fwdX = Math.sin(yaw);
       const fwdZ = Math.cos(yaw);
       const along = ux * fwdX + uz * fwdZ;
       const across = ux * fwdZ - uz * fwdX;
+      // The head keeps going where the car stopped: the impulse is added to
+      // its own speed on the neck and the spring spends it, which is why the
+      // recovery needs no code of its own — and the arc still bounds where
+      // it can get to, so the hardest shunt in the game reaches the end of a
+      // neck's travel and no further.
+      leanVel.long += along;
+      leanVel.lat += across;
+      leanVel.vert += uy;
       const w = rig.wobble;
       wobVel.yaw = clamp(wobVel.yaw + across * w.yaw * w.freq, -w.max * w.freq, w.max * w.freq);
       wobVel.pitch = clamp(
