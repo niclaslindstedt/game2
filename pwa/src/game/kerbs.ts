@@ -100,16 +100,27 @@ function blockMaterials(): THREE.Material[] {
   return [warn, warn, white, white, white, white];
 }
 
-/** Stand a batch of markers up as one instanced mesh, at the poses the
- * engine placed them at. `lift` raises each one off its foot to wherever
- * its own origin sits — the middle of a stake, the middle of a slab. */
-function instance(
-  geometry: THREE.BufferGeometry,
-  materials: THREE.Material[],
-  markers: KerbMarker[],
-  lift: number,
-): THREE.InstancedMesh | null {
+/** What one kind of marker IS: the shape, the paint on its faces, and how
+ * far its own origin sits over its foot. Every marker on every stage comes
+ * out of here, so a shape is stated once — and the item sheet stands one up
+ * on its own from the same three answers. */
+export function markerShape(kind: KerbMarker["kind"]): {
+  geometry: THREE.BufferGeometry;
+  materials: THREE.Material[];
+  lift: number;
+} {
+  return kind === "post"
+    ? { geometry: postGeometry(), materials: postMaterials(), lift: POST.height / 2 }
+    : { geometry: blockGeometry(), materials: blockMaterials(), lift: BLOCK.height / 2 };
+}
+
+/** Stand a batch of markers of one kind up as a single instanced mesh, at
+ * the poses the engine placed them at — each raised off its foot to
+ * wherever its own origin sits (the middle of a stake, the middle of a
+ * slab). */
+function instance(kind: KerbMarker["kind"], markers: KerbMarker[]): THREE.InstancedMesh | null {
   if (markers.length === 0) return null;
+  const { geometry, materials, lift } = markerShape(kind);
   const mesh = new THREE.InstancedMesh(geometry, materials, markers.length);
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
@@ -187,7 +198,7 @@ export function createPostField(): PostField {
   const touched = new Set<THREE.InstancedMesh>();
 
   const plant = (markers: KerbMarker[]): THREE.InstancedMesh | null => {
-    const batch = instance(postGeometry(), postMaterials(), markers, POST.height / 2);
+    const batch = instance("post", markers);
     if (batch === null) return null;
     markers.forEach((marker, index) => {
       posts.push({
@@ -303,10 +314,8 @@ export function buildKerbing(
   const posts = field.plant(markers.filter((m) => m.kind === "post"));
   if (posts) group.add(posts);
   const blocks = instance(
-    blockGeometry(),
-    blockMaterials(),
+    "block",
     markers.filter((m) => m.kind === "block"),
-    BLOCK.height / 2,
   );
   if (blocks) group.add(blocks);
   return group;

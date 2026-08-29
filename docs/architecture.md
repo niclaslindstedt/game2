@@ -69,6 +69,17 @@ The [oss-framework](https://github.com/niclaslindstedt/oss-framework) supplies t
 
 Root-level vitest suites cover the generator's R-rules, the drift and jump moment by moment, the gearboxes, and full bot simulations (see [simulation.md](simulation.md)). `scripts/` holds Node tooling: the sim CLI, track previews, the audio audition page, headless screenshots, the icon/OG generator (pure-Node PNG encoder in `scripts/lib/png.mjs` — no native image deps), the SEO checker, and the release plumbing (`scripts/release/`, changeset fragments → CHANGELOG).
 
+Several of those tools are the same shape and worth knowing as one: a
+harness PAGE under `pwa/src/tools/` with its own HTML entry at the `pwa/`
+root, and a `scripts/*.mjs` that builds just that entry, serves it, drives
+it in headless Chromium and writes a sheet to `previews/`. `make cars`,
+`make sky` and `make items` are all built this way, so the picture that
+comes back is drawn by the modules the game ships rather than by the tool.
+`make items` is the odd one in what it photographs: a single OBJECT — a
+stone, a plant, a kerb post, the cabin behind a car's glass — on a fitted
+turntable over a metre grid, which is the only place most of the world's
+vocabulary is ever legible.
+
 ## Deployment
 
 The app deploys to GitHub Pages at [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/) in three slots — `/` (latest release tag), `/preview/` (main), `/branch/` (parked feature branch) — via `pages.yml`; `release.yml` cuts versions from changeset fragments and chains the deploy. Details in [configuration.md](configuration.md); platform shells beyond the web in [platforms.md](platforms.md).

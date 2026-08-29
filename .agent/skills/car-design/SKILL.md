@@ -40,6 +40,7 @@ skill for any code change.
 | `pwa/src/game/car-mesh.ts`       | Scene wrapper: attitude (drift roll / air pitch), wheel spin + steer, blob shadow                                                |
 | `pwa/src/tools/car-preview.ts`   | The harness page the preview tool drives (contact-sheet renderer)                                                                |
 | `scripts/car-preview.mjs`        | The tool: `make cars` / `make liveries` / `make field`; `--variants`, `--cars`, `--liveries`, `--field`, `--out`, `--skip-build` |
+| `scripts/item-preview.mjs`       | The OTHER tool: `make items ITEMS=car,interior,wheel` — one part at a time, fitted and measured, plus a driver's-eye seat        |
 | `engine/game/defs/cars.ts`       | NOT this skill's file — handling numbers and the catalog. Only `color`/`accent` feed the default look                            |
 
 ## The loop: generate → render → LOOK → iterate
@@ -49,6 +50,10 @@ skill for any code change.
    `previews/cars.png`: per car one row — chase-cam **game** view first
    (straight + mid-drift, the view that actually matters), then front 3/4,
    side, rear 3/4, top.
+   **For a PART rather than a whole car**, `make items ITEMS=interior` (or
+   `car`, `wheel`) frames it on its own, on a metre grid, with a seat behind
+   the wheel — the cabin is the one thing `make cars` cannot review, because
+   at chase-cam range it is behind a tinted pane six metres away.
 2. **Generate candidates, several at a time.** Write a scratch script that
    imports `CAR_BODIES`, clones a spec (`JSON.parse(JSON.stringify(...))`),
    patches ONE axis per variant (silhouette, cabin, glass tone, spoiler…),

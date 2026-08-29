@@ -145,6 +145,15 @@ screenshots` — the grid shot shows the start dressing, speed/drift show
 3. Day is not enough — check dusk and night captures too; the flora is
    Lambert-lit and must sit in the environment's light, never glow.
 
+Before any of that, though, LOOK AT THE THING ITSELF. `make items GROUP=flora`
+(and `GROUP=stone`) stands every variant on its own fitted turntable over a
+metre grid and prints its measurements — a plant that is the wrong SIZE, has
+its base off y = 0, or reads as a slab from the side is obvious there in
+seconds and nearly invisible in a stage screenshot, where it is one of eight
+hundred things going past at 40 m/s. `make items ITEMS=<id> TURNTABLE=8` walks
+right round one. Use it as the first cut; the drives above are still what says
+whether a forest reads as a forest.
+
 ## Adding things
 
 - **A new tree**: a `VariantDef` in `flora.ts` (build with the helpers,
