@@ -24,6 +24,7 @@ make crew         # render the sixteen crew characters (previews/crew.png)
 make items        # photograph ONE THING at a time — a turntable per item, on a metre grid
 make items-list   # every item the turntable sheet knows, by group
 make sky          # render the atmosphere to previews/sky.png (every weather x time, plus a strike)
+make glyphs       # render the menu's marks at the three sizes they are read at
 make audition     # build previews/audition.html — every sound and both scores, playable
 make screenshots  # drive the built app headlessly, screenshot key moments
 make profile      # meter a frame's draw calls / triangles / binds — REQUIRED before/after any rendering change
@@ -125,6 +126,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | A CONTROLLER: its sticks, its triggers, what its buttons do | `pwa/src/game/gamepad.ts` reads a polled pad (DOM-free); `input.ts` does the polling, bindings in `settings.ts`                  |
 | Walking a MENU on a controller                              | `pwa/src/game/menu-nav.ts` (the cards, and `data-nav-back`) over `menu-cursor.ts` (where the cursor goes — DOM-free)             |
 | Main menu pages / routing                                   | `pwa/src/game/main-menu.tsx` (+ `menu-roam`, `menu-options`, `menu-car`)                                                         |
+| The GLYPH a menu row leads with instead of a sentence       | `pwa/src/game/menu-glyphs.tsx` — one 24x24 mark per idea; `make glyphs` contact-sheets them                                      |
 | The pre-race card: car, spec sheet, gearbox                 | `pwa/src/game/menu-car.tsx`; the numbers on it in `car-stats.ts` (derived from the catalog)                                      |
 | Campaign stages, locations, points, unlocks                 | `pwa/src/game/campaign.ts` — one board: the points a stage pays ARE what opens the next stage and the next location              |
 | The mass-start GRID, and the only catch-up in the game      | `engine/sim/grid.ts` + `TUNING.massStart` — the zig-zag on the apron, and the drive a row back is owed                           |

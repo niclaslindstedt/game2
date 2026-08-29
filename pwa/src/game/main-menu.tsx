@@ -42,7 +42,8 @@ import {
   type CampaignLocation,
   type CampaignProgress,
 } from "./campaign.ts";
-import { LevelGrid, LockGlyph, lengthLabel } from "./menu-levels.tsx";
+import { Glyph, type GlyphName } from "./menu-glyphs.tsx";
+import { LevelGrid, lengthLabel } from "./menu-levels.tsx";
 import { ResultsModal } from "./results-table.tsx";
 import { CarSetupPage } from "./menu-car.tsx";
 import { GalleryPage } from "./menu-gallery.tsx";
@@ -126,6 +127,46 @@ function VersionStamp() {
   );
 }
 
+/** Where the CAMPAIGN tile lands. A page listing ONE country is a press
+ * that asks nothing — so while there is only one, the tile opens it and the
+ * list is skipped. The rule is read off the catalog rather than hardcoded:
+ * the day a second country ships, the list comes back on its own, and
+ * `parentOf` reads the same rule so BACK never lands on the skipped page. */
+function campaignEntry(): MenuPage {
+  return LOCATIONS.length === 1
+    ? { page: "location", locationId: LOCATIONS[0].id }
+    : { page: "campaign" };
+}
+
+/** THE FRONT DOOR, as six marks. Every row used to carry a sentence saying
+ * what the mode was, which is a menu explaining itself: six explanations is
+ * a card that fills a phone, and none of them survives the second visit. A
+ * glyph and a name is the whole entry — what CAMPAIGN is, is learned by
+ * pressing it once.
+ *
+ * `data-menu` is the stable hook the capture harness presses; the label is
+ * free to change without a probe changing with it. */
+const ROOT_ITEMS: {
+  key: string;
+  glyph: GlyphName;
+  label: string;
+  page: MenuPage;
+  quiet?: boolean;
+}[] = [
+  { key: "campaign", glyph: "trophy", label: "CAMPAIGN", page: campaignEntry() },
+  { key: "timetrial", glyph: "stopwatch", label: "TIME TRIAL", page: { page: "timetrial" } },
+  { key: "headsup", glyph: "headsup", label: "HEADS UP", page: { page: "headsup" } },
+  { key: "roam", glyph: "roam", label: "ROAM", page: { page: "roam" } },
+  { key: "gallery", glyph: "camera", label: "GALLERY", page: { page: "gallery" }, quiet: true },
+  {
+    key: "options",
+    glyph: "sliders",
+    label: "OPTIONS",
+    page: { page: "options", tab: "hud" },
+    quiet: true,
+  },
+];
+
 function RootPage({
   developer,
   onNavigate,
@@ -139,57 +180,28 @@ function RootPage({
         <span className="menu-brand-name">{APP_NAME.toUpperCase()}</span>
         <span className="menu-brand-tag">arcade rally drifting</span>
       </div>
-      <div className="menu-items">
-        <button
-          type="button"
-          className="menu-item"
-          onClick={() => onNavigate({ page: "campaign" })}
-        >
-          CAMPAIGN
-          <span className="menu-item-sub">Work through a location, stage by stage</span>
-        </button>
-        <button
-          type="button"
-          className="menu-item"
-          onClick={() => onNavigate({ page: "timetrial" })}
-        >
-          TIME TRIAL
-          <span className="menu-item-sub">Chase the clock on stages you have finished</span>
-        </button>
-        <button type="button" className="menu-item" onClick={() => onNavigate({ page: "headsup" })}>
-          HEADS UP
-          <span className="menu-item-sub">
-            One race against the field, for nothing but the race
-          </span>
-        </button>
-        <button type="button" className="menu-item" onClick={() => onNavigate({ page: "roam" })}>
-          ROAM
-          <span className="menu-item-sub">Any seed, any length — drive whatever it builds</span>
-        </button>
-        <button
-          type="button"
-          className="menu-item menu-item-quiet"
-          onClick={() => onNavigate({ page: "gallery" })}
-        >
-          GALLERY
-          <span className="menu-item-sub">The pictures you took, to look at and send on</span>
-        </button>
-        <button
-          type="button"
-          className="menu-item menu-item-quiet"
-          onClick={() => onNavigate({ page: "options", tab: "hud" })}
-        >
-          OPTIONS
-          <span className="menu-item-sub">HUD, video and controls</span>
-        </button>
+      <div className="menu-tiles">
+        {ROOT_ITEMS.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            className={`menu-tile ${item.quiet ? "menu-tile-quiet" : ""}`}
+            data-menu={item.key}
+            onClick={() => onNavigate(item.page)}
+          >
+            <Glyph name={item.glyph} />
+            <span className="menu-tile-name">{item.label}</span>
+          </button>
+        ))}
         {developer && (
           <button
             type="button"
-            className="menu-item menu-item-dev"
+            className="menu-tile menu-tile-dev"
+            data-menu="developer"
             onClick={() => onNavigate({ page: "developer" })}
           >
-            DEVELOPER
-            <span className="menu-item-sub">Tools for testing the game</span>
+            <Glyph name="terminal" />
+            <span className="menu-tile-name">DEVELOPER</span>
           </button>
         )}
       </div>
@@ -206,19 +218,15 @@ function CampaignPage({
 }) {
   return (
     <div className="menu-card">
-      <MenuHead
-        back={() => onNavigate({ page: "root" })}
-        backLabel="MAIN MENU"
-        title="CAMPAIGN"
-        sub="Pick a location"
-      />
+      <MenuHead back={() => onNavigate({ page: "root" })} backLabel="MENU" title="CAMPAIGN" />
       <div className="menu-locations">
         {LOCATIONS.map((location, index) => {
           const cleared = location.levels.filter((l) => levelCleared(progress, l.id)).length;
           const mine = playerStanding(location, progress);
           // R30 — a country is opened by the PREVIOUS country's TABLE, not by
           // its stages: a player who podiumed their way through Taiga has seen
-          // all of it and still has a table to top.
+          // all of it and still has a table to top. That rule is the one thing
+          // here a padlock cannot say on its own, so it stays written.
           if (!locationUnlocked(location, progress)) {
             const before = LOCATIONS[index - 1];
             return (
@@ -227,8 +235,8 @@ function CampaignPage({
                 className="menu-location menu-location-locked menu-level-locked"
                 aria-label={`${location.name}, locked`}
               >
+                <Glyph name="lock" className="menu-lock" />
                 <span className="menu-location-name">{location.name.toUpperCase()}</span>
-                <LockGlyph />
                 <span className="menu-location-blurb">Top the {before.name} table</span>
               </div>
             );
@@ -242,12 +250,15 @@ function CampaignPage({
             >
               <span className="menu-location-name">{location.name.toUpperCase()}</span>
               <span className="menu-location-blurb">{location.blurb}</span>
-              <span className="menu-location-progress">
-                {cleared} / {location.levels.length} STAGES
+              <span
+                className="menu-location-progress"
+                title={`${cleared} of ${location.levels.length} stages cleared`}
+              >
+                {cleared} / {location.levels.length}
                 {locationWon(location, progress)
                   ? " · WON"
                   : mine.points > 0
-                    ? ` · ${mine.points} PTS, ${mine.tied ? "=" : ""}${ordinal(mine.place)}`
+                    ? ` · ${mine.points} PTS · ${mine.tied ? "=" : ""}${ordinal(mine.place)}`
                     : ""}
               </span>
             </button>
@@ -268,7 +279,13 @@ function CampaignPage({
  * CONTINUE walks FORWARD first — the next stage never driven — and only then
  * back to the first stage not yet WON. That is the shape of a points
  * campaign: see the country, then go back for the wins it costs to leave
- * it. */
+ * it.
+ *
+ * It is ONE line and a row of buttons. The scoring — three, two, one for the
+ * podium — used to be printed here on every visit, and it is a rule a player
+ * learns from their first result screen. What survives is the gate that
+ * nothing else can teach: a country whose stages are all driven still needs
+ * the table topped, and that is not guessable from a full grid. */
 function StandingsPanel({
   location,
   progress,
@@ -292,7 +309,7 @@ function StandingsPanel({
   return (
     <div className="menu-standings">
       <div className="menu-standings-line">
-        <span className="menu-label">STANDINGS</span>
+        <Glyph name="standings" />
         <span className={`menu-standings-place ${won ? "menu-standings-won" : ""}`}>
           {won
             ? "WON"
@@ -302,21 +319,20 @@ function StandingsPanel({
               : `${mine.tied ? "=" : ""}${ordinal(mine.place)} OF ${rows.length}`}
         </span>
         {run > 0 && <span className="menu-standings-points">{mine.points} PTS</span>}
-        <span className="menu-standings-run">
-          {run} / {location.levels.length} STAGES DRIVEN
+        <span
+          className="menu-standings-run"
+          title={`${run} of ${location.levels.length} stages driven`}
+        >
+          {run} / {location.levels.length}
         </span>
+        {!won && locationComplete(location, progress) && (
+          <span className="menu-standings-hint">TOP THE TABLE TO OPEN THE NEXT COUNTRY</span>
+        )}
       </div>
-      {!won && (
-        <div className="menu-standings-hint">
-          {locationComplete(location, progress)
-            ? "TOP THE TABLE TO OPEN THE NEXT COUNTRY"
-            : "3 · 2 · 1 POINTS FOR THE PODIUM — DRIVE THEM ALL, THEN WIN THEM"}
-        </div>
-      )}
       <div className="menu-standings-acts">
         {next && (
           <button type="button" className="menu-opt menu-standings-go" onClick={() => onPick(next)}>
-            CONTINUE: {next.name.toUpperCase()}
+            CONTINUE · {next.name.toUpperCase()}
           </button>
         )}
         <button
@@ -327,7 +343,7 @@ function StandingsPanel({
             setTable(true);
           }}
         >
-          FULL TABLE
+          TABLE
         </button>
         {mine.points > 0 && (
           <button
@@ -343,7 +359,7 @@ function StandingsPanel({
               onReset(location.id);
             }}
           >
-            {sure ? "SURE? THE POINTS GO" : "RESET LOCATION"}
+            {sure ? "SURE? THE POINTS GO" : "RESET"}
           </button>
         )}
       </div>
@@ -383,13 +399,13 @@ function LocationPage({
   const location = locationById(locationId);
   const pick = (level: CampaignLevel): void =>
     onNavigate({ page: "car", levelId: level.id, mode: "campaign" });
+  const out = locationParent();
   return (
     <div className="menu-card menu-card-wide">
       <MenuHead
-        back={() => onNavigate({ page: "campaign" })}
-        backLabel="CAMPAIGN"
+        back={() => onNavigate(out)}
+        backLabel={out.page === "root" ? "MENU" : "CAMPAIGN"}
         title={location.name.toUpperCase()}
-        sub={location.blurb}
       />
       <LevelGrid
         location={location}
@@ -428,12 +444,7 @@ function TimeTrialPage({
 }) {
   return (
     <div className="menu-card menu-card-wide">
-      <MenuHead
-        back={() => onNavigate({ page: "root" })}
-        backLabel="MAIN MENU"
-        title="TIME TRIAL"
-        sub="Finish a stage in the campaign to run it here"
-      />
+      <MenuHead back={() => onNavigate({ page: "root" })} backLabel="MENU" title="TIME TRIAL" />
       {LOCATIONS.map((location) => (
         <div key={location.id} className="menu-section">
           <div className="menu-section-title">{location.name.toUpperCase()}</div>
@@ -446,9 +457,14 @@ function TimeTrialPage({
           />
         </div>
       ))}
-      <button type="button" className="menu-item" onClick={() => onNavigate({ page: "scores" })}>
+      <button
+        type="button"
+        className="menu-line"
+        data-menu="scores"
+        onClick={() => onNavigate({ page: "scores" })}
+      >
+        <Glyph name="standings" />
         HIGH SCORES
-        <span className="menu-item-sub">The ten best times on every stage you have finished</span>
       </button>
     </div>
   );
@@ -476,7 +492,6 @@ function ScoresPage({
         back={() => onNavigate({ page: "timetrial" })}
         backLabel="TIME TRIAL"
         title="HIGH SCORES"
-        sub="The ten best times on every stage you have finished"
       />
       {open.length === 0 ? (
         <div className="menu-empty">Drive a stage to the end in the campaign first.</div>
@@ -486,7 +501,12 @@ function ScoresPage({
             <div key={level.id} className="score-stage">
               <div className="score-stage-name">{level.name.toUpperCase()}</div>
               <div className="score-stage-where">{location.name}</div>
-              <ScoreBoard entries={loadBoard(level.id)} />
+              {/* Five rows here, ten on the results card. The full board is
+                  the arcade's invitation — ten places, nine of them free —
+                  and it is worth a screen when a run has just landed on it.
+                  On a page listing every stage at once, ten dotted rows per
+                  stage is the same invitation printed six times. */}
+              <ScoreBoard entries={loadBoard(level.id)} rows={5} />
             </div>
           ))}
         </div>
@@ -520,10 +540,16 @@ const DEPTH: Record<MenuPage["page"], number> = {
  * which has nowhere further out to go. */
 function parentOf(page: MenuPage): MenuPage | null {
   if (page.page === "root") return null;
-  if (page.page === "location") return { page: "campaign" };
+  if (page.page === "location") return locationParent();
   if (page.page === "scores") return { page: "timetrial" };
   if (page.page === "car") return carParent(page.levelId, page.mode);
   return { page: "root" };
+}
+
+/** Out of a country: the list of them, or straight to the front door while
+ * there is only one to list (see `campaignEntry`). */
+function locationParent(): MenuPage {
+  return LOCATIONS.length === 1 ? { page: "root" } : { page: "campaign" };
 }
 
 /** The grid the pre-race card was reached from. A campaign stage goes back
@@ -535,7 +561,7 @@ function carParent(levelId: string, mode: PlayMode): MenuPage {
   if (mode === "timetrial") return { page: "timetrial" };
   if (mode === "headsup") return { page: "headsup" };
   const found = findLevel(levelId);
-  return found ? { page: "location", locationId: found.location.id } : { page: "campaign" };
+  return found ? { page: "location", locationId: found.location.id } : campaignEntry();
 }
 
 export function MainMenu(props: MainMenuProps) {

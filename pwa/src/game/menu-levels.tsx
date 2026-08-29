@@ -12,6 +12,7 @@
 import { FIELD_SIZE, STAGE_RULES, type Difficulty } from "@engine";
 
 import { formatTime, ordinal } from "../lib/util.ts";
+import { Glyph } from "./menu-glyphs.tsx";
 import {
   PODIUM,
   POINTS,
@@ -24,21 +25,10 @@ import {
 } from "./campaign.ts";
 import { PLAYER_ID } from "./standings.ts";
 
-/** The padlock on a locked stage box. Drawn rather than lettered so it
- * stays a lock at every box size and in every font the shell falls back to. */
+/** The padlock on anything not open yet. The drawing lives with the rest of
+ * the menu's marks; this is the box it hangs in. */
 export function LockGlyph() {
-  return (
-    <svg className="menu-lock" viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M7.5 10.5V7.5a4.5 4.5 0 0 1 9 0v3"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-      />
-      <rect x="4.5" y="10.5" width="15" height="10.5" rx="2.4" fill="currentColor" />
-    </svg>
-  );
+  return <Glyph name="lock" className="menu-lock" />;
 }
 
 /** A stage's billing without compiling it: the band's name, the minutes it
@@ -70,48 +60,72 @@ type LevelBoxProps = {
   onPlay: () => void;
 };
 
-/** One stage box. Locked boxes wear a grey border and a padlock, name
- * nothing about the stage behind them and cannot be pressed; open ones wear
- * green and say what they are. */
+/** One stage box. The BORDER carries the state — lit and open, grey and shut
+ * — because at a glance across six boxes the frame is what the eye counts.
+ *
+ * What is INSIDE is only what is specific to this stage: its number, its
+ * name, how long it is, and what has been got out of it. The stage's blurb
+ * ("Open forest road, one jump") and the locked box's reason both came off,
+ * and between them they were most of the box's height: a padlock already
+ * says shut, and what a road is like is something you find out by driving
+ * it. The reason stays as the box's accessible name, for a reader that
+ * cannot see a padlock.
+ *
+ * The three results share ONE wrapping row rather than three stacked lines,
+ * each behind the mark that says which it is: a cup for the finish, a watch
+ * for the clock. A stage that has never been driven shows an empty row and
+ * takes no height for it. */
 function LevelBox({ level, index, unlocked, hint, best, place, points, onPlay }: LevelBoxProps) {
   if (!unlocked) {
     return (
-      <div className="menu-level menu-level-locked" aria-label={`Stage ${index + 1}, locked`}>
+      <div
+        className="menu-level menu-level-locked"
+        title={hint}
+        aria-label={`Stage ${index + 1}, locked — ${hint}`}
+      >
         <span className="menu-level-no">{index + 1}</span>
         <LockGlyph />
-        <span className="menu-level-hint">{hint}</span>
       </div>
     );
   }
+  const laps = levelLaps(level);
   return (
     <button type="button" className="menu-level menu-level-open" onClick={onPlay}>
-      <span className="menu-level-no">{index + 1}</span>
+      <span className="menu-level-head">
+        <span className="menu-level-no">{index + 1}</span>
+        <Glyph name={laps > 1 ? "circuit" : "sprint"} className="menu-level-shape" />
+      </span>
       <span className="menu-level-name">{level.name}</span>
       <span className="menu-level-meta">{lengthLabel(level)}</span>
-      <span className="menu-level-blurb">{level.blurb}</span>
-      {/* R30 — what this stage is worth on the location's table, which is the
-          same board the next box is locked to. It leads the two bests because
-          it is the thing that is actually being played for; the result and the
-          time ride underneath it. */}
-      {points !== undefined && (
-        <span
-          className={`menu-level-points ${points === POINTS[0] ? "menu-level-points-win" : ""}`}
-        >
-          {points} {points === 1 ? "PT" : "PTS"}
-        </span>
-      )}
-      {/* Two bests, and the RESULT is the one that matters: a stage is
-          cleared by beating the field, not by beating the clock. The time
-          rides underneath it as the thing to chase once it is. */}
-      {place !== undefined && (
-        <span
-          className={`menu-level-place ${place <= PODIUM ? "menu-level-place-podium" : ""}`}
-          title={`Best finish: ${place} of ${FIELD_SIZE}`}
-        >
-          BEST {ordinal(place)}
-        </span>
-      )}
-      {best !== undefined && <span className="menu-level-best">BEST {formatTime(best)}</span>}
+      <span className="menu-level-marks">
+        {/* R30 — what this stage is paying the location's table, which is the
+            same board the next box is locked to, so it leads the two bests. */}
+        {points !== undefined && (
+          <span
+            className={`menu-level-mark ${points === POINTS[0] ? "menu-level-mark-lit" : ""}`}
+            title={`${points} points on the location's table`}
+          >
+            {points} {points === 1 ? "PT" : "PTS"}
+          </span>
+        )}
+        {/* R29 — the best RESULT, which is what clears a campaign box: a stage
+            is beaten by beating the field, not by beating the clock. */}
+        {place !== undefined && (
+          <span
+            className={`menu-level-mark ${place <= PODIUM ? "menu-level-mark-lit" : ""}`}
+            title={`Best finish: ${place} of ${FIELD_SIZE}`}
+          >
+            <Glyph name="trophy" />
+            {ordinal(place)}
+          </span>
+        )}
+        {best !== undefined && (
+          <span className="menu-level-mark" title="Best time">
+            <Glyph name="stopwatch" />
+            {formatTime(best)}
+          </span>
+        )}
+      </span>
     </button>
   );
 }

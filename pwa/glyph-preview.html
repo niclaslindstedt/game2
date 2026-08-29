@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Glyph preview harness</title>
+    <!-- Tooling page for scripts/glyph-preview.mjs — not part of the app
+         build (vite only builds index.html) and never deployed. It renders
+         the REAL <Glyph> component, so the sheet cannot drift from the
+         marks the menus are actually drawn with. -->
+  </head>
+  <body>
+    <div id="sheet"></div>
+    <script type="module" src="/src/tools/glyph-preview.tsx"></script>
+  </body>
+</html>

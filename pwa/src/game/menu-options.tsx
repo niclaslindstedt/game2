@@ -691,7 +691,7 @@ function ControlsTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "
 export function OptionsPage({ tab, onTab, settings, onSettings, onBack }: OptionsProps) {
   return (
     <div className="menu-card menu-card-wide">
-      <MenuHead back={onBack} backLabel="MAIN MENU" title="OPTIONS" />
+      <MenuHead back={onBack} backLabel="MENU" title="OPTIONS" />
       <div className="opt-tabs">
         {TABS.map((entry) => (
           <button

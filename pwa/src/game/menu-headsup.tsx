@@ -56,12 +56,7 @@ export function HeadsUpPage({
   );
   return (
     <div className="menu-card menu-card-wide">
-      <MenuHead
-        back={onBack}
-        backLabel="MAIN MENU"
-        title="HEADS UP"
-        sub="Race the field on a stage you have finished — no points, just the race"
-      />
+      <MenuHead back={onBack} backLabel="MENU" title="HEADS UP" />
       {!open && <div className="menu-empty">Drive a stage to the end in the campaign first.</div>}
       {LOCATIONS.map((location) => (
         <div key={location.id} className="menu-section">
@@ -75,29 +70,34 @@ export function HeadsUpPage({
           />
         </div>
       ))}
-      <OptionRow
-        label="RIVALS"
-        options={DIFFICULTY_OPTIONS}
-        value={headsUp.difficulty}
-        onPick={(difficulty) => onHeadsUp({ ...headsUp, difficulty })}
-      />
-      <ToggleRow
-        label="MASS START"
-        hint="The whole field on one grid, on one green. You start on the back row — and the rows you give away come back as drive over the first 200 m, which is the only catch-up there is."
-        on={headsUp.massStart}
-        onToggle={() => onHeadsUp({ ...headsUp, massStart: !headsUp.massStart })}
-      />
-      {headsUp.massStart && (
+      {/* The mode's three settings, grouped so a phone held sideways can pair
+          them up: three full-width rows under two rows of stage boxes is one
+          row more than a 390px-tall screen holds. */}
+      <div className="menu-settings">
         <OptionRow
-          label="CARS"
-          options={GRID_OPTIONS}
-          value={gridOption(headsUp.cars)}
-          onPick={(id) => {
-            const picked = GRID_OPTIONS.find((opt) => opt.id === id);
-            if (picked) onHeadsUp({ ...headsUp, cars: picked.cars });
-          }}
+          label="RIVALS"
+          options={DIFFICULTY_OPTIONS}
+          value={headsUp.difficulty}
+          onPick={(difficulty) => onHeadsUp({ ...headsUp, difficulty })}
         />
-      )}
+        <ToggleRow
+          label="MASS START"
+          hint="Everyone off one grid, on one green. You start at the back."
+          on={headsUp.massStart}
+          onToggle={() => onHeadsUp({ ...headsUp, massStart: !headsUp.massStart })}
+        />
+        {headsUp.massStart && (
+          <OptionRow
+            label="CARS"
+            options={GRID_OPTIONS}
+            value={gridOption(headsUp.cars)}
+            onPick={(id) => {
+              const picked = GRID_OPTIONS.find((opt) => opt.id === id);
+              if (picked) onHeadsUp({ ...headsUp, cars: picked.cars });
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }
