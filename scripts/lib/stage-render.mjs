@@ -138,6 +138,62 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
     return h00 * (1 - fx) * (1 - fy) + h10 * fx * (1 - fy) + h01 * (1 - fx) * fy + h11 * fx * fy;
   };
 
+  /** R17 — THE APRON: the ground a junction has spread with gravel.
+   *
+   * Where a dirt road meets a sealed one there is always a corner of ground
+   * between the two that is neither road and is not field either — every
+   * car that has swung wide off the main road has run over it, and what
+   * grows there is nothing. Left as grass it is the tell that the two
+   * ribbons were laid separately and never met, and no amount of widening
+   * the mat closes it: the corner is the shape of two roads crossing at an
+   * angle, not a road that is too narrow.
+   *
+   * So it is the GROUND that answers, not the road. The platform has
+   * already graded this flat (`junctionFlat`), so there is nothing to
+   * shape and no seam to open — only a surface to say what it is. Bounded
+   * by how far it lies from the minor road's own mat, so what comes out is
+   * the corner either side of the mouth rather than the whole ellipse.
+   *
+   * Returns 0..1, faded at its rim so the gravel runs out into the grass
+   * instead of ending on a drawn line. */
+  const APRON_REACH = 9;
+  // ...and it is the MINOR road's apron, so the mouth it is measured from
+  // is the minor road's mat alone. Measured from whatever road is nearest
+  // instead, the through road's own verge is within reach of it on the far
+  // side of the crossing, and a junction grows a gravel shoulder on a road
+  // that has no dirt road anywhere near it.
+  const apronNear = track.junctions.map((j) =>
+    track.samples.filter(
+      (s) =>
+        Math.abs(s.s - j.s) < j.reach * 2.5 &&
+        s.surface === "gravel" &&
+        (j.joining ? s.s < j.s : s.s > j.s),
+    ),
+  );
+  const apronAt = (x, z) => {
+    let best = 0;
+    for (const [n, j] of track.junctions.entries()) {
+      const flat = junctionFlat(j, x, z);
+      if (flat <= 0) continue;
+      // Not on the sealed road: the through road draws its own surface, and
+      // an apron over it is a dirt patch on the carriageway.
+      const past = junctionMainEdge(j, x, z);
+      if (past === null || past < 0) continue;
+      // ...and near the mouth, measured from the minor road's mat.
+      let out = Infinity;
+      for (const s of apronNear[n]) {
+        const d =
+          Math.hypot(s.x - x, s.z - z) - (Math.abs(s.shift ?? 0) + (s.width ?? track.width) / 2);
+        if (d < out) out = d;
+      }
+      if (out >= APRON_REACH) continue;
+      const t = Math.max(0, out) / APRON_REACH;
+      const here = flat * (1 - t * t * (3 - 2 * t));
+      if (here > best) best = here;
+    }
+    return best;
+  };
+
   // The sun comes over the viewer's left shoulder, which is the convention
   // every relief map on earth uses because the eye reads it as raised.
   const metersPerPixel = 1 / scale;
@@ -159,6 +215,12 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
       else if (h > 26) color = mix(color, GROUND.rock, Math.min(1, (h - 26) / 30));
       if (slope > 0.35) color = mix(color, GROUND.rockDark, Math.min(0.85, (slope - 0.35) / 0.9));
       else if (slope > 0.12) color = mix(color, GROUND.moss, (slope - 0.12) * 1.2);
+      // R17 — the junction's own apron, spread over whatever the country
+      // was doing here.
+      const apron = apronAt(worldX(x), worldZ(y));
+      if (apron > 0) {
+        color = mix(color, mix(ROAD.gravel.loose, ROAD.gravel.worn, 0.35), apron);
+      }
       // Hillshade: the lambert term against a sun low in the north-west.
       const light = 0.72 + 0.55 * (-dx * 0.55 - dy * 0.55 + 0.45) * (1 / Math.hypot(dx, dy, 1));
       canvas.set(x, y, shade(color, Math.max(0.35, Math.min(1.45, light))));
@@ -276,15 +338,6 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
    * goes the OTHER way and is the only thing that crosses the edge. */
   const DRAG_ON = 0.42;
 
-  /** R17 — inside a junction neither road wears a border: the shoulder and
-   * the edge lines are cut away, and a minor road has none at all where it
-   * stands on the mat of the road it meets. */
-  const inJunction = (x, z) => {
-    if (track.junctions.some((j) => junctionFlat(j, x, z) > 0.25)) return true;
-    const past = pastMainEdge(x, z);
-    return past !== null && past < 1.5;
-  };
-
   const bandColor = (sample, lat, roadWidth, x, z) => {
     const half = roadWidth / 2;
     const out = Math.abs(lat) - half;
@@ -325,15 +378,46 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
     // past that line the ground belongs to the road running through: a band
     // of grass drawn there is a lawn on the carriageway, which is what the
     // mouth's outer corner had.
-    const pastEdge = pastMainEdge(x, z);
-    if (pastEdge !== null && pastEdge < 0) return null;
-    if (inJunction(sample.x, sample.z)) return null; // the junction is all road
-    if (out < ROAD_CROSS.verge.bareTo) return ROAD.shoulder;
-    return mix(
-      ROAD.shoulder,
-      ROAD.verge,
-      Math.min(1, (out - ROAD_CROSS.verge.bareTo) / (ROAD_CROSS.reach - ROAD_CROSS.verge.bareTo)),
-    );
+    // R17 — a MINOR road has no border where it crosses the road it meets:
+    // its shoulder and verge stop at the main road's edge, because past
+    // that line the ground belongs to the road running through.
+    //
+    // Only the minor road. The junction's frame is a straight band and the
+    // road curves through it, so the through road's OWN verge weaves in and
+    // out of that band — and culled by it, the tarmac's shoulder came and
+    // went in blocks with field between them, the length of every crossing.
+    if (kind === "gravel") {
+      const pastEdge = pastMainEdge(x, z);
+      if (pastEdge !== null && pastEdge < 0) return null;
+    }
+    // R17 — and where the junction has spread its APRON, the road's border
+    // gives way to it. The apron is painted into the ground, so a verge
+    // band drawn over it puts the shoulder and the grass back on top of the
+    // very corner the apron exists to surface — which is the wedge between
+    // the two roads, and the one place a junction must not be green.
+    const apron = apronAt(x, z);
+    const beside =
+      out < ROAD_CROSS.verge.bareTo
+        ? ROAD.shoulder
+        : mix(
+            ROAD.shoulder,
+            ROAD.verge,
+            Math.min(
+              1,
+              (out - ROAD_CROSS.verge.bareTo) / (ROAD_CROSS.reach - ROAD_CROSS.verge.bareTo),
+            ),
+          );
+    if (apron > 0) {
+      return mix(beside, mix(ROAD.gravel.loose, ROAD.gravel.worn, 0.35), apron);
+    }
+    // "The junction is all road" used to mean drawing NOTHING here. But
+    // nothing is not road — it is whatever the ground was, which is grass,
+    // so the sealed road lost its shoulder for the length of every crossing
+    // and the field came up to the edge of the carriageway. What a junction
+    // takes away is the border's LINE, not the ground beside the road: the
+    // mat keeps no edge line and no camber (that is decided on the mat
+    // side), and out here the shoulder simply carries on.
+    return beside;
   };
 
   const drawRoad = (samples, roadWidth) => {
