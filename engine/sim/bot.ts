@@ -16,6 +16,8 @@ import { latCeiling, slideFloor, surfaceGripFor, wheelSlide } from "../game/limi
 import { TUNING } from "../game/defs/tuning.ts";
 import type { CarSpec } from "../game/defs/cars.ts";
 import { flatTrack, SURFACES, type TerrainField, type Track } from "../mapgen/index.ts";
+import { scarPlan, scarsFor } from "./scars.ts";
+import { startsIn } from "../game/step.ts";
 import type { CarInput, GameState } from "../game/state.ts";
 
 /** The sample `ahead` steps down the road. On a CIRCUIT (R22) the road runs
@@ -108,6 +110,14 @@ export type BotProfile = {
    * touch anybody, past it they lean on whatever is beside them, and past
    * `AGGRO.dirty` they stop passing cars and start removing them. */
   aggression: number;
+  /** Where in its own grid ritual this car is, 0..1 of one blip (see
+   * `GRID`). It is not a skill and not even a temperament — it is a phase,
+   * and it exists for one reason: fourteen crews all revving to the same
+   * clock is one loud engine, where fourteen crews a fifth of a blip apart
+   * is a START LINE. It comes off the START NUMBER rather than the crew
+   * (`rivals.ts`), because two identical drivers stood side by side should
+   * still not blip in unison. */
+  gridPhase: number;
 };
 
 /** How much brake a driver carries PAST the turn-in of a corner the car
@@ -149,6 +159,7 @@ export const RALLY_BOT: BotProfile = {
   offRoadGiveUp: 8,
   overtake: 0.6,
   aggression: 0.15,
+  gridPhase: 0,
 };
 
 /** The lateral grip multiplier this car has on each surface, by surface
@@ -236,6 +247,14 @@ export function botInput(
   traffic: readonly TrafficCar[] = NO_TRAFFIC,
 ): CarInput {
   const { car, track } = state;
+  // THE START CONTROL. Nothing the hands do reaches the car while the lights
+  // are up, so the corner plan below has nothing to say here — and running it
+  // anyway is a scan of the road, per car, for every one of the ten seconds
+  // the field spends stood still. What a driver is doing is the pedal, and
+  // that is THE GRID RITUAL at the bottom of the file.
+  if (state.phase === "intro" || state.phase === "countdown") {
+    return gridInput(gridRev(startsIn(state), profile.aggression, profile.gridPhase));
+  }
   // How freely this car rotates, against the profile's reference — and it
   // is TWO things, because a car arrives at a hot corner on both of them:
   // how much authority a developed slide hands the wheel (`driftYaw`) and
@@ -275,6 +294,12 @@ export function botInput(
   const desired = Math.atan2(aimX - car.x, aimZ - car.z);
   const error = angleDiff(car.heading, desired);
   let steer = clamp(error * profile.steerGain, -1, 1);
+
+  // What this stage has already done to this driver (`scars.ts`) — read
+  // every step, because the reading is also the booking: a respawn is only
+  // visible as the counter moving, and the place worth remembering is where
+  // the car was standing before it moved.
+  const scars = scarsFor(state);
 
   // Corner-speed plan: the tightest curvature over the horizon caps speed at
   // sqrt(a_lat / κ); the nearest cap that requires braking wins.
@@ -377,6 +402,22 @@ export function botInput(
     ahead += 1;
   }
 
+  // ...and over the top of the road ahead, the road BEHIND: a stretch that
+  // has already ended this run is planned at a fraction of the speed it
+  // ended it at, and at a smaller fraction every time it does it again. The
+  // corner scan cannot see this — a place that catches a car out need not be
+  // a corner at all, and the corner it is was legal at that speed for
+  // everybody who got through it — so it is a cap in its own right, and the
+  // plan takes whichever of the two is lower.
+  const scarred = scarPlan(scars, state, braking);
+  if (scarred < targetSpeed) targetSpeed = scarred;
+  // ...and the driver KNOWS it, which is a different thing from the plan
+  // having a number in it. Everything below that overrules the pedals —
+  // the flick, and the throttle that holds a slide open — is a decision
+  // taken on the assumption that running wide costs a moment. Arriving at
+  // the place that ended the last run, it costs the run again.
+  const wary = car.u > scarred;
+
   // THE PEDALS, and they are pedals rather than switches. Both used to be
   // on or off, which is not how either one is driven: a car held at a corner
   // speed by a throttle snapping between the floor and nothing pitches on
@@ -411,8 +452,12 @@ export function botInput(
   // the corner is quick enough to be worth one. Yanked to START a rotation
   // and let go the moment there is one, which is why this one reads
   // `car.drifting` and the trail below does not.
+  // ...and nobody flicks a car into the corner that has just ended their
+  // run. The lever is a deliberate overspeed the slide is trusted to scrub;
+  // `wary` is the driver having already been shown what happens when it
+  // does not, so the corner gets driven rather than attacked.
   const handbrake =
-    nearHard && !car.drifting && (rotates ? hot : car.u > slideFloor(state.spec, 1) + 1);
+    nearHard && !car.drifting && !wary && (rotates ? hot : car.u > slideFloor(state.spec, 1) + 1);
   // ...and the TRAILED BRAKE, which is the same ask made with the pedal that
   // is already down. The plan has the car braking for the corner anyway; a
   // driver in a car that will not rotate carries some of that brake PAST the
@@ -434,6 +479,14 @@ export function botInput(
     // its half-throttle in a lump exactly where it was least settled.
     const deep = clamp((Math.abs(car.slip) - DRIFT_HOLD) / DRIFT_BAND, 0, 1);
     throttle = 1 - (1 - DRIFT_FLOOR) * deep;
+    // Unless the slide is being carried into a place that has already ended
+    // this run, and it is the SLIDE that has to go. Everywhere else the
+    // pedal is never lifted right off mid-drift, because the drive is what
+    // holds the angle — here that is the point: the drive comes off, the
+    // slide shuts, and the plan above gets a car it can actually brake with
+    // back a step later. It is what a driver does when they recognise the
+    // corner they are already sideways for.
+    if (wary) throttle = 0;
     // Standing on the middle pedal sideways is not how a driver avoids
     // anything — but a front-driver that let the brake up here would simply
     // stop turning, so what it keeps is the trail and never more.
@@ -758,4 +811,126 @@ function readTraffic(
   }
 
   return { offset, throttle, brake, shove };
+}
+
+// THE GRID RITUAL — what a crew does with the throttle while the lights are
+// still up.
+//
+// Nothing a car does on the grid moves it (`step.ts`), so the whole start
+// control is one pedal and one needle. A bot that simply drove — which is
+// what a corner plan does with an empty road in front of it — buried the
+// throttle on the first frame of the establishing shot and held it there for
+// ten seconds: fourteen cars pinned flat at the limiter, every one of them
+// making exactly the same noise, and every one of them dropping the clutch
+// on a full flywheel.
+//
+// A driver waiting for a green does not do that. They BLIP it — short stabs
+// while there is time, longer and closer together as the lights come down,
+// and then one held note they intend to leave on. That shape is the whole
+// module: a square wave on the pedal, which `TUNING.revs` turns into a rev
+// that climbs at `blip` and falls away at `settle`, so a stab reads as
+// *brum* and a long one as *brmmmmmm* without anything here shaping a curve.
+//
+// It is TEMPERAMENT, and it comes off `aggression` for the same reason the
+// leaning does (see THE OTHER CARS): it is not monotone in pace, so no skill
+// axis can own it. A calm crew feathers it and waits; a wild one buries it,
+// blips it oftener, and sits on the limiter at the green. And that last part
+// is not decoration — `clutchDump` reads the revs the drop lands on, so a
+// crew that spends the countdown screaming genuinely leaves on lit tyres and
+// a crew that waits genuinely drives away. Whoever is hardest on the field
+// is hardest on their own start line too.
+const GRID = {
+  /** Seconds before the green the ritual starts. Under the whole start
+   * control (`TUNING.intro + countdown`), because a crew that began revving
+   * on the first frame of the establishing shot would have nothing left to
+   * build toward — the beats before this one are the field WAITING. */
+  from: 8,
+  /** ...and the seconds of it spent on one held note. Long enough that the
+   * revs actually reach the launch figure below from wherever the last blip
+   * left them (`TUNING.revs.settle` is 3.4/s, so a second covers the whole
+   * range), which is what stops the drop landing on an arbitrary point of
+   * the last blip — a start-line lottery rather than a character. */
+  hold: 1,
+  /** Blips per second at the top of the ritual and by the last one. They
+   * accelerate rather than tick: the rate is read as a ramp and integrated
+   * to the phase, so no blip is ever cut in half by the ramp moving. */
+  rate: { first: 0.5, last: 1.6 },
+  /** How much of a cycle the pedal is DOWN, first blip to last. A quarter is
+   * a stab that is gone as soon as it arrives; two thirds is a note being
+   * held. This is the whole of *brum* → *brmmmmmm*. */
+  open: { first: 0.26, last: 0.7 },
+  /** How far the pedal goes, for the mildest crew in the field and for the
+   * one with the reputation. The calm end is deliberately over the fumes'
+   * own floor (`EXHAUST.rev.from`) and under the body's tremble threshold
+   * (`SHAKE.from` in car-shake.ts): the quiet crews smoke a little and sit
+   * still, and what shakes on the line is the crews with something to
+   * prove. */
+  depth: { calm: 0.55, wild: 1 },
+  /** How much of that depth the FIRST blip gets, 0..1 — the rest arrives
+   * as the green does. A ritual that opened at full depth would have
+   * nowhere to build. */
+  warm: 0.55,
+  /** ...and the same idea on the rate: what the blip count is multiplied by
+   * at either end of the temper. A crew with a temper is not merely revving
+   * harder, they are revving MORE. */
+  eager: { calm: 0.7, wild: 1.35 },
+  /** The held note the clutch comes out on, calm crew to wild one. Nobody
+   * launches at idle, so the calm end is still a car sitting ready — but it
+   * is only a little over `TUNING.engine.dumpFrom` (the most revs a drop
+   * costs nothing at), so the mild crews pay a fraction of the penalty and
+   * drive cleanly away. The wild end is the limiter: lit tyres, a cloud of
+   * smoke, and a couple of car lengths handed to everybody who waited. */
+  launch: { calm: 0.5, wild: 1 },
+} as const;
+
+/** Read one number off two: what fraction of the way from `a` to `b` `at`
+ * is, as a plain lerp. Used enough below to be worth a name. */
+function mix(a: number, b: number, at: number): number {
+  return a + (b - a) * at;
+}
+
+/** THE PEDAL ON THE GRID, 0..1 — `left` seconds before the green, for a crew
+ * of this `aggression`, `phase` of a blip out of step with its neighbours.
+ *
+ * Exported because it is the one part of the bot with no road in it: a test
+ * can drive the whole ritual without compiling a stage, and the shape is
+ * worth asserting (a calm crew never reaches a wild one's depth; every crew
+ * ends on a held note; nobody revs before `GRID.from`). */
+export function gridRev(left: number, aggression: number, phase: number): number {
+  const temper = clamp(aggression, 0, 1);
+  // The last beat: one note, held, and the revs the clutch comes out on.
+  if (left <= GRID.hold) return mix(GRID.launch.calm, GRID.launch.wild, temper);
+  if (left >= GRID.from) return 0;
+
+  // Seconds into the blipping, and how far through it that is.
+  const span = GRID.from - GRID.hold;
+  const t = GRID.from - left;
+  const urgency = clamp(t / span, 0, 1);
+
+  // Which blip, and how far into it. The rate ramps linearly over the span,
+  // so the phase is its integral — a quadratic, which keeps the blips
+  // accelerating smoothly instead of jumping whenever the rate is re-read.
+  const eager = mix(GRID.eager.calm, GRID.eager.wild, temper);
+  const cycles =
+    eager * (GRID.rate.first * t + ((GRID.rate.last - GRID.rate.first) * t * t) / (2 * span)) +
+    phase;
+  const into = cycles - Math.floor(cycles);
+  // Off the pedal: the flywheel is what makes the sound of a blip, and it
+  // needs the gap to fall through.
+  if (into >= mix(GRID.open.first, GRID.open.last, urgency)) return 0;
+  return mix(GRID.depth.calm, GRID.depth.wild, temper) * mix(GRID.warm, 1, urgency);
+}
+
+/** The whole of what a bot does with a car it cannot move: a pedal, and
+ * nothing else touched. */
+function gridInput(throttle: number): CarInput {
+  return {
+    steer: 0,
+    throttle,
+    brake: 0,
+    handbrake: false,
+    shiftUp: false,
+    shiftDown: false,
+    reset: false,
+  };
 }

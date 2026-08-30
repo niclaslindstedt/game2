@@ -40,7 +40,7 @@ import { createEnvironment } from "./environment.ts";
 import { createFieldCars, type FieldCars } from "./field-cars.ts";
 import type { Clap } from "./weather.ts";
 import { TRUNK_COLOR } from "./flora.ts";
-import { EXHAUST } from "./fumes.ts";
+import { PIPE, pipeBursts, pipeWork } from "./fumes.ts";
 import { createWayHomeArrow } from "./way-home.ts";
 import { islandPlanes } from "./map-island.ts";
 import {
@@ -52,7 +52,7 @@ import {
 import { createMirror, MIRROR_ASPECT, MIRROR_RANGE } from "./mirror.ts";
 import { createNameTag, GHOST_LOOK, TAG_LAYER, type NameTag } from "./name-tag.ts";
 import { buildMapRoute, type MapRoute } from "./map-route.ts";
-import { classify } from "./standings.ts";
+import { classify, type RivalRun } from "./standings.ts";
 import { buildWorld, type World } from "./world.ts";
 
 /** How much of the map pane's width the route ribbon may cover before it
@@ -169,6 +169,15 @@ export type GameRenderer = {
    * nobody entered, where the size falls back to where the TIME would have
    * placed on the derived list (standings.ts). */
   setStanding: (place: number | null) => void;
+  /** WATCH SOMEBODY ELSE COME HOME (spectate.ts). Past the line the player's
+   * own run is over, and `render` is handed the game of whichever crew is
+   * being followed instead of theirs — so this is what tells the renderer
+   * that the car under the camera is a RIVAL: the player's own body comes
+   * off the road, along with the three things bolted to it that only mean
+   * something to somebody driving (the way home, the mirror, the cabin), and
+   * the field stops raising a second cloud off the car the frame is already
+   * raising one off. Null puts the lens back on the player's car. */
+  spectate: (run: RivalRun | null) => void;
   cycleCamera: () => CameraMode;
   /** God mode's controls for this frame — what the free camera should do
    * with `dt` worth of held keys and mouse travel. Written straight into
@@ -551,6 +560,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
 
   /** The field's verdict, set by the app as the boards go by. */
   let standing: number | null = null;
+  /** The crew the frame is being rendered FROM while the run-out is
+   * spectated, and null whenever the lens is on the player's own car. */
+  let watched: RivalRun | null = null;
 
   const setGhost = (state: GameState | null): void => {
     dropGhost();
@@ -867,32 +879,19 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // into road speed, so it smokes harder than one at pace — `car.rev` is
     // the throttle itself anywhere in the start control, and gearing plus
     // speed at every other moment, which is why the read is phase-gated.
-    const X = EXHAUST;
-    const revving =
-      state.phase === "countdown" || state.phase === "intro"
-        ? Math.max(0, (c.rev - X.rev.from) / (1 - X.rev.from))
-        : 0;
+    const pipe = pipeWork(c.rev, c.u, state.phase, fx);
     fumeClock += dt;
-    const idling = c.u > 1 ? X.every.rolling : X.every.idle;
-    const fumeEvery = (idling + (X.rev.every - idling) * revving) / Math.max(0.2, fx);
-    if (fx > 0 && !c.airborne && fumeClock > fumeEvery) {
-      fumeClock = 0;
-      const rolling = X.shade.base + X.shade.pace * Math.min(1, c.u / X.shade.paceAt);
-      const shade = rolling + (X.rev.shade - rolling) * revving;
-      // A blip is a BURST — one puff a tick reads as an engine ticking
-      // over however fast the ticks come.
-      const puffs = 1 + Math.round((X.rev.puffs - 1) * revving);
-      // Standing still there is no car pulling away from the cloud, so what
-      // pushes it out of the pipe is the pressure behind it.
-      const out = c.u * 0.15 + X.rev.blast * revving;
-      for (let i = 0; i < puffs; i++) {
+    const bursts = fx > 0 && !c.airborne ? pipeBursts(fumeClock, pipe.every) : 0;
+    if (bursts > 0) {
+      fumeClock -= bursts * pipe.every;
+      for (let i = 0; i < bursts * pipe.puffs; i++) {
         fumes.spawn(
-          c.x - fwdX * 1.9 + rightX * 0.35,
-          c.y + 0.32,
-          c.z - fwdZ * 1.9 + rightZ * 0.35,
-          -fwdX * out + state.wind.x * 0.85,
-          -fwdZ * out + state.wind.z * 0.85,
-          shade,
+          c.x - fwdX * PIPE.back + rightX * PIPE.side,
+          c.y + PIPE.up,
+          c.z - fwdZ * PIPE.back + rightZ * PIPE.side,
+          -fwdX * pipe.blast + state.wind.x * 0.85,
+          -fwdZ * pipe.blast + state.wind.z * 0.85,
+          pipe.shade,
         );
       }
     }
@@ -963,7 +962,12 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // Stated as "not the views nobody drives from" rather than as a list of
     // the play cameras, because that list grows: naming them is how the
     // arrow quietly stops appearing in the next camera somebody adds.
-    const driving = view !== "drone" && view !== "map" && view !== "free" && !state.drowning;
+    //
+    // Spectating is the other kind of nobody: the state under the camera is
+    // a rival's, so there is a car being driven — just not by the player,
+    // and none of the three things this gates is theirs to read.
+    const driving =
+      view !== "drone" && view !== "map" && view !== "free" && !state.drowning && !watched;
     wayHomeArrow.group.visible = driving;
     if (driving) wayHomeArrow.update(state, chase.camera, dt);
     chase.update(state, dt);
@@ -1011,9 +1015,19 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // those whatever is drawn, so hiding the body after dark left a pool of
     // headlight travelling along an empty road, which is a stranger thing to
     // see than a small car; and now that the map leans in to a few metres, it
-    // also hid the one thing on the stage that is actually moving. Nothing
-    // here has to switch it on: the body is built visible and stays that way.
+    // also hid the one thing on the stage that is actually moving.
+    //
+    // ONE BEAT TAKES IT OFF, and it is the beat where there is no such car:
+    // spectating hands `render` a rival's game, so the player's body would be
+    // drawn wrapped around somebody else's — a second car inside the one the
+    // field is already drawing, in the wrong paint. A finished run has
+    // nowhere on a rally stage to stand, which is the same rule the field
+    // keeps for a crew who is home (`onRoad`).
     if (car) {
+      const mine = !watched;
+      car.group.visible = mine;
+      car.shadow.visible = mine;
+      car.debris.visible = mine;
       // Behind the wheel the player is looking at the FIRST-PERSON cabin,
       // not the one authored to be read through glass from a car's length
       // back — the two stand in the same space, so only one of them is ever
@@ -1208,6 +1222,22 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     field,
     setStanding: (place) => {
       standing = place;
+    },
+    spectate: (run) => {
+      watched = run;
+      field.watch(run);
+      // The lens changes car, and the rig has to be re-stood around the new
+      // one either way: coming BACK it is standing behind somebody else's car
+      // on another part of the stage, and the flying finish would otherwise
+      // plant its shot there.
+      //
+      // ARRIVING at a crew it FLIES — a second, in an arc over whatever
+      // country lies between (camera-sweep.ts) — because the gap between two
+      // cars on a stage is hundreds of metres and a cut across it says
+      // nothing about where either of them is. Standing down is a cut: the
+      // destination there is the results card, not a shot.
+      const onto = run ? run.state : game;
+      if (onto) chase.retake(onto, run !== null);
     },
     cycleCamera: () => chase.cycle(),
     flyCamera: (move) => {

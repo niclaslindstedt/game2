@@ -50,11 +50,10 @@
 // And two BEATS override whichever of them is up. The establishing shot
 // opens every stage: the camera circles the start control while the crew in
 // front leaves, then comes down onto the car it will be driven from
-// (camera-start.ts). The flying finish closes it: the moment the car crosses
-// the line the camera stops travelling with it, plants itself where it
-// stood, and simply turns to watch the car go — the shot every rally
-// broadcast cuts to, and the reason R25 builds road past the gate for the
-// car to disappear down.
+// (camera-start.ts). The flying finish closes it: the camera stops
+// travelling with the car, plants itself where it stood, and turns to watch
+// it go (camera-finish.ts). This file owns WHEN each of the two has the
+// frame; they own what the shot is.
 
 import * as THREE from "three";
 import { angleLerp, clamp } from "../lib/angles.ts";
@@ -77,8 +76,10 @@ import {
   type FreeFlyPose,
   type FreeFlyRig,
 } from "./camera-free.ts";
+import { createFinishCamera } from "./camera-finish.ts";
 import { createMapCamera, type MapPose } from "./camera-map.ts";
 import { createStartCamera } from "./camera-start.ts";
+import { createSweepCamera } from "./camera-sweep.ts";
 import { DEFAULT_SETTINGS, PLAY_CAMERAS, type PlayCamera } from "./settings.ts";
 
 /** `free` is god mode: the developer tool that takes the lens off the car
@@ -483,37 +484,6 @@ const CLIFF = {
   settle: 1.4,
 };
 
-/** THE FINISH SHOT. The camera stops dead at the line and lets the car
- * leave, so everything here is about what a planted camera does.
- *
- * It rises a little as it plants — a broadcast camera is on a rostrum, not
- * on the road — and pulls its field of view in over the same beat, which is
- * a lens going long: the car recedes into a flatter, tighter frame instead
- * of racing away down a wide-angle tunnel. Both ease in over `settle`
- * rather than cutting, because a cut would land in the middle of the one
- * moment the player is watching. */
-const FINISH = {
-  /** Seconds the plant takes to complete. */
-  settle: 1.1,
-  /** How far the camera rises onto its rostrum, m. Deliberately modest: the
-   * gate's banner hangs at 4.7 m, and a camera that climbs to meet it turns
-   * the arch into a wall ruled across the middle of the frame. Staying
-   * under it leaves the gate where it belongs — an arch over the top third,
-   * with the road and the departing car running away beneath it. */
-  lift: 1,
-  /** ...and how far back off the line it drifts while it does, m. A nudge,
-   * not a retreat: the whole point of the shot is that the camera STAYS. */
-  back: 1.5,
-  /** The long lens it settles to, degrees. */
-  fov: 46,
-  /** How fast the aim follows the car, 1/s. Loose: a planted camera pans,
-   * and a pan that tracks perfectly reads as a lock rather than an
-   * operator. */
-  pan: 3.4,
-  /** How far above the car's own height the aim sits, m. */
-  aimUp: 0.7,
-};
-
 export type { MapPose };
 
 export type GameCamera = {
@@ -561,6 +531,20 @@ export type GameCamera = {
   skipStartShot: () => void;
   /** Rewind the establishing shot for a new run. */
   resetStartShot: () => void;
+  /** PUT THE LENS ON THIS CAR, wherever it has been. The spectator feed hands
+   * `update` another crew's game entirely (App.tsx), so every reading the rig
+   * carries — its yaw, its floor, its sway, and above all the flying finish's
+   * PLANT, which is taken from wherever the camera was standing — belongs to
+   * a different road. This drops all of it and stands the rig around `state`
+   * in one call, with no time in it.
+   *
+   * `fly` makes the change a flight back up the road over the country
+   * between the two rather than a cut (camera-sweep.ts) — which is what a
+   * spectator
+   * CHANGING crew wants, and what standing the feed down does not: the
+   * results card is the destination there, and a shot nobody is going to look
+   * at is not worth a second. */
+  retake: (state: GameState, fly?: boolean) => void;
   update: (state: GameState, dt: number) => void;
   /** Rattle the shot. `dir` is the world direction the blow came FROM the
    * car's middle toward — the in-car views throw the driver's head along it
@@ -614,11 +598,12 @@ export function createGameCamera(width: number, height: number): GameCamera {
    * one rig with a head on it (camera-eye.ts). */
   const eye = createEyeCamera();
   let tuning: EyeTuning = { ...NEUTRAL_TUNING };
-  /** Where the camera was standing when the car crossed the line, and where
-   * it is aiming now. Null until it plants; cleared when a fresh run puts
-   * the camera back in the player's hands. */
-  let planted: { x: number; y: number; z: number; back: THREE.Vector3 } | null = null;
-  const aim = new THREE.Vector3();
+  /** The shot the stage closes on: the camera planted at the line, watching
+   * the car go (camera-finish.ts). */
+  const finishShot = createFinishCamera();
+  /** …and the flight between two cars, for a spectator changing crew
+   * (camera-sweep.ts). */
+  const sweepShot = createSweepCamera();
   const free = createFreeFly();
   const freeMove: FreeFlyMove = { ...NEUTRAL_MOVE };
 
@@ -784,46 +769,6 @@ export function createGameCamera(width: number, height: number): GameCamera {
     );
   };
 
-  /**
-   * The flying finish: the camera stops where it is and watches the car go.
-   *
-   * The plant is taken from wherever the camera happened to be on the last
-   * racing frame — whichever rig was up, hood included — so the shot begins
-   * from the view the player was already in rather than cutting to a
-   * position they have never seen. From there it only rises, eases back,
-   * and pans.
-   */
-  const updateFinish = (state: GameState, dt: number): void => {
-    const car = state.car;
-    if (!planted) {
-      // Behind the camera along its own view axis: which way "back off the
-      // line" is, without assuming the camera was ever facing down the road.
-      const back = new THREE.Vector3();
-      camera.getWorldDirection(back);
-      back.y = 0;
-      if (back.lengthSq() < 1e-6) back.set(0, 0, 1);
-      back.normalize().negate();
-      planted = { x: camera.position.x, y: camera.position.y, z: camera.position.z, back };
-      aim.set(car.x, car.y + FINISH.aimUp, car.z);
-    }
-    // A smoothstep on the roll-out's own clock, so the plant is a fixed
-    // gesture and not something a slow frame can outrun.
-    const t = Math.min(1, state.rollout / FINISH.settle);
-    const ease = t * t * (3 - 2 * t);
-    const px = planted.x + planted.back.x * FINISH.back * ease;
-    const pz = planted.z + planted.back.z * FINISH.back * ease;
-    const ground = state.terrain.groundAt(px, pz);
-    camera.position.set(px, Math.max(planted.y + FINISH.lift * ease, ground + CHASE_CLEARANCE), pz);
-    // The pan lags the car, which is what makes it read as an operator
-    // following it rather than a rig bolted to it.
-    const follow = clamp(FINISH.pan * dt, 0, 1);
-    aim.x += (car.x - aim.x) * follow;
-    aim.y += (car.y + FINISH.aimUp - aim.y) * follow;
-    aim.z += (car.z - aim.z) * follow;
-    camera.lookAt(aim);
-    fov += (FINISH.fov - fov) * clamp(2.4 * dt, 0, 1);
-  };
-
   /** One step of the free camera, and the accumulated nudges it consumes.
    * Wanted from two places — the ordinary update below, and `flyOnly`, for a
    * frame whose world is deliberately being held still — so the clearing of
@@ -835,6 +780,20 @@ export function createGameCamera(width: number, height: number): GameCamera {
     freeMove.speedSteps = 0;
     camera.fov = verticalFovFor(FREE_FOV, camera.aspect);
     camera.updateProjectionMatrix();
+  };
+
+  /** Stand whichever rig is up around `state`. Split out of `update` because
+   * `retake` needs the same dispatch: one list of modes, so a camera added
+   * tomorrow is placed by both.
+   *
+   * The in-car rigs take no rattle — a kick reaches them as the directional
+   * jolt `kick` already handed the neck, and a random offset per frame on top
+   * of that is the cabin jumping about rather than the car being hit. */
+  const placeFor = (inCar: InCarCamera | null, state: GameState, dt: number): void => {
+    if (inCar) fov = eye.update(inCar, state, dt, camera);
+    else if (mode === "drone") updateDrone(state, dt);
+    else if (mode === "map") fov = map.update(camera, state, dt);
+    else updateChase(CHASE_RIGS[mode as Exclude<PlayCamera, InCarCamera>], state, dt);
   };
 
   const update = (state: GameState, dt: number): void => {
@@ -862,23 +821,24 @@ export function createGameCamera(width: number, height: number): GameCamera {
     // God mode is nobody's shot but the pilot's: the finish never takes it,
     // and it keeps flying whatever phase the run beneath it is in.
     if (watching && mode !== "free" && mode !== "drone" && mode !== "map") {
-      updateFinish(state, dt);
+      fov = finishShot.fly(camera, state, fov, CHASE_CLEARANCE, dt);
       camera.fov = verticalFovFor(fov, camera.aspect);
       camera.updateProjectionMatrix();
       return;
     }
-    if (!watching) planted = null;
+    if (!watching) finishShot.reset();
     if (mode === "free") {
       flyStep(dt);
       return;
     }
-    // The in-car rigs take no rattle: a kick reaches them as the directional
-    // jolt `kick` already handed the neck, and a random offset per frame on
-    // top of that is the cabin jumping about rather than the car being hit.
-    if (inCar) fov = eye.update(inCar, state, dt, camera);
-    else if (mode === "drone") updateDrone(state, dt);
-    else if (mode === "map") fov = map.update(camera, state, dt);
-    else updateChase(CHASE_RIGS[mode as Exclude<PlayCamera, InCarCamera>], state, dt);
+    placeFor(inCar, state, dt);
+    // …and the transit rides over it in exactly the same way, and for the
+    // same reason: the rig has just written the pose this flight is aiming
+    // at, so the last frame of the flight and the first frame after it are
+    // the same frame (camera-sweep.ts). The two beats never overlap — a
+    // spectator's crew is mid-stage, and the establishing shot only flies
+    // through `intro`.
+    if (sweepShot.flying()) fov = sweepShot.fly(camera, state, fov, dt);
     // The establishing shot rides OVER the driving camera rather than
     // instead of it: the rig has just written the pose the player will be
     // driving with, and the shot blends into that exact frame, so the
@@ -925,6 +885,32 @@ export function createGameCamera(width: number, height: number): GameCamera {
     mapPose: map.pose,
     skipStartShot: startShot.skip,
     resetStartShot: startShot.reset,
+    retake: (state, fly = false) => {
+      // Captured BEFORE anything below moves the lens: the flight starts
+      // from the frame that is actually on screen.
+      if (fly) sweepShot.start(camera, state);
+      else sweepShot.reset();
+      // The flying finish plants itself wherever the camera was standing on
+      // the frame it took over, and the shot is the whole of what a card is
+      // laid over. Coming back from a spectator feed the camera is behind
+      // somebody else's car, kilometres up the road — so the plant is
+      // dropped and the rig is stood around THIS car again first.
+      finishShot.reset();
+      // Everything the rig carries from frame to frame, hung back on the car
+      // rather than eased across the gap: an angle, a floor and a spring
+      // that all belonged to a different road.
+      headYaw = state.car.heading;
+      driftOff = 0;
+      yaw = headYaw;
+      swing = 0;
+      swingVel = 0;
+      held = 0;
+      takeoff = state.car.y;
+      floored = false;
+      // No time in it, so nothing eases: this writes the pose, it does not
+      // fly to it.
+      placeFor(IN_CAR.includes(mode as InCarCamera) ? (mode as InCarCamera) : null, state, 0);
+    },
     cycle: () => {
       // Genuinely a no-op from the overhead views: the drone and the map are
       // the menu's own framing, and walking them onto a driving camera would

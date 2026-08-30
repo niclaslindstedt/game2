@@ -35,6 +35,7 @@ const ROOTS = [
   ".menu-card",
   ".roam",
   ".hud-finish",
+  ".hud-spectate",
   ".splash",
 ];
 
