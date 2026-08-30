@@ -184,6 +184,19 @@ export type RoadShape = {
    * graded plane: no crown, no camber, no wheel tracks, because two roads
    * cannot each keep their own and still be one surface. */
   flat?: number;
+  /** R17 — how far the MAT sits off the centerline, m, positive to the
+   * right of travel. Zero everywhere but a junction's mouth, and the only
+   * place in the model where a road's surfacing is not centred on the line
+   * the car drives.
+   *
+   * A dirt road opening into a main road opens on ONE side: the route is
+   * turning through the junction, and the corner itself gives the inner
+   * edge all the angle it needs, so what has to be built out is the outer
+   * edge — which is where a car swinging wide off the main road actually
+   * puts its wheels. Widening both sides equally to get that is what makes
+   * a mouth read as a road that briefly got fatter instead of as a mouth,
+   * and it costs twice the ground for half the effect. */
+  shift?: number;
 };
 
 /** Where the two wheel tracks run on a road of this width, meters from the
@@ -307,7 +320,12 @@ export function vergeOffset(out: number, lift: number, edgeY: number): number {
  * two halves of the road can differ; `width` is the full road width. The
  * bank keeps tilting past the edge, because the ground a banked corner is
  * built on is banked with it. */
-export function corridorOffset(shape: RoadShape, lateral: number, width: number): number {
+export function corridorOffset(shape: RoadShape, offset: number, width: number): number {
+  // R17 — the whole cross-section is measured from the MAT's own centre,
+  // which a junction's mouth moves off the centerline. Done here, once, so
+  // everything that reads a road's shape — the renderer's ribbon, the
+  // terrain's shelf, the physics the car rides — sees the same road.
+  const lateral = offset - (shape.shift ?? 0);
   const half = width / 2;
   const out = Math.abs(lateral) - half;
   if (out <= 0) return crossOffset(shape, lateral, width);

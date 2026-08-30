@@ -848,7 +848,11 @@ export function createTerrain(track: Track): TerrainField {
     const lo = Math.max(0, index - LIP_ENVELOPE);
     const hi = Math.min(samples.length - 1, index + LIP_ENVELOPE);
     for (let i = lo; i <= hi; i++) {
-      if (samples[i].width > widest) widest = samples[i].width;
+      // R17 — how far the mat REACHES, not how wide it is: a mouth opens on
+      // one side, so its far edge stands `shift + width / 2` out and the
+      // shelf has to be under all of it.
+      const reach = 2 * Math.abs(samples[i].shift ?? 0) + samples[i].width;
+      if (reach > widest) widest = reach;
     }
     // Never NARROWER than the nominal corridor. A gravel road wanders
     // either side of nominal all the way down a stage (R33), and letting

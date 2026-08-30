@@ -139,11 +139,14 @@ function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
-/** How far past the main road's edge gravel is still dragged out onto the
- * tarmac, m — the smear of stones every car turning out of a dirt road
- * carries with it, which in life is the most obvious thing about a
- * junction between a sealed road and an unsealed one. */
-const DRAG_OUT = 13;
+/** How far the dirt road's surfacing takes to become the sealed road's
+ * across the seam, m. The seam IS the main road's edge — a road surface
+ * changes across a line, not across a fade — and a mouth is OBLIQUE, so
+ * even this measured across the main road is a couple of metres down the
+ * minor one. Fading it over a car's length instead painted the mouth
+ * tarmac-coloured before it reached the junction, which reads as a gravel
+ * road stopping short of the road it is joining. */
+const SEAM = 0.4;
 /** ...and how much of the tarmac's own color the smear takes at the mouth
  * of the junction, where every car turning off the dirt road drops what it
  * carried onto the seal. */
@@ -332,10 +335,15 @@ export function buildRoad(
     const here = s.width ?? width;
     const wide = here / width;
     const halfHere = here / 2;
+    // R17 — the mat's own centre, which a junction's mouth moves off the
+    // centerline: the stations are measured across the MAT, then carried
+    // out to where the mat actually is.
+    const shift = s.shift ?? 0;
     for (const l of cross) {
       const out = Math.abs(l * wide) - halfHere;
-      const px = s.x + r.x * l * wide;
-      const pz = s.z + r.z * l * wide;
+      const lat = l * wide + shift;
+      const px = s.x + r.x * lat;
+      const pz = s.z + r.z * lat;
       // R16 — the HAND-OVER. Past the bare shoulder the ribbon leans onto
       // the ground lattice beside it and by the corridor's lip the ground
       // has it entirely, so the two meshes MEET rather than one stopping in
@@ -351,7 +359,7 @@ export function buildRoad(
       // through as a dark hairline down the whole stage, which is the same
       // defect as the stripe it replaced, two orders of magnitude thinner
       // and just as visible against grass.
-      let y = s.elevation + corridorOffset(s, l * wide, here) + bias;
+      let y = s.elevation + corridorOffset(s, lat, here) + bias;
       if (ground !== undefined && hand < 1) {
         y = y * hand + ground.heightAt(px, pz) * (1 - hand);
       }
@@ -386,8 +394,8 @@ export function buildRoad(
         // vertex, so the seam is that edge, at that angle.
         if (kind === "gravel") {
           const past = mainEdgeAt(track, px, pz);
-          if (past !== null && past < DRAG_OUT) {
-            const t = Math.max(0, past) / DRAG_OUT;
+          if (past !== null && past < SEAM) {
+            const t = Math.max(0, past) / SEAM;
             sealed.copy(sealedLoose).lerp(sealedWorn, 0.55);
             paint.lerp(sealed, 1 - t * t * (3 - 2 * t));
           }
@@ -450,6 +458,21 @@ export function buildRoad(
           // No landscape to hand over to (the stage previews): the old flat
           // verge, which is all a picture of the road's plan needs.
           paint.copy(shoulder).lerp(verge, t);
+        }
+      }
+      // R17 — and NO BORDER over the road it meets. A minor road's shoulder
+      // and verge stop dead at the main road's edge, because past that line
+      // the ground is the through road's: a vertex out there wearing the
+      // country's colour is a patch of grass lying on the carriageway, and
+      // that is what the mouth's outer corner had. The sample's own centre
+      // cannot answer this — it is metres away and often clear of the main
+      // road while its verge is not — so it is asked per VERTEX, where the
+      // colour is actually being decided.
+      if (out > 0) {
+        const over = mainEdgeAt(track, px, pz);
+        if (over !== null && over < 0) {
+          sealed.copy(sealedLoose).lerp(sealedWorn, 0.55);
+          paint.copy(sealed);
         }
       }
       colors.push(paint.r, paint.g, paint.b);
@@ -630,17 +653,47 @@ export function buildMarkings(
       (j) => junctionFlat(j, s.x, s.z) > 0 && (j.joining ? s.s < j.s : s.s > j.s),
     );
   const plain = (s: Ribbon): boolean => s.surface === "asphalt" && s.deck == null && !minor(s);
+
+  /** R17 — the minor road's own MAT at each crossing: the samples that make
+   * its mouth. What the through road's edge line breaks for is that mouth,
+   * so the break is measured against the thing itself rather than against
+   * the platform — which is tens of metres longer than the opening — and a
+   * side, which the geometry answers badly and the mat answers exactly. */
+  const mouthMats = track.junctions.map((j) =>
+    track.samples.filter(
+      (s) => Math.abs(s.s - j.s) < j.reach * 2 && (j.joining ? s.s < j.s : s.s > j.s),
+    ),
+  );
+  /** How far past that mat the break still reaches, m: the opening is the
+   * mat plus the ground either side that a car turning in crosses, and a
+   * break cut to the mat exactly leaves a stub of line inside the mouth. */
+  const MOUTH_PAD = 2.5;
+  const inMouth = (x: number, z: number): boolean =>
+    mouthMats.some((mat) =>
+      mat.some(
+        (s) =>
+          Math.hypot(s.x - x, s.z - z) <
+          Math.abs(s.shift ?? 0) + (s.width ?? width) / 2 + MOUTH_PAD,
+      ),
+    );
   // Nothing ELSE here stops for a junction. Both arms of the sealed road
   // keep their lines right across it, exactly as a country road does past a
   // farm track: a junction that takes the tarmac's markings away for fifty
   // meters is what makes two roads read as dissolving into each other
   // instead of one running past the other.
   for (const side of [-1, 1]) {
-    // Asphalt: a solid white edge line, a hand's width inside the kerb.
+    // Asphalt: a solid white edge line, a hand's width inside the kerb —
+    // interrupted for a side road's MOUTH, on that side only. A line ruled
+    // across the opening is a kerb where a car turns in.
     strip(
       (s) => ((s.width ?? width) / 2 - 0.65) * side,
       (s) => ((s.width ?? width) / 2 - 0.3) * side,
-      plain,
+      (s) => {
+        if (!plain(s)) return false;
+        const r = rightOf(s.heading);
+        const lat = ((s.width ?? width) / 2 - 0.475) * side;
+        return !inMouth(s.x + r.x * lat, s.z + r.z * lat);
+      },
       () => paint,
       side > 0,
     );

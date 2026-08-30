@@ -121,6 +121,12 @@ export type TrackSample = {
    * remains the right answer to how wide the road IS, which is what the
    * placement heuristics and the search's clearances want. */
   width: number;
+  /** R17 — how far the MAT sits off the centerline here, m, positive to the
+   * right of travel. Zero everywhere but a junction's mouth, which opens on
+   * one side only (see `RoadShape.shift`). The mat therefore spans
+   * `shift ± width / 2`, and anything that asks whether a point is ON the
+   * road has to say so. */
+  shift?: number;
 };
 
 /** One co-driver call: a turn (or a run of same-direction turns) with its
@@ -919,17 +925,30 @@ function createCompiler(
    * of a boulevard are the same place at two scales. */
   const mouthRun = R.junction.mouth.run * track.width;
 
+  /** R17 — the fastest a mouth may open, m of mat per m of road. What sets
+   * it is the GROUND: the terrain shapes its shelf around the nearest
+   * centerline point, so a mat that widens faster than the samples are
+   * spaced leaves a probe at a wide sample's lip nearest to a narrow one
+   * alongside, the ground hands over inside the ribbon, and the seam is a
+   * face down the outside of the mouth. Measured on the rollers' seam
+   * check: past this the step at the mouth's rim goes over what a wheel
+   * rides. */
+  const MOUTH_SLEW = 0.42;
+
   /** R17 — the MOUTH's two sizes, m: how much wider the mat is where it
    * meets the tarmac, and the length of lane it opens over.
    *
-   * The widening is CAPPED at the corridor's own reach (R16). The ground
-   * lattice is shaped out to the corridor's lip and hands over to the
-   * country past it, so a mat that flares further than that is a mat
-   * standing over ground nothing shelved — which is a vertical face along
-   * the outside of the mouth, and exactly the seam the hand-over exists to
-   * close. A mouth a corridor wide is still over twice the road across its
-   * throat, which is what a graded side road meeting a country highway
-   * looks like. */
+   * The widening is CAPPED at the corridor's own reach (R16), and that cap
+   * is the thing standing between this mouth and the one a real junction
+   * has. The ground lattice is shaped out to the corridor's lip and hands
+   * over to the country past it, so a mat that flares further is a mat over
+   * ground nothing shelved — a vertical face along the outside of the
+   * mouth. Enlarging the PLATFORM to cover a wider mouth does not buy it
+   * either: measured on seed 1, spreading the graded ellipse by the mouth's
+   * own width left the seam where it was (0.46 m) and opened a 1.5 m gap
+   * between the ribbon and the tiles, because the ground under the road
+   * moved with it. What a wider mouth needs first is a corridor that owns a
+   * point by which MAT is nearest rather than by which centerline is. */
   const mouthWide = Math.min(R.junction.mouth.wide * track.width, ROAD_CROSS.reach);
   const mouthTaper = R.junction.mouth.taper * track.width;
 
@@ -989,14 +1008,40 @@ function createCompiler(
    * minor arm is the unsealed one, so which side of the meeting point it
    * lies on follows from `joining` alone: the stage ARRIVES at a joining
    * junction on the dirt and LEAVES a parting one on it. */
-  const mouthFlare = (sample: TrackSample): number => {
+  /** R17 — which side each junction's mouth opens on, in the ROUTE's own
+   * lateral frame: the outside of the corner the route turns through, read
+   * off the sample at the meeting point and then held for the whole mouth.
+   *
+   * Read per sample instead, it flips halfway: a junction's corner unwinds
+   * over the last few metres, its curvature crosses zero, and the mat's
+   * wide side jumps from one edge to the other inside one mouth. Which side
+   * is the outside is a fact about the JUNCTION, so it is decided once. */
+  const mouthSides = new Map<RoadJunction, 1 | -1>();
+  const outerOf = (junction: RoadJunction): 1 | -1 => {
+    let side = mouthSides.get(junction);
+    if (side !== undefined) return side;
+    let best = Infinity;
+    let curvature = 0;
+    for (const sample of track.samples) {
+      const d = Math.abs(sample.s - junction.s);
+      if (d >= best) continue;
+      best = d;
+      curvature = sample.curvature;
+    }
+    side = curvature >= 0 ? -1 : 1;
+    mouthSides.set(junction, side);
+    return side;
+  };
+
+  const mouthFlare = (sample: TrackSample): { extra: number; outer: 1 | -1 } => {
     // The mouth belongs to the DIRT road. Said here rather than left to the
     // throat arithmetic, because the surface flip and the throat are two
     // measurements of the same crossing taken different ways, and a sample
     // between the two answers would otherwise get the full mouth laid on a
     // piece of tarmac — which a paving machine does not do (R33).
-    if (sample.surface !== "gravel") return 0;
+    if (sample.surface !== "gravel") return { extra: 0, outer: 1 };
     let widest = 0;
+    let outer: 1 | -1 = 1;
     for (const junction of track.junctions) {
       const d = junction.joining ? junction.s - sample.s : sample.s - junction.s;
       if (d < 0 || d > mouthRun) continue;
@@ -1004,15 +1049,24 @@ function createCompiler(
       if (throat === undefined) throats.set(junction, (throat = throatOf(junction)));
       const out = d - throat;
       if (out >= mouthTaper) continue;
-      // Past the throat it is over: that piece of road is the SEALED one,
-      // and a paving machine lays a constant width (R33). The mouth belongs
-      // to the dirt road.
-      if (out < 0) continue;
-      const t = 1 - out / mouthTaper;
+      // Past the throat the mouth is at its WIDEST and stays there. The
+      // surface flip and the throat are two measurements of the same
+      // crossing taken different ways, so a sample can be gravel and
+      // already inside the sealed road's edge — and dropping the flare
+      // there took the mouth from twenty-nine metres to sixteen in one
+      // two-metre step, at exactly the place the two roads have to meet.
+      // What that leaves is a wedge of field between the dirt road's edge
+      // and the tarmac's, which is the whole defect the mouth exists to
+      // close. The `surface` guard above is what keeps this off the main
+      // road: the tarmac's own samples never take a flare (R33).
+      const t = out <= 0 ? 1 : 1 - out / mouthTaper;
       const extra = mouthWide * (1 - Math.sqrt(Math.max(0, 1 - t * t)));
-      if (extra > widest) widest = extra;
+      if (extra > widest) {
+        widest = extra;
+        outer = outerOf(junction);
+      }
     }
-    return widest;
+    return { extra: widest, outer };
   };
 
   /** R23/R24 — the ground a branch has to keep off, as a distance query:
@@ -1338,6 +1392,35 @@ function createCompiler(
     const all = track.samples;
     const reach = Math.ceil(Math.max(R.junction.reach.max, mouthRun) / SAMPLE_STEP) + 1;
     const start = Math.max(0, from - reach);
+    // R17 — the mouth's own widening, measured first and then SLEW-LIMITED.
+    // A kerb fillet is a quarter ellipse, so its width runs away vertically
+    // at the throat: laid straight onto the samples that is metres of extra
+    // mat inside one two-metre step, and the ground beside a road cannot
+    // turn that corner — the terrain hands over inside the ribbon and what
+    // is left is a face down the outside of the mouth. Limiting how fast
+    // the mat may open keeps the fillet's shape everywhere it is gentle and
+    // only trims the tail, which is the part no ground could follow anyway.
+    // The limit binds only between two samples that are both the MINOR
+    // road. Where the neighbour is the main road the step is the junction
+    // itself — the mouth is meant to be at its widest there and then simply
+    // stop, and the ground under it is the platform, which is one flat
+    // plane already. Slewing that step would taper the mouth shut again at
+    // exactly the place it exists to open.
+    const flares: number[] = [];
+    const outers: (1 | -1)[] = [];
+    for (let i = start; i < all.length; i++) {
+      const mouth = mouthFlare(all[i]);
+      flares[i] = mouth.extra;
+      outers[i] = mouth.outer;
+    }
+    const raw = flares.slice();
+    const slew = MOUTH_SLEW * SAMPLE_STEP;
+    for (let i = start + 1; i < all.length; i++) {
+      if (raw[i - 1] > 0 && flares[i] > flares[i - 1] + slew) flares[i] = flares[i - 1] + slew;
+    }
+    for (let i = all.length - 2; i >= start; i--) {
+      if (raw[i + 1] > 0 && flares[i] > flares[i + 1] + slew) flares[i] = flares[i + 1] + slew;
+    }
     for (let i = start; i < all.length; i++) {
       const sample = all[i];
       let flat = 0;
@@ -1355,7 +1438,26 @@ function createCompiler(
       // reads the mat's own reach across the main road, so a pass that ran
       // over this sample already would otherwise flare a flare.
       sample.width = rawWidth[i];
-      sample.width += 2 * mouthFlare(sample);
+      sample.shift = 0;
+      const flare = flares[i] ?? 0;
+      if (flare > 0) {
+        // R17 — the mouth opens on ONE side. The route is turning through
+        // the junction, so the inside of that corner already meets the main
+        // road at an angle and needs nothing built out; what a car swinging
+        // off the main road actually uses is the OUTSIDE. Widening both
+        // sides to get that costs twice the ground for half the effect, and
+        // reads as a road that briefly got fatter rather than as a mouth.
+        //
+        // The outside of a turn is the side away from where it bends, and a
+        // junction corner always bends — `isJunctionTurn` only takes a
+        // corner inside R17's angle band, so there is no straight case to
+        // fall back on — and which side that is belongs to the JUNCTION
+        // (`outerOf`), not to this sample: a corner unwinds over its last
+        // few metres, so a side read per sample flips halfway through one
+        // mouth and the mat's wide half jumps edges.
+        sample.width = rawWidth[i] + flare;
+        sample.shift = (outers[i] * flare) / 2;
+      }
     }
   };
 

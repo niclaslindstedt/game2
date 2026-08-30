@@ -1056,7 +1056,7 @@ export const STAGE_RULES = {
      * meeting a country highway looks like. `run` bounds how far back the
      * widening may reach at all, in road widths: a corner that hugs the main
      * road for a hundred meters is not a hundred meters of mouth. */
-    mouth: { run: 3, wide: 0.13, taper: 1.1 },
+    mouth: { run: 3, wide: 0.45, taper: 1.1 },
     /** R17 — how far a junction's abandoned arm is allowed to be from the
      * edge of the map, as a share of the run a branch may take getting
      * there. A junction is only built where the arm it abandons can LEAVE:
