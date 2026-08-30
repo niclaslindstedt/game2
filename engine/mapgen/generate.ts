@@ -23,6 +23,7 @@ import {
 } from "./rules.ts";
 import { knobScale, resolveKnobs } from "./rules.ts";
 import { generateCircuit } from "./circuit.ts";
+import { createLandField, type LandField } from "./land.ts";
 import { roadClearance } from "./road.ts";
 import {
   PROBE_STEP,
@@ -55,8 +56,25 @@ export function generateStage(
 ): SegmentPlan[] {
   const dials = resolveKnobs(knobs);
   if (shape === "circuit") return generateCircuit(seed, length, dials);
+  // R35 — the country, and the water standing on it, BEFORE the first
+  // segment is drawn. Built once from the stage's own seed rather than per
+  // attempt: the landscape is not what a retry is retrying, and the pour
+  // it caches is what makes asking "is this line in a lake" cheap enough
+  // to ask of every probe point of every candidate.
+  const land = createLandField(seed, dials);
+  const ladder = R.water.routeClearLadder;
   for (let attempt = 0; attempt < 40; attempt++) {
-    const plans = tryGenerateStage((seed + attempt * 0x9e3779b9) >>> 0, length, dials);
+    // The setback the water is given, relaxing as the attempts run out:
+    // most of them at the full standard, the last of them at none. A
+    // country that is mostly lake still has to produce a stage.
+    const clearance = R.water.routeClear * ladder[Math.floor((attempt * ladder.length) / 40)];
+    const plans = tryGenerateStage(
+      (seed + attempt * 0x9e3779b9) >>> 0,
+      length,
+      dials,
+      land,
+      clearance,
+    );
     if (plans) return plans;
   }
   throw new Error(`stage generation failed for seed ${seed} (${length})`);
@@ -66,6 +84,8 @@ function tryGenerateStage(
   seed: number,
   length: FiniteStageLength,
   knobs: StageKnobs,
+  land: LandField,
+  routeClear: number,
 ): SegmentPlan[] | null {
   const spec = R.stageLengths[length];
   const rng = createRng(seed);
@@ -74,6 +94,12 @@ function tryGenerateStage(
   // is what the width dial makes of it.
   const clear = roadClearance(knobScale(knobs.width, R.roadWidth));
   const field = createPointField(clear);
+  /** R35 — the line keeps out of the water. A candidate whose probe points
+   * come within the route's clearance of a lake's surface is refused like
+   * any other rule violation: redrawn, then backtracked out of, never
+   * repaired. Repairing it is what the terrain used to do, and what a
+   * terrain does when handed a road through a lake is build a causeway. */
+  const keepsDry = (p: Cursor): boolean => !land.nearWater(p.x, p.z, routeClear);
   let cursor: Cursor = { x: 0, z: 0, heading: 0, arc: 0 };
   let total = 0;
   let sLastLipEnd = -Infinity;
@@ -162,7 +188,7 @@ function tryGenerateStage(
 
       const { points, end } = probePoints(cursor, plan);
       if (!points.every((p) => inBounds(p, spec.worldBound))) continue;
-      if (points.some((p) => field.blocked(p) || entersStart(p, clear))) continue;
+      if (points.some((p) => field.blocked(p) || entersStart(p, clear) || !keepsDry(p))) continue;
       commit(plan, points, end);
       placed = true;
     }
@@ -218,7 +244,8 @@ function tryGenerateStage(
     // bound is the box the search folds the line inside, not a wall, and a
     // finish placed legally near it may run its apron over the edge.
     const past = probePoints(end, runOff).points;
-    const clearOfEverything = (p: Cursor): boolean => !field.blocked(p) && !entersStart(p, clear);
+    const clearOfEverything = (p: Cursor): boolean =>
+      !field.blocked(p) && !entersStart(p, clear) && keepsDry(p);
     if (
       points.every((p) => inBounds(p, spec.worldBound)) &&
       points.every(clearOfEverything) &&
@@ -269,6 +296,36 @@ export function createStageStream(seed: number, knobs?: Partial<StageKnobs>): St
   const rng = createRng(seed);
   const clear = roadClearance(knobScale(dials.width, R.roadWidth));
   const field = createPointField(clear);
+  // R35 — the same water the finite search steers round. An endless run
+  // meets more of the country than any stage does, so it meets more of the
+  // country's lakes; the pour's block cache is what keeps asking about
+  // them flat as the road runs on.
+  const land = createLandField(seed, dials);
+  /** The setback the water is given right now. A stream cannot start over
+   * the way the finite search does, so where that one walks a ladder of
+   * whole ATTEMPTS this one walks the same ladder in place: every failed
+   * placement gives the water a little less room, and the first success
+   * hands it all back. A run that meets an archipelago squeezes past it
+   * and then goes back to keeping its distance.
+   *
+   * It counts iterations since the road last got FURTHER, not failed
+   * placements: a line boxed in against a shore places a segment, fails,
+   * backtracks and places again for as long as you let it, all without
+   * advancing a metre, so a counter that any success resets never counts
+   * past one. */
+  let stuck = 0;
+  const keepsDry = (p: Cursor): boolean => {
+    const ladder = R.water.routeClearLadder;
+    const rung = Math.floor(stuck / R.endless.wetPatience);
+    // Off the bottom of the ladder the rule lets go altogether, and the
+    // road is allowed to cross. That is not the rule failing: a stream
+    // has a COURSE to keep and cannot turn round, so a country that walls
+    // it in with water leaves exactly two options — cross, or stop
+    // forever. A finite stage in the same spot throws the attempt away and
+    // re-rolls, which is why only the endless search needs this.
+    if (rung >= ladder.length) return true;
+    return !land.nearWater(p.x, p.z, R.water.routeClear * ladder[rung]);
+  };
   let cursor: Cursor = { x: 0, z: 0, heading: 0, arc: 0 };
   let total = 0;
   /** Generation high-water mark — never rewound by a backtrack, so the
@@ -332,7 +389,7 @@ export function createStageStream(seed: number, knobs?: Partial<StageKnobs>): St
       // error budget is redrawn (a turn's heading is monotonic, so checking
       // the exit covers the whole arc).
       if (Math.abs(angleDiff(end.heading, course)) > R.endless.maxCourseError) continue;
-      if (points.some((p) => field.blocked(p) || entersStart(p, clear))) continue;
+      if (points.some((p) => field.blocked(p) || entersStart(p, clear) || !keepsDry(p))) continue;
       commit(plan, points, end);
       return true;
     }
@@ -379,7 +436,16 @@ export function createStageStream(seed: number, knobs?: Partial<StageKnobs>): St
       if (++iterations > 4000) {
         throw new Error(`endless stream stuck at ${total.toFixed(0)} m (seed ${seed})`);
       }
+      const was = highWater;
       if (!place()) backtrack();
+      // Progress walks the setback back UP the ladder a rung at a time
+      // rather than restoring it all at once. Snapping straight back to
+      // the full standard the moment a segment lands strands a road that
+      // has just been let into the shallows: the next segment is refused
+      // again, and the line spends the rest of the run oscillating on the
+      // waterline it was supposed to be crossing.
+      if (highWater > was) stuck = Math.max(0, stuck - R.endless.wetPatience);
+      else stuck++;
     }
     // Freeze every plan that STARTS behind the boundary: the last of them
     // ends at or past the boundary (segments tile the arc), so the road

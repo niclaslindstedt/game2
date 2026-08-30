@@ -365,6 +365,15 @@ export function assignFeature(
   // Jumps first — they are the headline feature.
   if (
     length >= R.jump.minStraight &&
+    // R6 — and long enough for the parts of a jump to fit inside it,
+    // whichever ramp gets drawn below. `minStraight` alone does not say
+    // that: at 90 m it is shorter than the run-up, the longest ramp and
+    // the landing added together, so a straight could pass it and then
+    // have nowhere to put the lip except inside its own run-up — which is
+    // exactly what `rng.range(runUp, length - landing - ramp)` does when
+    // its high bound falls under its low one, silently and only on the
+    // draws where the ramp comes out long.
+    length >= R.jump.runUp + R.jump.rampLength.max + R.jump.landing &&
     sStart + R.jump.runUp - sLastLipEnd >= R.jump.minSpacing &&
     rng.chance(R.featureChance.jump)
   ) {

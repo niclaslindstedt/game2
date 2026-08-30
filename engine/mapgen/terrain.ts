@@ -19,7 +19,14 @@ import { smooth, valueNoise } from "../lib/noise.ts";
 import type { Surface, Track, TrackSample } from "./compile.ts";
 import { createGuardField, type CornerGuard, type GuardField } from "./guards.ts";
 import { createStandField, type Stand, type StandField } from "./stands.ts";
-import { BANK, traceRivers, type River, type RiverAnchor, type RoadClear } from "./river.ts";
+import {
+  BANK,
+  traceRivers,
+  type River,
+  type RiverAnchor,
+  type RoadClear,
+  type StandingWater,
+} from "./river.ts";
 import {
   corridorOffset,
   handoverAt,
@@ -29,7 +36,8 @@ import {
   vergeOffset,
   type RoadShape,
 } from "./road.ts";
-import { createLandField, LAKE_Y } from "./land.ts";
+import { createLandField } from "./land.ts";
+import type { WaterField } from "./water.ts";
 import type { GeologyField } from "./geology.ts";
 import { STAGE_RULES as R, knobScale } from "./rules.ts";
 import { createSpurIndex, type SpurIndex } from "./spurs.ts";
@@ -185,9 +193,10 @@ export function computeStreams(
   seed: number,
   anchors: RiverAnchor[],
   farHeight: (x: number, z: number) => number,
+  standingAt: StandingWater,
   roadClear?: RoadClear,
 ): Stream[] {
-  return traceRivers(seed, anchors, farHeight, LAKE_Y, roadClear).flatMap(sliceRiver);
+  return traceRivers(seed, anchors, farHeight, standingAt, roadClear).flatMap(sliceRiver);
 }
 
 /** Distance from a point to the water's centerline, plus the surface
@@ -302,6 +311,17 @@ export type TerrainField = {
   /** Water surface height over this point — lake/sea table or a stream's
    * local level — or null on dry ground. */
   waterAt: (x: number, z: number) => number | null;
+  /** R35 — the standing water poured onto the bare country: levels,
+   * depths, bodies, and where the nearest of them is.
+   *
+   * Where `waterAt` answers "is this point under water", this answers "and
+   * at what height would it be if it were" — which is what anything
+   * DRAWING a shoreline needs, because the waterline runs BETWEEN the
+   * points it is asked about. A renderer that can only ask the first
+   * question has to guess the edge, and the guess it can afford is the
+   * tile it is drawing: hence a lake with straight sides, hanging over the
+   * ground wherever the tile reached further than the water did. */
+  water: WaterField;
   /** Distance to the road centerline, m — Infinity out of corridor range
    * (beyond ~240 m). What placement code asks before planting near road. */
   roadDistanceAt: (x: number, z: number) => number;
@@ -1260,7 +1280,13 @@ export function createTerrain(track: Track): TerrainField {
     // hillside the tiles never dip into, and a car up there is on the
     // hillside — there is nothing to drown in.
     const ground = latticeAt(x, z);
-    const surface = ground < LAKE_Y ? LAKE_Y : streamWaterAt(streams, x, z);
+    // R35 — the standing water here is whatever the POUR left at this
+    // point, at that body's own level, not one table for the whole world.
+    // The level is asked of the bare country and the waterline is settled
+    // against the drawn lattice, which is what keeps an embankment across
+    // a lake dry on top and wet either side of it.
+    const lake = land.water.shoreLevelAt(x, z);
+    const surface = lake !== null && ground < lake ? lake : streamWaterAt(streams, x, z);
     if (surface === null || ground >= surface - 0.02) return null;
     // ...and a road over it is another layer again: an embankment across a
     // lake, or a shelf cut above a stream, is dry road with water below,
@@ -1392,7 +1418,17 @@ export function createTerrain(track: Track): TerrainField {
         track.seed,
         collectAnchors(track, streamScan),
         rawHeight,
-        LAKE_Y,
+        // R35 — the water the courses are looking for is the water the
+        // pour put on the bare country, at its own levels. Asked of the
+        // BARE land and not the shaped terrain: a river ends in a lake,
+        // and whether a lake is there is not a thing the road decides.
+        //
+        // The SHORE and not the submerged part, which is what a mouth
+        // actually is: a river ends where it meets the lake, not at the
+        // point it would be under it. Asking whether the water has closed
+        // over the course's own last step makes a river walk past the very
+        // body it was running into and go looking for the coast.
+        { levelAt: land.water.shoreLevelAt, nearestAt: land.water.nearestAt },
         roadClear,
         // The country the stage occupies: a mouth that gets clear of it has
         // left the map, which is one of the two ways a river is allowed to
@@ -1463,6 +1499,7 @@ export function createTerrain(track: Track): TerrainField {
     farHeightAt: farField,
     geology: land.geology,
     waterAt,
+    water: land.water,
     roadDistanceAt,
     cutAt,
     spurSurfaceAt,

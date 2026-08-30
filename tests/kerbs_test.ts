@@ -39,6 +39,12 @@ function zonesFor(seed: number): { zones: KerbZone[]; track: ReturnType<typeof c
 
 describe("R26 — kerb placement", () => {
   it("marks the corners that earn it and leaves the sweepers bare", () => {
+    // Counted ACROSS the seeds rather than within each one. What the rule
+    // says is that a soft corner goes unmarked, and the sweep needs soft
+    // corners to say it of — but no seed owes the sweep one, and pinning
+    // that on every seed individually makes the test a statement about
+    // which corners this list of seeds happens to draw.
+    let soften = 0;
     for (const seed of SEEDS) {
       const { zones, track } = zonesFor(seed);
       const marked = new Set(zones.filter((z) => z.role === "apex").map((z) => z.side));
@@ -50,13 +56,14 @@ describe("R26 — kerb placement", () => {
       expect(apexes).toHaveLength(worthy.length);
       // ...and the soft ones are left alone.
       const soft = track.pacenotes.filter((n) => n.angle < R.kerb.minAngle);
-      expect(soft.length).toBeGreaterThan(0);
+      soften += soft.length;
       for (const note of soft) {
         const mid = (note.s + note.endS) / 2;
         const covering = apexes.filter((z) => z.fromS <= mid && z.toS >= mid);
         expect(covering).toHaveLength(0);
       }
     }
+    expect(soften).toBeGreaterThan(0);
   });
 
   it("puts the apex INSIDE the bend and the exit OUTSIDE it", () => {

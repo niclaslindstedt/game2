@@ -192,31 +192,44 @@ export function buildTerrain(
     return { look, ground: new THREE.Color(look.soil) };
   });
 
-  // The water is ONE mesh for the whole ground: a pane per flooded tile,
-  // all at the same height and never overlapping, so instancing them costs
-  // nothing and saves a draw call per hollow. That needs every pane to
-  // share a geometry, which means the grain has to be anchored to the TILE
-  // rather than to the world — and it only reads as one continuous sheet
-  // if the repeat lands on a whole number of tiles, which is what
-  // WATER_REPEATS is for.
-  const WATER_REPEATS = 6;
-  const lakeGeo = new THREE.PlaneGeometry(TILE, TILE, 1, 1);
-  lakeGeo.rotateX(-Math.PI / 2);
-  {
-    const uv = lakeGeo.getAttribute("uv");
-    const pos = lakeGeo.getAttribute("position");
-    for (let i = 0; i < uv.count; i++) {
-      uv.setXY(
-        i,
-        ((pos.getX(i) + TILE / 2) / TILE) * WATER_REPEATS,
-        ((pos.getZ(i) + TILE / 2) / TILE) * WATER_REPEATS,
-      );
-    }
-  }
-  let lakes: THREE.InstancedMesh | null = null;
-  const lakeAt = new THREE.Matrix4();
+  // R35 — THE WATER, CUT TO ITS OWN SHORE.
+  //
+  // It used to be a pane per flooded TILE: one square, tile-sized, at one
+  // height for the whole world, drawn whenever any corner of the tile dipped
+  // under the table. Which meant a lake's edge was the tile grid — straight
+  // sides, right angles, and a sheet lying over every metre of ground inside
+  // that tile that stood above the water. That is the water hanging in the
+  // air, and no amount of shading fixes a shoreline that is in the wrong
+  // place.
+  //
+  // Now each tile cuts its water against the ground it actually drew:
+  // marching squares over the same height lattice, at the level the pour
+  // gave the body here. Where a cell is entirely under water it contributes
+  // its whole square; where the shore crosses it, the polygon is clipped on
+  // the waterline itself, interpolated along the cell's edges. The sheet
+  // therefore ENDS exactly where the ground rises through it — every
+  // headland, every inlet — and it is flat, because a body's level is.
+  //
+  // It stays ONE mesh: the tiles' triangles are concatenated into a single
+  // buffer in `flushLakes`, so a stage with nine lakes on it still costs
+  // one draw call, exactly as the instanced panes did.
+  //
+  // The grain is anchored to the WORLD rather than to a tile — the geometry
+  // is no longer a repeated unit square, so there is nothing to repeat
+  // against, and world UVs make the surface continuous across every seam by
+  // construction.
+  const WATER_GRAIN = TILE / 6;
+  /** The level of the water standing at a point, whether or not the point
+   * itself is under it — the shore's own reading, so a cell that straddles
+   * the waterline still knows which surface it is being cut against. */
+  const lakeLevelAt = field.water.shoreLevelAt;
+  let lakes: THREE.Mesh | null = null;
+  const lakeGeo = new THREE.BufferGeometry();
 
-  type Tile = { ground: THREE.Mesh; lake: boolean };
+  /** One tile's water: triangles in world space, flat at their body's
+   * level, or null where the tile has no standing water on it. */
+  type TileWater = { positions: number[]; uvs: number[] };
+  type Tile = { ground: THREE.Mesh; water: TileWater | null };
   const tiles = new Map<string, Tile>();
 
   /** THE GROUND'S OWN COLOUR at a point, into `out`: the altitude band, the
@@ -243,8 +256,15 @@ export function buildTerrain(
     out: THREE.Color,
   ): void => {
     const speck = 0.88 + hash2(Math.round(x * 2), Math.round(z * 2), noiseSeed + 29) * 0.24;
-    if (y < LAKE_Y + 0.6) out.copy(bed);
-    else if (y < LAKE_Y + 3) out.copy(shore);
+    // R35 — bed and beach are painted against the level of the water
+    // STANDING HERE, not against the sea. A tarn on a shoulder has a
+    // lakebed and a shore of its own, and keying the two bands to one
+    // global height paints them at that height right across the map:
+    // a ring of beach round every hill that happens to pass through it,
+    // and a lake three hundred metres up with meadow running under it.
+    const level = lakeLevelAt(x, z) ?? -Infinity;
+    if (y < level + 0.6) out.copy(bed);
+    else if (y < level + 3) out.copy(shore);
     else if (carved) out.copy(shore).lerp(bed, 0.35);
     else {
       // The meadow base, broken by big soft patches of moss, heath, dry
@@ -302,32 +322,44 @@ export function buildTerrain(
     out.multiplyScalar(speck);
   };
 
-  /** Rewrite the water from every tile standing. Grown in blocks so a tile
-   * arriving does not reallocate the buffer each time. */
+  /** Rewrite the water from every tile standing: one buffer holding every
+   * standing tile's clipped triangles, so the whole of a stage's water is
+   * a single draw however many separate lakes it is. */
   const flushLakes = (): void => {
-    const flooded: string[] = [];
-    for (const [key, tile] of tiles) if (tile.lake) flooded.push(key);
-    if (!lakes || lakes.instanceMatrix.count < flooded.length) {
-      if (lakes) {
-        group.remove(lakes);
-        lakes.dispose();
-      }
-      lakes = new THREE.InstancedMesh(lakeGeo, waterMat, Math.ceil((flooded.length + 1) / 32) * 32);
+    let count = 0;
+    for (const tile of tiles.values()) if (tile.water) count += tile.water.positions.length;
+    // A ground with no hollow in it draws no water at all: a mesh with an
+    // empty buffer is still a draw call.
+    if (count === 0) {
+      if (lakes) lakes.visible = false;
+      return;
+    }
+    const positions = new Float32Array(count);
+    const uvs = new Float32Array((count / 3) * 2);
+    let p = 0;
+    let u = 0;
+    for (const tile of tiles.values()) {
+      if (!tile.water) continue;
+      positions.set(tile.water.positions, p);
+      uvs.set(tile.water.uvs, u);
+      p += tile.water.positions.length;
+      u += tile.water.uvs.length;
+    }
+    lakeGeo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    lakeGeo.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+    // The sheet is flat and lit from above wherever it is, so one shared
+    // normal beats a per-vertex attribute nobody varies.
+    lakeGeo.deleteAttribute("normal");
+    lakeGeo.computeVertexNormals();
+    lakeGeo.computeBoundingSphere();
+    if (!lakes) {
+      lakes = new THREE.Mesh(lakeGeo, waterMat);
+      // The water never moves and the camera is always outside it; culling
+      // it per tile is what the single mesh gave up, and the bounding
+      // sphere below is what it gets back.
       group.add(lakes);
     }
-    flooded.forEach((key, i) => {
-      const [tx, tz] = key.split(",").map(Number);
-      lakeAt.makeTranslation((tx + 0.5) * TILE, LAKE_Y, (tz + 0.5) * TILE);
-      lakes?.setMatrixAt(i, lakeAt);
-    });
-    // Only what was written is drawn: an instance nobody sets keeps the
-    // identity matrix, which floods the start line.
-    lakes.count = flooded.length;
-    // A ground with no hollow in it draws no water at all: an instanced
-    // mesh with a count of zero is still a draw call.
-    lakes.visible = flooded.length > 0;
-    lakes.instanceMatrix.needsUpdate = true;
-    lakes.computeBoundingSphere();
+    lakes.visible = true;
   };
 
   const buildTile = (tx: number, tz: number): Tile => {
@@ -339,7 +371,6 @@ export function buildTerrain(
     const n = CELLS + 3;
     const H = new Float32Array(n * n);
     const carved = new Uint8Array(n * n);
-    let minH = Infinity;
     for (let j = 0; j < n; j++) {
       for (let i = 0; i < n; i++) {
         const x = originX + (i - 1) * CELL;
@@ -347,7 +378,6 @@ export function buildTerrain(
         const y = heightAt(x, z);
         H[j * n + i] = y;
         if (inStream(field.streams, x, z, 0)) carved[j * n + i] = 1;
-        if (y < minH) minH = y;
       }
     }
 
@@ -397,11 +427,91 @@ export function buildTerrain(
     const ground = new THREE.Mesh(geo, groundMat);
     group.add(ground);
 
-    // Anywhere the tile dips under the water table, water floods it — a
-    // lake in a hollow, the open sea across a basin. The pane itself is an
-    // instance in the shared sheet above; this only says whether there is
-    // one here.
-    return { ground, lake: minH < LAKE_Y + 0.5 };
+    return { ground, water: cutWater(originX, originZ, H, n) };
+  };
+
+  /** Cut this tile's standing water against the ground it just drew.
+   *
+   * Marching squares over the drawn lattice: each cell's four corners are
+   * either under their water level or not, and the polygon that survives is
+   * the part that is. A corner under water contributes itself; an edge with
+   * one corner each side contributes the point where the depth crosses
+   * zero — which IS the waterline, to the accuracy of the ground the tile
+   * is showing. Fan-triangulated, so a cell contributes anywhere from
+   * nothing to three triangles.
+   *
+   * The level comes from the pour and the ground from the lattice, and that
+   * split is the whole reason this reads right: the level is flat over a
+   * body no matter how coarsely it was worked out, and the SHORE is as fine
+   * as whatever the tile drew. */
+  const cutWater = (
+    originX: number,
+    originZ: number,
+    H: Float32Array,
+    n: number,
+  ): TileWater | null => {
+    let positions: number[] | null = null;
+    let uvs: number[] | null = null;
+    // Corner scratch, reused per cell: x, z, ground, level, depth.
+    const cx = [0, 0, 0, 0];
+    const cz = [0, 0, 0, 0];
+    const cd = [0, 0, 0, 0];
+    const poly: number[] = [];
+    for (let j = 0; j < CELLS; j++) {
+      for (let i = 0; i < CELLS; i++) {
+        // The cell's corners, anticlockwise, so the polygon comes out
+        // wound one way and faces up.
+        let level = -Infinity;
+        let wet = 0;
+        for (let c = 0; c < 4; c++) {
+          const di = c === 0 || c === 3 ? 0 : 1;
+          const dj = c < 2 ? 0 : 1;
+          const x = originX + (i + di) * CELL;
+          const z = originZ + (j + dj) * CELL;
+          const ground = H[(j + dj + 1) * n + (i + di + 1)];
+          const here = lakeLevelAt(x, z);
+          cx[c] = x;
+          cz[c] = z;
+          cd[c] = here === null ? -Infinity : here - ground;
+          if (here !== null && here > level) level = here;
+          if (cd[c] > 0) wet++;
+        }
+        if (wet === 0) continue;
+        poly.length = 0;
+        for (let c = 0; c < 4; c++) {
+          const d0 = cd[c];
+          const d1 = cd[(c + 1) % 4];
+          if (d0 > 0) poly.push(cx[c], cz[c]);
+          // The crossing, wherever one corner is under and the next is not.
+          // `-Infinity` on a corner with no water near it still gives the
+          // right SIDE, and the interpolation is clamped to the edge, so a
+          // shore against dry country lands on the corner rather than
+          // somewhere off in the next field.
+          if (d0 > 0 !== d1 > 0) {
+            const span = d0 - d1;
+            const t = Number.isFinite(span) && span !== 0 ? d0 / span : d0 > 0 ? 1 : 0;
+            const k = t < 0 ? 0 : t > 1 ? 1 : t;
+            poly.push(cx[c] + (cx[(c + 1) % 4] - cx[c]) * k, cz[c] + (cz[(c + 1) % 4] - cz[c]) * k);
+          }
+        }
+        if (poly.length < 6) continue;
+        if (!positions) {
+          positions = [];
+          uvs = [];
+        }
+        // Fan from the first vertex: the polygon is convex (it is a square
+        // cut by one line) so a fan is a correct triangulation.
+        for (let v = 1; v + 1 < poly.length / 2; v++) {
+          for (const at of [0, v, v + 1]) {
+            const px = poly[at * 2];
+            const pz = poly[at * 2 + 1];
+            positions.push(px, level, pz);
+            (uvs as number[]).push(px / WATER_GRAIN, pz / WATER_GRAIN);
+          }
+        }
+      }
+    }
+    return positions && uvs ? { positions, uvs } : null;
   };
 
   const dropTile = (key: string): void => {
@@ -519,7 +629,6 @@ export function buildTerrain(
 
   const dispose = (): void => {
     for (const key of [...tiles.keys()]) dropTile(key);
-    lakes?.dispose();
     lakeGeo.dispose();
     groundMat.dispose();
     waterMat.dispose();

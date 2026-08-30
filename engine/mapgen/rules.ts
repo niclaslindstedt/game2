@@ -297,6 +297,14 @@ export const STAGE_RULES = {
      * stream may still backtrack out of a pocket, exactly like the finite
      * search — the one escape hatch an infinite road cannot live without. */
     commitLag: 900,
+    /** R35 — how many failed placements in a row the stream tries before
+     * giving the water another rung of its setback. The finite search gets
+     * to throw a whole attempt away and start again; a stream has to get
+     * past whatever is in front of it, so it squeezes instead. Small
+     * enough that a genuine bottleneck is through in a few backtracks,
+     * large enough that ordinary boxing-in is solved by backtracking
+     * rather than by walking to the water's edge. */
+    wetPatience: 12,
   },
 
   /** R22 — the circuit. A lap is the stage length's band divided by the
@@ -653,6 +661,42 @@ export const STAGE_RULES = {
       swamp: 1.2,
     },
 
+    /** R35 — SITING. Where in the country the stage's own origin lands.
+     *
+     * A stage starts at (0, 0) and no search chooses that point: the route
+     * is drawn outward from it. So where the seed's country happens to put
+     * a sea basin there, the start line is in a lake and every metre of
+     * road leaving it is an embankment — which is what a stage looked like
+     * on nearly half of all seeds before the country was allowed to move
+     * under the stage instead.
+     *
+     * It is a SEARCH over the country, not a nudge: the origin walks out
+     * along a spiral until it finds ground standing clear of the water
+     * across the whole footprint a start needs, and the country is read
+     * from there. Deterministic and rng-free, so a seed's landscape is the
+     * same landscape it always was — sampled from a spot a stage can start
+     * on. */
+    siting: {
+      /** How much dry ground the start needs around it, m — the apron, the
+       * grid, and the run down to the first corner. */
+      reach: 210,
+      /** How far clear of the water that ground has to stand, m: the
+       * road's own freeboard, plus enough that a shoreline is a view from
+       * the grid rather than something the front row is parked in. */
+      freeboard: 6,
+      /** How far the origin may walk to find such a place, m, and in what
+       * steps. A basin is a kilometre or two across, so the walk has to be
+       * able to leave one; past `far` the country has no dry ground worth
+       * the search and the driest spot found is taken. */
+      step: 120,
+      far: 2600,
+      /** How many points the footprint is judged on: `rings` rings of
+       * `ring` points out to `reach`. Enough to catch a shore cutting
+       * across the apron, cheap enough to run a few hundred times. */
+      ring: 8,
+      rings: 3,
+    },
+
     /** The soil lying on the rock. Till and washed sediment: it collects
      * where water slows down and is stripped where it does not, so the
      * flanks and the escarpment faces come out bare and the valley floors
@@ -774,6 +818,48 @@ export const STAGE_RULES = {
     clearAfterJump: 50, // meters past a lip before water may start
     apron: 30,
     bedDepth: 0.5,
+    /** R35 — how far back from the standing water a ROUTE has to stay, m,
+     * measured ACROSS THE GROUND. The search rejects any line whose probe
+     * points come within this of a lake, so a stage is drawn round the
+     * water rather than through it and the terrain is never asked to raise
+     * an embankment across one.
+     *
+     * A distance and not a height, which is worth saying because the
+     * obvious version of this rule is a height and the obvious version is
+     * wrong. Water is flat and its shores are not, so "keep three metres
+     * above the lake" describes a band lying at the waterline on a beach
+     * and at the TOP OF THE BANK on anything steep — and the top of the
+     * bank is the one place a rideable verge (R31) cannot be cut. Every
+     * height this was tried at, from 3 m to 9 m, broke R31 about seven
+     * times as often as no rule at all, and the magnitude barely moved it:
+     * the damage was in pinning the road to the steep band, not in how
+     * wide the band was. Measured in metres of ground instead, the road
+     * ends up back on the flat, which is where a road beside a lake
+     * actually goes.
+     *
+     * The value is about a road's width: room for the corridor, its verge,
+     * and a watercourse to reach the lake between the two, without pushing
+     * every coastal stage inland. Measured, not guessed — over a 24-seed
+     * sweep it is where `water.float` falls furthest (65 findings on 22
+     * seeds to 47 on 16) before the extra setback starts shoving stages
+     * onto ground steep enough to cost more than the water gains.
+     *
+     * A crossing is a different thing and is unaffected: a ford or a deck
+     * is a place the road MEANS to meet water, and it carves its own
+     * channel (R12/R13). This is about the lake it should have gone
+     * around. */
+    routeClear: 20,
+    /** ...and how that setback RELAXES when a country will not yield a
+     * stage at the full standard. An archipelago is a real place and a
+     * seed is not allowed to simply fail, so the attempts walk down this
+     * ladder: most of them at the full setback, then a few progressively
+     * closer to the water, and the last of them at nothing.
+     *
+     * Nothing is not the same as "through the lake" — at a factor of zero
+     * the route may run right down to the waterline, but it still may not
+     * cross it, because `flooded` at a margin of zero is the water itself.
+     * That part is never negotiable; only the elbow room is. */
+    routeClearLadder: [1, 0.5, 0.25, 0],
   },
 
   /** R13 — the crossings a car cannot wade. A ford is water the wheels go
