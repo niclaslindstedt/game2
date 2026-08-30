@@ -34,7 +34,7 @@ import { LENS_MATERIAL } from "./car/lamps.ts";
 import { buildShell, buildStations } from "./car/shell.ts";
 import { buildTrim } from "./car/trim.ts";
 import { buildWheel } from "./car/wheels.ts";
-import { buildWipers, type CarWipers } from "./car/wipers.ts";
+import { buildWipers, type CarWipers, type FilmDetail } from "./car/wipers.ts";
 
 export type {
   CarBodySpec,
@@ -52,6 +52,7 @@ export type {
 export { bodyHalfLength, bodyHalfWidth } from "./car/shell.ts";
 export { LENS_MATERIAL, frontLampAnchors, rearLampAnchors, type LampAnchor } from "./car/lamps.ts";
 export { crewSeats, steeringTurn, type InteriorDetail } from "./car/interior.ts";
+export type { FilmDetail } from "./car/wipers.ts";
 export {
   DIAL_TOP_SPEED,
   cabinOpening,
@@ -165,13 +166,13 @@ export type CarBodyOptions = {
    * pass's own texture (mirror.ts), and the aspect it renders at. Left off,
    * the mirror is a dark housing with no picture in it. */
   rearView?: { texture: THREE.Texture; aspect: number };
-  /** Whether the screens carry the GRIME FILM the wipers clear
-   * (car/wipers.ts). The arms are built either way; the pane is a third of
-   * the car's triangles, drawn transparent, with a colour buffer rewritten
-   * as the coat moves — a bill worth paying for the screen the player looks
-   * through, and for nobody else's. Defaults on, so every tool that builds a
-   * body without saying whose it is gets the full one. */
-  screens?: boolean;
+  /** How finely the screens carry the GRIME FILM the wipers clear
+   * (car/wipers.ts). The arms are built either way. `fine` is for the car
+   * being driven, where the swept arc is read close up; `coarse` is for
+   * everyone else, where the glass only has to go brown; `off` leaves every
+   * screen permanently clean. Defaults to `fine`, so every tool that builds
+   * a body without saying whose it is gets the full one. */
+  screens?: FilmDetail;
 };
 
 export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): CarBodyParts {
@@ -300,7 +301,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     transparent: true,
     depthWrite: false,
   });
-  const wipers = buildWipers(spec, material, filmMat, options.screens ?? true);
+  const wipers = buildWipers(spec, material, filmMat, options.screens ?? "fine");
   if (wipers.film) wipers.film.renderOrder = 2;
   chassis.add(wipers.group);
 

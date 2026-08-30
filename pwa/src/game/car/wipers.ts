@@ -46,20 +46,41 @@ import type { CarBodySpec } from "./spec.ts";
 const FILM_LIFT = GLASS_LIFT + 0.003;
 const BLADE_LIFT = GLASS_LIFT + 0.014;
 
-/** The grid each screen is tessellated into. The resolution is not about
- * how fine the dirt is — it is about the EDGE of the swept arc, which is
- * the one line on the whole car the eye reads as "a wiper did that". At a
- * handful of cells across, a blade's fan comes out as three big triangles
- * of clean glass and reads as a texture glitch; the arc has to have an arc
- * in it.
+/** How finely a screen's film is tessellated, and it is a LADDER because the
+ * resolution answers two completely different questions depending on whose
+ * car it is.
  *
- * It is not free, though, and it is the reason `film` exists: at this
- * resolution the two panes are 3,456 triangles — more than a third of the
- * whole car — drawn in the transparent pass, with their colours rewritten
- * and re-uploaded on every frame the coat moves. On the car being driven
- * that is the right bill for the one surface the player looks THROUGH; on
- * anybody else's it buys nothing at any distance a rival is ever seen at. */
-const GRID = { front: { cols: 36, rows: 24 }, rear: { cols: 36, rows: 24 } };
+ * `fine` is what the car being driven needs. The resolution there is not
+ * about how fine the dirt is — it is about the EDGE of the swept arc, which
+ * is the one line on the whole car the eye reads as "a wiper did that". At a
+ * handful of cells across, a blade's fan comes out as three big triangles of
+ * clean glass and reads as a texture glitch; the arc has to have an arc in
+ * it. That costs 3,456 triangles across the two panes, drawn in the
+ * transparent pass with their colours rewritten as the coat moves — the
+ * right bill for the one surface a player spends a stage looking through.
+ *
+ * `coarse` is what every OTHER car needs, and it is a different question
+ * with a much cheaper answer. Nobody reads the arc on a rival: a car two
+ * hundred metres up the road is thirty pixels of bodywork, and what tells
+ * you its crew have been out there is simply that its glass has gone brown
+ * while yours is being wiped. That is a TINT, not an arc — the alpha
+ * interpolates across a cell either way — so it needs the corners of the
+ * pane and barely more. At 48 triangles the pair it is 1.4% of the fine
+ * film, which is the difference between a grid that can afford dirty
+ * windows and one that cannot. */
+export type FilmDetail = "off" | "coarse" | "fine";
+
+const GRID: Record<
+  Exclude<FilmDetail, "off">,
+  { front: { cols: number; rows: number }; rear: { cols: number; rows: number } }
+> = {
+  fine: { front: { cols: 36, rows: 24 }, rear: { cols: 36, rows: 24 } },
+  // Not 1x1: a single cell has no vertex the blades can clear WITHOUT
+  // clearing the whole pane, so the screen would flash rather than wipe.
+  // Four across is enough that a stroke takes the middle of the glass and
+  // leaves the corners, which is the whole of what reads at range.
+  coarse: { front: { cols: 4, rows: 3 }, rear: { cols: 4, rows: 3 } },
+};
 
 /** WHAT IS ON THE GLASS, and it is three things rather than two.
  *
@@ -330,15 +351,14 @@ function bladeGeometry(reach: number): THREE.BufferGeometry {
   return b.geometry();
 }
 
-/** Build the arms, and — when `film` is set — the grime pane they clear.
- * Only the car the player is IN needs the pane: it is the surface they look
- * through, and it is also a third of the car's triangles and a colour buffer
- * rewritten as the coat moves. Everyone else gets the arms alone. */
+/** Build the arms, and the grime pane they clear at whichever resolution the
+ * car warrants (`FilmDetail`). The arms are the same at every level: a car
+ * with no film still sweeps, it simply has nothing drawn to take off. */
 export function buildWipers(
   spec: CarBodySpec,
   material: THREE.Material,
   filmMaterial: THREE.Material,
-  film = true,
+  film: FilmDetail = "fine",
 ): CarWipers {
   const group = new THREE.Group();
   const panes = screenPanes(spec);
@@ -352,18 +372,18 @@ export function buildWipers(
 
   for (const which of ["front", "rear"] as const) {
     const pane = panes[which];
-    const grid = GRID[which];
+    const grid = film === "off" ? GRID.coarse[which] : GRID[film][which];
     const arm = ARMS[which];
     const frame = frameOf(pane);
     const offset = position.length / 3;
     const cols = grid.cols;
     const rows = grid.rows;
-    const count = film ? (cols + 1) * (rows + 1) : 0;
+    const count = film === "off" ? 0 : (cols + 1) * (rows + 1);
 
     // The film follows the patch's own warp rather than a plane through it,
     // so it lies on the glass at the corners as well as the middle.
     const local: number[] = [];
-    if (film) {
+    if (film !== "off") {
       for (let j = 0; j <= rows; j++) {
         for (let i = 0; i <= cols; i++) {
           const u = pane.rect.u0 + ((pane.rect.u1 - pane.rect.u0) * i) / cols;
@@ -501,7 +521,7 @@ export function buildWipers(
   let filmGeo: THREE.BufferGeometry | null = null;
   let colors: THREE.Float32BufferAttribute | null = null;
   let filmMesh: THREE.Mesh | null = null;
-  if (film) {
+  if (film !== "off") {
     filmGeo = new THREE.BufferGeometry();
     filmGeo.setAttribute("position", new THREE.Float32BufferAttribute(position, 3));
     colors = new THREE.Float32BufferAttribute(color, 4);

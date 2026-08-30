@@ -14,6 +14,7 @@ import {
   DRAW_DISTANCE_SCALE,
   EFFECTS_SCALE,
   INTERIOR_DETAIL,
+  SCREEN_GRIME,
   FLORA_SCALE,
   GROUND_SCALE,
   RESOLUTION_SCALE,
@@ -253,7 +254,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   let ghostCar: CarVisual | null = null;
   let ghostTag: NameTag | null = null;
   const field = createFieldCars(scene);
-  field.setInterior(INTERIOR_DETAIL[quality.interior]);
+  field.setCarDetail(
+    INTERIOR_DETAIL[quality.interior],
+    SCREEN_GRIME[quality.interior] ? "coarse" : "off",
+  );
   /** Whether the cars that are not the player's are named. */
   let nameTags = true;
   /** The stage that is standing, as the state it was last shown with —
@@ -384,7 +388,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   const setVideo = (next: VideoSettings): void => {
     quality = next;
     applyResolution();
-    field.setInterior(INTERIOR_DETAIL[quality.interior]);
+    field.setCarDetail(
+      INTERIOR_DETAIL[quality.interior],
+      SCREEN_GRIME[quality.interior] ? "coarse" : "off",
+    );
     if (game) setConditions(game);
     else applyRange();
   };
@@ -454,6 +461,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // cabin: it is the only one anybody will ever sit in.
     car = buildCar(state.spec, {
       interior: INTERIOR_DETAIL[quality.interior],
+      // The one screen anybody looks THROUGH, so it is the one that gets the
+      // fine film — the arc a blade leaves is read at arm's length here.
+      screens: SCREEN_GRIME[quality.interior] ? "fine" : "off",
       cockpit: true,
       // The rear view goes IN the cockpit's mirror rather than only into the
       // HUD's strip, so the mirror pass's texture is handed to the body that
@@ -534,10 +544,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     ghostCar = buildCar(state.spec, {
       ghost: true,
       interior: INTERIOR_DETAIL[quality.interior],
-      // A ghost is a picture of a lap, drawn half-transparent: a film of
-      // grime on ITS screens is a third of its triangles spent on something
-      // nothing can see through anyway.
-      screens: false,
+      // A ghost is a picture of a lap, seen from outside and half
+      // transparent, so it takes the same coarse film every other car on the
+      // road does rather than the one built to be looked through.
+      screens: SCREEN_GRIME[quality.interior] ? "coarse" : "off",
     });
     // The ghost gets the same plate the field does, for the same reason: on
     // a road with two cars on it, which of them is the one to beat is

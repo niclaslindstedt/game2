@@ -45,7 +45,7 @@
 import * as THREE from "three";
 import { type GameEvent, type GameState } from "@engine";
 
-import type { InteriorDetail } from "./car-body.ts";
+import type { FilmDetail, InteriorDetail } from "./car-body.ts";
 import { buildCar, tintCar, type CarVisual } from "./car-mesh.ts";
 import { crewLookFor } from "./car-crew.ts";
 import { liveryForCrew } from "./car-livery.ts";
@@ -150,11 +150,14 @@ export type FieldCars = {
    * lamps are lit, and how hard it is raining on the glass. Pushed by the
    * renderer, which owns all three. */
   paint: (tint: THREE.Color, lampsLit: boolean, rain: number) => void;
-  /** How much cabin the rivals' own glass has behind it — the player's VIDEO
-   * option, taken down a level here (`fieldInterior`). Read when a car is
-   * BUILT, so it lands on the next stage rather than mid-run, which is the
-   * same contract the undergrowth setting keeps. */
-  setInterior: (detail: InteriorDetail) => void;
+  /** How much of a rival is built for the sake of what is only visible up
+   * close: how much cabin its glass has behind it — the player's VIDEO
+   * option, taken down a level here (`fieldInterior`) — and how finely its
+   * screens carry the grime film its wipers clear. Both read when a car is
+   * BUILT, so they land on the next stage rather than mid-run, which is the
+   * same contract the undergrowth setting keeps; one call because they are
+   * one setting. */
+  setCarDetail: (detail: InteriorDetail, screens: FilmDetail) => void;
   /** How many rival cars are being drawn right now (the debug overlay). */
   drawn: () => number;
   dispose: () => void;
@@ -181,6 +184,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
   const built = new Map<RivalRun, FieldCar>();
   let drawn = 0;
   let interior: InteriorDetail = fieldInterior("high");
+  let screens: FilmDetail = "coarse";
   let tint = new THREE.Color(1, 1, 1);
   let lampsLit = false;
   let rain = 0;
@@ -281,11 +285,11 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
             paint: livery,
             interior,
             crew: crewLookFor(run.entry.crew.id),
-            // Nobody looks THROUGH a rival's windscreen, and the film on one
-            // is a third of the car's triangles and a colour buffer rewritten
-            // every frame the coat moves (car/wipers.ts). Their arms still
-            // sweep in the rain.
-            screens: false,
+            // Their glass gets filthy like everybody's, at the resolution a
+            // car seen from OUTSIDE needs: nobody reads the swept arc on a
+            // rival, they read that its windows have gone brown, and that is
+            // 48 triangles rather than 3,456 (car/wipers.ts).
+            screens,
           });
           // The plate wears the car's own paint and the number off its door,
           // so the name and the colour coming up the road are one crew.
@@ -342,8 +346,9 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
         if (rival) lightDust(rival, power, power);
       }
     },
-    setInterior: (detail) => {
+    setCarDetail: (detail, grime) => {
       interior = fieldInterior(detail);
+      screens = grime;
     },
     setNames: (on) => {
       named = on;

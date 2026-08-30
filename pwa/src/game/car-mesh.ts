@@ -22,6 +22,7 @@ import {
   GLASS_OPACITY,
   INSTRUMENT_MATERIAL,
   LENS_MATERIAL,
+  type FilmDetail,
   type InteriorDetail,
 } from "./car-body.ts";
 import type { CrewLook } from "./car-crew.ts";
@@ -195,10 +196,9 @@ export type CarOptions = {
   paint?: Livery;
   /** The crew behind the glass (car-crew.ts). Defaults to the player's. */
   crew?: CrewLook;
-  /** Whether the screens carry the grime film the wipers clear
-   * (car/wipers.ts). The player's car only — see `CarBodyOptions.screens`.
-   * Defaults on. */
-  screens?: boolean;
+  /** How finely the screens carry the grime film the wipers clear
+   * (car/wipers.ts) — see `CarBodyOptions.screens`. Defaults to `fine`. */
+  screens?: FilmDetail;
 };
 
 /** How far off the centerline this car's beams hang, front and rear. */
