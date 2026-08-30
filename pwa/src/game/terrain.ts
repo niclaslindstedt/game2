@@ -15,6 +15,7 @@ import {
   GROUND_CELL,
   LAKE_Y,
   REGIONS,
+  ROAD_CROSS,
   createRng,
   createTerrain,
   inStream,
@@ -25,6 +26,11 @@ import {
 
 import { hash2, valueNoise } from "../lib/noise.ts";
 import type { Biome, RegionGround } from "./biome.ts";
+// R16 — the ground beside a road takes the ROAD's own edge tone and the
+// SPILL's own noise field, so the ribbon's dissolve, the scattered stones
+// and this wash all hand over along one boundary.
+import { ROAD_PAINT } from "./road-mesh.ts";
+import { DISSOLVE } from "./road-spill.ts";
 import { detailTexture } from "./textures.ts";
 
 export { APRON, LAKE_Y };
@@ -53,6 +59,19 @@ const BUILD_BUDGET = 3;
 function clamp01(t: number): number {
   return t < 0 ? 0 : t > 1 ? 1 : t;
 }
+
+/** R16 — how far the road's dust reaches into the country beside it, how
+ * much of the shoulder's colour the ground takes at the lip, and how far
+ * the noise field is allowed to push the boundary either way (0 is a band
+ * of fixed width, which is the ruled line the whole hand-over exists to
+ * avoid; 1 is the whole reach).
+ *
+ * `reach` is generous on purpose. The ribbon's own dissolve is spent by the
+ * corridor's lip, so this is the ONLY thing softening the far side of the
+ * boundary, and a wash that died out in a metre would simply move the step
+ * a metre further out. `mix` is well under half: this is dust on grass, and
+ * grass it still has to look like. */
+const DUST = { reach: 9, mix: 0.4, wander: 0.8 };
 
 /** Where the meadow gives out and the mountain starts, m of altitude: the
  * ground goes over to bedrock across this band. */
@@ -114,6 +133,12 @@ export function buildTerrain(
   const field = createTerrain(track);
   const heightAt = field.heightAt;
   const samples = track.samples;
+  /** Where the road's corridor ends, m from its centerline — the lip the
+   * ribbon hands over at, and so where the ground's own paint starts being
+   * the only thing left softening the edge. The nominal width rather than
+   * R33's per-sample one: `roadDistanceAt` answers with a distance and not
+   * a sample, and this is a colour wash nine metres wide, not a boundary. */
+  const LIP = track.width / 2 + ROAD_CROSS.reach;
 
   // Paint-only noise seeds (the shape's seeds live inside the field).
   const rng = createRng((track.seed ^ 0x513ac1b7) >>> 0);
@@ -149,6 +174,12 @@ export function buildTerrain(
   const soil = new THREE.Color(palette.soil);
   const shore = new THREE.Color(palette.shore);
   const bed = new THREE.Color(palette.lakeBed);
+  // R16 — what the road leaves on the country beside it. The road's own
+  // shoulder colour rather than a brown of its own: the wash has to arrive
+  // at exactly the tone the ribbon's outer band is already dissolving into,
+  // or the two hand-overs disagree and there are two boundaries instead of
+  // none.
+  const dust = new THREE.Color(ROAD_PAINT.shoulder);
   const c = new THREE.Color();
 
   /** Each sub-region's ground, resolved once against the engine's REGIONS
@@ -245,6 +276,28 @@ export function buildTerrain(
     if (steep > 0) {
       const band = valueNoise(x, z, 18, noiseSeed + 47);
       out.lerp(band > 0.5 ? rock : rockDark, steep);
+    }
+    // R16 — THE DUST. The grass beside a gravel road is not grass: it is
+    // grass with a road's worth of dust on it, thrown there by every car
+    // that has been past and never washed off. Without it the transition
+    // has a LAST STEP in it — the ribbon dissolves honestly across its own
+    // band and then, at the corridor's lip, the country goes back to full
+    // meadow green in one vertex. That step is the line still visible in a
+    // screenshot after the geometry seam is gone, and no amount of scatter
+    // hides it, because it is a change of hue and the scatter is texture.
+    //
+    // So the wash carries on PAST the lip, over ground the road mesh does
+    // not reach, dying out over `DUST.reach`. It is driven by the same
+    // noise field the ribbon's paint and the spilled stones use, so the
+    // three interlock along one wandering boundary rather than each drawing
+    // an edge of its own — and because `paintGround` is the one palette
+    // BOTH the tiles and the road's outer band read (see the header above),
+    // the wash is continuous across the seam by construction.
+    const past = field.roadDistanceAt(x, z) - LIP;
+    if (past < DUST.reach) {
+      const fade = 1 - clamp01(past / DUST.reach);
+      const wander = valueNoise(x, z, DISSOLVE.patch, DISSOLVE.seed);
+      out.lerp(dust, clamp01(fade * (1 + DUST.wander) - wander * DUST.wander) * DUST.mix);
     }
     out.multiplyScalar(speck);
   };

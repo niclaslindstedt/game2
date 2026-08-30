@@ -37,6 +37,7 @@ import {
   createGame,
   createRng,
   step,
+  wearAt,
   type CarInput,
   type GameState,
   type KerbMarker,
@@ -45,7 +46,7 @@ import {
 
 import { createConeField } from "../pwa/src/game/cones.ts";
 import { createPostField } from "../pwa/src/game/kerbs.ts";
-import { buildRoadSpill } from "../pwa/src/game/road-spill.ts";
+import { REACH as SPILL_REACH, buildRoadSpill } from "../pwa/src/game/road-spill.ts";
 import { GROUND_SCALE } from "../pwa/src/game/settings.ts";
 import { stepTumble, tumbleFrom } from "../pwa/src/game/tumble.ts";
 
@@ -348,13 +349,17 @@ describe("the stone spilled at the road's edge (R16)", () => {
       rng,
       density,
       () => 0,
+      () => {},
       () => false,
     );
     const out: { x: number; z: number; y: number }[] = [];
     const m = new THREE.Matrix4();
     const at = new THREE.Vector3();
-    for (let i = 0; i < spill.mesh.count; i++) {
-      spill.mesh.getMatrixAt(i, m);
+    // The STONES are the first of the spill's two meshes; the grass growing
+    // back the other way is the second, and is not what this asks about.
+    const [mesh] = spill.meshes;
+    for (let i = 0; i < mesh.count; i++) {
+      mesh.getMatrixAt(i, m);
       at.setFromMatrixPosition(m);
       out.push({ x: at.x, z: at.z, y: at.y });
     }
@@ -362,13 +367,20 @@ describe("the stone spilled at the road's edge (R16)", () => {
     return out;
   };
 
-  it("thins from the road's edge outward, and never stands on the mat", () => {
+  it("thins from the road's edge outward, and keeps out of the wheel tracks", () => {
     const placed = stones(1);
     expect(placed.length).toBeGreaterThan(200);
-    // Every stone is OUTSIDE the mat — the surfacing draws its own gravel,
-    // and a chipping standing on the road is litter the wheels bounce off.
-    // ...and the count falls with distance: that gradient IS the effect.
+    // R16 — a gravel road is MADE of the stones, so they stand on the mat
+    // as well as beside it. What they may not do is stand in the two lines
+    // every car before you drove down: a road is swept clean where it is
+    // driven, and that pattern is what stops loose stone on the mat reading
+    // as gravel tipped over tarmac. Measured as a ratio rather than a floor
+    // of zero — the mat is sampled continuously and the tracks have soft
+    // edges, so what is asserted is that the tracks are much emptier than
+    // the loose margins beside them.
     const bands = [0, 0, 0, 0];
+    let inTracks = 0;
+    let onMargins = 0;
     for (const p of placed) {
       let nearest = Infinity;
       let half = track.width / 2;
@@ -380,13 +392,63 @@ describe("the stone spilled at the road's edge (R16)", () => {
         }
       }
       const out = nearest - half;
-      expect(out).toBeGreaterThan(-0.6);
-      const band = Math.min(3, Math.floor(out / 2));
-      if (band >= 0) bands[band] += 1;
+      if (out <= 0) {
+        // On the mat: is this where the wheels run, or where they do not?
+        if (wearAt(nearest, half * 2) > 0.6) inTracks += 1;
+        else onMargins += 1;
+        continue;
+      }
+      // Equal-width buckets spanning the whole scatter, so "it thins" is a
+      // claim about density and not about the last bucket being open-ended.
+      const band = Math.floor(out / (SPILL_REACH / bands.length));
+      if (band < bands.length) bands[band] += 1;
     }
+    expect(onMargins).toBeGreaterThan(0);
+    expect(inTracks).toBeLessThan(onMargins * 0.5);
+    // ...and past the edge the count falls with distance: that gradient IS
+    // the effect, and it is what makes the edge a transition rather than a
+    // boundary with stones on one side of it.
     expect(bands[0]).toBeGreaterThan(bands[1]);
     expect(bands[1]).toBeGreaterThan(bands[2]);
     expect(bands[2]).toBeGreaterThan(bands[3]);
+  });
+
+  it("grows grass back the other way, over the road's own edge", () => {
+    // The other half of R16's hand-over: the stones run out into the
+    // country and the country grows back in. A verge that stopped dead at
+    // the road's edge would draw the boundary the stones just erased.
+    const rng = createRng(0x51ed);
+    const spill = buildRoadSpill(
+      track,
+      0,
+      300,
+      rng,
+      1,
+      () => 0,
+      () => {},
+      () => false,
+    );
+    const [, grass] = spill.meshes;
+    expect(grass.count).toBeGreaterThan(50);
+    const m = new THREE.Matrix4();
+    const at = new THREE.Vector3();
+    let onTheRoad = 0;
+    for (let i = 0; i < grass.count; i++) {
+      grass.getMatrixAt(i, m);
+      at.setFromMatrixPosition(m);
+      let nearest = Infinity;
+      let half = track.width / 2;
+      for (const s of track.samples) {
+        const d = Math.hypot(s.x - at.x, s.z - at.z);
+        if (d < nearest) {
+          nearest = d;
+          half = s.width / 2;
+        }
+      }
+      if (nearest < half) onTheRoad += 1;
+    }
+    expect(onTheRoad).toBeGreaterThan(0);
+    spill.dispose();
   });
 
   it("thins with OPTIONS ▸ VIDEO ▸ GROUND DETAIL, and never to nothing", () => {

@@ -31,8 +31,11 @@ import { valueNoise } from "../lib/noise.ts";
 // the scattered stones agree instead of reading as two effects.
 import { DISSOLVE } from "./road-spill.ts";
 
-import { APRON } from "./terrain.ts";
-import { gravelTexture } from "./textures.ts";
+// `APRON` straight from the engine rather than through terrain.ts, which
+// only re-exports it: the ground's paint reads this module's palette for
+// R16's dust wash, and the two must not import each other.
+import { APRON } from "@engine";
+import { detailTexture, gravelTexture, textureMean } from "./textures.ts";
 import { rightOf, type Ribbon } from "./ribbon.ts";
 
 /** World up — the axis every scattered chipping spins about. */
@@ -279,6 +282,21 @@ export function buildRoad(
   const looseGravel = new THREE.Color(ROAD_PAINT.gravel.loose);
   const wornGravel = new THREE.Color(ROAD_PAINT.gravel.worn);
   const country = new THREE.Color();
+  // What the ribbon's colour has to be multiplied by at the corridor's lip
+  // so that, once this mesh's gravel map has had its say, it renders what
+  // the ground beside it renders under the detail map. Read off the two
+  // canvases rather than declared, so re-speckling a texture keeps the seam
+  // shut. Built here, once per ribbon, rather than at module scope: both
+  // textures are painted lazily and neither exists until something asks.
+  const EDGE_FIX = ((): THREE.Color => {
+    const road = textureMean(gravelTexture());
+    const land = textureMean(detailTexture());
+    return new THREE.Color(
+      land.r / Math.max(1e-3, road.r),
+      land.g / Math.max(1e-3, road.g),
+      land.b / Math.max(1e-3, road.b),
+    );
+  })();
 
   let lastCount = -1;
   let run = 0;
@@ -326,9 +344,16 @@ export function buildRoad(
       // has already warped both carriageways onto it.
       const handing = ground !== undefined && out > 0 && (s.flat ?? 0) < 0.25;
       const hand = handing ? handoverAt(out) : 1;
+      // The lift that keeps the mat off the ground lattice is spent by the
+      // hand-over along with everything else, so the ribbon's last vertex
+      // is the ground's height EXACTLY. Carrying it out to the lip instead
+      // leaves the two meshes two centimetres apart — a gap the skirt shows
+      // through as a dark hairline down the whole stage, which is the same
+      // defect as the stripe it replaced, two orders of magnitude thinner
+      // and just as visible against grass.
       let y = s.elevation + corridorOffset(s, l * wide, here) + bias;
       if (ground !== undefined && hand < 1) {
-        y = y * hand + (ground.heightAt(px, pz) + bias) * (1 - hand);
+        y = y * hand + ground.heightAt(px, pz) * (1 - hand);
       }
       positions.push(px, y, pz);
       // UVs run meters along and across, so the grain is the same size
@@ -405,6 +430,22 @@ export function buildRoad(
           const mix = clamp01(t * (1 + DISSOLVE.spread) - g * DISSOLVE.spread);
           ground.paintAt(px, pz, country);
           paint.copy(shoulder).lerp(country, mix);
+          // ...and then UNDO THIS MESH'S OWN MAP, by however much of the
+          // ground's colour the vertex has taken.
+          //
+          // The road carries a brown gravel grain and the tiles carry a
+          // near-white one, so the same colour on both renders forty per
+          // cent apart (see `textureMean`). Handing the ground's colour
+          // over without this is handing over three quarters of the
+          // difference and leaving the rest as a hard line exactly at the
+          // lip — the last edge in R16's hand-over, drawn by the maps after
+          // the geometry and the palette have both done everything right.
+          // By the lip the vertex is asking the gravel map for what the
+          // detail map would have given it, so the two meshes render the
+          // same colour at the seam and there is nothing left to see.
+          paint.r *= 1 + (EDGE_FIX.r - 1) * mix;
+          paint.g *= 1 + (EDGE_FIX.g - 1) * mix;
+          paint.b *= 1 + (EDGE_FIX.b - 1) * mix;
         } else {
           // No landscape to hand over to (the stage previews): the old flat
           // verge, which is all a picture of the road's plan needs.
@@ -449,9 +490,10 @@ export function buildRoad(
  * stripe running the whole length of the stage a few metres out in the
  * grass: the very vertical face R16 exists to remove, put back by the mesh
  * that was supposed to hide it. `ground` is the same landscape `buildRoad`
- * hands over to, and `bias` the same lift, so the two meshes share an edge.
- * Without one (the stage previews draw a ribbon and no landscape) the
- * analytic height is all there is. */
+ * hands over to, and the hand-over has spent the lift by the lip in both,
+ * so the two meshes share an edge exactly. Without a landscape (the stage
+ * previews draw a ribbon and nothing else) the analytic height is all there
+ * is, and `bias` is the lift that goes with it. */
 export function buildSkirts(
   samples: Ribbon[],
   width: number,
@@ -486,7 +528,7 @@ export function buildSkirts(
       // inside a junction, where there is no hand-over to make (R17).
       const handed = ground !== undefined && (s.flat ?? 0) < 0.25;
       const top = handed
-        ? ground.heightAt(ex, ez) + bias
+        ? ground.heightAt(ex, ez)
         : s.elevation + corridorOffset(s, at, here) + bias;
       // The skirt drops a few meters below grade — deep enough to meet the
       // terrain shelf under every roll of the road.

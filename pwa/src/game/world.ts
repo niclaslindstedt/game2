@@ -323,11 +323,12 @@ function buildScenery(
   // hit is a prop the engine placed, drawn by the wild cells.
   type Rock = { x: number; y: number; z: number; s: number };
   const rocks: Rock[] = [];
-  // R16 — THE SPILL: the chippings that ran off the mat, thinning out across
-  // the whole hand-over band until there is no road left. Its own module,
-  // because it is the half of the road's edge a player actually reads (see
-  // road-spill.ts) and because it is thousands of stones rather than the
-  // handful of cobbles below.
+  // R16 — THE SPILL: the loose stone on the mat itself, the chippings that
+  // ran off it thinning out across the hand-over band and away into open
+  // grass, and the tufts of grass growing back the other way. Its own
+  // module, because it is the half of the road's edge a player actually
+  // reads (see road-spill.ts) and because it is thousands of stones rather
+  // than the handful of cobbles below.
   const spill = buildRoadSpill(
     track,
     Math.max(4, from),
@@ -335,9 +336,10 @@ function buildScenery(
     rng,
     stone,
     field.groundAt,
+    terrain.paintAt,
     (x, z) => inStream(field.streams, x, z, 0.5) || field.groundAt(x, z) < LAKE_Y + 1.2,
   );
-  group.add(spill.mesh);
+  for (const mesh of spill.meshes) group.add(mesh);
   for (let i = Math.max(4, from); i < to; i += 5) {
     const s = samples[i];
     if (stone < 1 && !rng.chance(stone)) continue;

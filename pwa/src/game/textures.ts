@@ -82,6 +82,44 @@ export const detailTexture = once((): THREE.CanvasTexture => {
   return toTexture(canvas, 1);
 });
 
+/** The average colour a texture multiplies a surface BY, in the linear space
+ * the shader does the multiplying in.
+ *
+ * This exists because two surfaces that meet cannot be matched on their
+ * vertex colours alone when they carry different maps. The road's grain is
+ * a brown speckle averaging a little over half brightness; the ground's is
+ * a near-white one averaging nearly all of it. So a road vertex and a
+ * ground vertex painted the SAME colour render forty percent apart, and at
+ * the corridor's lip — where R16 has just spent a whole band handing one
+ * over to the other — that difference is a hard line, drawn by the maps
+ * after the geometry and the palette have both done everything right.
+ *
+ * Measured off the canvas rather than declared, so it stays true when
+ * somebody re-speckles a texture. `colorSpace` is honoured: the canvas is
+ * sRGB and the shader is linear, and averaging in the wrong one is worth
+ * several percent on a mean this dark. */
+const means = new WeakMap<THREE.CanvasTexture, THREE.Color>();
+export function textureMean(tex: THREE.CanvasTexture): THREE.Color {
+  const held = means.get(tex);
+  if (held) return held;
+  const canvas = tex.image as HTMLCanvasElement;
+  const ctx = canvas.getContext("2d");
+  const total = new THREE.Color(1, 1, 1);
+  means.set(tex, total);
+  if (!ctx) return total;
+  total.setRGB(0, 0, 0);
+  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const px = new THREE.Color();
+  const n = data.length / 4;
+  for (let i = 0; i < data.length; i += 4) {
+    px.setRGB(data[i] / 255, data[i + 1] / 255, data[i + 2] / 255, THREE.SRGBColorSpace);
+    total.r += px.r / n;
+    total.g += px.g / n;
+    total.b += px.b / n;
+  }
+  return total;
+}
+
 export const waterTexture = once((): THREE.CanvasTexture => {
   const { canvas, ctx } = makeCanvas(64);
   speckle(ctx, 64, "#2f86e0", [
