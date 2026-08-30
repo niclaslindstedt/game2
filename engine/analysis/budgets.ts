@@ -255,6 +255,12 @@ export const ANALYSIS = {
      * reporting, m². Under this it is the raster's own edge — a mat is
      * swept as a disc per sample and its boundary lands between cells. */
     splinterArea: 6,
+    /** ...and how thin a patch of country between two roads has to be
+     * before it is a SPLINTER rather than a field, m. A junction whose
+     * grass runs to a knife point is the tell that nobody planned it: below
+     * a car and a half across, the ground between two carriageways is a
+     * seam somebody should have paved, not an island. */
+    splinterThick: 7,
     /** R17 — the angle the dirt road has to arrive at the tarmac at,
      * measured where its centerline crosses the main road's edge. `min` is
      * where a junction stops being one: two roads sharing a tangent there

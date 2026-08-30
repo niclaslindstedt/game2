@@ -684,16 +684,52 @@ function createCompiler(
    * of a boulevard are the same place at two scales. */
   const mouthRun = R.junction.mouth.run * track.width;
 
+  /** R17 — the kerb radius the MOUTH is built to, m. */
+  const kerb = R.junction.mouth.kerb * track.width;
+
+  /** R17 — where each junction's THROAT is: how far back down the minor
+   * road, in meters of its own arc, the centerline crosses the main road's
+   * edge. That crossing is the mouth's mouth — the line the dirt road stops
+   * at and the tarmac starts — and the fillet is measured back from it.
+   *
+   * Measured off the built road rather than from the corner's nominal
+   * radius, and remembered per junction because the flare asks for it once
+   * per sample. */
+  const throatOf = (junction: RoadJunction): number => {
+    const nx = Math.cos(junction.heading);
+    const nz = -Math.sin(junction.heading);
+    // The NEAREST crossing to the meeting point, not the first one the walk
+    // meets: a joining junction's minor arm runs backwards through the
+    // sample list, so the first sample in `s` order that stands off the mat
+    // is the far end of the mouth rather than its throat.
+    let throat = Infinity;
+    for (const sample of track.samples) {
+      const d = junction.joining ? junction.s - sample.s : sample.s - junction.s;
+      if (d < 0 || d > mouthRun || d >= throat) continue;
+      const across = (sample.x - junction.x) * nx + (sample.z - junction.z) * nz;
+      if (Math.abs(across) >= junction.width / 2) throat = d;
+    }
+    return throat === Infinity ? 0 : throat;
+  };
+  const throats = new Map<RoadJunction, number>();
+
   /** R17 — how much wider the MOUTH makes a sample of the minor road, m of
    * extra half-width per side.
    *
-   * The widening is the WEDGE and nothing else: the gap between this
-   * sample's near mat edge and the main road's, closed while it is narrow
-   * enough to be a seam and opening again over another seam's width past
-   * that. A flare of some fixed proportion instead widens the road hardest
-   * at the meeting point, where the two mats already lie on top of each
-   * other — which puts a mushroom of paving out into the field on the far
-   * side and fills nothing.
+   * The shape is a quarter circle of radius `kerb`, tangent to the dirt
+   * road's own edges where the widening starts and to the main road's edge
+   * where it ends — the kerb radius every junction in the world is built
+   * with. `out` is meters of the minor road's OWN length back from the
+   * throat, not distance across the main road: a fillet is a radius laid on
+   * the ground, so it reaches a kerb radius back down the lane whether the
+   * lane arrives square or at a slant. Measured across instead, an oblique
+   * junction gets its whole mouth compressed into the few meters its
+   * centerline takes to cross the edge, and opens like a trapdoor.
+   *
+   * Past the throat it is over. A sample inside the main road's mat is
+   * standing on the through road, which is already paved right across, and
+   * carrying the flare on from there puts a mushroom of dirt out into the
+   * field on the far side of a road that never needed covering.
    *
    * Returns 0 for a sample that is not the minor road of any junction. The
    * minor arm is the unsealed one, so which side of the meeting point it
@@ -704,21 +740,11 @@ function createCompiler(
     for (const junction of track.junctions) {
       const d = junction.joining ? junction.s - sample.s : sample.s - junction.s;
       if (d < 0 || d > mouthRun) continue;
-      const nx = Math.cos(junction.heading);
-      const nz = -Math.sin(junction.heading);
-      const across = (sample.x - junction.x) * nx + (sample.z - junction.z) * nz;
-      // The mat's own reach ACROSS the main road: a minor road running
-      // alongside spans its full half-width, one arriving square across it
-      // spans almost none — its length is what covers the ground there.
-      const spread =
-        (sample.width / 2) * Math.abs(Math.cos(sample.heading) * nx - Math.sin(sample.heading) * nz);
-      const gap = Math.abs(across) - spread - junction.width / 2;
-      const seam = R.junction.mouth.seam;
-      if (gap <= 0 || gap >= 2 * seam) continue;
-      // Under a seam the wedge is paved out entirely; past one it opens
-      // over a second seam's worth rather than in a step, so the mouth has
-      // no edge a driver can see the end of.
-      const extra = Math.min(gap, seam) * Math.min(1, (2 * seam - gap) / seam);
+      let throat = throats.get(junction);
+      if (throat === undefined) throats.set(junction, (throat = throatOf(junction)));
+      const out = d - throat;
+      if (out <= 0 || out >= kerb) continue;
+      const extra = kerb - Math.sqrt(Math.max(0, kerb * kerb - (kerb - out) * (kerb - out)));
       if (extra > widest) widest = extra;
     }
     return widest;
@@ -1062,6 +1088,10 @@ function createCompiler(
    *   between two roads that meet and two ribbons that collided. */
   const shapeJunctions = (from: number): void => {
     if (track.junctions.length === 0) return;
+    // A parting junction's minor arm is the road AFTER it, so its throat
+    // moves as more of that road is walked — an endless stream would
+    // otherwise flare every later chunk against the first chunk's answer.
+    throats.clear();
     const all = track.samples;
     const reach = Math.ceil(Math.max(R.junction.reach.max, mouthRun) / SAMPLE_STEP) + 1;
     const start = Math.max(0, from - reach);

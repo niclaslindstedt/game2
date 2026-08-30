@@ -866,22 +866,28 @@ export const STAGE_RULES = {
      * lane cuts the corner, and season after season the mouth is worn and
      * bladed WIDER until the two mats are one piece of ground.
      *
-     * So the minor road's mat is flared over the last stretch into the
-     * junction — by exactly as much as the gap between it and the main
-     * road's edge, so the widening is the wedge and nothing else. A flare
-     * of a fixed proportion instead is what puts a mushroom of tarmac out
-     * into the field at the meeting point, where the two mats already
-     * overlap and there is no wedge to fill.
+     * So the minor road's mat is flared into a KERB RADIUS: a quarter
+     * circle tangent to the dirt road's own edge at one end and to the main
+     * road's edge at the other, which is how every junction on every map is
+     * actually built. Two properties of that shape are the whole point, and
+     * getting either wrong is visible from the air:
      *
-     * `run` is how far back down the minor road the mouth may reach, in
-     * road WIDTHS — the same proportion argument as `junctionParts`,
-     * because the mouth of a lane and the mouth of a boulevard are the same
-     * PLACE at two scales. `seam` is where a gap stops being one, m: under
-     * it the country between the two carriageways is a seam and gets paved
-     * over, and past it the roads have genuinely parted and the field
-     * between them opens up over another `seam`'s worth of widening rather
-     * than in a step. */
-    mouth: { run: 1.9, seam: 7 },
+     * - It only ever WIDENS on the way in. A mouth that opens and closes
+     *   again before it reaches the tarmac reads as a bulge in a lane
+     *   rather than as a junction.
+     * - It STOPS at the main road's edge. Past that line the ground belongs
+     *   to the through road, which is already paving it — carrying the
+     *   flare on across puts a mushroom of dirt out into the field on the
+     *   far side, where there was never anything to cover.
+     *
+     * `kerb` is the radius, as a share of the road's own width, so the mouth
+     * of a lane and the mouth of a boulevard are the same PLACE at two
+     * scales; at 0.6 the throat is a little over twice the road, which is
+     * what a junction two graded roads wide looks like. `run` bounds how far
+     * back down the minor road the widening may reach at all, in road
+     * widths — a corner that hugs the main road for a hundred meters is not
+     * allowed to be a hundred meters of mouth. */
+    mouth: { run: 1.9, kerb: 0.6 },
     /** ...and how far past the main road's own edge the mouth's opening is
      * counted, m — the stretch of edge line and border a driver turning in
      * has worn away either side of the throat. Small: a junction is a gap

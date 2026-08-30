@@ -29,7 +29,6 @@
 
 import { SPUR } from "../mapgen/spurs.ts";
 import { junctionMouth } from "../mapgen/road.ts";
-import { STAGE_RULES } from "../mapgen/rules.ts";
 import type { RoadJunction, Track, TrackSample } from "../mapgen/compile.ts";
 import { ANALYSIS } from "./budgets.ts";
 import {
@@ -175,7 +174,6 @@ export function analyzeJunctions(track: Track): MetricReport {
   const started = Date.now();
   const findings: Finding[] = [];
   const J = ANALYSIS.junctions;
-  const seam = STAGE_RULES.junction.mouth.seam;
 
   let splinters = 0;
   let worstSplinter = 0;
@@ -224,7 +222,7 @@ export function analyzeJunctions(track: Track): MetricReport {
     // business.
     const mouthReach = junction.reach + junction.width;
     for (const patch of patches) {
-      if (patch.peak * 2 >= seam) continue;
+      if (patch.peak * 2 >= J.splinterThick) continue;
       if (Math.hypot(patch.x - junction.x, patch.z - junction.z) > mouthReach) continue;
       const area = patch.cells * cell * cell;
       if (area < J.splinterArea) continue;
