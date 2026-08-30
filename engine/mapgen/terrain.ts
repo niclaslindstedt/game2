@@ -842,7 +842,7 @@ export function createTerrain(track: Track): TerrainField {
    * Taking the widest can only ever level a little more ground than the mat
    * needs, and a little more flat ground beside a junction is what a
    * junction has. */
-  const LIP_ENVELOPE = 12;
+  const LIP_ENVELOPE = 4;
   const lipAt = (index: number): number => {
     let widest = 0;
     const lo = Math.max(0, index - LIP_ENVELOPE);

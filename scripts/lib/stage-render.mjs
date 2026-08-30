@@ -215,11 +215,7 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
     }
     return best;
   };
-  /** How far the dirt road's surfacing takes to become the sealed road's
-   * across the seam, m. Short: the seam IS the main road's edge, and a road
-   * surface changes across a line, not across a fade. */
-  const SEAM = 1.2;
-  /** ...and how much gravel the tarmac wears at the mouth in return — the
+  /** How much gravel the tarmac wears at the mouth — the
    * smear every car turning out of the dirt road drops on the seal, which
    * goes the OTHER way and is the only thing that crosses the edge. */
   const DRAG_ON = 0.42;
@@ -257,20 +253,24 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
         return mix(own, mix(ROAD.gravel.loose, ROAD.gravel.worn, 0.5), dust * DRAG_ON);
       }
       if (kind !== "gravel") return own;
-      // R17 — the seam runs along the main road's own EDGE, at its angle,
-      // and nowhere else. The dirt road keeps its own surfacing right up to
-      // that line; only the part of its mat standing INSIDE the sealed
-      // road's edge reads as the sealed road, because that ground belongs
-      // to the road that runs through. Fading it out over metres of the
-      // dirt road instead painted the mouth tarmac-coloured for a car's
-      // length before it got there, which reads as a gravel road that stops
-      // short of the junction it is joining.
+      // R17 — the dirt road STOPS at the main road's edge, cut at that
+      // angle, and nothing of it carries on past. Not its surfacing, not
+      // its verge, not its marking: past that line the ground is the road
+      // that runs through, and the through road draws it. Anything of the
+      // minor road drawn out there is the two roads MERGING, which is the
+      // one thing a junction must not look like.
       const past = pastMainEdge(x, z);
-      if (past === null || past >= SEAM) return own;
-      const t = Math.max(0, past) / SEAM;
-      return mix(own, mix(ROAD.asphalt.loose, ROAD.asphalt.worn, 0.55), 1 - t * t * (3 - 2 * t));
+      if (past !== null && past < 0) return null;
+      return own;
     }
     if (bridge) return null; // nothing beside a deck but the drop
+    // R17 — a minor road has NO BORDER where it crosses the road it meets.
+    // Its shoulder and its verge stop dead at the main road's edge, because
+    // past that line the ground belongs to the road running through: a band
+    // of grass drawn there is a lawn on the carriageway, which is what the
+    // mouth's outer corner had.
+    const pastEdge = pastMainEdge(x, z);
+    if (pastEdge !== null && pastEdge < 0) return null;
     if (inJunction(sample.x, sample.z)) return null; // the junction is all road
     if (out < ROAD_CROSS.verge.bareTo) return ROAD.shoulder;
     return mix(
@@ -341,6 +341,12 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
   const minorAt = (sample) =>
     track.junctions.some((j) => junctionFlat(j, sample.x, sample.z) > 0 && onMinorSide(j, sample));
 
+  /** How far past the minor road's own mat the break in the through road's
+   * edge line still reaches, m. The opening is the mat plus the ground
+   * either side of it that a car turning in crosses; a break cut to the mat
+   * exactly leaves a stub of line inside the mouth at each corner. */
+  const MOUTH_PAD = 2.5;
+
   /** The MINOR road's own mat at each junction: its samples, near enough to
    * the crossing to be the mouth. */
   const mouthMats = track.junctions.map((j) =>
@@ -359,7 +365,11 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
    * badly and the mat answers exactly. */
   const inMouth = (x, z) =>
     mouthMats.some((mat) =>
-      mat.some((s) => Math.hypot(s.x - x, s.z - z) < (s.width ?? track.width) / 2 + 0.6),
+      mat.some(
+        (s) =>
+          Math.hypot(s.x - x, s.z - z) <
+          Math.abs(s.shift ?? 0) + (s.width ?? track.width) / 2 + MOUTH_PAD,
+      ),
     );
 
   const drawMarkings = (samples, roadWidth, branch = false) => {
@@ -394,7 +404,15 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
         if (c.s % 9 < 3) band(-0.2, 0.2, ROAD.marking);
       } else {
         const stripe = Math.floor(c.s / 4) % 2 === 0 ? ROAD.rumbleRed : ROAD.rumbleWhite;
-        for (const side of [-1, 1]) band((half - 0.9) * side, half * side, stripe);
+        for (const side of [-1, 1]) {
+          // R17 — the rally's own marking stops at the seal with the road
+          // it belongs to. A striped edge running on across the tarmac is
+          // the stage marking somebody else's carriageway.
+          const lat = (half - 0.45) * side;
+          const past = pastMainEdge(c.x + cr.x * lat, c.z + cr.z * lat);
+          if (past !== null && past < 0) continue;
+          band((half - 0.9) * side, half * side, stripe);
+        }
       }
     }
   };

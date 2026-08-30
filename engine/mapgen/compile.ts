@@ -938,14 +938,17 @@ function createCompiler(
   /** R17 — the MOUTH's two sizes, m: how much wider the mat is where it
    * meets the tarmac, and the length of lane it opens over.
    *
-   * The widening is CAPPED at the corridor's own reach (R16). The ground
-   * lattice is shaped out to the corridor's lip and hands over to the
-   * country past it, so a mat that flares further than that is a mat
-   * standing over ground nothing shelved — which is a vertical face along
-   * the outside of the mouth, and exactly the seam the hand-over exists to
-   * close. A mouth a corridor wide is still over twice the road across its
-   * throat, which is what a graded side road meeting a country highway
-   * looks like. */
+   * The widening is CAPPED at the corridor's own reach (R16), and that cap
+   * is the thing standing between this mouth and the one a real junction
+   * has. The ground lattice is shaped out to the corridor's lip and hands
+   * over to the country past it, so a mat that flares further is a mat over
+   * ground nothing shelved — a vertical face along the outside of the
+   * mouth. Enlarging the PLATFORM to cover a wider mouth does not buy it
+   * either: measured on seed 1, spreading the graded ellipse by the mouth's
+   * own width left the seam where it was (0.46 m) and opened a 1.5 m gap
+   * between the ribbon and the tiles, because the ground under the road
+   * moved with it. What a wider mouth needs first is a corridor that owns a
+   * point by which MAT is nearest rather than by which centerline is. */
   const mouthWide = Math.min(R.junction.mouth.wide * track.width, ROAD_CROSS.reach);
   const mouthTaper = R.junction.mouth.taper * track.width;
 
