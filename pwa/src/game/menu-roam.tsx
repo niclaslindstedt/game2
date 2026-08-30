@@ -20,6 +20,7 @@ import { STAGE_RULES, circuitLapBand, type StageLength, type StageShape } from "
 import { CarPicker } from "./car-picker.tsx";
 import { debugReport, type DebugBox } from "./debug-info.ts";
 import { MAP_LAYERS, type LegendStop, type MapLayerId } from "./map-layers.ts";
+import { Glyph } from "./menu-glyphs.tsx";
 import {
   OptionRow,
   STAGE_DIALS,
@@ -281,15 +282,23 @@ function MapPane({
     };
   }, []);
 
-  // The hint lives INSIDE the pane, in the corner of the thing it is about.
-  // It must not eat the gesture it advertises, hence pointer-events: none.
-  // The developer's tools go in the same hole, which is why the pane takes
-  // children at all: they belong to the map, so they have to move with it
-  // when the pane is blown up to the whole screen.
+  // Everything the pane says about itself stacks along its FOOT, inside the
+  // pane and therefore inside the frame: the gesture hint, then whatever
+  // tools the caller put in it. The hint used to ride the top right corner,
+  // where a phone's status bar and its rounded corner between them ate it —
+  // it is the one row that has to be read before anything else here can be
+  // used, so it goes where the rest of the controls are.
+  //
+  // The hint must not eat the gesture it advertises, hence pointer-events:
+  // none. The developer's tools go in the same stack, which is why the pane
+  // takes children at all: they belong to the map, so they move with it when
+  // the pane is blown up to the whole screen.
   return (
     <div ref={ref} className={full ? "roam-map roam-map-full" : "roam-map"} aria-label="Stage map">
-      <span className="roam-map-hint">DRAG TO TURN · TILT · ZOOM · ⌘/CTRL-DRAG TO PAN</span>
-      {children}
+      <div className="roam-map-foot">
+        <span className="roam-map-hint">DRAG TO TURN · TILT · ZOOM · ⌘/CTRL-DRAG TO PAN</span>
+        {children}
+      </div>
     </div>
   );
 }
@@ -336,12 +345,6 @@ function MapTools({ map }: { map: MapDebug }) {
             is the flat sky the menu's cards sit on with the map in a hole in
             the corner of it. */}
         {map.full && <MapShotButton map={map} />}
-        {/* ...the TEXT, on the other hand, is offered at either size. It
-            describes the stage and the framing, neither of which the pane's
-            size changes, and now that the boxes are not on screen this is
-            the only way to read what the generator built without taking a
-            picture of it first. */}
-        <MapCopyButton map={map} />
       </div>
       {map.legend.length > 0 && (
         <div className="map-legend">
@@ -409,8 +412,17 @@ const READY_PERIOD = 500;
  * typed out by hand before it can go in a report. So the facts go where
  * facts are wanted — in a paste — and the map gets its pixels back.
  *
- * A picture still gets the boxes: the SHUTTER next door paints them into
- * it, which is the one place they cannot be selected and copied. */
+ * A picture still gets the boxes: the SHUTTER on the tool row paints them
+ * into it, which is the one place they cannot be selected and copied.
+ *
+ * It rides the PANE'S HEADER rather than the tool row along the foot, in
+ * the slot the word ROAM had. Two reasons, and the second is the real one:
+ * the foot row is the map's LAYERS, and a button that copies text is not a
+ * layer; and a developer looking at this page does not need to be told
+ * which page it is, so the slot was a word wide and said nothing. A glyph,
+ * because it is the only mark in the menus that stands on its own — hence
+ * the label and the title, which every other glyph gets from the word it
+ * sits beside. */
 function MapCopyButton({ map }: { map: MapDebug }) {
   const [said, setSaid] = useState<string | null>(null);
   const [ready, setReady] = useState(() => map.read() !== null);
@@ -424,8 +436,9 @@ function MapCopyButton({ map }: { map: MapDebug }) {
   return (
     <button
       type="button"
-      className={said ? "map-tool map-tool-on" : "map-tool"}
+      className={said ? "map-copy map-copy-on" : "map-copy"}
       title="Copy the stage, the layer's reading, the framing and the REPRO link as text"
+      aria-label="Copy debug info"
       data-map-copy
       // What a headless pass waits on: the stage is generated on a worker's
       // own schedule, and until it lands there is nothing here to read.
@@ -450,7 +463,11 @@ function MapCopyButton({ map }: { map: MapDebug }) {
         });
       }}
     >
-      {said ?? "COPY DEBUG INFO"}
+      <Glyph name="clipboard" />
+      {/* The receipt still gets words. A glyph can say "copy this"; nothing
+          drawn in a 24 px box can say COPY FAILED, and a button that
+          silently did nothing is the one this page cannot afford. */}
+      {said && <span className="map-copy-said">{said}</span>}
     </button>
   );
 }
@@ -490,7 +507,11 @@ export function RoamPage({
             <button type="button" className="menu-back" data-nav-back onClick={onBack}>
               ‹ MENU
             </button>
-            <span className="roam-title">ROAM</span>
+            {/* The page's name — or, once the developer switch is on, the
+                button that copies what the map is looking at. A developer
+                standing in front of this page does not need to be told
+                which page it is, and the slot was a word wide. */}
+            {map ? <MapCopyButton map={map} /> : <span className="roam-title">ROAM</span>}
             <span className="roam-seed">
               <span className="roam-pane-title">SEED</span>
               <button

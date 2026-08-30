@@ -2796,14 +2796,70 @@ a.menu-version:focus-visible {
   color: var(--hud-good);
 }
 
-/* What the map can be DONE to, in the corner of the map itself. Quiet, and
-   deaf: a label lying across the pane must not swallow the drag it is
-   advertising. */
-.roam-map-hint {
+/* COPY DEBUG INFO, as a mark in the header where the page's name was. It
+   wears the seed stepper's chrome rather than the tool row's, because that
+   is the row it is now in — a button in a header has to look like the other
+   buttons in that header, not like the ones it moved away from. */
+.map-copy {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font: inherit;
+  font-size: clamp(0.9rem, 3.2vmin, 1.25rem);
+  line-height: 1;
+  color: var(--hud-good);
+  background: rgb(255 255 255 / 12%);
+  border: 2px solid rgb(255 255 255 / 35%);
+  border-radius: 0.45rem;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.map-copy:hover,
+.map-copy:focus-visible {
+  background: rgb(255 210 62 / 25%);
+}
+
+.map-copy-on {
+  color: #0b1830;
+  background: var(--hud-good);
+  border-color: var(--hud-good);
+}
+
+.map-copy:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* The receipt beside the mark — smaller than the glyph, because it is a
+   flash of state and not a label the button wears. */
+.map-copy-said {
+  font-size: 0.58em;
+  letter-spacing: 0.12em;
+}
+
+/* Everything the map says about itself, stacked along its foot: the gesture
+   hint first, then the developer's tools under it. One anchored stack, so
+   the rows cannot drift apart or land on top of each other, and it is deaf
+   by default — a strip lying across the pane must not swallow the drag it
+   is advertising, so only the controls inside it take a pointer. */
+.roam-map-foot {
   position: absolute;
-  top: 0.4rem;
-  right: 0.7rem;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
   pointer-events: none;
+}
+
+/* What the map can be DONE to. Quiet, and it wraps rather than running off
+   the pane: on a phone this is four gestures' worth of words across a
+   narrow column. */
+.roam-map-hint {
   font-size: clamp(0.46rem, 1.5vmin, 0.6rem);
   letter-spacing: 0.14em;
   opacity: 0.6;
@@ -2830,19 +2886,23 @@ a.menu-version:focus-visible {
 
 /* ── The developer's map ─────────────────────────────────────────────────
 
-   Blown up to the whole viewport. The pane measures itself and hands its
-   rectangle up (see MapPane), and the renderer scissors the map view into
-   whatever it is told — so making the hole the size of the screen is the
-   whole of "full screen", and nothing in the renderer knows about it. It
-   sits over the roam column rather than replacing it: leaving the page
-   standing underneath is what makes SHRINK a press rather than a reload. */
+   Blown up to fill the STAGE PANE, which with the column and the slider
+   taken off below is the whole screen inside its own frame. The pane
+   measures itself and hands its rectangle up (see MapPane), and the
+   renderer scissors the map view into whatever it is told — so growing the
+   hole is the whole of "full screen", and nothing in the renderer knows
+   about it. The page stays standing underneath, which is what makes SHRINK
+   a press rather than a reload.
+
+   It fills the pane rather than covering the VIEWPORT, and that is the
+   difference between the map's own controls being on the page and being off
+   the edge of it: a hole pinned to the viewport puts everything anchored
+   inside it — the layer switch, the gesture hint — outside the frame the
+   pane draws, and on a phone that means under the home bar and behind the
+   status bar. Inside the pane they land where every other control on this
+   page lands. */
 .roam-map-full {
-  position: fixed;
-  inset: 0;
-  z-index: 6;
   min-height: 0;
-  border: none;
-  border-radius: 0;
 }
 
 /* The pane paints NOTHING — that is the whole design (see above) — so
@@ -2856,18 +2916,14 @@ a.menu-version:focus-visible {
   display: none;
 }
 
-/* The layer switch, along the foot of the map it paints. Its own row of
-   buttons is deaf-by-default like the hint (the pane owns the drag), so
-   only the controls themselves take a pointer. */
+/* The layer switch, in the map's foot stack under the gesture hint. It is
+   placed by the stack rather than anchoring itself, so the two can never
+   overlap. */
 .map-tools {
-  position: absolute;
-  left: 0.5rem;
-  right: 0.5rem;
-  bottom: 0.5rem;
+  align-self: stretch;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  pointer-events: none;
   font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
 }
 

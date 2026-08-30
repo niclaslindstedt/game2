@@ -72,6 +72,34 @@ export const ANALYSIS = {
      * Kept here rather than derived from the rule book so that changing
      * what counts as a good edge is a visible line in a diff. */
     edge: { grade: 0.45, fail: 1.2 },
+    /** R16 — THE SEAM, as opposed to the edge above: how big a STEP the
+     * ground may take across the corridor's outer band, m, measured as the
+     * worst second difference along a fine walk of it. A slope of any
+     * steepness reads zero here; only a kink registers, which is what
+     * separates a road on a hillside from a road with a face at its lip.
+     *
+     * `stride` is how finely the band is walked, m — under the ribbon's own
+     * outermost station spacing, so a step that falls between two of the
+     * drawn vertices is still met head on.
+     *
+     * MEASURED, not chosen. Across ~85,000 probes — seeds 1-11 at short and
+     * medium, and again at the ends of the elevation, water and width dials
+     * — the median kink is 0.007 m, the 99.9th percentile 0.091, and the
+     * worst anywhere 0.222. So the budget sits above the whole healthy
+     * population with room to spare, and what it is above is not the road:
+     * the floor under this measurement is the GROUND LATTICE'S OWN
+     * FACETING. The landscape is drawn low-poly on purpose, its 14 m
+     * triangles crease at every edge, and the corridor's lip is where the
+     * ribbon hands over onto them — so the last stride of the band always
+     * crosses one. That crease is the art direction, not a defect, and a
+     * budget tight enough to report it would be reporting the terrain.
+     *
+     * What it catches instead is a STEP, which is a different size of
+     * thing: cutting the hand-over off at the shoulder — the defect R16
+     * exists to prevent — measures 3.48 m here, an order of magnitude past
+     * `fail`. `fail` itself is where a wheel meets it as an edge rather
+     * than a bump. */
+    seam: { kink: 0.3, fail: 0.6, stride: 0.35 },
     /** How thick a barrier across an abandoned branch (R17) is, measured
      * along the branch, m — half of it either side of the line it stands
      * on. A line of cones is a hand's width and a row of round bales is

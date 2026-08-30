@@ -169,15 +169,17 @@ profile:
 	npm run profile
 
 # Stand where a screenshot was taken: paste the REPRO line off the in-game
-# debug overlay and this captures that exact frame, plus the overlay's rows
-# as text. The before/after tool for anything reported with a picture.
+# debug overlay — or off the developer map's COPY DEBUG INFO button — and
+# this captures that exact frame, plus the page's own rows as text. The
+# before/after tool for anything reported with a picture.
 # `make debug-shot REPRO='?seed=42&…' OUT=before`
+# `make debug-shot REPRO='?seed=42&roam=1&…' ARGS=--drive`  (from the road)
 debug-shot:
 	@test -n "$(REPRO)" || { \
-		echo "usage: make debug-shot REPRO='<repro line from the debug overlay>' [OUT=name]"; \
+		echo "usage: make debug-shot REPRO='<repro line>' [OUT=name] [ARGS='--drive --portrait']"; \
 		exit 2; \
 	}
-	node scripts/debug-shot.mjs '$(REPRO)' $(if $(OUT),--out $(OUT),)
+	node scripts/debug-shot.mjs '$(REPRO)' $(if $(OUT),--out $(OUT),) $(ARGS)
 
 shellcheck:
 	shellcheck scripts/*.sh .githooks/* .claude/hooks/*.sh

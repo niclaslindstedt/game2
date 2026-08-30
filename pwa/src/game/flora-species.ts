@@ -124,6 +124,39 @@ function pineTree(b: GeoBuilder, h: number, crook: number, crownX: number): void
   b.blob(PINE_CROWN, h * 0.11, cx - h * 0.09, cy + h * 0.06, h * 0.06);
 }
 
+/** A branch broken back to a stub, HINGED ON THE TRUNK.
+ *
+ * `GeoBuilder.add` turns a part about the model's origin, not about itself,
+ * so a stub translated out to where it joins the trunk and then tilted
+ * swings clean off it: at five metres up, a third of a radian throws the
+ * stub two metres sideways, and what the player sees is a stick hanging in
+ * the air beside the tree. (`pineTree` has always corrected for the same
+ * rotation with its `jointX`; the snags did not.) Rotating the box about
+ * its own inner end FIRST and translating afterwards puts the joint where
+ * the joint is, whatever the angle.
+ *
+ * `length` is signed — negative points the stub the other way round the
+ * trunk. `at` is the height it grows from and `lean` the trunk's own tilt,
+ * so the stub follows a trunk that is not upright. */
+function branchStub(
+  b: GeoBuilder,
+  color: THREE.Color,
+  length: number,
+  thick: number,
+  at: number,
+  angle: number,
+  lean = 0,
+  z = 0,
+): void {
+  const geo = new THREE.BoxGeometry(Math.abs(length), thick, thick);
+  geo.translate(length / 2, 0, 0);
+  geo.rotateZ(angle);
+  // Where the trunk's axis actually is at that height: `add` swings the
+  // trunk about the origin too, so a leaning one is no longer at x = 0.
+  geo.translate(-Math.tan(lean) * at, at, z);
+  b.add(geo, color);
+}
+
 // ── The variant roster ─────────────────────────────────────────────────────
 
 export type VariantDef = { build: (b: GeoBuilder) => void; twoSided?: boolean };
@@ -241,12 +274,8 @@ export const VARIANTS: Record<string, VariantDef> = {
   deadSnag: {
     build: (b) => {
       b.cyl(DEAD_WOOD, 0.05, 0.38, 8, 0, { tiltZ: 0.04 });
-      const stub = new THREE.BoxGeometry(1.6, 0.14, 0.14);
-      stub.translate(0.7, 4.6, 0);
-      b.add(stub, DEAD_WOOD, { tiltZ: -0.3 });
-      const stub2 = new THREE.BoxGeometry(1.2, 0.12, 0.12);
-      stub2.translate(-0.5, 5.8, 0.1);
-      b.add(stub2, DEAD_WOOD, { tiltZ: 0.4 });
+      branchStub(b, DEAD_WOOD, 1.6, 0.14, 4.6, -0.3, 0.04);
+      branchStub(b, DEAD_WOOD, -1.2, 0.12, 5.8, 0.4, 0.04, 0.1);
     },
   },
   stump: {
@@ -299,9 +328,7 @@ export const VARIANTS: Record<string, VariantDef> = {
   leaningSnag: {
     build: (b) => {
       b.cyl(DEAD_WOOD, 0.11, 0.3, 9, 0, { tiltZ: 0.42 });
-      const stub = new THREE.BoxGeometry(1.3, 0.13, 0.13);
-      stub.translate(0.5, 3.6, 0);
-      b.add(stub, DEAD_WOOD, { tiltZ: -0.1 });
+      branchStub(b, DEAD_WOOD, 1.3, 0.13, 3.6, -0.1, 0.42);
     },
   },
   /** A branch down in the moss — the litter a real forest floor is made
@@ -564,12 +591,8 @@ export const VARIANTS: Record<string, VariantDef> = {
   drownedTrunk: {
     build: (b) => {
       b.cyl(DROWNED, 0.11, 0.3, 4.2, 0, { tiltZ: 0.09 });
-      const stub = new THREE.BoxGeometry(1.1, 0.11, 0.11);
-      stub.translate(0.5, 2.9, 0);
-      b.add(stub, DROWNED, { tiltZ: -0.42 });
-      const stub2 = new THREE.BoxGeometry(0.8, 0.09, 0.09);
-      stub2.translate(-0.35, 3.6, 0.08);
-      b.add(stub2, DROWNED, { tiltZ: 0.5 });
+      branchStub(b, DROWNED, 1.1, 0.11, 2.9, -0.42, 0.09);
+      branchStub(b, DROWNED, -0.8, 0.09, 3.6, 0.5, 0.09, 0.08);
     },
   },
   /** BULRUSH / cattail: reeds with the brown seed head. Taller and stiffer

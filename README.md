@@ -49,34 +49,34 @@ Open the printed URL. The game opens on the main menu, over a stage a bot is dri
 
 ## Usage
 
-| Command            | What it does                                                                                                               |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| `npm run dev`      | Dev server (no service worker)                                                                                             |
-| `make build`       | Typecheck + production build to `pwa/dist/`                                                                                |
-| `make test`        | Full test suite (generator rules, drift/jump physics, bot sims) — `SHARD=i/N` runs one slice, which is how CI fans it out  |
-| `make lint`        | ESLint + typecheck across engine, app, tests, and tooling                                                                  |
-| `make sim`         | Headless balance sweep: bots drive stages, prints the pace / damage table (`--sweep` ranks the roster per stage archetype) |
-| `make drift`       | The drift lab: every corner the generator builds × every technique, tabled and drawn to `previews/drift-<car>.png`         |
-| `make heat`        | The whole grid down one road at once: what the rival crews do to each other, per difficulty                                |
-| `make record`      | Record a bot run to a run tape (`runs/*.jsonl`) — a whole drive as the controls that drove it                              |
-| `make replay`      | `RUN=runs/<file>.jsonl` — replay a tape and place its time against each difficulty's field                                 |
-| `make track`       | Render generated stages: a schematic map AND a shaded view of the place, to `previews/`                                    |
-| `make analyze`     | Score generated stages: road surface, water flow, road network, drivability, jumps, the two ends, ground, and build cost   |
-| `make cars`        | Render the car models to a contact sheet (`previews/cars.png`)                                                             |
-| `make liveries`    | Render one body in the field's paint schemes (`previews/liveries.png`)                                                     |
-| `make field`       | Render the campaign's fourteen rivals in their own cars and colours (`previews/field.png`)                                 |
-| `make crew`        | Render the sixteen crew characters behind the glass (`previews/crew.png`)                                                  |
-| `make items`       | Photograph one thing at a time (`previews/items.png`): a turntable per item, on a metre grid — `ITEMS=`, `GROUP=`          |
-| `make items-list`  | List every item the turntable sheet can stand up, by group                                                                 |
-| `make sky`         | Render the atmosphere to a contact sheet (`previews/sky.png`): every weather × time of day, and a caught strike            |
-| `make glyphs`      | Render the menu's marks to a contact sheet (`previews/glyphs.png`) at the three sizes they are read at                     |
-| `make audition`    | Build the audio review page (`previews/audition.html`): every sound, both scores, live                                     |
-| `make screenshots` | Drive the built app headlessly and screenshot the key moments                                                              |
-| `make profile`     | Meter what one frame costs the renderer — draw calls, triangles and binds per scene                                        |
-| `make debug-shot`  | Stand where a screenshot was taken: `REPRO='<line off the in-game debug overlay>'`, captured to `previews/`                |
-| `make icons`       | Regenerate PWA icons, favicon, and the OG image from the app mark                                                          |
-| `make check-seo`   | Build + structural SEO/PWA/bundle-budget assertions                                                                        |
-| `make hooks`       | Install the pre-commit / commit-msg git hooks                                                                              |
+| Command            | What it does                                                                                                                                                                       |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`      | Dev server (no service worker)                                                                                                                                                     |
+| `make build`       | Typecheck + production build to `pwa/dist/`                                                                                                                                        |
+| `make test`        | Full test suite (generator rules, drift/jump physics, bot sims) — `SHARD=i/N` runs one slice, which is how CI fans it out                                                          |
+| `make lint`        | ESLint + typecheck across engine, app, tests, and tooling                                                                                                                          |
+| `make sim`         | Headless balance sweep: bots drive stages, prints the pace / damage table (`--sweep` ranks the roster per stage archetype)                                                         |
+| `make drift`       | The drift lab: every corner the generator builds × every technique, tabled and drawn to `previews/drift-<car>.png`                                                                 |
+| `make heat`        | The whole grid down one road at once: what the rival crews do to each other, per difficulty                                                                                        |
+| `make record`      | Record a bot run to a run tape (`runs/*.jsonl`) — a whole drive as the controls that drove it                                                                                      |
+| `make replay`      | `RUN=runs/<file>.jsonl` — replay a tape and place its time against each difficulty's field                                                                                         |
+| `make track`       | Render generated stages: a schematic map AND a shaded view of the place, to `previews/`                                                                                            |
+| `make analyze`     | Score generated stages: road surface, water flow, road network, drivability, jumps, the two ends, ground, and build cost                                                           |
+| `make cars`        | Render the car models to a contact sheet (`previews/cars.png`)                                                                                                                     |
+| `make liveries`    | Render one body in the field's paint schemes (`previews/liveries.png`)                                                                                                             |
+| `make field`       | Render the campaign's fourteen rivals in their own cars and colours (`previews/field.png`)                                                                                         |
+| `make crew`        | Render the sixteen crew characters behind the glass (`previews/crew.png`)                                                                                                          |
+| `make items`       | Photograph one thing at a time (`previews/items.png`): a turntable per item, on a metre grid — `ITEMS=`, `GROUP=`                                                                  |
+| `make items-list`  | List every item the turntable sheet can stand up, by group                                                                                                                         |
+| `make sky`         | Render the atmosphere to a contact sheet (`previews/sky.png`): every weather × time of day, and a caught strike                                                                    |
+| `make glyphs`      | Render the menu's marks to a contact sheet (`previews/glyphs.png`) at the three sizes they are read at                                                                             |
+| `make audition`    | Build the audio review page (`previews/audition.html`): every sound, both scores, live                                                                                             |
+| `make screenshots` | Drive the built app headlessly and screenshot the key moments                                                                                                                      |
+| `make profile`     | Meter what one frame costs the renderer — draw calls, triangles and binds per scene                                                                                                |
+| `make debug-shot`  | Stand where a screenshot was taken: `REPRO='<line off the debug overlay or the map's COPY DEBUG INFO>'`, captured to `previews/`; `ARGS=--drive` retakes a map repro from the road |
+| `make icons`       | Regenerate PWA icons, favicon, and the OG image from the app mark                                                                                                                  |
+| `make check-seo`   | Build + structural SEO/PWA/bundle-budget assertions                                                                                                                                |
+| `make hooks`       | Install the pre-commit / commit-msg git hooks                                                                                                                                      |
 
 **On a controller:** plug in or pair a pad — anywhere, on any platform — press one of its buttons, and it takes over. The analogue triggers are the pedals (R2 gas, L2 brake, so half a trigger is half the pedal and a slide is catchable), the left stick steers, A is the handbrake, X switches camera, the shoulders shift, B puts a lost car back on the road, SELECT takes a picture and START opens the in-race card. **The menus are on the pad too**: the stick and the d-pad walk every card in the game, A presses what the gold cursor is on and B is the way back — so a run can be picked, driven, paused and left without ever reaching for the glass. Every binding is yours to change in Options → Controls, which grows a CONTROLLER section the moment a pad appears. On a touch device a connected pad also takes the on-screen wheel and pedal away — which is what makes this playable as an installed Android PWA on a handheld like a Retroid Pocket, driven on the buttons it already has.
 
