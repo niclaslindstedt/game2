@@ -90,6 +90,31 @@ function nudgeRange(el: HTMLInputElement, by: number): void {
   el.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
+/**
+ * A surface that answers the directions ITSELF, marked with `data-nav-own`.
+ *
+ * Almost every card is a list of buttons and a cursor walking them, but the
+ * initials entry is not: up and down there mean the LETTER, not the next
+ * control, and a ring parked on one of three slots would be a second cursor
+ * arguing with the caret. Such a surface gets each direction as a cancelable
+ * `menu-nav` event on its own element, and cancelling it is how it says it
+ * has dealt with the press. Anything it leaves alone falls through to the
+ * cursor, so a card can own up and down and still have its buttons walked.
+ */
+const OWNED = "[data-nav-own]";
+
+/** The event an owning surface listens for, and what rides on it. */
+export const NAV_EVENT = "menu-nav";
+export type MenuNavEvent = CustomEvent<{ dir: NavDir | "confirm" }>;
+
+/** Hand a press to the surface. True when the surface took it. */
+function offer(host: HTMLElement, dir: NavDir | "confirm"): boolean {
+  if (!host.matches(OWNED)) return false;
+  const sent = new CustomEvent(NAV_EVENT, { detail: { dir }, cancelable: true });
+  host.dispatchEvent(sent);
+  return sent.defaultPrevented;
+}
+
 export type MenuNav = {
   /** Move the cursor. Does nothing when no menu is on screen. */
   move: (dir: NavDir) => void;
@@ -191,11 +216,16 @@ export function createMenuNav(): MenuNav {
         (document.activeElement as HTMLElement | null)?.blur?.();
         return;
       }
+      // A surface that owns the directions draws its own place — the caret
+      // on the initials card. Putting a ring on its first button as well
+      // would be two cursors on one card.
+      if (host.matches(OWNED)) return clearRing();
       put(landing(host), false);
     },
     move: (dir) => {
       const host = root();
       if (!host) return;
+      if (offer(host, dir)) return;
       const list = items(host);
       if (list.length === 0) return;
       const from = at(list);
@@ -226,6 +256,7 @@ export function createMenuNav(): MenuNav {
     confirm: () => {
       const host = root();
       if (!host) return;
+      if (offer(host, "confirm")) return;
       const list = items(host);
       const from = at(list);
       if (from >= 0) list[from].click();

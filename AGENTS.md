@@ -167,6 +167,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | The HEADS UP page and its three settings                    | `pwa/src/game/menu-headsup.tsx`; the stage boxes all three grids share are `pwa/src/game/menu-levels.tsx`                        |
 | The standings sheet, drawn                                  | `pwa/src/game/results-table.tsx` (the results card's modal and the menu's own table)                                             |
 | The time trial's high score board and its initials          | `pwa/src/game/scores.ts` (storage) + `score-board.tsx` / `hud-initials.tsx`                                                      |
+| What a PRESS does to a name being entered on that board     | `pwa/src/game/initials-entry.ts` — DOM-free: the wheel, the caret, and what an empty slot wakes as                               |
 | The time trial's ghost: recording, replay, storage          | `pwa/src/game/ghost.ts`                                                                                                          |
 | Taking a picture, and what is stamped on it                 | `pwa/src/game/screenshots.ts` (the canvas work) + `shot-plan.ts` (size, name, where the mark and the notes go — DOM-free)        |
 | The CAMPAIGN's own maps, opened to be looked at             | `MapViewerPage` in `pwa/src/game/menu-dev.tsx` over `App.tsx`'s `viewLevelMap` — the `debug-tools` skill                         |
