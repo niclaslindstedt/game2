@@ -248,7 +248,7 @@ function VideoTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "onS
         onPick={(effects) => set({ effects })}
       />
       <OptionRow
-        label="CAR INTERIORS"
+        label="CAR DETAIL"
         options={[
           { id: "off", label: "OFF" },
           { id: "low", label: "LOW" },
@@ -278,9 +278,10 @@ function VideoTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "onS
         onPick={(ground) => set({ ground })}
       />
       <div className="opt-note">
-        INTERIORS is what is behind the glass — trim, seats and a crew on LOW, plus the roll cage
-        and a steering wheel that turns on FULL. OFF puts the old solid windows back. Applies to the
-        next stage you start.
+        CAR DETAIL is what is behind the glass and what is on it. LOW puts trim, seats and a crew in
+        every cabin, and road grime on every car&apos;s screens for the wipers to clear. FULL adds
+        the roll cage and a steering wheel that turns. OFF puts the old solid windows back and
+        leaves every screen permanently clean. Applies to the next stage you start.
       </div>
       <div className="opt-note">
         Grass, shrubs and stumps between the trees — the cheapest frames on this page. The trees you

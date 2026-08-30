@@ -76,8 +76,13 @@ export const APRON_HOLDS =
  * the apron holds, and never more than the roster can dress. */
 export const GRID_MAX = Math.min(FIELD_SIZE, APRON_HOLDS);
 
-/** The default grid, and on today's apron also the deepest: eight cars, so
- * seven crews and the player. */
+/** The default grid, and also the deepest one on offer. Both numbers above
+ * it are DERIVED, so this is whatever the apron and the roster currently
+ * allow rather than a figure to quote: today the roster is the binding half
+ * and a default heads-up race is the whole entry list on one grid. A shorter
+ * one is a menu choice (`GRID_OPTIONS`), and it is the one setting that
+ * decides what a heads-up frame costs — every car on it is a body, a plate
+ * and a `GameState` stepped beside the player's. */
 export const GRID_DEFAULT = GRID_MAX;
 
 /** Where one car stands on the grid, and what standing there costs it. */

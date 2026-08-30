@@ -45,7 +45,7 @@
 import * as THREE from "three";
 import { type GameEvent, type GameState } from "@engine";
 
-import type { InteriorDetail } from "./car-body.ts";
+import type { FilmDetail, InteriorDetail } from "./car-body.ts";
 import { buildCar, tintCar, type CarVisual } from "./car-mesh.ts";
 import { crewLookFor } from "./car-crew.ts";
 import { liveryForCrew } from "./car-livery.ts";
@@ -65,6 +65,16 @@ const BUILD_RANGE = 420;
  * pixels of dust-coloured fuzz, and the road ahead is doing a better job of
  * saying somebody is up there than the car is. */
 const DRAW_RANGE = 340;
+
+/** How many bodies may be GENERATED in one frame. A car is thousands of
+ * triangles put together part by part and costs tens of milliseconds to
+ * build, which on a rally start is fine — one crew comes into range at a
+ * time. A GRID is the case that breaks it: the whole entry list is inside
+ * `BUILD_RANGE` on the first frame of the establishing shot, and building
+ * all of them there is a freeze at exactly the moment the player is watching
+ * the lights. One a frame spends the ceremony instead, and nothing is shown
+ * on the frame it was built on anyway. */
+const BUILD_BUDGET = 1;
 
 /** How thick a rival's cloud is against the player's own — see `createPlume`.
  * Half, so the whole entry list shares one pool without any of them tearing
@@ -140,11 +150,14 @@ export type FieldCars = {
    * lamps are lit, and how hard it is raining on the glass. Pushed by the
    * renderer, which owns all three. */
   paint: (tint: THREE.Color, lampsLit: boolean, rain: number) => void;
-  /** How much cabin the rivals' own glass has behind it — the player's VIDEO
-   * option, pushed by the renderer. Read when a car is BUILT, so it lands on
-   * the next stage rather than mid-run, which is the same contract the
-   * undergrowth setting keeps. */
-  setInterior: (detail: InteriorDetail) => void;
+  /** How much of a rival is built for the sake of what is only visible up
+   * close: how much cabin its glass has behind it — the player's VIDEO
+   * option, taken down a level here (`fieldInterior`) — and how finely its
+   * screens carry the grime film its wipers clear. Both read when a car is
+   * BUILT, so they land on the next stage rather than mid-run, which is the
+   * same contract the undergrowth setting keeps; one call because they are
+   * one setting. */
+  setCarDetail: (detail: InteriorDetail, screens: FilmDetail) => void;
   /** How many rival cars are being drawn right now (the debug overlay). */
   drawn: () => number;
   dispose: () => void;
@@ -153,11 +166,25 @@ export type FieldCars = {
 /** One crew's body and the plate over it, built and dropped together. */
 type FieldCar = { visual: CarVisual; tag: NameTag };
 
+/** What a RIVAL's cabin is built at, given what the player chose for their
+ * own. A level down off the top one: the full cabin's extra is a roll cage
+ * and a steering wheel that turns on its own mesh, and neither of those is
+ * readable through somebody else's glass at the distance one is seen from —
+ * while eight of them are eight cages and eight more draw calls. The lower
+ * two settings are left alone: a player already on the cheap cabin has paid
+ * the smallest bill there is, and taking the crews out of the cars around
+ * them on top of it would be a change to what the field LOOKS like rather
+ * than to what it costs. */
+function fieldInterior(detail: InteriorDetail): InteriorDetail {
+  return detail === "high" ? "low" : detail;
+}
+
 export function createFieldCars(scene: THREE.Scene): FieldCars {
   let runs: RivalRun[] = [];
   const built = new Map<RivalRun, FieldCar>();
   let drawn = 0;
-  let interior: InteriorDetail = "high";
+  let interior: InteriorDetail = fieldInterior("high");
+  let screens: FilmDetail = "coarse";
   let tint = new THREE.Color(1, 1, 1);
   let lampsLit = false;
   let rain = 0;
@@ -219,6 +246,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
     update: (viewer, camera, dt, shown) => {
       drawn = 0;
       near.length = 0;
+      let budget = BUILD_BUDGET;
       // The same gate the bodies are behind, and the dust needs it MORE than
       // they do. Past the line the classification is settled by stepping
       // every remaining crew thousands of times a frame (R30's
@@ -248,7 +276,8 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
         // a corner ahead while their car does not exist yet.
         if (beat && range <= DUST_RANGE) near.push({ run, range });
         if (!existing) {
-          if (range > BUILD_RANGE) continue;
+          if (range > BUILD_RANGE || budget === 0) continue;
+          budget -= 1;
           const livery = liveryForCrew(run.entry.crew.id, run.entry.number);
           // Their own paint, and their own crew inside it: the pair of
           // helmets behind the glass is that crew's, not a copy of yours.
@@ -256,6 +285,11 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
             paint: livery,
             interior,
             crew: crewLookFor(run.entry.crew.id),
+            // Their glass gets filthy like everybody's, at the resolution a
+            // car seen from OUTSIDE needs: nobody reads the swept arc on a
+            // rival, they read that its windows have gone brown, and that is
+            // 48 triangles rather than 3,456 (car/wipers.ts).
+            screens,
           });
           // The plate wears the car's own paint and the number off its door,
           // so the name and the colour coming up the road are one crew.
@@ -312,8 +346,9 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
         if (rival) lightDust(rival, power, power);
       }
     },
-    setInterior: (detail) => {
-      interior = detail;
+    setCarDetail: (detail, grime) => {
+      interior = fieldInterior(detail);
+      screens = grime;
     },
     setNames: (on) => {
       named = on;

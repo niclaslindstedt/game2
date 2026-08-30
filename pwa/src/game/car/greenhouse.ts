@@ -172,7 +172,16 @@ function glassRect(rect: Rect, seal: number, span: { u: number; v: number }): Re
  * the pane actually sits. This is the surface the wipers sweep and the
  * grime settles on, so it is stated once here rather than guessed at by
  * anything that has to land something on the glass. */
-export type ScreenPane = { patch: Patch; rect: Rect; span: { u: number; v: number } };
+export type ScreenPane = {
+  patch: Patch;
+  rect: Rect;
+  span: { u: number; v: number };
+  /** True on the car's left flank, whose patch is the x-mirror of the
+   * right's. Its diagonals hand back a normal pointing INTO the cabin (see
+   * `patchNormal`), so anything laid proud of this pane has to negate its
+   * lift the way `patchQuad` does, or it is laid inside the car. */
+  mirrored: boolean;
+};
 
 /** How far proud of the panel a screen's glass sits — what anything laid
  * ON the glass has to clear. */
@@ -249,16 +258,29 @@ export function cabinPanels(spec: CarBodySpec): CabinPanel[] {
   return panels;
 }
 
-/** The windscreen and the backlight, as glass. */
-export function screenPanes(spec: CarBodySpec): { front: ScreenPane; rear: ScreenPane } {
+/** Every pane of glass in the cabin: the two SCREENS, which have arms, and
+ * the flanks' windows, which never do. The side glass is handed out for the
+ * same reason the screens are — it gets filthy over a stage (car/wipers.ts)
+ * — and one opening at a time, because a door window and the quarter light
+ * behind it are two separate pieces of glass with a pillar between them. */
+export function screenPanes(spec: CarBodySpec): {
+  front: ScreenPane;
+  rear: ScreenPane;
+  sides: ScreenPane[];
+} {
   const seal = spec.cabin.seal ?? 0;
-  const [front, rear] = cabinPanels(spec);
-  const pane = (panel: CabinPanel): ScreenPane => ({
+  const [front, rear, ...flanks] = cabinPanels(spec);
+  const pane = (panel: CabinPanel, hole: number): ScreenPane => ({
     patch: panel.patch,
     span: panel.span,
-    rect: glassRect(panel.holes[0], seal, panel.span),
+    rect: glassRect(panel.holes[hole], seal, panel.span),
+    mirrored: panel.mirrored,
   });
-  return { front: pane(front), rear: pane(rear) };
+  const sides: ScreenPane[] = [];
+  for (const flank of flanks) {
+    for (let hole = 0; hole < flank.holes.length; hole++) sides.push(pane(flank, hole));
+  }
+  return { front: pane(front, 0), rear: pane(rear, 0), sides };
 }
 
 /** The heights the baked reflection is struck between: the cabin's own sill

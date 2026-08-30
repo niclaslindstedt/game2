@@ -34,7 +34,7 @@ import { LENS_MATERIAL } from "./car/lamps.ts";
 import { buildShell, buildStations } from "./car/shell.ts";
 import { buildTrim } from "./car/trim.ts";
 import { buildWheel } from "./car/wheels.ts";
-import { buildWipers, type CarWipers } from "./car/wipers.ts";
+import { buildWipers, type CarWipers, type FilmDetail } from "./car/wipers.ts";
 
 export type {
   CarBodySpec,
@@ -52,6 +52,7 @@ export type {
 export { bodyHalfLength, bodyHalfWidth } from "./car/shell.ts";
 export { LENS_MATERIAL, frontLampAnchors, rearLampAnchors, type LampAnchor } from "./car/lamps.ts";
 export { crewSeats, steeringTurn, type InteriorDetail } from "./car/interior.ts";
+export type { FilmDetail } from "./car/wipers.ts";
 export {
   DIAL_TOP_SPEED,
   cabinOpening,
@@ -165,6 +166,13 @@ export type CarBodyOptions = {
    * pass's own texture (mirror.ts), and the aspect it renders at. Left off,
    * the mirror is a dark housing with no picture in it. */
   rearView?: { texture: THREE.Texture; aspect: number };
+  /** How finely the screens carry the GRIME FILM the wipers clear
+   * (car/wipers.ts). The arms are built either way. `fine` is for the car
+   * being driven, where the swept arc is read close up; `coarse` is for
+   * everyone else, where the glass only has to go brown; `off` leaves every
+   * screen permanently clean. Defaults to `fine`, so every tool that builds
+   * a body without saying whose it is gets the full one. */
+  screens?: FilmDetail;
 };
 
 export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): CarBodyParts {
@@ -270,6 +278,14 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   const partGeos: THREE.BufferGeometry[] = [];
   for (const [name, builder] of partBuilders) {
     const geo = builder.geometry();
+    // A part a spec never authored builds no triangles, and an empty mesh is
+    // still an object to transform, cull, sort and issue a draw for on every
+    // pass of every frame — on every car on a grid. There is nothing there
+    // to break off either, so it is simply not made.
+    if ((geo.getAttribute("position")?.count ?? 0) === 0) {
+      geo.dispose();
+      continue;
+    }
     const mesh = new THREE.Mesh(geo, material);
     chassis.add(mesh);
     breakables[name] = mesh;
@@ -285,8 +301,8 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     transparent: true,
     depthWrite: false,
   });
-  const wipers = buildWipers(spec, material, filmMat);
-  wipers.film.renderOrder = 2;
+  const wipers = buildWipers(spec, material, filmMat, options.screens ?? "fine");
+  if (wipers.film) wipers.film.renderOrder = 2;
   chassis.add(wipers.group);
 
   // The cockpit hangs off the same sprung chassis as everything else, so it

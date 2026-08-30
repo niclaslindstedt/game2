@@ -171,13 +171,24 @@ export type VideoSettings = {
   drawDistance: "near" | "normal" | "far";
   /** Particles, rain and the ambient life — the transient FX budget. */
   effects: "off" | "low" | "full";
-  /** How much CABIN is built behind the glass. `off` leaves the windows
-   * solid the way they used to be — the cheapest car, and the only level
-   * that costs no extra draw call per car on the road. `low` furnishes the
-   * read: the trim, the dash, the seats and the crew sat in them. `full`
-   * adds the roll cage, the harnesses and a steering wheel that turns with
-   * the front tyres. Applies to the NEXT stage built, like the undergrowth:
-   * a cabin is geometry, and geometry is decided when a car is made. */
+  /** HOW MUCH OF A CAR IS BUILT for the sake of what is only visible up
+   * close — the two things behind and on the glass, on one ladder because
+   * they are one judgement: how much does a car you are looking AT deserve.
+   *
+   * The cabin: `off` leaves the windows solid the way they used to be — the
+   * cheapest car, and the only level that costs no extra draw call per car
+   * on the road. `low` furnishes the read: the trim, the dash, the seats and
+   * the crew sat in them. `full` adds the roll cage, the harnesses and a
+   * steering wheel that turns with the front tyres.
+   *
+   * The grime film the wipers clear (`SCREEN_GRIME`) rides along: `off`
+   * leaves every screen permanently clean, and both levels above it wet the
+   * whole road's glass — a rival's at a resolution that costs 48 triangles
+   * rather than 3,456, which is what makes giving it to a whole grid
+   * affordable at all.
+   *
+   * Applies to the NEXT stage built, like the undergrowth: both are
+   * geometry, and geometry is decided when a car is made. */
   interior: "off" | "low" | "full";
   /** How thickly the world is planted with the SOFT stuff — undergrowth,
    * shrubs, stumps. Applies to the NEXT stage built. Named UNDERGROWTH in
@@ -229,6 +240,16 @@ export const INTERIOR_DETAIL: Record<VideoSettings["interior"], "off" | "low" | 
   off: "off",
   low: "low",
   full: "high",
+};
+
+/** Whether the road's glass gets dirty at all, off the same row. How FINELY
+ * any one screen carries it is not this setting's business — that is decided
+ * per car by whose it is (`FilmDetail`), because the car being driven is
+ * read through and every other one is read at range. */
+export const SCREEN_GRIME: Record<VideoSettings["interior"], boolean> = {
+  off: false,
+  low: true,
+  full: true,
 };
 
 /** Flora density multiplier — the scatter chance for everything the world

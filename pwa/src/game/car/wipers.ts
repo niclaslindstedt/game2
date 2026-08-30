@@ -46,14 +46,46 @@ import type { CarBodySpec } from "./spec.ts";
 const FILM_LIFT = GLASS_LIFT + 0.003;
 const BLADE_LIFT = GLASS_LIFT + 0.014;
 
-/** The grid each screen is tessellated into. The resolution is not about
- * how fine the dirt is — it is about the EDGE of the swept arc, which is
- * the one line on the whole car the eye reads as "a wiper did that". At a
- * handful of cells across, a blade's fan comes out as three big triangles
- * of clean glass and reads as a texture glitch; the arc has to have an arc
- * in it. Still nothing: two panes of a few hundred flat, unlit,
- * vertex-coloured triangles. */
-const GRID = { front: { cols: 36, rows: 24 }, rear: { cols: 36, rows: 24 } };
+/** How finely a screen's film is tessellated, and it is a LADDER because the
+ * resolution answers two completely different questions depending on whose
+ * car it is.
+ *
+ * `fine` is what the car being driven needs. The resolution there is not
+ * about how fine the dirt is — it is about the EDGE of the swept arc, which
+ * is the one line on the whole car the eye reads as "a wiper did that". At a
+ * handful of cells across, a blade's fan comes out as three big triangles of
+ * clean glass and reads as a texture glitch; the arc has to have an arc in
+ * it. That costs 3,456 triangles across the two panes, drawn in the
+ * transparent pass with their colours rewritten as the coat moves — the
+ * right bill for the one surface a player spends a stage looking through.
+ *
+ * `coarse` is what every OTHER car needs, and it is a different question
+ * with a much cheaper answer. Nobody reads the arc on a rival: a car two
+ * hundred metres up the road is thirty pixels of bodywork, and what tells
+ * you its crew have been out there is simply that its glass has gone brown
+ * while yours is being wiped. That is a TINT, not an arc — the alpha
+ * interpolates across a cell either way — so it needs the corners of the
+ * pane and barely more. At 48 triangles the pair it is 1.4% of the fine
+ * film, which is the difference between a grid that can afford dirty
+ * windows and one that cannot. */
+export type FilmDetail = "off" | "coarse" | "fine";
+
+const GRID = {
+  fine: { cols: 36, rows: 24 },
+  // Not 1x1: a single cell has no vertex the blades can clear WITHOUT
+  // clearing the whole pane, so the screen would flash rather than wipe.
+  // Four across is enough that a stroke takes the middle of the glass and
+  // leaves the corners, which is the whole of what reads at range.
+  coarse: { cols: 4, rows: 3 },
+};
+
+/** THE SIDE GLASS IS ALWAYS COARSE, on every car including the one being
+ * driven, and that is not a compromise. The fine grid exists to carry the
+ * EDGE of a swept arc; nothing sweeps a flank, so there is no edge on it to
+ * carry — what a side window has is one slowly deepening wash, and alpha
+ * interpolates across a cell for free. Fine tessellation there would be
+ * three thousand triangles spent on a gradient. */
+const SIDE_GRID = GRID.coarse;
 
 /** WHAT IS ON THE GLASS, and it is three things rather than two.
  *
@@ -68,12 +100,21 @@ const WATER_TONE = new THREE.Color(0x9fabb4);
 const DUST_TONE = new THREE.Color(0xcbb083);
 const MUD_TONE = new THREE.Color(0x6d5a3c);
 
-/** Most of the film a full coat can reach, 0..1 of opaque — short of 1, so
- * even a caked screen is still glass rather than a painted panel. High: the
- * back window of a car that has done a gravel stage is a window you cannot
- * see out of, and the whole point of the blade is that it cuts a hole in
- * something. */
+/** Most of the film a full coat can reach on a SCREEN, 0..1 of opaque —
+ * short of 1, so even a caked screen is still glass rather than a painted
+ * panel. High: the back window of a car that has done a gravel stage is a
+ * window you cannot see out of, and the whole point of the blade is that it
+ * cuts a hole in something. */
 const COAT_MAX = 0.88;
+
+/** ...and the ceiling on a SIDE window, which is lower for a reason that has
+ * nothing to do with dirt. Nothing wipes the flanks, so whatever they reach
+ * they keep for the rest of the stage — and what is behind them is the crew.
+ * At the screens' ceiling a stage ends with two solid tan slabs where the
+ * helmets were, which is the interior deleting itself. This is filthy enough
+ * to read as a car that has been somewhere and sheer enough to keep the pair
+ * of them showing through it. */
+const SIDE_COAT_MAX = 0.6;
 
 /** What soils a screen, at a downpour and at a filthy car — and the two
  * are measured against different things, which is the whole of why they
@@ -83,12 +124,26 @@ const COAT_MAX = 0.88;
  * and takes most of a stage: a car standing still on the gravel has nothing
  * arriving at its glass, however filthy the rest of it already is.
  *
- * The BACKLIGHT is the other way round from the windscreen — it sits out of
- * the rain and in the wake, which is exactly why it is the window that ends
- * a rally caked. */
+ * THE ORDER IS THE POINT, and it is the same order in both columns: the
+ * BACKLIGHT dirtiest, the windscreen next, the flanks last. The backlight
+ * sits in the car's own wake, so everything the wheels throw up and
+ * everything left hanging in the air behind it comes down on that pane —
+ * which is why it is the window that ends a rally caked. The windscreen is
+ * scoured by the airflow and only catches what the car drives into. The
+ * flanks are edge-on to the direction of travel and catch least of all,
+ * which is the whole reason they can be left unwiped for a stage and still
+ * be windows at the end of it. */
 const SOIL = {
-  front: { rain: 0.5, road: 0.0023 },
+  front: { rain: 0.17, road: 0.0023 },
   rear: { rain: 0.2, road: 0.005 },
+  // An order of magnitude under the screens, and it has to be: NOTHING takes
+  // this back off. A screen's rate is what it regains between strokes, so it
+  // can be fast and still read as a screen being kept clear; a flank's is the
+  // whole of what it will ever carry, so the same number there is a car whose
+  // side windows are opaque half a minute after the start. These are sized to
+  // arrive at the ceiling somewhere near the END of a stage, which is what
+  // makes the flanks read as a run's worth of road rather than as a setting.
+  side: { rain: 0.012, road: 0.00013 },
 };
 
 /** What a blade leaves behind, as a fraction of what it found — and it is
@@ -195,8 +250,10 @@ export type CarWipers = {
   group: THREE.Group;
   /** The grime pane itself — handed out so the assembly can order it over
    * the glass it is laid on, which no distance sort can be trusted to get
-   * right for two surfaces three millimetres apart. */
-  film: THREE.Mesh;
+   * right for two surfaces three millimetres apart. Null on a car built
+   * without one, where the arms still sweep and there is simply nothing on
+   * the glass for them to take off. */
+  film: THREE.Mesh | null;
   /**
    * Drive the glass one step.
    *
@@ -249,7 +306,12 @@ function frameOf(pane: ScreenPane): Frame {
   // Orthogonalise against `up`, then point the frame the same way the panel
   // faces — a left-handed frame would sweep the blades behind the glass.
   right.addScaledVector(up, -right.dot(up)).normalize();
+  // OUTWARD, always: the left flank's patch is an x-mirror, so its diagonals
+  // hand back the normal pointing into the cabin (`patchNormal`). Taken as
+  // it comes, every film and every blade on that side of the car is laid
+  // inside the bodywork.
   const normal = vec(patchNormal(patch));
+  if (pane.mirrored) normal.negate();
   if (new THREE.Vector3().crossVectors(right, up).dot(normal) < 0) right.negate();
   return { origin, right, up, normal, width, height };
 }
@@ -259,11 +321,21 @@ function frameOf(pane: ScreenPane): Frame {
 type Pivot = { reach: number; radius: Float32Array; angle: Float32Array };
 
 /** One screen's film: the slice of the shared buffers it owns, the coat on
- * each of its vertices, and the arm(s) that clear it. */
+ * each of its vertices, and the arm(s) that clear it.
+ *
+ * On a car built with no film `count` is zero and every per-vertex array is
+ * empty, so all four of the loops below fall through; `level` is what the
+ * arms read instead. The arms and their beat are shared between the two: a
+ * rival's wipers still come on in the rain, they just have nothing drawn
+ * for them to clear. */
 type Film = {
   offset: number;
   count: number;
   coat: Float32Array;
+  /** The screen's coat as ONE number, 0..1 — the same reading the swept
+   * average gives, kept for the filmless car where there are no vertices to
+   * average. Maintained either way, so `sweep` reads one field. */
+  level: number;
   /** Painted coat, quantised — the buffer is only rewritten when the glass
    * has visibly moved. */
   shown: Float32Array;
@@ -283,6 +355,9 @@ type Film = {
   soak: number;
   tone: THREE.Color;
   shade: number;
+  /** How opaque this pane's coat may get — `COAT_MAX` on a screen, less on
+   * a side window, which nothing ever takes it back off (`SIDE_COAT_MAX`). */
+  ceiling: number;
   pivots: Pivot[];
   blades: THREE.Object3D[];
   park: number;
@@ -312,10 +387,14 @@ function bladeGeometry(reach: number): THREE.BufferGeometry {
   return b.geometry();
 }
 
+/** Build the arms, and the grime pane they clear at whichever resolution the
+ * car warrants (`FilmDetail`). The arms are the same at every level: a car
+ * with no film still sweeps, it simply has nothing drawn to take off. */
 export function buildWipers(
   spec: CarBodySpec,
   material: THREE.Material,
   filmMaterial: THREE.Material,
+  film: FilmDetail = "fine",
 ): CarWipers {
   const group = new THREE.Group();
   const panes = screenPanes(spec);
@@ -327,45 +406,83 @@ export function buildWipers(
   const films: Film[] = [];
   const bladeGeos: THREE.BufferGeometry[] = [];
 
-  for (const which of ["front", "rear"] as const) {
-    const pane = panes[which];
-    const grid = GRID[which];
-    const arm = ARMS[which];
+  /** Every pane that gets dirty, and what each one is: the two screens with
+   * their arms, then the flanks' windows with none. A side window is the
+   * same film with nothing to take it off again, which is why it is worth so
+   * little geometry and has to stop short of opaque. */
+  const screens: {
+    pane: ScreenPane;
+    arm: (typeof ARMS)["front"] | null;
+    soil: { rain: number; road: number };
+    grid: { cols: number; rows: number };
+    ceiling: number;
+  }[] = [
+    {
+      pane: panes.front,
+      arm: ARMS.front,
+      soil: SOIL.front,
+      grid: GRID[film === "off" ? "coarse" : film],
+      ceiling: COAT_MAX,
+    },
+    {
+      pane: panes.rear,
+      arm: ARMS.rear,
+      soil: SOIL.rear,
+      grid: GRID[film === "off" ? "coarse" : film],
+      ceiling: COAT_MAX,
+    },
+    ...panes.sides.map((pane) => ({
+      pane,
+      arm: null,
+      soil: SOIL.side,
+      grid: SIDE_GRID,
+      ceiling: SIDE_COAT_MAX,
+    })),
+  ];
+
+  for (const screen of screens) {
+    const pane = screen.pane;
+    const grid = screen.grid;
+    const arm = screen.arm;
     const frame = frameOf(pane);
     const offset = position.length / 3;
     const cols = grid.cols;
     const rows = grid.rows;
-    const count = (cols + 1) * (rows + 1);
+    const count = film === "off" ? 0 : (cols + 1) * (rows + 1);
 
     // The film follows the patch's own warp rather than a plane through it,
     // so it lies on the glass at the corners as well as the middle.
     const local: number[] = [];
-    for (let j = 0; j <= rows; j++) {
-      for (let i = 0; i <= cols; i++) {
-        const u = pane.rect.u0 + ((pane.rect.u1 - pane.rect.u0) * i) / cols;
-        const v = pane.rect.v0 + ((pane.rect.v1 - pane.rect.v0) * j) / rows;
-        const p = vec(patchAt(pane.patch, u, v)).addScaledVector(frame.normal, FILM_LIFT);
-        position.push(p.x, p.y, p.z);
-        color.push(0, 0, 0, 0);
-        p.sub(frame.origin);
-        local.push(p.dot(frame.right), p.dot(frame.up));
+    if (film !== "off") {
+      for (let j = 0; j <= rows; j++) {
+        for (let i = 0; i <= cols; i++) {
+          const u = pane.rect.u0 + ((pane.rect.u1 - pane.rect.u0) * i) / cols;
+          const v = pane.rect.v0 + ((pane.rect.v1 - pane.rect.v0) * j) / rows;
+          const p = vec(patchAt(pane.patch, u, v)).addScaledVector(frame.normal, FILM_LIFT);
+          position.push(p.x, p.y, p.z);
+          color.push(0, 0, 0, 0);
+          p.sub(frame.origin);
+          local.push(p.dot(frame.right), p.dot(frame.up));
+        }
       }
-    }
-    for (let j = 0; j < rows; j++) {
-      for (let i = 0; i < cols; i++) {
-        const a = offset + j * (cols + 1) + i;
-        const b = a + 1;
-        const c = a + cols + 1;
-        const d = c + 1;
-        index.push(a, b, d, a, d, c);
+      for (let j = 0; j < rows; j++) {
+        for (let i = 0; i < cols; i++) {
+          const a = offset + j * (cols + 1) + i;
+          const b = a + 1;
+          const c = a + cols + 1;
+          const d = c + 1;
+          index.push(a, b, d, a, d, c);
+        }
       }
     }
 
     // An arm long enough to swing off the side of the glass is the one way
     // this reads as wrong from any angle, so the reach answers to where its
     // own pivot sits rather than to a figure picked for one car.
-    const spread = (Math.max(...arm.pivots.map(Math.abs)) * frame.width) / 2;
-    const clear = (frame.width / 2 - spread) / Math.max(0.2, Math.abs(Math.sin(arm.park)));
+    const spread = arm ? (Math.max(...arm.pivots.map(Math.abs)) * frame.width) / 2 : 0;
+    const clear = arm
+      ? (frame.width / 2 - spread) / Math.max(0.2, Math.abs(Math.sin(arm.park)))
+      : 0;
     // A shade OVER the half-width rather than under it. The tip of a parked
     // blade sitting exactly on the glass edge is a blade that looks short;
     // a real one runs to the edge and disappears under the trim, and the
@@ -373,15 +490,15 @@ export function buildWipers(
     // instead of stopping halfway. Much more than this and the arm swings
     // out over the bodywork, which is the one way this reads as wrong from
     // every angle at once.
-    const reach = Math.min(frame.height * arm.reach, clear * 1.06);
+    const reach = arm ? Math.min(frame.height * arm.reach, clear * 1.06) : 0;
     const pivots: Pivot[] = [];
     const blades: THREE.Object3D[] = [];
-    const geo = armed ? bladeGeometry(reach) : null;
+    const geo = armed && arm ? bladeGeometry(reach) : null;
     if (geo) bladeGeos.push(geo);
     const basis = new THREE.Matrix4().makeBasis(frame.right, frame.up, frame.normal);
-    for (const at of arm.pivots) {
+    for (const at of arm?.pivots ?? []) {
       const px = (at * frame.width) / 2;
-      const py = arm.base * frame.height;
+      const py = arm ? arm.base * frame.height : 0;
       const radius = new Float32Array(count);
       const angle = new Float32Array(count);
       for (let k = 0; k < count; k++) {
@@ -409,13 +526,13 @@ export function buildWipers(
         .addScaledVector(frame.up, py)
         .addScaledVector(frame.normal, BLADE_LIFT);
       const blade = new THREE.Mesh(geo, material);
-      blade.rotation.z = arm.park;
+      blade.rotation.z = arm?.park ?? 0;
       mount.add(blade);
       group.add(mount);
       blades.push(blade);
     }
 
-    const shade = shadeFactor(patchNormal(pane.patch));
+    const shade = shadeFactor([frame.normal.x, frame.normal.y, frame.normal.z]);
     const bias = new Float32Array(count);
     for (let k = 0; k < count; k++) {
       // Streaky, and heavier down the screen: what runs down the glass
@@ -434,8 +551,8 @@ export function buildWipers(
     // Both ends of the stroke, in order — `sweep` is signed (an arm that
     // parks on the right swings the other way), so the arc's bounds are a
     // min and a max rather than a start and a start-plus.
-    const swungLo = Math.min(arm.park, arm.park + arm.sweep) - WIPE_EDGE;
-    const swungHi = Math.max(arm.park, arm.park + arm.sweep) + WIPE_EDGE;
+    const swungLo = arm ? Math.min(arm.park, arm.park + arm.sweep) - WIPE_EDGE : 0;
+    const swungHi = arm ? Math.max(arm.park, arm.park + arm.sweep) + WIPE_EDGE : 0;
     for (let k = 0; k < count; k++) {
       for (const p of pivots) {
         const inner = p.reach * BLADE.from;
@@ -452,39 +569,47 @@ export function buildWipers(
       offset,
       count,
       coat: new Float32Array(count),
+      level: 0,
       shown: new Float32Array(count).fill(-1),
       bias,
-      soil: SOIL[which],
+      soil: screen.soil,
       swept: Int32Array.from(reachable),
       mud: 0,
       soak: 0,
       tone: new THREE.Color(),
       shade,
+      ceiling: screen.ceiling,
       pivots,
       blades,
-      park: arm.park,
-      sweep: arm.sweep,
-      rate: which === "rear" ? REAR_RATE : 1,
+      park: arm?.park ?? 0,
+      sweep: arm?.sweep ?? 0,
+      rate: arm === ARMS.rear ? REAR_RATE : 1,
       phase: 0,
-      angle: arm.park,
+      angle: arm?.park ?? 0,
       rest: 0,
       running: false,
     });
   }
 
-  const filmGeo = new THREE.BufferGeometry();
-  filmGeo.setAttribute("position", new THREE.Float32BufferAttribute(position, 3));
-  const colors = new THREE.Float32BufferAttribute(color, 4);
-  filmGeo.setAttribute("color", colors);
-  filmGeo.setIndex(index);
-  const film = new THREE.Mesh(filmGeo, filmMaterial);
-  // The film paints itself every step it moves; the dirt painter bakes from
-  // a pristine copy, and two writers on one buffer is a flicker.
-  film.userData[NO_DIRT] = true;
-  group.add(film);
+  let filmGeo: THREE.BufferGeometry | null = null;
+  let colors: THREE.Float32BufferAttribute | null = null;
+  let filmMesh: THREE.Mesh | null = null;
+  if (film !== "off") {
+    filmGeo = new THREE.BufferGeometry();
+    filmGeo.setAttribute("position", new THREE.Float32BufferAttribute(position, 3));
+    colors = new THREE.Float32BufferAttribute(color, 4);
+    filmGeo.setAttribute("color", colors);
+    filmGeo.setIndex(index);
+    filmMesh = new THREE.Mesh(filmGeo, filmMaterial);
+    // The film paints itself every step it moves; the dirt painter bakes from
+    // a pristine copy, and two writers on one buffer is a flicker.
+    filmMesh.userData[NO_DIRT] = true;
+    group.add(filmMesh);
+  }
 
   const grime = new THREE.Color();
   const paint = (f: Film): void => {
+    if (!colors) return;
     // What the road put there first — sand, or the same sand with the
     // weather in it — and then how much of the film is that rather than
     // rain's own smear.
@@ -496,7 +621,7 @@ export function buildWipers(
       arr[i] = f.tone.r;
       arr[i + 1] = f.tone.g;
       arr[i + 2] = f.tone.b;
-      arr[i + 3] = f.coat[k] * COAT_MAX;
+      arr[i + 3] = f.coat[k] * f.ceiling;
       f.shown[k] = f.coat[k];
     }
     colors.needsUpdate = true;
@@ -534,6 +659,11 @@ export function buildWipers(
       // beat between strokes while it is only spitting), and a DRY screen
       // that is merely dusty gets one stroke and a long wait.
       f.phase = 0;
+      // With no pane there is nothing per-vertex to smear, so the stroke
+      // takes its share off the one number the arms are reading instead —
+      // which is what stops a filmless car's wipers running for the rest of
+      // the stage on a coat that never comes down.
+      if (f.count === 0) f.level *= SMEAR;
       if (need < WIPE.off) f.running = false;
       else if (wet < WIPE.rain) f.rest = REST.dry;
       else if (wet < 0.4) f.rest = REST.drizzle * (1 - wet);
@@ -571,6 +701,7 @@ export function buildWipers(
         // a moment either way — a shower does not turn the dust on a screen
         // brown the instant it starts.
         f.soak += (Math.min(1, wet * 3) - f.soak) * Math.min(1, dt * 1.5);
+        f.level = Math.min(1, f.level + laid);
         for (let k = 0; k < f.count; k++) {
           f.coat[k] = Math.min(1, f.coat[k] + laid * f.bias[k]);
         }
@@ -579,9 +710,16 @@ export function buildWipers(
       // can actually clear, and the weather about to put more there — the
       // two handed over separately, because they mean different things to
       // the blades (see `sweep`).
-      let sum = 0;
-      for (let i = 0; i < f.swept.length; i++) sum += f.coat[f.swept[i] as number] as number;
-      sweep(f, wet, f.swept.length > 0 ? sum / f.swept.length : 0, dt);
+      // A pane with no arm has no swept set to average, and its `level` is
+      // the running total above — nothing reads it, because nothing sweeps
+      // it, but zeroing it here would be a lie in the one field that says
+      // how dirty the glass is.
+      if (f.count > 0 && f.swept.length > 0) {
+        let sum = 0;
+        for (let i = 0; i < f.swept.length; i++) sum += f.coat[f.swept[i] as number] as number;
+        f.level = sum / f.swept.length;
+      }
+      sweep(f, wet, f.level, dt);
 
       let moved = false;
       for (let k = 0; k < f.count && !moved; k++) {
@@ -592,9 +730,9 @@ export function buildWipers(
   };
 
   const dispose = (): void => {
-    filmGeo.dispose();
+    filmGeo?.dispose();
     for (const geo of bladeGeos) geo.dispose();
   };
 
-  return { group, film, update, dispose };
+  return { group, film: filmMesh, update, dispose };
 }

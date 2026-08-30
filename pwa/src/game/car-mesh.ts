@@ -22,6 +22,7 @@ import {
   GLASS_OPACITY,
   INSTRUMENT_MATERIAL,
   LENS_MATERIAL,
+  type FilmDetail,
   type InteriorDetail,
 } from "./car-body.ts";
 import type { CrewLook } from "./car-crew.ts";
@@ -195,6 +196,9 @@ export type CarOptions = {
   paint?: Livery;
   /** The crew behind the glass (car-crew.ts). Defaults to the player's. */
   crew?: CrewLook;
+  /** How finely the screens carry the grime film the wipers clear
+   * (car/wipers.ts) — see `CarBodyOptions.screens`. Defaults to `fine`. */
+  screens?: FilmDetail;
 };
 
 /** How far off the centerline this car's beams hang, front and rear. */
@@ -250,6 +254,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     crew: options.crew,
     cockpit: options.cockpit,
     rearView: options.rearView,
+    screens: options.screens,
   });
   // Panels, parts and wheels share one material, so a ghost is one flag.
   // Its own back faces still occlude its front ones (depth writing stays

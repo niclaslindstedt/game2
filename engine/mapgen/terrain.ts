@@ -14,7 +14,7 @@
 // never stairsteps.
 
 import { createRng } from "../lib/prng.ts";
-import { cellKey } from "../lib/math.ts";
+import { blockOffsets, cellKey } from "../lib/math.ts";
 import { smooth, valueNoise } from "../lib/noise.ts";
 import type { Surface, Track, TrackSample } from "./compile.ts";
 import { createGuardField, type CornerGuard, type GuardField } from "./guards.ts";
@@ -397,7 +397,32 @@ export function createTerrain(track: Track): TerrainField {
     px: number[];
     pz: number[];
     floor: number[];
+    /** The box the cell's samples actually occupy, and the lowest `floor`
+     * among them. Together they let a query REJECT a whole cell without
+     * touching a sample — see `nearestSample`, where they are most of the
+     * work the search does not do. A cell holds only the road that runs
+     * through it, so its box is usually a ribbon across a corner of the
+     * 48 m square rather than the square. */
+    minX: number;
+    maxX: number;
+    minZ: number;
+    maxZ: number;
+    minFloor: number;
   };
+  const emptyCell = (): Cell => ({
+    index: [],
+    x: [],
+    z: [],
+    top: [],
+    px: [],
+    pz: [],
+    floor: [],
+    minX: Infinity,
+    maxX: -Infinity,
+    minZ: Infinity,
+    maxZ: -Infinity,
+    minFloor: Infinity,
+  });
   let grid = new Map<number, Cell>();
   let firstIndexed = 0;
   let indexed = 0;
@@ -407,9 +432,7 @@ export function createTerrain(track: Track): TerrainField {
       const s = samples[i];
       const key = cellKey(Math.floor(s.x / GRID), Math.floor(s.z / GRID));
       let cell = grid.get(key);
-      if (!cell) {
-        grid.set(key, (cell = { index: [], x: [], z: [], top: [], px: [], pz: [], floor: [] }));
-      }
+      if (!cell) grid.set(key, (cell = emptyCell()));
       const top = ceilingOf(s);
       // The road's own grade here, from its neighbours: one sample step
       // either side, which is the finest the compiled centerline holds.
@@ -425,13 +448,19 @@ export function createTerrain(track: Track): TerrainField {
       const bank = s.bank ?? 0;
       const px = slope * sinH - bank * cosH;
       const pz = slope * cosH + bank * sinH;
+      const floor = top - Math.hypot(px, pz) * BENCH;
       cell.index.push(i);
       cell.x.push(s.x);
       cell.z.push(s.z);
       cell.top.push(top);
       cell.px.push(px);
       cell.pz.push(pz);
-      cell.floor.push(top - Math.hypot(px, pz) * BENCH);
+      cell.floor.push(floor);
+      if (s.x < cell.minX) cell.minX = s.x;
+      if (s.x > cell.maxX) cell.maxX = s.x;
+      if (s.z < cell.minZ) cell.minZ = s.z;
+      if (s.z > cell.maxZ) cell.maxZ = s.z;
+      if (floor < cell.minFloor) cell.minFloor = floor;
     }
     nearCx = NaN;
   };
@@ -443,14 +472,39 @@ export function createTerrain(track: Track): TerrainField {
   // the same 7x7 block. Holding that block's non-empty buckets turns a
   // repeat query from forty-nine map lookups into a walk of the two or three
   // that actually hold road. Invalidated whenever the index changes shape.
+  //
+  // Held in RING ORDER, nearest ring first, and that ordering is what makes
+  // the rejection below work: the block reaches 140 m and the road within a
+  // few metres is what sets the ceiling, so walking the middle first arrives
+  // at the outer rings with a bound low enough to throw them away whole.
   let nearCx = NaN;
   let nearCz = NaN;
   const nearCells: Cell[] = [];
+  const BLOCK = blockOffsets(3);
 
-  type Near = {
-    d: number;
-    index: number;
-    lateral: number;
+  /** Squared distance from a point to a cell's SAMPLE box — zero inside it.
+   * The rejection bound: nothing in the cell is nearer than this, and
+   * nothing in it can hold a cone lower than `minFloor` lifted by the climb
+   * over that distance. */
+  const boxDistance2 = (cell: Cell, x: number, z: number): number => {
+    const dx = x < cell.minX ? cell.minX - x : x > cell.maxX ? x - cell.maxX : 0;
+    const dz = z < cell.minZ ? cell.minZ - z : z > cell.maxZ ? z - cell.maxZ : 0;
+    return dx * dx + dz * dz;
+  };
+
+  /** The LOWEST ceiling any sample in `cell` could impose on a point that
+   * far from its box. Inside the bench a sample's plane cannot fall below
+   * its own `floor`; past it the cone lifts that by the verge grade, which
+   * at a hundred metres is forty-odd metres of clearance and is why almost
+   * every outer-ring cell is thrown away without being read. */
+  const cellFloor = (cell: Cell, d2: number): number =>
+    d2 <= BENCH2 ? cell.minFloor : cell.minFloor + (Math.sqrt(d2) - BENCH) * VERGE_CLIMB;
+
+  /** WHERE THE ROAD IS, and nothing about how high the ground beside it may
+   * stand. Every caller but one wants only this. */
+  type RoadNear = { d: number; index: number; lateral: number };
+
+  type Near = RoadNear & {
     /** R31 — the highest the ground may stand here for this road's sake:
      * the lowest nearby corridor's own underside, opening upward at
      * `verge.climb` once past the bench. Infinity where no road reaches. */
@@ -461,20 +515,78 @@ export function createTerrain(track: Track): TerrainField {
      * — see `rawHeight`. */
     own: number;
   };
-  const nearestSample = (x: number, z: number): Near | null => {
-    const cx = Math.floor(x / GRID);
-    const cz = Math.floor(z / GRID);
-    if (cx !== nearCx || cz !== nearCz) {
-      nearCx = cx;
-      nearCz = cz;
-      nearCells.length = 0;
-      for (let dx = -3; dx <= 3; dx++) {
-        for (let dz = -3; dz <= 3; dz++) {
-          const cell = grid.get(cellKey(cx + dx, cz + dz));
-          if (cell) nearCells.push(cell);
-        }
+
+  /** Pick up the non-empty cells of the block around `(cx, cz)` into
+   * `nearCells`, if the last query was not already standing in it. */
+  const block = (cx: number, cz: number): void => {
+    if (cx === nearCx && cz === nearCz) return;
+    nearCx = cx;
+    nearCz = cz;
+    nearCells.length = 0;
+    for (let i = 0; i < BLOCK.length; i += 2) {
+      const cell = grid.get(cellKey(cx + BLOCK[i], cz + BLOCK[i + 1]));
+      if (cell) nearCells.push(cell);
+    }
+  };
+
+  /** Past either stage end the distance to the end SAMPLE would swing the
+   * shelf away under the road apron, so it is measured from the apron's
+   * spine instead while within its reach. Both searches end here. */
+  const apronDistance = (
+    best: number,
+    x: number,
+    z: number,
+    lateral: number,
+    d: number,
+  ): number => {
+    if (best !== firstIndexed && best !== samples.length - 1) return d;
+    const s = samples[best];
+    const lon = (x - s.x) * Math.sin(s.heading) + (z - s.z) * Math.cos(s.heading);
+    const out = best === firstIndexed ? -lon : lon;
+    return out > 0 ? Math.hypot(lateral, Math.max(0, out - APRON)) : d;
+  };
+
+  /** The nearest road sample and nothing else — no verge cone, and so no
+   * reason to read a candidate the box test has already put further off than
+   * the answer in hand.
+   *
+   * That is the whole point of it being its own search. The cone is a MIN
+   * over every corridor in reach, so `nearestSample` has to keep reading
+   * cells it can never win the distance with; the corridor surface, the
+   * road-clearance field and the prop placement want none of that, and they
+   * are between them most of the queries the field ever answers. */
+  const nearestRoad = (x: number, z: number): RoadNear | null => {
+    block(Math.floor(x / GRID), Math.floor(z / GRID));
+    let best = -1;
+    let bestD2 = Infinity;
+    for (let c = 0; c < nearCells.length; c++) {
+      const cell = nearCells[c];
+      const bx = x < cell.minX ? cell.minX - x : x > cell.maxX ? x - cell.maxX : 0;
+      const bz = z < cell.minZ ? cell.minZ - z : z > cell.maxZ ? z - cell.maxZ : 0;
+      if (bx * bx + bz * bz >= bestD2) continue;
+      const cellX = cell.x;
+      const cellZ = cell.z;
+      for (let k = 0; k < cellX.length; k++) {
+        const ddx = x - cellX[k];
+        const ddz = z - cellZ[k];
+        const d2 = ddx * ddx + ddz * ddz;
+        if (d2 >= bestD2) continue;
+        bestD2 = d2;
+        best = cell.index[k];
       }
     }
+    if (best < 0) return null;
+    const s = samples[best];
+    const lateral = (x - s.x) * Math.cos(s.heading) - (z - s.z) * Math.sin(s.heading);
+    return {
+      d: apronDistance(best, x, z, lateral, Math.sqrt(bestD2)),
+      index: best,
+      lateral,
+    };
+  };
+
+  const nearestSample = (x: number, z: number): Near | null => {
+    block(Math.floor(x / GRID), Math.floor(z / GRID));
     let best = -1;
     let bestD2 = Infinity;
     // R31 — the verge cone, taken over every sample in reach rather than
@@ -490,6 +602,13 @@ export function createTerrain(track: Track): TerrainField {
     let bestSlot = -1;
     for (let c = 0; c < nearCells.length; c++) {
       const cell = nearCells[c];
+      // Two questions a cell can answer, and a cell that can answer NEITHER
+      // is skipped whole. It holds no nearer sample if its box is already
+      // further off than the best, and it can lower no ceiling if the
+      // lowest cone it could possibly hold is already above the one in
+      // hand. Both bounds are exact, so this changes only the work.
+      const boxD2 = boxDistance2(cell, x, z);
+      if (boxD2 >= bestD2 && (boxD2 >= CONE_REACH2 || cellFloor(cell, boxD2) >= ceiling)) continue;
       const cellX = cell.x;
       const cellZ = cell.z;
       for (let k = 0; k < cellX.length; k++) {
@@ -525,7 +644,7 @@ export function createTerrain(track: Track): TerrainField {
     if (best < 0) return null;
     const s = samples[best];
     const lateral = (x - s.x) * Math.cos(s.heading) - (z - s.z) * Math.sin(s.heading);
-    let d = Math.sqrt(bestD2);
+    const d = Math.sqrt(bestD2);
     // The NEARBY cone: the same min, over the road this point is actually
     // beside rather than over every corridor in reach. `rawHeight` uses it
     // as a floor, so that a road sixty metres off and twenty metres down
@@ -554,6 +673,12 @@ export function createTerrain(track: Track): TerrainField {
         const window2 = window * window;
         for (let c = 0; c < nearCells.length; c++) {
           const cell = nearCells[c];
+          // The same two rejections as the walk above, against this walk's
+          // own bounds: a cell outside the window holds nothing to consider,
+          // and one whose lowest possible cone is already above `own` cannot
+          // lower it.
+          const boxD2 = boxDistance2(cell, x, z);
+          if (boxD2 > window2 || cellFloor(cell, boxD2) >= own) continue;
           for (let k = 0; k < cell.x.length; k++) {
             const ddx2 = x - cell.x[k];
             const ddz2 = z - cell.z[k];
@@ -571,15 +696,7 @@ export function createTerrain(track: Track): TerrainField {
         }
       }
     }
-    // Past either stage end, distance to the end sample would swing the
-    // shelf away under the road apron — measure from the apron's spine
-    // instead while within its reach.
-    if (best === firstIndexed || best === samples.length - 1) {
-      const lon = (x - s.x) * Math.sin(s.heading) + (z - s.z) * Math.cos(s.heading);
-      const out = best === firstIndexed ? -lon : lon;
-      if (out > 0) d = Math.hypot(lateral, Math.max(0, out - APRON));
-    }
-    return { d, index: best, lateral, ceiling, own };
+    return { d: apronDistance(best, x, z, lateral, d), index: best, lateral, ceiling, own };
   };
 
   // The bare landscape the road was laid across (land.ts) — the same
@@ -855,7 +972,7 @@ export function createTerrain(track: Track): TerrainField {
         hand: handoverAt(d - width / 2),
       };
     };
-    const near = nearestSample(x, z);
+    const near = nearestRoad(x, z);
     if (near && near.d < shelfEnd + 3)
       consider(samples[near.index], near.d, sideOf(near.lateral), samples[near.index].width);
     const spur = spurs.spurs.length > 0 ? spurs.nearest(x, z) : null;
@@ -878,9 +995,9 @@ export function createTerrain(track: Track): TerrainField {
   // Lattice corners are hot (every off-road step reads several), so they
   // are cached; the cache clears whenever the field itself changes shape
   // (new streams carved, the endless prune re-anchoring the corridor).
-  let cornerCache = new Map<string, number>();
+  let cornerCache = new Map<number, number>();
   const cornerHeight = (i: number, j: number): number => {
-    const key = `${i},${j}`;
+    const key = cellKey(i, j);
     const hit = cornerCache.get(key);
     if (hit !== undefined) return hit;
     if (cornerCache.size > 8192) cornerCache = new Map();
@@ -926,7 +1043,7 @@ export function createTerrain(track: Track): TerrainField {
    * BRIDGE, because a deck is a road over the water rather than ground
    * over it, and what runs under one is still the river it spans (R13). */
   const roadTopAt = (x: number, z: number): number | null => {
-    const near = nearestSample(x, z);
+    const near = nearestRoad(x, z);
     if (near && near.d < shelfEnd + 3 && samples[near.index].deck !== null) return null;
     const corridor = corridorGround(x, z);
     return corridor && corridor.cover > 0.5 ? corridor.y : null;
@@ -965,7 +1082,7 @@ export function createTerrain(track: Track): TerrainField {
    * the road was built to cross it, and keeps its bank off it everywhere
    * else. */
   const roadClear: RoadClear = (x, z) => {
-    const near = nearestSample(x, z);
+    const near = nearestRoad(x, z);
     const stage = near ? near.d - shelfEnd : Infinity;
     const spur = spurs.spurs.length > 0 ? spurs.nearest(x, z) : null;
     const branch = spur ? spur.d - spur.spur.width / 2 - ROAD_CROSS.reach : Infinity;
@@ -988,7 +1105,7 @@ export function createTerrain(track: Track): TerrainField {
     half,
     forestScale: knobScale(track.knobs.trees, R.forest.density),
     groundAt,
-    roadNear: nearestSample,
+    roadNear: nearestRoad,
     sampleAt: (index) => samples[index],
     spurClearance,
     inAnyStream: (x, z, margin) => inStream(streams, x, z, margin),
@@ -1077,7 +1194,7 @@ export function createTerrain(track: Track): TerrainField {
       // lands on the stage and never on a stream or a branch.
       for (; spurCount < track.spurs.length; spurCount++) spurs.add(track.spurs[spurCount]);
       const committedS = samples[samples.length - 1].s - (track.endless ? 250 : 0);
-      const roadAt = (x: number, z: number): number => nearestSample(x, z)?.d ?? Infinity;
+      const roadAt = (x: number, z: number): number => nearestRoad(x, z)?.d ?? Infinity;
       guards.extend(
         committedS,
         roadAt,
@@ -1121,7 +1238,7 @@ export function createTerrain(track: Track): TerrainField {
 
   sync(0);
 
-  const roadDistanceAt = (x: number, z: number): number => nearestSample(x, z)?.d ?? Infinity;
+  const roadDistanceAt = (x: number, z: number): number => nearestRoad(x, z)?.d ?? Infinity;
 
   return {
     heightAt,
