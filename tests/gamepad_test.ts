@@ -6,7 +6,13 @@
 // slide is caught with a fraction of the pedal, which a key cannot express
 // and a thumb on glass cannot hold steady.
 //
-// The second is that a PRESS HAPPENS ONCE. A pad fires no events — it is
+// The second is that the same hardware has to be able to FLY. A handheld
+// has no keyboard, so god mode's free camera is unreachable on one unless
+// the sticks and the triggers are read as a flight — and that reading is
+// derived from the DRIVING bindings, so nothing about the developer tool
+// has to be bound before it works.
+//
+// The third is that a PRESS HAPPENS ONCE. A pad fires no events — it is
 // polled, once a frame, so every reading arrives many times over. An edge
 // that fired on each of them would cycle the camera through all six angles
 // in a tenth of a second and walk out of the run on the way past.
@@ -20,10 +26,13 @@ import { describe, expect, it } from "vitest";
 import {
   NAV_DELAY,
   NAV_REPEAT,
+  NEUTRAL_FLY,
   captureAxis,
   captureSource,
   createPadReader,
+  otherStick,
   pairedAxis,
+  readFlyPad,
   readPad,
 } from "../pwa/src/game/gamepad.ts";
 import { pickNeighbour, type NavRect } from "../pwa/src/game/menu-cursor.ts";
@@ -104,6 +113,61 @@ describe("the pad's wheel", () => {
     expect(left.steerStep).toBe(-1);
     expect(left.steer).toBe(0);
     expect(readPad([pad({ buttons: { 15: 1 } })], BINDINGS).steerStep).toBe(1);
+  });
+});
+
+describe("flying the camera on a pad", () => {
+  it("moves the rig with the stick that steers and aims it with the other", () => {
+    // Pushed AWAY from the player, a stick reports negative on its vertical
+    // axis; forward is positive to the camera. Both sticks cross that sign
+    // in readFlyPad and nowhere else.
+    const away = readFlyPad([pad({ axes: { 1: -1 } })], BINDINGS);
+    expect(away.forward).toBe(1);
+    expect(away.right).toBe(0);
+    expect(readFlyPad([pad({ axes: { 1: 1 } })], BINDINGS).forward).toBe(-1);
+    expect(readFlyPad([pad({ axes: { 0: 1 } })], BINDINGS).right).toBe(1);
+
+    const look = readFlyPad([pad({ axes: { 2: 1, 3: -1 } })], BINDINGS);
+    expect(look.lookX).toBe(1);
+    expect(look.lookY).toBe(1);
+    expect(readFlyPad([pad({ axes: { 3: 1 } })], BINDINGS).lookY).toBe(-1);
+  });
+
+  it("follows the steering axis to whichever pair is left over", () => {
+    // Nothing about god mode is bound in the options, so the look stick is
+    // DERIVED: a player who steers on the right stick looks on the left.
+    expect(otherStick(0)).toBe(2);
+    expect(otherStick(2)).toBe(0);
+    const bindings = { ...BINDINGS, steerAxis: 2 };
+    const both = readFlyPad([pad({ axes: { 0: 1, 3: -1 } })], bindings);
+    expect(both.lookX).toBe(1);
+    expect(both.forward).toBe(1);
+  });
+
+  it("keeps a resting pad still and aims gently off centre", () => {
+    const resting = readFlyPad([pad({ axes: { 0: 0.1, 3: 0.1 } })], BINDINGS);
+    expect(resting.forward).toBe(0);
+    expect(resting.right).toBe(0);
+    expect(resting.lookX).toBe(0);
+    // Half a stick is far less than half the look rate — the curve is what
+    // lets one control line a shot up on a tree and still whip round.
+    const half = readFlyPad([pad({ axes: { 2: 0.575 } })], BINDINGS);
+    expect(half.lookX).toBeGreaterThan(0);
+    expect(half.lookX).toBeLessThan(0.3);
+  });
+
+  it("flies up and down on the pedals, analogue, and sprints on the handbrake", () => {
+    const up = readFlyPad([pad({ buttons: { 7: 0.5 } })], BINDINGS);
+    expect(up.up).toBeGreaterThan(0.4);
+    expect(up.up).toBeLessThan(0.6);
+    expect(readFlyPad([pad({ buttons: { 6: 1 } })], BINDINGS).up).toBe(-1);
+    // Both buried is a rig holding its height, not one fighting itself.
+    expect(readFlyPad([pad({ buttons: { 6: 1, 7: 1 } })], BINDINGS).up).toBe(0);
+    expect(readFlyPad([pad({ buttons: { 0: 1 } })], BINDINGS).fast).toBe(true);
+  });
+
+  it("gives a camera nothing at all when no pad is connected", () => {
+    expect(readFlyPad([], BINDINGS)).toEqual(NEUTRAL_FLY);
   });
 });
 

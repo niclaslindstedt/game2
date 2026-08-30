@@ -16,8 +16,9 @@
 // somewhere else every time. Note which way that convention TURNS: growing
 // the yaw swings the view to the LEFT of the screen, because the camera's
 // right in this world is forward x up = (-cos yaw, 0, sin yaw). Everything
-// the hands do — the mouse, the arrows, A and D — is in screen terms, so it
-// crosses that sign exactly once, here in `update`.
+// the hands do — the mouse, the arrows, A and D, a stick, a thumb on the
+// glass — is in screen terms, so it crosses that sign exactly once, here in
+// `update`.
 
 import * as THREE from "three";
 
@@ -89,6 +90,15 @@ const ACCEL = 12;
 export const KEY_LOOK_RATE = 1.4;
 /** Radians of look per pixel of mouse travel under pointer lock. */
 export const MOUSE_LOOK_RATE = 0.0022;
+/** Radians of look per second at FULL stick deflection. Faster than the
+ * arrow keys because a stick is analogue — the aim is done at a fraction of
+ * its travel, and only a whip round to see what is behind you uses all of
+ * it. */
+export const PAD_LOOK_RATE = 2.4;
+/** Radians of look per pixel of thumb travel on the glass. Roughly a
+ * quarter turn per drag across a phone in portrait: a look control that
+ * needs three swipes to turn round is one nobody aims with. */
+export const TOUCH_LOOK_RATE = 0.006;
 
 /** How close to straight up or down the pitch may come, radians. Exactly
  * vertical loses the yaw reference and the view rolls. */

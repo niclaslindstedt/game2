@@ -1560,7 +1560,104 @@ body {
   color: var(--hud-good);
 }
 
-/* Desktop with a mouse: the touch pads are noise; keyboard drives. */
+/* ── God mode's fly controls ────────────────────────────────────────────
+   The same two halves, holding a flight: a push stick under one thumb, a
+   drag-to-look under the other, and the altitude and cruise-speed buttons
+   between them. Quieter chrome than the driving zones on purpose — this is
+   a developer tool standing in front of a frame somebody is about to
+   photograph, and it must not be the loudest thing in the picture. */
+.hud-fly-stick {
+  position: absolute;
+  display: none;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  color: var(--hud-ink);
+  animation: hud-anchor-in 100ms steps(2);
+}
+
+.hud-fly-ring {
+  position: absolute;
+  left: -56px;
+  top: -56px;
+  width: 112px;
+  height: 112px;
+  border: 5px solid currentcolor;
+  border-radius: 50%;
+  opacity: 0.5;
+  filter: drop-shadow(2px 2px 0 rgb(18 48 105 / 60%));
+}
+
+/* Moved by the pointer handler through `transform`, never by React: the
+   HUD around it repaints at ~12 Hz and a stick that lagged the thumb by
+   that much is a camera nobody can fly. */
+.hud-fly-knob {
+  position: absolute;
+  left: -21px;
+  top: -21px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--hud-steer);
+  opacity: 0.85;
+  filter: drop-shadow(2px 2px 0 rgb(18 48 105 / 60%));
+}
+
+/* What the other half is FOR, said once. A look zone has nothing anchored
+   in it until a thumb lands, so without this it is a blank half of the
+   screen that happens to aim a camera. */
+.hud-fly-hint {
+  position: absolute;
+  bottom: 4.6rem;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: clamp(0.7rem, 2vmin, 0.95rem);
+  letter-spacing: 0.08em;
+  opacity: 0.4;
+}
+
+/* A column up the outer edge of the LOOK half, at mid-height: the one part
+   of the screen no instrument uses in either orientation. Across the bottom
+   it would sit on the dial cluster, which in portrait runs the full width. */
+.hud-fly-dial {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: auto;
+}
+
+.hud-fly-dial-left {
+  left: max(0.6rem, env(safe-area-inset-left));
+}
+
+.hud-fly-dial-right {
+  right: max(0.6rem, env(safe-area-inset-right));
+}
+
+.hud-fly-btn {
+  width: 3rem;
+  height: 3rem;
+  padding: 0;
+  border: 3px solid var(--hud-ink);
+  border-radius: 0.5rem;
+  background: rgb(18 48 105 / 45%);
+  color: var(--hud-ink);
+  font: inherit;
+  font-size: 1.3rem;
+  line-height: 1;
+  touch-action: none;
+}
+
+.hud-fly-btn:active {
+  background: var(--hud-steer);
+}
+
+/* Desktop with a mouse: the touch pads are noise; keyboard drives — and
+   flies. */
 @media (hover: hover) and (pointer: fine) {
   .hud-touch {
     display: none;

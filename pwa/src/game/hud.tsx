@@ -3,16 +3,18 @@
 // (the app refreshes it ~12×/s — the canvas is the 60 fps surface, the HUD
 // is not), and lays out everything drawn over the road.
 //
-// The thumb zones it hangs at the bottom are next door in hud-touch.tsx:
-// they are the one part of this screen that does NOT run off the snapshot —
-// they write into the input manager at pointer rate — and that is a
-// different job from drawing a readout.
+// The thumb zones it hangs at the bottom are next door in hud-touch.tsx —
+// and, while god mode has the camera, in hud-fly.tsx: they are the one part
+// of this screen that does NOT run off the snapshot (they write into the
+// input manager at pointer rate), and that is a different job from drawing a
+// readout.
 
 import type { CSSProperties } from "react";
 
 import type { GamePhase, TurnSeverity } from "@engine";
 
 import { deviceControls, type InputManager } from "./input.ts";
+import { FlyControls } from "./hud-fly.tsx";
 import { PedalZone, SteerZone } from "./hud-touch.tsx";
 import { PODIUM as PODIUM_PLACES } from "./campaign.ts";
 import {
@@ -938,10 +940,16 @@ export function Hud({
       {/* Touch controls — one half of the screen anchors a steering wheel
           under the thumb, the other is the gesture pedal (gas / brake /
           handbrake, and the gears on a flick). Which half is which is the
-          player's choice. */}
+          player's choice.
+
+          While GOD MODE has the camera the same two halves fly it instead:
+          the car is parked and given nothing, so a wheel and a throttle over
+          it are controls that do nothing — and on a phone, where the fly
+          keyboard is not, they would be the only controls there are. */}
       <div className="hud-touch">
-        {thumbs && <SteerZone touch={touch} side={touchLayout.steerSide} />}
-        {thumbs && (
+        {thumbs && flying && <FlyControls fly={input.flyTouch} stickSide={touchLayout.steerSide} />}
+        {thumbs && !flying && <SteerZone touch={touch} side={touchLayout.steerSide} />}
+        {thumbs && !flying && (
           <PedalZone
             touch={touch}
             layout={touchLayout}

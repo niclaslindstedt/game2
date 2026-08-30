@@ -180,6 +180,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | What a split is measured against, and where a respawn lands | `engine/game/track.ts` (`lastCheckpoint`) + `pwa/src/game/standings.ts` (the field's leader)                                     |
 | A player option (HUD, video, controls)                      | `pwa/src/game/settings.ts`, then its reader                                                                                      |
 | The debug overlay, god mode, the debug log                  | `pwa/src/game/debug-*.ts(x)`, `camera-free.ts`, `menu-dev.tsx` — the `debug-tools` skill                                         |
+| How god mode is FLOWN on a pad or a phone                   | `readFlyPad` in `pwa/src/game/gamepad.ts` (sticks) + `pwa/src/game/hud-fly.tsx` (thumbs); merged in `input.ts`'s `flyMove`       |
 | The generator's LAYERS, X-rayed over the map view           | `pwa/src/game/map-layers.ts` — the `debug-tools` and `mapgen-improvement` skills                                                 |
 | What a full-screen MAP says about itself, and its repro     | `pwa/src/game/map-debug.ts` + `App.tsx`'s `?roam= ?layer= ?mapfull= ?m…=` readers — the `debug-tools` skill                      |
 | A DEVELOPER switch (god, overlay, collecting race data)     | `DevSettings` in `pwa/src/game/settings.ts` + a row in `menu-dev.tsx`; `devFromUrl` in `App.tsx` pins it for tooling             |
