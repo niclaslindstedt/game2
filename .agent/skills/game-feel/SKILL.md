@@ -114,6 +114,19 @@ What each contributes:
   a car turning — the reference has none of it. Body attitude is pitch only
   (the road's gradient grounded, the ballistic arc airborne, both free from
   `vy/u`); the drift is displayed by the YAW against the camera's framing.
+- **A shot that carries the lens between two poses interpolates ORIENTATION,
+  never an aim point.** Walking a `lookAt` target from what the camera was
+  looking at to what it is going to look at fails the moment the destination
+  is BEHIND the lens — the line between the two passes through the eye, and
+  `lookAt` on the point it is standing on tumbles: a whip to the back, a
+  tumble at the crossing, a whip forward on the landing. Slerp the quaternion
+  instead (`slerpQuaternions`), taking the far end off the pose the
+  destination RIG has already written that frame, so the last flown frame and
+  the first driven one are the same frame in AIM as well as position — a rig
+  frames its car and does not point at it, so an aim-point shot always pops
+  on the hand-over. Any deliberate look on top (a tilt down over an arc) is a
+  LOCAL rotation applied after the slerp, which is stable at every pose.
+  `camera-sweep.ts` and `camera-start.ts` are the two worked examples.
 - The renderer never mutates `GameState`; feel state that must persist
   (dirt level, camera smoothing) lives in renderer-side closures and resets
   with the next stage's meshes.

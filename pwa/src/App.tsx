@@ -596,19 +596,26 @@ type Settling = {
  * `backdrop` is the default and needs no press: once the player's own
  * roll-out is over, their car is parked and the race is still on, so the
  * results card sits over the RACE rather than over a stationary car — the
- * leader of what is left, from the drone, the way the main menu stands over
- * a stage somebody is driving.
+ * leader of what is left, driving.
  *
- * `feed` is what SPECTATE buys: the same run-out from the chase camera, with
- * the strip and the two buttons that walk the field (spectate.ts). */
+ * `feed` is what SPECTATE buys: the same run-out, the same shot, with the
+ * strip and the two buttons that walk the field (spectate.ts). */
 type WatchMode = "off" | "backdrop" | "feed";
 
-/** …and the camera each is watched from. The feed is an OUTSIDE view and not
- * a choice: the in-car rigs are measured off the silhouette of the car the
+/** …and the camera each is watched from. It is an OUTSIDE view and not a
+ * choice: the in-car rigs are measured off the silhouette of the car the
  * stage was built around (`setEyes`), and the car on screen is somebody
- * else's. The backdrop takes the menu's own framing, because it is doing the
- * menu's own job — a card over something alive. */
-const WATCH_CAMERA = { backdrop: "drone", feed: "chase" } as const;
+ * else's.
+ *
+ * BOTH ways of watching take the SAME rig, and that is the point of the
+ * pair being written out here rather than assumed. The transit that carries
+ * the lens onto a crew (camera-sweep.ts) lands it behind them in the view
+ * the player was just driving in, which is the shot a spectator is owed —
+ * so pressing SPECTATE over the card is a strip appearing rather than the
+ * camera going somewhere else, and BACK TO RESULTS is the strip going away.
+ * A second flight between two ways of watching the same car said nothing
+ * about the race and cost a second of it. */
+const WATCH_CAMERA = { backdrop: "chase", feed: "chase" } as const;
 
 /** How much of R25's roll-out the player's own car keeps before the card's
  * backdrop takes the frame, s.
@@ -1720,7 +1727,7 @@ export function App() {
         // player's own car (`setEyes`), and the car in shot is somebody
         // else's: walking onto one would put the lens inside a body it was
         // never measured for. Both ways of watching it are from outside,
-        // and the drone the card stands over is not on the ladder at all.
+        // and both are already standing in the one view that is.
         if (spectateRef.current) return;
         const mode = renderer.cycleCamera();
         const play = PLAY_CAMERAS.find((cam) => cam.id === mode);
@@ -1813,8 +1820,9 @@ export function App() {
           if (settling) cutTo(walkWatch(settling.field, spectateRef.current, by), "feed");
         },
         // BACK TO RESULTS drops to the card, and the card's own backdrop is
-        // this same run-out from the drone: the race does not stop because
-        // somebody stopped watching it closely.
+        // this same run-out from this same shot: the race does not stop
+        // because somebody stopped watching it closely, and the picture does
+        // not move because the strip over it went away.
         leave: () => {
           if (spectateRef.current) cutTo(spectateRef.current, "backdrop");
         },
@@ -2159,12 +2167,14 @@ export function App() {
       /** R30 — THE CARD'S OWN BACKDROP. A few seconds past the line the
        * player's own car is a small thing receding down the run-out, and
        * there is a RACE going on up the road: crews still out there, driving
-       * for places worth points. So the run-out opens itself, from the
-       * drone, on the crew behind — the leader of what is left, which on a
-       * road everybody is driving toward the same line is the next car due
-       * through it. The card stands over that the way the main menu stands
-       * over a stage somebody is driving, and SPECTATE becomes a matter of
-       * coming DOWN to the car rather than of starting anything.
+       * for places worth points. So the run-out opens itself on the crew
+       * behind — the leader of what is left, which on a road everybody is
+       * driving toward the same line is the next car due through it. The
+       * camera flies back up the road to them (camera-sweep.ts) and settles
+       * in behind them in the view the player was driving in a moment ago;
+       * the card stands over that the way the main menu stands over a stage
+       * somebody is driving, and SPECTATE becomes a matter of the numbers
+       * appearing rather than of starting anything.
        *
        * R25's own celebration keeps `BACKDROP_AFTER` of the roll-out first:
        * the flying finish is a gesture worth watching, and it is finished
