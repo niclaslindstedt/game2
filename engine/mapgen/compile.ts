@@ -121,6 +121,12 @@ export type TrackSample = {
    * remains the right answer to how wide the road IS, which is what the
    * placement heuristics and the search's clearances want. */
   width: number;
+  /** R17 — how far the MAT sits off the centerline here, m, positive to the
+   * right of travel. Zero everywhere but a junction's mouth, which opens on
+   * one side only (see `RoadShape.shift`). The mat therefore spans
+   * `shift ± width / 2`, and anything that asks whether a point is ON the
+   * road has to say so. */
+  shift?: number;
 };
 
 /** One co-driver call: a turn (or a run of same-direction turns) with its
@@ -919,6 +925,16 @@ function createCompiler(
    * of a boulevard are the same place at two scales. */
   const mouthRun = R.junction.mouth.run * track.width;
 
+  /** R17 — the fastest a mouth may open, m of mat per m of road. What sets
+   * it is the GROUND: the terrain shapes its shelf around the nearest
+   * centerline point, so a mat that widens faster than the samples are
+   * spaced leaves a probe at a wide sample's lip nearest to a narrow one
+   * alongside, the ground hands over inside the ribbon, and the seam is a
+   * face down the outside of the mouth. Measured on the rollers' seam
+   * check: past this the step at the mouth's rim goes over what a wheel
+   * rides. */
+  const MOUTH_SLEW = 0.42;
+
   /** R17 — the MOUTH's two sizes, m: how much wider the mat is where it
    * meets the tarmac, and the length of lane it opens over.
    *
@@ -1344,6 +1360,30 @@ function createCompiler(
     const all = track.samples;
     const reach = Math.ceil(Math.max(R.junction.reach.max, mouthRun) / SAMPLE_STEP) + 1;
     const start = Math.max(0, from - reach);
+    // R17 — the mouth's own widening, measured first and then SLEW-LIMITED.
+    // A kerb fillet is a quarter ellipse, so its width runs away vertically
+    // at the throat: laid straight onto the samples that is metres of extra
+    // mat inside one two-metre step, and the ground beside a road cannot
+    // turn that corner — the terrain hands over inside the ribbon and what
+    // is left is a face down the outside of the mouth. Limiting how fast
+    // the mat may open keeps the fillet's shape everywhere it is gentle and
+    // only trims the tail, which is the part no ground could follow anyway.
+    // The limit binds only between two samples that are both the MINOR
+    // road. Where the neighbour is the main road the step is the junction
+    // itself — the mouth is meant to be at its widest there and then simply
+    // stop, and the ground under it is the platform, which is one flat
+    // plane already. Slewing that step would taper the mouth shut again at
+    // exactly the place it exists to open.
+    const flares: number[] = [];
+    for (let i = start; i < all.length; i++) flares[i] = mouthFlare(all[i]);
+    const raw = flares.slice();
+    const slew = MOUTH_SLEW * SAMPLE_STEP;
+    for (let i = start + 1; i < all.length; i++) {
+      if (raw[i - 1] > 0 && flares[i] > flares[i - 1] + slew) flares[i] = flares[i - 1] + slew;
+    }
+    for (let i = all.length - 2; i >= start; i--) {
+      if (raw[i + 1] > 0 && flares[i] > flares[i + 1] + slew) flares[i] = flares[i + 1] + slew;
+    }
     for (let i = start; i < all.length; i++) {
       const sample = all[i];
       let flat = 0;
@@ -1361,7 +1401,24 @@ function createCompiler(
       // reads the mat's own reach across the main road, so a pass that ran
       // over this sample already would otherwise flare a flare.
       sample.width = rawWidth[i];
-      sample.width += 2 * mouthFlare(sample);
+      sample.shift = 0;
+      const flare = flares[i] ?? 0;
+      if (flare > 0) {
+        // R17 — the mouth opens on ONE side. The route is turning through
+        // the junction, so the inside of that corner already meets the main
+        // road at an angle and needs nothing built out; what a car swinging
+        // off the main road actually uses is the OUTSIDE. Widening both
+        // sides to get that costs twice the ground for half the effect, and
+        // reads as a road that briefly got fatter rather than as a mouth.
+        //
+        // The outside of a turn is the side away from where it bends, and a
+        // junction corner always bends — `isJunctionTurn` only takes a
+        // corner inside R17's angle band, so there is no straight case to
+        // fall back on.
+        const outer = sample.curvature >= 0 ? -1 : 1;
+        sample.width = rawWidth[i] + flare;
+        sample.shift = (outer * flare) / 2;
+      }
     }
   };
 

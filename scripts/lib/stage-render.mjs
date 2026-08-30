@@ -294,22 +294,31 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
       // the things this picture exists to judge.
       const wideC = (c.width ?? roadWidth) / roadWidth;
       const wideA = (a.width ?? roadWidth) / roadWidth;
+      // R17 — where the MAT's centre is, which a junction's mouth moves off
+      // the centerline: the mouth opens on one side only.
+      const shiftC = c.shift ?? 0;
+      const shiftA = a.shift ?? 0;
       for (let k = 0; k < lat.length - 1; k++) {
         const l0 = lat[k];
         const l1 = lat[k + 1];
-        const lm = ((l0 + l1) / 2) * wideC;
+        const lm = ((l0 + l1) / 2) * wideC + shiftC;
         const color = bandColor(c, lm, c.width ?? roadWidth, c.x + cr.x * lm, c.z + cr.z * lm);
         if (!color) continue;
         // Shade the band by its own cross-fall, so the crown, the ruts and
         // the corner's bank are visible as SHAPE and not only as color.
-        const fall = corridorOffset(c, l1, roadWidth) - corridorOffset(c, l0, roadWidth);
+        const fall =
+          corridorOffset(c, l1 + shiftC, roadWidth) - corridorOffset(c, l0 + shiftC, roadWidth);
         const light = 1 + Math.max(-0.28, Math.min(0.28, fall * 1.6));
+        const a0 = l0 * wideA + shiftA;
+        const a1 = l1 * wideA + shiftA;
+        const c0 = l0 * wideC + shiftC;
+        const c1 = l1 * wideC + shiftC;
         canvas.poly(
           [
-            [px(a.x + ar.x * l0 * wideA), pz(a.z + ar.z * l0 * wideA)],
-            [px(c.x + cr.x * l0 * wideC), pz(c.z + cr.z * l0 * wideC)],
-            [px(c.x + cr.x * l1 * wideC), pz(c.z + cr.z * l1 * wideC)],
-            [px(a.x + ar.x * l1 * wideA), pz(a.z + ar.z * l1 * wideA)],
+            [px(a.x + ar.x * a0), pz(a.z + ar.z * a0)],
+            [px(c.x + cr.x * c0), pz(c.z + cr.z * c0)],
+            [px(c.x + cr.x * c1), pz(c.z + cr.z * c1)],
+            [px(a.x + ar.x * a1), pz(a.z + ar.z * a1)],
           ],
           shade(color, light),
         );
@@ -332,29 +341,26 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
   const minorAt = (sample) =>
     track.junctions.some((j) => junctionFlat(j, sample.x, sample.z) > 0 && onMinorSide(j, sample));
 
-  /** R17 — which side of the through road each junction's mouth opens on,
-   * found by asking the MINOR road where it is rather than by reasoning
-   * about a sign: the average offset of its samples across the junction's
-   * own axis. */
-  const mouthSide = track.junctions.map((j) => {
-    let sum = 0;
-    for (const sample of track.samples) {
-      if (junctionFlat(j, sample.x, sample.z) <= 0 || !onMinorSide(j, sample)) continue;
-      sum += (sample.x - j.x) * Math.cos(j.heading) - (sample.z - j.z) * Math.sin(j.heading);
-    }
-    return Math.sign(sum) || 1;
-  });
+  /** The MINOR road's own mat at each junction: its samples, near enough to
+   * the crossing to be the mouth. */
+  const mouthMats = track.junctions.map((j) =>
+    track.samples.filter((s) => Math.abs(s.s - j.s) < j.reach * 2 && onMinorSide(j, s)),
+  );
 
   /** R17 — is this point in the MOUTH the minor road opens in the through
    * road's edge? A side road's opening interrupts the edge line it crosses,
-   * on that side only: a line ruled straight across a junction's mouth is a
-   * kerb where a car turns in. */
+   * and nothing else does: the break is as long as the opening and no
+   * longer, and it is on the side the opening is on.
+   *
+   * Asked of the minor road's own MAT rather than of the platform and a
+   * side. The platform is tens of metres longer than the opening, so a
+   * break measured against it takes the line away for half a junction —
+   * and which side is "the mouth's" is a question the geometry answers
+   * badly and the mat answers exactly. */
   const inMouth = (x, z) =>
-    track.junctions.some((j, n) => {
-      if (junctionFlat(j, x, z) <= 0) return false;
-      const across = (x - j.x) * Math.cos(j.heading) - (z - j.z) * Math.sin(j.heading);
-      return Math.sign(across) === mouthSide[n];
-    });
+    mouthMats.some((mat) =>
+      mat.some((s) => Math.hypot(s.x - x, s.z - z) < (s.width ?? track.width) / 2 + 0.6),
+    );
 
   const drawMarkings = (samples, roadWidth, branch = false) => {
     if (scale < 0.55) return;

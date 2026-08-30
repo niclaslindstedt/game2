@@ -306,7 +306,7 @@ export function createKerbField(track: Track): KerbField {
         // the whole stage and a junction's mouth flares it half as wide
         // again, so a marker placed off the nominal stands ON the mat at
         // every crossing on the map.
-        const out = ((sample.width ?? track.width) / 2 + shape.out) * side;
+        const out = (sample.shift ?? 0) + ((sample.width ?? track.width) / 2 + shape.out) * side;
         const r = { x: Math.cos(sample.heading), z: -Math.sin(sample.heading) };
         if (onSeal(sample.x + r.x * out, sample.z + r.z * out)) continue;
         // ...and the run ENDS at the seal rather than a post-spacing short

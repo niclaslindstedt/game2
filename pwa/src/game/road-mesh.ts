@@ -332,10 +332,15 @@ export function buildRoad(
     const here = s.width ?? width;
     const wide = here / width;
     const halfHere = here / 2;
+    // R17 — the mat's own centre, which a junction's mouth moves off the
+    // centerline: the stations are measured across the MAT, then carried
+    // out to where the mat actually is.
+    const shift = s.shift ?? 0;
     for (const l of cross) {
       const out = Math.abs(l * wide) - halfHere;
-      const px = s.x + r.x * l * wide;
-      const pz = s.z + r.z * l * wide;
+      const lat = l * wide + shift;
+      const px = s.x + r.x * lat;
+      const pz = s.z + r.z * lat;
       // R16 — the HAND-OVER. Past the bare shoulder the ribbon leans onto
       // the ground lattice beside it and by the corridor's lip the ground
       // has it entirely, so the two meshes MEET rather than one stopping in
@@ -351,7 +356,7 @@ export function buildRoad(
       // through as a dark hairline down the whole stage, which is the same
       // defect as the stripe it replaced, two orders of magnitude thinner
       // and just as visible against grass.
-      let y = s.elevation + corridorOffset(s, l * wide, here) + bias;
+      let y = s.elevation + corridorOffset(s, lat, here) + bias;
       if (ground !== undefined && hand < 1) {
         y = y * hand + ground.heightAt(px, pz) * (1 - hand);
       }
