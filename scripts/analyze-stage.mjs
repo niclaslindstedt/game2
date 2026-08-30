@@ -19,6 +19,7 @@
 //   npm run analyze -- --count 24         # a sweep
 //   npm run analyze -- --length long --shape circuit
 //   npm run analyze -- --water 1 --elevation 1   # the generator's dials
+//   npm run analyze -- --steepness 1 --asphalt 1 # R34: rock, and roads cut through it
 //   npm run analyze -- --checks           # every check, not just the metrics
 //   npm run analyze -- --findings 40      # how many findings to print a seed
 //   npm run analyze -- --no-perf          # skip the cold-build timing
@@ -51,7 +52,7 @@ const maxFindings = Number(flag("findings") ?? 8);
 const showChecks = has("checks");
 const perf = !has("no-perf");
 const knobs = {};
-for (const dial of ["elevation", "water", "trees", "asphalt", "width"]) {
+for (const dial of ["elevation", "water", "trees", "asphalt", "width", "steepness"]) {
   const value = flag(dial);
   if (value !== undefined) knobs[dial] = Number(value);
 }

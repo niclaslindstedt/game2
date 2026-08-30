@@ -12,8 +12,9 @@
 //
 // The pause card holds the run where it stands. The heavy state lives in
 // refs; the HUD re-renders from a ~12 Hz snapshot. URL params (?seed=,
-// ?tod=, ?weather=, ?car=, ?length=, ?shape=, ?laps=, ?gearbox=, the four generator dials
-// ?elevation= ?water= ?trees= ?asphalt=, ?start=1, ?shot=1 and ?bot=1) pin a run for tooling and
+// ?tod=, ?weather=, ?car=, ?length=, ?shape=, ?laps=, ?gearbox=, the generator dials
+// ?elevation= ?steepness= ?water= ?trees= ?asphalt= ?width=, ?start=1, ?shot=1 and ?bot=1) pin a
+// run for tooling and
 // screenshots, and the developer tools add ?debug=1, ?god=1 and the free
 // camera's pose (?gx= ?gy= ?gz= ?gyaw= ?gpitch=) — the repro line the debug
 // overlay prints is exactly that set, so a screenshot reproduces as a URL.

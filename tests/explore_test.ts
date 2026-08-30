@@ -566,9 +566,17 @@ describe("the terrain field", () => {
 
     it("holds the whole landscape under a cone the car could drive up", () => {
       // The rule itself, stated where it is made: the field is capped at
-      // the road's own underside, opening upward at `climb` past the bench.
-      // No tolerance — a hillside, a mountain's toe, a corner guard's mound
+      // the road's own underside, opening upward past the bench. No
+      // tolerance — a hillside, a mountain's toe, a corner guard's mound
       // and the far field's blend are all cut to this exactly.
+      //
+      // R34 makes the cone two-sided rather than one grade: `verge.climb`
+      // out to a whole lattice cell past the bench, which is the runoff a
+      // car that goes off has to come back up, and past THAT the face the
+      // road was cut through — up to `cut.face` where the rock stands. The
+      // bound below is the loosest the dials allow, because it is a bound:
+      // what it is here to catch is a cone that stopped binding at all, and
+      // a stage that quietly grew a wall inside the runoff.
       //
       // What is cut is the LANDSCAPE, and the exemption is the other half of
       // the rule: a point standing on ANOTHER road's own shelf is not
@@ -625,7 +633,14 @@ describe("the terrain field", () => {
               if (terrain.roadDistanceAt(x, z) < Math.abs(lat) - 0.5) continue;
               if (onBranch(x, z)) continue;
               probes += 1;
-              expect(terrain.heightAt(x, z)).toBeLessThanOrEqual(top + R.verge.climb * out);
+              // R31's runoff, then R34's face. `out` is measured from the
+              // corridor's lip and the cone from the centerline, so the
+              // runoff reaches this much further out than the bench does.
+              const runoff = Math.max(0, R.verge.bench + GROUND_CELL - edge);
+              const rise =
+                R.verge.climb * Math.min(out, runoff) +
+                R.verge.cut.face.max * Math.max(0, out - runoff);
+              expect(terrain.heightAt(x, z)).toBeLessThanOrEqual(top + rise);
             }
           }
         }
@@ -641,6 +656,15 @@ describe("the terrain field", () => {
       // spanning a cell diagonal reads a Lipschitz field back steeper than
       // it is. Before R31 it was four to six percent of the ground beside
       // the road — walls a car sliding off it stopped dead against.
+      //
+      // R34's CUTTINGS are the one wall that is there on purpose, so they
+      // are not counted — but the runoff in front of them is, which is the
+      // half of R34 worth pinning: a face may stand over the verge, and it
+      // may not stand ON it. `cutAt` is the field's own answer to which
+      // ground is a cutting, so this asks the rule rather than a distance,
+      // and it is asked at ANY strength: a probe the field calls cut at all
+      // is a probe this claim was never making, and picking a threshold
+      // here would only be picking how much of a cutting to call landscape.
       const limit = TUNING.collision.climbLimit;
       let probes = 0;
       let walls = 0;
@@ -656,10 +680,17 @@ describe("the terrain field", () => {
             let prev = terrain.groundAt(s.x + right.x * side * edge, s.z + right.z * side * edge);
             for (let out = 1; out <= 25; out++) {
               const lat = side * (edge + out);
-              const here = terrain.groundAt(s.x + right.x * lat, s.z + right.z * lat);
+              const px = s.x + right.x * lat;
+              const pz = s.z + right.z * lat;
+              const here = terrain.groundAt(px, pz);
               // The face is measured LEAVING the road: what a car sliding
               // off it drives into. A drop is the country's business — a
-              // rise it cannot get over is not.
+              // rise it cannot get over is not. R34's blasted rock is the
+              // exception, and only where the field says it is rock.
+              if (terrain.cutAt(px, pz) > 0) {
+                prev = here;
+                continue;
+              }
               probes++;
               if (here - prev >= limit) walls++;
               prev = here;

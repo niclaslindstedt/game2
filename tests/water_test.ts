@@ -436,12 +436,21 @@ describe("driving out again (TUNING.crash.drown.shallows)", () => {
    * off is the water keeping it anyway: the body held down at a waterline
    * the car has already driven past, which finishes the beat buried in the
    * beach it is standing on. */
-  // 59 leads because the search below only asks whether a seed BEACHES, on
-  // neutral input, while the tests then ask the car to drive away under
-  // throttle — and those differ. Seed 45 beaches and then sits there at
-  // 0.15 m/s, which passes the search and fails the driving. Leading with a
-  // seed that satisfies both keeps the search honest and stops at once.
-  const SHORE_SEEDS = [59, 3, ...SEEDS];
+  // The list leads with seeds that satisfy BOTH halves, because the search
+  // below only asks whether a seed BEACHES, on neutral input, while the
+  // tests then ask the car to drive away under throttle — and those differ.
+  // Seed 45 beaches and then sits there at 0.15 m/s, which passes the search
+  // and fails the driving. Leading with ones that do both keeps the search
+  // honest and stops at once.
+  //
+  // WHICH seeds those are is not stable across generator changes and is not
+  // meant to be: the drive that carries the car into the water is 60 s of
+  // full lock off whatever road the seed built, so a stage whose road moves
+  // puts the car in different water. R34 laid the roads along the country
+  // and every one of them moved; 59 and 3 stopped beaching and these two
+  // started. If this list runs out again, scan for a fresh one rather than
+  // reading it as the shallows having stopped working.
+  const SHORE_SEEDS = [39, 49, 59, 3, ...SEEDS];
 
   /** Take a seed's plunge and run the drowning out. Reports the seed whose
    * shoreline the car drives back out of — which one that is depends on the

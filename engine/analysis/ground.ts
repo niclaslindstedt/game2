@@ -19,6 +19,22 @@
 //
 //   WHAT GROWS, GROWS ON SOIL. Trees need a rooting depth. A forest
 //   standing on bare bedrock is the same mistake seen from the other side.
+//
+// ...and two are about the country the road actually runs THROUGH, which is
+// a different country from the one the stage is set in and has to be
+// measured separately (R31, R34):
+//
+//   THE ROAD RUNS THROUGH SOMETHING. R31 cuts the landscape back to a cone
+//   beside every road, so a stage can score full marks for relief with all
+//   of that relief pushed over the horizon and a lawn either side of the
+//   car. The corridor check reads the terrain field — the ground that is
+//   drawn and driven — rather than the bare geology, and it is the only
+//   thing here that can tell a valley from a table.
+//
+//   WHERE IT CANNOT GO ROUND, IT GOES THROUGH. A road that meets rock is
+//   cut through it, and a stage with no cuttings anywhere is one whose
+//   roads went round everything — which is what a country with no rock in
+//   it looks like from the driver's seat.
 
 import { LAKE_Y } from "../mapgen/land.ts";
 import { GROVES } from "../mapgen/props.ts";
@@ -129,6 +145,89 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
         if (terrain.treesNear(x, z, G.rootReach).length > 0) treesOnRock++;
       }
     }
+  }
+
+  // ── The corridor, and the cuttings in it (R31, R34) ──────────────────
+  // Walked along the road rather than swept over the map, because the
+  // question is about the ground BESIDE THE ROAD and nothing else: how much
+  // of the country survives the verge cone, and how much of what survives
+  // is a face the road was cut through. Both are read off `heightAt` — the
+  // terrain field, which is what the game draws and the car rides — where
+  // every other check in this metric reads the bare geology underneath it.
+  const C = G.corridor;
+  const CUT = G.cut;
+  const flanks: number[] = [];
+  let cutSides = 0;
+  let sides = 0;
+  let walledRun = 0;
+  let walledWorst = 0;
+  let walled = 0;
+  let deepest = 0;
+  // Every tenth sample: 20 m of road, which is finer than the shortest
+  // hillside the 14 m ground lattice can hold in the first place.
+  const stride = 10;
+  for (let i = 0; i < track.samples.length; i += stride) {
+    const s = track.samples[i];
+    const cos = Math.cos(s.heading);
+    const sin = Math.sin(s.heading);
+    let bothWalled = true;
+    for (const side of [-1, 1]) {
+      let rise = 0;
+      let cut = 0;
+      for (let d = C.probe.from; d <= C.probe.to; d += C.probe.step) {
+        const x = s.x + side * d * cos;
+        const z = s.z - side * d * sin;
+        rise = Math.max(rise, terrain.heightAt(x, z) - s.elevation);
+        cut = Math.max(cut, terrain.cutAt(x, z));
+      }
+      flanks.push(rise);
+      sides++;
+      if (cut >= CUT.face) cutSides++;
+      else bothWalled = false;
+      if (cut >= CUT.face && rise > deepest) {
+        deepest = rise;
+        findings.push({
+          code: "ground.cut",
+          severity: "note",
+          message: `the road runs through a ${rise.toFixed(0)} m cutting @${s.s.toFixed(0)} m`,
+          at: { x: s.x, z: s.z },
+          value: rise,
+        });
+      }
+    }
+    // ...and a run with a face up BOTH sides at once is not a cutting any
+    // more, it is a corridor with nowhere to go. Measured as a run rather
+    // than as a share, because a hundred scattered metres of it is a stage
+    // with rock on it and three hundred consecutive is a tunnel.
+    if (bothWalled) {
+      walledRun += stride * track.step;
+      if (walledRun > walledWorst) walledWorst = walledRun;
+      if (walledRun > CUT.walled) walled += stride * track.step;
+    } else walledRun = 0;
+  }
+  flanks.sort((a, c) => a - c);
+  const corridorRise = percentile(flanks, 0.75);
+  const cutShare = sides > 0 ? cutSides / sides : 0;
+  const walledShare = track.length > 0 ? walled / track.length : 0;
+  if (corridorRise < C.rise.min) {
+    findings.push({
+      code: "ground.corridor",
+      severity: "warn",
+      message: `the ground beside the road stands only ${corridorRise.toFixed(
+        1,
+      )} m over it — the stage is a ribbon on a table, whatever the country behind it is doing`,
+      value: C.rise.min - corridorRise,
+    });
+  }
+  if (walledShare > CUT.walledShare) {
+    findings.push({
+      code: "ground.walled",
+      severity: "warn",
+      message: `${(walledShare * 100).toFixed(0)}% of the stage runs walled in on both sides (worst run ${walledWorst.toFixed(
+        0,
+      )} m) — a cutting is a place, not a stage`,
+      value: walledShare,
+    });
   }
 
   heights.sort((a, c) => a - c);
@@ -259,6 +358,27 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       weight: 1.5,
       value: treesOnRock / Math.max(1, bareCells),
     },
+    {
+      // Weighted like `relief`, because it is the same claim asked where it
+      // matters. A stage is looked at from the road, and this is the only
+      // check in the metric standing there.
+      id: "corridor",
+      label: "the road runs THROUGH the country, not across it (R31)",
+      score: within(corridorRise, C.rise, C.slack),
+      weight: 1.5,
+      value: corridorRise,
+    },
+    {
+      id: "cut",
+      label: "where the road cannot go round rock it goes through it (R34)",
+      score:
+        within(cutShare, CUT.share, CUT.slack) *
+        // ...and a stage walled in on both sides for a quarter of its
+        // length has cut too much, however good the share looks.
+        (1 - Math.min(1, Math.max(0, walledShare - CUT.walledShare) / CUT.walledShare)),
+      weight: 1,
+      value: cutShare,
+    },
   ];
 
   return {
@@ -284,6 +404,10 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       soilOnCliffs,
       bareCells,
       treesOnRock,
+      corridorRise,
+      cutShare,
+      walledShare,
+      deepestCut: deepest,
     },
     ms: Date.now() - started,
   };
