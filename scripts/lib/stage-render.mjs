@@ -94,7 +94,13 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
 
   // ── Frame: the road, then as much country as the picture has room for ──
   const b = track.bounds;
-  const pad = 60;
+  // Country around the road, m. A SHARE of what is being framed rather than
+  // a fixed sixty: at a whole stage's scale sixty metres is a margin, and
+  // at a junction's it is three times the thing being looked at — so every
+  // close-up came out at the same hundred and sixty metres across whatever
+  // `--span` asked for, which is how a mouth can look fine in the picture
+  // meant to show it and wrong to anybody who zooms in.
+  const pad = Math.max(6, 0.08 * Math.max(b.maxX - b.minX, b.maxZ - b.minZ));
   const spanX = b.maxX - b.minX + pad * 2;
   const spanZ = b.maxZ - b.minZ + pad * 2;
   const scale = Math.min(width / spanX, height / spanZ);
@@ -215,6 +221,56 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
     }
     return best;
   };
+  /** R17 — CUT a polygon at the main road's edge, keeping the part OUTSIDE
+   * the sealed mat; null where nothing of it is left. The dirt road stops
+   * at that line, and a cut made by dropping whole bands is quantised to
+   * the band's own size — a metre across, two along — which is a staircase
+   * where a junction wants an edge. Clipping puts the boundary exactly on
+   * the line.
+   *
+   * The edge is `|across| = width / 2` in the junction's own frame, so each
+   * side of the main road is one half-plane and Sutherland-Hodgman does it
+   * in four points. Only junctions the polygon actually reaches along the
+   * road are asked, which is what makes this cheap enough per band. */
+  const cutAtMain = (world) => {
+    let poly = world;
+    for (const j of track.junctions) {
+      const sin = Math.sin(j.heading);
+      const cos = Math.cos(j.heading);
+      const half = j.width / 2;
+      let side = 0;
+      let reaches = false;
+      for (const [x, z] of poly) {
+        const dx = x - j.x;
+        const dz = z - j.z;
+        if (Math.abs(dx * sin + dz * cos) > j.reach) continue;
+        reaches = true;
+        const across = dx * cos - dz * sin;
+        if (Math.abs(across) < half) side += across >= 0 ? 1 : -1;
+      }
+      if (!reaches || side === 0) continue;
+      const keep = side >= 0 ? 1 : -1;
+      // Inside the kept half-plane means out past the main road's edge, on
+      // this polygon's own side of it.
+      const depth = ([x, z]) => keep * ((x - j.x) * cos - (z - j.z) * sin) - half;
+      const out = [];
+      for (let i = 0; i < poly.length; i++) {
+        const p = poly[i];
+        const q = poly[(i + 1) % poly.length];
+        const dp = depth(p);
+        const dq = depth(q);
+        if (dp >= 0) out.push(p);
+        if (dp >= 0 !== dq >= 0) {
+          const t = dp / (dp - dq);
+          out.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]);
+        }
+      }
+      if (out.length < 3) return null;
+      poly = out;
+    }
+    return poly;
+  };
+
   /** How much gravel the tarmac wears at the mouth — the
    * smear every car turning out of the dirt road drops on the seal, which
    * goes the OTHER way and is the only thing that crosses the edge. */
@@ -313,13 +369,18 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
         const a1 = l1 * wideA + shiftA;
         const c0 = l0 * wideC + shiftC;
         const c1 = l1 * wideC + shiftC;
+        const quad = [
+          [a.x + ar.x * a0, a.z + ar.z * a0],
+          [c.x + cr.x * c0, c.z + cr.z * c0],
+          [c.x + cr.x * c1, c.z + cr.z * c1],
+          [a.x + ar.x * a1, a.z + ar.z * a1],
+        ];
+        // R17 — the dirt road is CUT at the sealed road's edge, on the line
+        // itself rather than at whichever band happened to straddle it.
+        const cut = c.surface === "gravel" ? cutAtMain(quad) : quad;
+        if (!cut) continue;
         canvas.poly(
-          [
-            [px(a.x + ar.x * a0), pz(a.z + ar.z * a0)],
-            [px(c.x + cr.x * c0), pz(c.z + cr.z * c0)],
-            [px(c.x + cr.x * c1), pz(c.z + cr.z * c1)],
-            [px(a.x + ar.x * a1), pz(a.z + ar.z * a1)],
-          ],
+          cut.map(([x, z]) => [px(x), pz(z)]),
           shade(color, light),
         );
       }
@@ -381,16 +442,22 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
       if (c.surface === "water" || c.deck != null) continue;
       const ar = { x: Math.cos(a.heading), z: -Math.sin(a.heading) };
       const cr = { x: Math.cos(c.heading), z: -Math.sin(c.heading) };
-      const band = (l0, l1, color) =>
-        canvas.poly(
-          [
-            [px(a.x + ar.x * l0), pz(a.z + ar.z * l0)],
-            [px(c.x + cr.x * l0), pz(c.z + cr.z * l0)],
-            [px(c.x + cr.x * l1), pz(c.z + cr.z * l1)],
-            [px(a.x + ar.x * l1), pz(a.z + ar.z * l1)],
-          ],
-          color,
-        );
+      const band = (l0, l1, color, cut = false) => {
+        const quad = [
+          [a.x + ar.x * l0, a.z + ar.z * l0],
+          [c.x + cr.x * l0, c.z + cr.z * l0],
+          [c.x + cr.x * l1, c.z + cr.z * l1],
+          [a.x + ar.x * l1, a.z + ar.z * l1],
+        ];
+        // The rally's own marking is the dirt road's, so it is cut where
+        // the dirt road is: on the sealed road's edge, at that angle.
+        const poly = cut ? cutAtMain(quad) : quad;
+        if (poly)
+          canvas.poly(
+            poly.map(([x, z]) => [px(x), pz(z)]),
+            color,
+          );
+      };
       if (c.surface === "asphalt") {
         if (!branch && minorAt(c)) continue;
         for (const side of [-1, 1]) {
@@ -404,15 +471,11 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
         if (c.s % 9 < 3) band(-0.2, 0.2, ROAD.marking);
       } else {
         const stripe = Math.floor(c.s / 4) % 2 === 0 ? ROAD.rumbleRed : ROAD.rumbleWhite;
-        for (const side of [-1, 1]) {
-          // R17 — the rally's own marking stops at the seal with the road
-          // it belongs to. A striped edge running on across the tarmac is
-          // the stage marking somebody else's carriageway.
-          const lat = (half - 0.45) * side;
-          const past = pastMainEdge(c.x + cr.x * lat, c.z + cr.z * lat);
-          if (past !== null && past < 0) continue;
-          band((half - 0.9) * side, half * side, stripe);
-        }
+        // R17 — the rally's own marking stops at the seal with the road it
+        // belongs to: a striped edge running on across the tarmac is the
+        // stage marking somebody else's carriageway. Cut on the line, so it
+        // ends where the road does rather than a marker short of it.
+        for (const side of [-1, 1]) band((half - 0.9) * side, half * side, stripe, true);
       }
     }
   };

@@ -1008,14 +1008,40 @@ function createCompiler(
    * minor arm is the unsealed one, so which side of the meeting point it
    * lies on follows from `joining` alone: the stage ARRIVES at a joining
    * junction on the dirt and LEAVES a parting one on it. */
-  const mouthFlare = (sample: TrackSample): number => {
+  /** R17 — which side each junction's mouth opens on, in the ROUTE's own
+   * lateral frame: the outside of the corner the route turns through, read
+   * off the sample at the meeting point and then held for the whole mouth.
+   *
+   * Read per sample instead, it flips halfway: a junction's corner unwinds
+   * over the last few metres, its curvature crosses zero, and the mat's
+   * wide side jumps from one edge to the other inside one mouth. Which side
+   * is the outside is a fact about the JUNCTION, so it is decided once. */
+  const mouthSides = new Map<RoadJunction, 1 | -1>();
+  const outerOf = (junction: RoadJunction): 1 | -1 => {
+    let side = mouthSides.get(junction);
+    if (side !== undefined) return side;
+    let best = Infinity;
+    let curvature = 0;
+    for (const sample of track.samples) {
+      const d = Math.abs(sample.s - junction.s);
+      if (d >= best) continue;
+      best = d;
+      curvature = sample.curvature;
+    }
+    side = curvature >= 0 ? -1 : 1;
+    mouthSides.set(junction, side);
+    return side;
+  };
+
+  const mouthFlare = (sample: TrackSample): { extra: number; outer: 1 | -1 } => {
     // The mouth belongs to the DIRT road. Said here rather than left to the
     // throat arithmetic, because the surface flip and the throat are two
     // measurements of the same crossing taken different ways, and a sample
     // between the two answers would otherwise get the full mouth laid on a
     // piece of tarmac — which a paving machine does not do (R33).
-    if (sample.surface !== "gravel") return 0;
+    if (sample.surface !== "gravel") return { extra: 0, outer: 1 };
     let widest = 0;
+    let outer: 1 | -1 = 1;
     for (const junction of track.junctions) {
       const d = junction.joining ? junction.s - sample.s : sample.s - junction.s;
       if (d < 0 || d > mouthRun) continue;
@@ -1035,9 +1061,12 @@ function createCompiler(
       // road: the tarmac's own samples never take a flare (R33).
       const t = out <= 0 ? 1 : 1 - out / mouthTaper;
       const extra = mouthWide * (1 - Math.sqrt(Math.max(0, 1 - t * t)));
-      if (extra > widest) widest = extra;
+      if (extra > widest) {
+        widest = extra;
+        outer = outerOf(junction);
+      }
     }
-    return widest;
+    return { extra: widest, outer };
   };
 
   /** R23/R24 — the ground a branch has to keep off, as a distance query:
@@ -1378,7 +1407,12 @@ function createCompiler(
     // plane already. Slewing that step would taper the mouth shut again at
     // exactly the place it exists to open.
     const flares: number[] = [];
-    for (let i = start; i < all.length; i++) flares[i] = mouthFlare(all[i]);
+    const outers: (1 | -1)[] = [];
+    for (let i = start; i < all.length; i++) {
+      const mouth = mouthFlare(all[i]);
+      flares[i] = mouth.extra;
+      outers[i] = mouth.outer;
+    }
     const raw = flares.slice();
     const slew = MOUTH_SLEW * SAMPLE_STEP;
     for (let i = start + 1; i < all.length; i++) {
@@ -1417,10 +1451,12 @@ function createCompiler(
         // The outside of a turn is the side away from where it bends, and a
         // junction corner always bends — `isJunctionTurn` only takes a
         // corner inside R17's angle band, so there is no straight case to
-        // fall back on.
-        const outer = sample.curvature >= 0 ? -1 : 1;
+        // fall back on — and which side that is belongs to the JUNCTION
+        // (`outerOf`), not to this sample: a corner unwinds over its last
+        // few metres, so a side read per sample flips halfway through one
+        // mouth and the mat's wide half jumps edges.
         sample.width = rawWidth[i] + flare;
-        sample.shift = (outer * flare) / 2;
+        sample.shift = (outers[i] * flare) / 2;
       }
     }
   };
