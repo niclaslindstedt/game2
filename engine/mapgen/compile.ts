@@ -21,7 +21,7 @@ import { createStageStream, generateStage } from "./generate.ts";
 import { createRng } from "../lib/prng.ts";
 import { cellKey } from "../lib/math.ts";
 import { hash2 } from "../lib/noise.ts";
-import { createLandField } from "./land.ts";
+import { createLandField, LAKE_Y } from "./land.ts";
 import { junctionFlat, junctionPlatformY, ROAD_CROSS } from "./road.ts";
 import { buildSpur, placeBlock, SPUR, type Spur } from "./spurs.ts";
 
@@ -445,16 +445,29 @@ function smoothstep(t: number): number {
 }
 
 /** R12 — the dip a ford sits in. Water lies FLAT at `bedDepth` below the
- * lowest rolling grade around it (so it reads as collected, never perched),
- * and the road eases down to it and back out over the aprons. Fords sit on
+ * lowest grade around it (so it reads as collected, never perched), and the
+ * road eases down to it and back out over the aprons. Fords sit on
  * straights, where the rolling profile advances 1:1 with arc, so the whole
  * dip can be shaped from local arc position alone. Returns the elevation
- * override for local position `u`, or null outside the dip. */
+ * override for local position `u`, or null outside the dip.
+ *
+ * The road's height at a local position comes in two halves and they are
+ * used differently (R34). `roll` is the road's own undulation, and the
+ * water is set under the LOWEST of it across the crossing so it reads as
+ * collected rather than perched on a local rise. `base` is the landscape
+ * the road is following, and the water is set against it at the crossing's
+ * MIDDLE — because a road descending through a crossing would otherwise
+ * put its water at the bottom of the whole window, and the apron would have
+ * to drop the road the crossing's entire fall in twenty metres. The
+ * landscape's trend belongs to the road; only the roll is searched.
+ *
+ * Both are asked AHEAD of the sample being emitted, which is why the
+ * segment's profile is walked before any of its samples are built. */
 function fordDip(
   plan: SegmentPlan,
   u: number,
-  rollS0: number,
-  rolling: (s: number) => number,
+  base: (u: number) => number,
+  roll: (u: number) => number,
 ): number | null {
   if (plan.feature !== "water" || plan.featureStart === undefined || plan.featureEnd === undefined)
     return null;
@@ -463,12 +476,18 @@ function fordDip(
   const to = plan.featureEnd + R.water.apron;
   if (u < from || u > to) return null;
   let low = Infinity;
-  for (let v = from; v <= to; v += 2) low = Math.min(low, rolling(rollS0 + v));
-  const water = low - R.water.bedDepth;
+  for (let v = from; v <= to; v += 2) low = Math.min(low, roll(v));
+  const water = base((plan.featureStart + plan.featureEnd) / 2) + low - R.water.bedDepth;
   if (u >= plan.featureStart && u <= plan.featureEnd) return water;
   const t = u < plan.featureStart ? (u - from) / R.water.apron : (to - u) / R.water.apron;
-  const base = rolling(rollS0 + u);
-  return base + (water - base) * smoothstep(t);
+  const here = base(u) + roll(u);
+  // ...and never BELOW the water, whatever the road was doing. On a road
+  // that is descending through the crossing the far apron's own grade can
+  // duck under the level the water was set at, and a road under its own
+  // ford is water standing on tarmac. Held at the water instead, which
+  // simply means the flat water reaches a little further — which is what a
+  // ford on a slope looks like.
+  return Math.max(water, here + (water - here) * smoothstep(t));
 }
 
 /** R13 — the deck a bridge carries the road across on. Where a ford dips
@@ -481,8 +500,8 @@ function fordDip(
 function bridgeDeck(
   plan: SegmentPlan,
   u: number,
-  rollS0: number,
-  rolling: (s: number) => number,
+  base: (u: number) => number,
+  roll: (u: number) => number,
 ): number | null {
   if (!isBridge(plan) || plan.featureStart === undefined || plan.featureEnd === undefined) {
     return null;
@@ -490,15 +509,42 @@ function bridgeDeck(
   const from = plan.featureStart - R.bridge.margin;
   const to = plan.featureEnd + R.bridge.margin;
   if (u < from || u > to) return null;
+  // R34 — the roll is searched, the landscape is read at the middle. Same
+  // split, and for the same reason, as the ford above: a deck pinned to the
+  // highest point of a road that is climbing through the crossing has to be
+  // ramped down from at the far end, and the ramp is a wall.
   let high = -Infinity;
-  for (let v = from; v <= to; v += 2) high = Math.max(high, rolling(rollS0 + v));
-  if (u >= plan.featureStart && u <= plan.featureEnd) return high;
+  for (let v = from; v <= to; v += 2) high = Math.max(high, roll(v));
+  const deck = base((plan.featureStart + plan.featureEnd) / 2) + high;
+  if (u >= plan.featureStart && u <= plan.featureEnd) return deck;
   const t = u < plan.featureStart ? (u - from) / R.bridge.margin : (to - u) / R.bridge.margin;
-  const base = rolling(rollS0 + u);
-  return base + (high - base) * smoothstep(t);
+  const here = base(u) + roll(u);
+  return here + (deck - here) * smoothstep(t);
 }
 
-type Cursor = { x: number; z: number; heading: number; s: number; rollS: number };
+type Cursor = {
+  x: number;
+  z: number;
+  heading: number;
+  s: number;
+  rollS: number;
+  /** R34 — the LANDSCAPE the road is laid along, at the cursor: the bare
+   * country's height, lagged and grade-clamped into something drivable
+   * (`R.elevation.follow`). The road's own rolling noise rides on this
+   * rather than being the whole of its height, which is what puts a stage
+   * down the valleys instead of at an arbitrary altitude the terrain then
+   * has to plane the country away to reach.
+   *
+   * Carried on the cursor because the filter is CAUSAL: it is the road
+   * builder walking forward, and it has to survive both a segment boundary
+   * and an endless stage's streaming. */
+  baseY: number;
+  /** ...and how fast it is climbing, m per m. R17's junction platform is a
+   * PLANE, and the plane has to lie on the road's whole grade: give it the
+   * roll's slope alone and a road following a hillside steps off the edge
+   * of its own junction. */
+  baseSlope: number;
+};
 
 type Compiler = {
   append: (plans: SegmentPlan[]) => void;
@@ -533,11 +579,71 @@ function createCompiler(
   paving: Paving,
   bumps: (s: number, surface: Surface, shaped: boolean) => number,
   widthAt: (s: number, surface: Surface, shaped: boolean) => number,
+  /** R34 — whether the road is laid ALONG the country (every generated
+   * stage) or at a height of its own (a synthetic rig). A rig is a
+   * measuring device: flat, smooth and repeatable, so a physics test
+   * measures the car and not the hillside it happens to have been built
+   * on. Handing it `rolling = () => 0` used to be enough to say so; with
+   * the road following the ground it is not, and a rig that quietly
+   * acquired a landscape is a suite of tests measuring the wrong thing. */
+  followsLand = true,
 ): Compiler {
-  const cursor: Cursor = { x: 0, z: 0, heading: 0, s: 0, rollS: 0 };
+  const cursor: Cursor = { x: 0, z: 0, heading: 0, s: 0, rollS: 0, baseY: 0, baseSlope: 0 };
   /** The bare country the stage is laid across — the branches steer by it
-   * so none of them drives out into a lake (R17). */
+   * so none of them drives out into a lake (R17), and (R34) the road's own
+   * height follows it. */
   const land = createLandField(track.seed, track.knobs);
+
+  /** R34 — one step of the road builder's eye: move the road's base toward
+   * the ground under it, but no faster than the eye smooths and no steeper
+   * than anything will drive. What comes out is a road that runs along the
+   * country and cuts or fills where the country will not have it.
+   *
+   * Exponential rather than linear so the response length means the same
+   * thing whatever the step is, and clamped after rather than before, so
+   * the clamp is a property of the ROAD and the lag a property of the
+   * builder — two rules, not one number doing both jobs badly. */
+  const F = R.elevation.follow;
+  /** The height the road is willing to follow the country to at a point:
+   * the ground, or the water's own freeboard where the ground is under it.
+   * A road goes OVER a lake on an embankment, never along the bed of one.
+   * The route's line is chosen without asking where the water is, so this
+   * is the only thing standing between a stage and eighteen metres of tarn
+   * on top of it — the START included, which is a point the route search
+   * does not choose at all.
+   *
+   * `roll` is the road's own undulation at this point, and it is subtracted
+   * because the freeboard is owed by the SURFACE a car drives on, not by
+   * the base underneath it. The roll swings several metres either way; a
+   * freeboard measured against the base alone lets the trough of it put the
+   * road back under the water it was lifted out of. */
+  const buildable = (x: number, z: number, roll: number): number =>
+    Math.max(land.heightAt(x, z), LAKE_Y + F.freeboard - roll);
+  if (followsLand) cursor.baseY = buildable(0, 0, rolling(0));
+
+  const followLand = (
+    base: number,
+    slope: number,
+    x: number,
+    z: number,
+    step: number,
+    roll: number,
+  ): { base: number; slope: number } => {
+    if (!followsLand) return { base, slope: 0 };
+    const ground = buildable(x, z, roll);
+    const want = base + (ground - base) * (1 - Math.exp(-step / F.lag));
+    // The gradient the road would like to be on here, then the two clamps:
+    // how steep it may be, and how fast that may CHANGE. The second is what
+    // rounds a hilltop off into a crest instead of leaving the brow the
+    // first one on its own builds.
+    let next = (want - base) / step;
+    const swing = F.crest * step;
+    if (next > slope + swing) next = slope + swing;
+    else if (next < slope - swing) next = slope - swing;
+    if (next > F.grade) next = F.grade;
+    else if (next < -F.grade) next = -F.grade;
+    return { base: base + next * step, slope: next };
+  };
   let openNote: Pacenote | null = null;
   /** R28 — where the last board actually STANDS, meters (the gap the rule
    * is quoted in is board to board, not corner to corner), and the arc
@@ -635,8 +741,11 @@ function createCompiler(
     // Joining, that is the tangent at the END of the corner and it points
     // BACK the way the tarmac came; leaving, the tangent at its start.
     const heading = joining ? at.heading + Math.PI : at.heading;
-    const y = rolling(at.rollS);
-    const slope = (rolling(at.rollS + 2) - rolling(at.rollS - 2)) / 4;
+    // R34 — the country the road is following here, plus its roll. The
+    // branch and its platform are built on the SAME height the route is at,
+    // so a junction is one plane whatever the ground under it was doing.
+    const y = at.baseY + rolling(at.rollS);
+    const slope = at.baseSlope + (rolling(at.rollS + 2) - rolling(at.rollS - 2)) / 4;
     // The minor road leaves the meeting point on that same tangent and
     // curves away. Traced from the junction OUTWARD, a corner the route
     // drove backwards through bends the other way.
@@ -1184,21 +1293,77 @@ function createCompiler(
         openNote = null;
       }
 
+      // R34 — the segment's own path, WALKED BEFORE ANY OF IT IS BUILT.
+      //
+      // It is one walk, not two. The road's base height follows the ground
+      // under it, so the profile cannot be a function of arc position that
+      // anything may evaluate at will: it has to be walked, in order, from
+      // where the last segment left the cursor. And a ford looks AHEAD —
+      // it needs the lowest grade across the whole crossing before it can
+      // decide where the water lies — so the walk has to be finished before
+      // the first sample of the segment is emitted.
+      //
+      // Which leaves exactly one safe shape: walk once into this array, and
+      // emit from the array. Walking it a second time to look ahead is the
+      // trap — a probe that integrates the same heading in a slightly
+      // different order diverges from the compiler by metres over a stage,
+      // and then the water is at one height and the road that wades it at
+      // another.
+      const path: {
+        x: number;
+        z: number;
+        heading: number;
+        s: number;
+        base: number;
+        slope: number;
+      }[] = [];
+      {
+        let h = cursor.heading;
+        let px = cursor.x;
+        let pz = cursor.z;
+        let ps = cursor.s;
+        let pr = cursor.rollS;
+        let baseY = cursor.baseY;
+        let baseSlope = cursor.baseSlope;
+        for (let i = 0; i < steps; i++) {
+          if (curvature !== 0) h += curvature * step;
+          px += Math.sin(h) * step;
+          pz += Math.cos(h) * step;
+          ps += step;
+          pr += step * straightness(curvature);
+          const next = followLand(baseY, baseSlope, px, pz, step, rolling(pr));
+          baseY = next.base;
+          baseSlope = next.slope;
+          path.push({ x: px, z: pz, heading: h, s: ps, base: baseY, slope: baseSlope });
+        }
+      }
+      /** The two halves of the road's height at a local position in this
+       * segment — the country it follows, and its own roll on top. The
+       * crossings read both, and read them differently (see `fordDip`); the
+       * samples simply add them. `u` is clamped to the segment, which is
+       * what the aprons either side of a crossing want anyway. */
+      const baseAt = (u: number): number =>
+        path[Math.max(0, Math.min(steps - 1, Math.round(u / step) - 1))].base;
+      const rollAt = (u: number): number => rolling(rollS0 + u);
+
       for (let i = 0; i < steps; i++) {
         const uPrev = i * step;
         const u = uPrev + step;
+        const at = path[i];
         if (flipAt >= 0 && uPrev < flipAt && u >= flipAt) pavedNow = !pavedNow;
-        if (curvature !== 0) cursor.heading += curvature * step;
-        cursor.x += Math.sin(cursor.heading) * step;
-        cursor.z += Math.cos(cursor.heading) * step;
-        cursor.s += step;
+        cursor.heading = at.heading;
+        cursor.x = at.x;
+        cursor.z = at.z;
+        cursor.s = at.s;
         cursor.rollS += step * straightness(curvature);
+        cursor.baseY = at.base;
+        cursor.baseSlope = at.slope;
         // The lip flag lands on the last ramp sample: the one the car
         // leaves. That sample sits at full lip height; past it the road is
         // back at grade, which is the drop that throws the car.
         const jump = lipAt >= 0 && uPrev < lipAt && u >= lipAt;
-        const dip = fordDip(built, u, rollS0, rolling);
-        const deckY = bridgeDeck(built, u, rollS0, rolling);
+        const dip = fordDip(built, u, baseAt, rollAt);
+        const deckY = bridgeDeck(built, u, baseAt, rollAt);
         // A crossing is a ford OR a deck, never both: the wheels go through
         // the water or ride over it (R13).
         const crossed = inCrossing(built, u);
@@ -1212,7 +1377,8 @@ function createCompiler(
           elevation:
             (dip ??
               deckY ??
-              rolling(cursor.rollS) +
+              at.base +
+                rolling(cursor.rollS) +
                 (jump ? (built.lipHeight ?? 2) : segmentElevation(built, u))) +
             // R33 — the grain, last: a ford's flat water and a bridge's deck
             // get none (the builder returns 0 for both), so the only thing
@@ -1315,6 +1481,34 @@ function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs, circuit =
   };
 }
 
+/** R22 — a circuit has to close IN HEIGHT as well as on the map.
+ *
+ * Its last sample lands on its first (that is what makes laps possible),
+ * but the road's height is walked forward along the country and there is
+ * nothing in that walk to make the last step arrive back where the first
+ * one started. What is left is a step at the start line: a car crossing it
+ * on lap two drops or climbs it in one sample, which is a wall.
+ *
+ * The correction is a RAMP, spread over the whole lap. Over kilometres it
+ * is a fraction of a percent of grade — under the road's own roll, under
+ * anything the physics or the analysis can see — where the same metres
+ * taken out at the line are a cliff. It is applied after every warp the
+ * compiler does (R17's platforms included) so nothing lands back on top of
+ * it, and the junction heights ride the same ramp so a platform still
+ * agrees with the road standing on it.
+ *
+ * Fords and decks ride it too, and have to: the water in a ford is at the
+ * road's own height by construction, so moving one without the other is
+ * how a crossing ends up perched. */
+function closeCircuitHeight(track: Track): void {
+  const samples = track.samples;
+  if (samples.length < 2 || track.length <= 0) return;
+  const step = samples[samples.length - 1].elevation - samples[0].elevation;
+  if (Math.abs(step) < 1e-6) return;
+  for (const s of samples) s.elevation -= step * (s.s / track.length);
+  for (const j of track.junctions) j.y -= step * (j.s / track.length);
+}
+
 /** Compile the GENERATED stage for a seed at a menu length. Finite lengths
  * build the whole stage; `endless` builds the opening stretch and hands
  * back a track that extends itself (track.extend) as the run progresses.
@@ -1338,6 +1532,7 @@ export function compileStage(
     createCompiler(track, rolling, paving, bumps, widthAt).append(
       generateStage(seed, length, dials, shape),
     );
+    if (circuit) closeCircuitHeight(track);
     return track;
   }
   const track = emptyTrack(seed, true, dials);
@@ -1375,6 +1570,7 @@ export function compileTrack(
     buildPaving(seed, dials.asphalt),
     () => 0,
     () => 1,
+    false,
   ).append(segments);
   return track;
 }

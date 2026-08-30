@@ -57,7 +57,7 @@ const USAGE = `usage:
                          [--length short|medium|long] [--shape sprint|circuit] [--laps N]
                          [--weather clear|rain|storm|fog] [--time day|dusk|night] [--season …]
                          [--difficulty easy|medium|hard] [--cars N] [--mass-start] [--alone]
-                         [--elevation|--water|--trees|--asphalt|--width 0..1]
+                         [--elevation|--water|--trees|--asphalt|--width|--steepness 0..1]
                          [--out FILE]
   npm run tape -- replay FILE [--difficulty easy,medium,hard] [--splits]
   npm run tape -- show FILE`;

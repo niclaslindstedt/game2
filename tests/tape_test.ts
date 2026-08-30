@@ -26,7 +26,7 @@ const STAGE: TapeStage = {
   length: "short",
   shape: "sprint",
   laps: 1,
-  knobs: { elevation: 0.5, water: 0.5, trees: 0.5, asphalt: 0.25, width: 0.55 },
+  knobs: { elevation: 0.5, steepness: 0.5, water: 0.5, trees: 0.5, asphalt: 0.25, width: 0.55 },
   timeOfDay: "day",
   weather: "clear",
   season: "summer",
@@ -168,13 +168,23 @@ describe("the run tape", () => {
   });
 
   it("gets harder as the difficulty climbs", () => {
-    // Over several stages rather than one, because a PLACE is an integer
-    // over a field of fourteen crews who have real accidents: one crew
-    // putting it in the trees on one road moves the same lap a place either
-    // way, and a single seed reads that coin-flip as a broken ladder. The
-    // claim being made is about the ladder, so it is asked of the ladder —
-    // several roads at once, where one crew's bad afternoon cannot carry it.
-    const totals = [0, 0, 0];
+    // Over several stages rather than one, because one crew putting it in
+    // the trees on one road is a real event and a single seed reads that
+    // coin-flip as a broken ladder. The claim is about the ladder, so it is
+    // asked of the ladder — several roads at once, where one crew's bad
+    // afternoon cannot carry it.
+    //
+    // Measured as a GAP IN SECONDS to the field's median, and not as the
+    // recorded lap's integer PLACE, because place has almost no resolution
+    // where this lap lands. A bot's own lap comes home in the last third of
+    // its own field; down there the crews are seconds apart and a whole
+    // step of the ladder — measured at 62.2 s / 58.0 s / 56.2 s median over
+    // six roads — is worth a place or none at all, at random. The ladder was
+    // healthy on every one of those measurements while this assertion read
+    // 38 against 37 and called it broken. Seconds are what the difficulty
+    // actually moves; places are what that buys, and only where the field is
+    // close enough for a second to be worth one.
+    const gaps = [0, 0, 0];
     for (const seed of [42, 7, 21]) {
       const stage = { ...STAGE, seed };
       const recorded = race({
@@ -185,19 +195,28 @@ describe("the run tape", () => {
         driver: { kind: "bot" as const },
       });
       (["easy", "medium", "hard"] as const).forEach((difficulty, i) => {
-        totals[i] += placeAmongField({
+        const { rows } = placeAmongField({
           stage,
           field: { difficulty, cars: 15, massStart: false },
           time: recorded.time,
           carId: CAR.id,
-        }).place;
+        });
+        // The field's own median time, the driver's row left out of it: the
+        // pace of the crews the lap is being measured against.
+        const field = rows
+          .filter((row) => !row.you && row.time !== null)
+          .map((row) => row.time as number)
+          .sort((a, b) => a - b);
+        expect(field.length).toBeGreaterThan(8);
+        gaps[i] += recorded.time - field[Math.floor(field.length / 2)];
       });
     }
-    // The same lap is worth no better a place against a better field. This
-    // is the assertion the whole calibration rests on: if it ever fails, the
-    // difficulty ladder has stopped being a ladder.
-    expect(totals[0]).toBeLessThanOrEqual(totals[1]);
-    expect(totals[1]).toBeLessThanOrEqual(totals[2]);
+    // The same lap is worth LESS against a better field — it stands further
+    // behind the crews it is being measured against. This is the assertion
+    // the whole calibration rests on: if it ever fails, the difficulty
+    // ladder has stopped being a ladder.
+    expect(gaps[0]).toBeLessThan(gaps[1]);
+    expect(gaps[1]).toBeLessThan(gaps[2]);
     // Three roads and three fields of fourteen is a hundred and twenty-six
     // stages driven for one assertion — worth it for the one the whole
     // calibration rests on, but not inside the default budget.

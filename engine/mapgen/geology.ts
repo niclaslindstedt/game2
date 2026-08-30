@@ -109,14 +109,25 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
   // beside the road here, exactly as they reach the road itself.
   const relief = knobScale(knobs.elevation, R.elevation.knob);
   const ponds = knobScale(knobs.water, R.wet.ponds);
-  // The one number that says which country this is. Drawn from the seed,
-  // not from a dial: a stage is set SOMEWHERE, and where is not a slider a
-  // player was asked about.
-  const smoothness = rng.range(G.smoothness.min, G.smoothness.max);
+  // R34 — the one number that says which country this is, drawn from the
+  // seed inside the band the `steepness` dial opens. The dial moves the
+  // BAND and the seed picks the position in it, so a stage is still set
+  // somewhere: what the dial says is which countries a seed may land in,
+  // not which country this one is.
+  const smoothness = rng.range(
+    knobScale(knobs.steepness, { min: G.smoothness.min, max: G.steep.sharp.min }),
+    knobScale(knobs.steepness, { min: G.smoothness.max, max: G.steep.sharp.max }),
+  );
+  // ...and how big the relief that country holds is. Sharp country stands
+  // its steps and its crests higher as well as steeper — the same fault the
+  // ice would have worn into a hillside is a cliff where it did not.
+  const rise = knobScale(knobs.steepness, G.steep.rise);
   // The ice took the fine grain with it, worked the sharp crests into
   // whalebacks, and wore the fault steps back into slopes.
   const grainAmp = G.bedrock.grain.amp * (1 - G.grain.planed * smoothness);
-  const peak = G.bedrock.mountain.height * (G.mountain.tall - G.mountain.planed * smoothness);
+  const peak =
+    G.bedrock.mountain.height * rise * (G.mountain.tall - G.mountain.planed * smoothness);
+  const escRise = G.bedrock.escarpment.rise * rise;
   const escSpan =
     G.bedrock.escarpment.span.min +
     (G.bedrock.escarpment.span.max - G.bedrock.escarpment.span.min) * smoothness;
@@ -128,10 +139,18 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
   const layers = (
     x: number,
     z: number,
-  ): { rock: number; broad: number; face: number; sunk: number } => {
+  ): { rock: number; broad: number; face: number; sheer: number; sunk: number } => {
     const swell = (valueNoise(x, z, G.bedrock.swell.scale, noiseSeed) - 0.5) * G.bedrock.swell.amp;
-    const hills =
-      (valueNoise(x, z, G.bedrock.hills.scale, noiseSeed + 7) - 0.5) * G.bedrock.hills.amp;
+    const H = G.bedrock.hills;
+    const hillRaw = valueNoise(x, z, H.scale, noiseSeed + 7);
+    const hills = (hillRaw - 0.5) * H.amp;
+    // ...and how steep the hills are HERE, differenced rather than read off
+    // a shaping function, because value noise has none to read. See
+    // `hills.grade`: this is the only gradient the module pays for and the
+    // soil model does not work without it.
+    const hx = (valueNoise(x + H.grade, z, H.scale, noiseSeed + 7) - hillRaw) / H.grade;
+    const hz = (valueNoise(x, z + H.grade, H.scale, noiseSeed + 7) - hillRaw) / H.grade;
+    const roll = clamp01((Math.hypot(hx, hz) * H.amp * relief) / H.steep);
     const grain = (valueNoise(x, z, G.bedrock.grain.scale, noiseSeed + 13) - 0.5) * grainAmp;
 
     // The mountain chains: a slow mask says where one stands, a ridged
@@ -180,20 +199,34 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     const sunk = seaMask * (b.depth + ponds * b.deeper) + pond * (p.depth + ponds * p.deeper);
 
     const rock =
-      (swell + hills + grain + mountain + esc * G.bedrock.escarpment.rise) * relief -
-      sunk +
-      G.bedrock.datum;
+      (swell + hills + grain + mountain + esc * escRise) * relief - sunk + G.bedrock.datum;
     // The water table follows the land without its detail: the swell and
     // the mountains, and nothing finer. That is what puts a mire in a
     // hollow the broad shape does not know about.
     const broad = (swell + mountain) * relief - sunk + G.bedrock.datum;
-    // How steep it is here, 0..1 — the flank of a mountain and the face of
-    // an escarpment, which is everywhere the ice and the rain strip the
-    // ground bare.
+    // How steep it is here, 0..1, and it comes in TWO strengths because two
+    // rules ask it and they are not asking the same question.
+    //
+    // `face` is all of the slope there is — a mountain's flank, an
+    // escarpment's step and the side of an ordinary hill. That is what
+    // strips SOIL: till is deposited by water slowing down, and water does
+    // not slow down on a hillside either.
+    //
+    // `sheer` leaves the hills out. It is what says the ground is too steep
+    // to HOLD WATER, and a hill is not: a hollow on a broad rise still
+    // gathers a mire in it, and the pond at the bottom of a sloping field
+    // is the most ordinary water there is. Handing the pits the full face
+    // shuts them off over most of a hilly country, and what is left is the
+    // deep sea basins — a map whose every shoreline drops away too steeply
+    // for a car to drive back out of.
+    //
+    // The max and not the sum, in both: a hillside on a mountain flank is
+    // scoured once.
     const flank = mask * 4 * crest * (1 - crest);
     const step = 4 * esc * (1 - esc);
-    const face = clamp01(Math.max(flank, step));
-    return { rock, broad, face, sunk };
+    const sheer = clamp01(Math.max(flank, step));
+    const face = clamp01(Math.max(sheer, roll));
+    return { rock, broad, face, sheer, sunk };
   };
 
   /** THE PITS — how far the ground is cut BELOW THE WATER TABLE here, m, and
@@ -287,8 +320,10 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     x: number,
     z: number,
   ): { rock: number; soil: number; surface: number; broad: number; face: number } => {
-    const { rock, broad, face } = layers(x, z);
-    const pit = pitAt(x, z, rock, face);
+    const { rock, broad, face, sheer } = layers(x, z);
+    // `sheer` and not `face`: what stops a hollow holding water is a
+    // mountainside, not a hill (see `layers`).
+    const pit = pitAt(x, z, rock, sheer);
     const steep = Math.max(face, pit.rim);
     const soil = soilOf(x, z, rock, broad, steep);
     const dry = rock + soil - G.soil.datum;

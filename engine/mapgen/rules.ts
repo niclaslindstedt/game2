@@ -130,6 +130,30 @@
 //       sixty metres away and twenty metres below took fourteen metres of
 //       hillside out from under the route, and left its ribbon hanging in
 //       the air with a vertical face down the side of it.
+//   R34 Where a road meets ground it cannot go round, it is CUT THROUGH it,
+//       and the face it is cut through is the face that ground would stand
+//       at. R31 says the country beside a road may only rise at a grade a
+//       car could climb, and taken alone that is a country with no rock in
+//       it: every shoulder the road forces gets battered back into the same
+//       gentle ramp, and a stage laid across mountains reads as a stage laid
+//       across a lawn. So the grade R31 holds the country to is not one
+//       number, it is the ANGLE OF REPOSE OF WHAT IS THERE:
+//         · Deep till slumps. It is battered back to R31's own climb, and a
+//           car that runs wide onto it comes back down onto the road.
+//         · Rock stands. Where the cover is thin the face is left standing at
+//           the rock's own angle, and it reads as what it is — a cutting,
+//           with the bedrock showing, nothing rooted on it and stone at its
+//           foot.
+//       ...and how far it is worth blasting depends on what the road is
+//       worth. A SEALED road is a public road somebody engineered: it holds
+//       its line and takes the shoulder out of the way. A gravel road is
+//       scraped in by a grader for the cost of the diesel, and a grader goes
+//       ROUND — so an unsealed stage gets the shallow cut and the sealed
+//       sections get the walls. `knobs.steepness` says how hard the country
+//       is on both counts.
+//       The BENCH is untouched either way: a cut face begins outside the
+//       flat ground R31 keeps beside every road, so a car running wide has
+//       the same room it always had before it reaches the rock.
 
 /** Sample spacing along the compiled centerline, meters. It lives here
  * because it is not only the compiler's business: a search that has to land
@@ -168,6 +192,15 @@ export type StageKnobs = {
    * boulevard with room to throw the car at a corner and still be on the
    * road when it lands. */
   width: number;
+  /** R34 — how STEEP the country stands. Not how HIGH it stands, which is
+   * `elevation`: this is the angle the same relief is held at. At 0 the
+   * ice has been over everything — long slopes, whaleback summits, fault
+   * steps worn back into hillsides, and a road that is graded gently into
+   * whatever it crosses. At 1 the rock keeps its faces, and where the road
+   * has to go through a shoulder of it rather than round, it goes through
+   * a CUT: a blasted face standing over the verge instead of a bank
+   * battered back to something a car could climb. */
+  steepness: number;
 };
 
 /** The default dial positions — the stage the rules built before the knobs
@@ -183,6 +216,9 @@ export const DEFAULT_KNOBS: StageKnobs = {
   // The width the stage vocabulary — turn radii, the bot's line, the drift
   // tuning — was measured against.
   width: 0.55,
+  // Middling country: rock faces where the road has to force a shoulder,
+  // worn slopes everywhere it does not.
+  steepness: 0.5,
 };
 
 function clamp01(v: number): number {
@@ -199,6 +235,7 @@ export function resolveKnobs(knobs?: Partial<StageKnobs>): StageKnobs {
     trees: clamp01(knobs?.trees ?? DEFAULT_KNOBS.trees),
     asphalt: clamp01(knobs?.asphalt ?? DEFAULT_KNOBS.asphalt),
     width: clamp01(knobs?.width ?? DEFAULT_KNOBS.width),
+    steepness: clamp01(knobs?.steepness ?? DEFAULT_KNOBS.steepness),
   };
 }
 
@@ -398,6 +435,52 @@ export const STAGE_RULES = {
      * dial still rolls a little (a billiard table is not a rally stage),
      * a full one doubles the hills the road climbs. */
     knob: { min: 0.4, max: 2 },
+
+    /** R34 — and what the roll RIDES ON. A road is not a profile somebody
+     * drew and then laid on a country: it is laid ALONG the country, down
+     * the valleys, and it climbs only where it has to get over something.
+     * The rolling noise above is the road's own character on top of that,
+     * not the whole of its height.
+     *
+     * So the road follows the bare landscape, through a lag and two clamps
+     * — which between them are what a road IS. The lag is a road builder's
+     * eye: it takes the broad shape of the country and ignores every
+     * hummock, so the road runs level across ground that is not. The clamps
+     * are what anything is willing to drive over. Where the country is
+     * gentler than they are the road simply follows it; where it is not the
+     * road cannot, and the difference is CUT AND FILL — the embankment
+     * across a hollow and the cutting through a shoulder, which is where
+     * R34's rock faces come from and the only place they come from.
+     *
+     * All three are causal and per-step, so an endless stage streams
+     * through this unchanged and a stage is still a pure function of its
+     * seed.
+     *
+     * `lag` is the response length, m. `grade` is the gradient, and has to
+     * leave room under `ANALYSIS.drive.grade` for the rolling noise riding
+     * on top of it, which is where the rest of that budget goes — the two
+     * ADD, and a follower given the whole budget puts every stage over it.
+     *
+     * `crest` is the VERTICAL CURVATURE, per m: how fast the gradient
+     * itself may change. It is the clamp that stops the road being a ramp.
+     * A gradient limit alone says nothing about the corner between two
+     * gradients, so a follower that ran up to its cap and straight back
+     * down built a brow at every hilltop the country had — the sim came
+     * back with air time nearly doubled and three cars in the field wrecked
+     * on the landings. Lengthening the lag fixes that by refusing to follow
+     * the country at all, which takes the cuttings with it; this fixes it
+     * where it happens. It is a real road-building number too: this is the
+     * vertical curve every crest on a road is designed around, and 0.0035
+     * is a radius of about 280 m.
+     *
+     * `freeboard` is the one thing the road refuses to follow the country
+     * into: the water. A road builder goes round a lake or builds a
+     * causeway over it, and never lays a carriageway on a lake bed — so
+     * the height the road follows is the ground or this far over the water
+     * table, whichever is higher, and low ground crossed at that height
+     * comes out as the embankment it should be. Without it a stage that
+     * routes across a tarn drives along the bottom of it. */
+    follow: { lag: 200, grade: 0.075, crest: 0.004, freeboard: 3.5 },
   },
 
   /** R32 — THE GROUND, IN LAYERS. What the country beside the road is made
@@ -414,8 +497,38 @@ export const STAGE_RULES = {
   geology: {
     /** How glacially planed a country may be, 0 (alpine) to 1 (shield).
      * Neither end is reached: a stage with no texture at all reads as a
-     * heightmap, and one with nothing worn is a set of teeth. */
-    smoothness: { min: 0.15, max: 0.95 },
+     * heightmap, and one with nothing worn is a set of teeth.
+     *
+     * The band is what `steepness` moves (see `steep` below); the position
+     * INSIDE it is still drawn from the seed, because a stage is set
+     * somewhere and the dial only says which countries the seed may land
+     * in. This pair is the worn end, held for `steepness` 0. */
+    smoothness: { min: 0.5, max: 0.95 },
+
+    /** R34 — where the `steepness` dial reaches into the rock.
+     *
+     * `sharp` is the smoothness band at the top of the dial: the ice barely
+     * touched this country, so it keeps its crests, its fine grain and its
+     * fault steps as cliffs. Reading between the two bands rather than
+     * replacing one number with a dial is what keeps `smoothness` a
+     * per-seed property — every dial position still builds a range of
+     * countries, it just builds a different range.
+     *
+     * `rise` is the same dial on the SIZE of the relief, because sharp
+     * country does not only hold its slopes steeper, it stands them
+     * higher: the same escarpment the ice would have worn into a hillside
+     * is a hundred-foot step where it did not. */
+    steep: {
+      sharp: { min: 0.08, max: 0.5 },
+      rise: { min: 0.85, max: 1.45 },
+      /** ...and how much steeper the ground BESIDE THE ROAD is allowed to
+       * lean at the top of the dial — the per-side embankment grade in
+       * `terrain.ts`, which is what actually stands a hillside up next to
+       * the car. A multiplier on the rising half of the band only: the
+       * falling half is a drop off the road's shoulder, and how far a car
+       * that goes over the edge falls is not what this dial is about. */
+      bank: { min: 0.8, max: 1.9 },
+    },
 
     /** How much of the finest octave the ice planes off at full
      * smoothness — the grain that separates a weathered hillside from a
@@ -430,20 +543,41 @@ export const STAGE_RULES = {
     bedrock: {
       /** The broad swell of the country — the wave a stage crosses two or
        * three of. `amp` is peak to trough. */
-      swell: { scale: 430, amp: 52 },
-      /** Hills riding on it... */
-      hills: { scale: 150, amp: 16 },
+      swell: { scale: 430, amp: 54 },
+      /** Hills riding on it. This is the layer a DRIVER reads: the swell is
+       * slower than a stage is long, and the grain is finer than a corner,
+       * so a hill you crest and a hollow you drop into is this one and
+       * nothing else. It is deliberately short and tall enough to hold a
+       * real grade — a country whose only shape is its swell is the country
+       * you can see clean across, which is a rare view even on a plain. */
+      hills: {
+        scale: 130,
+        amp: 21,
+        /** The step the hills' own GRADIENT is differenced over, m, and the
+         * grade at which the ground it describes counts as fully scoured.
+         *
+         * This is the only derivative `geology.ts` pays for, and it is not
+         * optional. Every other steepness term in the module comes free off
+         * a smoothstep — a mountain flank, an escarpment face, a pit's rim
+         * — but value noise hands back nothing, and the hills are the layer
+         * that carries the grade a driver actually reads. Without it the
+         * soil model cannot see the slopes it is supposed to strip, and the
+         * analysis quite correctly reports two metres of till lying down
+         * the side of every hill on the map. */
+        grade: 26,
+        steep: 0.55,
+      },
       /** ...and the fine grain the ice takes away. */
-      grain: { scale: 46, amp: 4 },
+      grain: { scale: 46, amp: 4.5 },
       /** Where a mountain chain stands (`from` is the share of the mask
        * below which there is none) and how high its crest gets. */
-      mountain: { scale: 1150, from: 0.58, height: 70 },
+      mountain: { scale: 1150, from: 0.57, height: 72 },
       /** ...and where its crest RUNS. */
       ridge: { scale: 300 },
       /** The fault steps: a wandering line the ground drops over. `span`
        * is how much of the noise the step is spread across — narrow is a
        * cliff, wide is a hillside, and the smoothness reads between them. */
-      escarpment: { scale: 520, from: 0.52, span: { min: 0.05, max: 0.22 }, rise: 13 },
+      escarpment: { scale: 520, from: 0.52, span: { min: 0.042, max: 0.22 }, rise: 15 },
       /** The sea basins: broad hollows sunk under the lake table. `wetter`
        * and `deeper` are what the `water` dial adds to each. */
       /** `wetter` and `deeper` are what the `water` dial adds. Both are
@@ -941,8 +1075,69 @@ export const STAGE_RULES = {
     /** ...and the grade the ground may rise at past the bench, m per m.
      * Under `collision.climbLimit` with room to spare, because the lattice
      * reads a field of this grade BACK at up to `climb * SQRT2` across a
-     * cell diagonal, and that steeper number is the face the car meets. */
+     * cell diagonal, and that steeper number is the face the car meets.
+     *
+     * This is the grade for ground that CANNOT stand steeper — deep till,
+     * which slumps. Where the road has been cut through rock instead, R34's
+     * `cut` band says what the face is held at. */
     climb: 0.45,
+
+    /** R34 — THE CUT. What the road does with ground it cannot go round.
+     *
+     * These are grades past the bench, m per m, and they replace `climb`
+     * by however much of a cut this piece of road is in. The face is a
+     * cone like R31's and it starts at the same bench, so nothing here
+     * touches the flat ground beside the road: it changes only how the
+     * country stands up once it is past it.
+     *
+     * `face` is the band the rock is held at, read off `knobs.steepness`.
+     * The top of it is a shade under 60° — steep enough that the renderer
+     * paints it as bare rock and a car cannot climb it, and short of
+     * vertical because the ground it is built out of is sampled on a 14 m
+     * lattice and a face that turns over inside one cell is a fold, not a
+     * cliff.
+     *
+     * `sealed` and `loose` are how much of that face each kind of road
+     * actually gets. A tarmac road was engineered and blasted; a gravel
+     * road was scraped in by a grader, and a grader goes round what it
+     * can and battered back what it cannot. The gap between the two is
+     * the whole visible difference R34 is about.
+     *
+     * `soil` is the depth of cover, m, past which the ground can no longer
+     * hold a face at all — it is till, and till slumps to `climb`
+     * whatever the road is surfaced with and whatever the dial says. The
+     * cut fades out over it rather than switching, so a cutting runs out
+     * into a bank instead of ending at a ruled line. */
+    cut: {
+      face: { min: 0.75, max: 1.7 },
+      sealed: 1,
+      loose: 0.34,
+      soil: 0.8,
+      /** How deep the road is CUT IN before there is a face beside it at
+       * all — the natural ground's height at the road, minus the road's
+       * own grade, m.
+       *
+       * This is the gate that decides WHERE a cutting is, and it is the
+       * whole reason the road follows the country (`elevation.follow`)
+       * rather than floating at a height of its own. A road runs down the
+       * valleys, and down a valley it stands at or above the ground on its
+       * own low embankment: nothing is cut, and what is beside it is soil.
+       * It is only where it has to climb over a shoulder to get anywhere
+       * that its grade runs under the ground, and that — and nowhere else
+       * — is where anybody blasts.
+       *
+       * `from` is a ditch's worth, below which there is no face; by `full`
+       * the road is properly down in it. */
+      depth: { from: 2.5, full: 10 },
+      /** How far the country has to stand ABOVE what the cut left before
+       * the ground there reads as a FACE rather than as a bank, m: `over`
+       * where it starts counting, `full` where it is all rock. Everything
+       * that treats a cutting as a cutting reads this — nothing roots on
+       * it, so the trunks and the undergrowth stop; the ground paint takes
+       * the bedrock (it already does, off the slope); and the analysis
+       * counts the stage's cuttings by it. */
+      bare: { over: 1.5, full: 7 },
+    },
   },
 
   /** R24 — the start zone. `apron` is the dirt extrapolated straight past

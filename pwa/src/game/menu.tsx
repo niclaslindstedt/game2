@@ -143,6 +143,20 @@ export const STAGE_DIALS: {
     ],
   },
   {
+    // R34 — how steep the country stands, as against how high `elevation`
+    // stands it. The two read as one thing on a map and as two entirely
+    // different stages from the driver's seat: ALPINE hills on a WORN dial
+    // are long open slopes you can see across, and the same hills on SHEER
+    // are rock either side of the road.
+    key: "steepness",
+    label: "TERRAIN",
+    stops: [
+      { id: "low", label: "WORN", value: 0.12 },
+      { id: "mid", label: "RUGGED", value: 0.5 },
+      { id: "high", label: "SHEER", value: 0.9 },
+    ],
+  },
+  {
     key: "water",
     label: "WATER",
     stops: [
