@@ -181,6 +181,35 @@ export class MeshBuilder {
   }
 }
 
+/** Several finished geometries as ONE, for the case where the pieces are
+ * built apart because something might one day move one of them, and drawn
+ * together because until that day none of them does. The sources are left
+ * standing — that is the whole point: they are what the merged copy is
+ * swapped back for.
+ *
+ * Position and colour only, like `absorb`, and every source must carry the
+ * same colour width (three components on the body's builders, four on the
+ * ones with alpha) or the copies would interleave into nonsense. */
+export function mergeGeometries(sources: readonly THREE.BufferGeometry[]): THREE.BufferGeometry {
+  const width = sources[0].getAttribute("color").itemSize;
+  let vertices = 0;
+  for (const source of sources) vertices += source.getAttribute("position").count;
+  const pos = new Float32Array(vertices * 3);
+  const col = new Float32Array(vertices * width);
+  let at = 0;
+  for (const source of sources) {
+    const p = source.getAttribute("position").array as ArrayLike<number>;
+    const c = source.getAttribute("color").array as ArrayLike<number>;
+    pos.set(p, at * 3);
+    col.set(c, at * width);
+    at += source.getAttribute("position").count;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute("color", new THREE.Float32BufferAttribute(col, width));
+  return geo;
+}
+
 /** Two hex colours mixed, as a hex colour — the authored way to strike a
  * tone between two named ones without carrying THREE.Color into data. */
 export function mixHex(a: number, b: number, t: number): number {
