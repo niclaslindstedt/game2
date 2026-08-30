@@ -68,7 +68,7 @@ const TRIES = 8;
  * the height a driver's eye sits the loose ones catching the light are most
  * of what says so. Fewer than the verge gets, because the road is DRIVEN —
  * see `matKeep`. */
-const MAT_TRIES = 3;
+const MAT_TRIES = 2;
 
 /** ...and tufts of grass, per sample per side. The other direction of the
  * same hand-over: the stones run out into the country and the country grows
@@ -76,7 +76,7 @@ const MAT_TRIES = 3;
  * Sparser than the stones: a tuft costs the same four triangles but stands
  * up, so it is a far bigger thing on screen and a great many fewer of them
  * read as a verge. */
-const GRASS_TRIES = 4;
+const GRASS_TRIES = 3;
 
 /** Where a candidate lands, in meters out from the road edge, from a
  * uniform roll. Squared, which puts most of them against the shoulder and
@@ -210,7 +210,7 @@ export function buildRoadSpill(
         // lying in it is what stops that boundary being where the road
         // stops. They simply have to run out before the grass does.
         const g = valueNoise(x, z, DISSOLVE.patch, DISSOLVE.seed);
-        if (t > g + 0.75) continue;
+        if (t > g + 0.5) continue;
         if (blocked(x, z)) continue;
         stones.push({
           x,
