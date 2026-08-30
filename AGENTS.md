@@ -57,7 +57,7 @@ This project is tuned by measuring, not guessing:
 4. **`make track`** to LOOK at what the rules engine builds.
 5. **`make screenshots`** to LOOK at the game itself (grid, speed, drift, every camera on the ladder, the cockpit by day and by night, portrait). In Claude web sessions Chromium is preinstalled — `CHROMIUM_PATH=/opt/pw-browsers/chromium make screenshots`.
 6. **`make items`** to LOOK at one thing on its own — a stone, a fern, the cabin behind the glass. Most of what the world is made of is six pixels at the speed you pass it; this is where it gets rotated and measured. `ITEMS=` picks the rows, `GROUP=` a whole kind, `TURNTABLE=` the seats to walk round.
-7. **`make profile`** before and after every rendering change. Draw calls, triangles and binds are the numbers a real GPU sees; the fps it also prints is software rasterization and means nothing off this machine.
+7. **`make profile`** before and after every rendering change. Draw calls, triangles and binds are the numbers a real GPU sees; the fps it also prints is software rasterization and means nothing off this machine. The table is metered over a wall-clock window, so on a slow machine two runs of one build differ by up to a tenth — judge the change structurally (a new pass? a new material? or only an instance count?) before reading movement that size as a regression.
 8. **`make replay RUN=…`** before and after every DIFFICULTY change. A bot lap says what the bot would do; a recorded human drive (developer menu → COLLECT RACE DATA, or `make record`) replayed against easy/medium/hard says what those words are worth to a person — the `bot-improvement` skill owns reading it.
 
 Both harnesses serve `pwa/dist`, so **`make build` first, every time**: a stale
