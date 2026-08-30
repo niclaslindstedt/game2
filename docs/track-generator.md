@@ -157,17 +157,26 @@ looks like. The placement is engine-side because one of the markers is
 solid: the contact model collides the same list the renderer draws, so the
 slab that throws a cut apex is a slab the player could see coming.
 
-| Role       | Where it goes                                                           | What it says                                                                                      |
-| ---------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| **apex**   | the INSIDE of the bend, around its tightest point                       | "Aim here." The target that defines the line, and what stops it being cut into the ditch.         |
-| **exit**   | the OUTSIDE, from where the corner stops bending out along the straight | "The road ends here." Centrifugal force takes the car wide under power; this is the usable width. |
-| **entry**  | the OUTSIDE, on the approach to a hard corner                           | "Brake." A braking marker — so it only appears in front of a corner that needs braking for.       |
-| **hazard** | both sides, wrapped around a bridge deck or a jump lip's shoulders      | "This one will hurt." High-risk collision zones, marked all the way round.                        |
+| Role       | Where it goes                                                      | What it says                                                                                      |
+| ---------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| **apex**   | the INSIDE of the bend, around its tightest point                  | "Aim here." The target that defines the line, and what stops it being cut into the ditch.         |
+| **exit**   | the OUTSIDE, through the last of the bend, ending where it does    | "The road ends here." Centrifugal force takes the car wide under power; this is the usable width. |
+| **entry**  | the OUTSIDE, through the first of a hard corner                    | "Brake." The turn-in board — so it only appears on a corner that needs braking for.               |
+| **hazard** | both sides, wrapped around a bridge deck or a jump lip's shoulders | "This one will hurt." High-risk collision zones, marked all the way round.                        |
+
+**A corner zone never leaves its corner.** Marking is what a BEND wears, so
+every span is clipped to the arc its pacenote covers: `exitRun` and `entryRun`
+are ceilings a short corner simply does not fill, not runs of road the marking
+is guaranteed. A run of posts standing down an empty straight is the
+end-to-end stripe with gaps in it — from the car it announces a corner forty
+metres before there is one, and from above it is a road wearing kerbing at
+random. Only a hazard reaches past a bend, because what it is wrapped around
+is not one.
 
 Corners under `kerb.minAngle` (~41°) get nothing at all, which is what makes
 kerbing an event: on a stage of soft sweepers almost nothing is marked, and
 the one hairpin reads from a long way out. Only corners past
-`kerb.entryAngle` also earn a braking marker.
+`kerb.entryAngle` also earn a turn-in board.
 
 **What is built there depends on the surface.** Tarmac gets a low-profile
 continuous kerb running through the whole zone. Gravel does not: a poured

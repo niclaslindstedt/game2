@@ -676,36 +676,39 @@ export const STAGE_RULES = {
    *   apex   — inside the bend, around its tightest point: the target the
    *            driver aims at, and the thing that stops the line being cut
    *            into the ditch.
-   *   exit   — outside the road where the corner unwinds: the edge of the
-   *            usable width as the car is pushed wide under power.
-   *   entry  — outside the road on the approach to a hard corner: the
-   *            braking marker.
+   *   exit   — outside the road through the last of the bend, where the
+   *            corner unwinds: the edge of the usable width as the car is
+   *            pushed wide under power.
+   *   entry  — outside the road through the first of a hard corner: the
+   *            turn-in board.
    *   hazard — wrapped around something that will hurt: a bridge parapet,
    *            a jump lip's shoulders.
    *
    * Corners under `minAngle` get nothing at all. That threshold is what
    * makes kerbing an event: on a stage of soft sweepers almost nothing is
-   * marked, and the one hairpin reads from a long way out. */
+   * marked, and the one hairpin reads from a long way out. And every corner
+   * zone is CLIPPED to its corner — a straight carries no marking, so these
+   * spans are ceilings the bend can be shorter than, never runs of road the
+   * marking is guaranteed. */
   kerb: {
     /** Total bend a turn (or a same-direction combination) must carry
      * before it is marked at all, radians — a shade over 40°, which puts
      * every hairpin and every real medium in and leaves the sweepers bare. */
     minAngle: 0.72,
-    /** ...and the bend past which the corner also earns a braking marker
-     * on the way in, radians. A hard corner at the end of a straight is
-     * the one place a rally actually boards the outside edge. */
+    /** ...and the bend past which the corner also earns a turn-in board on
+     * its way in, radians. A hard corner is the one place a rally actually
+     * boards the outside edge. */
     entryAngle: 1.25,
     /** How much of the corner the apex kerb covers, as a fraction of its
      * arc, centred on the middle of the bend — and the meters it is held
      * between, so a hairpin is not marked by a stub and a long fourth-gear
      * sweeper is not marked from end to end. */
     apexSpan: { frac: 0.5, min: 14, max: 55 },
-    /** The exit kerb starts where the corner ends and runs this far down
-     * the straight, meters. */
+    /** The exit kerb ends where the corner ends and reaches back this far
+     * into it, meters. */
     exitRun: { min: 16, max: 40 },
-    /** The braking marker sits this far back from the corner's entry,
-     * meters, and runs for `entryRun`. */
-    entryLead: 46,
+    /** The turn-in board starts where the corner starts and runs this far
+     * into it, meters. */
     entryRun: 34,
     /** Kerbing on either side of a hazard's own span, meters. */
     hazardPad: 12,

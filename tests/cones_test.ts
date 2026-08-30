@@ -46,6 +46,7 @@ import {
 
 import { createConeField } from "../pwa/src/game/cones.ts";
 import { createPostField } from "../pwa/src/game/kerbs.ts";
+import { rightOf } from "../pwa/src/game/ribbon.ts";
 import { REACH as SPILL_REACH, buildRoadSpill } from "../pwa/src/game/road-spill.ts";
 import { GROUND_SCALE } from "../pwa/src/game/settings.ts";
 import { stepTumble, tumbleFrom } from "../pwa/src/game/tumble.ts";
@@ -413,13 +414,13 @@ describe("the stone spilled at the road's edge (R16)", () => {
     expect(bands[2]).toBeGreaterThan(bands[3]);
   });
 
-  it("grows grass back the other way, over the road's own edge", () => {
-    // The other half of R16's hand-over: the stones run out into the
-    // country and the country grows back in. A verge that stopped dead at
-    // the road's edge would draw the boundary the stones just erased.
+  /** Every tuft the spill grew over 300 samples of road, each against the
+   * nearest sample: how far onto that road's mat it stands, and what that
+   * road is surfaced with. */
+  const tufts = (on = track): { onto: number; surface: string; deck: boolean }[] => {
     const rng = createRng(0x51ed);
     const spill = buildRoadSpill(
-      track,
+      on,
       0,
       300,
       rng,
@@ -428,27 +429,57 @@ describe("the stone spilled at the road's edge (R16)", () => {
       () => {},
       () => false,
     );
+    // The grass is the SECOND of the spill's two meshes; the stones are the
+    // first, and are not what these ask about.
     const [, grass] = spill.meshes;
-    expect(grass.count).toBeGreaterThan(50);
     const m = new THREE.Matrix4();
     const at = new THREE.Vector3();
-    let onTheRoad = 0;
+    const found: { onto: number; surface: string; deck: boolean }[] = [];
     for (let i = 0; i < grass.count; i++) {
       grass.getMatrixAt(i, m);
       at.setFromMatrixPosition(m);
       let nearest = Infinity;
-      let half = track.width / 2;
-      for (const s of track.samples) {
+      let closest = on.samples[0];
+      for (const s of on.samples) {
         const d = Math.hypot(s.x - at.x, s.z - at.z);
         if (d < nearest) {
           nearest = d;
-          half = s.width / 2;
+          closest = s;
         }
       }
-      if (nearest < half) onTheRoad += 1;
+      // How far onto the MAT, measured across the road rather than as the
+      // distance to the sample point: samples are two metres apart and the
+      // scatter jitters along the road between them, so a straight distance
+      // reads a tuft standing on the mat as one standing beside it.
+      const r = rightOf(closest.heading);
+      const lateral = Math.abs((at.x - closest.x) * r.x + (at.z - closest.z) * r.z);
+      const half = (closest.width ?? on.width) / 2;
+      found.push({ onto: half - lateral, surface: closest.surface, deck: closest.deck != null });
     }
-    expect(onTheRoad).toBeGreaterThan(0);
     spill.dispose();
+    return found;
+  };
+
+  it("grows grass back the other way, over a LOOSE road's own edge", () => {
+    // The other half of R16's hand-over: the stones run out into the
+    // country and the country grows back in. A verge that stopped dead at
+    // the road's edge would draw the boundary the stones just erased.
+    const grown = tufts();
+    expect(grown.length).toBeGreaterThan(50);
+    expect(grown.filter((t) => t.surface === "gravel" && t.onto > 0).length).toBeGreaterThan(0);
+  });
+
+  it("grows NOTHING out of tarmac", () => {
+    // A sealed mat is a poured surface with an edge, and a bridge deck is a
+    // slab over a river: the verge closes in on neither. The tufts beside
+    // them are still there — a tarmac road has a verge like any other — but
+    // every one of them is past the edge. The dial is turned all the way up
+    // so the window under test is sealed road rather than whatever mix the
+    // seed happened to pave.
+    const grown = tufts(compileStage(4, "medium", { asphalt: 1 }));
+    const sealed = grown.filter((t) => t.surface !== "gravel" || t.deck);
+    expect(sealed.length).toBeGreaterThan(0);
+    expect(sealed.filter((t) => t.onto > 0)).toHaveLength(0);
   });
 
   it("thins with OPTIONS ▸ VIDEO ▸ GROUND DETAIL, and never to nothing", () => {

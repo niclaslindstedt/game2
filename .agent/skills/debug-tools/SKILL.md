@@ -117,11 +117,15 @@ saying what each band is worth.
 
 Two things make it a debug tool rather than a picture:
 
-- **Zoom has no floor and the map pans.** Wheel or pinch leans in until the
-  lens is a few metres off the ground; **⌘/CTRL-drag** (or two fingers, or
-  the middle button) walks the aim to the part of the stage in question. A
-  map that could only zoom into its own centre would be useless — the defect
-  is never in the middle.
+- **Zoom leans all the way to the ground, and the map pans.** Wheel or pinch
+  leans in until the lens is a metre off the ground — a metre and a half of
+  road across the pane, which is the scale a chipping, a tuft or a marker
+  post is actually judged at; **⌘/CTRL-drag** (or two fingers, or the middle
+  button) walks the aim to the part of the stage in question. A map that
+  could only zoom into its own centre would be useless — the defect is never
+  in the middle. Stepping the seed, or opening another level in the viewer,
+  frames the whole of the new stage again: the pan and zoom belonged to the
+  country the last one was made of.
 - **COPY DEBUG INFO puts the whole caption on the clipboard**: seed, dials,
   what the stage was assembled from (turns, straights, jumps, crests, fords,
   bridges), its spread, its spurs and splits, what the painted layer measured

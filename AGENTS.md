@@ -64,6 +64,29 @@ Both harnesses serve `pwa/dist`, so **`make build` first, every time**: a stale
 dist photographs and meters the last change rather than this one, and the
 picture that comes back is wrong in a way that reads as a bug in the code.
 
+### When a report arrives as a `[STAGE] … [REPRO]` block
+
+A bug about the world usually arrives as a SCREENSHOT with a block of debug
+text under it — `[STAGE]`, `[MAP VIEW]` or `[CAMERA]`, and a `[REPRO]` link.
+That block is not context to read past: it is the repro, copied off the game's
+own debug overlay (its COPY DEBUG INFO button), and it exists so the frame in
+the picture can be stood in again. **Never reason about such a report from the
+prose and the picture alone — reproduce it first.** Paste the query string —
+everything from the `?` of the `[REPRO]` link — into:
+
+```sh
+make build                                        # the harness serves pwa/dist
+CHROMIUM_PATH=/opt/pw-browsers/chromium \
+  make debug-shot REPRO='?seed=38&…' OUT=before   # previews/before.png
+make debug-shot REPRO='?seed=38&…' ARGS=--drive   # ...the same place, DRIVING
+```
+
+It opens that exact frame, writes `previews/<OUT>.png`, and prints the
+overlay's rows back as text — check them against the block you were handed
+before drawing any conclusion. Fix, re-shoot the same line as `after`, and put
+both pictures in the PR. The `debug-tools` skill owns the rest of the loop
+(what each overlay box means, `?god=1` and the free camera, the map's layers).
+
 ## Commit and PR conventions
 
 - Conventional commits (`feat(engine): …`, `fix(pwa): …`); enforced by the `commit-msg` hook. Squash-merge: the PR title becomes the commit subject on `main`, so it must be a conventional subject too.

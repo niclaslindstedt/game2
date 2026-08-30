@@ -224,16 +224,24 @@ export function buildRoadSpill(
       // ── AND THE OTHER WAY. Grass coming back in over the gravel, on the
       // SAME field read the other way round: where the stones have thinned
       // the tufts have taken, so the two interlock along one boundary
-      // instead of each drawing an edge of its own. They reach a little way
-      // onto the mat — the loose margin no wheel touches is exactly where a
-      // verge starts closing a road in — and stop dead at the wheel tracks,
-      // which is what `matKeep` says and what a driven road looks like.
+      // instead of each drawing an edge of its own. On a LOOSE road they
+      // reach a little way onto the mat — the margin no wheel touches is
+      // exactly where a verge starts closing a road in — and stop dead at
+      // the wheel tracks, which is what `matKeep` says and what a driven
+      // road looks like.
+      //
+      // NOTHING GROWS OUT OF TARMAC. A sealed mat is a poured surface with
+      // an edge, and a bridge deck is a slab over a river: the verge stops
+      // at both of them, so their tufts only ever go outward. The roll is
+      // still taken either way, so the two surfaces scatter the same verge
+      // from the same stream and only the reach onto the road differs.
+      const closes = s.surface === "gravel" && s.deck == null;
       for (let n = 0; n < GRASS_TRIES; n++) {
         if (density < 1 && !rng.chance(density)) continue;
         const t = rng.next();
         const out = spread(t);
         // Half of them grow inward of the road's edge rather than outward.
-        const inward = rng.chance(0.5);
+        const inward = rng.chance(0.5) && closes;
         const lateral = inward ? Math.max(0, half - out * 0.35) * side : (half + out) * side;
         if (inward && !rng.chance(matKeep(lateral, width))) continue;
         const { x, z } = place(lateral);
