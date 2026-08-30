@@ -34,6 +34,7 @@ export const GLYPH_NAMES = [
   "lock",
   "sprint",
   "circuit",
+  "clipboard",
 ] as const;
 
 export type GlyphName = (typeof GLYPH_NAMES)[number];
@@ -133,6 +134,15 @@ const GLYPHS: Record<GlyphName, JSX.Element> = {
     <>
       <path d="M8 4.5h8a7 7 0 0 1 0 14H8a7 7 0 0 1 0-14Z" />
       <path d="M9.5 9h5a2.5 2.5 0 0 1 0 5h-5a2.5 2.5 0 0 1 0-5Z" />
+    </>
+  ),
+  // One sheet behind another: take a copy of this. The only mark here that
+  // stands alone rather than beside a word, so it is drawn as the shape
+  // every other application already uses for the same idea.
+  clipboard: (
+    <>
+      <rect x="8.5" y="3" width="12.5" height="15.5" rx="2.2" />
+      <path d="M15.5 21H5.2A2.2 2.2 0 0 1 3 18.8V7.5" />
     </>
   ),
 };

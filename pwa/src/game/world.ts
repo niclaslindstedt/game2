@@ -624,10 +624,11 @@ function buildBridges(
  * statement, not a wall. */
 function buildSpur(track: Track, spur: Spur, cones: ConeField, beside: GroundBeside): THREE.Group {
   const group = new THREE.Group();
-  group.add(buildSkirts(spur.samples, spur.width));
   // A hair under the stage's own mat: inside a junction the two are warped
   // onto the SAME plane (R17), and two coplanar meshes tear each other
-  // apart in the depth buffer.
+  // apart in the depth buffer. The skirt takes the same lift, so it hangs
+  // from the branch's own lip rather than through it.
+  group.add(buildSkirts(spur.samples, spur.width, 0.012, beside));
   group.add(buildRoad(track, spur.samples, spur.width, 0.012, beside));
   group.add(buildMarkings(track, spur.samples, spur.width));
   const chippings = buildChippings(track, spur.samples, spur.width);
@@ -836,7 +837,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
     const chunkGroup = new THREE.Group();
     const ribbon = chunkSamples(track, from, to);
     const bare = track.samples.slice(Math.max(0, from - 1), to);
-    chunkGroup.add(buildSkirts(ribbon, track.width));
+    chunkGroup.add(buildSkirts(ribbon, track.width, undefined, beside));
     chunkGroup.add(buildRoad(track, ribbon, track.width, undefined, beside));
     chunkGroup.add(buildMarkings(track, bare, track.width));
     // R25 — the rally's own striped marking, at the corners that earn it.

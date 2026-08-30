@@ -208,6 +208,24 @@ questions: flying, PLACE leads and the car is scenery; racing, CAR leads.
 
    `make build` first — the script serves the built app, not the dev server.
 
+   **A MAP repro works the same way.** The developer map's COPY DEBUG INFO
+   button writes the same kind of line, carrying `roam=1` and the map
+   camera's framing instead of god mode's pose, and the script tells the two
+   apart by that flag: the driving page is waited on by its overlay, the map
+   page by its copy button, whose text it then reads back off the clipboard.
+   So a defect reported from above reproduces from above.
+
+   ```sh
+   make debug-shot REPRO='?seed=38&roam=1&mapfull=1&maz=…' OUT=map-before
+   make debug-shot REPRO='?seed=38&roam=1&…' ARGS=--drive OUT=road-before
+   ```
+
+   `--drive` is the second half of that: it drops the map flags and the map
+   camera off the line and opens the same seed, dials, conditions and car
+   **driving**. The first question about anything seen from above is what it
+   looks like from the road, and this is how you get there without hand-
+   editing a query string.
+
 2. **Confirm you are looking at the same thing.** Two shots of one place is
    the point; two shots of two places proves nothing. If they differ, the
    likely causes in order: a stale `pwa/dist`, a different **build stamp**

@@ -438,8 +438,26 @@ export function buildRoad(
 /** Dirt skirts: close the gap between the ribbon's outer lip and the ground
  * lattice under it, so a raised road (ramps, crests, an asphalt mat) reads
  * as a solid landform and never as floating carpet. A bridge deck gets
- * none — there is nothing under a bridge but air and water. */
-export function buildSkirts(samples: Ribbon[], width: number): THREE.Mesh {
+ * none — there is nothing under a bridge but air and water.
+ *
+ * **It hangs from the vertex the RIBBON ends at, which is not the ribbon's
+ * own analytic height.** R16 spends the hand-over across the outer band, so
+ * the ribbon's last vertex is the ground's height there and not the road's
+ * — and the terrain sinks its shelf a little under the corridor besides. A
+ * skirt hung from `corridorOffset` alone therefore stands a third of a metre
+ * proud of the road it is closing, and what that draws is a dirt-coloured
+ * stripe running the whole length of the stage a few metres out in the
+ * grass: the very vertical face R16 exists to remove, put back by the mesh
+ * that was supposed to hide it. `ground` is the same landscape `buildRoad`
+ * hands over to, and `bias` the same lift, so the two meshes share an edge.
+ * Without one (the stage previews draw a ribbon and no landscape) the
+ * analytic height is all there is. */
+export function buildSkirts(
+  samples: Ribbon[],
+  width: number,
+  bias = 0.02,
+  ground?: GroundBeside,
+): THREE.Mesh {
   const half = width / 2;
   const edge = half + ROAD_CROSS.reach;
   const positions: number[] = [];
@@ -456,9 +474,20 @@ export function buildSkirts(samples: Ribbon[], width: number): THREE.Mesh {
         continue;
       }
       const r = rightOf(s.heading);
-      const ex = s.x + r.x * edge * side;
-      const ez = s.z + r.z * edge * side;
-      const top = s.elevation + corridorOffset(s, edge * side, width);
+      // R33 — the ribbon scales its whole cross-section, verge and all, with
+      // the road's width HERE, so the lip moves in and out along the stage
+      // and the skirt has to move with it.
+      const here = s.width ?? width;
+      const at = edge * (here / width) * side;
+      const ex = s.x + r.x * at;
+      const ez = s.z + r.z * at;
+      // R16 — the ribbon's last vertex, computed the way `buildRoad`
+      // computes it: the ground's own height past the hand-over, except
+      // inside a junction, where there is no hand-over to make (R17).
+      const handed = ground !== undefined && (s.flat ?? 0) < 0.25;
+      const top = handed
+        ? ground.heightAt(ex, ez) + bias
+        : s.elevation + corridorOffset(s, at, here) + bias;
       // The skirt drops a few meters below grade — deep enough to meet the
       // terrain shelf under every roll of the road.
       positions.push(ex, top, ez, ex, top - 5, ez);

@@ -415,11 +415,34 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
   // way round. Signed, and the sign is kept in the message: a road standing
   // on a wall and a road cut into one look nothing alike and are two
   // different things to go and fix.
+  //
+  // ── ...AND THE SEAM IN IT. A STEP IS NOT A SLOPE, and the grade above
+  // cannot tell them apart: it is one measurement across the whole band, so
+  // a road falling four metres down a hillside and a road with a knee-high
+  // face at its lip read the same number, and only one of them is a defect.
+  //
+  // What draws a LINE beside a road is the second kind — a kink, where one
+  // stride across the band departs from what the strides either side of it
+  // are doing. So the band is walked in short strides and what is scored is
+  // the worst SECOND DIFFERENCE: a fall of any steepness reads zero as long
+  // as it is straight, and a face reads its own height.
+  //
+  // On a healthy stage this measures a few millimetres (a hundred of them
+  // at the very worst), and that is the point — it is a TRIPWIRE, not a
+  // survey. Everything that meets at this seam is authored somewhere else:
+  // the hand-over curve, the verge profile, how far under the ribbon the
+  // ground tiles are pinned, the streams carved through it, the guards
+  // raised beside it. Any one of them moving can leave a step here, and a
+  // step here is a dirt-coloured stripe running the length of every stage.
   let edgesChecked = 0;
   let edgeFaces = 0;
   let worstEdge = 0;
+  let seams = 0;
+  let worstSeam = 0;
   {
     const band = ROAD_CROSS.reach - ROAD_CROSS.verge.bareTo;
+    const strides = Math.max(2, Math.round(band / ANALYSIS.rollers.seam.stride));
+    const profile: number[] = [];
     for (let i = 0; i < track.samples.length; i += stride) {
       if (skip[i]) continue;
       const sample = track.samples[i];
@@ -431,11 +454,33 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
       const hereHalf = sample.width / 2;
       for (const side of [-1, 1]) {
         edgesChecked++;
-        const hem = (hereHalf + ROAD_CROSS.verge.bareTo) * side;
         const lip = (hereHalf + ROAD_CROSS.reach) * side;
-        const inner = terrain.groundAt(sample.x + rx * hem, sample.z + rz * hem);
-        const outer = terrain.groundAt(sample.x + rx * lip, sample.z + rz * lip);
-        const grade = (inner - outer) / band;
+        profile.length = 0;
+        for (let k = 0; k <= strides; k++) {
+          const out = ROAD_CROSS.verge.bareTo + (band * k) / strides;
+          const lat = (hereHalf + out) * side;
+          profile.push(terrain.groundAt(sample.x + rx * lat, sample.z + rz * lat));
+        }
+        const grade = (profile[0] - profile[strides]) / band;
+        let kink = 0;
+        for (let k = 1; k < strides; k++) {
+          const bend = Math.abs(profile[k] - (profile[k - 1] + profile[k + 1]) / 2);
+          if (bend > kink) kink = bend;
+        }
+        if (kink > ANALYSIS.rollers.seam.kink) {
+          seams++;
+          if (kink > worstSeam) {
+            worstSeam = kink;
+            findings.push({
+              code: "rollers.seam",
+              severity: kink >= ANALYSIS.rollers.seam.fail ? "error" : "warn",
+              message: `a ${kink.toFixed(2)} m step in the road's edge where it should run out smoothly`,
+              at: { x: sample.x + rx * lip, z: sample.z + rz * lip },
+              s: sample.s,
+              value: kink,
+            });
+          }
+        }
         if (Math.abs(grade) <= ANALYSIS.rollers.edge.grade) continue;
         edgeFaces++;
         if (Math.abs(grade) <= Math.abs(worstEdge)) continue;
@@ -648,6 +693,16 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
       weight: 1.5,
       value: Math.abs(worstEdge),
       budget: ANALYSIS.rollers.edge.grade,
+    },
+    {
+      // R16 — and the seam itself: no STEP where the road hands over,
+      // however steeply the country beside it happens to fall.
+      id: "seam",
+      label: "the road hands over to the country without a step in the seam",
+      score: rate(seams, Math.max(1, edgesChecked), ANALYSIS.rollers.tolerated),
+      weight: 1.5,
+      value: worstSeam,
+      budget: ANALYSIS.rollers.seam.kink,
     },
     {
       // R33 — a BAND, not a ceiling. A gravel road with NO bumps is a

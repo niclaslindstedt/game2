@@ -237,6 +237,30 @@ describe("the rollers", () => {
       expect(edge?.score, `seed ${seed}`).toBeGreaterThan(0.9);
     }
   }, 20_000);
+
+  // R16 — and the SEAM, which is the other half of the same promise and a
+  // different measurement: the edge check asks how steeply the ground falls
+  // away, this one asks whether it does it in one piece. A stage may
+  // legitimately do the first (a road along a hillside) and may never do the
+  // second, so the assertion here is absolute where the edge's is a band.
+  it("finds no step in the seam where the road hands over to the country", () => {
+    for (const seed of SEEDS) {
+      const r = report(seed);
+      const seam = r.metrics.find((m) => m.id === "rollers")?.checks.find((c) => c.id === "seam");
+      expect(seam, `seed ${seed}`).toBeDefined();
+      expect(seam?.budget).toBe(ANALYSIS.rollers.seam.kink);
+      // The worst kink anywhere on the stage stays well inside the budget —
+      // this is a tripwire on the hand-over, and a healthy stage measures
+      // millimetres. If this ever fails, something has put a face back at
+      // the road's edge and every screenshot of one will show it.
+      expect(seam?.value ?? 0, `seed ${seed}`).toBeLessThan(ANALYSIS.rollers.seam.kink);
+      expect(seam?.score, `seed ${seed}`).toBe(1);
+      expect(
+        r.findings.filter((f) => f.code === "rollers.seam"),
+        `seed ${seed}`,
+      ).toHaveLength(0);
+    }
+  }, 20_000);
 });
 
 describe("the water", () => {
