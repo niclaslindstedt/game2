@@ -190,6 +190,7 @@ export {
 // The headless simulator and its bot driver.
 export { simulateStage, type SimOptions, type SimResult } from "./sim/simulate.ts";
 export { botInput, gridRev, RALLY_BOT, type BotProfile, type TrafficCar } from "./sim/bot.ts";
+export { scarPlan, scarsFor, type Scars } from "./sim/scars.ts";
 export { simulateHeat, type HeatEntry, type HeatOptions, type HeatResult } from "./sim/heat.ts";
 export {
   AXIS_MAX,

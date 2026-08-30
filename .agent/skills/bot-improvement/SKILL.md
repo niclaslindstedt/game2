@@ -50,9 +50,12 @@ human one (same seed + car + profile → identical digest —
 
 - No `Math.random()`, no wall clock, no reads of the state's RNG.
 - `botInput` is stateless — everything the bot knows is in the `GameState`
-  (the track samples, the car, the progress index). If a heuristic needs
-  memory, that is a deliberate design change: add a bot-owned object threaded
-  by the caller, never a field on `GameState`.
+  (the track samples, the car, the progress index), with ONE exception, and
+  it is the shape any other memory should copy: `scars.ts` keeps what this
+  driver has already come unstuck on in a module-level `WeakMap` keyed on the
+  `GameState` object. Never a field on `GameState`, and never something the
+  caller threads — a caller that forgets to thread a memory silently gets the
+  bug the memory exists to prevent.
 - The bot **never reaches into physics internals** — it reads the same state
   the HUD reads and produces the same `CarInput` a thumb produces. A bot that
   peeks at un-exported model internals is a bot that lies about drivability.
@@ -118,6 +121,12 @@ knobs the code actually reads.
    the aim (damping earlier is what runs a drift wide).
 5. **Recovery** — off the road: throttle off, brake down, let the aim pull
    the nose back. Sliding along the verge at pace is how a car gets lost.
+   Then the SCARS (`scars.ts`): a respawn puts the car back at the last board
+   in an identical state, so a driver who learned nothing drives the same
+   line into the same corner forever. A place that ended a run is planned at
+   a fraction of the speed that ended it, less again each time it does it
+   again — and the flick and the drift throttle, which both overrule the
+   plan, stand down there.
 6. **Air** — line the nose up with the travel direction for the landing;
    no throttle, no brake.
 7. **Gears** — shifts the manual by the same speed thresholds the auto box
@@ -178,6 +187,10 @@ in instead. Do not "fix" that by re-racing it.
 - A `skill.ts` or `rivals.ts` change owes the `--field` table AND the same
   tape replayed before and after — the table says what the budgets bought,
   the tape says what that did to a person.
+- **The retirement column in `make heat` is signal now** — a run that cannot
+  be finished, not a crew trapped at one board. Chase a new one; the wider
+  read is 25 seeds x three difficulties with respawns counted per PLACE
+  (a repeat inside 40 m is the loop coming back).
 - **A traffic or temper change owes `make heat` instead** — and owes a
   `make sim` table that has not moved AT ALL. A bot handed no traffic must
   drive the stage it always drove, so a byte-identical sweep is the proof the
