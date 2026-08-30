@@ -40,7 +40,7 @@ import { createEnvironment } from "./environment.ts";
 import { createFieldCars, type FieldCars } from "./field-cars.ts";
 import type { Clap } from "./weather.ts";
 import { TRUNK_COLOR } from "./flora.ts";
-import { EXHAUST } from "./fumes.ts";
+import { PIPE, pipeBursts, pipeWork } from "./fumes.ts";
 import { createWayHomeArrow } from "./way-home.ts";
 import { islandPlanes } from "./map-island.ts";
 import {
@@ -867,32 +867,19 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // into road speed, so it smokes harder than one at pace — `car.rev` is
     // the throttle itself anywhere in the start control, and gearing plus
     // speed at every other moment, which is why the read is phase-gated.
-    const X = EXHAUST;
-    const revving =
-      state.phase === "countdown" || state.phase === "intro"
-        ? Math.max(0, (c.rev - X.rev.from) / (1 - X.rev.from))
-        : 0;
+    const pipe = pipeWork(c.rev, c.u, state.phase, fx);
     fumeClock += dt;
-    const idling = c.u > 1 ? X.every.rolling : X.every.idle;
-    const fumeEvery = (idling + (X.rev.every - idling) * revving) / Math.max(0.2, fx);
-    if (fx > 0 && !c.airborne && fumeClock > fumeEvery) {
-      fumeClock = 0;
-      const rolling = X.shade.base + X.shade.pace * Math.min(1, c.u / X.shade.paceAt);
-      const shade = rolling + (X.rev.shade - rolling) * revving;
-      // A blip is a BURST — one puff a tick reads as an engine ticking
-      // over however fast the ticks come.
-      const puffs = 1 + Math.round((X.rev.puffs - 1) * revving);
-      // Standing still there is no car pulling away from the cloud, so what
-      // pushes it out of the pipe is the pressure behind it.
-      const out = c.u * 0.15 + X.rev.blast * revving;
-      for (let i = 0; i < puffs; i++) {
+    const bursts = fx > 0 && !c.airborne ? pipeBursts(fumeClock, pipe.every) : 0;
+    if (bursts > 0) {
+      fumeClock -= bursts * pipe.every;
+      for (let i = 0; i < bursts * pipe.puffs; i++) {
         fumes.spawn(
-          c.x - fwdX * 1.9 + rightX * 0.35,
-          c.y + 0.32,
-          c.z - fwdZ * 1.9 + rightZ * 0.35,
-          -fwdX * out + state.wind.x * 0.85,
-          -fwdZ * out + state.wind.z * 0.85,
-          shade,
+          c.x - fwdX * PIPE.back + rightX * PIPE.side,
+          c.y + PIPE.up,
+          c.z - fwdZ * PIPE.back + rightZ * PIPE.side,
+          -fwdX * pipe.blast + state.wind.x * 0.85,
+          -fwdZ * pipe.blast + state.wind.z * 0.85,
+          pipe.shade,
         );
       }
     }

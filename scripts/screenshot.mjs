@@ -217,6 +217,54 @@ await capture("shot-grid-revving", { width: 1280, height: 720 }, async (page) =>
   await atLamps(page, 3);
 });
 
+// THE WHOLE GRID REVVING, which is the shot above with the rest of the field
+// in it: `?mode=headsup` stands the other crews on the apron in front of the
+// player, and every one of them spends the countdown blipping its own
+// throttle (`GRID` in the engine's bot). The acceptance test is that the
+// line is not one car making smoke and a row of parked models — every pipe
+// working, and working by DIFFERENT amounts in the one frame, because the
+// crews are on their own beats and the ones with a temper are harder at it.
+//
+// Shot at the second lamp rather than the last, and from over the field
+// rather than from behind it. Both are about what a STILL can carry: the
+// last second is the held note every crew leaves on, where the pipes are
+// steady and the picture cannot tell a pattern from a constant — and from
+// the chase camera a car's own bodywork stands between the lens and its
+// tailpipe, so the only exhaust in frame is the player's. The player's
+// throttle is down from the first lamp so their own pipe is there to judge
+// the rest against.
+await capture(
+  "shot-grid-field-revving",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await atLamps(page, 1);
+    await page.keyboard.down("ArrowUp");
+    await atLamps(page, 2);
+  },
+  { mode: "headsup", camera: "heli" },
+);
+
+await capture(
+  "probe-grid-heli",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await atLamps(page, 1);
+    await page.keyboard.down("ArrowUp");
+    await atLamps(page, 3);
+  },
+  { mode: "headsup", camera: "heli" },
+);
+await capture(
+  "probe-grid-top",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await atLamps(page, 1);
+    await page.keyboard.down("ArrowUp");
+    await atLamps(page, 3);
+  },
+  { mode: "headsup", camera: "far" },
+);
+
 // Off the line, THE WRONG WAY: the throttle goes down on the first lamp, so
 // the engine is against the limiter when the clutch comes out and the tyres
 // are lit rather than gripping. The driven wheels are spinning under a car
