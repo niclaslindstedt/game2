@@ -73,7 +73,7 @@ export const HIGHWAY = {
   correction: 0.55,
   /** How many entry points a road may try before the country is judged not
    * to carry one there. */
-  tries: 14,
+  tries: 40,
 } as const;
 
 /** Cell edge of the lookup grid, m — a couple of points per cell. */

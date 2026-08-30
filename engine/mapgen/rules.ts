@@ -843,6 +843,45 @@ export const STAGE_RULES = {
      * proportion: a narrow lane may part in fifteen meters and a boulevard
      * take forty, and both look like the same place. */
     junctionParts: 2.4,
+
+    /** R17 — BORROWING the tarmac. The sealed roads are laid before the
+     * route (`highway.ts`), so a paved stretch of stage is not a stripe the
+     * generator painted: it is a piece of a real road the rally went and
+     * found. This group is how it goes and finds one.
+     *
+     * `seek` is how far the route will steer toward tarmac before giving up
+     * on this run and carrying on down the country, m — generous, because
+     * failing to find it costs nothing but a gravel stage, while cutting
+     * the search short costs the `asphalt` dial its meaning.
+     *
+     * `joinReach` is how close the route has to get before it can turn on,
+     * m, and `joinAngle` how nearly aligned with the road it has to be —
+     * a junction is a place two roads MEET, so the route arrives at one
+     * pointing roughly along the road it is joining rather than broadside
+     * into it. `runOn` is how far it stays, m, before it turns off again. */
+    borrow: {
+      seek: 2200,
+      joinReach: 90,
+      joinAngle: Math.PI / 2.6,
+      runOn: { min: 320, max: 900 },
+      /** How near the tarmac the route has to be before it stops striding,
+       * m, and the short straights it walks the last stretch in. The join
+       * is solved from the CURSOR, and the cursor only stands at a segment
+       * boundary — at the vocabulary's own straight lengths the route steps
+       * clean over the road it came to find. */
+      closeIn: 320,
+      step: { min: 34, max: 62 },
+      /** ...and the most of what a stage has LEFT that one borrow may
+       * spend. A sprint's whole band is under two kilometres, so a borrow
+       * drawn at the vocabulary's own length is most of the stage — R11
+       * refuses it every time, and from outside that reads as a route that
+       * never finds a road. */
+      share: 0.45,
+      /** ...and how far into a stage the FIRST road is wanted by, as a
+       * share of it. Same argument: a gap drawn to make the dial's share
+       * come true over a long stage lands past a sprint's finish line. */
+      firstBy: 0.4,
+    },
   },
 
   /** R17 — the junction PLATFORM: the graded area where the two roads
@@ -1087,4 +1126,14 @@ export type SegmentPlan = {
    * PAST the finish gate. The line is drawn where the segment has this
    * much left to run, and everything after it is run-out. */
   runOut?: number;
+  /** R17 — set where this segment is the route running ON a tarmac road it
+   * borrowed (`highway.ts`). The SEARCH decides it, not a paving field
+   * downstream: which stretches of a stage are sealed is a question about
+   * where the roads are, and only the search knows where the line went. The
+   * junction is the boundary — the segment that turns onto the tarmac is
+   * unpaved, and the meeting point is its far end. */
+  paved?: boolean;
+  /** ...and which road, and where along it, so the compiler can hand the
+   * junction the arm the route does not take without guessing. */
+  onRoad?: { road: number; from: number; to: number };
 };
