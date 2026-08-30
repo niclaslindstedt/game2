@@ -4356,6 +4356,32 @@ a.menu-version:focus-visible {
   opacity: 0.7;
 }
 
+/* COPY DEBUG INFO while god mode is flying with the overlay OFF. It stands
+   in the corner the repro strip would have had, because that corner is where
+   this screen's facts live either way — and it is one small button rather
+   than a strip, because the reason the overlay is off is that the picture is
+   wanted whole. */
+.debug-copy {
+  position: absolute;
+  left: max(0.5rem, env(safe-area-inset-left));
+  bottom: max(0.5rem, env(safe-area-inset-bottom));
+  z-index: 4;
+  font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  font-size: clamp(0.58rem, 1.5vmin, 0.74rem);
+  letter-spacing: 0.08em;
+  color: #dff1ff;
+  background: rgb(6 14 30 / 88%);
+  border: 1px solid rgb(159 216 255 / 40%);
+  border-radius: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+}
+
+.debug-copy:hover {
+  border-color: var(--hud-good);
+  color: var(--hud-good);
+}
+
 /* The debug log's tail, in the developer menu. Selectable for the same
    reason the repro line is: a clipboard the browser refuses must not be the
    only way out. */

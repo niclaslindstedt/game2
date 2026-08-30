@@ -203,6 +203,21 @@ one press, and the boxes and the link are on the clipboard as text. Ask for
 the picture when the problem is something you have to see, and the text when
 it is a number.
 
+**The same pair exists on the ROAD**, and it is the one to ask a player for:
+
+- **The shutter (ENTER, or the HUD's button) while the DEBUG OVERLAY is up**
+  paints the overlay into the picture — PLACE, CAMERA, STAGE, CAR and the
+  REPRO line, in the pixels. The boxes are DOM over the canvas and are
+  therefore in nothing the drawing buffer holds, so without this a
+  screenshot taken IN the game says less than one taken with the operating
+  system's own key. Every picture also lands on the CLIPBOARD as it is
+  taken (OPTIONS ▸ CONTROLS ▸ COPY TO CLIPBOARD), so what a reporter has to
+  do is press one key and paste.
+- **COPY DEBUG INFO, in the bottom corner, while god mode flies with the
+  overlay OFF.** Flying to LOOK at something is the case where four panels
+  of numbers are four panels over the subject — so the numbers get a button
+  instead, and it writes exactly what the map's does.
+
 That is the whole loop this skill exists for, in its shortest form: a person
 who can see the problem presses one button, and what reaches you is a frame
 that already says which seed it is, what is painted on it, where the lens was
@@ -334,10 +349,12 @@ something wants and what a flight to FOLLOW something cannot use.
   you fed it.
 - The overlay's rows are **wrapped, never truncated**. A clipped row carries
   no number, which is the one thing this overlay may not do.
-- `make screenshots shot-debug` captures the three scenes that hold the
+- `make screenshots shot-debug` captures the four scenes that hold the
   tools honest: the overlay over a run, the same frame with the HUD hidden,
-  and god mode parked off the road. `shot-map` does the same for the map's
-  layers — every one of them on a pinned seed at a pinned framing, so the
+  god mode parked off the road, and the same flight with the boxes off —
+  which is the one that catches COPY DEBUG INFO going missing, since with
+  the overlay down that button is the only way off this screen. `shot-map`
+  does the same for the map's layers — every one of them on a pinned seed at a pinned framing, so the
   sheet is comparable across two builds.
 - **The map's layers must stay translucent.** An opaque sheet is a map at
   framing distance and a flat colour a hundred metres up, with the road, the

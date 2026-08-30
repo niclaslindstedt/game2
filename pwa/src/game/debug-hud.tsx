@@ -9,12 +9,24 @@
 //
 // Every row carries its key in `data-k`, so a headless pass can read a value
 // straight out of the DOM instead of parsing the PNG it just captured.
+//
+// The COPY button at the foot of this file is the same facts with the boxes
+// switched OFF — god mode's own, for a flight taken to look at the picture
+// rather than to read numbers over it. See `DebugCopyButton`.
 
 import { useState } from "react";
 
 import type { GameState } from "@engine";
 
-import { debugBoxes, reproQuery, type DebugContext } from "./debug-info.ts";
+import { copyText } from "../lib/copy-text.ts";
+import {
+  debugBoxes,
+  debugReport,
+  reproQuery,
+  type DebugBox,
+  type DebugContext,
+} from "./debug-info.ts";
+import { playUi } from "./audio/ui.ts";
 
 type DebugHudProps = {
   ctx: DebugContext;
@@ -76,5 +88,65 @@ export function DebugHud({ ctx, state, hudHidden }: DebugHudProps) {
       {ctx.god && <div className="debug-crosshair" aria-hidden="true" />}
       <ReproStrip query={reproQuery(ctx)} />
     </div>
+  );
+}
+
+/** How long the button says what happened, ms — the same beat the map's own
+ * copy button holds its receipt for. */
+const SAID_MS = 2400;
+
+/**
+ * COPY DEBUG INFO, for a flight taken with the overlay OFF.
+ *
+ * God mode without the boxes is the ordinary way to LOOK at something: the
+ * whole screen is the thing being judged, and four panels of numbers over it
+ * are four panels in the way. But the moment the thing is worth reporting,
+ * every one of those numbers is wanted — and there is nothing on screen to
+ * read them off. So the facts get a button instead of a panel, exactly as
+ * the developer map's do (menu-roam.tsx): one press, and the boxes and the
+ * link are on the clipboard as text.
+ *
+ * It is deliberately NOT offered while the overlay is up. Up there the boxes
+ * are already on screen and the repro strip already has a button, and a
+ * second one beside it would be two buttons for one job.
+ *
+ * `read` is called at the PRESS rather than watched, because what it reads
+ * moves under the hand: a flying camera's pose is a different pose a frame
+ * later, and the line worth copying is the one from the moment somebody
+ * decided to copy it.
+ */
+export function DebugCopyButton({
+  read,
+}: {
+  read: () => { boxes: DebugBox[]; repro: string } | null;
+}) {
+  const [said, setSaid] = useState<string | null>(null);
+  return (
+    <button
+      type="button"
+      className="debug-copy"
+      title="Copy the place, the camera, the stage and the REPRO link as text"
+      data-debug-copy
+      onClick={() => {
+        const now = read();
+        const say = (text: string): void => {
+          setSaid(text);
+          setTimeout(() => setSaid(null), SAID_MS);
+        };
+        if (!now) {
+          say("NO STAGE YET");
+          return;
+        }
+        playUi("select");
+        // The whole URL rather than the query alone: this text is going
+        // somewhere else — a chat, an issue, another agent's prompt — and a
+        // query string on its own is only a link to whoever already knows
+        // which build it came off.
+        const url = `${location.origin}${location.pathname}${now.repro}`;
+        void copyText(debugReport(now.boxes, url)).then((ok) => say(ok ? "COPIED" : "COPY FAILED"));
+      }}
+    >
+      {said ?? "COPY DEBUG INFO"}
+    </button>
   );
 }

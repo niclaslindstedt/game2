@@ -55,8 +55,15 @@ import { createInput } from "./game/input.ts";
 import { createMenuNav } from "./game/menu-nav.ts";
 import type { CameraMode, MapPose } from "./game/camera.ts";
 import type { FreeFlyPose } from "./game/camera-free.ts";
-import { DebugHud } from "./game/debug-hud.tsx";
-import { stageQuery, traceLine, type DebugBox, type DebugContext } from "./game/debug-info.ts";
+import { DebugCopyButton, DebugHud } from "./game/debug-hud.tsx";
+import {
+  debugBoxes,
+  reproQuery,
+  stageQuery,
+  traceLine,
+  type DebugBox,
+  type DebugContext,
+} from "./game/debug-info.ts";
 import { debugLogging, log as debugLog, logRunStart, setDebugLogging } from "./game/debug-log.ts";
 import type { GameRenderer } from "./game/renderer.ts";
 import { Hud, type HudFlash, type HudSnapshot, type HudSplit } from "./game/hud.tsx";
@@ -171,7 +178,8 @@ import { setAudioVolumes, unlockAudio } from "./game/audio/bus.ts";
 import { playUi } from "./game/audio/ui.ts";
 import { armMenuMusic, pauseMusic, playMusic, resumeMusic, stopMusic } from "./game/audio/music.ts";
 import type { RunAudio } from "./game/audio/index.ts";
-import { armScreenshots, captureFrame, type ShotNotes } from "./game/screenshots.ts";
+import { armScreenshots, captureFrame, type Capture, type ShotNotes } from "./game/screenshots.ts";
+import { beginImageCopy } from "./lib/share-image.ts";
 import { splashSkipped } from "./game/splash.ts";
 import { SplashScreen } from "./game/splash-screen.tsx";
 import { UpdateCard } from "./game/update-card.tsx";
@@ -732,6 +740,11 @@ export function App() {
   /** What the debug overlay is reading, refreshed on the HUD's own tick and
    * only while the overlay is up. */
   const [debugCtx, setDebugCtx] = useState<DebugContext | null>(null);
+  /** The frame rate, out where anything that has to describe THIS MOMENT can
+   * reach it. The overlay gets it pushed on the HUD's tick; the shutter and
+   * the copy button read it at the press, and neither of them is in the loop
+   * that works it out. */
+  const fpsRef = useRef(0);
   const [flashes, setFlashes] = useState<HudFlash[]>([]);
   /** R28 — the split just driven through, until the run's clock times it
    * out. Mirrored in a ref: the frame loop is created once and expires it
@@ -865,15 +878,16 @@ export function App() {
    * because a press must never stop the car. Null means nothing pending;
    * a second press before the first has been served simply relabels it.
    *
-   * `notes` is the developer map's caption, painted INTO the picture rather
-   * than left on the page (screenshots.ts) — null on a player's own shot,
-   * which is the frame and nothing else. `done` is how the button that asked
-   * for it finds out: the capture happens frames later, in the loop, and a
-   * menu has no HUD to flash the receipt on. */
+   * `notes` is the caption painted INTO the picture rather than left on the
+   * page (screenshots.ts): the developer map's boxes, or the driving
+   * overlay's while it is up. Null on a player's own shot, which is the
+   * frame and nothing else. `done` is how whoever asked finds out — the
+   * capture happens frames later, in the loop, and it is the only place that
+   * ever holds the finished picture. */
   const shotRef = useRef<{
     label: string;
     notes: ShotNotes | null;
-    done?: (ok: boolean) => void;
+    done?: (capture: Capture | null) => void;
   } | null>(null);
 
   const pwa = usePwaUpdate({
@@ -905,7 +919,21 @@ export function App() {
    * the animation callback that filled it (screenshots.ts), so a press
    * leaves a label behind and the very next frame is the picture. A second
    * press before the first has been served simply relabels the request,
-   * which is right — the two would have been the same frame anyway. */
+   * which is right — the two would have been the same frame anyway.
+   *
+   * TWO THINGS RIDE ON THE PRESS ITSELF and cannot wait for the frame:
+   *
+   * The DEBUG BOXES, when the overlay is up. They are DOM over the canvas,
+   * so none of what they say is in the drawing buffer the picture comes off
+   * — which is exactly wrong for the kind of picture whose whole purpose is
+   * to be handed to somebody else. Read here rather than in the loop because
+   * this is the moment the shutter was pressed, and a flying camera has
+   * moved by the time the frame is served.
+   *
+   * The CLIPBOARD, when the player asked for it. `write` wants the gesture's
+   * transient activation, which the encode outlives, so the claim is staked
+   * inside the press and the picture is handed over afterwards
+   * (lib/share-image.ts). */
   const takeShot = (): void => {
     if (!optionsRef.current.screenshots) return;
     // Not behind the menu: that frame is the drone circling a stage nobody
@@ -915,7 +943,27 @@ export function App() {
     // arrived a beat after the button would read as lag rather than as a
     // camera.
     playUi("select");
-    shotRef.current = { label: shotLabel(), notes: null };
+    const copy = optionsRef.current.copyShots ? beginImageCopy() : null;
+    const read = debugRef.current ? readDebugRef.current() : null;
+    shotRef.current = {
+      label: shotLabel(),
+      notes: read ? { boxes: read.boxes, repro: read.repro } : null,
+      done: (capture) => {
+        if (!copy) {
+          flash(capture ? "PICTURE SAVED" : "PICTURE FAILED", capture ? "good" : "bad");
+          return;
+        }
+        copy.settle(capture?.blob ?? null);
+        // ONE receipt, and it waits for the clipboard: a picture the player
+        // meant to paste is not saved until it is pasteable, and two flashes
+        // for one press is the HUD talking to itself. The wait is the write,
+        // not the encode — the blob is already in hand by here.
+        void copy.done.then((copied) => {
+          if (!capture) flash("PICTURE FAILED", "bad");
+          else flash(copied ? "PICTURE SAVED · COPIED" : "PICTURE SAVED", "good");
+        });
+      },
+    };
   };
   const takeShotRef = useRef(takeShot);
   takeShotRef.current = takeShot;
@@ -1397,18 +1445,28 @@ export function App() {
    * is a picture that already says which seed it is and what is painted on
    * it. Deliberately NOT behind the player's SCREENSHOTS option: that switch
    * is about the game's own camera, and a developer who opened this page has
-   * asked for this one. Resolves once the frame has been filed, which is how
-   * the button reports back. */
-  const takeMapShot = (): Promise<boolean> =>
+   * asked for this one. The CLIPBOARD does follow the player's switch, and
+   * is claimed inside the press for the same reason the shutter's is
+   * (lib/share-image.ts). Resolves once the frame has been filed, which is
+   * how the button reports back. */
+  const takeMapShot = (): Promise<{ saved: boolean; copied: boolean }> =>
     new Promise((resolve) => {
       const read = readMapDebugRef.current();
       const info = mapInfoRef.current;
       const spec = stageRef.current;
       playUi("select");
+      const copy = optionsRef.current.copyShots ? beginImageCopy() : null;
       shotRef.current = {
         label: `Map ${spec?.seed ?? seedRef.current}${info ? ` · ${info.label}` : ""}`,
         notes: read ? { boxes: read.boxes, repro: read.repro, legend: info?.legend ?? [] } : null,
-        done: resolve,
+        done: (capture) => {
+          if (!copy) {
+            resolve({ saved: capture !== null, copied: false });
+            return;
+          }
+          copy.settle(capture?.blob ?? null);
+          void copy.done.then((copied) => resolve({ saved: capture !== null, copied }));
+        },
       };
     });
   const takeMapShotRef = useRef(takeMapShot);
@@ -1494,6 +1552,25 @@ export function App() {
   };
   const debugContextRef = useRef(debugContext);
   debugContextRef.current = debugContext;
+
+  /** The overlay's boxes and its repro line, read FRESH — the same pair the
+   * map's `readMapDebug` hands back, for the driving half of the game.
+   *
+   * A function rather than the `debugCtx` state on purpose, and for two
+   * reasons that both come down to timing. The state is only pushed while
+   * the overlay is UP, so with the boxes switched off there is nothing in it
+   * to copy; and it is pushed on the HUD's twelve-a-second tick, where the
+   * camera this describes moves every frame. What a picture is captioned
+   * with, and what a button copies, has to be the moment it was asked for.
+   * Null before there is a stage to describe. */
+  const readDebug = (): { boxes: DebugBox[]; repro: string } | null => {
+    const ctx = debugContextRef.current(fpsRef.current);
+    const state = gameRef.current;
+    if (!ctx || !state) return null;
+    return { boxes: debugBoxes(ctx, state), repro: reproQuery(ctx) };
+  };
+  const readDebugRef = useRef(readDebug);
+  readDebugRef.current = readDebug;
 
   // The menu's backdrop follows the page, the seed and the demo's roll.
   useEffect(() => {
@@ -2158,9 +2235,11 @@ export function App() {
         if (wanted === null) return;
         shotRef.current = null;
         void captureFrame(canvas, wanted.label, wanted.notes).then((capture) => {
-          // The HUD's flash is the receipt while driving; behind a menu there
-          // is no HUD, so whoever asked gets told directly instead.
-          if (wanted.done) wanted.done(capture !== null);
+          // Whoever asked says what happened: the shutter flashes it on the
+          // HUD, a menu's button says it on its own face. This is also the
+          // one place the finished picture exists, which is why the whole
+          // capture goes back rather than a yes or no.
+          if (wanted.done) wanted.done(capture);
           else flash(capture ? "PICTURE SAVED" : "PICTURE FAILED", capture ? "good" : "bad");
         });
       };
@@ -2303,6 +2382,7 @@ export function App() {
           fps = fpsFrames / fpsSeconds;
           fpsFrames = 0;
           fpsSeconds = 0;
+          fpsRef.current = fps;
         }
         const state = gameRef.current;
         if (!state) return;
@@ -2709,6 +2789,12 @@ export function App() {
           worth nothing to whoever has to fix it. */}
       {options.dev.debug && debugCtx && gameRef.current && !menu && !bench && (
         <DebugHud ctx={debugCtx} state={gameRef.current} hudHidden={hudHidden} />
+      )}
+      {/* Flying with the boxes OFF — the picture is wanted whole, and the
+          numbers behind it are one press away instead of over it. Never
+          alongside the overlay: up there they are already on screen. */}
+      {godActive && !options.dev.debug && !paused && !bench && (
+        <DebugCopyButton read={() => readDebugRef.current()} />
       )}
       {bench && <BenchmarkCard status={bench} onAgain={startBenchmark} onLeave={leaveBenchmark} />}
       {paused && !menu && !bench && (

@@ -582,6 +582,13 @@ export type Settings = {
    * room. Off leaves the gallery reachable: the pictures already in the
    * roll are still theirs to look at, copy and share. */
   screenshots: boolean;
+  /** Whether every picture also goes on the CLIPBOARD as it is filed in the
+   * roll. On by default: a screenshot is nearly always taken to be shown to
+   * somebody, and the shortest road from the shutter to a chat window is a
+   * paste. Off is for a player who works with something else on their
+   * clipboard and would rather the game left it alone — the picture still
+   * lands in the gallery, where COPY is a press away. */
+  copyShots: boolean;
   /** True once the developer menu has been let out — see DEV_TAPS. It stays
    * out: a player who found it deliberately does not want to find it again
    * every time they open the game. */
@@ -655,6 +662,7 @@ export const DEFAULT_SETTINGS: Settings = {
   // something else to manage while the road is coming at them.
   gearbox: "auto",
   screenshots: true,
+  copyShots: true,
   developer: false,
   dev: { debug: false, god: false, record: false },
 };
@@ -748,6 +756,7 @@ export function loadSettings(): Settings {
     pad: clonePad(DEFAULT_PAD),
     gearbox: DEFAULT_SETTINGS.gearbox,
     screenshots: DEFAULT_SETTINGS.screenshots,
+    copyShots: DEFAULT_SETTINGS.copyShots,
     developer: false,
     dev: { ...DEFAULT_SETTINGS.dev },
   };
@@ -783,6 +792,7 @@ export function loadSettings(): Settings {
     migratePedalDirs(settings.touch);
     if (parsed.gearbox === "manual") settings.gearbox = "manual";
     if (parsed.screenshots === false) settings.screenshots = false;
+    if (parsed.copyShots === false) settings.copyShots = false;
     if (parsed.developer === true) settings.developer = true;
     if (parsed.dev) Object.assign(settings.dev, parsed.dev);
     // A tool nobody can reach is a tool nobody can switch off: if the menu

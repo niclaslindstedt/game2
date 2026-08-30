@@ -29,6 +29,12 @@
 // activation, so they have to be called from the press itself and never
 // after an `await` that outlives it. That is why nothing here decodes,
 // re-encodes or fetches: a caller hands over a Blob it already holds.
+//
+// …except the SHUTTER, whose picture does not exist yet at the moment of the
+// press — the drawing buffer can only be read inside the animation callback
+// that filled it, which is frames away (game/screenshots.ts). That is what
+// `beginImageCopy` is for, and why the clipboard is the one verb here with a
+// second entry point.
 
 /** The one MIME type everything here moves. */
 export const MIME_PNG = "image/png";
@@ -99,6 +105,59 @@ export async function copyImage(blob: Blob): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+/** A clipboard write that was CLAIMED before the picture existed. `settle`
+ * hands over the PNG once it has been encoded — or null, when there was no
+ * picture to hand over, which releases the claim rather than pasting
+ * something stale. `done` says whether the clipboard took it. */
+export type PendingCopy = {
+  settle: (blob: Blob | null) => void;
+  done: Promise<boolean>;
+};
+
+/**
+ * Claim the clipboard for a picture that has not been taken yet.
+ *
+ * CALL THIS INSIDE THE PRESS. `ClipboardItem` takes a PROMISE of a blob as
+ * well as a blob, and that is the whole trick: the write is issued while the
+ * gesture's transient activation is still live, and the browser holds the
+ * clipboard open until the picture arrives a few frames later. Awaiting the
+ * encode first and writing afterwards is the same call outside its
+ * activation, which Safari refuses outright.
+ *
+ * Where the promise form is not taken, it falls back to writing the finished
+ * blob — which works in Chrome, whose activation outlives the encode — so the
+ * worst case is a copy that silently did not happen on one browser rather
+ * than one that throws on all of them.
+ */
+export function beginImageCopy(): PendingCopy {
+  let hand: (blob: Blob | null) => void = () => {};
+  const picture = new Promise<Blob | null>((resolve) => {
+    hand = resolve;
+  });
+  if (!canCopyImage()) return { settle: hand, done: Promise.resolve(false) };
+  // The clipboard's own promise must REJECT where the picture never came,
+  // because resolving it with nothing would put an empty item on the
+  // clipboard — which is worse than leaving what was already there.
+  const wanted = picture.then((blob) => {
+    if (!blob) throw new Error("no picture");
+    return blob;
+  });
+  const later = (): Promise<boolean> => wanted.then(copyImage, () => false);
+  try {
+    return {
+      settle: hand,
+      done: navigator.clipboard.write([new ClipboardItem({ [MIME_PNG]: wanted })]).then(
+        () => true,
+        // A browser that took the item and then refused the promise still
+        // has an ordinary blob write left to try.
+        later,
+      ),
+    };
+  } catch {
+    return { settle: hand, done: later() };
   }
 }
 

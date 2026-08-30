@@ -1617,6 +1617,26 @@ await capture(
     gpitch: "-0.35",
   },
 );
+// The same flight with the boxes OFF: the picture whole, and COPY DEBUG INFO
+// in the corner the overlay's repro strip would have had. That button is the
+// only way the numbers behind this frame can be got at from here, so a scene
+// that photographs it is what catches it going missing.
+await capture(
+  "shot-debug-god-bare",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await page.waitForSelector("[data-debug-copy]", { timeout: 120000 });
+    await page.waitForTimeout(3000);
+  },
+  {
+    god: "1",
+    gx: "-30",
+    gy: "25",
+    gz: "120",
+    gyaw: "2.6",
+    gpitch: "-0.35",
+  },
+);
 
 // R29 — THE CAMPAIGN AND ITS FIELD, which is the one part of the game a
 // `?start=1` link cannot reach: a stage entered from the menu is the only
