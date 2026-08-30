@@ -1004,11 +1004,17 @@ function createCompiler(
       if (throat === undefined) throats.set(junction, (throat = throatOf(junction)));
       const out = d - throat;
       if (out >= mouthTaper) continue;
-      // Past the throat it is over: that piece of road is the SEALED one,
-      // and a paving machine lays a constant width (R33). The mouth belongs
-      // to the dirt road.
-      if (out < 0) continue;
-      const t = 1 - out / mouthTaper;
+      // Past the throat the mouth is at its WIDEST and stays there. The
+      // surface flip and the throat are two measurements of the same
+      // crossing taken different ways, so a sample can be gravel and
+      // already inside the sealed road's edge — and dropping the flare
+      // there took the mouth from twenty-nine metres to sixteen in one
+      // two-metre step, at exactly the place the two roads have to meet.
+      // What that leaves is a wedge of field between the dirt road's edge
+      // and the tarmac's, which is the whole defect the mouth exists to
+      // close. The `surface` guard above is what keeps this off the main
+      // road: the tarmac's own samples never take a flare (R33).
+      const t = out <= 0 ? 1 : 1 - out / mouthTaper;
       const extra = mouthWide * (1 - Math.sqrt(Math.max(0, 1 - t * t)));
       if (extra > widest) widest = extra;
     }

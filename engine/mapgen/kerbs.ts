@@ -42,7 +42,7 @@
 
 import { cellKey } from "../lib/math.ts";
 import type { Track } from "./compile.ts";
-import { corridorOffset } from "./road.ts";
+import { corridorOffset, junctionMainEdge } from "./road.ts";
 import { STAGE_RULES as R } from "./rules.ts";
 
 /** Why a piece of road is marked — see the four sentences above. */
@@ -268,12 +268,22 @@ export function createKerbField(track: Track): KerbField {
     const to = Math.min(upTo, track.samples.length);
     if (to <= indexed) return;
     const K = R.kerb;
-    const half = track.width / 2;
     // The zones only have to cover the new road: `buildKerbs` takes every
     // note that OVERLAPS the window, so a corner straddling a chunk
     // boundary is marked whole by both halves and the run of posts along it
     // never has a gap at the seam.
     const zones = buildKerbs(track, track.samples[indexed].s, track.samples[to - 1].s);
+    /** R17 — is this marker standing on the SEALED road at a junction? The
+     * marking belongs to the rally's own road: a striped post on the tarmac
+     * of a public road is a marshal standing in the carriageway, and the
+     * run has to stop at the seal rather than cross it. */
+    const onSeal = (x: number, z: number): boolean => {
+      for (const junction of track.junctions) {
+        const past = junctionMainEdge(junction, x, z);
+        if (past !== null && past < 0) return true;
+      }
+      return false;
+    };
     for (let i = indexed; i < to; i++) {
       const sample = track.samples[i];
       // A ford and a bridge deck carry no marking of their own: the water
@@ -290,11 +300,24 @@ export function createKerbField(track: Track): KerbField {
         const seen = apex ? lastBlock : lastPost;
         const at = (side + 1) / 2;
         const spacing = apex ? K.blockSpacing : K.postSpacing;
-        if (sample.s - seen[at] < spacing) continue;
-        seen[at] = sample.s;
         const shape = apex ? KERB_MARKER.block : KERB_MARKER.post;
-        const out = (half + shape.out) * side;
+        // R17/R33 — beside the road AS IT IS HERE. The nominal width is the
+        // one width the road mostly is not: R33 wanders it either side down
+        // the whole stage and a junction's mouth flares it half as wide
+        // again, so a marker placed off the nominal stands ON the mat at
+        // every crossing on the map.
+        const out = ((sample.width ?? track.width) / 2 + shape.out) * side;
         const r = { x: Math.cos(sample.heading), z: -Math.sin(sample.heading) };
+        if (onSeal(sample.x + r.x * out, sample.z + r.z * out)) continue;
+        // ...and the run ENDS at the seal rather than a post-spacing short
+        // of it: where the next marker would be on the tarmac, this one is
+        // the last, and it goes down wherever it stands.
+        const next = track.samples[i + 1];
+        const last =
+          next !== undefined &&
+          onSeal(next.x + Math.cos(next.heading) * out, next.z - Math.sin(next.heading) * out);
+        if (!last && sample.s - seen[at] < spacing) continue;
+        seen[at] = sample.s;
         const marker: KerbMarker = {
           kind: apex ? "block" : "post",
           x: sample.x + r.x * out,

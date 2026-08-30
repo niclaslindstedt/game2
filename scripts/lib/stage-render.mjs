@@ -215,9 +215,13 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
     }
     return best;
   };
-  /** Meters of tarmac the gravel is still dragged out over. */
-  const DRAG_OUT = 13;
-  /** ...and how much gravel the tarmac wears at the mouth in return. */
+  /** How far the dirt road's surfacing takes to become the sealed road's
+   * across the seam, m. Short: the seam IS the main road's edge, and a road
+   * surface changes across a line, not across a fade. */
+  const SEAM = 1.2;
+  /** ...and how much gravel the tarmac wears at the mouth in return — the
+   * smear every car turning out of the dirt road drops on the seal, which
+   * goes the OTHER way and is the only thing that crosses the edge. */
   const DRAG_ON = 0.42;
 
   /** R17 — inside a junction neither road wears a border: the shoulder and
@@ -253,10 +257,17 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
         return mix(own, mix(ROAD.gravel.loose, ROAD.gravel.worn, 0.5), dust * DRAG_ON);
       }
       if (kind !== "gravel") return own;
-      // R17 — the seam runs along the main road's own edge, at its angle.
+      // R17 — the seam runs along the main road's own EDGE, at its angle,
+      // and nowhere else. The dirt road keeps its own surfacing right up to
+      // that line; only the part of its mat standing INSIDE the sealed
+      // road's edge reads as the sealed road, because that ground belongs
+      // to the road that runs through. Fading it out over metres of the
+      // dirt road instead painted the mouth tarmac-coloured for a car's
+      // length before it got there, which reads as a gravel road that stops
+      // short of the junction it is joining.
       const past = pastMainEdge(x, z);
-      if (past === null || past >= DRAG_OUT) return own;
-      const t = Math.max(0, past) / DRAG_OUT;
+      if (past === null || past >= SEAM) return own;
+      const t = Math.max(0, past) / SEAM;
       return mix(own, mix(ROAD.asphalt.loose, ROAD.asphalt.worn, 0.55), 1 - t * t * (3 - 2 * t));
     }
     if (bridge) return null; // nothing beside a deck but the drop
@@ -317,11 +328,33 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
    * width of the crossing and carries no line at all — painted from there,
    * the tarmac's edge line runs round the outside of the gravel road's
    * mouth, which is a white line where there is no road edge. */
+  const onMinorSide = (j, sample) => (j.joining ? sample.s < j.s : sample.s > j.s);
   const minorAt = (sample) =>
-    track.junctions.some(
-      (j) =>
-        junctionFlat(j, sample.x, sample.z) > 0 && (j.joining ? sample.s < j.s : sample.s > j.s),
-    );
+    track.junctions.some((j) => junctionFlat(j, sample.x, sample.z) > 0 && onMinorSide(j, sample));
+
+  /** R17 — which side of the through road each junction's mouth opens on,
+   * found by asking the MINOR road where it is rather than by reasoning
+   * about a sign: the average offset of its samples across the junction's
+   * own axis. */
+  const mouthSide = track.junctions.map((j) => {
+    let sum = 0;
+    for (const sample of track.samples) {
+      if (junctionFlat(j, sample.x, sample.z) <= 0 || !onMinorSide(j, sample)) continue;
+      sum += (sample.x - j.x) * Math.cos(j.heading) - (sample.z - j.z) * Math.sin(j.heading);
+    }
+    return Math.sign(sum) || 1;
+  });
+
+  /** R17 — is this point in the MOUTH the minor road opens in the through
+   * road's edge? A side road's opening interrupts the edge line it crosses,
+   * on that side only: a line ruled straight across a junction's mouth is a
+   * kerb where a car turns in. */
+  const inMouth = (x, z) =>
+    track.junctions.some((j, n) => {
+      if (junctionFlat(j, x, z) <= 0) return false;
+      const across = (x - j.x) * Math.cos(j.heading) - (z - j.z) * Math.sin(j.heading);
+      return Math.sign(across) === mouthSide[n];
+    });
 
   const drawMarkings = (samples, roadWidth, branch = false) => {
     if (scale < 0.55) return;
@@ -344,7 +377,14 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
         );
       if (c.surface === "asphalt") {
         if (!branch && minorAt(c)) continue;
-        for (const side of [-1, 1]) band((half - 0.65) * side, (half - 0.3) * side, ROAD.marking);
+        for (const side of [-1, 1]) {
+          const lat = (half - 0.475) * side;
+          // The edge line stops for the side road's MOUTH, on that side
+          // only: a driver turning in crosses the through road's edge, and
+          // a line ruled across the opening is a kerb that is not there.
+          if (inMouth(c.x + cr.x * lat, c.z + cr.z * lat)) continue;
+          band((half - 0.65) * side, (half - 0.3) * side, ROAD.marking);
+        }
         if (c.s % 9 < 3) band(-0.2, 0.2, ROAD.marking);
       } else {
         const stripe = Math.floor(c.s / 4) % 2 === 0 ? ROAD.rumbleRed : ROAD.rumbleWhite;
