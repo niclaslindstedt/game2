@@ -39,6 +39,7 @@
 import { APP_NAME, APP_SHORT_NAME } from "../identity.ts";
 import { configureShotStore, putShot, type ShotMeta } from "../lib/shot-store.ts";
 import {
+  NOTE_MIN,
   STAMP_FONT_STACK,
   notesFit,
   notesLayout,
@@ -46,6 +47,7 @@ import {
   shotSize,
   stampFits,
   stampLayout,
+  type NotesLayout,
 } from "./shot-plan.ts";
 // The app mark, read from the same SVG the icons are generated from
 // (pwa/public/icons/icon.svg) rather than restated here: the geometry has
@@ -243,6 +245,58 @@ function panel(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h
   ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
 }
 
+/** One box's rows wrapped to a layout's value column, and what the panel
+ * around them comes to. Measuring is most of the work of drawing one, so it
+ * is done once and handed on. */
+type MeasuredBox = {
+  box: ShotNotes["boxes"][number];
+  wrapped: { row: { k: string; v: string }; lines: string[] }[];
+  height: number;
+};
+
+/** Every box, measured, with the height of the whole stack including the
+ * gaps between panels. */
+function measureBoxes(
+  ctx: CanvasRenderingContext2D,
+  boxes: ShotNotes["boxes"],
+  L: NotesLayout,
+): { boxes: MeasuredBox[]; height: number } {
+  ctx.font = `${L.font}px ${NOTE_FONT_STACK}`;
+  const valueWidth = L.width - L.inset * 2 - L.key;
+  let stack = 0;
+  const measured = boxes.map((box) => {
+    const wrapped = box.rows.map((row) => ({ row, lines: wrapText(ctx, row.v, valueWidth) }));
+    const rows = wrapped.reduce((n, r) => n + r.lines.length, 0);
+    const boxHeight = L.inset * 2 + L.line * (rows + 1);
+    stack += boxHeight + L.gap;
+    return { box, wrapped, height: boxHeight };
+  });
+  return { boxes: measured, height: Math.max(0, stack - L.gap) };
+}
+
+/** How tall the strips along the foot come to — the legend, and the repro
+ * line under it, wrapped to the width of the picture — with the gap between
+ * them and none above or below. The boxes are given whatever is left, so
+ * this has to be arithmetic the drawing then agrees with exactly. */
+function footHeight(
+  ctx: CanvasRenderingContext2D,
+  notes: ShotNotes,
+  width: number,
+  L: NotesLayout,
+): number {
+  // Top to bottom: the legend, then the repro line under it — the order they
+  // are drawn in below, walking upward from the foot.
+  const strips: number[] = [];
+  if (notes.legend && notes.legend.length > 0) strips.push(L.inset * 2 + L.line);
+  if (notes.repro) {
+    ctx.font = `${L.font}px ${NOTE_FONT_STACK}`;
+    const wide = width - L.pad * 2 - L.inset * 2 - L.key;
+    strips.push(L.inset * 2 + L.line * wrapText(ctx, notes.repro, wide).length);
+  }
+  if (strips.length === 0) return 0;
+  return strips.reduce((a, b) => a + b, 0) + L.gap * (strips.length - 1);
+}
+
 /** Paint the notes onto a grabbed frame: the boxes down the left, the layer
  * legend and the repro line along the foot. Left and bottom for the same
  * reason the overlay uses them — the middle of the picture is the thing
@@ -254,7 +308,7 @@ function drawNotes(
   notes: ShotNotes,
 ): void {
   if (!notesFit(width, height)) return;
-  const L = notesLayout(width, height);
+  let L = notesLayout(width, height);
   // The bottom-right corner belongs to the mark, and the mark goes on AFTER
   // this — so the strips along the foot stop above it rather than being
   // signed across. Lifting them keeps the repro line the full width of the
@@ -266,17 +320,34 @@ function drawNotes(
   ctx.textBaseline = "top";
   ctx.textAlign = "left";
 
-  // The boxes. Each is measured before it is drawn, because a value that
-  // wrapped to three lines has to be inside its own panel rather than over
-  // the next one.
+  // THE FOOT IS MEASURED FIRST, because it is what says how much height the
+  // boxes have. The strips are the only part that has to clear the mark; the
+  // boxes are a narrow column down the left and never come near it, so
+  // stopping them where the mark starts would throw away a tenth of the
+  // frame — which at 720p is the difference between four boxes and three.
+  const footTop = (layout: NotesLayout): number =>
+    bottom - layout.pad - footHeight(ctx, notes, width, layout);
+
+  // SHRINK TO FIT, rather than lose a box off the bottom. A racing overlay is
+  // four panels and twenty-five rows, which at the natural size is taller
+  // than a 720p frame leaves room for — and the box that falls off the end is
+  // STAGE, the one carrying the seed, the dials and the build stamp. Every
+  // measure is a wrap pass at a different size, and there are at most a
+  // handful of sizes between the natural one and the floor.
+  let stack = measureBoxes(ctx, notes.boxes, L);
+  while (stack.height > footTop(L) - L.gap - L.pad && L.font > NOTE_MIN) {
+    L = notesLayout(width, height, L.font - 1);
+    stack = measureBoxes(ctx, notes.boxes, L);
+  }
+  const floor = footTop(L) - L.gap;
+
+  // The boxes. A value that wrapped to three lines is inside its own panel
+  // rather than over the next one, which is what the measure above bought.
   let y = L.pad;
-  const valueWidth = L.width - L.inset * 2 - L.key;
-  for (const box of notes.boxes) {
-    ctx.font = `${L.font}px ${NOTE_FONT_STACK}`;
-    const wrapped = box.rows.map((row) => ({ row, lines: wrapText(ctx, row.v, valueWidth) }));
-    const rows = wrapped.reduce((n, r) => n + r.lines.length, 0);
-    const boxHeight = L.inset * 2 + L.line * (rows + 1);
-    if (y + boxHeight > bottom - L.pad - L.line * 3) break;
+  for (const { box, wrapped, height: boxHeight } of stack.boxes) {
+    // Even at the floor a caption can outgrow a small enough frame; the last
+    // box then stays off rather than being drawn over the repro line.
+    if (y + boxHeight > floor) break;
     panel(ctx, L.pad, y, L.width, boxHeight);
     let at = y + L.inset;
     ctx.fillStyle = NOTE_TITLE;

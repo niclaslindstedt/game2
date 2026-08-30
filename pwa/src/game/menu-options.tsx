@@ -734,6 +734,14 @@ function ScreenshotSection({
         on={settings.screenshots}
         onToggle={() => onSettings({ ...settings, screenshots: !settings.screenshots })}
       />
+      {/* Beside the shutter rather than on HUD, because it is not something
+          on screen — it is what the shutter DOES. */}
+      <ToggleRow
+        label="COPY TO CLIPBOARD"
+        hint="Every picture also lands on the clipboard, ready to paste"
+        on={settings.copyShots}
+        onToggle={() => onSettings({ ...settings, copyShots: !settings.copyShots })}
+      />
     </div>
   );
 }

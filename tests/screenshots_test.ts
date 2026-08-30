@@ -16,6 +16,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  NOTE_MIN,
+  noteFont,
   notesFit,
   notesLayout,
   shotFileName,
@@ -191,6 +193,25 @@ describe("the developer picture's notes", () => {
     expect(notesFit(1280, 720)).toBe(true);
     expect(notesFit(240, 135)).toBe(false);
   });
+
+  // The whole panel follows the row's own size, which is what lets a caption
+  // be stepped down until four boxes fit a 720p frame without any part of it
+  // coming apart at a size nobody tested.
+  it("takes a row size down with every proportion in step", () => {
+    const natural = notesLayout(1280, 720);
+    const smaller = notesLayout(1280, 720, natural.font - 2);
+    expect(smaller.font).toBe(natural.font - 2);
+    for (const key of ["line", "pad", "inset", "key", "chip"] as const) {
+      expect(smaller[key]).toBeLessThan(natural[key]);
+    }
+    expect(smaller.line).toBeGreaterThan(smaller.font);
+    expect(smaller.width - smaller.inset * 2 - smaller.key).toBeGreaterThan(smaller.key);
+  });
+
+  it("has a floor a caption is never stepped below", () => {
+    expect(noteFont(1280, 720)).toBeGreaterThan(NOTE_MIN);
+    expect(noteFont(240, 135)).toBe(NOTE_MIN);
+  });
 });
 
 describe("the setting", () => {
@@ -201,5 +222,13 @@ describe("the setting", () => {
 
   it("defaults on for a player whose stored options predate it", () => {
     expect(loadSettings().screenshots).toBe(true);
+  });
+
+  // The clipboard is the shortest road from the shutter to somebody else, so
+  // it ships on — and it is its OWN switch: a player who wants the pictures
+  // and not their clipboard touched must be able to have exactly that.
+  it("copies to the clipboard by default, and separately", () => {
+    expect(DEFAULT_SETTINGS.copyShots).toBe(true);
+    expect(loadSettings().copyShots).toBe(true);
   });
 });

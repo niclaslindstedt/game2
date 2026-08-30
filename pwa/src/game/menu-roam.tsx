@@ -75,8 +75,10 @@ export type MapDebug = {
   /** TAKE THE PICTURE: the whole screen, with the boxes and the repro line
    * painted INTO the pixels rather than left on the page — so what lands in
    * the roll is a report somebody can be handed, not a screenshot that needs
-   * a caption typed under it. Resolves true once it is filed. */
-  onShot: () => Promise<boolean>;
+   * a caption typed under it. Resolves once it is filed, saying whether it
+   * was filed and whether the clipboard took a copy: the picture exists to
+   * be HANDED to somebody, and a paste is the shortest way there. */
+  onShot: () => Promise<{ saved: boolean; copied: boolean }>;
 };
 
 type RoamProps = {
@@ -379,8 +381,8 @@ function MapShotButton({ map }: { map: MapDebug }) {
       onClick={() => {
         setSaid("TAKING…");
         void map.onShot().then(
-          (ok) => {
-            setSaid(ok ? "SAVED TO GALLERY" : "FAILED");
+          ({ saved, copied }) => {
+            setSaid(saved ? (copied ? "SAVED · COPIED" : "SAVED TO GALLERY") : "FAILED");
             setTimeout(() => setSaid(null), SHOT_SAID);
           },
           () => {
