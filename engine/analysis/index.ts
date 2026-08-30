@@ -71,7 +71,7 @@ export function analyzeTrack(
     analyzeRollers(track, terrain),
     analyzeWater(track, terrain),
     analyzeRoads(track),
-    analyzeJunctions(track),
+    analyzeJunctions(track, terrain),
     analyzeDrive(track, speeds),
     analyzeJumps(track, terrain, speeds),
     analyzeEnds(track, terrain),

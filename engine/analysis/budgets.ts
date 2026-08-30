@@ -278,13 +278,17 @@ export const ANALYSIS = {
     /** How far either side of the meeting point the checks read the route,
      * m — the corner the junction sits on plus the run out of it. */
     approach: 120,
-    /** How long a hole the crossing may leave in the through road's own
-     * markings, m. The mouth IS a gap in one kerb, so it is not zero; but a
-     * road whose lines stop for the length of a football pitch at every
-     * junction is the tell that the two ribbons dissolved into each other
-     * instead of one running past the other. Two road widths at the widest
-     * the dial builds. */
-    markGap: 42,
+    /** How much UNSEALED road the sealed one may have in it through a
+     * crossing, m. The dirt road stops AT the tarmac; a band of gravel
+     * running under the sealed road and out the far side is the surface
+     * change painted across the minor road instead of along the main
+     * road's edge, and it takes the tarmac's markings with it.
+     *
+     * Not zero, because the seam is a real place and the samples that carry
+     * it are two meters apart — one of them lands on whichever side of the
+     * edge line it lands on. Two samples' worth of slack; anything past
+     * that is a band, not a seam. */
+    throughGap: 5,
   },
 
   /** DRIVABILITY: whether the geometry asks the car for something it does

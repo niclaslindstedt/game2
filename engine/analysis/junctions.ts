@@ -23,13 +23,19 @@
 //   and it is a line of tape. Where that is missing the stage has two
 //   equally plausible ways on at racing speed.
 //
+//   A shrub in the middle of the crossing. A junction's paving is wider
+//   than the road that flares into it, and everything that decides where
+//   the world's furniture stands measures against the road's NOMINAL width.
+//   So the mouth is the one place on a stage where a tree can be planted on
+//   the tarmac.
+//
 // The measurements are all of the RESULT — the road that got built, rasterized
 // and swept — rather than of the generator's intention. A check that asks the
 // junction whether it thinks it is a junction passes every seed.
 
 import { SPUR } from "../mapgen/spurs.ts";
-import { junctionMouth } from "../mapgen/road.ts";
 import type { RoadJunction, Track, TrackSample } from "../mapgen/compile.ts";
+import type { TerrainField } from "../mapgen/terrain.ts";
 import { ANALYSIS } from "./budgets.ts";
 import {
   metricScore,
@@ -170,18 +176,19 @@ function crossAngle(a: number, b: number): number {
   return d > Math.PI / 2 ? Math.PI - d : d;
 }
 
-export function analyzeJunctions(track: Track): MetricReport {
+export function analyzeJunctions(track: Track, terrain: TerrainField): MetricReport {
   const started = Date.now();
   const findings: Finding[] = [];
   const J = ANALYSIS.junctions;
 
+  let standing = 0;
   let splinters = 0;
   let worstSplinter = 0;
   let detached = 0;
   let shut = 0;
   let offAngle = 0;
   let tightestAngle = Math.PI / 2;
-  let brokenMark = 0;
+  let brokenThrough = 0;
   let worstBreak = 0;
 
   for (let n = 0; n < track.junctions.length; n++) {
@@ -240,6 +247,36 @@ export function analyzeJunctions(track: Track): MetricReport {
       });
     }
 
+    // ── Is anything STANDING on the paving? ─────────────────────────────
+    // Straight off the raster, which is the only description of a junction's
+    // paved area that exists: everything that decides where a tree or a
+    // boulder goes measures against the road's nominal width, and the mouth
+    // is wider than that.
+    const paved = (x: number, z: number): boolean => {
+      const ix = Math.floor((x - originX) / cell);
+      const iz = Math.floor((z - originZ) / cell);
+      if (ix < 0 || iz < 0 || ix >= side || iz >= side) return false;
+      return road[iz * side + ix];
+    };
+    for (const thing of [
+      ...terrain.obstaclesNear(junction.x, junction.z, reach),
+      ...terrain.treesNear(junction.x, junction.z, reach),
+    ]) {
+      if (!paved(thing.x, thing.z)) continue;
+      standing++;
+      findings.push({
+        code: "junctions.clear",
+        severity: "error",
+        message: `something is standing on the paving of junction ${n + 1}, ${Math.hypot(
+          thing.x - junction.x,
+          thing.z - junction.z,
+        ).toFixed(0)} m from the meeting point`,
+        at: { x: thing.x, z: thing.z },
+        s: junction.s,
+        value: thing.radius,
+      });
+    }
+
     // ── Do the two roads actually TOUCH at the meeting point? ───────────
     const ix = Math.floor((junction.x - originX) / cell);
     const iz = Math.floor((junction.z - originZ) / cell);
@@ -291,64 +328,53 @@ export function analyzeJunctions(track: Track): MetricReport {
       }
     }
 
-    // ── Do the through road's markings survive the crossing? ────────────
+    // ── Does the sealed road run THROUGH, as sealed road? ───────────────
     // Both of its arms: the route's own collinear one, and the branch that
-    // carries it on past the crossing. They are one road, and the mouth
-    // falls on whichever of them the dirt road arrives beside — so a check
-    // that walks only the route measures the half of the through road the
-    // junction never touches.
-    //
-    // Walked as a RUN. What matters is not how much paint is missing but
-    // how long the longest hole in a line is, because that is what reads
-    // from a car as the road having stopped.
-    const throughRoad: { x: number; z: number; heading: number; half: number; step: number }[] = [];
+    // carries it on past the crossing. They are one road, and a junction is
+    // a place the dirt road STOPS at — it must not run on underneath the
+    // tarmac and come out the far side, which is what a surface change
+    // painted across the minor road instead of along the main road's edge
+    // does. Walked as a RUN out from the meeting point, so a band of gravel
+    // that straddles it is measured as the one interruption a driver sees
+    // rather than as two short ones.
+    const throughRoad: { surface: string; step: number }[] = [];
     for (const sample of track.samples) {
       if (Math.abs(sample.s - junction.s) > J.approach) continue;
-      if (sample.surface !== "asphalt" || sample.deck != null) continue;
       if (junction.joining ? sample.s < junction.s : sample.s > junction.s) continue;
-      throughRoad.push({ ...sample, half: sample.width / 2, step: track.step });
+      throughRoad.push({
+        surface: sample.deck != null ? "asphalt" : sample.surface,
+        step: track.step,
+      });
     }
-    // Ordered OUT from the meeting point, so a run of missing paint on the
-    // branch continues the one on the route instead of starting a second,
-    // shorter one — the hole a driver sees is one hole. A joining
-    // junction's main arm runs away from it with rising `s` and a parting
-    // one's with falling `s`, so only one of the two needs turning round.
+    // A joining junction's main arm runs away from it with rising `s` and a
+    // parting one's with falling `s`, so only one of the two needs turning
+    // round to be walked outward.
     if (junction.joining) throughRoad.reverse();
     const arm = track.spurs.find((spur) => spur.atS === junction.s);
     if (arm) {
       for (const sample of arm.samples) {
         if (sample.s > J.approach) break;
-        throughRoad.push({ ...sample, half: arm.width / 2, step: SPUR.step });
+        throughRoad.push({ surface: sample.surface, step: SPUR.step });
       }
     }
-    // One run per KERB. The mouth opens one of them and the other runs
-    // straight past, so a hole measured across both at once is never a hole
-    // at all — which is the check quietly measuring nothing.
-    const gaps = [0, 0];
+    let run = 0;
     let longest = 0;
     for (const sample of throughRoad) {
-      const rx = Math.cos(sample.heading);
-      const rz = -Math.sin(sample.heading);
-      const at = sample.half - 0.65;
-      for (let k = 0; k < 2; k++) {
-        const edge = k === 0 ? -1 : 1;
-        const open = junctionMouth(junction, sample.x + rx * at * edge, sample.z + rz * at * edge);
-        gaps[k] = open ? gaps[k] + sample.step : 0;
-        if (gaps[k] > longest) longest = gaps[k];
-      }
+      run = sample.surface === "asphalt" ? 0 : run + sample.step;
+      if (run > longest) longest = run;
     }
-    if (longest > J.markGap) {
-      brokenMark++;
+    if (longest > J.throughGap) {
+      brokenThrough++;
       if (longest > worstBreak) worstBreak = longest;
       findings.push({
-        code: "junctions.marking",
-        severity: "warn",
-        message: `the tarmac's markings stop for ${longest.toFixed(
-          0,
-        )} m through junction ${n + 1} — a through road does not notice a crossing`,
+        code: "junctions.through",
+        severity: "error",
+        message: `${longest.toFixed(0)} m of the sealed road through junction ${
+          n + 1
+        } is not sealed — the dirt road stops at the tarmac, it does not run under it`,
         at: { x: junction.x, z: junction.z },
         s: junction.s,
-        value: longest - J.markGap,
+        value: longest - J.throughGap,
       });
     }
   }
@@ -391,6 +417,13 @@ export function analyzeJunctions(track: Track): MetricReport {
       value: detached,
     },
     {
+      id: "clear",
+      label: "nothing stands on a junction's paving",
+      score: rate(standing, Math.max(count, standing)),
+      weight: 2.5,
+      value: standing,
+    },
+    {
       id: "shut",
       label: "every abandoned arm is taped shut",
       score: rate(track.spurs.length - shut, Math.max(1, track.spurs.length)),
@@ -406,12 +439,12 @@ export function analyzeJunctions(track: Track): MetricReport {
       budget: (J.angle.min * 180) / Math.PI,
     },
     {
-      id: "marking",
-      label: "the through road's markings run past the crossing",
-      score: under(worstBreak, J.markGap, J.markGap * 4),
+      id: "through",
+      label: "the sealed road runs through the crossing sealed",
+      score: under(worstBreak, J.throughGap, J.throughGap * 4),
       weight: 1.5,
       value: worstBreak,
-      budget: J.markGap,
+      budget: J.throughGap,
     },
   ];
 
@@ -424,13 +457,14 @@ export function analyzeJunctions(track: Track): MetricReport {
     findings,
     stats: {
       junctions: track.junctions.length,
+      standing,
       splinters,
       detached,
       open: track.spurs.length - shut,
       tightestAngle: (tightestAngle * 180) / Math.PI,
       worstMarkGap: worstBreak,
       offAngle,
-      brokenMark,
+      brokenThrough,
     },
     ms: Date.now() - started,
   };

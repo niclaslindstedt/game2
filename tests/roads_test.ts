@@ -22,7 +22,6 @@ import {
   junctionFlat,
   createGame,
   junctionMainEdge,
-  junctionMouth,
   roadClearance,
   knobScale,
   locate,
@@ -296,10 +295,11 @@ describe("junctions (R17)", () => {
         // stretch that is never trimmed, because a junction whose other
         // arm is simply missing reads as the main road stopping dead.
         expect(land.flooded(end.x, end.z) && end.s > SPUR.keep).toBe(false);
-        // ...and it is a real road while it lasts: sealed, then degrading
-        // to gravel as it leaves the world.
-        expect(spur.samples[0].surface).toBe("asphalt");
-        expect(end.surface).toBe("gravel");
+        // ...and it is TARMAC the whole way. A branch is the sealed road
+        // the route borrowed, carried on past the junction; a tarmac road
+        // that turns to gravel in an empty field is a road that goes
+        // nowhere, and it is the loudest thing on the map from above.
+        for (const sample of spur.samples) expect(sample.surface).toBe("asphalt");
       }
     }
   });
@@ -448,42 +448,77 @@ describe("junctions (R17)", () => {
     }
   });
 
-  it("flares the minor road into a mouth, and opens only the near kerb", () => {
-    const track = compileStage(3, "medium", { asphalt: 0.5 });
-    expect(track.junctions.length).toBeGreaterThan(0);
-    for (const junction of track.junctions) {
-      // The dirt road arrives wider than it runs: that flare is what
-      // carries its mat out to the main road's edge instead of leaving a
-      // wedge of country tapering to a knife point between them.
-      const arm = track.samples.filter((sample) => {
-        const d = junction.joining ? junction.s - sample.s : sample.s - junction.s;
-        return d >= 0 && d <= R.junction.mouth.run * track.width;
-      });
-      expect(arm.length).toBeGreaterThan(0);
-      const widest = Math.max(...arm.map((sample) => sample.width));
-      expect(widest).toBeGreaterThan(track.width * 1.2);
+  it("opens the dirt road into a mouth that is widest at the tarmac", () => {
+    for (const seed of seeds) {
+      const track = compileStage(seed, "medium", { asphalt: 0.5 });
+      for (const junction of track.junctions) {
+        const nx = Math.cos(junction.heading);
+        const nz = -Math.sin(junction.heading);
+        const half = junction.width / 2;
+        // The minor arm, walked from the meeting point outward: how wide
+        // the mat is, and how far its centerline still stands past the main
+        // road's own mat.
+        const arm = track.samples
+          .filter((sample) => sample.surface === "gravel")
+          .map((sample) => ({
+            d: junction.joining ? junction.s - sample.s : sample.s - junction.s,
+            out: Math.abs((sample.x - junction.x) * nx + (sample.z - junction.z) * nz) - half,
+            width: sample.width,
+          }))
+          .filter((p) => p.d >= 0 && p.d <= R.junction.mouth.run * track.width && p.out >= 0)
+          .sort((a, b) => a.d - b.d);
+        if (arm.length < 3) continue;
 
-      // ...and the opening it cuts is a gap in ONE kerb. The mouth is on
-      // the side the dirt road arrives on; the far edge line runs straight
-      // past, which is what makes the sealed road the one that goes
-      // through.
-      const mouth = junction.mouth;
-      expect(mouth).not.toBeNull();
-      const nx = Math.cos(junction.heading);
-      const nz = -Math.sin(junction.heading);
-      const half = junction.width / 2;
-      const edge = (side: -1 | 1, along: number): [number, number] => [
-        junction.x + Math.sin(junction.heading) * along + nx * half * side,
-        junction.z + Math.cos(junction.heading) * along + nz * half * side,
-      ];
-      const mid = ((mouth?.from ?? 0) + (mouth?.to ?? 0)) / 2;
-      expect(junctionMouth(junction, ...edge(mouth?.side ?? 1, mid))).toBe(true);
-      expect(junctionMouth(junction, ...edge((mouth?.side === 1 ? -1 : 1), mid))).toBe(false);
-      // The opening is a gap in the kerb, not a missing stretch of road:
-      // it never runs longer than the mouth the flare was given.
-      expect((mouth?.to ?? 0) - (mouth?.from ?? 0)).toBeLessThanOrEqual(
-        2 * R.junction.mouth.run * track.width,
-      );
+        // Widest where it meets the tarmac. A mouth that peaks short of the
+        // seal and closes again is a bulge in a lane, not a junction.
+        expect(arm[0].width).toBe(Math.max(...arm.map((p) => p.width)));
+        // ...and open by a real amount against the lane BEHIND it. Measured
+        // against the arm's own far end rather than the nominal, because
+        // the road out there is wandering either side of nominal anyway
+        // (R33) and what this is asserting is the OPENING.
+        expect(arm[0].width).toBeGreaterThan(arm[arm.length - 1].width * 1.1);
+
+        // ...and it only ever widens on the way IN: walked outward the mat
+        // never grows again, so the flare reads as one opening rather than
+        // as a road that wobbles. Allowed R33's own width wander on top,
+        // which is the road breathing under the mouth rather than the mouth
+        // reopening.
+        const wander = track.width * R.roughness.width.vary * 2;
+        for (let i = 1; i < arm.length; i++) {
+          expect(arm[i].width).toBeLessThanOrEqual(arm[i - 1].width + wander);
+        }
+        // ...and CLOSED again past the taper: a mouth is a place, not a
+        // road that got wider and stayed that way. Asked beyond the taper's
+        // own length, where no flare is left to explain a wide sample.
+        const shut = arm.filter((p) => p.d - arm[0].d > R.junction.mouth.taper * track.width);
+        for (const p of shut) {
+          expect(p.width).toBeLessThanOrEqual(track.width * (1 + R.roughness.width.vary) + 1e-6);
+        }
+      }
+    }
+  });
+
+  it("stops the dirt road AT the tarmac instead of running it underneath", () => {
+    for (const seed of seeds) {
+      const track = compileStage(seed, "medium", { asphalt: 0.5 });
+      for (const junction of track.junctions) {
+        // Everything on the through road's side of the meeting point is
+        // sealed, and so is the arm that carries it on: a band of gravel
+        // crossing a tarmac road is the surface change painted across the
+        // minor road instead of along the main road's edge.
+        const through = track.samples.filter((sample) => {
+          const d = junction.joining ? sample.s - junction.s : junction.s - sample.s;
+          return d > track.step && d < R.junction.reach.max;
+        });
+        for (const sample of through) {
+          if (sample.deck !== null) continue;
+          expect(sample.surface).toBe("asphalt");
+        }
+        const arm = track.spurs.find((spur) => spur.atS === junction.s);
+        for (const sample of arm?.samples ?? []) {
+          expect(sample.surface).toBe("asphalt");
+        }
+      }
     }
   });
 
@@ -513,27 +548,24 @@ describe("junctions (R17)", () => {
   it("a car out on a branch drives on the surface that branch is made of", () => {
     const track = compileStage(3, "medium", { asphalt: 0.5 });
     const spur = track.spurs[0];
-    // A branch is sealed for its first stretch and graded past that, so one
-    // of them carries both surfaces — and both must reach `state.surface`.
-    // Sampled well out along it: the head of a branch sits INSIDE its
-    // junction, which is still the stage road.
-    for (const surface of ["asphalt", "gravel"] as const) {
-      const on = spur.samples.find(
-        (sample) => sample.surface === surface && sample.s > junctionReach(track),
-      );
-      expect(on, `branch carries no ${surface} clear of its junction`).toBeDefined();
-      const state = createGame({ seed: 3, carId: "compact", track, skipCountdown: true });
-      state.car.x = on!.x;
-      state.car.z = on!.z;
-      // ON the branch, not dropped onto it from the start line's height:
-      // both `offRoad` and `surface` are frozen while the car is airborne.
-      state.car.y = state.terrain.groundAt(on!.x, on!.z);
-      state.car.heading = on!.heading;
-      for (let i = 0; i < 30; i++) step(state, NEUTRAL_INPUT);
-      expect(state.car.airborne).toBe(false);
-      expect(state.offRoad).toBe(true);
-      expect(state.surface).toBe(surface);
-    }
+    // A branch is TARMAC end to end (R17) — the sealed road the route
+    // borrowed, carried on past the junction — so a car that leaves the
+    // route and explores one has to find tarmac grip under it, not the
+    // open country's. Sampled well out along it: the head of a branch sits
+    // INSIDE its junction, which is still the stage road.
+    const on = spur.samples.find((sample) => sample.s > junctionReach(track));
+    expect(on, "branch carries no road clear of its junction").toBeDefined();
+    const state = createGame({ seed: 3, carId: "compact", track, skipCountdown: true });
+    state.car.x = on!.x;
+    state.car.z = on!.z;
+    // ON the branch, not dropped onto it from the start line's height:
+    // both `offRoad` and `surface` are frozen while the car is airborne.
+    state.car.y = state.terrain.groundAt(on!.x, on!.z);
+    state.car.heading = on!.heading;
+    for (let i = 0; i < 30; i++) step(state, NEUTRAL_INPUT);
+    expect(state.car.airborne).toBe(false);
+    expect(state.offRoad).toBe(true);
+    expect(state.surface).toBe("asphalt");
   });
 
   // R17 — THE BLOCK. The barrier shutting an abandoned branch is a thing

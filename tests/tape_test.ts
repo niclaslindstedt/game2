@@ -174,8 +174,13 @@ describe("the run tape", () => {
     // way, and a single seed reads that coin-flip as a broken ladder. The
     // claim being made is about the ladder, so it is asked of the ladder —
     // several roads at once, where one crew's bad afternoon cannot carry it.
+    // FIVE roads, not three: a place is an integer, and summed over three
+    // the ladder's two rungs sit close enough together that one crew's
+    // accident can invert them. Widening the sample is the fix — the claim
+    // is about the ladder, so it is worth the stages it costs to ask it of
+    // enough of one.
     const totals = [0, 0, 0];
-    for (const seed of [42, 7, 21]) {
+    for (const seed of [42, 7, 21, 3, 11]) {
       const stage = { ...STAGE, seed };
       const recorded = race({
         stage,
@@ -198,10 +203,10 @@ describe("the run tape", () => {
     // difficulty ladder has stopped being a ladder.
     expect(totals[0]).toBeLessThanOrEqual(totals[1]);
     expect(totals[1]).toBeLessThanOrEqual(totals[2]);
-    // Three roads and three fields of fourteen is a hundred and twenty-six
-    // stages driven for one assertion — worth it for the one the whole
-    // calibration rests on, but not inside the default budget.
-  }, 60_000);
+    // Five roads and three fields of fourteen is two hundred and ten stages
+    // driven for one assertion — worth it for the one the whole calibration
+    // rests on, but nowhere near the default budget.
+  }, 120_000);
 
   it("writes down the cut establishing shot, because it moves the field", () => {
     const recorder = createTapeRecorder({

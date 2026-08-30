@@ -139,7 +139,8 @@ function buildScenery(
   const rng = createRng((track.seed ^ 0x5f356495 ^ Math.imul(from, 2246822519)) >>> 0);
   const samples = track.samples;
   const half = track.width / 2;
-  const clearance = half + 3.5;
+  /** Room past the road's own edge that nothing grows in, m. */
+  const clearance = 3.5;
   const heightAt = terrain.heightAt;
   const field = terrain.field;
 
@@ -155,10 +156,18 @@ function buildScenery(
   // Clearance checks walk the guard samples — the chunk's own road with
   // its aprons plus a margin of neighbours — so nothing grows on the road,
   // the start run-up, or the finish run-off.
-  const clearOfRoad = (x: number, z: number, r: number): boolean => {
+  //
+  // `margin` is room past the road's EDGE, and the edge is the one this
+  // sample actually has: a junction's mouth flares half as wide again as
+  // the road it opens off (R17) and a gravel road wanders either side of
+  // nominal down the whole stage (R33). Measured against the nominal
+  // instead, every crossing on the map gets shrubs planted in the middle
+  // of its paving.
+  const clearOfRoad = (x: number, z: number, margin: number): boolean => {
     for (let i = 0; i < guard.length; i += 4) {
       const dx = x - guard[i].x;
       const dz = z - guard[i].z;
+      const r = guard[i].width / 2 + margin;
       if (dx * dx + dz * dz < r * r) return false;
     }
     return true;
@@ -251,7 +260,7 @@ function buildScenery(
       const chance =
         (biome.undergrowthDensity / 2) * (community.groundCover ?? 1) * density * band.share;
       if (!rng.chance(chance)) continue;
-      if (!clearOfRoad(x, z, half + 1.2)) continue;
+      if (!clearOfRoad(x, z, 1.2)) continue;
       if (inStream(terrain.field.streams, x, z, 0.5)) continue;
       const y = heightAt(x, z);
       // A lake that stops on a line is the tell that it was drawn on. In
@@ -289,7 +298,7 @@ function buildScenery(
       const offset = half + rng.range(0.25, ROAD_CROSS.verge.bareTo + 0.6);
       const x = s.x + r.x * offset * side + rng.range(-0.6, 0.6);
       const z = s.z + r.z * offset * side + rng.range(-0.6, 0.6);
-      if (!clearOfRoad(x, z, half + 0.15)) continue;
+      if (!clearOfRoad(x, z, 0.15)) continue;
       if (inStream(field.streams, x, z, 0.5)) continue;
       const y = heightAt(x, z);
       if (y < LAKE_Y + 1.2) continue;
@@ -347,7 +356,7 @@ function buildScenery(
     const x = s.x + r.x * offset * side + rng.range(-3, 3);
     const z = s.z + r.z * offset * side + rng.range(-3, 3);
     const drop = rng.next();
-    if (!clearOfRoad(x, z, half + 1.2)) continue;
+    if (!clearOfRoad(x, z, 1.2)) continue;
     if (inStream(terrain.field.streams, x, z, 0.5)) continue;
     const y = heightAt(x, z);
     if (y < LAKE_Y + 1.2) continue;
@@ -639,7 +648,6 @@ function buildSpur(track: Track, spur: Spur, cones: ConeField, beside: GroundBes
   if (spur.block) group.add(buildBlockade(spur.block, cones));
   return group;
 }
-
 
 export type World = {
   group: THREE.Group;

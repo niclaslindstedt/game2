@@ -9,7 +9,15 @@
 //   A road that ends in a field. Roads go somewhere. A branch that stops
 //   in open country, with nothing at the end of it and nothing on the far
 //   side, is the single loudest tell that a landscape was generated: the
-//   real ones all continue past the edge of what you were given.
+//   real ones all continue past the edge of what you were given. A SEALED
+//   road that does it is worse again: somebody laid a tarmac road, and
+//   tarmac is laid to reach somewhere.
+//
+//   A tarmac road that turns into a gravel one. A surface change is a
+//   place — a junction, where the rally leaves the public road (R17). One
+//   that happens in the middle of nowhere, with no junction and nothing to
+//   explain it, says the road was drawn in two passes by two people who
+//   never spoke.
 //
 //   Two roads running side by side. Legal — they never touch — and still
 //   wrong, because a country does not lay two carriageways a hundred
@@ -94,6 +102,8 @@ export function analyzeRoads(track: Track): MetricReport {
   // ── Where does each branch GO? ────────────────────────────────────────
   let stranded = 0;
   let stubs = 0;
+  let degraded = 0;
+  let unsealed = 0;
   for (let i = 0; i < track.spurs.length; i++) {
     const spur: Spur = track.spurs[i];
     const end = spur.samples[spur.samples.length - 1];
@@ -113,6 +123,46 @@ export function analyzeRoads(track: Track): MetricReport {
         )} m inside the stage's own bounds`,
         at: { x: end.x, z: end.z },
         value: Math.max(0, R.escape - out),
+      });
+    }
+
+    // R17 — a SEALED road is held to the harder bar, and a branch is one:
+    // it is the tarmac the route borrowed, carried on past the junction.
+    // Somebody laid it, and tarmac is laid to reach somewhere — so a lake
+    // or the road it may not cross is a reason it STOPPED, never a reason
+    // it was right to stop there. It has to be out of sight when it does.
+    if (out < R.escape) {
+      unsealed++;
+      findings.push({
+        code: "roads.sealed",
+        severity: "error",
+        message: `the tarmac of branch ${i + 1} stops ${Math.max(0, -out).toFixed(
+          0,
+        )} m inside the map (${spur.endsAt === "water" ? "at water" : spur.endsAt === "stage" ? "at the stage" : "for no reason"}) — a sealed road leads somewhere`,
+        at: { x: end.x, z: end.z },
+        s: spur.atS,
+        value: Math.max(0, R.escape - out),
+      });
+    }
+
+    // ...and it is tarmac the whole way. A surface change is a PLACE (R17);
+    // one part-way down a branch, with no junction at it, is a road that
+    // gave up being a road.
+    const changes = spur.samples.filter(
+      (sample, k) => k > 0 && sample.surface !== spur.samples[k - 1].surface,
+    );
+    if (changes.length > 0) {
+      degraded++;
+      const at = changes[0];
+      findings.push({
+        code: "roads.degrade",
+        severity: "error",
+        message: `branch ${i + 1} stops being tarmac ${at.s.toFixed(
+          0,
+        )} m along it, at no junction — a sealed road does not turn to gravel in a field`,
+        at: { x: at.x, z: at.z },
+        s: spur.atS,
+        value: end.s - at.s,
       });
     }
     const length = spur.samples.length * SPUR.step;
@@ -309,6 +359,20 @@ export function analyzeRoads(track: Track): MetricReport {
       budget: R.parallelRun,
     },
     {
+      id: "sealed",
+      label: "every tarmac road runs off the map",
+      score: rate(unsealed, Math.max(1, track.spurs.length)),
+      weight: 2.5,
+      value: unsealed,
+    },
+    {
+      id: "degrade",
+      label: "no tarmac road turns to gravel in a field",
+      score: rate(degraded, Math.max(1, track.spurs.length)),
+      weight: 2,
+      value: degraded,
+    },
+    {
       id: "stubs",
       label: "no branch is a stub",
       score: rate(stubs, Math.max(1, track.spurs.length)),
@@ -341,6 +405,8 @@ export function analyzeRoads(track: Track): MetricReport {
     stats: {
       branches: track.spurs.length,
       stranded,
+      unsealed,
+      degraded,
       stubs,
       breaches,
       parallelRuns: parallelRun,

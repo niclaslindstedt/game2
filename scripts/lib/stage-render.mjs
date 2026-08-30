@@ -89,7 +89,6 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
     junctionDust,
     junctionFlat,
     junctionMainEdge,
-    junctionMouth,
   } = engine;
   const canvas = createCanvas(width, height, GROUND.grass);
 
@@ -226,19 +225,9 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
    * stands on the mat of the road it meets. */
   const inJunction = (x, z) => {
     if (track.junctions.some((j) => junctionFlat(j, x, z) > 0.25)) return true;
-    return onMainMat(x, z);
-  };
-  /** ...and the narrower question the MARKINGS ask: is this piece of road
-   * standing on the main road's own mat, where a minor road has no border
-   * of its own to paint. */
-  const onMainMat = (x, z) => {
     const past = pastMainEdge(x, z);
     return past !== null && past < 1.5;
   };
-  /** R17 — is a point in a junction's MOUTH: the gap the dirt road cuts in
-   * the main road's near kerb, and the only place a crossing interrupts the
-   * through road's paint. */
-  const inMouth = (x, z) => track.junctions.some((j) => junctionMouth(j, x, z));
 
   const bandColor = (sample, lat, roadWidth, x, z) => {
     const half = roadWidth / 2;
@@ -327,10 +316,6 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
       const c = samples[i];
       const half = (c.width ?? roadWidth) / 2;
       if (c.surface === "water" || c.deck != null) continue;
-      // R17 — the through road's paint runs PAST a crossing; only the kerb
-      // the dirt road opens gives way, and that is asked at the edge line's
-      // own position below.
-      if (onMainMat(c.x, c.z)) continue;
       const ar = { x: Math.cos(a.heading), z: -Math.sin(a.heading) };
       const cr = { x: Math.cos(c.heading), z: -Math.sin(c.heading) };
       const band = (l0, l1, color) =>
@@ -344,11 +329,7 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
           color,
         );
       if (c.surface === "asphalt") {
-        for (const side of [-1, 1]) {
-          const at = (half - 0.65) * side;
-          if (inMouth(c.x + cr.x * at, c.z + cr.z * at)) continue;
-          band(at, (half - 0.3) * side, ROAD.marking);
-        }
+        for (const side of [-1, 1]) band((half - 0.65) * side, (half - 0.3) * side, ROAD.marking);
         if (c.s % 9 < 3) band(-0.2, 0.2, ROAD.marking);
       } else {
         const stripe = Math.floor(c.s / 4) % 2 === 0 ? ROAD.rumbleRed : ROAD.rumbleWhite;

@@ -126,8 +126,15 @@ export const SPUR = {
   /** ...and the run it is allowed to take doing it. The floor keeps a
    * junction near the edge of the map from being a stub anyway; the
    * ceiling keeps a junction in the middle of a big stage from building a
-   * second stage's worth of road. */
-  length: { min: 260, max: 1500 },
+   * second stage's worth of road.
+   *
+   * The ceiling is generous because LEAVING is the point. A junction sits
+   * wherever the paving field put it, which is usually in the middle of the
+   * country the stage occupies — and from there a branch that has to steer
+   * round a lake and keep off the stage covers a lot of ground to get to an
+   * edge. A ceiling that binds turns a public road into a road that stops
+   * in a field, which is the loudest mistake on the map. */
+  length: { min: 260, max: 3200 },
   step: 4,
   /** Radius the branch's own wandering never turns tighter than, m. */
   minRadius: 55,

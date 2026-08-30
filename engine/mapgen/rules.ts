@@ -866,33 +866,41 @@ export const STAGE_RULES = {
      * lane cuts the corner, and season after season the mouth is worn and
      * bladed WIDER until the two mats are one piece of ground.
      *
-     * So the minor road's mat is flared into a KERB RADIUS: a quarter
-     * circle tangent to the dirt road's own edge at one end and to the main
-     * road's edge at the other, which is how every junction on every map is
-     * actually built. Two properties of that shape are the whole point, and
-     * getting either wrong is visible from the air:
+     * So the minor road's mat is flared into a TRUMPET, and three
+     * properties of that shape are the whole point. Getting any of them
+     * wrong is visible from the air, and each has been:
      *
-     * - It only ever WIDENS on the way in. A mouth that opens and closes
-     *   again before it reaches the tarmac reads as a bulge in a lane
-     *   rather than as a junction.
-     * - It STOPS at the main road's edge. Past that line the ground belongs
-     *   to the through road, which is already paving it — carrying the
-     *   flare on across puts a mushroom of dirt out into the field on the
-     *   far side, where there was never anything to cover.
+     * - It is WIDEST AT THE TARMAC. The mouth's job is to give a car
+     *   leaving the dirt road room to turn either way onto the seal, and
+     *   that room is needed where the two meet. A flare that peaks a few
+     *   meters short and closes again reads as a bulge in a lane.
+     * - It opens GRADUALLY. Narrow down the length of the lane, opening
+     *   over a stretch of it, not a step.
+     * - It STOPS at the main road's edge, and the dirt stops with it. Past
+     *   that line the ground belongs to the through road, which is already
+     *   paving it — carrying the flare across puts a mushroom of dirt out
+     *   into the field on the far side, and carrying the SURFACE across
+     *   drives a band of gravel through the middle of a sealed road.
      *
-     * `kerb` is the radius, as a share of the road's own width, so the mouth
-     * of a lane and the mouth of a boulevard are the same PLACE at two
-     * scales; at 0.6 the throat is a little over twice the road, which is
-     * what a junction two graded roads wide looks like. `run` bounds how far
-     * back down the minor road the widening may reach at all, in road
-     * widths — a corner that hugs the main road for a hundred meters is not
-     * allowed to be a hundred meters of mouth. */
-    mouth: { run: 1.9, kerb: 0.6 },
-    /** ...and how far past the main road's own edge the mouth's opening is
-     * counted, m — the stretch of edge line and border a driver turning in
-     * has worn away either side of the throat. Small: a junction is a gap
-     * in the kerb, not a missing kilometre of road marking. */
-    mouthLip: 3,
+     * `wide` is the extra half-width at the tarmac and `taper` the length of
+     * lane it opens over, both as shares of the road's own width, so the
+     * mouth of a lane and the mouth of a boulevard are the same PLACE at two
+     * scales. At 0.6 and 1.1 the throat is a little over twice the road and
+     * opens over a road and a bit of it — which is what a graded side road
+     * meeting a country highway looks like. `run` bounds how far back the
+     * widening may reach at all, in road widths: a corner that hugs the main
+     * road for a hundred meters is not a hundred meters of mouth. */
+    mouth: { run: 3, wide: 0.13, taper: 1.1 },
+    /** R17 — how far a junction's abandoned arm is allowed to be from the
+     * edge of the map, as a share of the run a branch may take getting
+     * there. A junction is only built where the arm it abandons can LEAVE:
+     * a branch that cannot get clear of the country stops in a field, and a
+     * tarmac road ending in a field is the loudest mistake the generator
+     * can make. Measured as a share of the box's own diagonal, so it means
+     * the same on a sprint and on a stage four times the size — and well
+     * under 1, because a branch does not fly straight out: it wanders, and
+     * it steers round water and round the road it left. */
+    armReach: 0.8,
     /** R23's exemption around a junction, m of stage arc either side of it.
      * A branch leaves a junction ON the road it is leaving, so it cannot be
      * measured against that road while it is still LEAVING. Wide enough to

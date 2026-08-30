@@ -333,10 +333,20 @@ describe("the road's surface (R33)", () => {
     // at all.
     const track = compileStage(2, "long", { asphalt: 0.6 });
     const band = STAGE_RULES.roughness.width.vary;
+    // ...outside a junction's MOUTH, which is the one place the dirt road
+    // is deliberately opened out well past its band (R17) and is a place
+    // rather than a wander.
+    const mouthRun = STAGE_RULES.junction.mouth.run * track.width;
+    const inMouth = (s: (typeof track.samples)[number]): boolean =>
+      track.junctions.some((j) => {
+        const d = j.joining ? j.s - s.s : s.s - j.s;
+        return d >= 0 && d <= mouthRun;
+      });
     let lo = Infinity;
     let hi = 0;
     for (const s of track.samples) {
       if (s.deck !== null) continue;
+      if (inMouth(s)) continue;
       if (s.surface === "asphalt") {
         // Laid, not bladed: exactly the nominal, to the millimetre.
         expect(s.width).toBeCloseTo(track.width, 6);

@@ -349,8 +349,10 @@ export type PropContext = {
   groundAt: (x: number, z: number) => number;
   /** Distance to the stage centerline and which sample it came from. */
   roadNear: (x: number, z: number) => { d: number; index: number } | null;
-  /** Where a stage sample stands — the slab field's cut-wall probe. */
-  sampleAt: (index: number) => { x: number; z: number; elevation: number };
+  /** Where a stage sample stands, and how wide the road is there — the
+   * slab field's cut-wall probe, and the width every keep-off distance is
+   * measured from (R17's mouths and R33's wander both move it). */
+  sampleAt: (index: number) => { x: number; z: number; elevation: number; width: number };
   /** Distance past the mat edge of the nearest abandoned branch (R17). */
   spurClearance: (x: number, z: number) => number;
   /** True when a point is inside a stream valley, with margin. */
@@ -469,11 +471,20 @@ export function createPropField(ctx: PropContext): PropField {
   };
   const standing = (ob: WildObstacle): boolean => felled.size === 0 || !felled.has(propKey(ob));
 
+  /** Half the width of the road at the sample a query landed nearest to, m.
+   * The road's own width HERE, never the stage's nominal: a junction's mouth
+   * flares half as wide again as the lane it opens off (R17) and a gravel
+   * road wanders either side of nominal down the whole stage (R33), so the
+   * nominal is the one width the road is mostly not — and a boulder set at
+   * nominal-plus-its-clearance stands on the paving at every crossing. */
+  const halfAt = (near: { index: number } | null): number =>
+    near ? sampleAt(near.index).width / 2 : half;
+
   /** True when a prop of `radius` standing here leaves the road ribbon —
    * mat, shoulder and ditch — entirely to itself. */
   const offEveryRoad = (x: number, z: number, radius: number): boolean => {
     const near = roadNear(x, z);
-    if (near && near.d - radius < half + PROP_ROAD_CLEAR) return false;
+    if (near && near.d - radius < halfAt(near) + PROP_ROAD_CLEAR) return false;
     return spurClearance(x, z) - radius > PROP_ROAD_CLEAR;
   };
 
@@ -494,7 +505,7 @@ export function createPropField(ctx: PropContext): PropField {
     sink = 0,
   ): void => {
     const near = roadNear(x, z);
-    if (near && near.d < half + OB_ROAD_CLEAR) return;
+    if (near && near.d < halfAt(near) + OB_ROAD_CLEAR) return;
     if (spurClearance(x, z) < OB_ROAD_CLEAR) return;
     const { radius } = solidShape(kind, size);
     if (!offEveryRoad(x, z, radius) || inAnyStream(x, z, Math.max(1, radius * 0.5))) return;
@@ -739,7 +750,7 @@ export function createPropField(ctx: PropContext): PropField {
       const x = (cx + 0.15 + hash2(cx, cz, slabSeed + 1) * 0.7) * SLAB_CELL;
       const z = (cz + 0.15 + hash2(cx, cz, slabSeed + 2) * 0.7) * SLAB_CELL;
       const near = roadNear(x, z);
-      const edge = near ? near.d - half : Infinity;
+      const edge = near ? near.d - halfAt(near) : Infinity;
       // Only in the band beside the road, and only where the ground out
       // there is still climbing hard — an outcrop is the cut wall showing
       // through, not a rock dropped in a meadow.
@@ -870,7 +881,7 @@ export function createPropField(ctx: PropContext): PropField {
     roll: number,
   ): void => {
     const near = roadNear(x, z);
-    if (near && near.d < half + TREE_ROAD_CLEAR) return;
+    if (near && near.d < halfAt(near) + TREE_ROAD_CLEAR) return;
     if (spurClearance(x, z) < TREE_ROAD_CLEAR || inAnyStream(x, z, 1.5)) return;
     // Feet on the RIDDEN lattice ground, same as the props: the trunk must
     // stand exactly on the surface the car drives.

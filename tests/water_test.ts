@@ -441,7 +441,11 @@ describe("driving out again (TUNING.crash.drown.shallows)", () => {
   // throttle — and those differ. Seed 45 beaches and then sits there at
   // 0.15 m/s, which passes the search and fails the driving. Leading with a
   // seed that satisfies both keeps the search honest and stops at once.
-  const SHORE_SEEDS = [59, 3, ...SEEDS];
+  // ...and a wide enough field to search. Which shores a stage HAS is a
+  // property of the generator, so a fixed handful of seeds is a fixture
+  // that goes stale the next time the roads move: the list is the search
+  // SPACE, not the answer, and it has to be big enough to hold one.
+  const SHORE_SEEDS = [59, 3, ...SEEDS, ...Array.from({ length: 60 }, (_, i) => 60 + i)];
 
   /** Take a seed's plunge and run the drowning out. Reports the seed whose
    * shoreline the car drives back out of — which one that is depends on the
