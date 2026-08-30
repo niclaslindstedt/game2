@@ -218,6 +218,10 @@ export function buildSpur(
    * a point and height, once the stage's own verge cone has cut away
    * whatever would have been a wall beside it. */
   shelfHolds: (x: number, z: number, y: number) => boolean,
+  /** R23 + R31 — the highest this branch may stand at a point without its
+   * own shelf becoming a wall beside the stage. Infinity out where the
+   * stage's cone does not reach. */
+  shelfCeiling: (x: number, z: number) => number,
 ): Spur {
   const rng = createRng(
     (seed ^ (Math.round(atS) * 2654435761) ^ (end === "entry" ? 0x9e37 : 0x85eb)) >>> 0,
@@ -409,6 +413,21 @@ export function buildSpur(
     const want = y + (Math.max(land.heightAt(x, z), LAKE_Y + SPUR.shoreFreeboard) - y) * follow;
     const cap = SPUR.maxGrade * SPUR.step;
     y = Math.max(y - cap, Math.min(y + cap, want));
+    // R23 + R31 — and it may not climb out of the STAGE's verge cone while
+    // it is still inside it.
+    //
+    // Following the country is right in open ground and wrong beside the
+    // road it just left: the two part company in height long before they
+    // part on the map, and a branch three metres from the stage and seven
+    // above it leaves the terrain an impossible job. Holding the ground up
+    // under the branch — which it must, or the branch hangs in the air —
+    // builds exactly the wall on the stage's shoulder that R31 exists to
+    // forbid. Neither rule can give way there, so the branch gives way
+    // here, and the two roads run at one height until they have genuinely
+    // separated. Past the cone's reach the ceiling is Infinity and the
+    // branch follows the country as it always did.
+    const ceiling = shelfCeiling(x, z);
+    if (y > ceiling) y = ceiling;
   }
   // R23 — and then the guarantee the steering only tries for: the branch is
   // CUT at the first step that stands inside the clearance. Not backed up
@@ -430,6 +449,19 @@ export function buildSpur(
     // the question of whether the branch is still leaving.
     const clear = roadDistance(at.x, at.z, false);
     if (clear >= keepOut) departed = true;
+    // R31 — the HEIGHT rule binds the whole way, the junction window
+    // included, and that is the half of R23 this used to let through.
+    //
+    // At the mouth the two roads are one graded plane, so `over` is zero
+    // and this passes by construction; what it catches is the branch that
+    // has started to CLIMB AWAY while still inside the stage's verge cone.
+    // Exempting the first `keep` metres from it, and never asking it at all
+    // while the branch was still leaving, let a branch stand seven metres
+    // over the stage three metres from its edge — and the terrain then has
+    // an impossible job, because holding the ground up under the branch
+    // (which it must, or the branch hangs in the air) builds a wall on the
+    // stage's shoulder that R31 says cannot be there. Neither rule can give
+    // way in the terrain; the branch is what has to.
     if (at.s <= SPUR.keep) continue;
     // Still leaving: the stage either side of the junction is this branch's
     // own road, and the ground under both is the junction's one plane.
@@ -477,7 +509,13 @@ export function buildSpur(
     samples.pop();
     endsAt = "water";
   }
-  length = samples[samples.length - 1].s;
+  // A branch can now be trimmed away entirely: the height rule above binds
+  // from the mouth, so an arm that climbs out of the stage's verge cone in
+  // its first few metres has nothing left that is allowed to exist. That is
+  // an honest answer — this corner cannot carry a junction — and the
+  // caller's `armCanLeave` reads it off an empty arm and refuses the
+  // junction. It must not crash on the way there.
+  length = samples.length > 0 ? samples[samples.length - 1].s : 0;
 
   // R17 — the branch is the MAIN road continued, so it is sealed for its
   // whole length: a tarmac road that turns to gravel in an empty field is a

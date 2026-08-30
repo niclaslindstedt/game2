@@ -805,6 +805,7 @@ function createCompiler(
       (x: number, z: number, ignoringJunction?: boolean) =>
         Math.min(stage(x, z, ignoringJunction), others(x, z)),
       country.shelfHolds,
+      country.shelfCeiling,
     );
     const last = trial.samples[trial.samples.length - 1];
     if (!last) return false;
@@ -1233,6 +1234,36 @@ function createCompiler(
     return true;
   };
 
+  /** R23 + R31 — the same rule read as a HEIGHT rather than as a verdict:
+   * the highest a branch may stand here without its shelf becoming a wall
+   * beside the stage. `shelfHolds` is the test a finished branch passes or
+   * fails; this is what a branch under construction has to be held to, and
+   * the two are the same cone.
+   *
+   * Infinity where no part of the stage is close enough to have an opinion,
+   * which is most of a branch — so past the corridor it follows the country
+   * exactly as it always did. */
+  const shelfCeiling = (x: number, z: number): number => {
+    const STRIDE = 8;
+    const bench = Math.max(track.width / 2 + ROAD_CROSS.reach, R.verge.bench);
+    const slack = STRIDE * SAMPLE_STEP * 0.5;
+    const all = track.samples;
+    let cap = Infinity;
+    for (let k = 0; k < all.length; k += STRIDE) {
+      const road = all[k];
+      const dx = road.x - x;
+      const dz = road.z - z;
+      const d2 = dx * dx + dz * dz;
+      // Out past the point where even ground at this road's own height
+      // would clear the cone, the sample has nothing to say.
+      const reach = bench + slack + Math.max(0, cap - road.elevation) / R.verge.climb;
+      if (cap < Infinity && d2 > reach * reach) continue;
+      const allowed = road.elevation + Math.max(0, Math.sqrt(d2) - bench - slack) * R.verge.climb;
+      if (allowed < cap) cap = allowed;
+    }
+    return cap;
+  };
+
   /** Build the branch every noted junction earns, now that the road they
    * hang off is compiled. A finite stage hands each branch the stage's own
    * bounding box to escape; a streamed one has no box, so the branch just
@@ -1284,6 +1315,7 @@ function createCompiler(
             Math.min(stage(x, z, ignoringJunction), clearOfBranches(x, z));
         })(),
         shelfHolds,
+        shelfCeiling,
       );
       track.spurs.push(spur);
       standing.push(spur);
@@ -1767,6 +1799,9 @@ type Country = {
   ) => (x: number, z: number, ignoring?: boolean) => number;
   /** R31 — whether the ground is still there for a road at this height. */
   shelfHolds: (x: number, z: number, y: number) => boolean;
+  /** R31 — and the height itself: the highest a road may stand here
+   * without its shelf standing as a wall beside the stage. */
+  shelfCeiling: (x: number, z: number) => number;
 };
 
 const PLAN_STEP = 6;
@@ -1883,6 +1918,48 @@ function planCountry(
       return Math.max(0, best - slack);
     };
   const bench = Math.max(width / 2 + ROAD_CROSS.reach, R.verge.bench);
+  /** The lowest the stage gets. The cone rises with distance from the road
+   * and never falls, so no point further out than this height allows can
+   * lower a ceiling already found — which is what bounds the ring walk
+   * below to a handful of cells instead of the whole stage. */
+  let lowest = Infinity;
+  for (const p of pts) if (p.y < lowest) lowest = p.y;
+  /** R23 + R31 — the highest a ROAD may stand at a point without its shelf
+   * becoming a wall beside the stage: the stage's own verge cone, read as a
+   * ceiling instead of as a yes/no.
+   *
+   * `shelfHolds` answers whether a given height is legal; this answers what
+   * the legal height IS, which is what a branch needs while it is being
+   * BUILT rather than after. Asked once per branch step, so it walks the
+   * same grid `roadDistance` does and stops at the first ring that cannot
+   * lower the answer — the cone only ever rises with distance, so a ring
+   * whose nearest possible point is already above the best is a ring with
+   * nothing to say. */
+  const shelfCeiling = (px: number, pz: number): number => {
+    let cap = Infinity;
+    const cx = Math.floor(px / CELL);
+    const cz = Math.floor(pz / CELL);
+    for (let ring = 0; ring <= rings; ring++) {
+      // The nearest ground this ring could hold, and therefore the lowest
+      // ceiling it could impose on top of the lowest road height seen.
+      if (cap < Infinity && (ring - 1) * CELL > bench + slack + (cap - lowest) / R.verge.climb) {
+        break;
+      }
+      for (let dx = -ring; dx <= ring; dx++) {
+        const stride = Math.abs(dx) === ring || ring === 0 ? 1 : 2 * ring;
+        for (let dz = -ring; dz <= ring; dz += stride) {
+          const bucket = grid.get(cellKey(cx + dx, cz + dz));
+          if (bucket === undefined) continue;
+          for (const p of bucket) {
+            const d = Math.hypot(p.x - px, p.z - pz);
+            const allowed = p.y + Math.max(0, d - bench - slack) * R.verge.climb;
+            if (allowed < cap) cap = allowed;
+          }
+        }
+      }
+    }
+    return cap;
+  };
   const shelfHolds = (px: number, pz: number, y: number): boolean => {
     for (const p of pts) {
       const over = y - p.y;
@@ -1894,7 +1971,7 @@ function planCountry(
     }
     return true;
   };
-  return { bounds: box, roadDistance, shelfHolds };
+  return { bounds: box, roadDistance, shelfHolds, shelfCeiling };
 }
 
 function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs, circuit = false): Track {
