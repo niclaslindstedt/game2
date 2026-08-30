@@ -2939,41 +2939,12 @@ a.menu-version:focus-visible {
   border: 1px solid rgb(0 0 0 / 45%);
 }
 
-/* The box in the corner of a full-screen map. It borrows the driving
-   overlay's own boxes (.debug-box and friends) rather than restating them:
-   the two are one instrument pointed at two subjects, and a screenshot of
-   either has to read the same way. */
-.map-debug {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
-  color: #dff1ff;
-  text-shadow: none;
-}
-
-/* Under the page's own header rather than across it: the way back and the
-   seed stepper stay reachable in full screen, and a box laid over them
-   would hide the two controls this view is actually driven from. */
-.map-debug-boxes {
-  position: absolute;
-  top: calc(max(0.5rem, env(safe-area-inset-top)) + 2.6rem);
-  left: max(0.5rem, env(safe-area-inset-left));
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  width: min(26rem, 56vw);
-  max-height: calc(100% - 11rem);
-  overflow: hidden;
-}
-
-/* Clear of the layer switch along the bottom, which is the one thing on
-   this page a pointer has to be able to reach. Written through `.map-debug`
-   so it outranks the driving overlay's own `.debug-repro`, which sits later
-   in this file and pins the strip to the foot of the screen. */
-.map-debug .debug-repro {
-  bottom: 4.6rem;
-  pointer-events: auto;
+/* A tool with nothing to say yet: the stage is still being generated, so
+   the button that would copy its numbers is offered but dead, rather than
+   absent and arriving under the pointer a second later. */
+.map-tool:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .roam-seed {
