@@ -343,6 +343,13 @@ export function enter(crew: RivalCrew, difficulty: Difficulty, number: number): 
       ...profileFor(skill),
       overtake: crew.overtake,
       aggression: temperFor(difficulty, crew.temper),
+      // Where their grid ritual sits against everybody else's (`GRID` in
+      // bot.ts). The golden ratio, walked by start number: it is the one
+      // step that never repeats a gap, so however deep the entry list is
+      // cut the field on the apron stays spread across the blip instead of
+      // falling into unison — which is what a whole grid revving to one
+      // clock sounds like, and it sounds like one engine.
+      gridPhase: (number * 0.618034) % 1,
     },
     gearbox: gearboxFor(skill),
   };

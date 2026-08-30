@@ -15,10 +15,14 @@ import {
   NEUTRAL_INPUT,
   START_INTERVAL,
   TUNING,
+  compileTrack,
+  createField,
   createGame,
+  gridRev,
   skipIntro,
   startsIn,
   step,
+  stepField,
   type GameState,
 } from "@engine";
 
@@ -254,5 +258,113 @@ describe("the start control's beats", () => {
     const state = createGame({ seed: 42, skipCountdown: true, quiet: true });
     expect(state.phase).toBe("racing");
     expect(startsIn(state)).toBe(0);
+  });
+});
+
+/** Walk one crew's whole ritual at the engine's own rate, from `START`
+ * seconds out to the green. Returns the pedal at every step. */
+function ritual(aggression: number, phase = 0): number[] {
+  const pedal: number[] = [];
+  for (let i = 0; i <= stepsIn(START); i++) {
+    pedal.push(gridRev(START - i * TUNING.dt, aggression, phase));
+  }
+  return pedal;
+}
+
+/** How many separate blips are in a ritual — rising edges off a closed
+ * throttle, which is what a listener would count. */
+function blips(pedal: number[]): number {
+  let count = 0;
+  for (let i = 1; i < pedal.length; i++) if (pedal[i] > 0 && pedal[i - 1] === 0) count += 1;
+  return count;
+}
+
+describe("the grid ritual", () => {
+  it("waits before it starts, and ends on a held note", () => {
+    for (const aggression of [0, 0.5, 1]) {
+      const pedal = ritual(aggression);
+      // The beats before the ritual are the field WAITING: the establishing
+      // shot opens on cars with the engine merely running.
+      expect(pedal[0], `agg ${aggression}`).toBe(0);
+      // ...and it closes on one note, not on whichever part of a blip the
+      // green happened to land in — the drop reads the revs it lands on
+      // (`clutchDump`), so a lottery there is a lottery on the launch.
+      const last = pedal.slice(-stepsIn(0.5));
+      expect(Math.min(...last), `agg ${aggression}`).toBeGreaterThan(0);
+      expect(Math.max(...last) - Math.min(...last)).toBeCloseTo(0, 6);
+    }
+  });
+
+  it("revs a crew with a temper harder, oftener, and higher at the green", () => {
+    const calm = ritual(0);
+    const wild = ritual(1);
+    // Harder: the deepest thing the mild crew ever asks for is under what
+    // the wild one is asking for at the same moment.
+    expect(Math.max(...wild)).toBeGreaterThan(Math.max(...calm));
+    // Oftener.
+    expect(blips(wild)).toBeGreaterThan(blips(calm));
+    // ...and sat on more revs when the clutch comes out, which is what the
+    // difference actually COSTS them — a lit axle rather than a clean drive
+    // away (see "launching off the line" above).
+    expect(wild[wild.length - 1]).toBeGreaterThan(calm[calm.length - 1]);
+    // The calm end is still a car sitting ready, not one idling: nobody
+    // launches off idle, and a pipe at idle has nothing to show either.
+    expect(calm[calm.length - 1]).toBeGreaterThan(TUNING.engine.dumpFrom);
+  });
+
+  it("builds: the blips come closer together and are held longer", () => {
+    const pedal = ritual(0.6);
+    const half = Math.floor(pedal.length / 2);
+    // Measured over the BLIPPING only — the held note at the end would
+    // otherwise count as one very long blip and swamp the second half.
+    const early = pedal.slice(0, half);
+    const late = pedal.slice(half, pedal.length - stepsIn(1.2));
+    const open = (part: number[]): number => part.filter((v) => v > 0).length / part.length;
+    expect(open(late)).toBeGreaterThan(open(early));
+    expect(Math.max(...late)).toBeGreaterThan(Math.max(...early));
+  });
+
+  it("puts the field out of step with itself, so a grid is not one engine", () => {
+    // Two identical drivers stood side by side. Same temper, different slot:
+    // if the phase did nothing they would blip as one car.
+    const a = ritual(0.6, 0);
+    const b = ritual(0.6, 0.5);
+    const apart = a.filter((v, i) => v > 0 !== b[i] > 0).length;
+    expect(apart).toBeGreaterThan(stepsIn(1));
+  });
+
+  it("is pure: the same crew at the same moment always asks for the same thing", () => {
+    for (const left of [7.3, 4.1, 0.4]) {
+      expect(gridRev(left, 0.42, 0.31)).toBe(gridRev(left, 0.42, 0.31));
+    }
+  });
+
+  it("leaves the whole grid revving, at different amounts, on different beats", () => {
+    const track = compileTrack(42, [{ kind: "straight", length: 400, feature: "none" }]);
+    const field = createField(
+      track,
+      { difficulty: "medium", cars: 8, massStart: true },
+      { seed: 42, laps: 1, timeOfDay: "day", weather: "clear", season: "summer" },
+    );
+    // Two thirds of the way through the ritual: past the first blips, short
+    // of the held note everybody ends on.
+    for (let i = 0; i < stepsIn(START - 2); i++) stepField(field);
+    const revs = field.runs.map((run) => run.state.car.rev);
+    // Somebody is working, and they are not all doing the same thing — the
+    // failure this replaces is a whole grid pinned flat at the limiter.
+    expect(Math.max(...revs)).toBeGreaterThan(0.4);
+    expect(new Set(revs.map((r) => r.toFixed(2))).size).toBeGreaterThan(2);
+
+    // ...and at the green the crews with a temper are the ones who left on
+    // lit tyres, because `clutchDump` reads the revs they were sat on.
+    for (let i = 0; i < stepsIn(2) + 1; i++) stepField(field);
+    expect(field.runs.every((run) => run.state.phase === "racing")).toBe(true);
+    const spun = field.runs.map((run) => ({
+      aggression: run.entry.profile.aggression,
+      spin: run.state.car.launchSpin,
+    }));
+    const mildest = spun.reduce((a, b) => (a.aggression <= b.aggression ? a : b));
+    const wildest = spun.reduce((a, b) => (a.aggression >= b.aggression ? a : b));
+    expect(wildest.spin).toBeGreaterThan(mildest.spin);
   });
 });

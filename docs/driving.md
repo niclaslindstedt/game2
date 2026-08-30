@@ -1098,10 +1098,25 @@ standing axle does: everything the engine was carrying arrives at once.
 
 It shows as much as it costs: `wheelspin` carries it into the drawn wheels
 and the tachometer, the launch cloud is thrown off the same number
-(`launchThrow` in `pwa/src/game/dust.ts`), and the body trembles on its
+(`launchThrow` in `pwa/src/game/dust.ts`), the pipe smokes hardest at
+exactly the moment none of the fuel is becoming road speed (`pipeWork` in
+`pwa/src/game/fumes.ts`), and the body trembles on its
 mounts while the revs are up and the car is not
 (`pwa/src/game/car-shake.ts` — millimetres, on the sprung mass and on the
 in-car eye, and gone by 50 km/h where the road's own grain takes over).
+
+**And every car on the line does all three, not just the one being driven.**
+On a heads-up grid the rivals sit through the same ceremony, and the bot
+spends it blipping its own throttle — deeper, oftener and higher at the
+green the more temper the crew has (the grid ritual, in
+[simulation.md](simulation.md)). Because `car.rev` is the same number for
+everybody, the tremble and the exhaust follow for nothing: the rivals'
+bodies already read it (`car-mesh.ts`), and the field smokes out of a second
+shared cloud on the same terms as its dust (`field-cars.ts` over
+`fumes.ts`), thinned by `FIELD_FUMES` and capped to the nearest few crews.
+The revs a rival is sat on are the revs its clutch drops on, so the smoke
+and the shake at the lights are a true advertisement of who is about to
+light their tyres up.
 
 ## Car against car
 

@@ -37,6 +37,15 @@
 //   cost what one does. Their lamps light it, and everybody else's, through
 //   the register in dust-light.ts.
 //
+//   AND SMOKING, out of a second shared cloud on the same terms. Every crew
+//   has an engine running, and the beat that needs it most is the one where
+//   nothing is moving: on a heads-up grid the whole field sits blipping its
+//   throttle at the lights (`GRID` in the engine's bot), and a start line
+//   where only the player's pipe is working is a start line with one car on
+//   it. The rule for how hard a pipe works is `pipeWork` in fumes.ts —
+//   shared with the player's own, so a rival's exhaust answers its engine
+//   exactly as the player's answers theirs, only thinner.
+//
 // Everything on the road is DRAWN, with no near limit under the far one: the
 // field is entered off to one side of the player's grid slot
 // (`GRID_STAGGER`), so the closest two cars ever get in the start control is
@@ -50,6 +59,7 @@ import { buildCar, tintCar, type CarVisual } from "./car-mesh.ts";
 import { crewLookFor } from "./car-crew.ts";
 import { liveryForCrew } from "./car-livery.ts";
 import { lightDust } from "./dust-light.ts";
+import { createFumes, PIPE, pipeBursts, pipeWork } from "./fumes.ts";
 import { plumeGround } from "./ground-tint.ts";
 import { createNameTag, type NameTag } from "./name-tag.ts";
 import { createPlume } from "./plume.ts";
@@ -107,6 +117,41 @@ const DUST_CARS = 3;
  * see. */
 const LAMP_CARS = 3;
 
+/** How near a crew has to be before their exhaust is drawn, m. Tighter than
+ * anything else here: a plume hanging over the trees reads at half a
+ * kilometre, and a puff off a tailpipe reads at the distance you can make
+ * out the tailpipe. Drawn INSIDE the body's own range, so a pipe never
+ * smokes without a car under it. */
+const FUME_RANGE = 90;
+
+/** …and how many crews may smoke at once, nearest first. Seven is the whole
+ * grid the game stands up (`gridSize`) less the player, which is the case
+ * this exists for: on the line every crew is inside `FUME_RANGE` and the
+ * point is that all of them are working. Anywhere else the road has strung
+ * them out and the range is what does the culling. */
+const FUME_CARS = 7;
+
+/** How thick a rival's exhaust is against the player's own, and how big a
+ * pool the whole field shares. The thinning is the same bargain the dust
+ * makes (`FIELD_PLUME`): a rival's pipe is read across a start line rather
+ * than off your own bumper, so it does not need the density — and at full
+ * rate seven redlining pipes would spend any sane pool in a third of a
+ * second and tear holes in each other's clouds.
+ *
+ * It is well over half rather than a token, and that is a LOOKED-AT number.
+ * The rate the player's pipe works at is steeply non-linear in the revs
+ * (`EXHAUST.every` runs from an eighth of a second at idle to a sixtieth at
+ * the limiter), so a thinning that sounds generous on paper lands on the
+ * flat part of it: at a third, a rival holding half revs on the line made
+ * about eight puffs a second and was invisible from the car behind it,
+ * which is the entire failure this exists to prevent.
+ *
+ * The pool is then sized for what that rate asks for at its worst — the
+ * whole grid on the limiter at once, over the second or so a puff lives —
+ * with the same headroom the field's dust cloud carries. */
+const FIELD_FUMES = 0.6;
+const FUME_POOL = 1536;
+
 /** The beats the field is worth drawing in. Past the line the player's own
  * run is over and the rest of the entry list is a classification being
  * settled at thousands of steps a frame (R30's `settleField`) — a car moving
@@ -163,8 +208,11 @@ export type FieldCars = {
   dispose: () => void;
 };
 
-/** One crew's body and the plate over it, built and dropped together. */
-type FieldCar = { visual: CarVisual; tag: NameTag };
+/** One crew's body and the plate over it, built and dropped together — and
+ * the seconds since their pipe last fired, which lives here for the same
+ * reason: a clock belongs to a car, and a field of them sharing one would
+ * put every pipe in the field on the same beat. */
+type FieldCar = { visual: CarVisual; tag: NameTag; fumeClock: number };
 
 /** What a RIVAL's cabin is built at, given what the player chose for their
  * own. A level down off the top one: the full cabin's extra is a roll cage
@@ -196,6 +244,10 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
   const plume = createPlume(FIELD_PLUME);
   plume.points.visible = false;
   scene.add(plume.points);
+  /** …and one exhaust cloud, on the same terms. */
+  const fumes = createFumes(FUME_POOL);
+  fumes.points.visible = false;
+  scene.add(fumes.points);
   /** The crews within `DUST_RANGE` this frame, nearest first: who raises
    * dust, and whose lamps light it. Kept as one array and rewritten in
    * place, because this is a per-frame path and a fresh array a frame is
@@ -211,6 +263,10 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
    * texture bind on every pass of every frame. */
   const showCloud = (): void => {
     plume.points.visible = !wetGround && runs.length > 0;
+    // The exhaust takes only the second half of that test. Rain settles what
+    // a wheel PICKS UP; it does nothing to what an engine puts out, and a
+    // grid steaming in the wet is the best the effect ever looks.
+    fumes.points.visible = runs.length > 0;
   };
 
   const drop = ({ visual, tag }: FieldCar): void => {
@@ -258,6 +314,10 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
       // ageing while they are out of range: a plume the player is driving
       // INTO was raised by a car that is already gone.
       plume.step(dt);
+      // …and so does the exhaust, for the same reason: a cloud left hanging
+      // on the line after the field has gone is a cloud that has to keep
+      // thinning whether anybody is still feeding it or not.
+      fumes.update(dt);
       for (const run of runs) {
         const existing = built.get(run);
         if (!onRoad(run)) {
@@ -297,7 +357,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
             color: livery.paint,
           });
           scene.add(visual.group, visual.shadow, visual.debris, tag.sprite);
-          const fresh = { visual, tag };
+          const fresh = { visual, tag, fumeClock: 0 };
           built.set(run, fresh);
           tintCar(visual, tint, lampsLit, rain);
           visual.update(run.state, 0, camera.position);
@@ -330,6 +390,40 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
           ),
         );
       }
+      // …and the exhaust off the nearest few pipes. Same list, a much
+      // shorter reach (`FUME_RANGE`), and the same `pipeWork` the player's
+      // own pipe is read with — so a rival sitting on its limiter at the
+      // lights smokes for the same reason and by the same rule.
+      if (shown && fx > 0) {
+        for (let i = 0; i < near.length && i < FUME_CARS; i++) {
+          const crew = near[i];
+          if (!crew || crew.range > FUME_RANGE) break;
+          const body = built.get(crew.run);
+          if (!body) continue;
+          const state = crew.run.state;
+          const car = state.car;
+          body.fumeClock += dt;
+          const pipe = pipeWork(car.rev, car.u, state.phase, fx, FIELD_FUMES);
+          const bursts = car.airborne ? 0 : pipeBursts(body.fumeClock, pipe.every);
+          if (bursts === 0) continue;
+          body.fumeClock -= bursts * pipe.every;
+          // Their own axes, not the viewer's: the field on a grid is not all
+          // pointing the same way as the player, and a pipe placed off the
+          // wrong heading smokes out of somebody's door.
+          const fwdX = Math.sin(car.heading);
+          const fwdZ = Math.cos(car.heading);
+          for (let puff = 0; puff < bursts * pipe.puffs; puff++) {
+            fumes.spawn(
+              car.x - fwdX * PIPE.back + fwdZ * PIPE.side,
+              car.y + PIPE.up,
+              car.z - fwdZ * PIPE.back - fwdX * PIPE.side,
+              -fwdX * pipe.blast + state.wind.x * 0.85,
+              -fwdZ * pipe.blast + state.wind.z * 0.85,
+              pipe.shade,
+            );
+          }
+        }
+      }
     },
     setDust: (wet, budget) => {
       wetGround = wet;
@@ -360,12 +454,18 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
       lampsLit = lit;
       rain = wet;
       for (const { visual } of built.values()) tintCar(visual, tint, lampsLit, rain);
+      // The exhaust carries its own colours and is fullbright, so the time of
+      // day reaches it the way it reaches every baked-colour surface: through
+      // the material tint (car-fx.ts does the same to the player's). Without
+      // it a rival's smoke glows pale grey at midnight.
+      (fumes.points.material as THREE.PointsMaterial).color.copy(tint);
     },
     drawn: () => drawn,
     dispose: () => {
       clear();
-      scene.remove(plume.points);
+      scene.remove(plume.points, fumes.points);
       plume.dispose();
+      fumes.dispose();
     },
   };
 }
