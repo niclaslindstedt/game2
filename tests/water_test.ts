@@ -25,6 +25,7 @@ import {
   traceRivers,
   type GameEvent,
   type GameState,
+  type StandingWater,
 } from "@engine";
 
 const SEEDS = [1, 2, 3, 5, 8, 13, 21, 34];
@@ -138,12 +139,24 @@ describe("crossings (R13)", () => {
   });
 });
 
+/** R35 — what a course can sense of the water already standing on the
+ * country, as the terrain field reports it. The tracer takes this rather
+ * than one sea level, because a river ends in whatever body it reaches. */
+function sensed(terrain: ReturnType<typeof createTerrain>): StandingWater {
+  return { levelAt: terrain.water.shoreLevelAt, nearestAt: terrain.water.nearestAt };
+}
+
 describe("the river (R18)", () => {
   it("never runs uphill", () => {
     for (const seed of SEEDS) {
       const track = compileStage(seed, "long", { water: 0.8 });
       const terrain = createTerrain(track);
-      const rivers = traceRivers(track.seed, collectAnchors(track, 0), terrain.heightAt, LAKE_Y);
+      const rivers = traceRivers(
+        track.seed,
+        collectAnchors(track, 0),
+        terrain.heightAt,
+        sensed(terrain),
+      );
       for (const river of rivers) {
         for (let i = 1; i < river.points.length; i++) {
           expect(river.points[i].y).toBeLessThanOrEqual(river.points[i - 1].y + 1e-9);
@@ -160,7 +173,7 @@ describe("the river (R18)", () => {
         track.seed,
         collectAnchors(track, 0),
         terrain.heightAt,
-        LAKE_Y,
+        sensed(terrain),
       )) {
         const spring = river.points[0];
         const mouth = river.points[river.points.length - 1];
@@ -195,7 +208,7 @@ describe("the river (R18)", () => {
       const track = compileStage(seed, "long", { water: 0.9 });
       const terrain = createTerrain(track);
       const anchors = collectAnchors(track, 0);
-      const rivers = traceRivers(track.seed, anchors, terrain.heightAt, LAKE_Y);
+      const rivers = traceRivers(track.seed, anchors, terrain.heightAt, sensed(terrain));
       const claimed = rivers.flatMap((r) => r.anchors);
       expect(claimed.length).toBe(anchors.length);
       crossings += anchors.length;
@@ -311,7 +324,7 @@ describe("going under (TUNING.crash.drown)", () => {
    * `crash.deepWater` is a low bar a car meets in a puddle at a lakeshore,
    * and which shelf it ends up on is decided by the handling that carried
    * it there. `swallows` is what actually holds the scenario still. */
-  const DROWNING_SEEDS = [34, 26, ...SEEDS];
+  const DROWNING_SEEDS = [11, 34, 26, ...SEEDS];
 
   /** ...and does that water actually close over the roof? The car sinks to
    * the BED (step.ts), so a shelf shallower than the roof leaves it settled

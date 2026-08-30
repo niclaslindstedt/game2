@@ -202,6 +202,40 @@ type Field = (x: number, z: number) => number;
  * committing to a step (R18). */
 export type RoadClear = (x: number, z: number) => number;
 
+/** R35 — what a course can sense of the water already standing on the
+ * country. Both halves matter and they are not the same question: one is
+ * "have I arrived", the other is "which way is there anything to arrive
+ * AT". A tracer with only the first gropes downhill through the contours
+ * of its own noise and runs out of length a couple of hundred metres short
+ * of a lake it was never aimed at. */
+export type StandingWater = {
+  /** The surface of the standing water at or beside a point, m, or null on
+   * dry ground — the lake, tarn or sea a course ends in, at its own
+   * level. */
+  levelAt: (x: number, z: number) => number | null;
+  /** The nearest standing water within `within` metres, or null where
+   * there is none in reach. */
+  nearestAt: (
+    x: number,
+    z: number,
+    within: number,
+  ) => { x: number; z: number; level: number } | null;
+};
+
+/** How far a mouth looks for the water it is running to, m — its own run,
+ * so it only ever aims at something it could actually reach. */
+const MOUTH_REACH = 1400;
+/** How hard it is pulled that way, against the local downhill (a unit
+ * vector) and the road's push. Water runs downhill AND it runs to the sea;
+ * this is the second of those, and it is deliberately weaker than the
+ * road's shove so a course still bends out of a corridor rather than
+ * ploughing down it toward the lake. */
+const SEAWARD_PULL = 0.9;
+/** How often the mouth re-asks where the water is, in steps. A fixed
+ * destination for a stretch at a time keeps the course purposeful instead
+ * of twitching at every cell boundary the answer crosses. */
+const SEAWARD_REFRESH = 8;
+
 /** No road anywhere: what a caller with no road to report hands in. */
 const OPEN_COUNTRY: RoadClear = () => Infinity;
 
@@ -302,7 +336,7 @@ function traceCourse(
   seed: number,
   anchors: RiverAnchor[],
   field: Field,
-  lakeY: number,
+  standingAt: StandingWater,
   roadClear: RoadClear,
   bounds: WorldBounds | undefined,
 ): River {
@@ -581,14 +615,42 @@ function traceCourse(
     // the biggest of them: water that has gathered does not un-gather.
     width = Math.max(width, ...anchors.slice(0, joined).map((a) => a.halfWidth));
     const from = points.length;
+    // R35 — where the water it is running to actually is. The pour laid
+    // the lakes down before any of this, so a mouth is not a search: it is
+    // a journey to somewhere that already exists.
+    let target = standingAt.nearestAt(x, z, MOUTH_REACH);
+    let sinceLook = 0;
     for (let d = 0; d < MOUTH_RUN.max; d += STEP) {
       const grade = downhill(field, x, z);
+      if (sinceLook++ >= SEAWARD_REFRESH) {
+        target = standingAt.nearestAt(x, z, MOUTH_REACH);
+        sinceLook = 0;
+      }
+      // ...and only water it can run DOWN to. A tarn on the shoulder above
+      // is not where this river is going.
+      const reachable = target !== null && target.level <= y;
+      // R35 — and if there is nothing to reach, STOP. Before the water was
+      // on the map a mouth had no way of telling "not there yet" from
+      // "nowhere to go", so it walked its whole run and pooled wherever it
+      // had got to — a kilometre and a half of drawn river, wandering past
+      // every road on the way, to arrive at the same tarn it could have
+      // made in fifty metres. Now the pour knows, so the course can.
+      if (!reachable) break;
+      let seaX = 0;
+      let seaZ = 0;
+      if (target && target.level <= y) {
+        const tx = target.x - x;
+        const tz = target.z - z;
+        const far = Math.hypot(tx, tz) || 1;
+        seaX = (tx / far) * SEAWARD_PULL;
+        seaZ = (tz / far) * SEAWARD_PULL;
+      }
       // Downhill, bending off any road it runs at — and pooling at one it
       // cannot get around, because the water below the last crossing has
       // nowhere it has to be.
       const away = d < CROSS_WINDOW ? null : awayFromRoad(roadClear, x, z, width + ROAD_KEEP);
-      let dx = (grade ? grade.x : -Math.sin(phase)) + (away ? away.x * ROAD_PUSH : 0);
-      let dz = (grade ? grade.z : -Math.cos(phase)) + (away ? away.z * ROAD_PUSH : 0);
+      let dx = (grade ? grade.x : -Math.sin(phase)) + seaX + (away ? away.x * ROAD_PUSH : 0);
+      let dz = (grade ? grade.z : -Math.cos(phase)) + seaZ + (away ? away.z * ROAD_PUSH : 0);
       const len = Math.hypot(dx, dz) || 1;
       dx /= len;
       dz /= len;
@@ -601,7 +663,11 @@ function traceCourse(
       y = Math.min(y, ground - SINK);
       push(x, z, y, dx, dz);
       // It reached standing water: the lake IS the end of the river.
-      if (ground < lakeY + 1) {
+      // R35 — ANY standing water, at whatever level the pour left it. A
+      // course that only recognises the sea walks straight through the
+      // tarn it should have emptied into and goes looking for the coast.
+      const lake = standingAt.levelAt(x, z);
+      if (lake !== null && ground < lake + 1) {
         endsAt = "water";
         break;
       }
@@ -661,7 +727,7 @@ export function traceRivers(
   seed: number,
   anchors: RiverAnchor[],
   field: Field,
-  lakeY: number,
+  standingAt: StandingWater,
   roadClear: RoadClear = OPEN_COUNTRY,
   bounds?: WorldBounds,
 ): River[] {
@@ -674,7 +740,7 @@ export function traceRivers(
   let guard = 0;
   while (pending.length > 0 && guard++ < 64) {
     const course = pending.shift() as RiverAnchor[];
-    const river = traceCourse(seed, course, field, lakeY, roadClear, bounds);
+    const river = traceCourse(seed, course, field, standingAt, roadClear, bounds);
     rivers.push(river);
     if (river.rest.length > 0) pending.push(river.rest);
   }

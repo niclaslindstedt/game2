@@ -112,5 +112,12 @@ export {
   type Pacenote,
   type Checkpoint,
 } from "./compile.ts";
-export { traceRivers, type River, type RiverAnchor, type RiverPoint } from "./river.ts";
+export {
+  traceRivers,
+  type River,
+  type RiverAnchor,
+  type RiverPoint,
+  type StandingWater,
+} from "./river.ts";
+export { SEA, type WaterBody, type WaterField } from "./water.ts";
 export { flatTrack, SURFACES, type FlatTrack } from "./flat.ts";

@@ -21,7 +21,7 @@ import { createStageStream, generateStage } from "./generate.ts";
 import { createRng } from "../lib/prng.ts";
 import { cellKey } from "../lib/math.ts";
 import { hash2 } from "../lib/noise.ts";
-import { createLandField, LAKE_Y } from "./land.ts";
+import { createLandField } from "./land.ts";
 import { junctionFlat, junctionPlatformY, ROAD_CROSS } from "./road.ts";
 import { buildSpur, placeBlock, SPUR, type Spur } from "./spurs.ts";
 
@@ -446,6 +446,41 @@ function smoothstep(t: number): number {
   return c * c * (3 - 2 * c);
 }
 
+/** The height the road is willing to follow the country to at a point: the
+ * ground, or the local water's own freeboard where the ground is under it.
+ * A road goes OVER a lake on an embankment, never along the bed of one.
+ *
+ * R35 — the water it clears is the water that is actually HERE, at its own
+ * level. Against one table for the whole world a road crossing a tarn two
+ * hundred metres up reads the sea's level, decides it is comfortably
+ * clear, and drives straight through the lake.
+ *
+ * `roll` is the road's own undulation at this point, and it is subtracted
+ * because the freeboard is owed by the SURFACE a car drives on, not by the
+ * base underneath it. The roll swings several metres either way; a
+ * freeboard measured against the base alone lets the trough of it put the
+ * road back under the water it was lifted out of.
+ *
+ * Stated ONCE, because two walks read it: the compiler's, which builds the
+ * road, and the trial walk that sizes the country around it. A country
+ * measured against a different rule than the road was built to is a
+ * landscape that does not fit its own stage.
+ *
+ * It is what keeps a road out of water it was routed into — not what keeps
+ * it from being routed there. The search does that (R35's `keepsDry`), and
+ * this is the backstop under it: the START in particular is a point no
+ * search chooses at all. */
+function buildableAt(
+  land: ReturnType<typeof createLandField>,
+  x: number,
+  z: number,
+  roll: number,
+): number {
+  const ground = land.heightAt(x, z);
+  const water = land.water.shoreLevelAt(x, z);
+  return water === null ? ground : Math.max(ground, water + R.elevation.follow.freeboard - roll);
+}
+
 /** R12 — the dip a ford sits in. Water lies FLAT at `bedDepth` below the
  * lowest grade around it (so it reads as collected, never perched), and the
  * road eases down to it and back out over the aprons. Fords sit on
@@ -649,21 +684,7 @@ function createCompiler(
    * the clamp is a property of the ROAD and the lag a property of the
    * builder — two rules, not one number doing both jobs badly. */
   const F = R.elevation.follow;
-  /** The height the road is willing to follow the country to at a point:
-   * the ground, or the water's own freeboard where the ground is under it.
-   * A road goes OVER a lake on an embankment, never along the bed of one.
-   * The route's line is chosen without asking where the water is, so this
-   * is the only thing standing between a stage and eighteen metres of tarn
-   * on top of it — the START included, which is a point the route search
-   * does not choose at all.
-   *
-   * `roll` is the road's own undulation at this point, and it is subtracted
-   * because the freeboard is owed by the SURFACE a car drives on, not by
-   * the base underneath it. The roll swings several metres either way; a
-   * freeboard measured against the base alone lets the trough of it put the
-   * road back under the water it was lifted out of. */
-  const buildable = (x: number, z: number, roll: number): number =>
-    Math.max(land.heightAt(x, z), LAKE_Y + F.freeboard - roll);
+  const buildable = (x: number, z: number, roll: number): number => buildableAt(land, x, z, roll);
   if (followsLand) cursor.baseY = buildable(0, 0, rolling(0));
 
   const followLand = (
@@ -1774,7 +1795,7 @@ function planCountry(
   // grade and crest clamps the compiler walks with, so the trial's heights
   // track the real road's rather than the bare hillside's.
   const F = R.elevation.follow;
-  let base = Math.max(land.heightAt(0, 0), LAKE_Y + F.freeboard - rolling(0));
+  let base = buildableAt(land, 0, 0, rolling(0));
   let slope = 0;
   for (const plan of plans) {
     const curvature = plan.kind === "turn" && plan.radius ? (plan.dir ?? 1) / plan.radius : 0;
@@ -1791,7 +1812,7 @@ function planCountry(
       if (z < box.minZ) box.minZ = z;
       if (z > box.maxZ) box.maxZ = z;
       const roll = rolling(rollS);
-      const ground = Math.max(land.heightAt(x, z), LAKE_Y + F.freeboard - roll);
+      const ground = buildableAt(land, x, z, roll);
       const want = base + (ground - base) * (1 - Math.exp(-step / F.lag));
       let next = (want - base) / step;
       const swing = F.crest * step;

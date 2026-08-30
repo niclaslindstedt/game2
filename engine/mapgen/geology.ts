@@ -340,7 +340,12 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     return { rock, soil, surface, broad, face: steep };
   };
 
-  const groundAt = (x: number, z: number): GroundSample => {
+  /** Everything above works in COUNTRY space — the seed's landscape, at
+   * the coordinates its own noise is written in. The stage is then sited
+   * somewhere in it (below), and the public field reads through that
+   * offset, so the world the game sees has its origin on ground a stage
+   * can start from. */
+  const rawGround = (x: number, z: number): GroundSample => {
     const { rock, soil, surface, broad, face } = finish(x, z);
     const W = G.groundwater;
     // Steep ground drains: the table drops away under a flank far faster
@@ -349,12 +354,71 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     return { bedrock: rock, soil, surface, table };
   };
 
-  const surfaceAt = (x: number, z: number): number => finish(x, z).surface;
+  /** R35 — where in the country this stage stands.
+   *
+   * The stage's origin is not chosen by anything: the route search draws
+   * outward from (0, 0), and the start apron is laid on it before any rule
+   * gets a say. So it is the COUNTRY that moves. The origin walks a spiral
+   * until the whole footprint a start needs stands clear of the water, and
+   * every query below is answered from there.
+   *
+   * The dryness test is the ground against its own local groundwater
+   * table, which is the same number the pour in `water.ts` settles a lake
+   * to — so a site that passes here is a site the pour will leave dry,
+   * without this having to run a pour of its own to find out.
+   *
+   * No rng: a seed's landscape is exactly the landscape it always was, and
+   * only the window onto it moves. */
+  const site = ((): { x: number; z: number } => {
+    const S = G.siting;
+    /** How far the WORST point of the footprint stands clear of the water
+     * under it, m. Negative anywhere wet; the biggest value wins, so a
+     * country with nowhere dry still gets its driest spot rather than
+     * failing. */
+    const buildable = (ox: number, oz: number): number => {
+      let worst = Infinity;
+      for (let r = 0; r <= S.rings; r++) {
+        const radius = (S.reach * r) / S.rings;
+        const points = r === 0 ? 1 : S.ring;
+        for (let a = 0; a < points; a++) {
+          const angle = (a / points) * Math.PI * 2;
+          const g = rawGround(ox + radius * Math.cos(angle), oz + radius * Math.sin(angle));
+          const clear = g.surface - Math.max(LAKE_Y, g.table) - S.freeboard;
+          if (clear < worst) worst = clear;
+        }
+      }
+      return worst;
+    };
+    let best = { x: 0, z: 0 };
+    let bestClear = buildable(0, 0);
+    if (bestClear >= 0) return best;
+    // A spiral of whole steps: rings of increasing radius, each walked in
+    // the same fixed order, so the first site that passes is a property of
+    // the country alone.
+    for (let radius = S.step; radius <= S.far; radius += S.step) {
+      const points = Math.max(6, Math.round((2 * Math.PI * radius) / S.step));
+      for (let a = 0; a < points; a++) {
+        const angle = (a / points) * Math.PI * 2;
+        const ox = radius * Math.cos(angle);
+        const oz = radius * Math.sin(angle);
+        const clear = buildable(ox, oz);
+        if (clear >= 0) return { x: ox, z: oz };
+        if (clear > bestClear) {
+          bestClear = clear;
+          best = { x: ox, z: oz };
+        }
+      }
+    }
+    return best;
+  })();
+
+  const groundAt = (x: number, z: number): GroundSample => rawGround(x + site.x, z + site.z);
+  const surfaceAt = (x: number, z: number): number => finish(x + site.x, z + site.z).surface;
 
   return {
     groundAt,
     surfaceAt,
-    soilAt: (x, z) => finish(x, z).soil,
+    soilAt: (x, z) => finish(x + site.x, z + site.z).soil,
     wetAt: (x, z) => {
       const g = groundAt(x, z);
       return Math.max(0, g.table - g.surface);

@@ -20,6 +20,7 @@
 
 import { angleDiff } from "../lib/math.ts";
 import { createRng } from "../lib/prng.ts";
+import { createLandField, type LandField } from "./land.ts";
 import { roadClearance } from "./road.ts";
 import {
   STAGE_RULES as R,
@@ -178,14 +179,15 @@ function netTurn(plans: SegmentPlan[]): number {
 }
 
 /** Walk the closure's segments from `cursor`, validating each against the
- * world bound and the cyclic self-distance rule. Returns the points to
- * commit, or null on the first violation. */
+ * world bound, the cyclic self-distance rule and the water (R35). Returns
+ * the points to commit, or null on the first violation. */
 function probeClosure(
   cursor: Cursor,
   segments: SegmentPlan[],
   field: PointField,
   worldBound: number,
   cycle: number,
+  keepsDry: (p: Cursor) => boolean,
 ): Cursor[] | null {
   let at = cursor;
   const all: Cursor[] = [];
@@ -194,6 +196,7 @@ function probeClosure(
     for (const p of points) {
       if (!inBounds(p, worldBound)) return null;
       if (field.blocked(p, cycle)) return null;
+      if (!keepsDry(p)) return null;
     }
     all.push(...points);
     at = end;
@@ -210,8 +213,17 @@ export function generateCircuit(
   length: FiniteStageLength,
   knobs: StageKnobs,
 ): SegmentPlan[] {
+  // R35 — the country and its water, poured before the ring is drawn. One
+  // field for every attempt: a retry is redrawing the road, not the
+  // landscape.
+  const land = createLandField(seed, knobs);
+  const ladder = R.water.routeClearLadder;
   for (let attempt = 0; attempt < 400; attempt++) {
-    const plans = tryCircuit((seed + attempt * 0x9e3779b9) >>> 0, length, knobs);
+    // The same relaxing setback the sprint search walks down — a ring has
+    // to close on itself as well as keep out of the water, so it needs the
+    // give even more than a point-to-point stage does.
+    const clearance = R.water.routeClear * ladder[Math.floor((attempt * ladder.length) / 400)];
+    const plans = tryCircuit((seed + attempt * 0x9e3779b9) >>> 0, length, knobs, land, clearance);
     if (plans) return plans;
   }
   throw new Error(`circuit generation failed for seed ${seed} (${length})`);
@@ -221,6 +233,8 @@ function tryCircuit(
   seed: number,
   length: FiniteStageLength,
   knobs: StageKnobs,
+  land: LandField,
+  routeClear: number,
 ): SegmentPlan[] | null {
   const spec = R.stageLengths[length];
   const band = circuitLapBand(length);
@@ -234,6 +248,8 @@ function tryCircuit(
   // the whole shape of a circuit, and the closure lies along the start's
   // apron rather than across it.
   const field = createPointField(roadClearance(knobScale(knobs.width, R.roadWidth)));
+  /** R35 — a ring is drawn round the water like any other road. */
+  const keepsDry = (p: Cursor): boolean => !land.nearWater(p.x, p.z, routeClear);
   let cursor: Cursor = { x: 0, z: 0, heading: 0, arc: 0 };
   // Where the ROAD stands, walked the compiler's way — the pose the closure
   // has to solve from. `builtStack` carries one entry per committed segment
@@ -291,6 +307,7 @@ function tryCircuit(
           field,
           spec.worldBound,
           total + added,
+          keepsDry,
         );
         if (points && Math.abs(netTurn([...plans, ...segments])) > Math.PI) {
           plans.push(...segments);
@@ -330,7 +347,7 @@ function tryCircuit(
       // A turn's heading is monotonic, so its exit covers the whole arc.
       if (Math.abs(angleDiff(end.heading, ring)) > COURSE_ERROR) continue;
       if (!points.every((p) => inBounds(p, spec.worldBound))) continue;
-      if (points.some((p) => field.blocked(p))) continue;
+      if (points.some((p) => field.blocked(p) || !keepsDry(p))) continue;
       commit(plan, points, end);
       placed = true;
     }
