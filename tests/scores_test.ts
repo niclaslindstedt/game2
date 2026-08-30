@@ -14,6 +14,17 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  erase,
+  moveCaret,
+  nameOf,
+  startEntry,
+  toSlot,
+  typeChar,
+  wheel,
+  WHEEL,
+  type InitialsState,
+} from "../pwa/src/game/initials-entry.ts";
+import {
   ALPHABET,
   BOARD_SIZE,
   DEFAULT_INITIALS,
@@ -115,20 +126,26 @@ describe("the three letters", () => {
     stubStorage();
   });
 
-  it("defaults to AAA and then offers back whatever was last entered", () => {
+  it("defaults to ONE letter and then offers back whatever was last entered", () => {
     expect(lastInitials()).toBe(DEFAULT_INITIALS);
+    expect(DEFAULT_INITIALS.trim()).toBe("A"); // not AAA — a name nobody typed
     rememberInitials("NIC");
     expect(lastInitials()).toBe("NIC");
   });
 
   it("stores exactly three characters the alphabet has, whatever it is handed", () => {
     expect(normalizeInitials("nic")).toBe("NIC");
-    expect(normalizeInitials("N")).toBe("NAA"); // padded, never ragged
+    // Padded so the board never has to align ragged rows — with BLANKS, so a
+    // one-letter name stays a one-letter name.
+    expect(normalizeInitials("N")).toBe("N  ");
     expect(normalizeInitials("")).toBe(DEFAULT_INITIALS);
     expect(normalizeInitials("TOOLONG")).toBe("TOO");
     // Anything off the alphabet is dropped rather than stored as itself.
-    expect(normalizeInitials("é!x")).toBe("XAA");
+    expect(normalizeInitials("é!x")).toBe("X  ");
     for (const c of normalizeInitials("💥💥💥")) expect(ALPHABET).toContain(c);
+    // A hole is not a name a slot can be put back on: it closes up.
+    expect(normalizeInitials("N C")).toBe("NC ");
+    expect(normalizeInitials("   ")).toBe(DEFAULT_INITIALS);
   });
 
   it("survives storage being unavailable", () => {
@@ -147,5 +164,121 @@ describe("the three letters", () => {
     // The board still comes back so the card can show where the run landed,
     // even though nothing could be written down.
     expect(recordScore("taiga-1", entry("ABC", 60)).map((r) => r.who)).toEqual(["ABC"]);
+  });
+});
+
+// The entry is two controls over one name — a keyboard and a wheel — and the
+// whole design is in what each of them does to the slot the caret moves ONTO.
+// Every case below is a player entering their own initials, so getting one
+// wrong is a name somebody has to fight the card to correct.
+describe("entering the letters", () => {
+  /** Type a whole string, one character at a time. */
+  const type = (state: InitialsState, chars: string): InitialsState =>
+    [...chars].reduce(typeChar, state);
+
+  /** Turn the wheel, one press at a time. */
+  const turn = (state: InitialsState, by: number, times = 1): InitialsState => {
+    let now = state;
+    for (let i = 0; i < times; i += 1) now = wheel(now, by);
+    return now;
+  };
+
+  it("opens on ONE letter, with the caret on it", () => {
+    const open = startEntry(DEFAULT_INITIALS);
+    expect(nameOf(open)).toBe("A  ");
+    expect(open.caret).toBe(0);
+    expect(open.fresh).toBe(true);
+  });
+
+  it("never repeats a letter under a keyboard", () => {
+    // The thing the card is for: NLM is typed as NLM and reads back as NLM.
+    expect(nameOf(type(startEntry(DEFAULT_INITIALS), "NLM"))).toBe("NLM");
+    // …and a name shorter than the slots simply stops.
+    const two = type(startEntry(DEFAULT_INITIALS), "NL");
+    expect(nameOf(two)).toBe("NL ");
+    expect(two.caret).toBe(2);
+  });
+
+  it("throws the offered name away on the first character typed", () => {
+    const offered = startEntry("NIC");
+    expect(nameOf(offered)).toBe("NIC");
+    // X is a player called X, not one called XIC.
+    expect(nameOf(typeChar(offered, "x"))).toBe("X  ");
+    // Wheeling and tapping are EDITS of the offered name, not a fresh start.
+    expect(nameOf(toSlot(offered, 2))).toBe("NIC");
+    expect(nameOf(turn(offered, 1))).toBe("OIC");
+  });
+
+  it("wakes an empty slot holding the letter to its left", () => {
+    // The arcade's own way in: wheel to N, step across, and the next slot is
+    // already N — so L and M are two presses away instead of eleven.
+    const n = turn(startEntry(DEFAULT_INITIALS), 1, 13);
+    expect(nameOf(n)).toBe("N  ");
+    const second = moveCaret(n, 1);
+    expect(nameOf(second)).toBe("NN ");
+    expect(second.caret).toBe(1);
+    const nl = turn(second, -1, 2);
+    expect(nameOf(nl)).toBe("NL ");
+    expect(nameOf(turn(moveCaret(nl, 1), 1))).toBe("NLM");
+  });
+
+  it("wakes on the first wheel press against a blank, and steps from the second", () => {
+    // Typed N, then reached for the wheel: the press that finds an empty slot
+    // fills it rather than stepping through it, so a mixed entry gets the
+    // same head start a wheeled one does.
+    const typed = type(startEntry(DEFAULT_INITIALS), "N");
+    expect(nameOf(wheel(typed, 1))).toBe("NN ");
+    expect(nameOf(turn(typed, 1, 2))).toBe("NO ");
+  });
+
+  it("has no space on the wheel — A goes down to 9, and 9 up to A", () => {
+    expect(WHEEL).not.toContain(" ");
+    const open = startEntry(DEFAULT_INITIALS);
+    expect(nameOf(turn(open, -1))).toBe("9  ");
+    expect(nameOf(turn(open, -1, 2))).toBe("8  ");
+    expect(nameOf(turn(open, -1, 11))).toBe("Z  ");
+    expect(nameOf(turn(turn(open, -1), 1))).toBe("A  ");
+  });
+
+  it("never leaves a hole for the caret to fall into", () => {
+    // Tapping the third slot of a one-letter name lands on the second: a name
+    // is entered left to right, and "A_N" is not a name a slot can hold.
+    const open = startEntry(DEFAULT_INITIALS);
+    const tapped = toSlot(open, 2);
+    expect(tapped.caret).toBe(1);
+    expect(nameOf(tapped)).toBe("AA ");
+    // Right off the end of a full name stays on the last slot.
+    expect(moveCaret(type(open, "NLM"), 1).caret).toBe(INITIALS_LENGTH - 1);
+    expect(moveCaret(open, -1).caret).toBe(0);
+  });
+
+  it("erases from the caret back, and always leaves a name behind", () => {
+    const three = type(startEntry(DEFAULT_INITIALS), "NLM");
+    const two = erase(three);
+    expect(nameOf(two)).toBe("NL ");
+    expect(two.caret).toBe(2);
+    // The caret is now on a blank, so the next press takes the slot before it.
+    expect(nameOf(erase(two))).toBe("N  ");
+    // …and the last letter cannot be deleted into nothing: a board row with
+    // no name on it is not a state the card is allowed to reach.
+    const bare = erase(erase(erase(three)));
+    expect(nameOf(bare)).toBe("A  ");
+    expect(bare.caret).toBe(0);
+  });
+
+  it("only ever makes a name the board can store", () => {
+    let now = startEntry("NIC");
+    for (const press of ["type:9", "wheel:1", "move:1", "erase", "tap:2", "wheel:-1", "type:Q"]) {
+      const [what, arg] = press.split(":");
+      if (what === "type") now = typeChar(now, arg as string);
+      else if (what === "wheel") now = wheel(now, Number(arg));
+      else if (what === "move") now = moveCaret(now, Number(arg));
+      else if (what === "tap") now = toSlot(now, Number(arg));
+      else now = erase(now);
+      const name = nameOf(now);
+      expect(name.length).toBe(INITIALS_LENGTH);
+      expect(normalizeInitials(name)).toBe(name);
+      for (const c of name) expect(ALPHABET).toContain(c);
+    }
   });
 });

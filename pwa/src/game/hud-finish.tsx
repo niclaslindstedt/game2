@@ -268,10 +268,14 @@ export function FinishCard({
           />
         ) : (
           <div className="hud-finish-acts pointer-events-auto">
+            {/* The card's way ON, for the pad's START (menu-nav.ts): a run
+                that has just ended and a player still holding the button
+                should land on the next start line, not on a card. */}
             {nextStage && (
               <button
                 type="button"
                 className="hud-start hud-finish-next"
+                data-nav-next
                 onClick={() => {
                   playUi("start");
                   nextStage.go();
@@ -287,6 +291,7 @@ export function FinishCard({
               <button
                 type="button"
                 className="hud-start hud-finish-next"
+                data-nav-next
                 onClick={() => {
                   playUi("start");
                   onRetry();

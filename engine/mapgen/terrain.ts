@@ -305,6 +305,12 @@ export type TerrainField = {
   /** Distance to the road centerline, m — Infinity out of corridor range
    * (beyond ~240 m). What placement code asks before planting near road. */
   roadDistanceAt: (x: number, z: number) => number;
+  /** R34 — how much the ground here is a FACE THE ROAD WAS CUT THROUGH, 0
+   * (open country, or a bank a car could climb) to 1 (blasted rock over the
+   * verge). Nothing roots on a cutting, so the prop field reads it off the
+   * soil; the analysis reads it to count how much of a stage runs through
+   * rock rather than over it. */
+  cutAt: (x: number, z: number) => number;
   /** The surface of any road OTHER than the stage at a point: the mat of
    * an abandoned asphalt branch (R17), or null on open ground. The stage's
    * own surface comes from the track samples — this is what tells the
@@ -397,6 +403,14 @@ export function createTerrain(track: Track): TerrainField {
     px: number[];
     pz: number[];
     floor: number[];
+    /** R34 — the grade this sample's cone opens at past the bench, m per m.
+     * `verge.climb` where the ground is till and the road was scraped in;
+     * up to `verge.cut.face` where it is rock and the road was blasted
+     * through it. Per sample rather than one constant, because it is a
+     * property of what the road is and what it is cut through, and both
+     * change along a stage. Never BELOW `VERGE_CLIMB`, which is what keeps
+     * `cellFloor`'s rejection bound valid. */
+    climb: number[];
     /** The box the cell's samples actually occupy, and the lowest `floor`
      * among them. Together they let a query REJECT a whole cell without
      * touching a sample — see `nearestSample`, where they are most of the
@@ -417,6 +431,7 @@ export function createTerrain(track: Track): TerrainField {
     px: [],
     pz: [],
     floor: [],
+    climb: [],
     minX: Infinity,
     maxX: -Infinity,
     minZ: Infinity,
@@ -426,6 +441,59 @@ export function createTerrain(track: Track): TerrainField {
   let grid = new Map<number, Cell>();
   let firstIndexed = 0;
   let indexed = 0;
+
+  /** R34 — the grade the country beside one piece of road is allowed to
+   * stand at, m per m past the bench.
+   *
+   * Four things decide it, and all four are the rule in one line each:
+   * whether the road is CUT IN here at all, what it is cut through (rock
+   * stands, till slumps), what the road is worth (a blasted tarmac cutting
+   * or a scraped gravel one), and how hard the country is
+   * (`knobs.steepness`). Multiplied rather than taken as a max, because a
+   * cutting needs all four: a sealed road running down a valley on its own
+   * embankment gets the same soft bank a farm track does, and so does a
+   * sealed road cut deep into a hillside of till.
+   *
+   * The FIRST of them is the one that decides where cuttings are, and it
+   * only means anything because the road follows the country
+   * (`elevation.follow`): most of a stage runs along the low ground at or
+   * over natural grade, and the answer there is R31's own climb with soil
+   * beside it. A road at a height of its own invention is arbitrarily cut
+   * in everywhere, and then so are its rock faces.
+   *
+   * A bridge has no cut. It stands in the air over a channel, and giving
+   * its cone a face would wall in the ravine underneath it. */
+  const cutClimb = (s: TrackSample): number => {
+    if (s.deck != null) return VERGE_CLIMB;
+    const C = R.verge.cut;
+    // How far the road's grade runs UNDER the ground it is crossing: what
+    // a cutting is, measured where it is.
+    const depth = land.heightAt(s.x, s.z) - s.elevation;
+    const into = clamp01((depth - C.depth.from) / (C.depth.full - C.depth.from));
+    if (into <= 0) return VERGE_CLIMB;
+    const worth = s.surface === "asphalt" ? C.sealed : C.loose;
+    // R32 — the cover, read out on the FLANKS rather than under the
+    // centerline. A cutting is not on the road, it is up the side of it,
+    // and those are different ground: the road lies along the valley where
+    // the till is deep, and the shoulder it had to force is scoured. Read
+    // at the road's own position instead and almost no stage ever gets a
+    // cutting, because almost no road runs over bare rock.
+    //
+    // The THINNER of the two, because the two sides are not symmetric and
+    // the cone is: one side of a road is nearly always the high one, that
+    // is the side with something to cut, and steep ground is the ground
+    // with no cover left on it. The low side has nothing standing on it for
+    // a grade to bind.
+    const cos = Math.cos(s.heading);
+    const sin = Math.sin(s.heading);
+    const soil = Math.min(
+      land.geology.soilAt(s.x + BENCH * cos, s.z - BENCH * sin),
+      land.geology.soilAt(s.x - BENCH * cos, s.z + BENCH * sin),
+    );
+    const rock = 1 - clamp01(soil / C.soil);
+    const face = knobScale(track.knobs.steepness, C.face);
+    return VERGE_CLIMB + (face - VERGE_CLIMB) * into * worth * rock;
+  };
 
   const indexSamples = (from: number, to: number): void => {
     for (let i = from; i < to; i++) {
@@ -456,6 +524,7 @@ export function createTerrain(track: Track): TerrainField {
       cell.px.push(px);
       cell.pz.push(pz);
       cell.floor.push(floor);
+      cell.climb.push(cutClimb(s));
       if (s.x < cell.minX) cell.minX = s.x;
       if (s.x > cell.maxX) cell.maxX = s.x;
       if (s.z < cell.minZ) cell.minZ = s.z;
@@ -496,7 +565,12 @@ export function createTerrain(track: Track): TerrainField {
    * far from its box. Inside the bench a sample's plane cannot fall below
    * its own `floor`; past it the cone lifts that by the verge grade, which
    * at a hundred metres is forty-odd metres of clearance and is why almost
-   * every outer-ring cell is thrown away without being read. */
+   * every outer-ring cell is thrown away without being read.
+   *
+   * `VERGE_CLIMB` and not the sample's own R34 grade on purpose: this is a
+   * LOWER bound on what the cell could impose, and a cut only ever opens
+   * the cone FASTER. Reading a cell's steepest grade here would reject
+   * cells that still had something to say. */
   const cellFloor = (cell: Cell, d2: number): number =>
     d2 <= BENCH2 ? cell.minFloor : cell.minFloor + (Math.sqrt(d2) - BENCH) * VERGE_CLIMB;
 
@@ -514,6 +588,11 @@ export function createTerrain(track: Track): TerrainField {
      * ground out from under one of them, and this is the floor that says so
      * — see `rawHeight`. */
     own: number;
+    /** R34 — the grade `own` was opened at, so `rawHeight` can take exactly
+     * that rise back off again. Reading `verge.climb` there instead leaves
+     * the difference standing as a lip right at the corridor's lip, which
+     * on a blasted cutting is metres of it. */
+    ownClimb: number;
   };
 
   /** Pick up the non-empty cells of the block around `(cx, cz)` into
@@ -636,7 +715,7 @@ export function createTerrain(track: Track): TerrainField {
           const d = Math.sqrt(d2);
           const hold = BENCH / d;
           const rise =
-            cell.top[k] + (ddx * cell.px[k] + ddz * cell.pz[k]) * hold + (d - BENCH) * VERGE_CLIMB;
+            cell.top[k] + (ddx * cell.px[k] + ddz * cell.pz[k]) * hold + coneRise(d, cell.climb[k]);
           if (rise < ceiling) ceiling = rise;
         }
       }
@@ -660,14 +739,16 @@ export function createTerrain(track: Track): TerrainField {
     // nearest road's own plane, which is rare: everywhere else the answer is
     // the ceiling itself and the second walk never happens.
     let own = Infinity;
+    let ownClimb = VERGE_CLIMB;
     if (bestCell && bestSlot >= 0) {
       const ddx = x - bestCell.x[bestSlot];
       const ddz = z - bestCell.z[bestSlot];
       const tilt = ddx * bestCell.px[bestSlot] + ddz * bestCell.pz[bestSlot];
+      ownClimb = bestCell.climb[bestSlot];
       own =
         bestD2 <= BENCH2
           ? bestCell.top[bestSlot] + tilt
-          : bestCell.top[bestSlot] + (tilt * BENCH) / d + (d - BENCH) * VERGE_CLIMB;
+          : bestCell.top[bestSlot] + (tilt * BENCH) / d + coneRise(d, bestCell.climb[bestSlot]);
       if (ceiling < own) {
         const window = d + LOCAL_CONE;
         const window2 = window * window;
@@ -689,14 +770,24 @@ export function createTerrain(track: Track): TerrainField {
             if (d2 <= BENCH2) here = cell.top[k] + t;
             else {
               const dk = Math.sqrt(d2);
-              here = cell.top[k] + (t * BENCH) / dk + (dk - BENCH) * VERGE_CLIMB;
+              here = cell.top[k] + (t * BENCH) / dk + coneRise(dk, cell.climb[k]);
             }
-            if (here < own) own = here;
+            if (here < own) {
+              own = here;
+              ownClimb = cell.climb[k];
+            }
           }
         }
       }
     }
-    return { d: apronDistance(best, x, z, lateral, d), index: best, lateral, ceiling, own };
+    return {
+      d: apronDistance(best, x, z, lateral, d),
+      index: best,
+      lateral,
+      ceiling,
+      own,
+      ownClimb,
+    };
   };
 
   // The bare landscape the road was laid across (land.ts) — the same
@@ -708,9 +799,32 @@ export function createTerrain(track: Track): TerrainField {
   // Per-side embankment grade along the stage, m per m of distance from the
   // shoulder: positive climbs into a hillside wall, negative drops toward a
   // valley (or the sea the lakes make). Varies slowly with arc position.
+  //
+  // R34 — the two sides are ONE number read twice, with opposite signs, and
+  // that is the whole rule. A road laid across a slope is BENCHED into it:
+  // cut on the uphill side, filled on the downhill, because that is the
+  // cheapest way to get a level road onto a hillside and it is what every
+  // mountain road on earth looks like. Drawing the two sides independently
+  // — which is what this did — puts them both uphill about half the time,
+  // and at the top of the steepness dial half a stage came out walled in on
+  // both sides for four hundred metres at a stretch. That is not a cutting,
+  // it is a tunnel with the lid off.
+  //
+  // A THROUGH-CUT, rock standing up both sides at once, is still built: it
+  // is what `tilt` is for, and it happens where the hillside is levelling
+  // off and the country either side of the road is high anyway. It comes
+  // out short, which is exactly what a through-cut is — you pass through
+  // one, you do not drive down it.
+  //
+  // `steepness` scales the RISING half and only that half: how steep the
+  // hillside the road is cut into stands is what the dial was asked about;
+  // how far a car that goes over the other edge falls is not.
+  const sideLean = knobScale(track.knobs.steepness, R.geology.steep.bank);
   const sideGrade = (s: number, side: number): number => {
-    const raw = valueNoise(s, side * 97.3, 210, sideSeed);
-    return -0.34 + raw * 1.1;
+    const lean = (valueNoise(s, 0, 210, sideSeed) - 0.5) * 2;
+    const tilt = -0.28 + valueNoise(s, 37.1, 330, sideSeed + 3) * 0.55;
+    const raw = tilt + side * lean * 0.62;
+    return raw > 0 ? raw * sideLean : raw;
   };
 
   const half = track.width / 2;
@@ -776,7 +890,28 @@ export function createTerrain(track: Track): TerrainField {
   /** Radius of the flat bench, m, measured from a road's centerline. */
   const BENCH = Math.max(shelfEnd, R.verge.bench);
   const BENCH2 = BENCH * BENCH;
-  const VERGE_CLIMB = R.verge.climb;
+  const VERGE_CLIMB: number = R.verge.climb;
+  /** R34 — how far out a CUT FACE may begin, m from the centerline. The
+   * bench is one lattice cell diagonal, sized so every corner of a cell the
+   * road crosses is pinned under it; the face has to start a whole cell
+   * OUTSIDE that, because a corner just past the bench is still a corner
+   * the bilinear ground under the corridor's own lip is interpolated from.
+   * Start the face at the bench itself and a fourteen-metre rock wall lifts
+   * the outermost vertex of the road mesh with it — R16's hand-over opens
+   * back up into the vertical face down the side of the road it exists to
+   * close. What it buys, besides being correct, is a car's worth of runoff
+   * between the tarmac and the rock. */
+  const CUT_FROM = BENCH + GROUND_CELL;
+
+  /** How far a cone opens above its road's own underside at distance `d`,
+   * m — R31's runoff out to `CUT_FROM`, then R34's face beyond it. Zero
+   * inside the bench. One function, four callers (the ceiling walk, the
+   * two `own` walks and the floor that takes the rise back off), because
+   * a cone measured one way and undone another is a lip along the road. */
+  const coneRise = (d: number, climb: number): number =>
+    d <= BENCH
+      ? 0
+      : (Math.min(d, CUT_FROM) - BENCH) * VERGE_CLIMB + Math.max(0, d - CUT_FROM) * climb;
   /** How far out the cone is still worth asking about, m. By here it stands
    * tens of metres over the road and binds on nothing but a cliff — and
    * where it does not bind, dropping it costs the query nothing. */
@@ -950,23 +1085,27 @@ export function createTerrain(track: Track): TerrainField {
      * an embankment and an embankment has a side — this only says the side
      * is a slope a car could come back up, which is R31 read the other way
      * round. `own` carries the cone's rise past the bench, so that is taken
-     * back off before the fall is applied. */
-    const floorOf = (level: number, d: number, edge: number): number =>
-      level - Math.max(0, d - BENCH) * VERGE_CLIMB - Math.max(0, d - edge) * VERGE_CLIMB;
+     * back off — at the grade it was actually opened at (R34), not at the
+     * verge's, or a cutting leaves the difference standing as a lip along
+     * its own corridor. */
+    const floorOf = (level: number, d: number, edge: number, climb: number): number =>
+      level - coneRise(d, climb) - Math.max(0, d - edge) * VERGE_CLIMB;
     let hold = near ? holdOf(near.d, shelfEnd) : 0;
-    let floor = near ? floorOf(near.own, near.d, shelfEnd) : -Infinity;
+    let floor = near ? floorOf(near.own, near.d, shelfEnd, near.ownClimb) : -Infinity;
     if (spur) {
       // A branch is never banked and the index carries no signed lateral,
       // so its cone is the plain one: its own underside, opening upward
-      // past the bench.
-      const branch = ceilingOf(spur.sample) + Math.max(0, spur.d - BENCH) * VERGE_CLIMB;
+      // past the bench. Nor is a branch ever CUT (R34): it is the road the
+      // stage did not take, abandoned to the country, and nobody blasts a
+      // cutting for a road nobody is going to drive.
+      const branch = ceilingOf(spur.sample) + coneRise(spur.d, VERGE_CLIMB);
       if (branch < ceiling) ceiling = branch;
       // ...and where the point is on the BRANCH's ground, the branch is the
       // road it is beside and the floor is its own.
       const edge = spur.spur.width / 2 + ROAD_CROSS.reach;
       if (!near || spur.d < near.d) {
         hold = holdOf(spur.d, edge);
-        floor = floorOf(branch, spur.d, edge);
+        floor = floorOf(branch, spur.d, edge, VERGE_CLIMB);
       }
     }
     // It only ever RAISES the ceiling, so this takes no ground away and
@@ -979,6 +1118,31 @@ export function createTerrain(track: Track): TerrainField {
   };
 
   const heightAt = (x: number, z: number): number => carveGround(streams, x, z, rawHeight(x, z));
+
+  /** R34 — how much the ground at a point is a FACE THE ROAD WAS CUT
+   * THROUGH, 0 (open country, or a bank battered back to something a car
+   * could climb) to 1 (blasted rock standing over the verge).
+   *
+   * Two questions, multiplied. How hard was this piece of road cut — which
+   * is the cone's own grade, already decided per sample by `cutClimb` off
+   * the surface, the cover and the dial. And how much country is actually
+   * standing on the cut here: a cutting is only a cutting where the land
+   * WANTED to be above the road, and the same blasted tarmac running out
+   * across a flat has no face beside it at all.
+   *
+   * Cheap where it has to be. Almost every point the props ask about is
+   * nowhere near a road, and that answer costs one index lookup — the bare
+   * landscape is only read once a road is close enough to have cut it. */
+  const cutAt = (x: number, z: number): number => {
+    const C = R.verge.cut;
+    const near = nearestSample(x, z);
+    if (!near || near.d > CORRIDOR_RANGE) return 0;
+    const blast = clamp01((near.ownClimb - VERGE_CLIMB) / Math.max(1e-6, C.face.max - VERGE_CLIMB));
+    if (blast <= 0) return 0;
+    const over = farField(x, z) - near.ceiling;
+    if (over <= C.bare.over) return 0;
+    return blast * smooth(clamp01((over - C.bare.over) / (C.bare.full - C.bare.over)));
+  };
 
   /** The DRAWN corridor surface at a point — the ribbon the road mesh
    * builds, with no tile sink under it — and two different weights on it.
@@ -1152,7 +1316,12 @@ export function createTerrain(track: Track): TerrainField {
     sampleAt: (index) => samples[index],
     spurClearance,
     inAnyStream: (x, z, margin) => inStream(streams, x, z, margin),
-    soilAt: land.geology.soilAt,
+    // R34 — the cover, MINUS whatever the road blasted off. The geology's
+    // own soil is the bare country's, and the bare country never heard of
+    // the cutting: read it raw and a spruce wood grows down a rock face,
+    // which is the same mistake R32's rooting rule exists to stop one
+    // layer further down.
+    soilAt: (x, z) => land.geology.soilAt(x, z) * (1 - cutAt(x, z)),
     wetAt: land.geology.wetAt,
     guards,
   });
@@ -1291,6 +1460,7 @@ export function createTerrain(track: Track): TerrainField {
     geology: land.geology,
     waterAt,
     roadDistanceAt,
+    cutAt,
     spurSurfaceAt,
     streams,
     rivers,

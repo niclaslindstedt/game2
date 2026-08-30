@@ -29,7 +29,7 @@ import {
 const STAGE: GhostStage = {
   seed: 38,
   length: "short",
-  knobs: { elevation: 0.5, water: 0.5, trees: 0.5, asphalt: 0.5, width: 0.5 },
+  knobs: { elevation: 0.5, steepness: 0.5, water: 0.5, trees: 0.5, asphalt: 0.5, width: 0.5 },
   timeOfDay: "day",
   weather: "clear",
 };

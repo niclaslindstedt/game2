@@ -177,6 +177,7 @@ const EDGE_ACTIONS: PadAction[] = [
   "screenshot",
   "confirm",
   "back",
+  "next",
 ];
 
 /** Which way a menu cursor was just asked to move. Not a `PadAction`: it is

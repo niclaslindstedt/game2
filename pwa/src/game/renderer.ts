@@ -174,6 +174,11 @@ export type GameRenderer = {
    * with `dt` worth of held keys and mouse travel. Written straight into
    * the camera's own channel; ignored in every other mode. */
   flyCamera: (move: FreeFlyMove) => void;
+  /** Fly the free camera over a world that is being HELD STILL — god mode's
+   * frame is rendered with dt 0, so the flight cannot take its step from the
+   * render it is about to make. Call it after `flyCamera` has banked the
+   * frame's nudges and before `render`; a no-op in every other mode. */
+  flyFrozen: (dt: number) => void;
   /** God mode's rig, so a URL can put it somewhere exactly. */
   placeCamera: (pose: Partial<FreeFlyPose>) => void;
   /** Which camera is up, where it is standing and how fast god mode is
@@ -1217,6 +1222,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       chase.freeMove.pitchDelta += move.pitchDelta;
       chase.freeMove.speedSteps += move.speedSteps;
     },
+    flyFrozen: (dt) => chase.flyOnly(dt),
     placeCamera: (pose) => chase.free.place(pose),
     cameraPose: () => ({ ...chase.pose(), speed: chase.free.speed(), mode: chase.mode() }),
     skipIntroShot: chase.skipStartShot,

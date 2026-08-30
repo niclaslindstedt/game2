@@ -25,6 +25,7 @@
 //   npm run track -- --shape circuit   # a closed lap circuit (R22)
 //   npm run track -- --length endless --km 8   # a streamed endless stretch
 //   npm run track -- --asphalt 0.6 --water 0.9 --elevation 1 --trees 0.2 --width 0.2
+//   npm run track -- --steepness 1 --asphalt 1   # R34: the cuttings, at their deepest
 //   npm run track -- --only render     # skip the other picture
 //   npm run track -- --zoom junctions  # one close-up per junction, and
 //   npm run track -- --zoom junctions --span 70   # ...how much country
@@ -61,7 +62,7 @@ const only = flag("only");
 const zoom = flag("zoom");
 const zoomSpan = Number(flag("span") ?? 80);
 const knobs = {};
-for (const dial of ["elevation", "water", "trees", "asphalt", "width"]) {
+for (const dial of ["elevation", "water", "trees", "asphalt", "width", "steepness"]) {
   const value = flag(dial);
   if (value !== undefined) knobs[dial] = Number(value);
 }

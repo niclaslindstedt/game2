@@ -57,7 +57,7 @@ This project is tuned by measuring, not guessing:
 4. **`make track`** to LOOK at what the rules engine builds.
 5. **`make screenshots`** to LOOK at the game itself (grid, speed, drift, every camera on the ladder, the cockpit by day and by night, portrait). In Claude web sessions Chromium is preinstalled — `CHROMIUM_PATH=/opt/pw-browsers/chromium make screenshots`.
 6. **`make items`** to LOOK at one thing on its own — a stone, a fern, the cabin behind the glass. Most of what the world is made of is six pixels at the speed you pass it; this is where it gets rotated and measured. `ITEMS=` picks the rows, `GROUP=` a whole kind, `TURNTABLE=` the seats to walk round.
-7. **`make profile`** before and after every rendering change. Draw calls, triangles and binds are the numbers a real GPU sees; the fps it also prints is software rasterization and means nothing off this machine.
+7. **`make profile`** before and after every rendering change. Draw calls, triangles and binds are the numbers a real GPU sees; the fps it also prints is software rasterization and means nothing off this machine. The table is metered over a wall-clock window, so on a slow machine two runs of one build differ by up to a tenth — judge the change structurally (a new pass? a new material? or only an instance count?) before reading movement that size as a regression.
 8. **`make replay RUN=…`** before and after every DIFFICULTY change. A bot lap says what the bot would do; a recorded human drive (developer menu → COLLECT RACE DATA, or `make record`) replayed against easy/medium/hard says what those words are worth to a person — the `bot-improvement` skill owns reading it.
 
 Both harnesses serve `pwa/dist`, so **`make build` first, every time**: a stale
@@ -167,6 +167,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | The HEADS UP page and its three settings                    | `pwa/src/game/menu-headsup.tsx`; the stage boxes all three grids share are `pwa/src/game/menu-levels.tsx`                        |
 | The standings sheet, drawn                                  | `pwa/src/game/results-table.tsx` (the results card's modal and the menu's own table)                                             |
 | The time trial's high score board and its initials          | `pwa/src/game/scores.ts` (storage) + `score-board.tsx` / `hud-initials.tsx`                                                      |
+| What a PRESS does to a name being entered on that board     | `pwa/src/game/initials-entry.ts` — DOM-free: the wheel, the caret, and what an empty slot wakes as                               |
 | The time trial's ghost: recording, replay, storage          | `pwa/src/game/ghost.ts`                                                                                                          |
 | Taking a picture, and what is stamped on it                 | `pwa/src/game/screenshots.ts` (the canvas work) + `shot-plan.ts` (size, name, where the mark and the notes go — DOM-free)        |
 | The CAMPAIGN's own maps, opened to be looked at             | `MapViewerPage` in `pwa/src/game/menu-dev.tsx` over `App.tsx`'s `viewLevelMap` — the `debug-tools` skill                         |

@@ -51,7 +51,7 @@ export type InputAction = "restart" | "menu" | "camera" | "pause" | "screenshot"
 /** The presses that walk a MENU rather than the game behind it. Only a
  * controller produces these: a keyboard has the mouse and the touchscreen
  * beside it, and its arrows are already the throttle and the wheel. */
-export type NavAction = "navUp" | "navDown" | "navLeft" | "navRight" | "confirm" | "back";
+export type NavAction = "navUp" | "navDown" | "navLeft" | "navRight" | "confirm" | "back" | "next";
 
 export type InputManager = {
   /** Produce this step's input; advances steering smoothing by `dt`. */
@@ -432,9 +432,12 @@ export function createInput(target: Window = window): InputManager {
     padHold = navigating ? NEUTRAL_HOLD : hold;
     for (const action of pressed) {
       if (navigating) {
-        if (action === "confirm" || action === "back") navHandler?.(action);
+        if (action === "confirm" || action === "back" || action === "next") navHandler?.(action);
         // PAUSE still goes through: it is the press that put the card up,
-        // and it has to be the press that takes it down again.
+        // and it has to be the press that takes it down again. It shares a
+        // button with NEXT by default, and that is not a clash — the pause
+        // card marks no way ON, so over a run START closes the card, and
+        // over a menu there is no run for it to reach.
         else if (action === "pause") actionHandler?.("pause");
         continue;
       }

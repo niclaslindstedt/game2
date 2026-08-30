@@ -15,6 +15,7 @@
 //   npm run sim -- --weather storm       # race in rain/storm wind
 //   npm run sim -- --asphalt 0.8         # generator dials, each 0..1:
 //                                        # --elevation --water --trees --asphalt --width
+//                                        # --steepness
 //   npm run sim -- --gearbox manual      # drive the bot with a manual box
 //   npm run sim -- --sweep               # the ROSTER BALANCE table: every
 //                                        # car over five stage archetypes,
@@ -58,7 +59,7 @@ const cars = flag("car") ? [flag("car")] : CARS.map((c) => c.id);
 const weather = flag("weather") ?? "clear";
 // The generator's dials — anything not passed keeps its default position.
 const knobs = {};
-for (const dial of ["elevation", "water", "trees", "asphalt", "width"]) {
+for (const dial of ["elevation", "water", "trees", "asphalt", "width", "steepness"]) {
   const value = flag(dial);
   if (value !== undefined) knobs[dial] = Number(value);
 }

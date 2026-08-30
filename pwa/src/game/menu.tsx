@@ -143,6 +143,20 @@ export const STAGE_DIALS: {
     ],
   },
   {
+    // R34 — how steep the country stands, as against how high `elevation`
+    // stands it. The two read as one thing on a map and as two entirely
+    // different stages from the driver's seat: ALPINE hills on a WORN dial
+    // are long open slopes you can see across, and the same hills on SHEER
+    // are rock either side of the road.
+    key: "steepness",
+    label: "TERRAIN",
+    stops: [
+      { id: "low", label: "WORN", value: 0.12 },
+      { id: "mid", label: "RUGGED", value: 0.5 },
+      { id: "high", label: "SHEER", value: 0.9 },
+    ],
+  },
+  {
     key: "water",
     label: "WATER",
     stops: [
@@ -322,6 +336,61 @@ export function OptionRow<T extends string>({
   );
 }
 
+/** A CONTINUOUS setting, drawn as the thing it is.
+ *
+ * A row of chips is the right control for a choice whose answers have names
+ * — LOW, MEDIUM, HIGH — and the wrong one for a level, where the answer is
+ * "a bit less than that" and the chips are five places the value is allowed
+ * to stand. The readout is what a bare slider lacks: a number to come back
+ * to, and a word for the bottom of the travel, since OFF is a thing people
+ * mean rather than a very quiet thing.
+ *
+ * A controller reaches it too — menu-nav.ts walks range inputs and steps
+ * them sideways, the same way it steps the car on its stand. */
+export function SliderRow({
+  label,
+  value,
+  min = 0,
+  max = 1,
+  step = 0.05,
+  format,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  format: (value: number) => string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="menu-row">
+      <span className="menu-label">{label}</span>
+      <div className="menu-slide">
+        <input
+          className="menu-slider"
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          aria-label={label}
+          onInput={(e) => {
+            // The tick is the point on a volume fader: it is an EFFECT, so
+            // moving the effects level is heard at the level being set while
+            // the thumb is still on it. Capped inside playUi, so a drag is a
+            // run of ticks rather than a buzz.
+            playUi("move");
+            onChange(Number((e.target as HTMLInputElement).value));
+          }}
+        />
+        <span className="menu-slide-read">{format(value)}</span>
+      </div>
+    </div>
+  );
+}
+
 /** A switch with its cost written under it. Shared by OPTIONS and the
  * developer menu, which both ask the same question — on or off, and what
  * does that buy me. */
@@ -392,10 +461,16 @@ export function PauseMenu({
         <div className="hud-pause-sub">
           STAGE {seed} — {carName}
         </div>
+        {/* RESUME is both the way OUT of this card and where a controller's
+            cursor belongs: it is the press a card opened by mis-aiming for
+            the minimap needs, and the two rows under it throw the stage
+            away. Without the focus mark the cursor skips it — a way back is
+            normally a chevron nobody came for — and lands on RESTART. */}
         <button
           type="button"
           className="hud-start"
           data-nav-back
+          data-nav-focus
           onClick={() => {
             playUi("back");
             onResume();

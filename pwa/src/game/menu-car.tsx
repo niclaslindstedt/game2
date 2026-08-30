@@ -117,19 +117,34 @@ export function CarSetupPage({
         sub={`${level.blurb} · ${billing}${best === undefined ? "" : ` · BEST ${formatTime(best)}`}`}
       />
       <div className="car-setup">
-        <CarPicker
-          carId={race.carId}
-          onPick={(carId) => onRace({ ...race, carId })}
-          onDeveloper={onDeveloper}
-        />
+        {/* TRANSMISSION rides in the CAR's column, under the stand. The
+            stand is narrower than the sheet beside it and leaves a hole
+            below the car; the row used to stand full-width under both
+            columns, which spent a whole line of a phone held sideways on a
+            choice two words wide and pushed START off the bottom. It also
+            belongs here: the box is part of what you are taking to the
+            stage, and the sheet above quotes its figures through it. */}
+        <div className="car-setup-pick">
+          <CarPicker
+            carId={race.carId}
+            onPick={(carId) => onRace({ ...race, carId })}
+            cursor
+            onDeveloper={onDeveloper}
+          />
+          <GearboxRow
+            label="TRANSMISSION"
+            gearbox={settings.gearbox}
+            onGearbox={(gearbox) => onSettings({ ...settings, gearbox })}
+          />
+        </div>
         <CarSpecPanel spec={spec} gearbox={settings.gearbox} />
       </div>
-      <GearboxRow
-        label="TRANSMISSION"
-        gearbox={settings.gearbox}
-        onGearbox={(gearbox) => onSettings({ ...settings, gearbox })}
-      />
-      <button type="button" className="menu-start" onClick={onStart}>
+      {/* The controller's two marks (menu-nav.ts): the cursor lands on the
+          CAR — sideways over the stand is the next car and the previous
+          one, which is the whole decision this card exists for — while
+          START, the pad button, takes the green light from wherever the
+          cursor happens to be standing. */}
+      <button type="button" className="menu-start" data-nav-next onClick={onStart}>
         START
       </button>
     </div>

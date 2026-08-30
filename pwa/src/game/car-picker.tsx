@@ -18,10 +18,15 @@ import { DEV_TAPS, DEV_TAP_WINDOW_MS } from "./settings.ts";
 export function CarPicker({
   carId,
   onPick,
+  cursor,
   onDeveloper,
 }: {
   carId: string;
   onPick: (id: string) => void;
+  /** Stand the controller's cursor here when the page comes up. The card
+   * whose whole question is WHICH CAR asks for it; Roam, where the car is
+   * one of six panels, does not. */
+  cursor?: boolean;
   /** Fired when the chassis has been drummed on DEV_TAPS times in quick
    * succession — the way into the developer menu. */
   onDeveloper?: () => void;
@@ -92,10 +97,15 @@ export function CarPicker({
 
   return (
     <div className="car-pick-row">
-      <div className="car-pick">
+      {/* The arrows and the car between them are ONE stop on a controller's
+          walk, not three (`data-nav-steps`, menu-nav.ts): left and right
+          over the stand change the car and leave the cursor where it is,
+          the way an arrow either side of something means to a thumb. */}
+      <div className="car-pick" data-nav-steps data-nav-focus={cursor ? "" : undefined}>
         <button
           type="button"
           className="car-pick-step"
+          data-nav-step="left"
           onClick={() => step(-1)}
           aria-label="Previous car"
         >
@@ -112,6 +122,7 @@ export function CarPicker({
         <button
           type="button"
           className="car-pick-step"
+          data-nav-step="right"
           onClick={() => step(1)}
           aria-label="Next car"
         >

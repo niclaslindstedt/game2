@@ -50,6 +50,10 @@ export type DebugContext = {
   playCamera: PlayCamera;
   pose: FreeFlyPose & { speed: number };
   god: boolean;
+  /** Whether god mode is holding the simulation still. False while the bot
+   * is driving underneath it (`?bot=1`), which is the one flight taken over
+   * a run that is still going somewhere. */
+  held: boolean;
   /** Frames per second, averaged over the last second. */
   fps: number;
   /** Build stamp — the version and the commit the app was cut from. */
@@ -254,10 +258,14 @@ export function debugBoxes(ctx: DebugContext, state: GameState): DebugBox[] {
       cameraBox(ctx),
       stageBox(ctx, state),
       {
-        title: "CAR (PARKED)",
+        // Whether the run is HELD is the difference between a frame anybody
+        // can fly back to and one that had already moved on by the time the
+        // shutter went — so the box that says where the car is says it.
+        title: ctx.held ? "CAR (HELD)" : "CAR (DRIVEN)",
         rows: [
           { k: "xyz", v: `${m(car.x)} ${m(car.y)} ${m(car.z)}` },
           { k: "track", v: `s ${m(state.progressS)} · lat ${m(state.lateral)} · ${state.phase}` },
+          { k: "run", v: ctx.held ? "held by god mode" : "running (bot at the wheel)" },
         ],
       },
     ];

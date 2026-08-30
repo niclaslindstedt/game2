@@ -457,6 +457,56 @@ export const ANALYSIS = {
      * all of its points — the slack `within` scores against. */
     slack: 0.3,
     reliefSlack: 140,
+
+    /** THE CORRIDOR — the country the road actually runs THROUGH, as
+     * against `relief`, which is the country the stage is set in.
+     *
+     * They are not the same measurement and the difference is the whole
+     * point of having both. Every other check in this metric reads the bare
+     * geology, and the bare geology can be a mountain range while the
+     * ground a driver sees out of the window is a lawn: R31 cuts the
+     * country back to a cone beside every road, so a stage can score full
+     * marks for relief and still be a ribbon laid across a table with the
+     * hills all pushed over the horizon. This one is measured on the
+     * terrain field — the ground that is drawn and driven — and it is the
+     * only check that can tell the difference.
+     *
+     * `rise` is how far the ground stands over the road at the far probe,
+     * m, at the 75th percentile of the flanks: a BAND, because a stage with
+     * nothing standing beside it is a plain you can see clean across and
+     * one with everything standing beside it is a trench. `probe` is where
+     * the flanks are read, m from the centerline — starting outside R31's
+     * bench, because inside it the answer is "flat" by construction and
+     * measuring it would only prove the bench exists. */
+    corridor: { rise: { min: 3.5, max: 26 }, probe: { from: 22, to: 62, step: 8 }, slack: 9 },
+
+    /** R34 — THE CUTTINGS. How much of a stage runs through rock rather
+     * than over it, as the share of road flanks with a cut face standing
+     * beside them.
+     *
+     * ONE-SIDED, and that is the measurement talking. A cutting is where a
+     * road could not go round, and a road that follows the country
+     * (`elevation.follow`) mostly can: on seed 3 at the default dials 0.9%
+     * of flanks come out as rock, at full steepness 5.6%, and only with the
+     * stage fully sealed does it reach a quarter. All three of those are
+     * right — a soft country genuinely has no cuttings in it, and a floor
+     * under this would be a check demanding rock that nature did not put
+     * there. What is NOT right is a stage that is all cutting, so the
+     * ceiling is where the points are.
+     *
+     * The flat-world regression this metric exists to catch is `corridor`'s
+     * to catch, not this one's: a generator that stopped cutting because it
+     * stopped having hills fails there, where it belongs.
+     *
+     * `face` is how much of `terrain.cutAt` counts as a cutting at all —
+     * under it the ground beside the road is a bank, not a wall. `walled`
+     * is the run of road, m, with a face up BOTH sides at once past which
+     * it stops being a cutting and becomes a corridor with nowhere to go;
+     * `walledShare` is how much of a stage may be that before it is a
+     * finding. R34 benches the road into the hillside — cut one side,
+     * filled the other — so this should stay at zero, and a seed where it
+     * does not is a seed where that broke. */
+    cut: { share: { min: 0, max: 0.45 }, slack: 0.15, face: 0.35, walled: 260, walledShare: 0.05 },
   },
 
   /** COST. The generator runs in the game, on a phone, every time a stage

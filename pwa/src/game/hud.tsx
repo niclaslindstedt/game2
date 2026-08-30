@@ -190,6 +190,12 @@ type HudProps = {
    * translucent enough to print it through its own title. Held, there is
    * nothing to leave the shot with anyway. */
   paused: boolean;
+  /** Whether god mode has the camera. The gantry is the other instrument
+   * that has to know: nobody is on the grid to leave, and the run is held at
+   * whatever instant the camera came off the car, so lights left up would
+   * hang over the middle of every frame flown out to be photographed instead
+   * of ageing out with the clock. */
+  flying: boolean;
   onPause: () => void;
   onCamera: () => void;
   /** Take a picture. Null where there is none to take — the player has
@@ -724,6 +730,7 @@ export function Hud({
   snap,
   live,
   paused,
+  flying,
   flashes,
   split,
   input,
@@ -867,7 +874,10 @@ export function Hud({
 
       {/* Center: countdown / finish / event flashes. */}
       <div className="hud-center">
-        <StartLights live={live} muted={paused} />
+        {/* Away entirely while god mode flies — same reasoning as the
+            way-home arrow the renderer takes down in the free camera: it is
+            an aid for somebody driving, and nobody is. */}
+        {!flying && <StartLights live={live} muted={paused} />}
         {(snap.phase === "rollout" || snap.phase === "finished") && snap.finishTime !== null && (
           <FinishCard
             time={snap.finishTime}

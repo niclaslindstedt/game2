@@ -24,19 +24,25 @@ export const BOARD_SIZE = 10;
 /** Letters in a name. Three, for the same reason every cabinet used three. */
 export const INITIALS_LENGTH = 3;
 
+/** An unused slot. A stored name is always exactly `INITIALS_LENGTH`
+ * characters, so a two-letter name ends in one of these and the board never
+ * has to align ragged rows. */
+export const BLANK = " ";
+
 /**
- * THE ALPHABET, in the order the ▲/▼ buttons walk it.
- *
- * A–Z first because a name is letters, then the digits, and a space last so
- * a two-letter name is possible without the space being in the way of every
- * scroll. A blank is a space rather than an empty slot, so every stored name
- * is exactly `INITIALS_LENGTH` characters and the board never has to align
- * ragged rows.
+ * THE ALPHABET a stored name may be made of: letters, digits, and the blank
+ * that pads a short one out to length. What the ENTRY walks with up and down
+ * is a different, shorter list — `WHEEL` in `initials-entry.ts`, which has no
+ * blank on it, because a name is shortened by leaving a slot empty rather
+ * than by scrolling to a space.
  */
 export const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ";
 
-/** What a name defaults to before anybody has entered one. */
-export const DEFAULT_INITIALS = "AAA";
+/** What a name defaults to before anybody has entered one: ONE letter, and
+ * two empty slots after it. A cabinet's AAA is three letters to walk back
+ * from before you can say your own — and two of them look like a name you
+ * meant, so a player who stops early leaves AAA on the board. */
+export const DEFAULT_INITIALS = "A" + BLANK + BLANK;
 
 export type ScoreEntry = {
   /** Exactly `INITIALS_LENGTH` characters from `ALPHABET`. */
@@ -54,11 +60,20 @@ const BOARD_KEY = "scandi-flick-scores:";
 const INITIALS_KEY = "scandi-flick-initials";
 
 /** Force any string into a storable name: uppercased, only characters the
- * alphabet has, padded and cut to length. Anything a hand-edited storage
- * value or an older build wrote comes back through here. */
+ * alphabet has, cut to length and padded out with blanks. Padding is blank
+ * rather than a letter because a short name is a name — an older build's AAA
+ * comes back unchanged, but nothing new ever grows letters nobody typed. The
+ * blanks are dropped before the padding goes back on, so a name that arrives
+ * with a hole in the middle of it — which only a hand-edited key can be —
+ * comes back closed up rather than un-enterable.
+ * Anything a hand-edited storage value or an older build wrote comes back
+ * through here. */
 export function normalizeInitials(raw: string): string {
-  const kept = [...raw.toUpperCase()].filter((c) => ALPHABET.includes(c)).join("");
-  return (kept + DEFAULT_INITIALS).slice(0, INITIALS_LENGTH);
+  const kept = [...raw.toUpperCase()]
+    .filter((c) => c !== BLANK && ALPHABET.includes(c))
+    .join("")
+    .slice(0, INITIALS_LENGTH);
+  return (kept || DEFAULT_INITIALS).padEnd(INITIALS_LENGTH, BLANK);
 }
 
 /** The name last entered, so a player who has been here before is offered

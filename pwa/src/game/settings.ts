@@ -344,11 +344,13 @@ export type PadSource =
  * `steerRight` are the d-pad — a digital pair that rides the same ramp the
  * keyboard's arrows do.
  *
- * The last four are the MENUS, not the car: a pad has to be able to walk a
+ * The last five are the MENUS, not the car: a pad has to be able to walk a
  * card and press what it lands on, or half the game is unreachable on a
  * handheld. `steerLeft`/`steerRight` move the cursor sideways in a menu —
  * the same d-pad, doing the thing that d-pad means — so only up and down
- * need names of their own. */
+ * need names of their own. `next` is the odd one: it presses a surface's
+ * way ON rather than whatever the cursor found, so START walks a player
+ * from the front door to the green light without them choosing anything. */
 export type PadAction =
   | "throttle"
   | "brake"
@@ -365,6 +367,7 @@ export type PadAction =
   | "screenshot"
   | "confirm"
   | "back"
+  | "next"
   | "navUp"
   | "navDown";
 
@@ -412,6 +415,7 @@ export const PAD_ACTIONS: { id: PadAction; label: string; menu?: true }[] = [
   { id: "menu", label: "MAIN MENU" },
   { id: "confirm", label: "MENU: SELECT", menu: true },
   { id: "back", label: "MENU: BACK", menu: true },
+  { id: "next", label: "MENU: NEXT", menu: true },
   { id: "navUp", label: "MENU: UP", menu: true },
   { id: "navDown", label: "MENU: DOWN", menu: true },
 ];
@@ -425,8 +429,10 @@ const button = (index: number): PadSource[] => [{ kind: "button", index }];
  * SELECT — the button nothing on the road wants — takes the picture. The
  * d-pad steers for anyone who would rather not use the stick.
  *
- * In a menu the same buttons mean menu things: A selects, B goes back, and
- * the d-pad and stick walk the card.
+ * In a menu the same buttons mean menu things: A selects, B goes back, the
+ * d-pad and stick walk the card, and START — the same button that pauses a
+ * run — is NEXT: it takes each screen's way on, so holding it down from the
+ * front door lands on a start line without a single choice being made.
  *
  * TWO actions are deliberately unbound, and for the same reason in each
  * case — there is already a way to do it that cannot be done by accident:
@@ -457,6 +463,7 @@ export const DEFAULT_PAD: PadSettings = {
       screenshot: button(8),
       confirm: button(0),
       back: button(1),
+      next: button(9),
       navUp: button(12),
       navDown: button(13),
     },

@@ -512,11 +512,14 @@ export function RoamPage({
                 standing in front of this page does not need to be told
                 which page it is, and the slot was a word wide. */}
             {map ? <MapCopyButton map={map} /> : <span className="roam-title">ROAM</span>}
-            <span className="roam-seed">
+            {/* One stop on a controller's walk, arrows and number together
+                — the same `data-nav-steps` group the car's stand is. */}
+            <span className="roam-seed" data-nav-steps>
               <span className="roam-pane-title">SEED</span>
               <button
                 type="button"
                 className="roam-step"
+                data-nav-step="left"
                 onClick={() => step(-1)}
                 aria-label="Previous seed"
               >
@@ -526,6 +529,7 @@ export function RoamPage({
               <button
                 type="button"
                 className="roam-step"
+                data-nav-step="right"
                 onClick={() => step(1)}
                 aria-label="Next seed"
               >
@@ -567,7 +571,7 @@ export function RoamPage({
               choice you may or may not want to make; this is the one thing
               the page is for, and a player who wants none of them should not
               have to travel past all of them to leave. */}
-          <button type="button" className="menu-start" onClick={onStart}>
+          <button type="button" className="menu-start" data-nav-next onClick={onStart}>
             DRIVE IT
           </button>
 

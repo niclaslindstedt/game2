@@ -15,7 +15,7 @@ import { angleDiff, clamp } from "../lib/math.ts";
 import { latCeiling, slideFloor, surfaceGripFor, wheelSlide } from "../game/limits.ts";
 import { TUNING } from "../game/defs/tuning.ts";
 import type { CarSpec } from "../game/defs/cars.ts";
-import { flatTrack, SURFACES, type Track } from "../mapgen/index.ts";
+import { flatTrack, SURFACES, type TerrainField, type Track } from "../mapgen/index.ts";
 import type { CarInput, GameState } from "../game/state.ts";
 
 /** The sample `ahead` steps down the road. On a CIRCUIT (R22) the road runs
@@ -58,6 +58,23 @@ export type BotProfile = {
    * trusted with proportionally more of it, one that rotates less — or one
    * that has to be ASKED before it rotates at all — with less. */
   rotationRef: number;
+  /** How much a corner with NOWHERE TO GO takes off the plan, 0..1 — the
+   * share of the geometric corner speed a driver gives up where running
+   * wide would end the run rather than cost a second.
+   *
+   * The rest of this plan reads the road and nothing beside it, which is
+   * fine while the answer to running wide is always "a bit of grass". It
+   * stops being fine the moment the stage is laid along the country (R34):
+   * a road down a valley floor runs past open water, and a road forced over
+   * a shoulder runs between rock. A driver looks at that and lifts. One who
+   * does not drives into the same lake until the clock runs out — which is
+   * exactly what this bot did, three hundred times in one run, on the first
+   * seed that put a tarn on the outside of a fast corner.
+   *
+   * It is a fraction and not a flat margin because what it is protecting
+   * scales with the corner: giving up 2 m/s means nothing at 160 km/h and
+   * is the whole corner at 40. */
+  exposure: number;
   /** Margin over the corner speed that triggers braking, m/s. */
   brakeMargin: number;
   /** How much of the car's braking the corner plan assumes it will get —
@@ -124,6 +141,7 @@ export const RALLY_BOT: BotProfile = {
   hardCurvature: 1 / 30,
   hotEntry: 2.5,
   rotationRef: 2.5,
+  exposure: 0.45,
   brakeMargin: 2.5,
   brakeUse: 0.7,
   reverseAfter: 0.8,
@@ -143,6 +161,61 @@ export const RALLY_BOT: BotProfile = {
  * for it dozens of times on every one of a run's 120 steps a second, and
  * the answer only depends on the car's rubber. */
 const GRIP_BY_CAR = new WeakMap<CarSpec, readonly number[]>();
+
+/** WHAT IS BESIDE THE ROAD, per centerline sample: 0 where running wide
+ * costs a moment on the grass, 1 where it ends the run.
+ *
+ * Cached per terrain field and filled LAZILY, one sample at a time, because
+ * the corner scan below is the bot's whole cost and a terrain query is far
+ * more expensive than anything else in it. Only the samples the scan
+ * actually reaches are ever asked — the corners, which are a fraction of a
+ * stage — and each of them once per race rather than once per physics step.
+ * `NaN` is "not asked yet"; the field never returns one.
+ *
+ * A `WeakMap` on the terrain and not on the track: the exposure is a fact
+ * about the country, and two stages on the same road with different water
+ * are different countries. It also means a test that swaps in a synthetic
+ * terrain gets its own table rather than the real one's answers. */
+const EXPOSURE = new WeakMap<TerrainField, Float32Array>();
+
+/** How far off the centerline a car that has run wide ends up, m — where
+ * the question "and then what" is actually asked. Two probes: the first is
+ * just past R31's flat bench, which is as far as a small mistake carries;
+ * the second is out where a real one does. */
+const RUNOFF = [18, 28, 42];
+
+/** ...and what each hazard is WORTH, 0..1. Water is the whole run: a car in
+ * it drowns and is fetched, and it is the one thing out there that cannot
+ * be driven off again. Rock (R34's cut faces) is a hard stop that usually
+ * ends in a wedge and a fetch, so it is most of a run rather than all of
+ * it — and a driver treats it accordingly, which is to say still lifts. */
+const HAZARD = { water: 1, rock: 0.7 };
+
+function exposureAt(terrain: TerrainField, track: Track, index: number): number {
+  let table = EXPOSURE.get(terrain);
+  if (!table) {
+    table = new Float32Array(track.samples.length).fill(NaN);
+    EXPOSURE.set(terrain, table);
+  }
+  // An endless stage grows its samples under the table it was built with.
+  if (index >= table.length) return 0;
+  const cached = table[index];
+  if (cached === cached) return cached;
+  const s = track.samples[index];
+  const cos = Math.cos(s.heading);
+  const sin = Math.sin(s.heading);
+  let worst = 0;
+  for (const side of [-1, 1]) {
+    for (const out of RUNOFF) {
+      const x = s.x + side * out * cos;
+      const z = s.z - side * out * sin;
+      if (terrain.waterAt(x, z) !== null) worst = Math.max(worst, HAZARD.water);
+      else if (terrain.cutAt(x, z) > 0.35) worst = Math.max(worst, HAZARD.rock);
+    }
+  }
+  table[index] = worst;
+  return worst;
+}
 
 function gripBySurface(spec: CarSpec): readonly number[] {
   let grip = GRIP_BY_CAR.get(spec);
@@ -267,6 +340,16 @@ export function botInput(
     // road-tired car would brake for a sealed corner as if it were gravel,
     // and no amount of tire in the catalog would ever show up as pace.
     const cap = Math.sqrt((latAccel * gripOf[surface[i]]) / k);
+    // ...and then what is BESIDE that corner. A driver plans a corner off
+    // the grip he expects to have AND off what happens if he does not get
+    // it, and those are different questions: the same bend is taken one way
+    // with a field on the outside of it and another with a lake. Where
+    // there is nowhere to go the plan gives up a share of the corner speed
+    // and, below, refuses the hot entry outright — because the hot entry is
+    // a deliberate overspeed paid for by running wide, and running wide is
+    // the thing that is not available here.
+    const exposed = exposureAt(state.terrain, track, i);
+    const safe = exposed > 0 ? cap * (1 - profile.exposure * exposed) : cap;
     // Rally style: a hard corner is entered HOT — the plan deliberately
     // carries extra speed there and the drift scrubs it, instead of braking
     // down to the geometric cap like a grip line would.
@@ -276,13 +359,20 @@ export function botInput(
     // smallest. How much of it a car is trusted with is its ROTATION: the
     // slide is what brings the nose round in there, so a car that rotates
     // freely can carry more in than one that pushes.
-    const planCap = hard ? cap + hotEntry : cap;
+    // ...and the hot entry is SCALED by the exposure rather than switched
+    // off by it. A driver beside a lake still flicks the car into the
+    // hairpin — that is how the corner is driven, and the technique is not
+    // the danger — he simply asks for less of it. Taking it away outright
+    // costs the quick crews the whole rally half of their pace on any stage
+    // with water on it, and a difficulty ladder built on quick crews stops
+    // being one.
+    const planCap = hard ? safe + hotEntry * (1 - exposed) : safe;
     // Distance-discounted: a far corner allows more speed now than a near one.
     const allowed = Math.sqrt(planCap * planCap + braking * Math.max(0, distance - 10));
     if (allowed < targetSpeed) targetSpeed = allowed;
     if (hard && distance < hardDistance) {
       hardDistance = distance;
-      hardCap = cap;
+      hardCap = safe;
     }
     ahead += 1;
   }

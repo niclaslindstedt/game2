@@ -28,6 +28,7 @@ import {
   LOCATIONS,
   continueAt,
   findLevel,
+  latestOpen,
   levelCleared,
   levelCompleted,
   levelUnlocked,
@@ -148,6 +149,12 @@ function campaignEntry(): MenuPage {
     : { page: "campaign" };
 }
 
+/** The front door's own way ON: the tile a player who pressed START at the
+ * studio card meant to press. CAMPAIGN is the game — the other five are
+ * ways of driving stages the campaign opens, or of setting the game up to
+ * be driven. */
+const ROOT_NEXT = "campaign";
+
 /** THE FRONT DOOR, as six marks. Every row used to carry a sentence saying
  * what the mode was, which is a menu explaining itself: six explanations is
  * a card that fills a phone, and none of them survives the second visit. A
@@ -197,6 +204,7 @@ function RootPage({
             type="button"
             className={`menu-tile ${item.quiet ? "menu-tile-quiet" : ""}`}
             data-menu={item.key}
+            data-nav-next={item.key === ROOT_NEXT ? "" : undefined}
             onClick={() => onNavigate(item.page)}
           >
             <Glyph name={item.glyph} />
@@ -226,6 +234,9 @@ function CampaignPage({
   progress: CampaignProgress;
   onNavigate: (page: MenuPage) => void;
 }) {
+  // The FURTHEST country open, which is the one a player coming back is
+  // playing. It is where the cursor stands and what START takes.
+  const resume = LOCATIONS.filter((location) => locationUnlocked(location, progress)).at(-1);
   return (
     <div className="menu-card">
       <MenuHead back={() => onNavigate({ page: "root" })} backLabel="MENU" title="CAMPAIGN" />
@@ -256,6 +267,7 @@ function CampaignPage({
               key={location.id}
               type="button"
               className="menu-location"
+              data-nav-next={location === resume ? "" : undefined}
               onClick={() => onNavigate({ page: "location", locationId: location.id })}
             >
               <span className="menu-location-name">{location.name.toUpperCase()}</span>
@@ -410,6 +422,13 @@ function LocationPage({
   const pick = (level: CampaignLevel): void =>
     onNavigate({ page: "car", levelId: level.id, mode: "campaign" });
   const out = locationParent();
+  const gate = (_level: CampaignLevel, index: number): boolean =>
+    levelUnlocked(location, index, progress);
+  // THE STAGE THIS PAGE WOULD PICK — the same one CONTINUE names, so the
+  // cursor lands on the box the panel below is already pointing at and one
+  // press of START drives it. Falling back to the last open box for a
+  // location with nothing left to win, which is the end of its own ladder.
+  const resume = continueAt(location, progress) ?? latestOpen(location, gate);
   return (
     <div className="menu-card menu-card-wide">
       <MenuHead
@@ -420,9 +439,10 @@ function LocationPage({
       <LevelGrid
         location={location}
         progress={progress}
-        open={(_level, index) => levelUnlocked(location, index, progress)}
+        open={gate}
         hint="Podium on the stage before this one"
         difficulty={race.difficulty}
+        next={resume}
         onPlay={pick}
       />
       <StandingsPanel
@@ -452,6 +472,13 @@ function TimeTrialPage({
   progress: CampaignProgress;
   onNavigate: (page: MenuPage) => void;
 }) {
+  const open = (level: CampaignLevel): boolean => levelCompleted(level, progress);
+  // The furthest stage anyone has driven to the end of, wherever it is: the
+  // last road a player saw the finish of is the one they came here to put a
+  // clock on. Every grid is handed it and only the one holding it marks a
+  // box, because a level id belongs to exactly one location.
+  let resume: CampaignLevel | null = null;
+  for (const location of LOCATIONS) resume = latestOpen(location, open) ?? resume;
   return (
     <div className="menu-card menu-card-wide">
       <MenuHead back={() => onNavigate({ page: "root" })} backLabel="MENU" title="TIME TRIAL" />
@@ -461,8 +488,9 @@ function TimeTrialPage({
           <LevelGrid
             location={location}
             progress={progress}
-            open={(level) => levelCompleted(level, progress)}
+            open={open}
             hint="Finish this stage in the campaign"
+            next={resume}
             onPlay={(level) => onNavigate({ page: "car", levelId: level.id, mode: "timetrial" })}
           />
         </div>

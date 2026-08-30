@@ -32,6 +32,7 @@ import { blockOffsets, cellKey } from "../lib/math.ts";
 import type { Surface } from "./compile.ts";
 import { LAKE_Y, type LandField } from "./land.ts";
 import { ROAD_CROSS, roadClearance } from "./road.ts";
+import { STAGE_RULES as R } from "./rules.ts";
 
 /** One sample of a spur's centerline — the same shape as a track sample,
  * minus everything only the stage proper needs (progress, pacenotes). */
@@ -232,9 +233,13 @@ export function buildSpur(
     x > bounds.maxX + SPUR.escape ||
     z < bounds.minZ - SPUR.escape ||
     z > bounds.maxZ + SPUR.escape;
-  // The branch starts on the road's own grade and then makes up its own
-  // mind, inside a grade a road would actually be built on.
-  let grade = junction.slope;
+  // R34 — the branch leaves on the road's own grade and then follows the
+  // country, at the same lag the route does, inside a grade a minor road
+  // would actually be built on. `follow` is that lag as a per-step share:
+  // the branch walks in `SPUR.step` metres, not the compiler's, so the
+  // response length is converted here rather than restated as a number of
+  // its own that would then drift from the route's.
+  const follow = 1 - Math.exp(-SPUR.step / R.elevation.follow.lag);
   let curvature = 0;
   let x = junction.x;
   let z = junction.z;
@@ -375,7 +380,6 @@ export function buildSpur(
     samples.push({ x, z, heading, elevation: y, s, surface: "asphalt", lift: 0, flat: 0 });
     if (s >= SPUR.straight && s % SPUR.bend < SPUR.step) {
       curvature = rng.range(-1 / SPUR.minRadius, 1 / SPUR.minRadius);
-      grade = Math.max(-SPUR.maxGrade, Math.min(SPUR.maxGrade, grade + rng.range(-0.03, 0.03)));
     }
     // Out in the open the branch wanders; past its first stretch it is
     // leaving, and a road that is leaving holds a line for the edge of the
@@ -391,7 +395,20 @@ export function buildSpur(
     heading += curvature * SPUR.step;
     x += Math.sin(heading) * SPUR.step;
     z += Math.cos(heading) * SPUR.step;
-    y += grade * SPUR.step;
+    // R34 — and the branch FOLLOWS THE COUNTRY, by the same lag and grade
+    // clamp the route does (`elevation.follow`), off the junction's own
+    // height. It used to random-walk its grade, which put a branch at a
+    // height of its own invention: fifty metres from the road it left, and
+    // twenty above or below the ground either of them was crossing. That is
+    // invisible while the route is at an invented height too — both are
+    // wrong in the same way — and the moment the route is laid on the
+    // country it becomes a wall down the side of every junction.
+    //
+    // Its own `maxGrade` and not the route's: a branch is a minor road, and
+    // it is allowed to be gentler about what it will climb.
+    const want = y + (Math.max(land.heightAt(x, z), LAKE_Y + SPUR.shoreFreeboard) - y) * follow;
+    const cap = SPUR.maxGrade * SPUR.step;
+    y = Math.max(y - cap, Math.min(y + cap, want));
   }
   // R23 — and then the guarantee the steering only tries for: the branch is
   // CUT at the first step that stands inside the clearance. Not backed up
