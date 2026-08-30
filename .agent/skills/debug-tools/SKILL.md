@@ -84,9 +84,20 @@ The two measurements answer different questions and neither replaces the
 other:
 
 - **`make profile`** counts what a frame ASKS FOR — draw calls, triangles,
-  program and texture binds. Those are the same numbers on every machine, so
-  it is the one that is trustworthy in headless Chromium and the one a PR
-  quotes. Its fps column is software rasterization and means nothing.
+  program and texture binds. What a frame asks for does not depend on the
+  GPU, which is what makes this the table a PR quotes. Its fps column is
+  software rasterization and means nothing.
+  **But the table is not repeatable to better than about ten per cent on a
+  slow machine.** Each scene settles at a fixed STAGE TIME and is then
+  metered over a fixed six-second WALL-CLOCK window (`WINDOW` in
+  `scripts/profile-render.mjs`), so where the container draws five frames in
+  it and the next run draws fifteen, the car has covered a different distance
+  and a different set of chunks, props and trees was in frustum. Judge a
+  rendering change STRUCTURALLY first — does it add a pass, a material, a
+  mesh, or only change an instance COUNT? — and quote the table only when the
+  movement is far outside that spread, or when the frames-metered counts
+  match. An instanced batch drawn with fewer instances cannot move `draws` at
+  all, whatever the table says.
 - **The benchmark** is the other half: what a REAL machine, with a real GPU
   and the player's own video settings, actually takes to draw them. It is
   therefore worthless headless — this container manages about one frame a
