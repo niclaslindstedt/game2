@@ -34,9 +34,14 @@ export type BridgeDeck = Exclude<Crossing, "ford">;
  * not a seam. It sits ON the route's centerline, at a corner: the sealed
  * road — the MAIN road — runs straight through it, made of the route's own
  * collinear arm on one side and the abandoned branch on the other, and the
- * gravel road the route turns onto (or off) is the MINOR one, which simply
- * stops at the main road's edge. Everything inside the platform is one
- * graded plane, one surface, and no borders. */
+ * gravel road the route turns onto (or off) is the MINOR one, which arrives
+ * at an angle and opens out into a MOUTH where it meets the seal.
+ *
+ * The main road is the one that does not notice: same width, same surface,
+ * its centre line running straight past the crossing. All the giving way is
+ * the minor road's — it is the one that flares, loses its border and stops
+ * at the main road's edge. Everything inside the platform is one graded
+ * plane. */
 export type RoadJunction = {
   /** The point on the route's centerline where the two roads meet — the
    * tangent point of the corner, which is where a surveyor would have put
@@ -62,18 +67,9 @@ export type RoadJunction = {
    * junction is a hole cut in both roads' borders, graded flat and paved
    * over, which is what makes the two of them one surface. */
   reach: number;
-  /** ...and the radius inside which that flattening applies, m. */
-  radius: number;
-  /** R17 — the GORE NOSE: the pavement carried into the wedge between the
-   * two carriageways where they have just parted, as flat quads on the
-   * platform's plane. Two roads that leave a junction together part over
-   * a couple of dozen meters and leave a wedge of country between them;
-   * where that wedge is narrower than a car it is not an island but a
-   * seam, and a junction whose grass runs to a knife point is the tell
-   * that nobody planned it. Built from the road's OWN samples rather than
-   * from the corner's nominal arc — a stage corner is a run of segments,
-   * and after the first one it is no longer the circle it started as. */
-  gore: [number, number][][];
+  /** ...and how far ACROSS the main road that graded area runs, m — wide
+   * enough to carry the whole mouth the dirt road opens, mat and verge. */
+  spread: number;
   /** Arc position on the stage (association / pruning). */
   s: number;
   /** True where the route JOINS the sealed road, false where it leaves. */
@@ -570,6 +566,42 @@ const ROAD_DISTANCE_REACH = 220;
  * has to exempt exactly the same stretch. */
 const SPUR_JUNCTION_WINDOW = R.junction.spurWindow;
 
+/** R23 — how much room a point leaves the branches in `list`, m, reading
+ * the list LIVE so a branch added after this was built is measured too.
+ *
+ * Two branches off two different junctions are two roads like any other
+ * pair, and nothing else asks them to keep apart: they cross in open
+ * country a kilometre from anything, which is a junction nobody built.
+ *
+ * Strided to match the stage's own coarsening, and the slack is taken off
+ * the answer so this can only ever under-report the room a branch has,
+ * never invent some. */
+function branchClearance(list: Spur[]): (x: number, z: number) => number {
+  const STRIDE = 8;
+  const slack = (STRIDE * SPUR.step) / 2;
+  return (x: number, z: number): number => {
+    let best = Infinity;
+    for (const other of list) {
+      const b = other.bounds;
+      if (
+        x < b.minX - ROAD_DISTANCE_REACH ||
+        x > b.maxX + ROAD_DISTANCE_REACH ||
+        z < b.minZ - ROAD_DISTANCE_REACH ||
+        z > b.maxZ + ROAD_DISTANCE_REACH
+      ) {
+        continue;
+      }
+      for (let i = 0; i < other.samples.length; i += STRIDE) {
+        const dx = other.samples[i].x - x;
+        const dz = other.samples[i].z - z;
+        const d = Math.hypot(dx, dz);
+        if (d < best) best = d;
+      }
+    }
+    return best === Infinity ? Infinity : Math.max(0, best - slack);
+  };
+}
+
 /** The incremental heart: walks plans into samples, bounds, and pacenotes,
  * carrying the cursor (and the open pacenote, so a turn combination split
  * across two endless sections still merges into one call). */
@@ -579,6 +611,13 @@ function createCompiler(
   paving: Paving,
   bumps: (s: number, surface: Surface, shaped: boolean) => number,
   widthAt: (s: number, surface: Surface, shaped: boolean) => number,
+  /** R17 — the country the finished stage will occupy, known before it is
+   * walked (see `planBounds`). A junction is only worth building where the
+   * arm it abandons can LEAVE, and which way is out is a question about the
+   * whole map that the cursor cannot answer halfway down it. Absent on an
+   * endless stage, which has no box and whose branches only have to get out
+   * of their own junction's neighbourhood. */
+  country?: Country,
   /** R34 — whether the road is laid ALONG the country (every generated
    * stage) or at a height of its own (a synthetic rig). A rig is a
    * measuring device: flat, smooth and repeatable, so a physics test
@@ -662,10 +701,12 @@ function createCompiler(
   let pavedNow = paving.pavedAt(0);
   let flipWanted = false;
 
-  /** The road's PRISTINE heights, before any junction platform warped it
-   * (R17) — kept alongside the samples so a warp pass that overlaps an
-   * earlier one lands in exactly the same place instead of compounding. */
+  /** The road's PRISTINE heights and widths, before any junction warped or
+   * flared them (R17) — kept alongside the samples so a shaping pass that
+   * overlaps an earlier one lands in exactly the same place instead of
+   * compounding. */
   const rawY: number[] = [];
+  const rawWidth: number[] = [];
 
   /** Junctions found in this pass, waiting for their branches. The branch
    * has to run until it is clear of the stage's country (R17), and how big
@@ -689,15 +730,108 @@ function createCompiler(
   };
   const junctions: Junction[] = [];
 
+  /** R17 — can the arm this junction would abandon get OUT of the country
+   * the stage occupies? A branch runs until it is clear of the map and then
+   * stops out of sight; one that cannot get clear stops in a field instead,
+   * and a tarmac road ending in a field is the loudest mistake the
+   * generator can make — it is visible from a kilometre up and it is the
+   * one thing that says nobody built this.
+   *
+   * The only honest test of whether a branch can leave is to DRIVE it, so
+   * that is the test: the same `buildSpur` the junction would really get,
+   * run against the country the plan already describes, and the corner is
+   * taken only if the branch it would earn actually reaches the edge. A ray
+   * out of the box cannot answer it — what stops a branch is the lake it
+   * has to steer round and the stage it may not cross (R23), and neither is
+   * on the ray.
+   *
+   * Where the corner is rejected nothing is repaired: the paving field
+   * simply waits, and the surface changes at the next corner that can carry
+   * a junction.
+   *
+   * Always true on an endless stage, which has no box — there a branch is
+   * only asked to leave its own junction's neighbourhood, which any of them
+   * manages. */
+  /** The arms of the junctions already taken, as the trial built them. A
+   * branch is boxed in by the OTHER branches as much as by the stage (R23),
+   * and a trial that does not know about them accepts a junction whose real
+   * arm is then stopped after fifty metres by the last one — which leaves a
+   * public road lying alongside the stage inside its own junction window,
+   * where nothing measures it. */
+  const trialArms: Spur[] = [];
+  const armCanLeave = (
+    pose: { x: number; z: number; heading: number; elevation: number; slope: number },
+    atS: number,
+    end: "entry" | "exit",
+  ): boolean => {
+    if (!country) return true;
+    const stage = country.roadDistance(atS - SPUR_JUNCTION_WINDOW, atS + SPUR_JUNCTION_WINDOW);
+    const others = branchClearance(trialArms);
+    const trial = buildSpur(
+      track.seed,
+      pose,
+      atS,
+      end,
+      country.bounds,
+      land,
+      track.width,
+      (x: number, z: number, ignoringJunction?: boolean) =>
+        Math.min(stage(x, z, ignoringJunction), others(x, z)),
+      country.shelfHolds,
+    );
+    const last = trial.samples[trial.samples.length - 1];
+    if (!last) return false;
+    const b = country.bounds;
+    const out = Math.max(b.minX - last.x, last.x - b.maxX, b.minZ - last.z, last.z - b.maxZ);
+    if (out < R.junction.armReach * SPUR.escape) return false;
+    // A true answer here is always taken — the caller flips the surface on
+    // it — so this arm is part of the country the next trial is measured
+    // against.
+    trialArms.push(trial);
+    return true;
+  };
+
   /** R17 — is this corner one a junction could sit at? A junction is where
    * a road MEETS another; that needs a real turn, neither a kink nor a
    * hairpin, and one tight enough that the two carriageways actually PART
-   * rather than peel away from each other over fifty meters of tangent. */
-  const isJunctionTurn = (plan: SegmentPlan): boolean => {
+   * rather than peel away from each other over fifty meters of tangent —
+   * and an abandoned arm with somewhere to go. */
+  const isJunctionTurn = (plan: SegmentPlan, at: Cursor, joining: boolean): boolean => {
     if (plan.kind !== "turn" || !plan.radius || plan.feature !== "none") return false;
     const angle = plan.length / plan.radius;
     if (angle < R.paving.junctionAngle.min || angle > R.paving.junctionAngle.max) return false;
-    return partedAt(plan.radius) <= R.paving.junctionParts * track.width;
+    if (partedAt(plan.radius) > R.paving.junctionParts * track.width) return false;
+    // Where the route JOINS the tarmac the meeting point is the corner's
+    // far end, so the arm leaves from where the cursor will be once the
+    // corner is walked — projected here, since the decision is made before
+    // it is. The arc's centre is a road's width to the inside of the
+    // tangent; the far tangent point is the same distance back from it.
+    const dir = plan.dir ?? 1;
+    const radius = plan.radius;
+    const exit = joining ? at.heading + dir * angle : at.heading;
+    const cx = at.x + Math.cos(at.heading) * radius * dir;
+    const cz = at.z - Math.sin(at.heading) * radius * dir;
+    const x = joining ? cx - Math.cos(exit) * radius * dir : at.x;
+    const z = joining ? cz + Math.sin(exit) * radius * dir : at.z;
+    const rollS = at.rollS + (joining ? plan.length * straightness(dir / radius) : 0);
+    // R34 — the height the road is at, not the height its roll is at: the
+    // base the builder's eye has followed the country to, carried forward
+    // on its current grade where the corner has yet to be walked. A trial
+    // branch started tens of metres under the road it leaves is one the
+    // shelf refuses for a reason that has nothing to do with the junction.
+    const base = at.baseY + (joining ? at.baseSlope * plan.length : 0);
+    const slope = at.baseSlope + (rolling(rollS + 2) - rolling(rollS - 2)) / 4;
+    return armCanLeave(
+      {
+        x,
+        z,
+        heading: (joining ? exit + Math.PI : at.heading) % (Math.PI * 2),
+        elevation: base + rolling(rollS),
+        slope: joining ? -slope : slope,
+      },
+      at.s + (joining ? plan.length : 0),
+      joining ? "entry" : "exit",
+    );
   };
 
   /** How far along the main road the two carriageways still overlap: the
@@ -774,77 +908,111 @@ function createCompiler(
       curve,
       width: track.width,
       reach,
-      radius: reach,
-      gore: [],
+      spread: track.width * 0.85,
       s: at.s,
       joining,
     });
   };
 
-  /** R17 — cut the gore nose for a junction, from the road that actually
-   * got built. Walks the MINOR road away from the meeting point, tracks
-   * its near edge against the main road's edge line, and paves the wedge
-   * between them from where they touch out to where the gap is wide
-   * enough to be an island. `step` is +1 where the minor road runs on from
-   * the junction and -1 where it runs back into it. */
-  const cutGore = (junction: RoadJunction, at: number, step: 1 | -1): void => {
-    const all = track.samples;
-    const turn = Math.sign(junction.curve);
-    const half = junction.width / 2;
-    const bx = Math.sin(junction.heading);
-    const bz = Math.cos(junction.heading);
+  /** R17 — how far back down the MINOR road a mouth may reach, m. A
+   * proportion of the road's own width: the mouth of a lane and the mouth
+   * of a boulevard are the same place at two scales. */
+  const mouthRun = R.junction.mouth.run * track.width;
+
+  /** R17 — the MOUTH's two sizes, m: how much wider the mat is where it
+   * meets the tarmac, and the length of lane it opens over.
+   *
+   * The widening is CAPPED at the corridor's own reach (R16). The ground
+   * lattice is shaped out to the corridor's lip and hands over to the
+   * country past it, so a mat that flares further than that is a mat
+   * standing over ground nothing shelved — which is a vertical face along
+   * the outside of the mouth, and exactly the seam the hand-over exists to
+   * close. A mouth a corridor wide is still over twice the road across its
+   * throat, which is what a graded side road meeting a country highway
+   * looks like. */
+  const mouthWide = Math.min(R.junction.mouth.wide * track.width, ROAD_CROSS.reach);
+  const mouthTaper = R.junction.mouth.taper * track.width;
+
+  /** R17 — where each junction's THROAT is: how far back down the minor
+   * road, in meters of its own arc, the centerline crosses the main road's
+   * edge. That crossing is the mouth's mouth — the line the dirt road stops
+   * at and the tarmac starts — and the fillet is measured back from it.
+   *
+   * Measured off the built road rather than from the corner's nominal
+   * radius, and remembered per junction because the flare asks for it once
+   * per sample. */
+  const throatOf = (junction: RoadJunction): number => {
     const nx = Math.cos(junction.heading);
     const nz = -Math.sin(junction.heading);
-    const edge = (i: number): { along: number; across: number } | null => {
-      const sample = all[i];
-      if (!sample) return null;
-      // The minor road's edge on the side the gore opens.
-      const rx = Math.cos(sample.heading);
-      const rz = -Math.sin(sample.heading);
-      const dx = sample.x - rx * half * turn - junction.x;
-      const dz = sample.z - rz * half * turn - junction.z;
-      return { along: dx * bx + dz * bz, across: (dx * nx + dz * nz) * turn };
-    };
-    const point = (along: number, across: number): [number, number] => [
-      junction.x + bx * along + nx * across * turn,
-      junction.z + bz * along + nz * across * turn,
-    ];
-    let prev: { along: number; across: number } | null = null;
-    const quads: [number, number][][] = [];
-    for (let k = 0; k < Math.ceil(R.junction.reach.max / SAMPLE_STEP); k++) {
-      const here = edge(at + k * step);
-      if (!here) break;
-      if (prev && prev.across < half && here.across >= half) {
-        // The touching point, interpolated — the gore has to start where
-        // the two edges actually cross, not at the next sample along.
-        const t = (half - prev.across) / (here.across - prev.across);
-        prev = {
-          along: prev.along + (here.along - prev.along) * t,
-          across: half,
-        };
-      }
-      if (prev && prev.across >= half) {
-        if (here.across - half > R.junction.goreNose) {
-          const t = (R.junction.goreNose + half - prev.across) / (here.across - prev.across);
-          const along = prev.along + (here.along - prev.along) * t;
-          quads.push([
-            point(prev.along, half),
-            point(prev.along, prev.across),
-            point(along, R.junction.goreNose + half),
-            point(along, half),
-          ]);
-          break;
-        }
-        quads.push([
-          point(prev.along, half),
-          point(prev.along, prev.across),
-          point(here.along, here.across),
-          point(here.along, half),
-        ]);
-      }
-      prev = here;
+    // The NEAREST crossing to the meeting point, not the first one the walk
+    // meets: a joining junction's minor arm runs backwards through the
+    // sample list, so the first sample in `s` order that stands off the mat
+    // is the far end of the mouth rather than its throat.
+    let throat = Infinity;
+    for (const sample of track.samples) {
+      const d = junction.joining ? junction.s - sample.s : sample.s - junction.s;
+      if (d < 0 || d > mouthRun || d >= throat) continue;
+      const across = (sample.x - junction.x) * nx + (sample.z - junction.z) * nz;
+      if (Math.abs(across) >= junction.width / 2) throat = d;
     }
-    junction.gore = quads;
+    // Infinity where the minor arm never leaves the main road's mat inside
+    // the window: there is no throat, so there is no mouth. Falling back to
+    // zero instead opens one at the meeting point itself — on the SEALED
+    // side, where the road is laid to a constant width (R33) and the flare
+    // is three times the road across a piece of tarmac.
+    return throat;
+  };
+  const throats = new Map<RoadJunction, number>();
+
+  /** R17 — how much wider the MOUTH makes a sample of the minor road, m of
+   * extra half-width per side.
+   *
+   * A quarter ellipse: `mouthWide` of extra half-width at the THROAT,
+   * closing to nothing over `mouthTaper` of lane. It leaves the road's own
+   * edge with no kink and arrives at the tarmac at its widest, which is
+   * where a car turning out of the lane needs the room — the whole reason
+   * a mouth is wider than the road behind it.
+   *
+   * `out` is meters of the minor road's OWN length back from the throat,
+   * not distance across the main road: a mouth is a length of lane, so it
+   * reaches the same way back down it whether the lane arrives square or at
+   * a slant. Measured across instead, an oblique junction gets its whole
+   * mouth compressed into the few meters its centerline takes to cross the
+   * edge, and opens like a trapdoor.
+   *
+   * At the throat it is over. A sample past it is standing on the through
+   * road, which is already paved right across — carrying the flare on
+   * puts a mushroom of dirt into the field on the far side of a road that
+   * never needed covering.
+   *
+   * Returns 0 for a sample that is not the minor road of any junction. The
+   * minor arm is the unsealed one, so which side of the meeting point it
+   * lies on follows from `joining` alone: the stage ARRIVES at a joining
+   * junction on the dirt and LEAVES a parting one on it. */
+  const mouthFlare = (sample: TrackSample): number => {
+    // The mouth belongs to the DIRT road. Said here rather than left to the
+    // throat arithmetic, because the surface flip and the throat are two
+    // measurements of the same crossing taken different ways, and a sample
+    // between the two answers would otherwise get the full mouth laid on a
+    // piece of tarmac — which a paving machine does not do (R33).
+    if (sample.surface !== "gravel") return 0;
+    let widest = 0;
+    for (const junction of track.junctions) {
+      const d = junction.joining ? junction.s - sample.s : sample.s - junction.s;
+      if (d < 0 || d > mouthRun) continue;
+      let throat = throats.get(junction);
+      if (throat === undefined) throats.set(junction, (throat = throatOf(junction)));
+      const out = d - throat;
+      if (out >= mouthTaper) continue;
+      // Past the throat it is over: that piece of road is the SEALED one,
+      // and a paving machine lays a constant width (R33). The mouth belongs
+      // to the dirt road.
+      if (out < 0) continue;
+      const t = 1 - out / mouthTaper;
+      const extra = mouthWide * (1 - Math.sqrt(Math.max(0, 1 - t * t)));
+      if (extra > widest) widest = extra;
+    }
+    return widest;
   };
 
   /** R23/R24 — the ground a branch has to keep off, as a distance query:
@@ -1007,30 +1175,8 @@ function createCompiler(
      * off the answer so this can only ever under-report the room a branch
      * has, never invent some.
      */
-    const STRIDE = 8;
-    const slack = (STRIDE * SPUR.step) / 2;
     const standing: Spur[] = [];
-    const clearOfBranches = (x: number, z: number): number => {
-      let best = Infinity;
-      for (const other of standing) {
-        const b = other.bounds;
-        if (
-          x < b.minX - ROAD_DISTANCE_REACH ||
-          x > b.maxX + ROAD_DISTANCE_REACH ||
-          z < b.minZ - ROAD_DISTANCE_REACH ||
-          z > b.maxZ + ROAD_DISTANCE_REACH
-        ) {
-          continue;
-        }
-        for (let i = 0; i < other.samples.length; i += STRIDE) {
-          const dx = other.samples[i].x - x;
-          const dz = other.samples[i].z - z;
-          const d = Math.hypot(dx, dz);
-          if (d < best) best = d;
-        }
-      }
-      return best === Infinity ? Infinity : Math.max(0, best - slack);
-    };
+    const clearOfBranches = branchClearance(standing);
     for (const junction of junctions) {
       const box = track.endless
         ? {
@@ -1170,15 +1316,27 @@ function createCompiler(
     }
   };
 
-  /** R17 — warp the road onto its junctions' platforms. Inside a junction
-   * the two carriageways are one graded plane: the crown, the camber and
-   * the wheel tracks come out (`flat`) and the centerline eases onto the
-   * plane the main road's grade defines. Run off the PRISTINE heights, so
-   * a pass that overlaps an earlier one lands in the same place. */
-  const platformWarp = (from: number): void => {
+  /** R17 — SHAPE THE JUNCTIONS, over the road that has now been walked.
+   * Two things happen to a sample near a crossing, and both are run off the
+   * PRISTINE height and width so a pass that overlaps an earlier one lands
+   * in exactly the same place instead of compounding:
+   *
+   * - It is warped onto the platform. Inside a junction the two carriageways
+   *   are one graded plane: the crown, the camber and the wheel tracks come
+   *   out (`flat`) and the centerline eases onto the plane the main road's
+   *   grade defines.
+   * - If it is the MINOR road, its mat FLARES. The dirt road opens out into
+   *   its mouth over the last stretch, until it meets the main road's edge
+   *   with no wedge of country left between them — which is the difference
+   *   between two roads that meet and two ribbons that collided. */
+  const shapeJunctions = (from: number): void => {
     if (track.junctions.length === 0) return;
+    // A parting junction's minor arm is the road AFTER it, so its throat
+    // moves as more of that road is walked — an endless stream would
+    // otherwise flare every later chunk against the first chunk's answer.
+    throats.clear();
     const all = track.samples;
-    const reach = Math.ceil(R.junction.reach.max / SAMPLE_STEP) + 1;
+    const reach = Math.ceil(Math.max(R.junction.reach.max, mouthRun) / SAMPLE_STEP) + 1;
     const start = Math.max(0, from - reach);
     for (let i = start; i < all.length; i++) {
       const sample = all[i];
@@ -1193,6 +1351,11 @@ function createCompiler(
       }
       sample.flat = flat;
       sample.elevation = rawY[i] * (1 - flat) + plane * flat;
+      // Back to the pristine width BEFORE the mouth is measured — the flare
+      // reads the mat's own reach across the main road, so a pass that ran
+      // over this sample already would otherwise flare a flare.
+      sample.width = rawWidth[i];
+      sample.width += 2 * mouthFlare(sample);
     }
   };
 
@@ -1207,7 +1370,7 @@ function createCompiler(
       if (paving.pavedAt(cursor.s) !== pavedNow) flipWanted = true;
       let flipAt = -1;
       let joinAtEnd: SegmentPlan | null = null;
-      if (flipWanted && isJunctionTurn(plan)) {
+      if (flipWanted && isJunctionTurn(plan, cursor, !pavedNow)) {
         flipWanted = false;
         const onMain = Math.min(plan.length, onMainRun(plan.radius ?? 1));
         if (pavedNow) {
@@ -1412,6 +1575,7 @@ function createCompiler(
         sample.bank = bankRate(curvature, sample);
         track.samples.push(sample);
         rawY.push(sample.elevation);
+        rawWidth.push(sample.width);
         if (checkpointDue >= 0 && cursor.s >= checkpointDue) {
           track.checkpoints.push({ s: cursor.s, index: track.samples.length - 1 });
           checkpointS = cursor.s;
@@ -1445,20 +1609,169 @@ function createCompiler(
     }
     paveLift(firstNew);
     bankRunoff(firstNew);
-    platformWarp(firstNew);
-    // The gore is cut from the road on BOTH sides of the meeting point, so
-    // it waits until the corner it belongs to has actually been walked.
-    const fromS = firstNew * SAMPLE_STEP - R.junction.reach.max;
-    for (const junction of track.junctions) {
-      if (junction.s < fromS) continue;
-      const at = Math.round(junction.s / SAMPLE_STEP) - 1;
-      if (at < 1 || at >= track.samples.length - 1) continue;
-      cutGore(junction, at, junction.joining ? -1 : 1);
-    }
+    shapeJunctions(firstNew);
+    // The mouth is measured from the flared road, so it waits for the pass
+    // that flares it — and for the minor arm on BOTH sides of the meeting
+    // point to have been walked.
     buildForks();
   };
 
   return { append };
+}
+
+/** R17 — THE COUNTRY, walked off the plan before anything is built.
+ *
+ * A junction is only worth building where the arm it abandons can leave the
+ * map, and the only honest way to know that is to drive the branch — which
+ * needs the stage's box and the ground it may not take, both of which are
+ * questions about the WHOLE stage that the compiler's cursor cannot answer
+ * halfway down it. So the plan is walked once, coarsely, into a box and a
+ * bucketed point field, and the junction test drives its trial branch
+ * against that.
+ *
+ * Coarser than the compiled stage — a segment is stepped every few meters
+ * rather than every two — because what it feeds are clearances measured in
+ * tens of meters, and the slack is subtracted off every answer so the field
+ * can only ever under-report the room a branch has, never invent some. */
+type Country = {
+  bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
+  /** R23 — the keep-out field, with an arc window either side of the
+   * junction under test excluded (a branch leaves a junction ON the road it
+   * is leaving). */
+  roadDistance: (
+    ignoreFrom: number,
+    ignoreTo: number,
+  ) => (x: number, z: number, ignoring?: boolean) => number;
+  /** R31 — whether the ground is still there for a road at this height. */
+  shelfHolds: (x: number, z: number, y: number) => boolean;
+};
+
+const PLAN_STEP = 6;
+
+function planCountry(
+  plans: SegmentPlan[],
+  width: number,
+  rolling: (s: number) => number,
+  /** R34 — the ground the road will be laid ALONG. Without it the trial
+   * walks a road at its roll alone, which on any stage with relief in it is
+   * tens of metres from where the real one ends up: `shelfHolds` then
+   * compares a branch's height against a route that is not there, and the
+   * junction test stops meaning anything. */
+  land: ReturnType<typeof createLandField>,
+): Country {
+  const box = { minX: 0, maxX: 0, minZ: 0, maxZ: 0 };
+  const pts: { x: number; z: number; y: number; s: number }[] = [];
+  const CELL = 48;
+  const grid = new Map<number, typeof pts>();
+  let x = 0;
+  let z = 0;
+  let heading = 0;
+  let s = 0;
+  let rollS = 0;
+  // The road builder's eye, at the plan's own resolution: the same lag,
+  // grade and crest clamps the compiler walks with, so the trial's heights
+  // track the real road's rather than the bare hillside's.
+  const F = R.elevation.follow;
+  let base = Math.max(land.heightAt(0, 0), LAKE_Y + F.freeboard - rolling(0));
+  let slope = 0;
+  for (const plan of plans) {
+    const curvature = plan.kind === "turn" && plan.radius ? (plan.dir ?? 1) / plan.radius : 0;
+    const steps = Math.max(1, Math.ceil(plan.length / PLAN_STEP));
+    const step = plan.length / steps;
+    for (let i = 0; i < steps; i++) {
+      heading += curvature * step;
+      x += Math.sin(heading) * step;
+      z += Math.cos(heading) * step;
+      s += step;
+      rollS += step * straightness(curvature);
+      if (x < box.minX) box.minX = x;
+      if (x > box.maxX) box.maxX = x;
+      if (z < box.minZ) box.minZ = z;
+      if (z > box.maxZ) box.maxZ = z;
+      const roll = rolling(rollS);
+      const ground = Math.max(land.heightAt(x, z), LAKE_Y + F.freeboard - roll);
+      const want = base + (ground - base) * (1 - Math.exp(-step / F.lag));
+      let next = (want - base) / step;
+      const swing = F.crest * step;
+      if (next > slope + swing) next = slope + swing;
+      else if (next < slope - swing) next = slope - swing;
+      if (next > F.grade) next = F.grade;
+      else if (next < -F.grade) next = -F.grade;
+      base += next * step;
+      slope = next;
+      const point = { x, z, y: base + roll, s };
+      pts.push(point);
+      const key = cellKey(Math.floor(x / CELL), Math.floor(z / CELL));
+      const bucket = grid.get(key);
+      if (bucket) bucket.push(point);
+      else grid.set(key, [point]);
+    }
+  }
+  const slack = PLAN_STEP / 2;
+  const rings = Math.ceil(ROAD_DISTANCE_REACH / CELL);
+  // R24 — the aprons the stage's two ends stand on: plain road extrapolated
+  // straight past the start gate and the finish line, which a branch may no
+  // more cross than it may cross the stage. Modelled here as well as in the
+  // real field, because this one's whole job is to answer the same question
+  // the real one will — a trial that does not know about them accepts a
+  // junction whose branch is then cut short by one, which is a tarmac road
+  // stopping in a field and the exact thing the trial exists to prevent.
+  const apronOf = (
+    at: { x: number; z: number },
+    /** The point the road came FROM, so the heading is `behind → at`. */
+    behind: { x: number; z: number },
+    sign: 1 | -1,
+  ): ((x: number, z: number) => number) => {
+    const heading = Math.atan2(at.x - behind.x, at.z - behind.z);
+    const sin = Math.sin(heading);
+    const cos = Math.cos(heading);
+    return (x: number, z: number): number => {
+      const dx = x - at.x;
+      const dz = z - at.z;
+      const along = (dx * sin + dz * cos) * sign;
+      const lateral = dx * cos - dz * sin;
+      return Math.hypot(lateral, along <= 0 ? -along : Math.max(0, along - R.startZone.apron));
+    };
+  };
+  const n = pts.length;
+  const first = apronOf(pts[0], { x: 2 * pts[0].x - pts[1].x, z: 2 * pts[0].z - pts[1].z }, -1);
+  const last = apronOf(pts[n - 1], pts[n - 2] ?? pts[n - 1], 1);
+  const roadDistance =
+    (ignoreFrom: number, ignoreTo: number) =>
+    (px: number, pz: number, ignoring = true): number => {
+      let best = Math.min(ROAD_DISTANCE_REACH, first(px, pz), last(px, pz));
+      const cx = Math.floor(px / CELL);
+      const cz = Math.floor(pz / CELL);
+      for (let ring = 0; ring <= rings; ring++) {
+        if ((ring - 1) * CELL >= best) break;
+        for (let dx = -ring; dx <= ring; dx++) {
+          const stride = Math.abs(dx) === ring || ring === 0 ? 1 : 2 * ring;
+          for (let dz = -ring; dz <= ring; dz += stride) {
+            const bucket = grid.get(cellKey(cx + dx, cz + dz));
+            if (bucket === undefined) continue;
+            for (const p of bucket) {
+              if (ignoring && p.s > ignoreFrom && p.s < ignoreTo) continue;
+              const d = Math.hypot(p.x - px, p.z - pz);
+              if (d < best) best = d;
+            }
+          }
+        }
+      }
+      return Math.max(0, best - slack);
+    };
+  const bench = Math.max(width / 2 + ROAD_CROSS.reach, R.verge.bench);
+  const shelfHolds = (px: number, pz: number, y: number): boolean => {
+    for (const p of pts) {
+      const over = y - p.y;
+      if (over <= 0) continue;
+      const need = bench + over / R.verge.climb + slack;
+      const dx = p.x - px;
+      const dz = p.z - pz;
+      if (dx * dx + dz * dz < need * need) return false;
+    }
+    return true;
+  };
+  return { bounds: box, roadDistance, shelfHolds };
 }
 
 function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs, circuit = false): Track {
@@ -1529,9 +1842,19 @@ export function compileStage(
   if (length !== "endless") {
     const circuit = shape === "circuit";
     const track = emptyTrack(seed, false, dials, circuit);
-    createCompiler(track, rolling, paving, bumps, widthAt).append(
-      generateStage(seed, length, dials, shape),
-    );
+    const plans = generateStage(seed, length, dials, shape);
+    // R17 — the country the stage will occupy, walked before it is
+    // compiled. A junction may only be built where the arm it abandons can
+    // leave the map, and which way is out is a question about the whole box
+    // that the cursor cannot answer halfway down it.
+    createCompiler(
+      track,
+      rolling,
+      paving,
+      bumps,
+      widthAt,
+      planCountry(plans, track.width, rolling, createLandField(seed, dials)),
+    ).append(plans);
     if (circuit) closeCircuitHeight(track);
     return track;
   }
@@ -1570,6 +1893,9 @@ export function compileTrack(
     buildPaving(seed, dials.asphalt),
     () => 0,
     () => 1,
+    // No country: a rig has no box for a junction's abandoned arm to leave,
+    // and it does not follow the land either.
+    undefined,
     false,
   ).append(segments);
   return track;

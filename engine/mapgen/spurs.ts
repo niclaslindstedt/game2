@@ -127,8 +127,15 @@ export const SPUR = {
   /** ...and the run it is allowed to take doing it. The floor keeps a
    * junction near the edge of the map from being a stub anyway; the
    * ceiling keeps a junction in the middle of a big stage from building a
-   * second stage's worth of road. */
-  length: { min: 260, max: 1500 },
+   * second stage's worth of road.
+   *
+   * The ceiling is generous because LEAVING is the point. A junction sits
+   * wherever the paving field put it, which is usually in the middle of the
+   * country the stage occupies — and from there a branch that has to steer
+   * round a lake and keep off the stage covers a lot of ground to get to an
+   * edge. A ceiling that binds turns a public road into a road that stops
+   * in a field, which is the loudest mistake on the map. */
+  length: { min: 260, max: 3200 },
   step: 4,
   /** Radius the branch's own wandering never turns tighter than, m. */
   minRadius: 55,
@@ -166,9 +173,6 @@ export const SPUR = {
    * than a short causeway: the road has to be seen to go somewhere even
    * when the country will not let it go far. */
   keep: 60,
-  /** Fraction of the branch that is still sealed — past it the tarmac has
-   * run out and the road carries on as gravel. */
-  sealed: 0.68,
 
   /** R17 — where the barrier across the branch may stand. `from` keeps it
    * off the junction's own platform, where it would be buried under the
@@ -475,18 +479,15 @@ export function buildSpur(
   }
   length = samples[samples.length - 1].s;
 
-  // The tarmac runs out before the branch does: past `sealed` the mat is
-  // gone and what is left is a gravel lane heading out of the world. The
-  // mat also has to come UP out of the junction it starts in: a branch
-  // that begins at full lift stands 20 cm proud of the road it is joined
-  // to, right where the two are supposed to be one surface.
-  const sealedTo = length * SPUR.sealed;
+  // R17 — the branch is the MAIN road continued, so it is sealed for its
+  // whole length: a tarmac road that turns to gravel in an empty field is a
+  // road that goes nowhere, and it is the loudest thing on the map from
+  // above. The mat only has to come UP out of the junction it starts in —
+  // a branch that begins at full lift stands 20 cm proud of the road it is
+  // joined to, right where the two are supposed to be one surface.
   for (const sample of samples) {
-    const sealed = sample.s < sealedTo;
-    sample.surface = sealed ? "asphalt" : "gravel";
-    const out = Math.min(1, Math.max(0, (sealedTo - sample.s) / ROAD_CROSS.liftRamp));
-    const up = Math.min(1, Math.max(0, sample.s / ROAD_CROSS.liftRamp));
-    sample.lift = sealed ? ROAD_CROSS.asphaltLift * Math.min(out, up) : 0;
+    sample.surface = "asphalt";
+    sample.lift = ROAD_CROSS.asphaltLift * Math.min(1, sample.s / ROAD_CROSS.liftRamp);
   }
   // The box is the branch that SURVIVED the trims, not the walk that built
   // it: a cut branch reporting the country it never reached is a lie the

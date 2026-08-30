@@ -447,10 +447,11 @@ describe("driving out again (TUNING.crash.drown.shallows)", () => {
   // meant to be: the drive that carries the car into the water is 60 s of
   // full lock off whatever road the seed built, so a stage whose road moves
   // puts the car in different water. R34 laid the roads along the country
-  // and every one of them moved; 59 and 3 stopped beaching and these two
-  // started. If this list runs out again, scan for a fresh one rather than
-  // reading it as the shallows having stopped working.
-  const SHORE_SEEDS = [39, 49, 59, 3, ...SEEDS];
+  // and every one of them moved; R17's junction placement moved them again.
+  // So the leading names are a shortcut, not the fixture: the tail is the
+  // search SPACE, and it is wide on purpose so that a generator change
+  // costs the suite a few seconds of scanning rather than a red test.
+  const SHORE_SEEDS = [39, 49, 59, 3, ...SEEDS, ...Array.from({ length: 60 }, (_, i) => 60 + i)];
 
   /** Take a seed's plunge and run the drowning out. Reports the seed whose
    * shoreline the car drives back out of — which one that is depends on the

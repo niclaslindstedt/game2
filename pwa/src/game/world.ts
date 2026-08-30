@@ -22,7 +22,6 @@ import {
   createKerbField,
   createRng,
   inStream,
-  junctionPlatformY,
   markersBetween,
   type GameState,
   type Season,
@@ -52,13 +51,12 @@ import { buildRoadSpill } from "./road-spill.ts";
 import { buildWild } from "./wild.ts";
 import { buildTerrain, LAKE_Y, type Terrain } from "./terrain.ts";
 import { buildStreamMeshes } from "./streams.ts";
-import { gravelTexture, waterTexture } from "./textures.ts";
+import { waterTexture } from "./textures.ts";
 import { buildFinishGate, buildStartGate, type FinishGate, type Muzzle } from "./finish-gate.ts";
 import { buildKerbing, createPostField } from "./kerbs.ts";
 import { buildCrowd, type Crowd } from "./crowd.ts";
 import { rightOf } from "./ribbon.ts";
 import {
-  ROAD_PAINT,
   buildChippings,
   buildFords,
   buildMarkings,
@@ -141,7 +139,8 @@ function buildScenery(
   const rng = createRng((track.seed ^ 0x5f356495 ^ Math.imul(from, 2246822519)) >>> 0);
   const samples = track.samples;
   const half = track.width / 2;
-  const clearance = half + 3.5;
+  /** Room past the road's own edge that nothing grows in, m. */
+  const clearance = 3.5;
   const heightAt = terrain.heightAt;
   const field = terrain.field;
 
@@ -157,10 +156,18 @@ function buildScenery(
   // Clearance checks walk the guard samples — the chunk's own road with
   // its aprons plus a margin of neighbours — so nothing grows on the road,
   // the start run-up, or the finish run-off.
-  const clearOfRoad = (x: number, z: number, r: number): boolean => {
+  //
+  // `margin` is room past the road's EDGE, and the edge is the one this
+  // sample actually has: a junction's mouth flares half as wide again as
+  // the road it opens off (R17) and a gravel road wanders either side of
+  // nominal down the whole stage (R33). Measured against the nominal
+  // instead, every crossing on the map gets shrubs planted in the middle
+  // of its paving.
+  const clearOfRoad = (x: number, z: number, margin: number): boolean => {
     for (let i = 0; i < guard.length; i += 4) {
       const dx = x - guard[i].x;
       const dz = z - guard[i].z;
+      const r = guard[i].width / 2 + margin;
       if (dx * dx + dz * dz < r * r) return false;
     }
     return true;
@@ -253,7 +260,7 @@ function buildScenery(
       const chance =
         (biome.undergrowthDensity / 2) * (community.groundCover ?? 1) * density * band.share;
       if (!rng.chance(chance)) continue;
-      if (!clearOfRoad(x, z, half + 1.2)) continue;
+      if (!clearOfRoad(x, z, 1.2)) continue;
       if (inStream(terrain.field.streams, x, z, 0.5)) continue;
       const y = heightAt(x, z);
       // A lake that stops on a line is the tell that it was drawn on. In
@@ -291,7 +298,7 @@ function buildScenery(
       const offset = half + rng.range(0.25, ROAD_CROSS.verge.bareTo + 0.6);
       const x = s.x + r.x * offset * side + rng.range(-0.6, 0.6);
       const z = s.z + r.z * offset * side + rng.range(-0.6, 0.6);
-      if (!clearOfRoad(x, z, half + 0.15)) continue;
+      if (!clearOfRoad(x, z, 0.15)) continue;
       if (inStream(field.streams, x, z, 0.5)) continue;
       const y = heightAt(x, z);
       if (y < LAKE_Y + 1.2) continue;
@@ -349,7 +356,7 @@ function buildScenery(
     const x = s.x + r.x * offset * side + rng.range(-3, 3);
     const z = s.z + r.z * offset * side + rng.range(-3, 3);
     const drop = rng.next();
-    if (!clearOfRoad(x, z, half + 1.2)) continue;
+    if (!clearOfRoad(x, z, 1.2)) continue;
     if (inStream(terrain.field.streams, x, z, 0.5)) continue;
     const y = heightAt(x, z);
     if (y < LAKE_Y + 1.2) continue;
@@ -632,49 +639,13 @@ function buildSpur(track: Track, spur: Spur, cones: ConeField, beside: GroundBes
   // from the branch's own lip rather than through it.
   group.add(buildSkirts(spur.samples, spur.width, 0.012, beside));
   group.add(buildRoad(track, spur.samples, spur.width, 0.012, beside));
-  group.add(buildMarkings(track, spur.samples, spur.width));
+  group.add(buildMarkings(track, spur.samples, spur.width, true));
   const chippings = buildChippings(track, spur.samples, spur.width);
   if (chippings) group.add(chippings);
   // A branch too short, or too closely folded against the route, to take a
   // barrier that clears the road the stage takes is left open on purpose:
   // nothing in the way beats something in the way (spurs.ts, `placeBlock`).
   if (spur.block) group.add(buildBlockade(spur.block, cones));
-  return group;
-}
-
-/** R17 — the junction paving. The two carriageways already cover the
- * ground where they overlap; what they cannot cover is the wedge between
- * them where the corner has just pulled them apart, and a junction that
- * ends in a knife edge of grass driven to a point is the tell that nobody
- * planned it. So this lays the gore nose: pavement carried out to where
- * the gap has opened enough to be an island, on the junction's own graded
- * plane, and no further. */
-function buildJunctions(track: Track, from: number, to: number): THREE.Group {
-  const group = new THREE.Group();
-  const fromS = from === 0 ? -Infinity : track.samples[from].s;
-  const toS = track.samples[to - 1].s;
-  const mat = new THREE.MeshLambertMaterial({
-    map: gravelTexture(),
-    color: new THREE.Color(ROAD_PAINT.asphalt.worn),
-    side: THREE.DoubleSide,
-  });
-  for (const junction of track.junctions) {
-    if (junction.s < fromS || junction.s > toS) continue;
-    for (const quad of junction.gore) {
-      const positions: number[] = [];
-      const uvs: number[] = [];
-      for (const [x, z] of quad) {
-        positions.push(x, junctionPlatformY(junction, x, z) + 0.03, z);
-        uvs.push(x / 3.5, z / 3.5);
-      }
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-      geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
-      geo.setIndex([0, 1, 2, 0, 2, 3]);
-      geo.computeVertexNormals();
-      group.add(new THREE.Mesh(geo, mat));
-    }
-  }
   return group;
 }
 
@@ -863,7 +834,6 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
     const chippings = buildChippings(track, bare, track.width);
     if (chippings) chunkGroup.add(chippings);
     chunkGroup.add(buildBridges(track, from, to, terrain.heightAt));
-    chunkGroup.add(buildJunctions(track, from, to));
     // The branches this stretch of road forks off at its paving junctions.
     for (; spurScan < track.spurs.length; spurScan++) {
       const spur = track.spurs[spurScan];

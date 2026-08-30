@@ -54,10 +54,17 @@
 //       that falls gently away to the landscape. No ditch — a trench beside
 //       a rally road is a trap the eye reads as a scar, not as drainage.
 //   R17 Roads MEET at a planned junction, ON the centerline: the route turns
-//       off (or onto) the road at a real corner, the arm it abandons carries
-//       straight on along the corner's tangent and runs off the map, and the
-//       ground where the two carriageways overlap is one graded platform —
-//       no borders, no markings, one surface, one plane.
+//       off (or onto) the road at a real corner, and the SEALED road runs
+//       STRAIGHT THROUGH — the route's collinear arm on one side, the arm it
+//       abandons on the other, same width, same surface, its markings
+//       unbroken past the crossing. The dirt road is the MINOR one: it
+//       arrives at an angle and its mouth FLARES, widening as it closes on
+//       the tarmac the way every car that has turned out of it has widened
+//       it, until its mat meets the main road's edge with no country left
+//       between them. The ground they share is one graded platform, and the
+//       abandoned arm is taped shut and runs off the map STILL SEALED — a
+//       tarmac road that turns to gravel in an empty field is a road that
+//       goes nowhere.
 //   R19 Turns are BANKED. A road built through a corner is superelevated so
 //       water and cars both stay on it: the cross-fall rolls from the crown
 //       into the turn over a runoff, tops out at `bank.max` for the
@@ -970,6 +977,38 @@ export const STAGE_RULES = {
      * proportion: a narrow lane may part in fifteen meters and a boulevard
      * take forty, and both look like the same place. */
     junctionParts: 2.4,
+
+    /** R17 — BORROWING the tarmac. The sealed roads are laid before the
+     * route (`highway.ts`), so a paved stretch of stage is not a stripe the
+     * generator painted: it is a piece of a real road the rally went and
+     * found. This group is how it goes and finds one.
+     *
+     * `seek` is how far off the tarmac the route will consider a join
+     * from, m. It is a REACH, not a taste: the approach is one
+     * turn-straight-turn, so the furthest road it can arrive on is the
+     * straight's ceiling plus what two corners carry, and a road past that
+     * has no solve to find however much the stage would like one. The
+     * route does not steer toward the tarmac at all — it asks, at every
+     * corner, whether the road is already within reach.
+     *
+     * `meet` is the stretch of road that rendezvous is looked for over, m,
+     * and how far apart the candidate meeting points are: a junction close
+     * to where the route already is costs the stage less detour than one at
+     * the far end of the look, so the nearest is tried first and this only
+     * says how far the looking goes.
+     *
+     * `runOn` is how far the route stays on the tarmac, m, before it turns
+     * off again. `share` is the most of what a stage has LEFT that one
+     * borrow may spend: a sprint's whole band is under two kilometres, so a
+     * borrow drawn at the vocabulary's own length is most of the stage —
+     * R11 refuses it every time, and from outside that reads as a route
+     * that never finds a road. */
+    borrow: {
+      seek: 600,
+      meet: { reach: 600, step: 55 },
+      runOn: { min: 320, max: 900 },
+      share: 0.45,
+    },
   },
 
   /** R17 — the junction PLATFORM: the graded area where the two roads
@@ -983,11 +1022,51 @@ export const STAGE_RULES = {
     platform: 0.95,
     /** ...clamped, m, so a junction is a junction and not a car park. */
     reach: { min: 20, max: 40 },
-    /** Where the two carriageways have parted by this much, the paving
-     * stops and the grass gore between them starts, m. Below it the gap is
-     * a seam, not an island, and paving over it is what keeps a junction
-     * from ending in a knife edge of grass. */
-    goreNose: 7,
+
+    /** R17 — THE MOUTH: how the MINOR road opens out where it meets the
+     * sealed one. A dirt road that arrives at a junction the same width it
+     * ran at leaves a wedge of country between its near edge and the main
+     * road's, tapering to a knife point — which is the tell that two
+     * ribbons collided rather than two roads meeting. In life there is no
+     * wedge, and the reason is traffic: every car that turns out of the
+     * lane cuts the corner, and season after season the mouth is worn and
+     * bladed WIDER until the two mats are one piece of ground.
+     *
+     * So the minor road's mat is flared into a TRUMPET, and three
+     * properties of that shape are the whole point. Getting any of them
+     * wrong is visible from the air, and each has been:
+     *
+     * - It is WIDEST AT THE TARMAC. The mouth's job is to give a car
+     *   leaving the dirt road room to turn either way onto the seal, and
+     *   that room is needed where the two meet. A flare that peaks a few
+     *   meters short and closes again reads as a bulge in a lane.
+     * - It opens GRADUALLY. Narrow down the length of the lane, opening
+     *   over a stretch of it, not a step.
+     * - It STOPS at the main road's edge, and the dirt stops with it. Past
+     *   that line the ground belongs to the through road, which is already
+     *   paving it — carrying the flare across puts a mushroom of dirt out
+     *   into the field on the far side, and carrying the SURFACE across
+     *   drives a band of gravel through the middle of a sealed road.
+     *
+     * `wide` is the extra half-width at the tarmac and `taper` the length of
+     * lane it opens over, both as shares of the road's own width, so the
+     * mouth of a lane and the mouth of a boulevard are the same PLACE at two
+     * scales. At 0.6 and 1.1 the throat is a little over twice the road and
+     * opens over a road and a bit of it — which is what a graded side road
+     * meeting a country highway looks like. `run` bounds how far back the
+     * widening may reach at all, in road widths: a corner that hugs the main
+     * road for a hundred meters is not a hundred meters of mouth. */
+    mouth: { run: 3, wide: 0.13, taper: 1.1 },
+    /** R17 — how far a junction's abandoned arm is allowed to be from the
+     * edge of the map, as a share of the run a branch may take getting
+     * there. A junction is only built where the arm it abandons can LEAVE:
+     * a branch that cannot get clear of the country stops in a field, and a
+     * tarmac road ending in a field is the loudest mistake the generator
+     * can make. Measured as a share of the box's own diagonal, so it means
+     * the same on a sprint and on a stage four times the size — and well
+     * under 1, because a branch does not fly straight out: it wanders, and
+     * it steers round water and round the road it left. */
+    armReach: 0.8,
     /** R23's exemption around a junction, m of stage arc either side of it.
      * A branch leaves a junction ON the road it is leaving, so it cannot be
      * measured against that road while it is still LEAVING. Wide enough to
@@ -1235,4 +1314,14 @@ export type SegmentPlan = {
    * PAST the finish gate. The line is drawn where the segment has this
    * much left to run, and everything after it is run-out. */
   runOut?: number;
+  /** R17 — set where this segment is the route running ON a tarmac road it
+   * borrowed (`highway.ts`). The SEARCH decides it, not a paving field
+   * downstream: which stretches of a stage are sealed is a question about
+   * where the roads are, and only the search knows where the line went. The
+   * junction is the boundary — the segment that turns onto the tarmac is
+   * unpaved, and the meeting point is its far end. */
+  paved?: boolean;
+  /** ...and which road, and where along it, so the compiler can hand the
+   * junction the arm the route does not take without guessing. */
+  onRoad?: { road: number; from: number; to: number };
 };

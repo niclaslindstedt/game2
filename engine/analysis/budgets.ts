@@ -237,6 +237,60 @@ export const ANALYSIS = {
     boxFill: { min: 0.3, max: 1 },
   },
 
+  /** R17 — THE JUNCTIONS, as places two roads meet at rather than as seams
+   * one road changes surface across. Every threshold here answers a defect
+   * somebody found by looking at a picture of one. */
+  junctions: {
+    /** Cell of the raster the mouth is swept on, m. A junction's defects
+     * are metres across, so this only has to resolve a splinter of grass —
+     * and it is squared into the cost, over a box tens of metres a side,
+     * once per junction. */
+    cell: 1,
+    /** How far past the mouth the sweep still looks, m. Room for the open
+     * country beside a junction to be recognized as open country: a box
+     * that stopped at the paving would measure the field as one more
+     * sliver of grass and report it. Comfortably over `mouth.seam`. */
+    margin: 26,
+    /** How big a stranded scrap of grass has to be before it is worth
+     * reporting, m². Under this it is the raster's own edge — a mat is
+     * swept as a disc per sample and its boundary lands between cells. */
+    splinterArea: 6,
+    /** ...and how thin a patch of country between two roads has to be
+     * before it is a SPLINTER rather than a field, m. A junction whose
+     * grass runs to a knife point is the tell that nobody planned it: below
+     * a car and a half across, the ground between two carriageways is a
+     * seam somebody should have paved, not an island. */
+    splinterThick: 7,
+    /** R17 — the angle the dirt road has to arrive at the tarmac at,
+     * measured where its centerline crosses the main road's edge. `min` is
+     * where a junction stops being one: two roads sharing a tangent there
+     * have MERGED, and a merge with a barrier across one arm reads as a
+     * slip road with a mistake on it rather than as a crossing. A right
+     * angle is the ideal and needs no ceiling — it is what a lane joining a
+     * road looks like everywhere.
+     *
+     * 35° rather than something stricter because the corner the junction
+     * sits on is drawn from the stage's own vocabulary (`junctionAngle`,
+     * 64°-112°) and the route is still turning through it where it crosses
+     * the edge — so what is being asked is that the two roads are visibly
+     * at an angle, not that a rally stage is a road atlas. */
+    angle: { min: 0.61, slack: 0.6 },
+    /** How far either side of the meeting point the checks read the route,
+     * m — the corner the junction sits on plus the run out of it. */
+    approach: 120,
+    /** How much UNSEALED road the sealed one may have in it through a
+     * crossing, m. The dirt road stops AT the tarmac; a band of gravel
+     * running under the sealed road and out the far side is the surface
+     * change painted across the minor road instead of along the main
+     * road's edge, and it takes the tarmac's markings with it.
+     *
+     * Not zero, because the seam is a real place and the samples that carry
+     * it are two meters apart — one of them lands on whichever side of the
+     * edge line it lands on. Two samples' worth of slack; anything past
+     * that is a band, not a seam. */
+    throughGap: 5,
+  },
+
   /** DRIVABILITY: whether the geometry asks the car for something it does
    * not have. The reference car is deliberately a MODEST one — a stage
    * only the best car can hold is a stage most runs cannot. */
@@ -492,6 +546,11 @@ export const ANALYSIS = {
     rollers: 1.6,
     water: 1.4,
     roads: 1.2,
+    /** A stage has one or two junctions and they are the two places on it
+     * where the world has to look BUILT — so a defect at one is worth as
+     * much as a defect anywhere else on the road, over a hundredth of the
+     * ground. */
+    junctions: 1.2,
     drive: 1.4,
     jumps: 1.2,
     /** The ends carry the most of any metric: every other check is a

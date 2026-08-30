@@ -829,6 +829,35 @@ export function createTerrain(track: Track): TerrainField {
 
   const half = track.width / 2;
   const shelfEnd = half + ROAD_CROSS.reach; // the ribbon's own outer edge
+  /** How far out the corridor shapes the ground beside the sample at
+   * `index`, m: the widest the mat gets within a few samples of it, plus
+   * the verge.
+   *
+   * An ENVELOPE rather than the sample's own width, because the corridor is
+   * found by the nearest CENTERLINE point while the lip is a question about
+   * the mat: at a junction's mouth the road opens by half its width in one
+   * two-metre step (R17), so a probe standing at a wide sample's lip is
+   * often nearest to a narrow one alongside — and the ground then hands
+   * over inside the ribbon, which is a face along the outside of the mouth.
+   * Taking the widest can only ever level a little more ground than the mat
+   * needs, and a little more flat ground beside a junction is what a
+   * junction has. */
+  const LIP_ENVELOPE = 4;
+  const lipAt = (index: number): number => {
+    let widest = 0;
+    const lo = Math.max(0, index - LIP_ENVELOPE);
+    const hi = Math.min(samples.length - 1, index + LIP_ENVELOPE);
+    for (let i = lo; i <= hi; i++) {
+      if (samples[i].width > widest) widest = samples[i].width;
+    }
+    // Never NARROWER than the nominal corridor. A gravel road wanders
+    // either side of nominal all the way down a stage (R33), and letting
+    // the shelf breathe in and out with it would move the ground beside
+    // every metre of every road to buy nothing — the wander is centimetres
+    // and the verge already absorbs it. What this exists for is the mouth,
+    // which is metres, so it only ever reaches further OUT.
+    return Math.max(shelfEnd, widest / 2 + ROAD_CROSS.reach);
+  };
   /** How far from the road the corridor still shapes the ground, m — see
    * rawHeight; inside the sample grid's own search reach on purpose. */
   const CORRIDOR_RANGE = 140;
@@ -968,16 +997,23 @@ export function createTerrain(track: Track): TerrainField {
       base = far;
     } else {
       const s = samples[near.index];
+      // R16 — the ribbon's own outer edge HERE, not the stage's nominal
+      // one. A junction's mouth flares the mat well past nominal (R17) and
+      // gravel wanders either side of it down the whole stage (R33); pin
+      // the shelf at the nominal and the ground hands over while the ribbon
+      // is still going, which is a vertical face along the outside of every
+      // mouth on the map.
+      const lip = lipAt(near.index);
       const corridorY =
-        ribbonY(s, sideOf(near.lateral) * Math.min(near.d, shelfEnd), s.width) - TILE_SINK;
-      if (near.d < shelfEnd) {
+        ribbonY(s, sideOf(near.lateral) * Math.min(near.d, lip), s.width) - TILE_SINK;
+      if (near.d < lip) {
         base = corridorY;
       } else {
         const grade = sideGrade(s.s, near.lateral >= 0 ? 1 : -1);
-        const embankment = s.elevation + (near.d - shelfEnd) * grade;
-        const toFar = smooth(clamp01((near.d - shelfEnd) / 110));
+        const embankment = s.elevation + (near.d - lip) * grade;
+        const toFar = smooth(clamp01((near.d - lip) / 110));
         const shaped = embankment * (1 - toFar) + far * toFar;
-        const off = smooth(clamp01((near.d - shelfEnd) / 26));
+        const off = smooth(clamp01((near.d - lip) / 26));
         base = corridorY * (1 - off) + shaped * off;
       }
     }
@@ -1242,9 +1278,16 @@ export function createTerrain(track: Track): TerrainField {
 
   /** Distance from a point to the nearest road's outer EDGE — stage or
    * abandoned branch, ribbon and verge included — negative on the road
-   * itself. R18's water steers by it: a watercourse crosses a road where
-   * the road was built to cross it, and keeps its bank off it everywhere
-   * else. */
+   * itself. R18's water steers by it, and nothing is planted or stood
+   * anywhere it comes back negative.
+   *
+   * Measured against the stage's NOMINAL corridor, deliberately: R18's
+   * watercourses are traced against this, so a width that moves with the
+   * road's own wander (R33) and its junction mouths (R17) would move every
+   * river on every stage to buy a metre of accuracy the water cannot see.
+   * What has to know the road's real width is the code that STANDS things
+   * beside it — `props.ts` and the renderer's planting — and both ask the
+   * sample rather than this. */
   const roadClear: RoadClear = (x, z) => {
     const near = nearestRoad(x, z);
     const stage = near ? near.d - shelfEnd : Infinity;

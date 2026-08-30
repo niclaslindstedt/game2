@@ -22,49 +22,36 @@ import { angleDiff } from "../lib/math.ts";
 import { createRng } from "../lib/prng.ts";
 import { roadClearance } from "./road.ts";
 import {
-  SAMPLE_STEP,
   STAGE_RULES as R,
   circuitLapBand,
   knobScale,
   type FiniteStageLength,
   type SegmentPlan,
   type StageKnobs,
-  type TurnSeverity,
 } from "./rules.ts";
 import {
+  DIR_PAIRS,
   PROBE_STEP,
   assignFeature,
+  buildWalk,
+  bearing,
   createPointField,
   drawTurn,
   inBounds,
   probePoints,
   recomputeSameDirRun,
+  solveCsc,
+  solveRadii,
   straightLength,
   trackRun,
   type Cursor,
   type PointField,
+  type Pose,
   type SameDirRun,
 } from "./search.ts";
 
-const TAU = Math.PI * 2;
-
-/** The corners the closure is allowed to solve at — a ladder of radii read
- * straight out of the turn vocabulary (R3), a few across each severity's
- * band, widest first: a closing corner that can be swept is worth more than
- * one that has to be hooked, so the hairpin end is the fallback and not the
- * first answer. Solving only at radii the generator would have DRAWN is
- * what keeps the closure inside R3 instead of beside it — the angle it
- * sweeps is then checked against that same severity's angle band. */
-const CLOSE_RADII: { radius: number; severity: TurnSeverity }[] = (
-  ["soft", "medium", "hard"] as const
-).flatMap((severity) => {
-  const band = R.turn[severity].radius;
-  const steps = R.circuit.closeRadii;
-  return Array.from({ length: steps }, (_, i) => ({
-    severity,
-    radius: band.max - ((band.max - band.min) * i) / (steps - 1),
-  }));
-});
+/** The corners the closure is allowed to solve at (R3's ladder). */
+const CLOSE_RADII = solveRadii(R.circuit.closeRadii);
 
 /** How far off the ring bearing a drawn turn is allowed to leave the road
  * before it is redrawn, and the share of that budget past which the next
@@ -110,67 +97,6 @@ const CLOSE_REACH = 700;
  * long ones when most of the cost is walking the same ground twice. */
 const MAX_BACKTRACKS = 40;
 
-type Pose = { x: number; z: number; heading: number };
-
-/** Positive rotation from `from` to `to` turning in `dir`, radians. */
-function sweep(from: number, to: number, dir: 1 | -1): number {
-  const raw = dir === 1 ? to - from : from - to;
-  return ((raw % TAU) + TAU) % TAU;
-}
-
-/** The centre of the circle a car at `p` turns on at radius `r` in `dir`.
- * The heading's right-hand normal is (cos h, -sin h), and a dir of +1 grows
- * the heading, so that normal points at the centre. */
-function turnCentre(p: Pose, r: number, dir: 1 | -1): { x: number; z: number } {
-  return { x: p.x + dir * r * Math.cos(p.heading), z: p.z - dir * r * Math.sin(p.heading) };
-}
-
-/** Heading of the vector (x, z) in the engine's convention. */
-function bearing(x: number, z: number): number {
-  return Math.atan2(x, z);
-}
-
-type Closure = { arc1: number; straight: number; arc2: number };
-
-/** Solve the turn-straight-turn from `from` to `to`: a corner of radius
- * `r1` in direction `d1`, a straight, and a corner of radius `r2` in `d2`
- * that arrives on the target pose. The straight is the common tangent of
- * the two corners' circles — the OUTER one when both bend the same way, the
- * crossover when they bend against each other — and where that tangent
- * touches is found from one offset: the difference of the radii for a
- * same-sense pair, their sum for an opposite-sense one. Null when the
- * circles are too close together for that tangent to exist. */
-function solveCsc(
-  from: Pose,
-  to: Pose,
-  r1: number,
-  r2: number,
-  d1: 1 | -1,
-  d2: 1 | -1,
-): Closure | null {
-  const c1 = turnCentre(from, r1, d1);
-  const c2 = turnCentre(to, r2, d2);
-  const dx = c2.x - c1.x;
-  const dz = c2.z - c1.z;
-  const dist = Math.hypot(dx, dz);
-  const offset = d1 === d2 ? d1 * (r2 - r1) : -d1 * (r1 + r2);
-  if (dist <= Math.abs(offset) + 1e-6) return null;
-  const hs = bearing(dx, dz) - Math.asin(offset / dist);
-  return {
-    arc1: sweep(from.heading, hs, d1),
-    straight: Math.sqrt(dist * dist - offset * offset),
-    arc2: sweep(hs, to.heading, d2),
-  };
-}
-
-/** The four dir pairs, in the order the closure tries them. */
-const DIR_PAIRS: [1 | -1, 1 | -1][] = [
-  [1, 1],
-  [-1, -1],
-  [1, -1],
-  [-1, 1],
-];
-
 /** The closure as segments, or null when no solve at any radius produces a
  * corner combination the vocabulary owns. The closing straight (R2) is part
  * of it: a circuit's finish line is its start line, and both want a
@@ -211,26 +137,6 @@ function closureSegments(from: Pose, goal: Pose): SegmentPlan[] | null {
     }
   }
   return null;
-}
-
-/** Walk `plans` from `from` the way compile.ts will walk them — the same
- * step count, the same order of operations — so the search knows where the
- * ROAD ends and not merely where its coarse validation probe thinks it
- * does. The two differ by meters over a lap, which is the difference
- * between a start line and a hole in one. */
-function buildWalk(from: Pose, plans: SegmentPlan[]): Pose {
-  let { x, z, heading } = from;
-  for (const plan of plans) {
-    const steps = Math.max(1, Math.round(plan.length / SAMPLE_STEP));
-    const step = plan.length / steps;
-    const curvature = plan.kind === "turn" && plan.radius ? (plan.dir ?? 1) / plan.radius : 0;
-    for (let i = 0; i < steps; i++) {
-      if (curvature !== 0) heading += curvature * step;
-      x += Math.sin(heading) * step;
-      z += Math.cos(heading) * step;
-    }
-  }
-  return { x, z, heading };
 }
 
 /** How near the start line the closure has to land before it counts as
@@ -402,7 +308,7 @@ function tryCircuit(
       // needs the cursor brought back within reach of a solve, and homing
       // on the start line is what does it.
       const homing = total >= homeFrom;
-      const ring = (ringDir * TAU * Math.min(total, target)) / target;
+      const ring = (ringDir * 2 * Math.PI * Math.min(total, target)) / target;
       const course = homing ? bearing(-cursor.x, -R.closingStraight - cursor.z) : ring;
       const off = angleDiff(cursor.heading, course);
       const forcedDir: 1 | -1 | 0 =

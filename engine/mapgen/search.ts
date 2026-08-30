@@ -11,6 +11,7 @@
 import type { Rng } from "../lib/prng.ts";
 import { cellKey } from "../lib/math.ts";
 import {
+  SAMPLE_STEP,
   STAGE_RULES as R,
   knobScale,
   type SegmentPlan,
@@ -19,6 +20,113 @@ import {
 } from "./rules.ts";
 
 export type Cursor = { x: number; z: number; heading: number; arc: number };
+
+/** Where a road is and which way it points — a cursor without the arc. */
+export type Pose = { x: number; z: number; heading: number };
+
+const TAU = Math.PI * 2;
+
+/** Positive rotation from `from` to `to` turning in `dir`, radians. */
+export function sweep(from: number, to: number, dir: 1 | -1): number {
+  const raw = dir === 1 ? to - from : from - to;
+  return ((raw % TAU) + TAU) % TAU;
+}
+
+/** The centre of the circle a car at `p` turns on at radius `r` in `dir`.
+ * The heading's right-hand normal is (cos h, -sin h), and a dir of +1 grows
+ * the heading, so that normal points at the centre. */
+export function turnCentre(p: Pose, r: number, dir: 1 | -1): { x: number; z: number } {
+  return { x: p.x + dir * r * Math.cos(p.heading), z: p.z - dir * r * Math.sin(p.heading) };
+}
+
+/** Heading of the vector (x, z) in the engine's convention. */
+export function bearing(x: number, z: number): number {
+  return Math.atan2(x, z);
+}
+
+export type Closure = { arc1: number; straight: number; arc2: number };
+
+/** Solve the turn-straight-turn from `from` to `to`: a corner of radius
+ * `r1` in direction `d1`, a straight, and a corner of radius `r2` in `d2`
+ * that arrives on the target pose. The straight is the common tangent of
+ * the two corners' circles — the OUTER one when both bend the same way, the
+ * crossover when they bend against each other — and where that tangent
+ * touches is found from one offset: the difference of the radii for a
+ * same-sense pair, their sum for an opposite-sense one. Null when the
+ * circles are too close together for that tangent to exist.
+ *
+ * Shared, because arriving exactly on a pose is what BOTH a circuit's
+ * closure (R22, onto its own grid) and a junction's approach (R17, onto a
+ * road that was laid before the route) are: one is a line coming back to
+ * where it started, the other a line coming to meet somebody else's road,
+ * and the geometry does not know the difference. */
+export function solveCsc(
+  from: Pose,
+  to: Pose,
+  r1: number,
+  r2: number,
+  d1: 1 | -1,
+  d2: 1 | -1,
+): Closure | null {
+  const c1 = turnCentre(from, r1, d1);
+  const c2 = turnCentre(to, r2, d2);
+  const dx = c2.x - c1.x;
+  const dz = c2.z - c1.z;
+  const dist = Math.hypot(dx, dz);
+  const offset = d1 === d2 ? d1 * (r2 - r1) : -d1 * (r1 + r2);
+  if (dist <= Math.abs(offset) + 1e-6) return null;
+  const hs = bearing(dx, dz) - Math.asin(offset / dist);
+  return {
+    arc1: sweep(from.heading, hs, d1),
+    straight: Math.sqrt(dist * dist - offset * offset),
+    arc2: sweep(hs, to.heading, d2),
+  };
+}
+
+/** The four dir pairs, in the order a solve tries them. */
+export const DIR_PAIRS: [1 | -1, 1 | -1][] = [
+  [1, 1],
+  [-1, -1],
+  [1, -1],
+  [-1, 1],
+];
+
+/** Walk `plans` from `from` the way compile.ts will walk them — the same
+ * step count, the same order of operations — so the search knows where the
+ * ROAD ends and not merely where its coarse validation probe thinks it
+ * does. The two differ by meters over a lap, which is the difference
+ * between a start line and a hole in one. */
+export function buildWalk(from: Pose, plans: SegmentPlan[]): Pose {
+  let { x, z, heading } = from;
+  for (const plan of plans) {
+    const steps = Math.max(1, Math.round(plan.length / SAMPLE_STEP));
+    const step = plan.length / steps;
+    const curvature = plan.kind === "turn" && plan.radius ? (plan.dir ?? 1) / plan.radius : 0;
+    for (let i = 0; i < steps; i++) {
+      if (curvature !== 0) heading += curvature * step;
+      x += Math.sin(heading) * step;
+      z += Math.cos(heading) * step;
+    }
+  }
+  return { x, z, heading };
+}
+
+/** The corners a solve is allowed to use — a ladder of `steps` radii read
+ * straight out of the turn vocabulary (R3) across each severity's band,
+ * widest first: a corner that can be swept is worth more than one that has
+ * to be hooked, so the hairpin end is the fallback and not the first
+ * answer. Solving only at radii the generator would have DRAWN is what
+ * keeps a solved corner inside R3 instead of beside it — the angle it
+ * sweeps is then checked against that same severity's angle band. */
+export function solveRadii(steps: number): { radius: number; severity: TurnSeverity }[] {
+  return (["soft", "medium", "hard"] as const).flatMap((severity) => {
+    const band = R.turn[severity].radius;
+    return Array.from({ length: steps }, (_, i) => ({
+      severity,
+      radius: band.max - ((band.max - band.min) * i) / (steps - 1),
+    }));
+  });
+}
 
 /** Coarse spacing (meters) for the bounds / self-distance validation walk. */
 export const PROBE_STEP = 6;

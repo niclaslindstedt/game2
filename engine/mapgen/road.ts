@@ -364,6 +364,12 @@ export type JunctionPlatform = {
   heading: number;
   width: number;
   reach: number;
+  /** Half the ACROSS-axis of the graded area, m. Wider than the through
+   * carriageway, because what has to lie flat at a crossing is not the main
+   * road but the MOUTH the dirt road opens across it (R17) — mat, verge and
+   * all. Ground that stops being levelled inside the mouth's own ribbon
+   * leaves a face along the outside of the crossing. */
+  spread: number;
 };
 
 /** How much a point lies inside the platform, 1 in the middle of it to 0
@@ -383,7 +389,7 @@ export function junctionFlat(platform: JunctionPlatform, x: number, z: number): 
   // rounded up — can be inside it. Almost every point the terrain asks
   // about is further off than that, and it asks this of every junction on
   // the stage for every height it reads.
-  const half = platform.width * 0.85;
+  const half = platform.spread;
   if (dx * dx + dz * dz > 1.2769 * (platform.reach * platform.reach + half * half)) return 0;
   const along = dx * Math.sin(platform.heading) + dz * Math.cos(platform.heading);
   const across = dx * Math.cos(platform.heading) - dz * Math.sin(platform.heading);
@@ -403,9 +409,24 @@ export function junctionFlat(platform: JunctionPlatform, x: number, z: number): 
  * an unsealed road drops what its tires picked up on the tarmac at the
  * mouth, and in life that smear is the most obvious thing about a junction
  * between the two. It belongs to the MOUTH, not to the whole platform —
- * a tarmac road tan for sixty meters is not a junction, it is a mess. */
+ * a tarmac road tan for sixty meters is not a junction, it is a mess.
+ *
+ * RAGGED, not a disc. The smear is laid down by cars TURNING, so it reaches
+ * furthest where they turn — along the main road, both ways out of the
+ * mouth — and thins where nothing drives. A clean radial falloff reads as a
+ * stain somebody airbrushed on, which is the one thing it must not look
+ * like, so the reach itself is modulated round the bearing. The wobble is
+ * SMOOTH: a per-metre hash makes the edge a staircase of square cells,
+ * which reads as a rendering fault rather than as loose stone. */
 export function junctionDust(platform: JunctionPlatform, x: number, z: number): number {
-  const d = Math.hypot(x - platform.x, z - platform.z) / (platform.width * 1.15);
+  const dx = x - platform.x;
+  const dz = z - platform.z;
+  const reach = platform.width * 1.15;
+  // Bearing measured off the MAIN road, so the two lobes lie along the road
+  // the traffic joins rather than wherever the map's north happens to be.
+  const off = Math.atan2(dx, dz) - platform.heading;
+  const lobes = 1 + 0.3 * Math.cos(2 * off) + 0.12 * Math.sin(3 * off) + 0.07 * Math.cos(5 * off);
+  const d = Math.hypot(dx, dz) / (reach * lobes);
   if (d >= 1) return 0;
   return (1 - d) * (1 - d);
 }
