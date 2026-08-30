@@ -322,9 +322,21 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
   const standing = roadFurniture(track);
   for (let k = 0; k < lanes.length; k++) {
     if (!onRibbon(lanes[k], half)) continue;
-    const inMat = Math.abs(lanes[k]) <= half;
-    if (!inMat) continue;
+    // The rank's lanes are laid on the NOMINAL half-width, which is the
+    // one width the road mostly is not: R33 wanders it either side down
+    // the whole stage and a junction's mouth flares it. So whether a lane
+    // is on the mat is asked per sample, against the road as it is THERE.
+    //
+    // It matters because a kerb marker is planted off the local edge
+    // (kerbs.ts places it that way, deliberately and for the same reason).
+    // Judged against the nominal edge instead, a post standing properly
+    // out in the verge reads as standing in the road wherever the road has
+    // pinched in under its nominal — which is a finding about the ruler,
+    // not about the stage.
+    if (Math.abs(lanes[k]) > half + ROAD_CROSS.reach) continue;
     for (const contact of rank[k]) {
+      const localHalf = (track.samples[contact.index].width ?? track.width) / 2;
+      if (Math.abs(lanes[k]) > localHalf) continue;
       checkedMat++;
       const hits: { kind: string; x: number; z: number; gap: number }[] = [];
       for (const solid of [

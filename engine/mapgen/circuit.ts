@@ -222,7 +222,10 @@ export function generateCircuit(
     // The same relaxing setback the sprint search walks down — a ring has
     // to close on itself as well as keep out of the water, so it needs the
     // give even more than a point-to-point stage does.
-    const clearance = R.water.routeClear * ladder[Math.floor((attempt * ladder.length) / 400)];
+    const clearance =
+      R.water.routeClear *
+      ladder[Math.floor((attempt * ladder.length) / 400)] *
+      knobScale(knobs.water, R.wet.routeSetback);
     const plans = tryCircuit((seed + attempt * 0x9e3779b9) >>> 0, length, knobs, land, clearance);
     if (plans) return plans;
   }

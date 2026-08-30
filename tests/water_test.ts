@@ -108,12 +108,24 @@ describe("crossings (R13)", () => {
     // be climbable, because over the side is a drowning. And it is checked
     // on the deck rather than off the road: by the time a car this far
     // sideways counts as off-road it would already be in the river.
-    const track = compileStage(5, "medium", { water: 0.9 });
-    const deck = track.samples.findIndex((s) => s.deck === "concrete");
-    expect(deck).toBeGreaterThan(0);
+    // WHICH seed puts a concrete deck on a medium stage moves whenever the
+    // routing does, so the scenario finds one rather than naming one — the
+    // test is about the parapet, not about seed 5.
+    let seed = 0;
+    let track = compileStage(5, "medium", { water: 0.9 });
+    let deck = -1;
+    for (const candidate of [5, ...SEEDS, 9, 11, 19, 23, 30, 37, 41, 47, 53]) {
+      track = compileStage(candidate, "medium", { water: 0.9 });
+      deck = track.samples.findIndex((sample) => sample.deck === "concrete");
+      if (deck > 0 && deck + 6 < track.samples.length) {
+        seed = candidate;
+        break;
+      }
+    }
+    expect(deck, "no seed put a concrete deck on a medium stage").toBeGreaterThan(0);
     const s = track.samples[deck + 6];
     const right = { x: Math.cos(s.heading), z: -Math.sin(s.heading) };
-    const state = createGame({ seed: 5, skipCountdown: true, track });
+    const state = createGame({ seed, skipCountdown: true, track });
     // Halfway to the edge, thrown at the parapet at 25 m/s of pure slide.
     state.car.x = s.x + right.x * 5;
     state.car.z = s.z + right.z * 5;
@@ -236,7 +248,15 @@ describe("the river (R18)", () => {
           ...anchors.map((a) => Math.hypot(a.x - s.x, a.z - s.z)),
           Infinity,
         );
-        if (toCrossing < 60) continue;
+        // The crossing's OWN water reaches a good deal further than the
+        // crossing point, and the exemption has to cover all of it or the
+        // ford's own sheet reads as a course running at the road. The
+        // tracer lets a course run at the road for its `CROSS_WINDOW`
+        // (40 m of travel) either side of an anchor; the sheet it draws is
+        // up to `MAX_WIDTH` (20 m) of half-width; and where the course ends
+        // in a POOL that widens again by `POOL_SPREAD`. Those three added
+        // are what a crossing's water can legitimately occupy.
+        if (toCrossing <= 40 + 20 * 2.6) continue;
         if (terrain.waterAt(s.x, s.z) !== null) flooded += 1;
         else dry += 1;
       }
@@ -306,9 +326,34 @@ describe("the river (R18)", () => {
  * water deep enough to be drowning in it. Returns the step that put it
  * there. The lakeland dial is turned up so there IS water to find, and the
  * lock decides WHICH side of the road it is found on — the two answer with
- * different shorelines, and both beats the water has are wanted. */
+ * different shorelines, and both beats the water has are wanted.
+ *
+ * It is STAGED at the stretch of road nearest a lake rather than driven
+ * from the grid. R35 sites a stage's start on ground clear of the water and
+ * keeps the route back from it, so a car circling at full lock from the
+ * start line now finds two hundred metres of guaranteed dry ground and
+ * nothing else — the scenario stopped being about drowning and started
+ * being about which seed happened to put a lake next to a start. */
 function plunge(seed: number, steer: number): { state: GameState; entry: GameEvent[] } | null {
-  const state = createGame({ seed, length: "long", skipCountdown: true, knobs: { water: 1 } });
+  const track = compileStage(seed, "long", { water: 1 });
+  const land = createLandField(seed, track.knobs);
+  let at = track.samples[0];
+  let best = Infinity;
+  for (let i = 0; i < track.samples.length; i += 5) {
+    const s = track.samples[i];
+    const near = land.water.nearestAt(s.x, s.z, 600);
+    if (!near) continue;
+    const d = Math.hypot(near.x - s.x, near.z - s.z);
+    if (d < best) {
+      best = d;
+      at = s;
+    }
+  }
+  const state = createGame({ seed, length: "long", skipCountdown: true, track });
+  state.car.x = at.x;
+  state.car.z = at.z;
+  state.car.y = at.elevation;
+  state.car.heading = at.heading;
   const input = { ...NEUTRAL_INPUT, throttle: 1, steer };
   for (let i = 0; i < 120 * 60; i++) {
     const entry = step(state, input);
@@ -324,7 +369,11 @@ describe("going under (TUNING.crash.drown)", () => {
    * `crash.deepWater` is a low bar a car meets in a puddle at a lakeshore,
    * and which shelf it ends up on is decided by the handling that carried
    * it there. `swallows` is what actually holds the scenario still. */
-  const DROWNING_SEEDS = [11, 34, 26, ...SEEDS];
+  // Led by seeds whose water is known to be deep enough, then a wider net:
+  // which seeds put a drownable lake beside a road moves whenever the
+  // generator's routing does, and a list of three is a fixture that breaks
+  // every time the stages shift rather than a scenario that holds.
+  const DROWNING_SEEDS = [9, 30, 11, 34, 26, ...SEEDS, 7, 12, 15, 17, 19, 22, 25, 28, 31, 36];
 
   /** ...and does that water actually close over the roof? The car sinks to
    * the BED (step.ts), so a shelf shallower than the roof leaves it settled

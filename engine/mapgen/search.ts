@@ -19,7 +19,45 @@ import {
   type TurnSeverity,
 } from "./rules.ts";
 
-export type Cursor = { x: number; z: number; heading: number; arc: number };
+export type Cursor = {
+  x: number;
+  z: number;
+  heading: number;
+  arc: number;
+  /** R23 — roughly how high the ROAD stands here, m, walked at the probe's
+   * own resolution. Absent where the caller has no landscape to follow (a
+   * synthetic track), and the height half of R23 is then simply not asked.
+   *
+   * It is the road's base, not its surface: the rolling profile rides on
+   * top of this and swings a few metres either way, which is noise against
+   * the tens of metres the height rule is about. */
+  y?: number;
+};
+
+/** R34's height walk, at the probe's own resolution — the road builder's
+ * eye, cheap enough to run inside the search rather than only after it.
+ *
+ * The same lag and the same two clamps the compiler walks with, so the
+ * search's idea of how high the road will be tracks the road that actually
+ * gets built rather than the bare hillside under it. That difference is the
+ * whole point: a road is metres above the country it crosses on an
+ * embankment and metres below it in a cutting, and it is the ROAD's height
+ * that decides whether two arms of a stage can pass each other. */
+export type Profile = { y: number; slope: number };
+
+export function stepProfile(profile: Profile, ground: number, step: number): number {
+  const F = R.elevation.follow;
+  const want = profile.y + (ground - profile.y) * (1 - Math.exp(-step / F.lag));
+  let next = (want - profile.y) / step;
+  const swing = F.crest * step;
+  if (next > profile.slope + swing) next = profile.slope + swing;
+  else if (next < profile.slope - swing) next = profile.slope - swing;
+  if (next > F.grade) next = F.grade;
+  else if (next < -F.grade) next = -F.grade;
+  profile.slope = next;
+  profile.y += next * step;
+  return profile.y;
+}
 
 /** Where a road is and which way it points — a cursor without the arc. */
 export type Pose = { x: number; z: number; heading: number };
@@ -136,6 +174,13 @@ export const PROBE_STEP = 6;
  * and exit); beyond it R10 applies in full. */
 export const SELF_IGNORE_ARC = 80;
 
+/** R23 — the biggest height difference the rule sizes its search grid for,
+ * m. Two arms further apart than this in height need more room than the
+ * grid's ring walk looks at, so the rule under-reports past it: a ceiling
+ * on the CHECK, not on the stage. Generous enough to cover any fold-back a
+ * stage's own grade clamp can build over a few kilometres. */
+const HEIGHT_SPAN = 60;
+
 export type PointField = ReturnType<typeof createPointField>;
 
 /** The committed probe points, spatially hashed so the R10 check per
@@ -144,8 +189,14 @@ export type PointField = ReturnType<typeof createPointField>;
  * the long bands. Cell size equals the clearance the field is enforcing
  * (R23's `roadClearance`), so every point within that distance of a query
  * sits in one of the neighbouring cells. */
-export function createPointField(clear: number) {
-  const cell = clear;
+export function createPointField(clear: number, shelfEnd = 0) {
+  // R23's height half needs to reach further than its plan half whenever
+  // two arms differ by more than the plain clearance can bridge, so the
+  // grid's cells — and the ring the query walks — are sized on the widest
+  // separation the rule can ask for rather than on `clear` alone.
+  const faceMax = R.verge.cut.face.max;
+  const reach = Math.max(clear, 2 * shelfEnd + HEIGHT_SPAN / faceMax);
+  const cell = reach;
   const minD2 = clear * clear;
   const points: Cursor[] = [];
   const grid = new Map<number, Cursor[]>();
@@ -206,7 +257,25 @@ export function createPointField(clear: number) {
             if (Math.min(gap, cycle - gap) < SELF_IGNORE_ARC) continue;
             const ddx = p.x - c.x;
             const ddz = p.z - c.z;
-            if (ddx * ddx + ddz * ddz < minD2) return true;
+            const d2 = ddx * ddx + ddz * ddz;
+            if (d2 < minD2) return true;
+            // R23 IN HEIGHT. Keeping two arms `clear` apart on the map says
+            // nothing about how far apart they are vertically, and the
+            // terrain between them has to get from one to the other: each
+            // road owns its corridor out to `shelfEnd`, and the country in
+            // between can climb no faster than R34's steepest cut face.
+            //
+            // Without this a stage could legally fold back 43 m from itself
+            // with 33 m of height between the two arms — and then no ground
+            // satisfies both. Whichever road a lattice corner is nearer to
+            // owns it, so adjacent corners 14 m apart came out 32 m apart in
+            // height: a cliff at the upper road's edge, its verge running
+            // out into thin air, and R31 broken with nothing in the terrain
+            // able to fix it.
+            if (c.y === undefined || p.y === undefined) continue;
+            const rise = Math.abs(p.y - c.y);
+            const need = 2 * shelfEnd + rise / faceMax;
+            if (d2 < need * need) return true;
           }
         }
       }
@@ -234,7 +303,14 @@ export function entersStart(p: Cursor, clear: number): boolean {
 }
 
 /** Walk a candidate segment from `from`, at the coarse validation spacing. */
-export function probePoints(from: Cursor, plan: SegmentPlan): { points: Cursor[]; end: Cursor } {
+export function probePoints(
+  from: Cursor,
+  plan: SegmentPlan,
+  /** The road's height as it walks, or undefined to skip it. Advanced by
+   * this call and NOT rewound — the caller keeps the authoritative copy and
+   * hands in a clone for a candidate it may yet throw away. */
+  height?: { profile: Profile; groundAt: (x: number, z: number) => number },
+): { points: Cursor[]; end: Cursor } {
   const points: Cursor[] = [];
   let { x, z, heading, arc } = from;
   const steps = Math.max(1, Math.ceil(plan.length / PROBE_STEP));
@@ -246,9 +322,10 @@ export function probePoints(from: Cursor, plan: SegmentPlan): { points: Cursor[]
     x += Math.sin(heading) * step;
     z += Math.cos(heading) * step;
     arc += step;
-    points.push({ x, z, heading, arc });
+    const y = height ? stepProfile(height.profile, height.groundAt(x, z), step) : undefined;
+    points.push({ x, z, heading, arc, y });
   }
-  return { points, end: { x, z, heading, arc } };
+  return { points, end: { x, z, heading, arc, y: height?.profile.y } };
 }
 
 /** The probe walks at PROBE_STEP while compile samples finer, and the two
@@ -379,11 +456,17 @@ export function assignFeature(
   ) {
     const ramp = rng.range(R.jump.rampLength.min, R.jump.rampLength.max);
     const lipAt = rng.range(R.jump.runUp, length - R.jump.landing - ramp);
+    // R6 — the ramp's GRADE is drawn and the lip follows from it, because
+    // the grade is what throws the car and a height drawn on its own says
+    // nothing about it over a ramp of unknown length. The cap keeps the
+    // biggest lips sane; `rules_test` holds it clear of the grade floor, so
+    // capping can never hand back a ramp gentler than a hill.
+    const ratio = rng.range(R.jump.ratio.min, R.jump.ratio.max);
     return {
       feature: "jump",
       featureStart: lipAt,
       featureEnd: lipAt + ramp,
-      lipHeight: rng.range(R.jump.lipHeight.min, R.jump.lipHeight.max),
+      lipHeight: Math.min(R.jump.lipHeight.max, Math.max(R.jump.lipHeight.min, ratio * ramp)),
     };
   }
   if (

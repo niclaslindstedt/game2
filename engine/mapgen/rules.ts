@@ -496,6 +496,31 @@ export const STAGE_RULES = {
      * comes out as the embankment it should be. Without it a stage that
      * routes across a tarn drives along the bottom of it. */
     follow: { lag: 200, grade: 0.075, crest: 0.004, freeboard: 3.5 },
+    /** R34 — how far the road may stand OFF the country it crosses, m: up
+     * on fill, down in cut. The lag and the grade clamp say how fast the
+     * road may follow the land; nothing said how far behind it was allowed
+     * to get, and over ground that falls away faster than the clamp lets
+     * the road descend, the answer was as far as it liked.
+     *
+     * That is what builds a road flying thirty metres over a hollow with a
+     * sixty-degree side, which is not an embankment — it is a wall the car
+     * goes over and does not come back from. The terrain cannot fix it
+     * either way round: hold the fill up and it is a mesa, let it go and
+     * the road hangs in the air.
+     *
+     * Measured rather than guessed. Over 24 seeds the fill a stage
+     * actually needs is 6.7 m at the median and 18.2 m at the ninetieth
+     * percentile — and then a tail running to 68 m, which is a viaduct
+     * nobody asked for. The cap sits above the ninetieth so ordinary cut
+     * and fill is untouched and only the tail is refused; the search then
+     * draws a different line, which is what it is for. */
+    maxFill: 22,
+    maxCut: 24,
+    /** ...and how the cap RELAXES when a country will not yield a stage
+     * inside it, the way the water's setback does. Some countries are all
+     * ridge and ravine, and a stage has to cross them somehow; the last
+     * rung is no cap at all, which is where this rule started. */
+    fillLadder: [1, 1.7, 3, 0],
   },
 
   /** R32 — THE GROUND, IN LAYERS. What the country beside the road is made
@@ -781,7 +806,13 @@ export const STAGE_RULES = {
 
   /** R6 — jump placement. */
   jump: {
-    minStraight: 90, // segment must be at least this long to carry a lip
+    /** Segment must be at least this long to carry a lip — and it is the
+     * SUM OF THE PARTS, not a number chosen next to them. At 90 it was
+     * shorter than the run-up, the longest ramp and the landing added
+     * together, so a straight could pass it and then have nowhere to put
+     * the lip except inside its own run-up. `tests/rules_test.ts` holds the
+     * two together. */
+    minStraight: 107,
     runUp: 35, // meters of straight before the lip
     landing: 50, // meters of straight after the lip
     minSpacing: 200, // meters of stage between two lips
@@ -799,6 +830,19 @@ export const STAGE_RULES = {
      * and the height under the car for every lip on the stage, and that is
      * the measurement this band is set against. */
     lipHeight: { min: 0.9, max: 2.2 },
+    /** R6 — the RAMP'S OWN GRADE, which is what actually launches the car,
+     * drawn directly instead of falling out of two independent bands.
+     *
+     * Height and length drawn apart can multiply out to a ramp shallower
+     * than the road is allowed to climb anyway: 0.9 m over 22 m is 0.041,
+     * against an `elevation.follow.grade` of 0.075. A quarter of all jumps
+     * came out that way — and on a road already descending at its clamp
+     * such a "jump" does not launch the car at all, it just flattens the
+     * descent for twenty metres. The bot flew one for 0.017 s.
+     *
+     * So the floor is set clear of that clamp: a jump is a ramp STEEPER
+     * than any hill the road could have been on, or it is not a jump. */
+    ratio: { min: 0.1, max: 0.16 },
     rampLength: { min: 12, max: 22 },
   },
 
@@ -1346,6 +1390,22 @@ export const STAGE_RULES = {
     /** How much of the far landscape sinks under the water table into
      * ponds and lakes — the water the road runs PAST rather than over. */
     ponds: { min: 0, max: 1 },
+    /** R35 — what the dial does to the ROUTE's setback from that water, as
+     * a multiplier on `water.routeClear`.
+     *
+     * It has to shrink as the dial rises, and the reason is not a tuning
+     * preference — it is that the rule inverts the dial otherwise. Turning
+     * the water up puts more lakes on the map, a fixed setback then pushes
+     * the route into whatever dry corridors are left, and the stage you
+     * drive comes out with LESS water beside it than a dry seed's: the
+     * analysis measured a wet stage at 0.29 of water against a dry one's
+     * 0.37, which is the dial working backwards.
+     *
+     * It is also simply what lakeland roads do. In dry country a road can
+     * afford to keep its distance from the one pond it passes; in a
+     * country that is half water there is nowhere to keep it, so the road
+     * runs the shore — which is the whole character of the place. */
+    routeSetback: { min: 1.3, max: 0.3 },
   },
 
   /** The `trees` knob multiplies the solid trunk field's density. */
