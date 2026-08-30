@@ -159,6 +159,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | The generator's LAYERS, X-rayed over the map view           | `pwa/src/game/map-layers.ts` — the `debug-tools` and `mapgen-improvement` skills                                                 |
 | What a full-screen MAP says about itself, and its repro     | `pwa/src/game/map-debug.ts` + `App.tsx`'s `?roam= ?layer= ?mapfull= ?m…=` readers — the `debug-tools` skill                      |
 | A DEVELOPER switch (god, overlay, collecting race data)     | `DevSettings` in `pwa/src/game/settings.ts` + a row in `menu-dev.tsx`; `devFromUrl` in `App.tsx` pins it for tooling             |
+| How long THIS MACHINE takes to draw a fixed piece of racing | `pwa/src/game/benchmark.ts` (the race it pins, and the pump); its card in `menu-dev.tsx` — the `debug-tools` skill               |
 | The studio card / boot cover                                | `pwa/src/game/splash.ts` (policy) + `splash-screen.tsx`                                                                          |
 | App identity (name, palette, URLs)                          | `pwa/src/identity.ts` (single source)                                                                                            |
 | New CLI tooling                                             | `scripts/*.mjs` (Node, no deps beyond `scripts/lib/`)                                                                            |

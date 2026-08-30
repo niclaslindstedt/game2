@@ -4040,6 +4040,51 @@ a.menu-version:focus-visible {
   user-select: text;
 }
 
+/* THE BENCHMARK'S CARD. It wears the pause card's chrome, because it is the
+   same thing: a card over a run. What it does differently is put ONE NUMBER
+   at the size of a headline — the whole tool exists to be read at a glance
+   and written down, and everything else on the card is the small print that
+   says which race the number is about. */
+.bench {
+  align-items: stretch;
+  text-align: center;
+  min-width: min(20rem, 84vw);
+}
+
+.bench-time {
+  font-size: clamp(2.4rem, 11vmin, 4rem);
+  line-height: 1;
+  color: var(--hud-good);
+  /* The seconds tick up while it runs, and digits of different widths under
+     a counter make the whole number jump about. */
+  font-variant-numeric: tabular-nums;
+}
+
+.bench-unit {
+  font-size: 0.4em;
+  opacity: 0.75;
+  margin-left: 0.2em;
+}
+
+.bench-note {
+  font-size: clamp(0.6rem, 2vmin, 0.8rem);
+  letter-spacing: 0.08em;
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+
+.bench-bar {
+  height: 0.35rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 20%);
+  overflow: hidden;
+}
+
+.bench-bar-fill {
+  height: 100%;
+  background: var(--hud-good);
+}
+
 /* The developer toggles on the pause card, held apart from the three big
    actions above them so nobody reaches for GOD MODE aiming for RESUME. */
 .hud-pause-dev {
