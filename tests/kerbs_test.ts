@@ -67,26 +67,53 @@ describe("R26 — kerb placement", () => {
         const mid = (note.s + note.endS) / 2;
         const apex = zones.find((z) => z.role === "apex" && z.fromS <= mid && z.toS >= mid);
         expect(apex?.side).toBe(note.dir);
-        // The exit starts where the corner stops bending, on the far side.
+        // The exit ENDS where the corner stops bending, on the far side —
+        // it marks the unwind, not the straight past it.
         const exit = zones.find(
-          (z) => z.role === "exit" && Math.abs(z.fromS - note.endS) < 1e-6 && z.side === -note.dir,
+          (z) => z.role === "exit" && Math.abs(z.toS - note.endS) < 1e-6 && z.side === -note.dir,
         );
         expect(exit).toBeDefined();
       }
     }
   });
 
-  it("only puts a braking marker in front of a corner that needs braking", () => {
+  it("only puts a turn-in board on a corner that needs braking", () => {
     for (const seed of SEEDS) {
       const { zones, track } = zonesFor(seed);
       const entries = zones.filter((z) => z.role === "entry");
       const hard = track.pacenotes.filter((n) => n.angle >= R.kerb.entryAngle);
       expect(entries).toHaveLength(hard.length);
       for (const entry of entries) {
-        // It sits BEFORE the corner, which is the whole point of a marker.
-        const note = hard.find((n) => Math.abs(n.s - R.kerb.entryLead - entry.fromS) < 1e-6);
+        // It stands at the corner's own turn-in, on its outside.
+        const note = hard.find((n) => Math.abs(n.s - entry.fromS) < 1e-6);
         expect(note).toBeDefined();
-        expect(entry.toS).toBeLessThan((note as (typeof hard)[number]).s);
+        expect(entry.toS).toBeLessThanOrEqual((note as (typeof hard)[number]).endS + 1e-6);
+      }
+    }
+  });
+
+  it("marks corners and NOTHING ELSE — no post stands on a straight", () => {
+    // The rule the whole module exists for, stated where it can be broken:
+    // a run of markers down an empty straight is the end-to-end stripe with
+    // gaps in it, and it tells a driver a corner is coming where there is
+    // none. Only a hazard — a bridge, a jump lip — reaches past a bend,
+    // because what it is wrapped around is not one.
+    for (const seed of SEEDS) {
+      const { zones, track } = zonesFor(seed);
+      const corners = track.pacenotes.filter((n) => n.angle >= R.kerb.minAngle);
+      for (const zone of zones) {
+        if (zone.role === "hazard") continue;
+        const inside = corners.some((n) => zone.fromS >= n.s - 1e-6 && zone.toS <= n.endS + 1e-6);
+        expect(inside).toBe(true);
+      }
+      // ...and the markers that come out of them stand on corner road too.
+      const field = createKerbField(track);
+      for (const marker of field.markers) {
+        const onCorner = corners.some((n) => marker.s >= n.s && marker.s <= n.endS);
+        const onHazard = zones.some(
+          (z) => z.role === "hazard" && marker.s >= z.fromS && marker.s <= z.toS,
+        );
+        expect(onCorner || onHazard).toBe(true);
       }
     }
   });

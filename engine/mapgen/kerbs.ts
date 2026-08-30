@@ -10,14 +10,23 @@
 //   APEX   — inside the bend, around its tightest point. "Aim here." It is
 //            the target that defines the line, and the thing that stops the
 //            line being cut into whatever is on the inside.
-//   EXIT   — outside the road where the corner unwinds onto the straight.
-//            "The road ends here." Centrifugal force is taking the car
-//            outward under power, and this is the edge of what it may use.
-//   ENTRY  — outside the road on the approach to a hard corner. "Brake." A
-//            braking marker, which is why it only ever appears in front of
-//            a corner that needs braking for.
+//   EXIT   — outside the road through the last part of the bend, where the
+//            corner unwinds. "The road ends here." Centrifugal force is
+//            taking the car outward under power, and this is the edge of
+//            what it may use.
+//   ENTRY  — outside the road through the first part of a hard corner.
+//            "Brake." The turn-in board, which is why it only ever appears
+//            on a corner that needs braking for.
 //   HAZARD — wrapped around something that will genuinely hurt: a bridge
 //            parapet, the shoulders of a jump's lip.
+//
+// EVERY CORNER ZONE IS INSIDE ITS CORNER. Marking is what a bend wears, and
+// a run of posts standing down an empty straight is exactly the from-end-to-
+// end stripe the rule exists to prevent — read from the car it says a corner
+// is coming for forty metres before there is one, and read from above it is
+// the road wearing kerbing at random. So a zone is clipped to the arc its
+// pacenote covers: where the marking stops is where the bend stops. Only a
+// hazard reaches past a corner, because what it is wrapped around is not one.
 //
 // This module decides WHERE. It does not decide what is built there, because
 // that depends on the surface and the two are not the same object: a sealed
@@ -78,14 +87,11 @@ function clampSpan(value: number, band: { min: number; max: number }): number {
 export function buildKerbs(track: Track, fromS = 0, toS = Infinity): KerbZone[] {
   const zones: KerbZone[] = [];
   const K = R.kerb;
-  // A corner reaches outside itself: its braking marker sits `entryLead`
-  // before it and its exit kerb runs past its end, so the notes that can
-  // touch this span start before it and finish after it.
-  const noteFrom = fromS - K.exitRun.max;
-  const noteTo = toS + K.entryLead;
 
   for (const note of track.pacenotes) {
-    if (note.endS < noteFrom || note.s > noteTo) continue;
+    // No corner zone reaches outside its own note, so the notes that can
+    // touch this span are exactly the ones that overlap it.
+    if (note.endS < fromS || note.s > toS) continue;
     if (note.angle < K.minAngle) continue;
     const inside = note.dir as -1 | 1;
     const outside = -inside as -1 | 1;
@@ -98,17 +104,25 @@ export function buildKerbs(track: Track, fromS = 0, toS = Infinity): KerbZone[] 
     const apex = Math.min(arc, clampSpan(arc * K.apexSpan.frac, K.apexSpan));
     zones.push({ fromS: mid - apex / 2, toS: mid + apex / 2, side: inside, role: "apex" });
 
-    // The exit: from where the corner stops bending, out along the straight
-    // that follows it. Longer out of a bigger corner, which is where the car
-    // is being pushed hardest toward the edge.
+    // The exit: the last stretch of the bend, on the outside, ending where
+    // the corner does. Longer out of a bigger corner, which is where the car
+    // is being pushed hardest toward the edge — but never longer than the
+    // bend, because past the bend is a straight and a straight is not marked.
     const exit = clampSpan(arc * 0.5, K.exitRun);
-    zones.push({ fromS: note.endS, toS: note.endS + exit, side: outside, role: "exit" });
+    zones.push({
+      fromS: Math.max(note.s, note.endS - exit),
+      toS: note.endS,
+      side: outside,
+      role: "exit",
+    });
 
-    // The braking marker, on the corners that actually need braking for.
+    // The turn-in board, on the corners that actually need braking for: the
+    // first stretch of the bend, outside, where the car is arriving hot and
+    // the edge is the thing it must not run out of.
     if (note.angle >= K.entryAngle) {
       zones.push({
-        fromS: note.s - K.entryLead,
-        toS: note.s - K.entryLead + K.entryRun,
+        fromS: note.s,
+        toS: Math.min(note.endS, note.s + K.entryRun),
         side: outside,
         role: "entry",
       });
@@ -255,9 +269,10 @@ export function createKerbField(track: Track): KerbField {
     if (to <= indexed) return;
     const K = R.kerb;
     const half = track.width / 2;
-    // The zones only have to cover the new road, but a corner reaches
-    // outside itself and `buildKerbs` already widens the window it reads
-    // notes over — so the span asked for is exactly the span placed.
+    // The zones only have to cover the new road: `buildKerbs` takes every
+    // note that OVERLAPS the window, so a corner straddling a chunk
+    // boundary is marked whole by both halves and the run of posts along it
+    // never has a gap at the seam.
     const zones = buildKerbs(track, track.samples[indexed].s, track.samples[to - 1].s);
     for (let i = indexed; i < to; i++) {
       const sample = track.samples[i];

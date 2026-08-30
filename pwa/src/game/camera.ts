@@ -528,6 +528,7 @@ export type GameCamera = {
   nudgeMap: (dAz: number, dPitch: number, zoomBy: number) => void;
   panMap: (dxFrac: number, dyFrac: number) => void;
   resetMap: () => void;
+  reframeMap: () => void;
   placeMap: (pose: Partial<MapPose>) => void;
   holdMap: (held: boolean) => void;
   mapPose: () => MapPose;
@@ -896,6 +897,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
     nudgeMap: map.nudge,
     panMap: map.pan,
     resetMap: map.reset,
+    reframeMap: map.reframe,
     placeMap: map.place,
     holdMap: map.hold,
     mapPose: map.pose,

@@ -478,6 +478,11 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   };
 
   const setGame = (state: GameState): void => {
+    // Whether this is the FIRST stage of the session, which is the one the
+    // map's framing must not be reset for: a link that named a framing
+    // (map-debug.ts) has already parked the camera on it, and the boot stage
+    // would throw that away before a single frame was drawn.
+    const first = world === null;
     if (world) {
       scene.remove(world.group);
       world.dispose();
@@ -512,6 +517,11 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // A new stage is a new run: a ghost or a field on it is asked for after,
     // and the establishing shot starts again from the top.
     chase.resetStartShot();
+    // ...and a new stage is a new SUBJECT for the map. The zoom and the pan
+    // were walked onto the last one and describe country that is no longer
+    // there, so stepping a seed on Roam or opening a level in the map viewer
+    // frames the whole of the new stage and lets the turn go again.
+    if (!first) chase.reframeMap();
     dropGhost();
     field.clear();
     applyIsland();

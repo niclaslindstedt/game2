@@ -14,8 +14,8 @@
 // Two things about it are load-bearing and easy to undo:
 //
 //   - The zoom's floor is a STANDOFF in metres, not a fraction of the
-//     framing. Leaning in has to reach the same few metres off the ground on
-//     an eleven-kilometre epic as on a sprint, or the developer's layers
+//     framing. Leaning in has to reach the same metre off the ground on an
+//     eleven-kilometre epic as on a sprint, or the developer's layers
 //     (map-layers.ts) can only be read on short stages.
 //   - The aim rides the GROUND under it rather than the world's zero. At the
 //     framing distance that is a rounding error; leaned all the way in it is
@@ -46,10 +46,12 @@ const PITCH_MAX = 1.45;
 const ZOOM_MAX = 1;
 /** ...and how close it can be pulled IN — as a STANDOFF in metres rather
  * than as a fraction of the framing, so the answer does not depend on how
- * big the stage happens to be. A few metres puts the lens among the trees,
- * which is the point: a generator defect is usually a thing the size of a
- * car, and looking at it from a third of the way in is looking at a valley. */
-const RANGE_MIN = 5;
+ * big the stage happens to be. A metre is GROUND LEVEL: the lens ends up
+ * among the tufts and the chippings, which is where half the defects worth
+ * chasing actually live — a stone bedded wrong, grass growing out of the
+ * tarmac, a post standing in the wrong place. Stopping a few metres short of
+ * that is stopping just before the thing is legible. */
+const RANGE_MIN = 1;
 /** How long the map holds still after the player last touched it, s, before
  * the slow turn picks up again from wherever they left it. */
 const HOLD = 4;
@@ -112,8 +114,19 @@ export type MapCamera = {
    * point under it stays under it. Held inside the framed island, so a pan
    * can never leave the stage behind and the map cannot be lost. */
   pan: (dxFrac: number, dyFrac: number) => void;
-  /** Back to the framing that holds the whole stage: default tilt, no pan. */
+  /** Back to the framing that holds the whole stage: default tilt, no pan.
+   * A GESTURE — the player asked for it, so the idle turn waits `HOLD`
+   * before picking up, and the map does not walk out from under the hand
+   * that just placed it. */
   reset: () => void;
+  /** The same framing, for a NEW STAGE rather than for a gesture: a seed
+   * stepped on Roam, a level opened in the map viewer. Nobody is holding
+   * anything, and the zoom and pan that were walked onto the last stage
+   * describe country that no longer exists — so the framing goes back to
+   * the whole of the new one and the turn picks up from the first frame.
+   * (Still the turn's own terms: a map being READ holds still — see
+   * `hold`.) */
+  reframe: () => void;
   /** Park it exactly where a link says it was — the map's own repro line
    * (map-debug.ts). Absent components are left where they already were. */
   place: (pose: Partial<MapPose>) => void;
@@ -152,6 +165,16 @@ export function createMapCamera(): MapCamera {
   let near = 1;
   let far = 1;
   const eye = { x: 0, y: 0, z: 0 };
+
+  /** Back to the framing that holds the whole stage. The azimuth is left
+   * alone: which way round the map is being looked at is not something a
+   * reframe has an opinion about, and snapping it would spin the stage. */
+  const frame = (): void => {
+    pitch = PITCH;
+    zoom = 1;
+    panX = 0;
+    panZ = 0;
+  };
 
   const update = (camera: THREE.PerspectiveCamera, state: GameState, dt: number): number => {
     held += dt;
@@ -233,7 +256,11 @@ export function createMapCamera(): MapCamera {
     // planes are cut from.
     const reach = radius + RELIEF;
     const toCentre = Math.hypot(eye.x - cx, eye.y - aimY, eye.z - cz);
-    near = Math.max(0.4, toCentre - reach);
+    // ...and the near plane can never be allowed past the standoff itself,
+    // or leaning all the way in clips away the very ground being leaned in
+    // on. At framing distance the subtraction decides it; down at RANGE_MIN
+    // the standoff does, and a fifth of it leaves the lens something to see.
+    near = Math.max(Math.min(0.4, standoff * 0.2), toCentre - reach);
     far = toCentre + reach;
     camera.near = near;
     camera.far = far;
@@ -266,10 +293,14 @@ export function createMapCamera(): MapCamera {
     },
     reset: () => {
       held = 0;
-      pitch = PITCH;
-      zoom = 1;
-      panX = 0;
-      panZ = 0;
+      frame();
+    },
+    reframe: () => {
+      // The turn is armed rather than delayed: `HOLD` is the pause that
+      // belongs to a hand on the map, and there is no hand on a stage that
+      // has only just been built.
+      held = HOLD;
+      frame();
     },
     place: (pose) => {
       held = 0;
