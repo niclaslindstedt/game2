@@ -309,7 +309,7 @@ export function DeveloperPage({
       <div className="opt-toggles">
         <ToggleRow
           label="GOD MODE"
-          hint="Fly the camera off the car — WASD, space up, ctrl down"
+          hint="Fly the camera off the car — WASD, space up, ctrl down; sticks on a pad, thumbs on glass"
           on={dev.god}
           onToggle={() => onDev({ ...dev, god: !dev.god })}
         />

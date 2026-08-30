@@ -710,6 +710,32 @@ await capture(
   { hasTouch: true, isMobile: true },
 );
 
+// GOD MODE ON A PHONE. The developer tool's own thumb zones: a push stick
+// where the wheel would be, drag-to-look on the other half, and the dial
+// between them. Without these a handheld gets the driving controls over a
+// car god mode has just parked — a tool that does not exist on the device
+// it is needed on. The thumb is held off the stick's centre, so the shot
+// carries what the rig is being asked for as well as where the controls sit.
+await capture(
+  "shot-touch-god",
+  { width: 390, height: 844 },
+  async (page) => {
+    // Not `racing()`: god mode HOLDS the run, so the clock never leaves
+    // zero and a scene that waited for it would wait for ever.
+    await page.waitForSelector(".hud-fly-dial", { timeout: 120000 });
+    const zone = await page.locator(".hud-zone-left").boundingBox();
+    const x = zone.x + zone.width * 0.5;
+    const y = zone.y + zone.height * 0.6;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 34, y - 42, { steps: 8 });
+    await page.waitForTimeout(500);
+  },
+  { god: "1" },
+  "load",
+  { hasTouch: true, isMobile: true },
+);
+
 // Reverse: the brake held once the car has stopped, so the gear reads R and
 // the speedo is climbing again with the car going the other way.
 await capture("shot-reverse", { width: 1280, height: 720 }, async (page) => {

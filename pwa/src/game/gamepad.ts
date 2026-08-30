@@ -3,7 +3,10 @@
 // Retroid Pocket, an Odin, a phone with a clip-on pad — has sticks and
 // analogue triggers in its hands, and this is what turns them into the same
 // three things a thumb on glass produces: an axis, two pedals and a set of
-// presses.
+// presses. While god mode has the camera the same hardware is read as a
+// FLIGHT instead (`readFlyPad`) — a handheld has no keyboard, and a
+// developer tool only a keyboard can reach is one that does not exist on the
+// device the game is being played on.
 //
 // DOM-free on purpose. The browser's `Gamepad` is a live object that
 // re-reads the hardware on every property access and cannot be constructed;
@@ -68,6 +71,15 @@ export const NAV_REPEAT = 0.11;
  * binding to get wrong. */
 export function pairedAxis(axis: number): number {
   return axis % 2 === 0 ? axis + 1 : axis - 1;
+}
+
+/** The OTHER stick — the one that is not steering. Pads lay their two sticks
+ * out as axes 0/1 and 2/3, so whichever pair drives, the other pair is the
+ * one a free camera looks with. Derived rather than bound: god mode is a
+ * developer tool, and a tool that needs its own options page before it can
+ * be flown is one nobody reaches for. */
+export function otherStick(axis: number): number {
+  return (axis + 2) % 4;
 }
 
 /** The pedals' floor. A trigger at rest is not always at zero, and a car
@@ -160,6 +172,80 @@ export function readPad(frames: PadFrame[], bindings: PadBindings): PadHold {
     steerStep: right - left,
     navX: right - left || push(stickX),
     navY: down - up || push(stickY),
+  };
+}
+
+/** What a frame of pad is worth to GOD MODE's free camera. The same pad,
+ * read as a flight rather than as a drive: the stick that steers moves the
+ * rig, the other one aims it, and the pedals become up and down.
+ *
+ * Screen-space throughout, matching `FreeFlyMove`: `right` is strafe to the
+ * right of the picture, `lookY` is positive UP. A stick pushed away from the
+ * player reports NEGATIVE on its vertical axis, so both of those cross a
+ * sign here and nowhere else. */
+export type PadFly = {
+  forward: number;
+  right: number;
+  /** Throttle lifts, brake descends, both analogue — a trigger half open is
+   * half the climb rate, which is what makes a pad worth flying on. */
+  up: number;
+  lookX: number;
+  lookY: number;
+  fast: boolean;
+};
+
+export const NEUTRAL_FLY: PadFly = {
+  forward: 0,
+  right: 0,
+  up: 0,
+  lookX: 0,
+  lookY: 0,
+  fast: false,
+};
+
+/** The look stick's response curve. Squaring keeps the middle of the travel
+ * gentle enough to line a shot up on one tree while the top of it still
+ * whips round — the same bargain the touch wheel's throw curve makes, and
+ * for the same reason: a camera that aims in one register only is one that
+ * is either twitchy or slow, never both. */
+const LOOK_CURVE = 2;
+
+/** Read the pads as a FLIGHT. Everything here is derived from the driving
+ * bindings — the steering axis, its deadzone and invert, and the two
+ * pedals — so nothing about god mode has to be bound before it can be
+ * flown. */
+export function readFlyPad(frames: PadFrame[], bindings: PadBindings): PadFly {
+  if (frames.length === 0) return NEUTRAL_FLY;
+  const lookAxis = otherStick(bindings.steerAxis);
+  /** The furthest any pad has this axis pushed, deadzoned. Two pads is a
+   * handheld in a dock, and the same rule the pedals use applies: neither
+   * one sitting idle may hold the other's stick at centre. */
+  const axis = (index: number): number => {
+    let best = 0;
+    for (const frame of frames) {
+      const value = deadzone(frame.axes[index] ?? 0, bindings.deadzone);
+      if (Math.abs(value) > Math.abs(best)) best = value;
+    }
+    return best;
+  };
+  const curve = (value: number): number => Math.sign(value) * Math.abs(value) ** LOOK_CURVE;
+  /** Turn a stick round without minting a negative zero: `-0` is a distinct
+   * value in JavaScript, and it reads back out of an equality check — and
+   * out of anything that prints an axis — as a number that is not zero. */
+  const flip = (value: number): number => (value === 0 ? 0 : -value);
+  /** A player whose stick reads backwards said so once, on the driving
+   * page; both horizontal axes owe that answer, or half the pad would be
+   * mirrored against the other. */
+  const sideways = (value: number): number => (bindings.steerInvert ? flip(value) : value);
+  const up = actionValue(frames, bindings, "throttle");
+  const down = actionValue(frames, bindings, "brake");
+  return {
+    forward: flip(axis(pairedAxis(bindings.steerAxis))),
+    right: sideways(axis(bindings.steerAxis)),
+    up: clamp01(deadzone(up, TRIGGER_FLOOR)) - clamp01(deadzone(down, TRIGGER_FLOOR)),
+    lookX: sideways(curve(axis(lookAxis))),
+    lookY: flip(curve(axis(pairedAxis(lookAxis)))),
+    fast: actionValue(frames, bindings, "handbrake") >= PRESS,
   };
 }
 

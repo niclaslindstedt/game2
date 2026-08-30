@@ -26,11 +26,20 @@
 
 import type { CarInput } from "@engine";
 
-import { KEY_LOOK_RATE, MOUSE_LOOK_RATE, NEUTRAL_MOVE, type FreeFlyMove } from "./camera-free.ts";
+import {
+  KEY_LOOK_RATE,
+  MOUSE_LOOK_RATE,
+  NEUTRAL_MOVE,
+  PAD_LOOK_RATE,
+  type FreeFlyMove,
+} from "./camera-free.ts";
 import {
   createPadReader,
+  NEUTRAL_FLY,
   NEUTRAL_HOLD,
+  readFlyPad,
   type NavPress,
+  type PadFly,
   type PadFrame,
   type PadHold,
 } from "./gamepad.ts";
@@ -43,6 +52,7 @@ import {
   type PadAction,
   type PadSettings,
 } from "./settings.ts";
+import { clamp } from "../lib/util.ts";
 
 /** The presses the app reacts to rather than the car: they leave, reload or
  * reframe the run instead of driving it. */
@@ -108,9 +118,30 @@ export type InputManager = {
    * flight cannot leave the wheel wound on or the throttle buried when the
    * camera comes back down. */
   setFreeFly: (on: boolean) => void;
-  /** What the free camera should do with `dt` seconds of held keys and the
-   * mouse travel banked since the last read. Consuming: the look and wheel
-   * deltas come out once. */
+  /** God mode's TOUCH controls write here, the way the driving zones write
+   * into `touch` — a phone has no keyboard, and a developer tool that only
+   * a keyboard can reach does not exist on the device the game is installed
+   * on.
+   *
+   * The three axes are HELD: a thumb on the stick leaves them set. The look
+   * and speed fields are DELTAS the camera CONSUMES and zeroes on its way
+   * past, exactly as it does the mouse's — a drag says how far the view
+   * moved, not where it should end up. */
+  flyTouch: {
+    forward: number;
+    right: number;
+    up: number;
+    fast: boolean;
+    /** Radians banked since the last read, screen-space: yaw positive to
+     * the right, pitch positive up. */
+    yaw: number;
+    pitch: number;
+    /** Cruise-speed notches banked since the last read. */
+    steps: number;
+  };
+  /** What the free camera should do with `dt` seconds of held keys, sticks
+   * and thumbs, and the mouse travel banked since the last read. Consuming:
+   * the look and wheel deltas come out once. */
   flyMove: (dt: number) => FreeFlyMove;
   /** True while ALT is held — the key that takes the HUD off the screen for
    * a clean screenshot. Read rather than dispatched: it is a state the
@@ -258,6 +289,7 @@ export function createInput(target: Window = window): InputManager {
   let altHeld = false;
 
   const touch = { steer: 0, throttle: false, brake: false, handbrake: false };
+  const flyTouch = { forward: 0, right: 0, up: 0, fast: false, yaw: 0, pitch: 0, steps: 0 };
 
   /** The controller. `padHold` is last frame's sticks and triggers, held
    * between polls because `sample` runs once per 120 Hz STEP and the pad is
@@ -266,6 +298,10 @@ export function createInput(target: Window = window): InputManager {
   const padReader = createPadReader(DEFAULT_PAD.bindings);
   let padOptions: PadSettings = DEFAULT_PAD;
   let padHold: PadHold = NEUTRAL_HOLD;
+  /** The same pads, read as a flight while god mode has the camera. Held
+   * between polls for the reason `padHold` is: the pad is asked once a
+   * frame and the camera flies on every one of them. */
+  let padFly: PadFly = NEUTRAL_FLY;
   let padPresent = false;
   /** True while a menu card owns the pad — see `setNavigating`. */
   let navigating = false;
@@ -421,6 +457,7 @@ export function createInput(target: Window = window): InputManager {
     // it hide the thumb zones out from under the player's only controls.
     if (!padOptions.enabled || typing || padHolds > 0) {
       padHold = NEUTRAL_HOLD;
+      padFly = NEUTRAL_FLY;
       padReader.release();
       return false;
     }
@@ -429,8 +466,25 @@ export function createInput(target: Window = window): InputManager {
     // Not even the edges — a gear or a reset banked behind a pause card
     // arrives the instant the card comes down, which reads as the game
     // doing something on its own.
-    padHold = navigating ? NEUTRAL_HOLD : hold;
+    const flyingPad = flying && !navigating;
+    padHold = navigating || flying ? NEUTRAL_HOLD : hold;
+    // The camera has the sticks: the same hardware, read as a flight. The
+    // car is given nothing either way — `sample` sees to that — but reading
+    // it as a drive as well would leave a stale wheel angle sitting in
+    // `padHold` for the frame the camera lands on.
+    padFly = flyingPad ? readFlyPad(frames, padOptions.bindings) : NEUTRAL_FLY;
     for (const action of pressed) {
+      if (flyingPad) {
+        // The shoulders are the cruise-speed dial while flying — the one
+        // control a flight needs that neither stick nor trigger carries.
+        // Everything else the pad does to a RUN (a gear, a reset) is
+        // dropped rather than banked: god mode holds the run still, and a
+        // press queued through a flight arrives the instant it lands.
+        if (action === "shiftUp") speedSteps += KEY_SPEED_STEP;
+        else if (action === "shiftDown") speedSteps -= KEY_SPEED_STEP;
+        else if (PAD_APP_ACTIONS.includes(action)) actionHandler?.(action as InputAction);
+        continue;
+      }
       if (navigating) {
         if (action === "confirm" || action === "back" || action === "next") navHandler?.(action);
         // PAUSE still goes through: it is the press that put the card up,
@@ -550,24 +604,57 @@ export function createInput(target: Window = window): InputManager {
       held.clear();
       downCodes.clear();
       padHold = NEUTRAL_HOLD;
+      padFly = NEUTRAL_FLY;
       padReader.release();
+      // A thumb that was on a fly zone when the camera landed has no
+      // pointerup this manager will see — the zone it was holding is not on
+      // the screen any more.
+      flyTouch.forward = 0;
+      flyTouch.right = 0;
+      flyTouch.up = 0;
+      flyTouch.fast = false;
+      flyTouch.yaw = 0;
+      flyTouch.pitch = 0;
+      flyTouch.steps = 0;
     },
+    flyTouch,
     flyMove: (dt) => {
       if (!flying) return NEUTRAL_MOVE;
       const axis = (plus: readonly string[], minus: readonly string[]): number =>
         (plus.some((c) => flyDown.has(c)) ? 1 : 0) - (minus.some((c) => flyDown.has(c)) ? 1 : 0);
+      // Three surfaces, one rig. The keys, the sticks and the thumbs ADD
+      // rather than override each other: unlike the wheel, where two
+      // surfaces asking for different lock is a contradiction, two hands
+      // pushing the same camera forward is just a camera going forward.
+      // Clamped so the sum still means "full travel", which is what
+      // camera-free's diagonal normalisation is measured against.
+      const push = (keys: number, pad: number, thumb: number): number =>
+        clamp(keys + pad + thumb, -1, 1);
       const move: FreeFlyMove = {
-        forward: axis(FLY_KEYS.forward, FLY_KEYS.back),
-        right: axis(FLY_KEYS.right, FLY_KEYS.left),
-        up: axis(FLY_KEYS.up, FLY_KEYS.down),
-        yawDelta: mouseYaw + axis(FLY_KEYS.lookRight, FLY_KEYS.lookLeft) * KEY_LOOK_RATE * dt,
-        pitchDelta: mousePitch + axis(FLY_KEYS.lookUp, FLY_KEYS.lookDown) * KEY_LOOK_RATE * dt,
-        fast: FLY_KEYS.fast.some((c) => flyDown.has(c)),
-        speedSteps,
+        forward: push(axis(FLY_KEYS.forward, FLY_KEYS.back), padFly.forward, flyTouch.forward),
+        right: push(axis(FLY_KEYS.right, FLY_KEYS.left), padFly.right, flyTouch.right),
+        up: push(axis(FLY_KEYS.up, FLY_KEYS.down), padFly.up, flyTouch.up),
+        yawDelta:
+          mouseYaw +
+          flyTouch.yaw +
+          (axis(FLY_KEYS.lookRight, FLY_KEYS.lookLeft) * KEY_LOOK_RATE +
+            padFly.lookX * PAD_LOOK_RATE) *
+            dt,
+        pitchDelta:
+          mousePitch +
+          flyTouch.pitch +
+          (axis(FLY_KEYS.lookUp, FLY_KEYS.lookDown) * KEY_LOOK_RATE +
+            padFly.lookY * PAD_LOOK_RATE) *
+            dt,
+        fast: FLY_KEYS.fast.some((c) => flyDown.has(c)) || padFly.fast || flyTouch.fast,
+        speedSteps: speedSteps + flyTouch.steps,
       };
       mouseYaw = 0;
       mousePitch = 0;
       speedSteps = 0;
+      flyTouch.yaw = 0;
+      flyTouch.pitch = 0;
+      flyTouch.steps = 0;
       return move;
     },
     altHeld: () => altHeld,

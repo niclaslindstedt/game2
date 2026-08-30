@@ -29,8 +29,12 @@ import { clamp } from "../lib/util.ts";
 
 /** Capture the pointer so a drag that leaves the zone keeps steering; a
  * pointer that cannot be captured (synthetic, already released) is fine —
- * the zone still tracks it by id. */
-function capturePointer(e: { currentTarget: EventTarget | null; pointerId: number }): void {
+ * the zone still tracks it by id.
+ *
+ * Exported for god mode's fly zones (hud-fly.tsx), which are the same kind
+ * of surface under a different set of controls: a thumb anchored somewhere
+ * on a half of the screen, held by a `thumb-guard`. */
+export function capturePointer(e: { currentTarget: EventTarget | null; pointerId: number }): void {
   try {
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   } catch {
@@ -42,7 +46,7 @@ function capturePointer(e: { currentTarget: EventTarget | null; pointerId: numbe
  * one who knows: the browser drops it the moment a touch ends, whether or
  * not it ever told us the touch ended. This is what a zone's guard checks
  * before refusing a new claim, and what its watchdog ticks on. */
-function stillDown(zone: EventTarget | null): (pointerId: number) => boolean {
+export function stillDown(zone: EventTarget | null): (pointerId: number) => boolean {
   const el = zone as HTMLElement | null;
   return (pointerId) => el?.hasPointerCapture(pointerId) ?? false;
 }

@@ -73,8 +73,15 @@ would be in every frame the scene takes.
 
 ```sh
 make build
-CHROMIUM_PATH=/opt/pw-browsers/chromium make screenshots
+CHROMIUM_PATH=/opt/pw-browsers/chromium make screenshots        # every scene
+CHROMIUM_PATH=/opt/pw-browsers/chromium \
+  node scripts/screenshot.mjs shot-touch-god                     # just these
 ```
+
+**The Make target takes no scene filter** — it is `node scripts/screenshot.mjs`
+and nothing else, so `make screenshots ARGS=…` quietly shoots the whole sweep,
+which is minutes of a session. Iterating on ONE surface means calling the
+script directly with a fragment of the scene's name.
 
 **Look at the PNGs with the Read tool** — every judgement is made on a
 screenshot, not on source. Watch the harness's `[pageerror]` lines too: a

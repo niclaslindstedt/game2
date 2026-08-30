@@ -60,6 +60,19 @@ arrows    look                       mouse       look, after a click (pointer lo
 Q and E shadow SPACE and CTRL because **Ctrl+W closes the browser tab** and
 no page can swallow it. Descending while flying forward wants Q.
 
+The other two surfaces fly the same rig, because the device the bug was
+found on is rarely the one with a keyboard on it:
+
+```
+pad     the steering stick moves, the other stick looks, the triggers are
+        up / down, handbrake = sprint, the shift shoulders = cruise speed
+        (`readFlyPad` in gamepad.ts — derived from the DRIVING bindings, so
+        there is nothing to bind first)
+touch   the driving zones are replaced by fly zones (`hud-fly.tsx`): a push
+        stick under the steering thumb, drag-to-look under the other, and
+        buttons for up, down and the cruise speed
+```
+
 Entering god mode is a hand-over: the flight starts from the frame that was
 already on screen, so nothing teleports. A run that STARTS in god mode
 (`?god=1`) skips the countdown — nobody is on the grid to wait for one. The
