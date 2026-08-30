@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE TRANSIT — the camera flying from one car to another.
+// THE TRANSIT — the camera going from one car to another.
 //
 // A spectator feed (spectate.ts) changes cars: the results card opens itself
 // on the leader of what is left, NEXT walks back down the road to the crew
@@ -9,41 +9,37 @@
 // that size tells the viewer nothing: the new car simply appears somewhere,
 // and the stage between the two might as well not exist.
 //
-// So the camera GOES there, and the move it makes is the one a helicopter
-// makes when the leader has gone through the gate and the next car is still
-// out on the stage: IT FLIES BACKWARDS UP THE ROAD. It holds the way it was
-// already facing — down the road, the way the cars come — backs off the line,
-// rises over whatever country is in the way, and settles in behind the crew
-// coming the other way, pointing the same way it started. The car it lands on
-// drives INTO the frame rather than being swung round to.
+// So the camera GOES there, and the move is the plainest one that can carry
+// that distance: IT SLIDES BACKWARDS UP THE ROAD, gathering speed and then
+// losing it again, and stops behind the crew coming the other way. That is
+// the whole shot. Everything below is in service of it staying readable, and
+// the temptation each thing resists is the same one: dressing a move up until
+// the viewer can no longer tell where they have been taken.
 //
-// Four things make that readable, and each of them is a way of getting it
-// wrong that a transit invites:
+//   IT FOLLOWS THE ROAD, NOT THE LINE BETWEEN THE CARS. Both ends of a
+//   transit are cars on the same stage, so the road already runs from one to
+//   the other — and it goes ROUND the hills rather than over them. A flight
+//   along the straight line has to climb whatever is in the way, which on a
+//   rally stage is a ridge, a stand of trees and usually a hill; forty metres
+//   of altitude and a hard tilt down to keep the ground in frame is a shot
+//   nobody can place themselves in. Following the road costs no altitude at
+//   all, crosses nothing nobody is racing on, and keeps the one thing the
+//   viewer is being carried along in the middle of the frame.
 //
-//   IT NEVER AIMS AT THE TARGET. The destination is up the road BEHIND the
-//   lens, so an aim point walked in a straight line from in front of the
-//   camera to a car behind it passes through the camera itself, and a lens
-//   asked to look at the point it is standing on tumbles — a whip round to
-//   the back, a tumble at the crossing, and a whip back to the front on the
-//   last frame. What is interpolated here is the ORIENTATION, from the one
-//   the shot started in to the one the rig has written for the frame it is
-//   landing on, along the short way round. Two cameras both pointing down
-//   the same road barely turn at all, which is the whole point.
+//   IT INTERPOLATES ORIENTATION, NEVER AN AIM POINT. The destination is up
+//   the road BEHIND the lens, so an aim point walked in a straight line from
+//   in front of the camera to a car behind it passes through the camera
+//   itself, and a lens asked to look at the point it is standing on tumbles.
+//   What is turned here is the ORIENTATION: the pose the shot started in, the
+//   pose the rig has written for the frame it is landing on, and — through
+//   the middle, where a bend would otherwise leave the shot travelling
+//   sideways — the road's own heading under the lens.
 //
-//   IT LEAVES BACKWARDS. The first move is along the lens's own back axis —
-//   away from the line — rather than straight at the destination, so the
-//   shot reads as a camera retreating and not as one being dragged sideways.
-//   It is worth nothing when the destination is not actually behind, so it
-//   is scaled by how much of it is.
-//
-//   THE ARC CLEARS THE COUNTRY, AND THE LENS TILTS DOWN OVER IT. The ground
-//   between two cars on a rally stage is a ridge, a stand of trees and
-//   usually a hill; a flight along the line between them is a flight through
-//   all of it. The ground is sampled along that line once, at the moment the
-//   flight starts, and the arc is lifted until its apex rides just over the
-//   tallest thing it found — and the lens pitches down by as much as the lift
-//   is worth, so the road stays in the bottom of the frame instead of the
-//   shot becoming a horizon.
+//   IT RISES A LITTLE, AND ONLY A LITTLE. Enough to see over the crest the
+//   road is about to go under, and to give the ground something to move
+//   against; not enough to become a map. The aim goes down the road at road
+//   height, so the tilt that lift is worth falls out of the geometry rather
+//   than being a gesture laid on top of it.
 //
 //   IT LANDS ON THE RIG, NOT NEAR IT. The destination is re-read every frame
 //   off the pose the chase camera has already written — the car it is built
@@ -52,151 +48,174 @@
 //   up.
 
 import * as THREE from "three";
-import { clamp } from "../lib/angles.ts";
-import type { GameState } from "@engine";
+import { angleLerp, clamp } from "../lib/angles.ts";
+import type { GameState, Track } from "@engine";
 
-/** How long the flight takes, s: this much, plus a second for every
- * `TIME_SPAN` metres of ground, capped. A fixed second is the right length
- * for the two hundred metres between two cars in the same fight and a
- * nonsense for the kilometre between the leader and the crew who went off —
- * covering that in the same beat is a scrub through a position rather than a
- * move over the country. */
-const TIME_MIN = 0.9;
-const TIME_MAX = 1.9;
-const TIME_SPAN = 900;
+/** How long the move takes, s: this much, plus a second for every
+ * `TIME_SPAN` metres of road. A fixed second is the right length for the two
+ * hundred metres between two cars in the same fight and a nonsense for the
+ * kilometre between the leader and the crew who went off — covering that in
+ * the same beat is a scrub through a position rather than a move over the
+ * stage. */
+const TIME_MIN = 0.85;
+const TIME_MAX = 2.1;
+const TIME_SPAN = 800;
 
-/** Ground between the two poses under which there is no flight at all, m.
+/** Road between the two ends under which there is no move at all, m.
  * Changing which VIEW a car is watched from is not a transit — the lens is
- * already there — and a flight with nowhere to go still climbs its clearance
- * and comes back down, which is a lob over a car standing still. */
+ * already there — and a move with nowhere to go still lifts and settles,
+ * which is a hop over a car standing still. */
 const MIN_TRAVEL = 12;
 
-/** How far over the tallest GROUND between the two cars the apex rides, m.
- * The crest is sampled off the terrain, and what stands on the terrain is
- * not in it: the old spruce is 16 m before its instance scale, so most of
- * this number is canopy. Past that it is "just above" — the arc is a way
- * over the hill, not a satellite view. */
-const CLEARANCE = 26;
-
-/** …and the ground over which that clearance is worth all of it, m. Under it
- * the arch is faded down with the distance, because the clearance is what
- * makes a LONG flight an arc rather than a slide, and on a short one it is
- * just a hop nobody asked for. The crest itself is never faded: a ridge in
- * the way has to be cleared however near it is. */
-const ARC_SPAN = 260;
+/** How far over the road the lens rides at the middle of the move, m, and
+ * the road that buys all of it. Deliberately modest: this is a camera on a
+ * long boom running back up the stage, not an aircraft. Under `LIFT_SPAN` it
+ * is faded down with the distance, so a short move stays at road height
+ * where it belongs. */
+const LIFT = 14;
+const LIFT_SPAN = 260;
 
 /** …and the hard floor under the lens, m, checked against the ground it is
- * actually over on every frame. The crest above is 28 samples along a line
- * that can be a kilometre, which is enough to find a ridge and not enough to
- * promise it found a spur; a camera through a hillside is a black frame, and
- * this is what makes that impossible rather than unlikely. */
-const GUARD = 9;
+ * actually over on every frame. Following the road means the ground under
+ * the lens is the road, so this almost never binds — which is exactly why it
+ * is cheap to keep: the almost is a cutting, a bridge deck, and the ends of
+ * the move, where the path is the lateral blend rather than the road. */
+const GUARD = 6;
 
-/** Points along the line the ground is sampled at. The line can be a
- * kilometre, so this is a sample every few tens of metres — enough to find a
- * ridge, and it is walked ONCE per flight rather than per frame. */
-const SAMPLES = 28;
+/** How far down the road the middle of the move is watching, m, and how far
+ * over the road the point it is watching sits. The drop from the lens to it
+ * IS the pitch of the shot — about nine degrees at full lift, which is a
+ * camera looking where it is going rather than one looking at the ground. */
+const AIM_REACH = 90;
+const AIM_UP = 3;
 
-/** The retreat off the line: the share of the whole flight the lens backs
- * straight away along its own axis before the arc takes over, and the metres
- * that is allowed to reach. The bump peaks at 4/27 of the reach a third of
- * the way in and is gone by the end, so it shapes the DEPARTURE and cannot
- * argue with the landing. */
-const DEPART_FRAC = 0.35;
-const DEPART_MAX = 110;
-
-/** How much faster the aim turns than the body travels. Down-the-road to
- * down-the-road is a few degrees and takes no time at all; a hand-over from
- * the drone or from god mode is closer to a right angle, and this puts it on
- * its new heading by two thirds of the way in so the last third is nothing
- * but settling into the rig. */
-const TURN_SNAP = 1.6;
-
-/** How far ahead the tilt assumes the shot is looking, m, and the most it
- * will pitch down, rad. A lens `lift` metres above the line it would
- * otherwise be flying has to drop its aim by `atan(lift / reach)` to hold
- * the same ground in frame — the tilt is that angle, so it grows and dies
- * with the arc rather than being a gesture bolted onto it. */
-const TILT_REACH = 130;
-const TILT_MAX = 0.42;
-
-/** Degrees of extra field of view at the apex. The world stretching as the
- * camera accelerates and settling as it arrives is most of what sells a
- * second's flight as speed rather than as a scrub through a position. */
-const FOV_BOOST = 9;
-
-/** How much of the flight is spent climbing, and the same again descending.
- * What is left in the middle is held at FULL lift, which is what makes the
- * shape an ARCH rather than a lob: a lob is only at its clearance for an
- * instant, so anything standing between the two cars has to be cleared by
- * the one frame that passes over it, and everything either side of that
- * frame is lower than the apex the crest was measured for. */
-const RAMP = 0.32;
-
-/** The lens's own right axis — the one the tilt below pitches about. */
+/** The lens's own right axis — the one that pitch is taken about. */
 const RIGHT = new THREE.Vector3(1, 0, 0);
 
-/** Smoothstep, so the flight leaves and arrives at rest. */
+/** …and the same for the lift, which is why the shape is a PLATEAU rather
+ * than a lob: a lob is only at its height for an instant, so the crest it
+ * was raised for has to be cleared by the one frame that passes over it. */
+const RAMP = 0.34;
+
+/** Smoothstep, so the move leaves and arrives at rest — and IS the speeding
+ * up and slowing down that makes it read as one gesture. */
 function ease(t: number): number {
   const c = Math.min(1, Math.max(0, t));
   return c * c * (3 - 2 * c);
 }
 
-/** The arch, 0..1: up over `RAMP`, held, and down over the last `RAMP`. */
-function arch(t: number): number {
+/** Up over `RAMP`, held, and down over the last `RAMP`. */
+function plateau(t: number): number {
   return ease(t / RAMP) * ease((1 - t) / RAMP);
 }
 
-/** The departure, 0..~0.148 — the Hermite tangent basis `t(1-t)²`. Its slope
- * at zero is 1 and at one is 0, so the reach it scales IS the speed the
- * flight leaves at, and the landing does not know it happened. */
-function depart(t: number): number {
-  return t * (1 - t) * (1 - t);
+/** Where the road is at arc position `s` — the point between the two samples
+ * it falls between, heading interpolated the short way round. Indexed off
+ * the track's own spacing and then corrected against the samples' own `s`,
+ * so it stays right if the spacing is ever not exactly uniform. */
+type RoadPoint = { x: number; z: number; y: number; heading: number };
+function roadAt(track: Track, s: number, out: RoadPoint): RoadPoint {
+  const samples = track.samples;
+  const last = samples.length - 1;
+  const at = clamp(Math.floor(s / track.step), 0, Math.max(0, last - 1));
+  const a = samples[at];
+  const b = samples[Math.min(last, at + 1)];
+  const span = b.s - a.s;
+  const f = span > 1e-6 ? clamp((s - a.s) / span, 0, 1) : 0;
+  out.x = a.x + (b.x - a.x) * f;
+  out.z = a.z + (b.z - a.z) * f;
+  out.y = a.elevation + (b.elevation - a.elevation) * f;
+  out.heading = angleLerp(a.heading, b.heading, f);
+  return out;
+}
+
+/** The arc position of the road nearest `(x, z)`. Walked over the whole
+ * stage rather than a window, because the two ends of a transit are hundreds
+ * of metres apart and neither one's hint is any use for the other — and it
+ * is walked ONCE per move rather than per frame. */
+function nearestS(track: Track, x: number, z: number): number {
+  const samples = track.samples;
+  let best = 0;
+  let bestD2 = Infinity;
+  for (let i = 0; i < samples.length; i++) {
+    const dx = samples[i].x - x;
+    const dz = samples[i].z - z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 < bestD2) {
+      bestD2 = d2;
+      best = i;
+    }
+  }
+  return samples[best].s;
 }
 
 export type SweepCamera = {
-  /** Begin a flight from wherever the camera is standing now to the car in
+  /** Begin a move from wherever the camera is standing now to the car in
    * `to`. Call it BEFORE anything re-stands the rig: the pose it captures is
    * the frame that is on screen. */
   start: (camera: THREE.PerspectiveCamera, to: GameState) => void;
-  /** Whether the flight still owns the frame. */
+  /** Whether the move still owns the frame. */
   flying: () => boolean;
-  /** Fly this frame OVER the pose the rig has already written.
+  /** Move this frame OVER the pose the rig has already written.
    *
    * The caller runs the play rig FIRST, so `camera` arrives holding the pose
-   * it would be standing in had there been no flight — position and aim
-   * both; this reads that as the destination and pulls the lens back along
-   * the arc toward where it came from. `rigFov` is the rig's design fov, and
-   * the returned number is the design fov for this frame. On the frame the
-   * flight ENDS it touches nothing and hands the rig's own pose straight
-   * back, so there is no pop between the last flown frame and the first
-   * driven one. */
+   * it would be standing in had there been no transit — position and aim
+   * both; this reads that as the destination and pulls the lens back up the
+   * road toward where it came from. `rigFov` is the rig's design fov, and the
+   * returned number is the design fov for this frame. On the frame the move
+   * ENDS it touches nothing and hands the rig's own pose straight back, so
+   * there is no pop between the last flown frame and the first driven one. */
   fly: (camera: THREE.PerspectiveCamera, to: GameState, rigFov: number, dt: number) => number;
-  /** Abandon a flight — a cut is wanted instead. */
+  /** Abandon a move — a cut is wanted instead. */
   reset: () => void;
 };
 
 export function createSweepCamera(): SweepCamera {
-  /** How far through the flight, 0..1. One means there is no flight. */
+  /** How far through the move, 0..1. One means there is no move. */
   let at = 1;
   /** …and how long this one is given, s. */
   let span = TIME_MIN;
-  /** Where the lens was standing when it started, and the way it was facing
-   * from there — the two ends of everything below. */
-  const from = new THREE.Vector3();
+  /** Where the lens was standing when it started, the way it was facing, and
+   * where the road was under it: an arc position, the metres it stood to the
+   * side of the road there, and the metres it stood above it. The two
+   * offsets are what make the path exact at the ends and the ROAD in the
+   * middle — a lens that started out in a field lands on the rig rather than
+   * being snapped onto the centreline first. */
   const fromQuat = new THREE.Quaternion();
-  /** The retreat off the line, in metres of world, already pointing the way
-   * the lens's own back axis pointed when the flight started. */
-  const away = new THREE.Vector3();
-  /** The height the arc has to get over, m — the tallest ground or water on
-   * the line between the two cars, read once when the flight starts — and
-   * how much of `CLEARANCE` this flight's length has earned. */
-  let crest = 0;
-  let reach = 0;
-  const scratch = new THREE.Vector3();
-  const toPos = new THREE.Vector3();
+  let fromS = 0;
+  const fromOff = new THREE.Vector2();
+  let fromRise = 0;
+  /** How much of the lift this move has earned — read once, off the road it
+   * had to cover when it started, so neither the height nor the length of
+   * the move jitters as the car it is chasing drives on. */
+  let lift = 0;
+
+  const road = { x: 0, z: 0, y: 0, heading: 0 };
   const toQuat = new THREE.Quaternion();
-  const tilt = new THREE.Quaternion();
+  const pitch = new THREE.Quaternion();
+
+  /** Where along the road a point is, and how far off it stands. A circuit's
+   * `progressS` runs on across the laps while its samples cover one, so the
+   * arc position is taken modulo the lap and the two ends are always joined
+   * the SHORT way round. */
+  const lap = (track: Track): number => (track.circuit ? track.length : 0);
+  const local = (track: Track, s: number): number => {
+    const round = lap(track);
+    if (round <= 0) return clamp(s, 0, track.length);
+    const wrapped = s % round;
+    return wrapped < 0 ? wrapped + round : wrapped;
+  };
+  /** How much road there is from `from` to `to`, signed, and on a circuit
+   * always the SHORT way round: half a lap back is a transit, and the other
+   * three quarters of one is a tour. */
+  const reach = (track: Track, from: number, to: number): number => {
+    const round = lap(track);
+    const delta = to - from;
+    if (round <= 0) return delta;
+    if (delta > round / 2) return delta - round;
+    if (delta < -round / 2) return delta + round;
+    return delta;
+  };
 
   return {
     flying: () => at < 1,
@@ -204,44 +223,23 @@ export function createSweepCamera(): SweepCamera {
       at = 1;
     },
     start: (camera, to) => {
-      const car = to.car;
-      const ground = Math.hypot(car.x - camera.position.x, car.z - camera.position.z);
-      // Already there: this is a change of VIEW and not a transit, and the
-      // kindest thing a transit can do with one is not happen.
-      if (ground < MIN_TRAVEL) {
+      const track = to.track;
+      const here = local(track, nearestS(track, camera.position.x, camera.position.z));
+      const there = local(track, to.progressS);
+      const delta = reach(track, here, there);
+      if (Math.abs(delta) < MIN_TRAVEL) {
+        // Already there: this is a change of VIEW and not a transit, and the
+        // kindest thing a transit can do with one is not happen.
         at = 1;
         return;
       }
-      from.copy(camera.position);
+      fromS = here;
+      span = clamp(TIME_MIN + Math.abs(delta) / TIME_SPAN, TIME_MIN, TIME_MAX);
+      lift = LIFT * clamp(Math.abs(delta) / LIFT_SPAN, 0, 1);
+      roadAt(track, here, road);
+      fromOff.set(camera.position.x - road.x, camera.position.z - road.z);
+      fromRise = camera.position.y - road.y;
       fromQuat.copy(camera.quaternion);
-      span = clamp(TIME_MIN + ground / TIME_SPAN, TIME_MIN, TIME_MAX);
-      reach = clamp(ground / ARC_SPAN, 0, 1);
-      // THE RETREAT. Straight back along the lens's own axis, flattened —
-      // the shot backs off the line, it does not climb off it — and worth
-      // only as much as the destination actually lies that way. A crew being
-      // walked back UP the road is in front, and a camera that reversed away
-      // from them first would be going the wrong way in the one second it
-      // has to explain itself.
-      camera.getWorldDirection(scratch);
-      scratch.y = 0;
-      if (scratch.lengthSq() < 1e-6) scratch.set(0, 0, 1);
-      away.copy(scratch).normalize().negate();
-      const behind = clamp(
-        (away.x * (car.x - from.x) + away.z * (car.z - from.z)) / Math.max(1e-3, ground),
-        0,
-        1,
-      );
-      away.multiplyScalar(Math.min(DEPART_MAX, ground * DEPART_FRAC) * behind);
-      // THE TALLEST THING IN THE WAY. Water counts as ground: a lake's
-      // surface is opaque from underneath, so an arc that dipped through one
-      // would spend the middle of the flight showing nothing at all.
-      crest = Math.max(from.y, car.y);
-      for (let i = 0; i <= SAMPLES; i++) {
-        const f = i / SAMPLES;
-        const x = from.x + (car.x - from.x) * f;
-        const z = from.z + (car.z - from.z) * f;
-        crest = Math.max(crest, to.terrain.groundAt(x, z), to.terrain.waterAt(x, z) ?? -Infinity);
-      }
       at = 0;
     },
     fly: (camera, to, rigFov, dt) => {
@@ -249,40 +247,56 @@ export function createSweepCamera(): SweepCamera {
       // Arrived: the rig's pose is already in `camera`, and the kindest thing
       // to do with it is nothing.
       if (at >= 1) return rigFov;
+      const track = to.track;
       // Where the rig has stood itself THIS frame, and the way it is facing
       // from there — the destination, both halves of it re-read every frame
       // because the car it is built around is still driving.
-      toPos.copy(camera.position);
       toQuat.copy(camera.quaternion);
+      const there = local(track, to.progressS);
+      roadAt(track, there, road);
+      const toOffX = camera.position.x - road.x;
+      const toOffZ = camera.position.z - road.z;
+      const toRise = camera.position.y - road.y;
+
+      // THE PATH: along the road, with the two ends' own offsets off it
+      // blended across. Exact at both ends by construction.
       const travelled = ease(at);
-      const back = depart(at);
-      const x = from.x + (toPos.x - from.x) * travelled + away.x * back;
-      const z = from.z + (toPos.z - from.z) * travelled + away.z * back;
-      const base = from.y + (toPos.y - from.y) * travelled;
-      // The lift is measured against the MIDDLE of the flight, because that
-      // is where the apex lands: enough to clear the crest from there, and
-      // none at either end. Zero when the lens is already over everything,
-      // which is a flight that has no reason to climb.
-      const arc = arch(at);
-      const apex = Math.max(0, crest + CLEARANCE * reach - (from.y + toPos.y) / 2);
-      // …and the ground actually under the lens, as a floor. Faded on the
-      // same profile as the arc, so it can lift the middle of a flight over
-      // something the crest walk stepped past and can never fight the
-      // landing at either end.
+      // The reach is re-read every frame with the destination, or the move
+      // would land on the road the car was standing on when it STARTED —
+      // fifty metres back up the stage by the time it gets there.
+      const s = local(track, fromS + reach(track, fromS, there) * travelled);
+      roadAt(track, s, road);
+      const x = road.x + fromOff.x + (toOffX - fromOff.x) * travelled;
+      const z = road.z + fromOff.y + (toOffZ - fromOff.y) * travelled;
+      const rise = fromRise + (toRise - fromRise) * travelled;
+      const over = plateau(at);
       const under = Math.max(to.terrain.groundAt(x, z), to.terrain.waterAt(x, z) ?? -Infinity);
-      const y = Math.max(base + apex * arc, under + GUARD * arc);
+      const y = Math.max(road.y + rise + lift * over, under + GUARD * over);
       camera.position.set(x, y, z);
-      // THE AIM, along the short way round from the one the shot started in
-      // to the one it is landing in. Nothing here knows where the target car
-      // is, and nothing here should: the rig on the other end of the flight
-      // has already decided how that car is framed, and every frame of the
-      // transit is on its way to being that frame.
-      camera.quaternion.slerpQuaternions(fromQuat, toQuat, ease(Math.min(1, at * TURN_SNAP)));
-      // …then down by as much as the arc has climbed, about the lens's own
-      // right axis, so the ground the shot is flying over stays under it.
-      const dip = Math.min(TILT_MAX, Math.atan2(Math.max(0, y - base), TILT_REACH));
-      if (dip > 1e-4) camera.quaternion.multiply(tilt.setFromAxisAngle(RIGHT, -dip));
-      return rigFov + FOV_BOOST * arc;
+
+      // THE AIM: one slow turn from the pose the shot started in to the pose
+      // it is landing in, and nothing else. Both of those look down the road
+      // — a camera behind a car faces the way it is driving — so on a stage
+      // that bends between them this is a steady sweep across the angle the
+      // road turns through, spread over the whole move.
+      //
+      // The aim deliberately does NOT track the road under it. A path that
+      // follows a corner covers it at the speed the middle of a move travels
+      // at, and a lens pinned to that tangent pans at two or three degrees a
+      // FRAME through the apex — which is a whip, and reads as being thrown
+      // rather than carried. Letting the aim cut the corner while the body
+      // follows it costs a few degrees of the road sliding toward the edge
+      // of frame, and buys a shot that turns at a rate a person could.
+      camera.quaternion.slerpQuaternions(fromQuat, toQuat, travelled);
+      // …and down by as much as the lift is worth, about the lens's own
+      // right axis: a shot riding `lift` metres over a road it is watching
+      // `AIM_REACH` down has to drop its aim by that angle to keep the road
+      // in the frame. Local, so it adds no yaw of its own and cannot argue
+      // with the turn above; and it grows and dies with the lift, so both
+      // ends of the move are the rig's own pitch exactly.
+      const dip = Math.atan2(y - road.y - AIM_UP, AIM_REACH);
+      if (dip > 1e-4) camera.quaternion.multiply(pitch.setFromAxisAngle(RIGHT, -dip));
+      return rigFov;
     },
   };
 }
