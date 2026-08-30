@@ -68,6 +68,7 @@ import {
   drainField,
   fieldResults,
   livePlace,
+  onRoad,
   placeAtFinish,
   placeAtSplit,
   rubRivals,
@@ -76,13 +77,17 @@ import {
   splitLeader,
   stepField,
   stopField,
+  watchField,
   playerSlot,
   PLAYER_ID,
   RALLY_FIELD,
   type ClassRow,
   type FieldPlan,
   type RivalField,
+  type RivalRun,
 } from "./game/standings.ts";
+import { readWatch, walkWatch, watchLeader, type Watched } from "./game/spectate.ts";
+import type { SpectateProps } from "./game/hud-spectate.tsx";
 import {
   createRunTape,
   saveRunTape,
@@ -564,12 +569,68 @@ let flashId = 0;
  * is keeping up. */
 const SPLIT_HOLD = 3.6;
 
-/** R30 — how much of the results card's frame the stragglers may have:
- * physics steps per frame, spread over whoever is still on the road. A
- * hundred and twenty of them is a second of one car's racing, so a rival a
- * minute behind is home in a couple of seconds of card — and the card is
- * rendering a run-out, not a race, so the budget is spare. */
-const SETTLE_STEPS = 800;
+/** R30 — one run-out in progress: the field still on the road, and everything
+ * the classification it is going to produce has to be filed under. Named
+ * rather than inlined on the ref because three frames read it — the card's
+ * own backdrop, the feed a press of SPECTATE opens (spectate.ts), and the
+ * one-go settle that books the sheet when the player presses on. */
+type Settling = {
+  field: RivalField;
+  levelId: string;
+  /** The player's own stage time, and the car they set it in. */
+  time: number;
+  carId: string;
+  /** …and their split times in board order, which is what a spectator's gap
+   * is measured against: the crew on screen is racing a time that is already
+   * on the sheet. */
+  splits: number[];
+  /** Race time at which anybody still going is retired where they stand. */
+  limit: number;
+  /** Whether the classification goes on the campaign's board. False on a
+   * heads-up race, which is settled to be READ and never written down. */
+  score: boolean;
+};
+
+/** HOW THE RUN-OUT IS BEING WATCHED.
+ *
+ * `backdrop` is the default and needs no press: once the player's own
+ * roll-out is over, their car is parked and the race is still on, so the
+ * results card sits over the RACE rather than over a stationary car — the
+ * leader of what is left, from the drone, the way the main menu stands over
+ * a stage somebody is driving.
+ *
+ * `feed` is what SPECTATE buys: the same run-out from the chase camera, with
+ * the strip and the two buttons that walk the field (spectate.ts). */
+type WatchMode = "off" | "backdrop" | "feed";
+
+/** …and the camera each is watched from. The feed is an OUTSIDE view and not
+ * a choice: the in-car rigs are measured off the silhouette of the car the
+ * stage was built around (`setEyes`), and the car on screen is somebody
+ * else's. The backdrop takes the menu's own framing, because it is doing the
+ * menu's own job — a card over something alive. */
+const WATCH_CAMERA = { backdrop: "drone", feed: "chase" } as const;
+
+/** How much of R25's roll-out the player's own car keeps before the card's
+ * backdrop takes the frame, s.
+ *
+ * The flying finish is the celebration and it is worth having: the camera
+ * plants at the gate, holds, and watches the car go down the run-out. But it
+ * is a GESTURE, and it is over long before the car has finished coasting —
+ * past this the shot is a small car receding, and there is a race going on
+ * somewhere up the road. So the beat is given its seconds and then handed
+ * over, rather than waiting out a roll-out that can run for half a minute.
+ *
+ * Measured on `rollout`, the run's own clock for the beat, so a machine
+ * drawing the stage at a fraction of real time gives the shot the same
+ * amount of ROAD as one that is keeping up. */
+const BACKDROP_AFTER = 4.5;
+
+/** Steps per pass when the run-out is finished off in one go, and how many
+ * passes it is given. The product is far more road than `settleLimit` can
+ * ever ask for, and the whole thing is spent on a screen that is being torn
+ * down anyway — see `settleNow`. */
+const SETTLE_ALL = 20_000;
+const SETTLE_PASSES = 500;
 
 /** Air time under which a landing is not worth a banner, s — every ripple
  * and curb technically leaves the ground, and "CLEAN AIR 0.0s" three times
@@ -684,18 +745,36 @@ export function App() {
    * across the line, but the crews still out there have places worth points
    * to somebody, so they are driven to the finish off the card's own frames
    * (see `settleField`) and the classification is booked when the last one
-   * lands. */
-  const settleRef = useRef<{
-    field: RivalField;
-    levelId: string;
-    time: number;
-    carId: string;
-    /** Race time at which anybody still going is retired where they stand. */
-    limit: number;
-    /** Whether the classification goes on the campaign's board. False on a
-     * heads-up race, which is settled to be READ and never written down. */
-    score: boolean;
-  } | null>(null);
+   * lands. Null once the sheet is in, and again on every start. */
+  const settleRef = useRef<Settling | null>(null);
+  /** R30 — the crew that run-out is being WATCHED through (spectate.ts), and
+   * null whenever the card is up instead. Held in a ref because the frame
+   * loop follows it; `watched` is the same feed read for the strip, on the
+   * HUD's own tick. */
+  const spectateRef = useRef<RivalRun | null>(null);
+  /** …and whether that is the card's own backdrop or the feed the player
+   * asked for. Both step the same run-out; they differ in the camera and in
+   * whether the strip is up. */
+  const watchModeRef = useRef<WatchMode>("off");
+  /** …and the same answer as state, for the HUD: with the run-out on screen
+   * every instrument on the driving layout is a reading of a car that is
+   * parked, so the chrome comes down and the card is left standing over the
+   * race on its own. */
+  const [watching, setWatching] = useState(false);
+  const [watched, setWatched] = useState<Watched | null>(null);
+  /** The feed's presses, plus the way it is torn down. Wired inside the
+   * frame-loop effect, where the renderer that has to be told lives. */
+  const watchActionsRef = useRef<{
+    open: () => void;
+    step: (by: number) => void;
+    leave: () => void;
+    close: () => void;
+  }>({
+    open: () => undefined,
+    step: () => undefined,
+    leave: () => undefined,
+    close: () => undefined,
+  });
   /** Where the run stands, as of the last board it went through. Held in a
    * ref because the HUD reads it off the snapshot the frame loop takes, and
    * mirrored into state only so the results card re-renders on the finish. */
@@ -942,8 +1021,12 @@ export function App() {
   const armField = (spec: StageSpec, mode: PlayMode, plan?: FieldPlan): void => {
     fieldRef.current = null;
     standingRef.current = null;
-    // Whatever the last attempt was still running home is over: those cars
-    // are on a road nobody is driving any more.
+    // Whatever the last attempt was still running home is FINISHED FIRST and
+    // written down — the run-out plays at race speed behind the card, so a
+    // player who pressed on before the last car landed would otherwise walk
+    // away from a classification nobody ever recorded. Then the shot that was
+    // watching it comes down with the road it was pointed at.
+    watchActionsRef.current.close();
     settleRef.current = null;
     setResult(null);
     rendererRef.current?.setStanding(null);
@@ -1070,6 +1153,9 @@ export function App() {
     ghostRef.current = null;
     fieldRef.current = null;
     standingRef.current = null;
+    // Same bargain as a restart: the stage the player just drove keeps its
+    // classification, whether or not they stayed to watch it decided.
+    watchActionsRef.current.close();
     settleRef.current = null;
     setResult(null);
     rendererRef.current?.setGhost(null);
@@ -1629,6 +1715,13 @@ export function App() {
         // Genuinely nothing to do while flying: god mode is not on the
         // ladder, and walking off it would land the camera by accident.
         if (godRef.current) return;
+        // …and nothing to do while the run-out is on screen either. The
+        // ladder's in-car views are mounted off the silhouette of the
+        // player's own car (`setEyes`), and the car in shot is somebody
+        // else's: walking onto one would put the lens inside a body it was
+        // never measured for. Both ways of watching it are from outside,
+        // and the drone the card stands over is not on the ladder at all.
+        if (spectateRef.current) return;
         const mode = renderer.cycleCamera();
         const play = PLAY_CAMERAS.find((cam) => cam.id === mode);
         // Remembered only when it IS a play camera: the ladder never walks
@@ -1638,6 +1731,98 @@ export function App() {
         flash(`${play?.label ?? "CHASE"} CAM`, "info");
       };
       actionsRef.current = { restart, menu: goMainMenu, camera };
+
+      /** R30 — THE CLASSIFICATION, BOOKED: the sheet the campaign's board
+       * takes and the card's table opens. Every way the run-out can end lands
+       * here — the last car coming home under the camera, a road that was
+       * already clear, and the player pressing on before either — because a
+       * result must not depend on how much of it anybody stayed to watch. */
+      const bookResults = (settling: Settling): void => {
+        settleRef.current = null;
+        const rows = fieldResults(settling.field, {
+          time: settling.time,
+          carId: settling.carId,
+        });
+        if (settling.score) setProgress(recordResult(settling.levelId, rows));
+        setResult({ levelId: settling.levelId, rows });
+      };
+
+      /** The strip's reading of `run`, or null once that crew is off the
+       * road — home, retired, or the whole run-out already booked. */
+      const readFeed = (run: RivalRun): Watched | null => {
+        const settling = settleRef.current;
+        return settling ? readWatch(settling.field, run, settling.splits) : null;
+      };
+
+      /** The camera the player's OWN run is watched from right now — where
+       * the lens goes back to when nothing is being followed. */
+      const cameraForPlayer = (): CameraMode => (godRef.current ? "free" : playCameraRef.current);
+
+      /** CUT TO `run`, in `how` — or stand the whole thing down on null,
+       * which puts the lens back on the player's own car. Three things and
+       * no more: who the frame loop follows, who the renderer draws the
+       * world around, and which camera it is watched from. Everything else
+       * about the mode falls out of those. */
+      const cutTo = (run: RivalRun | null, how: WatchMode): void => {
+        // Never onto a car that is not out there. Nothing here hands one in
+        // — every source reads off the road — but a crew who is home has no
+        // picture and no numbers, so standing down is the only honest answer
+        // to being pointed at one.
+        const on = run && onRoad(run) ? run : null;
+        spectateRef.current = on;
+        watchModeRef.current = on ? how : "off";
+        // The MODE goes first and the crew second: standing down hands the
+        // rig back to the player's own view, and it is `spectate(null)` that
+        // re-stands it around their car — in whichever view that turns out
+        // to be.
+        renderer.setCamera(
+          on ? WATCH_CAMERA[how === "feed" ? "feed" : "backdrop"] : cameraForPlayer(),
+        );
+        renderer.spectate(on);
+        setWatching(on !== null);
+        // The strip belongs to the FEED alone. Behind the card there is a
+        // card, and a second set of readouts under it would be two things
+        // asking to be read at once.
+        setWatched(on && how === "feed" ? readFeed(on) : null);
+      };
+
+      /** FINISH THE RUN-OUT WHERE IT STANDS, at whatever it costs, and book
+       * the sheet. The run-out plays at race speed behind the card now, so a
+       * player pressing NEXT thirty seconds in would otherwise walk away
+       * from a classification that was never written down — and R30's points
+       * behind the player are worth two and one to somebody whether or not
+       * anybody stayed to watch them being earned. A few hundred thousand
+       * steps on a screen that is being torn down anyway. */
+      const settleNow = (): void => {
+        const settling = settleRef.current;
+        if (!settling) return;
+        let pass = 0;
+        while (!settleField(settling.field, SETTLE_ALL, settling.limit) && pass < SETTLE_PASSES) {
+          pass += 1;
+        }
+        bookResults(settling);
+      };
+
+      watchActionsRef.current = {
+        open: () => {
+          const settling = settleRef.current;
+          if (settling) cutTo(watchLeader(settling.field), "feed");
+        },
+        step: (by) => {
+          const settling = settleRef.current;
+          if (settling) cutTo(walkWatch(settling.field, spectateRef.current, by), "feed");
+        },
+        // BACK TO RESULTS drops to the card, and the card's own backdrop is
+        // this same run-out from the drone: the race does not stop because
+        // somebody stopped watching it closely.
+        leave: () => {
+          if (spectateRef.current) cutTo(spectateRef.current, "backdrop");
+        },
+        close: () => {
+          settleNow();
+          cutTo(null, "off");
+        },
+      };
       input.onNav((action) => {
         if (action === "confirm") menuNav.confirm();
         else if (action === "back") menuNav.back();
@@ -1715,6 +1900,7 @@ export function App() {
               levelId: where.level.id,
               time: home,
               carId: stageRef.current?.carId ?? "",
+              splits: [...state.checkpointTimes],
               limit: settleLimit(home),
               // R30's points are the CAMPAIGN's board and only its. A heads-up
               // race is one race and nothing carries out of it.
@@ -1970,6 +2156,112 @@ export function App() {
           else flash(capture ? "PICTURE SAVED" : "PICTURE FAILED", capture ? "good" : "bad");
         });
       };
+      /** R30 — THE CARD'S OWN BACKDROP. A few seconds past the line the
+       * player's own car is a small thing receding down the run-out, and
+       * there is a RACE going on up the road: crews still out there, driving
+       * for places worth points. So the run-out opens itself, from the
+       * drone, on the crew behind — the leader of what is left, which on a
+       * road everybody is driving toward the same line is the next car due
+       * through it. The card stands over that the way the main menu stands
+       * over a stage somebody is driving, and SPECTATE becomes a matter of
+       * coming DOWN to the car rather than of starting anything.
+       *
+       * R25's own celebration keeps `BACKDROP_AFTER` of the roll-out first:
+       * the flying finish is a gesture worth watching, and it is finished
+       * well before the car is. */
+      const openBackdrop = (state: GameState): void => {
+        if (spectateRef.current) return;
+        const past =
+          state.phase === "finished" ||
+          (state.phase === "rollout" && state.rollout >= BACKDROP_AFTER);
+        if (!past) return;
+        const settling = settleRef.current;
+        if (!settling) return;
+        const leader = watchLeader(settling.field);
+        // Nobody left to point a camera at: the road cleared while the
+        // player was still coasting down R25's run-out, and the sheet is
+        // simply in. Booked HERE because nothing else is going to — the
+        // run-out is driven at race speed now, and this is the one place
+        // that asks whether it is over before it has begun.
+        if (!leader) {
+          bookResults(settling);
+          return;
+        }
+        cutTo(leader, "backdrop");
+      };
+
+      /** R30 — ONE FRAME OF THE RUN-OUT BEING WATCHED (spectate.ts), and
+       * false when nothing is being followed and the run below the loop is
+       * the player's own.
+       *
+       * One path for both ways of watching it — the card's backdrop and the
+       * feed the player asked for — because they are the same run-out: a
+       * frame's worth of ticks, every remaining crew driven alone by
+       * `watchField`, the sheet booked on the tick the last one lands. The
+       * player's own game is not stepped at all: their run ended at the
+       * line.
+       *
+       * `frozen` is a pause card or god mode's hold: the shot keeps its frame
+       * and stops its clock, exactly as a run under either does. */
+      const spectateFrame = (dtFrame: number, frozen: boolean): boolean => {
+        let watching = spectateRef.current;
+        if (!watching) return false;
+        const how = watchModeRef.current;
+        const settling = settleRef.current;
+        // The sheet came in, the run was thrown away underneath, or a menu
+        // has opened over the top: there is nothing left out there to point a
+        // camera at. Stood DOWN rather than merely skipped — following a
+        // rival is what holds the player's own car off the road, and a shot
+        // nobody steps is a car that never comes back.
+        if (!settling || menuRef.current) {
+          cutTo(null, "off");
+          return false;
+        }
+        if (!frozen) {
+          acc += dtFrame;
+          let ticks = 0;
+          while (acc >= TUNING.dt) {
+            acc -= TUNING.dt;
+            ticks += 1;
+          }
+          if (ticks > 0 && watchField(settling.field, ticks, settling.limit)) {
+            bookResults(settling);
+            cutTo(null, "off");
+            return false;
+          }
+          // THE CREW UNDER THE CAMERA IS HOME — across the line, or retired
+          // where they stood. A broadcast cuts to whoever is still driving
+          // rather than holding on an empty road, and the car it cuts to is
+          // the LEADER of what is left: `stillRunning` is ordered by road
+          // covered, so a crew who has just reached the finish was by
+          // definition in front of everybody still on the stage, and the new
+          // leader is the next one down it.
+          if (!onRoad(watching)) {
+            const next = watchLeader(settling.field);
+            if (!next) {
+              bookResults(settling);
+              cutTo(null, "off");
+              return false;
+            }
+            cutTo(next, how);
+            watching = next;
+          }
+          // The engine note of the car being WATCHED. There is no road bed
+          // for a car nobody is in, and this is the one the picture is of.
+          audioRef.current?.frame(watching.state, dtFrame);
+        }
+        renderer.render(watching.state, frozen ? 0 : dtFrame);
+        servePendingShot();
+        hudClock += dtFrame;
+        if (hudClock > 0.08) {
+          hudClock = 0;
+          // Only the FEED has a strip to refresh. Behind the card the
+          // readouts are the card's.
+          if (how === "feed") setWatched(readFeed(watching));
+        }
+        return true;
+      };
+
       const frame = (now: number): void => {
         raf = requestAnimationFrame(frame);
         const dtFrame = Math.min(0.1, (now - last) / 1000);
@@ -2033,6 +2325,12 @@ export function App() {
         // somewhere, so it keeps its time.
         const held = flying && !autopilotRef.current;
         heldRef.current = held;
+        // R30 — the run-out, watched. Taken after god mode's controls have
+        // been DRAINED above and before the pause card's frozen frame below:
+        // watching is neither of those, and its own hold is the same two.
+        // The card's own backdrop opens itself here; the feed is a press.
+        if (page === null) openBackdrop(state);
+        if (spectateFrame(dtFrame, pausedRef.current || held)) return;
         // The pause card is a run that must not tick while the player is
         // reading it — and a paused run is a FROZEN one: rendered with no
         // time passing, so the wheels stop turning, the dust hangs and the
@@ -2133,20 +2431,18 @@ export function App() {
         // frame it is allowed. Runs under the establishing shot, which is
         // exactly what the shot is long enough for.
         if (fieldRef.current) catchUpField(fieldRef.current);
-        // R30 — the stragglers, driven home behind the results card. A
-        // bounded slice of the frame, and the classification is booked the
-        // moment the road is clear: the card is watching a run-out, so it has
-        // the frame to spare and the player has the seconds to spend.
-        const settling = settleRef.current;
-        if (settling && settleField(settling.field, SETTLE_STEPS, settling.limit)) {
-          settleRef.current = null;
-          const rows = fieldResults(settling.field, {
-            time: settling.time,
-            carId: settling.carId,
-          });
-          if (settling.score) setProgress(recordResult(settling.levelId, rows));
-          setResult({ levelId: settling.levelId, rows });
-        }
+        // R30's stragglers are NOT fast-forwarded here. Through the player's
+        // own roll-out the field is still taking the same tick they are
+        // (`stepField`, in the step loop above), and the moment that beat
+        // ends the card's backdrop takes the run-out over at race speed
+        // (`openBackdrop`). A frame that also drove them eight hundred steps
+        // would have the whole field home before there was anything to
+        // watch — which is exactly what the card used to stand over.
+        //
+        // The one path that still finishes a run-out in one go is the way
+        // OUT (`settleNow`): a player pressing on must not cost the field its
+        // places.
+        //
         // The road bed belongs to a run the player is IN. Behind the menu the
         // stage is scenery under a theme, and an engine bed over the top of
         // that is two pieces of music at once.
@@ -2318,6 +2614,20 @@ export function App() {
         }
       : null;
 
+  // R30 — WHETHER THERE IS ANYTHING TO WATCH. The same condition the FULL
+  // RESULTS button is waiting out, read off the same state: a run with a
+  // field entered, whose sheet has not landed yet. It is the whole of what
+  // the wait is, so it is also the whole of what the offer is.
+  const carsStillOut = (campaign !== null || headsUp !== null) && result?.levelId !== run.levelId;
+  const onSpectate = carsStillOut ? (): void => watchActionsRef.current.open() : null;
+  /** The feed itself, once one is up. `watched` is refreshed on the HUD's own
+   * tick from inside the loop; the two presses are wired there as well. */
+  const spectate: SpectateProps | null = watched && {
+    watched,
+    onStep: (by: number): void => watchActionsRef.current.step(by),
+    onLeave: (): void => watchActionsRef.current.leave(),
+  };
+
   // The board the results card shows, and the three letters it is waiting on.
   // Entering them writes the row and hands the new board straight back, so the
   // player sees where they landed without the card being rebuilt around them.
@@ -2379,6 +2689,9 @@ export function App() {
           race={headsUp}
           locked={lockedBehind}
           onSaveRun={saveRun}
+          onSpectate={onSpectate}
+          watching={watching}
+          spectate={spectate}
         />
       )}
       {/* Outside the HUD on purpose: ALT takes the game's chrome off so a

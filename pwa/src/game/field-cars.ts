@@ -152,10 +152,15 @@ const FUME_CARS = 7;
 const FIELD_FUMES = 0.6;
 const FUME_POOL = 1536;
 
-/** The beats the field is worth drawing in. Past the line the player's own
- * run is over and the rest of the entry list is a classification being
- * settled at thousands of steps a frame (R30's `settleField`) — a car moving
- * that fast is a streak across the country, not a rival. */
+/** The beats the field is worth drawing in, read off the car the frame is
+ * being rendered FROM. Past the line that car's own run is over and the
+ * frame belongs to it alone: R25's roll-out is the player's celebration,
+ * with the camera planted at the gate, and a rival streaking through the
+ * back of it is not part of the shot.
+ *
+ * It is not a gate on the run-out. Once the roll-out ends the frame is
+ * rendered from a RIVAL's game instead (spectate.ts) — racing, so this
+ * passes — and the rest of the field is exactly what there is to draw. */
 function onScreen(phase: GameState["phase"]): boolean {
   return phase !== "rollout" && phase !== "finished";
 }
@@ -186,6 +191,20 @@ export type FieldCars = {
   /** Whether a crew that is on the road is NAMED while it is there — the
    * player's option (name-tag.ts). */
   setNames: (on: boolean) => void;
+  /** THE CREW THE CAMERA IS ON, while the run-out is being spectated
+   * (spectate.ts) — null the rest of the time, which is all of it.
+   *
+   * Two things come off that one car, and both because the frame is now
+   * being rendered from ITS game: everything the renderer throws off the
+   * state it was handed — the towed cloud, the grit at the wheels, the
+   * exhaust — is already being thrown at full strength there, so the
+   * field's own thinned copies would be a second cloud in the same place;
+   * and its name plate would hang in the middle of every frame, over a car
+   * the strip along the bottom of the screen has already named.
+   *
+   * Dropping it from `near` is what does both: that list is what feeds the
+   * field's plume AND its pipes. */
+  watch: (run: RivalRun | null) => void;
   /** One rival's own events, spent on ITS body alone: a car the player put
    * into the trees crumples and sheds parts, and makes no sound, because
    * neither happened here. (The dust it TOWS is not an event — it is the
@@ -237,6 +256,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
   let lampsLit = false;
   let rain = 0;
   let named = true;
+  let watched: RivalRun | null = null;
   let wetGround = false;
   let fx = 1;
   /** One cloud for the whole entry list — see the module note. Off until
@@ -334,7 +354,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
         // than either the body's or the plate's — see `DUST_RANGE`. Gathered
         // before the build gate below, because a crew can be raising a cloud
         // a corner ahead while their car does not exist yet.
-        if (beat && range <= DUST_RANGE) near.push({ run, range });
+        if (beat && range <= DUST_RANGE && run !== watched) near.push({ run, range });
         if (!existing) {
           if (range > BUILD_RANGE || budget === 0) continue;
           budget -= 1;
@@ -369,7 +389,8 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
         if (!seen) continue;
         drawn += 1;
         existing.visual.update(run.state, dt, camera.position);
-        if (named) existing.tag.place(car.x, car.y, car.z, camera);
+        if (named && run !== watched) existing.tag.place(car.x, car.y, car.z, camera);
+        else existing.tag.hide();
       }
       near.sort((a, b) => a.range - b.range);
       // The dust each of the nearest crews is towing, off the ground THEY
@@ -447,6 +468,10 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
     setNames: (on) => {
       named = on;
       if (!on) for (const { tag } of built.values()) tag.hide();
+    },
+    watch: (run) => {
+      watched = run;
+      if (run) built.get(run)?.tag.hide();
     },
     events: (run, events) => built.get(run)?.visual.onEvents(run.state, events),
     paint: (next, lit, wet) => {

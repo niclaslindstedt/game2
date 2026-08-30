@@ -120,6 +120,11 @@ export type FinishCardProps = {
    * the developer switch that collects them is on; returns whether the file
    * actually reached the disk, so the button can say when it did not. */
   onSaveRun: (() => boolean) | null;
+  /** WATCH THE REST OF THEM COME HOME (spectate.ts). Offered only while the
+   * road still has somebody on it — which is the same condition the FULL
+   * RESULTS button is waiting out, and the reason the two sit together: this
+   * is what there is to do with the wait. */
+  onSpectate: (() => void) | null;
 };
 
 /** The save button, which is the only control on this card that reports back:
@@ -156,6 +161,7 @@ export function FinishCard({
   race,
   locked,
   onSaveRun,
+  onSpectate,
 }: FinishCardProps) {
   // The full result sheet is a DELIBERATE look: fifteen rows over the top of
   // the card, opened by the player who wants them and gone again in a press.
@@ -298,6 +304,21 @@ export function FinishCard({
                 }}
               >
                 RETRY
+              </button>
+            )}
+            {/* …and the way to spend the wait the card is otherwise asking
+              the player to sit through: the cars still out there are a race,
+              and this is the seat to watch it from. */}
+            {onSpectate && (
+              <button
+                type="button"
+                className="hud-pause-act"
+                onClick={() => {
+                  playUi("select");
+                  onSpectate();
+                }}
+              >
+                SPECTATE
               </button>
             )}
             <button

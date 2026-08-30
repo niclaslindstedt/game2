@@ -443,6 +443,20 @@ export function advanceField(field: RivalField, seconds: number): void {
   }
 }
 
+/** Retire anybody who has been out there past `limit` seconds of their own
+ * race clock, and say whether that leaves the road clear. Stated once and
+ * read by both run-outs below, so a sheet read off a card the player watched
+ * retires exactly the crews a sheet read off one they did not. */
+function retireOverdue(field: RivalField, limit: number): boolean {
+  let running = false;
+  for (const run of field.runs) {
+    if (run.done) continue;
+    if (run.state.raceTime >= limit) run.done = true;
+    else running = true;
+  }
+  return !running;
+}
+
 /** RUN THE STRAGGLERS HOME. The player is across the line and the card is
  * up, but a classification needs everybody's time, not just the times of the
  * crews who beat them — R30's points are handed out to a finishing ORDER, and
@@ -455,6 +469,11 @@ export function advanceField(field: RivalField, seconds: number): void {
  * stand — a bot wedged nose-first against a trunk would otherwise hold the
  * results open for as long as the player was prepared to watch it.
  *
+ * EVERY CREW IS DRIVEN ALONE here, and that is what makes the result
+ * independent of the rate it is settled at: a time is a crew's own clock at
+ * their own line, so stepping one of them more often than the one beside it
+ * cannot move either time. `watchField` leans on exactly that.
+ *
  * A crew still OWING their head start is driven home here too, and their
  * debt is left standing: `owed` places a car on the road relative to the
  * player, and the player has finished. Their time is their own race clock,
@@ -465,19 +484,36 @@ export function advanceField(field: RivalField, seconds: number): void {
 export function settleField(field: RivalField, steps: number, limit: number): boolean {
   let budget = steps;
   while (budget > 0) {
+    if (retireOverdue(field, limit)) break;
     let stepped = false;
     for (const run of field.runs) {
       if (run.done) continue;
-      if (run.state.raceTime >= limit) {
-        run.done = true;
-        continue;
-      }
       advanceRun(run);
       stepped = true;
       if (--budget <= 0) break;
     }
     // Nobody moved: everybody is home, retired, or stopped.
     if (!stepped) break;
+  }
+  return field.runs.every((run) => run.done);
+}
+
+/** …AND THE SAME RUN-OUT AT RACE SPEED, for a player who would rather WATCH
+ * the rest of the field come home than read the sheet it produces. `ticks`
+ * is physics steps of their time — a frame's worth — and every crew still
+ * out there takes all of them.
+ *
+ * It is the settle at a hundredth of the rate and nothing else: each crew is
+ * driven alone, by the same `advanceRun`, retired by the same rule. So the
+ * classification a spectator watches being decided is the classification
+ * they would have been handed had they never looked, which is the whole
+ * point — a result that depended on who was watching would not be a result.
+ *
+ * Returns true once nobody is left running. */
+export function watchField(field: RivalField, ticks: number, limit: number): boolean {
+  for (let i = 0; i < ticks; i++) {
+    if (retireOverdue(field, limit)) break;
+    for (const run of field.runs) if (!run.done) advanceRun(run);
   }
   return field.runs.every((run) => run.done);
 }
@@ -599,6 +635,17 @@ export function livePlace(field: RivalField, state: GameState): number {
     else if (theirs > mine - GRID_TIE && run.entry.number < field.playerNumber) ahead += 1;
   }
   return ahead + 1;
+}
+
+/** WHO IS STILL OUT THERE, leader first — the crews a run-out can be watched
+ * through, in the order the road puts them. Measured by road covered, the
+ * same reading `livePlace` counts, so "the leader" is the car actually in
+ * front and walking the list is walking back down the stage from them.
+ *
+ * A fresh array per call: it is asked for when a spectator changes car and
+ * once a frame to say how many are left, never inside a step. */
+export function stillRunning(field: RivalField): RivalRun[] {
+  return field.runs.filter(onRoad).sort((a, b) => covered(b.state) - covered(a.state));
 }
 
 /** What the classification calls the player's own run. A crew id nobody in
