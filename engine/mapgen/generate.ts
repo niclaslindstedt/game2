@@ -24,7 +24,7 @@ import {
 import { knobScale, resolveKnobs } from "./rules.ts";
 import { generateCircuit } from "./circuit.ts";
 import { createLandField, type LandField } from "./land.ts";
-import { roadClearance } from "./road.ts";
+import { ROAD_CROSS, roadClearance } from "./road.ts";
 import {
   PROBE_STEP,
   assignFeature,
@@ -37,6 +37,7 @@ import {
   straightLength,
   trackRun,
   type Cursor,
+  type Profile,
   type SameDirRun,
 } from "./search.ts";
 
@@ -67,13 +68,16 @@ export function generateStage(
     // The setback the water is given, relaxing as the attempts run out:
     // most of them at the full standard, the last of them at none. A
     // country that is mostly lake still has to produce a stage.
-    const clearance = R.water.routeClear * ladder[Math.floor((attempt * ladder.length) / 40)];
+    const rung = Math.floor((attempt * ladder.length) / 40);
+    const clearance =
+      R.water.routeClear * ladder[rung] * knobScale(dials.water, R.wet.routeSetback);
     const plans = tryGenerateStage(
       (seed + attempt * 0x9e3779b9) >>> 0,
       length,
       dials,
       land,
       clearance,
+      R.elevation.fillLadder[rung],
     );
     if (plans) return plans;
   }
@@ -86,26 +90,74 @@ function tryGenerateStage(
   knobs: StageKnobs,
   land: LandField,
   routeClear: number,
+  fillScale: number,
 ): SegmentPlan[] | null {
   const spec = R.stageLengths[length];
   const rng = createRng(seed);
   const plans: SegmentPlan[] = [];
   // R23 — the whole search is measured in the road's own clearance, which
   // is what the width dial makes of it.
-  const clear = roadClearance(knobScale(knobs.width, R.roadWidth));
-  const field = createPointField(clear);
+  const width = knobScale(knobs.width, R.roadWidth);
+  const clear = roadClearance(width);
+  const shelfEnd = width / 2 + ROAD_CROSS.reach;
+  const field = createPointField(clear, shelfEnd);
+  /** R23 — the road's own height as the search walks it, so the rule can
+   * ask how far apart two arms are vertically as well as on the map. The
+   * ground it follows is what the road may be BUILT on, water's freeboard
+   * included, which is the same thing the compiler follows. */
+  const groundAt = (x: number, z: number): number => {
+    const ground = land.heightAt(x, z);
+    const water = land.water.shoreLevelAt(x, z);
+    return water === null ? ground : Math.max(ground, water + R.elevation.follow.freeboard);
+  };
+  const profile: Profile = { y: groundAt(0, 0), slope: 0 };
+  /** A candidate is walked on a COPY: the search draws several before it
+   * keeps one, and a rejected draw must not have moved the road's height.
+   * The copy comes back with the points so whichever draw is committed can
+   * adopt the height it walked to. */
+  const probe = (
+    from: Cursor,
+    plan: SegmentPlan,
+  ): { points: Cursor[]; end: Cursor; walked: Profile } => {
+    const walked: Profile = { ...profile };
+    return { ...probePoints(from, plan, { profile: walked, groundAt }), walked };
+  };
+  /** ...and a backtrack has to put it back, so every committed segment's
+   * starting height is kept beside its plan. */
+  const heights: Profile[] = [];
+  /** Undo one committed segment's worth of height. */
+  const rewind = (): void => {
+    const was = heights.pop();
+    if (!was) return;
+    profile.y = was.y;
+    profile.slope = was.slope;
+  };
   /** R35 — the line keeps out of the water. A candidate whose probe points
    * come within the route's clearance of a lake's surface is refused like
    * any other rule violation: redrawn, then backtracked out of, never
    * repaired. Repairing it is what the terrain used to do, and what a
    * terrain does when handed a road through a lake is build a causeway. */
   const keepsDry = (p: Cursor): boolean => !land.nearWater(p.x, p.z, routeClear);
+  /** R34 — and it keeps within reach of the ground. A line the road can
+   * only take by standing twenty-odd metres off the country is refused
+   * here, where another line can still be drawn, rather than left to the
+   * terrain — which has no good answer to it. */
+  const sitsOnTheLand = (p: Cursor): boolean => {
+    if (p.y === undefined || fillScale <= 0) return true;
+    const off = p.y - land.heightAt(p.x, p.z);
+    return off <= R.elevation.maxFill * fillScale && -off <= R.elevation.maxCut * fillScale;
+  };
   let cursor: Cursor = { x: 0, z: 0, heading: 0, arc: 0 };
   let total = 0;
   let sLastLipEnd = -Infinity;
   const sameDirRun: SameDirRun = { dir: 0, count: 0, angle: 0 };
 
-  const commit = (plan: SegmentPlan, points: Cursor[], end: Cursor): void => {
+  const commit = (plan: SegmentPlan, points: Cursor[], end: Cursor, walked?: Profile): void => {
+    heights.push({ ...profile });
+    if (walked) {
+      profile.y = walked.y;
+      profile.slope = walked.slope;
+    }
     if (plan.feature === "jump") {
       sLastLipEnd = total + (plan.featureEnd ?? plan.length);
     }
@@ -125,8 +177,18 @@ function tryGenerateStage(
     feature: "none",
   };
   {
-    const { points, end } = probePoints(cursor, opening);
-    commit(opening, points, end);
+    const { points, end, walked } = probe(cursor, opening);
+    // R34 — the opening is the one segment no search chose, so it is also
+    // the one nothing was checking. It is laid from the origin whatever the
+    // country there does, and where that country falls away it left the
+    // grid on the tallest fill on the map — the worst wall beside a road on
+    // a twelve-seed sweep was on a start straight, not on a stage. Siting
+    // (R35) puts the origin on dry ground but says nothing about what the
+    // next two hundred metres do, so the same rule the rest of the route
+    // keeps has to bind here too. There is no redrawing it: the attempt is
+    // rejected and the sub-seed loop tries another country.
+    if (!points.every(sitsOnTheLand)) return null;
+    commit(opening, points, end, walked);
   }
 
   const targetLength = rng.range(spec.band.min, spec.band.max) - R.closingStraight;
@@ -186,10 +248,16 @@ function tryGenerateStage(
       // band's ceiling once the closing straight lands on top.
       if (total + plan.length > spec.band.max - R.closingStraight) continue;
 
-      const { points, end } = probePoints(cursor, plan);
+      const { points, end, walked } = probe(cursor, plan);
       if (!points.every((p) => inBounds(p, spec.worldBound))) continue;
-      if (points.some((p) => field.blocked(p) || entersStart(p, clear) || !keepsDry(p))) continue;
-      commit(plan, points, end);
+      if (
+        points.some(
+          (p) => field.blocked(p) || entersStart(p, clear) || !keepsDry(p) || !sitsOnTheLand(p),
+        )
+      ) {
+        continue;
+      }
+      commit(plan, points, end, walked);
       placed = true;
     }
     if (!placed) {
@@ -204,6 +272,7 @@ function tryGenerateStage(
         if (!dropped || plans.length <= 1) return null;
         field.removeLast(Math.max(1, Math.ceil(dropped.length / PROBE_STEP)));
         total -= dropped.length;
+        rewind();
       }
       cursor = { ...field.points[field.points.length - 1] };
       recomputeSameDirRun(plans, sameDirRun);
@@ -239,19 +308,19 @@ function tryGenerateStage(
   };
   const runOff: SegmentPlan = { kind: "straight", length: R.startZone.apron, feature: "none" };
   for (;;) {
-    const { points, end } = probePoints(cursor, closing);
+    const { points, end, walked } = probe(cursor, closing);
     // The run-off is checked for clearance but not for BOUNDS: the world
     // bound is the box the search folds the line inside, not a wall, and a
     // finish placed legally near it may run its apron over the edge.
-    const past = probePoints(end, runOff).points;
+    const past = probe(end, runOff).points;
     const clearOfEverything = (p: Cursor): boolean =>
-      !field.blocked(p) && !entersStart(p, clear) && keepsDry(p);
+      !field.blocked(p) && !entersStart(p, clear) && keepsDry(p) && sitsOnTheLand(p);
     if (
       points.every((p) => inBounds(p, spec.worldBound)) &&
       points.every(clearOfEverything) &&
       past.every(clearOfEverything)
     ) {
-      commit(closing, points, end);
+      commit(closing, points, end, walked);
       // R11 measures the RACED stage — the road up to the line. The
       // run-out is road the clock never sees.
       return total - R.runOut >= spec.band.min ? plans : null;
@@ -260,6 +329,7 @@ function tryGenerateStage(
     if (!dropped || plans.length <= 1) return null;
     field.removeLast(Math.max(1, Math.ceil(dropped.length / PROBE_STEP)));
     total -= dropped.length;
+    rewind();
     cursor = { ...field.points[field.points.length - 1] };
     recomputeSameDirRun(plans, sameDirRun);
     if (total < spec.band.min - R.closingStraight) return null;
@@ -301,6 +371,9 @@ export function createStageStream(seed: number, knobs?: Partial<StageKnobs>): St
   // country's lakes; the pour's block cache is what keeps asking about
   // them flat as the road runs on.
   const land = createLandField(seed, dials);
+  /** ...and how much of it the DIAL leaves: a lakeland road runs the shore
+   * because there is nowhere else to run. */
+  const setback = knobScale(dials.water, R.wet.routeSetback);
   /** The setback the water is given right now. A stream cannot start over
    * the way the finite search does, so where that one walks a ladder of
    * whole ATTEMPTS this one walks the same ladder in place: every failed
@@ -324,7 +397,7 @@ export function createStageStream(seed: number, knobs?: Partial<StageKnobs>): St
     // forever. A finite stage in the same spot throws the attempt away and
     // re-rolls, which is why only the endless search needs this.
     if (rung >= ladder.length) return true;
-    return !land.nearWater(p.x, p.z, R.water.routeClear * ladder[rung]);
+    return !land.nearWater(p.x, p.z, R.water.routeClear * ladder[rung] * setback);
   };
   let cursor: Cursor = { x: 0, z: 0, heading: 0, arc: 0 };
   let total = 0;

@@ -1035,8 +1035,27 @@ export function createTerrain(track: Track): TerrainField {
       } else {
         const grade = sideGrade(s.s, near.lateral >= 0 ? 1 : -1);
         const embankment = s.elevation + (near.d - lip) * grade;
+        // R34 — and the bench STOPS WHERE IT MEETS THE COUNTRY.
+        //
+        // `grade` is a shape the road imposes: a cutting on the uphill side,
+        // an embankment on the downhill one, drawn from noise rather than
+        // measured off the land. Run out unbounded it is a hillside the road
+        // invents — at seventy metres a third of a grade is twenty metres of
+        // ground that is not there, and because it is keyed to whichever
+        // sample happens to be NEAREST, two arms of a stage passing each
+        // other hand adjacent lattice corners two different inventions:
+        // seed 19's junction had 38.6 m of it beside 11.1 m, a twenty-eight
+        // metre cliff between two corners fourteen metres apart, on ground
+        // whose real height was seventeen. That is a wall the car falls off.
+        //
+        // A real cutting's face climbs until it reaches the natural ground
+        // and then it is the natural ground; a real embankment's side falls
+        // until it lands on it. So the bench is bounded BY the country on
+        // whichever side it is working: it can cut into it or stand out from
+        // it, but it cannot carry on past it and keep going.
+        const bounded = grade >= 0 ? Math.min(embankment, far) : Math.max(embankment, far);
         const toFar = smooth(clamp01((near.d - lip) / 110));
-        const shaped = embankment * (1 - toFar) + far * toFar;
+        const shaped = bounded * (1 - toFar) + far * toFar;
         const off = smooth(clamp01((near.d - lip) / 26));
         base = corridorY * (1 - off) + shaped * off;
       }

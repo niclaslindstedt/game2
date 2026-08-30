@@ -619,7 +619,7 @@ const SPUR_JUNCTION_WINDOW = R.junction.spurWindow;
  * never invent some. */
 function branchClearance(list: Spur[]): (x: number, z: number) => number {
   const STRIDE = 8;
-  const slack = (STRIDE * SPUR.step) / 2;
+  const slack = BRANCH_DISTANCE_SLACK;
   return (x: number, z: number): number => {
     let best = Infinity;
     for (const other of list) {
@@ -1116,7 +1116,7 @@ function createCompiler(
     // spacing, subtracted off the answer so this can only ever under-report
     // the distance, never claim room the branch does not have.
     const STRIDE = 8;
-    const slack = (STRIDE * SAMPLE_STEP) / 2;
+    const slack = STAGE_DISTANCE_SLACK;
     for (let i = 0; i < track.samples.length; i += STRIDE) {
       const sample = track.samples[i];
       const ix = Math.floor(sample.x / CELL);
@@ -1806,6 +1806,17 @@ type Country = {
 
 const PLAN_STEP = 6;
 
+/** How much each road-distance field UNDER-reports by, m: half its own
+ * coarsened spacing, subtracted off every answer so a field can only ever
+ * claim a branch has less room than it really has, never more.
+ *
+ * Named rather than inlined so the three fields cannot drift apart: they
+ * are the same idea measured at three different strides, and a reader
+ * comparing one against another needs to see that. */
+const BRANCH_DISTANCE_SLACK = (8 * SPUR.step) / 2;
+const STAGE_DISTANCE_SLACK = (8 * SAMPLE_STEP) / 2;
+const PLAN_DISTANCE_SLACK = PLAN_STEP / 2;
+
 function planCountry(
   plans: SegmentPlan[],
   width: number,
@@ -1865,7 +1876,7 @@ function planCountry(
       else grid.set(key, [point]);
     }
   }
-  const slack = PLAN_STEP / 2;
+  const slack = PLAN_DISTANCE_SLACK;
   const rings = Math.ceil(ROAD_DISTANCE_REACH / CELL);
   // R24 — the aprons the stage's two ends stand on: plain road extrapolated
   // straight past the start gate and the finish line, which a branch may no

@@ -436,24 +436,32 @@ describe("the field on the road", () => {
     // them may end a step inside each other — the contact model resolves
     // every pair, and a pair it did not resolve is fourteen games driving
     // through one another.
-    const track = compileStage(38, "short");
-    const field = createField(track, { difficulty: "hard", cars: 8, massStart: true }, stage);
+    // Walked over several seeds rather than one. WHETHER a given stage's
+    // eight cars actually touch depends on how that stage's corners bunch
+    // them, which moves whenever the generator's routing does; that they
+    // touch SOMEWHERE, and are never resolved into each other when they do,
+    // is the rule. Pinning it to one seed made it a test of that seed.
     const reach = TUNING.collision.halfWidth * 2;
     let closest = Infinity;
     let met = 0;
-    for (let i = 0; i < 120 * 90; i++) {
-      stepField(field);
-      const live = field.runs.filter(onRoad);
-      for (let a = 0; a < live.length; a++) {
-        for (let b = a + 1; b < live.length; b++) {
-          const one = live[a].state.car;
-          const two = live[b].state.car;
-          if (Math.abs(one.y - two.y) > TUNING.collision.cars.reach) continue;
-          const gap = Math.hypot(one.x - two.x, one.z - two.z);
-          closest = Math.min(closest, gap);
-          if (gap < reach + 0.05) met += 1;
+    for (const seed of [38, 3, 7, 11, 19]) {
+      const track = compileStage(seed, "short");
+      const field = createField(track, { difficulty: "hard", cars: 8, massStart: true }, stage);
+      for (let i = 0; i < 120 * 90; i++) {
+        stepField(field);
+        const live = field.runs.filter(onRoad);
+        for (let a = 0; a < live.length; a++) {
+          for (let b = a + 1; b < live.length; b++) {
+            const one = live[a].state.car;
+            const two = live[b].state.car;
+            if (Math.abs(one.y - two.y) > TUNING.collision.cars.reach) continue;
+            const gap = Math.hypot(one.x - two.x, one.z - two.z);
+            closest = Math.min(closest, gap);
+            if (gap < reach + 0.05) met += 1;
+          }
         }
       }
+      if (met > 0) break;
     }
     // They found each other — a grid this deep cannot get down a stage
     // without it — and the model held them apart when they did.
