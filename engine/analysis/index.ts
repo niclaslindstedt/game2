@@ -32,6 +32,7 @@ import { analyzeDrive } from "./drive.ts";
 import { analyzeEnds } from "./ends.ts";
 import { analyzeGround } from "./ground.ts";
 import { analyzeJumps } from "./jumps.ts";
+import { analyzeJunctions } from "./junctions.ts";
 import { analyzePerf } from "./perf.ts";
 import { analyzeRoads } from "./roads.ts";
 import { analyzeRollers } from "./rollers.ts";
@@ -70,6 +71,7 @@ export function analyzeTrack(
     analyzeRollers(track, terrain),
     analyzeWater(track, terrain),
     analyzeRoads(track),
+    analyzeJunctions(track),
     analyzeDrive(track, speeds),
     analyzeJumps(track, terrain, speeds),
     analyzeEnds(track, terrain),

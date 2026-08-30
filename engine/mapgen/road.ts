@@ -398,6 +398,51 @@ export function junctionFlat(platform: JunctionPlatform, x: number, z: number): 
   return 1 - t * t * (3 - 2 * t);
 }
 
+/** R17 — is a point standing in a junction's MOUTH: the gap the dirt road
+ * cuts in the main road's near edge.
+ *
+ * This is the ONE thing the through road concedes to a crossing. Its
+ * carriageway, its camber and its centre line all run past unbroken — a
+ * sealed road whose markings stop dead for fifty meters at every junction
+ * reads as two roads dissolving into each other, which is the defect R17
+ * exists to prevent — but the edge line, the shoulder and the border on the
+ * side the dirt road arrives on give way across the throat, because that is
+ * where the traffic turns through them.
+ *
+ * The point given is the EDGE's own position, not the road's centerline:
+ * the two edge lines are drawn a road apart and only one of them is in the
+ * mouth. Anything on the far side of the main road's centerline is out of
+ * it by definition.
+ *
+ * Read by the renderer (which stops painting there) and by the analysis
+ * (which measures how much of the main road's marking survives a junction),
+ * so the two can never disagree about where a junction interrupts a road. */
+export function junctionMouth(
+  junction: {
+    x: number;
+    z: number;
+    heading: number;
+    width: number;
+    mouth: { from: number; to: number; side: -1 | 1 } | null;
+  },
+  x: number,
+  z: number,
+): boolean {
+  const mouth = junction.mouth;
+  if (!mouth) return false;
+  const dx = x - junction.x;
+  const dz = z - junction.z;
+  const across = (dx * Math.cos(junction.heading) - dz * Math.sin(junction.heading)) * mouth.side;
+  // Bounded on BOTH sides of the kerb: out past the main road's own edge
+  // the mouth is over, and anything further off than that is standing in a
+  // field beside the junction rather than in it. Without the ceiling a
+  // branch that turns hard away is still "in the mouth" a hundred meters
+  // out, because its along-position never leaves the span.
+  if (across <= 0 || across > junction.width / 2 + R.junction.mouthLip) return false;
+  const along = dx * Math.sin(junction.heading) + dz * Math.cos(junction.heading);
+  return along >= mouth.from && along <= mouth.to;
+}
+
 /** R17 — the gravel DRAG-OUT: how much of the dirt road's surfacing has
  * been carried onto the sealed one here, 0..1. Every car that turns out of
  * an unsealed road drops what its tires picked up on the tarmac at the

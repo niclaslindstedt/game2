@@ -29,6 +29,7 @@ export {
   junctionDust,
   junctionFlat,
   junctionMainEdge,
+  junctionMouth,
   junctionPlatformY,
   roadClearance,
   type RoadShape,

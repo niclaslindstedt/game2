@@ -22,6 +22,7 @@ import {
   junctionFlat,
   createGame,
   junctionMainEdge,
+  junctionMouth,
   roadClearance,
   knobScale,
   locate,
@@ -447,18 +448,42 @@ describe("junctions (R17)", () => {
     }
   });
 
-  it("paves the gore so the grass between two parting roads is an island", () => {
+  it("flares the minor road into a mouth, and opens only the near kerb", () => {
     const track = compileStage(3, "medium", { asphalt: 0.5 });
+    expect(track.junctions.length).toBeGreaterThan(0);
     for (const junction of track.junctions) {
-      expect(junction.gore.length).toBeGreaterThan(0);
-      for (const quad of junction.gore) {
-        for (const [x, z] of quad) {
-          // Every scrap of it is inside the junction it belongs to.
-          expect(Math.hypot(x - junction.x, z - junction.z)).toBeLessThan(
-            junction.reach + R.junction.goreNose + junction.width,
-          );
-        }
-      }
+      // The dirt road arrives wider than it runs: that flare is what
+      // carries its mat out to the main road's edge instead of leaving a
+      // wedge of country tapering to a knife point between them.
+      const arm = track.samples.filter((sample) => {
+        const d = junction.joining ? junction.s - sample.s : sample.s - junction.s;
+        return d >= 0 && d <= R.junction.mouth.run * track.width;
+      });
+      expect(arm.length).toBeGreaterThan(0);
+      const widest = Math.max(...arm.map((sample) => sample.width));
+      expect(widest).toBeGreaterThan(track.width * 1.2);
+
+      // ...and the opening it cuts is a gap in ONE kerb. The mouth is on
+      // the side the dirt road arrives on; the far edge line runs straight
+      // past, which is what makes the sealed road the one that goes
+      // through.
+      const mouth = junction.mouth;
+      expect(mouth).not.toBeNull();
+      const nx = Math.cos(junction.heading);
+      const nz = -Math.sin(junction.heading);
+      const half = junction.width / 2;
+      const edge = (side: -1 | 1, along: number): [number, number] => [
+        junction.x + Math.sin(junction.heading) * along + nx * half * side,
+        junction.z + Math.cos(junction.heading) * along + nz * half * side,
+      ];
+      const mid = ((mouth?.from ?? 0) + (mouth?.to ?? 0)) / 2;
+      expect(junctionMouth(junction, ...edge(mouth?.side ?? 1, mid))).toBe(true);
+      expect(junctionMouth(junction, ...edge((mouth?.side === 1 ? -1 : 1), mid))).toBe(false);
+      // The opening is a gap in the kerb, not a missing stretch of road:
+      // it never runs longer than the mouth the flare was given.
+      expect((mouth?.to ?? 0) - (mouth?.from ?? 0)).toBeLessThanOrEqual(
+        2 * R.junction.mouth.run * track.width,
+      );
     }
   });
 

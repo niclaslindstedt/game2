@@ -76,7 +76,17 @@ const bar = (score) => {
 const mark = { error: "!!", warn: " !", note: "  " };
 
 const reports = [];
-const columns = ["rollers", "water", "roads", "drive", "jumps", "ends", "ground", "perf"];
+const columns = [
+  "rollers",
+  "water",
+  "roads",
+  "junctions",
+  "drive",
+  "jumps",
+  "ends",
+  "ground",
+  "perf",
+];
 
 console.log(
   [

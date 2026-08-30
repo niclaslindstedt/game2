@@ -34,9 +34,14 @@ export type BridgeDeck = Exclude<Crossing, "ford">;
  * not a seam. It sits ON the route's centerline, at a corner: the sealed
  * road — the MAIN road — runs straight through it, made of the route's own
  * collinear arm on one side and the abandoned branch on the other, and the
- * gravel road the route turns onto (or off) is the MINOR one, which simply
- * stops at the main road's edge. Everything inside the platform is one
- * graded plane, one surface, and no borders. */
+ * gravel road the route turns onto (or off) is the MINOR one, which arrives
+ * at an angle and opens out into a MOUTH where it meets the seal.
+ *
+ * The main road is the one that does not notice: same width, same surface,
+ * its centre line running straight past the crossing. All the giving way is
+ * the minor road's — it is the one that flares, loses its border and stops
+ * at the main road's edge. Everything inside the platform is one graded
+ * plane. */
 export type RoadJunction = {
   /** The point on the route's centerline where the two roads meet — the
    * tangent point of the corner, which is where a surveyor would have put
@@ -62,18 +67,19 @@ export type RoadJunction = {
    * junction is a hole cut in both roads' borders, graded flat and paved
    * over, which is what makes the two of them one surface. */
   reach: number;
-  /** ...and the radius inside which that flattening applies, m. */
-  radius: number;
-  /** R17 — the GORE NOSE: the pavement carried into the wedge between the
-   * two carriageways where they have just parted, as flat quads on the
-   * platform's plane. Two roads that leave a junction together part over
-   * a couple of dozen meters and leave a wedge of country between them;
-   * where that wedge is narrower than a car it is not an island but a
-   * seam, and a junction whose grass runs to a knife point is the tell
-   * that nobody planned it. Built from the road's OWN samples rather than
-   * from the corner's nominal arc — a stage corner is a run of segments,
-   * and after the first one it is no longer the circle it started as. */
-  gore: [number, number][][];
+  /** R17 — the MOUTH the minor road cuts in the main road's near edge:
+   * `from` and `to` are meters ALONG the main road's heading from the
+   * meeting point (so negative is back the way it came), and `side` says
+   * which half of the main road the dirt road arrives on — +1 to the
+   * heading's right. It is the gap in the kerb: the stretch where the main
+   * road's edge line, its shoulder and its border give way to the crossing,
+   * and the only thing about the junction the through road concedes.
+   *
+   * Measured from the road that actually got BUILT rather than from the
+   * corner's nominal arc, because a stage corner is a run of segments and
+   * after the first one it is no longer the circle it started as. Null
+   * until the minor arm has been walked. */
+  mouth: { from: number; to: number; side: -1 | 1 } | null;
   /** Arc position on the stage (association / pruning). */
   s: number;
   /** True where the route JOINS the sealed road, false where it leaves. */
@@ -556,10 +562,12 @@ function createCompiler(
   let pavedNow = paving.pavedAt(0);
   let flipWanted = false;
 
-  /** The road's PRISTINE heights, before any junction platform warped it
-   * (R17) — kept alongside the samples so a warp pass that overlaps an
-   * earlier one lands in exactly the same place instead of compounding. */
+  /** The road's PRISTINE heights and widths, before any junction warped or
+   * flared them (R17) — kept alongside the samples so a shaping pass that
+   * overlaps an earlier one lands in exactly the same place instead of
+   * compounding. */
   const rawY: number[] = [];
+  const rawWidth: number[] = [];
 
   /** Junctions found in this pass, waiting for their branches. The branch
    * has to run until it is clear of the stage's country (R17), and how big
@@ -665,77 +673,55 @@ function createCompiler(
       curve,
       width: track.width,
       reach,
-      radius: reach,
-      gore: [],
+      mouth: null,
       s: at.s,
       joining,
     });
   };
 
-  /** R17 — cut the gore nose for a junction, from the road that actually
-   * got built. Walks the MINOR road away from the meeting point, tracks
-   * its near edge against the main road's edge line, and paves the wedge
-   * between them from where they touch out to where the gap is wide
-   * enough to be an island. `step` is +1 where the minor road runs on from
-   * the junction and -1 where it runs back into it. */
-  const cutGore = (junction: RoadJunction, at: number, step: 1 | -1): void => {
-    const all = track.samples;
-    const turn = Math.sign(junction.curve);
-    const half = junction.width / 2;
-    const bx = Math.sin(junction.heading);
-    const bz = Math.cos(junction.heading);
-    const nx = Math.cos(junction.heading);
-    const nz = -Math.sin(junction.heading);
-    const edge = (i: number): { along: number; across: number } | null => {
-      const sample = all[i];
-      if (!sample) return null;
-      // The minor road's edge on the side the gore opens.
-      const rx = Math.cos(sample.heading);
-      const rz = -Math.sin(sample.heading);
-      const dx = sample.x - rx * half * turn - junction.x;
-      const dz = sample.z - rz * half * turn - junction.z;
-      return { along: dx * bx + dz * bz, across: (dx * nx + dz * nz) * turn };
-    };
-    const point = (along: number, across: number): [number, number] => [
-      junction.x + bx * along + nx * across * turn,
-      junction.z + bz * along + nz * across * turn,
-    ];
-    let prev: { along: number; across: number } | null = null;
-    const quads: [number, number][][] = [];
-    for (let k = 0; k < Math.ceil(R.junction.reach.max / SAMPLE_STEP); k++) {
-      const here = edge(at + k * step);
-      if (!here) break;
-      if (prev && prev.across < half && here.across >= half) {
-        // The touching point, interpolated — the gore has to start where
-        // the two edges actually cross, not at the next sample along.
-        const t = (half - prev.across) / (here.across - prev.across);
-        prev = {
-          along: prev.along + (here.along - prev.along) * t,
-          across: half,
-        };
-      }
-      if (prev && prev.across >= half) {
-        if (here.across - half > R.junction.goreNose) {
-          const t = (R.junction.goreNose + half - prev.across) / (here.across - prev.across);
-          const along = prev.along + (here.along - prev.along) * t;
-          quads.push([
-            point(prev.along, half),
-            point(prev.along, prev.across),
-            point(along, R.junction.goreNose + half),
-            point(along, half),
-          ]);
-          break;
-        }
-        quads.push([
-          point(prev.along, half),
-          point(prev.along, prev.across),
-          point(here.along, here.across),
-          point(here.along, half),
-        ]);
-      }
-      prev = here;
+  /** R17 — how far back down the MINOR road a mouth may reach, m. A
+   * proportion of the road's own width: the mouth of a lane and the mouth
+   * of a boulevard are the same place at two scales. */
+  const mouthRun = R.junction.mouth.run * track.width;
+
+  /** R17 — how much wider the MOUTH makes a sample of the minor road, m of
+   * extra half-width per side.
+   *
+   * The widening is the WEDGE and nothing else: the gap between this
+   * sample's near mat edge and the main road's, closed while it is narrow
+   * enough to be a seam and opening again over another seam's width past
+   * that. A flare of some fixed proportion instead widens the road hardest
+   * at the meeting point, where the two mats already lie on top of each
+   * other — which puts a mushroom of paving out into the field on the far
+   * side and fills nothing.
+   *
+   * Returns 0 for a sample that is not the minor road of any junction. The
+   * minor arm is the unsealed one, so which side of the meeting point it
+   * lies on follows from `joining` alone: the stage ARRIVES at a joining
+   * junction on the dirt and LEAVES a parting one on it. */
+  const mouthFlare = (sample: TrackSample): number => {
+    let widest = 0;
+    for (const junction of track.junctions) {
+      const d = junction.joining ? junction.s - sample.s : sample.s - junction.s;
+      if (d < 0 || d > mouthRun) continue;
+      const nx = Math.cos(junction.heading);
+      const nz = -Math.sin(junction.heading);
+      const across = (sample.x - junction.x) * nx + (sample.z - junction.z) * nz;
+      // The mat's own reach ACROSS the main road: a minor road running
+      // alongside spans its full half-width, one arriving square across it
+      // spans almost none — its length is what covers the ground there.
+      const spread =
+        (sample.width / 2) * Math.abs(Math.cos(sample.heading) * nx - Math.sin(sample.heading) * nz);
+      const gap = Math.abs(across) - spread - junction.width / 2;
+      const seam = R.junction.mouth.seam;
+      if (gap <= 0 || gap >= 2 * seam) continue;
+      // Under a seam the wedge is paved out entirely; past one it opens
+      // over a second seam's worth rather than in a step, so the mouth has
+      // no edge a driver can see the end of.
+      const extra = Math.min(gap, seam) * Math.min(1, (2 * seam - gap) / seam);
+      if (extra > widest) widest = extra;
     }
-    junction.gore = quads;
+    return widest;
   };
 
   /** R23/R24 — the ground a branch has to keep off, as a distance query:
@@ -1061,15 +1047,23 @@ function createCompiler(
     }
   };
 
-  /** R17 — warp the road onto its junctions' platforms. Inside a junction
-   * the two carriageways are one graded plane: the crown, the camber and
-   * the wheel tracks come out (`flat`) and the centerline eases onto the
-   * plane the main road's grade defines. Run off the PRISTINE heights, so
-   * a pass that overlaps an earlier one lands in the same place. */
-  const platformWarp = (from: number): void => {
+  /** R17 — SHAPE THE JUNCTIONS, over the road that has now been walked.
+   * Two things happen to a sample near a crossing, and both are run off the
+   * PRISTINE height and width so a pass that overlaps an earlier one lands
+   * in exactly the same place instead of compounding:
+   *
+   * - It is warped onto the platform. Inside a junction the two carriageways
+   *   are one graded plane: the crown, the camber and the wheel tracks come
+   *   out (`flat`) and the centerline eases onto the plane the main road's
+   *   grade defines.
+   * - If it is the MINOR road, its mat FLARES. The dirt road opens out into
+   *   its mouth over the last stretch, until it meets the main road's edge
+   *   with no wedge of country left between them — which is the difference
+   *   between two roads that meet and two ribbons that collided. */
+  const shapeJunctions = (from: number): void => {
     if (track.junctions.length === 0) return;
     const all = track.samples;
-    const reach = Math.ceil(R.junction.reach.max / SAMPLE_STEP) + 1;
+    const reach = Math.ceil(Math.max(R.junction.reach.max, mouthRun) / SAMPLE_STEP) + 1;
     const start = Math.max(0, from - reach);
     for (let i = start; i < all.length; i++) {
       const sample = all[i];
@@ -1084,6 +1078,62 @@ function createCompiler(
       }
       sample.flat = flat;
       sample.elevation = rawY[i] * (1 - flat) + plane * flat;
+      // Back to the pristine width BEFORE the mouth is measured — the flare
+      // reads the mat's own reach across the main road, so a pass that ran
+      // over this sample already would otherwise flare a flare.
+      sample.width = rawWidth[i];
+      sample.width += 2 * mouthFlare(sample);
+    }
+  };
+
+  /** R17 — and then MEASURE the mouth each junction ended up with: the
+   * stretch of the main road's near edge the dirt road's flared mat runs
+   * across. That span is the gap in the kerb — where the through road's
+   * edge line, its shoulder and its border give way — and it is measured
+   * from the built road rather than derived from the corner, because the
+   * flare above is what decides how wide the opening came out.
+   *
+   * Both edges of the minor mat are projected, not just its centerline: the
+   * opening is as wide as the road that crosses it, and a span taken off
+   * the centerline alone leaves the kerb painted across half the throat. */
+  const measureMouths = (): void => {
+    for (const junction of track.junctions) {
+      // Once measured it never moves, and a `leaving` junction's minor arm
+      // is the road AFTER it — so it waits for the road to be walked. An
+      // endless stream calls this every append; without both guards it
+      // re-measures every crossing it has ever built, against samples it
+      // has since pruned from the front.
+      if (junction.mouth) continue;
+      if (!junction.joining && track.length < junction.s + mouthRun) continue;
+      const bx = Math.sin(junction.heading);
+      const bz = Math.cos(junction.heading);
+      const nx = Math.cos(junction.heading);
+      const nz = -Math.sin(junction.heading);
+      const half = junction.width / 2;
+      let from = Infinity;
+      let to = -Infinity;
+      let lean = 0;
+      for (const sample of track.samples) {
+        const d = junction.joining ? junction.s - sample.s : sample.s - junction.s;
+        if (d < 0 || d > mouthRun) continue;
+        const rx = Math.cos(sample.heading);
+        const rz = -Math.sin(sample.heading);
+        for (const k of [-1, 0, 1]) {
+          const dx = sample.x + rx * (sample.width / 2) * k - junction.x;
+          const dz = sample.z + rz * (sample.width / 2) * k - junction.z;
+          const across = dx * nx + dz * nz;
+          // Only what stands ON the main road's near half is part of the
+          // opening: the mouth is a gap in one kerb, and the minor road's
+          // far shoulder out in the field is not in it.
+          if (Math.abs(across) > half + R.junction.mouthLip) continue;
+          lean += across;
+          const along = dx * bx + dz * bz;
+          if (along < from) from = along;
+          if (along > to) to = along;
+        }
+      }
+      junction.mouth =
+        from <= to ? { from, to, side: lean >= 0 ? 1 : -1 } : null;
     }
   };
 
@@ -1246,6 +1296,7 @@ function createCompiler(
         sample.bank = bankRate(curvature, sample);
         track.samples.push(sample);
         rawY.push(sample.elevation);
+        rawWidth.push(sample.width);
         if (checkpointDue >= 0 && cursor.s >= checkpointDue) {
           track.checkpoints.push({ s: cursor.s, index: track.samples.length - 1 });
           checkpointS = cursor.s;
@@ -1279,16 +1330,11 @@ function createCompiler(
     }
     paveLift(firstNew);
     bankRunoff(firstNew);
-    platformWarp(firstNew);
-    // The gore is cut from the road on BOTH sides of the meeting point, so
-    // it waits until the corner it belongs to has actually been walked.
-    const fromS = firstNew * SAMPLE_STEP - R.junction.reach.max;
-    for (const junction of track.junctions) {
-      if (junction.s < fromS) continue;
-      const at = Math.round(junction.s / SAMPLE_STEP) - 1;
-      if (at < 1 || at >= track.samples.length - 1) continue;
-      cutGore(junction, at, junction.joining ? -1 : 1);
-    }
+    shapeJunctions(firstNew);
+    // The mouth is measured from the flared road, so it waits for the pass
+    // that flares it — and for the minor arm on BOTH sides of the meeting
+    // point to have been walked.
+    measureMouths();
     buildForks();
   };
 

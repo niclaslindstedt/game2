@@ -21,6 +21,7 @@ import {
   junctionDust,
   junctionFlat,
   junctionMainEdge,
+  junctionMouth,
   rutAt,
   wearAt,
   type Track,
@@ -124,6 +125,16 @@ function mainEdgeAt(track: Track, x: number, z: number): number | null {
     if (best === null || out < best) best = out;
   }
   return best;
+}
+
+/** R17 — is this point standing in the MOUTH of any junction: the gap the
+ * dirt road cuts in the main road's near kerb, and the only place a
+ * crossing interrupts the through road's markings. */
+function inMouth(track: Track, x: number, z: number): boolean {
+  for (const junction of track.junctions) {
+    if (junctionMouth(junction, x, z)) return true;
+  }
+  return false;
 }
 
 /** R16 — how far in from the mat's outer edge the surfacing starts giving
@@ -561,7 +572,6 @@ export function buildSkirts(
  * `kerbs.ts`. Fords and bridge decks carry nothing either way. Markings run
  * the stage proper, never the aprons — pass the bare range. */
 export function buildMarkings(track: Track, samples: Ribbon[], width: number): THREE.Mesh {
-  const half = width / 2;
   const positions: number[] = [];
   const colors: number[] = [];
   const indices: number[] = [];
@@ -609,25 +619,33 @@ export function buildMarkings(track: Track, samples: Ribbon[], width: number): T
   };
 
   const plain = (s: Ribbon): boolean =>
-    s.surface !== "water" &&
-    s.deck == null &&
-    junctionAt(track, s.x, s.z) < 0.4 &&
-    !onMainMat(track, s.x, s.z);
+    s.surface === "asphalt" && s.deck == null && !onMainMat(track, s.x, s.z);
   for (const side of [-1, 1]) {
-    // Asphalt: a solid white edge line, a hand's width inside the kerb.
+    // Asphalt: a solid white edge line, a hand's width inside the kerb —
+    // and it runs straight past a junction, breaking only across the MOUTH
+    // the dirt road cuts in this side's kerb (R17). Asked at the line's own
+    // position rather than at the road's centre, because a crossing opens
+    // one kerb and leaves the other painted.
+    const inner = (s: Ribbon): number => ((s.width ?? width) / 2 - 0.65) * side;
     strip(
-      () => (half - 0.65) * side,
-      () => (half - 0.3) * side,
-      (s) => plain(s) && s.surface === "asphalt",
+      inner,
+      (s) => ((s.width ?? width) / 2 - 0.3) * side,
+      (s) => {
+        if (!plain(s)) return false;
+        const r = rightOf(s.heading);
+        const at = inner(s);
+        return !inMouth(track, s.x + r.x * at, s.z + r.z * at);
+      },
       () => paint,
       side > 0,
     );
   }
-  // ...and the broken centre line, 3 m of paint every 9.
+  // ...and the broken centre line, 3 m of paint every 9. Nothing interrupts
+  // it: the through road is the one that does not notice the crossing.
   strip(
     () => -0.16,
     () => 0.16,
-    (s) => plain(s) && s.surface === "asphalt" && s.s % 9 < 3,
+    (s) => plain(s) && s.s % 9 < 3,
     () => paint,
     false,
   );

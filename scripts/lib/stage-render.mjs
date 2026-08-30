@@ -89,6 +89,7 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
     junctionDust,
     junctionFlat,
     junctionMainEdge,
+    junctionMouth,
   } = engine;
   const canvas = createCanvas(width, height, GROUND.grass);
 
@@ -225,9 +226,19 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
    * stands on the mat of the road it meets. */
   const inJunction = (x, z) => {
     if (track.junctions.some((j) => junctionFlat(j, x, z) > 0.25)) return true;
+    return onMainMat(x, z);
+  };
+  /** ...and the narrower question the MARKINGS ask: is this piece of road
+   * standing on the main road's own mat, where a minor road has no border
+   * of its own to paint. */
+  const onMainMat = (x, z) => {
     const past = pastMainEdge(x, z);
     return past !== null && past < 1.5;
   };
+  /** R17 — is a point in a junction's MOUTH: the gap the dirt road cuts in
+   * the main road's near kerb, and the only place a crossing interrupts the
+   * through road's paint. */
+  const inMouth = (x, z) => track.junctions.some((j) => junctionMouth(j, x, z));
 
   const bandColor = (sample, lat, roadWidth, x, z) => {
     const half = roadWidth / 2;
@@ -276,11 +287,18 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
       const c = samples[i];
       const ar = { x: Math.cos(a.heading), z: -Math.sin(a.heading) };
       const cr = { x: Math.cos(c.heading), z: -Math.sin(c.heading) };
+      // The station list is built once at the nominal width and SCALED by
+      // the road's own width HERE, exactly as the game's ribbon does — a
+      // picture drawn at the nominal width cannot show a mouth flaring
+      // (R17) or the gravel road wandering wider (R33), which are two of
+      // the things this picture exists to judge.
+      const wideC = (c.width ?? roadWidth) / roadWidth;
+      const wideA = (a.width ?? roadWidth) / roadWidth;
       for (let k = 0; k < lat.length - 1; k++) {
         const l0 = lat[k];
         const l1 = lat[k + 1];
-        const lm = (l0 + l1) / 2;
-        const color = bandColor(c, lm, roadWidth, c.x + cr.x * lm, c.z + cr.z * lm);
+        const lm = ((l0 + l1) / 2) * wideC;
+        const color = bandColor(c, lm, c.width ?? roadWidth, c.x + cr.x * lm, c.z + cr.z * lm);
         if (!color) continue;
         // Shade the band by its own cross-fall, so the crown, the ruts and
         // the corner's bank are visible as SHAPE and not only as color.
@@ -288,10 +306,10 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
         const light = 1 + Math.max(-0.28, Math.min(0.28, fall * 1.6));
         canvas.poly(
           [
-            [px(a.x + ar.x * l0), pz(a.z + ar.z * l0)],
-            [px(c.x + cr.x * l0), pz(c.z + cr.z * l0)],
-            [px(c.x + cr.x * l1), pz(c.z + cr.z * l1)],
-            [px(a.x + ar.x * l1), pz(a.z + ar.z * l1)],
+            [px(a.x + ar.x * l0 * wideA), pz(a.z + ar.z * l0 * wideA)],
+            [px(c.x + cr.x * l0 * wideC), pz(c.z + cr.z * l0 * wideC)],
+            [px(c.x + cr.x * l1 * wideC), pz(c.z + cr.z * l1 * wideC)],
+            [px(a.x + ar.x * l1 * wideA), pz(a.z + ar.z * l1 * wideA)],
           ],
           shade(color, light),
         );
@@ -304,12 +322,15 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
    * so it is only drawn when it would actually read. */
   const drawMarkings = (samples, roadWidth) => {
     if (scale < 0.55) return;
-    const half = roadWidth / 2;
     for (let i = 1; i < samples.length; i++) {
       const a = samples[i - 1];
       const c = samples[i];
+      const half = (c.width ?? roadWidth) / 2;
       if (c.surface === "water" || c.deck != null) continue;
-      if (inJunction(c.x, c.z)) continue;
+      // R17 — the through road's paint runs PAST a crossing; only the kerb
+      // the dirt road opens gives way, and that is asked at the edge line's
+      // own position below.
+      if (onMainMat(c.x, c.z)) continue;
       const ar = { x: Math.cos(a.heading), z: -Math.sin(a.heading) };
       const cr = { x: Math.cos(c.heading), z: -Math.sin(c.heading) };
       const band = (l0, l1, color) =>
@@ -323,7 +344,11 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
           color,
         );
       if (c.surface === "asphalt") {
-        for (const side of [-1, 1]) band((half - 0.65) * side, (half - 0.3) * side, ROAD.marking);
+        for (const side of [-1, 1]) {
+          const at = (half - 0.65) * side;
+          if (inMouth(c.x + cr.x * at, c.z + cr.z * at)) continue;
+          band(at, (half - 0.3) * side, ROAD.marking);
+        }
         if (c.s % 9 < 3) band(-0.2, 0.2, ROAD.marking);
       } else {
         const stripe = Math.floor(c.s / 4) % 2 === 0 ? ROAD.rumbleRed : ROAD.rumbleWhite;
@@ -338,17 +363,6 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
   }
   drawRoad(track.samples, track.width);
   drawMarkings(track.samples, track.width);
-  // The junction gore noses: the pavement carried out to where the two
-  // carriageways have parted enough for the grass between them to be an
-  // island rather than a knife edge (R17).
-  for (const junction of track.junctions) {
-    for (const quad of junction.gore) {
-      canvas.poly(
-        quad.map(([x, z]) => [px(x), pz(z)]),
-        ROAD.asphalt.worn,
-      );
-    }
-  }
   // The tape and cones across every abandoned branch: the stage does not
   // go this way. Drawn LAST, because a closure the road is painted over is
   // no closure at all — and set past the junction's own platform, where a

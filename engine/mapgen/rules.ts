@@ -54,10 +54,17 @@
 //       that falls gently away to the landscape. No ditch — a trench beside
 //       a rally road is a trap the eye reads as a scar, not as drainage.
 //   R17 Roads MEET at a planned junction, ON the centerline: the route turns
-//       off (or onto) the road at a real corner, the arm it abandons carries
-//       straight on along the corner's tangent and runs off the map, and the
-//       ground where the two carriageways overlap is one graded platform —
-//       no borders, no markings, one surface, one plane.
+//       off (or onto) the road at a real corner, and the SEALED road runs
+//       STRAIGHT THROUGH — the route's collinear arm on one side, the arm it
+//       abandons on the other, same width, same surface, its markings
+//       unbroken past the crossing. The dirt road is the MINOR one: it
+//       arrives at an angle and its mouth FLARES, widening as it closes on
+//       the tarmac the way every car that has turned out of it has widened
+//       it, until its mat meets the main road's edge with no country left
+//       between them. The ground they share is one graded platform, and the
+//       abandoned arm is taped shut and runs off the map STILL SEALED — a
+//       tarmac road that turns to gravel in an empty field is a road that
+//       goes nowhere.
 //   R19 Turns are BANKED. A road built through a corner is superelevated so
 //       water and cars both stay on it: the cross-fall rolls from the crown
 //       into the turn over a runoff, tops out at `bank.max` for the
@@ -849,11 +856,37 @@ export const STAGE_RULES = {
     platform: 0.95,
     /** ...clamped, m, so a junction is a junction and not a car park. */
     reach: { min: 20, max: 40 },
-    /** Where the two carriageways have parted by this much, the paving
-     * stops and the grass gore between them starts, m. Below it the gap is
-     * a seam, not an island, and paving over it is what keeps a junction
-     * from ending in a knife edge of grass. */
-    goreNose: 7,
+
+    /** R17 — THE MOUTH: how the MINOR road opens out where it meets the
+     * sealed one. A dirt road that arrives at a junction the same width it
+     * ran at leaves a wedge of country between its near edge and the main
+     * road's, tapering to a knife point — which is the tell that two
+     * ribbons collided rather than two roads meeting. In life there is no
+     * wedge, and the reason is traffic: every car that turns out of the
+     * lane cuts the corner, and season after season the mouth is worn and
+     * bladed WIDER until the two mats are one piece of ground.
+     *
+     * So the minor road's mat is flared over the last stretch into the
+     * junction — by exactly as much as the gap between it and the main
+     * road's edge, so the widening is the wedge and nothing else. A flare
+     * of a fixed proportion instead is what puts a mushroom of tarmac out
+     * into the field at the meeting point, where the two mats already
+     * overlap and there is no wedge to fill.
+     *
+     * `run` is how far back down the minor road the mouth may reach, in
+     * road WIDTHS — the same proportion argument as `junctionParts`,
+     * because the mouth of a lane and the mouth of a boulevard are the same
+     * PLACE at two scales. `seam` is where a gap stops being one, m: under
+     * it the country between the two carriageways is a seam and gets paved
+     * over, and past it the roads have genuinely parted and the field
+     * between them opens up over another `seam`'s worth of widening rather
+     * than in a step. */
+    mouth: { run: 1.9, seam: 7 },
+    /** ...and how far past the main road's own edge the mouth's opening is
+     * counted, m — the stretch of edge line and border a driver turning in
+     * has worn away either side of the throat. Small: a junction is a gap
+     * in the kerb, not a missing kilometre of road marking. */
+    mouthLip: 3,
     /** R23's exemption around a junction, m of stage arc either side of it.
      * A branch leaves a junction ON the road it is leaving, so it cannot be
      * measured against that road while it is still LEAVING. Wide enough to

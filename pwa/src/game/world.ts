@@ -22,7 +22,6 @@ import {
   createKerbField,
   createRng,
   inStream,
-  junctionPlatformY,
   markersBetween,
   type GameState,
   type Season,
@@ -52,13 +51,12 @@ import { buildRoadSpill } from "./road-spill.ts";
 import { buildWild } from "./wild.ts";
 import { buildTerrain, LAKE_Y, type Terrain } from "./terrain.ts";
 import { buildStreamMeshes } from "./streams.ts";
-import { gravelTexture, waterTexture } from "./textures.ts";
+import { waterTexture } from "./textures.ts";
 import { buildFinishGate, buildStartGate, type FinishGate, type Muzzle } from "./finish-gate.ts";
 import { buildKerbing, createPostField } from "./kerbs.ts";
 import { buildCrowd, type Crowd } from "./crowd.ts";
 import { rightOf } from "./ribbon.ts";
 import {
-  ROAD_PAINT,
   buildChippings,
   buildFords,
   buildMarkings,
@@ -642,41 +640,6 @@ function buildSpur(track: Track, spur: Spur, cones: ConeField, beside: GroundBes
   return group;
 }
 
-/** R17 — the junction paving. The two carriageways already cover the
- * ground where they overlap; what they cannot cover is the wedge between
- * them where the corner has just pulled them apart, and a junction that
- * ends in a knife edge of grass driven to a point is the tell that nobody
- * planned it. So this lays the gore nose: pavement carried out to where
- * the gap has opened enough to be an island, on the junction's own graded
- * plane, and no further. */
-function buildJunctions(track: Track, from: number, to: number): THREE.Group {
-  const group = new THREE.Group();
-  const fromS = from === 0 ? -Infinity : track.samples[from].s;
-  const toS = track.samples[to - 1].s;
-  const mat = new THREE.MeshLambertMaterial({
-    map: gravelTexture(),
-    color: new THREE.Color(ROAD_PAINT.asphalt.worn),
-    side: THREE.DoubleSide,
-  });
-  for (const junction of track.junctions) {
-    if (junction.s < fromS || junction.s > toS) continue;
-    for (const quad of junction.gore) {
-      const positions: number[] = [];
-      const uvs: number[] = [];
-      for (const [x, z] of quad) {
-        positions.push(x, junctionPlatformY(junction, x, z) + 0.03, z);
-        uvs.push(x / 3.5, z / 3.5);
-      }
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-      geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
-      geo.setIndex([0, 1, 2, 0, 2, 3]);
-      geo.computeVertexNormals();
-      group.add(new THREE.Mesh(geo, mat));
-    }
-  }
-  return group;
-}
 
 export type World = {
   group: THREE.Group;
@@ -863,7 +826,6 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
     const chippings = buildChippings(track, bare, track.width);
     if (chippings) chunkGroup.add(chippings);
     chunkGroup.add(buildBridges(track, from, to, terrain.heightAt));
-    chunkGroup.add(buildJunctions(track, from, to));
     // The branches this stretch of road forks off at its paving junctions.
     for (; spurScan < track.spurs.length; spurScan++) {
       const spur = track.spurs[spurScan];
