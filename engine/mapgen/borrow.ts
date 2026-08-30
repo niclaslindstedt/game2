@@ -15,6 +15,17 @@
 // which already crosses the map. The junction is where the two meet, and it
 // is a place because both roads were there before it.
 //
+// The approach is SOLVED, not steered. A route that chases the nearest
+// point on the tarmac arrives broadside; one that eases onto the road's own
+// line arrives parallel, and a corner joining a road covers
+// `radius · (1 − cos turn)` of sideways ground, so a parallel arrival needs
+// an infinite radius and is refused however close it gets. What actually
+// joins a road is the same turn-straight-turn a circuit closes onto its own
+// grid with (`solveCsc`): pick a point on the tarmac, and solve the pieces
+// that ARRIVE there pointing down it. The last of those pieces is the
+// junction — so it is drawn from the corners R17 says a junction may sit
+// at, and the geometry is a junction rather than being decorated into one.
+//
 // Everything here is geometry over the segment vocabulary the rest of the
 // search speaks, so the borrowed stretch is validated against R9 and R10
 // exactly like any other candidate: a borrow that would take the route out
@@ -23,12 +34,17 @@
 
 import type { Highway, HighwayNetwork } from "./highway.ts";
 import { STAGE_RULES as R, type SegmentPlan } from "./rules.ts";
-import type { Cursor } from "./search.ts";
+import { DIR_PAIRS, solveCsc, solveRadii, type Pose } from "./search.ts";
 
 /** How far apart the followed road is cut into segments, m. Short enough
  * that a public road's bend is tracked rather than chorded across, long
  * enough that a borrowed kilometre is a dozen segments and not a hundred. */
 const FOLLOW_STEP = 70;
+
+/** How many radii per severity the approach solves at. Three is the ladder
+ * the circuit's closure uses; the approach has a whole road to aim at
+ * rather than one pose, so it does not need a finer one. */
+const APPROACH_RADII = 3;
 
 /** Fold an angle into -PI..PI. */
 function wrap(a: number): number {
@@ -38,62 +54,27 @@ function wrap(a: number): number {
   return d;
 }
 
-/** R17 — the TURN ONTO the tarmac, solved rather than drawn.
- *
- * A car joining a road does not arrive at it and then start turning: it
- * turns so that it ARRIVES already on the road, which is one arc, and which
- * arc it is follows from the geometry rather than from the vocabulary. Take
- * the cursor's turning centre for a radius `r` — a road's width to the left
- * or right of where it is pointing — and the arc becomes tangent to the
- * road exactly when that centre sits `r` from the road's own line. That is
- * linear in `r`, so there is one radius that joins, and this solves for it.
- *
- * Returns null where the answer is not a corner a road would be built with:
- * the wrong side, a radius tighter than a hairpin, or one so open the two
- * roads merge over a hundred meters instead of meeting.
- */
-export function solveJoin(
-  cursor: Cursor,
-  /** A point ON the road's centerline, and the direction of travel along it
-   * that the route is joining INTO. */
-  at: { x: number; z: number },
-  along: number,
-  radii: { min: number; max: number },
-): { dir: 1 | -1; radius: number; angle: number } | null {
-  // The road's own normal, and how far off its line the cursor stands.
-  const mx = Math.cos(along);
-  const mz = -Math.sin(along);
-  const off = (cursor.x - at.x) * mx + (cursor.z - at.z) * mz;
-  const turn = wrap(along - cursor.heading);
-  if (turn === 0) return null;
-  const dir: 1 | -1 = turn > 0 ? 1 : -1;
-  // The centre sits `r` to the turning side of the cursor: its offset from
-  // the road's line is `off + r · (n̂ · m̂)`, and the arc is tangent when the
-  // magnitude of that is `r`.
-  const nx = Math.cos(cursor.heading) * dir;
-  const nz = -Math.sin(cursor.heading) * dir;
-  const dot = nx * mx + nz * mz;
-  // The centre stands `off + r·dot` from the road's line, and the arc is
-  // tangent when the magnitude of that is `r`. The centre is on the same
-  // side of the road as the cursor — it is turning toward the road, not
-  // away past it — so the sign follows `off`, and
-  //
-  //     sign·(off + r·dot) = r   ->   r = |off| / (1 − sign·dot)
-  //
-  // A root that comes out negative is the arc curving away from the road:
-  // no corner there, and the caller tries again further along.
-  const side = off >= 0 ? 1 : -1;
-  const denom = 1 - side * dot;
-  if (Math.abs(denom) < 1e-6) return null;
-  const radius = Math.abs(off) / denom;
-  if (!(radius > 0) || radius < radii.min || radius > radii.max) return null;
-  const angle = Math.abs(turn);
-  return { dir, radius, angle };
+/** R17 — how far along the main road two carriageways still overlap after
+ * a corner of this radius: the arc the turn has to run before it has
+ * carried the route clear of the main road's mat. Stated here as well as in
+ * the compiler because it is what decides whether a corner is a junction at
+ * all, and the approach has to solve for one that IS. */
+function partedAt(radius: number, width: number): number {
+  const cos = Math.max(-1, Math.min(1, 1 - width / radius));
+  return radius * Math.acos(cos);
+}
+
+/** The corners a junction may sit at: inside R17's angle band, and tight
+ * enough that the two carriageways actually part. */
+function junctionCorners(width: number): { radius: number; severity: SegmentPlan["severity"] }[] {
+  return solveRadii(APPROACH_RADII).filter(
+    (c) => partedAt(c.radius, width) <= R.paving.junctionParts * width,
+  );
 }
 
 export type Borrow = {
-  /** The corner that turns onto the tarmac (unpaved — it is the dirt
-   * road's own mouth), then the run along it, then the corner off. */
+  /** The approach (a corner, a straight and the junction's own corner),
+   * then the run along the tarmac, then the corner off it. */
   plans: SegmentPlan[];
   /** Which road was borrowed, and the span of its points the route ran. */
   road: number;
@@ -111,44 +92,130 @@ export type Borrow = {
  * would be left on a tarmac road it never leaves. Built whole, it is
  * validated whole and dropped whole. */
 export function planBorrow(
-  cursor: Cursor,
+  from: Pose,
   network: HighwayNetwork,
+  width: number,
+  /** How far the route stays on the tarmac once it is on it, m. */
   runOn: number,
-  radii: { min: number; max: number },
 ): Borrow | null {
-  const hit = network.nearest(cursor.x, cursor.z);
-  if (!hit || hit.d > R.paving.borrow.joinReach) return null;
+  const hit = network.nearest(from.x, from.z);
+  if (!hit || hit.d > R.paving.borrow.seek) return null;
   const road = hit.road;
-  const at = road.points[hit.index];
-  // Which way along the road the route is going: whichever needs less
-  // turning. A road runs both ways and the rally takes the one it is
-  // already pointing down.
-  const ahead = Math.abs(wrap(at.heading - cursor.heading));
-  const back = Math.abs(wrap(at.heading + Math.PI - cursor.heading));
-  const forward = ahead <= back;
-  const along = forward ? at.heading : at.heading + Math.PI;
-  if (Math.min(ahead, back) > R.paving.borrow.joinAngle) return null;
+  const meet = R.paving.borrow.meet;
+  const perPoint = road.points[1].s - road.points[0].s;
+  const stride = Math.max(1, Math.round(meet.step / perPoint));
+  const span = Math.ceil(meet.reach / perPoint);
+  const corners = junctionCorners(width);
+  const approach = solveRadii(APPROACH_RADII);
+  const straight = { min: R.straightShort.min, max: R.straightLong.max };
+  /** How far a meeting point can be from the cursor and still be reachable
+   * by one turn-straight-turn: the straight's ceiling plus what the two
+   * corners can carry. Anything past it has no solve to find, and looking
+   * for one is the whole cost of a borrow that fails — which is most of
+   * them, since the route asks at every corner while the dial wants
+   * tarmac. */
+  const reach = straight.max + 4 * R.turn.soft.radius.max;
 
-  const join = solveJoin(cursor, at, along, radii);
-  if (!join) return null;
-  const plans: SegmentPlan[] = [
-    {
-      kind: "turn",
-      length: join.radius * join.angle,
-      dir: join.dir,
-      radius: join.radius,
-      severity: "medium",
-      feature: "none",
-    },
-  ];
+  // Every place on the road worth meeting, nearest first: a junction close
+  // to where the route already is costs the stage less detour than one at
+  // the far end of the look.
+  for (let step = 0; step <= span; step += stride) {
+    for (const side of step === 0 ? [1] : [1, -1]) {
+      const index = hit.index + side * step;
+      if (index < 0 || index >= road.points.length) continue;
+      const at = road.points[index];
+      if (Math.hypot(at.x - from.x, at.z - from.z) > reach) continue;
+      // A road runs both ways and the rally may take either, so both are
+      // solved for; which one comes out is whichever the vocabulary can
+      // actually arrive on.
+      for (const forward of [true, false]) {
+        const goal: Pose = {
+          x: at.x,
+          z: at.z,
+          heading: forward ? at.heading : at.heading + Math.PI,
+        };
+        for (const first of approach) {
+          const band1 = R.turn[first.severity ?? "medium"].angle;
+          for (const last of corners) {
+            const band2 = R.turn[last.severity ?? "medium"].angle;
+            for (const [d1, d2] of DIR_PAIRS) {
+              const solved = solveCsc(from, goal, first.radius, last.radius, d1, d2);
+              if (!solved) continue;
+              if (solved.arc1 < band1.min || solved.arc1 > band1.max) continue;
+              if (solved.arc2 < band2.min || solved.arc2 > band2.max) continue;
+              // R17 — the arrival corner IS the junction, so its angle is
+              // the junction's: too shallow and the two roads merge at a
+              // glance, too tight and the junction is a hairpin.
+              if (
+                solved.arc2 < R.paving.junctionAngle.min ||
+                solved.arc2 > R.paving.junctionAngle.max
+              ) {
+                continue;
+              }
+              if (solved.straight < straight.min || solved.straight > straight.max) continue;
+              const plans: SegmentPlan[] = [
+                {
+                  kind: "turn",
+                  length: first.radius * solved.arc1,
+                  dir: d1,
+                  radius: first.radius,
+                  severity: first.severity,
+                  feature: "none",
+                },
+                { kind: "straight", length: solved.straight, feature: "none" },
+                {
+                  kind: "turn",
+                  length: last.radius * solved.arc2,
+                  dir: d2,
+                  radius: last.radius,
+                  severity: last.severity,
+                  feature: "none",
+                },
+              ];
+              const ran = followRoad(road, index, forward, runOn, plans);
+              if (ran === null) continue;
+              // ...and the corner off it, back onto the dirt. Drawn rather
+              // than solved: where the route goes after a junction is the
+              // stage's business, and the only thing it has to be is a
+              // corner R17 would put a junction at.
+              const off = corners[corners.length - 1];
+              plans.push({
+                kind: "turn",
+                length: off.radius * R.paving.junctionAngle.min,
+                dir: d2 === 1 ? -1 : 1,
+                radius: off.radius,
+                severity: off.severity,
+                feature: "none",
+              });
+              return { plans, road: network.roads.indexOf(road), from: index, to: ran };
+            }
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
 
-  // ...then the road itself, cut into segments that track its bend. A
-  // public road's curvature is gentle by construction, so most of these
-  // come out straight — which is what a road across open country is.
+/** Cut `runOn` metres of the road into segments that track its bend, from
+ * `index` onward, appending them to `plans`. Returns the index it reached,
+ * or null where the road runs out first — a route that would drive off the
+ * end of the tarmac it borrowed is not a borrow.
+ *
+ * A public road's curvature is gentle by construction, so most of what
+ * comes out is straight — which is what a road across open country is. */
+function followRoad(
+  road: Highway,
+  index: number,
+  forward: boolean,
+  runOn: number,
+  plans: SegmentPlan[],
+): number | null {
   const step = forward ? 1 : -1;
   const perPoint = road.points[1].s - road.points[0].s;
   const chunk = Math.max(2, Math.round(FOLLOW_STEP / perPoint));
-  let i = hit.index;
+  const widest = R.turn.soft.radius.max;
+  let i = index;
   let ran = 0;
   while (ran < runOn) {
     const next = i + step * chunk;
@@ -156,10 +223,10 @@ export function planBorrow(
     const a = road.points[i];
     const b = road.points[next];
     const length = Math.abs(b.s - a.s);
-    const turn = wrap((forward ? b.heading - a.heading : a.heading - b.heading) * 1);
+    const turn = wrap(forward ? b.heading - a.heading : a.heading - b.heading);
     const bend = Math.abs(turn) > 1e-4 ? length / Math.abs(turn) : Infinity;
     plans.push(
-      bend > radii.max
+      bend > widest
         ? { kind: "straight", length, feature: "none", paved: true }
         : {
             kind: "turn",
@@ -174,64 +241,8 @@ export function planBorrow(
     ran += length;
     i = next;
   }
-
-  // ...and the corner off it, back onto the dirt. Drawn rather than solved:
-  // where the route goes after a junction is the stage's business, and the
-  // only thing this has to be is a corner a road is built with.
-  const off = Math.min(radii.max, Math.max(radii.min, (radii.min + radii.max) / 2));
-  plans.push({
-    kind: "turn",
-    length: off * (Math.PI / 2.4),
-    dir: join.dir === 1 ? -1 : 1,
-    radius: off,
-    severity: "medium",
-    feature: "none",
-  });
-  return { plans, road: network.roads.indexOf(road), from: hit.index, to: i };
+  return i;
 }
-
-/** How the route should be steered to ARRIVE at the tarmac rather than
- * merely to reach it, as a heading error: positive turns the heading
- * toward the answer.
- *
- * Aiming straight at the nearest point on the road is what a search does
- * when it wants to touch one; it is not what a road builder does. A route
- * pointed at the tarmac meets it broadside, at an angle no junction is
- * built with, and the join is refused — so it wanders past and tries again
- * from the other side, forever. What this steers by instead is the road's
- * own LINE: close the cross-track error, and turn onto the road's heading
- * as the error goes to nothing, which is how anything follows a line and is
- * what puts the route alongside the tarmac pointing down it.
- *
- * Null where there is no tarmac on the map at all. */
-export function steerToTarmac(cursor: Cursor, network: HighwayNetwork): number | null {
-  const hit = network.nearest(cursor.x, cursor.z);
-  if (!hit) return null;
-  const at = hit.road.points[hit.index];
-  // Down the road the way the route is already pointing: a rally joins the
-  // carriageway it is going along, not the one coming the other way.
-  const ahead = Math.abs(wrap(at.heading - cursor.heading));
-  const along = ahead <= Math.PI / 2 ? at.heading : at.heading + Math.PI;
-  const mx = Math.cos(along);
-  const mz = -Math.sin(along);
-  const off = (cursor.x - at.x) * mx + (cursor.z - at.z) * mz;
-  // Cross toward the road at a HELD angle, and keep holding it right up to
-  // the kerb. Easing onto the road's own heading as the offset closes — the
-  // way anything follows a line — is what makes this fail: a corner that
-  // joins a road covers `radius · (1 − cos turn)` of sideways ground, so an
-  // approach that arrives parallel needs an infinite radius, and every join
-  // is refused however close the route gets. What the solver wants is to be
-  // met a few dozen metres out at a real angle, which is also what a
-  // junction looks like.
-  const want = along - Math.sign(off || 1) * APPROACH;
-  return wrap(want - cursor.heading);
-}
-
-/** The angle an approach crosses the road at, radians. Inside the join's own
- * ceiling with room to spare, and steep enough that the corner onto the
- * tarmac lands in the turn vocabulary rather than needing a radius no road
- * is built with. */
-const APPROACH = Math.PI / 3.6;
 
 /** The slice of a road either side of a borrowed stretch: the arms the
  * route does NOT take at its two junctions. Not built — CUT, from a road

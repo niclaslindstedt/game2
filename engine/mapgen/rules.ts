@@ -983,38 +983,31 @@ export const STAGE_RULES = {
      * generator painted: it is a piece of a real road the rally went and
      * found. This group is how it goes and finds one.
      *
-     * `seek` is how far the route will steer toward tarmac before giving up
-     * on this run and carrying on down the country, m — generous, because
-     * failing to find it costs nothing but a gravel stage, while cutting
-     * the search short costs the `asphalt` dial its meaning.
+     * `seek` is how far off the tarmac the route will consider a join
+     * from, m. It is a REACH, not a taste: the approach is one
+     * turn-straight-turn, so the furthest road it can arrive on is the
+     * straight's ceiling plus what two corners carry, and a road past that
+     * has no solve to find however much the stage would like one. The
+     * route does not steer toward the tarmac at all — it asks, at every
+     * corner, whether the road is already within reach.
      *
-     * `joinReach` is how close the route has to get before it can turn on,
-     * m, and `joinAngle` how nearly aligned with the road it has to be —
-     * a junction is a place two roads MEET, so the route arrives at one
-     * pointing roughly along the road it is joining rather than broadside
-     * into it. `runOn` is how far it stays, m, before it turns off again. */
+     * `meet` is the stretch of road that rendezvous is looked for over, m,
+     * and how far apart the candidate meeting points are: a junction close
+     * to where the route already is costs the stage less detour than one at
+     * the far end of the look, so the nearest is tried first and this only
+     * says how far the looking goes.
+     *
+     * `runOn` is how far the route stays on the tarmac, m, before it turns
+     * off again. `share` is the most of what a stage has LEFT that one
+     * borrow may spend: a sprint's whole band is under two kilometres, so a
+     * borrow drawn at the vocabulary's own length is most of the stage —
+     * R11 refuses it every time, and from outside that reads as a route
+     * that never finds a road. */
     borrow: {
-      seek: 2200,
-      joinReach: 90,
-      joinAngle: Math.PI / 2.6,
+      seek: 600,
+      meet: { reach: 600, step: 55 },
       runOn: { min: 320, max: 900 },
-      /** How near the tarmac the route has to be before it stops striding,
-       * m, and the short straights it walks the last stretch in. The join
-       * is solved from the CURSOR, and the cursor only stands at a segment
-       * boundary — at the vocabulary's own straight lengths the route steps
-       * clean over the road it came to find. */
-      closeIn: 320,
-      step: { min: 34, max: 62 },
-      /** ...and the most of what a stage has LEFT that one borrow may
-       * spend. A sprint's whole band is under two kilometres, so a borrow
-       * drawn at the vocabulary's own length is most of the stage — R11
-       * refuses it every time, and from outside that reads as a route that
-       * never finds a road. */
       share: 0.45,
-      /** ...and how far into a stage the FIRST road is wanted by, as a
-       * share of it. Same argument: a gap drawn to make the dial's share
-       * come true over a long stage lands past a sprint's finish line. */
-      firstBy: 0.4,
     },
   },
 
