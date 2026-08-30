@@ -566,6 +566,42 @@ const ROAD_DISTANCE_REACH = 220;
  * has to exempt exactly the same stretch. */
 const SPUR_JUNCTION_WINDOW = R.junction.spurWindow;
 
+/** R23 — how much room a point leaves the branches in `list`, m, reading
+ * the list LIVE so a branch added after this was built is measured too.
+ *
+ * Two branches off two different junctions are two roads like any other
+ * pair, and nothing else asks them to keep apart: they cross in open
+ * country a kilometre from anything, which is a junction nobody built.
+ *
+ * Strided to match the stage's own coarsening, and the slack is taken off
+ * the answer so this can only ever under-report the room a branch has,
+ * never invent some. */
+function branchClearance(list: Spur[]): (x: number, z: number) => number {
+  const STRIDE = 8;
+  const slack = (STRIDE * SPUR.step) / 2;
+  return (x: number, z: number): number => {
+    let best = Infinity;
+    for (const other of list) {
+      const b = other.bounds;
+      if (
+        x < b.minX - ROAD_DISTANCE_REACH ||
+        x > b.maxX + ROAD_DISTANCE_REACH ||
+        z < b.minZ - ROAD_DISTANCE_REACH ||
+        z > b.maxZ + ROAD_DISTANCE_REACH
+      ) {
+        continue;
+      }
+      for (let i = 0; i < other.samples.length; i += STRIDE) {
+        const dx = other.samples[i].x - x;
+        const dz = other.samples[i].z - z;
+        const d = Math.hypot(dx, dz);
+        if (d < best) best = d;
+      }
+    }
+    return best === Infinity ? Infinity : Math.max(0, best - slack);
+  };
+}
+
 /** The incremental heart: walks plans into samples, bounds, and pacenotes,
  * carrying the cursor (and the open pacenote, so a turn combination split
  * across two endless sections still merges into one call). */
@@ -716,12 +752,21 @@ function createCompiler(
    * Always true on an endless stage, which has no box — there a branch is
    * only asked to leave its own junction's neighbourhood, which any of them
    * manages. */
+  /** The arms of the junctions already taken, as the trial built them. A
+   * branch is boxed in by the OTHER branches as much as by the stage (R23),
+   * and a trial that does not know about them accepts a junction whose real
+   * arm is then stopped after fifty metres by the last one — which leaves a
+   * public road lying alongside the stage inside its own junction window,
+   * where nothing measures it. */
+  const trialArms: Spur[] = [];
   const armCanLeave = (
     pose: { x: number; z: number; heading: number; elevation: number; slope: number },
     atS: number,
     end: "entry" | "exit",
   ): boolean => {
     if (!country) return true;
+    const stage = country.roadDistance(atS - SPUR_JUNCTION_WINDOW, atS + SPUR_JUNCTION_WINDOW);
+    const others = branchClearance(trialArms);
     const trial = buildSpur(
       track.seed,
       pose,
@@ -730,14 +775,20 @@ function createCompiler(
       country.bounds,
       land,
       track.width,
-      country.roadDistance(atS - SPUR_JUNCTION_WINDOW, atS + SPUR_JUNCTION_WINDOW),
+      (x: number, z: number, ignoringJunction?: boolean) =>
+        Math.min(stage(x, z, ignoringJunction), others(x, z)),
       country.shelfHolds,
     );
     const last = trial.samples[trial.samples.length - 1];
     if (!last) return false;
     const b = country.bounds;
     const out = Math.max(b.minX - last.x, last.x - b.maxX, b.minZ - last.z, last.z - b.maxZ);
-    return out >= R.junction.armReach * SPUR.escape;
+    if (out < R.junction.armReach * SPUR.escape) return false;
+    // A true answer here is always taken — the caller flips the surface on
+    // it — so this arm is part of the country the next trial is measured
+    // against.
+    trialArms.push(trial);
+    return true;
   };
 
   /** R17 — is this corner one a junction could sit at? A junction is where
@@ -1124,30 +1175,8 @@ function createCompiler(
      * off the answer so this can only ever under-report the room a branch
      * has, never invent some.
      */
-    const STRIDE = 8;
-    const slack = (STRIDE * SPUR.step) / 2;
     const standing: Spur[] = [];
-    const clearOfBranches = (x: number, z: number): number => {
-      let best = Infinity;
-      for (const other of standing) {
-        const b = other.bounds;
-        if (
-          x < b.minX - ROAD_DISTANCE_REACH ||
-          x > b.maxX + ROAD_DISTANCE_REACH ||
-          z < b.minZ - ROAD_DISTANCE_REACH ||
-          z > b.maxZ + ROAD_DISTANCE_REACH
-        ) {
-          continue;
-        }
-        for (let i = 0; i < other.samples.length; i += STRIDE) {
-          const dx = other.samples[i].x - x;
-          const dz = other.samples[i].z - z;
-          const d = Math.hypot(dx, dz);
-          if (d < best) best = d;
-        }
-      }
-      return best === Infinity ? Infinity : Math.max(0, best - slack);
-    };
+    const clearOfBranches = branchClearance(standing);
     for (const junction of junctions) {
       const box = track.endless
         ? {
