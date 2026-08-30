@@ -1081,6 +1081,26 @@ for (const tab of ["HUD", "AUDIO", "VIDEO", "CONTROLS"]) {
   }
 }
 
+// The camera card: seven angles with their descriptions, over the HUD tab.
+// It is the one options control that is not on the page it belongs to, so
+// it needs a frame of its own to be looked at.
+for (const [name, viewport] of [
+  ["shot-menu-camera", { width: 1280, height: 720 }],
+  ["shot-menu-camera-landscape", { width: 844, height: 390 }],
+]) {
+  await capture(
+    name,
+    viewport,
+    async (page) => {
+      await menuUp(page);
+      await tile(page, "options");
+      await page.locator(".opt-picker").click();
+      await page.waitForTimeout(400);
+    },
+    { menu: "1" },
+  );
+}
+
 // The new-build card, over the menu and over a run: it wears the menu's
 // chrome, and both are places it can turn up. `?update=1` stands it up —
 // a real waiting worker needs a deploy to land on a device that already had

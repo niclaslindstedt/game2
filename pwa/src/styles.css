@@ -2117,8 +2117,13 @@ body {
    is a row of boxes pushed off the bottom of a laptop screen for no
    information at all.
 
-   The button is centred against the whole text block rather than against
-   the title, so a head with a subtitle and one without both look aimed. */
+   The button rides at the TOP of the row rather than centred in it. A head
+   with a subtitle is half again as tall as the button, so centring pushed
+   it a third of a line down and left the card looking bottom-heavy: more
+   air above the first thing you can press than under the last one. Aligned
+   to the top it starts exactly where the card's padding ends, which is
+   where the button under the card ends too. A head with no subtitle is
+   already the button's own height, so nothing moves there. */
 .menu-head {
   display: flex;
   align-items: center;
@@ -2126,7 +2131,7 @@ body {
 }
 
 .menu-head .menu-back {
-  align-self: center;
+  align-self: flex-start;
   flex: none;
 }
 
@@ -2414,6 +2419,43 @@ body {
   color: var(--hud-shadow);
 }
 
+/* A chip that OPENS something rather than being one of a set — the camera's
+   name, with the mark that says there is a card behind it. */
+.opt-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* A continuous setting: the fader, and the number it is standing at. The
+   readout is a fixed width so the track does not breathe in and out by a
+   character as the value crosses 100%. */
+.menu-slide {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  /* A fader is a line where a row of chips is a row of boxes, so left to
+     itself it sits half the height of the rows around it and the list loses
+     its rhythm. This is a chip row's height. */
+  min-height: 2rem;
+}
+
+.menu-slider {
+  flex: 1;
+  min-width: 0;
+  accent-color: #ffd23e;
+  cursor: pointer;
+}
+
+.menu-slide-read {
+  flex: none;
+  min-width: 3.2em;
+  text-align: right;
+  font-size: clamp(0.6rem, 2vmin, 0.82rem);
+  letter-spacing: 0.08em;
+  color: var(--hud-good);
+}
+
 /* A MODE page's own settings, grouped (heads-up's rivals, mass start and
    grid size). A column on any screen with the height for one. */
 .menu-settings {
@@ -2583,6 +2625,18 @@ a.menu-version:focus-visible {
   grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
   gap: clamp(0.6rem, 2.5vmin, 1.2rem);
   align-items: start;
+}
+
+/* The CAR's column: the stand, and the gearbox in the space under it. The
+   stand is a fixed height and the sheet beside it is as tall as it needs to
+   be, so that space exists on every screen the two columns fit on — and a
+   TRANSMISSION row laid across both of them underneath was a whole line of
+   a phone held sideways spent on two words. */
+.car-setup-pick {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.4rem, 1.8vmin, 0.7rem);
+  min-width: 0;
 }
 
 /* The stand carries this card rather than sitting under a stage grid as a
@@ -3134,45 +3188,66 @@ a.menu-version:focus-visible {
   }
 }
 
+/* THE OPTIONS PAGE IS A LIST OF SETTINGS, and it has to read as one. Two
+   things do that, and both are about air rather than about ink: rows far
+   enough apart that the eye can tell where one ends, and a rule between
+   groups so a section reads as a section. The page scrolls either way —
+   there was never a width of screen that held all of CONTROLS — so height
+   spent on legibility here is height well spent. */
 .opt-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: clamp(0.75rem, 2.4vmin, 1.15rem);
 }
 
 @media (orientation: landscape) and (max-height: 34rem) {
   .opt-list {
-    gap: 0.35rem;
+    gap: 0.6rem;
   }
 }
 
 .opt-section {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding-top: 0.3rem;
+  gap: clamp(0.6rem, 2vmin, 0.95rem);
+  padding-top: clamp(0.5rem, 1.8vmin, 0.9rem);
+  border-top: 2px solid rgb(255 255 255 / 14%);
 }
 
-/* Landscape on a phone: an option row stops stacking its buttons under its
-   label and sits on one line beside it — the card has width to spare and
-   nothing but height to lose. Scoped to `.opt-list` so the CAR row (whose
-   control is a turntable, not a button strip) and Roam's dials (which live
-   in a narrow column) keep stacking. */
-@media (orientation: landscape) and (max-height: 34rem) {
-  .opt-section {
-    gap: 0.35rem;
-    padding-top: 0;
-  }
+/* A rule under the tabs would be a second rule under the tabs. */
+.opt-list > .opt-section:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
 
+/* WHERE THE CONTROLS START, on every row alike. Once the card is wide
+   enough for a label and its control side by side, the label takes a column
+   of its own and every control begins at the same x. Right-aligning them
+   instead — which is what this used to do — put a three-chip row and a
+   seven-chip row on two different left edges, and the page read as a pile
+   of rows rather than as one list.
+
+   Scoped to `.opt-list` so the CAR row (whose control is a turntable, not a
+   button strip) and Roam's dials (which live in a narrow column) keep
+   stacking. Below the breakpoint every row still stacks, because on a
+   portrait phone a label column is a control column that is too narrow. */
+@media (min-width: 34rem) {
   .opt-list .menu-row {
-    flex-direction: row;
+    display: grid;
+    grid-template-columns: minmax(6rem, 12rem) minmax(0, 1fr);
     align-items: center;
-    justify-content: space-between;
-    gap: 0.6rem;
+    gap: 0.35rem clamp(0.8rem, 3vw, 2rem);
   }
 
   .opt-list .menu-opts {
-    justify-content: flex-end;
+    justify-content: flex-start;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 34rem) {
+  .opt-section {
+    gap: 0.45rem;
+    padding-top: 0.45rem;
   }
 }
 
@@ -4299,6 +4374,69 @@ a.menu-version:focus-visible {
 
 .hud-modal-card .hud-pause-act {
   margin-top: 0.7rem;
+}
+
+/* ── The camera card (menu-options.tsx) ──────────────────────────────────
+   Seven angles, each with the sentence that says what it is like to drive
+   from. Wider than the results sheet the shell was built for, because these
+   boxes carry prose rather than three columns of figures — and it scrolls,
+   because seven of them do not fit a phone held sideways. */
+
+.opt-camera-card {
+  width: min(44rem, 100%);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.opt-cameras {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.5rem;
+  width: 100%;
+  margin-top: 0.6rem;
+}
+
+.opt-camera {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font: inherit;
+  text-align: left;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 10%);
+  border: 2px solid rgb(255 255 255 / 35%);
+  border-left: 4px solid rgb(255 255 255 / 25%);
+  border-radius: 0.6rem;
+  padding: 0.45rem 0.6rem;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.opt-camera b {
+  font-size: clamp(0.66rem, 2.2vmin, 0.88rem);
+  letter-spacing: 0.14em;
+  color: var(--hud-good);
+}
+
+.opt-camera-hint {
+  font-style: normal;
+  font-weight: 500;
+  font-size: clamp(0.54rem, 1.8vmin, 0.7rem);
+  line-height: 1.3;
+  opacity: 0.78;
+}
+
+/* The one in use wears the accent down its left edge — the same mark a
+   switched-on toggle wears, because it is the same idea. */
+.opt-camera-on {
+  background: rgb(255 210 62 / 22%);
+  border-color: rgb(255 210 62 / 55%);
+  border-left-color: var(--hud-good);
+}
+
+.opt-camera:hover,
+.opt-camera:focus-visible {
+  background: rgb(255 255 255 / 18%);
 }
 
 /* ── R30: the points, on the results card ────────────────────────────────

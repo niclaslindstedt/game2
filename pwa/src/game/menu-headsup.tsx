@@ -23,6 +23,7 @@
 
 import {
   LOCATIONS,
+  latestOpen,
   levelCompleted,
   type CampaignLevel,
   type CampaignProgress,
@@ -51,9 +52,12 @@ export function HeadsUpPage({
   onBack: () => void;
   onPlay: (level: CampaignLevel) => void;
 }) {
-  const open = LOCATIONS.some((location) =>
-    location.levels.some((level) => levelCompleted(level, progress)),
-  );
+  const gate = (level: CampaignLevel): boolean => levelCompleted(level, progress);
+  const open = LOCATIONS.some((location) => location.levels.some(gate));
+  // The furthest stage finished anywhere — where the cursor stands, and the
+  // race START takes. See the same line on the time trial's grid.
+  let resume: CampaignLevel | null = null;
+  for (const location of LOCATIONS) resume = latestOpen(location, gate) ?? resume;
   return (
     <div className="menu-card menu-card-wide">
       <MenuHead back={onBack} backLabel="MENU" title="HEADS UP" />
@@ -64,8 +68,9 @@ export function HeadsUpPage({
           <LevelGrid
             location={location}
             progress={progress}
-            open={(level) => levelCompleted(level, progress)}
+            open={gate}
             hint="Finish this stage in the campaign"
+            next={resume}
             onPlay={onPlay}
           />
         </div>

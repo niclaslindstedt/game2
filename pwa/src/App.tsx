@@ -1618,6 +1618,7 @@ export function App() {
       input.onNav((action) => {
         if (action === "confirm") menuNav.confirm();
         else if (action === "back") menuNav.back();
+        else if (action === "next") menuNav.next();
         else if (action === "navUp") menuNav.move("up");
         else if (action === "navDown") menuNav.move("down");
         else if (action === "navLeft") menuNav.move("left");

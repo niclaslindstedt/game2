@@ -9,9 +9,14 @@
 // to the nearest thing in the direction asked for. A page added tomorrow is
 // navigable the day it is written, with nothing to remember.
 //
-// Two things ARE authored, because guessing them would be worse than asking:
-// which containers are menus (ROOTS, most modal first), and which control is
-// a surface's way BACK (`data-nav-back`).
+// Four things ARE authored, because guessing them would be worse than
+// asking: which containers are menus (ROOTS, most modal first), which
+// control is a surface's way BACK (`data-nav-back`), which is its way ON
+// (`data-nav-next` — what START presses), and where the cursor should be
+// standing when the surface comes up (`data-nav-focus`, defaulting to the
+// way on). The last two are what make a pad able to start a race by holding
+// one button down: every surface names its own most likely press, and START
+// takes it without the cursor having to be walked there first.
 //
 // Where the cursor GOES is menu-cursor.ts next door — a pure function over
 // rectangles, DOM-free so the tests can read it. This file is the half that
@@ -36,13 +41,63 @@ const ROOTS = [
 /** What the cursor may land on. Everything the menus are built from is a
  * button; the rest of the list is there so a surface that grows a real
  * control of another kind is not silently skipped. */
-const ITEMS = "button:not([disabled]), [role='button']:not([aria-disabled='true']), a[href]";
+const ITEMS =
+  "button:not([disabled]), [role='button']:not([aria-disabled='true']), a[href], input[type='range']:not([disabled])";
+
+/** Where the cursor stands when a surface comes up. Falls back to the way
+ * ON, and then to the first row that is not the way OUT — a cursor parked
+ * on BACK is a cursor sitting on the one press nobody came here for. */
+const FOCUS = "[data-nav-focus]";
+
+/** The surface's way ON: the press a player who wants nothing else off this
+ * screen would make. START takes it wherever the cursor happens to be, so
+ * one button held down walks the front door → the ladder → the car → the
+ * green light. A surface with no obvious next step marks none, and START
+ * does nothing there rather than pressing something at random. */
+const NEXT = "[data-nav-next]";
+
+/** A VALUE CYCLED IN PLACE — an arrow either side of the car on its stand.
+ * The pair is one stop on the cursor's walk rather than two: sideways moves
+ * the value and leaves the cursor where it is, which is what an arrow
+ * either side of something means to a thumb. `data-nav-steps` marks the
+ * group, `data-nav-step="left" / "right"` the two arrows. */
+const STEPS = "[data-nav-steps]";
+
+const arrowIn = (group: Element, dir: NavDir): HTMLElement | null =>
+  group.querySelector<HTMLElement>(`[data-nav-step="${dir}"]`);
+
+const isRange = (el: Element): el is HTMLInputElement =>
+  el instanceof HTMLInputElement && el.type === "range";
+
+/** A slider, moved one notch and made to say so — sideways over a fader is
+ * the fader moving, which is the same rule a stepper follows.
+ *
+ * The value has to go in through the PROTOTYPE's setter. React keeps its own
+ * record of what an input last held, and it keeps it by replacing the
+ * element's own `value` setter — so writing `el.value` updates that record
+ * as a side effect, and the input event that follows looks to React like
+ * nothing changed and is dropped on the floor. */
+function nudgeRange(el: HTMLInputElement, by: number): void {
+  const step = Number(el.step) || 1;
+  const min = el.min === "" ? 0 : Number(el.min);
+  const max = el.max === "" ? 100 : Number(el.max);
+  const was = Number(el.value);
+  const next = Math.min(max, Math.max(min, was + step * by));
+  if (next === was) return;
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  if (setter) setter.call(el, String(next));
+  else el.value = String(next);
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+}
 
 export type MenuNav = {
   /** Move the cursor. Does nothing when no menu is on screen. */
   move: (dir: NavDir) => void;
   /** Press what the cursor is on. */
   confirm: () => void;
+  /** Take the surface's way ON — its `data-nav-next` control — whatever the
+   * cursor is sitting on. Silent on a surface that has no next step. */
+  next: () => void;
   /** The surface's own way back — its `data-nav-back` control. Silent on a
    * surface that has none, which is a card the player has to answer. */
   back: () => void;
@@ -70,8 +125,36 @@ export function createMenuNav(): MenuNav {
     return null;
   };
 
-  const items = (host: HTMLElement): HTMLElement[] =>
-    [...host.querySelectorAll<HTMLElement>(ITEMS)].filter(visible);
+  /** The cursor's stops on this surface, in reading order. A stepper group
+   * collapses to ONE stop — its forward arrow, so a press on it means the
+   * next car rather than the last one. */
+  const items = (host: HTMLElement): HTMLElement[] => {
+    const list: HTMLElement[] = [];
+    const groups = new Set<Element>();
+    for (const el of host.querySelectorAll<HTMLElement>(ITEMS)) {
+      if (!visible(el)) continue;
+      const group = el.closest<HTMLElement>(STEPS);
+      if (!group) {
+        list.push(el);
+        continue;
+      }
+      if (groups.has(group)) continue;
+      groups.add(group);
+      list.push(arrowIn(group, "right") ?? el);
+    }
+    return list;
+  };
+
+  /** Where a surface puts the cursor when it comes up. */
+  const landing = (host: HTMLElement): HTMLElement | undefined => {
+    const list = items(host);
+    // `contains` as well as identity, so a page can mark a whole control —
+    // the car on its stand — rather than having to know which of its
+    // buttons the cursor collapses onto.
+    const aim = host.querySelector<HTMLElement>(FOCUS) ?? host.querySelector<HTMLElement>(NEXT);
+    const marked = aim ? list.find((item) => item === aim || aim.contains(item)) : undefined;
+    return marked ?? list.find((item) => !item.hasAttribute("data-nav-back")) ?? list[0];
+  };
 
   /** Where the cursor is, as an index into `list` — −1 when it is nowhere,
    * which is what a fresh card and a click on the backdrop both look like. */
@@ -84,7 +167,10 @@ export function createMenuNav(): MenuNav {
   const put = (item: HTMLElement | undefined, sound: boolean): void => {
     if (!item) return;
     clearRing();
-    item.classList.add(CURSOR);
+    // The ring goes round the whole stepper where there is one: a glow on
+    // the right-hand arrow alone says the arrow is selected, when what is
+    // selected is the car between the two of them.
+    (item.closest<HTMLElement>(STEPS) ?? item).classList.add(CURSOR);
     item.focus({ preventScroll: true });
     // A long card — the CONTROLS tab is twenty rows — has to follow the
     // cursor, or it walks off the bottom of the screen and out of sight.
@@ -105,7 +191,7 @@ export function createMenuNav(): MenuNav {
         (document.activeElement as HTMLElement | null)?.blur?.();
         return;
       }
-      put(items(host)[0], false);
+      put(landing(host), false);
     },
     move: (dir) => {
       const host = root();
@@ -115,7 +201,25 @@ export function createMenuNav(): MenuNav {
       const from = at(list);
       // Off the card entirely — the first press brings the cursor back
       // rather than jumping somewhere the player never put it.
-      if (from < 0) return put(list[0], true);
+      if (from < 0) return put(landing(host), true);
+      // A stepper answers sideways itself, and the cursor stays on it: left
+      // and right over the car on its stand are the previous and the next
+      // car, not a walk onto whatever is beside the stand.
+      const sideways = dir === "left" || dir === "right";
+      const group = list[from].closest<HTMLElement>(STEPS);
+      const arrow = group && sideways ? arrowIn(group, dir) : null;
+      if (arrow) {
+        arrow.click();
+        playUi("move");
+        return;
+      }
+      // A fader is the same idea with no arrows drawn on it. No tick from
+      // here: the row hears its own input event and makes the noise, so one
+      // raised here as well would be two clicks for one notch.
+      if (sideways && isRange(list[from])) {
+        nudgeRange(list[from], dir === "right" ? 1 : -1);
+        return;
+      }
       const next = pickNeighbour(list.map(rectOf), from, dir);
       if (next !== null && next !== from) put(list[next], true);
     },
@@ -128,7 +232,16 @@ export function createMenuNav(): MenuNav {
       // A card with nothing to land on is still a card that has to be got
       // past — the studio card is a whole screen that answers to any press.
       else if (list.length === 0) host.click();
-      else put(list[0], true);
+      else put(landing(host), true);
+    },
+    next: () => {
+      const host = root();
+      if (!host) return;
+      const on = host.querySelector<HTMLElement>(NEXT);
+      if (on) on.click();
+      // Same rule confirm follows, for the same card: the studio cover has
+      // no way on to mark and answers to any press at all, START included.
+      else if (items(host).length === 0) host.click();
     },
     back: () => {
       const host = root();
@@ -151,7 +264,10 @@ function visible(el: HTMLElement): boolean {
   return el.getClientRects().length > 0;
 }
 
+/** A stop's box, as the player reads it: a stepper is measured across the
+ * whole group, so DOWN off the car leaves from under the car and not from
+ * under the arrow on its right. */
 function rectOf(el: HTMLElement): NavRect {
-  const box = el.getBoundingClientRect();
+  const box = (el.closest<HTMLElement>(STEPS) ?? el).getBoundingClientRect();
   return { x: box.left, y: box.top, w: box.width, h: box.height };
 }

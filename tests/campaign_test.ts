@@ -37,7 +37,10 @@ import {
   POINTS,
   continueAt,
   ladderAfter,
+  latestOpen,
   levelCleared,
+  levelCompleted,
+  levelUnlocked,
   loadProgress,
   locationComplete,
   locationStandings,
@@ -49,6 +52,7 @@ import {
   recordResult,
   resetPoints,
   unlockEverything,
+  type CampaignLevel,
 } from "../pwa/src/game/campaign.ts";
 import {
   PLAYER_ID,
@@ -218,6 +222,28 @@ describe("the location's table", () => {
     // a WIN, which is the third place standing on stage one.
     recordResult(TAIGA.levels[2].id, sheet(["frostbite", "blink", "scrapper", PLAYER_ID]));
     expect(continueAt(TAIGA, loadProgress())?.id).toBe(TAIGA.levels[0].id);
+  });
+
+  it("names the last stage a gate leaves open, for the cursor to stand on", () => {
+    // Where a controller lands, and what the pad's START takes (menu-nav.ts).
+    // The campaign's gate opens the stage after each podium…
+    const campaign = (_level: CampaignLevel, index: number): boolean =>
+      levelUnlocked(TAIGA, index, loadProgress());
+    expect(latestOpen(TAIGA, campaign)?.id).toBe(TAIGA.levels[0].id);
+    recordResult(TAIGA.levels[0].id, sheet([PLAYER_ID]));
+    expect(latestOpen(TAIGA, campaign)?.id).toBe(TAIGA.levels[1].id);
+
+    // …while the time trial's opens anything driven to the END, podium or
+    // not, so the two gates answer differently on the same progress. A stage
+    // finished off the podium opens no further campaign box and is still the
+    // furthest road the clock is offered on.
+    const finished = (level: CampaignLevel): boolean => levelCompleted(level, loadProgress());
+    recordFinish(TAIGA.levels[1].id, 100, { place: 9, difficulty: "medium" });
+    expect(latestOpen(TAIGA, finished)?.id).toBe(TAIGA.levels[1].id);
+    expect(latestOpen(TAIGA, campaign)?.id).toBe(TAIGA.levels[1].id);
+
+    // A gate that opens nothing has no answer to give rather than a wrong one.
+    expect(latestOpen(TAIGA, () => false)).toBeNull();
   });
 
   it("starts again on a reset, and the developer unlock wins the lot", () => {
