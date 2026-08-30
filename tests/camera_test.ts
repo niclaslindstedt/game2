@@ -7,6 +7,11 @@
 // over the roof is what a twenty-five metre drop looks like when nothing at
 // all is happening. Driven directly — the camera only ever reads state, so a
 // scripted fall is the whole scenario and needs no physics.
+//
+// ...and, at the bottom, the TRANSIT between two cars (camera-sweep.ts): a
+// spectator changing crew is a jump of hundreds of metres over country that
+// is mostly hill, and the one thing a picture can never prove is that the
+// lens did not go THROUGH any of it.
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
@@ -540,5 +545,114 @@ describe("the head behind the wheel", () => {
     const fast = neckRun("cockpit", 1 / 144, -20, undefined);
     expect(fast.fwd).toBeGreaterThan(sixty.fwd * 0.75);
     expect(fast.fwd).toBeLessThan(sixty.fwd * 1.25);
+  });
+});
+
+describe("the transit between two cars", () => {
+  /** How far down the road the crew being cut TO is standing, m. */
+  const GAP = 700;
+  /** …and a ridge across the middle of it, high enough that no straight line
+   * between the two cars can be over it. */
+  const RIDGE = { at: GAP / 2, span: 80, height: 90 };
+
+  /** A stage with that ridge across the middle and flat ground either side,
+   * and a camera settled behind a car at the near end of it. */
+  function staged(): { state: GameState; cam: ReturnType<typeof createGameCamera> } {
+    const state = game();
+    const car = state.car;
+    const near = car.z;
+    state.terrain = {
+      ...state.terrain,
+      groundAt: (_x, z) => (Math.abs(z - (near + RIDGE.at)) < RIDGE.span ? RIDGE.height : car.y),
+      waterAt: () => null,
+    };
+    const cam = createGameCamera(1600, 900);
+    cam.setMode("chase");
+    car.heading = 0;
+    // Settled: the rig has read its floor and stopped easing, so what the
+    // flight starts from is a real shot rather than the camera's birth pose.
+    for (let f = 0; f < 30; f++) cam.update(state, FRAME);
+    return { state, cam };
+  }
+
+  /** Fly to a car `GAP` down the road and report every frame of it. The car
+   * is MOVED rather than a second one built: the flight reads nothing off a
+   * crew but where its car is, and one game with a moved car is the same
+   * two endpoints with none of the ceremony. */
+  function transit(seconds: number): {
+    heights: number[];
+    clearances: number[];
+    steps: number[];
+    landed: THREE.Vector3;
+    rig: THREE.Vector3;
+  } {
+    const { state, cam } = staged();
+    state.car.z += GAP;
+    cam.retake(state, true);
+    const heights: number[] = [];
+    const clearances: number[] = [];
+    const steps: number[] = [];
+    let prev: THREE.Vector3 | null = null;
+    for (let f = 0; f < Math.round(seconds / FRAME); f++) {
+      cam.update(state, FRAME);
+      const p = cam.camera.position;
+      heights.push(p.y);
+      clearances.push(p.y - state.terrain.groundAt(p.x, p.z));
+      if (prev) steps.push(p.distanceTo(prev));
+      prev = p.clone();
+    }
+    const landed = cam.camera.position.clone();
+    // Where the rig alone would have stood this frame — the flight's own
+    // destination, asked for by cutting to the same car without one.
+    const plain = staged();
+    plain.state.car.z += GAP;
+    plain.cam.retake(plain.state, false);
+    plain.cam.update(plain.state, FRAME);
+    return { heights, clearances, steps, landed, rig: plain.cam.camera.position.clone() };
+  }
+
+  it("clears the tallest ground between the two cars", () => {
+    const { heights, clearances } = transit(1);
+    // The apex is over the ridge, and by a margin — a lens level with a
+    // hilltop is a frame full of hilltop.
+    expect(Math.max(...heights)).toBeGreaterThan(RIDGE.height + 15);
+    // …and it is never inside anything, at any point of the flight. This is
+    // the assertion the whole shot exists to keep: the crest is sampled off
+    // a line, and a line can step past a spur.
+    expect(Math.min(...clearances)).toBeGreaterThan(0);
+  });
+
+  it("takes a second, and lands on the pose the rig would have stood in", () => {
+    // Half a second in it is still out over the country and nowhere near
+    // the car...
+    const half = transit(0.5);
+    expect(half.landed.distanceTo(half.rig)).toBeGreaterThan(50);
+    // ...and a second in it is home, on the rig's own frame, so the last
+    // flown frame and the first driven one are the same frame.
+    const whole = transit(1.05);
+    expect(whole.landed.distanceTo(whole.rig)).toBeLessThan(1);
+  });
+
+  it("flies it, rather than cutting", () => {
+    const { steps } = transit(1);
+    // No frame carries a disproportionate share of the distance: a cut
+    // dressed as a flight shows up as one enormous step among sixty small
+    // ones. Sixty frames over 700 m is ~12 m each; the eased middle is the
+    // fastest part and still nowhere near a jump.
+    const total = steps.reduce((a, b) => a + b, 0);
+    expect(total).toBeGreaterThan(GAP * 0.9);
+    expect(Math.max(...steps)).toBeLessThan(total * 0.1);
+  });
+
+  it("cuts when it is not asked to fly", () => {
+    // Standing the feed down is a cut: the destination is the results card,
+    // not a shot. One frame and the camera is simply there.
+    const { state, cam } = staged();
+    state.car.z += GAP;
+    cam.retake(state, false);
+    cam.update(state, FRAME);
+    const p = cam.camera.position;
+    expect(Math.abs(p.z - state.car.z)).toBeLessThan(40);
+    expect(p.y).toBeLessThan(RIDGE.height);
   });
 });

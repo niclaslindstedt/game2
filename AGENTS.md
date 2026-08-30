@@ -137,6 +137,8 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | Who the campaign's rivals ARE (aliases, cars, characters)   | `engine/sim/rivals.ts` — the `bot-improvement` skill                                                                             |
 | What a rival is PAINTED (colour, pattern, door number)      | `RIVAL_SCHEMES` in `pwa/src/game/car-livery.ts` — the `car-design` skill                                                         |
 | The field on the road, and what place a run is in           | `engine/sim/field.ts`; `pwa/src/game/standings.ts` is the frame's half (+ `campaign.ts` for the podium rule)                     |
+| WATCHING the run-out once your own run is over              | `pwa/src/game/spectate.ts` (the feed) + `hud-spectate.tsx`; the run-out at race speed is `watchField` in `engine/sim/field.ts`   |
+| The camera FLYING from one car to another                   | `pwa/src/game/camera-sweep.ts`; the shot a stage closes on is its sibling `camera-finish.ts` — the `game-feel` skill             |
 | RECORDING a run, and driving it again to calibrate a field  | `engine/sim/tape.ts` + `race.ts`, over `pwa/src/game/run-tape.ts` — the `bot-improvement` skill                                  |
 | The rival cars you can see and hit                          | `pwa/src/game/field-cars.ts`; the plate over each one is `name-tag.ts`                                                           |
 | The name over a car that is not the player's                | `pwa/src/game/name-tag.ts` — a label, a colour and a point; it must never learn what a bot is                                    |

@@ -831,6 +831,148 @@ body {
   margin-top: 0;
 }
 
+/* ── The spectator's strip (hud-spectate.tsx) ────────────────────────────
+   A broadcast lower third, and it is the whole HUD while a run-out is being
+   watched: everything the driving layout reads belongs to a car that is
+   parked past the line, so `Hud` hands the screen to this instead of
+   dressing itself in somebody else's numbers.
+
+   Along the BOTTOM, because the picture is the point — the car being
+   followed is framed by a chase camera that puts it in the middle of the
+   screen, and a strip across the top would sit exactly where the road it is
+   driving into does. */
+.hud-spectate {
+  position: absolute;
+  left: 50%;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: min(48rem, 94vw);
+  padding: 0.55rem 1.1rem;
+  background: rgb(18 48 105 / 78%);
+  border-radius: 0.9rem;
+  text-align: center;
+}
+
+.hud-spec-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.8rem;
+  font-size: clamp(0.55rem, 1.9vmin, 0.8rem);
+  letter-spacing: 0.16em;
+}
+
+.hud-spec-tag {
+  color: var(--hud-good);
+}
+
+.hud-spec-out {
+  opacity: 0.8;
+}
+
+/* The crew on the left, their numbers on the right — and the pair wraps
+   rather than shrinking, because a phone in portrait has no width to give
+   and a name squeezed to three letters names nobody. */
+.hud-spec-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem 1.1rem;
+}
+
+.hud-spec-steps {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.hud-spec-step {
+  font: inherit;
+  font-size: clamp(1.2rem, 4.5vmin, 1.9rem);
+  line-height: 1;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 12%);
+  border: 2px solid rgb(255 255 255 / 45%);
+  border-radius: 0.5rem;
+  /* A thumb target, not a glyph: the two arrows are the mode's only
+     controls, and they are pressed while looking at the road. */
+  min-width: 2.4rem;
+  padding: 0.25rem 0.4rem;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.hud-spec-step:active {
+  background: rgb(255 210 62 / 75%);
+  color: var(--hud-shadow);
+}
+
+.hud-spec-who {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.05;
+  min-width: 8rem;
+}
+
+/* The door plate, worn beside the name the way the car wears it. */
+.hud-spec-no {
+  font-size: 0.56em;
+  color: var(--hud-shadow);
+  background: var(--hud-good);
+  border-radius: 0.22em;
+  padding: 0 0.35em;
+  margin-right: 0.42em;
+  vertical-align: 0.18em;
+  text-shadow: none;
+}
+
+.hud-spec-name {
+  font-size: clamp(1.1rem, 4vmin, 1.7rem);
+  letter-spacing: 0.04em;
+}
+
+.hud-spec-driver {
+  font-size: clamp(0.6rem, 2vmin, 0.85rem);
+  opacity: 0.85;
+}
+
+.hud-spec-numbers {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-spec-place,
+.hud-spec-clock,
+.hud-spec-gap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: clamp(0.95rem, 3.2vmin, 1.4rem);
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
+/* Down on the player is the player KEEPING their place, so the tones read
+   from where the player is sitting rather than from the watched car's seat. */
+.hud-spec-gap-safe {
+  color: var(--hud-good);
+}
+
+.hud-spec-gap-threat {
+  color: var(--hud-bad);
+}
+
+.hud-spec-leave {
+  margin-top: 0.15rem;
+}
+
 /* R28 — the split board. It stands where the flashes do and above them, in
    the middle of the screen where a driver's eyes already are, because the
    gap is read in the half second after a corner exit and nothing on the

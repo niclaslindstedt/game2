@@ -24,6 +24,7 @@ import {
   type FinishScores,
   type NextStage,
 } from "./hud-finish.tsx";
+import { SpectateStrip, type SpectateProps } from "./hud-spectate.tsx";
 import { Minimap, type HudMinimap } from "./minimap.tsx";
 import type { HudSettings, TouchSettings } from "./settings.ts";
 import type { ShiftWindow } from "./shift-window.ts";
@@ -226,6 +227,20 @@ type HudProps = {
   /** Save the run as a run tape from the results card. Null unless the
    * developer switch that collects them is on. */
   onSaveRun: (() => boolean) | null;
+  /** Leave the card and go and WATCH the crews still out there. Null when
+   * the road is already clear, and on every run with nobody entered. */
+  onSpectate: (() => void) | null;
+  /** Whether the RUN-OUT is what is on screen — the card's own backdrop or
+   * the feed alike (spectate.ts). The player's car is parked past the line
+   * either way, so every instrument on the driving layout is a reading of a
+   * car that is not moving and not in shot: the chrome comes down and what
+   * is left is the card, over the race. */
+  watching: boolean;
+  /** THE SPECTATOR FEED, when one is up (spectate.ts). It takes the WHOLE
+   * screen rather than dressing the driving layout: every instrument here
+   * reads the player's own car, and the player's own car is parked past the
+   * line. Null the rest of the time. */
+  spectate: SpectateProps | null;
 };
 
 /** The tach dial, laid out like the arcade cluster it comes from: it reads
@@ -750,6 +765,9 @@ export function Hud({
   race,
   locked,
   onSaveRun,
+  onSpectate,
+  watching,
+  spectate,
 }: HudProps) {
   const { touch } = input;
   const pedalSide = touchLayout.steerSide === "left" ? "right" : "left";
@@ -761,6 +779,47 @@ export function Hud({
   // desktop the throttle key is the only throttle there is, and on a handheld
   // with a controller in its hands the pad is.
   const thumbs = deviceControls().touch && !padDriving;
+  /** The results card, wherever it ends up being drawn. */
+  const finish = (snap.phase === "rollout" || snap.phase === "finished") &&
+    snap.finishTime !== null && (
+      <FinishCard
+        time={snap.finishTime}
+        record={snap.record}
+        laps={snap.laps}
+        lapTimes={snap.lapTimes}
+        standing={
+          snap.standing && {
+            ...snap.standing,
+            // A heads-up race has no podium to miss: it pays nothing, it
+            // opens nothing, and every finish in it is simply the result.
+            podium: race !== null || snap.standing.place <= PODIUM_PLACES,
+          }
+        }
+        nextStage={nextStage}
+        onRetry={onRetry}
+        onRetire={onRetire}
+        scores={scores}
+        campaign={campaign}
+        race={race}
+        locked={locked}
+        onSaveRun={onSaveRun}
+        onSpectate={onSpectate}
+      />
+    );
+  // THE RUN-OUT OWNS THE SCREEN once it is on it. The canvas under this is a
+  // rival's game, and every readout in the driving layout below — the clock,
+  // the dials, the damage, the map, the pace notes — is a reading of the
+  // player's own car, which is parked past the line and not in shot. So the
+  // chrome comes down, and what is left is the one thing the beat is for: the
+  // feed's strip if the player asked for it, and otherwise the results card,
+  // standing over the race.
+  if (spectate || watching) {
+    return (
+      <div className="hud pointer-events-none absolute inset-0 select-none">
+        {spectate ? <SpectateStrip {...spectate} /> : <div className="hud-center">{finish}</div>}
+      </div>
+    );
+  }
   return (
     <div
       className="hud pointer-events-none absolute inset-0 select-none"
@@ -880,30 +939,7 @@ export function Hud({
             way-home arrow the renderer takes down in the free camera: it is
             an aid for somebody driving, and nobody is. */}
         {!flying && <StartLights live={live} muted={paused} />}
-        {(snap.phase === "rollout" || snap.phase === "finished") && snap.finishTime !== null && (
-          <FinishCard
-            time={snap.finishTime}
-            record={snap.record}
-            laps={snap.laps}
-            lapTimes={snap.lapTimes}
-            standing={
-              snap.standing && {
-                ...snap.standing,
-                // A heads-up race has no podium to miss: it pays nothing, it
-                // opens nothing, and every finish in it is simply the result.
-                podium: race !== null || snap.standing.place <= PODIUM_PLACES,
-              }
-            }
-            nextStage={nextStage}
-            onRetry={onRetry}
-            onRetire={onRetire}
-            scores={scores}
-            campaign={campaign}
-            race={race}
-            locked={locked}
-            onSaveRun={onSaveRun}
-          />
-        )}
+        {finish}
         <div className="hud-flashes">
           {flashes.map((f) => (
             <div key={f.id} className={`hud-flash hud-flash-${f.tone}`}>

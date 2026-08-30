@@ -1561,6 +1561,15 @@ await capture(
   { bot: "1", length: "short", seed: "38" },
 );
 
+// R30's SPECTATOR MODE has no scene here, and the reason is worth writing
+// down so the next session does not spend an afternoon rediscovering it: the
+// run-out only exists on a run that has a LEVEL, and a `?start=1` link never
+// passes through `startStage`, so every scene on this page finishes a stage
+// that was never entered for points and has no field to run home. Reaching
+// the card with cars still out means clicking through the menu — twelve
+// minutes of software-rendered driving on a campaign stage, against the
+// forty seconds a scene here is worth.
+
 // THE DEVELOPER TOOLS, which only exist to be photographed: the debug
 // overlay is a contract that a screenshot of the game carries enough to
 // stand in the same place again, and the only way to know it still does is
