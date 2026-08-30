@@ -16,6 +16,7 @@ import { latCeiling, slideFloor, surfaceGripFor, wheelSlide } from "../game/limi
 import { TUNING } from "../game/defs/tuning.ts";
 import type { CarSpec } from "../game/defs/cars.ts";
 import { flatTrack, SURFACES, type TerrainField, type Track } from "../mapgen/index.ts";
+import { scarPlan, scarsFor } from "./scars.ts";
 import { startsIn } from "../game/step.ts";
 import type { CarInput, GameState } from "../game/state.ts";
 
@@ -294,6 +295,12 @@ export function botInput(
   const error = angleDiff(car.heading, desired);
   let steer = clamp(error * profile.steerGain, -1, 1);
 
+  // What this stage has already done to this driver (`scars.ts`) — read
+  // every step, because the reading is also the booking: a respawn is only
+  // visible as the counter moving, and the place worth remembering is where
+  // the car was standing before it moved.
+  const scars = scarsFor(state);
+
   // Corner-speed plan: the tightest curvature over the horizon caps speed at
   // sqrt(a_lat / κ); the nearest cap that requires braking wins.
   const horizonMeters = Math.max(20, car.u * profile.planHorizon);
@@ -395,6 +402,22 @@ export function botInput(
     ahead += 1;
   }
 
+  // ...and over the top of the road ahead, the road BEHIND: a stretch that
+  // has already ended this run is planned at a fraction of the speed it
+  // ended it at, and at a smaller fraction every time it does it again. The
+  // corner scan cannot see this — a place that catches a car out need not be
+  // a corner at all, and the corner it is was legal at that speed for
+  // everybody who got through it — so it is a cap in its own right, and the
+  // plan takes whichever of the two is lower.
+  const scarred = scarPlan(scars, state, braking);
+  if (scarred < targetSpeed) targetSpeed = scarred;
+  // ...and the driver KNOWS it, which is a different thing from the plan
+  // having a number in it. Everything below that overrules the pedals —
+  // the flick, and the throttle that holds a slide open — is a decision
+  // taken on the assumption that running wide costs a moment. Arriving at
+  // the place that ended the last run, it costs the run again.
+  const wary = car.u > scarred;
+
   // THE PEDALS, and they are pedals rather than switches. Both used to be
   // on or off, which is not how either one is driven: a car held at a corner
   // speed by a throttle snapping between the floor and nothing pitches on
@@ -429,8 +452,12 @@ export function botInput(
   // the corner is quick enough to be worth one. Yanked to START a rotation
   // and let go the moment there is one, which is why this one reads
   // `car.drifting` and the trail below does not.
+  // ...and nobody flicks a car into the corner that has just ended their
+  // run. The lever is a deliberate overspeed the slide is trusted to scrub;
+  // `wary` is the driver having already been shown what happens when it
+  // does not, so the corner gets driven rather than attacked.
   const handbrake =
-    nearHard && !car.drifting && (rotates ? hot : car.u > slideFloor(state.spec, 1) + 1);
+    nearHard && !car.drifting && !wary && (rotates ? hot : car.u > slideFloor(state.spec, 1) + 1);
   // ...and the TRAILED BRAKE, which is the same ask made with the pedal that
   // is already down. The plan has the car braking for the corner anyway; a
   // driver in a car that will not rotate carries some of that brake PAST the
@@ -452,6 +479,14 @@ export function botInput(
     // its half-throttle in a lump exactly where it was least settled.
     const deep = clamp((Math.abs(car.slip) - DRIFT_HOLD) / DRIFT_BAND, 0, 1);
     throttle = 1 - (1 - DRIFT_FLOOR) * deep;
+    // Unless the slide is being carried into a place that has already ended
+    // this run, and it is the SLIDE that has to go. Everywhere else the
+    // pedal is never lifted right off mid-drift, because the drive is what
+    // holds the angle — here that is the point: the drive comes off, the
+    // slide shuts, and the plan above gets a car it can actually brake with
+    // back a step later. It is what a driver does when they recognise the
+    // corner they are already sideways for.
+    if (wary) throttle = 0;
     // Standing on the middle pedal sideways is not how a driver avoids
     // anything — but a front-driver that let the brake up here would simply
     // stop turning, so what it keeps is the trail and never more.
