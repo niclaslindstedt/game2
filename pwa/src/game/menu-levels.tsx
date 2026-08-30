@@ -57,6 +57,10 @@ type LevelBoxProps = {
    * has been driven and paid NOTHING says so: nought is the reason the box
    * after it is still shut. */
   points: number | undefined;
+  /** This is the stage the page would pick for you — the controller lands
+   * its cursor here, and START takes it (menu-nav.ts). One box per PAGE, so
+   * a page listing several locations names it once. */
+  next: boolean;
   onPlay: () => void;
 };
 
@@ -75,7 +79,17 @@ type LevelBoxProps = {
  * each behind the mark that says which it is: a cup for the finish, a watch
  * for the clock. A stage that has never been driven shows an empty row and
  * takes no height for it. */
-function LevelBox({ level, index, unlocked, hint, best, place, points, onPlay }: LevelBoxProps) {
+function LevelBox({
+  level,
+  index,
+  unlocked,
+  hint,
+  best,
+  place,
+  points,
+  next,
+  onPlay,
+}: LevelBoxProps) {
   if (!unlocked) {
     return (
       <div
@@ -90,7 +104,12 @@ function LevelBox({ level, index, unlocked, hint, best, place, points, onPlay }:
   }
   const laps = levelLaps(level);
   return (
-    <button type="button" className="menu-level menu-level-open" onClick={onPlay}>
+    <button
+      type="button"
+      className="menu-level menu-level-open"
+      data-nav-next={next ? "" : undefined}
+      onClick={onPlay}
+    >
       <span className="menu-level-head">
         <span className="menu-level-no">{index + 1}</span>
         <Glyph name={laps > 1 ? "circuit" : "sprint"} className="menu-level-shape" />
@@ -139,12 +158,16 @@ export function LevelGrid({
   open,
   hint,
   difficulty,
+  next,
   onPlay,
 }: {
   location: CampaignLocation;
   progress: CampaignProgress;
   open: (level: CampaignLevel, index: number) => boolean;
   hint: string;
+  /** The stage this PAGE would pick — see `LevelBoxProps.next`. Null on
+   * every grid but the one holding it, on a page that lists several. */
+  next?: CampaignLevel | null;
   /** Which field's results to show on the boxes. Absent on the time trial's
    * grid, where there is no field, so a placing would be a fiction and the
    * points belong to the campaign rather than to the clock. */
@@ -163,6 +186,7 @@ export function LevelGrid({
           best={progress.best[level.id]}
           place={difficulty === undefined ? undefined : bestPlace(progress, level.id, difficulty)}
           points={difficulty === undefined ? undefined : stagePoints(level.id, progress)[PLAYER_ID]}
+          next={next?.id === level.id}
           onPlay={() => onPlay(level, index)}
         />
       ))}

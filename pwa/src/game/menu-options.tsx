@@ -5,10 +5,10 @@
 //              INSIDE the car are set up, and which instruments are on
 //              screen. Speed, gear and the countdown are not offered:
 //              those are the game.
-//   AUDIO    — the two faders, in five steps rather than as a continuous
-//              slider: every other control on this screen is a row of
-//              choices, and a volume nobody can quite reproduce is worse
-//              than one they can name.
+//   AUDIO    — the two faders, as faders. A volume is the one setting on
+//              this page whose answers have no names: five chips said where
+//              a level was allowed to stand rather than where the player
+//              wanted it, and a slider with its number beside it says both.
 //   VIDEO    — the levers that buy frames on a weak device (resolution,
 //              draw distance, the effects budget, how thickly the world is
 //              planted).
@@ -27,7 +27,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { captureAxis, captureSource, type PadFrame } from "./gamepad.ts";
 import { deviceControls, holdPad, readPadFrames } from "./input.ts";
-import { GearboxRow, MenuHead, OptionRow, ToggleRow } from "./menu.tsx";
+import { playToggle, playUi } from "./audio/ui.ts";
+import { GearboxRow, MenuHead, OptionRow, SliderRow, ToggleRow } from "./menu.tsx";
 import {
   DEFAULT_KEYS,
   DEFAULT_PAD,
@@ -67,25 +68,11 @@ const TABS: { id: OptionsTab; label: string }[] = [
   { id: "controls", label: "CONTROLS" },
 ];
 
-/** The fader's stops. Five is enough to mix with and few enough to hit with
- * a thumb; OFF is a real stop rather than the bottom of a ramp, because
- * "no music" is a thing people want and not a very quiet thing. */
-const LEVELS: { id: string; label: string }[] = [
-  { id: "0", label: "OFF" },
-  { id: "0.25", label: "25" },
-  { id: "0.5", label: "50" },
-  { id: "0.75", label: "75" },
-  { id: "1", label: "100" },
-];
-
-/** The nearest stop to a stored value — a build that changes the ladder must
- * still show something sensible for a volume set on the old one. */
-function nearestLevel(value: number): string {
-  let best = LEVELS[0];
-  for (const level of LEVELS) {
-    if (Math.abs(Number(level.id) - value) < Math.abs(Number(best.id) - value)) best = level;
-  }
-  return best.id;
+/** A fader's readout. OFF is a word rather than 0% because it is a state and
+ * not a quantity: silence is a thing people choose, and "0%" reads as a
+ * setting that did not take. */
+function levelLabel(value: number): string {
+  return value <= 0 ? "OFF" : `${Math.round(value * 100)}%`;
 }
 
 type OptionsProps = {
@@ -147,21 +134,100 @@ function ViewSection({ settings, onSettings }: Pick<OptionsProps, "settings" | "
   );
 }
 
+/** WHERE YOU WATCH FROM, on a card of its own.
+ *
+ * The seven angles used to be seven chips on one line. That row was half
+ * again as wide as anything else on the page — it was what every other
+ * row's controls had to be laid out around — and the sentence under it
+ * could only ever describe the one that happened to be lit. Behind a press
+ * they are seven boxes each carrying its own description, which is what
+ * choosing where to sit actually needs: the choice is between the pictures,
+ * not between the words.
+ *
+ * The card is a `.hud-modal-card`, which is the first surface menu-nav.ts
+ * looks for — so a controller walks the angles the moment it opens, lands
+ * on the one already chosen, and B closes it. */
+function CameraModal({
+  value,
+  onPick,
+  onClose,
+}: {
+  value: PlayCamera;
+  onPick: (id: PlayCamera) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="hud-modal pointer-events-auto">
+      <div className="hud-modal-card opt-camera-card">
+        <div className="hud-modal-title">CAMERA</div>
+        <div className="hud-modal-sub">Where every stage starts</div>
+        <div className="opt-cameras">
+          {PLAY_CAMERAS.map((cam) => (
+            <button
+              key={cam.id}
+              type="button"
+              className={`opt-camera ${cam.id === value ? "opt-camera-on" : ""}`}
+              data-nav-next={cam.id === value ? "" : undefined}
+              onClick={() => {
+                playToggle(true);
+                onPick(cam.id);
+                onClose();
+              }}
+            >
+              <b>{cam.label}</b>
+              <span className="opt-camera-hint">{cam.hint}</span>
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="hud-pause-act"
+          data-nav-back
+          onClick={() => {
+            playUi("back");
+            onClose();
+          }}
+        >
+          CLOSE
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function HudTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "onSettings">) {
   const camera = PLAY_CAMERAS.find((cam) => cam.id === settings.camera) ?? PLAY_CAMERAS[0];
+  const [picking, setPicking] = useState(false);
   return (
     <div className="opt-list">
       <div className="menu-sub">Where you watch from, and what is on screen</div>
-      <OptionRow
-        label="CAMERA"
-        options={PLAY_CAMERAS}
-        value={settings.camera}
-        onPick={(id: PlayCamera) => onSettings({ ...settings, camera: id })}
-      />
+      <div className="menu-row">
+        <span className="menu-label">CAMERA</span>
+        <div className="menu-opts">
+          <button
+            type="button"
+            className="menu-opt menu-opt-active opt-picker"
+            onClick={() => {
+              playUi("select");
+              setPicking(true);
+            }}
+          >
+            {camera.label}
+            <span aria-hidden="true">›</span>
+          </button>
+        </div>
+      </div>
       <div className="opt-note">
         {camera.hint} — every stage starts here, and the camera key still walks the whole ladder
         from wherever you set it.
       </div>
+      {picking && (
+        <CameraModal
+          value={settings.camera}
+          onPick={(id) => onSettings({ ...settings, camera: id })}
+          onClose={() => setPicking(false)}
+        />
+      )}
       <ViewSection settings={settings} onSettings={onSettings} />
       <div className="opt-toggles">
         {HUD_TOGGLES.map((toggle) => (
@@ -190,17 +256,17 @@ function AudioTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "onS
   return (
     <div className="opt-list">
       <div className="menu-sub">Everything is synthesized — the game ships no audio files</div>
-      <OptionRow
+      <SliderRow
         label="EFFECTS"
-        options={LEVELS}
-        value={nearestLevel(audio.sfx)}
-        onPick={(id) => set({ sfx: Number(id) })}
+        value={audio.sfx}
+        format={levelLabel}
+        onChange={(sfx) => set({ sfx })}
       />
-      <OptionRow
+      <SliderRow
         label="MUSIC"
-        options={LEVELS}
-        value={nearestLevel(audio.music)}
-        onPick={(id) => set({ music: Number(id) })}
+        value={audio.music}
+        format={levelLabel}
+        onChange={(music) => set({ music })}
       />
       <div className="opt-note">
         The engine, the tyres, the wind and the slide are all effects — turning them off leaves the

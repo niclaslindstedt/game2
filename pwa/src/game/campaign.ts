@@ -577,6 +577,27 @@ export function continueAt(
   );
 }
 
+/** THE LAST STAGE A GATE LEAVES OPEN — the furthest one down the ladder a
+ * player is allowed to drive right now. The gate is passed in for the same
+ * reason `LevelGrid` takes one: the campaign opens the stage after the last
+ * podium, and the time trial and heads-up open anything finished.
+ *
+ * It is where a grid stands its controller cursor, and what that grid's way
+ * ON takes, so a pad walks INTO the campaign rather than back to the first
+ * stage every time. `continueAt` is the campaign's better answer where it
+ * has one; this is the fallback, and the whole answer on the two grids that
+ * have no ladder to pick back up. */
+export function latestOpen(
+  location: CampaignLocation,
+  open: (level: CampaignLevel, index: number) => boolean,
+): CampaignLevel | null {
+  let found: CampaignLevel | null = null;
+  for (const [index, level] of location.levels.entries()) {
+    if (open(level, index)) found = level;
+  }
+  return found;
+}
+
 /** The stage after this one, or null at the end of the ladder. The ladder
  * carries on into the next LOCATION rather than stopping at the end of one, so
  * a finished location hands the player straight into the next country. */

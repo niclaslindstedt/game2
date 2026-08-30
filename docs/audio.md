@@ -364,8 +364,14 @@ app, because a hidden page's timers are throttled to about 1 Hz.
 
 ## Options
 
-Options → Audio has two faders, effects and music, in five steps each with OFF
-as a real stop. They scale two views of one underlying synth, so there is only
+Options → Audio has two faders, effects and music, and they are drawn as
+faders: a level is the one setting on that page whose answers have no names,
+and a row of five chips said where a volume was allowed to stand rather than
+where the player wanted it. Each runs 0–100% in twentieths, reads its own
+number beside it, and reads OFF at the bottom — silence is a state people
+choose, not a very quiet one. Moving one ticks, which is how the EFFECTS
+fader is heard at the level it is being set to while the thumb is still on it.
+They scale two views of one underlying synth, so there is only
 ever one audio context to unlock and one limiter for everything to sum into.
 The engine, the tyres, the wind and the slide are all EFFECTS — turning them
 off leaves a stage with nothing but its score.

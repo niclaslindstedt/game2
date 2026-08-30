@@ -152,15 +152,19 @@ describe("the pad's presses", () => {
     // what was down. If a still-held START then reads as a fresh press, the
     // card it just opened closes a frame later, opens again the frame after
     // that, and where it lands is decided by whenever the thumb comes off.
+    //
+    // START answers to TWO actions out of the box — `pause` over a run and
+    // `next` over a card — so both come out of one press, and it is the
+    // surface on screen that decides which of them means anything.
     const reader = createPadReader(BINDINGS);
     const start = pad({ buttons: { 9: 1 } });
-    expect(poll(reader, [start]).pressed).toEqual(["pause"]);
+    expect(poll(reader, [start]).pressed).toEqual(["pause", "next"]);
     reader.release();
     expect(poll(reader, [start]).pressed).toEqual([]);
     expect(poll(reader, [start]).pressed).toEqual([]);
     // Let go, and START is a way back out of the card again.
     poll(reader, [pad()]);
-    expect(poll(reader, [start]).pressed).toEqual(["pause"]);
+    expect(poll(reader, [start]).pressed).toEqual(["pause", "next"]);
   });
 
   it("holds a latched button back however long it is leant on", () => {
@@ -173,7 +177,7 @@ describe("the pad's presses", () => {
       expect(poll(reader, [start]).pressed).toEqual([]);
     }
     poll(reader, [pad()]);
-    expect(poll(reader, [start]).pressed).toEqual(["pause"]);
+    expect(poll(reader, [start]).pressed).toEqual(["pause", "next"]);
   });
 
   it("takes the deepest read of an action across two pads", () => {
