@@ -549,91 +549,127 @@ describe("the head behind the wheel", () => {
 });
 
 describe("the transit between two cars", () => {
-  /** How far down the road the crew being cut TO is standing, m. */
-  const GAP = 700;
-  /** …and a ridge across the middle of it, high enough that no straight line
-   * between the two cars can be over it. */
-  const RIDGE = { at: GAP / 2, span: 80, height: 90 };
+  /** A stage that BENDS: two straights with a long sweeping right between
+   * them. The straight line between the two ends of a transit cuts the chord
+   * across that corner; the road does not, and the difference is what the
+   * shot is built on. */
+  const BEND: SegmentPlan[] = [
+    { kind: "straight", length: 320, feature: "none" },
+    { kind: "turn", length: 340, dir: 1, radius: 200, severity: "soft", feature: "none" },
+    { kind: "straight", length: 320, feature: "none" },
+  ];
 
-  /** A stage with that ridge across the middle and flat ground either side,
-   * and a camera settled behind a car at the near end of it. */
+  /** How much road the crew being cut TO is standing back up, m. */
+  const GAP = 700;
+
+  /** How long a move over `GAP` is given, s — `TIME_MIN` plus a second per
+   * `TIME_SPAN` metres, restated here rather than exported because a test
+   * that read the number off the module could not catch the module changing
+   * it. */
+  const MOVE = 0.85 + GAP / 800;
+
+  function bent(): GameState {
+    return createGame({
+      seed: 4,
+      carId: "compact",
+      skipCountdown: true,
+      track: compileTrack(4, BEND),
+    });
+  }
+
+  /** Stand the car on the road at arc position `s`, progress and all. The
+   * transit reads the destination off `progressS` — the car's own place on
+   * the stage — so a scenario that moved the body without it would be a car
+   * teleported off the road rather than one further up it. */
+  function place(state: GameState, s: number): void {
+    const samples = state.track.samples;
+    const i = clamp(Math.round(s / state.track.step), 0, samples.length - 1);
+    const sample = samples[i];
+    state.car.x = sample.x;
+    state.car.z = sample.z;
+    state.car.y = sample.elevation;
+    state.car.heading = sample.heading;
+    state.progressIndex = i;
+    state.progressS = sample.s;
+  }
+
+  /** How far `(x, z)` is from the nearest point of the road. */
+  function offRoad(state: GameState, x: number, z: number): number {
+    let best = Infinity;
+    for (const sample of state.track.samples) {
+      best = Math.min(best, Math.hypot(sample.x - x, sample.z - z));
+    }
+    return best;
+  }
+
+  /** The stage, with a camera settled behind a car near the finish — the
+   * place every transit this shot exists for starts from. */
   function staged(): { state: GameState; cam: ReturnType<typeof createGameCamera> } {
-    const state = game();
-    const car = state.car;
-    const near = car.z;
-    state.terrain = {
-      ...state.terrain,
-      groundAt: (_x, z) => (Math.abs(z - (near + RIDGE.at)) < RIDGE.span ? RIDGE.height : car.y),
-      waterAt: () => null,
-    };
+    const state = bent();
+    place(state, state.track.length - 30);
     const cam = createGameCamera(1600, 900);
     cam.setMode("chase");
-    car.heading = 0;
     // Settled: the rig has read its floor and stopped easing, so what the
-    // flight starts from is a real shot rather than the camera's birth pose.
+    // move starts from is a real shot rather than the camera's birth pose.
     for (let f = 0; f < 30; f++) cam.update(state, FRAME);
     return { state, cam };
   }
 
-  /** How long a flight over `GAP` is given, s — `TIME_MIN` plus a second per
-   * `TIME_SPAN` metres, restated here rather than exported because a test
-   * that read the number off the module could not catch the module changing
-   * it. */
-  const FLIGHT = 0.9 + GAP / 900;
-
-  /** Fly to a car `GAP` metres away and report every frame of it. `dz` is
-   * which way that is: `+GAP` is down the road AHEAD of the lens, `-GAP` is
-   * back up it BEHIND — the direction a spectator's next crew is actually
-   * in, and the one an aim walked as a POINT tumbles over. The car is MOVED rather
-   * than a second one built: the flight reads nothing off a crew but where
-   * its car is, and one game with a moved car is the same two endpoints with
-   * none of the ceremony. */
+  /** Move the lens to a car `GAP` metres back up the road and report every
+   * frame of it. The car is MOVED rather than a second one built: the shot
+   * reads nothing off a crew but where its car is on the stage, and one game
+   * with a moved car is the same two ends with none of the ceremony. */
   function transit(
     seconds: number,
-    dz = GAP,
+    back = GAP,
   ): {
-    heights: number[];
-    clearances: number[];
+    positions: THREE.Vector3[];
     steps: number[];
     forwards: THREE.Vector3[];
     ups: THREE.Vector3[];
+    strays: number[];
+    overs: number[];
     landed: THREE.Vector3;
     aim: THREE.Quaternion;
     rig: THREE.Vector3;
     rigAim: THREE.Quaternion;
   } {
     const { state, cam } = staged();
-    state.car.z += dz;
+    const target = state.progressS - back;
+    place(state, target);
     cam.retake(state, true);
-    const heights: number[] = [];
-    const clearances: number[] = [];
+    const positions: THREE.Vector3[] = [];
     const steps: number[] = [];
     const forwards: THREE.Vector3[] = [];
     const ups: THREE.Vector3[] = [];
+    const strays: number[] = [];
+    const overs: number[] = [];
     let prev: THREE.Vector3 | null = null;
     for (let f = 0; f < Math.round(seconds / FRAME); f++) {
       cam.update(state, FRAME);
-      const p = cam.camera.position;
-      heights.push(p.y);
-      clearances.push(p.y - state.terrain.groundAt(p.x, p.z));
+      const p = cam.camera.position.clone();
+      positions.push(p);
       if (prev) steps.push(p.distanceTo(prev));
-      prev = p.clone();
+      prev = p;
       forwards.push(new THREE.Vector3(0, 0, -1).applyQuaternion(cam.camera.quaternion));
       ups.push(new THREE.Vector3(0, 1, 0).applyQuaternion(cam.camera.quaternion));
+      strays.push(offRoad(state, p.x, p.z));
+      overs.push(p.y - state.terrain.groundAt(p.x, p.z));
     }
     // Where the rig alone would have stood this frame, and the way it would
-    // have been facing — the flight's own destination, asked for by cutting
-    // to the same car without one.
+    // have been facing — the move's own destination, asked for by cutting to
+    // the same car without one.
     const plain = staged();
-    plain.state.car.z += dz;
+    place(plain.state, plain.state.progressS - back);
     plain.cam.retake(plain.state, false);
     plain.cam.update(plain.state, FRAME);
     return {
-      heights,
-      clearances,
+      positions,
       steps,
       forwards,
       ups,
+      strays,
+      overs,
       landed: cam.camera.position.clone(),
       aim: cam.camera.quaternion.clone(),
       rig: plain.cam.camera.position.clone(),
@@ -641,111 +677,132 @@ describe("the transit between two cars", () => {
     };
   }
 
-  it("clears the tallest ground between the two cars", () => {
-    const { heights, clearances } = transit(FLIGHT);
-    // The apex is over the ridge, and by a margin — a lens level with a
-    // hilltop is a frame full of hilltop.
-    expect(Math.max(...heights)).toBeGreaterThan(RIDGE.height + 15);
-    // …and it is never inside anything, at any point of the flight. This is
-    // the assertion the whole shot exists to keep: the crest is sampled off
-    // a line, and a line can step past a spur.
-    expect(Math.min(...clearances)).toBeGreaterThan(0);
+  it("follows the ROAD rather than the line between the two cars", () => {
+    const { positions, strays } = transit(MOVE);
+    // Never far off the centreline — a chase camera's own standoff and the
+    // lift, and nothing like the chord.
+    expect(Math.max(...strays)).toBeLessThan(40);
+    // …and the chord is genuinely somewhere else, or the assertion above is
+    // free: the straight line between the two ends leaves the road by a
+    // margin no rig standoff explains.
+    const { state } = staged();
+    const a = positions[0];
+    const b = positions[positions.length - 1];
+    let worstChord = 0;
+    for (let i = 0; i <= 40; i++) {
+      const f = i / 40;
+      worstChord = Math.max(
+        worstChord,
+        offRoad(state, a.x + (b.x - a.x) * f, a.z + (b.z - a.z) * f),
+      );
+    }
+    expect(worstChord).toBeGreaterThan(90);
+  });
+
+  it("stays low, and never inside the ground", () => {
+    const { positions, overs } = transit(MOVE);
+    // A camera on a boom running back up the stage, not an aircraft: the
+    // whole complaint about a lobbed transit is that nobody can place
+    // themselves in a frame taken from forty metres up.
+    expect(Math.max(...overs)).toBeLessThan(26);
+    // …and it does rise: a move that never left road height would have
+    // nothing for the ground to move against.
+    expect(Math.max(...overs)).toBeGreaterThan(8);
+    // Never inside anything, at any point. Following the road makes this
+    // nearly free, which is exactly why it is worth stating.
+    expect(Math.min(...overs)).toBeGreaterThan(0);
+    expect(positions.length).toBeGreaterThan(50);
+  });
+
+  it("speeds up and then slows down, once", () => {
+    const { steps } = transit(MOVE);
+    const total = steps.reduce((a, b) => a + b, 0);
+    expect(total).toBeGreaterThan(GAP * 0.85);
+    // One hump: slow, then fast, then slow. Read off the three thirds of
+    // the move rather than off consecutive frames, because the road is a
+    // polyline and a metre of sampling noise between two frames says
+    // nothing about the gesture. This is what "a smooth motion, increasing
+    // in speed then decreasing" means once it is measured rather than
+    // looked at.
+    const third = Math.floor(steps.length / 3);
+    const mean = (from: number, to: number): number =>
+      steps.slice(from, to).reduce((a, b) => a + b, 0) / Math.max(1, to - from);
+    const opening = mean(0, third);
+    const middle = mean(third, third * 2);
+    const closing = mean(third * 2, steps.length);
+    expect(middle).toBeGreaterThan(opening * 1.5);
+    expect(middle).toBeGreaterThan(closing * 1.5);
+    // …and it leaves and arrives at rest, rather than cutting into motion.
+    const peak = Math.max(...steps);
+    expect(steps[0]).toBeLessThan(peak * 0.25);
+    expect(steps[steps.length - 1]).toBeLessThan(peak * 0.25);
+    // No frame carries a disproportionate share of the road, which is what a
+    // cut dressed as a move looks like from here.
+    expect(peak).toBeLessThan(total * 0.05);
+  });
+
+  it("never tumbles, going BACK up the road to the crew behind", () => {
+    // The spectator's own geometry: the lens is at the finish looking down
+    // the road, and the crew it is being sent to is behind it, still coming.
+    // Both ends of that move face the way the cars drive, and so does every
+    // frame between them.
+    //
+    // Interpolating an aim POINT is what makes this incomprehensible: a line
+    // from a point in front of the lens to a car behind it passes through
+    // the lens, so the shot whips round to the back, tumbles at the
+    // crossing, and whips forward again on the landing.
+    const { forwards, ups } = transit(MOVE);
+    for (const up of ups) {
+      // The horizon stays a horizon: a lens asked to look at the point it is
+      // standing on rolls, and a rolled frame is the one thing a viewer
+      // cannot read past.
+      expect(up.y).toBeGreaterThan(0.9);
+    }
+    // No frame turns more than a degree and a half. The stage bends between
+    // the two ends, so this is not zero — but the turn is spread over the
+    // whole move rather than spent at the apex, which is the difference
+    // between being carried round a corner and being whipped round one.
+    for (let f = 1; f < forwards.length; f++) {
+      expect(forwards[f].angleTo(forwards[f - 1])).toBeLessThan(0.025);
+    }
   });
 
   it("lands on the pose the rig would have stood in, aim and all", () => {
-    // Half way through it is still out over the country and nowhere near
-    // the car...
-    const half = transit(FLIGHT / 2);
+    // Half way through it is still out on the stage and nowhere near the
+    // car...
+    const half = transit(MOVE / 2);
     expect(half.landed.distanceTo(half.rig)).toBeGreaterThan(50);
     // ...and at the end it is home, on the rig's own frame — in POSITION and
     // in AIM, so the last flown frame and the first driven one are the same
     // frame. The aim half is the one that pops if it is left out: a shot
     // that points itself at the car all the way in hands over to a rig
     // pointing somewhere else entirely.
-    const whole = transit(FLIGHT + 0.1);
+    const whole = transit(MOVE + 0.1);
     expect(whole.landed.distanceTo(whole.rig)).toBeLessThan(1);
     expect(whole.aim.angleTo(whole.rigAim)).toBeLessThan(0.02);
   });
 
-  it("flies it, rather than cutting", () => {
-    const { steps } = transit(FLIGHT);
-    // No frame carries a disproportionate share of the distance: a cut
-    // dressed as a flight shows up as one enormous step among a hundred
-    // small ones. The eased middle is the fastest part and still nowhere
-    // near a jump.
-    const total = steps.reduce((a, b) => a + b, 0);
-    expect(total).toBeGreaterThan(GAP * 0.9);
-    expect(Math.max(...steps)).toBeLessThan(total * 0.1);
-  });
-
-  it("never tumbles, flying BACK up the road to the crew behind", () => {
-    // The spectator's own geometry: the lens is at the finish looking down
-    // the road, and the crew it is being sent to is behind it, still coming.
-    // Both ends of that flight face the SAME way, so the shot is a reverse
-    // tracking move and the aim barely turns at all.
-    //
-    // Interpolating an aim POINT is what makes this incomprehensible: a line
-    // from a point in front of the lens to a car behind it passes through
-    // the lens, so the shot whips round to the back, tumbles at the
-    // crossing, and whips forward again on the landing.
-    const { forwards, ups } = transit(FLIGHT, -GAP);
-    for (const fwd of forwards) {
-      // Still looking down the road, every frame of the way — never round
-      // at the target, and never through the reversal that gets it there.
-      expect(fwd.z).toBeGreaterThan(0.3);
-    }
-    for (const up of ups) {
-      // …and the horizon stays a horizon: a lens asked to look at the point
-      // it is standing on rolls, and a rolled frame is the one thing a
-      // viewer cannot read past.
-      expect(up.y).toBeGreaterThan(0.9);
-    }
-    // No frame turns more than a few degrees, which is what "smoothly" means
-    // when it is measured rather than looked at.
-    for (let f = 1; f < forwards.length; f++) {
-      expect(forwards[f].angleTo(forwards[f - 1])).toBeLessThan(0.05);
-    }
-  });
-
-  it("tilts down over the arc, and comes back to the rig's own pitch", () => {
-    const { forwards, rigAim } = transit(FLIGHT, -GAP);
-    const pitch = forwards.map((f) => Math.asin(-f.y));
-    // What "level" means here is the rig's own aim: a chase camera already
-    // looks a few degrees down at the car it is behind, and the tilt is
-    // measured against that rather than against the horizon.
-    const settled = Math.asin(-new THREE.Vector3(0, 0, -1).applyQuaternion(rigAim).y);
-    // Up over the country the lens is looking DOWN at the ground it is
-    // flying over rather than out at the horizon...
-    expect(Math.max(...pitch)).toBeGreaterThan(settled + 0.12);
-    // ...and it arrives back on the rig's pitch, because the tilt is worth
-    // exactly what the lift is worth and the lift is gone by the landing.
-    expect(Math.abs(pitch[pitch.length - 1] - settled)).toBeLessThan(0.02);
-  });
-
-  it("does not fly at all when the lens is already there", () => {
+  it("does not move at all when the lens is already there", () => {
     // Changing which VIEW a car is watched from is not a transit. Without
-    // the guard the flight still climbs its clearance and comes back down —
-    // a lob over a car that never moved.
+    // the guard the shot still lifts and settles — a hop over a car that
+    // never moved.
     const { state, cam } = staged();
     const before = cam.camera.position.clone();
-    cam.retake(state, true);
-    const heights: number[] = [];
     for (let f = 0; f < 60; f++) {
+      cam.retake(state, true);
       cam.update(state, FRAME);
-      heights.push(cam.camera.position.y);
+      expect(Math.abs(cam.camera.position.y - before.y)).toBeLessThan(1);
     }
-    expect(Math.max(...heights)).toBeLessThan(before.y + 2);
   });
 
   it("cuts when it is not asked to fly", () => {
     // Standing the feed down is a cut: the destination is the results card,
     // not a shot. One frame and the camera is simply there.
     const { state, cam } = staged();
-    state.car.z += GAP;
+    place(state, state.progressS - GAP);
     cam.retake(state, false);
     cam.update(state, FRAME);
     const p = cam.camera.position;
-    expect(Math.abs(p.z - state.car.z)).toBeLessThan(40);
-    expect(p.y).toBeLessThan(RIDGE.height);
+    expect(Math.hypot(p.x - state.car.x, p.z - state.car.z)).toBeLessThan(40);
   });
 });

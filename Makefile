@@ -149,6 +149,14 @@ sky:
 glyphs:
 	npm run glyphs
 
+# Photograph the camera leaving the finish line for a crew still out on the
+# stage (previews/transit.png) — CONSECUTIVE frames, so what is judged is
+# whether each one belongs beside the last. REQUIRED before/after any change
+# to the transit or to what it lands in. `OUT=` names the sheet. Same
+# Chromium requirements as `screenshots`.
+transit:
+	npm run transit
+
 # Build the audio review page: every sound in the bank on a button, both
 # scores under the real sequencer with per-voice mutes, and the continuous
 # road bed under sliders. Self-contained HTML — open it, or publish it so
