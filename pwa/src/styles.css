@@ -752,6 +752,7 @@ body {
   align-items: center;
   gap: 0.3rem;
   margin-top: 0.6rem;
+  position: relative; /* the hidden field hangs off this, inside the card */
 }
 
 .hud-initials-title {
@@ -772,44 +773,42 @@ body {
   margin: 0.15rem 0;
 }
 
-.hud-initial {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.hud-initial-step,
+/* A letter is the control now that the chevrons are gone: tapping one puts
+   the caret on it and raises the device's keyboard, so it has to be a thumb
+   target rather than a glyph. The padding is above the underline, not around
+   it, so three slots still read as three slots. */
 .hud-initial-letter {
   font: inherit;
   color: var(--hud-ink);
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0;
-}
-
-.hud-initial-step {
-  font-size: clamp(0.9rem, 3vmin, 1.2rem);
-  line-height: 1;
-  opacity: 0.6;
-  padding: 0.35rem 0.7rem; /* a thumb target, not a glyph */
-}
-
-.hud-initial-step:active {
-  opacity: 1;
-}
-
-.hud-initial-letter {
+  padding: 0.55rem 0.4rem 0.2rem;
   font-size: clamp(1.8rem, 7vmin, 3rem);
   line-height: 1.05;
-  min-width: 1.1em;
+  min-width: 1.7em; /* with the padding, a 44px thumb target at phone sizes */
   border-bottom: 3px solid rgb(255 255 255 / 35%);
 }
 
-.hud-initial.is-caret .hud-initial-letter {
+.hud-initial-letter.is-caret {
   color: var(--hud-good);
   border-bottom-color: var(--hud-good);
   animation: hud-pop 0.9s infinite;
+}
+
+/* THE KEYBOARD'S WAY IN. Invisible, but a laid-out field in the page and not
+   a hidden one: a browser opens its on-screen keyboard for a field it can
+   focus, and it can focus neither `display: none` nor something parked off
+   the edge of the world. One pixel under the slots, taking no room. */
+.hud-initials-field {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  font-size: 16px; /* anything smaller and iOS zooms the page on focus */
+  pointer-events: none;
 }
 
 .hud-initials-done {
