@@ -1114,11 +1114,14 @@ await capture(
 // ── The developer's map ─────────────────────────────────────────────────
 //
 // The map pane blown up to the whole screen, with one of the generator's own
-// layers painted over the landscape and the box in the corner saying what
-// the picture is of. These are the sheets to LOOK at when a stage comes out
-// wrong: the ground under a bad stretch of road can be read off them without
-// driving it, and the REPRO line in each one puts anybody else in front of
-// the same map.
+// layers painted over the landscape. These are the sheets to LOOK at when a
+// stage comes out wrong: the ground under a bad stretch of road can be read
+// off them without driving it.
+//
+// Nothing is captioned on screen — the numbers live behind COPY DEBUG INFO
+// now, and in the game's own SCREENSHOT they are painted into the picture.
+// These sheets do not need one: every fact a caption would carry is in the
+// URL below, which is also what makes them reproducible.
 //
 // Everything is pinned through the URL rather than clicked — the framing
 // included — so two passes over the same seed are the same picture and the
@@ -1126,12 +1129,14 @@ await capture(
 // once it is full screen (see holdMap), which is what makes that true.
 const MAP_FRAME = { maz: "0.9", mpitch: "1.0", mzoom: "1" };
 
-/** The full-screen map is standing, its stage is built, and the debug box
- * has something to say. Everything here waits on the DOM rather than on a
- * timeout: the world takes as long as software rendering takes. */
+/** The full-screen map is standing and its stage is built — the copy button
+ * arms itself off the same read the debug text comes out of, so a live
+ * `data-ready` is the page saying there is a stage to photograph. Everything
+ * here waits on the DOM rather than on a timeout: the world takes as long as
+ * software rendering takes. */
 async function mapUp(page) {
   await page.waitForSelector(".roam-map-full", { timeout: 120000 });
-  await page.waitForSelector(".map-debug-boxes .debug-box", { timeout: 240000 });
+  await page.waitForSelector("[data-map-copy][data-ready='1']", { timeout: 240000 });
   // The ground streams in a few tiles a frame, and a map photographed while
   // it is still arriving is a picture of a half-built island.
   await page.waitForTimeout(12000);

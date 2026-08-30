@@ -39,7 +39,7 @@ something is the moment you are looking at it.
 | **Debug overlay**    | The boxes naming the stage, the place, the camera and the car — and the REPRO line along the bottom.                                                                                                                                                                                                                                                                                                                                   | `pwa/src/game/debug-hud.tsx` over `debug-info.ts`                                                        |
 | **Debug log**        | A ring buffer of every engine event, every engine log line, and a position trace once a second. Copied whole or per-run from DEVELOPER → DEBUG LOG.                                                                                                                                                                                                                                                                                    | `pwa/src/game/debug-log.ts`, page in `menu-dev.tsx`                                                      |
 | **The benchmark**    | A fixed piece of racing — the first stage, fifteen cars off one green, a bot at every wheel — drawn as fast as the machine will draw it, timed with a stopwatch. The answer is SECONDS, and lower is better: a frame rate is a number about one moment, and two of them from two machines are never about the same moment. Pins everything about the race and nothing about the picture, so what it compares is settings and machines. | `pwa/src/game/benchmark.ts`, card in `menu-dev.tsx`                                                      |
-| **The map's layers** | The stage's own layers painted over the Roam map — bedrock, groundwater, soil, foliage, roads — the pane blown up to the whole screen, a box saying what the generator built, and a shutter that paints that box into the picture. Reaches the campaign's own stages through DEVELOPER → MAP VIEWER.                                                                                                                                   | `pwa/src/game/map-layers.ts` + `map-debug.ts`, controls in `menu-roam.tsx`, the viewer in `menu-dev.tsx` |
+| **The map's layers** | The stage's own layers painted over the Roam map — bedrock, groundwater, soil, foliage, roads — the pane blown up to the whole screen, COPY DEBUG INFO for what the generator built as text, and a shutter that paints the same box into a picture. Reaches the campaign's own stages through DEVELOPER → MAP VIEWER.                                                                                                                  | `pwa/src/game/map-layers.ts` + `map-debug.ts`, controls in `menu-roam.tsx`, the viewer in `menu-dev.tsx` |
 
 **ALT held hides the HUD and leaves the overlay up.** That is the shot to
 ask for when the game's own chrome is in the way of the thing being reported.
@@ -122,12 +122,14 @@ Two things make it a debug tool rather than a picture:
   the middle button) walks the aim to the part of the stage in question. A
   map that could only zoom into its own centre would be useless — the defect
   is never in the middle.
-- **FULL SCREEN puts the debug box up**, and the box is the caption:
-  seed, dials, what the stage was assembled from (turns, straights, jumps,
-  crests, fords, bridges), its spread, its spurs and splits, what the painted
-  layer measured over the whole island, where the lens is standing, and the
-  REPRO line. The framing stops turning the moment the map is being read, so
-  two screenshots either side of a change are the same picture.
+- **COPY DEBUG INFO puts the whole caption on the clipboard**: seed, dials,
+  what the stage was assembled from (turns, straights, jumps, crests, fords,
+  bridges), its spread, its spurs and splits, what the painted layer measured
+  over the whole island, where the lens is standing, and the REPRO link —
+  as text, ready to paste into a report or a prompt. Nothing of it is drawn
+  over the map, because the map is what the page is for. The framing stops
+  turning the moment the map is being read (full screen, or a layer painted
+  on), so two screenshots either side of a change are the same picture.
 
 `make screenshots shot-map` captures the whole sheet — the bare map, one
 frame per layer, one leaned in and panned onto the road, and one after dark.
@@ -145,11 +147,15 @@ and the picture that comes out is of a road somebody is going to drive.
 
 **SCREENSHOT**, on the full-screen map's strip, is the button to point a
 reporter at. It saves the whole screen with the boxes, the layer legend and
-the REPRO line **painted into the pixels** — the overlay is DOM over the
-canvas, so none of it is in the drawing buffer a capture is lifted from, and
-a picture whose caption stayed behind in the browser is a picture nobody can
-act on. The file lands in the roll, which is the main menu's GALLERY, where
-it can be saved or shared.
+the REPRO line **painted into the pixels** — a caption is worth having on a
+picture precisely because a picture cannot be pasted, and the boxes are
+nowhere on the page to be lifted from anyway. The file lands in the roll,
+which is the main menu's GALLERY, where it can be saved or shared.
+
+**COPY DEBUG INFO** is the same facts for somebody who wants to READ them:
+one press, and the boxes and the link are on the clipboard as text. Ask for
+the picture when the problem is something you have to see, and the text when
+it is a number.
 
 That is the whole loop this skill exists for, in its shortest form: a person
 who can see the problem presses one button, and what reaches you is a frame

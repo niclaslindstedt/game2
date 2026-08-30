@@ -31,37 +31,12 @@ import { lengthLabel } from "./menu-levels.tsx";
 import { playUi } from "./audio/ui.ts";
 import { ToggleRow } from "./menu.tsx";
 import type { DevSettings } from "./settings.ts";
+import { copyText } from "../lib/copy-text.ts";
 
 /** How many lines of the log the page shows. Enough that the tail is worth
  * LOOKING at (and screenshotting) without the card growing into a wall
  * nobody scrolls to the bottom of. */
 const TAIL_LINES = 60;
-
-/** Put text on the clipboard, falling back to a hidden textarea where the
- * async API is missing or refused (insecure origin, a browser that only
- * grants it inside a gesture it did not recognise). Returns whether it
- * worked, so the button can say so rather than silently doing nothing. */
-async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    /* fall through to the old way */
-  }
-  try {
-    const area = document.createElement("textarea");
-    area.value = text;
-    area.style.position = "fixed";
-    area.style.opacity = "0";
-    document.body.appendChild(area);
-    area.select();
-    const ok = document.execCommand("copy");
-    document.body.removeChild(area);
-    return ok;
-  } catch {
-    return false;
-  }
-}
 
 function CopyButton({ label, text }: { label: string; text: () => string }) {
   const [said, setSaid] = useState<string | null>(null);

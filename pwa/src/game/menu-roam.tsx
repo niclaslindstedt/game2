@@ -18,7 +18,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { STAGE_RULES, circuitLapBand, type StageLength, type StageShape } from "@engine";
 
 import { CarPicker } from "./car-picker.tsx";
-import type { DebugBox } from "./debug-info.ts";
+import { debugReport, type DebugBox } from "./debug-info.ts";
 import { MAP_LAYERS, type LegendStop, type MapLayerId } from "./map-layers.ts";
 import {
   OptionRow,
@@ -31,6 +31,8 @@ import {
   dialStop,
   type RaceSettings,
 } from "./menu.tsx";
+import { playUi } from "./audio/ui.ts";
+import { copyText } from "../lib/copy-text.ts";
 
 export type MapRect = { x: number; y: number; width: number; height: number };
 
@@ -65,8 +67,9 @@ export type MapDebug = {
   /** The ramp the painted layer is read against. */
   legend: LegendStop[];
   /** The boxes and the repro line, read fresh — the framing moves under the
-   * hand, so the panel asks again a few times a second rather than being
-   * handed a snapshot that is stale by the time it is painted. */
+   * hand, so this is asked at the moment it is wanted (the copy, the
+   * shutter) rather than being handed a snapshot that is stale by the time
+   * anything uses it. Null until there is a stage to describe. */
   read: () => { boxes: DebugBox[]; repro: string } | null;
   /** TAKE THE PICTURE: the whole screen, with the boxes and the repro line
    * painted INTO the pixels rather than left on the page — so what lands in
@@ -333,6 +336,12 @@ function MapTools({ map }: { map: MapDebug }) {
             is the flat sky the menu's cards sit on with the map in a hole in
             the corner of it. */}
         {map.full && <MapShotButton map={map} />}
+        {/* ...the TEXT, on the other hand, is offered at either size. It
+            describes the stage and the framing, neither of which the pane's
+            size changes, and now that the boxes are not on screen this is
+            the only way to read what the generator built without taking a
+            picture of it first. */}
+        <MapCopyButton map={map} />
       </div>
       {map.legend.length > 0 && (
         <div className="map-legend">
@@ -383,45 +392,66 @@ function MapShotButton({ map }: { map: MapDebug }) {
   );
 }
 
-/** How often the panel re-reads the framing, ms. The map turns and the pan
- * walks under the hand, so the numbers have to follow; four times a second
- * is faster than anyone reads and slower than anything that would cost the
- * frame it is describing. */
-const PANEL_PERIOD = 250;
+/** How often the button checks whether there is a stage to describe yet,
+ * ms. It asks only until the answer is yes: the stage is built once and the
+ * check exists to stop the button being pressed before then, not to follow
+ * a framing that moves — what is copied is read at the press. */
+const READY_PERIOD = 500;
 
-/** The box in the corner of a full-screen map: what the generator built,
- * what the painted layer measured of it, where this was seen from, and the
- * line that puts anybody else in front of the same picture. The whole point
- * of a screenshot of this page is that it needs no caption. */
-function MapDebugPanel({ map }: { map: MapDebug }) {
-  const [seen, setSeen] = useState(map.read);
+/** COPY DEBUG INFO: what the generator built, what the painted layer
+ * measured of it, where this was seen from, and the link that puts anybody
+ * else in front of the same picture — as TEXT, on the clipboard.
+ *
+ * It replaced a panel that said all of the same things down the side of the
+ * map, and the reason is what the map is FOR. The boxes were a caption on a
+ * picture nobody was taking: two of them covered the quarter of the island
+ * the defect was usually in, and a number read off a screen still has to be
+ * typed out by hand before it can go in a report. So the facts go where
+ * facts are wanted — in a paste — and the map gets its pixels back.
+ *
+ * A picture still gets the boxes: the SHUTTER next door paints them into
+ * it, which is the one place they cannot be selected and copied. */
+function MapCopyButton({ map }: { map: MapDebug }) {
+  const [said, setSaid] = useState<string | null>(null);
+  const [ready, setReady] = useState(() => map.read() !== null);
   const readRef = useRef(map.read);
   readRef.current = map.read;
   useEffect(() => {
-    const timer = setInterval(() => setSeen(readRef.current()), PANEL_PERIOD);
+    if (ready) return;
+    const timer = setInterval(() => setReady(readRef.current() !== null), READY_PERIOD);
     return () => clearInterval(timer);
-  }, []);
-  if (!seen) return null;
+  }, [ready]);
   return (
-    <div className="map-debug" data-map-ui>
-      <div className="map-debug-boxes">
-        {seen.boxes.map((box) => (
-          <div key={box.title} className="debug-box">
-            <div className="debug-box-title">{box.title}</div>
-            {box.rows.map((row) => (
-              <div key={row.k} className="debug-row" data-k={row.k}>
-                <span className="debug-row-k">{row.k}</span>
-                <span className="debug-row-v">{row.v}</span>
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-      <div className="debug-repro map-debug-repro">
-        <span className="debug-repro-label">REPRO</span>
-        <code className="debug-repro-text">{seen.repro}</code>
-      </div>
-    </div>
+    <button
+      type="button"
+      className={said ? "map-tool map-tool-on" : "map-tool"}
+      title="Copy the stage, the layer's reading, the framing and the REPRO link as text"
+      data-map-copy
+      // What a headless pass waits on: the stage is generated on a worker's
+      // own schedule, and until it lands there is nothing here to read.
+      data-ready={ready ? "1" : "0"}
+      disabled={!ready}
+      onClick={() => {
+        const read = readRef.current();
+        if (!read) {
+          setSaid("NO STAGE YET");
+          setTimeout(() => setSaid(null), SHOT_SAID);
+          return;
+        }
+        playUi("select");
+        // The whole URL rather than the query alone: this text is going
+        // somewhere else — a chat, an issue, another agent's prompt — and a
+        // query string on its own is only a link to whoever already knows
+        // which build it came off.
+        const url = `${location.origin}${location.pathname}${read.repro}`;
+        void copyText(debugReport(read.boxes, url)).then((ok) => {
+          setSaid(ok ? "COPIED" : "COPY FAILED");
+          setTimeout(() => setSaid(null), SHOT_SAID);
+        });
+      }}
+    >
+      {said ?? "COPY DEBUG INFO"}
+    </button>
   );
 }
 
@@ -483,12 +513,7 @@ export function RoamPage({
             </span>
           </div>
           <MapPane onMapRect={onMapRect} view={mapView} full={map?.full ?? false}>
-            {map && (
-              <>
-                <MapTools map={map} />
-                {map.full && <MapDebugPanel map={map} />}
-              </>
-            )}
+            {map && <MapTools map={map} />}
           </MapPane>
           <div className="roam-length">
             <input

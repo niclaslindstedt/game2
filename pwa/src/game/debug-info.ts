@@ -291,15 +291,26 @@ export function traceLine(ctx: DebugContext, state: GameState): string {
   );
 }
 
-/** The same boxes as one block of text, for the debug log and the clipboard.
- * A screenshot is the fastest way to SHOW a problem and the slowest way to
- * quote a number out of; this is the other half. */
-export function debugText(ctx: DebugContext, state: GameState): string {
+/** ANY boxes as one block of text, with the repro under them. A screenshot
+ * is the fastest way to SHOW a problem and the slowest way to quote a
+ * number out of; this is the other half, and it is the whole of what the
+ * map's COPY DEBUG INFO puts on the clipboard.
+ *
+ * `repro` is whatever the surface wants pasted back — the query on its own
+ * where the reader already knows which build it is, the whole URL where the
+ * text is going somewhere else entirely. */
+export function debugReport(boxes: DebugBox[], repro: string): string {
   const lines: string[] = [];
-  for (const box of debugBoxes(ctx, state)) {
+  for (const box of boxes) {
     lines.push(`[${box.title}]`);
     for (const row of box.rows) lines.push(`  ${row.k}: ${row.v}`);
   }
-  lines.push(`[REPRO] ${reproQuery(ctx)}`);
+  lines.push(`[REPRO] ${repro}`);
   return lines.join("\n");
+}
+
+/** The driving overlay's own boxes, as that block — for the debug log and
+ * the clipboard. */
+export function debugText(ctx: DebugContext, state: GameState): string {
+  return debugReport(debugBoxes(ctx, state), reproQuery(ctx));
 }
