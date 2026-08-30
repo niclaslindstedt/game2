@@ -755,6 +755,14 @@ export function App() {
   const godRef = useRef(false);
   const debugRef = useRef(options.dev.debug);
   debugRef.current = options.dev.debug;
+  /** `?bot=1` — the bot has the wheel until a human touches a control. A ref
+   * rather than a local of the frame loop because god mode's HOLD reads it:
+   * a run somebody else is driving is the one flight that must not stop it. */
+  const autopilotRef = useRef(autopilotRequested());
+  /** Whether god mode is holding the run still, decided once by the frame
+   * loop and read back by the debug overlay — a picture taken from up here
+   * should say whether the world under it was moving. */
+  const heldRef = useRef(false);
   /** The compiled stage, cached under everything that decides what it IS:
    * the seed, the length band, and the dials. */
   const audioRef = useRef<RunAudio | null>(null);
@@ -1385,6 +1393,7 @@ export function App() {
       playCamera: playCameraRef.current,
       pose,
       god: pose.mode === "free",
+      held: heldRef.current,
       fps,
       build: BUILD,
     };
@@ -1426,6 +1435,19 @@ export function App() {
       `flying from ${p.x.toFixed(1)} ${p.y.toFixed(1)} ${p.z.toFixed(1)} yaw ${p.yaw.toFixed(3)}`,
     );
   }, [godActive, input]);
+
+  // …and the run it is holding is SAID OUT LOUD, because the alternative is
+  // a player who switched god mode on from the pause card, pressed RESUME,
+  // and watched nothing move. Only on the way in and the way out: arriving
+  // with the tools already on (a `?god=1` link) is not a change, and a run
+  // the bot is driving was never held to announce.
+  const godAnnounced = useRef(godActive);
+  useEffect(() => {
+    if (godAnnounced.current === godActive) return;
+    godAnnounced.current = godActive;
+    if (autopilotRef.current) return;
+    flash(godActive ? "GOD MODE — RUN HELD" : "RUN RESUMED", "info");
+  }, [godActive]);
 
   // The log fills only while the overlay is up: the two are one tool, and a
   // ring buffer nobody asked for is a leak in a shipped game.
@@ -1873,12 +1895,48 @@ export function App() {
         }
       };
 
+      /** Everything on screen that reads the run twelve times a second: the
+       * HUD's snapshot, the split ageing beside it, and the debug overlay's
+       * own. Written once and called from both the frame that STEPPED the
+       * run and the frame that is holding it still — a run held from its
+       * very first frame (a `?god=1` link) has never handed the HUD
+       * anything, and a HUD with nothing in it leaves the start-line caption
+       * hanging across the middle of every picture flown out to be taken. */
+      const pushHud = (state: GameState, fps: number): void => {
+        // R29 — a HEADS-UP race is the one discipline that knows the order of
+        // the road at every moment, so its position board reads live rather
+        // than waiting for the next split. Off the HUD's own clock and not
+        // the physics step: it is a number on a screen that redraws twelve
+        // times a second.
+        const racing = fieldRef.current;
+        if (racing?.massStart && state.phase === "racing") {
+          standingRef.current = { place: livePlace(racing, state), of: racing.of };
+        }
+        setSnap(
+          takeSnapshot(
+            state,
+            paceRef.current,
+            finishTimeRef.current,
+            ghostRef.current?.state.progressS ?? null,
+            bookRef.current,
+            standingRef.current,
+            fieldRef.current,
+          ),
+        );
+        // R28 — and the split ages on the race clock beside it.
+        const up = splitRef.current;
+        if (up && state.raceTime - up.time > SPLIT_HOLD) setSplit(null);
+        // The overlay reads its own snapshot: it needs the CAMERA, which the
+        // HUD's has no reason to carry, and it is off entirely for everyone
+        // who never let the developer menu out.
+        if (debugRef.current) setDebugCtx(debugContextRef.current(fps));
+      };
+
       // Fixed-timestep driver: engine steps at TUNING.dt regardless of frame
       // rate; a hitching tab clamps the backlog instead of spiraling. Behind
       // the menu the BOT is at the wheel; on the Roam page nothing drives at
       // all and only the map camera turns.
       let raf = 0;
-      let autopilot = autopilotRequested();
       let last = performance.now();
       let acc = 0;
       let hudClock = 0;
@@ -1962,6 +2020,18 @@ export function App() {
           const move = input.flyMove(dtFrame);
           if (!pausedRef.current) renderer.flyCamera(move);
         }
+        // GOD MODE HOLDS THE RUN. Flying is for LOOKING at a moment — the
+        // corner that reads wrong, the tree standing in the road, the water
+        // that ended up on the wrong side of a ridge — and a moment that
+        // drives on while it is being looked at is a moment nobody can fly
+        // back to. So the simulation stops for as long as the camera is off
+        // the car, and picks up exactly where it was when god mode lands.
+        //
+        // One exception, and it is the whole of `?bot=1`: a run somebody
+        // ELSE is driving is one the camera was sent up to watch get
+        // somewhere, so it keeps its time.
+        const held = flying && !autopilotRef.current;
+        heldRef.current = held;
         // The pause card is a run that must not tick while the player is
         // reading it — and a paused run is a FROZEN one: rendered with no
         // time passing, so the wheels stop turning, the dust hangs and the
@@ -1969,10 +2039,30 @@ export function App() {
         // state that is not moving is a car doing 120 km/h on stopped
         // ground. The Roam page is different: nothing is driving there
         // either, but the map camera is still turning, so it keeps its time.
-        if (page === null && pausedRef.current) {
+        if (page === null && (pausedRef.current || held)) {
           acc = 0;
+          // …and the one thing that still moves under god mode's hold is the
+          // camera, on its own clock: the frame below it is drawn with dt 0,
+          // so the flight has no dt to take its step from.
+          if (held && !pausedRef.current) renderer.flyFrozen(dtFrame);
           renderer.render(state, 0);
           servePendingShot();
+          // The readouts still get read under god mode's hold — over a state
+          // that is not moving, so they settle in one pass and cost nothing
+          // after it. The overlay is the reason to be up here at all: its
+          // REPRO line names where the lens is standing, and a line held
+          // still with the run would put whoever pasted it somewhere the
+          // picture was never taken from. The pause CARD is the other case
+          // and keeps its silence: it stands over a run that has already
+          // been read, and the card is what the player is looking at.
+          if (held) {
+            readLive(liveRef.current, state);
+            hudClock += dtFrame;
+            if (hudClock > 0.08) {
+              hudClock = 0;
+              pushHud(state, fps);
+            }
+          }
           return;
         }
         if (page?.page === "roam") {
@@ -1988,8 +2078,8 @@ export function App() {
           // pedals and the wheel RAMP, and a sample skipped is a ramp that
           // never moves.
           const human = input.sample(TUNING.dt);
-          if (autopilot && driving(human)) autopilot = false;
-          const driven = page || autopilot ? botInput(state) : human;
+          if (autopilotRef.current && driving(human)) autopilotRef.current = false;
+          const driven = page || autopilotRef.current ? botInput(state) : human;
           // R29 — the field takes the same tick, and takes it FIRST: the
           // player is the last car on the road, so a rival through a board on
           // this step was through it before them. They run from the FIRST
@@ -2069,35 +2159,7 @@ export function App() {
         hudClock += dtFrame;
         if (hudClock > 0.08) {
           hudClock = 0;
-          if (!page) {
-            // R29 — a HEADS-UP race is the one discipline that knows the
-            // order of the road at every moment, so its position board reads
-            // live rather than waiting for the next split. Off the HUD's own
-            // clock and not the physics step: it is a number on a screen
-            // that redraws twelve times a second.
-            const racing = fieldRef.current;
-            if (racing?.massStart && state.phase === "racing") {
-              standingRef.current = { place: livePlace(racing, state), of: racing.of };
-            }
-            setSnap(
-              takeSnapshot(
-                state,
-                paceRef.current,
-                finishTimeRef.current,
-                ghostRef.current?.state.progressS ?? null,
-                bookRef.current,
-                standingRef.current,
-                fieldRef.current,
-              ),
-            );
-            // R28 — and the split ages on the race clock beside it.
-            const up = splitRef.current;
-            if (up && state.raceTime - up.time > SPLIT_HOLD) setSplit(null);
-            // The overlay reads its own snapshot: it needs the CAMERA, which
-            // the HUD's has no reason to carry, and it is off entirely for
-            // everyone who never let the developer menu out.
-            if (debugRef.current) setDebugCtx(debugContextRef.current(fps));
-          }
+          if (!page) pushHud(state, fps);
         }
         // The trace: one position line a second, so the log says how the run
         // ARRIVED at whatever the screenshot caught it doing.
@@ -2298,6 +2360,7 @@ export function App() {
           snap={snap}
           live={liveRef.current}
           paused={paused}
+          flying={godActive}
           flashes={flashes}
           split={split}
           input={input}

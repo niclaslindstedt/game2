@@ -540,6 +540,11 @@ export type GameCamera = {
    * standing would spin the camera forever. */
   free: FreeFlyRig;
   freeMove: FreeFlyMove;
+  /** Fly the free camera on a clock of its own, for a frame whose world is
+   * being held still — god mode stops the run under it and draws it with
+   * dt 0, which is a dt the flight cannot take its own step from. A no-op
+   * in every other mode. */
+  flyOnly: (dt: number) => void;
   /** Where the camera is standing and what it is looking at, whatever mode
    * is up — what the debug overlay prints and the repro line carries. */
   pose: () => FreeFlyPose;
@@ -819,6 +824,19 @@ export function createGameCamera(width: number, height: number): GameCamera {
     fov += (FINISH.fov - fov) * clamp(2.4 * dt, 0, 1);
   };
 
+  /** One step of the free camera, and the accumulated nudges it consumes.
+   * Wanted from two places — the ordinary update below, and `flyOnly`, for a
+   * frame whose world is deliberately being held still — so the clearing of
+   * the deltas is stated here rather than at each call site. */
+  const flyStep = (dt: number): void => {
+    free.update(camera, freeMove, dt);
+    freeMove.yawDelta = 0;
+    freeMove.pitchDelta = 0;
+    freeMove.speedSteps = 0;
+    camera.fov = verticalFovFor(FREE_FOV, camera.aspect);
+    camera.updateProjectionMatrix();
+  };
+
   const update = (state: GameState, dt: number): void => {
     shake = Math.max(0, shake - 6 * dt * shake - 0.4 * dt);
     orbit += dt;
@@ -851,12 +869,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
     }
     if (!watching) planted = null;
     if (mode === "free") {
-      free.update(camera, freeMove, dt);
-      freeMove.yawDelta = 0;
-      freeMove.pitchDelta = 0;
-      freeMove.speedSteps = 0;
-      camera.fov = verticalFovFor(FREE_FOV, camera.aspect);
-      camera.updateProjectionMatrix();
+      flyStep(dt);
       return;
     }
     // The in-car rigs take no rattle: a kick reaches them as the directional
@@ -893,6 +906,15 @@ export function createGameCamera(width: number, height: number): GameCamera {
       // sees is the thing they were just looking at.
       if (next === "free" && mode !== "free") free.takeOver(camera);
       mode = next;
+    },
+    /** Fly the free camera on a clock of its OWN. God mode holds the run
+     * (App.tsx), and a held frame is drawn with dt 0 so that nothing on the
+     * ground moves — a camera taking its step from that dt would be held
+     * along with it, and a frozen world nobody can walk around is a
+     * photograph. A no-op in every other mode: nothing else flies. */
+    flyOnly: (dt: number) => {
+      if (mode !== "free") return;
+      flyStep(dt);
     },
     nudgeMap: map.nudge,
     panMap: map.pan,

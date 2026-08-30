@@ -35,7 +35,7 @@ something is the moment you are looking at it.
 
 | Tool                 | What it is                                                                                                                                                                                                                                                                                                                                                                                                                             | Where                                                                                                    |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| **God mode**         | The camera comes off the car and flies, FPS-style. The car is handed neutral input and sits where it was left.                                                                                                                                                                                                                                                                                                                         | `pwa/src/game/camera-free.ts`, mode `"free"` in `camera.ts`                                              |
+| **God mode**         | The camera comes off the car and flies, FPS-style, and the RUN IS HELD under it — the clock, the field and the weather all stop until the camera lands. The car is handed neutral input and sits where it was left.                                                                                                                                                                                                                    | `pwa/src/game/camera-free.ts`, mode `"free"` in `camera.ts`; the hold is in `App.tsx`'s frame loop       |
 | **Debug overlay**    | The boxes naming the stage, the place, the camera and the car — and the REPRO line along the bottom.                                                                                                                                                                                                                                                                                                                                   | `pwa/src/game/debug-hud.tsx` over `debug-info.ts`                                                        |
 | **Debug log**        | A ring buffer of every engine event, every engine log line, and a position trace once a second. Copied whole or per-run from DEVELOPER → DEBUG LOG.                                                                                                                                                                                                                                                                                    | `pwa/src/game/debug-log.ts`, page in `menu-dev.tsx`                                                      |
 | **The benchmark**    | A fixed piece of racing — the first stage, fifteen cars off one green, a bot at every wheel — drawn as fast as the machine will draw it, timed with a stopwatch. The answer is SECONDS, and lower is better: a frame rate is a number about one moment, and two of them from two machines are never about the same moment. Pins everything about the race and nothing about the picture, so what it compares is settings and machines. | `pwa/src/game/benchmark.ts`, card in `menu-dev.tsx`                                                      |
@@ -62,9 +62,27 @@ no page can swallow it. Descending while flying forward wants Q.
 
 Entering god mode is a hand-over: the flight starts from the frame that was
 already on screen, so nothing teleports. A run that STARTS in god mode
-(`?god=1`) skips the countdown — nobody is on the grid, and the start lights
-would otherwise hang over the middle of every frame flown out to be
-photographed.
+(`?god=1`) skips the countdown — nobody is on the grid to wait for one. The
+gantry itself is off the HUD for as long as the camera is flying, for the
+same reason the way-home arrow is: it is an aid for somebody driving, and a
+held run would hold its lights lit over the middle of every frame flown out
+to be photographed.
+
+**And the run is HELD while you fly.** Flying is for LOOKING at a moment,
+and a moment that drives on while it is being looked at is one nobody can
+fly back to: so the simulation stops the instant the camera comes off the
+car and picks up from the same instant when it lands. Nothing on the ground
+moves — the run's clock, the field, the weather, the dust already in the air
+— and only the camera has a clock of its own (`chase.flyOnly`, called
+because the frame under it is rendered with dt 0). The debug overlay keeps
+refreshing regardless: its REPRO line is the whole reason to be up here, and
+a line held still with the run would name a place the camera has since left.
+
+**`?bot=1` is the one flight that does not hold the run**, and that is what
+the flag is for: somebody else is at the wheel, and the camera was sent up
+to watch them get somewhere. The CAR box in the overlay says which it is —
+`CAR (HELD)` or `CAR (DRIVEN)` — so a screenshot from up here says whether
+the world under it was moving.
 
 There is no on-screen key legend: these keys and `FLY_KEYS` are the only
 places they are written down.
@@ -195,9 +213,11 @@ The overlay's boxes, and what each is for:
 - **STAGE** — seed, shape, length, laps, the five generator dials, road
   length and width, conditions, car, and the **build stamp**. Check the
   build first when the screenshot and your tree disagree about behaviour.
-- **CAR** — full while racing, one line while flying. Slip angle, yaw rate,
+- **CAR** — full while racing, two lines while flying. Slip angle, yaw rate,
   attitude, surface, damage, phase. This is the box a handling or collision
-  argument is made from.
+  argument is made from. Flying, its TITLE says whether the run underneath
+  was standing still: `CAR (HELD)` is the ordinary case, `CAR (DRIVEN)` a
+  flight over a run the bot is driving (`?bot=1`).
 - **REPRO** — the line. Everything above, as a query string.
 
 God mode and a run print **different boxes**, because they are different
@@ -288,6 +308,9 @@ Everything the overlay prints, the app reads back (`App.tsx`):
 `bot=1` is the companion to `god=1`: when the problem is something the CAR
 does at a place rather than something the WORLD looks like there, let the bot
 drive to it and read `stage-s` off the overlay to know when it has arrived.
+It is also the one thing that lifts god mode's hold on the run — without it
+the world under the camera stands still, which is what a flight to LOOK at
+something wants and what a flight to FOLLOW something cannot use.
 
 ## When you change these tools
 
