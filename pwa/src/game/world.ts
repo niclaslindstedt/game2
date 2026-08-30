@@ -639,7 +639,7 @@ function buildSpur(track: Track, spur: Spur, cones: ConeField, beside: GroundBes
   // from the branch's own lip rather than through it.
   group.add(buildSkirts(spur.samples, spur.width, 0.012, beside));
   group.add(buildRoad(track, spur.samples, spur.width, 0.012, beside));
-  group.add(buildMarkings(track, spur.samples, spur.width));
+  group.add(buildMarkings(track, spur.samples, spur.width, true));
   const chippings = buildChippings(track, spur.samples, spur.width);
   if (chippings) group.add(chippings);
   // A branch too short, or too closely folded against the route, to take a

@@ -560,7 +560,16 @@ export function buildSkirts(
  * therefore not a line at all but a run of objects. That lives in
  * `kerbs.ts`. Fords and bridge decks carry nothing either way. Markings run
  * the stage proper, never the aprons — pass the bare range. */
-export function buildMarkings(track: Track, samples: Ribbon[], width: number): THREE.Mesh {
+export function buildMarkings(
+  track: Track,
+  samples: Ribbon[],
+  width: number,
+  /** True where these samples are an abandoned BRANCH. A branch is the main
+   * road continued past the crossing, so its paint runs the whole way to
+   * the meeting point; only the route can be the minor road at a junction,
+   * and only the route's arc means anything measured against one. */
+  branch = false,
+): THREE.Mesh {
   const positions: number[] = [];
   const colors: number[] = [];
   const indices: number[] = [];
@@ -607,14 +616,25 @@ export function buildMarkings(track: Track, samples: Ribbon[], width: number): T
     }
   };
 
-  const plain = (s: Ribbon): boolean => s.surface === "asphalt" && s.deck == null;
-  // R17 — NOTHING here stops for a junction. The sealed road is the one
-  // that runs straight through a crossing: both edge lines and the centre
-  // line are painted right past it, exactly as they are on a country road
-  // past a farm track. A junction that takes the tarmac's markings away for
-  // fifty meters is what makes two roads read as dissolving into each other
-  // instead of one running past the other, and it was the loudest thing
-  // wrong with the old crossings.
+  /** R17 — is this piece of road the MINOR one at a crossing? The paint
+   * belongs to the road that runs THROUGH, and at a junction the route is
+   * only that road on one side of the meeting point: joining, it is the
+   * tarmac from the meeting point on; leaving, up to it. On the other side
+   * it is the dirt road turning off, whose mat is still sealed for the
+   * width of the crossing and carries no line at all — painted from there,
+   * the tarmac's edge line runs round the outside of the gravel road's
+   * mouth, which is a white line where no road has an edge. */
+  const minor = (s: Ribbon): boolean =>
+    !branch &&
+    track.junctions.some(
+      (j) => junctionFlat(j, s.x, s.z) > 0 && (j.joining ? s.s < j.s : s.s > j.s),
+    );
+  const plain = (s: Ribbon): boolean => s.surface === "asphalt" && s.deck == null && !minor(s);
+  // Nothing ELSE here stops for a junction. Both arms of the sealed road
+  // keep their lines right across it, exactly as a country road does past a
+  // farm track: a junction that takes the tarmac's markings away for fifty
+  // meters is what makes two roads read as dissolving into each other
+  // instead of one running past the other.
   for (const side of [-1, 1]) {
     // Asphalt: a solid white edge line, a hand's width inside the kerb.
     strip(
