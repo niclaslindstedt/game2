@@ -8,19 +8,26 @@
 
 /** The clock the whole engine runs on — see `TUNING.physicsHz`. Named out
  * here so the timestep can be derived from it rather than restated. */
-const PHYSICS_HZ = 60;
+const PHYSICS_HZ = 120;
 
 export const TUNING = {
   /** HOW OFTEN THE WORLD IS SOLVED, steps a second — the rate everything
-   * else in this file is quoted against, and the biggest single lever on
-   * what the engine costs: the bill is linear in it, fifteen cars included.
+   * else in this file is quoted against, and a linear lever on what the
+   * engine costs, fifteen cars included.
    *
-   * 60 and not 120 because nothing in the model needs the extra half. The
-   * car is remarkably insensitive to it — driven by the bot, one stage at
-   * 30 Hz finishes 0.2 s off the same stage at 120 and ends in the same
-   * metre of road, and the drift lab's slip angles move by one to three per
-   * cent — so the second step a frame was buying accuracy nobody could
-   * measure, at exactly twice the arithmetic.
+   * IT STAYS AT 120, and the reason is the SPRINGS. Nothing else objects:
+   * across 24 bot-driven stages, 60 Hz holds pace and finishing exactly and
+   * the drift lab's slip angles move one to three per cent, while a solo
+   * stage at 30 Hz ends in the same metre of road 0.2 s apart. But the bump
+   * stops are damped EXPLICITLY (`suspension.stopDamp`), and an explicit
+   * damper takes more out per second the bigger the step is — so at 60 a
+   * landing no longer compresses onto the stops it was authored to reach,
+   * and lands soft. Rate-correcting that damper is the price of turning
+   * this knob down, and it is a change to how every landing feels.
+   *
+   * Below 45 the drift model degrades on its own terms regardless: drift
+   * count falls 26% at 45 and 44% at 30. That is the floor even once the
+   * springs are fixed.
    *
    * CONTACT does not care, which is worth knowing before anybody reaches
    * for a collision rate of its own: `collideCars` is an impulse resolver,
@@ -33,9 +40,9 @@ export const TUNING = {
    * steps, so a second pass over the same positions finds `closing <= 0`
    * and returns.
    *
-   * What does move with it is the FLICK, which is read off how fast the rack
-   * is crossing and therefore off how often it is asked — so anything that
-   * changes this owes `make drift` a run. */
+   * The other thing that moves with it is the FLICK, read off how fast the
+   * rack is crossing and therefore off how often it is asked — so anything
+   * that changes this owes `make drift` a run as well as `make sim`. */
   physicsHz: PHYSICS_HZ,
   /** ...and the same number as the timestep every rate in here is spent in,
    * seconds. Derived, never authored: two places to say one thing is one
@@ -56,8 +63,27 @@ export const TUNING = {
    * At or above `physicsHz` every step decides, exactly as it always did.
    * It lives here beside the physics rate rather than in `sim/` because the
    * two are read together: what matters is the RATIO, and a reader deciding
-   * one of them needs the other in front of them. */
-  botHz: 30,
+   * one of them needs the other in front of them.
+   *
+   * IT SHIPS AT THE PHYSICS RATE — every step — and the knob is here for a
+   * device that cannot afford that. Halving it is genuinely nearly free on
+   * the numbers a sim table shows: over 24 bot-driven stages, pace, drift
+   * count and finishing are all identical and off-road is +4%. What it also
+   * does is lose a run. Two seeds put a crew back on the road where one did
+   * before, which is exactly what `scars_test` and `simulation_test` are
+   * there to catch, and a driver who looks up half as often committing to a
+   * slide it cannot see the end of is the mechanism.
+   *
+   * That is not worth taking by default, because of what it buys: the whole
+   * engine, fifteen cars included, is about 1.5% of realtime, and halving
+   * this takes ~14% off that. Two tenths of one per cent of a frame against
+   * a bot that gets lost more. The render clocks are where the phone's
+   * money is (`FRAME_HZ`, `MIRROR_HZ`).
+   *
+   * Measured floor if it is ever turned down anyway: 30 costs the same as 60
+   * — the whole saving is in the first halving — and 20 breaks it outright,
+   * twelve respawns against one. */
+  botHz: PHYSICS_HZ,
 
   /** The establishing shot at the start of a stage, seconds — the beat
    * before the lights, while the camera is still circling the start area

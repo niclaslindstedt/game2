@@ -14,7 +14,7 @@ tests/  scripts/(sim, previews)          pwa/ (Preact + three.js shell)
 The engine is a pure TypeScript module with no framework, no renderer, and no DOM. Its public surface is `engine/index.ts`:
 
 - `createGame({ seed, carId })` builds a run: the compiled stage and a car on the grid.
-- `step(state, input)` advances one fixed 60 Hz timestep (`TUNING.physicsHz`) and returns the `GameEvent[]` that step emitted (`takeoff`, `landing`, `splash`, `shift`, `respawn`, `finish`, …). The browser's render loop and the headless simulator call this same function — there is no other way to advance a run.
+- `step(state, input)` advances one fixed 120 Hz timestep (`TUNING.physicsHz`) and returns the `GameEvent[]` that step emitted (`takeoff`, `landing`, `splash`, `shift`, `respawn`, `finish`, …). The browser's render loop and the headless simulator call this same function — there is no other way to advance a run.
 
 Determinism is a hard invariant: everything random draws from the seeded RNG in the state (`engine/lib/prng.ts`), never `Math.random`, so a seed fully reproduces a stage and a bot run — which is what the sim digests and shareable daily stages rely on.
 
