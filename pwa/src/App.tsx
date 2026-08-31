@@ -28,6 +28,7 @@ import {
   carById,
   compileStage,
   createGame,
+  damageScaleFor,
   resolveKnobs,
   skipIntro,
   status,
@@ -66,7 +67,7 @@ import {
 } from "./game/debug-info.ts";
 import { debugLogging, log as debugLog, logRunStart, setDebugLogging } from "./game/debug-log.ts";
 import type { GameRenderer } from "./game/renderer.ts";
-import { Hud, type HudFlash, type HudSnapshot, type HudSplit } from "./game/hud.tsx";
+import { Hud, damageCall, type HudFlash, type HudSnapshot, type HudSplit } from "./game/hud.tsx";
 import type { FinishRace, FinishScores, FinishStandings } from "./game/hud-finish.tsx";
 import {
   advanceField,
@@ -560,12 +561,22 @@ const MODE_NAME: Record<PlayMode, string> = {
  * heads-up race runs whatever its three settings say. Nothing else enters
  * anybody, so nothing else asks. */
 function fieldPlan(race: RaceSettings, mode: PlayMode): FieldPlan {
-  if (mode !== "headsup") return { ...RALLY_FIELD, difficulty: race.difficulty };
+  if (mode !== "headsup") return { ...RALLY_FIELD, difficulty: runDifficulty(race, mode) };
   return {
-    difficulty: race.headsUp.difficulty,
+    difficulty: runDifficulty(race, mode),
     cars: gridSize(race.headsUp.cars),
     massStart: race.headsUp.massStart,
   };
+}
+
+/** WHICH DIFFICULTY THIS RUN IS DRIVEN AT. The same word the field is
+ * entered on — HEADS UP keeps its own, everything else takes the campaign's
+ * — and it is asked for on every mode, not only the two that enter anybody:
+ * a difficulty says what a hit costs the player's own car
+ * (`damageScaleFor`), and a time trial with nobody on the road is still
+ * driven at one setting or another. */
+function runDifficulty(race: RaceSettings, mode: PlayMode): Difficulty {
+  return mode === "headsup" ? race.headsUp.difficulty : race.difficulty;
 }
 
 /** The camera a run opens on: the player's own choice from OPTIONS, unless
@@ -1109,6 +1120,13 @@ export function App() {
         spec.grid && spec.grid.gain > 0
           ? { gain: spec.grid.gain, untilS: TUNING.massStart.catchUpS }
           : undefined,
+      // What a hit COSTS this car, from the difficulty the run is driven at:
+      // nothing on EASY, half on MEDIUM, the whole of it on HARD. Read fresh
+      // on every build, like the gearbox above, so a setting changed in the
+      // menu is in the next car put on the road and never in the one being
+      // driven. The rivals are never scaled (`createField`): what the crews
+      // do to each other is the simulation being honest.
+      damageScale: damageScaleFor(runDifficulty(raceRef.current, runRef.current.mode)),
       env: { timeOfDay: spec.timeOfDay, weather: spec.weather, season: spec.season },
     });
     const previous = gameRef.current;
@@ -2264,9 +2282,10 @@ export function App() {
           }
           if (demo) continue;
           // The banner is for what the player CANNOT see: how long that jump
-          // hung, and the moment the tank runs dry. Splashes, crashes,
-          // landings and respawns all announce themselves on screen already
-          // — captioning them is noise over the top of the game.
+          // hung, and the machinery giving out under a body that still looks
+          // driveable. Splashes, crashes, landings, respawns and the panels
+          // going over the roof all announce themselves on screen already —
+          // captioning them is noise over the top of the game.
           if (ev.type === "checkpoint") {
             // R29 — the one moment a staggered rally actually knows where
             // anybody is: the board. Your place is every car through it in
@@ -2294,6 +2313,13 @@ export function App() {
             );
           } else if (ev.type === "landing" && ev.clean && ev.airTime >= REAL_AIR) {
             flash(`CLEAN AIR ${ev.airTime.toFixed(1)}s`, "good");
+          } else if (ev.type === "systemFail") {
+            // The one exception to the rule above: a bent car announces
+            // itself and hurt MACHINERY does not. There is nothing to look
+            // at — the engine bay is shut, the rack is under the floor — so
+            // the news is said here, where the splits are said.
+            const call = damageCall(ev.system, ev.spent);
+            flash(call.text, call.tone);
           }
         }
       };

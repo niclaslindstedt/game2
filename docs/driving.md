@@ -909,15 +909,16 @@ wing all pull on it — so `chassis.gripFloor` is the floor under all three
 together: below about two thirds of the sound car's grip nothing can be
 pointed, and an unpointable car is not a consequence either.
 
-Nothing repairs mid-run. The HUD's damage instrument (top of the bottom-left
-cluster, over the rev counter) is a single top-view car: the crush ring wears
-the folds where the hits landed, the breakables cross out red as they tear
-off, the shell's own outline is the chassis the wreck is called on, and each
-system is drawn as the part it is — the engine block under the bonnet, the
-rack across the front axle, the gearbox down the tunnel, the suspension at
-the four wheels. A sound part reads as quiet steel; a hurt one takes color,
-yellow folding to red as it gives out, so a glance finds the one part that is
-wrong instead of scanning a row of bars.
+Nothing repairs mid-run. And nothing about it is drawn as an instrument: the
+damage the player can see is already on the screen — the wing is folded, the
+bonnet went over the roof three corners ago — and the damage they cannot see
+is the machinery under it. So the machinery **says** so. Each system, and the
+shell around them, crosses two lines on its way out
+(`TUNING.collision.callAt`), and each crossing is one `systemFail` event the
+app puts up in the middle of the screen where the splits and the lap times
+are said: `ENGINE DAMAGED` as it gives, `ENGINE BROKEN` as it goes, and
+`CHASSIS WRECKED` at the end of the shell. Once per line per run — damage
+never heals, so a line crossed stays crossed.
 
 Seven pieces can come off: the two bumpers, the two mirrors, the spoiler, and
 the two lids. A bonnet or boot lid is bolted deeper than the bumper in front

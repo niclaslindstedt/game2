@@ -11,7 +11,7 @@
 
 import type { CSSProperties } from "react";
 
-import type { GamePhase, TurnSeverity } from "@engine";
+import type { DamageCall, GamePhase, TurnSeverity } from "@engine";
 
 import { deviceControls, type InputManager } from "./input.ts";
 import { FlyControls } from "./hud-fly.tsx";
@@ -110,7 +110,6 @@ export type HudSnapshot = {
   finishTime: number | null;
   /** Set on the finish overlay when the run beat the stored record. */
   record: boolean;
-  damage: HudDamage;
   /** Metres of road the run is ahead of (positive) or behind (negative)
    * the ghost it is racing, or null when there is no ghost out there. */
   ghostGap: number | null;
@@ -130,31 +129,39 @@ export type HudStanding = {
   of: number;
 };
 
-/** The damage readout, already flipped into SCREEN space by the snapshot
- * (like everything else in the app layer): zone 0 is the nose, indices grow
- * toward the side the player SEES on the right, and `mirrorR` is the mirror
- * on the right of their car on screen. All values 0 (sound) .. 1 (spent). */
-export type HudDamage = {
-  /** Ring crush per zone as a fraction of the max fold. */
-  zones: number[];
-  /** Underside crush fraction (slammed landings). */
-  belly: number;
-  /** Structural wear — 1 is the wreck. */
-  wear: number;
-  /** The internal systems' damage meters. */
-  systems: { engine: number; suspension: number; gearbox: number; steering: number };
-  broken: {
-    bumperF: boolean;
-    bumperR: boolean;
-    mirrorL: boolean;
-    mirrorR: boolean;
-    spoiler: boolean;
-    hood: boolean;
-    hatch: boolean;
-  };
+export type HudFlash = { id: number; text: string; tone: "good" | "bad" | "info" };
+
+/** WHAT A BROKEN CAR SAYS ABOUT ITSELF. The damage a player can see is
+ * already on the screen — the wing is folded, the bonnet went over the roof
+ * three corners ago — and the damage they cannot see is the machinery under
+ * it. A gauge for that is a thing in a corner, read by nobody who is busy
+ * driving; so it is SAID instead, in the middle of the screen where every
+ * other piece of news is said, and only twice per part: once as it starts
+ * to give, once as it goes (`systemFail`, engine-side).
+ *
+ * Two words each, because it is read at speed out of the corner of an eye
+ * on the way into a corner. The first is the part; the second is how bad. */
+const DAMAGE_PARTS: Record<DamageCall, string> = {
+  engine: "ENGINE",
+  suspension: "SUSPENSION",
+  gearbox: "GEARBOX",
+  steering: "STEERING",
+  chassis: "CHASSIS",
 };
 
-export type HudFlash = { id: number; text: string; tone: "good" | "bad" | "info" };
+/** The call itself: what to put on screen, and in which colour. A part that
+ * is GIVING is a warning the driver can still do something about — ease off
+ * the kerbs, stop landing it flat — so it goes up in the same tone as a
+ * split; a part that is GONE is not news, it is a fact about the rest of the
+ * stage, and it goes up red. */
+export function damageCall(
+  system: DamageCall,
+  spent: boolean,
+): { text: string; tone: HudFlash["tone"] } {
+  const part = DAMAGE_PARTS[system];
+  if (!spent) return { text: `${part} DAMAGED`, tone: "info" };
+  return { text: system === "chassis" ? "CHASSIS WRECKED" : `${part} BROKEN`, tone: "bad" };
+}
 
 /** R28 — the SPLIT: what the board the car has just gone through said. Held
  * on screen for a few seconds and then gone, the way a split board is: it
@@ -509,176 +516,6 @@ function Pacenotes({
   );
 }
 
-/** The eight zone indicators around the 2D car, in the panel's 60×100 user
- * space: strokes hugging the outline, index 0 the nose, clockwise. */
-const DAMAGE_ZONE_PATHS = [
-  "M 22 3 Q 30 0.5 38 3", // nose
-  "M 41 4 Q 46 7 46.5 14", // front-right corner
-  "M 47 21 L 47 59", // right flank
-  "M 46.5 66 Q 46 89 41 94", // rear-right corner
-  "M 37 96.5 Q 30 99 23 96.5", // tail
-  "M 19 94 Q 14 89 13.5 66", // rear-left corner
-  "M 13 59 L 13 21", // left flank
-  "M 13.5 14 Q 14 7 19 4", // front-left corner
-];
-
-/** The color a part wears while it is SOUND. Deliberately COOL: the ramp
- * below runs yellow to red, and a warm "neutral" — cream, bone, off-white —
- * sits close enough to the low end of that ramp, over this instrument's navy
- * plate, to read as a car that is already hurt. Steel blue cannot be
- * mistaken for any value on the ramp. */
-function soundTint(alpha: number): string {
-  return `rgba(150, 178, 214, ${alpha})`;
-}
-
-/** Crush color ramp: quiet steel while sound, then yellow folding to red. */
-function crushColor(v: number): string {
-  if (v <= 0.02) return soundTint(0.3);
-  return `hsl(${Math.round(50 - 45 * Math.min(1, v))} 95% 55%)`;
-}
-
-/** System color ramp: a part that is SOUND reads as quiet steel, and only a
- * hurt one takes color — yellow folding to red as it gives out. Painting
- * every healthy part bright green makes five lights that shout nothing; this
- * instrument stays silent until it has news, so a glance mid-corner finds the
- * one part that is wrong instead of scanning a row of bars. */
-function systemColor(damage: number): string {
-  if (damage <= 0.04) return soundTint(0.62);
-  return `hsl(${Math.round(52 - 48 * Math.min(1, damage))} 92% 55%)`;
-}
-
-/** The damage instrument: ONE glyph, no bars. A top-view car wears the crush
- * on its outline where the hits landed, the breakables cross out red as they
- * tear off, and the four internal systems are the parts themselves — the
- * engine block under the bonnet, the rack across the front axle, the gearbox
- * down the tunnel, the suspension at the four wheels — each taking color as
- * it fails. The shell's own outline is the chassis, the bar the wreck is
- * called on. Drawn in the tach's materials so the cluster reads as one
- * instrument panel; sits above the tach, where the eye already is. */
-function DamagePanel({ damage }: { damage: HudDamage }) {
-  const broken = damage.broken;
-  const part = (isBroken: boolean): string =>
-    `hud-dmg-part ${isBroken ? "hud-dmg-part-broken" : ""}`;
-  const sys = damage.systems;
-  return (
-    <div
-      className="hud-damage"
-      title="Damage — engine, steering, gearbox, suspension, chassis"
-      aria-hidden="true"
-    >
-      <svg className="hud-dmg-car" viewBox="0 0 60 100">
-        {/* The instrument face — same plate the tach dial sits on. */}
-        <rect className="hud-dmg-face" x="1.5" y="1" width="57" height="98" rx="10" />
-        {/* The shell: its outline is the chassis gauge, and the crush strokes
-            below bloom over it where the car actually took the hit. */}
-        <path
-          className="hud-dmg-body"
-          d="M 19 9 Q 19 4.5 30 4.5 Q 41 4.5 41 9 L 42 84 Q 42 95 30 95 Q 18 95 18 84 Z"
-          style={{ stroke: systemColor(damage.wear) }}
-        />
-        <rect
-          className="hud-dmg-belly"
-          x="20"
-          y="24"
-          width="20"
-          height="56"
-          rx="8"
-          style={{
-            fill: crushColor(damage.belly),
-            opacity: Math.min(0.8, damage.belly * 1.6).toFixed(2),
-          }}
-        />
-        {/* ENGINE: the block filling the bonnet. */}
-        <rect
-          className="hud-dmg-sys"
-          x="21.5"
-          y="10"
-          width="17"
-          height="11"
-          rx="2.5"
-          style={{ fill: systemColor(sys.engine) }}
-        />
-        {/* STEERING: the rack across the front axle, drawn under the wheels
-            it turns, so the two read as one assembly. */}
-        <rect
-          className="hud-dmg-sys"
-          x="15"
-          y="25"
-          width="30"
-          height="3.4"
-          rx="1.7"
-          style={{ fill: systemColor(sys.steering) }}
-        />
-        {/* GEARBOX: the tunnel running back from the cabin. */}
-        <rect
-          className="hud-dmg-sys"
-          x="26.5"
-          y="58"
-          width="7"
-          height="26"
-          rx="3"
-          style={{ fill: systemColor(sys.gearbox) }}
-        />
-        <rect className="hud-dmg-cabin" x="22.5" y="32" width="15" height="24" rx="4" />
-        {/* SUSPENSION: the four corners it holds up. The front pair straddles
-            the rack above — an axle, not two loose blocks. */}
-        {[
-          [15.5, 22.5],
-          [39.5, 22.5],
-          [15.5, 68],
-          [39.5, 68],
-        ].map(([x, y]) => (
-          <rect
-            key={`${x},${y}`}
-            className="hud-dmg-sys"
-            x={x}
-            y={y}
-            width="5"
-            height="12"
-            rx="1.8"
-            style={{ fill: systemColor(sys.suspension) }}
-          />
-        ))}
-        {/* The ring: crush painted where it happened. */}
-        {DAMAGE_ZONE_PATHS.map((d, i) => (
-          <path
-            key={d}
-            className="hud-dmg-zone"
-            d={d}
-            style={{ stroke: crushColor(damage.zones[i]) }}
-          />
-        ))}
-        {/* The breakables: solid while bolted on, crossed out when gone.
-            The two lids are outlines over the bay they cover, so a missing
-            bonnet reads as an open engine bay rather than a missing bar. */}
-        <rect
-          className={part(broken.hood)}
-          x="22"
-          y="10.5"
-          width="16"
-          height="10"
-          rx="2"
-          fill="none"
-        />
-        <rect
-          className={part(broken.hatch)}
-          x="22"
-          y="79"
-          width="16"
-          height="8"
-          rx="2"
-          fill="none"
-        />
-        <rect className={part(broken.bumperF)} x="21" y="6" width="18" height="3.2" rx="1.5" />
-        <rect className={part(broken.bumperR)} x="21" y="89.5" width="18" height="3.2" rx="1.5" />
-        <rect className={part(broken.mirrorL)} x="9" y="29" width="4.5" height="7" rx="1.4" />
-        <rect className={part(broken.mirrorR)} x="46.5" y="29" width="4.5" height="7" rx="1.4" />
-        <rect className={part(broken.spoiler)} x="17" y="84.5" width="26" height="3.2" rx="1.5" />
-      </svg>
-    </div>
-  );
-}
-
 /** The camera button's glyph: a movie camera — body, lens cone, and the two
  * film reels on top. Drawn rather than lettered because the top bar is the
  * one strip that has to stay out of the way of the road. */
@@ -980,14 +817,13 @@ export function Hud({
         </div>
       )}
 
-      {/* Bottom-left: the instrument panel, in two rows. The car's CONDITION
-          sits in its own row above the dials rather than among them: the dial
-          row is a fixed cast sized to the narrowest phone, and anything that
-          can appear or grow mid-run would push an instrument off the right
-          edge. The top bar is the same bargain — it holds the stage, the clock
-          and the camera, and nothing that comes and goes. */}
+      {/* Bottom-left: the instrument panel. It is a fixed cast sized to the
+          narrowest phone — revs, gear, speed and nothing that comes and goes,
+          because anything that can appear mid-run would push an instrument
+          off the right edge. The top bar is the same bargain: the stage, the
+          clock and the camera. News about the car is SAID instead, in the
+          middle of the screen (`damageCall`). */}
       <div className="hud-speed">
-        <div className="hud-status">{show.damage && <DamagePanel damage={snap.damage} />}</div>
         <div className="hud-cluster">
           {show.tachometer && <Tachometer rpm={snap.rpm} />}
           <div className={`hud-gearbox ${snap.shiftUp ? "hud-gearbox-shift" : ""}`}>

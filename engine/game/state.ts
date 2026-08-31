@@ -61,6 +61,12 @@ export const INTERNAL_SYSTEMS: readonly InternalSystem[] = [
   "steering",
 ];
 
+/** WHAT A DAMAGE CALL IS ABOUT: one of the four systems, or the shell they
+ * are all bolted into. The chassis is not a system — nothing under the
+ * bonnet is wearing out, the body is simply losing its shape — but it fails
+ * the same way and it is said the same way, so the call carries it. */
+export type DamageCall = InternalSystem | "chassis";
+
 /** The car's accumulated damage — the physics writes it, the renderer bends
  * the body's polygons from it. Crashing never resets it: the dents are the
  * run's history, and only a fresh game starts clean. */
@@ -274,6 +280,19 @@ export type CarState = {
    * still down. The HUD reads it for the reverse gear. */
   reversing: boolean;
   damage: CarDamage;
+  /** HOW MUCH OF A HIT THIS CAR ACTUALLY KEEPS, 0..1 — the one thing a
+   * difficulty does to the car rather than to the field (`damageScaleFor`
+   * in sim/skill.ts), handed in at `createGame` and never touched again.
+   *
+   * It scales the LEDGER and nothing else. The contact still happens in
+   * full: the impulse, the yaw kick, the springs, the noise and the dust
+   * are the world's business and are the same at every setting, so a tree
+   * met at speed still spins the car and still sounds like a tree met at
+   * speed. What changes is how much of the fold is written down — 1 is the
+   * car as the collision model builds it, 0 is a car that cannot be
+   * marked. Every car in the sim defaults to 1: this is an assist on the
+   * run a player is sat in, not a change to the world. */
+  damageScale: number;
 };
 
 /** Refresh the slip angle after anything rewrites `u`/`w` directly — the
@@ -334,6 +353,16 @@ export type GameEvent =
   | { type: "impact"; speed: number; angle: number; belly: boolean }
   /** A piece of the body tearing off — the renderer sends it flying. */
   | { type: "partBreak"; part: DamagePart }
+  /** THE ONE PIECE OF DAMAGE NEWS NOBODY CAN SEE. A folded wing is on the
+   * screen and a bonnet leaving on the wind announces itself; an engine
+   * that has quietly lost a third of its power does not, and a driver who
+   * only finds out on the next hill has been told nothing. So each system
+   * (and the shell) calls out as it crosses the two lines that mean
+   * something — `spent` false is the part giving, true is it gone
+   * (`TUNING.collision.callAt`). Once per line: damage never heals, so a
+   * line crossed stays crossed, and only the wreck's patch-up at a respawn
+   * can put the chassis back under one. */
+  | { type: "systemFail"; system: DamageCall; spent: boolean }
   /** R26 — the car has ridden over an anti-cut block on the inside of a
    * corner. `speed` is the closing speed into it, m/s. Not an `impact`:
    * nothing folded, nothing broke, and the car drives on — what it cost

@@ -3,15 +3,15 @@
 // GameState once per HUD tick (~12 Hz — the canvas is the 60 fps surface,
 // the HUD is not). This is also where the app layer's SIGN BOUNDARY is
 // paid: the rendered world mirrors the engine's map view, so the co-driver
-// calls and the damage ledger are both flipped into SCREEN space here,
-// once, exactly as input.ts flips steering once.
+// calls are flipped into SCREEN space here, once, exactly as input.ts flips
+// steering once.
 
-import { DAMAGE_ZONES, TUNING, startsIn, wayHome, type GameState, type RivalField } from "@engine";
+import { TUNING, startsIn, wayHome, type GameState, type RivalField } from "@engine";
 
 import { buildMinimap } from "./minimap.tsx";
 import { cornerSign, type PaceSign } from "./pace-shape.ts";
 import { shiftLightOn, shiftWindow } from "./shift-window.ts";
-import type { HudDamage, HudPacenote, HudSnapshot, HudStanding } from "./hud.tsx";
+import type { HudPacenote, HudSnapshot, HudStanding } from "./hud.tsx";
 
 /** The two instruments the ~12 Hz snapshot cannot carry, and why they are
  * their own channel:
@@ -154,35 +154,6 @@ function tachometer(state: GameState): number {
   return Math.min(1, 0.18 + 0.82 * state.car.rev);
 }
 
-/** The damage ledger flipped into SCREEN space for the HUD's 2D car: the
- * rendered world mirrors the engine's map view (the same one-flip rule
- * input.ts applies to steering), so the engine's right-side zones — and its
- * right mirror — sit on the LEFT of the car the player sees. */
-function damageSnapshot(state: GameState): HudDamage {
-  const damage = state.car.damage;
-  const zoneMax = TUNING.collision.zoneMax;
-  const zones = Array.from(
-    { length: DAMAGE_ZONES },
-    (_, k) => damage.zones[(DAMAGE_ZONES - k) % DAMAGE_ZONES] / zoneMax,
-  );
-  const broken = damage.broken;
-  return {
-    zones,
-    belly: damage.belly / zoneMax,
-    wear: damage.wear,
-    systems: { ...damage.systems },
-    broken: {
-      bumperF: broken.includes("bumperF"),
-      bumperR: broken.includes("bumperR"),
-      mirrorL: broken.includes("mirrorR"),
-      mirrorR: broken.includes("mirrorL"),
-      spoiler: broken.includes("spoiler"),
-      hood: broken.includes("hood"),
-      hatch: broken.includes("hatch"),
-    },
-  };
-}
-
 /** Whether this run is being TIMED against anything — campaign and time
  * trial keep a book on every stage, Roam keeps none — and, if it is, the
  * record standing in it before this run started. Passed in rather than read
@@ -247,7 +218,6 @@ export function takeSnapshot(
     homeDistance: state.lost && !state.drowning ? wayHome(state).distance : 0,
     finishTime,
     record: book !== null && finishTime !== null && (book.best === null || finishTime < book.best),
-    damage: damageSnapshot(state),
     ghostGap: ghostS === null ? null : state.progressS - ghostS,
     standing,
   };

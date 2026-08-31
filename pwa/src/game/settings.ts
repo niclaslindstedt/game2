@@ -125,7 +125,6 @@ export type HudToggle =
   | "cameraButton"
   | "pacenotes"
   | "pacenoteText"
-  | "damage"
   | "tachometer"
   | "timer";
 
@@ -149,7 +148,6 @@ export const HUD_TOGGLES: { id: HudToggle; label: string; hint: string }[] = [
     label: "PACENOTE WORDS",
     hint: "Off leaves the corner arrows alone, nothing to read",
   },
-  { id: "damage", label: "DAMAGE", hint: "Crush, broken parts, systems" },
   { id: "tachometer", label: "TACHOMETER", hint: "Revs and the shift light" },
   { id: "timer", label: "STAGE CLOCK", hint: "Running time on the top bar" },
 ];
@@ -662,7 +660,6 @@ export const DEFAULT_SETTINGS: Settings = {
     cameraButton: true,
     pacenotes: true,
     pacenoteText: true,
-    damage: true,
     tachometer: true,
     timer: true,
   },

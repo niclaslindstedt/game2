@@ -198,9 +198,9 @@ temptation. Discrete objects with country between them, never a painted band.
 
 Orange rather than the rally red the real thing is painted in, and the reason
 is what the colour SAYS at speed: red is this game's colour for something
-having gone wrong — the tape across a closed branch, the damage instrument,
-the marker on the map — so a corner lined in it reads as a reprimand for a
-line the player has not even taken yet.
+having gone wrong — the tape across a closed branch, the call that says a
+part has broken, the marker on the map — so a corner lined in it reads as a
+reprimand for a line the player has not even taken yet.
 
 **A post and a block part company at the contact model.** A post stops
 nothing and never reaches the physics: the renderer knocks it flat off the

@@ -227,6 +227,125 @@ describe("the wreck", () => {
   });
 });
 
+describe("the difficulty's damage assist", () => {
+  /** A car with `damageScale` handed in, stood on the same long straight. */
+  const scaled = (damageScale: number): GameState =>
+    createGame({
+      seed: 3,
+      skipCountdown: true,
+      track: compileTrack(3, LONG_STRAIGHT),
+      damageScale,
+    });
+
+  /** Drive `state` head-on into the biggest trunk in the forest at 30 m/s. */
+  const ram = (state: GameState, events: GameEvent[] = []): GameEvent[] => {
+    const car = state.car;
+    car.u = 30;
+    const tree = solid({
+      kind: "tree",
+      size: OLD_TREE,
+      x: car.x,
+      z: car.z + TUNING.collision.halfLength + 0.5,
+    });
+    collideCar(state.spec, car, [tree], events, state.stats);
+    return events;
+  };
+
+  it("EASY writes nothing down — and the crash still happens in full", () => {
+    const hard = scaled(1);
+    const easy = scaled(0);
+    const hardEvents = ram(hard);
+    const easyEvents = ram(easy);
+
+    // The physics is the world's, not the difficulty's: the same trunk stops
+    // the car the same way, and it is heard and seen the same way too.
+    expect(easy.car.u).toBeCloseTo(hard.car.u, 6);
+    expect(easy.car.z).toBeCloseTo(hard.car.z, 6);
+    expect(easy.car.rideRate).toBeCloseTo(hard.car.rideRate, 6);
+    const hit = easyEvents.find((e) => e.type === "impact");
+    expect(hit).toEqual(hardEvents.find((e) => e.type === "impact"));
+    expect(easy.stats.impacts).toBe(1);
+
+    // …and the ledger stays clean, so nothing bends the body, breaks a part
+    // or costs the rest of the stage.
+    expect(easy.car.damage.zones.every((z) => z === 0)).toBe(true);
+    expect(easy.car.damage.wear).toBe(0);
+    expect(easy.car.damage.systems.engine).toBe(0);
+    expect(easy.car.damage.broken).toHaveLength(0);
+    expect(easy.car.damage.version).toBe(0);
+    expect(easyEvents.some((e) => e.type === "systemFail")).toBe(false);
+    expect(hard.car.damage.zones[0]).toBeGreaterThan(0.2);
+  });
+
+  it("MEDIUM keeps half of every hit", () => {
+    const full = scaled(1);
+    const half = scaled(0.5);
+    ram(full);
+    ram(half);
+    expect(half.car.damage.zones[0]).toBeCloseTo(full.car.damage.zones[0] / 2, 6);
+    expect(half.car.damage.wear).toBeCloseTo(full.car.damage.wear / 2, 6);
+    expect(half.car.damage.systems.engine).toBeCloseTo(full.car.damage.systems.engine / 2, 6);
+  });
+
+  it("is the whole of it unless a run asks otherwise", () => {
+    expect(freshState().car.damageScale).toBe(1);
+  });
+});
+
+describe("what a broken car says about itself", () => {
+  /** Every damage call one run made, in the order it made them. */
+  const calls = (events: GameEvent[]): string[] =>
+    events
+      .filter((e) => e.type === "systemFail")
+      .map((e) => (e.type === "systemFail" ? `${e.system}:${e.spent ? "spent" : "hurt"}` : ""));
+
+  it("calls each system once as it gives, once as it goes", () => {
+    const state = freshState();
+    const car = state.car;
+    const grid = car.z;
+    const tree = solid({
+      kind: "tree",
+      size: OLD_TREE,
+      x: car.x,
+      z: grid + TUNING.collision.halfLength + 0.5,
+    });
+    // Nose-first into the trunk, over and over: the engine is the system
+    // behind the panel that folds, so it walks both lines on its own.
+    const events: GameEvent[] = [];
+    for (let i = 0; i < 4; i++) {
+      car.u = 30;
+      car.z = grid;
+      collideCar(state.spec, car, [tree], events, state.stats);
+    }
+    const said = calls(events);
+    expect(car.damage.systems.engine).toBeGreaterThanOrEqual(TUNING.collision.callAt.spent);
+    expect(said.filter((c) => c === "engine:hurt")).toHaveLength(1);
+    expect(said.filter((c) => c === "engine:spent")).toHaveLength(1);
+    expect(said.indexOf("engine:hurt")).toBeLessThan(said.indexOf("engine:spent"));
+    // The shell is called on the same two lines as the machinery in it.
+    expect(said).toContain("chassis:spent");
+    // Nothing the crush never reached ever speaks up.
+    expect(said.some((c) => c.startsWith("gearbox"))).toBe(false);
+  });
+
+  it("says nothing at all while the car is merely dented", () => {
+    const state = freshState();
+    const car = state.car;
+    car.u = 0;
+    car.w = 9; // sliding into a sapling, flank first: a scrape
+    const events: GameEvent[] = [];
+    collideCar(
+      state.spec,
+      car,
+      [solid({ kind: "tree", size: SAPLING, x: car.x + TUNING.collision.halfWidth + 0.2 })],
+      events,
+      state.stats,
+    );
+    expect(car.damage.zones[2]).toBeGreaterThan(0);
+    expect(calls(events)).toHaveLength(0);
+  });
+});
+
 describe("the internal systems", () => {
   it("crush lands on the system living behind the struck panel", () => {
     const state = freshState();
