@@ -167,6 +167,18 @@ body {
   top: calc(max(0.6rem, env(safe-area-inset-top)) + 2.1rem);
 }
 
+/* The frame rate, last line of that chip and developers only. Tabular so
+   the digits do not dance as it ticks, and in the info colour rather than
+   the HUD's white: it is the one thing up there that is about the machine
+   rather than about the race, and it should not read as an instrument. */
+.hud-fps {
+  color: var(--hud-info);
+  font-variant-numeric: tabular-nums;
+  /* Off the label above it: three lines hard against each other read as one
+     caption, and this line is about the machine rather than the race. */
+  margin-top: 0.15em;
+}
+
 /* ── The race clock ─────────────────────────────────────────────────────
    In a racing game the clock is the opponent, so it is sized like one: the
    total time is the biggest type on the screen bar the speedo, the lap

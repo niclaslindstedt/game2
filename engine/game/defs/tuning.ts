@@ -78,7 +78,7 @@ export const TUNING = {
    * engine, fifteen cars included, is about 1.5% of realtime, and halving
    * this takes ~14% off that. Two tenths of one per cent of a frame against
    * a bot that gets lost more. The render clocks are where the phone's
-   * money is (`FRAME_HZ`, `MIRROR_HZ`).
+   * money is (`FRAME_HZ`, `MIRROR_TIERS`).
    *
    * Measured floor if it is ever turned down anyway: 30 costs the same as 60
    * — the whole saving is in the first halving — and 20 breaks it outright,

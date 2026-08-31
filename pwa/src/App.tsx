@@ -212,6 +212,17 @@ function updateCardForced(): boolean {
   return new URLSearchParams(location.search).get("update") === "1";
 }
 
+/** ?mirrorhz=N (tooling): hold the rear-view mirror at that refresh rate
+ * instead of letting the measured frame rate choose it (mirror-pace.ts).
+ * `make profile` is what needs it: the harness rasterizes in software at a
+ * handful of frames a second, so an adaptive mirror falls to its floor and
+ * the draw calls that come back describe the governor rather than the
+ * renderer. */
+function mirrorHzFromUrl(): number | null {
+  const raw = Number(new URLSearchParams(location.search).get("mirrorhz"));
+  return Number.isFinite(raw) && raw > 0 ? raw : null;
+}
+
 /** ?laps=N (tooling): race a circuit over this many laps instead of the
  * rule book's three. A scripted pass has to REACH a finish to photograph
  * one, and three laps of anything is a long time to hold a browser open. */
@@ -756,6 +767,13 @@ export function App() {
    * the copy button read it at the press, and neither of them is in the loop
    * that works it out. */
   const fpsRef = useRef(0);
+  /** ...and the same number rounded off for the HUD's own readout under the
+   * minimap, which only anybody who has let the developer menu out ever
+   * sees. Its own state rather than a field of the HUD snapshot: the
+   * snapshot is what the CAR is doing, and this is what the machine drawing
+   * it is doing. Written on the HUD's twelve-a-second tick, and only while
+   * there is somebody to read it. */
+  const [hudFps, setHudFps] = useState(0);
   const [flashes, setFlashes] = useState<HudFlash[]>([]);
   /** R28 — the split just driven through, until the run's clock times it
    * out. Mirrored in a ref: the frame loop is created once and expires it
@@ -874,6 +892,12 @@ export function App() {
   const godRef = useRef(false);
   const debugRef = useRef(options.dev.debug);
   debugRef.current = options.dev.debug;
+  /** ...and whether the developer menu has been let out at all, which is
+   * what puts the frame rate on the HUD. A wider door than the overlay on
+   * purpose: the rate is worth watching while the game is being PLAYED, and
+   * the overlay is a set of boxes across the road. */
+  const developerRef = useRef(options.developer);
+  developerRef.current = options.developer;
   /** `?bot=1` — the bot has the wheel until a human touches a control. A ref
    * rather than a local of the frame loop because god mode's HOLD reads it:
    * a run somebody else is driving is the one flight that must not stop it. */
@@ -1566,6 +1590,7 @@ export function App() {
       god: pose.mode === "free",
       held: heldRef.current,
       fps,
+      mirror: renderer.mirrorPace(),
       build: BUILD,
     };
   };
@@ -1719,6 +1744,7 @@ export function App() {
       // one most likely to be shown to somebody.
       if (optionsRef.current.screenshots) armScreenshots();
       renderer.setMirror(optionsRef.current.hud.mirror);
+      renderer.pinMirrorPace(mirrorHzFromUrl());
       renderer.setNameTags(optionsRef.current.hud.nameTags);
       renderer.setView(optionsRef.current.view);
       renderer.setMapRect(mapRectRef.current);
@@ -2244,6 +2270,9 @@ export function App() {
         // HUD's has no reason to carry, and it is off entirely for everyone
         // who never let the developer menu out.
         if (debugRef.current) setDebugCtx(debugContextRef.current(fps));
+        // The rate under the map. Rounded here rather than at the readout,
+        // so a state that has not moved is a render that does not happen.
+        if (developerRef.current) setHudFps(Math.round(fps));
       };
 
       // Fixed-timestep driver: engine steps at TUNING.dt regardless of frame
@@ -2823,6 +2852,7 @@ export function App() {
           split={split}
           input={input}
           show={options.hud}
+          fps={options.developer ? hudFps : null}
           touchLayout={options.touch}
           padDriving={padded && options.pad.hideTouch}
           onPause={() => setPaused(true)}

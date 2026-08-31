@@ -16,6 +16,11 @@
 // viewport — negating the projection's x would reverse every triangle's
 // winding and turn the world inside out, so the scene is drawn upright into
 // a texture and the texture is what gets reversed.
+//
+// HOW OFTEN the glass is refilled and HOW FAR it sees are not here: they are
+// not properties of the mirror but of the machine drawing it, and they move
+// while a stage is being driven. mirror-pace.ts owns both, and the renderer
+// hands the answers in — the rate to `fill`'s caller, the reach to `aim`.
 
 import * as THREE from "three";
 import type { GameState } from "@engine";
@@ -47,36 +52,6 @@ const WIDTH_TALL = 0.52;
  * the minimap that already own that corner. */
 const TOP_WIDE = 0.022;
 const TOP_TALL = 0.135;
-
-/** HOW OFTEN THE GLASS IS REFILLED, times a second.
- *
- * The pass behind this strip is the whole scene drawn a second time, and
- * measured it is the most expensive thing in a driving frame: 153 draw
- * calls of 397, two fifths of the triangles. What it buys is a 179x56
- * ribbon showing who is behind — a question that does not change inside a
- * thirtieth of a second at any speed a stage is driven at.
- *
- * So it is refilled on its own clock and the strip keeps compositing the
- * last answer in between. Being a RATE and not a frame count matters: the
- * glass then updates at the same speed on a phone at sixty and a monitor at
- * a hundred and forty-four, instead of being twice as fresh on the machine
- * that needed the help least. */
-export const MIRROR_HZ = 30;
-
-/** How far the mirror sees, as a fraction of what the forward view is given.
- * A mirror answers one question — is anyone close enough to matter — and a
- * rival four hundred metres back is not an answer anybody acts on. Drawing
- * the whole stage a second time is what the second pass would otherwise
- * cost, and this is the number that stops it: the world leaves the mirror's
- * frustum at the range the fog is pulled in to (environment.withHaze), so
- * nothing is cut off in mid-view — it goes the way distance goes.
- *
- * It pays TWICE, which is why it is worth keeping tight. It is the mirror
- * camera's far plane, so it decides what that pass draws; and the same
- * frustum is handed to the world's cull (`world.cull`'s `also`), so it also
- * decides how much open country the FORWARD pass is forbidden to throw
- * away. A car worth reacting to in a mirror is one within a few lengths. */
-export const MIRROR_RANGE = 0.2;
 
 /** Horizontal field of view through the glass, deg. Wider than a road car's
  * mirror on purpose: the useful question is whether anyone is close enough
@@ -120,9 +95,11 @@ export type RearMirror = {
   /** The camera the mirror pass draws with — handed to the world's cull so
    * the scenery behind the car is still in the pool when it is asked for. */
   camera: THREE.PerspectiveCamera;
-  /** Aim it from the car for this frame. `far` is the fog's far distance:
-   * the mirror sees exactly as far as the forward view does, so nothing
-   * cuts off in one and fades in the other. */
+  /** Aim it from the car for this frame. `far` is how far the mirror is
+   * allowed to see — the forward view's fog distance times the reach of the
+   * rung in force (mirror-pace.ts) — and the fog is pulled in to the same
+   * fraction around the pass, so the world leaves this frustum where the air
+   * had already gone solid rather than being cut off in mid-view. */
   aim: (state: GameState, driverEyeY: number, far: number) => void;
   /** Where the glass sits on a `w`×`h` canvas, CSS px from its top-left. */
   rect: (w: number, h: number) => MirrorRect;

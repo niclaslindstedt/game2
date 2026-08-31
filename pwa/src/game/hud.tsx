@@ -183,6 +183,13 @@ type HudProps = {
   input: InputManager;
   /** Which instruments the player has left switched on. */
   show: HudSettings;
+  /** The frame rate, for the readout under the minimap — or null for the
+   * players who have never let the developer menu out, which is everybody
+   * but whoever is working on the game. It hangs off the map rather than
+   * living in the debug overlay because the number worth having is the one
+   * the game is running at while it is being PLAYED, and the overlay is a
+   * wall of boxes across the road. */
+  fps: number | null;
   /** Which thumb steers, and what each drag off the pedal anchor does. */
   touchLayout: TouchSettings;
   /** Whether a controller has the car. The thumb zones come off when one
@@ -757,6 +764,7 @@ export function Hud({
   split,
   input,
   show,
+  fps,
   touchLayout,
   padDriving,
   onPause,
@@ -936,6 +944,11 @@ export function Hud({
       <div className={`hud-chip hud-stage ${show.minimap ? "" : "hud-stage-nomap"}`}>
         STAGE {snap.seed}
         <span className="hud-chip-sub">{snap.carName}</span>
+        {/* The frame rate, under the map with the rest of the run's label —
+            developers only. In the same chip rather than beside it so it
+            hangs off whatever that chip is currently hanging off: the map's
+            bottom edge, or the button row when the map is switched off. */}
+        {fps !== null && <span className="hud-chip-sub hud-fps">{fps} FPS</span>}
       </div>
 
       {/* The co-driver's slot: corner calls while there is a road to call,

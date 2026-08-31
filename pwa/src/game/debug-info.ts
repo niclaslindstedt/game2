@@ -17,6 +17,7 @@ import type { GameState, StageKnobs, Track } from "@engine";
 
 import type { FreeFlyPose } from "./camera-free.ts";
 import type { CameraMode } from "./camera.ts";
+import type { MirrorTier } from "./mirror-pace.ts";
 import { STAGE_DIALS } from "./menu.tsx";
 import type { PlayCamera } from "./settings.ts";
 
@@ -56,6 +57,11 @@ export type DebugContext = {
   held: boolean;
   /** Frames per second, averaged over the last second. */
   fps: number;
+  /** What the rear view is currently costing: the rung of the pace ladder
+   * the frame rate has put it on (mirror-pace.ts). Read beside `fps`, it is
+   * the answer to "why is the glass stale" and to "did the ladder actually
+   * hand the frames back". */
+  mirror: MirrorTier;
   /** Build stamp — the version and the commit the app was cut from. */
   build: string;
 };
@@ -149,6 +155,10 @@ function cameraBox(ctx: DebugContext): DebugBox {
   ];
   if (ctx.god) rows.push({ k: "fly-speed", v: `${m(ctx.pose.speed)} m/s` });
   rows.push({ k: "fps", v: ctx.fps.toFixed(0) });
+  rows.push({
+    k: "mirror",
+    v: `${ctx.mirror.hz} Hz · reach ${ctx.mirror.range.toFixed(2)}`,
+  });
   return { title: ctx.god ? "CAMERA · GOD MODE" : "CAMERA", rows };
 }
 
