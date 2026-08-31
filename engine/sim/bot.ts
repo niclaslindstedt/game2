@@ -15,7 +15,13 @@ import { angleDiff, clamp } from "../lib/math.ts";
 import { latCeiling, slideFloor, surfaceGripFor, wheelSlide } from "../game/limits.ts";
 import { TUNING } from "../game/defs/tuning.ts";
 import type { CarSpec } from "../game/defs/cars.ts";
-import { flatTrack, SURFACES, type TerrainField, type Track } from "../mapgen/index.ts";
+import {
+  builtTerrain,
+  flatTrack,
+  SURFACES,
+  type TerrainField,
+  type Track,
+} from "../mapgen/index.ts";
 import { scarPlan, scarsFor } from "./scars.ts";
 import { startsIn } from "../game/step.ts";
 import type { CarInput, GameState } from "../game/state.ts";
@@ -183,11 +189,25 @@ const GRIP_BY_CAR = new WeakMap<CarSpec, readonly number[]>();
  * stage — and each of them once per race rather than once per physics step.
  * `NaN` is "not asked yet"; the field never returns one.
  *
- * A `WeakMap` on the terrain and not on the track: the exposure is a fact
- * about the country, and two stages on the same road with different water
- * are different countries. It also means a test that swaps in a synthetic
- * terrain gets its own table rather than the real one's answers. */
-const EXPOSURE = new WeakMap<TerrainField, Float32Array>();
+ * KEYED ON THE TRACK where the terrain is one the mapgen actually built,
+ * and on the terrain itself where it is not.
+ *
+ * The exposure is a fact about the country, so the key has to be whatever
+ * decides the country — and `createTerrain` takes the track and nothing
+ * else, so two genuine fields off one track ARE one country and answer
+ * identically. That matters because a field is fifteen games on one shared
+ * track, each with its own terrain (they need their own: the field caches
+ * the block its last query landed in, and fifteen cars in fifteen places
+ * would miss that cache every time). Keyed on the terrain, those fifteen
+ * cars fill fifteen identical copies of this table — a whole stage of
+ * water and rock lookups, done fourteen times for nothing.
+ *
+ * The terrain stays the key for anything the mapgen did not build, which is
+ * what keeps the other half of the old rule: a test that spreads its own
+ * `waterAt` over a field gets its own table rather than the real country's
+ * answers. `builtTerrain` is a `WeakSet` membership test for exactly that
+ * reason — a spread produces a new object, so it cannot inherit the mark. */
+const EXPOSURE = new WeakMap<TerrainField | Track, Float32Array>();
 
 /** How far off the centerline a car that has run wide ends up, m — where
  * the question "and then what" is actually asked. Two probes: the first is
@@ -203,10 +223,11 @@ const RUNOFF = [18, 28, 42];
 const HAZARD = { water: 1, rock: 0.7 };
 
 function exposureAt(terrain: TerrainField, track: Track, index: number): number {
-  let table = EXPOSURE.get(terrain);
+  const key = builtTerrain(terrain) ? track : terrain;
+  let table = EXPOSURE.get(key);
   if (!table) {
     table = new Float32Array(track.samples.length).fill(NaN);
-    EXPOSURE.set(terrain, table);
+    EXPOSURE.set(key, table);
   }
   // An endless stage grows its samples under the table it was built with.
   if (index >= table.length) return 0;
