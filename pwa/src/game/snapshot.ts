@@ -9,6 +9,7 @@
 import { DAMAGE_ZONES, TUNING, startsIn, wayHome, type GameState, type RivalField } from "@engine";
 
 import { buildMinimap } from "./minimap.tsx";
+import { cornerSign, type PaceSign } from "./pace-shape.ts";
 import { shiftLightOn, shiftWindow } from "./shift-window.ts";
 import type { HudDamage, HudPacenote, HudSnapshot, HudStanding } from "./hud.tsx";
 
@@ -81,10 +82,16 @@ export type PaceMemory = {
   /** Progress at the last read. A respawn, a restart or a new stage moves it
    * BACKWARDS, which is the one thing that clears the latch. */
   lastS: number;
+  /** The drawn shape of each corner currently on the strip, keyed by its
+   * entry. Walking the centerline for a corner on every tick would redo work
+   * that cannot change — with one exception, which is why the exit is kept
+   * beside the shape: on an endless stage the note at the streaming frontier
+   * grows as its combination is built, and a grown note is a new picture. */
+  shapes: Map<number, { endS: number; sign: PaceSign }>;
 };
 
 export function createPaceMemory(): PaceMemory {
-  return { calledS: -Infinity, lastS: 0 };
+  return { calledS: -Infinity, lastS: 0, shapes: new Map() };
 }
 
 /** Turn angle past which a call earns the LONG modifier, radians (~100°). */
@@ -110,19 +117,30 @@ function upcomingPacenotes(state: GameState, mem: PaceMemory): HudPacenote[] {
    * corner already on the strip — a combination is close to the corner it
    * follows, not to the car that has yet to reach either. */
   let from = state.progressS;
+  const drawn: number[] = [];
   for (const note of state.track.pacenotes) {
     if (note.endS <= state.progressS) continue;
     // Close enough to call, or called already and not yet driven through.
     if (note.s - from > lead && note.s > mem.calledS) break;
     mem.calledS = Math.max(mem.calledS, note.s);
     from = Math.max(from, note.endS);
+    let drawing = mem.shapes.get(note.s);
+    if (!drawing || drawing.endS !== note.endS) {
+      drawing = { endS: note.endS, sign: cornerSign(state.track.samples, note) };
+      mem.shapes.set(note.s, drawing);
+    }
+    drawn.push(note.s);
     out.push({
       dir: note.dir > 0 ? "left" : "right",
       severity: note.severity,
       long: note.angle > LONG_NOTE_ANGLE,
       distance: Math.max(0, note.s - state.progressS),
+      sign: drawing.sign,
     });
     if (out.length >= 2) break;
+  }
+  for (const key of mem.shapes.keys()) {
+    if (!drawn.includes(key)) mem.shapes.delete(key);
   }
   return out;
 }

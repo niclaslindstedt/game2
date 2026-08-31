@@ -390,13 +390,77 @@ body {
    snapshot ticks per frame, and an opacity that steps is a flicker in the
    corner of an eye that is watching the road. */
 .hud-pace-call {
+  /* How far the plate's leading edge runs out to its point, and which side
+     is paying for it. Every padding rule on this plate adds the two, so the
+     words never end up under the point — including the tighter padding the
+     glyphs-only variant uses, which would otherwise override a plain
+     `padding-left` here and put the icon behind the wedge. */
+  --pace-point: 0.85rem;
+  --pace-lead: 0rem;
+  --pace-trail: 0rem;
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  background: rgb(18 48 105 / 62%);
+  background-color: rgb(18 48 105 / 62%);
   border-radius: 0.7rem;
-  padding: 0.3rem 0.8rem 0.3rem 0.45rem;
+  padding: 0.3rem calc(0.8rem + var(--pace-trail)) 0.3rem calc(0.45rem + var(--pace-lead));
   transition: opacity 0.12s linear;
+}
+
+/* THE PLATE ITSELF POINTS. The drawn corner says which way the road goes,
+   and so does the word beside it — but both of those have to be LOOKED at,
+   and the co-driver's strip is read by an eye that is on the road. So the
+   sign is cut to a point on the side the corner turns toward, and that point
+   is filled solid in the severity's own colour: a slab of green leaning left
+   is a left-hander before anything on it has been read.
+
+   The wedge is a background layer rather than a border or a pseudo-element,
+   so it inherits `currentColor` from the severity class and the whole plate
+   keeps one colour story with nothing to hold in step.
+
+   Where the point meets the plate's long edges, the shape is ROUNDED rather
+   than mitred: this HUD is drawn in one hand — rounded caps and joins on
+   every glyph on it — and a pair of sharp spurs at the top and bottom of the
+   wedge is the one place the chrome would come to a spike. clip-path has no
+   radius of its own, so each corner is a three-segment quadratic: the point
+   the road-edge leaves the diagonal, two points off a Bézier whose control
+   is the mitre it replaces, and the point it lands back on the long edge.
+   Every one of them is a multiple of the point's own width, so the corner
+   keeps its shape at every plate size. */
+.hud-pace-to-left {
+  --pace-lead: var(--pace-point);
+  clip-path: polygon(
+    0 50%,
+    calc(var(--pace-point) * 0.72) 14%,
+    calc(var(--pace-point) * 0.92) 6%,
+    calc(var(--pace-point) * 1.15) 1.6%,
+    calc(var(--pace-point) * 1.4) 0,
+    100% 0,
+    100% 100%,
+    calc(var(--pace-point) * 1.4) 100%,
+    calc(var(--pace-point) * 1.15) 98.4%,
+    calc(var(--pace-point) * 0.92) 94%,
+    calc(var(--pace-point) * 0.72) 86%
+  );
+  background-image: linear-gradient(90deg, currentColor 0 var(--pace-point), transparent 0);
+}
+
+.hud-pace-to-right {
+  --pace-trail: var(--pace-point);
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--pace-point) * 1.4) 0,
+    calc(100% - var(--pace-point) * 1.15) 1.6%,
+    calc(100% - var(--pace-point) * 0.92) 6%,
+    calc(100% - var(--pace-point) * 0.72) 14%,
+    100% 50%,
+    calc(100% - var(--pace-point) * 0.72) 86%,
+    calc(100% - var(--pace-point) * 0.92) 94%,
+    calc(100% - var(--pace-point) * 1.15) 98.4%,
+    calc(100% - var(--pace-point) * 1.4) 100%,
+    0 100%
+  );
+  background-image: linear-gradient(270deg, currentColor 0 var(--pace-point), transparent 0);
 }
 
 .hud-pace-arrow {
@@ -430,7 +494,7 @@ body {
 /* Words off: the call is the arrow, so the plate shrinks to it rather than
    leaving a pill of empty background where the text used to be. */
 .hud-pace-glyphs .hud-pace-call {
-  padding: 0.25rem 0.45rem;
+  padding: 0.25rem calc(0.45rem + var(--pace-trail)) 0.25rem calc(0.45rem + var(--pace-lead));
   gap: 0.25rem;
 }
 
@@ -444,7 +508,7 @@ body {
   transform: scale(0.58);
   transform-origin: top center;
   opacity: 0.5;
-  background: rgb(18 48 105 / 45%);
+  background-color: rgb(18 48 105 / 45%);
 }
 
 /* Severity is the color story: green flows, yellow commits, orange bites.
@@ -1459,6 +1523,15 @@ body {
      phone and slides under it on a short one. */
   .hud-pace {
     top: calc(max(0.6rem, env(safe-area-inset-top)) + var(--hud-map) + var(--hud-stage) + 0.55rem);
+  }
+
+  /* ...and below the GLASS when the glass is up, which on a phone hangs
+     lower and wider than the dock the rule above clears. Restated inside the
+     media query because the rule above is later in the sheet than the base
+     `.hud-pace-under-glass` and carries the same weight: without this the
+     mirror is drawn straight across the corner call. */
+  .hud-pace-under-glass {
+    top: calc(var(--glass-bottom) + 1.4vh);
   }
 
   .hud-speed {
