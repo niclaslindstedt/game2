@@ -56,6 +56,7 @@ import {
   type FieldPlan,
   type RivalField,
 } from "./standings.ts";
+import { MIRROR_TIERS } from "./mirror-pace.ts";
 import type { GameRenderer } from "./renderer.ts";
 import type { PlayCamera } from "./settings.ts";
 
@@ -167,6 +168,15 @@ export function runBenchmark({
   onStatus,
 }: BenchmarkOpts): () => void {
   const fence = gpuFence(canvas);
+  // THE MIRROR IS PINNED, like everything else about this run. Left alone it
+  // is redrawn at whatever the machine can afford (mirror-pace.ts), and two
+  // things would go wrong at once: a session that had already dropped a rung
+  // would start the race drawing less than a fresh one does, and the ladder
+  // would then climb back mid-measurement — the workload changing under the
+  // stopwatch, which is the one thing a fixed workload may not do. Every
+  // frame here is fed the same `step` whatever it cost, so the ladder would
+  // be reading a rate nobody achieved anyway.
+  renderer.pinMirrorPace(MIRROR_TIERS[0].hz);
   const channel = new MessageChannel();
   let stopped = false;
   /** Frames drawn since the green — the measured ones. */
@@ -177,6 +187,11 @@ export function runBenchmark({
   /** When the green was, ms on the page's clock; 0 while warming up. */
   let green = 0;
   let elapsed = 0;
+
+  /** Hand the mirror back to the frame rate. Whatever ends this run — the
+   * last frame or somebody walking away from it — the next thing this
+   * renderer draws is a person driving, and they should have the ladder. */
+  const release = (): void => renderer.pinMirrorPace(null);
 
   const report = (phase: BenchmarkStatus["phase"]): void => {
     onStatus({
@@ -222,6 +237,7 @@ export function runBenchmark({
     }
     if (frames >= BENCHMARK.frames) {
       stopped = true;
+      release();
       report("done");
       return;
     }
@@ -234,6 +250,7 @@ export function runBenchmark({
   channel.port2.postMessage(0);
   return (): void => {
     stopped = true;
+    release();
     channel.port1.onmessage = null;
   };
 }

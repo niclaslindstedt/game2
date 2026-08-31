@@ -157,7 +157,9 @@ describe("stage generator", () => {
   // the most junctions — every one of them a branch that has to walk the
   // country keeping clear of the stage (R23). This is the heaviest test in
   // the file by a distance, and it is measuring a statistical claim: it
-  // needs the seeds, and it needs the time.
+  // needs the seeds, and it needs the time — the file-wide allowance in
+  // `vitest.config.ts`, which is sized for exactly this and which a case
+  // must never quietly narrow with an argument of its own.
   it("R15 — the asphalt dial is the share of the stage that comes out sealed", () => {
     const share = (asphalt: number): number => {
       let paved = 0;
@@ -176,7 +178,7 @@ describe("stage generator", () => {
     expect(share(0.25)).toBeLessThan(0.36);
     expect(share(0.5)).toBeGreaterThan(share(0.25));
     expect(share(1)).toBeGreaterThan(0.95);
-  }, 20000);
+  });
 
   it("the dials are deterministic, and different dials build different stages", () => {
     const dials = { elevation: 0.8, water: 0.2, trees: 0.9, asphalt: 0.4 };

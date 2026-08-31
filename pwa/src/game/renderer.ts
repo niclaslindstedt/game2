@@ -49,7 +49,8 @@ import {
   type MapLayerInfo,
   type MapLayers,
 } from "./map-layers.ts";
-import { createMirror, MIRROR_ASPECT, MIRROR_HZ, MIRROR_RANGE } from "./mirror.ts";
+import { createMirror, MIRROR_ASPECT } from "./mirror.ts";
+import { createMirrorPace, refillGap, type MirrorTier } from "./mirror-pace.ts";
 import { createNameTag, GHOST_LOOK, TAG_LAYER, type NameTag } from "./name-tag.ts";
 import { buildMapRoute, type MapRoute } from "./map-route.ts";
 import { classify, type RivalRun } from "./standings.ts";
@@ -194,6 +195,14 @@ export type GameRenderer = {
    * cruising — the debug overlay's readout, and the repro line's
    * coordinates. */
   cameraPose: () => FreeFlyPose & { speed: number; mode: CameraMode };
+  /** Which rung of the mirror's pace ladder this machine is on right now
+   * (mirror-pace.ts) — for the debug overlay, which is where a player who
+   * thinks the glass is stale finds out that it is, and why. */
+  mirrorPace: () => MirrorTier;
+  /** Hold that rung instead of letting the frame rate choose it, or hand it
+   * back with null — `?mirrorhz=` and the profiling harness (mirror-pace.ts
+   * says why a meter needs this). */
+  pinMirrorPace: (hz: number | null) => void;
   /** The driver has thrown the establishing shot away. Call it BEFORE the
    * engine's own `skipIntro`, which moves the run's clock in one step: this
    * is what lets the camera fly the rest of the shot at speed instead of
@@ -222,17 +231,29 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
 
   const chase = createGameCamera(canvas.clientWidth || 1, canvas.clientHeight || 1);
   const mirror = createMirror();
+  /** What the machine can afford to spend on the mirror — how often it is
+   * refilled and how far it sees, both of which move while a stage is
+   * driven (mirror-pace.ts). It outlives the world, because what a machine
+   * can draw is a property of the machine and not of the stage. */
+  const mirrorPace = createMirrorPace();
   /** The player's option, and whether this frame is one the glass belongs
    * in — the two are kept apart so `drawScene` can be asked the question
    * once, after `render` has decided it against the state and the view. */
   let mirrorOption = true;
   let mirrorUp = false;
+  /** Whether the mirror was up on the frame BEFORE this one: the pace is
+   * only judged on frames the glass was actually in, and the first of a run
+   * of those follows frames drawn under a different load. */
+  let mirrorWas = false;
   /** Whether the mirror's own pass runs THIS frame — see where it is set. */
   let mirrorFill = false;
-  /** Seconds since the glass was last refilled (`MIRROR_HZ`). Starts past
-   * the interval so the very first driving frame fills it: a strip
-   * compositing a target nothing has drawn into yet is a black hole over
-   * the road. */
+  /** ...and how far it is allowed to see when it does, as a fraction of the
+   * forward view's fog. Settled in `render` and read in `drawScene`, so both
+   * halves of one frame pull the air in by the same amount. */
+  let mirrorRange = mirrorPace.tier().range;
+  /** Seconds since the glass was last refilled. Starts past any interval so
+   * the very first driving frame fills it: a strip compositing a target
+   * nothing has drawn into yet is a black hole over the road. */
   let mirrorAge = Infinity;
   /** ...and whether it is drawn as the HUD's strip over the frame, as
    * opposed to into the cockpit's own mirror inside it. */
@@ -1089,17 +1110,31 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // The cockpit shows the same picture in its own mirror (car/cockpit.ts),
     // so the strip over the frame is not drawn as well.
     mirrorStrip = mirrorUp && view !== "cockpit";
-    // ...BUT IT IS ONLY REFILLED AT `MIRROR_HZ`, on its own clock. The pass
-    // behind that strip is the whole scene drawn a second time and it is the
-    // most expensive thing in a driving frame; the composite over the top
-    // still happens every frame, so what the player sees is a continuous
-    // strip showing an answer up to a thirtieth of a second old.
+    // ...BUT IT IS ONLY REFILLED ON ITS OWN CLOCK, and how fast that clock
+    // runs is what this machine can afford this second (mirror-pace.ts). The
+    // pass behind the strip is the whole scene drawn a second time and it is
+    // the most expensive thing in a driving frame, so it is the first thing
+    // to give way when the frame rate does. The composite over the top still
+    // happens every frame, so what the player sees is a continuous strip
+    // showing an answer a fraction of a second old.
+    //
+    // The pace is judged on frames the glass was actually IN. A slow frame
+    // with the mirror down says nothing about what the mirror costs, and a
+    // ladder that climbed through a menu would arrive at the first corner
+    // having proved nothing.
+    if (mirrorUp) {
+      if (!mirrorWas) mirrorPace.settle();
+      mirrorPace.frame(dt);
+    }
+    mirrorWas = mirrorUp;
+    const pace = mirrorPace.tier();
+    mirrorRange = pace.range;
     mirrorAge += dt;
-    mirrorFill = mirrorUp && mirrorAge >= 1 / MIRROR_HZ;
+    mirrorFill = mirrorUp && mirrorAge >= refillGap(pace.hz);
     if (mirrorFill) mirrorAge = 0;
     // Aimed on the frames it is filled on, and only those: pointing a camera
     // nothing is about to render through is arithmetic for nobody.
-    if (mirrorFill) mirror.aim(state, driverEyeY, environment.fogFar() * MIRROR_RANGE);
+    if (mirrorFill) mirror.aim(state, driverEyeY, environment.fogFar() * mirrorRange);
     // The road and its scenery are built for the WHOLE stage; the frame
     // only pays for the part the air is still clear enough to show. Last,
     // because the map view sets its fog from the framing it just solved —
@@ -1173,7 +1208,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         if (cockpit) cockpit.visible = false;
         // The air comes in with the far plane, so the world leaves the
         // mirror's frustum where it had already gone solid — see withHaze.
-        environment.withHaze(MIRROR_RANGE, () => mirror.fill(renderer, scene, w, h));
+        environment.withHaze(mirrorRange, () => mirror.fill(renderer, scene, w, h));
         if (cabin) cabin.visible = true;
         if (cockpit) cockpit.visible = cockpitUp;
         wayHomeArrow.group.visible = arrow;
@@ -1292,6 +1327,8 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     flyFrozen: (dt) => chase.flyOnly(dt),
     placeCamera: (pose) => chase.free.place(pose),
     cameraPose: () => ({ ...chase.pose(), speed: chase.free.speed(), mode: chase.mode() }),
+    mirrorPace: () => mirrorPace.tier(),
+    pinMirrorPace: mirrorPace.pin,
     skipIntroShot: chase.skipStartShot,
     render,
     onEvents,

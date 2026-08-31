@@ -141,6 +141,16 @@ const READ_CLOCK = `(() => {
  * landing in the window does not dominate it. */
 const WINDOW = 6000;
 
+/** The rear-view mirror is REDRAWN AT WHATEVER THE MACHINE CAN AFFORD
+ * (pwa/src/game/mirror-pace.ts), and this machine is a software rasterizer
+ * managing a handful of frames a second — so left alone the mirror would
+ * fall to its floor here and the table would describe the governor rather
+ * than the renderer, on a machine nobody plays on. Pinned at the top rung,
+ * every scene is metered with the mirror costing what it costs on a machine
+ * holding sixty. Change this and the whole table moves: two fifths of a
+ * driving frame's triangles are behind that strip. */
+const MIRROR_HZ = "60";
+
 const rows = [];
 
 async function scene(name, params, settle) {
@@ -148,7 +158,9 @@ async function scene(name, params, settle) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   page.on("pageerror", (err) => console.error(`[pageerror] ${err.message}`));
   await page.addInitScript(METER);
-  await page.goto(`${url}?${new URLSearchParams({ seed, ...params })}`, { waitUntil: "load" });
+  await page.goto(`${url}?${new URLSearchParams({ seed, mirrorhz: MIRROR_HZ, ...params })}`, {
+    waitUntil: "load",
+  });
   await page.waitForSelector("canvas.game-canvas");
   await settle(page);
   await page.evaluate(`

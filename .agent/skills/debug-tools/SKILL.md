@@ -129,8 +129,17 @@ other:
   movement is far outside that spread, or when the frames-metered counts
   match. An instanced batch drawn with fewer instances cannot move `draws` at
   all, whatever the table says.
+  It also PINS the rear-view mirror (`?mirrorhz=60`), because the mirror is
+  redrawn at whatever the machine can afford (`pwa/src/game/mirror-pace.ts`)
+  and this machine can afford nothing — unpinned, the table reports a
+  governor sitting on its floor rather than a renderer. Anything else that
+  learns to draw less from the frame rate has to be pinned here too, or the
+  meter is measuring its own slowness.
 - **The benchmark** is the other half: what a REAL machine, with a real GPU
-  and the player's own video settings, actually takes to draw them. It is
+  and the player's own video settings, actually takes to draw them. It pins
+  the mirror for the same reason and a second one: every frame there is fed
+  a fixed sixtieth of a second whatever it cost, so an adaptive knob left
+  loose would be reading a rate nobody achieved. It is
   therefore worthless headless — this container manages about one frame a
   second — and it is the number to ask a person on the hardware in question
   for.
