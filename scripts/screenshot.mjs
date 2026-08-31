@@ -166,9 +166,9 @@ async function capture(name, viewport, script, params = {}, waitUntil = "load", 
 }
 
 /** A close-up of one HUD element, captured at 4x so the instruments can be
- * JUDGED. The minimap and the damage glyph are a few dozen pixels in a real
- * frame — big enough to check there for clipping, far too small to see
- * whether their parts read apart from each other. */
+ * JUDGED. The minimap is a few dozen pixels in a real frame — big enough to
+ * check there for clipping, far too small to see whether its parts read
+ * apart from each other. */
 async function captureElement(name, selector, script, params = {}) {
   if (only.length > 0 && !only.some((f) => name.includes(f))) return;
   const page = await browser.newPage({
@@ -979,8 +979,7 @@ await capture(
   { shot: "1" },
 );
 
-// The two new instruments, close up: the minimap with a stage's worth of
-// gauge on it, and the damage glyph on a car that has actually been hurt.
+// The minimap close up, with a stage's worth of gauge on it.
 await captureElement(
   "shot-instrument-minimap",
   ".hud-minimap-dock",
@@ -991,21 +990,21 @@ await captureElement(
   },
   { length: "short" },
 );
-await captureElement("shot-instrument-damage", ".hud-damage", async (page) => {
-  // Into the scenery on purpose, and held there until the glyph has
-  // something to SAY: a sound car makes this shot prove nothing, and how long
-  // the bashing takes is not a number worth hard-coding.
+
+// The instrument panel, close up. It is a FIXED cast — revs, gear, speed —
+// and this shot is what says so: nothing that comes and goes belongs in this
+// corner, because every phone width is sized to exactly these three.
+//
+// What a broken car has to SAY is not photographed here, and cannot be: the
+// machinery calls out in the middle of the screen (`damageCall` in hud.tsx)
+// for under two seconds, and the shutter takes several under software
+// rendering. The call is an ordinary `.hud-flash` — the same one a lap time
+// and a clean-air call go up in — so there is nothing about its look that
+// this sweep does not already photograph.
+await captureElement("shot-instrument-cluster", ".hud-speed", async (page) => {
   await page.keyboard.down("ArrowUp");
   await racing(page);
-  await page.keyboard.down("ArrowLeft");
-  await page.waitForFunction(
-    `[...document.querySelectorAll(".hud-dmg-sys, .hud-dmg-zone")]
-       .filter((el) => (el.style.fill || el.style.stroke || "").startsWith("hsl")).length >= 1
-     || document.querySelectorAll(".hud-dmg-part-broken").length >= 1`,
-    null,
-    { timeout: 120000 },
-  );
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(6000);
 });
 
 // ── The menu surfaces. The main menu runs a live bot demo under a drone

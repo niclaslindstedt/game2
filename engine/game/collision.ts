@@ -22,6 +22,7 @@ import {
   DAMAGE_ZONES,
   updateSlip,
   type CarState,
+  type DamageCall,
   type DamagePart,
   type GameEvent,
   type RunStats,
@@ -54,13 +55,25 @@ export function damageZoneAt(angle: number): number {
   return ((Math.round(angle / span) % DAMAGE_ZONES) + DAMAGE_ZONES) % DAMAGE_ZONES;
 }
 
+/** Has `part` just crossed one of the two lines worth telling the driver
+ * about? Compared against the value BEFORE the damage was dealt, so a
+ * system that walks past a line in a dozen small hits calls out on the one
+ * that took it there and stays quiet through the rest. */
+function callDamage(system: DamageCall, was: number, now: number, events: GameEvent[]): void {
+  const { hurt, spent } = T.collision.callAt;
+  if (was < spent && now >= spent) events.push({ type: "systemFail", system, spent: true });
+  else if (was < hurt && now >= hurt) events.push({ type: "systemFail", system, spent: false });
+}
+
 /** Crush reaching past the panels: which system lives nearest each zone,
  * as (system, share-of-transfer) pairs. */
-function dealSystems(car: CarState, zone: number | null, crush: number): void {
+function dealSystems(car: CarState, zone: number | null, crush: number, events: GameEvent[]): void {
   const S = T.collision.systems;
   const sys = car.damage.systems;
   const deal = (key: keyof typeof sys, amount: number): void => {
+    const was = sys[key];
     sys[key] = Math.min(1, sys[key] + amount);
+    callDamage(key, was, sys[key], events);
   };
   if (zone === null) {
     deal("suspension", crush * S.suspensionFromBelly);
@@ -82,22 +95,33 @@ function dealSystems(car: CarState, zone: number | null, crush: number): void {
 
 /** Book one dealt crush: fold the panels (a ring zone, or the underside
  * when `zone` is null), hurt the system living behind them, take the wear,
- * tear off whatever the folding sheared through, and tell the world. */
+ * tear off whatever the folding sheared through, and tell the world.
+ *
+ * `dealt` is the fold the contact earned; what is written down is that
+ * times the car's own `damageScale` (state.ts). The hit itself has already
+ * happened by the time this is called — the impulse is spent, the springs
+ * are loaded — and the event goes out whatever the scale is, so a car that
+ * keeps none of the damage still crashes as loudly as one that keeps all
+ * of it. */
 function dealCrush(
   car: CarState,
   zone: number | null,
-  crush: number,
+  dealt: number,
   angle: number,
   speed: number,
   events: GameEvent[],
   stats: RunStats,
 ): void {
   const damage = car.damage;
-  damage.wear = Math.min(1, damage.wear + crush * T.collision.wearPerCrush);
-  damage.version += 1;
   stats.impacts += 1;
   events.push({ type: "impact", speed, angle, belly: zone === null });
-  dealSystems(car, zone, crush);
+  const crush = dealt * car.damageScale;
+  if (crush <= 0) return;
+  const wasWear = damage.wear;
+  damage.wear = Math.min(1, damage.wear + crush * T.collision.wearPerCrush);
+  callDamage("chassis", wasWear, damage.wear, events);
+  damage.version += 1;
+  dealSystems(car, zone, crush, events);
   if (zone === null) {
     damage.belly = Math.min(T.collision.zoneMax, damage.belly + crush);
     return;

@@ -133,6 +133,7 @@ export function freshCar(): CarState {
       broken: [],
       version: 0,
     },
+    damageScale: 1,
   };
 }
 
@@ -200,6 +201,11 @@ export type CreateGameOptions = {
   /** The metres this slot is owed, as extra drive to take them back with
    * (TUNING.massStart). Only a mass start hands one in. */
   catchUp?: CatchUp;
+  /** How much of every hit this car keeps, 0..1 (`CarState.damageScale`).
+   * Defaults to the whole of it: the difficulty's assist is asked for by
+   * the run a player is sat in, and nothing else — the sim, the field and
+   * the tests all drive cars that are marked exactly as they are hit. */
+  damageScale?: number;
 };
 
 /** Wind direction, mean speed, and gust phase are seeded on their own
@@ -267,6 +273,7 @@ export function createGame(options: CreateGameOptions): GameState {
   car.y = grid.elevation;
   car.heading = grid.heading;
   car.gearbox = gearbox;
+  car.damageScale = clamp(options.damageScale ?? 1, 0, 1);
   const env = buildEnv(
     options.seed,
     options.env?.timeOfDay ?? "day",

@@ -5,8 +5,8 @@
 // Watching a run-out is still DRIVING, from the passenger seat: the crew
 // under the camera is on the same stage, against the same clock, in a car
 // with its own gearbox and its own dents. So the driving layout stays up and
-// simply reads THAT car — the clock top left, the dials and the damage
-// bottom left, the minimap and the position board top right. What is left
+// simply reads THAT car — the clock top left, the dials bottom left, the
+// minimap and the position board top right. What is left
 // over is the one thing no instrument on that layout can say: whose car it
 // is. That is this, and this is all of it.
 //

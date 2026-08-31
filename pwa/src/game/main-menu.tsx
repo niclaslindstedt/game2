@@ -465,10 +465,13 @@ function LocationPage({
         onPick={pick}
         onReset={onResetPoints}
       />
-      {/* R29 — how good the fourteen crews you are running against are. It
-          stays on the GRID rather than moving to the pre-race card with the
-          car, because it is what the boxes' best-result lines are measured
-          against: change it here and the whole ladder is re-read at once. */}
+      {/* R29 — how good the fourteen crews you are running against are, and
+          what a crash costs your own car while you race them
+          (`damageScaleFor`: nothing on EASY, half on MEDIUM, all of it on
+          HARD). It stays on the GRID rather than moving to the pre-race card
+          with the car, because it is what the boxes' best-result lines are
+          measured against: change it here and the whole ladder is re-read at
+          once. */}
       <OptionRow
         label="RIVALS"
         options={DIFFICULTY_OPTIONS}

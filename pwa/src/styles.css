@@ -1115,8 +1115,8 @@ body {
   color: var(--hud-info);
 }
 
-/* The bottom-left corner is one instrument panel in two rows: the damage
-   glyph sits on top, the dial row under it. */
+/* The bottom-left corner is the instrument panel: the dial row, and the
+   room above it a taller cluster is free to grow into. */
 .hud-speed {
   position: absolute;
   left: max(1rem, env(safe-area-inset-left));
@@ -1125,21 +1125,6 @@ body {
   flex-direction: column;
   align-items: flex-start;
   gap: 0.3rem;
-}
-
-/* The condition row: the damage glyph plus whatever the situation has to
-   say. It is allowed to grow — nothing in it is sized to fit.
-
-   It also has to sit ABOVE the touch zones, which come later in the DOM and
-   cover this whole corner: the way back onto the road is a button, and a
-   button under the steering zone is a button that anchors the wheel instead
-   of pressing. */
-.hud-status {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: flex-end;
-  gap: 0.5rem;
 }
 
 /* The dial row: revs, gear, speed. Fixed cast — every phone width has to
@@ -1281,85 +1266,6 @@ body {
   font-size: clamp(1.4rem, 5vmin, 2.4rem);
   font-variant-numeric: tabular-nums;
   text-align: center;
-}
-
-/* ── The damage instrument ──────────────────────────────────────────────
-   One glyph over the tach, built from the tach's own materials: the
-   translucent navy face, the chunky white strokes, the red accent. The car
-   IS the readout — crush on the outline where the hits landed, color on the
-   parts as the machinery underneath gives out. */
-.hud-damage {
-  display: inline-flex;
-  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 45%));
-}
-
-.hud-dmg-car {
-  /* Landscape-ish and wide enough that the four systems stay separable; the
-     glyph is the whole instrument now, so it can afford the width the bars
-     used to take beside it. */
-  width: clamp(2.4rem, 8vmin, 3.8rem);
-  overflow: visible;
-}
-
-.hud-dmg-face {
-  fill: rgb(9 24 52 / 45%);
-  stroke: rgb(255 255 255 / 35%);
-  stroke-width: 1.4;
-}
-
-/* The shell. Its STROKE is the chassis gauge — set from the wear ramp in
-   hud.tsx — so the outline itself reddens on the way to the wreck. */
-.hud-dmg-body {
-  fill: rgb(9 24 52 / 55%);
-  stroke-width: 2;
-}
-
-/* The four internal systems, each drawn as the part it is. Color comes from
-   the ramp in hud.tsx; the outline keeps them legible over the dark face. */
-.hud-dmg-sys {
-  /* A hard dark edge on every part. Four neighbouring shapes all hurt at
-     once are all the same yellow, and without the edge they merge into one
-     blob that says "something" instead of "the front axle". */
-  stroke: #0a1c3a;
-  stroke-width: 1.5;
-}
-
-/* The glass is context, not information, so it is an outline and not a mass.
-   That keeps the glyph's one rule legible at a glance — every SOLID shape
-   inside the shell is a system that can fail, and its color is its health —
-   and it stops the cabin from merging with the gearbox block behind it into
-   one dark slab. */
-.hud-dmg-cabin {
-  fill: none;
-  stroke: rgb(255 255 255 / 24%);
-  stroke-width: 1.2;
-}
-
-/* Underside crush. hud.tsx paints it from the same ramp the crush ring uses,
-   so a slammed belly reads as the damage it is instead of a dark slab; the
-   fill here is the floor that ramp starts from. */
-.hud-dmg-belly {
-  fill: var(--hud-bad);
-}
-
-/* The crush ring hugs the shell just outside it. Thin enough to leave the
-   wheels their own space, dim enough while sound to read as a ring rather
-   than a readout. */
-.hud-dmg-zone {
-  fill: none;
-  stroke-width: 4.2;
-  stroke-linecap: round;
-}
-
-.hud-dmg-part {
-  fill: rgb(255 255 255 / 62%);
-}
-
-.hud-dmg-part-broken {
-  fill: rgb(255 90 78 / 25%);
-  stroke: var(--hud-bad);
-  stroke-width: 1.6;
-  stroke-dasharray: 2.2 1.8;
 }
 
 /* ── The minimap ────────────────────────────────────────────────────────

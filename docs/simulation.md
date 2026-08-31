@@ -102,13 +102,15 @@ Points buy more than a profile: a crew whose `hands` reach `MANUAL_HANDS` (5.5 o
 
 Each crew also has a **temper** and an **overtake** number — what they are like once there is somebody else's bodywork in the way. `overtake` is the crew's own at every setting; `temper` is a place in the field's pecking order (0 for the mildest driver on the roster, 1 for the one with the reputation) which the difficulty's band turns into an actual `aggression` (`temperFor`). Scrapper is the one to watch on easy as well as on hard; what changes is what she is allowed to do about it.
 
-A difficulty is one number — the points the middle of the field gets — plus a spread, and a band of temper beside it:
+A difficulty is one number — the points the middle of the field gets — plus a spread, a band of temper beside it, and one thing it does to the player's own car:
 
-| Setting  | Budget | Spread | Temper band | P3 pace, as a ratio to `RALLY_BOT` |
-| -------- | ------ | ------ | ----------- | ---------------------------------- |
-| `easy`   | 27     | ±9     | 0 – 0.50    | ≈ 0.86                             |
-| `medium` | 35     | ±9     | 0.10 – 0.72 | ≈ 0.80                             |
-| `hard`   | 42     | ±8     | 0.25 – 1.00 | ≈ 0.75                             |
+| Setting  | Budget | Spread | Temper band | Damage kept | P3 pace, as a ratio to `RALLY_BOT` |
+| -------- | ------ | ------ | ----------- | ----------- | ---------------------------------- |
+| `easy`   | 27     | ±9     | 0 – 0.50    | none        | ≈ 0.86                             |
+| `medium` | 35     | ±9     | 0.10 – 0.72 | half        | ≈ 0.80                             |
+| `hard`   | 42     | ±8     | 0.25 – 1.00 | all of it   | ≈ 0.75                             |
+
+**Damage kept** (`damageScaleFor`) is the one handicap in the model, and it points at the player rather than at the field: a beginner's stage is not lost to the crew in front, it is lost to the tree at the third corner and the rest of the stage spent driving a bent car home. It scales the ledger and nothing else — the impulse, the yaw kick, the noise and the dust are the same at every setting, so on EASY a tree met at speed still spins the car and simply leaves no mark. The crews are never scaled (`createField` hands `createGame` nothing): what the field does to itself is the simulation being honest, and `make heat` has to keep measuring it at every setting.
 
 The budgets are set against a **recorded human drive**, not against the reference bot — a difficulty is a promise made to a person, and the run tape below is the only instrument that asks the question that way. Placed against the stage one was cut on, `hard`'s leader arrives within a handful of seconds of a decent lap, `medium`'s about fifteen behind it, and `easy`'s far enough back to be a comfortable win and near enough to be a race. They used to be a minute and a half, two minutes and two and a half minutes behind the same lap, which is not a difficulty ladder — it is the player alone on the road with a timing screen.
 
@@ -130,7 +132,7 @@ The field sees itself, too: `stepField` hands every crew the cars around it — 
 
 **The run-out is watched, not fast-forwarded.** R30 drives the crews still out there home so the classification has everybody's time; anybody still going at `settleLimit(playerTime)` is retired where they stand. Two functions do it, by the same rule and with each crew driven ALONE:
 
-- `watchField(field, ticks, limit)` — a frame's worth of ticks, at race speed. This is what runs behind the results card: once the player's roll-out ends, the camera flies back up the road (`pwa/src/game/camera-sweep.ts`) and the card's backdrop becomes the run-out itself, from behind the leader of what is left, and SPECTATE (`pwa/src/game/spectate.ts`) takes the card down over that same shot and points the whole driving HUD — clock, minimap, position board, dials, damage — at the crew under the camera instead, with a banner naming them where the pacenotes would be and two buttons that walk the field.
+- `watchField(field, ticks, limit)` — a frame's worth of ticks, at race speed. This is what runs behind the results card: once the player's roll-out ends, the camera flies back up the road (`pwa/src/game/camera-sweep.ts`) and the card's backdrop becomes the run-out itself, from behind the leader of what is left, and SPECTATE (`pwa/src/game/spectate.ts`) takes the card down over that same shot and points the whole driving HUD — clock, minimap, position board, dials — at the crew under the camera instead, with a banner naming them where the pacenotes would be and two buttons that walk the field.
 - `settleField(field, steps, limit)` — the same run-out in one go, used only on the way OUT: a player pressing NEXT before the last car is home must not cost the field its places, so the sheet is finished and booked as the screen is torn down (`settleNow` in `App.tsx`).
 
 **How often there IS a run-out is worth knowing.** A heads-up race always has one — everybody leaves on one green and the player is on the back row. A staggered rally usually has none: every rival left the control earlier and `catchUpField` pays the whole stagger off under the establishing shot, so by the time the player finishes the entry list is normally home, and what is left out there is a crew who went off or a field slow enough that its head start did not cover the gap. Measured on seed 38 short with the bot driving: `easy` leaves 2 of 14 out, `hard` 1, `medium` none.

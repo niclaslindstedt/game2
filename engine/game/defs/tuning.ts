@@ -1631,6 +1631,18 @@ export const TUNING = {
      * only lets go once the clip around it has folded far enough to pull
      * its hinges, which is deeper than the bumper in front of it. */
     partAt: { mirror: 0.04, bumper: 0.12, spoiler: 0.1, lid: 0.2 },
+    /** WHEN THE CAR SAYS SOMETHING ABOUT ITSELF: the two lines a system
+     * (or the shell's wear) crosses on its way out, 0..1, each worth one
+     * `systemFail` call. There is nothing to look at any more — the crush
+     * is on the body and the machinery is under it — so these are what the
+     * driver is told, and they are set where the DRIVING changes rather
+     * than at tidy fractions. `hurt` is a little under the misfire
+     * (`chassis.misfireFrom`) and the box's lost top gear
+     * (`chassis.topGearAt`), so the warning arrives before the symptom;
+     * `spent` is past both, where the part is doing most of what it will
+     * ever do to the car. Two calls, not five: a part that reports every
+     * tenth is a part nobody reads. */
+    callAt: { hurt: 0.45, spent: 0.85 },
     /** The mass every other number here is written against, kg. A car's
      * own `mass` is read against this: heavier spins less off a clipped
      * tree, folds deeper for the same closing speed (the energy is real),
@@ -1657,9 +1669,9 @@ export const TUNING = {
 
     /** WHAT THE REST OF THE LEDGER DOES TO THE DRIVING. The systems below
      * are the machinery; these are the numbers for everything else the
-     * crash left behind — the spent structure the HUD draws the body's own
-     * outline in, the shell pulled out of true, the floorpan, and the
-     * panels that are lying back up the road. Read in game/damage.ts.
+     * crash left behind — the spent structure, the shell pulled out of
+     * true, the floorpan, and the panels that are lying back up the road.
+     * Read in game/damage.ts.
      *
      * The whole group is sized against the same bar as the systems: a car
      * with every one of these at its worst is EXHAUSTING to drive and

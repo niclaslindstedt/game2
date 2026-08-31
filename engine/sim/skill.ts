@@ -31,6 +31,11 @@
 // can own it — and it comes off the crew's own `temper` through the band a
 // difficulty sets (`temperFor`, and `AGGRO` in bot.ts).
 //
+// One thing here is not about the bots at all: `damageScaleFor`, how much of
+// a hit the PLAYER's car keeps at each setting. It lives beside the budgets
+// because a difficulty is one word to the player and has to be one row here,
+// and it is documented where it is defined.
+//
 // Tuning happens here and in rivals.ts, and it is measured with
 // `npm run sim -- --field`, which drives the whole field and prints what
 // each difficulty actually does to the clock.
@@ -262,12 +267,39 @@ export type TemperBand = {
 
 export const DIFFICULTIES: Record<
   Difficulty,
-  { label: string; budget: number; spread: number; aggression: TemperBand }
+  { label: string; budget: number; spread: number; aggression: TemperBand; damage: number }
 > = {
-  easy: { label: "EASY", budget: 27, spread: 18, aggression: { calm: 0, wild: 0.5 } },
-  medium: { label: "MEDIUM", budget: 35, spread: 18, aggression: { calm: 0.1, wild: 0.72 } },
-  hard: { label: "HARD", budget: 42, spread: 16, aggression: { calm: 0.25, wild: 1 } },
+  easy: { label: "EASY", budget: 27, spread: 18, aggression: { calm: 0, wild: 0.5 }, damage: 0 },
+  medium: {
+    label: "MEDIUM",
+    budget: 35,
+    spread: 18,
+    aggression: { calm: 0.1, wild: 0.72 },
+    damage: 0.5,
+  },
+  hard: { label: "HARD", budget: 42, spread: 16, aggression: { calm: 0.25, wild: 1 }, damage: 1 },
 };
+
+/** HOW MUCH OF A HIT THE PLAYER KEEPS at each setting, 0..1 — the one
+ * number in this file that is not about the bots at all.
+ *
+ * A difficulty is otherwise entirely the FIELD: the budget the crews spend
+ * and the band their tempers sit in, with no handicap anywhere near the
+ * player's car. This is the exception, and it is deliberate, because a
+ * beginner's stage is not lost to the crew in front — it is lost to the
+ * tree at the third corner and the forty minutes of driving a bent car
+ * home afterwards. On EASY the car cannot be marked: everything still
+ * happens to it — the spin, the bang, the panels of dust — and none of it
+ * is written down. MEDIUM keeps half, so a bad stage costs pace and never
+ * ends the run. HARD is the car the collision model actually builds.
+ *
+ * Only the run a player is sat in asks for this (`createGame`'s
+ * `damageScale`). The field is never scaled: what the crews do to each
+ * other is the simulation being honest, and `make heat` has to keep
+ * measuring it at every setting. */
+export function damageScaleFor(difficulty: Difficulty): number {
+  return DIFFICULTIES[difficulty].damage;
+}
 
 export const DIFFICULTY_IDS: Difficulty[] = ["easy", "medium", "hard"];
 

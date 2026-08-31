@@ -41,6 +41,7 @@ import {
   budgetFor,
   compileStage,
   createGame,
+  damageScaleFor,
   step,
   profileFor,
   gearboxFor,
@@ -138,6 +139,23 @@ describe("the three difficulties", () => {
       expect(budgets[2]).toBeLessThanOrEqual(SKILL_MAX);
       expect(budgets[0]).toBeGreaterThan(0);
     }
+  });
+
+  it("are also what a hit costs the player: nothing, half, all of it", () => {
+    expect(damageScaleFor("easy")).toBe(0);
+    expect(damageScaleFor("medium")).toBe(0.5);
+    expect(damageScaleFor("hard")).toBe(1);
+    // A ladder, like the budgets — and one that never scales the FIELD: the
+    // crews' own contacts are the simulation being honest at every setting.
+    const scales = DIFFICULTY_IDS.map(damageScaleFor);
+    expect(scales[0]).toBeLessThan(scales[1]);
+    expect(scales[1]).toBeLessThan(scales[2]);
+    const field = createField(
+      compileStage(38, "short"),
+      { ...RALLY_FIELD, difficulty: "easy" },
+      { seed: 38, laps: 1, timeOfDay: "day", weather: "clear", season: "summer" },
+    );
+    for (const run of field.runs) expect(run.state.car.damageScale).toBe(1);
   });
 
   it("spread the field: the head of a difficulty outspends its tail", () => {
