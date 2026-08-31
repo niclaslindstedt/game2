@@ -84,8 +84,9 @@ export type BenchmarkPlan = {
    * prints what was standing there. */
   field: FieldPlan;
   /** Seconds of game each rendered frame advances. A sixtieth divides the
-   * engine's 120 Hz step exactly, so a frame is two steps with nothing left
-   * over — the race is the same race every time it is run. */
+   * engine's step exactly (`TUNING.physicsHz`), so a frame is a whole number
+   * of steps with nothing left over — the race is the same race every time
+   * it is run. */
   step: number;
   /** Frames MEASURED, after the warm-up. Thirty seconds of racing at the
    * step above: long enough to cover the grid, the run to the first corner

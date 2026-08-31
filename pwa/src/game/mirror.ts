@@ -48,14 +48,35 @@ const WIDTH_TALL = 0.52;
 const TOP_WIDE = 0.022;
 const TOP_TALL = 0.135;
 
+/** HOW OFTEN THE GLASS IS REFILLED, times a second.
+ *
+ * The pass behind this strip is the whole scene drawn a second time, and
+ * measured it is the most expensive thing in a driving frame: 153 draw
+ * calls of 397, two fifths of the triangles. What it buys is a 179x56
+ * ribbon showing who is behind — a question that does not change inside a
+ * thirtieth of a second at any speed a stage is driven at.
+ *
+ * So it is refilled on its own clock and the strip keeps compositing the
+ * last answer in between. Being a RATE and not a frame count matters: the
+ * glass then updates at the same speed on a phone at sixty and a monitor at
+ * a hundred and forty-four, instead of being twice as fresh on the machine
+ * that needed the help least. */
+export const MIRROR_HZ = 30;
+
 /** How far the mirror sees, as a fraction of what the forward view is given.
  * A mirror answers one question — is anyone close enough to matter — and a
  * rival four hundred metres back is not an answer anybody acts on. Drawing
  * the whole stage a second time is what the second pass would otherwise
  * cost, and this is the number that stops it: the world leaves the mirror's
  * frustum at the range the fog is pulled in to (environment.withHaze), so
- * nothing is cut off in mid-view — it goes the way distance goes. */
-export const MIRROR_RANGE = 0.45;
+ * nothing is cut off in mid-view — it goes the way distance goes.
+ *
+ * It pays TWICE, which is why it is worth keeping tight. It is the mirror
+ * camera's far plane, so it decides what that pass draws; and the same
+ * frustum is handed to the world's cull (`world.cull`'s `also`), so it also
+ * decides how much open country the FORWARD pass is forbidden to throw
+ * away. A car worth reacting to in a mirror is one within a few lengths. */
+export const MIRROR_RANGE = 0.2;
 
 /** Horizontal field of view through the glass, deg. Wider than a road car's
  * mirror on purpose: the useful question is whether anyone is close enough

@@ -207,6 +207,38 @@ export type VideoSettings = {
   ground: "plain" | "normal" | "rich";
 };
 
+/** HOW MANY FRAMES A SECOND A PHONE IS ASKED FOR, at most.
+ *
+ * A ProMotion screen asks for a hundred and twenty, and answering costs
+ * twice the GPU and twice the draw submission for a game that reads
+ * identically at sixty — on a device with no fan and a battery, which is
+ * where a heat complaint comes from. A sixty-hertz screen never reaches
+ * this ceiling, so it is free there rather than a cut.
+ *
+ * Phones only (`FRAME_CAP_QUERY`): a machine with a real pointer is on
+ * mains power and its owner may well have bought the high refresh rate on
+ * purpose. The physics does not ride on it either way — that runs off its
+ * own accumulator at `TUNING.physicsHz`, so a frame not drawn is a frame
+ * with more steps in it, never a slower car. */
+export const FRAME_HZ = 60;
+
+/** Who the cap applies to. */
+export const FRAME_CAP_QUERY = "(pointer: coarse)";
+
+/** ...as the shortest gap between two drawn frames, ms, with a tolerance
+ * under the interval. A sixty-hertz display does not deliver frames exactly
+ * 16.67 ms apart, and at a hard floor the jitter alone would drop every few
+ * and cap the phone that needed no help at fifty. Under it, sixty passes
+ * every time and a hundred and twenty (8.3 ms) still cannot. */
+export function frameFloorMs(): number {
+  // Off `globalThis` rather than the bare global, because this module is
+  // reachable from the ENGINE's own project, which is typed without a DOM —
+  // and nothing headless is drawing frames, so no cap there anyway.
+  const media = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
+  if (!media) return 0;
+  return media(FRAME_CAP_QUERY).matches ? 1000 / FRAME_HZ - 2 : 0;
+}
+
 /** Pixel-ratio ceilings. Below 1 the canvas renders smaller than the screen
  * and is scaled up — blurry, and the difference between a phone that holds
  * 60 fps and one that does not. */

@@ -292,7 +292,7 @@ export function createInput(target: Window = window): InputManager {
   const flyTouch = { forward: 0, right: 0, up: 0, fast: false, yaw: 0, pitch: 0, steps: 0 };
 
   /** The controller. `padHold` is last frame's sticks and triggers, held
-   * between polls because `sample` runs once per 120 Hz STEP and the pad is
+   * between polls because `sample` runs once per physics STEP and the pad is
    * asked once per FRAME — several steps read the same reading, exactly as
    * several steps read the same key state between two keydowns. */
   const padReader = createPadReader(DEFAULT_PAD.bindings);

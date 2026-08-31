@@ -6,9 +6,51 @@
 // with `npm run sim` and the drift/jump tests; the render layer never reads
 // these directly.
 
+/** The clock the whole engine runs on — see `TUNING.physicsHz`. Named out
+ * here so the timestep can be derived from it rather than restated. */
+const PHYSICS_HZ = 60;
+
 export const TUNING = {
-  /** Fixed physics timestep, seconds (120 Hz). */
-  dt: 1 / 120,
+  /** HOW OFTEN THE WORLD IS SOLVED, steps a second — the rate everything
+   * else in this file is quoted against, and the biggest single lever on
+   * what the engine costs: the bill is linear in it, fifteen cars included.
+   *
+   * 60 and not 120 because nothing in the model needs the extra half. The
+   * car is remarkably insensitive to it — driven by the bot, one stage at
+   * 30 Hz finishes 0.2 s off the same stage at 120 and ends in the same
+   * metre of road, and the drift lab's slip angles move by one to three per
+   * cent — so the second step a frame was buying accuracy nobody could
+   * measure, at exactly twice the arithmetic.
+   *
+   * What it does cost is CONTACT: `collideCars` corrects a pair once per
+   * step, so two cars leaning on each other are pushed apart half as often.
+   * A single impact is unaffected — the resolver kills the closing speed and
+   * separates them whatever the rate — but a sustained rub is softer. So
+   * anything that moves this owes the field a `make heat` run for that
+   * reason, and `make drift` for the flick, which is read off how fast the
+   * rack is crossing and therefore off how often it is asked. */
+  physicsHz: PHYSICS_HZ,
+  /** ...and the same number as the timestep every rate in here is spent in,
+   * seconds. Derived, never authored: two places to say one thing is one
+   * place to get it wrong. */
+  dt: 1 / PHYSICS_HZ,
+
+  /** HOW OFTEN A DRIVER LOOKS UP, decisions a second — the bot's own clock,
+   * which is not the same question as how often the world is solved.
+   *
+   * The physics has to run at `physicsHz` because that is what integrates a
+   * car. The DRIVER only has to re-read the road as often as the road
+   * changes, and at rally speed a car covers half a metre in a thirtieth of
+   * a second. The whole corner scan hangs off this — every sample over the
+   * plan horizon, the hazard beside each one, the traffic — and it is most
+   * of what the bot costs, so halving it halves that. Between decisions the
+   * hands stay where they were put, which is also what hands do.
+   *
+   * At or above `physicsHz` every step decides, exactly as it always did.
+   * It lives here beside the physics rate rather than in `sim/` because the
+   * two are read together: what matters is the RATIO, and a reader deciding
+   * one of them needs the other in front of them. */
+  botHz: 30,
 
   /** The establishing shot at the start of a stage, seconds — the beat
    * before the lights, while the camera is still circling the start area

@@ -34,8 +34,8 @@
 //   road speed rather than by load: a fraction of a percent of disagreement
 //   is centimetres of lean nothing asked for, parked in one direction, in
 //   proportion to SPEED, leaving the brakes nothing left to move. Worse, the
-//   engine steps at a fixed 120 Hz off an accumulator, so on a display whose
-//   rate 120 is not a multiple of — 144 being the common one — some frames
+//   engine steps at a fixed rate off an accumulator, so on a display whose
+//   rate is not a multiple of it — 144 against 60, say — some frames
 //   step twice and some not at all, and a chased mount hands the neck tens
 //   of metres a second of phantom motion several times a second. The machine
 //   it was tuned on is steady and somebody else's shakes itself apart.
@@ -701,8 +701,8 @@ export function createEyeCamera(): EyeCamera {
     // finite step, an exponential taken over one — is centimetres of lean
     // that nothing asked for. It parks the head at one end of its arc, in
     // proportion to SPEED, leaving the brakes nothing to move it with. It is
-    // also a reading of the display: the engine steps at a fixed 120 Hz off
-    // an accumulator, so on a monitor whose rate 120 is not a multiple of,
+    // also a reading of the display: the engine steps at a fixed rate off
+    // an accumulator, so on a monitor whose rate is not a multiple of it,
     // some frames step twice and some not at all, and a mount differenced
     // across them alternates between double speed and a dead stop.
     //

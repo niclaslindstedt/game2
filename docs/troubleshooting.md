@@ -17,7 +17,7 @@ Check Node major (`.nvmrc` says 24; ≥22 works) and that you ran the Make targe
 The renderer needs WebGL2. Check `chrome://gpu`, disable GPU-blocking extensions, or try another browser. If the page loads but the canvas errors, the console will name the failure — file it with the stage seed.
 
 **The game feels slow / choppy on the phone.**
-The engine steps at a fixed 120 Hz regardless of frame rate, so physics stays correct; choppiness is render-bound. Close other tabs, and prefer the installed (home-screen) app — browsers throttle busy tabs.
+The engine steps at a fixed 60 Hz regardless of frame rate, so physics stays correct; choppiness is render-bound. Close other tabs, and prefer the installed (home-screen) app — browsers throttle busy tabs.
 
 **Stale version after a deploy.**
 Updates are prompt-gated: the new build installs in the background and asks before swapping. If the prompt was dismissed, reload twice, or clear site data for the domain as a last resort.

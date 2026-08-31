@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The ghost: your best run on a stage, kept as the CONTROLS that drove it.
 //
-// The engine is deterministic — a fixed 120 Hz step, no `Math.random`, every
+// The engine is deterministic — a fixed step (`TUNING.physicsHz`), no `Math.random`, every
 // draw from the state's seeded stream — so the same stage, the same car and
 // the same sequence of inputs put the car through the same metre of road
 // every time. That makes a ghost a tape of button presses rather than a

@@ -119,7 +119,7 @@ export type FieldStage = {
 
 /** How near a rival has to be before the contact model is asked about it, m.
  * Two capsules reach at most `halfLength × 2` centre to centre, and nothing
- * covers the slack in one 120 Hz step. */
+ * covers the slack in one step. */
 const RUB_RANGE = 5;
 
 /** Enter the field for a stage. The compiled track is SHARED with the
@@ -288,7 +288,7 @@ export type FieldContact = (
   crushB: number,
 ) => void;
 
-/** Scratch for `stepField`, which runs 120 times a second for as long as a
+/** Scratch for `stepField`, which runs `TUNING.physicsHz` times a second for as long as a
  * stage lasts and has no business allocating three lists every time. Only
  * that function touches them, and it never re-enters itself. */
 const LIVE: RivalRun[] = [];

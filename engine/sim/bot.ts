@@ -175,8 +175,8 @@ export const RALLY_BOT: BotProfile = {
  * drives.
  *
  * Resolved once per car rather than per sample: the corner scan below asks
- * for it dozens of times on every one of a run's 120 steps a second, and
- * the answer only depends on the car's rubber. */
+ * for it dozens of times on every step a run decides on, and the answer
+ * only depends on the car's rubber. */
 const GRIP_BY_CAR = new WeakMap<CarSpec, readonly number[]>();
 
 /** WHAT IS BESIDE THE ROAD, per centerline sample: 0 where running wide
@@ -257,16 +257,55 @@ function gripBySurface(spec: CarSpec): readonly number[] {
   return grip;
 }
 
-/** Compute this step's input for the current state. Pure and stateless —
- * everything the bot knows is in the GameState and in `traffic`, which is
+/** WHAT THE HANDS ARE STILL DOING, per run.
+ *
+ * Keyed on the state because that is what a run IS here, and the field
+ * hands this function fifteen different ones a step. Weak, so a stage that
+ * ends takes its drivers with it. */
+const HELD = new WeakMap<GameState, CarInput>();
+
+/** Whether the driver re-reads the road on this step, or drives on with the
+ * lock and the pedals it last chose (`TUNING.botHz`). Off the run's own
+ * clock, so it is the same answer on the same step of the same stage however
+ * it is being driven — a replay, a headless sim and the live game all decide
+ * together. The interval is worked out per call rather than once at load:
+ * one divide against a whole corner scan is nothing, and it keeps both rates
+ * answerable at runtime, which is what lets the sweep drive them. */
+function looksUp(state: GameState): boolean {
+  const every = Math.max(1, Math.round(TUNING.physicsHz / TUNING.botHz));
+  if (every === 1) return true;
+  return Math.round(state.t / TUNING.dt) % every === 0;
+}
+
+/** Compute this step's input for the current state.
+ *
+ * Everything the bot knows is in the GameState and in `traffic`, which is
  * the other cars near enough to matter, handed in by whoever is running the
  * field. An empty list is a stage driven alone, and produces exactly the
- * input a bot with no eyes for traffic always produced. */
+ * input a bot with no eyes for traffic always produced.
+ *
+ * It is not quite stateless: on the steps between decisions (`BOT_HZ`) it
+ * answers with the input it last chose for this run rather than reading the
+ * road again. That is held HERE rather than at the call sites because the
+ * rate is a fact about the driver, not about who is asking — and a caller
+ * that forgot would silently be the one car on the stage thinking twice as
+ * hard as the rest. A fresh object every time regardless: the held one is
+ * this module's, and a caller that stored what it was given (a run tape
+ * does) must never find it changing underneath. */
 export function botInput(
   state: GameState,
   profile: BotProfile = RALLY_BOT,
   traffic: readonly TrafficCar[] = NO_TRAFFIC,
 ): CarInput {
+  const held = HELD.get(state);
+  if (held && !looksUp(state)) return { ...held };
+  const fresh = decide(state, profile, traffic);
+  HELD.set(state, fresh);
+  return { ...fresh };
+}
+
+/** The driving itself — everything below is one decision, taken fresh. */
+function decide(state: GameState, profile: BotProfile, traffic: readonly TrafficCar[]): CarInput {
   const { car, track } = state;
   // THE START CONTROL. Nothing the hands do reaches the car while the lights
   // are up, so the corner plan below has nothing to say here — and running it
