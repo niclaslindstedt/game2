@@ -196,7 +196,14 @@ describe("the rollers", () => {
   // be: by putting something wrong there. A clean sweep proves the
   // generator; only a sabotaged stage proves the instrument.
   it("sees a barrier standing in the road, solid or not", () => {
-    const track = compileStage(3, "medium", { asphalt: 0.4 });
+    // R17 — the seed is SEARCHED for rather than named: a stage has a
+    // branch only where its country carries a public road for the route to
+    // leave, and which seeds those are is the land's decision.
+    let track = compileStage(3, "medium", { asphalt: 0.4 });
+    for (const seed of [3, 1, 2, 5, 8, 13, 21]) {
+      track = compileStage(seed, "medium", { asphalt: 0.4 });
+      if (track.spurs.some((s) => s.block)) break;
+    }
     const terrain = createTerrain(track);
     const clean = analyzeTrack(track, terrain, { perf: false });
     expect(clean.findings.filter((f) => f.code === "rollers.clear")).toHaveLength(0);
@@ -204,7 +211,7 @@ describe("the rollers", () => {
     // Drag one branch's barrier onto the route's centerline and across it —
     // exactly where the renderer used to put a third of them.
     const spur = track.spurs.find((s) => s.block);
-    expect(spur, "seed 3 has a branch with a barrier on it").toBeDefined();
+    expect(spur, "no seed in the sweep had a branch with a barrier on it").toBeDefined();
     const onRoad = track.samples.find((s) => s.s > (spur?.atS ?? 0));
     const block = spur?.block;
     if (!block || !onRoad) throw new Error("unreachable");

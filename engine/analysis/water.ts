@@ -73,6 +73,8 @@ export function analyzeWater(track: Track, terrain: TerrainField): MetricReport 
   let strandedMouths = 0;
   let sourceless = 0;
   let gathered = 0;
+  let retraces = 0;
+  let worstRetrace = 0;
 
   for (const river of rivers) {
     const course = river.points;
@@ -122,6 +124,50 @@ export function analyzeWater(track: Track, terrain: TerrainField): MetricReport 
             value: thinning,
           });
         }
+      }
+    }
+
+    // ...and it never runs back over itself. A tracer's walk steers by the
+    // downhill it can feel and the road pushing it away, and where those
+    // two disagree across a cell boundary it can settle into swapping
+    // between the pair — a limit cycle, with the surface pinned at the
+    // floor of the hollow they share and nothing left that could end the
+    // walk. What gets drawn is not a river: it is four hundred points and
+    // a full-width sheet of standing water on one spot, over whatever the
+    // road was doing underneath. Cheap to see from the outside and almost
+    // invisible from the inside, which is exactly what a check is for.
+    //
+    // Measured as a course coming back close to ground it covered a long
+    // way upstream — both halves, because the drawn points carry the
+    // MEANDER's sway on top of the walk and a sway swings them past each
+    // other. What separates a sway from a cycle is how far the water
+    // travelled in between: over seeds 1-24 at medium the longest a
+    // healthy course runs before returning within `retrace` of itself is
+    // 85 m, one sway's worth, and seed 2's pre-fix cycle ran 3624 m.
+    const arc: number[] = [0];
+    for (let i = 1; i < course.length; i++) {
+      arc.push(
+        arc[i - 1] + Math.hypot(course[i].x - course[i - 1].x, course[i].z - course[i - 1].z),
+      );
+    }
+    for (let i = 0; i < course.length; i++) {
+      for (let j = 0; j < i; j++) {
+        const run = arc[i] - arc[j];
+        if (run <= W.retraceRun) break;
+        const d = Math.hypot(course[i].x - course[j].x, course[i].z - course[j].z);
+        if (d >= W.retrace) continue;
+        retraces++;
+        if (run > worstRetrace) {
+          worstRetrace = run;
+          findings.push({
+            code: "water.retrace",
+            severity: "error",
+            message: `a watercourse runs back over itself after ${run.toFixed(0)} m, ${d.toFixed(1)} m away`,
+            at: { x: course[i].x, z: course[i].z },
+            value: run,
+          });
+        }
+        break;
       }
     }
 
@@ -300,6 +346,13 @@ export function analyzeWater(track: Track, terrain: TerrainField): MetricReport 
       weight: 2.5,
       value: worstFloat,
       budget: W.float,
+    },
+    {
+      id: "retrace",
+      label: "a course never runs back over itself",
+      score: rate(retraces, Math.max(1, points)),
+      weight: 2.5,
+      value: worstRetrace,
     },
     {
       id: "mouth",

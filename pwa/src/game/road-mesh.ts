@@ -164,6 +164,42 @@ function dustAt(track: Track, x: number, z: number): number {
   return best;
 }
 
+/** R17 — every piece of MAT within reach of a junction, from both roads: a
+ * disc per sample, at the width that sample actually is.
+ *
+ * What it answers is "is this point paved by somebody", which is the only
+ * honest way to decide whether a border vertex may wear the country's
+ * colour. A junction is two roads and a graded platform, and each of the
+ * three knows about itself: the main road's own edge is `mainEdgeAt`, the
+ * platform is `junctionAt`, and neither of them is the MOUTH — the minor
+ * road's flared mat, which is what the abandoned arm's shoulder lies across
+ * at the crossing's outer corner. That corner is where the green tongues
+ * were.
+ *
+ * Built once per ribbon and only around the junctions, because that is the
+ * only place two mats overlap. */
+function junctionMats(track: Track): { x: number; z: number; r: number }[] {
+  const out: { x: number; z: number; r: number }[] = [];
+  for (const junction of track.junctions) {
+    const near = junction.reach * 2 + junction.width;
+    const take = (p: { x: number; z: number; width?: number; shift?: number }, w: number): void => {
+      if (Math.abs(p.x - junction.x) > near || Math.abs(p.z - junction.z) > near) return;
+      out.push({ x: p.x, z: p.z, r: (p.width ?? w) / 2 + Math.abs(p.shift ?? 0) });
+    };
+    for (const sample of track.samples) take(sample, track.width);
+    for (const spur of track.spurs) for (const sample of spur.samples) take(sample, spur.width);
+  }
+  return out;
+}
+
+/** R17 — how far past the main road's edge a junction's shoulder takes to
+ * open back out to its full width, m. The band of dirt outside the paving
+ * runs continuously round a crossing, so the minor road's border closes to
+ * nothing at the kerb and the main road's is already at full width a few
+ * metres out: filleted over the border's OWN width, the two meet edge to
+ * edge and read as one thing rather than as two that stop at each other. */
+const BORDER_FILLET = ROAD_CROSS.reach;
+
 /** R17 — is this piece of road standing on the MAIN road's mat? A minor
  * road has no border where it crosses the road it meets: its shoulder and
  * its edge line stop at that edge, which is the whole reason a junction
@@ -267,9 +303,8 @@ export function buildRoad(
   bias = 0.02,
   ground?: GroundBeside,
 ): THREE.Mesh {
-  const half = width / 2;
   const lat = stations(width);
-  const matOnly = lat.filter((l) => Math.abs(l) <= half);
+  const mats = junctionMats(track);
   const positions: number[] = [];
   const uvs: number[] = [];
   const colors: number[] = [];
@@ -303,23 +338,26 @@ export function buildRoad(
   })();
 
   let lastCount = -1;
+  /** The cross-section the strip currently in hand is woven from, so a
+   * change can close it before starting the next. */
+  let lastSection: number[] | null = null;
   let run = 0;
   for (let i = 0; i < samples.length; i++) {
     const s = samples[i];
     const r = rightOf(s.heading);
     const bridge = s.deck != null;
-    // Inside a junction the road is mat and nothing else — its border is
-    // cut away and the throat below pays the gap back as road surface.
-    // Only the mouth loses its border, not the whole platform: a junction
-    // cuts a hole in both roads' edges, it does not delete a hundred
-    // meters of them.
-    const cross = junctionAt(track, s.x, s.z) > 0.25 || onMainMat(track, s.x, s.z) ? matOnly : lat;
-    // The strip has to restart wherever the station count changes: the two
-    // cross-sections cannot be woven into each other.
-    if (cross.length !== lastCount) {
-      lastCount = cross.length;
-      run = 0;
-    }
+    // R17 — the cross-section does NOT change at a junction. What changes
+    // is where the border ENDS, and that is decided per vertex below.
+    //
+    // Deciding it per sample took the border off both sides of the through
+    // road for the whole length of the platform: a country road losing its
+    // shoulder and its edge line for forty metres either side of a farm
+    // track, which is the opposite of what a junction looks like. A main
+    // road keeps its border past a side road; the only thing that
+    // interrupts it is the MOUTH, on the mouth's own side, over the mouth's
+    // own width — and the only road with no border at all is the minor one,
+    // where it is standing on the main road's mat.
+    const cross = lat;
     const kind = bridge
       ? "deck"
       : s.surface === "water"
@@ -340,153 +378,227 @@ export function buildRoad(
     // centerline: the stations are measured across the MAT, then carried
     // out to where the mat actually is.
     const shift = s.shift ?? 0;
-    for (const l of cross) {
-      const out = Math.abs(l * wide) - halfHere;
-      const lat = l * wide + shift;
-      const px = s.x + r.x * lat;
-      const pz = s.z + r.z * lat;
-      // R16 — the HAND-OVER. Past the bare shoulder the ribbon leans onto
-      // the ground lattice beside it and by the corridor's lip the ground
-      // has it entirely, so the two meshes MEET rather than one stopping in
-      // the air over the other. Inside a junction it does not apply: a
-      // junction is one graded plane out to its rim (R17), and the engine
-      // has already warped both carriageways onto it.
-      const handing = ground !== undefined && out > 0 && (s.flat ?? 0) < 0.25;
-      const hand = handing ? handoverAt(out) : 1;
-      // The lift that keeps the mat off the ground lattice is spent by the
-      // hand-over along with everything else, so the ribbon's last vertex
-      // is the ground's height EXACTLY. Carrying it out to the lip instead
-      // leaves the two meshes two centimetres apart — a gap the skirt shows
-      // through as a dark hairline down the whole stage, which is the same
-      // defect as the stripe it replaced, two orders of magnitude thinner
-      // and just as visible against grass.
-      let y = s.elevation + corridorOffset(s, lat, here) + bias;
-      if (ground !== undefined && hand < 1) {
-        y = y * hand + ground.heightAt(px, pz) * (1 - hand);
-      }
-      positions.push(px, y, pz);
-      // UVs run meters along and across, so the grain is the same size
-      // whatever the road does and never stretches through a corner.
-      uvs.push(l / 3.5, s.s / 3.5);
-      if (out <= 0) {
-        // On the mat: the wear map decides the mix. The bridge deck is
-        // planks or concrete, worn the same way but never bermed. Inside a
-        // junction the wear FLATTENS: two roads' wheel tracks crossing each
-        // other is the tell that two ribbons were laid over one another,
-        // and a real crossing is scuffed evenly all over anyway.
-        const flat = s.flat ?? 0;
-        paint.copy(loose).lerp(worn, wearAt(l * wide, here) * (1 - flat) + 0.55 * flat);
-        // R16 — the road's outer line has to MEET the country, not stop at
-        // it. Over the last stretch of the mat the surfacing gives way to
-        // the shoulder's dirt, along a line that wanders: a dead straight
-        // boundary ruled parallel to the centerline is the one thing that
-        // says "drawn" from any distance at all. Not inside a junction,
-        // which is paved to a hard edge on purpose (R17).
-        const inside = -out;
-        if (inside < HANDOVER && flat < 0.25) {
-          const wobble = 0.75 + 0.5 * hash2(Math.round(s.s / 3), l > 0 ? 1 : 0, 0x9e37);
-          const t = clamp01(1 - inside / (HANDOVER * wobble));
-          paint.lerp(shoulder, t * t * HANDOVER_MIX);
-        }
-        // R17 — and at a junction the surfacing changes along the MAIN
-        // road's edge, not across the minor road: the tarmac is laid to
-        // its own edge line and the gravel starts there, smeared out over
-        // the drag-out every car turning off it leaves behind. Read per
-        // vertex, so the seam is that edge, at that angle.
-        if (kind === "gravel") {
-          const past = mainEdgeAt(track, px, pz);
-          if (past !== null && past < SEAM) {
-            const t = Math.max(0, past) / SEAM;
-            sealed.copy(sealedLoose).lerp(sealedWorn, 0.55);
-            paint.lerp(sealed, 1 - t * t * (3 - 2 * t));
-          }
-        } else if (kind === "asphalt") {
-          // ...and the other way: every car that turns out of the dirt
-          // road carries stones onto the tarmac, so the sealed side of a
-          // junction wears a smear of gravel too. In life it is the most
-          // obvious thing about a junction between a sealed road and an
-          // unsealed one.
-          const dust = dustAt(track, px, pz);
-          if (dust > 0) {
-            gravelDust.copy(looseGravel).lerp(wornGravel, 0.5);
-            paint.lerp(gravelDust, dust * DRAG_ON);
-          }
-        }
-      } else if (out < ROAD_CROSS.verge.bareTo) {
-        // ...and coming the other way, the bare shoulder keeps a memory of
-        // the surfacing it just left, so the handover is one blend rather
-        // than two halves of a step.
-        paint.copy(shoulder).lerp(loose, 0.28 * (1 - out / ROAD_CROSS.verge.bareTo));
-      } else {
-        // R16 — THE DISSOLVE. Past the bare shoulder the road runs out into
-        // the country, and this is the half of that a player actually sees.
+    /** One row of vertices across the road at this sample, in `stations`'
+     * cross-section. A function because the SECTION CAN CHANGE from one
+     * sample to the next — a junction cuts both roads' borders away (R17)
+     * — and a strip whose rows are different lengths cannot be woven. The
+     * change is drawn as two rows at the same arc position instead: the old
+     * section closes flush against the new one, so the mat's edge steps in
+     * along a single line and there is no hole.
+     *
+     * There used to be one. The strip simply restarted at the change and
+     * the two rows were never woven together, which left a full-width band
+     * of missing road at every junction rim on the map — the bright green
+     * slivers ruled across the tarmac in every screenshot of one.
+     */
+    const emitRow = (stations: number[]): void => {
+      for (const l of stations) {
+        const wantOut = Math.abs(l * wide) - halfHere;
+        const wantLat = l * wide + shift;
+        // R17 — THE TWO ROADS' BORDERS ARE ONE BORDER. A junction's
+        // shoulder does not stop at the kerb and start again on the other
+        // side: it wraps round the corner, so the band of dirt outside the
+        // paving is continuous all the way round the crossing and there is
+        // no telling which road any part of it belongs to.
         //
-        // What it must not be is a lerp between two colours across a band of
-        // fixed width, because that is a line ruled parallel to the
-        // centerline and a ruled line is legible from the far side of a
-        // valley. So the amount of ground at a vertex is the hand-over
-        // pushed either way by a noise field at the size of the stones being
-        // scattered: fingers of gravel reach out into the grass and tongues
-        // of grass come back in, and the boundary stops being one.
+        // What that takes is a FILLET. A border vertex standing on the
+        // other road's mat has no width — it is a shoulder lying on
+        // somebody's carriageway — and it opens back out to full width over
+        // the next few metres past the kerb, which is where the main road's
+        // own shoulder already is. The two therefore meet edge to edge and
+        // read as one band round the outside.
         //
-        // Both ends stay hard. At the shoulder it is all road — the blade
-        // keeps that strip bare — and at the corridor's lip it is all
-        // ground, whatever the noise says, because that is the vertex the
-        // tile mesh is standing next to.
-        const t = 1 - handoverAt(out);
-        if (ground !== undefined) {
-          const g = valueNoise(px, pz, DISSOLVE.patch, DISSOLVE.seed);
-          const mix = clamp01(t * (1 + DISSOLVE.spread) - g * DISSOLVE.spread);
-          ground.paintAt(px, pz, country);
-          paint.copy(shoulder).lerp(country, mix);
-          // ...and then UNDO THIS MESH'S OWN MAP, by however much of the
-          // ground's colour the vertex has taken.
-          //
-          // The road carries a brown gravel grain and the tiles carry a
-          // near-white one, so the same colour on both renders forty per
-          // cent apart (see `textureMean`). Handing the ground's colour
-          // over without this is handing over three quarters of the
-          // difference and leaving the rest as a hard line exactly at the
-          // lip — the last edge in R16's hand-over, drawn by the maps after
-          // the geometry and the palette have both done everything right.
-          // By the lip the vertex is asking the gravel map for what the
-          // detail map would have given it, so the two meshes render the
-          // same colour at the seam and there is nothing left to see.
-          paint.r *= 1 + (EDGE_FIX.r - 1) * mix;
-          paint.g *= 1 + (EDGE_FIX.g - 1) * mix;
-          paint.b *= 1 + (EDGE_FIX.b - 1) * mix;
+        // Per VERTEX, because that is the only place the question can be
+        // answered: the sample's own centre is metres away and is usually
+        // clear of the main road while its verge is not. Deciding it per
+        // sample instead took the border off BOTH sides of the through road
+        // for the whole length of the platform — a country road losing its
+        // shoulder and its edge line for forty metres either side of a farm
+        // track.
+        const wx = s.x + r.x * wantLat;
+        const wz = s.z + r.z * wantLat;
+        const over = wantOut > 0 ? mainEdgeAt(track, wx, wz) : null;
+        // ...and over ANY road's mat, not only the main one. At the outer
+        // corner of a mouth it is the MINOR road's flared mat the other
+        // road's border lies across, and `junctionMainEdge` knows nothing
+        // about that one: what it left was a raised band of dirt out on the
+        // tarmac beside every crossing.
+        const paved =
+          wantOut > 0 &&
+          mats.some((m) => (m.x - wx) * (m.x - wx) + (m.z - wz) * (m.z - wz) < m.r * m.r);
+        const keep = paved ? 0 : over === null ? 1 : clamp01(over / BORDER_FILLET);
+        const out = wantOut * keep;
+        const lat = wantOut > 0 ? Math.sign(l) * (halfHere + out) + shift : wantLat;
+        const px = s.x + r.x * lat;
+        const pz = s.z + r.z * lat;
+        // R16 — the HAND-OVER. Past the bare shoulder the ribbon leans onto
+        // the ground lattice beside it and by the corridor's lip the ground
+        // has it entirely, so the two meshes MEET rather than one stopping in
+        // the air over the other. Inside a junction it does not apply: a
+        // junction is one graded plane out to its rim (R17), and the engine
+        // has already warped both carriageways onto it.
+        const handing = ground !== undefined && out > 0 && (s.flat ?? 0) < 0.25;
+        const hand = handing ? handoverAt(out) : 1;
+        // The lift that keeps the mat off the ground lattice is spent by the
+        // hand-over along with everything else, so the ribbon's last vertex
+        // is the ground's height EXACTLY. Carrying it out to the lip instead
+        // leaves the two meshes two centimetres apart — a gap the skirt shows
+        // through as a dark hairline down the whole stage, which is the same
+        // defect as the stripe it replaced, two orders of magnitude thinner
+        // and just as visible against grass.
+        let y = s.elevation + corridorOffset(s, lat, here) + bias;
+        if (ground !== undefined && hand < 1) {
+          y = y * hand + ground.heightAt(px, pz) * (1 - hand);
+        }
+        positions.push(px, y, pz);
+        // UVs run meters along and across, so the grain is the same size
+        // whatever the road does and never stretches through a corner.
+        uvs.push(l / 3.5, s.s / 3.5);
+        if (out <= 0) {
+          // On the mat: the wear map decides the mix. The bridge deck is
+          // planks or concrete, worn the same way but never bermed. Inside a
+          // junction the wear FLATTENS: two roads' wheel tracks crossing each
+          // other is the tell that two ribbons were laid over one another,
+          // and a real crossing is scuffed evenly all over anyway.
+          const flat = s.flat ?? 0;
+          paint.copy(loose).lerp(worn, wearAt(l * wide, here) * (1 - flat) + 0.55 * flat);
+          // R16 — the road's outer line has to MEET the country, not stop at
+          // it. Over the last stretch of the mat the surfacing gives way to
+          // the shoulder's dirt, along a line that wanders: a dead straight
+          // boundary ruled parallel to the centerline is the one thing that
+          // says "drawn" from any distance at all. Not inside a junction,
+          // which is paved to a hard edge on purpose (R17).
+          const inside = -out;
+          if (inside < HANDOVER && flat < 0.25) {
+            const wobble = 0.75 + 0.5 * hash2(Math.round(s.s / 3), l > 0 ? 1 : 0, 0x9e37);
+            const t = clamp01(1 - inside / (HANDOVER * wobble));
+            paint.lerp(shoulder, t * t * HANDOVER_MIX);
+          }
+          // R17 — and at a junction the surfacing changes along the MAIN
+          // road's edge, not across the minor road: the tarmac is laid to
+          // its own edge line and the gravel starts there, smeared out over
+          // the drag-out every car turning off it leaves behind. Read per
+          // vertex, so the seam is that edge, at that angle.
+          if (kind === "gravel") {
+            const past = mainEdgeAt(track, px, pz);
+            if (past !== null && past < SEAM) {
+              const t = Math.max(0, past) / SEAM;
+              sealed.copy(sealedLoose).lerp(sealedWorn, 0.55);
+              paint.lerp(sealed, 1 - t * t * (3 - 2 * t));
+            }
+          } else if (kind === "asphalt") {
+            // ...and the other way: every car that turns out of the dirt
+            // road carries stones onto the tarmac, so the sealed side of a
+            // junction wears a smear of gravel too. In life it is the most
+            // obvious thing about a junction between a sealed road and an
+            // unsealed one.
+            const dust = dustAt(track, px, pz);
+            if (dust > 0) {
+              gravelDust.copy(looseGravel).lerp(wornGravel, 0.5);
+              paint.lerp(gravelDust, dust * DRAG_ON);
+            }
+          }
+        } else if (out < ROAD_CROSS.verge.bareTo) {
+          // ...and coming the other way, the bare shoulder keeps a memory of
+          // the surfacing it just left, so the handover is one blend rather
+          // than two halves of a step.
+          paint.copy(shoulder).lerp(loose, 0.28 * (1 - out / ROAD_CROSS.verge.bareTo));
         } else {
-          // No landscape to hand over to (the stage previews): the old flat
-          // verge, which is all a picture of the road's plan needs.
-          paint.copy(shoulder).lerp(verge, t);
+          // R16 — THE DISSOLVE. Past the bare shoulder the road runs out into
+          // the country, and this is the half of that a player actually sees.
+          //
+          // What it must not be is a lerp between two colours across a band of
+          // fixed width, because that is a line ruled parallel to the
+          // centerline and a ruled line is legible from the far side of a
+          // valley. So the amount of ground at a vertex is the hand-over
+          // pushed either way by a noise field at the size of the stones being
+          // scattered: fingers of gravel reach out into the grass and tongues
+          // of grass come back in, and the boundary stops being one.
+          //
+          // Both ends stay hard. At the shoulder it is all road — the blade
+          // keeps that strip bare — and at the corridor's lip it is all
+          // ground, whatever the noise says, because that is the vertex the
+          // tile mesh is standing next to.
+          const t = 1 - handoverAt(out);
+          if (ground !== undefined) {
+            const g = valueNoise(px, pz, DISSOLVE.patch, DISSOLVE.seed);
+            const mix = clamp01(t * (1 + DISSOLVE.spread) - g * DISSOLVE.spread);
+            ground.paintAt(px, pz, country);
+            paint.copy(shoulder).lerp(country, mix);
+            // ...and then UNDO THIS MESH'S OWN MAP, by however much of the
+            // ground's colour the vertex has taken.
+            //
+            // The road carries a brown gravel grain and the tiles carry a
+            // near-white one, so the same colour on both renders forty per
+            // cent apart (see `textureMean`). Handing the ground's colour
+            // over without this is handing over three quarters of the
+            // difference and leaving the rest as a hard line exactly at the
+            // lip — the last edge in R16's hand-over, drawn by the maps after
+            // the geometry and the palette have both done everything right.
+            // By the lip the vertex is asking the gravel map for what the
+            // detail map would have given it, so the two meshes render the
+            // same colour at the seam and there is nothing left to see.
+            paint.r *= 1 + (EDGE_FIX.r - 1) * mix;
+            paint.g *= 1 + (EDGE_FIX.g - 1) * mix;
+            paint.b *= 1 + (EDGE_FIX.b - 1) * mix;
+          } else {
+            // No landscape to hand over to (the stage previews): the old flat
+            // verge, which is all a picture of the road's plan needs.
+            paint.copy(shoulder).lerp(verge, t);
+          }
         }
-      }
-      // R17 — and NO BORDER over the road it meets. A minor road's shoulder
-      // and verge stop dead at the main road's edge, because past that line
-      // the ground is the through road's: a vertex out there wearing the
-      // country's colour is a patch of grass lying on the carriageway, and
-      // that is what the mouth's outer corner had. The sample's own centre
-      // cannot answer this — it is metres away and often clear of the main
-      // road while its verge is not — so it is asked per VERTEX, where the
-      // colour is actually being decided.
-      if (out > 0) {
-        const over = mainEdgeAt(track, px, pz);
-        if (over !== null && over < 0) {
-          sealed.copy(sealedLoose).lerp(sealedWorn, 0.55);
-          paint.copy(sealed);
+        // R17 — and NO BORDER over the road it meets. A minor road's shoulder
+        // and verge stop dead at the main road's edge, because past that line
+        // the ground is the through road's: a vertex out there wearing the
+        // country's colour is a patch of grass lying on the carriageway, and
+        // that is what the mouth's outer corner had. The sample's own centre
+        // cannot answer this — it is metres away and often clear of the main
+        // road while its verge is not — so it is asked per VERTEX, where the
+        // colour is actually being decided.
+        if (out > 0) {
+          const over = mainEdgeAt(track, px, pz);
+          if (over !== null && over < 0) {
+            sealed.copy(sealedLoose).lerp(sealedWorn, 0.55);
+            paint.copy(sealed);
+          }
+          // ...and NO GRASS ON THE PAVING either. A junction is graded and
+          // surfaced out to its rim (R17), so a border vertex inside the
+          // platform is standing on made ground however far it is from
+          // either mat — and one that has dissolved into the country is a
+          // green tongue lying across the crossing, tapering to a point at
+          // the mouth's outer corner. Held at the bare shoulder instead,
+          // which is what the ground round a junction actually is, and
+          // faded out on the platform's own edge so the country comes back
+          // where the made ground stops.
+          const graded = paved ? 1 : junctionAt(track, px, pz);
+          if (graded > 0) paint.lerp(shoulder, graded);
         }
+        colors.push(paint.r, paint.g, paint.b);
       }
-      colors.push(paint.r, paint.g, paint.b);
-    }
-    if (run > 0) {
+    };
+    /** ...and weave the last row emitted onto the one before it. */
+    const weave = (count: number): void => {
       // Wound so the face normals point up — the road is drawn single-sided
       // and a downward winding would cull the whole surface from above.
-      const b = positions.length / 3 - cross.length;
-      const a = b - cross.length;
-      for (let k = 0; k < cross.length - 1; k++) {
+      const b = positions.length / 3 - count;
+      const a = b - count;
+      for (let k = 0; k < count - 1; k++) {
         indices.push(a + k, b + k, a + k + 1, a + k + 1, b + k, b + k + 1);
       }
+    };
+    if (cross.length !== lastCount) {
+      // Close the outgoing section against this sample before the new one
+      // starts, so the two butt together instead of leaving a gap.
+      if (run > 0 && lastSection !== null) {
+        emitRow(lastSection);
+        weave(lastSection.length);
+      }
+      lastCount = cross.length;
+      lastSection = cross;
+      run = 0;
     }
+    emitRow(cross);
+    if (run > 0) weave(cross.length);
     run += 1;
   }
 
@@ -519,6 +631,7 @@ export function buildRoad(
  * previews draw a ribbon and nothing else) the analytic height is all there
  * is, and `bias` is the lift that goes with it. */
 export function buildSkirts(
+  track: Track,
   samples: Ribbon[],
   width: number,
   bias = 0.02,
@@ -526,6 +639,7 @@ export function buildSkirts(
 ): THREE.Mesh {
   const half = width / 2;
   const edge = half + ROAD_CROSS.reach;
+  const mats = junctionMats(track);
   const positions: number[] = [];
   const indices: number[] = [];
   for (const side of [-1, 1]) {
@@ -544,7 +658,26 @@ export function buildSkirts(
       // the road's width HERE, so the lip moves in and out along the stage
       // and the skirt has to move with it.
       const here = s.width ?? width;
-      const at = edge * (here / width) * side;
+      const want = edge * (here / width) * side;
+      // R17 — and it stops where the border does. The skirt hangs off the
+      // ribbon's outer lip to close it to the ground, so it has to be at
+      // the lip the ribbon actually drew — filleted in at a junction, and
+      // absent altogether where the lip would be standing on another
+      // road's mat. Left at its full width it hangs a wedge of raised dirt
+      // out over the tarmac beside every mouth, which is a bank of earth
+      // in the middle of somebody's carriageway.
+      const wx = s.x + r.x * want;
+      const wz = s.z + r.z * want;
+      const over = mainEdgeAt(track, wx, wz);
+      const paved = mats.some((m) => (m.x - wx) * (m.x - wx) + (m.z - wz) * (m.z - wz) < m.r * m.r);
+      const keep = paved ? 0 : over === null ? 1 : clamp01(over / BORDER_FILLET);
+      if (keep <= 0) {
+        start = positions.length / 3;
+        run = 0;
+        continue;
+      }
+      const rim = (here / 2) * side;
+      const at = rim + (want - rim) * keep;
       const ex = s.x + r.x * at;
       const ez = s.z + r.z * at;
       // R16 — the ribbon's last vertex, computed the way `buildRoad`
@@ -651,7 +784,18 @@ export function buildMarkings(
   const minor = (s: Ribbon): boolean =>
     !branch &&
     track.junctions.some(
-      (j) => junctionFlat(j, s.x, s.z) > 0 && (j.joining ? s.s < j.s : s.s > j.s),
+      (j) =>
+        junctionFlat(j, s.x, s.z) > 0 &&
+        (j.joining ? s.s < j.s : s.s > j.s) &&
+        // ...and only while it is still OFF the main road's mat. The route
+        // is on the tarmac from where its line first reaches that mat,
+        // which is `onMainRun` metres short of the meeting point — some
+        // twenty of them — and over that stretch it IS the main road, so
+        // it carries the main road's paint. Judged on the side alone, the
+        // through road lost its centre line for the length of every
+        // crossing: a dashed line that stops dead at a farm track and
+        // starts again past it.
+        (junctionMainEdge(j, s.x, s.z) ?? 1) > 0,
     );
   const plain = (s: Ribbon): boolean => s.surface === "asphalt" && s.deck == null && !minor(s);
 

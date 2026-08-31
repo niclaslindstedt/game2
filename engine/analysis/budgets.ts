@@ -228,6 +228,23 @@ export const ANALYSIS = {
     /** Window either side of a crossing where the course IS allowed on the
      * road, m — it is crossing it there. */
     crossWindow: 45,
+    /** How close a course may come to ground it has already covered, m,
+     * before it has run back over itself. Water does not, ever: a course
+     * that returns to a point it left is a walk stuck swapping between two
+     * cells, and it draws a full-width sheet of standing water on one spot
+     * rather than a river.
+     *
+     * Three quarters of the tracer's own step (`STEP`, 14 m), which is the
+     * distance the walk itself uses to decide it is circling — one rule,
+     * measured the same way on both sides. */
+    retrace: 10.5,
+    /** ...after this much TRAVEL, m. The drawn points carry the meander's
+     * sway, which swings them past each other by design, so distance alone
+     * cannot tell a bend from a cycle — how far the water ran in between
+     * can. Over seeds 1-24 at medium the longest a healthy course runs
+     * before coming back within `retrace` of itself is 85 m (one sway),
+     * and seed 2's cycle ran 3624 m before returning to the same spot. */
+    retraceRun: 200,
   },
 
   /** The ROAD NETWORK: where the roads go, and whether any of them go
@@ -293,6 +310,40 @@ export const ANALYSIS = {
      * at 0.0%; with it off, the worst is 6.1% of the sealed road. */
     sweeps: 0.01,
     sweepClear: 30,
+
+    /** R31 — how much HEIGHT two roads passing each other may have between
+     * them, over and above what R31's own verge cone allows for the ground
+     * they are apart on. Under `stepFloor` nothing is reported at all: the
+     * cone is measured off centerlines strided every twenty metres and the
+     * roads have camber, bank and a metre of lift between them, so a metre
+     * of disagreement is the instrument rather than a defect.
+     *
+     * What it catches is the case the cone was blind to. R31 used to bind
+     * only upward — a branch on stilts beside the stage — and a branch
+     * BELOW it builds the same wall from the other side, because the
+     * terrain holds each road's shelf flat to its own corridor lip and then
+     * drops the whole difference between the two lips. Measured on seeds
+     * 1-12 at medium before the cone was made two-sided: four branches lay
+     * within a metre of the route more than a hundred metres up their own
+     * length, the worst 5.9 m below it, and seed 38's short sprint ran 140
+     * m at twelve metres from the route and ten below it — a sheer earth
+     * face beside the road, in the picture that started this.
+     *
+     * `stepFail` is where it stops being a bank and becomes a drop: three
+     * metres is over the roof of the car. */
+    stepFloor: 1.2,
+    stepFail: 3,
+
+    /** R17/R20 — how many surface changes the ROUTE may make away from a
+     * junction. Not zero: R20 ends a borrowed road's surfacing where the
+     * route runs into a corner too tight for a public road to have, which
+     * is a change with no crossing at it and a deliberate, argued trade
+     * (see `compile.ts`). One such joint on a stage is a rural road that
+     * ran out of money; three is a generator painting stripes.
+     *
+     * Measured over seeds 1-12 at medium: 9 orphaned changes over 12
+     * stages, none of them on more than one stage at a time. */
+    orphans: 1,
   },
 
   /** R17 — THE JUNCTIONS, as places two roads meet at rather than as seams

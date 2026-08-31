@@ -37,6 +37,13 @@ const W = R.roughness.width;
 const gravel = { surface: "gravel", lift: 0 } as const;
 const asphalt = { surface: "asphalt", lift: 0 } as const;
 
+/** True where a point stands on a junction's graded platform — asked of the
+ * same function the terrain shapes the ground with, so the test and the
+ * world agree on where a junction is. */
+function inJunction(track: ReturnType<typeof compileStage>, at: { x: number; z: number }): boolean {
+  return track.junctions.some((j) => junctionFlat(j, at.x, at.z) > 0);
+}
+
 describe("the road's cross-section (R16)", () => {
   it("crowns the road: the middle is the highest line across it", () => {
     const crown = crossOffset(gravel, 0, WIDTH);
@@ -210,6 +217,14 @@ describe("the road's cross-section (R16)", () => {
         // ...while the mat itself is still entirely the ribbon's — to
         // within the road's own grain between two samples (R33), which is
         // what a query landing between them reads.
+        //
+        // Off a JUNCTION PLATFORM, where the cross-section is exactly what
+        // R17 planes away: inside one there is no crown, no camber and no
+        // bank, because the two carriageways are warped onto one graded
+        // plane. Seed 7 puts a sample 27 m inside a 37 m platform, and the
+        // 0.11 m it reads is its crown — the ribbon there agreeing with the
+        // ground, not disagreeing with it.
+        if (inJunction(track, s)) continue;
         const mid = terrain.groundAt(s.x, s.z);
         expect(Math.abs(mid - (s.elevation + corridorOffset(s, 0, s.width)))).toBeLessThan(0.1);
       }
@@ -230,13 +245,43 @@ describe("the road's cross-section (R16)", () => {
       // interpolate ACROSS, so the error there scales with how steep that
       // plane is; R34 gave the platform the road's terrain-following grade,
       // which is the first time it has had one worth speaking of.
-      expect(gaps[gaps.length - 1], `worst lip gap on seed ${seed}`).toBeLessThan(0.6);
+      //
+      // The ceiling therefore moves whenever the junctions do. With the
+      // tarmac laid before the route (R17) they sit where the public roads
+      // are rather than where a paving field asked: measured on these three
+      // seeds the tail went 0.13 → 0.42, 0.12 → 0.00 and 0.57 → 0.72, and
+      // seed 7's worst point is still a junction rim (33 m from the meeting
+      // point, 3 m from the branch) rather than a new kind of place. The
+      // p90 above — the assertion that matters — is untouched at under two
+      // centimetres on all three.
+      expect(gaps[gaps.length - 1], `worst lip gap on seed ${seed}`).toBeLessThan(0.8);
     }
   });
 });
 
 describe("junctions (R17)", () => {
   const seeds = [1, 2, 3, 5, 8, 13, 21];
+
+  /** The first of these seeds whose stage actually has a branch on it.
+   *
+   * R17 — a stage has tarmac on it only where its COUNTRY carries a public
+   * road the route could reach. The roads are laid on the bare land before
+   * the rally is routed over it (`highway.ts`), so a seed whose land will
+   * not carry one — or whose route never comes within reach of the one it
+   * has — is all gravel, and that is the right answer rather than a
+   * failure. A test that names a seed and expects a junction on it is
+   * testing the country, not the junction. */
+  function firstBranch(asphalt: number): {
+    seed: number;
+    track: ReturnType<typeof compileStage>;
+    spur: NonNullable<ReturnType<typeof compileStage>["spurs"][number]>;
+  } {
+    for (const seed of seeds) {
+      const track = compileStage(seed, "medium", { asphalt });
+      if (track.spurs.length > 0) return { seed, track, spur: track.spurs[0] };
+    }
+    throw new Error("no seed in the sweep carried a public road");
+  }
 
   it("changes surface only at a corner, and puts a junction there", () => {
     for (const seed of seeds) {
@@ -454,7 +499,7 @@ describe("junctions (R17)", () => {
   });
 
   it("warps both carriageways onto one plane and cuts their borders away", () => {
-    const track = compileStage(3, "medium", { asphalt: 0.5 });
+    const { track } = firstBranch(0.5);
     expect(track.junctions.length).toBeGreaterThan(0);
     for (const junction of track.junctions) {
       expect(junctionFlat(junction, junction.x, junction.z)).toBeCloseTo(1, 6);
@@ -564,9 +609,8 @@ describe("junctions (R17)", () => {
   });
 
   it("gives an exploring car tarmac grip on a branch", () => {
-    const track = compileStage(3, "medium", { asphalt: 0.5 });
+    const { track, spur } = firstBranch(0.5);
     const terrain = createTerrain(track);
-    const spur = track.spurs[0];
     const on = spur.samples[Math.floor(spur.samples.length / 3)];
     expect(terrain.spurSurfaceAt(on.x, on.z)).toBe(on.surface);
     // Well off it, the wild is the wild again.
@@ -587,8 +631,7 @@ describe("junctions (R17)", () => {
   }
 
   it("a car out on a branch drives on the surface that branch is made of", () => {
-    const track = compileStage(3, "medium", { asphalt: 0.5 });
-    const spur = track.spurs[0];
+    const { seed, track, spur } = firstBranch(0.5);
     // A branch is TARMAC end to end (R17) — the sealed road the route
     // borrowed, carried on past the junction — so a car that leaves the
     // route and explores one has to find tarmac grip under it, not the
@@ -596,7 +639,7 @@ describe("junctions (R17)", () => {
     // INSIDE its junction, which is still the stage road.
     const on = spur.samples.find((sample) => sample.s > junctionReach(track));
     expect(on, "branch carries no road clear of its junction").toBeDefined();
-    const state = createGame({ seed: 3, carId: "compact", track, skipCountdown: true });
+    const state = createGame({ seed, carId: "compact", track, skipCountdown: true });
     state.car.x = on!.x;
     state.car.z = on!.z;
     // ON the branch, not dropped onto it from the start line's height:
@@ -617,10 +660,12 @@ describe("junctions (R17)", () => {
   // stage actually takes.
   it("stands every branch's barrier clear of the road the stage takes", () => {
     let placed = 0;
+    let branches = 0;
     for (const seed of seeds) {
       const track = compileStage(seed, "medium", { asphalt: 0.4 });
       const half = track.width / 2;
       for (const spur of track.spurs) {
+        branches += 1;
         const block = spur.block;
         if (!block) continue;
         placed += 1;
@@ -645,8 +690,12 @@ describe("junctions (R17)", () => {
         }
       }
     }
-    // A sweep where nothing is placed proves nothing about placement.
-    expect(placed).toBeGreaterThan(seeds.length);
+    // A sweep where nothing is placed proves nothing about placement. The
+    // bar is the branches the sweep actually built, not the seeds it
+    // walked: R17 gives a stage a branch only where its country carries a
+    // public road for the route to leave, so some seeds have none.
+    expect(branches).toBeGreaterThan(0);
+    expect(placed).toBeGreaterThan(branches / 2);
   });
 
   it("builds the same barrier, of the same kind, every time it compiles a seed", () => {

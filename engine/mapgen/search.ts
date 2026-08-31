@@ -349,18 +349,29 @@ export function recomputeSameDirRun(plans: SegmentPlan[], run: SameDirRun): void
   run.count = 0;
   run.angle = 0;
   const last = plans[plans.length - 1];
-  if (!last || last.kind !== "turn" || !last.dir) return;
+  if (!last || last.kind !== "turn" || !last.dir || last.paved) return;
   run.dir = last.dir;
   for (let i = plans.length - 1; i >= 0; i--) {
     const p = plans[i];
-    if (p.kind !== "turn" || p.dir !== run.dir) break;
+    if (p.kind !== "turn" || p.dir !== run.dir || p.paved) break;
     run.count += 1;
     run.angle += p.length / (p.radius ?? 1);
   }
 }
 
+/** R5 — the same-direction run, advanced by one committed segment.
+ *
+ * A BORROWED segment resets it, exactly as a straight does. R5 caps how
+ * many corners in a row the rally may turn the same way, so a stage does
+ * not spiral — and the pieces of a public road the route is running along
+ * (R17) are not the rally's corners. They are a line being tracked: a
+ * gentle bend cut into seventy-metre chunks (`borrow.ts`) comes out as
+ * several same-direction turns that in the country are one sweep, and
+ * counting them caps the rally's own vocabulary for something the rally
+ * did not draw. What the reset says is that the route came off a public
+ * road, so the next corner is a fresh corner. */
 export function trackRun(run: SameDirRun, plan: SegmentPlan): void {
-  if (plan.kind === "turn" && plan.dir) {
+  if (plan.kind === "turn" && plan.dir && !plan.paved) {
     const angle = plan.length / (plan.radius ?? 1);
     if (plan.dir === run.dir) {
       run.count += 1;

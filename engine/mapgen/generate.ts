@@ -25,6 +25,8 @@ import { knobScale, resolveKnobs } from "./rules.ts";
 import { generateCircuit } from "./circuit.ts";
 import { createLandField, type LandField } from "./land.ts";
 import { ROAD_CROSS, roadClearance } from "./road.ts";
+import { createHighwayNetwork, layHighways, type Highway, type HighwayNetwork } from "./highway.ts";
+import { planBorrow } from "./borrow.ts";
 import {
   PROBE_STEP,
   assignFeature,
@@ -63,6 +65,13 @@ export function generateStage(
   // it caches is what makes asking "is this line in a lake" cheap enough
   // to ask of every probe point of every candidate.
   const land = createLandField(seed, dials);
+  // R17 — and THE TARMAC, before the first segment of rally is drawn. A
+  // sealed road is not a stripe painted down the racing line: it is a
+  // public road that was there first and goes somewhere, and the rally
+  // borrows a kilometre of it. Laying it here is what makes that true —
+  // the search plans AROUND these roads (it may never cross one) and ONTO
+  // them (`planBorrow`), instead of the surface being decided afterwards.
+  const network = createHighwayNetwork(layStageHighways(seed, dials, land, length));
   const ladder = R.water.routeClearLadder;
   for (let attempt = 0; attempt < 40; attempt++) {
     // The setback the water is given, relaxing as the attempts run out:
@@ -76,6 +85,7 @@ export function generateStage(
       length,
       dials,
       land,
+      network,
       clearance,
       R.elevation.fillLadder[rung],
     );
@@ -84,11 +94,34 @@ export function generateStage(
   throw new Error(`stage generation failed for seed ${seed} (${length})`);
 }
 
+/** R17 — the TARMAC a seed's country carries, laid before the rally is
+ * routed across it and rebuilt identically wherever it is asked for.
+ *
+ * It is a pure function of the seed, the dials and the length's box, which
+ * is what lets the search plan around the roads and the compiler then build
+ * the pieces of them the stage touches without either having to hand the
+ * other a list. */
+export function layStageHighways(
+  seed: number,
+  knobs: StageKnobs,
+  land: LandField,
+  length: FiniteStageLength,
+): Highway[] {
+  return layHighways(
+    seed,
+    knobs,
+    land,
+    R.stageLengths[length].worldBound,
+    knobScale(knobs.width, R.roadWidth),
+  );
+}
+
 function tryGenerateStage(
   seed: number,
   length: FiniteStageLength,
   knobs: StageKnobs,
   land: LandField,
+  network: HighwayNetwork,
   routeClear: number,
   fillScale: number,
 ): SegmentPlan[] | null {
@@ -147,6 +180,44 @@ function tryGenerateStage(
     const off = p.y - land.heightAt(p.x, p.z);
     return off <= R.elevation.maxFill * fillScale && -off <= R.elevation.maxCut * fillScale;
   };
+  /** R17 + R23 — AND IT NEVER CROSSES THE TARMAC. The sealed roads were
+   * laid across this country before the rally was routed over it, and a
+   * rally stage does not drive over a public road: it meets one at a
+   * junction, runs it, and turns off. So the same clearance that keeps two
+   * roads apart keeps the gravel off the tarmac, and the only way onto a
+   * sealed road is `planBorrow` below — which waives this for the road it
+   * is joining, and for that one only.
+   *
+   * The only ground exempt from it is a JUNCTION: `meets` holds the
+   * meeting point of every crossing the route has made, and `parting`
+   * metres of tarmac around one is that crossing rather than a road the
+   * rally is driving down. Even a borrow in progress is held to it — the
+   * stretches that RUN ALONG the road are exempt because they are on it by
+   * construction, and the corners either side of them are ordinary rally
+   * road. */
+  /** ...and the meeting points of every junction the route has already
+   * made, where the two roads ARE one road (`STAGE_RULES.junction.parting`,
+   * the same exemption a branch leaving a junction gets). Without it the
+   * corner off the tarmac is refused by the road it is turning off. */
+  const meets: { x: number; z: number; arc: number; at: number }[] = [];
+  const clearOfTarmac = (p: Cursor): boolean => {
+    const hit = network.nearest(p.x, p.z, undefined, clear);
+    if (hit === null) return true;
+    // BOTH ROADS have to be in the crossing, and the route's end of it is
+    // measured along its OWN ARC. A junction is a place the route passes
+    // through once; ask only whether the piece of TARMAC is near a meeting
+    // point and a route that left the crossing, ran a hundred and fifty
+    // metres and came back alongside the same road is still exempt, because
+    // the road it is beside is still near where it turned off. That is seed
+    // 10's medium: two metres from the middle of a public road, a hundred
+    // and forty-seven metres of stage after leaving it.
+    const at = hit.road.points[hit.index];
+    return meets.some(
+      (m) =>
+        Math.abs(p.arc - m.arc) < R.junction.parting &&
+        Math.hypot(at.x - m.x, at.z - m.z) < R.junction.parting,
+    );
+  };
   let cursor: Cursor = { x: 0, z: 0, heading: 0, arc: 0 };
   let total = 0;
   let sLastLipEnd = -Infinity;
@@ -168,6 +239,142 @@ function tryGenerateStage(
     trackRun(sameDirRun, plan);
   };
 
+  /** Undo one committed segment — the backtrack's own move, named because
+   * a borrow that fails half way through has to make it too, and because
+   * everything a borrow leaves BESIDE the plan list has to come back with
+   * it. A junction's exemption that outlived the junction is how the route
+   * came to drive nineteen metres from a public road on seed 5: the borrow
+   * was placed, the search later retreated through it, and the meeting
+   * points stayed behind waiving R23 for the rest of the stage. */
+  const uncommit = (): void => {
+    const dropped = plans.pop();
+    if (!dropped) return;
+    field.removeLast(Math.max(1, Math.ceil(dropped.length / PROBE_STEP)));
+    total -= dropped.length;
+    if (dropped.paved) sealed -= dropped.length;
+    // R17 — A BORROW COMES OUT WHOLE. Its pieces were validated together,
+    // and the ones that lead up to the crossing were validated with R23
+    // waived for the road they lead to (`meets`). Drop the tail of a borrow
+    // and keep its approach and the route is left running up to a public
+    // road and turning away from it, on ground it was only ever allowed
+    // because it was going to join there — seed 7's medium came within six
+    // metres of the middle of one that way, on a stage with no junction on
+    // it at all.
+    while (borrows.length > 0) {
+      const span = borrows[borrows.length - 1];
+      if (plans.length >= span.to) break;
+      while (plans.length > span.from) {
+        const more = plans.pop();
+        if (!more) break;
+        field.removeLast(Math.max(1, Math.ceil(more.length / PROBE_STEP)));
+        total -= more.length;
+        if (more.paved) sealed -= more.length;
+        rewind();
+      }
+      borrows.pop();
+    }
+    // `>=`, not `>`: a borrow records its meeting points at the plan length
+    // it STARTS from, so a retreat that has undone the whole borrow leaves
+    // the two equal. With a strict compare the crossing outlived the
+    // crossing — seed 10 kept waiving R23 around a junction it no longer
+    // had, and the route drove two metres from the middle of a public road.
+    rewind();
+    while (meets.length > 0 && meets[meets.length - 1].at >= plans.length) meets.pop();
+    cursor = { ...field.points[field.points.length - 1] };
+  };
+
+  /** R17 — take a whole borrow or none of it. The pieces are solved
+   * together (borrow.ts) and they only mean anything together: a route left
+   * standing on a public road it never turns off is not a stage. So they
+   * are validated in sequence — each against the world, the water, the land
+   * and every OTHER public road — and the first one that will not fit
+   * unwinds the lot.
+   *
+   * The road being joined is exempted from R23 for the whole borrow, which
+   * is the entire point of a borrow; its two MEETING POINTS then stay
+   * exempt for the rest of the search, because the route leaving a junction
+   * is inside the clearance of the road it just left until the two have
+   * parted, exactly as a branch is. */
+  const commitBorrow = (borrow: NonNullable<ReturnType<typeof planBorrow>>): boolean => {
+    const road = network.roads[borrow.road];
+    const took: SegmentPlan[] = [];
+    // R17/R23 — the two places this borrow makes the route and the road ONE
+    // road, noted before anything is validated so the approach is measured
+    // against the same exemption every other segment of the stage is.
+    //
+    // Waiving the whole road for the whole borrow instead is what let a
+    // route run a hundred and fifty metres down the side of the tarmac it
+    // was about to join: seed 10 at medium came within a metre and a half
+    // of the middle of a public road, a hundred metres from its crossing,
+    // and neither the search nor the analysis said a word. The road being
+    // joined is exempt AT THE CROSSING and nowhere else, exactly like the
+    // branch that leaves it.
+    const marks = meets.length;
+    {
+      // Where along the STAGE each crossing falls: the entry is the end of
+      // the approach's turn-straight-turn, the exit the end of the run
+      // along the road (everything but the corner off it).
+      const runs = borrow.plans.map((plan) => plan.length);
+      const upTo = (n: number): number => runs.slice(0, n).reduce((a, b) => a + b, total);
+      meets.push({ ...road.points[borrow.from], arc: upTo(3), at: plans.length });
+      meets.push({ ...road.points[borrow.to], arc: upTo(runs.length - 1), at: plans.length });
+    }
+    const undo = (): false => {
+      for (let i = 0; i < took.length; i++) {
+        const more = plans.pop();
+        if (!more) break;
+        field.removeLast(Math.max(1, Math.ceil(more.length / PROBE_STEP)));
+        total -= more.length;
+        rewind();
+        cursor = { ...field.points[field.points.length - 1] };
+      }
+      meets.length = marks;
+      recomputeSameDirRun(plans, sameDirRun);
+      return false;
+    };
+    for (const plan of borrow.plans) {
+      if (total + plan.length > spec.band.max - R.closingStraight) break;
+      // R5 — the borrow's own corners are the RALLY's corners (only the
+      // pieces of road it runs along are exempt), so they are held to the
+      // same-direction cap like any drawn turn. `planBorrow` solves
+      // geometry and knows nothing about what the route has been doing
+      // for the last three segments; without this a borrow could arrive
+      // through a third corner the same way and put a spiral in a stage.
+      if (plan.kind === "turn" && !plan.paved && plan.dir === sameDirRun.dir) {
+        const angle = plan.length / (plan.radius ?? 1);
+        if (
+          sameDirRun.count + 1 > R.maxSameDirectionTurns ||
+          sameDirRun.angle + angle > R.maxSameDirectionAngle
+        ) {
+          break;
+        }
+      }
+      const { points, end, walked } = probe(cursor, plan);
+      if (!points.every((p) => inBounds(p, spec.worldBound))) break;
+      if (
+        points.some(
+          (p) =>
+            field.blocked(p) ||
+            entersStart(p, clear) ||
+            !keepsDry(p) ||
+            !sitsOnTheLand(p) ||
+            // The pieces that RUN ALONG the road are on it by definition;
+            // everything else in a borrow is ordinary rally road and
+            // keeps R23's distance from the tarmac like any other.
+            (!plan.paved && !clearOfTarmac(p)),
+        )
+      ) {
+        break;
+      }
+      commit(plan, points, end, walked);
+      took.push(plan);
+    }
+    if (took.length !== borrow.plans.length) return undo();
+    for (const plan of took) if (plan.paved) sealed += plan.length;
+    borrows.push({ from: plans.length - took.length, to: plans.length });
+    return true;
+  };
+
   // R1 — opening straight (never carries a feature: it is the start grid).
   // Long enough for a heads-up field to string out on: `launch.run` from
   // the gate, and never shorter than the vocabulary's own opening.
@@ -187,7 +394,7 @@ function tryGenerateStage(
     // next two hundred metres do, so the same rule the rest of the route
     // keeps has to bind here too. There is no redrawing it: the attempt is
     // rejected and the sub-seed loop tries another country.
-    if (!points.every(sitsOnTheLand)) return null;
+    if (!points.every(sitsOnTheLand) || !points.every(clearOfTarmac)) return null;
     commit(opening, points, end, walked);
   }
 
@@ -201,9 +408,102 @@ function tryGenerateStage(
   const maxIterations = 2000 + spec.band.max;
   let iterations = 0;
 
+  // R15/R17 — HOW MUCH OF THE STAGE IS TARMAC, and the state that decides
+  // when to go looking for some. The `asphalt` dial is the share of the
+  // route that should come out sealed (R15), and the only way to seal a
+  // metre of route is to be driving on a public road — so the dial is a
+  // target the search spends by BORROWING, not a coin it flips per section.
+  const wantSealed = knobs.asphalt >= R.paving.floor ? knobs.asphalt * targetLength : 0;
+  let sealed = 0;
+  /** Where the last borrow let go of the tarmac, m of stage arc. A stage
+   * opens on gravel and puts a run of it between two sealed stretches: two
+   * junctions back to back are one junction with a kink in it. */
+  let leftTarmacAt = 0;
+  /** The furthest a `planBorrow` solve can reach — the straight's ceiling
+   * plus what its two corners carry. Beyond it there is no solve to find,
+   * and the whole cost of a borrow that fails is looking for one, so the
+   * cheap `nearest` probe below stands in front of the expensive search. */
+  const borrowReach = R.straightLong.max + 4 * R.turn.soft.radius.max;
+
+  /** R17 — go and find a road, and take the whole borrow if one solves.
+   *
+   * Asked in two situations, and `needed` is which. Normally it is the
+   * `asphalt` dial spending its budget: the route is owed some tarmac, it
+   * has run enough gravel since the last stretch, and there is a road
+   * within reach. But a borrow is also THE WAY PAST A ROAD — the route may
+   * not cross one (R23), so a search boxed in against the tarmac has
+   * exactly one legal move, which is to join it and leave on the far side.
+   * There the dial has no say: the alternative is not less tarmac, it is no
+   * stage. */
+  /** Where the last failed look for a road was made, m of stage arc. The
+   * solve is the expensive thing in the whole search — a few thousand
+   * turn-straight-turn closures over every meeting point in reach — and
+   * asking it again forty metres further down the same straight asks the
+   * same question. A look that found nothing is good for the length of a
+   * segment. */
+  let lookedAt = -Infinity;
+  /** The roads this route has already borrowed — see `tryBorrow`. */
+  const used = new Set<number>();
+  /** ...and the plan index each committed borrow starts at, so a retreat
+   * that reaches into one takes the whole of it. */
+  const borrows: { from: number; to: number }[] = [];
+  const tryBorrow = (needed: boolean): boolean => {
+    if (!needed && sealed >= wantSealed) return false;
+    if (total - lookedAt < R.paving.borrow.look) return false;
+    if (total - leftTarmacAt < R.paving.gap.min) return false;
+    if (total + R.paving.borrow.runOn.min >= targetLength) return false;
+    if (
+      !network.nearest(cursor.x, cursor.z, undefined, Math.min(R.paving.borrow.seek, borrowReach))
+    ) {
+      return false;
+    }
+    // How long a stretch to stay on it: what the dial still owes, inside
+    // the vocabulary's band, and never so much of what the stage has LEFT
+    // that R11 refuses the closing straight afterwards.
+    const room = (targetLength - total) * R.paving.borrow.share;
+    const owed = needed ? R.paving.borrow.runOn.min : wantSealed - sealed;
+    const runOn = Math.max(R.paving.borrow.runOn.min, Math.min(owed, room));
+    if (runOn > room) return false;
+    // Longest first, then shorter. A borrow is validated whole and dropped
+    // whole, so the further the route stays on the road the more chances
+    // there are for one of its segments to leave the world or cross the
+    // stage's own line — and the dial asking for a long one must not come
+    // out as no tarmac at all. Ask for what is owed; settle for what fits.
+    for (const want of [runOn, runOn * 0.6, R.paving.borrow.runOn.min]) {
+      if (want < R.paving.borrow.runOn.min) break;
+      const borrow = planBorrow(
+        cursor,
+        network,
+        width,
+        want,
+        plans[plans.length - 1].kind === "straight",
+      );
+      // R17 — ONE BORROW PER ROAD. A rally that meets the same public road
+      // twice has gone round in a circle, and the country pays for it
+      // twice over: the stretch of tarmac between the two crossings is a
+      // single piece of road with an abandoned arm reaching into it from
+      // each end, so it is built and drawn twice, two carriageways a couple
+      // of metres apart pointing at each other. Over seeds 1-24 that was
+      // 82 of the 97 R23 breaches on the sweep.
+      if (!borrow || used.has(borrow.road) || !commitBorrow(borrow)) continue;
+      used.add(borrow.road);
+      leftTarmacAt = total;
+      lookedAt = -Infinity;
+      return true;
+    }
+    lookedAt = total;
+    return false;
+  };
+
   while (total < targetLength) {
     if (++iterations > maxIterations) return null;
     let placed = false;
+    // R17 — go and find a road. Asked before the dice, because a borrow is
+    // not one more candidate segment: it is a corner onto the tarmac, the
+    // run along it and the corner off, solved and validated as one piece
+    // (see borrow.ts). Half-placing it would leave the route on a public
+    // road it never leaves.
+    if (tryBorrow(false)) placed = true;
     for (let attempt = 0; attempt < 10 && !placed; attempt++) {
       // R9 — near the boundary, steer back toward the middle: force a turn
       // whose direction reduces the outward heading.
@@ -252,7 +552,12 @@ function tryGenerateStage(
       if (!points.every((p) => inBounds(p, spec.worldBound))) continue;
       if (
         points.some(
-          (p) => field.blocked(p) || entersStart(p, clear) || !keepsDry(p) || !sitsOnTheLand(p),
+          (p) =>
+            field.blocked(p) ||
+            entersStart(p, clear) ||
+            !keepsDry(p) ||
+            !sitsOnTheLand(p) ||
+            !clearOfTarmac(p),
         )
       ) {
         continue;
@@ -260,6 +565,11 @@ function tryGenerateStage(
       commit(plan, points, end, walked);
       placed = true;
     }
+    // R17 — boxed in against a public road, the way through IS the road.
+    // Tried before the retreat, because backing out of the pocket only
+    // works if the pocket has another way out of it, and a stage hemmed
+    // between the tarmac and its own line does not.
+    if (!placed && tryBorrow(true)) placed = true;
     if (!placed) {
       // Search is stuck (boxed in by its own line). End the stage early if a
       // legal stage length is already reached; otherwise back the line out
@@ -268,13 +578,9 @@ function tryGenerateStage(
       // a different continuation.
       if (total >= spec.band.min - R.closingStraight) break;
       for (let drop = 0; drop < 3; drop++) {
-        const dropped = plans.pop();
-        if (!dropped || plans.length <= 1) return null;
-        field.removeLast(Math.max(1, Math.ceil(dropped.length / PROBE_STEP)));
-        total -= dropped.length;
-        rewind();
+        if (plans.length <= 1) return null;
+        uncommit();
       }
-      cursor = { ...field.points[field.points.length - 1] };
       recomputeSameDirRun(plans, sameDirRun);
     }
   }
@@ -314,7 +620,11 @@ function tryGenerateStage(
     // finish placed legally near it may run its apron over the edge.
     const past = probe(end, runOff).points;
     const clearOfEverything = (p: Cursor): boolean =>
-      !field.blocked(p) && !entersStart(p, clear) && keepsDry(p) && sitsOnTheLand(p);
+      !field.blocked(p) &&
+      !entersStart(p, clear) &&
+      keepsDry(p) &&
+      sitsOnTheLand(p) &&
+      clearOfTarmac(p);
     if (
       points.every((p) => inBounds(p, spec.worldBound)) &&
       points.every(clearOfEverything) &&
@@ -325,12 +635,8 @@ function tryGenerateStage(
       // run-out is road the clock never sees.
       return total - R.runOut >= spec.band.min ? plans : null;
     }
-    const dropped = plans.pop();
-    if (!dropped || plans.length <= 1) return null;
-    field.removeLast(Math.max(1, Math.ceil(dropped.length / PROBE_STEP)));
-    total -= dropped.length;
-    rewind();
-    cursor = { ...field.points[field.points.length - 1] };
+    if (plans.length <= 1) return null;
+    uncommit();
     recomputeSameDirRun(plans, sameDirRun);
     if (total < spec.band.min - R.closingStraight) return null;
   }

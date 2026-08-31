@@ -43,6 +43,12 @@ Every time a finding comes up, ask which of three things it is:
 | A check measuring the wrong thing              | Fix the CHECK, in `engine/analysis/`. Say why in the comment.                   |
 | A real property of the game, scored as a fault | Move the threshold in `budgets.ts` — **and only with a MEASUREMENT behind it.** |
 
+Telling the first row from the second: **instruments agreeing on a LOCATION is
+evidence, and a finding that appears on every seed at the same VALUE is the
+measurement bug.** Three checks firing at one place on the map are three views
+of one defect; three checks reporting 0.42 on every seed are one check with a
+constant in it.
+
 That third row is where honesty goes to die. A threshold moved because a seed
 failed it is a threshold that will be moved again next time. A threshold moved
 because `make sim` shows three cars landing those jumps with zero respawns is
@@ -302,10 +308,32 @@ undoes it without knowing it was ever a rule.
 - **The self-distance check (R10) exempts route neighbours.** Tightening it
   without the window outlaws hairpins; loosening the window lets the stage
   fold.
-- **R23's junction exemption is stated ONCE** (`STAGE_RULES.junction.spurWindow`)
+- **R23's junction exemption is stated ONCE** (`STAGE_RULES.junction.parting`)
   and read by the branch builder AND the analysis. A branch leaves a junction
   ON the road it is leaving; an analyzer that does not exempt exactly the same
-  stretch reports every junction on the map as two roads sharing ground.
+  stretch reports every junction on the map as two roads sharing ground. It is
+  a PLACE — ground distance from the meeting point — and never a window of
+  stage arc: an arc window forgives whatever the route has wandered into
+  hundreds of metres away, and both sides forgiving it is how four real
+  overlaps went unreported across seeds 1-12.
+- **Where the search TRIAL-BUILDS what the compiler builds for real, the trial
+  is the stricter of the two.** Several rules are decided twice — "could a
+  branch leave the map from this corner" against the country the plan
+  describes, then the real arm against the country that got built — and the
+  two answers are never identical. A trial more OPTIMISTIC than the build
+  accepts a corner whose arm is then cut short, and ships a stub of tarmac
+  standing in a field; a trial more pessimistic just loses a junction and the
+  search draws another corner. So state the threshold twice, deliberately,
+  with the slack in the safe direction (`TRIAL_PARTING` under
+  `BUILT_PARTING`). One shared constant looks tidier and is the bug — and the
+  analysis needs the same asymmetry the other way, or it measures the built
+  stage with the builder's own tolerance and reports nothing, ever.
+- **A commit made of SEVERAL segments unwinds WHOLE.** Backtracking pops one
+  plan at a time, which is right for plans drawn on their own and wrong for a
+  borrow — a turn on, a run along the road, a turn off, legal only together.
+  Pop one and what is left is the violation the feature exists to prevent. Any
+  composite commit records the span it occupies and the single retreat path
+  pops the whole of it; which means there has to BE a single retreat path.
 - **Vocabulary numbers are a coupled system.** The turn radii, the bot's
   `latAccel` plan, the drift tuning and the grid's catch-up window all agree
   with each other. Lengthen the start apron and `TUNING.massStart.catchUpS`

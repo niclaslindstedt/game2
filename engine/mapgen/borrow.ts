@@ -64,11 +64,14 @@ function partedAt(radius: number, width: number): number {
   return radius * Math.acos(cos);
 }
 
-/** The corners a junction may sit at: inside R17's angle band, and tight
- * enough that the two carriageways actually part. */
+/** The corners a junction may sit at: inside R17's angle band, tight enough
+ * that the two carriageways actually part, and wide enough that the corner
+ * still has an inside. */
 function junctionCorners(width: number): { radius: number; severity: SegmentPlan["severity"] }[] {
   return solveRadii(APPROACH_RADII).filter(
-    (c) => partedAt(c.radius, width) <= R.paving.junctionParts * width,
+    (c) =>
+      c.radius >= R.paving.junctionRadius * width &&
+      partedAt(c.radius, width) <= R.paving.junctionParts * width,
   );
 }
 
@@ -97,16 +100,21 @@ export function planBorrow(
   width: number,
   /** How far the route stays on the tarmac once it is on it, m. */
   runOn: number,
+  /** R4 — whether the segment the route is standing on is a straight. A
+   * hard turn is taken out of a straight and never out of another turn, so
+   * where it is not, the approach's first corner is drawn from the gentler
+   * half of the vocabulary. */
+  fromStraight: boolean,
 ): Borrow | null {
-  const hit = network.nearest(from.x, from.z);
-  if (!hit || hit.d > R.paving.borrow.seek) return null;
+  const hit = network.nearest(from.x, from.z, undefined, R.paving.borrow.seek);
+  if (!hit) return null;
   const road = hit.road;
   const meet = R.paving.borrow.meet;
   const perPoint = road.points[1].s - road.points[0].s;
   const stride = Math.max(1, Math.round(meet.step / perPoint));
   const span = Math.ceil(meet.reach / perPoint);
   const corners = junctionCorners(width);
-  const approach = solveRadii(APPROACH_RADII);
+  const approach = solveRadii(APPROACH_RADII).filter((c) => fromStraight || c.severity !== "hard");
   const straight = { min: R.straightShort.min, max: R.straightLong.max };
   /** How far a meeting point can be from the cursor and still be reachable
    * by one turn-straight-turn: the straight's ceiling plus what the two
@@ -178,7 +186,18 @@ export function planBorrow(
               // than solved: where the route goes after a junction is the
               // stage's business, and the only thing it has to be is a
               // corner R17 would put a junction at.
-              const off = corners[corners.length - 1];
+              //
+              // The tightest such corner, because that is the SQUAREST
+              // crossing the vocabulary can give (see `junctionRadius`) —
+              // unless the road's last few metres bent, in which case R4
+              // binds: a hard turn is taken out of a straight, never out of
+              // another turn. A public road mostly runs straight, so the
+              // tight one is what a borrow usually gets.
+              const straightOut = plans[plans.length - 1].kind === "straight";
+              const off = straightOut
+                ? corners[corners.length - 1]
+                : corners.filter((c) => c.severity !== "hard").pop();
+              if (!off) continue;
               plans.push({
                 kind: "turn",
                 length: off.radius * R.paving.junctionAngle.min,
