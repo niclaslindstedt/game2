@@ -13,13 +13,31 @@
 // It is also a CONTROL: the pane hands drags, wheels and pinches to the map
 // camera, so "alpine" is something the player tilts down to and sees for
 // themselves rather than a word they have to take on trust.
+//
+// And the stage on it does not have to be a bare seed: SELECT LEVEL, in the
+// pane's header, loads one of the CAMPAIGN's own roads (menu-levels.tsx's
+// StagePicker) into these same settings — so the fourteen authored stages
+// can be looked at layer by layer, taken out at another hour or in worse
+// weather, and driven, all on the one page that was already built to do
+// exactly that to a seed.
+//
+// THE DEVELOPER'S MAP VIEWER IS THIS PAGE with `viewing` set: the same map,
+// the same camera, the same layers and the same stage list, with the whole
+// driving half of the page — the car, the conditions, the dials, and DRIVE
+// IT — taken off. That is the only difference between them, and it is a
+// difference of PURPOSE: the viewer is a stage you are looking at, and Roam
+// is a stage you are choosing in order to drive it. So Roam always keeps
+// its way onto the road, full-screen map or not, and the viewer never grows
+// one.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { STAGE_RULES, circuitLapBand, type StageLength, type StageShape } from "@engine";
 
+import { levelForRoad, type CampaignLevel } from "./campaign.ts";
 import { CarPicker } from "./car-picker.tsx";
 import { debugReport, type DebugBox } from "./debug-info.ts";
 import { MAP_LAYERS, type LegendStop, type MapLayerId } from "./map-layers.ts";
+import { StagePicker } from "./menu-levels.tsx";
 import { Glyph } from "./menu-glyphs.tsx";
 import {
   OptionRow,
@@ -89,6 +107,19 @@ type RoamProps = {
   onStart: () => void;
   onBack: () => void;
   onDeveloper: () => void;
+  /** Load one of the campaign's own stages into these settings — its seed,
+   * its band, its shape and the conditions it is authored in. */
+  onLevel: (level: CampaignLevel) => void;
+  /** THE DEVELOPER'S MAP VIEWER: the map, the layers and the stage list,
+   * with the driving half of the page taken off — no car, no conditions, no
+   * dials, and no way onto the road. Look only. */
+  viewing: boolean;
+  /** Whether the stage list is up over the map, and the way to open and
+   * shut it. It is the MENU's state rather than this page's so that the
+   * escape key and the pad's B walk out of it the way they walk out of
+   * everything else. */
+  picking: boolean;
+  onPicking: (picking: boolean) => void;
   /** Where the map pane is, so the renderer can draw the stage into it.
    * Null on unmount — the map view goes back to full-bleed. */
   onMapRect: (rect: MapRect | null) => void;
@@ -307,8 +338,13 @@ function MapPane({
 
 /** The layer switch and the full-screen handle, along the foot of the map.
  * Laid over the pane rather than beside it because the map IS the page —
- * every row of controls under it is a row the landscape does not get. */
-function MapTools({ map }: { map: MapDebug }) {
+ * every row of controls under it is a row the landscape does not get.
+ *
+ * `full` is whether the pane is currently blown up, which is not the same
+ * question as whether it CAN be shrunk: the viewer is nothing but the map,
+ * so there it is permanently full and the toggle is a button whose two
+ * states would look identical. */
+function MapTools({ map, full, fixed }: { map: MapDebug; full: boolean; fixed: boolean }) {
   return (
     <div className="map-tools" data-map-ui>
       <div className="map-tool-row">
@@ -333,20 +369,22 @@ function MapTools({ map }: { map: MapDebug }) {
             {layer.label}
           </button>
         ))}
-        <button
-          type="button"
-          className={map.full ? "map-tool map-tool-on" : "map-tool"}
-          onClick={() => map.onFull(!map.full)}
-          data-map-full
-        >
-          {map.full ? "SHRINK" : "FULL SCREEN"}
-        </button>
+        {!fixed && (
+          <button
+            type="button"
+            className={map.full ? "map-tool map-tool-on" : "map-tool"}
+            onClick={() => map.onFull(!map.full)}
+            data-map-full
+          >
+            {map.full ? "SHRINK" : "FULL SCREEN"}
+          </button>
+        )}
         {/* The shutter is offered only on the FULL SCREEN map, and that is
             the honest limit rather than a tidiness rule: a picture is the
             whole drawing buffer, and in the small pane most of that buffer
             is the flat sky the menu's cards sit on with the map in a hole in
             the corner of it. */}
-        {map.full && <MapShotButton map={map} />}
+        {full && <MapShotButton map={map} />}
       </div>
       {map.legend.length > 0 && (
         <div className="map-legend">
@@ -482,6 +520,10 @@ export function RoamPage({
   onStart,
   onBack,
   onDeveloper,
+  onLevel,
+  viewing,
+  picking,
+  onPicking,
   onMapRect,
   mapView,
   map,
@@ -491,9 +533,33 @@ export function RoamPage({
     STAGE_LENGTH_OPTIONS.findIndex((l) => l.id === race.length),
   );
   const step = (by: number): void => onSeed(Math.max(1, seed + by));
+  // Which campaign stage these settings are standing on, derived rather than
+  // remembered: the moment the seed is stepped or a dial moved, this is a
+  // different road and the header says so on its own. A flag carried
+  // alongside the settings would have had to be cleared by every control on
+  // the page, and would eventually have been left set by one of them.
+  const level = levelForRoad(seed, race.length, race.shape, race.knobs);
+
+  if (picking) {
+    return (
+      <StagePicker
+        loaded={level?.id ?? null}
+        back={viewing ? "MAP VIEWER" : "ROAM"}
+        onPick={(picked) => {
+          onLevel(picked);
+          onPicking(false);
+        }}
+        onBack={() => onPicking(false)}
+      />
+    );
+  }
+
+  // The VIEWER is the map and nothing else, so its pane is permanently blown
+  // up; on Roam that is the developer's own toggle.
+  const full = viewing || (map?.full ?? false);
 
   return (
-    <div className={map?.full ? "roam roam-full" : "roam"}>
+    <div className={`roam${viewing ? " roam-view" : full ? " roam-full" : ""}`}>
       <div className="roam-split">
         <section className="roam-pane roam-pane-stage">
           {/* The way back and the page's name ride on the stage pane's own
@@ -507,13 +573,36 @@ export function RoamPage({
               carry the mark itself; without it B is dead on Roam. */}
           <div className="roam-pane-head">
             <button type="button" className="menu-back" data-nav-back onClick={onBack}>
-              ‹ MENU
+              ‹ {viewing ? "DEVELOPER" : "MENU"}
             </button>
             {/* The page's name — or, once the developer switch is on, the
                 button that copies what the map is looking at. A developer
                 standing in front of this page does not need to be told
                 which page it is, and the slot was a word wide. */}
             {map ? <MapCopyButton map={map} /> : <span className="roam-title">ROAM</span>}
+            {/* WHICH STAGE THIS IS — and the way to make it another one.
+                A seed is a number nobody remembers; the campaign's roads
+                have names, and this page is where one of them can be taken
+                out at a different hour, in worse weather, or in a car it
+                was never authored for. So the button both names what is on
+                the map and opens the list to change it. */}
+            <button
+              type="button"
+              className={level ? "roam-level roam-level-on" : "roam-level"}
+              title={
+                viewing
+                  ? "Put one of the campaign's own stages on the map"
+                  : "Load one of the campaign's own stages onto the map — then change anything about it and drive it"
+              }
+              onClick={() => onPicking(true)}
+            >
+              {/* The mark is the loaded stage's own SHAPE, and it is there
+                  only when there is a stage to describe: a sprint arrow
+                  beside the words SELECT LEVEL would be promising something
+                  about a road nobody has picked yet. */}
+              {level && <Glyph name={level.shape === "circuit" ? "circuit" : "sprint"} />}
+              {level ? level.name.toUpperCase() : "SELECT LEVEL"}
+            </button>
             {/* One stop on a controller's walk, arrows and number together
                 — the same `data-nav-steps` group the car's stand is. */}
             <span className="roam-seed" data-nav-steps>
@@ -539,115 +628,124 @@ export function RoamPage({
               </button>
             </span>
           </div>
-          <MapPane onMapRect={onMapRect} view={mapView} full={map?.full ?? false}>
-            {map && <MapTools map={map} />}
+          <MapPane onMapRect={onMapRect} view={mapView} full={full}>
+            {map && <MapTools map={map} full={full} fixed={viewing} />}
           </MapPane>
-          <div className="roam-length">
-            <input
-              className="roam-slider"
-              type="range"
-              min={0}
-              max={STAGE_LENGTH_OPTIONS.length - 1}
-              step={1}
-              value={lengthIndex}
-              aria-label="Stage length"
-              onInput={(e) => {
-                const length =
-                  STAGE_LENGTH_OPTIONS[Number((e.target as HTMLInputElement).value)].id;
-                onRace({
-                  ...race,
-                  length,
-                  shape: length === "endless" ? "sprint" : race.shape,
-                });
-              }}
-            />
-            <span className="roam-length-read">
-              <b>{STAGE_LENGTH_OPTIONS[lengthIndex].label}</b>
-              {lengthBilling(race.length, race.shape)}
-            </span>
-          </div>
-        </section>
-
-        <div className="roam-column">
-          {/* The way on, at the TOP of the column. Everything under it is a
-              choice you may or may not want to make; this is the one thing
-              the page is for, and a player who wants none of them should not
-              have to travel past all of them to leave. */}
-          <button type="button" className="menu-start" data-nav-next onClick={onStart}>
-            DRIVE IT
-          </button>
-
-          <section className="roam-pane">
-            <span className="roam-pane-title">CAR</span>
-            <CarPicker
-              carId={race.carId}
-              onPick={(carId) => onRace({ ...race, carId })}
-              onDeveloper={onDeveloper}
-            />
-          </section>
-
-          <section className="roam-pane">
-            <span className="roam-pane-title">CONDITIONS</span>
-            <OptionRow
-              label="TIME"
-              options={TIMES_OF_DAY}
-              value={race.timeOfDay}
-              onPick={(timeOfDay) => onRace({ ...race, timeOfDay })}
-            />
-            <OptionRow
-              label="WEATHER"
-              options={WEATHERS}
-              value={race.weather}
-              onPick={(weather) => onRace({ ...race, weather })}
-            />
-            <OptionRow
-              label="SEASON"
-              options={SEASONS}
-              value={race.season}
-              onPick={(season) => onRace({ ...race, season })}
-            />
-          </section>
-
-          <section className="roam-pane">
-            <span className="roam-pane-title">STAGE</span>
-            {/* The generator's dials: what the seed BUILDS, with the map
-                redrawing the moment one moves. They sit in the COLUMN rather
-                than under the map, because the map is the page and every row
-                of controls laid across it is a row it does not get. SHAPE is
-                one of them — and picking a circuit off ENDLESS moves the
-                length too, because a road that never comes back cannot be
-                lapped and a setup that half-means something is worse than
-                one that moves. */}
-            <div className="roam-dials">
-              <OptionRow
-                label="SHAPE"
-                options={STAGE_SHAPES}
-                value={race.shape}
-                onPick={(shape) =>
+          {!viewing && (
+            <div className="roam-length">
+              <input
+                className="roam-slider"
+                type="range"
+                min={0}
+                max={STAGE_LENGTH_OPTIONS.length - 1}
+                step={1}
+                value={lengthIndex}
+                aria-label="Stage length"
+                onInput={(e) => {
+                  const length =
+                    STAGE_LENGTH_OPTIONS[Number((e.target as HTMLInputElement).value)].id;
                   onRace({
                     ...race,
-                    shape,
-                    length:
-                      shape === "circuit" && race.length === "endless" ? "medium" : race.length,
-                  })
-                }
+                    length,
+                    shape: length === "endless" ? "sprint" : race.shape,
+                  });
+                }}
               />
-              {STAGE_DIALS.map((dial) => (
-                <OptionRow
-                  key={dial.key}
-                  label={dial.label}
-                  options={dial.stops}
-                  value={dialStop(dial.stops, race.knobs[dial.key])}
-                  onPick={(id) => {
-                    const stop = dial.stops.find((s) => s.id === id);
-                    if (!stop) return;
-                    onRace({ ...race, knobs: { ...race.knobs, [dial.key]: stop.value } });
-                  }}
-                />
-              ))}
+              <span className="roam-length-read">
+                <b>{STAGE_LENGTH_OPTIONS[lengthIndex].label}</b>
+                {lengthBilling(race.length, race.shape)}
+              </span>
             </div>
-          </section>
-        </div>
+          )}
+        </section>
+
+        {/* The driving half of the page. It is not rendered at all in the
+            VIEWER — hiding it in CSS would leave a car stand and a set of
+            dials in the document for a controller's cursor to walk onto and
+            a screen reader to read out, on a page whose whole point is that
+            there is nothing here to set. */}
+        {!viewing && (
+          <div className="roam-column">
+            {/* The way on, at the TOP of the column. Everything under it is
+                a choice you may or may not want to make; this is the one
+                thing the page is for, and a player who wants none of them
+                should not have to travel past all of them to leave. */}
+            <button type="button" className="menu-start" data-nav-next onClick={onStart}>
+              DRIVE IT
+            </button>
+
+            <section className="roam-pane">
+              <span className="roam-pane-title">CAR</span>
+              <CarPicker
+                carId={race.carId}
+                onPick={(carId) => onRace({ ...race, carId })}
+                onDeveloper={onDeveloper}
+              />
+            </section>
+
+            <section className="roam-pane">
+              <span className="roam-pane-title">CONDITIONS</span>
+              <OptionRow
+                label="TIME"
+                options={TIMES_OF_DAY}
+                value={race.timeOfDay}
+                onPick={(timeOfDay) => onRace({ ...race, timeOfDay })}
+              />
+              <OptionRow
+                label="WEATHER"
+                options={WEATHERS}
+                value={race.weather}
+                onPick={(weather) => onRace({ ...race, weather })}
+              />
+              <OptionRow
+                label="SEASON"
+                options={SEASONS}
+                value={race.season}
+                onPick={(season) => onRace({ ...race, season })}
+              />
+            </section>
+
+            <section className="roam-pane">
+              <span className="roam-pane-title">STAGE</span>
+              {/* The generator's dials: what the seed BUILDS, with the map
+                  redrawing the moment one moves. They sit in the COLUMN
+                  rather than under the map, because the map is the page and
+                  every row of controls laid across it is a row it does not
+                  get. SHAPE is one of them — and picking a circuit off
+                  ENDLESS moves the length too, because a road that never
+                  comes back cannot be lapped and a setup that half-means
+                  something is worse than one that moves. */}
+              <div className="roam-dials">
+                <OptionRow
+                  label="SHAPE"
+                  options={STAGE_SHAPES}
+                  value={race.shape}
+                  onPick={(shape) =>
+                    onRace({
+                      ...race,
+                      shape,
+                      length:
+                        shape === "circuit" && race.length === "endless" ? "medium" : race.length,
+                    })
+                  }
+                />
+                {STAGE_DIALS.map((dial) => (
+                  <OptionRow
+                    key={dial.key}
+                    label={dial.label}
+                    options={dial.stops}
+                    value={dialStop(dial.stops, race.knobs[dial.key])}
+                    onPick={(id) => {
+                      const stop = dial.stops.find((s) => s.id === id);
+                      if (!stop) return;
+                      onRace({ ...race, knobs: { ...race.knobs, [dial.key]: stop.value } });
+                    }}
+                  />
+                ))}
+              </div>
+            </section>
+          </div>
+        )}
       </div>
     </div>
   );

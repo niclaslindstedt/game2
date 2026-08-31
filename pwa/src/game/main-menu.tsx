@@ -48,7 +48,7 @@ import { LevelGrid, lengthLabel } from "./menu-levels.tsx";
 import { ResultsModal } from "./results-table.tsx";
 import { CarSetupPage } from "./menu-car.tsx";
 import { GalleryPage } from "./menu-gallery.tsx";
-import { DebugLogPage, DeveloperPage, MapViewerPage } from "./menu-dev.tsx";
+import { DebugLogPage, DeveloperPage } from "./menu-dev.tsx";
 import { HeadsUpPage } from "./menu-headsup.tsx";
 import {
   DIFFICULTY_OPTIONS,
@@ -78,11 +78,24 @@ export type MenuPage =
   | { page: "car"; levelId: string; mode: PlayMode }
   | { page: "scores" }
   | { page: "gallery" }
-  | { page: "roam" }
+  /** Roam — and, with `viewing` set, the developer's MAP VIEWER, which is
+   * the same page with everything but the map taken off it.
+   *
+   * One page rather than two because the map, its camera, its layers and
+   * the stage standing under it are the same in both, and a viewer of its
+   * own would be a second copy of all of it drifting out of step. What the
+   * flag changes is what the page is FOR: Roam is a stage you are choosing
+   * in order to drive it, and the viewer is a stage you are looking at.
+   *
+   * `picking` is set while the STAGE LIST is up, on either. It is a step of
+   * the page rather than a page of its own because what it changes is that
+   * page's settings: leaving it does not leave the map, and the backdrop,
+   * the map camera and the pane's rectangle belong to the page underneath
+   * it either way. */
+  | { page: "roam"; picking?: boolean; viewing?: boolean }
   | { page: "options"; tab: OptionsTab }
   | { page: "developer" }
-  | { page: "debuglog" }
-  | { page: "mapviewer" };
+  | { page: "debuglog" };
 
 export type MainMenuProps = {
   page: MenuPage;
@@ -108,9 +121,10 @@ export type MainMenuProps = {
   /** The developer's map tools on Roam — the generator's layers, the
    * full-screen pane and the debug box. Null for everybody else. */
   mapDebug: MapDebug | null;
-  /** Open one of the CAMPAIGN's own stages on that map instead of driving
-   * it — the developer's map viewer. */
-  onViewLevelMap: (level: CampaignLevel) => void;
+  /** Load one of the CAMPAIGN's own stages into Roam's settings — its seed,
+   * its band, its shape and the conditions it is authored in — so it can be
+   * looked at on the map and then driven. */
+  onRoamLevel: (level: CampaignLevel) => void;
   /** Leave the menu for the developer's stopwatch — a fixed piece of racing,
    * drawn as fast as the machine will draw it (game/benchmark.ts). */
   onBenchmark: () => void;
@@ -567,18 +581,33 @@ const DEPTH: Record<MenuPage["page"], number> = {
   developer: 1,
   location: 2,
   debuglog: 2,
-  mapviewer: 2,
   scores: 2,
   // Deeper than either grid that reaches it, so arriving at the pre-race
   // card sounds like going IN from both of them.
   car: 3,
 };
 
+/** ...and the same number for a page that has steps INSIDE it. Roam is three
+ * depths in one entry — the page, the developer's viewer reached from a
+ * page as deep as it is, and the stage list over either — so without this,
+ * opening the list and shutting it would make the same noise as each other. */
+function depthOf(page: MenuPage): number {
+  if (page.page !== "roam") return DEPTH[page.page];
+  return DEPTH.roam + (page.viewing === true ? 1 : 0) + (page.picking === true ? 1 : 0);
+}
+
 /** Where BACK goes from a page — the same step that page's own back button
  * takes, so the button and the key can never disagree. Null on the root,
  * which has nowhere further out to go. */
 function parentOf(page: MenuPage): MenuPage | null {
   if (page.page === "root") return null;
+  // Roam walks out through its own steps: the stage list back onto the map
+  // it was opened from, then the map itself back to whichever door it was
+  // reached through — the front one, or the developer menu.
+  if (page.page === "roam") {
+    if (page.picking === true) return { page: "roam", viewing: page.viewing };
+    return page.viewing === true ? { page: "developer" } : { page: "root" };
+  }
   if (page.page === "location") return locationParent();
   if (page.page === "scores") return { page: "timetrial" };
   if (page.page === "car") return carParent(page.levelId, page.mode);
@@ -619,7 +648,7 @@ export function MainMenu(props: MainMenuProps) {
    * sounds are wired in ONE place rather than on forty buttons. */
   const navigate = (next: MenuPage): void => {
     if (next.page === page.page && next.page === "options") playUi("page");
-    else if (DEPTH[next.page] < DEPTH[page.page]) playUi("back");
+    else if (depthOf(next) < depthOf(page)) playUi("back");
     else playUi("select");
     onNavigate(next);
   };
@@ -668,8 +697,10 @@ export function MainMenu(props: MainMenuProps) {
   }, []);
 
   // Roam is the one page that is not a card over a backdrop — the map IS
-  // the page — so it paints its own scrim and skips the shared one.
-  const roam = page.page === "roam";
+  // the page — so it paints its own scrim and skips the shared one. Its
+  // STAGE LIST is a card like any other, though, and takes the shared one
+  // back: a list of names read over a sunlit map is a list nobody can read.
+  const roam = page.page === "roam" && page.picking !== true;
   return (
     <div
       className={`menu ${roam ? "menu-open" : ""} pointer-events-auto`}
@@ -728,15 +759,19 @@ export function MainMenu(props: MainMenuProps) {
         {page.page === "gallery" && (
           <GalleryPage settings={props.settings} onBack={() => navigate({ page: "root" })} />
         )}
-        {roam && (
+        {page.page === "roam" && (
           <RoamPage
             race={props.race}
             onRace={props.onRace}
             seed={props.seed}
             onSeed={props.onSeed}
             onStart={props.onPlayRoam}
-            onBack={() => navigate({ page: "root" })}
+            onBack={() => navigate(parentOf(page) ?? { page: "root" })}
             onDeveloper={props.onDeveloper}
+            onLevel={props.onRoamLevel}
+            viewing={page.viewing === true}
+            picking={page.picking === true}
+            onPicking={(picking) => navigate({ page: "roam", picking, viewing: page.viewing })}
             onMapRect={props.onMapRect}
             mapView={props.mapView}
             map={props.mapDebug}
@@ -750,18 +785,12 @@ export function MainMenu(props: MainMenuProps) {
             onUnlockEverything={props.onUnlockEverything}
             onBack={() => navigate({ page: "root" })}
             onDebugLog={() => navigate({ page: "debuglog" })}
-            onMapViewer={() => navigate({ page: "mapviewer" })}
+            onMapViewer={() => navigate({ page: "roam", viewing: true, picking: true })}
             onBenchmark={props.onBenchmark}
           />
         )}
         {page.page === "debuglog" && (
           <DebugLogPage onBack={() => navigate({ page: "developer" })} />
-        )}
-        {page.page === "mapviewer" && (
-          <MapViewerPage
-            onView={props.onViewLevelMap}
-            onBack={() => navigate({ page: "developer" })}
-          />
         )}
         {page.page === "options" && (
           <OptionsPage

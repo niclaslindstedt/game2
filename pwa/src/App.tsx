@@ -1504,29 +1504,32 @@ export function App() {
     [mapLayer, mapFull, mapInfo],
   );
 
-  /** THE MAP VIEWER: a campaign stage, opened on the map instead of driven.
-   * A level is a seed, a band, a shape and the hour it is set in — exactly
-   * what Roam's own settings are — so viewing one is LOADING it into the
-   * map rather than a second stage pipeline, and every tool already on that
-   * page (the layers, the pan, the zoom, the shutter) comes with it. */
-  const viewLevelMap = (level: CampaignLevel): void => {
-    status(`Map viewer — ${level.name}`);
+  /** A CAMPAIGN STAGE, LOADED INTO ROAM. A level is a seed, a band, a shape
+   * and the conditions it is set in — exactly what Roam's own settings are —
+   * so picking one off the stage list is loading it into those settings
+   * rather than a second stage pipeline. Everything already on that page
+   * comes with it: the map and its layers, the pan, the zoom, the shutter,
+   * the conditions, the car, and DRIVE IT.
+   *
+   * The dials are RESET rather than inherited. The campaign's stages are the
+   * same country for everybody — they are built off the rule book's defaults
+   * (see `playLevel`) — and a stage loaded onto whatever Roam happened to be
+   * left on would be a road no player has ever driven wearing that stage's
+   * name. Everything else here is a starting point the player may then move,
+   * which is the whole reason this lands on Roam and not on a grid. */
+  const loadRoamLevel = (level: CampaignLevel): void => {
+    status(`${level.name} — loaded into Roam`);
     seedRef.current = level.seed;
     setSeed(level.seed);
     applyRace({
       ...raceRef.current,
       length: level.length,
       shape: level.shape ?? "sprint",
-      // The campaign's stages are the same country for everybody: they are
-      // built off the default dials, not off whatever Roam was last left on
-      // (see `playLevel`), and a viewer that inherited the dials would be
-      // looking at a stage no player has ever driven.
       knobs: DEFAULT_STAGE_KNOBS,
       timeOfDay: level.timeOfDay,
       weather: level.weather,
       season: level.season,
     });
-    setMapFull(true);
     setMenu({ page: "roam" });
   };
 
@@ -2884,7 +2887,7 @@ export function App() {
           onMapRect={setMapRect}
           mapView={mapView}
           mapDebug={options.developer ? mapDebug : null}
-          onViewLevelMap={viewLevelMap}
+          onRoamLevel={loadRoamLevel}
           onBenchmark={startBenchmark}
         />
       )}

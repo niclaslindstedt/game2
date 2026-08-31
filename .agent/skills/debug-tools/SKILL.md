@@ -33,13 +33,13 @@ out it stays out. The two toggles are also on the **pause card** mid-run,
 which is where they are actually wanted — the moment you want to fly to
 something is the moment you are looking at it.
 
-| Tool                 | What it is                                                                                                                                                                                                                                                                                                                                                                                                                             | Where                                                                                                    |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| **God mode**         | The camera comes off the car and flies, FPS-style, and the RUN IS HELD under it — the clock, the field and the weather all stop until the camera lands. The car is handed neutral input and sits where it was left.                                                                                                                                                                                                                    | `pwa/src/game/camera-free.ts`, mode `"free"` in `camera.ts`; the hold is in `App.tsx`'s frame loop       |
-| **Debug overlay**    | The boxes naming the stage, the place, the camera and the car — and the REPRO line along the bottom.                                                                                                                                                                                                                                                                                                                                   | `pwa/src/game/debug-hud.tsx` over `debug-info.ts`                                                        |
-| **Debug log**        | A ring buffer of every engine event, every engine log line, and a position trace once a second. Copied whole or per-run from DEVELOPER → DEBUG LOG.                                                                                                                                                                                                                                                                                    | `pwa/src/game/debug-log.ts`, page in `menu-dev.tsx`                                                      |
-| **The benchmark**    | A fixed piece of racing — the first stage, fifteen cars off one green, a bot at every wheel — drawn as fast as the machine will draw it, timed with a stopwatch. The answer is SECONDS, and lower is better: a frame rate is a number about one moment, and two of them from two machines are never about the same moment. Pins everything about the race and nothing about the picture, so what it compares is settings and machines. | `pwa/src/game/benchmark.ts`, card in `menu-dev.tsx`                                                      |
-| **The map's layers** | The stage's own layers painted over the Roam map — bedrock, groundwater, soil, foliage, roads — the pane blown up to the whole screen, COPY DEBUG INFO for what the generator built as text, and a shutter that paints the same box into a picture. Reaches the campaign's own stages through DEVELOPER → MAP VIEWER.                                                                                                                  | `pwa/src/game/map-layers.ts` + `map-debug.ts`, controls in `menu-roam.tsx`, the viewer in `menu-dev.tsx` |
+| Tool                 | What it is                                                                                                                                                                                                                                                                                                                                                                                                                             | Where                                                                                              |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| **God mode**         | The camera comes off the car and flies, FPS-style, and the RUN IS HELD under it — the clock, the field and the weather all stop until the camera lands. The car is handed neutral input and sits where it was left.                                                                                                                                                                                                                    | `pwa/src/game/camera-free.ts`, mode `"free"` in `camera.ts`; the hold is in `App.tsx`'s frame loop |
+| **Debug overlay**    | The boxes naming the stage, the place, the camera and the car — and the REPRO line along the bottom.                                                                                                                                                                                                                                                                                                                                   | `pwa/src/game/debug-hud.tsx` over `debug-info.ts`                                                  |
+| **Debug log**        | A ring buffer of every engine event, every engine log line, and a position trace once a second. Copied whole or per-run from DEVELOPER → DEBUG LOG.                                                                                                                                                                                                                                                                                    | `pwa/src/game/debug-log.ts`, page in `menu-dev.tsx`                                                |
+| **The benchmark**    | A fixed piece of racing — the first stage, fifteen cars off one green, a bot at every wheel — drawn as fast as the machine will draw it, timed with a stopwatch. The answer is SECONDS, and lower is better: a frame rate is a number about one moment, and two of them from two machines are never about the same moment. Pins everything about the race and nothing about the picture, so what it compares is settings and machines. | `pwa/src/game/benchmark.ts`, card in `menu-dev.tsx`                                                |
+| **The map's layers** | The stage's own layers painted over the Roam map — bedrock, groundwater, soil, foliage, roads — the pane blown up to the whole screen, COPY DEBUG INFO for what the generator built as text, and a shutter that paints the same box into a picture. Reaches the campaign's own stages through SELECT LEVEL, on the map itself or from DEVELOPER → MAP VIEWER.                                                                          | `pwa/src/game/map-layers.ts` + `map-debug.ts`, all of it in `menu-roam.tsx`                        |
 
 **ALT held hides the HUD and leaves the overlay up.** That is the shot to
 ask for when the game's own chrome is in the way of the thing being reported.
@@ -183,11 +183,23 @@ frame per layer, one leaned in and panned onto the road, and one after dark.
 ### The stages a player actually drives
 
 Roam builds a stage from whatever the dials happen to say, which is right for
-choosing a seed and wrong for finding a defect in a SHIPPED map. **DEVELOPER →
-MAP VIEWER → a country → a stage** loads a campaign level's exact spec — its
-seed, its band, its shape, the campaign's own dials, the hour and weather it
-is set in — onto that same full-screen map. Every tool above comes with it,
-and the picture that comes out is of a road somebody is going to drive.
+choosing a seed and wrong for finding a defect in a SHIPPED map. **SELECT
+LEVEL → a country → a stage** loads a campaign level's exact spec — its seed,
+its band, its shape, the campaign's own dials, the hour and weather it is set
+in — onto the map. Every tool above comes with it, and the picture that comes
+out is of a road somebody is going to drive.
+
+Two doors onto the same list, and the difference is what you may then do:
+
+- **On ROAM**, the button is in the map pane's header, and the stage that
+  lands is a stage you can change and DRIVE. The header goes on naming it
+  until a dial or the seed moves the road off it (`levelForRoad`).
+- **DEVELOPER → MAP VIEWER** opens the same list on the same page with the
+  driving half not rendered at all — the map, the layers, the copy button and
+  the shutter, and nothing to set. Look only.
+
+Both are `RoamPage`; the viewer is that page with `viewing` set. There is no
+second map, no second camera and no second stage pipeline to keep in step.
 
 ### Asking for a picture instead of a repro
 

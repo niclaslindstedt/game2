@@ -1296,7 +1296,7 @@ await capture("shot-map-night", { width: 1280, height: 720 }, mapUp, {
   mpanz: "-484",
 });
 
-// ── The map viewer ──────────────────────────────────────────────────────
+// ── The stage list, and the map viewer ──────────────────────────────────
 //
 // The campaign's own stages, opened on the map rather than driven — the
 // stages a defect actually reaches a player through. Driven by CLICKING
@@ -1331,13 +1331,32 @@ await capture(
     await page.locator(".menu-item", { hasText: "TAIGA" }).first().click();
     await page.waitForTimeout(400);
     // Granite Ridge — the long one, with the jumps and the water in it.
-    await page.locator(".menu-item-dev").nth(2).click();
+    await page.locator(".menu-item", { hasText: "GRANITE RIDGE" }).first().click();
     await mapUp(page);
     // ...and the layer switched on with the BUTTON, not with a URL.
     await page.locator("[data-map-layer='soil']").click();
     await page.waitForTimeout(6000);
   },
   { menu: "1", debug: "1" },
+);
+
+// ...and the same list where a PLAYER meets it: Roam's own SELECT LEVEL,
+// with the stage loaded, its conditions lit, and DRIVE IT beside the map.
+await capture(
+  "shot-roam-level",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await menuUp(page);
+    await page.locator("[data-menu='roam']").click();
+    await page.waitForTimeout(600);
+    await page.locator(".roam-level").click();
+    await page.waitForTimeout(400);
+    await page.locator(".menu-item", { hasText: "TAIGA" }).first().click();
+    await page.waitForTimeout(400);
+    await page.locator(".menu-item", { hasText: "COLD WATER" }).first().click();
+    await page.waitForTimeout(6000);
+  },
+  { menu: "1" },
 );
 
 // The conditions: a dawn run, the dusk sun, storm rain at speed, and night
