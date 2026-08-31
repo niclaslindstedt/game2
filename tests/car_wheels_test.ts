@@ -61,7 +61,7 @@ function gearCeiling(state: GameState): number {
 /** Steady state under one input — long enough for the readout's own settle
  * (TUNING.engine.spinSettle) to have arrived wherever it is going. */
 function hold(state: GameState, input: CarInput, seconds: number): void {
-  for (let i = 0; i < Math.round(seconds * 120); i++) step(state, input);
+  for (let i = 0; i < Math.round(seconds * TUNING.physicsHz); i++) step(state, input);
 }
 
 /** Where a wheel stands, in the car's own frame: front-right by default. */

@@ -391,7 +391,7 @@ describe("the field on the road", () => {
     drainField(field);
     // Half a minute more of racing: enough for the field to reach the first
     // board on a short stage, and cheap enough to run in a unit test.
-    for (let i = 0; i < 120 * 45; i++) stepField(field);
+    for (let i = 0; i < TUNING.physicsHz * 45; i++) stepField(field);
     const splits = field.runs.map((run) => run.splits[0]).filter((at) => at !== undefined);
     expect(splits.length).toBeGreaterThan(0);
 
@@ -422,7 +422,7 @@ describe("the field on the road", () => {
     );
     expect(placeAtFinish(field, 0)).toBe(1);
     drainField(field);
-    for (let i = 0; i < 120 * 200; i++) stepField(field);
+    for (let i = 0; i < TUNING.physicsHz * 200; i++) stepField(field);
     const times = field.runs.map((run) => run.time).filter((t): t is number => t !== null);
     expect(times.length).toBeGreaterThan(RIVALS.length / 2);
     expect(placeAtFinish(field, Math.max(...times) + 1)).toBe(times.length + 1);
@@ -447,7 +447,7 @@ describe("the field on the road", () => {
     for (const seed of [38, 3, 7, 11, 19]) {
       const track = compileStage(seed, "short");
       const field = createField(track, { difficulty: "hard", cars: 8, massStart: true }, stage);
-      for (let i = 0; i < 120 * 90; i++) {
+      for (let i = 0; i < TUNING.physicsHz * 90; i++) {
         stepField(field);
         const live = field.runs.filter(onRoad);
         for (let a = 0; a < live.length; a++) {
@@ -484,7 +484,7 @@ describe("the field on the road", () => {
     });
     // On the line, behind everybody: the back row is the back of the field.
     expect(livePlace(field, player)).toBe(field.runs.length + 1);
-    for (let i = 0; i < 120 * 25; i++) {
+    for (let i = 0; i < TUNING.physicsHz * 25; i++) {
       stepField(field, player);
       step(player, botInput(player));
     }
@@ -547,7 +547,7 @@ describe("the field on the road", () => {
       stage,
     );
     drainField(field);
-    for (let i = 0; i < 120 * 200; i++) stepField(field);
+    for (let i = 0; i < TUNING.physicsHz * 200; i++) stepField(field);
     for (const run of field.runs) {
       if (run.time !== null) expect(onRoad(run)).toBe(false);
     }

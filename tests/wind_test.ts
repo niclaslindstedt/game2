@@ -91,7 +91,7 @@ describe("the wind", () => {
   it("updates the readable wind vector while the run stands on the grid", () => {
     const state = createGame({ seed: 3, env: { weather: "storm" } });
     const before = { ...state.wind };
-    for (let i = 0; i < 120; i++) step(state, NEUTRAL_INPUT);
+    for (let i = 0; i < TUNING.physicsHz; i++) step(state, NEUTRAL_INPUT);
     expect(state.phase).toBe("intro");
     const moved =
       Math.abs(state.wind.x - before.x) > 1e-6 || Math.abs(state.wind.z - before.z) > 1e-6;

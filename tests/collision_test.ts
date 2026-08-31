@@ -15,6 +15,7 @@ import {
   SOLID_PROP_HEIGHT,
   TUNING,
   collideCar,
+  collideCars,
   compileTrack,
   createGame,
   createTerrain,
@@ -246,7 +247,8 @@ describe("the internal systems", () => {
     const run = (engine: number): number => {
       const state = freshState();
       state.car.damage.systems.engine = engine;
-      for (let i = 0; i < 120 * 10; i++) step(state, { ...NEUTRAL_INPUT, throttle: 1 });
+      for (let i = 0; i < TUNING.physicsHz * 10; i++)
+        step(state, { ...NEUTRAL_INPUT, throttle: 1 });
       return state.car.u;
     };
     expect(run(1)).toBeLessThan(run(0) * 0.95);
@@ -259,7 +261,8 @@ describe("the internal systems", () => {
       const state = freshState();
       state.car.damage.systems.steering = steering;
       state.car.u = 15;
-      for (let i = 0; i < 120; i++) step(state, { ...NEUTRAL_INPUT, throttle: 0.4, steer: 0.3 });
+      for (let i = 0; i < TUNING.physicsHz; i++)
+        step(state, { ...NEUTRAL_INPUT, throttle: 0.4, steer: 0.3 });
       return Math.abs(state.car.heading);
     };
     expect(run(1)).toBeLessThan(run(0) * 0.85);
@@ -269,7 +272,8 @@ describe("the internal systems", () => {
     const run = (gearbox: number): number => {
       const state = freshState();
       state.car.damage.systems.gearbox = gearbox;
-      for (let i = 0; i < 120 * 12; i++) step(state, { ...NEUTRAL_INPUT, throttle: 1 });
+      for (let i = 0; i < TUNING.physicsHz * 12; i++)
+        step(state, { ...NEUTRAL_INPUT, throttle: 1 });
       return state.car.u;
     };
     expect(run(1)).toBeLessThan(run(0) - 0.5);
@@ -285,7 +289,8 @@ describe("the internal systems", () => {
       state.car.y = 3.1; // free-fall to vy ≈ −9.9 at the flat road
       state.car.vy = 0;
       state.car.airborne = true;
-      for (let i = 0; i < 120 * 2 && state.car.airborne; i++) step(state, NEUTRAL_INPUT);
+      for (let i = 0; i < TUNING.physicsHz * 2 && state.car.airborne; i++)
+        step(state, NEUTRAL_INPUT);
       return state.car.damage.belly;
     };
     expect(land(0)).toBe(0);
@@ -298,7 +303,8 @@ describe("a spent chassis and the panels left on the road", () => {
   const runTo = (secs: number, prep: (state: GameState) => void): number => {
     const state = freshState();
     prep(state);
-    for (let i = 0; i < 120 * secs; i++) step(state, { ...NEUTRAL_INPUT, throttle: 1 });
+    for (let i = 0; i < TUNING.physicsHz * secs; i++)
+      step(state, { ...NEUTRAL_INPUT, throttle: 1 });
     return state.car.u;
   };
 
@@ -324,7 +330,7 @@ describe("a spent chassis and the panels left on the road", () => {
       state.car.damage.wear = wear;
       state.car.u = 30;
       let travelled = 0;
-      for (let i = 0; i < 120 * 12 && state.car.u > 1; i++) {
+      for (let i = 0; i < TUNING.physicsHz * 12 && state.car.u > 1; i++) {
         const before = state.car.z;
         step(state, { ...NEUTRAL_INPUT, brake: 1 });
         travelled += Math.abs(state.car.z - before);
@@ -332,6 +338,55 @@ describe("a spent chassis and the panels left on the road", () => {
       return travelled;
     };
     expect(stop(1)).toBeGreaterThan(stop(0) * 1.1);
+  });
+
+  it("deals the same crush for the same rub whatever the physics rate is", () => {
+    // The invariant behind there being no collision rate of its own.
+    // `collideCars` is an IMPULSE resolver — it kills the closing speed and
+    // separates the pair — so what a rub costs is a fact about the speeds,
+    // not about how often anybody asked. A heat run at two rates looks like
+    // it disagrees, and that is fourteen bots taking different lines.
+    //
+    // Worth locking, because the obvious cheapening (resolve every other
+    // step) and the obvious strengthening (a faster collision clock) are
+    // both things somebody will reach for, and this says what they would
+    // actually change: the first makes rubs cost less, and the second is a
+    // no-op, since nothing moves between two steps for a second pass to find.
+    // `TUNING` is `as const`, so the rates are readonly to a reader — which
+    // is right, they are authored. Driving them is this test's whole point.
+    const clock = TUNING as unknown as { physicsHz: number; dt: number };
+    const rub = (hz: number): number => {
+      const was = clock.physicsHz;
+      clock.physicsHz = hz;
+      clock.dt = 1 / hz;
+      const mine = freshState();
+      const theirs = freshState();
+      const gap = TUNING.collision.halfWidth * 2 * 0.92;
+      let crush = 0;
+      for (let i = 0; i < 6; i++) {
+        // Held alongside and pushed together at a fixed closing speed: the
+        // same rub, whatever the clock.
+        theirs.car.x = mine.car.x + gap;
+        theirs.car.z = mine.car.z;
+        mine.car.u = 30;
+        theirs.car.u = 30;
+        mine.car.w = 4;
+        theirs.car.w = -4;
+        collideCars(
+          { spec: mine.spec, car: mine.car, events: [], stats: mine.stats },
+          { spec: theirs.spec, car: theirs.car, events: [], stats: theirs.stats },
+        );
+      }
+      for (const state of [mine, theirs]) {
+        crush += state.car.damage.zones.reduce((a, z) => a + z, 0) + state.car.damage.belly;
+      }
+      clock.physicsHz = was;
+      clock.dt = 1 / was;
+      return crush;
+    };
+    const at120 = rub(120);
+    expect(rub(60)).toBeCloseTo(at120, 10);
+    expect(rub(30)).toBeCloseTo(at120, 10);
   });
 
   it("a body folded down one side pulls that way with the wheel dead straight", () => {
@@ -343,7 +398,8 @@ describe("a spent chassis and the panels left on the road", () => {
         for (let i = 0; i < 3; i++) zones[first + i] = TUNING.collision.zoneMax;
       }
       state.car.u = 25;
-      for (let i = 0; i < 120 * 3; i++) step(state, { ...NEUTRAL_INPUT, throttle: 0.5 });
+      for (let i = 0; i < TUNING.physicsHz * 3; i++)
+        step(state, { ...NEUTRAL_INPUT, throttle: 0.5 });
       return state.car.heading;
     };
     expect(drift("none")).toBeCloseTo(0, 5);
@@ -358,7 +414,8 @@ describe("a spent chassis and the panels left on the road", () => {
       const state = freshState();
       if (broken) state.car.damage.broken.push("spoiler");
       state.car.u = 38;
-      for (let i = 0; i < 120; i++) step(state, { ...NEUTRAL_INPUT, throttle: 0.6, steer: 0.5 });
+      for (let i = 0; i < TUNING.physicsHz; i++)
+        step(state, { ...NEUTRAL_INPUT, throttle: 0.6, steer: 0.5 });
       return Math.abs(state.car.slip);
     };
     expect(held(true)).toBeGreaterThan(held(false));
@@ -367,7 +424,7 @@ describe("a spent chassis and the panels left on the road", () => {
   it("a gearbox past saving will not take its top ratio", () => {
     const state = freshState();
     state.car.damage.systems.gearbox = 1;
-    for (let i = 0; i < 120 * 40; i++) step(state, { ...NEUTRAL_INPUT, throttle: 1 });
+    for (let i = 0; i < TUNING.physicsHz * 40; i++) step(state, { ...NEUTRAL_INPUT, throttle: 1 });
     expect(state.car.gear).toBe(state.spec.gearTop.length - 2);
     expect(state.car.u).toBeLessThan(state.spec.gearTop[state.spec.gearTop.length - 2]);
   });
@@ -378,7 +435,7 @@ describe("a spent chassis and the panels left on the road", () => {
     state.car.u = 20;
     let dead = 0;
     let firing = 0;
-    for (let i = 0; i < 120 * 6; i++) {
+    for (let i = 0; i < TUNING.physicsHz * 6; i++) {
       const before = state.car.u;
       step(state, { ...NEUTRAL_INPUT, throttle: 1 });
       if (state.car.u > before) firing += 1;
@@ -400,14 +457,15 @@ describe("a spent chassis and the panels left on the road", () => {
       damage.systems[key] = 1;
     }
     damage.broken.push("hood", "hatch", "spoiler", "bumperF", "bumperR", "mirrorL", "mirrorR");
-    for (let i = 0; i < 120 * 40; i++) step(state, { ...NEUTRAL_INPUT, throttle: 1 });
+    for (let i = 0; i < TUNING.physicsHz * 40; i++) step(state, { ...NEUTRAL_INPUT, throttle: 1 });
     // It still goes — no faster than a country road, and nowhere near what
     // the same car does sound (over 40 m/s).
     expect(state.car.u).toBeGreaterThan(8);
     expect(state.car.u).toBeLessThan(28);
     // ...and it still steers: the grip floor is what guarantees this.
     const before = state.car.heading;
-    for (let i = 0; i < 120; i++) step(state, { ...NEUTRAL_INPUT, throttle: 0.5, steer: 1 });
+    for (let i = 0; i < TUNING.physicsHz; i++)
+      step(state, { ...NEUTRAL_INPUT, throttle: 0.5, steer: 1 });
     expect(Math.abs(state.car.heading - before)).toBeGreaterThan(0.3);
   });
 });
@@ -420,7 +478,7 @@ describe("hard landings", () => {
     state.car.vy = 0;
     state.car.airborne = true;
     const events: GameEvent[] = [];
-    for (let i = 0; i < 120 * 3 && state.car.airborne; i++) {
+    for (let i = 0; i < TUNING.physicsHz * 3 && state.car.airborne; i++) {
       events.push(...step(state, NEUTRAL_INPUT));
     }
     expect(state.car.airborne).toBe(false);
@@ -438,7 +496,7 @@ describe("hard landings", () => {
     state.car.y = 1.5;
     state.car.vy = 2; // a lip toss: up, over, down — slam well under the bar
     state.car.airborne = true;
-    for (let i = 0; i < 120 * 3 && state.car.airborne; i++) step(state, NEUTRAL_INPUT);
+    for (let i = 0; i < TUNING.physicsHz * 3 && state.car.airborne; i++) step(state, NEUTRAL_INPUT);
     expect(state.car.airborne).toBe(false);
     expect(state.car.damage.wear).toBe(0);
   });

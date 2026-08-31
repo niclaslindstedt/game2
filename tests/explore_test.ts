@@ -72,7 +72,7 @@ describe("top speed", () => {
       skipCountdown: true,
       track: compileTrack(3, LONG_STRAIGHT),
     });
-    for (let i = 0; i < 120 * 120; i++) step(state, drive());
+    for (let i = 0; i < TUNING.physicsHz * 120; i++) step(state, drive());
     expect(state.car.gear).toBe(state.spec.gearTop.length - 1);
     return state.stats.topSpeed * 3.6;
   }
@@ -107,7 +107,7 @@ describe("top speed", () => {
     state.car.x = 200;
     state.car.y = -0.35;
     let top = 0;
-    for (let i = 0; i < 120 * 90; i++) {
+    for (let i = 0; i < TUNING.physicsHz * 90; i++) {
       stepShifting(state, drive());
       if (state.offRoad) top = Math.max(top, state.car.u);
     }
@@ -128,7 +128,7 @@ describe("exploring", () => {
     state.car.x = 60; // far beyond the old 16 m lost-car offset
     state.car.y = -0.35;
     const events: GameEvent[] = [];
-    for (let i = 0; i < 120 * 6; i++) events.push(...step(state, drive()));
+    for (let i = 0; i < TUNING.physicsHz * 6; i++) events.push(...step(state, drive()));
     expect(state.offRoad).toBe(true);
     expect(events.filter((e) => e.type === "respawn")).toHaveLength(0);
     expect(state.stats.offRoadTime).toBeGreaterThan(5);
@@ -201,7 +201,7 @@ describe("exploring", () => {
     state.car.damage.wear = 1;
 
     let respawnAt = -1;
-    for (let i = 0; i < 120 * 8 && respawnAt < 0; i++) {
+    for (let i = 0; i < TUNING.physicsHz * 8 && respawnAt < 0; i++) {
       if (step(state, drive()).some((e) => e.type === "respawn")) respawnAt = state.t;
     }
     expect(respawnAt).toBeGreaterThan(TUNING.offTrack.stuck.after);
@@ -223,7 +223,7 @@ describe("exploring", () => {
     state.car.z = 240;
     state.car.y = -0.35;
     const events: GameEvent[] = [];
-    for (let i = 0; i < 120 * 12; i++) events.push(...step(state, drive()));
+    for (let i = 0; i < TUNING.physicsHz * 12; i++) events.push(...step(state, drive()));
     expect(state.offRoad).toBe(true);
     expect(events.filter((e) => e.type === "respawn")).toHaveLength(0);
   });
@@ -237,7 +237,7 @@ describe("exploring", () => {
     flatWild(state, () => -0.35);
     state.car.x = 80;
     state.car.y = -0.35;
-    for (let i = 0; i < 120; i++) step(state, drive());
+    for (let i = 0; i < TUNING.physicsHz; i++) step(state, drive());
     const events = step(state, drive({ reset: true }));
     expect(events.some((e) => e.type === "respawn")).toBe(true);
     expect(Math.abs(state.car.x)).toBeLessThan(1);
@@ -258,7 +258,7 @@ describe("exploring", () => {
     state.car.y = -0.35;
     state.car.u = 40;
     const events: GameEvent[] = [];
-    for (let i = 0; i < 120 * 8; i++) events.push(...step(state, drive()));
+    for (let i = 0; i < TUNING.physicsHz * 8; i++) events.push(...step(state, drive()));
     const takeoff = events.find((e) => e.type === "takeoff");
     const landing = events.find((e) => e.type === "landing");
     expect(takeoff).toBeDefined();
@@ -287,7 +287,7 @@ describe("crashes", () => {
     state.car.heading = Math.PI / 2; // straight off the road, toward the water
     state.car.u = 30;
     const events: GameEvent[] = [];
-    for (let i = 0; i < 120 * 8; i++) events.push(...step(state, drive()));
+    for (let i = 0; i < TUNING.physicsHz * 8; i++) events.push(...step(state, drive()));
     expect(events.some((e) => e.type === "crash")).toBe(true);
     expect(events.some((e) => e.type === "splash")).toBe(true);
     expect(events.some((e) => e.type === "respawn")).toBe(true);
@@ -324,7 +324,7 @@ describe("crashes", () => {
       state.car.y = -0.35;
       state.car.u = speed;
       const events: GameEvent[] = [];
-      for (let i = 0; i < 120 * 5; i++) {
+      for (let i = 0; i < TUNING.physicsHz * 5; i++) {
         events.push(...step(state, { ...NEUTRAL_INPUT, throttle }));
       }
       return { events, state };
@@ -366,12 +366,12 @@ describe("the attitude the ground puts in the body", () => {
     state.car.z = 200;
     state.car.y = 40;
     state.car.u = 12;
-    for (let i = 0; i < 120 * 3; i++) step(state, drive());
+    for (let i = 0; i < TUNING.physicsHz * 3; i++) step(state, drive());
     expect(state.car.pitch).toBeGreaterThan(0.15); // nose up the ramp
 
     state.car.heading = Math.PI; // turn round and point down it
     state.car.u = 12;
-    for (let i = 0; i < 120 * 3; i++) step(state, drive());
+    for (let i = 0; i < TUNING.physicsHz * 3; i++) step(state, drive());
     expect(state.car.pitch).toBeLessThan(-0.15);
   });
 
@@ -387,7 +387,7 @@ describe("the attitude the ground puts in the body", () => {
     state.car.z = 200;
     state.car.y = 15;
     state.car.u = 10;
-    for (let i = 0; i < 120 * 2; i++) step(state, drive());
+    for (let i = 0; i < TUNING.physicsHz * 2; i++) step(state, drive());
     // Right side up, and by roughly the angle of the slope itself.
     expect(state.car.roll).toBeCloseTo(Math.atan(0.25), 1);
     // The camber is the GROUND's, never the drift's: a car thrown fully
@@ -402,7 +402,8 @@ describe("the attitude the ground puts in the body", () => {
     // Above the drift's speed floor (TUNING.drift.slideFrom) — under it the
     // car only steers, so a standing start would never go sideways at all.
     level.car.u = 30;
-    for (let i = 0; i < 120 * 2 && !level.offRoad; i++) step(level, drive({ steer: 1 }));
+    for (let i = 0; i < TUNING.physicsHz * 2 && !level.offRoad; i++)
+      step(level, drive({ steer: 1 }));
     // Sideways is an ANGLE, not a slide fraction: `slide` is where the car
     // sits in the hand-over from grip, so widening that band moves it
     // without the car being any less crossed up.
@@ -428,7 +429,7 @@ describe("where the body stands on uneven ground", () => {
     state.car.z = 200;
     state.car.y = heightAt(60, 200);
     state.car.u = 6;
-    for (let i = 0; i < 120 * 2; i++) step(state, drive());
+    for (let i = 0; i < TUNING.physicsHz * 2; i++) step(state, drive());
 
     // Every corner of the body box, at the attitude the renderer draws it,
     // stands at or above the ground it is over.
@@ -458,7 +459,7 @@ describe("where the body stands on uneven ground", () => {
     state.car.z = 200;
     state.car.y = 12;
     state.car.u = 8;
-    for (let i = 0; i < 120; i++) step(state, drive());
+    for (let i = 0; i < TUNING.physicsHz; i++) step(state, drive());
     expect(state.car.y).toBeCloseTo(12, 6);
   });
 });

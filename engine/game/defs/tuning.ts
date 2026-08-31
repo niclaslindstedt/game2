@@ -22,13 +22,20 @@ export const TUNING = {
    * cent — so the second step a frame was buying accuracy nobody could
    * measure, at exactly twice the arithmetic.
    *
-   * What it does cost is CONTACT: `collideCars` corrects a pair once per
-   * step, so two cars leaning on each other are pushed apart half as often.
-   * A single impact is unaffected — the resolver kills the closing speed and
-   * separates them whatever the rate — but a sustained rub is softer. So
-   * anything that moves this owes the field a `make heat` run for that
-   * reason, and `make drift` for the flick, which is read off how fast the
-   * rack is crossing and therefore off how often it is asked. */
+   * CONTACT does not care, which is worth knowing before anybody reaches
+   * for a collision rate of its own: `collideCars` is an impulse resolver,
+   * so it kills the closing speed and separates the pair whatever the rate,
+   * and staging a held rub at a fixed closing speed deals exactly the same
+   * crush at 120, 90, 60 and 30 (`collision_test.ts`). A heat run at two
+   * rates LOOKS like it disagrees, and that is fourteen bots taking
+   * different lines rather than a softer model. There is also no such thing
+   * as resolving contact FASTER than this number: nothing moves between two
+   * steps, so a second pass over the same positions finds `closing <= 0`
+   * and returns.
+   *
+   * What does move with it is the FLICK, which is read off how fast the rack
+   * is crossing and therefore off how often it is asked — so anything that
+   * changes this owes `make drift` a run. */
   physicsHz: PHYSICS_HZ,
   /** ...and the same number as the timestep every rate in here is spent in,
    * seconds. Derived, never authored: two places to say one thing is one

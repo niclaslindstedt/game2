@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   NEUTRAL_INPUT,
   STAGE_RULES as R,
+  TUNING,
   botInput,
   circuitLapBand,
   compileStage,
@@ -171,7 +172,7 @@ describe("R22 — racing a circuit over laps", () => {
       skipCountdown: true,
     });
     const events: GameEvent[] = [];
-    for (let i = 0; i < 120 * 400 && state.phase !== "finished"; i++) {
+    for (let i = 0; i < TUNING.physicsHz * 400 && state.phase !== "finished"; i++) {
       events.push(...step(state, botInput(state)));
     }
     return { events, finalLap: state.lap };
@@ -211,7 +212,7 @@ describe("R22 — racing a circuit over laps", () => {
       skipCountdown: true,
     });
     let crossings = 0;
-    for (let i = 0; i < 120 * 400 && state.phase !== "finished"; i++) {
+    for (let i = 0; i < TUNING.physicsHz * 400 && state.phase !== "finished"; i++) {
       const before = state.progressIndex;
       if (step(state, botInput(state)).some((e) => e.type === "lap")) {
         crossings += 1;
