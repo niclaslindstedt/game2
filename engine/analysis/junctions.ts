@@ -298,30 +298,38 @@ export function analyzeJunctions(track: Track, terrain: TerrainField): MetricRep
     // barrier across one arm is a slip road with a mistake on it.
     const nx = Math.cos(junction.heading);
     const nz = -Math.sin(junction.heading);
-    let crossing: TrackSample | null = null;
-    for (const sample of track.samples) {
-      const d = junction.joining ? junction.s - sample.s : sample.s - junction.s;
-      if (d < 0 || d > J.approach) continue;
-      const across = Math.abs((sample.x - junction.x) * nx + (sample.z - junction.z) * nz);
-      if (across < half) continue;
-      if (!crossing || d < (junction.joining ? junction.s - crossing.s : crossing.s - junction.s)) {
-        crossing = sample;
+    // R36 — a CROSSING has the dirt road on BOTH sides, and both of them
+    // have to arrive square. Measured on one side only, an arm that had
+    // drifted off the square would be reported half the time and, on the
+    // seeds where it drifted on the unmeasured side, never — and squareness
+    // is the whole of what makes a crossing legal under R23.
+    const sides: (1 | -1)[] = junction.crossing ? [1, -1] : [junction.joining ? -1 : 1];
+    for (const side of sides) {
+      let arrival: TrackSample | null = null;
+      let nearest = Infinity;
+      for (const sample of track.samples) {
+        const d = (sample.s - junction.s) * side;
+        if (d < 0 || d > J.approach || d >= nearest) continue;
+        const across = Math.abs((sample.x - junction.x) * nx + (sample.z - junction.z) * nz);
+        if (across < half) continue;
+        nearest = d;
+        arrival = sample;
       }
-    }
-    if (crossing) {
-      const angle = crossAngle(crossing.heading, junction.heading);
+      if (!arrival) continue;
+      const angle = crossAngle(arrival.heading, junction.heading);
       if (angle < tightestAngle) tightestAngle = angle;
       if (angle < J.angle.min) {
         offAngle++;
         findings.push({
           code: "junctions.angle",
           severity: "warn",
-          message: `the dirt road leaves junction ${n + 1} at ${((angle * 180) / Math.PI).toFixed(
-            0,
-          )}° to the tarmac — under ${((J.angle.min * 180) / Math.PI).toFixed(
-            0,
-          )}° the two roads merge instead of meeting`,
-          at: { x: crossing.x, z: crossing.z },
+          message: `the dirt road ${junction.crossing ? "crosses" : "leaves"} ${
+            junction.crossing ? "crossing" : "junction"
+          } ${n + 1} at ${((angle * 180) / Math.PI).toFixed(0)}° to the tarmac — under ${(
+            (J.angle.min * 180) /
+            Math.PI
+          ).toFixed(0)}° the two roads merge instead of meeting`,
+          at: { x: arrival.x, z: arrival.z },
           s: junction.s,
           value: J.angle.min - angle,
         });
@@ -337,24 +345,47 @@ export function analyzeJunctions(track: Track, terrain: TerrainField): MetricRep
     // does. Walked as a RUN out from the meeting point, so a band of gravel
     // that straddles it is measured as the one interruption a driver sees
     // rather than as two short ones.
+    // R36 — AT A CROSSING THE THROUGH ROAD IS BOTH ARMS, and none of it is
+    // the route. A junction's sealed road is half the rally's own line and
+    // half a branch; a crossing's is entirely branch, because the rally
+    // crosses it and keeps none of it. Walked from the meeting point
+    // outward along each arm in turn, which is the same question asked of
+    // the same road — and asked the junction's way instead it reports the
+    // gravel the rally is on either side of the seal as a hundred metres of
+    // unsealed main road, which is the one thing a crossing gets right by
+    // construction.
     const throughRoad: { surface: string; step: number }[] = [];
-    for (const sample of track.samples) {
-      if (Math.abs(sample.s - junction.s) > J.approach) continue;
-      if (junction.joining ? sample.s < junction.s : sample.s > junction.s) continue;
-      throughRoad.push({
-        surface: sample.deck != null ? "asphalt" : sample.surface,
-        step: track.step,
-      });
-    }
-    // A joining junction's main arm runs away from it with rising `s` and a
-    // parting one's with falling `s`, so only one of the two needs turning
-    // round to be walked outward.
-    if (junction.joining) throughRoad.reverse();
-    const arm = track.spurs.find((spur) => spur.atS === junction.s);
-    if (arm) {
-      for (const sample of arm.samples) {
-        if (sample.s > J.approach) break;
-        throughRoad.push({ surface: sample.surface, step: SPUR.step });
+    const arms = track.spurs.filter((spur) => spur.atS === junction.s);
+    if (junction.crossing) {
+      for (const arm of arms) {
+        for (const sample of arm.samples) {
+          if (sample.s > J.approach) break;
+          throughRoad.push({ surface: sample.surface, step: SPUR.step });
+        }
+        // Each arm is its own run out of the crossing: a gap at the end of
+        // one and a gap at the start of the next are two interruptions, not
+        // one long one straddling the middle.
+        throughRoad.push({ surface: "asphalt", step: 0 });
+      }
+    } else {
+      for (const sample of track.samples) {
+        if (Math.abs(sample.s - junction.s) > J.approach) continue;
+        if (junction.joining ? sample.s < junction.s : sample.s > junction.s) continue;
+        throughRoad.push({
+          surface: sample.deck != null ? "asphalt" : sample.surface,
+          step: track.step,
+        });
+      }
+      // A joining junction's main arm runs away from it with rising `s` and
+      // a parting one's with falling `s`, so only one of the two needs
+      // turning round to be walked outward.
+      if (junction.joining) throughRoad.reverse();
+      const arm = arms[0];
+      if (arm) {
+        for (const sample of arm.samples) {
+          if (sample.s > J.approach) break;
+          throughRoad.push({ surface: sample.surface, step: SPUR.step });
+        }
       }
     }
     let run = 0;

@@ -570,13 +570,22 @@ describe("the wild's litter and outcrops", () => {
     // be survivable still is.
     const track = compileTrack(11);
     const terrain = createTerrain(track);
-    const free = track.width / 2 + ROAD_CROSS.reach;
     for (let i = 0; i < track.samples.length; i += 10) {
       const s = track.samples[i];
+      // R33 — the road's width HERE, never the stage's nominal. A gravel
+      // road wanders either side of nominal down its whole length, and the
+      // placement this is checking measures against the wander for a stated
+      // reason (`props.ts`'s `halfAt`): a boulder set at nominal-plus-its-
+      // clearance stands on the paving wherever the blade cut wide. Asked at
+      // nominal, this reports every stone beside a stretch cut NARROW — 12.5
+      // m of road against a 16.2 m nominal — as standing on a ribbon that is
+      // not there, and it passed until now only because no seed had put one
+      // in that band.
+      const free = s.width / 2 + ROAD_CROSS.reach;
       for (const ob of terrain.obstaclesNear(s.x, s.z, 40)) {
         if (ob.kind !== "rock" && ob.kind !== "slab" && ob.kind !== "stump") continue;
         const d = Math.hypot(ob.x - s.x, ob.z - s.z);
-        expect(d - ob.radius).toBeGreaterThanOrEqual(free);
+        expect(d - ob.radius, `${ob.kind} at ${s.s.toFixed(0)} m`).toBeGreaterThanOrEqual(free);
       }
     }
   });

@@ -62,8 +62,8 @@
 //       whole, running off one edge of the map and out the other, and they
 //       are where the houses and the towns will stand. THEN the rally road
 //       is routed, and it may borrow one for a while — but it may never
-//       CROSS one, and half of a public road may never turn to gravel
-//       because a stage went that way.
+//       WANDER ACROSS one (R36 says how it may cross), and half of a public
+//       road may never turn to gravel because a stage went that way.
 //       Where the two meet it is a planned junction, ON the centerline: the
 //       route turns off (or onto) the road at a real corner, and the SEALED
 //       road runs STRAIGHT THROUGH — the route's collinear arm on one side,
@@ -191,6 +191,43 @@
 //       The BENCH is untouched either way: a cut face begins outside the
 //       flat ground R31 keeps beside every road, so a car running wide has
 //       the same room it always had before it reaches the rock.
+//   R36 A stage may CROSS a public road, and the only way it may do it is
+//       SQUARE. Not a junction: nobody turns. The gravel arrives at right
+//       angles, goes straight over the tarmac and carries on out the far
+//       side, so the two dirt roads meeting the seal lie exactly opposite
+//       each other and what the map shows is a CROSSROADS — one road
+//       passing over another, which is a place, rather than two junctions
+//       that happened to land near one another. The tarmac is the road that
+//       does not notice: full width, full surface, markings unbroken from
+//       one side to the other.
+//       R23 is not weakened by any of this, and the SQUARENESS is why. What
+//       R23 forbids is two roads SHARING GROUND — a gravel road laid along
+//       a sealed one, or dragged over it at a slant, leaves the terrain a
+//       shelf it can only lay under one of them and the other hangs in the
+//       air. A square crossing shares one PLACE and parts immediately: the
+//       two dirt arms are collinear, so the gravel is off the tarmac's mat
+//       within half a road width of the middle of it, and everywhere else
+//       the clearance binds exactly as it always did. Crossing at an angle
+//       is what would share ground, and it stays forbidden.
+//       BOTH its arms are shut. A junction abandons one arm and the rally
+//       drives up the other; a crossing abandons the road entirely, so the
+//       public road is closed on both sides of the stage and a barrier
+//       stands on each — the crossing is the one place on a stage where two
+//       blocks face each other across the road the car is on.
+//       And the tarmac STANDS PROUD. A public road is built up on a graded
+//       formation and a rally track is scraped along the field beside it, so
+//       the gravel climbs a short ramp onto the seal and drops off the far
+//       edge — which at stage speed is a jump, and is the reason a road
+//       crossing is a place a driver remembers. The step is the ROAD's, not
+//       a feature laid on the route: the whole crossing is one level
+//       platform standing `crossing.stand` above the country, and the ramps
+//       either side of it are how the rally gets up there and back down.
+//       R20 is not bent by that, and the geometry is what keeps it: what
+//       R20 forbids is a LIP on sealed road, and a crossing's sealed part is
+//       the flat TOP. The tarmac's own mat is the level table in the middle;
+//       both ramps are gravel, and so is the far edge the car leaves. So the
+//       one piece of this that throws a car is on the rally's own surface,
+//       where every other jump on a stage is.
 
 /** Sample spacing along the compiled centerline, meters. It lives here
  * because it is not only the compiler's business: a search that has to land
@@ -1417,6 +1454,113 @@ export const STAGE_RULES = {
     parting: 80,
   },
 
+  /** R36 — THE LEVEL CROSSING: the route going STRAIGHT OVER a public road
+   * instead of turning onto it.
+   *
+   * A crossing is not a small junction and none of `junction`'s numbers
+   * describe it. A junction is a corner — the two roads share a tangent and
+   * the whole craft of it is the length over which they PART. A crossing has
+   * no corner in it at all: the gravel arrives square, spends one road width
+   * on the tarmac and is gone, and the two dirt arms are one straight line
+   * through the middle of the seal. That is what makes it legal under R23
+   * (see R36): the ground the two roads share is a place a car is on for
+   * half a second, not a stretch either of them runs along.
+   *
+   * So the shape is stated the other way round from a junction's. A
+   * junction's platform is elongated ALONG the main road, because that is
+   * where the two mats overlap; a crossing's is elongated ACROSS it, along
+   * the RALLY, because what has to be graded is the ramp the gravel climbs
+   * to get up onto the seal. */
+  crossing: {
+    /** How far the route runs dead straight either side of the tarmac's
+     * centerline, m. It is the whole reason the crossing is square: the
+     * approach solves onto a pose this far short of the road, and the
+     * straight that carries the route over it is `2 * clear` long — which
+     * has to be a length the vocabulary can draw (`straightLong`), because
+     * a crossing is an ordinary straight with a road lying across it.
+     *
+     * It also has to outreach the mats. Half a boulevard plus its verge is
+     * about 15 m and R23's clearance a little over 40, so a route that
+     * straightens up 55 m out is off the tarmac's ground before the corner
+     * that aimed it there ever begins. */
+    clear: 55,
+    /** How far off the route a road is worth crossing from, m, and the
+     * stretch of it the rendezvous is looked for over. Shorter than the
+     * BORROW's reach on purpose: a borrow is the stage going and finding a
+     * road because the dial asked for tarmac, and it is worth a detour. A
+     * crossing is not something the stage wants — it is what the stage does
+     * about a road that is in the way — so it only ever looks at road it has
+     * nearly arrived at. */
+    seek: 420,
+    meet: { reach: 420, step: 55 },
+    /** How far the route travels before a look that found nothing is worth
+     * repeating, m. The solve is the same expensive turn-straight-turn
+     * closure the borrow pays for (`paving.borrow.look` says why). */
+    look: 200,
+
+    /** R36 — HOW HIGH THE TARMAC STANDS above the country the rally crosses
+     * it on, m, and over how much gravel the climb happens.
+     *
+     * This is the jump, and it is a jump nobody built. A public road is laid
+     * on a graded formation — cut, filled, drained and rolled until it holds
+     * one line across country that does not — and a rally track is scraped
+     * along whatever the field was doing. Where the two cross, the field has
+     * to come up to meet the road and go back down the other side, and a car
+     * doing that at stage speed leaves the ground. Every rally in the world
+     * has one of these and everybody remembers it.
+     *
+     * `stand` is deliberately modest. What throws the car is not the height,
+     * it is the RATE — and `ramp` is metres of RALLY ROAD, measured from
+     * where the platform's own flat top ends. Its steepest point is half
+     * again as steep as the average, because the ramp eases in and out on a
+     * smoothstep and a smoothstep's peak slope is 1.5. That is the
+     * arithmetic to do before touching either number, and it is the one that
+     * was missed the first time these were chosen: 1.3 m over an
+     * eight-metre ramp measured 22% at the middle before the country under
+     * it was counted, and with it, 33%.
+     *
+     * At 1 m and 14 the steepest point is 11%, and the curvature over the
+     * lip throws the car off the ground from about 65 km/h up — which is
+     * what a road crossing is for, and comfortably under the speed anything
+     * arrives at one. Raising `stand` instead of shortening `ramp` buys the
+     * same jump on a taller embankment, and an embankment is a wall for
+     * anything that runs wide.
+     *
+     * It is a RAMP AND NOT A PLATFORM, and that separation is the whole
+     * reason this is its own number. The graded, paved, levelled area is the
+     * junction's own (`spread`) — twenty metres, the tarmac's mat with a toe
+     * either side. Sized to the ramp instead, the platform was a
+     * sixty-metre plateau of bare earth with a face round its rim, sitting
+     * in a field: what a crossing needs graded is the road, and what it
+     * needs RAISED is the road and the ramps up to it. So the ramps move the
+     * elevation only. They keep their crown, their camber and their gravel,
+     * and the terrain's shelf follows them the way it follows any road —
+     * which is a narrow embankment along the rally rather than a car park. */
+    stand: 1,
+    ramp: 14,
+    /** ...and how far the crossing's graded platform runs ALONG the tarmac,
+     * in road widths. Enough for the seal's own mat plus the mouths the
+     * gravel opens either side of it — the crossing's whole footprint on the
+     * public road, and no more: a platform that reaches further is a paved
+     * square in the countryside. */
+    reach: 1.45,
+    /** R36 — how much of a junction's DRAG-OUT a crossing gets, as a share.
+     *
+     * A junction's smear is laid down by cars TURNING: a tire under lateral
+     * load scrubs gravel off the dirt road and prints it on the seal, and in
+     * life it is the most obvious thing about the place. Nobody turns at a
+     * crossing. What goes across is what the tread happened to be holding,
+     * which is a dirty band, not a resurfacing.
+     *
+     * It is worth a number of its own because at a junction the smear is off
+     * to one side of the carriageway and at a crossing it is dead centre and
+     * continuous — so the same strength that reads as dirt at one reads at
+     * the other as the gravel road CARRYING ON through the tarmac, which is
+     * the exact lie R17 spends a paragraph forbidding. At full strength the
+     * seal disappeared under it for the whole width of the rally road. */
+    drag: 0.45,
+  },
+
   /** R19 — SUPERELEVATION: how far a turn is banked into itself. A road
    * built through a corner is tilted so the outside edge stands proud of
    * the inside; it is what stops the water — and the cars — running off
@@ -1689,4 +1833,12 @@ export type SegmentPlan = {
   /** ...and which road, and where along it, so the compiler can hand the
    * junction the arm the route does not take without guessing. */
   onRoad?: { road: number; from: number; to: number };
+  /** R36 — set on the STRAIGHT that carries the route square over a public
+   * road, saying which road and which of its points the crossing sits on.
+   *
+   * The search decides it for the same reason it decides `paved`: only the
+   * search knows the line went there, and a compiler left to notice a
+   * crossing by measuring its own samples against the network would also
+   * "notice" every near miss the clearance already allows. */
+  overRoad?: { road: number; index: number };
 };

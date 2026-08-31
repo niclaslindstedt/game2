@@ -388,7 +388,25 @@ export type JunctionPlatform = {
    * all. Ground that stops being levelled inside the mouth's own ribbon
    * leaves a face along the outside of the crossing. */
   spread: number;
+  /** How much of `reach` the platform keeps on the side of the main road
+   * the minor one does NOT open toward, as a share. A JUNCTION is lopsided:
+   * the minor road overlaps the main one only on the side it leaves toward,
+   * and grading thirty metres in the direction nothing happens is thirty
+   * metres of bare road. A CROSSING is not — the gravel opens on both
+   * sides, so it passes 1 and the platform is symmetric (R36). Optional so
+   * every junction keeps the lopsided default without saying so. */
+  behind?: number;
+  /** How much of a junction's DRAG-OUT this place gets, as a share. A
+   * junction's is 1: cars TURN there, and a turning tire is what scrubs
+   * gravel off the dirt road and lays it on the seal. A crossing's is less
+   * (R36) — nobody turns, so what gets carried across is what a wheel
+   * happened to be holding rather than what a corner scraped off it.
+   * Optional; absent means the full junction smear. */
+  drag?: number;
 };
+
+/** The default for `JunctionPlatform.behind` — a junction's short side. */
+const BEHIND = 0.42;
 
 /** How much a point lies inside the platform, 1 in the middle of it to 0
  * where the two roads have their own cross-sections back. The falloff is
@@ -411,7 +429,7 @@ export function junctionFlat(platform: JunctionPlatform, x: number, z: number): 
   if (dx * dx + dz * dz > 1.2769 * (platform.reach * platform.reach + half * half)) return 0;
   const along = dx * Math.sin(platform.heading) + dz * Math.cos(platform.heading);
   const across = dx * Math.cos(platform.heading) - dz * Math.sin(platform.heading);
-  const reach = along >= 0 ? platform.reach : platform.reach * 0.42;
+  const reach = along >= 0 ? platform.reach : platform.reach * (platform.behind ?? BEHIND);
   const d = Math.hypot(along / reach, across / half);
   // Full inside the core, then off over the last quarter: a junction has
   // an edge in life too, and a blend that runs for a hundred meters is a
@@ -446,7 +464,7 @@ export function junctionDust(platform: JunctionPlatform, x: number, z: number): 
   const lobes = 1 + 0.3 * Math.cos(2 * off) + 0.12 * Math.sin(3 * off) + 0.07 * Math.cos(5 * off);
   const d = Math.hypot(dx, dz) / (reach * lobes);
   if (d >= 1) return 0;
-  return (1 - d) * (1 - d);
+  return (1 - d) * (1 - d) * (platform.drag ?? 1);
 }
 
 /** The platform's own surface height at a point — the main road's grade,

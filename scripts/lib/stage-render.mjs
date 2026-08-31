@@ -283,6 +283,15 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
     }
     return best;
   };
+  /** R36 — is this point on the sealed mat of a LEVEL CROSSING? The two
+   * roads are cleanly separated there by geometry alone: the rally crosses
+   * square, so anything of it that lies across the tarmac's mat sits at
+   * `across` of nothing and answers yes, while the public road's own verge
+   * runs along the mat at `across` of half a road and more and answers no.
+   * Which is what lets one predicate cull the minor road's border without
+   * taking the through road's with it. */
+  const onCrossingMat = (x, z) =>
+    track.junctions.some((j) => j.crossing && (junctionMainEdge(j, x, z) ?? 1) < 0);
   /** R17 — CUT a polygon at the main road's edge, keeping the part OUTSIDE
    * the sealed mat; null where nothing of it is left. The dirt road stops
    * at that line, and a cut made by dropping whole bands is quantised to
@@ -386,7 +395,18 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
     // road curves through it, so the through road's OWN verge weaves in and
     // out of that band — and culled by it, the tarmac's shoulder came and
     // went in blocks with field between them, the length of every crossing.
-    if (kind === "gravel") {
+    //
+    // R36 — ...and at a LEVEL CROSSING the route is the minor road even
+    // where it is SEALED. For the road width it spends on the public road
+    // the crossing's own samples are tarmac (`compile.ts`), because that is
+    // what the car is driving on — which walked straight past a guard that
+    // asks whether the road is gravel, and drew the rally's verge as two tan
+    // bands lying across the carriageway, one each side of the mat. The
+    // question the guard is really asking is whether this road is the MINOR
+    // one here, and at a crossing it always is: nobody turns, so the route
+    // never becomes the through road the way it does inside a borrow's
+    // junction (which is the case the gravel guard exists to protect).
+    if (kind === "gravel" || onCrossingMat(x, z)) {
       const pastEdge = pastMainEdge(x, z);
       if (pastEdge !== null && pastEdge < 0) return null;
     }

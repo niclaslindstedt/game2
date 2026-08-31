@@ -127,6 +127,8 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | The wipers, and the grime on the glass they clear           | `pwa/src/game/car/wipers.ts` — the `car-design` skill                                                                            |
 | How dirty the car gets, and where                           | `pwa/src/game/car-dirt.ts`                                                                                                       |
 | Stage generation rules or vocabulary                        | `engine/mapgen/rules.ts` (data); the searches in `generate.ts` (sprint, endless) and `circuit.ts` (R22), over `search.ts`        |
+| How the rally gets PAST a public road: over it, or onto it  | `engine/mapgen/crossing.ts` (R36, square and free) / `borrow.ts` (R17, a detour the `asphalt` dial pays for)                     |
+| How high the tarmac stands where a stage crosses it         | `STAGE_RULES.crossing` — `stand` is the step, `ramp` the gravel it happens over; the jump is the two together                    |
 | What the GROUND is made of (bedrock, soil, groundwater)     | `engine/mapgen/geology.ts` (R32); its numbers in `STAGE_RULES.geology` — the `nature` and `mapgen-improvement` skills            |
 | How a generated stage is SCORED, and against what           | `engine/analysis/` — one module per metric, every threshold in `analysis/budgets.ts` — the `mapgen-improvement` skill            |
 | Track geometry/compilation                                  | `engine/mapgen/compile.ts`                                                                                                       |

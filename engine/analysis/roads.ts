@@ -32,6 +32,7 @@
 import { ROAD_CROSS, roadClearance } from "../mapgen/road.ts";
 import { SPUR, type Spur } from "../mapgen/spurs.ts";
 import { createHighwayNetwork } from "../mapgen/highway.ts";
+import { crossingParting } from "../mapgen/crossing.ts";
 import { STAGE_RULES } from "../mapgen/rules.ts";
 import type { Track } from "../mapgen/compile.ts";
 import { ANALYSIS } from "./budgets.ts";
@@ -63,6 +64,15 @@ type Strand = {
   meet: { x: number; z: number } | null;
   /** ...and where on the STAGE that crossing is, m of route arc. */
   atS: number;
+  /** R36 — set on both arms of a LEVEL CROSSING. The pair are not two
+   * roads: they are the two halves of one public road, cut where the rally
+   * went over it, and they leave one point in opposite directions along one
+   * line. So they meet at nought metres apart by construction — which is
+   * what R23 is about everywhere else and is the definition of a crossing
+   * here. `sameCrossing` below is the exemption, and it is as tight as it
+   * can be made: the two only overlap at all within a road width of the
+   * middle, because from there they diverge at two metres per metre. */
+  crossing: boolean;
 };
 
 /** Everything on the map that is a road, on one common spacing so a
@@ -70,7 +80,7 @@ type Strand = {
 function strands(track: Track, spacing: number): Strand[] {
   const out: Strand[] = [];
   const routeStride = Math.max(1, Math.round(spacing / track.step));
-  const route: Strand = { id: "route", points: [], meet: null, atS: 0 };
+  const route: Strand = { id: "route", points: [], meet: null, atS: 0, crossing: false };
   for (let i = 0; i < track.samples.length; i += routeStride) {
     const s = track.samples[i];
     route.points.push({ x: s.x, z: s.z, heading: s.heading, s: s.s, y: s.elevation });
@@ -89,6 +99,7 @@ function strands(track: Track, spacing: number): Strand[] {
       points,
       meet: first ? { x: first.x, z: first.z } : null,
       atS: spur.atS,
+      crossing: spur.crossing === true,
     });
   });
   return out;
@@ -147,8 +158,23 @@ export function analyzeRoads(track: Track): MetricReport {
       // route can be a hundred and fifty metres from a crossing while the
       // road beside it is still fifty. Same predicate as the rule the
       // search planned against (`generate.ts`'s `clearOfTarmac`).
+      // R36 — and each PLACE is exempt over its own reach, because the two
+      // kinds are two sizes: a junction's has to forgive two carriageways
+      // peeling apart through a corner, a crossing's a straight going over a
+      // mat. Reading one number for both is how an instrument and the rule
+      // it measures come apart — the search plans a crossing against
+      // `crossingParting` and this would have forgiven nine metres more of
+      // road beside every one of them, which is nine metres nothing was
+      // checking.
       const at = hit.road.points[hit.index];
-      if (track.junctions.some((j) => Math.hypot(j.x - at.x, j.z - at.z) < parting)) continue;
+      const crossParting = crossingParting(track.width);
+      if (
+        track.junctions.some(
+          (j) => Math.hypot(j.x - at.x, j.z - at.z) < (j.crossing ? crossParting : parting),
+        )
+      ) {
+        continue;
+      }
       crossings++;
       if (clear - hit.d <= worstCrossing) continue;
       worstCrossing = clear - hit.d;
@@ -291,6 +317,31 @@ export function analyzeRoads(track: Track): MetricReport {
       const branch = roads[a].meet !== null ? roads[a] : roads[b].meet !== null ? roads[b] : null;
       const exempt = branch !== null && (roads[a].meet === null || roads[b].meet === null);
       const parting = STAGE_RULES.junction.parting;
+      /** R36 — ...and the OTHER pair a crossing makes: its two arms against
+       * each other. Every other pair on the map is two roads, and this one
+       * is one road with a rally driven over the middle of it — so at the
+       * meeting point they are the same piece of tarmac and nought metres
+       * apart, which no clearance can be asked to forgive in general.
+       *
+       * Both ends measured from the shared meeting point, and the window is
+       * THE CLEARANCE ITSELF rather than `parting`: the arms leave the
+       * crossing in opposite directions along one line, so they separate at
+       * two metres per metre, and a pair of points each less than `clear`
+       * from the middle is the only pair the rule could ever have caught.
+       * Past that they are already further apart than the clearance asks and
+       * nothing is forgiven — so two arms that wander back into each other a
+       * kilometre out are still reported, which is the case worth keeping.
+       * Sized at a road width first, this exempted nothing at all: the sweep
+       * walks the strands every 20 m, so the pair straddling the middle is
+       * routinely one point ON it and one 20 m up the other arm. */
+      const pairMeet = roads[a].meet;
+      const sameCrossing =
+        roads[a].crossing &&
+        roads[b].crossing &&
+        !self &&
+        roads[a].atS === roads[b].atS &&
+        pairMeet !== null;
+      const armWindow = clear;
       /** Is this pair of points the CROSSING rather than two roads sharing
        * ground? Both ends have to be in it, and each is measured the way
        * the rule measures it (`generate.ts`'s `clearOfTarmac`): the branch
@@ -319,6 +370,14 @@ export function analyzeRoads(track: Track): MetricReport {
         let hit: { x: number; z: number; d: number } | null = null;
         for (const q of roads[b].points) {
           if (crossing(routeIsA ? p : q, routeIsA ? q : p)) continue;
+          if (
+            sameCrossing &&
+            pairMeet !== null &&
+            Math.hypot(p.x - pairMeet.x, p.z - pairMeet.z) < armWindow &&
+            Math.hypot(q.x - pairMeet.x, q.z - pairMeet.z) < armWindow
+          ) {
+            continue;
+          }
           if (self && Math.abs(p.s - q.s) < window) continue;
           const d = Math.hypot(p.x - q.x, p.z - q.z);
           if (d > reach) continue;
