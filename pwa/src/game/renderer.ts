@@ -765,9 +765,20 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // How hot the tires are, which only tarmac has any use for. A tire
     // cooks while it is sliding and cools the moment it hooks back up, and
     // the soot in its smoke follows it up and down.
+    //
+    // THREE ways a tire is being dragged rather than rolled, not one. The
+    // settled angle is only the last of them: the lever locks the rear
+    // wheels outright before the car has taken up any angle at all, and a
+    // spun car is dragging all four sideways. Cooking off `drifting` alone
+    // left the smokiest moments on tarmac — the whole first half of a
+    // handbrake turn, and every spin — coming out white.
+    const scrubbing = c.drifting || c.locked || c.spun;
+    // A locked or spun tire is fully overwhelmed whatever `slide` reads, so
+    // it cooks at the full rate rather than at the slide's fraction.
+    const cooking = c.locked || c.spun ? 1 : c.slide;
     rubberHeat = Math.max(
       0,
-      Math.min(1, rubberHeat + (sealed && c.drifting ? c.slide * SOOT.heat : -SOOT.cool) * dt),
+      Math.min(1, rubberHeat + (sealed && scrubbing ? cooking * SOOT.heat : -SOOT.cool) * dt),
     );
     dustClock += dt;
     if (fx > 0 && !c.airborne && dustClock > (sealed ? TARMAC_SMOKE.every : 0.03)) {
@@ -837,15 +848,24 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
           const puffs = T.launch.puffs + Math.round(T.launch.spun * spun);
           wheel(drivenAt, -1, puffs, T.spread);
           wheel(drivenAt, 1, puffs, T.spread);
-        } else if (c.drifting) {
-          // `drifting`, not `slide`: the readout is the settled ANGLE with
-          // hysteresis behind it, so smoke comes up for the drift a player
-          // can SEE and not for every corner that leans on the tires. A
-          // sliding tire on tarmac makes a few big puffs where gravel
-          // throws grains, and they hang where they were made.
-          const puffs = T.drift.puffs + Math.round(c.slide * 3);
+        } else if (scrubbing) {
+          // A readout, never the raw `slide`: `drifting` is the settled
+          // ANGLE with hysteresis behind it, so smoke comes up for the drift
+          // a player can SEE and not for every corner that leans on the
+          // tires — and `locked` and `spun` are the two ways a tire is being
+          // dragged before, or long past, any angle worth the name. A
+          // sliding tire on tarmac makes a few big puffs where gravel throws
+          // grains, and they hang where they were made.
+          const puffs = T.drift.puffs + Math.round(cooking * 3);
           wheel(-AXLE.rear, -1, puffs, T.spread);
           wheel(-AXLE.rear, 1, puffs, T.spread);
+          // A spin has all four dragged sideways, so the fronts make their
+          // own — which is what separates the picture of a spin from the
+          // picture of a drift held a beat too long.
+          if (c.spun) {
+            wheel(AXLE.front, -1, puffs, T.spread);
+            wheel(AXLE.front, 1, puffs, T.spread);
+          }
         } else if (c.braking && c.u > T.brake.speed) {
           wheel(-AXLE.rear, Math.random() < 0.5 ? -1 : 1, T.brake.puffs, T.spread);
         }

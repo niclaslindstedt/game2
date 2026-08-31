@@ -152,6 +152,21 @@ export type CarState = {
   slide: number;
   /** True while `slide` reads as a drift at pace — dust, HUD, stats. */
   drifting: boolean;
+  /** HOW MUCH THE LAST DRIFT TOOK OUT OF THE TIRES, 0..1 — the chain a
+   * sequence of corners builds up. Stepped once each time a drift BEGINS
+   * (`drift.linkStep`) and cooling the whole time (`drift.linkFade`), so a
+   * chicane's second corner is entered on rubber the first one has already
+   * used and the third on less again. Read by the grounded step, where it
+   * both deepens the slide being asked for and brings the breakaway
+   * forward; nothing else may write it. */
+  chain: number;
+  /** True while the car is SPUN — past `drift.spinAt` of slip, where the
+   * front tires point so far from the travel that neither the held lock nor
+   * the catch reaches the road. Not a deep drift: a drift the driver has
+   * lost. Held through its own hysteresis (`spinBack`, `spinOut`) so the
+   * moment reads as one event rather than a stutter, and cleared by a
+   * respawn like every other thing the car is carrying. */
+  spun: boolean;
   /** How far the DRIVEN wheels are outrunning the road, m/s — 0 hooked up,
    * and never more than the headroom between the road and what the current
    * gear gives at the limiter, because a wheel with a gear engaged cannot
@@ -235,6 +250,14 @@ export type CarState = {
   steer: number;
   /** True while the brakes bite this step (renderer readout: brake FX). */
   braking: boolean;
+  /** True while the LEVER has the rear wheels locked and the car is moving
+   * fast enough for that to mean anything (renderer readout: tire smoke).
+   * A dragged tire is cooking whether or not the car has reached an angle
+   * anybody would call a drift, which is the difference between this and
+   * `drifting`: on tarmac the lever is the single smokiest thing a car can
+   * do, and gating the smoke on angle alone left it silent through the
+   * whole first half of a handbrake turn. */
+  locked: boolean;
   /** True while the brake pedal is backing the car out rather than slowing
    * it — the car has stopped (or is already rolling back) and the pedal is
    * still down. The HUD reads it for the reverse gear. */
@@ -287,6 +310,11 @@ export type GameEvent =
    * starts a drowning, as opposed to a ford crossed on the way past. */
   | { type: "splash"; speed: number; deep: boolean }
   | { type: "shift"; gear: number }
+  /** A drift gone past saving — the car is round and rotating on its own
+   * momentum. `slip` is the angle it went at, rad, and `speed` how fast it
+   * was travelling when it let go: together they are how big a moment it
+   * was, which is what the camera, the smoke and the sound are sized off. */
+  | { type: "spin"; slip: number; speed: number }
   | { type: "offRoad"; off: boolean }
   /** A contact hard enough to matter. `speed` is the closing speed into
    * the surface, m/s; `angle` is where on the body it landed, radians in
@@ -340,6 +368,11 @@ export type RunStats = {
   driftCount: number;
   driftTime: number;
   driftScore: number;
+  /** Drifts taken past `drift.spinAt` — the ones that got away. The counter
+   * that says whether a car can be overdriven at all: a roster that never
+   * spins has no upper edge to its drift, and a bot that spins on every
+   * stage is being asked for angle it cannot hold. */
+  spins: number;
   jumps: number;
   airTime: number;
   cleanLandings: number;

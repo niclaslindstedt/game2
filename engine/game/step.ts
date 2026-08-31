@@ -65,6 +65,7 @@ function freshStats(): RunStats {
     driftCount: 0,
     driftTime: 0,
     driftScore: 0,
+    spins: 0,
     jumps: 0,
     airTime: 0,
     cleanLandings: 0,
@@ -106,6 +107,8 @@ export function freshCar(): CarState {
     kerbFrom: 0,
     slide: 0,
     drifting: false,
+    chain: 0,
+    spun: false,
     wheelspin: 0,
     launchSpin: 0,
     flick: 0,
@@ -119,6 +122,7 @@ export function freshCar(): CarState {
     shiftCutUntil: 0,
     steer: 0,
     braking: false,
+    locked: false,
     reversing: false,
     damage: {
       zones: new Array(DAMAGE_ZONES).fill(0),
@@ -364,6 +368,8 @@ function respawn(state: GameState, events: GameEvent[], home: WayHome): void {
   car.pitchLoad = 0;
   car.slide = 0;
   car.drifting = false;
+  car.chain = 0;
+  car.spun = false;
   car.wheelspin = 0;
   car.launchSpin = 0;
   // The service crew get to a wreck the moment it is back at the road: the
@@ -404,8 +410,11 @@ function drown(state: GameState, events: GameEvent[], waterY: number): void {
   car.settling = false;
   car.airTime = 0;
   car.drifting = false;
+  car.chain = 0;
+  car.spun = false;
   car.slide = 0;
   car.braking = false;
+  car.locked = false;
   car.reversing = false;
   // A body arriving fast enough to reach the bed before it has floated at
   // all skips the whole beat, so the water is allowed to swallow only so

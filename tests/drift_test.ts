@@ -43,6 +43,24 @@ function game(carId = "classic", surface?: "gravel" | "asphalt"): GameState {
   return createGame({ seed: 0, carId, skipCountdown: true, track });
 }
 
+/** ...and the same straight with a road wide enough to hold a HELD LOCK.
+ * A car circling at a fixed lock leaves the crown within a couple of seconds
+ * however wide the road looks from the driver's seat, and the surface under
+ * it is `nature` the moment it does — so a test comparing two SURFACES at a
+ * settled radius has to keep the car on the one it is asking about, or it
+ * quietly answers about a third. The TRACK's width is what does it; a
+ * sample's own `width` is not where the ground under the car is read from
+ * and widening those alone changes nothing. */
+function circuit(carId: string, surface: "gravel" | "asphalt"): GameState {
+  const base = compileTrack(0, STRAIGHT);
+  const track = {
+    ...base,
+    width: 900,
+    samples: base.samples.map((s) => ({ ...s, surface, bank: 0 })),
+  };
+  return createGame({ seed: 0, carId, skipCountdown: true, track });
+}
+
 function run(state: GameState, input: Partial<CarInput>, seconds: number): GameEvent[] {
   const events: GameEvent[] = [];
   const steps = Math.round(seconds / TUNING.dt);
@@ -409,6 +427,159 @@ describe("the wheel, and what the surface does with it", () => {
     expect(Math.abs(sealed.car.slip)).toBeLessThan(Math.abs(loose.car.slip) * 0.7);
     // And it is not simply slower — the grip is spent carrying speed.
     expect(sealed.car.u).toBeGreaterThan(loose.car.u);
+  });
+
+  it("turns tighter on tarmac the more its rubber is made for tarmac", () => {
+    // The other half of the surface, and the half that used to be missing.
+    // Breaking away later is only worth having if the grip that buys it
+    // reaches the wheel: with no surface in the steering's own authority
+    // every car took a WIDER line on tarmac than on gravel while arriving
+    // faster, which makes the one surface a car should be quick on a place
+    // to run wide.
+    //
+    // The contract is the ORDERING, not a flat "tarmac is tighter for
+    // everybody": the advantage is quoted against the car's own loose-
+    // surface rubber, so the hatch on sealed tires gains a great deal and
+    // the saloon on skinny loose ones gains almost nothing — and on gravel
+    // the saloon's own slide hands its wheel extra authority that the
+    // gripped paved car does not need and does not get. What must never
+    // happen again is the hatch, billed as the tarmac car, cornering wider
+    // on tarmac than on the loose.
+    // At a PINNED speed, because tarmac's lower drag and better traction
+    // make the car faster on the same pedal, and a faster car holds a wider
+    // radius at the same lock whatever the surface. Left to run, the two
+    // arrive at the corner 6 m/s apart and the comparison measures the
+    // straight rather than the turn.
+    const radii = ["compact", "coupe", "classic"].map((id) => {
+      const out: number[] = [];
+      for (const surface of ["gravel", "asphalt"] as const) {
+        const state = circuit(id, surface);
+        const speed = (): number => Math.hypot(state.car.u, state.car.w);
+        // Up to the mark first, then held there — never accelerated past it
+        // and asked to come back, which 2.5 s of corner is not long enough
+        // to do. The pedal never CLOSES either: a shut throttle is a lift,
+        // which is a move, and this is a question about the wheel alone.
+        for (let i = 0; i < 120 * 60 && speed() < 30; i++) {
+          step(state, { ...NEUTRAL_INPUT, throttle: 1 });
+        }
+        for (let i = 0; i < Math.round(2.5 / TUNING.dt); i++) {
+          step(state, { ...NEUTRAL_INPUT, steer: 0.45, throttle: speed() < 30 ? 0.6 : 0.3 });
+        }
+        out.push(speed() / Math.abs(state.car.yawRate));
+      }
+      return out;
+    });
+    // The hatch — sealed tires, the most paved grip in the roster — turns
+    // meaningfully tighter on the surface it is built for.
+    const [hatchLoose, hatchSealed] = radii[0];
+    expect(hatchSealed).toBeLessThan(hatchLoose * 0.95);
+    // ...and the gain falls away with the rubber: the coupe's all-round
+    // tires buy some of it, the saloon's loose ones none. Ordering the
+    // ratios is what pins the advantage to `tyres.sealed / tyres.loose`
+    // rather than to the surface alone.
+    const [hatch, coupe, saloon] = radii.map(([loose, sealed]) => sealed / loose);
+    expect(hatch).toBeLessThan(coupe);
+    expect(coupe).toBeLessThan(saloon);
+  });
+
+  it("can be drifted on tarmac — on a move, and less than on gravel", () => {
+    // Tarmac's whole slip vocabulary is a fraction of gravel's, so what
+    // counts as sideways is sized in the surface too. The contract is that
+    // the fraction is real on both sides: a paved corner CAN be drifted, and
+    // it is a smaller drift than the same provocation buys on the loose.
+    const angle = (surface: "gravel" | "asphalt"): number => {
+      const state = game("compact", surface);
+      upToSpeed(state, 10);
+      run(state, { steer: 1, handbrake: true }, 0.5);
+      run(state, { steer: 1, throttle: 0.3 }, 0.5);
+      expect(state.car.drifting).toBe(true);
+      return Math.abs(state.car.slip);
+    };
+    const sealed = angle("asphalt");
+    const loose = angle("gravel");
+    expect(sealed).toBeLessThan(loose);
+    // ...and the wheel ALONE on tarmac is not a drift, which is the other
+    // side of the same bargain: a paved corner is driven round unless the
+    // driver asks for something.
+    const plain = game("compact", "asphalt");
+    upToSpeed(plain, 10);
+    run(plain, { throttle: 0.35, steer: 0.45 }, 2.5);
+    expect(plain.car.drifting).toBe(false);
+  });
+});
+
+// THE LINKED DRIFT and THE SPIN — the two ends of the same idea. A drift
+// leaves the tires worse than it found them, so the corner after it goes
+// deeper; and past a point the car is simply gone, which is what stops the
+// escalation being free.
+describe("one drift after another", () => {
+  /** Provoke a slide, hold it, then straighten and run on for `rest`. */
+  function bout(state: GameState, side: number, rest: number): number {
+    let peak = 0;
+    for (let i = 0; i < Math.round(0.9 / TUNING.dt); i++) {
+      step(state, { ...NEUTRAL_INPUT, steer: side, throttle: 0, handbrake: i < 25 });
+      peak = Math.max(peak, Math.abs(state.car.slip));
+    }
+    run(state, { throttle: 1 }, rest);
+    return peak;
+  }
+
+  it("the second drift goes deeper than the first, and the third deeper still", () => {
+    const state = game("coupe");
+    upToSpeed(state, 12);
+    const first = bout(state, 1, 0.7);
+    const second = bout(state, -1, 0.7);
+    const third = bout(state, 1, 0.7);
+    expect(second).toBeGreaterThan(first);
+    expect(third).toBeGreaterThan(second);
+    // ...and the chain that did it is a real, bounded thing on the car.
+    expect(state.car.chain).toBeGreaterThan(0);
+    expect(state.car.chain).toBeLessThanOrEqual(1);
+  });
+
+  it("...and the tires come back if the driver gives them a straight", () => {
+    const linked = game("coupe");
+    upToSpeed(linked, 12);
+    bout(linked, 1, 0.7);
+    const second = bout(linked, -1, 0.7);
+
+    const rested = game("coupe");
+    upToSpeed(rested, 12);
+    bout(rested, 1, 8);
+    const after = bout(rested, -1, 0.7);
+    // Same car, same two provocations — the only difference is the road
+    // between them, and that is what a cooling chain has to be worth.
+    expect(after).toBeLessThan(second);
+    expect(rested.car.chain).toBeLessThan(linked.car.chain);
+  });
+
+  it("goes too far into a spin, and the spin is the end of the corner", () => {
+    // On tarmac, where the whole slip vocabulary is smaller and the wall is
+    // correspondingly closer: full lock and the lever held is not a drift
+    // anybody is managing, and it has to cost the corner rather than simply
+    // being the deepest angle available.
+    const state = circuit("classic", "asphalt");
+    upToSpeed(state, 12);
+    const entry = Math.hypot(state.car.u, state.car.w);
+    run(state, { steer: 1, handbrake: true, throttle: 0 }, 1.6);
+    expect(state.car.spun).toBe(true);
+    expect(state.stats.spins).toBeGreaterThan(0);
+    // Four tires dragged sideways is the most effective brake in the game,
+    // which is why a spin costs a run far more than the corner it happened in.
+    expect(Math.hypot(state.car.u, state.car.w)).toBeLessThan(entry * 0.6);
+  });
+
+  it("a car pointing the wrong way at walking pace is not spinning", () => {
+    // The spin has a speed floor on both sides of it. Without one on the
+    // ENTRY, a car beached on a bank or scrabbling out of a ditch at an
+    // angle enters on its slip and leaves on its speed in the same step,
+    // chattering the counter while the scrub pins it there and takes away
+    // the steering it needs to drive out.
+    const state = circuit("classic", "asphalt");
+    upToSpeed(state, 12);
+    run(state, { steer: 1, handbrake: true, throttle: 0 }, 8);
+    expect(Math.hypot(state.car.u, state.car.w)).toBeLessThan(TUNING.drift.spinOut);
+    expect(state.car.spun).toBe(false);
   });
 });
 

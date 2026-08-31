@@ -330,6 +330,28 @@ export const TUNING = {
      * it much past 2.5 and speed stops costing radius at all — every corner
      * is the same corner again, taken flat. */
     latCeiling: 1.4,
+    /** HOW MUCH OF THE TIRES' GRIP REACHES THE WHEEL, 0..1 — the fraction of
+     * a surface's grip advantage OVER GRAVEL (`surfaceGripFor` against the
+     * car's own loose-surface rubber, so the tire and the ground together)
+     * that turns into steering authority.
+     *
+     * Without it, grip only ever took things away. `latCeiling` bounds what
+     * the tires deliver and `breakaway` says how far sideways they go, but
+     * nothing in the model let a grippier surface actually POINT the car:
+     * `steerRate` is a property of the rack alone, so in the gripped range
+     * the yaw was `steer × steerGain` with no surface in it whatever. Every
+     * car in the roster took a WIDER line on tarmac than on gravel at the
+     * same lock — the hatch 107 m against 100, the coupe 140 against 119 —
+     * while arriving a third faster, which is a paved section that exists to
+     * be run wide off. `limits.ts` was meanwhile quoting the bot a paved
+     * corner speed off a ceiling the car could not turn tightly enough to
+     * spend.
+     *
+     * Under 1 because the rack is not the only thing in the way — a tire with
+     * twice the grip does not give the driver twice the yaw — but far enough
+     * over 0 that a paved corner is genuinely a tighter corner, and that mud
+     * and standing water genuinely wash wide. */
+    steerGrip: 0.55,
     /** ...and how much of the demand the tires still answer once they are
      * past it, 0..1 — the residual slope of the saturation curve. Zero is a
      * pure asymptote, and a pure asymptote is a cliff: the moment a corner
@@ -744,6 +766,22 @@ export const TUNING = {
      * and not the pedal, so a stab down the straight does nothing and a
      * brake carried into the corner does everything. */
     brakeDepth: 0.8,
+    /** ...and the LIFT's, ×`drivetrain[].liftYaw`. The mildest of the four
+     * and the only one that does not argue with the speed floor, which is
+     * the whole shape of what a closed throttle is worth: breathe it in a
+     * fast corner and the tail comes round a little, carry that into a slow
+     * one and the floor closes on the slide as the car runs out of speed.
+     * The lever and the brake are deliberate asks and claim the floor
+     * exception (`provokeFloor`); coming off the power is not an ask, it is
+     * a driver stopping doing something, and a car that could be drifted at
+     * walking pace by lifting would have no floor at all.
+     *
+     * `liftSpan` beside it is the same pedal moving the SETPOINT within
+     * whatever depth the layout already has; this is the pedal raising the
+     * depth itself. Both are needed for the same reason a move needs a
+     * demand and a yaw: on a layout whose own `depth` is 0.42 there is
+     * nothing under the setpoint to move. */
+    liftDepth: 0.45,
     /** ...and how far a full provocation lowers the SPEED FLOOR under all of
      * it, ×`slideFrom`. The floor is a rule the player is told — it will not
      * drift under 70 — and this is the one thing that argues with it,
@@ -815,15 +853,107 @@ export const TUNING = {
      * wide ramp would quietly move it: 75 has to drift like 75, not like a
      * car still half-gripped. */
     slideSpan: 1.39,
-    /** Slip angle at which the car READS as drifting — dust, HUD, stats.
-     * Read off the ANGLE rather than the slide, because the angle is what a
-     * player sees and because it moves smoothly: the slide tracks steering
-     * input, which chatters, and a readout that chatters is a stuttering
-     * dust plume and a meaningless drift count. Radians. */
+    /** Slip angle at which the car READS as drifting — dust, smoke, HUD,
+     * stats. Read off the ANGLE rather than the slide, because the angle is
+     * what a player sees and because it moves smoothly: the slide tracks
+     * steering input, which chatters, and a readout that chatters is a
+     * stuttering plume and a meaningless drift count. Radians, ×the
+     * surface's own `breakaway`.
+     *
+     * That scaling is the same one `angleSpan`, `angleBand`, `tailPeak` and
+     * `spinAt` all carry, and this was the one angle in the group without
+     * it — which is why tarmac could not be drifted. A paved surface's whole
+     * slip vocabulary is a fraction of gravel's BY CONSTRUCTION: every
+     * technique on asphalt lands at almost exactly `breakaway` times what
+     * the same technique buys on gravel. Held against one absolute
+     * threshold, that put the entire paved range under the angle the game
+     * calls a drift — a driver could throw the car at a corner on the lever
+     * and get no smoke, no counter and no dust for it, and the only route to
+     * a reading was to overshoot the model far enough to spin. Sized in the
+     * surface, tarmac drifts at tarmac angles: less of them than gravel, and
+     * really happening. */
     enterSlip: 0.18,
     /** ...and the angle it has to settle back under before that drift is
-     * over. One corner is one drift, not thirty. */
+     * over. One corner is one drift, not thirty. Scaled with the surface for
+     * the same reason, so the hysteresis keeps its ratio everywhere. */
     exitSlip: 0.09,
+
+    /** THE LINKED DRIFT — how much a drift takes out of the tires for the
+     * NEXT one, 0..1 per drift, capped at a full chain. Rubber that has just
+     * spent a corner scrubbing is hot, greasy and already past its peak: the
+     * second corner of a chicane is entered on tires that have less to give
+     * than the first one had, and the third less again. That is the whole
+     * reason a sequence of corners is harder than the same corners a
+     * kilometre apart, and the model had nothing that said so — every corner
+     * met a fresh car.
+     *
+     * Booked on the drift COUNT, not on time spent sliding, and that is
+     * deliberate: a term that grew with the slide would be the feedback loop
+     * this group exists to avoid (more angle → less grip → more angle), and
+     * it would punish one long committed drift instead of a series of quick
+     * ones. This only ever fires where the player can see the reason for it
+     * — a drift ENDED and another began before the tires came back. */
+    linkStep: 0.34,
+    /** ...how fast the chain cools, 1/s. It has to outlive the GAP between
+     * two corners or it buys nothing at all: one step is worth about three
+     * seconds and a full chain about eight, so a chicane, a corner that
+     * tightens and a hairpin taken in two bites all inherit what the last one
+     * left, while a straight hands the driver fresh rubber back. Sized
+     * straight off the probe — at 0.34/s a drift's whole step had cooled
+     * before the next corner arrived, and three provocations in a row
+     * measured the same as three taken minutes apart. */
+    linkFade: 0.12,
+    /** ...how much DEEPER a fully chained drift goes, ×`angleSpan`. The
+     * second drift is bigger than the first because it started with less
+     * grip, which is the thing the player is being asked to plan around. */
+    linkDepth: 0.5,
+    /** ...and how much EARLIER it lets go, ×`entryAt`. Greasy tires break
+     * away sooner as well as further, so a linked corner does not merely go
+     * deeper once provoked — it arrives at the slide on less lock. */
+    linkEntry: 0.35,
+
+    /** THE SPIN — the slip angle past which the car is simply gone, rad,
+     * ×the surface's own `breakaway` like every other angle in this group.
+     * Well past the deepest drift any technique asks for: this is not a big
+     * drift, it is the end of one. Past it the front tires are pointed so
+     * far from where the car is travelling that neither the lock nor the
+     * catch reaches the road any more, so the car keeps rotating on what it
+     * has and scrubs its speed away doing it.
+     *
+     * There has to BE one. Without it the only cost of overdoing a drift was
+     * a slower corner, so the deepest possible angle was also the fastest way
+     * round — and the linked drift above, which exists to make a sequence
+     * escalate, would have escalated into nothing at all. This is the wall
+     * the escalation runs into, and finding it is the mistake the player is
+     * being given room to make. */
+    spinAt: 1.05,
+    /** ...and the angle it has to come back under to be caught, rad — the
+     * hysteresis, ×`breakaway` as well. Meaningfully under `spinAt`: a
+     * threshold with no gap in it chatters a car sitting near the limit in
+     * and out of a spin several times a second, which is a stutter rather
+     * than a moment. */
+    spinBack: 0.72,
+    /** ...and the speed a spin needs on BOTH sides of it, m/s: under this a
+     * car is never spun, however far round it is pointing. A car that has
+     * scrubbed itself down to walking pace is not spinning any more, and a
+     * car beached on a bank or scrabbling out of a ditch at an angle was
+     * never spinning to begin with — both are pointing the wrong way, which
+     * is something the wheel and the throttle are supposed to be able to
+     * answer. Guarding only the exit left the slow ones entering on angle
+     * and leaving on speed in the same step, chattering the event and the
+     * counter while the scrub pinned them there and took away the steering
+     * they needed to drive out. */
+    spinOut: 6,
+    /** How much of the wheel's own authority survives a spin, 0..1. Not
+     * zero: the fronts are still rolling and still pointed somewhere, and a
+     * spin the driver cannot influence at all is a cutscene. Just far too
+     * little to save the corner. */
+    spinSteer: 0.22,
+    /** ...and how much harder a spinning car scrubs its speed off,
+     * ×`grip.scrub`. Four tires dragged sideways across the road is the most
+     * effective brake in the game, which is exactly why a spin costs the run
+     * far more than the corner it happened in. */
+    spinScrub: 3.5,
   },
 
   /** THE REV COUNTER. There is no crank in this model: on the move the revs
@@ -1058,8 +1188,19 @@ export const TUNING = {
      * being sideways, so the same corner is DRIVEN round rather than hung
      * out, and overdoing it is a short, smoky snap rather than a rally
      * angle carried to the exit. This is the number that stops a paved
-     * sweeper being taken at a gravel attitude and full pace. */
-    breakaway: { gravel: 1.0, asphalt: 0.35, water: 1.2, nature: 1.1 },
+     * sweeper being taken at a gravel attitude and full pace.
+     *
+     * There is a FLOOR under how small it may usefully be, and asphalt used
+     * to sit under it: at 0.35 the deepest angle the paved model would ask
+     * for — full lock, fully provoked, on the layout that slides most — came
+     * to 7°, which is under `drift.enterSlip`. A surface whose entire slip
+     * vocabulary sits below the angle the game calls a drift cannot be
+     * drifted at all: the dust never lights, the counter never moves, and
+     * the only way to get sideways on tarmac was to overshoot the model
+     * altogether and spin. Tarmac now asks for a real, small drift — a
+     * provoked one clears the readout and the wheel alone still will not,
+     * which is the point of a paved section. */
+    breakaway: { gravel: 1.0, asphalt: 0.62, water: 1.2, nature: 1.1 },
     /** Throttle effectiveness per surface. */
     power: { gravel: 1.0, asphalt: 1.08, water: 0.7, nature: 0.8 },
     /** Rough ground caps pace where gearing cannot: above this speed the
