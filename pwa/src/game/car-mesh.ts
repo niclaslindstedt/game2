@@ -118,7 +118,7 @@ const WHEEL_STEER_LOCK = 0.55;
 /** ...hard-clamped here, rad — past this the wheels read as broken. */
 const WHEEL_STEER_MAX = 0.7;
 /** How fast the drawn wheels chase the input, 1/s — quick enough to read
- * as the driver's hands, slow enough not to strobe at 120 Hz input. */
+ * as the driver's hands, slow enough not to strobe on per-step input. */
 const WHEEL_STEER_RATE = 14;
 
 export type CarVisual = {

@@ -32,6 +32,7 @@ import { describe, expect, it } from "vitest";
 import {
   KERB_MARKER,
   NEUTRAL_INPUT,
+  TUNING,
   compileStage,
   compileTrack,
   createGame,
@@ -98,8 +99,8 @@ function coneAhead(state: GameState, field: ReturnType<typeof createConeField>, 
 
 /** Run the car and the field together for `seconds`, at the engine's own step. */
 function run(state: GameState, field: ReturnType<typeof createConeField>, seconds: number): void {
-  const dt = 1 / 120;
-  for (let i = 0; i < seconds * 120; i++) {
+  const dt = TUNING.dt;
+  for (let i = 0; i < seconds * TUNING.physicsHz; i++) {
     step(state, drive({ throttle: 1 }));
     field.update(state, dt);
   }
@@ -176,7 +177,7 @@ describe("driving through the cones", () => {
     const field = createConeField();
     intoTheWild(state, 0);
     const cone = coneAhead(state, field, 0.4);
-    const dt = 1 / 120;
+    const dt = TUNING.dt;
     for (let i = 0; i < 240; i++) {
       step(state, drive());
       field.update(state, dt);
@@ -190,7 +191,7 @@ describe("driving through the cones", () => {
 describe("a long thing coming to rest", () => {
   /** Step one body until it settles, or give up. Returns the steps it took. */
   function settle(body: ReturnType<typeof tumbleFrom>, groundY: number): number {
-    const dt = 1 / 120;
+    const dt = TUNING.dt;
     for (let i = 0; i < 1200; i++) if (!stepTumble(body, dt, () => groundY)) return i;
     return -1;
   }
@@ -292,7 +293,7 @@ describe("driving through the marker posts", () => {
     expect(stood.tilt).toBeLessThan(0.01);
 
     let knocks = 0;
-    const dt = 1 / 120;
+    const dt = TUNING.dt;
     for (let i = 0; i < 6 * 120; i++) {
       step(state, drive({ throttle: 1 }));
       field.update(state, dt, () => (knocks += 1));
@@ -322,7 +323,7 @@ describe("driving through the marker posts", () => {
 
     for (let i = 0; i < 4 * 120; i++) {
       step(state, drive({ throttle: 1 }));
-      field.update(state, 1 / 120);
+      field.update(state, TUNING.dt);
     }
 
     const after = poseOf(batch);

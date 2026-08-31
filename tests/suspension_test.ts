@@ -79,7 +79,7 @@ describe("the springs", () => {
     let deepest = 0;
     let highest = 0;
     // Fly, land, and watch the body travel for a couple of seconds after.
-    for (let i = 0; i < 120 * 3; i++) {
+    for (let i = 0; i < TUNING.physicsHz * 3; i++) {
       step(state, drive());
       if (!car.airborne) {
         deepest = Math.min(deepest, car.ride);
@@ -107,7 +107,7 @@ describe("the springs", () => {
     car.vy = -25;
     let landings = 0;
     let settled = false;
-    for (let i = 0; i < 120 * 4; i++) {
+    for (let i = 0; i < TUNING.physicsHz * 4; i++) {
       for (const e of step(state, drive())) if (e.type === "landing") landings += 1;
       settled ||= car.settling;
     }
@@ -129,7 +129,7 @@ describe("the springs", () => {
     car.y += 0.4;
     car.vy = -2;
     let touched = false;
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0; i < TUNING.physicsHz; i++) {
       step(state, drive());
       if (!car.airborne) touched = true;
       if (touched) expect(car.airborne).toBe(false);
@@ -168,7 +168,8 @@ describe("the weight on the tires", () => {
       car.airborne = true;
       car.y += height;
       car.vy = 0;
-      for (let i = 0; i < 120 * 4 && car.airborne; i++) step(state, drive({ throttle: 0.4 }));
+      for (let i = 0; i < TUNING.physicsHz * 4 && car.airborne; i++)
+        step(state, drive({ throttle: 0.4 }));
     }
     if (angle > 0) {
       car.w = car.u * Math.tan(angle);
@@ -220,7 +221,7 @@ describe("the weight on the tires", () => {
     car.vy = 1.2;
     let landed = false;
     let lightest = 1;
-    for (let i = 0; i < 120 * 2; i++) {
+    for (let i = 0; i < TUNING.physicsHz * 2; i++) {
       step(state, drive({ throttle: 0.4 }));
       landed ||= !car.airborne;
       if (landed) lightest = Math.min(lightest, tyreLoad(car));
@@ -237,14 +238,14 @@ describe("the weight on the tires", () => {
     expect(hard.car.settle).toBeGreaterThan(soft.car.settle);
     // ...and neither of them is a permanent handicap: a second later the
     // car is standing on its tires again.
-    for (let i = 0; i < 120; i++) step(hard, drive({ throttle: 0.4 }));
+    for (let i = 0; i < TUNING.physicsHz; i++) step(hard, drive({ throttle: 0.4 }));
     expect(hard.car.settle).toBe(0);
   });
 
   it("costs nothing on smooth ground — a flat road is a car at full weight", () => {
     const state = freshState();
     state.car.u = 30;
-    for (let i = 0; i < 120; i++) step(state, drive({ throttle: 0.4 }));
+    for (let i = 0; i < TUNING.physicsHz; i++) step(state, drive({ throttle: 0.4 }));
     expect(Math.abs(1 - tyreLoad(state.car))).toBeLessThan(0.05);
   });
 });
@@ -265,7 +266,7 @@ describe("the ground as a solid", () => {
     const wall = from + 60;
     car.u = 30;
     let hitAt = 0;
-    for (let i = 0; i < 120 * 6; i++) {
+    for (let i = 0; i < TUNING.physicsHz * 6; i++) {
       step(state, drive({ throttle: 1 }));
       if (!hitAt && car.damage.zones[0] > 0) hitAt = car.x;
     }
@@ -289,7 +290,7 @@ describe("the ground as a solid", () => {
     // A 0.35 grade — half of climbLimit, a slope a rally car drives up.
     const start = intoTheWild(state, (from) => (x) => Math.max(0, (x - (from + 60)) * 0.35));
     car.u = 30;
-    for (let i = 0; i < 120 * 5; i++) step(state, drive({ throttle: 1 }));
+    for (let i = 0; i < TUNING.physicsHz * 5; i++) step(state, drive({ throttle: 1 }));
     expect(car.damage.zones[0]).toBe(0);
     expect(car.x - start).toBeGreaterThan(120); // it kept going, uphill
     expect(car.y).toBeGreaterThan(10);
@@ -301,7 +302,7 @@ describe("the ground as a solid", () => {
     intoTheWild(state, cliff);
     car.heading = Math.PI / 2 - 0.9; // ~50° onto the face
     car.u = 30;
-    for (let i = 0; i < 120 * 4; i++) step(state, drive({ throttle: 1 }));
+    for (let i = 0; i < TUNING.physicsHz * 4; i++) step(state, drive({ throttle: 1 }));
     // It slid along the wall rather than parking against it.
     expect(car.u).toBeGreaterThan(6);
     expect(Math.abs(car.z - state.track.samples[0].z)).toBeGreaterThan(30);

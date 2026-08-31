@@ -10,7 +10,7 @@
 // the question needs asking.
 //
 // The trick is the same one the ghost is built on. The engine is
-// deterministic — a fixed 120 Hz step, no `Math.random`, every draw from the
+// deterministic — a fixed step (`TUNING.physicsHz`), no `Math.random`, every draw from the
 // state's seeded stream — so the same stage, the same car and the same
 // sequence of inputs put the car through the same metre of road every time.
 // Write down what the engine was HANDED and the run comes back exactly,

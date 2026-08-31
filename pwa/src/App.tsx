@@ -166,6 +166,7 @@ import {
 } from "./game/ghost.ts";
 import {
   PLAY_CAMERAS,
+  frameFloorMs,
   loadSettings,
   saveSettings,
   type DevSettings,
@@ -2212,6 +2213,9 @@ export function App() {
       let last = performance.now();
       let acc = 0;
       let hudClock = 0;
+      /** The shortest gap between two DRAWN frames, ms — the phone cap, read
+       * once here because a media query per frame is a query per frame. */
+      const frameFloor = frameFloorMs();
       /** Frames and seconds since the rate was last worked out, and the
        * answer — the debug overlay's only performance number. */
       let fpsFrames = 0;
@@ -2353,6 +2357,12 @@ export function App() {
 
       const frame = (now: number): void => {
         raf = requestAnimationFrame(frame);
+        // The phone's frame ceiling (`FRAME_HZ`). `last` only moves on a
+        // frame that is KEPT, so the time a skipped one covered is handed to
+        // the next one rather than lost — the physics below runs off that
+        // same accumulator, so a frame not drawn is a frame with more steps
+        // in it, never a slower car.
+        if (now - last < frameFloor) return;
         const dtFrame = Math.min(0.1, (now - last) / 1000);
         last = now;
         // The pad is ASKED, once a frame, before anything below can return

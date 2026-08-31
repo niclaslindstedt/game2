@@ -524,7 +524,7 @@ export const ANALYSIS = {
      * shows up as a livelock. */
     plan: { budget: 90, fail: 700 },
     /** Per-call cost of the terrain field's hot queries, microseconds.
-     * `groundAt` is read several times per physics step at 120 Hz and once
+     * `groundAt` is read several times per physics step and once
      * per ground tile per frame; `waterAt` per step; `obstaclesNear` per
      * step for the contact model. These are the numbers that decide
      * whether a landscape change costs frames. */

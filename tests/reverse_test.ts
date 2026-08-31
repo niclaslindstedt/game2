@@ -158,7 +158,7 @@ describe("the bot backing out of a wedge", () => {
     wildWall(state, -4); // between the car and the road it is aiming for
     state.car.heading = -Math.PI / 2;
     let reversed = false;
-    for (let i = 0; i < 120 * 4; i++) {
+    for (let i = 0; i < TUNING.physicsHz * 4; i++) {
       step(state, botInput(state));
       if (state.car.reversing && state.car.u < -2) reversed = true;
     }
@@ -173,7 +173,7 @@ describe("the bot backing out of a wedge", () => {
     state.car.heading = -Math.PI / 2;
     let pushedAfterBackingOut = false;
     let backedOut = false;
-    for (let i = 0; i < 120 * 4; i++) {
+    for (let i = 0; i < TUNING.physicsHz * 4; i++) {
       step(state, botInput(state));
       if (state.car.u < -3) backedOut = true;
       if (backedOut && state.car.u > 3) pushedAfterBackingOut = true;

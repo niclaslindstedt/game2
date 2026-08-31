@@ -6,9 +6,84 @@
 // with `npm run sim` and the drift/jump tests; the render layer never reads
 // these directly.
 
+/** The clock the whole engine runs on — see `TUNING.physicsHz`. Named out
+ * here so the timestep can be derived from it rather than restated. */
+const PHYSICS_HZ = 120;
+
 export const TUNING = {
-  /** Fixed physics timestep, seconds (120 Hz). */
-  dt: 1 / 120,
+  /** HOW OFTEN THE WORLD IS SOLVED, steps a second — the rate everything
+   * else in this file is quoted against, and a linear lever on what the
+   * engine costs, fifteen cars included.
+   *
+   * IT STAYS AT 120, and the reason is the SPRINGS. Nothing else objects:
+   * across 24 bot-driven stages, 60 Hz holds pace and finishing exactly and
+   * the drift lab's slip angles move one to three per cent, while a solo
+   * stage at 30 Hz ends in the same metre of road 0.2 s apart. But the bump
+   * stops are damped EXPLICITLY (`suspension.stopDamp`), and an explicit
+   * damper takes more out per second the bigger the step is — so at 60 a
+   * landing no longer compresses onto the stops it was authored to reach,
+   * and lands soft. Rate-correcting that damper is the price of turning
+   * this knob down, and it is a change to how every landing feels.
+   *
+   * Below 45 the drift model degrades on its own terms regardless: drift
+   * count falls 26% at 45 and 44% at 30. That is the floor even once the
+   * springs are fixed.
+   *
+   * CONTACT does not care, which is worth knowing before anybody reaches
+   * for a collision rate of its own: `collideCars` is an impulse resolver,
+   * so it kills the closing speed and separates the pair whatever the rate,
+   * and staging a held rub at a fixed closing speed deals exactly the same
+   * crush at 120, 90, 60 and 30 (`collision_test.ts`). A heat run at two
+   * rates LOOKS like it disagrees, and that is fourteen bots taking
+   * different lines rather than a softer model. There is also no such thing
+   * as resolving contact FASTER than this number: nothing moves between two
+   * steps, so a second pass over the same positions finds `closing <= 0`
+   * and returns.
+   *
+   * The other thing that moves with it is the FLICK, read off how fast the
+   * rack is crossing and therefore off how often it is asked — so anything
+   * that changes this owes `make drift` a run as well as `make sim`. */
+  physicsHz: PHYSICS_HZ,
+  /** ...and the same number as the timestep every rate in here is spent in,
+   * seconds. Derived, never authored: two places to say one thing is one
+   * place to get it wrong. */
+  dt: 1 / PHYSICS_HZ,
+
+  /** HOW OFTEN A DRIVER LOOKS UP, decisions a second — the bot's own clock,
+   * which is not the same question as how often the world is solved.
+   *
+   * The physics has to run at `physicsHz` because that is what integrates a
+   * car. The DRIVER only has to re-read the road as often as the road
+   * changes, and at rally speed a car covers half a metre in a thirtieth of
+   * a second. The whole corner scan hangs off this — every sample over the
+   * plan horizon, the hazard beside each one, the traffic — and it is most
+   * of what the bot costs, so halving it halves that. Between decisions the
+   * hands stay where they were put, which is also what hands do.
+   *
+   * At or above `physicsHz` every step decides, exactly as it always did.
+   * It lives here beside the physics rate rather than in `sim/` because the
+   * two are read together: what matters is the RATIO, and a reader deciding
+   * one of them needs the other in front of them.
+   *
+   * IT SHIPS AT THE PHYSICS RATE — every step — and the knob is here for a
+   * device that cannot afford that. Halving it is genuinely nearly free on
+   * the numbers a sim table shows: over 24 bot-driven stages, pace, drift
+   * count and finishing are all identical and off-road is +4%. What it also
+   * does is lose a run. Two seeds put a crew back on the road where one did
+   * before, which is exactly what `scars_test` and `simulation_test` are
+   * there to catch, and a driver who looks up half as often committing to a
+   * slide it cannot see the end of is the mechanism.
+   *
+   * That is not worth taking by default, because of what it buys: the whole
+   * engine, fifteen cars included, is about 1.5% of realtime, and halving
+   * this takes ~14% off that. Two tenths of one per cent of a frame against
+   * a bot that gets lost more. The render clocks are where the phone's
+   * money is (`FRAME_HZ`, `MIRROR_HZ`).
+   *
+   * Measured floor if it is ever turned down anyway: 30 costs the same as 60
+   * — the whole saving is in the first halving — and 20 breaks it outright,
+   * twelve respawns against one. */
+  botHz: PHYSICS_HZ,
 
   /** The establishing shot at the start of a stage, seconds — the beat
    * before the lights, while the camera is still circling the start area

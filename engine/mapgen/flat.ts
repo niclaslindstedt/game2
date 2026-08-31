@@ -3,7 +3,7 @@
 //
 // A stage is a few thousand `TrackSample` OBJECTS, which is the right shape
 // for building and drawing one. It is the wrong shape for the two searches
-// the run does on every one of its 120 physics steps — locating the car
+// the run does on every one of its physics steps — locating the car
 // against the centerline (game/track.ts) and scanning the corners ahead
 // (sim/bot.ts). Both walk dozens of consecutive samples reading two or
 // three numbers from each, and object-per-sample turns that into dozens of
@@ -42,7 +42,7 @@ export type FlatTrack = {
   /** The sample's forward vector, `(sin heading, cos heading)` — and with
    * the signs swapped, its right axis. Projecting a car onto the road needs
    * both on every locate, and a transcendental pair per call is real money
-   * at 120 Hz. */
+   * at every step of every car on the road. */
   sinHeading: Float64Array;
   cosHeading: Float64Array;
   /** Index into `SURFACES`. */

@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   NEUTRAL_INPUT,
+  TUNING,
   compileTrack,
   createGame,
   finishIndex,
@@ -68,7 +69,7 @@ function run(state: GameState, steps: number): boolean {
 describe("the finish line", () => {
   it("ends the run when the car drives through the gate", () => {
     const state = stage();
-    expect(run(state, 120 * 60)).toBe(true);
+    expect(run(state, TUNING.physicsHz * 60)).toBe(true);
     expect(state.phase).toBe("finished");
     expect(pastLine(state, state.car.x, state.car.z)).toBeGreaterThan(0);
   });
@@ -78,7 +79,7 @@ describe("the finish line", () => {
     // Out in the wild, well past the verge, and driving the length of the
     // stage from there: every sample of the closing straight goes by.
     shift(state, gateHalfWidth(state.track) + 30);
-    expect(run(state, 120 * 60)).toBe(false);
+    expect(run(state, TUNING.physicsHz * 60)).toBe(false);
     expect(state.phase).toBe("racing");
     expect(state.progressIndex).toBe(state.track.samples.length - 1);
     expect(pastLine(state, state.car.x, state.car.z)).toBeGreaterThan(0);
@@ -87,7 +88,7 @@ describe("the finish line", () => {
   it("still ends the run when the car comes back and crosses the line", () => {
     const state = stage();
     shift(state, gateHalfWidth(state.track) + 30);
-    run(state, 120 * 60);
+    run(state, TUNING.physicsHz * 60);
     expect(state.phase).toBe("racing");
     // Back to the centerline behind the gate, pointing down the road.
     const s = state.track.samples[finishIndex(state.track)];
@@ -95,18 +96,18 @@ describe("the finish line", () => {
     state.car.z = s.z - Math.cos(s.heading) * 20;
     state.car.y = s.elevation;
     state.car.heading = s.heading;
-    expect(run(state, 120 * 30)).toBe(true);
+    expect(run(state, TUNING.physicsHz * 30)).toBe(true);
   });
 
   it("never sends a respawn out past the line it has to cross", () => {
     const state = stage();
     shift(state, gateHalfWidth(state.track) + 30);
-    run(state, 120 * 60);
+    run(state, TUNING.physicsHz * 60);
     const home = wayHome(state);
     expect(pastLine(state, home.x, home.z)).toBeLessThan(0);
-    expect(run(state, 120 * 30)).toBe(false);
+    expect(run(state, TUNING.physicsHz * 30)).toBe(false);
     step(state, { ...drive, reset: true });
     expect(state.phase).toBe("racing");
-    expect(run(state, 120 * 30)).toBe(true);
+    expect(run(state, TUNING.physicsHz * 30)).toBe(true);
   });
 });

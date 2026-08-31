@@ -49,7 +49,7 @@ import {
   type MapLayerInfo,
   type MapLayers,
 } from "./map-layers.ts";
-import { createMirror, MIRROR_ASPECT, MIRROR_RANGE } from "./mirror.ts";
+import { createMirror, MIRROR_ASPECT, MIRROR_HZ, MIRROR_RANGE } from "./mirror.ts";
 import { createNameTag, GHOST_LOOK, TAG_LAYER, type NameTag } from "./name-tag.ts";
 import { buildMapRoute, type MapRoute } from "./map-route.ts";
 import { classify, type RivalRun } from "./standings.ts";
@@ -227,6 +227,13 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
    * once, after `render` has decided it against the state and the view. */
   let mirrorOption = true;
   let mirrorUp = false;
+  /** Whether the mirror's own pass runs THIS frame — see where it is set. */
+  let mirrorFill = false;
+  /** Seconds since the glass was last refilled (`MIRROR_HZ`). Starts past
+   * the interval so the very first driving frame fills it: a strip
+   * compositing a target nothing has drawn into yet is a black hole over
+   * the road. */
+  let mirrorAge = Infinity;
   /** ...and whether it is drawn as the HUD's strip over the frame, as
    * opposed to into the cockpit's own mirror inside it. */
   let mirrorStrip = false;
@@ -1062,7 +1069,17 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // The cockpit shows the same picture in its own mirror (car/cockpit.ts),
     // so the strip over the frame is not drawn as well.
     mirrorStrip = mirrorUp && view !== "cockpit";
-    if (mirrorUp) mirror.aim(state, driverEyeY, environment.fogFar() * MIRROR_RANGE);
+    // ...BUT IT IS ONLY REFILLED AT `MIRROR_HZ`, on its own clock. The pass
+    // behind that strip is the whole scene drawn a second time and it is the
+    // most expensive thing in a driving frame; the composite over the top
+    // still happens every frame, so what the player sees is a continuous
+    // strip showing an answer up to a thirtieth of a second old.
+    mirrorAge += dt;
+    mirrorFill = mirrorUp && mirrorAge >= 1 / MIRROR_HZ;
+    if (mirrorFill) mirrorAge = 0;
+    // Aimed on the frames it is filled on, and only those: pointing a camera
+    // nothing is about to render through is arithmetic for nobody.
+    if (mirrorFill) mirror.aim(state, driverEyeY, environment.fogFar() * MIRROR_RANGE);
     // The road and its scenery are built for the WHOLE stage; the frame
     // only pays for the part the air is still clear enough to show. Last,
     // because the map view sets its fog from the framing it just solved —
@@ -1115,7 +1132,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       // the frame rather than over it: the cockpit's mirror is geometry, and
       // geometry samples a texture that has to already exist. The strip over
       // the top of the screen does not care either way.
-      if (mirrorUp) {
+      if (mirrorFill) {
         // The way home is parented to the FORWARD camera, so in the mirror
         // pass it would hang in mid-air beside the car with its needle
         // pointing at nothing. Nothing else in the scene is camera-bound.

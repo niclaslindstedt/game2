@@ -135,7 +135,7 @@ describe("crossings (R13)", () => {
     state.car.w = 25;
     const events: GameEvent[] = [];
     let flank = -Infinity;
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0; i < TUNING.physicsHz; i++) {
       events.push(...step(state, NEUTRAL_INPUT));
       const out = (state.car.x - s.x) * right.x + (state.car.z - s.z) * right.z;
       flank = Math.max(flank, out + TUNING.collision.halfWidth);
@@ -355,7 +355,7 @@ function plunge(seed: number, steer: number): { state: GameState; entry: GameEve
   state.car.y = at.elevation;
   state.car.heading = at.heading;
   const input = { ...NEUTRAL_INPUT, throttle: 1, steer };
-  for (let i = 0; i < 120 * 60; i++) {
+  for (let i = 0; i < TUNING.physicsHz * 60; i++) {
     const entry = step(state, input);
     if (state.drowning) return { state, entry };
   }

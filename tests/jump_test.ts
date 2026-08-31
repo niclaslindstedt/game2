@@ -49,7 +49,7 @@ function run(state: GameState, input: Partial<CarInput>, seconds: number): GameE
 function driveToLip(state: GameState): GameEvent[] {
   const events: GameEvent[] = [];
   let guard = 0;
-  while (!state.car.airborne && guard < 120 * 60) {
+  while (!state.car.airborne && guard < TUNING.physicsHz * 60) {
     events.push(
       ...step(state, {
         ...NEUTRAL_INPUT,
@@ -81,9 +81,10 @@ describe("the jump", () => {
     // as the floor. The road has a cross-section (R16) — a crown, and two
     // wheel tracks a car settles into — so "on the flat" is not zero, and a
     // threshold measured off zero starts recording part-way up the ramp.
-    while (state.progressS < JUMP_STAGE[0].featureStart! - 20 && guard < 120 * 60) drive();
+    while (state.progressS < JUMP_STAGE[0].featureStart! - 20 && guard < TUNING.physicsHz * 60)
+      drive();
     const rest = state.car.y;
-    while (!state.car.airborne && guard < 120 * 60) {
+    while (!state.car.airborne && guard < TUNING.physicsHz * 60) {
       drive();
       if (state.car.y > rest + 0.05 && !state.car.airborne) {
         heights.push(state.car.y);
@@ -144,7 +145,7 @@ describe("the jump", () => {
     const state = game();
     driveToLip(state);
     let landing: GameEvent | undefined;
-    for (let i = 0; i < 120 * 3 && !landing; i++) {
+    for (let i = 0; i < TUNING.physicsHz * 3 && !landing; i++) {
       landing = step(state, { ...NEUTRAL_INPUT }).find((e) => e.type === "landing");
     }
     expect(landing).toBeDefined();
@@ -179,7 +180,7 @@ describe("the jump", () => {
     let guard = 0;
     let speedBefore = state.car.u;
     const events: GameEvent[] = [];
-    while (state.car.airborne && guard < 120 * 6) {
+    while (state.car.airborne && guard < TUNING.physicsHz * 6) {
       speedBefore = state.car.u;
       // Crank sideways speed directly — the air keeps w frozen, so a messy
       // takeoff attitude survives to the landing. -14 against ~35 m/s
@@ -236,7 +237,7 @@ describe("over the edge", () => {
     car.w = -speed * Math.sin(slip);
     car.z = 36; // right at the lip: the slide is still on when it goes over
     let guard = 0;
-    while (!car.airborne && car.z < 60 && guard < 120 * 5) {
+    while (!car.airborne && car.z < 60 && guard < TUNING.physicsHz * 5) {
       step(state, NEUTRAL_INPUT);
       guard += 1;
     }

@@ -88,7 +88,7 @@ describe("the start grid", () => {
 
   it("hands the revs back to the gearing the moment the flag drops", () => {
     const state = createGame({ seed: 20692 });
-    for (let i = 0; i < stepsIn(START) + 120; i++) {
+    for (let i = 0; i < stepsIn(START) + TUNING.physicsHz; i++) {
       step(state, { ...NEUTRAL_INPUT, throttle: 1 });
     }
     expect(state.phase).toBe("racing");

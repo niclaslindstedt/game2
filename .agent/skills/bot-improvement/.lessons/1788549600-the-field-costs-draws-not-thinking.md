@@ -30,9 +30,10 @@ Two things that fall out:
   worth 48 draws across a grid (shipped). The wheels do not: they steer and
   spin independently.
 
-And one number for the rate question, since it comes up: stepping rivals below
-120 Hz is fine for a RALLY (60 Hz kept the finishing order identical, worst
-crew time moved 0.37 s over a 160 s stage) and breaks a HEADS-UP outright
-(order scrambled, worst crew moved 65 s). `collideCars` fires on every step two
-cars are touching, so halving the rate roughly halves the impulse a rub
-delivers — contacts went 2962 → 1674. Contact fidelity is rate-bound.
+One trap on the rate question. Lower the step rate and a heads-up scrambles
+(worst crew 65 s) while a heat's damage-dealt drops ~28% — which reads as the
+contact model going soft, and invites a collision clock of its own. Both wrong.
+`collideCars` is an impulse resolver, so a held rub at a fixed closing speed
+deals identical crush at 120, 90, 60 and 30 (locked in `collision_test.ts`);
+the scrambling is fourteen bots taking different lines. **Stage the mechanism
+before believing a field-level number about it.**
