@@ -1366,28 +1366,43 @@ export const TUNING = {
      *
      * The blocks are 0.6 m of road 3.4 m apart, so an apex taken over them
      * is several of these in a row and the costs COMPOUND: one is a thump
-     * and a twitch, a whole apex cut over them is most of a gear and a car
-     * that arrives at the exit pointing the wrong way. */
+     * and a twitch, a whole apex cut over them is a gear and a car that
+     * arrives at the exit pointing the wrong way.
+     *
+     * WHAT A WHOLE APEX CUT IS WORTH is the number this group is set
+     * against, and it is about a fifth of the car's speed — a price a
+     * driver pays on purpose to straighten a corner, not a stop. It is
+     * `keep` compounded over the handful of blocks a row gets to bite, and
+     * `analysis/drive.ts`'s `kerb` check measures exactly that by driving
+     * the reference car down every apex row on the stage. */
     kerb: {
-      /** Speed the car keeps through one block, 0..1 of what it had. */
+      /** Speed the car keeps through one block, 0..1 of what it had. Five
+       * bites is a full apex row, and 0.955⁵ is the fifth above. */
       keep: 0.955,
       /** Under this the car is stepping over a block rather than mounting
        * it: no jolt, no thud, no cost, m/s of closing speed. */
       clipSpeed: 2.5,
+      /** The BITE CEILING, m/s: the closing speed past which a slab bedded
+       * down to `KERB_MARKER.block.proud` is simply driven over. Climbing a
+       * hand's height of concrete costs what it costs; arriving twice as
+       * fast does not make it taller. Everything but `keep` is priced off
+       * the bite rather than the closing speed, which is what separates a
+       * kerb from a wall — see `clipKerbs`. */
+      biteMax: 6,
       /** Sideways shove out of the inside of the corner, m/s per m/s of
-       * closing speed — the block doing what it was laid there to do. */
+       * bite — the block doing what it was laid there to do. */
       shove: 0.32,
-      /** Roll rate the mounted side is lifted at, rad/s per m/s of closing
-       * speed. An order under `solids.tripLaunch`, and capped below it, so
-       * a kerb never puts a car over however hard it is taken. */
+      /** Roll rate the mounted side is lifted at, rad/s per m/s of bite. An
+       * order under `solids.tripLaunch`, and capped below it, so a kerb
+       * never puts a car over however hard it is taken. */
       lift: 0.06,
       liftMax: 0.9,
-      /** Yaw the shove drags the nose round by, rad/s per m/s. Small on
-       * purpose: a block unsettles the car, it does not spin it. */
+      /** Yaw the shove drags the nose round by, rad/s per m/s of bite.
+       * Small on purpose: a block unsettles the car, it does not spin it. */
       yaw: 0.035,
-      /** Heave thrown into the springs per m/s of closing speed, m/s of
-       * ride rate — the wheels going up 0.28 m and dropping off the far
-       * side, which is the wobble the player actually feels. */
+      /** Heave thrown into the springs per m/s of bite, m/s of ride rate —
+       * the wheels going up over the slab and dropping off the far side,
+       * which is the wobble the player actually feels. */
       heave: 0.11,
       /** How long the body is deaf to the kerbing after one bite, s. A
        * block is 0.6 m of road and the car is inside one for several steps

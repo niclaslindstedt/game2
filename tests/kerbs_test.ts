@@ -294,6 +294,42 @@ describe("R26 — riding over an anti-cut block", () => {
     expect(state.stats.impacts).toBe(0);
   });
 
+  it("charges a slab's own price however fast the car arrives (R20/R26)", () => {
+    // THE BITE CEILING. A slab bedded down to `KERB_MARKER.block.proud` is
+    // something the wheels ride over, and climbing a hand's height of
+    // concrete costs what it costs — arriving twice as fast does not make
+    // it taller. Without the ceiling the closing speed into a block dead
+    // ahead is the car's whole road speed and the shove that comes off it
+    // is a head-on into a wall: an apex lined with blocks took a car from
+    // 90 km/h to walking pace in five bites, which is a barrier and not a
+    // kerb.
+    const cost = (speed: number): number => {
+      const { state, block } = ontoABlock(speed);
+      const before = Math.hypot(state.car.u, state.car.w);
+      bite(state, block);
+      return before - Math.hypot(state.car.u, state.car.w);
+    };
+    const gentle = cost(TUNING.collision.kerb.biteMax * 0.6);
+    const savage = cost(TUNING.collision.kerb.biteMax * 4);
+    // A harder arrival still costs more — the scrub is a share of what the
+    // car was carrying — but only by what it was carrying, never by the
+    // block having grown.
+    expect(savage).toBeGreaterThan(gentle);
+    expect(savage).toBeLessThan(gentle * 3);
+  });
+
+  it("is bedded into the ground rather than standing on it", () => {
+    // The slab's own thickness is not what stands proud of the verge, and
+    // the difference is the whole character of the thing: a step the wheels
+    // cannot climb versus a lump they ride over. The renderer sinks it by
+    // exactly the same amount (`markerShape` in pwa/src/game/kerbs.ts).
+    expect(KERB_MARKER.block.proud).toBeLessThan(KERB_MARKER.block.height);
+    // ...and what stands proud is a lump beside the road rather than
+    // furniture standing in it: lower than the posts that say the same
+    // sentence everywhere the cutting is not the temptation.
+    expect(KERB_MARKER.block.proud).toBeLessThan(KERB_MARKER.post.height / 4);
+  });
+
   it("bites once per block rather than once per step", () => {
     // A block is 0.6 m of road and the car is inside one for several steps
     // at any speed. Charged every step it would cost a whole apex.

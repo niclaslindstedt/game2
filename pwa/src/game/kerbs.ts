@@ -111,7 +111,13 @@ export function markerShape(kind: KerbMarker["kind"]): {
 } {
   return kind === "post"
     ? { geometry: postGeometry(), materials: postMaterials(), lift: POST.height / 2 }
-    : { geometry: blockGeometry(), materials: blockMaterials(), lift: BLOCK.height / 2 };
+    : // The slab is BEDDED IN: only `proud` of its thickness stands above
+      // the verge, so its centre sits below the ground it is laid in.
+      {
+        geometry: blockGeometry(),
+        materials: blockMaterials(),
+        lift: BLOCK.proud - BLOCK.height / 2,
+      };
 }
 
 /** Stand a batch of markers of one kind up as a single instanced mesh, at

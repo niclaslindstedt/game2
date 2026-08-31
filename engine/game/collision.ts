@@ -367,6 +367,24 @@ export function collideCar(
  * its half-width because that is the dimension across the road. `kerbFrom`
  * keeps one block to one bite: it is 0.6 m of road and the car is inside
  * one for several steps at any speed.
+ *
+ * What separates it from every other solid is the BITE CEILING. A tree
+ * takes whatever the car brought to it, because a tree is as tall as the
+ * car; a slab bedded down to `KERB_MARKER.block.proud` is not, and it
+ * cannot charge more than climbing that costs however fast the car arrives.
+ * Without the ceiling the closing speed into a block dead ahead is the
+ * car's whole road speed, and the shove that comes off it is a head-on into
+ * a wall: an apex lined with blocks took a car from 90 km/h to walking pace
+ * in five bites, which is a barrier and not a kerb. So everything the slab
+ * does — the shove, the yaw, the roll, the heave — is priced off the BITE
+ * rather than the closing speed, and the only thing the car's own pace
+ * decides is how many blocks it gets to meet.
+ *
+ * The shove is LATERAL, too. A slab laid across the car's path is driven
+ * over, not bounced off; what pushes the car back off the inside of the
+ * corner is the wheels on one side riding up while the others do not, and
+ * that acts across the car. Taking it out of the forward speed instead is
+ * what made one clipped apex cost more than the corner did.
  */
 export function clipKerbs(
   spec: CarSpec,
@@ -391,7 +409,7 @@ export function clipKerbs(
   const cosH = Math.cos(car.heading);
 
   for (const block of blocks) {
-    if (Math.abs(car.y - block.y) > KERB_MARKER.block.height + 0.5) continue;
+    if (Math.abs(car.y - block.y) > KERB_MARKER.block.proud + 0.5) continue;
     // The block's centre in the car frame: `fwd` along the nose, `right`
     // along the right axis — the same box the body meets a trunk with.
     const dx = block.x - car.x;
@@ -410,28 +428,31 @@ export function clipKerbs(
     const nz = ez / d;
     const closing = car.u * nz + car.w * nx;
     if (closing <= K.clipSpeed) continue;
+    // What climbing a slab this low can cost, whatever the car brought to
+    // it — see the ceiling above.
+    const bite = Math.min(closing, K.biteMax);
 
     car.kerbFrom = now + K.again;
     // Everything the car is carrying pays the same share: a block does not
     // care which way the speed was pointing, only that the wheels had to
-    // climb it.
+    // climb it. This scrub IS the price of an apex cut — a full row of
+    // blocks is a handful of bites, and `keep` is set so that comes out at
+    // about a fifth of the car's speed.
     car.u *= K.keep;
     car.w *= K.keep;
-    // ...then the shove back out of the inside, along the contact normal,
-    // with the nose dragged round after it.
-    const shove = (closing * K.shove) / mass;
-    car.u -= nz * shove;
-    car.w -= nx * shove;
-    car.yawRate -= (Math.sign(right) * closing * K.yaw) / mass;
+    // ...then the shove back out of the inside, ACROSS the car, with the
+    // nose dragged round after it.
+    car.w -= nx * ((bite * K.shove) / mass);
+    car.yawRate -= (Math.sign(right) * bite * K.yaw) / mass;
     updateSlip(car);
 
     // The body over the wheels. Positive roll lifts the car's RIGHT side,
     // so a block under the right wheels rolls the car positive — and the
     // lift is capped well under `solids.tripLaunch`, because a kerb that
     // can put a car on its roof is a barrier and not a kerb.
-    const lift = Math.min(K.liftMax, (closing * K.lift) / mass);
+    const lift = Math.min(K.liftMax, (bite * K.lift) / mass);
     car.rollRate += Math.sign(right) * lift;
-    loadSprings(car, closing * K.heave, nz);
+    loadSprings(car, bite * K.heave, nz);
     events.push({ type: "kerbHit", speed: closing });
     // One bite per step: a car crossing two blocks at once has ridden over
     // a kerb, not over two of them, and it should thump once.

@@ -330,6 +330,13 @@ undoes it without knowing it was ever a rule.
 - **`make analyze COUNT=24` before and after**, and the finding tally in the
   PR. That tally is the honest summary of a generator change: which classes
   went away, which appeared, which are still open.
+  - **Compare TALLIES, never seeds.** Any change to the rules re-rolls the
+    search, so seed 7 after is a different stage from seed 7 before — its
+    score, its length and its findings all move for reasons that have
+    nothing to do with what you did. A seed-to-seed diff is noise wearing a
+    number, and it is the fastest way to spend an afternoon chasing a
+    regression that is a different stage. The same goes for `make sim`: read
+    the closing line over a wide sweep, not a row.
 - **Both `make sim` tables** (before/after) in the PR — the `commit` skill's
   contract for generator changes. Bots must keep finishing and keep drifting.
 - **Render BOTH pictures at more than one seed** and put the images in front

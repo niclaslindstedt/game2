@@ -325,14 +325,13 @@ describe("the road's surface (R33)", () => {
     }
   }, 20_000);
 
-  it("wanders the gravel's width and holds the tarmac's exactly", () => {
-    // R33 — a blade cuts a road wider on one pass than the next; a paving
-    // machine does not. So the two surfaces make opposite claims, and both
-    // are worth pinning: one that the gravel actually USES its band rather
-    // than sitting near the nominal, and one that the tarmac does not move
-    // at all.
+  it("cuts the gravel narrow, wanders it, and holds the tarmac's width exactly", () => {
+    // R33 — a blade cuts a dirt road as tight as its traffic can live with,
+    // wider on one pass than the next, and wider again round a bend; a
+    // paving machine lays one width and keeps it. So the two surfaces make
+    // opposite claims and both are worth pinning.
     const track = compileStage(2, "long", { asphalt: 0.6 });
-    const band = STAGE_RULES.roughness.width.vary;
+    const W = STAGE_RULES.roughness.width;
     // ...outside a junction's MOUTH, which is the one place the dirt road
     // is deliberately opened out well past its band (R17) and is a place
     // rather than a wander.
@@ -342,26 +341,156 @@ describe("the road's surface (R33)", () => {
         const d = j.joining ? j.s - s.s : s.s - j.s;
         return d >= 0 && d <= mouthRun;
       });
+    /** How far a sample is from the nearest road of the other surface, in
+     * samples — the width rolls in and out over `W.runoff` at a paving
+     * boundary exactly as it does at a bend, because a mat that changed
+     * width in one 2 m step would be a notch cut in the side of the road. */
+    const runoff = Math.ceil(W.runoff / track.step);
+    const nearGravel = (i: number): boolean => {
+      for (
+        let k = Math.max(0, i - runoff);
+        k <= Math.min(track.samples.length - 1, i + runoff);
+        k++
+      )
+        if (track.samples[k].surface === "gravel" && track.samples[k].deck === null) return true;
+      return false;
+    };
     let lo = Infinity;
     let hi = 0;
-    for (const s of track.samples) {
+    const bends: number[] = [];
+    const runs: number[] = [];
+    for (let i = 0; i < track.samples.length; i++) {
+      const s = track.samples[i];
       if (s.deck !== null) continue;
       if (inMouth(s)) continue;
       if (s.surface === "asphalt") {
-        // Laid, not bladed: exactly the nominal, to the millimetre.
-        expect(s.width).toBeCloseTo(track.width, 6);
+        // Laid, not bladed: exactly the nominal, to the millimetre — once
+        // clear of the joint with the dirt road either side of it.
+        if (!nearGravel(i)) expect(s.width).toBeCloseTo(track.width, 6);
         continue;
       }
       if (s.surface !== "gravel") continue;
       lo = Math.min(lo, s.width);
       hi = Math.max(hi, s.width);
+      if (Math.abs(s.curvature) > 1 / 90) bends.push(s.width);
+      else if (Math.abs(s.curvature) < 1e-6) runs.push(s.width);
     }
-    // Inside the authored band...
-    expect(lo).toBeGreaterThanOrEqual(track.width * (1 - band) - 1e-6);
-    expect(hi).toBeLessThanOrEqual(track.width * (1 + band) + 1e-6);
+    // Inside the authored band: narrow, wandering either side of that, and
+    // opening out at the bends.
+    expect(lo).toBeGreaterThanOrEqual(track.width * (W.narrow - W.vary) - 1e-6);
+    expect(hi).toBeLessThanOrEqual(track.width * (W.narrow + W.vary + W.corner.gain) + 1e-6);
     // ...and actually using it. A width that never leaves the middle of its
     // band is a constant width with extra arithmetic.
-    expect(hi - lo).toBeGreaterThan(track.width * band);
+    expect(hi - lo).toBeGreaterThan(track.width * W.vary);
+    // TIGHTER than the nominal for most of its length: that is the whole
+    // point of `narrow`, and a road that averaged the nominal would not be
+    // a dirt road however much it wandered.
+    const mean = (xs: number[]): number => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length);
+    expect(mean(runs)).toBeLessThan(track.width * (W.narrow + W.vary / 2));
+    // ...and WIDER round a bend than down the straight either side of it,
+    // which is the room a drift is given.
+    expect(mean(bends)).toBeGreaterThan(mean(runs));
+  });
+});
+
+describe("the corners' cross-fall (R19)", () => {
+  it("lies the gravel corners over, and reports how far", () => {
+    for (const seed of SEEDS) {
+      const drive = report(seed).metrics.find((m) => m.id === "drive");
+      const tilt = drive?.stats.cornerTilt ?? 0;
+      // The claim R19 makes and nothing measured before: not merely that a
+      // corner is banked the right WAY, but that it is banked at all. A
+      // stage whose corners all sit at one percent passes `camber` with
+      // full marks and reads as flat ground with a road painted on it.
+      expect(tilt, `seed ${seed}`).toBeGreaterThanOrEqual(ANALYSIS.drive.tilt.min);
+      expect(tilt, `seed ${seed}`).toBeLessThanOrEqual(ANALYSIS.drive.tilt.max);
+    }
+  });
+
+  it("banks the gravel harder than the tarmac, because the two have different causes", () => {
+    // A sealed road's cross-fall is DESIGNED and reserved for the geometry
+    // that needs it; a gravel road's is WORN, by every car that has pushed
+    // loose stone from the inside of the bend to the outside — which
+    // happens on any corner at all. So gravel gets both the higher ceiling
+    // and the longer pivot.
+    expect(STAGE_RULES.bank.max.gravel).toBeGreaterThan(STAGE_RULES.bank.max.asphalt);
+    expect(STAGE_RULES.bank.pivotRadius.gravel).toBeGreaterThan(
+      STAGE_RULES.bank.pivotRadius.asphalt,
+    );
+    const track = compileStage(2, "long", { asphalt: 0.6 });
+    const tilt = (surface: string): number => {
+      const banks = track.samples
+        .filter((s) => s.surface === surface && s.deck === null && Math.abs(s.curvature) > 1 / 120)
+        .map((s) => Math.abs(s.bank))
+        .sort((a, b) => a - b);
+      return banks.length > 0 ? banks[Math.floor(banks.length / 2)] : 0;
+    };
+    expect(tilt("gravel")).toBeGreaterThan(tilt("asphalt"));
+  });
+});
+
+describe("the road's own travel (R34)", () => {
+  it("measures the metres of climb and descent per km, and they are not a plane", () => {
+    for (const seed of SEEDS) {
+      const drive = report(seed).metrics.find((m) => m.id === "drive");
+      const perKm = drive?.stats.travelPerKm ?? 0;
+      // The simplest honest statement of "this road is not a table", and
+      // the one number that moves when the road is laid closer along the
+      // country it crosses (`elevation.follow.lag`).
+      expect(perKm, `seed ${seed}`).toBeGreaterThan(0);
+      expect(perKm, `seed ${seed}`).toBeLessThan(ANALYSIS.drive.rolling.max);
+    }
+  });
+
+  it("reads the road rather than its jumps", () => {
+    // A lip is a metre of climb inside twenty, and a stage with three of
+    // them would otherwise read as rolling country for having ramps on it.
+    // So the measurement has to be blind to them, and the way to prove that
+    // is a stage that HAS them: the travel it reports stays inside the band
+    // a jumpless one does.
+    const seed = SEEDS.find((s) => {
+      const jumps = report(s).metrics.find((m) => m.id === "jumps");
+      return ((jumps?.stats.jumps as number | undefined) ?? 0) > 0;
+    });
+    expect(seed, "no seed in the set has a jump on it").toBeDefined();
+    const drive = report(seed as number).metrics.find((m) => m.id === "drive");
+    expect(drive?.stats.travelPerKm).toBeLessThan(ANALYSIS.drive.rolling.max);
+  });
+});
+
+describe("what an apex cut costs (R26)", () => {
+  it("drives the reference car over a row of blocks and prices the cut", () => {
+    for (const seed of SEEDS) {
+      const drive = report(seed).metrics.find((m) => m.id === "drive");
+      const tariff = drive?.stats.apexTariff ?? 0;
+      // A band, and both ends are defects. A block that costs nothing is no
+      // deterrent and the corner can be straightened for free; a block that
+      // costs everything is a wall somebody left in the road, which is what
+      // an apex lined with them used to be — the car came out of the row at
+      // a fifteenth of the speed it went in at.
+      expect(tariff, `seed ${seed}`).toBeGreaterThanOrEqual(ANALYSIS.drive.kerb.min);
+      expect(tariff, `seed ${seed}`).toBeLessThanOrEqual(ANALYSIS.drive.kerb.max);
+    }
+  });
+});
+
+describe("the borrowed road's corners (R20)", () => {
+  it("puts no hairpin on the tarmac, away from the crossings", () => {
+    for (const seed of SEEDS) {
+      const sweeps = report(seed)
+        .metrics.find((m) => m.id === "roads")
+        ?.checks.find((c) => c.id === "sweeps");
+      expect(sweeps?.value, `seed ${seed}`).toBeLessThanOrEqual(ANALYSIS.roads.sweeps);
+    }
+  });
+
+  it("states the ceiling as R3's own bucket boundary", () => {
+    // The vocabulary already divides corners into the ones a public road
+    // has and the ones it does not: R3's `hard` bucket IS the drift
+    // moments. Stating the rule as that boundary rather than as a number of
+    // its own is what keeps the two from drifting apart.
+    expect(STAGE_RULES.paving.minRadius).toBe(STAGE_RULES.turn.medium.radius.min);
+    expect(STAGE_RULES.turn.hard.radius.max).toBeLessThan(STAGE_RULES.paving.minRadius);
   });
 });
 
