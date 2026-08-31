@@ -308,6 +308,17 @@ export function analyzeEnds(track: Track, terrain: TerrainField): MetricReport {
         if (sample.s < finishS || sample.s > finishS + E.settle) continue;
         if (sample.jump || sample.surface === "water") hazards++;
       }
+      // R36 — and a LEVEL CROSSING is one, though it carries no lip flag:
+      // the step is the public road's formation rather than a jump the
+      // generator built, and it throws the car exactly the same way. The
+      // closing straight is placed after the search has finished, so nothing
+      // should be able to put one here — which is the reason to measure it
+      // rather than to assume it.
+      for (const junction of track.junctions) {
+        if (!junction.crossing) continue;
+        if (junction.s < finishS || junction.s > finishS + E.settle) continue;
+        hazards++;
+      }
       const settled = settleRadius >= E.settleRadius && hazards === 0;
       if (!settled) {
         findings.push({

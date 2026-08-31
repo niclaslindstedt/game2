@@ -34,6 +34,7 @@ import { corridorOffset, ROAD_CROSS } from "../mapgen/road.ts";
 import type { Track, TrackSample } from "../mapgen/compile.ts";
 import type { TerrainField } from "../mapgen/terrain.ts";
 import { createKerbField, KERB_MARKER, markersBetween } from "../mapgen/kerbs.ts";
+import { STAGE_RULES } from "../mapgen/rules.ts";
 import { ANALYSIS } from "./budgets.ts";
 import { metricScore, rate, within, type Check, type Finding, type MetricReport } from "./types.ts";
 
@@ -144,6 +145,31 @@ function onRibbon(lateral: number, half: number): boolean {
   return Math.abs(lateral) <= half + ROAD_CROSS.reach;
 }
 
+/** R36 — strides on a LEVEL CROSSING's ramps: the road climbing onto the
+ * public road's formation and dropping off the far side.
+ *
+ * Its own mask, and NOT folded into `jumpMask`, because the two questions a
+ * roller asks about this ground want opposite answers. How rough is the
+ * SURFACE (R33) must not read it: a ramp is a shape somebody graded, and
+ * measured as grain it is a bump forty times the floor on every crossing on
+ * every seed — the instrument reporting the design. How the ground BESIDE
+ * the road behaves (R31's seam and edge) must still read it: a crossing
+ * stands on an embankment, an embankment has a rim, and whether that rim is
+ * a hillside or a face is exactly what the rank is for. Skip it there and
+ * the one shape on a stage most likely to be a wall is the one shape
+ * nothing measures. */
+function rampMask(track: Track): boolean[] {
+  const mask = new Array<boolean>(track.samples.length).fill(false);
+  for (const junction of track.junctions) {
+    if (!junction.crossing) continue;
+    const reach = 0.72 * junction.spread + STAGE_RULES.crossing.ramp;
+    for (let i = 0; i < track.samples.length; i++) {
+      if (Math.abs(track.samples[i].s - junction.s) <= reach) mask[i] = true;
+    }
+  }
+  return mask;
+}
+
 /** Strides where the surface is a FEATURE rather than a road: the jump lip
  * itself and the ground it throws the car over. R6 owns whether a jump is
  * placed legally; the roller has nothing useful to say about a drop that
@@ -168,6 +194,7 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
   const lanes = laneOffsets(half);
   const stride = Math.max(1, ANALYSIS.sampling.stride);
   const skip = jumpMask(track);
+  const ramps = rampMask(track);
 
   // The rank's whole field of contacts: lane-major, so a lane's profile is
   // contiguous and the along-lane walk reads it in order.
@@ -563,7 +590,10 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
   const sealedD2: number[] = [];
   for (let i = 1; i + 1 < track.samples.length; i++) {
     const here = track.samples[i];
-    if (skip[i] || here.deck !== null || here.surface === "water") {
+    // R36 — and a crossing's ramps, which are a graded shape rather than a
+    // rough surface (`rampMask`). Only here: the seam and edge checks above
+    // keep reading them, because the embankment's rim is theirs to judge.
+    if (skip[i] || ramps[i] || here.deck !== null || here.surface === "water") {
       bumpEnd = -Infinity;
       continue;
     }

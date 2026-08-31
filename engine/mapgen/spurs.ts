@@ -102,8 +102,14 @@ export type Spur = {
   /** Arc position of its junction on the stage. */
   atS: number;
   /** Which junction it hangs off: the one where the route JOINS the
-   * tarmac, or the one where it LEAVES it. */
+   * tarmac, or the one where it LEAVES it. On a CROSSING, where the route
+   * does neither, it is only which of the two arms this is. */
   end: "entry" | "exit";
+  /** R36 — set on both arms of a level crossing. A junction abandons one
+   * arm and the rally drives up the other; a crossing abandons the road, so
+   * these come in pairs, pointing opposite ways out of one meeting point,
+   * and both of them are shut. */
+  crossing?: boolean;
   samples: SpurSample[];
   /** Full road width, meters — the MAIN road's, continued: a branch is the
    * far arm of the road the route turned onto, not a road of its own. */

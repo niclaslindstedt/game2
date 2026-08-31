@@ -15,11 +15,35 @@ import { createGame, type GameState } from "@engine";
 
 import { createCarDirt, dirtRate, groundTravel } from "../pwa/src/game/car-dirt.ts";
 
-/** A racing state parked on the first sample of the given surface. */
-function stageOn(surface: "gravel" | "asphalt" | "water", seed = 7): GameState {
-  const state = createGame({ seed, length: "long", knobs: { water: 0.8 } });
+/** A racing state parked on the first sample of the given surface.
+ *
+ * The seed is SEARCHED FOR rather than named, and that is not fussiness.
+ * What surfaces a stage has is a property of its COUNTRY: tarmac exists only
+ * where the land carried a public road the route could use (R17), and water
+ * only where the pour left a body in the way (R35). A seed that has both
+ * today can have neither tomorrow — any change to how the route meets the
+ * roads redraws every stage downstream of it, and a suite that pins one
+ * seed then fails with "seed 7 has no asphalt", which says nothing about
+ * the thing under test. This helper wants A STAGE WITH TARMAC ON IT; the
+ * sweep is how it asks for one. */
+// Only the SEED is remembered, never the state: every caller mutates the
+// one it is handed, so a shared state would carry one test's car into the
+// next.
+const staged = new Map<string, number>();
+function stageOn(surface: "gravel" | "asphalt" | "water"): GameState {
+  const known = staged.get(surface);
+  const build = (seed: number): GameState =>
+    createGame({ seed, length: "long", knobs: { water: 0.8 } });
+  let state: GameState | null = known === undefined ? null : build(known);
+  for (let seed = 1; state === null && seed <= 24; seed++) {
+    const built = build(seed);
+    if (!built.track.samples.some((s) => s.surface === surface)) continue;
+    staged.set(surface, seed);
+    state = built;
+  }
+  if (state === null) throw new Error(`no seed in the sweep carried ${surface}`);
   const at = state.track.samples.findIndex((s) => s.surface === surface);
-  expect(at, `seed ${seed} has ${surface} somewhere`).toBeGreaterThanOrEqual(0);
+  expect(at, `the staged seed has ${surface} somewhere`).toBeGreaterThanOrEqual(0);
   state.phase = "racing";
   state.progressIndex = at;
   state.car.slide = 0;

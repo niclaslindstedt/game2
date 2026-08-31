@@ -22,7 +22,7 @@ import { createRng } from "../lib/prng.ts";
 import { cellKey } from "../lib/math.ts";
 import { hash2 } from "../lib/noise.ts";
 import { createLandField } from "./land.ts";
-import { junctionFlat, junctionPlatformY, ROAD_CROSS } from "./road.ts";
+import { junctionFlat, junctionMainEdge, junctionPlatformY, ROAD_CROSS } from "./road.ts";
 import { buildSpur, cutSpur, placeBlock, SPUR, type ShelfBand, type Spur } from "./spurs.ts";
 import { createHighwayNetwork, type Highway } from "./highway.ts";
 
@@ -71,10 +71,25 @@ export type RoadJunction = {
   /** ...and how far ACROSS the main road that graded area runs, m — wide
    * enough to carry the whole mouth the dirt road opens, mat and verge. */
   spread: number;
+  /** How much of `reach` survives on the side the minor road does NOT open
+   * toward, as a share (`JunctionPlatform.behind`). Left unset on a
+   * junction, which is lopsided; 1 on a crossing, which is not. */
+  behind?: number;
+  /** How much of a junction's gravel drag-out this place gets, as a share
+   * (`JunctionPlatform.drag`). Unset on a junction, which gets all of it;
+   * `crossing.drag` on a crossing, where nobody turns. */
+  drag?: number;
   /** Arc position on the stage (association / pruning). */
   s: number;
-  /** True where the route JOINS the sealed road, false where it leaves. */
+  /** True where the route JOINS the sealed road, false where it leaves.
+   * Meaningless on a crossing, where the route does neither. */
   joining: boolean;
+  /** R36 — true where this is a CROSSING rather than a junction: the route
+   * goes square over the public road and out the far side, so the minor
+   * road has two collinear arms instead of one, the sealed road has TWO
+   * abandoned arms instead of one, and the whole platform stands `stand`
+   * proud of the country the rally crossed it on. */
+  crossing?: boolean;
 };
 
 export type TrackSample = {
@@ -816,6 +831,12 @@ function createCompiler(
     joining: boolean;
     /** Arc position of the junction on the stage (pruning, association). */
     s: number;
+    /** R36 — a crossing rather than a junction: it earns TWO arms, one each
+     * way along the public road, and both of them are shut. */
+    crossing?: boolean;
+    /** ...and which point of which road it sits on, so the arms are cut
+     * from the line the tarmac was actually laid on. */
+    road?: { road: Highway; index: number };
   };
   const junctions: Junction[] = [];
 
@@ -1005,6 +1026,164 @@ function createCompiler(
     });
   };
 
+  /** R36 — note the CROSSING a `overRoad` straight makes. Everything about
+   * it is stated the other way round from a junction, and each difference is
+   * the same difference: nobody turns.
+   *
+   * - The meeting point is the middle of the passage, not a corner's tangent
+   *   point, so it is found by asking which point of the WALKED road is
+   *   nearest the piece of tarmac the search aimed at. The search's 6 m
+   *   probe and this 2 m walk diverge by a metre or two over a stage, and a
+   *   crossing placed at the search's answer is a crossing a metre off the
+   *   road it crosses — which is a platform with a strip of unlevelled
+   *   ground down one edge of it.
+   * - The platform is LEVEL and it stands `crossing.stand` above the route's
+   *   own line. That is the whole feature (R36): the public road is built up
+   *   on a formation, the rally is scraped along the field, and the car goes
+   *   over the step. A junction takes the main road's grade because the
+   *   route is about to drive down it; nothing drives down this one.
+   * - It is elongated ACROSS the tarmac (`spread` is the ramp, `reach` the
+   *   footprint on the public road) and it is SYMMETRIC (`behind: 1`),
+   *   because the gravel opens on both sides of it.
+   * - And `curve` is zero: the minor road is one straight line through the
+   *   middle, which is what makes the two dirt arms opposite each other. */
+  const noteCrossing = (
+    over: NonNullable<SegmentPlan["overRoad"]>,
+    path: { x: number; z: number; heading: number; s: number; base: number; slope: number }[],
+    rollAt: (u: number) => number,
+    step: number,
+  ): void => {
+    const road = track.highways[over.road];
+    if (!road) return;
+    const on = road.points[over.index];
+    if (!on) return;
+    let best = 0;
+    let nearest = Infinity;
+    for (let i = 0; i < path.length; i++) {
+      const d = Math.hypot(path[i].x - on.x, path[i].z - on.z);
+      if (d >= nearest) continue;
+      nearest = d;
+      best = i;
+    }
+    const at = path[best];
+    // R36 — the step. The route's OWN height here plus the stand: the
+    // formation the public road is built on, which the gravel has to climb.
+    const y = at.base + rollAt((best + 1) * step) + R.crossing.stand;
+
+    // ...and the plane that formation lies on. LEVEL ALONG THE PUBLIC ROAD,
+    // which is the direction anybody looks down it, and tilted at the
+    // ROUTE's own grade across it.
+    //
+    // Both halves of that are load-bearing and the second one was learned
+    // the hard way. A dead level platform is what a formation actually is,
+    // and on flat country it is right — but the moment the rally crosses on
+    // a slope the two edges of it are at two different heights above the
+    // route's own line, and where the country falls faster than `stand` the
+    // far edge is BELOW it. That is not a jump, it is a hole with a road in
+    // it: measured over seeds 1-24 the level plane gave steps of 2.0 to 2.9
+    // m and ramps at 27-33%, none of it the number `stand` says. Tilted at
+    // the route's grade the step is exactly `stand` on both sides of every
+    // crossing on every seed, which is what makes this a feature that can be
+    // tuned rather than a lottery the country runs.
+    //
+    // What it costs is cross-fall on the sealed mat — the route's grade over
+    // `reach`, so a few per cent over a road width. A public road laid
+    // across a hillside does that.
+    //
+    // The grade is the road's WHOLE slope, not the country's: the base the
+    // builder's eye has followed the land to, plus the rate its own roll
+    // (R34) is climbing at. Reading only the base left the roll to diverge
+    // across the ramp — a wave a metre deep over twenty is another five per
+    // cent on top of a thirteen, and it is the difference between the seeds
+    // that measured 13% and the ones that measured 25%.
+    const u = (best + 1) * step;
+    const slope = at.slope + (rollAt(u + 2) - rollAt(u - 2)) / 4;
+    const grade = {
+      x: Math.sin(at.heading) * slope,
+      z: Math.cos(at.heading) * slope,
+    };
+    junctions.push({
+      x: at.x,
+      z: at.z,
+      elevation: y,
+      slope: 0,
+      heading: on.heading,
+      joining: false,
+      s: at.s,
+      crossing: true,
+      road: { road, index: over.index },
+    });
+    track.junctions.push({
+      x: at.x,
+      z: at.z,
+      y,
+      grade,
+      heading: on.heading,
+      curve: 0,
+      width: track.width,
+      reach: R.crossing.reach * track.width,
+      // The graded area is a JUNCTION's, not the ramp's: this is the paving
+      // and the levelling, and a crossing's footprint on the ground is the
+      // same size as any other place two roads meet. The ramps are longer
+      // and they are not this (see `crossing.ramp`).
+      spread: track.width * 0.85,
+      behind: 1,
+      drag: R.crossing.drag,
+      s: at.s,
+      joining: false,
+      crossing: true,
+    });
+  };
+
+  /** R36 — is this point ON the public road's mat at a crossing?
+   *
+   * For the road width it spends up there the rally is not on a rally road:
+   * it is on the tarmac, briefly, the way anybody crossing a main road is.
+   * So that stretch is SEALED — which sets the grip under the wheels, takes
+   * R33's grain and width wander out of it (a paving machine lays one
+   * width), and hands the renderer a surface that agrees with the mat it
+   * paints across the crossing from the same edge function.
+   *
+   * The seam is the main road's own EDGE, cut square, exactly as it is at a
+   * junction. It is the one place a stage changes surface without a
+   * junction and without R20's run-out, and it needs no ceremony because
+   * nothing about it is a decision: the car is on the tarmac because the
+   * tarmac is there. */
+  const onCrossingSeal = (x: number, z: number): boolean => {
+    for (const junction of track.junctions) {
+      if (!junction.crossing) continue;
+      const past = junctionMainEdge(junction, x, z);
+      if (past !== null && past <= 0) return true;
+    }
+    return false;
+  };
+
+  /** R36 — how much of the CROSSING's own plane a sample of the rally road
+   * takes at this arc position, 1 up on the formation to 0 back down on the
+   * country. The ramp: the road climbs onto the public road's formation and
+   * drops off the far side, and the drop is the jump.
+   *
+   * Measured along the route's ARC and not across the ground, because that
+   * is the direction the rally climbs and the only one the ramp has. The
+   * platform's ellipse is the other measurement and it stays what it is —
+   * a shape on the ground, describing the graded area. This holds the plane
+   * for as far as that ellipse does (`0.72 * spread`, where its own falloff
+   * begins) so the two hand over with no seam, then eases off over
+   * `crossing.ramp` metres of gravel.
+   *
+   * A smoothstep, so the road leaves the formation and rejoins the country
+   * with no kink at either end — a linear ramp puts a crease at the toe that
+   * reads as a step in the road and measures as one. */
+  const crossingRamp = (junction: RoadJunction, s: number): number => {
+    if (!junction.crossing) return 0;
+    const hold = 0.72 * junction.spread;
+    const d = Math.abs(s - junction.s);
+    if (d <= hold) return 1;
+    const t = (d - hold) / R.crossing.ramp;
+    if (t >= 1) return 0;
+    return 1 - t * t * (3 - 2 * t);
+  };
+
   /** R17 — how far back down the MINOR road a mouth may reach, m. A
    * proportion of the road's own width: the mouth of a lane and the mouth
    * of a boulevard are the same place at two scales. */
@@ -1128,6 +1307,16 @@ function createCompiler(
     let widest = 0;
     let outer: 1 | -1 = 1;
     for (const junction of track.junctions) {
+      // R36 — A CROSSING HAS NO MOUTH, and that is what squareness buys.
+      // A mouth exists because a junction is a CORNER: the dirt road meets
+      // the tarmac at an angle, which leaves a wedge of country tapering to
+      // a knife point between the two mats, and the flare is what traffic
+      // wears away to close it. Crossed at right angles there is no wedge —
+      // a rectangle meeting a rectangle square meets it along a straight
+      // edge — so a flare here would be a lane that briefly got fatter for
+      // no reason, and a lopsided one at that (`outerOf` reads the corner's
+      // curvature, and a crossing has none).
+      if (junction.crossing) continue;
       const d = junction.joining ? junction.s - sample.s : sample.s - junction.s;
       if (d < 0 || d > mouthRun) continue;
       let throat = throats.get(junction);
@@ -1385,6 +1574,38 @@ function createCompiler(
             maxZ: junction.z + STREAMED_ESCAPE,
           }
         : track.bounds;
+      // R36 — a CROSSING abandons the public road entirely, so it earns an
+      // arm in EACH direction: the road runs on out of the crossing both
+      // ways, and both ways are shut. Cut, never driven — a crossing is only
+      // ever made on a road that already exists, so `road` is always there
+      // and there is no country to steer a branch through.
+      //
+      // The two are labelled `entry` and `exit` because a `Spur` has to be
+      // one or the other, and which arm is which does not matter: the label
+      // is what makes the pair distinguishable to the block's own dice, so
+      // the two barriers facing each other across the stage are not always
+      // the same barrier twice.
+      if (junction.crossing && junction.road) {
+        for (const [end, turn] of [
+          ["entry", 0],
+          ["exit", Math.PI],
+        ] as const) {
+          const arm = cutSpur(
+            { ...junction, heading: junction.heading + turn },
+            junction.s,
+            end,
+            junction.road.road,
+            junction.road.index,
+            land,
+            track.width,
+            shelfBand,
+          );
+          arm.crossing = true;
+          track.spurs.push(arm);
+          standing.push(arm);
+        }
+        continue;
+      }
       const end = junction.joining ? "entry" : "exit";
       // R17 — a BORROWED junction's arm is the rest of the road, so it is
       // cut off the line the tarmac was laid on rather than driven out of
@@ -1437,8 +1658,13 @@ function createCompiler(
     // platform, exactly like the road it leaves: same plane, no crown, no
     // border, so the two carriageways are one piece of ground.
     for (const spur of track.spurs) {
-      const platform = track.junctions.find(
-        (j) => j.s === spur.atS && j.joining === (spur.end === "entry"),
+      // A crossing's two arms share one meeting point, so `joining` cannot
+      // tell them apart and does not have to: they warp onto the same
+      // platform (R36).
+      const platform = track.junctions.find((j) =>
+        spur.crossing
+          ? j.crossing === true && j.s === spur.atS
+          : j.s === spur.atS && j.joining === (spur.end === "entry"),
       );
       if (!platform) continue;
       for (const sample of spur.samples) {
@@ -1619,15 +1845,35 @@ function createCompiler(
       const sample = all[i];
       let flat = 0;
       let plane = 0;
+      // R36 — the height blend is NOT the paving blend, and a crossing is
+      // why. `flat` says how much of the sample's CROSS-SECTION is warped
+      // out (the crown, the camber, the wheel tracks) — a fact about paving,
+      // which reaches exactly as far as the graded platform does. `lift`
+      // says how much of its HEIGHT comes from the platform's plane, and at
+      // a crossing that reaches further: the road climbs a ramp of ordinary
+      // gravel onto the formation, and gravel that has been warped flat is a
+      // ramp somebody paved. At a junction the two are the same number, and
+      // they stay the same number.
+      let lift = 0;
       for (const junction of track.junctions) {
         if (Math.abs(junction.s - sample.s) > R.junction.reach.max * 2) continue;
         const w = junctionFlat(junction, sample.x, sample.z);
         if (w <= flat) continue;
         flat = w;
+        if (w > lift) {
+          lift = w;
+          plane = junctionPlatformY(junction, sample.x, sample.z);
+        }
+      }
+      for (const junction of track.junctions) {
+        if (!junction.crossing) continue;
+        const w = crossingRamp(junction, sample.s);
+        if (w <= lift) continue;
+        lift = w;
         plane = junctionPlatformY(junction, sample.x, sample.z);
       }
       sample.flat = flat;
-      sample.elevation = rawY[i] * (1 - flat) + plane * flat;
+      sample.elevation = rawY[i] * (1 - lift) + plane * lift;
       // Back to the pristine width BEFORE the mouth is measured — the flare
       // reads the mat's own reach across the main road, so a pass that ran
       // over this sample already would otherwise flare a flare.
@@ -1890,6 +2136,11 @@ function createCompiler(
         path[Math.max(0, Math.min(steps - 1, Math.round(u / step) - 1))].base;
       const rollAt = (u: number): number => rolling(rollS0 + u);
 
+      // R36 — the public road this straight goes over. Noted from the walk,
+      // before any sample of it is emitted, so `shapeJunctions` finds the
+      // platform waiting when it warps the road onto it.
+      if (built.overRoad) noteCrossing(built.overRoad, path, rollAt, step);
+
       // R17 — a surface change that falls ON the segment's first sample.
       // The walk below flips between two samples, which cannot express a
       // flip at zero: seed 3's join corner was a 15 m turn whose whole
@@ -1920,7 +2171,9 @@ function createCompiler(
         const crossed = inCrossing(built, u);
         const bridge = crossed && isBridge(built);
         const ford = crossed && !bridge;
-        const paved = !ford && pavedNow;
+        // R36 — and the road width the route spends on a public road it is
+        // crossing is sealed, because it is on one.
+        const paved = !ford && (pavedNow || onCrossingSeal(cursor.x, cursor.z));
         const sample: TrackSample = {
           x: cursor.x,
           z: cursor.z,

@@ -68,6 +68,30 @@ export function analyzeDrive(track: Track, v: number[]): MetricReport {
       feature[k] = true;
     }
   }
+  // R36 — and a LEVEL CROSSING's ramps, for the same reason and with the
+  // same care. The public road stands on a formation and the rally climbs
+  // onto it, so the two ramps are steep and the far lip throws the car:
+  // that is the feature, not a defect in the road, and measured as ordinary
+  // road it is a 20% grade and a heave over the budget every single time.
+  //
+  // Bounded by the RAMP, which is the thing that is steep — the same arc
+  // window the compiler raises the road over (`crossingRamp`): the graded
+  // top, plus `crossing.ramp` of gravel either side of it. Not by `flat`,
+  // which is the PAVING and stops at the platform's rim: the ramps are
+  // ordinary gravel with their crown and camber intact, so keyed on that
+  // the exemption covered the flat part and left the steep part reported.
+  for (const junction of track.junctions) {
+    if (!junction.crossing) continue;
+    const reach = 0.72 * junction.spread + STAGE_RULES.crossing.ramp;
+    for (let i = 0; i < samples.length; i++) {
+      if (Math.abs(samples[i].s - junction.s) > reach) continue;
+      // One sample past each end: the grade at the last ramped sample is
+      // read across its neighbours, and the outer one is open road.
+      for (let k = Math.max(0, i - 1); k <= Math.min(samples.length - 1, i + 1); k++) {
+        feature[k] = true;
+      }
+    }
+  }
 
   for (let i = 1; i < samples.length - 1; i++) {
     const before: TrackSample = samples[i - 1];
