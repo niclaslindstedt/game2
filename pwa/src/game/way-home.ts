@@ -5,8 +5,9 @@
 // stage's shape stops being navigable the moment the road is behind a hill —
 // so the guidance has to be somewhere the player is already looking.
 //
-// It hangs off the CAMERA rather than the car: a fixed slot just below the
-// sign in every orientation, sized as a fraction of the frame so a phone
+// It hangs off the CAMERA rather than the car: a slot just BELOW the sign,
+// measured off the sign itself so the two never overlap in any orientation
+// or with the mirror up, and sized as a fraction of the frame so a phone
 // gets the same instrument a desktop does. It swings in the plane of the
 // FRAME — up means the road is that way past the top of the screen, down
 // means it is behind you — because an arrow that took the world bearing
@@ -21,12 +22,22 @@ import { wayHome, type GameState } from "@engine";
  * depend on it — near enough to sit in front of any terrain, far enough that
  * the perspective on it stays gentle. */
 const DIST = 6;
-/** Where it sits down the frame, 0 (top) .. 1 (bottom). Just under the
- * co-driver strip, which the CSS anchors at 11% plus its own height. */
-const SLOT = 0.27;
+/** Where it sits down the frame, 0 (top) .. 1 (bottom), when the sign is not
+ * on screen to be measured against. */
+const SLOT = 0.42;
 /** Arrow length as a fraction of the frame's half-height — the frame, not
- * the world, so portrait and landscape read identically. */
-const SIZE = 0.16;
+ * the world, so portrait and landscape read identically. Small: it is a
+ * bearing, not an instruction, and the instruction is already on the sign
+ * above it. An arrow big enough to be the subject of the frame covers the
+ * ground the driver is trying to pick a way back across. */
+const SIZE = 0.075;
+/** How far the arrow reaches either side of its own centre, in the units it
+ * is modelled in: the head's tip at 1.32, the shaft's tail at -0.95. */
+const REACH = 1.3;
+/** Clear air between the sign's bottom edge and the top of the arrow, as a
+ * fraction of the frame height. Enough that the two read as one instrument
+ * stacked, rather than as a sign with something growing out of it. */
+const AIR = 0.03;
 /** How far the tip leans INTO the screen, rad — enough that the head and
  * shaft read as a solid lying on the ground rather than a flat cut-out,
  * shallow enough that nothing is lost to foreshortening. */
@@ -50,7 +61,7 @@ export type WayHomeArrow = {
  * is what survives foreshortening, and a head only just wider than the shaft
  * would read as a stick from behind. Six-sided head and a square shaft keep
  * it inside the world's low-poly vocabulary. */
-export function createWayHomeArrow(): WayHomeArrow {
+export function createWayHomeArrow(canvas: HTMLCanvasElement): WayHomeArrow {
   const group = new THREE.Group();
   const material = new THREE.MeshBasicMaterial({
     // The same amber as the sign's warning triangle: one marker, two places.
@@ -80,6 +91,27 @@ export function createWayHomeArrow(): WayHomeArrow {
   const camQuat = new THREE.Quaternion();
   let shown = 0;
   let bearing = 0;
+  /** Where the arrow currently sits down the frame, and the sign it is
+   * hanging off. Negative until the first measurement, which is what makes
+   * the arrow ARRIVE in place: the HUD ticks at ~12 Hz, so the sign can be a
+   * frame or two behind the fade, and a slot that starts at a guess and then
+   * lerps would drop the arrow down the screen as it appears. */
+  let slot = -1;
+  let sign: Element | null = null;
+
+  /** The frame position, 0 (top) .. 1 (bottom), of the arrow's centre when
+   * it is hung under the co-driver's sign. The sign is DOM and the arrow is
+   * in the scene, so there is no shared measurement to read — but they share
+   * a box (the canvas and the HUD are the same inset-0 rectangle), and one
+   * rect off each is cheaper than restating the CSS that places the sign in
+   * every orientation and on both sides of the mirror toggle. */
+  const slotUnderSign = (): number => {
+    if (!sign?.isConnected) sign = document.querySelector(".hud-pace-home");
+    const frame = canvas.getBoundingClientRect();
+    if (!sign || frame.height <= 0) return SLOT;
+    const below = (sign.getBoundingClientRect().bottom - frame.top) / frame.height;
+    return Math.min(0.75, below + AIR + (SIZE * REACH) / 2);
+  };
 
   const update = (state: GameState, camera: THREE.PerspectiveCamera, dt: number): void => {
     // The same test the co-driver's strip runs off — pointing away from a
@@ -90,7 +122,11 @@ export function createWayHomeArrow(): WayHomeArrow {
     const want = state.lost && state.phase === "racing" ? 1 : 0;
     shown += (want - shown) * Math.min(1, FADE * dt);
     group.visible = shown > 0.01;
-    if (!group.visible) return;
+    if (!group.visible) {
+      slot = -1;
+      sign = null;
+      return;
+    }
 
     const car = state.car;
     const home = wayHome(state);
@@ -110,9 +146,14 @@ export function createWayHomeArrow(): WayHomeArrow {
 
     // The slot, in camera space: the camera looks down its own -z, and the
     // frame's half-height at DIST follows from the vertical fov the camera
-    // is currently on (portrait and landscape do not share one).
+    // is currently on (portrait and landscape do not share one). The sign is
+    // re-measured every frame it is up — it moves when the mirror is toggled
+    // and when the device turns — but it only SNAPS into place once, on the
+    // frame the arrow appears.
+    const under = slotUnderSign();
+    slot = slot < 0 ? under : slot + (under - slot) * Math.min(1, SWING * dt);
     const halfHeight = DIST * Math.tan((camera.fov * Math.PI) / 360);
-    group.position.set(0, halfHeight * (1 - 2 * SLOT), -DIST);
+    group.position.set(0, halfHeight * (1 - 2 * slot), -DIST);
     group.scale.setScalar(halfHeight * SIZE * (0.7 + 0.3 * shown));
 
     // Stand the arrow up in the frame (its +z onto screen-up, tipped into

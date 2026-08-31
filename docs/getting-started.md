@@ -69,7 +69,7 @@ Everything here is rebindable the same way the keys are: tap a row, press the bu
 
 ### Options
 
-**HUD** switches off anything you do not need on screen — minimap, the rear-view mirror, the on-screen camera button, pacenotes (and separately their WORDS, leaving just the corner arrows to read at a glance), damage glyph, tachometer, stage clock. Speed, gear and the start lights stay: those are the game.
+**HUD** switches off anything you do not need on screen — minimap, the rear-view mirror, the on-screen camera button, pacenotes (and separately their WORDS, leaving just the corner signs — each one the shape of the corner it calls, on a plate pointed the way the road goes — to read at a glance), damage glyph, tachometer, stage clock. Speed, gear and the start lights stay: those are the game.
 
 The **camera** key (C or V) walks eight angles, inside out: **COCKPIT** behind the wheel, **HOOD** over your own bonnet, **BUMPER** down at the nose with no bodywork in frame at all, then CLOSE, CHASE, FAR, HELI and TOP. OPTIONS ▸ HUD picks which one every stage opens on — the row opens a card with all of them on it, each with the sentence that says what it is like to drive from, because the choice is between the pictures and not between the words — and, under INSIDE THE CAR, sets up the three you sit in: **SEAT** height, **REACH**, **FIELD OF VIEW**, and **HEAD MOTION**, which is how much the driver's head moves at all. The head has weight: it is thrown forward under the brakes, sideways through a corner, down into a landing and along whatever you just hit, with the road buzzing up through it. HEAD MOTION winds all of that down together, and OFF bolts the camera to the car for anybody the movement does not agree with.
 

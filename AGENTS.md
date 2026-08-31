@@ -159,6 +159,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | A continuous sound (engine, tyres, wind, the slide)         | `engine-bed.ts` / `road-grain.ts` in `pwa/src/game/audio/`                                                                       |
 | A piece of MUSIC                                            | `pwa/src/game/audio/scores/` — the `soundtrack` skill                                                                            |
 | HUD readouts (dials, boards, calls)                         | `pwa/src/game/hud.tsx` + `pwa/src/styles.css`                                                                                    |
+| The SHAPE a corner call is DRAWN as, and the head on it     | `pwa/src/game/pace-shape.ts` — the stage's own plan of that turn, fitted to the sign's box; DOM-free, so the tests read it       |
 | The TOUCH controls — the wheel and the pedal thumb zones    | `pwa/src/game/hud-touch.tsx`; a zone's grip on a finger is `thumb-guard.ts`, what a drag MEANS is `pedal-gesture.ts`             |
 | Which gears a thumb flick may take, and why a key may not   | `pwa/src/game/shift-window.ts` — DOM-free, and the shift light reads off it too                                                  |
 | Input mapping                                               | `pwa/src/game/input.ts` (bindings in `settings.ts`)                                                                              |

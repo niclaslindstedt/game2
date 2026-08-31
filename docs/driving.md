@@ -674,8 +674,11 @@ has driven out does not drown in the lake, it drowns in the beach.
   verge is not lost, and neither is a clearing crossed perpendicular with the
   stage running alongside. Once it is, the co-driver's strip reads RETURN TO
   TRACK with the distance to the road, a footnote saying what the button
-  costs (the last checkpoint), and an arrow hangs over the car pointing at
-  the road itself. Going OFF has no threshold of its own: the alert is an
+  costs (the last checkpoint), and a small arrow hangs in the frame just
+  UNDER that sign, pointing at the road itself — measured off the sign
+  rather than parked at a fixed height, so the two stay stacked in either
+  orientation and on both sides of the mirror toggle.
+  Going OFF has no threshold of its own: the alert is an
   instruction, so the only thing that clears it is the track being back
   under the wheels. Nearing the road or aiming at it leaves it up, which is
   also what stops a wandering car blinking it on and off.

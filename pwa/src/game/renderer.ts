@@ -267,7 +267,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   const carFx = createCarFx(scene);
   const { dust, mud, smoke, plume, spray, foam, fumes, life, celebration } = carFx;
   const { atWheels } = carFx;
-  const wayHomeArrow = createWayHomeArrow();
+  const wayHomeArrow = createWayHomeArrow(canvas);
   // The arrow lives in camera space, and a camera only draws its children
   // when it is itself part of the scene being rendered.
   scene.add(chase.camera);

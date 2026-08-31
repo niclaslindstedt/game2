@@ -26,6 +26,7 @@ import {
 } from "./hud-finish.tsx";
 import { SpectateBanner, SpectateGap, type SpectateProps } from "./hud-spectate.tsx";
 import { Minimap, type HudMinimap } from "./minimap.tsx";
+import type { PaceSign } from "./pace-shape.ts";
 import type { HudSettings, TouchSettings } from "./settings.ts";
 import type { ShiftWindow } from "./shift-window.ts";
 import { clamp, formatTime } from "../lib/util.ts";
@@ -41,6 +42,9 @@ export type HudPacenote = {
   long: boolean;
   /** Meters from the car to the turn entry (0 while inside the turn). */
   distance: number;
+  /** The corner's own shape, ready to draw in the sign's 100x100 box — the
+   * stage's plan view of this turn, already in screen axes (pace-shape.ts). */
+  sign: PaceSign;
 };
 
 /** The car is in the start control — either beat of it. Nothing is geared
@@ -329,66 +333,24 @@ function Tachometer({ rpm }: { rpm: number }) {
   );
 }
 
-/** The pacenote arrows, drawn like rally corner signs: the shaft is the
- * road, the bend is the corner. Points bend RIGHT here; a left call mirrors
- * the whole icon. The head is computed from the last two points so every
- * severity's arrow stays consistent. */
-const PACE_ARROWS: Record<TurnSeverity, [number, number][]> = {
-  soft: [
-    [42, 92],
-    [42, 55],
-    [47, 38],
-    [58, 26],
-    [68, 19],
-  ],
-  medium: [
-    [40, 92],
-    [40, 58],
-    [44, 44],
-    [54, 37],
-    [70, 34],
-    [80, 34],
-  ],
-  hard: [
-    [38, 92],
-    [38, 52],
-    [42, 32],
-    [56, 24],
-    [68, 28],
-    [74, 42],
-    [74, 58],
-  ],
-};
-
-function PacenoteArrow({ severity, dir }: { severity: TurnSeverity; dir: "left" | "right" }) {
-  const pts = PACE_ARROWS[severity];
-  const d = `M ${pts.map((p) => p.join(" ")).join(" L ")}`;
-  const [x1, y1] = pts[pts.length - 2];
-  const [x2, y2] = pts[pts.length - 1];
-  const len = Math.hypot(x2 - x1, y2 - y1);
-  const ux = (x2 - x1) / len;
-  const uy = (y2 - y1) / len;
-  const head = [
-    [x2 + ux * 15, y2 + uy * 15],
-    [x2 - uy * 10, y2 + ux * 10],
-    [x2 + uy * 10, y2 - ux * 10],
-  ];
+/** The pacenote sign: the corner's own shape, drawn like a rally note board.
+ * The line is the road — the approach at the bottom, the bend the way the
+ * bend goes — with a heavy head on the exit. pace-shape.ts has squared both
+ * up and fitted them to this 100x100 box, so all that is left here is the
+ * hand they are drawn in: one chunky rounded stroke in the severity's
+ * colour, and the head filled in the same. */
+function PacenoteArrow({ sign }: { sign: PaceSign }) {
   return (
-    <svg
-      className="hud-pace-arrow"
-      viewBox="0 0 100 100"
-      style={dir === "left" ? { transform: "scaleX(-1)" } : undefined}
-      aria-hidden="true"
-    >
+    <svg className="hud-pace-arrow" viewBox="0 0 100 100" aria-hidden="true">
       <path
-        d={d}
+        d={`M ${sign.line.map((p) => p.join(" ")).join(" L ")}`}
         fill="none"
         stroke="currentColor"
         strokeWidth="13"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <polygon points={head.map((p) => p.join(",")).join(" ")} fill="currentColor" />
+      <polygon points={sign.head.map((p) => p.join(",")).join(" ")} fill="currentColor" />
     </svg>
   );
 }
@@ -503,10 +465,11 @@ function callFade(distance: number): number {
  * comes IS that feeling, delivered in the corner of an eye already busy with
  * the road. It also means the strip carries one instruction and no arithmetic.
  *
- * With the words switched off it is the ARROWS alone. The arrow already
- * carries severity in its shape and direction in its mirroring, and the fade
- * carries the distance, so nothing about the call is lost — what goes is the
- * READING, which at rally pace is the expensive part. */
+ * With the words switched off it is the SIGNS alone. A sign that is the
+ * corner's own shape carries the direction and the severity by being that
+ * corner, the colour says the severity again, and the fade carries the
+ * distance — so nothing about the call is lost. What goes is the READING,
+ * which at rally pace is the expensive part. */
 function Pacenotes({
   notes,
   words,
@@ -525,15 +488,17 @@ function Pacenotes({
       }`}
     >
       <div
-        className={`hud-pace-call hud-pace-${now.severity}`}
+        className={`hud-pace-call hud-pace-${now.severity} hud-pace-to-${now.dir}`}
         style={{ opacity: callFade(now.distance) }}
       >
-        <PacenoteArrow severity={now.severity} dir={now.dir} />
+        <PacenoteArrow sign={now.sign} />
         {words && <span className="hud-pace-text">{pacenoteText(now)}</span>}
       </div>
       {next && (
-        <div className={`hud-pace-call hud-pace-next hud-pace-${next.severity}`}>
-          <PacenoteArrow severity={next.severity} dir={next.dir} />
+        <div
+          className={`hud-pace-call hud-pace-next hud-pace-${next.severity} hud-pace-to-${next.dir}`}
+        >
+          <PacenoteArrow sign={next.sign} />
           {words && <span className="hud-pace-text">{pacenoteText(next)}</span>}
         </div>
       )}
