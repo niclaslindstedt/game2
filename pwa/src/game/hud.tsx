@@ -25,6 +25,7 @@ import {
   type NextStage,
 } from "./hud-finish.tsx";
 import { SpectateBanner, SpectateGap, type SpectateProps } from "./hud-spectate.tsx";
+import { MirrorSwitch, paceUnderGlass, type GlassSlot } from "./hud-mirror.tsx";
 import { Minimap, type HudMinimap } from "./minimap.tsx";
 import type { PaceSign } from "./pace-shape.ts";
 import type { HudSettings, TouchSettings } from "./settings.ts";
@@ -217,6 +218,12 @@ type HudProps = {
   flying: boolean;
   onPause: () => void;
   onCamera: () => void;
+  /** Whether the rear-view glass is UP. Not the same switch as `show.mirror`:
+   * that one is whether the game has a mirror at all, this one is whether the
+   * one it has is folded away for now (hud-mirror.tsx). */
+  mirrorUp: boolean;
+  /** Fold the glass away, or pull it back down. */
+  onMirror: () => void;
   /** Take a picture. Null where there is none to take — the player has
    * switched screenshots off. */
   onShot: (() => void) | null;
@@ -370,9 +377,9 @@ function pacenoteText(note: HudPacenote): string {
  * so the strip stops reading the stage and starts reading the way back. The
  * metres are the distance to the exact point the arrow over the car points
  * at, and that the reset key hands you directly. */
-function WayHomeCall({ distance, belowMirror }: { distance: number; belowMirror: boolean }) {
+function WayHomeCall({ distance, glass }: { distance: number; glass: GlassSlot }) {
   return (
-    <div className={`hud-pace ${belowMirror ? "hud-pace-under-glass" : ""}`}>
+    <div className={`hud-pace ${paceUnderGlass(glass)}`}>
       <div className="hud-pace-call hud-pace-home">
         {/* A warning triangle, drawn in the co-driver strip's own hand —
             chunky rounded strokes, one color — so it reads as the same
@@ -473,20 +480,16 @@ function callFade(distance: number): number {
 function Pacenotes({
   notes,
   words,
-  belowMirror,
+  glass,
 }: {
   notes: HudPacenote[];
   words: boolean;
-  belowMirror: boolean;
+  glass: GlassSlot;
 }) {
   const now = notes[0];
   const next = notes[1];
   return (
-    <div
-      className={`hud-pace ${words ? "" : "hud-pace-glyphs"} ${
-        belowMirror ? "hud-pace-under-glass" : ""
-      }`}
-    >
+    <div className={`hud-pace ${words ? "" : "hud-pace-glyphs"} ${paceUnderGlass(glass)}`}>
       <div
         className={`hud-pace-call hud-pace-${now.severity} hud-pace-to-${now.dir}`}
         style={{ opacity: callFade(now.distance) }}
@@ -734,6 +737,8 @@ export function Hud({
   padDriving,
   onPause,
   onCamera,
+  mirrorUp,
+  onMirror,
   onShot,
   nextStage,
   onRetry,
@@ -757,6 +762,17 @@ export function Hud({
   // desktop the throttle key is the only throttle there is, and on a handheld
   // with a controller in its hands the pad is.
   const thumbs = deviceControls().touch && !padDriving;
+  // WHAT THE MIRROR IS DOING over this frame — the switch that is drawn, and
+  // the clearance everything hanging under it takes. It has to agree with the
+  // renderer, which puts no glass up under a camera nobody drives from, on
+  // somebody else's car, or past the line: a slot that cleared a mirror which
+  // was not there would leave the co-driver's calls halfway down the screen.
+  const glass: GlassSlot =
+    !show.mirror || spectate || flying || snap.phase === "finished"
+      ? "off"
+      : mirrorUp
+        ? "up"
+        : "folded";
   /** The results card, wherever it ends up being drawn. */
   const finish = (snap.phase === "rollout" || snap.phase === "finished") &&
     snap.finishTime !== null && (
@@ -805,6 +821,13 @@ export function Hud({
       data-off={snap.offRoad ? "1" : undefined}
       data-air={snap.airborne && snap.phase === "racing" ? "1" : undefined}
     >
+      {/* THE MIRROR IS ITS OWN SWITCH: press the glass to fold the rear view
+          away, press the strip it folds to — or swipe it down — to pull it
+          back. Only where there is glass to press (see `glass` above), and
+          FIRST in the bar's DOM so that the top row's own buttons win
+          wherever the folded strip's hit box runs under them. */}
+      {glass !== "off" && <MirrorSwitch up={glass === "up"} onToggle={onMirror} />}
+
       {/* Top bar: the CLOCK, and the one press that belongs on the road —
           the camera. Which stage this is rides under the minimap instead:
           the top-left corner belongs to the time, because the time is what
@@ -923,15 +946,15 @@ export function Hud({
           WATCHING, the slot is the spectator's banner instead: there is
           nobody in this car to call a corner to, and nobody to send home. */}
       {spectate ? (
-        <SpectateBanner {...spectate} belowMirror={show.mirror} />
+        <SpectateBanner {...spectate} />
       ) : (
         snap.phase === "racing" &&
         (snap.lost ? (
-          <WayHomeCall distance={snap.homeDistance} belowMirror={show.mirror} />
+          <WayHomeCall distance={snap.homeDistance} glass={glass} />
         ) : (
           show.pacenotes &&
           snap.pacenotes.length > 0 && (
-            <Pacenotes notes={snap.pacenotes} words={show.pacenoteText} belowMirror={show.mirror} />
+            <Pacenotes notes={snap.pacenotes} words={show.pacenoteText} glass={glass} />
           )
         ))
       )}

@@ -106,8 +106,11 @@ export type GameRenderer = {
   /** Place the camera: the two play modes come from the camera key, the
    * drone and map views are placed by the menu behind it. */
   setCamera: (mode: CameraMode) => void;
-  /** Show or hide the rear-view mirror — the player's HUD option. Off is
-   * a whole render pass the frame does not pay for. */
+  /** Show or hide the rear-view mirror. Off is a whole render pass the frame
+   * does not pay for — which is why there are two ways to reach it and only
+   * one switch here: the HUD option says whether the game has a mirror, and
+   * the tap on the glass itself (hud-mirror.tsx) folds the one it has away
+   * for a while. Neither is this module's business; both arrive as `on`. */
   setMirror: (on: boolean) => void;
   /** Seat, lens and head motion for the three views taken from inside the
    * car (OPTIONS ▸ VIEW). Applies to the frame after it, every time: these

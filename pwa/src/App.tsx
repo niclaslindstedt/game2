@@ -955,6 +955,23 @@ export function App() {
     setTimeout(() => setFlashes((prev) => prev.filter((f) => f.id !== id)), 1800);
   };
 
+  /** Whether the rear-view glass is UP, this session. The HUD option decides
+   * whether the game has a mirror at all; this is the press on the glass
+   * itself (hud-mirror.tsx), and it only ever takes the RENDERING down — the
+   * strip it folds to is still there to pull back. Deliberately not saved:
+   * folding the mirror away over one jump says nothing about what the player
+   * wants the next time the game is opened, and the menu is where a mirror is
+   * switched off for good. */
+  const [mirrorUp, setMirrorUp] = useState(true);
+  const mirrorUpRef = useRef(true);
+  const toggleMirror = (): void => {
+    const up = !mirrorUpRef.current;
+    mirrorUpRef.current = up;
+    setMirrorUp(up);
+    rendererRef.current?.setMirror(up && optionsRef.current.hud.mirror);
+    flash(up ? "REAR VIEW ON" : "REAR VIEW OFF", "info");
+  };
+
   /** What the gallery writes under a picture: the stage it was taken on and
    * the car it was taken in. Those two place a frame that otherwise has
    * nothing in it but trees — a roll of forty low-poly forests is
@@ -1584,6 +1601,13 @@ export function App() {
     // view, so the pick waits for the cards to come down, the same rule god
     // mode's hold follows.
     const reframe = next.camera !== optionsRef.current.camera;
+    // Switching the rear view back ON in the menu is a player asking to SEE
+    // it, so a glass folded away in-game comes back up with it. The other
+    // direction needs nothing: off, there is no mirror to be folded.
+    if (next.hud.mirror && !optionsRef.current.hud.mirror) {
+      mirrorUpRef.current = true;
+      setMirrorUp(true);
+    }
     setOptions(next);
     optionsRef.current = next;
     saveSettings(next);
@@ -1591,7 +1615,7 @@ export function App() {
     input.setKeys(next.keys);
     input.setPad(next.pad);
     rendererRef.current?.setVideo(next.video);
-    rendererRef.current?.setMirror(next.hud.mirror);
+    rendererRef.current?.setMirror(next.hud.mirror && mirrorUpRef.current);
     rendererRef.current?.setNameTags(next.hud.nameTags);
     rendererRef.current?.setView(next.view);
     if (reframe && !menuRef.current) {
@@ -1775,7 +1799,7 @@ export function App() {
       // press: both are cheap, and the first picture of a session is the
       // one most likely to be shown to somebody.
       if (optionsRef.current.screenshots) armScreenshots();
-      renderer.setMirror(optionsRef.current.hud.mirror);
+      renderer.setMirror(optionsRef.current.hud.mirror && mirrorUpRef.current);
       renderer.pinMirrorPace(mirrorHzFromUrl());
       renderer.setNameTags(optionsRef.current.hud.nameTags);
       renderer.setView(optionsRef.current.view);
@@ -2896,6 +2920,8 @@ export function App() {
           padDriving={padded && options.pad.hideTouch}
           onPause={() => setPaused(true)}
           onCamera={() => actionsRef.current.camera()}
+          mirrorUp={mirrorUp}
+          onMirror={toggleMirror}
           onShot={options.screenshots ? () => takeShotRef.current() : null}
           nextStage={nextStage}
           onRetry={onRetry}
