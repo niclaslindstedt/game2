@@ -937,6 +937,29 @@ for (const [name, viewport] of [
   });
 }
 
+// OPTIONS, opened FROM the pause card — the page a player reaches without
+// abandoning the stage. Two things are being looked at: that the card wears
+// the same chrome as the one off the front door and sits over the held frame
+// rather than under the HUD, and that its way out says PAUSED, because a
+// back button reading MENU here is a promise to throw the run away. Portrait
+// as well: this is the longest card in the game on the narrowest screen.
+for (const [name, viewport] of [
+  ["shot-pause-options", { width: 1280, height: 720 }],
+  ["shot-pause-options-portrait", { width: 390, height: 844 }],
+]) {
+  await capture(name, viewport, async (page) => {
+    await page.keyboard.down("ArrowUp");
+    await racing(page);
+    await page.waitForTimeout(6000);
+    await page.keyboard.up("ArrowUp");
+    await page.click(".hud-minimap");
+    await page.waitForSelector(".hud-pause");
+    await page.getByRole("button", { name: "OPTIONS" }).click();
+    await page.waitForSelector(".menu-held .menu-card");
+    await page.waitForTimeout(400);
+  });
+}
+
 // ...and the same card opened during the ESTABLISHING SHOT, which is the one
 // moment the HUD has something of its own in the middle of the screen — so
 // the scene asks for that shot with `?shot=1`. The acceptance test is that

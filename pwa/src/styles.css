@@ -2045,6 +2045,15 @@ body {
   overflow: hidden;
 }
 
+/* OPTIONS opened from the pause card. The menu proper replaces the HUD and
+   needs no layer of its own; this one is drawn OVER a run that is still on
+   screen, so it takes the modal tier the pause card sits on — `.hud-center`
+   claims a layer to clear the thumb zones, and a positioned box with a
+   z-index beats one without whatever the source order says. */
+.menu-held {
+  z-index: 50;
+}
+
 /* The scrim. Strong enough that white text over a sunlit stage is always
    legible, light enough that the drone shot behind it still reads as a
    game running — that balance IS the menu's aliveness. Darkest at the top
