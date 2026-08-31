@@ -57,6 +57,28 @@ function toTexture(canvas: HTMLCanvasElement, repeat: number): THREE.CanvasTextu
   return tex;
 }
 
+/** Give a texture mipmaps, keeping the chunky magnification.
+ *
+ * Nearest filtering is the look, but nearest MINIFICATION is not a look —
+ * it is one texel of a few hundred, picked per pixel, and it changes which
+ * one it picks as the camera moves. On a surface seen face-on that reads as
+ * grain; on a FLAT one seen at a grazing angle, where a pixel covers metres
+ * of texture, it reads as the surface boiling. Water is the flattest thing
+ * in the world and is looked across rather than down at, so it is where
+ * that shows first and worst.
+ *
+ * Magnification stays nearest, so a texel is still a square close up: the
+ * grain is unchanged everywhere it can actually be seen, and only the
+ * distance — which was never grain, only noise — settles down. */
+function withMipmaps(tex: THREE.CanvasTexture): THREE.CanvasTexture {
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  // Clamped to the device's own maximum when it is uploaded; a grazing
+  // surface is exactly the case anisotropy exists for.
+  tex.anisotropy = 8;
+  return tex;
+}
+
 export const gravelTexture = once((): THREE.CanvasTexture => {
   const { canvas, ctx } = makeCanvas(128);
   speckle(ctx, 128, "#b29268", [
@@ -127,7 +149,7 @@ export const waterTexture = once((): THREE.CanvasTexture => {
     { color: "#1f6ec8", count: 160, min: 1, max: 4 },
     { color: "#dff1ff", count: 60, min: 1, max: 2 },
   ]);
-  return toTexture(canvas, 2);
+  return withMipmaps(toTexture(canvas, 2));
 });
 
 /** A rally gate banner: the word in chunky dark caps on a white ground,
