@@ -342,6 +342,10 @@ export function launch(car: CarState, vy: number, events: GameEvent[], stats: Ru
   car.settling = false;
   car.airTime = 0;
   car.vy = vy;
+  // Nothing is standing on the tires up here, and nothing about the ground
+  // the car just left applies to the one it comes down on. It arrives back
+  // at its own weight and the landing's own skitter decides the rest.
+  car.weight = 1;
   car.rollRate = -(car.w * T.air.rollFromSlide + car.yawRate * T.air.rollFromYaw);
   // The same trip about the vertical axis: the tires that were holding the
   // slide let go all at once, so the car keeps turning the way the slide
@@ -410,22 +414,48 @@ function stepSuspension(spec: CarSpec, car: CarState, jolt: number, longAccel: n
   car.pitchLoad += (want - car.pitchLoad) * clamp(S.pitchRate * dt, 0, 1);
 }
 
-/** HOW MUCH CAR IS STANDING ON THE ROAD right now, as a multiplier on grip.
- * A tire is worth the weight on it and nothing else, and a car that has
- * just arrived is not standing on its tires yet: the wheels hammer on their
- * own rubber for the better part of a second, and a wheel intermittently in
- * the air holds intermittently. That is `car.settle`, written by the landing
- * and sized by how hard it was, and it is what turns a landing into a MOMENT
- * — a nose a few degrees off line, or a wheel with any lock on it, takes the
- * car sideways where the same input on the flat would not.
+/** HOW HARD THE GROUND IS PULLING THE CAR DOWN OFF ITSELF, m/s² — the
+ * vertical acceleration it would take to keep the wheels following the
+ * ground at this pace. Positive over a brow, over a crown, and where a bank
+ * the car has ridden up straightens out again; negative through a
+ * compression, which presses the car on instead.
  *
- * A wheel hopping is the only thing here, and NOT because the springs would
- * be the wrong physics — see the tuning for why `car.ride` cannot tell a
- * landing from an ordinary rutted road. It reads 1 everywhere else, so this
- * costs a corner nothing. */
+ * `curve` is the ground's curvature along the DIRECTION OF TRAVEL and
+ * `pace` the speed the car is covering ground at, so this is `pace²/R` — a
+ * shape and a speed, which is why the same crown holds a car at a crawl and
+ * throws it at rally pace. Two things read it and they are the same
+ * question asked at two depths: how much weight is left on the tires, and
+ * whether there is any left at all. */
+function groundPull(curve: number, pace: number): number {
+  return -pace * pace * curve;
+}
+
+/** HOW MUCH CAR IS STANDING ON THE ROAD right now, as a multiplier on grip.
+ * A tire is worth the weight on it and nothing else, and two things take
+ * that weight away.
+ *
+ * A car that has just arrived is not standing on its tires yet: the wheels
+ * hammer on their own rubber for the better part of a second, and a wheel
+ * intermittently in the air holds intermittently. That is `car.settle`,
+ * written by the landing and sized by how hard it was, and it is what turns
+ * a landing into a MOMENT — a nose a few degrees off line, or a wheel with
+ * any lock on it, takes the car sideways where the same input on the flat
+ * would not.
+ *
+ * ...and a car going over a shape is not standing on its full weight: that
+ * is `car.weight`, the ground's own curvature under the path spending part
+ * of the car's mass on following the ground down. It is why cresting a rise
+ * and running straight off the top of it is a moment too, and why riding up
+ * a bank and levelling out lets a car away from the driver at a speed the
+ * same lock would have held on the flat.
+ *
+ * Neither is read off the springs, which is the model that suggests itself
+ * and does not work — see the tuning for why `car.ride` cannot tell a
+ * landing from an ordinary rutted road. Both read 1 on level ground, so
+ * this costs an ordinary corner nothing. */
 export function tyreLoad(car: CarState): number {
   const S = T.suspension;
-  return Math.max(S.loadFloor, 1 - S.loadSkitter * car.settle);
+  return Math.max(S.loadFloor, (1 - S.loadSkitter * car.settle) * car.weight);
 }
 
 export type GroundContext = {
@@ -477,6 +507,22 @@ export function stepGrounded(
   const dt = T.dt;
   const prevVy = car.vy;
   const prevU = car.u;
+  // WHAT THE GROUND IS DOING TO THE WEIGHT ON THE TIRES, before anything
+  // spends it. The shape under the car's path either lifts weight off it or
+  // presses weight on, and everything below that asks what the tires hold
+  // has to see the answer — so this comes first, off the pace and the
+  // ground the step is starting from.
+  //
+  // It EASES rather than arriving: the load takes a beat to reach the
+  // contact patch, and the lag is also what keeps the seam between two
+  // ground models — the road's corridor and the open lattice beside it —
+  // from reading as a step in the grip when a car crosses it.
+  {
+    const S = T.suspension;
+    const pull = groundPull(ctx.roadCurve, Math.hypot(car.u, car.w));
+    const want = clamp(1 - (S.weightGain * pull) / T.air.gravity, S.weightFloor, S.weightCeil);
+    car.weight += (want - car.weight) * clamp(S.weightRate * dt, 0, 1);
+  }
   // The surface and the car's own rubber, as one number: the slide's
   // ceiling, the lateral rate and how much torque the driven axle can put
   // down all read it, so the tires are felt in all three.
@@ -1135,7 +1181,10 @@ export function stepGrounded(
   // where a drift most wants to fly: over a crest, off a ledge, over the
   // top of a mountain. The lip does not care which way the nose is.
   const pace = Math.hypot(car.u, car.w);
-  const roadPull = -pace * pace * ctx.roadCurve;
+  // The far end of the same number the tires were weighed with at the top of
+  // the step: the ground has stopped merely taking weight off the car and is
+  // asking for more than gravity can give it.
+  const roadPull = groundPull(ctx.roadCurve, pace);
   if (pace > T.air.crestSpeed && roadPull > T.air.gravity * T.air.crestPull) {
     launch(car, car.vy, events, stats);
   } else if (ctx.groundAt) {

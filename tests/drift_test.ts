@@ -28,19 +28,47 @@ import {
 
 const STRAIGHT: SegmentPlan[] = [{ kind: "straight", length: 1500, feature: "none" }];
 
-function game(carId = "classic", surface?: "gravel" | "asphalt"): GameState {
-  // A slide carries the car tens of meters sideways; widen the test road so
-  // the handling is measured, not the off-road respawn.
+/** A straight, `width` metres wide and with NO CROSS-SECTION — the road a
+ * handling test wants under it, where the only thing that moves the car is
+ * the car.
+ *
+ * Both widths, because they answer different questions and have to agree:
+ * the track's decides where the road stops and the country starts, the
+ * sample's is what the corridor profile is drawn from. Set only the first
+ * and a long slide leaves the car sixty metres from a sixteen-metre road
+ * while still counting as being on it — driving on the road's surface, over
+ * whatever shape the profile has past its own outer reach.
+ *
+ * And `flat`, which takes the crown, the bank, the wheel tracks and the
+ * berm out in one field (R16's whole cross-section is scaled by it) — the
+ * straight is already level ALONG its length, and this is the other axis. A
+ * real road is curved both ways, a car sliding tens of metres sideways
+ * crosses all of it, and all of it is real: it rides the camber, it goes
+ * light over the crown, it is pulled toward the low side. None of it is
+ * what these tests are asking about. They are about what the tires and the
+ * driver's hands do, and they are decided on margins of well under a
+ * percent, which the road's own shape is comfortably large enough to
+ * swamp. */
+function straight(carId: string, width: number, surface?: "gravel" | "asphalt"): GameState {
   const base = compileTrack(0, STRAIGHT);
   const track = {
     ...base,
-    width: 220,
-    // The paving is the generator's to place, so a surface comparison has to
-    // seal the straight itself. The bank goes with it: a dead-flat road is
-    // the only one on which the two surfaces differ by nothing else.
-    samples: surface ? base.samples.map((s) => ({ ...s, surface, bank: 0 })) : base.samples,
+    width,
+    samples: base.samples.map((s) => ({
+      ...s,
+      width,
+      flat: 1,
+      bank: 0,
+      ...(surface ? { surface } : {}),
+    })),
   };
   return createGame({ seed: 0, carId, skipCountdown: true, track });
+}
+
+function game(carId = "classic", surface?: "gravel" | "asphalt"): GameState {
+  // A slide carries the car tens of meters sideways; widen the test road so
+  // the handling is measured, not the off-road respawn.
+  return straight(carId, 220, surface);
 }
 
 /** ...and the same straight with a road wide enough to hold a HELD LOCK.
@@ -48,17 +76,9 @@ function game(carId = "classic", surface?: "gravel" | "asphalt"): GameState {
  * however wide the road looks from the driver's seat, and the surface under
  * it is `nature` the moment it does — so a test comparing two SURFACES at a
  * settled radius has to keep the car on the one it is asking about, or it
- * quietly answers about a third. The TRACK's width is what does it; a
- * sample's own `width` is not where the ground under the car is read from
- * and widening those alone changes nothing. */
+ * quietly answers about a third. */
 function circuit(carId: string, surface: "gravel" | "asphalt"): GameState {
-  const base = compileTrack(0, STRAIGHT);
-  const track = {
-    ...base,
-    width: 900,
-    samples: base.samples.map((s) => ({ ...s, surface, bank: 0 })),
-  };
-  return createGame({ seed: 0, carId, skipCountdown: true, track });
+  return straight(carId, 900, surface);
 }
 
 function run(state: GameState, input: Partial<CarInput>, seconds: number): GameEvent[] {

@@ -32,10 +32,10 @@ import { clipKerbs, collideCar } from "./collision.ts";
 import {
   crossedFinish,
   crossedLip,
-  curvatureAt,
   locate,
   locatePoint,
   lastCheckpoint,
+  pathCurvature,
   slopeAt,
   trackLost,
   wayHome,
@@ -103,6 +103,7 @@ export function freshCar(): CarState {
     ride: 0,
     rideRate: 0,
     settle: 0,
+    weight: 1,
     pitchLoad: 0,
     kerbFrom: 0,
     slide: 0,
@@ -365,6 +366,7 @@ function respawn(state: GameState, events: GameEvent[], home: WayHome): void {
   car.ride = 0;
   car.rideRate = 0;
   car.settle = 0;
+  car.weight = 1;
   car.pitchLoad = 0;
   car.slide = 0;
   car.drifting = false;
@@ -765,11 +767,22 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // the fix after the move drives progress, lip detection, and respawn.
   const preFix = locate(track, car.x, car.z, state.progressIndex);
   const gain = driveGain(state);
+  // WHERE THE CAR IS GOING, in world space — which sideways is nowhere near
+  // where it is pointing. Everything below that asks the ground what it is
+  // about to do to the car reads this rather than the heading: the shape
+  // that throws a car is the shape under its PATH, and a car crossing a
+  // brow in a drift meets it just as squarely as one driving straight at
+  // it. (Both takeoff gates already read `pace` for the same reason — this
+  // is the direction half of the same idea.)
+  const sinH = Math.sin(car.heading);
+  const cosH = Math.cos(car.heading);
+  const dirX = sinH * car.u + cosH * car.w;
+  const dirZ = cosH * car.u - sinH * car.w;
   let ctx: GroundContext;
   if (preFix.offRoad) {
     // The wild: the terrain owns the ground — the RIDDEN lattice surface
     // (terrain.groundAt), which is the exact ground the renderer draws.
-    // The brow is read along the heading over the same wide baseline the
+    // The brow is read along the TRAVEL over the same wide baseline the
     // road uses, so the crest check fires off a mountain shoulder exactly
     // like it fires off a lip — this is where the spontaneous cliff jumps
     // come from. The grade the car stands on is read over its own short
@@ -779,11 +792,14 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     const ground = terrain.groundAt;
     const span = T.air.crestSpan;
     const grade = T.hills.gradeSpan;
-    const sinH = Math.sin(car.heading);
-    const cosH = Math.cos(car.heading);
     const here = ground(car.x, car.z);
-    const fwd = ground(car.x + sinH * span, car.z + cosH * span);
-    const back = ground(car.x - sinH * span, car.z - cosH * span);
+    // A stationary car has no path to read a brow along; the nose is the
+    // only direction it has, and at a standstill nothing is launching anyway.
+    const pace = Math.hypot(dirX, dirZ);
+    const goX = pace > 1e-6 ? dirX / pace : sinH;
+    const goZ = pace > 1e-6 ? dirZ / pace : cosH;
+    const fwd = ground(car.x + goX * span, car.z + goZ * span);
+    const back = ground(car.x - goX * span, car.z - goZ * span);
     const ahead = ground(car.x + sinH * grade, car.z + cosH * grade);
     const behind = ground(car.x - sinH * grade, car.z - cosH * grade);
     // The car's right axis in world space is (cos h, -sin h).
@@ -805,10 +821,14 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     ctx.drive = gain;
     ctx.groundAt = ground;
   } else {
-    // How sharply the road brows under the car — what decides whether it
-    // throws the car. A jump lip anywhere in that window is NOT a brow: its
-    // drop belongs to the ramp launch below, and reading it here would fire
-    // a stutter of hops on the run-up instead.
+    // How sharply the road curves under the car ALONG ITS PATH — what
+    // decides whether it throws the car, and how much of the car's weight
+    // is still on the tires while it does not. Both the stage's brows and
+    // the road's own cross-section, weighted by which way the car is going
+    // (`pathCurvature`). A jump lip anywhere in that window is NOT a brow:
+    // its drop belongs to the ramp launch below, and reading it here would
+    // fire a stutter of hops on the run-up instead — and the lip owns the
+    // whole surface there, cross-section included.
     const reach = Math.max(1, Math.round(T.air.crestSpan / track.step));
     const lipNear =
       crossedLip(track, Math.max(-1, preFix.index - reach - 1), preFix.index + reach) >= 0;
@@ -817,7 +837,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     ctx.groundY = preFix.elevation;
     ctx.slope = preFix.slope;
     ctx.slopeLat = preFix.slopeLat;
-    ctx.roadCurve = lipNear ? 0 : curvatureAt(track, preFix.index, T.air.crestSpan);
+    ctx.roadCurve = lipNear ? 0 : pathCurvature(track, preFix, dirX, dirZ);
     ctx.windX = state.wind.x;
     ctx.windZ = state.wind.z;
     ctx.t = state.t;

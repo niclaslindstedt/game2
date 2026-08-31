@@ -10,7 +10,7 @@
 
 import { STAGE_RULES, finishIndex, type Surface, type Track } from "../mapgen/index.ts";
 import { flatTrack, GROUP, GROUP_SHIFT, type FlatTrack } from "../mapgen/flat.ts";
-import { corridorOffset, crossOffset } from "../mapgen/road.ts";
+import { corridorOffset, crossOffset, ROAD_CROSS } from "../mapgen/road.ts";
 import { TUNING } from "./defs/tuning.ts";
 import type { GameState } from "./state.ts";
 
@@ -321,17 +321,110 @@ export function locate(track: Track, x: number, z: number, hint: number): TrackF
   const onRoad = Math.max(-halfRoad, Math.min(halfRoad, fix.lateral));
   const cross =
     s.deck != null ? crossOffset(s, onRoad, s.width) : corridorOffset(s, fix.lateral, s.width);
-  // The camber the car SITS on is the mat's, read at the edge at furthest:
-  // the chamfer off a paved edge is a curb, and rolling the body onto it
-  // would tip the car over a step a few centimeters wide.
+  // The camber the car SITS on, read over the SAME profile its height came
+  // from. Two wheels on the verge is still on the road (`offTrack.verge`),
+  // and for as long as this read the mat alone — clamped at the edge — the
+  // shoulder was a place the car's height followed down while its physics
+  // insisted the ground was level: no lean, no pull toward the ditch, and a
+  // vertical speed that disagreed with the elevation the car was being put
+  // at. The ground beside a road is the first slope anyone actually drives
+  // onto, and it was the one slope the handling could not feel.
+  //
+  // A DECK is the exception the clamp was really for: past a parapet is air,
+  // not a verge, so a bridge reads its own mat and nothing outside it.
   const probe = 0.5;
+  const profile = s.deck != null ? crossOffset : corridorOffset;
+  const at = s.deck != null ? onRoad : fix.lateral;
+  const lo = s.deck != null ? Math.max(-halfRoad, at - probe) : at - probe;
+  const hi = s.deck != null ? Math.min(halfRoad, at + probe) : at + probe;
   fix.elevation = crown + cross;
   fix.slope = slope;
-  fix.slopeLat =
-    (crossOffset(s, Math.min(halfRoad, onRoad + probe), s.width) -
-      crossOffset(s, Math.max(-halfRoad, onRoad - probe), s.width)) /
-    (2 * probe);
+  fix.slopeLat = (profile(s, hi, s.width) - profile(s, lo, s.width)) / (hi - lo);
   return fix;
+}
+
+/** How sharply the road's CROSS-SECTION curves under the car, 1/m —
+ * negative over the crown, positive through the trough at the shoulder. The
+ * transverse half of what `curvatureAt` measures along the stage, read over
+ * a baseline sized to the road itself (`air.crossSpan` of its half-width),
+ * because a road is shaped in tens of metres one way and single metres the
+ * other.
+ *
+ * This is the shape a car crossing a road actually goes over: up the verge,
+ * over the crown, out the far side. Nothing about that is visible along the
+ * centerline, which is why a road taken transversely used to be perfectly
+ * flat as far as the takeoff was concerned however fast it was taken.
+ *
+ * A deck has no cross-section worth the name and no ground past its
+ * parapet, so a bridge reports none. */
+export function crossCurvature(track: Track, fix: TrackPoint, share: number): number {
+  const s = track.samples[fix.index];
+  if (s.deck != null) return 0;
+  // A share of the half-width, but never wider than the corridor's own
+  // outer geometry: the features on this axis stop at the shoulder however
+  // wide the mat is, so past `reach` a bigger baseline reads more road
+  // rather than more shape, and on a very wide one it would reach out of
+  // the far verge and report the whole carriageway as a hump.
+  const half = s.width / 2;
+  const span = Math.min(half * share, ROAD_CROSS.reach);
+  if (span < 1e-6) return 0;
+  // The corridor is only the ground as far as the ribbon's own geometry
+  // goes (R16's hand-over): past `reach` the profile holds its last value
+  // for want of anything to say, and the country out there belongs to the
+  // terrain lattice. Probing into that flat would invent a trough at the
+  // edge of every wide road, so the arms stop at the corridor's own limit
+  // and the stencil takes the two it actually got — the same uneven-arm
+  // second difference `curvatureAt` uses where a stage runs out of samples.
+  const limit = half + ROAD_CROSS.reach;
+  const at = Math.max(-limit, Math.min(limit, fix.lateral));
+  const hi = Math.min(limit, at + span);
+  const lo = Math.max(-limit, at - span);
+  const ahead = hi - at;
+  const behind = at - lo;
+  if (ahead < 1e-6 || behind < 1e-6) return 0;
+  const here = corridorOffset(s, at, s.width);
+  const rise = (corridorOffset(s, hi, s.width) - here) / ahead;
+  const fall = (here - corridorOffset(s, lo, s.width)) / behind;
+  return (2 * (rise - fall)) / (ahead + behind);
+}
+
+/** THE CURVATURE THE CAR IS ACTUALLY GOING OVER, 1/m — the road's vertical
+ * shape resolved onto the direction the car is TRAVELLING in, which is what
+ * decides whether the ground can hold it (`air.crestPull`) and how much of
+ * its weight is still on the tires while it does.
+ *
+ * A road is a surface, not a line, and it is curved both ways: along the
+ * stage it brows and dips, across it there is a crown, a bank where R19 put
+ * one, and the break where the shoulder leans away. Which of those a car
+ * meets depends entirely on where it is pointed. Straight down the stage it
+ * is all the first; riding up the verge and over the road it is all the
+ * second — and that case used to read as dead flat, because the only thing
+ * ever measured was the centerline's own profile. So a car could cross a
+ * gravel road at any speed at all and never leave the ground, over the same
+ * crown that throws it when the stage happens to run over a brow.
+ *
+ * `dirX, dirZ` is the world-space direction of travel and need not be
+ * normalized — a stationary car reads nothing, which is right. The two
+ * curvatures are combined as a second directional derivative: each weighted
+ * by the square of the travel's component along its own axis, so a car
+ * driving down the road feels the stage's brows, a car crossing it feels
+ * the crown, and one sliding diagonally over the verge feels both. */
+export function pathCurvature(track: Track, fix: TrackPoint, dirX: number, dirZ: number): number {
+  const speed = Math.hypot(dirX, dirZ);
+  if (speed < 1e-6) return 0;
+  const flat = flatTrack(track);
+  const i = fix.index;
+  // The road's own axes: forward is (sin h, cos h) and its right is
+  // (cos h, -sin h) — the same frame the lateral offset is measured in.
+  const fwdX = flat.sinHeading[i];
+  const fwdZ = flat.cosHeading[i];
+  const along = (dirX * fwdX + dirZ * fwdZ) / speed;
+  const across = (dirX * fwdZ - dirZ * fwdX) / speed;
+  const A = TUNING.air;
+  return (
+    curvatureAt(track, i, A.crestSpan) * along * along +
+    crossCurvature(track, fix, A.crossSpan) * across * across
+  );
 }
 
 /** True when the car has run off one of the stage's ENDS — past the apron

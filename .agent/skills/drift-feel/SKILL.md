@@ -107,6 +107,15 @@ the wheel passing centre is the decaying memory of what was ASKED
 The tell for either is in the response curve below: a flat 1-2° across most
 of the throw and then one step to the maximum.
 
+**The rule under both, and under everything the ground does to the car: a
+sideways car is not going where it is pointing.** Every gate, every probe and
+every baseline in this model reads the DIRECTION OF TRAVEL and `pace =
+hypot(u, w)`, never `car.heading` and never `car.u` alone. The takeoff gates
+do; the ground's curvature does (`pathCurvature`); the slide's own speed
+floor does. Anything new that asks what the car is about to meet has to, or
+it works for a gripped car and quietly stops working in exactly the moment
+this skill exists for.
+
 ---
 
 ## Measure it — never tune this by feel alone

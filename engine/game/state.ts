@@ -137,6 +137,17 @@ export type CarState = {
    * angle on it, or with the wheel turned, gets away from the driver
    * instead of tracking straight out of the jump. */
   settle: number;
+  /** HOW MUCH OF ITS OWN WEIGHT THE CAR IS STANDING ON, 1 on level ground.
+   * The ground curving under the direction of travel takes weight off the
+   * tires or presses it on: a brow, or a bank the car has ridden up and
+   * then run straight off the top of, spends part of the car's weight
+   * following the ground down and leaves the tires the rest; a dip's floor
+   * does the opposite. Under 1 the car goes light — the slide comes easier
+   * and the nose is harder to hold — and it is the SAME quantity the
+   * takeoff reads, so going light and flying are one continuum. Written by
+   * the grounded step, spent through `tyreLoad`, and reset to 1 by a
+   * launch: in the air the tires carry nothing. */
+  weight: number;
   /** Load pitch, rad — the dive under brakes, the squat on the power and
    * the nose-dip a hit throws in, positive lifting the nose. Kept apart
    * from `pitch` (the ground's own attitude) because only the BODY takes

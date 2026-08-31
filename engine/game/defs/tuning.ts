@@ -1075,6 +1075,51 @@ export const TUNING = {
      * can be made unpointable by one landing is a car nobody can drive out
      * of a jump — the slide has to be recoverable. */
     loadFloor: 0.5,
+    /** WHAT THE GROUND ITSELF IS DOING TO THE WEIGHT ON THE TIRES. A tire
+     * is worth the load on it, and the load on it is not the car's weight
+     * wherever the ground is CURVED under the direction of travel: over a
+     * brow, or where a bank the car has ridden up straightens out again,
+     * part of the weight goes into following the ground down and the tires
+     * keep the rest. Through a compression — a dip's floor, the inside of a
+     * banked corner — it is the other way and the car is pressed on.
+     *
+     * It is the same number the takeoff reads (`pace²·curvature` against
+     * `g`), and that is the point: going light and flying are one continuum,
+     * not two rules. The car crests, the grip bleeds off, the slide comes
+     * easier and the nose gets harder to hold — and if there is enough speed
+     * in it the wheels leave the ground at `crestPull`. Nothing here is a
+     * separate "you are about to jump" state.
+     *
+     * `weightGain` is how much of that pull reaches the CONTACT PATCH. Not
+     * all of it does: the springs and the unsprung mass between the chassis
+     * and the rubber take their share of a transient, which is most of what
+     * a suspension is for. It is also the knob with a sim cost, for the same
+     * reason `loadSkitter` is — the bots plan every corner against the
+     * static ceiling and cannot see a brow coming, so what this really sets
+     * is how much of an ordinary undulating road they have to drive around.
+     * At 1 the 24-run sweep doubled its respawns and threw two clean runs
+     * off the road; the FLOOR made no difference to that at all, because
+     * what costs them is the ±10% of an ordinary road, not the rare deep
+     * unloading. At 0.32 the sweep is back to its own pace, drift time and
+     * respawn count, one spin up, and the road the bots plan against is
+     * roughly the road they get.
+     *
+     * It scales the grip and NOTHING else: the takeoff reads the pull
+     * itself, so where a shape throws the car is a fact about the shape and
+     * this cannot move it. What it sets is how light the car goes on the way
+     * there — 35% of the tires by the launch threshold, about a sixth of
+     * them crossing a 10 m gravel road at 110 km/h.
+     *
+     * `weightRate` is how fast the tires answer, 1/s — the load takes a beat
+     * to arrive, and the lag is also what keeps a seam between two ground
+     * models (road corridor to open terrain) from being a step in the grip.
+     * The two bounds are the usual reason: a tire with nothing on it is a
+     * car nobody can drive, and a compression that doubled the grip would
+     * make a dip the fastest place on the stage. */
+    weightGain: 0.32,
+    weightFloor: 0.6,
+    weightCeil: 1.1,
+    weightRate: 12,
     /** Nose attitude the springs take per m/s² of longitudinal
      * acceleration, rad — the dive under brakes and the squat on the
      * power. A couple of degrees at full braking: enough to read at the
@@ -1111,6 +1156,22 @@ export const TUNING = {
      * the HILL and not by the road's texture — a short baseline turns every
      * ripple at pace into a one-frame hop. */
     crestSpan: 12,
+    /** ...and the baseline its CROSS-SECTION is read over, as a share of the
+     * road's own HALF-WIDTH. The two directions cannot share a baseline:
+     * `crestSpan` laid across an 8 m road reaches into the country on both
+     * sides and reads the whole shelf, and the road's own width read along
+     * the stage turns every ripple into a hop.
+     *
+     * A share rather than a distance because the road is what sets the
+     * scale on this axis: R16's crown IS a half-width parabola and the break
+     * at the shoulder is a half-width out, while everything that has to be
+     * smoothed away sits well inside that — the wheel tracks (`rut.maxAt`
+     * caps them at 0.42 of it), the berm, the chamfer off a paved edge.
+     * Those are things a wheel rides over, not shapes the car goes over, and
+     * a fixed 2.5 m baseline straddled a rut trough and read it as a
+     * compression: grip went UP in the wheel tracks, on every road, which is
+     * the transverse version of exactly what `crestSpan` is wide to avoid. */
+    crossSpan: 0.8,
     /** How much harder than gravity the road has to pull the car down before
      * it actually leaves the ground (`u²·curvature` against `g`). A brow the
      * car only just outruns would otherwise separate by a fraction of a
