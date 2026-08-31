@@ -2233,6 +2233,16 @@ body {
   border-left-color: rgb(255 255 255 / 45%);
 }
 
+/* THE ROW YOU ARE ALREADY ON — the stage the map is currently showing, in
+   the list of stages. Lit rather than merely marked: a list where nothing
+   says which one is loaded is a list you have to remember your way around,
+   and this one is walked while looking at the thing it chose. */
+.menu-item-on {
+  color: var(--hud-good);
+  background: rgb(255 210 62 / 16%);
+  border-color: var(--hud-good);
+}
+
 .menu-item-sub {
   font-size: clamp(0.6rem, 2vmin, 0.78rem);
   font-style: normal;
@@ -3193,11 +3203,37 @@ a.menu-version:focus-visible {
    blowing it up to the screen does not by itself hide anything: the car
    stand and the dials go on showing straight through the map they are
    supposed to have got out of the way of. They are taken off explicitly.
-   The stage pane's own header stays: the seed stepper is exactly what
-   somebody reading these layers reaches for next. */
-.roam-full .roam-column,
-.roam-full .roam-length {
+   The stage pane's own header stays: the seed stepper and the stage list
+   are exactly what somebody reading these layers reaches for next.
+
+   DRIVE IT STAYS TOO, and that is not an oversight. ROAM IS A PAGE FOR
+   DRIVING: a map you are looking at here is a map you are deciding whether
+   to take out, and full screen is exactly when you have decided. The column
+   used to come off whole, which left the map at its most convincing with no
+   way onto it. The viewer is the page that looks and does not drive, and it
+   is `.roam-view` below. */
+.roam-full .roam-length,
+.roam-full .roam-column > *:not(.menu-start) {
   display: none;
+}
+
+/* ...and with only that button left in it, the column takes a button's
+   width rather than the quarter of the screen the dials needed — otherwise
+   "full screen" would be the map plus an empty pane beside it. Two classes
+   deep on purpose: it has to outrank the landscape rule that pins the
+   column's width, which is written further down the sheet. */
+.roam-full .roam-column {
+  width: auto;
+}
+
+/* THE DEVELOPER'S MAP VIEWER — the same page with the driving half not
+   rendered at all (menu-roam.tsx), so there is nothing here to hide: the
+   split holds one pane, and the pane holds the map. The rule exists to say
+   the pane cannot be shrunk out of it, which on Roam is a toggle and here
+   is the shape of the page. */
+.roam-view .roam-pane-stage {
+  flex: 1;
+  min-height: 0;
 }
 
 /* The layer switch, in the map's foot stack under the gesture hint. It is
@@ -3285,6 +3321,39 @@ a.menu-version:focus-visible {
 .map-tool:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+/* WHICH STAGE IS ON THE MAP, and the way to make it another one. It wears
+   the header's own chrome — the same plate the seed's arrows and the copy
+   mark wear — because a button in a row of buttons has to look like the row
+   it is in. Lit once a campaign stage is loaded: at that point it is a
+   readout as much as a control, and the name on it is the answer to the
+   only question this page's header is ever asked. */
+.roam-level {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font: inherit;
+  font-size: clamp(0.7rem, 2.4vmin, 0.95rem);
+  letter-spacing: 0.12em;
+  line-height: 1;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 12%);
+  border: 2px solid rgb(255 255 255 / 35%);
+  border-radius: 0.45rem;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.roam-level:hover,
+.roam-level:focus-visible {
+  background: rgb(255 210 62 / 25%);
+}
+
+.roam-level-on {
+  color: var(--hud-good);
+  border-color: var(--hud-good);
 }
 
 .roam-seed {

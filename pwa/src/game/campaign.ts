@@ -31,10 +31,13 @@
 // failing.
 
 import {
+  DEFAULT_KNOBS,
   RIVALS,
   STAGE_RULES,
   type Difficulty,
   type FiniteStageLength,
+  type StageKnobs,
+  type StageLength,
   type StageShape,
   type Season,
   type TimeOfDay,
@@ -68,6 +71,38 @@ export type CampaignLevel = {
 export function levelLaps(level: CampaignLevel): number {
   if (level.shape !== "circuit") return 1;
   return level.laps ?? STAGE_RULES.circuit.laps;
+}
+
+/** WHICH campaign stage a set of Roam settings is standing on, if any — the
+ * level whose seed, band, shape and dials build this exact road.
+ *
+ * The conditions are deliberately not part of the match. A road is what the
+ * generator builds; the hour, the weather and the season are what it is
+ * driven in, and a level taken out at dusk in the rain is still that level.
+ * Being able to say so is most of the reason Roam can load one at all — the
+ * campaign's stages are fixed conditions, and this is where they are not.
+ *
+ * The dials ARE part of it, and have to be: the campaign builds every stage
+ * off the rule book's defaults, so a seed driven on a WIDE road with no
+ * water in it is a different road that happens to share a number. */
+export function levelForRoad(
+  seed: number,
+  length: StageLength,
+  shape: StageShape,
+  knobs: StageKnobs,
+): CampaignLevel | null {
+  const stock = (Object.keys(DEFAULT_KNOBS) as (keyof StageKnobs)[]).every(
+    (key) => knobs[key] === DEFAULT_KNOBS[key],
+  );
+  if (!stock) return null;
+  for (const location of LOCATIONS) {
+    for (const level of location.levels) {
+      if (level.seed !== seed || level.length !== length) continue;
+      if ((level.shape ?? "sprint") !== shape) continue;
+      return level;
+    }
+  }
+  return null;
 }
 
 export type CampaignLocation = {
