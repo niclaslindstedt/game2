@@ -362,6 +362,13 @@ body {
   --glass-top: 2.2vh;
   --glass-aspect: 3.2;
   --glass-bottom: calc(var(--glass-top) + var(--glass-width) / var(--glass-aspect));
+  /* The housing once the glass is FOLDED — the mirror shut flat against the
+     roof, at the top edge of the frame rather than where the glass hung, and
+     the whole of what is left to pull it back down by. Not numbers mirror.ts
+     knows: nothing is rendered while the glass is folded, so this strip is
+     the DOM's alone. */
+  --glass-fold: max(0.5rem, 1.1vh);
+  --glass-fold-top: max(0.25rem, env(safe-area-inset-top));
 }
 
 @media (orientation: portrait) {
@@ -369,6 +376,71 @@ body {
     --glass-width: 52vw;
     --glass-top: 13.5vh;
   }
+}
+
+/* The glass as something to PRESS (hud-mirror.tsx). While the mirror is up
+   this is an empty box on the same three numbers and nothing is drawn in it,
+   because the mirror is what is drawn in it. */
+.hud-mirror {
+  position: absolute;
+  top: var(--glass-top);
+  left: 50%;
+  transform: translateX(-50%);
+  width: var(--glass-width);
+  height: calc(var(--glass-width) / var(--glass-aspect));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--hud-ink);
+  cursor: pointer;
+  pointer-events: auto;
+  /* The swipe that pulls the glass back down is the browser's idea of a pan
+     otherwise, and a gesture the page has already scrolled with never
+     reaches the lift. */
+  touch-action: none;
+}
+
+/* A mouse can be TOLD the glass is a switch; a thumb finds out by using it.
+   Nothing is drawn until the pointer is on it, because a permanent outline
+   round the mirror is a box on the road for everybody who never presses it. */
+.hud-mirror:not(.hud-mirror-folded):hover {
+  box-shadow: inset 0 0 0 2px rgb(255 255 255 / 30%);
+}
+
+/* Folded: the picture is gone and what is left is the housing, shut against
+   the top edge of the frame, with the chevron that pulls it back down. It
+   keeps the mirror's own width — the strip is the mirror, put away — and
+   leaves the co-driver's slot under it entirely free. */
+.hud-mirror-folded {
+  top: var(--glass-fold-top);
+  height: var(--glass-fold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0 0 0.3rem 0.3rem;
+  background: linear-gradient(180deg, rgb(42 50 62 / 92%), rgb(18 22 28 / 92%));
+  box-shadow: 0 1px 0 rgb(0 0 0 / 45%);
+}
+
+/* A strip a tenth of the glass tall is a thumb's target only with help: the
+   hit box reaches past the paint above and below it. Never SIDEWAYS — the
+   strip is already a fifth of the screen wide, and in portrait its ends run
+   under the clock and the camera button. */
+.hud-mirror-folded::after {
+  content: "";
+  position: absolute;
+  inset: -0.45rem 0;
+}
+
+.hud-mirror-pull {
+  flex: none;
+  width: 1.1rem;
+  height: auto;
+  opacity: 0.62;
+}
+
+.hud-mirror-folded:hover .hud-mirror-pull {
+  opacity: 1;
 }
 
 /* ── The co-driver: pacenote calls under the top bar ────────────────────── */

@@ -13,7 +13,10 @@
 // It stands in the CO-DRIVER'S SLOT (`.hud-pace`, above the car), which is
 // free for exactly as long as the mode lasts: there is nobody in this car to
 // be called a corner, so `Hud` takes the pacenotes down and hands the space
-// over. What the feed IS lives in spectate.ts.
+// over. It takes the WHOLE slot, top of the frame included: the rear-view
+// glass is the one thing that shares it, and the renderer keeps that down
+// while the camera is on somebody else's car. What the feed IS lives in
+// spectate.ts.
 
 import { playUi } from "./audio/ui.ts";
 import type { Watched } from "./spectate.ts";
@@ -28,22 +31,13 @@ export type SpectateProps = {
   onLeave: () => void;
 };
 
-export function SpectateBanner({
-  watched,
-  onStep,
-  onLeave,
-  belowMirror,
-}: SpectateProps & {
-  /** The mirror is up, so the banner drops below the glass — the same
-   * bargain the co-driver's calls strike for the same slot. */
-  belowMirror: boolean;
-}) {
+export function SpectateBanner({ watched, onStep, onLeave }: SpectateProps) {
   const step = (by: number): void => {
     playUi("select");
     onStep(by);
   };
   return (
-    <div className={`hud-pace hud-spectate ${belowMirror ? "hud-pace-under-glass" : ""}`}>
+    <div className="hud-pace hud-spectate">
       <div className="hud-spec-head">
         <span className="hud-spec-tag">SPECTATING</span>
         <span className="hud-spec-out">

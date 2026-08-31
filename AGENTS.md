@@ -153,6 +153,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | Lightning and the thunder behind it                         | `pwa/src/game/storm.ts` (drawn) + `thunder_*` in `audio/bank.ts` (heard)                                                         |
 | How heavy the weather is, and how hard it is coming down    | `pwa/src/game/weather.ts` — read off the wind, and DOM-free so the road bed shares it                                            |
 | The rear-view mirror: where the glass sits, how it aims     | `pwa/src/game/mirror.ts` (its box is restated in `styles.css` — see the parity rules)                                            |
+| The press that FOLDS the mirror away mid-stage, and back    | `pwa/src/game/hud-mirror.tsx` — the glass as a switch; the menu option is still the only way to be rid of it                     |
 | How often the mirror is redrawn, and how far it sees        | `pwa/src/game/mirror-pace.ts` — the ladder the frame rate walks the mirror down; DOM-free, so `mirror_test.ts` reads it          |
 | A particle pool the car throws off, and how it is tinted    | `pwa/src/game/car-fx.ts`; WHEN it is thrown stays in `renderer.ts`                                                               |
 | How the body TREMBLES when the engine is being worked       | `pwa/src/game/car-shake.ts` — DOM-free; read by `car-mesh.ts` (the shell) and `camera-eye.ts` (the seat)                         |
