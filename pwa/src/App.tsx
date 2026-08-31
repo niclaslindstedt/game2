@@ -608,8 +608,18 @@ type Settling = {
  * leader of what is left, driving.
  *
  * `feed` is what SPECTATE buys: the same run-out, the same shot, with the
- * strip and the two buttons that walk the field (spectate.ts). */
+ * card down, the whole driving layout pointed at the crew on screen, and the
+ * banner naming them over the two buttons that walk the field
+ * (spectate.ts). */
 type WatchMode = "off" | "backdrop" | "feed";
+
+/** THE FEED, as the HUD wears it: the banner's line on the crew under the
+ * camera, and the instruments the driving layout is pointed at them with —
+ * their clock, their revs, their gear, their dents, their route, their
+ * place. One object because both halves are read off the same crew on the
+ * same tick, and a HUD holding one of them without the other would be a
+ * name over somebody else's numbers for a frame. */
+type WatchFace = { feed: Watched; snap: HudSnapshot };
 
 /** …and the camera each is watched from. It is an OUTSIDE view and not a
  * choice: the in-car rigs are measured off the silhouette of the car the
@@ -620,8 +630,8 @@ type WatchMode = "off" | "backdrop" | "feed";
  * pair being written out here rather than assumed. The transit that carries
  * the lens onto a crew (camera-sweep.ts) lands it behind them in the view
  * the player was just driving in, which is the shot a spectator is owed —
- * so pressing SPECTATE over the card is a strip appearing rather than the
- * camera going somewhere else, and BACK TO RESULTS is the strip going away.
+ * so pressing SPECTATE over the card is the card coming down rather than the
+ * camera going somewhere else, and BACK TO RESULTS is it going back up.
  * A second flight between two ways of watching the same car said nothing
  * about the race and cost a second of it. */
 const WATCH_CAMERA = { backdrop: "chase", feed: "chase" } as const;
@@ -770,19 +780,27 @@ export function App() {
   const settleRef = useRef<Settling | null>(null);
   /** R30 — the crew that run-out is being WATCHED through (spectate.ts), and
    * null whenever the card is up instead. Held in a ref because the frame
-   * loop follows it; `watched` is the same feed read for the strip, on the
+   * loop follows it; `watchFace` is the same feed read for the HUD, on the
    * HUD's own tick. */
   const spectateRef = useRef<RivalRun | null>(null);
   /** …and whether that is the card's own backdrop or the feed the player
    * asked for. Both step the same run-out; they differ in the camera and in
-   * whether the strip is up. */
+   * which of the two the HUD is drawing. */
   const watchModeRef = useRef<WatchMode>("off");
-  /** …and the same answer as state, for the HUD: with the run-out on screen
-   * every instrument on the driving layout is a reading of a car that is
-   * parked, so the chrome comes down and the card is left standing over the
-   * race on its own. */
+  /** …and the same answer as state, for the HUD: behind the CARD the
+   * run-out is a backdrop, every instrument on the driving layout is a
+   * reading of a car that is parked, so the chrome comes down and the card
+   * is left standing over the race on its own. */
   const [watching, setWatching] = useState(false);
-  const [watched, setWatched] = useState<Watched | null>(null);
+  /** …and the feed itself, once the player has asked for one. Null whenever
+   * the card is up instead; refreshed on the HUD's own tick from inside the
+   * frame loop. */
+  const [watchFace, setWatchFace] = useState<WatchFace | null>(null);
+  /** The watched crew's own frame-rate channel and co-driver memory, so a
+   * clock in somebody else's car still counts hundredths and the player's
+   * own latch is never written by a run they are not driving. */
+  const watchLiveRef = useRef(createLive());
+  const watchPaceRef = useRef(createPaceMemory());
   /** The feed's presses, plus the way it is torn down. Wired inside the
    * frame-loop effect, where the renderer that has to be told lives. */
   const watchActionsRef = useRef<{
@@ -1832,11 +1850,33 @@ export function App() {
         setResult({ levelId: settling.levelId, rows });
       };
 
-      /** The strip's reading of `run`, or null once that crew is off the
-       * road — home, retired, or the whole run-out already booked. */
-      const readFeed = (run: RivalRun): Watched | null => {
+      /** THE FEED, READ: the banner's line on `run` and the instruments the
+       * driving layout wears while it is on them. Null once that crew is off
+       * the road — home, retired, or the whole run-out already booked.
+       *
+       * The snapshot is taken exactly as the player's own is, off a
+       * different `GameState`: the whole point of the mode is that a watched
+       * car reads on the same dials. What it is NOT given is anything the
+       * reading would be a lie about — no ghost to be up the road on, no
+       * record book to be beating, and no finish time, which is what keeps
+       * the results card off a run that is still going. */
+      const readFeed = (run: RivalRun): WatchFace | null => {
         const settling = settleRef.current;
-        return settling ? readWatch(settling.field, run, settling.splits) : null;
+        if (!settling) return null;
+        const feed = readWatch(settling.field, run, settling.splits);
+        if (!feed) return null;
+        return {
+          feed,
+          snap: takeSnapshot(
+            run.state,
+            watchPaceRef.current,
+            null,
+            null,
+            null,
+            feed.place === null ? null : { place: feed.place, of: feed.of },
+            settling.field,
+          ),
+        };
       };
 
       /** The camera the player's OWN run is watched from right now — where
@@ -1865,10 +1905,11 @@ export function App() {
         );
         renderer.spectate(on);
         setWatching(on !== null);
-        // The strip belongs to the FEED alone. Behind the card there is a
-        // card, and a second set of readouts under it would be two things
+        // The instruments belong to the FEED alone. Behind the card there is
+        // a card, and a second set of readouts under it would be two things
         // asking to be read at once.
-        setWatched(on && how === "feed" ? readFeed(on) : null);
+        if (on && how === "feed") readLive(watchLiveRef.current, on.state);
+        setWatchFace(on && how === "feed" ? readFeed(on) : null);
       };
 
       /** FINISH THE RUN-OUT WHERE IT STANDS, at whatever it costs, and book
@@ -1900,7 +1941,7 @@ export function App() {
         // BACK TO RESULTS drops to the card, and the card's own backdrop is
         // this same run-out from this same shot: the race does not stop
         // because somebody stopped watching it closely, and the picture does
-        // not move because the strip over it went away.
+        // not move because the card came back up over it.
         leave: () => {
           if (spectateRef.current) cutTo(spectateRef.current, "backdrop");
         },
@@ -2345,12 +2386,15 @@ export function App() {
         }
         renderer.render(watching.state, frozen ? 0 : dtFrame);
         servePendingShot();
+        // Only the FEED has instruments to refresh. Behind the card the
+        // readouts are the card's. The clock is the same two-channel split
+        // the player's own run uses: hundredths every frame, everything else
+        // on the HUD's own tick.
+        if (how === "feed") readLive(watchLiveRef.current, watching.state);
         hudClock += dtFrame;
         if (hudClock > 0.08) {
           hudClock = 0;
-          // Only the FEED has a strip to refresh. Behind the card the
-          // readouts are the card's.
-          if (how === "feed") setWatched(readFeed(watching));
+          if (how === "feed") setWatchFace(readFeed(watching));
         }
         return true;
       };
@@ -2720,10 +2764,10 @@ export function App() {
   // the wait is, so it is also the whole of what the offer is.
   const carsStillOut = (campaign !== null || headsUp !== null) && result?.levelId !== run.levelId;
   const onSpectate = carsStillOut ? (): void => watchActionsRef.current.open() : null;
-  /** The feed itself, once one is up. `watched` is refreshed on the HUD's own
-   * tick from inside the loop; the two presses are wired there as well. */
-  const spectate: SpectateProps | null = watched && {
-    watched,
+  /** The feed itself, once one is up. `watchFace` is refreshed on the HUD's
+   * own tick from inside the loop; the two presses are wired there as well. */
+  const spectate: SpectateProps | null = watchFace && {
+    watched: watchFace.feed,
     onStep: (by: number): void => watchActionsRef.current.step(by),
     onLeave: (): void => watchActionsRef.current.leave(),
   };
@@ -2768,8 +2812,11 @@ export function App() {
       />
       {snap && !menu && !hudHidden && !bench && (
         <Hud
-          snap={snap}
-          live={liveRef.current}
+          // WHOSE CAR THE INSTRUMENTS ARE READING. The player's, until a
+          // run-out is being watched closely — then it is the crew under the
+          // camera, on the same dials, and the layout never has to know.
+          snap={watchFace ? watchFace.snap : snap}
+          live={watchFace ? watchLiveRef.current : liveRef.current}
           paused={paused}
           flying={godActive}
           flashes={flashes}

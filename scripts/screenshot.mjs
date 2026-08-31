@@ -1566,9 +1566,16 @@ await capture(
 // run-out only exists on a run that has a LEVEL, and a `?start=1` link never
 // passes through `startStage`, so every scene on this page finishes a stage
 // that was never entered for points and has no field to run home. Reaching
-// the card with cars still out means clicking through the menu — twelve
-// minutes of software-rendered driving on a campaign stage, against the
-// forty seconds a scene here is worth.
+// the card with cars still out means clicking through the menu — the better
+// part of ten minutes of software-rendered driving on a campaign stage,
+// against the forty seconds a scene here is worth.
+//
+// It IS reachable when a change has to be looked at, and two things decide
+// whether the trip pays: pick EASY, because a staggered rally with a quick
+// field is home before the player is and the card then offers no SPECTATE
+// at all; and take every viewport off the ONE drive (`page.setViewportSize`
+// between shots) rather than paying for the stage again per orientation.
+// The route is the campaign scene below, with EASY for HARD.
 
 // THE DEVELOPER TOOLS, which only exist to be photographed: the debug
 // overlay is a contract that a screenshot of the game carries enough to

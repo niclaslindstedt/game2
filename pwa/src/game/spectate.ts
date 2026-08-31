@@ -28,9 +28,17 @@
 // ninety-second stage actually means.
 //
 // This module is the FEED: who is on screen, how NEXT and PREVIOUS walk the
-// field, and the line of numbers over the picture. It is DOM-free — the strip
-// that draws it is `hud-spectate.tsx`, and the frame loop that steps the
-// run-out under it is App.tsx.
+// field, and the readings the picture is captioned with. It is DOM-free — the
+// banner that draws it is `hud-spectate.tsx`, and the frame loop that steps
+// the run-out under it is App.tsx.
+//
+// What it does NOT carry is the crew's clock, speed, gearbox, damage or
+// route: those are a car being driven, and the HUD already has a whole
+// layout for reading one. App points that layout at the watched crew's own
+// `GameState` (`takeSnapshot`) instead of the player's, so a spectator reads
+// the same dials they raced under. What is left here is the handful of
+// numbers only a SPECTATOR has — who this is, and where they stand against
+// the time already on the sheet.
 
 import {
   livePlace,
@@ -41,7 +49,7 @@ import {
   type RivalRun,
 } from "./standings.ts";
 
-/** The crew on screen, and everything the strip over them reads. Rebuilt on
+/** The crew on screen, and everything the banner over them reads. Rebuilt on
  * the HUD's own tick rather than carried, because every number in it is a
  * reading of a car that is still driving. */
 export type Watched = {
@@ -99,7 +107,7 @@ export function walkWatch(field: RivalField, from: RivalRun | null, by: number):
   return running[next < 0 ? next + running.length : next];
 }
 
-/** Read the strip. `splits` is the PLAYER's own board times, in board order:
+/** Read the feed. `splits` is the PLAYER's own board times, in board order:
  * the crew being watched is racing a time that is already on the sheet, and
  * the gap to it at the last board they share is the number a spectator
  * actually came for. Null once the crew is no longer on the road — the

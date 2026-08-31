@@ -185,10 +185,15 @@ function covered(state: GameState): number {
 }
 
 /** The field's plates for this frame, backmarker first. */
-function rivalPlates(field: RivalField | null, project: Project): MinimapCar[] {
+function rivalPlates(field: RivalField | null, project: Project, own: GameState): MinimapCar[] {
   if (!field?.massStart) return [];
   const plated: { car: MinimapCar; covered: number }[] = [];
   for (const run of field.runs) {
+    // Never a plate on the car the map is drawn FROM. It is the arrowhead,
+    // and the arrowhead is already where it is: never the player, and — with
+    // a run-out being watched (spectate.ts) — never the crew under the
+    // camera, whose plate would otherwise stand on its own icon.
+    if (run.state === own) continue;
     // A crew still in the start control or already home is not on the road,
     // and a plate for one would be a car the player cannot reach.
     if (!onRoad(run)) continue;
@@ -213,7 +218,7 @@ export function buildMinimap(state: GameState, field: RivalField | null = null):
   const endless = state.track.endless;
   return {
     path,
-    cars: rivalPlates(field, project),
+    cars: rivalPlates(field, project, state),
     // Screen space runs the heading backwards (see the sign boundary above),
     // so the icon's clockwise rotation is the negated heading.
     car: { x, y, angle: -state.car.heading * (180 / Math.PI) },
