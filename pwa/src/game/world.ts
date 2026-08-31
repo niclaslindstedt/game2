@@ -51,7 +51,6 @@ import { buildRoadSpill } from "./road-spill.ts";
 import { buildWild } from "./wild.ts";
 import { buildTerrain, LAKE_Y, type Terrain } from "./terrain.ts";
 import { buildStreamMeshes } from "./streams.ts";
-import { waterTexture } from "./textures.ts";
 import { buildFinishGate, buildStartGate, type FinishGate, type Muzzle } from "./finish-gate.ts";
 import { buildKerbing, createPostField } from "./kerbs.ts";
 import { buildCrowd, type Crowd } from "./crowd.ts";
@@ -749,8 +748,7 @@ function disposeGroup(group: THREE.Group): void {
 export function buildWorld(track: Track, density = 1, season: Season = "summer", stone = 1): World {
   const group = new THREE.Group();
   const biome = biomeFor();
-  const waterTex = waterTexture();
-  const terrain = buildTerrain(track, biome, waterTex, season);
+  const terrain = buildTerrain(track, biome, season);
   group.add(terrain.group);
   terrain.sync(track, 0, track.samples[0].x, track.samples[0].z);
   // R16 — what the road's outer band hands over TO. The ribbon reads the
@@ -840,12 +838,12 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
       if (spur.atS > track.samples[to - 1].s) break;
       chunkGroup.add(buildSpur(track, spur, cones, beside));
     }
-    const fords = buildFords(track, fordScan, to, waterTex);
+    const fords = buildFords(track, fordScan, to);
     fordScan = fords.next;
     chunkGroup.add(fords.group);
     const toS = track.samples[to - 1].s;
     const fresh = terrain.field.streams.filter((s) => s.centerS >= streamScanS && s.centerS < toS);
-    if (fresh.length > 0) chunkGroup.add(buildStreamMeshes(fresh, waterTex, terrain.field.waterAt));
+    if (fresh.length > 0) chunkGroup.add(buildStreamMeshes(fresh, terrain.field.waterAt));
     streamScanS = toS;
     // The clearance guard: the whole road where it is known, and otherwise
     // this chunk's aproned ribbon plus a margin of neighbouring road so

@@ -32,6 +32,7 @@ import type { Biome, RegionGround } from "./biome.ts";
 import { ROAD_PAINT } from "./road-mesh.ts";
 import { DISSOLVE } from "./road-spill.ts";
 import { detailTexture } from "./textures.ts";
+import { driftWater, waterMaterial } from "./water-look.ts";
 
 export { APRON, LAKE_Y };
 
@@ -124,12 +125,7 @@ export type Terrain = {
   dispose: () => void;
 };
 
-export function buildTerrain(
-  track: Track,
-  biome: Biome,
-  waterTexture: THREE.Texture,
-  season: Season,
-): Terrain {
+export function buildTerrain(track: Track, biome: Biome, season: Season): Terrain {
   const field = createTerrain(track);
   const heightAt = field.heightAt;
   const samples = track.samples;
@@ -151,14 +147,9 @@ export function buildTerrain(
   // meters / 16, so the grain runs continuous across tile seams.
   const groundTex = detailTexture();
   const groundMat = new THREE.MeshLambertMaterial({ vertexColors: true, map: groundTex });
-  const waterMat = new THREE.MeshPhongMaterial({
-    color: 0x2f86e0,
-    map: waterTexture,
-    specular: 0xcfe4ff,
-    shininess: 130,
-    transparent: true,
-    opacity: 0.92,
-  });
+  // The app's one water look, shared with the fords and the streams — never
+  // disposed here, because it is not this module's to free.
+  const waterMat = waterMaterial();
 
   // The year moves the living half of the palette and leaves the rock and
   // the water where they are.
@@ -219,6 +210,15 @@ export function buildTerrain(
   // against, and world UVs make the surface continuous across every seam by
   // construction.
   const WATER_GRAIN = TILE / 6;
+  /** A cell's four corners as (di, dj) steps, in the order the waterline is
+   * walked round them — the winding that comes out facing UP (see
+   * `cutWater`). */
+  const CORNERS = [
+    [0, 0],
+    [0, 1],
+    [1, 1],
+    [1, 0],
+  ] as const;
   /** The level of the water standing at a point, whether or not the point
    * itself is under it — the shore's own reading, so a cell that straddles
    * the waterline still knows which surface it is being cut against. */
@@ -347,10 +347,15 @@ export function buildTerrain(
     }
     lakeGeo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     lakeGeo.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
-    // The sheet is flat and lit from above wherever it is, so one shared
-    // normal beats a per-vertex attribute nobody varies.
-    lakeGeo.deleteAttribute("normal");
-    lakeGeo.computeVertexNormals();
+    // The sheet is flat and lit from above wherever it is, so the normal is
+    // straight up at every vertex — written out rather than derived from the
+    // triangles. Deriving it is not just slower: on the SHORE it is wrong.
+    // A cell the waterline clips exactly through a corner fans a zero-area
+    // triangle, whose face normal is the zero vector, and a vertex that
+    // takes that on is lit by nothing at all.
+    const normals = new Float32Array(count);
+    for (let i = 1; i < count; i += 3) normals[i] = 1;
+    lakeGeo.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
     lakeGeo.computeBoundingSphere();
     if (!lakes) {
       lakes = new THREE.Mesh(lakeGeo, waterMat);
@@ -450,6 +455,13 @@ export function buildTerrain(
     H: Float32Array,
     n: number,
   ): TileWater | null => {
+    // Walked in +z-then-+x order rather than the other way round, because
+    // THAT is the winding that faces UP. Get it backwards and every triangle
+    // the fan emits is back-facing, the whole sheet is culled by a material
+    // that draws front faces, and what is left standing where a lake should
+    // be is its BED — ground painted lake-bottom blue, which is exactly
+    // enough like water to be reported as water that flickers rather than as
+    // water that is missing. The ground tiles above wind the same way.
     let positions: number[] | null = null;
     let uvs: number[] | null = null;
     // Corner scratch, reused per cell: x, z, ground, level, depth.
@@ -459,13 +471,10 @@ export function buildTerrain(
     const poly: number[] = [];
     for (let j = 0; j < CELLS; j++) {
       for (let i = 0; i < CELLS; i++) {
-        // The cell's corners, anticlockwise, so the polygon comes out
-        // wound one way and faces up.
         let level = -Infinity;
         let wet = 0;
         for (let c = 0; c < 4; c++) {
-          const di = c === 0 || c === 3 ? 0 : 1;
-          const dj = c < 2 ? 0 : 1;
+          const [di, dj] = CORNERS[c];
           const x = originX + (i + di) * CELL;
           const z = originZ + (j + dj) * CELL;
           const ground = H[(j + dj + 1) * n + (i + di + 1)];
@@ -623,15 +632,13 @@ export function buildTerrain(
   };
 
   const update = (dt: number): void => {
-    waterTexture.offset.x += dt * 0.008;
-    waterTexture.offset.y += dt * 0.005;
+    driftWater(dt);
   };
 
   const dispose = (): void => {
     for (const key of [...tiles.keys()]) dropTile(key);
     lakeGeo.dispose();
     groundMat.dispose();
-    waterMat.dispose();
   };
 
   /** The ground's colour where the ROAD asks for it — at the corridor's own

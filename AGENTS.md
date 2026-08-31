@@ -145,6 +145,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | The name over a car that is not the player's                | `pwa/src/game/name-tag.ts` — a label, a colour and a point; it must never learn what a bot is                                    |
 | Anything drawn (meshes, textures, camera, effects)          | `pwa/src/game/` (renderer.ts and friends)                                                                                        |
 | Where the camera stands OUTSIDE the car                     | `CHASE_RIGS` in `pwa/src/game/camera.ts` — one row per angle                                                                     |
+| What WATER looks like — lakes, fords and streams alike      | `pwa/src/game/water-look.ts` — one flat semi-transparent material for all three; the SHEETS are cut in `terrain.ts`              |
 | What colour the sky is under given conditions               | `pwa/src/game/sky.ts` (the presets and the weather/season colour maths)                                                          |
 | What is IN the sky (cumulus, the overcast deck, scud)       | `pwa/src/game/clouds.ts`                                                                                                         |
 | Lightning and the thunder behind it                         | `pwa/src/game/storm.ts` (drawn) + `thunder_*` in `audio/bank.ts` (heard)                                                         |

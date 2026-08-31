@@ -15,6 +15,8 @@
 import * as THREE from "three";
 import type { Stream } from "@engine";
 
+import { waterMaterial } from "./water-look.ts";
+
 export type { Stream };
 
 /** Water surface height over a point, or null on dry ground — the engine
@@ -46,22 +48,12 @@ function wetReach(
 }
 
 /** The water surfaces: one ribbon per WET run of each piece of river, as
- * wide as the water is there, lifted a hair above the carved bed. Shares
- * the ford sheets' material look (Phong — the sun glitters on it). */
-export function buildStreamMeshes(
-  streams: Stream[],
-  texture: THREE.Texture,
-  waterAt: WaterAt,
-): THREE.Group {
+ * wide as the water is there, lifted a hair above the carved bed. Wears the
+ * app's one water look (`water-look.ts`), which is what makes a stream and
+ * the lake it runs into the same colour where they meet. */
+export function buildStreamMeshes(streams: Stream[], waterAt: WaterAt): THREE.Group {
   const group = new THREE.Group();
-  const mat = new THREE.MeshPhongMaterial({
-    map: texture,
-    specular: 0xcfe4ff,
-    shininess: 120,
-    transparent: true,
-    opacity: 0.85,
-    side: THREE.DoubleSide,
-  });
+  const mat = waterMaterial();
   for (const s of streams) {
     const positions: number[] = [];
     const uvs: number[] = [];
@@ -109,7 +101,13 @@ export function buildStreamMeshes(
     geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
     geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
     geo.setIndex(indices);
-    geo.computeVertexNormals();
+    // Straight up at every vertex, like the lakes: a watercourse falls, but
+    // its surface is level across itself, and a normal derived from the
+    // ribbon's own tilt would shade each reach a different blue on the way
+    // down the hill.
+    const normals = new Float32Array(positions.length);
+    for (let i = 1; i < normals.length; i += 3) normals[i] = 1;
+    geo.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
     group.add(new THREE.Mesh(geo, mat));
   }
   return group;

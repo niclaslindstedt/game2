@@ -37,6 +37,7 @@ import { DISSOLVE } from "./road-spill.ts";
 import { APRON } from "@engine";
 import { detailTexture, gravelTexture, textureMean } from "./textures.ts";
 import { rightOf, type Ribbon } from "./ribbon.ts";
+import { waterMaterial } from "./water-look.ts";
 
 /** World up — the axis every scattered chipping spins about. */
 const UP = new THREE.Vector3(0, 1, 0);
@@ -771,7 +772,6 @@ export function buildFords(
   track: Track,
   from: number,
   to: number,
-  tex: THREE.Texture,
 ): { group: THREE.Group; next: number } {
   const group = new THREE.Group();
   const samples = track.samples;
@@ -795,16 +795,14 @@ export function buildFords(
     geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
     geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
     geo.setIndex(indices);
-    geo.computeVertexNormals();
-    // Phong, like the lakes: the ford glitters when the sun catches it.
-    const mat = new THREE.MeshPhongMaterial({
-      map: tex,
-      specular: 0xcfe4ff,
-      shininess: 120,
-      transparent: true,
-      opacity: 0.85,
-    });
-    group.add(new THREE.Mesh(geo, mat));
+    // Flat and lit from above, like the lakes: the crossing is a sheet of
+    // standing water and reads as one. The material is the app's shared
+    // water look rather than one built per ford — the same blue, and one
+    // program to bind however many crossings a stage has.
+    const normals = new Float32Array(positions.length);
+    for (let i = 1; i < normals.length; i += 3) normals[i] = 1;
+    geo.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
+    group.add(new THREE.Mesh(geo, waterMaterial()));
   };
   let i = from;
   let next = from;
