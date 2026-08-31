@@ -81,6 +81,11 @@ type OptionsProps = {
   settings: Settings;
   onSettings: (settings: Settings) => void;
   onBack: () => void;
+  /** What the way out is CALLED. The page is reached from two places — the
+   * front door, and the pause card over a held run — and a back button that
+   * says MENU on a card opened mid-stage is a promise to throw the stage
+   * away. Defaults to the front door's word. */
+  backLabel?: string;
 };
 
 /** The four knobs the three IN-CAR views are set up with — where the driver
@@ -779,10 +784,17 @@ function ControlsTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "
   );
 }
 
-export function OptionsPage({ tab, onTab, settings, onSettings, onBack }: OptionsProps) {
+export function OptionsPage({
+  tab,
+  onTab,
+  settings,
+  onSettings,
+  onBack,
+  backLabel = "MENU",
+}: OptionsProps) {
   return (
     <div className="menu-card menu-card-wide">
-      <MenuHead back={onBack} backLabel="MENU" title="OPTIONS" />
+      <MenuHead back={onBack} backLabel={backLabel} title="OPTIONS" />
       <div className="opt-tabs">
         {TABS.map((entry) => (
           <button
@@ -799,6 +811,60 @@ export function OptionsPage({ tab, onTab, settings, onSettings, onBack }: Option
       {tab === "audio" && <AudioTab settings={settings} onSettings={onSettings} />}
       {tab === "video" && <VideoTab settings={settings} onSettings={onSettings} />}
       {tab === "controls" && <ControlsTab settings={settings} onSettings={onSettings} />}
+    </div>
+  );
+}
+
+/** THE SAME PAGE, OVER A HELD RUN — what the pause card's OPTIONS row opens.
+ *
+ * It is the options page rather than a cut-down copy of it, because the
+ * settings a player pauses to change are exactly the ones a cut-down copy
+ * would leave out: the camera they cannot see out of, the effects level the
+ * corner they just crashed on is costing them, the pedal a thumb keeps
+ * missing. A second, smaller options screen is a second place for every
+ * setting to drift.
+ *
+ * What differs is only where BACK goes: onto the pause card, not out to the
+ * front door. The run is still standing behind the scrim and leaving it is
+ * the pause card's own decision to offer.
+ *
+ * The card wears the menu's chrome (`.menu`, its scrim and its body) so it
+ * reads as the page the player already knows, plus `.menu-held`, which lifts
+ * it onto the pause card's modal tier — the HUD is still up underneath, and
+ * parts of it claim layers of their own. */
+export function PauseOptions({ tab, onTab, settings, onSettings, onBack }: OptionsProps) {
+  // The row the pointer is on, so entering a button ticks once rather than
+  // once per child element the event bubbles up from. Delegated the way the
+  // main menu delegates it: the tabs and twenty control rows are plain
+  // markup, and a handler on each is twenty chances to miss one.
+  const hovered = useRef<Element | null>(null);
+  return (
+    <div
+      className="menu menu-held pointer-events-auto"
+      onPointerOver={(e) => {
+        const row = (e.target as HTMLElement | null)?.closest("button:not([disabled])") ?? null;
+        if (!row || row === hovered.current) return;
+        hovered.current = row;
+        playUi("move");
+      }}
+    >
+      <div className="menu-scrim" aria-hidden="true" />
+      <div className="menu-body">
+        <OptionsPage
+          tab={tab}
+          onTab={(next) => {
+            playUi("page");
+            onTab(next);
+          }}
+          settings={settings}
+          onSettings={onSettings}
+          onBack={() => {
+            playUi("back");
+            onBack();
+          }}
+          backLabel="PAUSED"
+        />
+      </div>
     </div>
   );
 }

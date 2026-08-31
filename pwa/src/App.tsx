@@ -133,6 +133,7 @@ import {
   type RaceSettings,
 } from "./game/menu.tsx";
 import { MainMenu, type MenuPage } from "./game/main-menu.tsx";
+import { PauseOptions, type OptionsTab } from "./game/menu-options.tsx";
 import { BenchmarkCard } from "./game/menu-dev.tsx";
 import type { MapDebug, MapRect, MapView } from "./game/menu-roam.tsx";
 import { mapDebugBoxes, mapReproQuery } from "./game/map-debug.ts";
@@ -750,6 +751,11 @@ export function App() {
   const [splashUp, setSplashUp] = useState(() => !splashSkipped(location.search));
   const [booted, setBooted] = useState(false);
   const [paused, setPaused] = useState(false);
+  /** WHICH CARD THE HELD RUN IS SHOWING: null is the pause card itself, a
+   * tab is OPTIONS opened over it. The run is paused either way — this only
+   * says what is drawn on top of it, so nothing about the hold, the frozen
+   * frame or the held score has to learn about the page. */
+  const [pauseTab, setPauseTab] = useState<OptionsTab | null>(null);
   /** True while ALT is held: the game's chrome comes off so a frame can be
    * judged on the pixels alone. The debug overlay is NOT part of it — a
    * screenshot with nothing to say where it was taken is the one thing the
@@ -883,6 +889,8 @@ export function App() {
   runRef.current = run;
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
+  const pauseTabRef = useRef(pauseTab);
+  pauseTabRef.current = pauseTab;
   /** The camera the run would be watched from if god mode landed right now.
    * Tracked here rather than read back off the renderer because the free
    * camera has REPLACED the mode there — the ladder the camera key walks is
@@ -1566,6 +1574,16 @@ export function App() {
   };
 
   const applyOptions = (next: Settings): void => {
+    // WHICH CAMERA A RUN OPENS ON is also which camera the run STANDING
+    // RIGHT NOW is watched from: OPTIONS is reachable from the pause card,
+    // and a view picked over a frozen frame that only takes effect on the
+    // next stage reads as a setting that did not take. Only when the choice
+    // MOVED — the camera key walks the same ladder without writing to
+    // options, and re-seating the lens on every unrelated option change
+    // would undo that walk. Behind a menu the drone and the map own the
+    // view, so the pick waits for the cards to come down, the same rule god
+    // mode's hold follows.
+    const reframe = next.camera !== optionsRef.current.camera;
     setOptions(next);
     optionsRef.current = next;
     saveSettings(next);
@@ -1576,6 +1594,10 @@ export function App() {
     rendererRef.current?.setMirror(next.hud.mirror);
     rendererRef.current?.setNameTags(next.hud.nameTags);
     rendererRef.current?.setView(next.view);
+    if (reframe && !menuRef.current) {
+      playCameraRef.current = next.camera;
+      if (!godRef.current) rendererRef.current?.setCamera(next.camera);
+    }
   };
 
   /** The debug snapshot the overlay renders and the log quotes. Null before
@@ -1717,6 +1739,13 @@ export function App() {
   useEffect(() => {
     if (paused) pauseMusic();
     else resumeMusic();
+  }, [paused]);
+
+  // Every way a hold ENDS — resume, restart, retiring to the menu — puts the
+  // pause card back to its first page, in one place rather than in each of
+  // them: the next pause is a card the player has to be able to predict.
+  useEffect(() => {
+    if (!paused) setPauseTab(null);
   }, [paused]);
 
   useEffect(() => {
@@ -2000,7 +2029,14 @@ export function App() {
         else if (action === "menu") goMainMenu();
         else if (action === "screenshot") takeShotRef.current();
         else if (action === "pause") {
-          if (!menuRef.current) setPaused((was) => !was);
+          if (menuRef.current) return;
+          // OPTIONS is a page INSIDE the hold, so the pause key steps back
+          // out of it rather than resuming: a player who paused to change one
+          // setting must not be thrown back onto the road by the same key
+          // that got them off it. It is the rule the menu's own Escape
+          // follows one page at a time (main-menu.tsx).
+          if (pauseTabRef.current !== null) setPauseTab(null);
+          else setPaused((was) => !was);
         } else camera();
       });
 
@@ -2887,7 +2923,7 @@ export function App() {
         <DebugCopyButton read={() => readDebugRef.current()} />
       )}
       {bench && <BenchmarkCard status={bench} onAgain={startBenchmark} onLeave={leaveBenchmark} />}
-      {paused && !menu && !bench && (
+      {paused && !menu && !bench && pauseTab === null && (
         <PauseMenu
           seed={stageRef.current?.seed ?? seed}
           carName={carById(race.carId).name}
@@ -2896,6 +2932,23 @@ export function App() {
           onResume={() => setPaused(false)}
           onRestart={() => actionsRef.current.restart()}
           onMainMenu={goMainMenu}
+          // HUD first: the camera and the instruments are what a player
+          // stopped mid-stage to change.
+          onOptions={() => setPauseTab("hud")}
+        />
+      )}
+      {/* OPTIONS over the held run. It REPLACES the pause card rather than
+          stacking on it: two cards deep is two scrims over the frame the
+          player is trying to look at, and the pad's cursor would have to
+          choose between them (menu-nav's ROOTS takes the first surface it
+          finds). BACK comes straight back here. */}
+      {paused && !menu && !bench && pauseTab !== null && (
+        <PauseOptions
+          tab={pauseTab}
+          onTab={setPauseTab}
+          settings={options}
+          onSettings={applyOptions}
+          onBack={() => setPauseTab(null)}
         />
       )}
       {menu && (

@@ -4,10 +4,11 @@
 // segmented `OptionRow` they are all picked with.
 //
 // PauseMenu is the one you reach mid-stage, by tapping the minimap: the run
-// holds where it stands, and it carries the three ways on — run this stage
-// again, leave for the main menu, or resume. It lives here rather than in
-// the top bar because the bar is a strip over the road, and every button on
-// it is a button in the way of the driving.
+// holds where it stands, and it carries the four ways on — resume, set the
+// game up (OPTIONS, opened over the held run and handing back to this card),
+// run this stage again, or leave for the main menu. It lives here rather
+// than in the top bar because the bar is a strip over the road, and every
+// button on it is a button in the way of the driving.
 
 import {
   DEFAULT_KNOBS,
@@ -441,6 +442,9 @@ type PauseProps = {
   onResume: () => void;
   onRestart: () => void;
   onMainMenu: () => void;
+  /** Open OPTIONS over the held run — the same page the front door opens,
+   * with its way back onto this card (menu-options.tsx's `PauseOptions`). */
+  onOptions: () => void;
 };
 
 /** The in-race menu, opened by tapping the minimap. The backdrop resumes:
@@ -453,6 +457,7 @@ export function PauseMenu({
   onResume,
   onRestart,
   onMainMenu,
+  onOptions,
 }: PauseProps) {
   return (
     <div className="hud-menu-wrap pointer-events-auto" onPointerDown={onResume} role="presentation">
@@ -463,9 +468,10 @@ export function PauseMenu({
         </div>
         {/* RESUME is both the way OUT of this card and where a controller's
             cursor belongs: it is the press a card opened by mis-aiming for
-            the minimap needs, and the two rows under it throw the stage
-            away. Without the focus mark the cursor skips it — a way back is
-            normally a chevron nobody came for — and lands on RESTART. */}
+            the minimap needs, and two of the three rows under it throw the
+            stage away. Without the focus mark the cursor skips it — a way
+            back is normally a chevron nobody came for — and lands on the
+            first row that is not it. */}
         <button
           type="button"
           className="hud-start"
@@ -477,6 +483,21 @@ export function PauseMenu({
           }}
         >
           RESUME
+        </button>
+        {/* Directly under RESUME because it is the row that costs nothing:
+            the camera you cannot see out of, the effects level the last
+            corner was costing you, the pedal a thumb keeps missing are all
+            settings you want changed HERE, with the stage still standing —
+            and reaching them used to mean abandoning the run. */}
+        <button
+          type="button"
+          className="hud-pause-act"
+          onClick={() => {
+            playUi("select");
+            onOptions();
+          }}
+        >
+          OPTIONS
         </button>
         <button
           type="button"
