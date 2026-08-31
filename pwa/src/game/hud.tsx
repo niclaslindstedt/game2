@@ -24,7 +24,7 @@ import {
   type FinishScores,
   type NextStage,
 } from "./hud-finish.tsx";
-import { SpectateStrip, type SpectateProps } from "./hud-spectate.tsx";
+import { SpectateBanner, SpectateGap, type SpectateProps } from "./hud-spectate.tsx";
 import { Minimap, type HudMinimap } from "./minimap.tsx";
 import type { HudSettings, TouchSettings } from "./settings.ts";
 import type { ShiftWindow } from "./shift-window.ts";
@@ -171,6 +171,11 @@ export type HudSplit = {
 };
 
 type HudProps = {
+  /** THE CAR THIS SCREEN IS ABOUT. The player's own, normally — and, while a
+   * run-out is being WATCHED, the crew under the camera instead (spectate.ts).
+   * Every instrument below reads it without knowing which, because a clock,
+   * a rev counter and a dented wing are the same readings whoever is
+   * driving. The app picks; see `spectate`. */
   snap: HudSnapshot;
   flashes: HudFlash[];
   /** The split board just driven through, until it times out. */
@@ -231,15 +236,15 @@ type HudProps = {
    * the road is already clear, and on every run with nobody entered. */
   onSpectate: (() => void) | null;
   /** Whether the RUN-OUT is what is on screen — the card's own backdrop or
-   * the feed alike (spectate.ts). The player's car is parked past the line
-   * either way, so every instrument on the driving layout is a reading of a
-   * car that is not moving and not in shot: the chrome comes down and what
-   * is left is the card, over the race. */
+   * the feed alike (spectate.ts). BEHIND THE CARD it is a backdrop and
+   * nothing more: the player's car is parked past the line, so the chrome
+   * comes down and what is left is the card, over the race. */
   watching: boolean;
-  /** THE SPECTATOR FEED, when one is up (spectate.ts). It takes the WHOLE
-   * screen rather than dressing the driving layout: every instrument here
-   * reads the player's own car, and the player's own car is parked past the
-   * line. Null the rest of the time. */
+  /** THE SPECTATOR FEED, when one is up (spectate.ts). The driving layout
+   * stays where it is and `snap` and `live` become the WATCHED crew's, so
+   * their clock, dials, damage, route and place read exactly where the
+   * player's own did; this is only the banner naming them, and the two
+   * presses that change which car it is. Null the rest of the time. */
   spectate: SpectateProps | null;
 };
 
@@ -806,17 +811,18 @@ export function Hud({
         onSpectate={onSpectate}
       />
     );
-  // THE RUN-OUT OWNS THE SCREEN once it is on it. The canvas under this is a
-  // rival's game, and every readout in the driving layout below — the clock,
-  // the dials, the damage, the map, the pace notes — is a reading of the
-  // player's own car, which is parked past the line and not in shot. So the
-  // chrome comes down, and what is left is the one thing the beat is for: the
-  // feed's strip if the player asked for it, and otherwise the results card,
-  // standing over the race.
-  if (spectate || watching) {
+  // THE RESULTS CARD OWNS THE SCREEN while the run-out is only its backdrop.
+  // Nothing is being watched closely, the player's own car is parked past the
+  // line, and a driving layout full of readings off a stationary car nobody
+  // can see would be two things asking to be read at once. So the chrome
+  // comes down and what is left is the card, standing over the race.
+  //
+  // The FEED is the other case, and it does not come through here: it keeps
+  // the whole layout and points it at somebody else (see `spectate`).
+  if (watching && !spectate) {
     return (
       <div className="hud pointer-events-none absolute inset-0 select-none">
-        {spectate ? <SpectateStrip {...spectate} /> : <div className="hud-center">{finish}</div>}
+        <div className="hud-center">{finish}</div>
       </div>
     );
   }
@@ -834,10 +840,15 @@ export function Hud({
       <div className="hud-top">
         <div className="hud-topleft">
           {show.timer && <RaceClock face={snap} live={live} />}
+          {/* Under the clock, the gap that corner of the screen is for. While
+              a run-out is watched it is the WATCHED crew's gap to the time
+              already on the sheet — the player's — which is the one number a
+              spectator actually came for. */}
+          {show.timer && spectate && <SpectateGap watched={spectate.watched} />}
           {/* The gap to the ghost is its own chip rather than a line inside
               the clock: the clock's text is what the tooling reads the run's
               progress off, and it holds nothing but the time. */}
-          {show.timer && snap.ghostGap !== null && (
+          {show.timer && !spectate && snap.ghostGap !== null && (
             <div
               className={`hud-chip hud-gap ${snap.ghostGap < 0 ? "hud-gap-down" : ""}`}
               aria-label="Gap to your best run"
@@ -849,8 +860,12 @@ export function Hud({
           {/* R28 — the split, under the clock it is a reading of. The
               co-driver owns the top of the screen and the corner call is
               the one thing a driver may never have covered up, so a board
-              reports where the time already lives. */}
-          {show.timer && split && snap.phase === "racing" && <SplitBoard split={split} />}
+              reports where the time already lives. It is the PLAYER's board,
+              though — a reading of a run that is over — so it stays down
+              while the screen is somebody else's car. */}
+          {show.timer && !spectate && split && snap.phase === "racing" && (
+            <SplitBoard split={split} />
+          )}
         </div>
         <div className="hud-actions pointer-events-auto">
           {/* TOUCH ONLY, and that is the whole of its case: a device with a
@@ -870,7 +885,11 @@ export function Hud({
               <ShutterGlyph />
             </button>
           )}
-          {show.cameraButton && (
+          {/* Off while a run-out is watched, because the press is: the
+              ladder's in-car views are mounted off the silhouette of the
+              player's OWN car, so App refuses to walk it onto somebody
+              else's. A button that does nothing is worse than no button. */}
+          {show.cameraButton && !spectate && (
             <button
               type="button"
               className="hud-mini hud-mini-icon"
@@ -922,8 +941,13 @@ export function Hud({
       {/* The co-driver's slot: corner calls while there is a road to call,
           the way back the moment there isn't. The way home is not behind the
           pacenote toggle — switching off the corner calls is a driver saying
-          they know the stage, not one who wants to stay lost. */}
-      {snap.phase === "racing" &&
+          they know the stage, not one who wants to stay lost.
+          WATCHING, the slot is the spectator's banner instead: there is
+          nobody in this car to call a corner to, and nobody to send home. */}
+      {spectate ? (
+        <SpectateBanner {...spectate} belowMirror={show.mirror} />
+      ) : (
+        snap.phase === "racing" &&
         (snap.lost ? (
           <WayHomeCall distance={snap.homeDistance} belowMirror={show.mirror} />
         ) : (
@@ -931,23 +955,29 @@ export function Hud({
           snap.pacenotes.length > 0 && (
             <Pacenotes notes={snap.pacenotes} words={show.pacenoteText} belowMirror={show.mirror} />
           )
-        ))}
+        ))
+      )}
 
-      {/* Center: countdown / finish / event flashes. */}
-      <div className="hud-center">
-        {/* Away entirely while god mode flies — same reasoning as the
-            way-home arrow the renderer takes down in the free camera: it is
-            an aid for somebody driving, and nobody is. */}
-        {!flying && <StartLights live={live} muted={paused} />}
-        {finish}
-        <div className="hud-flashes">
-          {flashes.map((f) => (
-            <div key={f.id} className={`hud-flash hud-flash-${f.tone}`}>
-              {f.text}
-            </div>
-          ))}
+      {/* Center: countdown / finish / event flashes. All three belong to the
+          player's own run — the gantry they left, the card their time earned,
+          the calls their car threw off — so the middle of the screen is empty
+          while somebody else's is on it. */}
+      {!spectate && (
+        <div className="hud-center">
+          {/* Away entirely while god mode flies — same reasoning as the
+              way-home arrow the renderer takes down in the free camera: it is
+              an aid for somebody driving, and nobody is. */}
+          {!flying && <StartLights live={live} muted={paused} />}
+          {finish}
+          <div className="hud-flashes">
+            {flashes.map((f) => (
+              <div key={f.id} className={`hud-flash hud-flash-${f.tone}`}>
+                {f.text}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Bottom-left: the instrument panel, in two rows. The car's CONDITION
           sits in its own row above the dials rather than among them: the dial
@@ -981,11 +1011,16 @@ export function Hud({
           While GOD MODE has the camera the same two halves fly it instead:
           the car is parked and given nothing, so a wheel and a throttle over
           it are controls that do nothing — and on a phone, where the fly
-          keyboard is not, they would be the only controls there are. */}
+          keyboard is not, they would be the only controls there are.
+
+          Watching a run-out is the same bargain without the camera to fly:
+          the car on screen is being driven by somebody else and the player's
+          own is parked past the line, so the wheel and the pedal come off
+          and the two arrows on the banner are the whole of the mode. */}
       <div className="hud-touch">
         {thumbs && flying && <FlyControls fly={input.flyTouch} stickSide={touchLayout.steerSide} />}
-        {thumbs && !flying && <SteerZone touch={touch} side={touchLayout.steerSide} />}
-        {thumbs && !flying && (
+        {thumbs && !flying && !spectate && <SteerZone touch={touch} side={touchLayout.steerSide} />}
+        {thumbs && !flying && !spectate && (
           <PedalZone
             touch={touch}
             layout={touchLayout}

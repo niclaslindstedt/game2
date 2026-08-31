@@ -200,7 +200,7 @@ export type FieldCars = {
    * exhaust — is already being thrown at full strength there, so the
    * field's own thinned copies would be a second cloud in the same place;
    * and its name plate would hang in the middle of every frame, over a car
-   * the strip along the bottom of the screen has already named.
+   * the banner above it has already named.
    *
    * Dropping it from `near` is what does both: that list is what feeds the
    * field's plume AND its pipes. */

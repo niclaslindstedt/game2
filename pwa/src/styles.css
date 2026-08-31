@@ -831,37 +831,30 @@ body {
   margin-top: 0;
 }
 
-/* ── The spectator's strip (hud-spectate.tsx) ────────────────────────────
-   A broadcast lower third, and it is the whole HUD while a run-out is being
-   watched: everything the driving layout reads belongs to a car that is
-   parked past the line, so `Hud` hands the screen to this instead of
-   dressing itself in somebody else's numbers.
+/* ── The spectator's banner (hud-spectate.tsx) ───────────────────────────
+   THE CO-DRIVER'S SLOT, BORROWED. While a run-out is watched the driving
+   layout stays where it is and simply reads the watched car — clock and gap
+   top left, minimap and position top right, dials and damage bottom left —
+   so the only thing left to draw is whose car it is and the two presses that
+   change it. That is small, and it goes above the car where the corner calls
+   would be, which is free because there is nobody in this car to call one
+   to.
 
-   Along the BOTTOM, because the picture is the point — the car being
-   followed is framed by a chase camera that puts it in the middle of the
-   screen, and a strip across the top would sit exactly where the road it is
-   driving into does. */
+   The banner wears `.hud-pace` itself rather than restating its offsets, so
+   the slot's two moves — down under the mirror, and down the stacked column
+   in portrait — can never drift apart from the calls it stands in for. That
+   rule is also full width and deaf to the pointer, so the controls inside it
+   take their own hearing back one at a time; a transparent band across the
+   screen would eat presses meant for the canvas under it. */
 .hud-spectate {
-  position: absolute;
-  left: 50%;
-  bottom: max(1rem, env(safe-area-inset-bottom));
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.35rem;
-  max-width: min(48rem, 94vw);
-  padding: 0.55rem 1.1rem;
-  background: rgb(18 48 105 / 78%);
-  border-radius: 0.9rem;
-  text-align: center;
+  gap: 0.25rem;
 }
 
 .hud-spec-head {
   display: flex;
   align-items: baseline;
-  gap: 0.8rem;
-  font-size: clamp(0.55rem, 1.9vmin, 0.8rem);
+  gap: 0.7rem;
+  font-size: clamp(0.5rem, 1.7vmin, 0.72rem);
   letter-spacing: 0.16em;
 }
 
@@ -873,35 +866,31 @@ body {
   opacity: 0.8;
 }
 
-/* The crew on the left, their numbers on the right — and the pair wraps
-   rather than shrinking, because a phone in portrait has no width to give
-   and a name squeezed to three letters names nobody. */
-.hud-spec-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem 1.1rem;
-}
-
+/* An arrow either side of the crew, on ONE pill: the trio is a single
+   control a thumb steps through, and drawing it as one says so before the
+   controller's cursor has to (`data-nav-steps`, menu-nav.ts). */
 .hud-spec-steps {
+  pointer-events: auto;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.45rem;
+  padding: 0.2rem 0.4rem;
+  background: rgb(18 48 105 / 62%);
+  border-radius: 0.7rem;
 }
 
 .hud-spec-step {
   font: inherit;
-  font-size: clamp(1.2rem, 4.5vmin, 1.9rem);
+  font-size: clamp(1rem, 3.4vmin, 1.5rem);
   line-height: 1;
   color: var(--hud-ink);
   background: rgb(255 255 255 / 12%);
   border: 2px solid rgb(255 255 255 / 45%);
-  border-radius: 0.5rem;
+  border-radius: 0.45rem;
   /* A thumb target, not a glyph: the two arrows are the mode's only
      controls, and they are pressed while looking at the road. */
-  min-width: 2.4rem;
-  padding: 0.25rem 0.4rem;
+  min-width: 2.1rem;
+  padding: 0.15rem 0.35rem;
   cursor: pointer;
   text-shadow: none;
 }
@@ -916,7 +905,9 @@ body {
   flex-direction: column;
   align-items: center;
   line-height: 1.05;
-  min-width: 8rem;
+  /* Wide enough that stepping from a short alias to a long one does not walk
+     the two arrows out from under the thumb already on them. */
+  min-width: 7rem;
 }
 
 /* The door plate, worn beside the name the way the car wears it. */
@@ -932,45 +923,34 @@ body {
 }
 
 .hud-spec-name {
-  font-size: clamp(1.1rem, 4vmin, 1.7rem);
+  font-size: clamp(0.95rem, 3.2vmin, 1.45rem);
   letter-spacing: 0.04em;
 }
 
 .hud-spec-driver {
-  font-size: clamp(0.6rem, 2vmin, 0.85rem);
+  font-size: clamp(0.55rem, 1.8vmin, 0.78rem);
   opacity: 0.85;
 }
 
-.hud-spec-numbers {
-  display: flex;
-  align-items: baseline;
-  gap: 0.9rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.hud-spec-place,
-.hud-spec-clock,
-.hud-spec-gap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  font-size: clamp(0.95rem, 3.2vmin, 1.4rem);
-  line-height: 1.05;
-  white-space: nowrap;
-}
-
-/* Down on the player is the player KEEPING their place, so the tones read
-   from where the player is sitting rather than from the watched car's seat. */
-.hud-spec-gap-safe {
-  color: var(--hud-good);
-}
-
-.hud-spec-gap-threat {
-  color: var(--hud-bad);
-}
-
+/* The way out, kept to a footnote under the plate: it is the one press that
+   leaves the mode, not the thing the screen is for. */
 .hud-spec-leave {
-  margin-top: 0.15rem;
+  pointer-events: auto;
+  font: inherit;
+  font-size: clamp(0.5rem, 1.7vmin, 0.72rem);
+  letter-spacing: 0.12em;
+  color: var(--hud-ink);
+  background: rgb(18 48 105 / 75%);
+  border: 2px solid rgb(255 255 255 / 45%);
+  border-radius: 0.4rem;
+  padding: 0.18rem 0.65rem;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.hud-spec-leave:active {
+  background: rgb(255 210 62 / 75%);
+  color: var(--hud-shadow);
 }
 
 /* R28 — the split board. It stands where the flashes do and above them, in
