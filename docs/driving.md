@@ -121,6 +121,34 @@ one continuous response rather than two modes.
   over-held counter swings the pendulum: the slip crosses centre into a
   second drift the other way, which needs its own counter. Balancing that
   on the wheel is the game.
+- **One drift makes the next one bigger.** A drift leaves the tires worse
+  than it found them, so the corner after it is entered on rubber that has
+  already been scrubbed: `CarState.chain` steps up once per drift STARTED
+  (`drift.linkStep`) and cools the whole time (`linkFade`), and while it is
+  warm the slide both lets go earlier (`linkEntry` off `entryAt`) and goes
+  deeper once it has (`linkDepth` off `angleSpan`). It is what makes a
+  chicane harder than the same two corners a kilometre apart, and a straight
+  is what hands the driver fresh tires back. Booked on the COUNT rather than
+  on time spent sliding, deliberately: a term that grew with the slide would
+  be the feedback loop this whole group is built to avoid, and it would
+  punish one long committed drift instead of a series of quick ones.
+- **...and past a point the car is simply gone.** `drift.spinAt` (×the
+  surface's breakaway, like every other angle here) is the top edge of the
+  drift: past it the front tires point so far from the travel that neither
+  the held lock nor the catch reaches the road, so the wheel keeps only
+  `spinSteer` of its authority, the redirect gives up its lock exemption,
+  and the car scrubs at `spinScrub` times the normal rate — four tires
+  dragged sideways being the most effective brake in the game. It is held
+  through a hysteresis (`spinBack`) so the moment reads as one event rather
+  than a stutter, and it has a speed floor (`spinOut`) on BOTH sides: a car
+  beached on a bank or scrabbling out of a ditch at an angle is pointing the
+  wrong way, not spinning. That floor reads GROUND speed and not `car.u` —
+  a car at seventy degrees of slip has almost no forward component however
+  fast it is travelling, and gated on the nose the spin dropped out the
+  instant it succeeded and counted itself twenty-six times in two seconds.
+  A `spin` event and `stats.spins` come off the entry. Without a wall like
+  this the deepest angle a car could be pushed to was also a corner it got
+  away with, and the escalation above would have escalated into nothing.
 - Two stabilizers keep it a dance instead of an instant spin:
   - **Saturation** — everything that deepens a slide fades as the car
     reaches the angle the wheel is asking for and is gone once it is past,
@@ -140,7 +168,18 @@ one continuous response rather than two modes.
   that had already shut and the pedal would do nothing to the angle at all.
   With the setpoint moved the band reopens and the whole slide carries the
   car there, while lift-to-tighten above pulls the line in underneath it —
-  one pedal, both halves of a rally turn-in. The weight is lagged
+  one pedal, both halves of a rally turn-in. It also lifts the DEPTH
+  (`drift.liftDepth`, ×the layout's `liftYaw`), because on a layout whose
+  own depth is 0.42 there is nothing under the setpoint for the pedal to
+  move — which is why a lift used to do nothing at all to a front-driver on
+  a surface with a small slip vocabulary. That lift is squared, so a
+  maintenance throttle is almost nothing and a driver who genuinely came off
+  the power gets all of it; and alone among the four moves it does NOT claim
+  the floor exception (`provokeFloor`), because the lever and the brake are
+  things a driver does to get a car round and a closed throttle is a driver
+  stopping doing something. So a lift-drift trades speed for a little angle
+  and then the floor closes on it as the car slows — which is exactly the
+  shape a lift should have. The weight is lagged
   (`CarState.lift`, at `TUNING.grip.liftSettle`) rather than read off the
   pedal: the throttle is a key on a keyboard and the mass it moves is not, and
   read raw, every dab became a wobble and one long drift was counted and drawn
@@ -189,12 +228,17 @@ one continuous response rather than two modes.
   | classic (rwd) | 44° / 23 m   | 46° / 13 m | 73° / 10 m |
   | coupe (awd)   | 37° / 37 m   | 41° / 22 m | 73° / 16 m |
 
-`car.slide` and `car.drifting` are readouts for the dust, the HUD and the
-balance table — nothing in the model branches on them. `drifting` is read off
-the slip ANGLE, with hysteresis, because the angle is what a player sees and
-because it moves smoothly, AND off a slide that is actually open: below the
-speed floor a hard turn is understeer, which is not a drift and must not
-light the dust or the counter. Drift score accumulates as `|slip| × speed ×
+`car.slide` and `car.drifting` are readouts for the dust, the smoke, the HUD
+and the balance table — nothing in the model branches on them. `drifting` is
+read off the slip ANGLE, with hysteresis and in the surface's own breakaway,
+because the angle is what a player sees and because it moves smoothly, AND
+off a slide that is actually open: below the speed floor a hard turn is
+understeer, which is not a drift and must not light the dust or the counter.
+`car.locked` and `car.spun` are the two other ways a tire can be dragged
+rather than rolled — the lever has the rear wheels locked before the car has
+taken up any angle at all, and a spun car is dragging all four — and the
+tarmac smoke reads all three, or the smokiest moments on a sealed road come
+out white. Drift score accumulates as `|slip| × speed ×
 time` — sideways AND fast — purely as a measurement; nothing in the game
 rewards it, and no drift seconds are counted at the player.
 
@@ -234,15 +278,15 @@ Generated stages roll (`STAGE_RULES.elevation` — long climbs, medium rollers, 
 
 ## Surfaces
 
-| Surface     | Effect                                                                                                                                                                                                                                               |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Gravel      | The baseline: full power, honest grip, dust off the rear when sideways — and a plume towed off the back wheels from 30 km/h up                                                                                                                       |
-| **Asphalt** | A third more lateral grip and a third of the breakaway angle: the corner that needed a slide is driven round, the drift has to be ASKED for and stays small when it comes — and it throws nothing at all until a tire is overwhelmed, then smokes it |
-| Water       | Fords and shallows: a splash on entry, heavy drag, reduced grip and power                                                                                                                                                                            |
-| Nature      | The open landscape off the road: loose grip, fast — up to ~150 km/h                                                                                                                                                                                  |
+| Surface     | Effect                                                                                                                                                                                                                                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Gravel      | The baseline: full power, honest grip, dust off the rear when sideways — and a plume towed off the back wheels from 30 km/h up                                                                                                                                                                         |
+| **Asphalt** | A third more lateral grip, a sharper wheel to spend it with, and under two thirds of the breakaway angle: the corner that needed a slide is driven round, the drift has to be ASKED for and stays small when it comes — and it throws nothing at all until a tire is overwhelmed, then smokes it black |
+| Water       | Fords and shallows: a splash on entry, heavy drag, reduced grip and power                                                                                                                                                                                                                              |
+| Nature      | The open landscape off the road: loose grip, fast — up to ~150 km/h                                                                                                                                                                                                                                    |
 
 Asphalt is not a different handling model, because there isn't one: it is
-two numbers on the same one, and they pull opposite ways.
+three numbers on the same one, and the first two pull opposite ways.
 `TUNING.surfaces.grip` is how HARD a surface holds — the sealed road's
 ceiling sits a third higher, so the slide starts later and the car carries
 more speed through the corner. `TUNING.surfaces.breakaway` is how far
@@ -253,6 +297,30 @@ why a rally car has to be properly sideways before the tires let go, and
 the big angle is what digs down through the loose stuff to the firm surface
 under it. Tarmac peaks a few degrees off straight and falls away past it —
 it holds harder than gravel ever will and it hates being sideways.
+
+The third is `TUNING.grip.steerGrip`, and it is what lets the first one
+reach the road at all. In the gripped range the yaw is `steer × steerGain`
+and `steerRate` is a property of the rack, so without a surface term a
+grippier road could not actually POINT the car: every car in the roster
+held a wider line on tarmac than on gravel at the same lock while arriving
+a third faster, and the paved section — the one surface a car should be
+quick on — was a place to run wide off. `steerGrip` is the fraction of a
+surface's grip advantage **over gravel** that becomes steering authority,
+quoted against the car's own loose-surface rubber so gravel is exactly
+neutral for every car. It is why the hatch, on sealed tires, gains most on
+tarmac and the saloon on skinny loose ones gains almost nothing. It reads
+the surface's own grip and not the landing's transient load: what a road is
+worth to the rack is a standing fact, and folding a landing into it made a
+landed car slide LESS than one on the flat.
+
+What counts as a drift is sized in the surface too (`enterSlip × breakaway`),
+and it has to be. Tarmac's whole slip vocabulary is a fraction of gravel's
+by construction — every technique lands at almost exactly `breakaway` times
+what the same technique buys on the loose — so held against one absolute
+angle the entire paved range sat under the threshold, and a driver could
+throw the car at a corner on the lever and get no smoke, no dust and no
+counter for it. Sized in the surface, tarmac drifts at tarmac angles: fewer
+degrees than gravel, and really happening.
 
 So a paved corner is DRIVEN round, and the drifts that do happen are the
 ones you committed to — entered hot, flicked, or pulled on the handbrake —

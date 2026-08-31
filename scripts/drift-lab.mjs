@@ -305,7 +305,12 @@ function drive(spec, corner, moveId) {
         Math.abs(car.yawRate) > 1e-3 ? speed / Math.abs(car.yawRate) : Infinity,
       );
     }
-    if (slip > TUNING.drift.enterSlip) sideways += TUNING.dt;
+    // The car's OWN answer, not a second copy of the threshold: what counts
+    // as sideways is sized in the surface's breakaway, so a restated
+    // `enterSlip` here reads gravel's angles onto a paved run and reports a
+    // tarmac drift as no drift at all. It is also the number the dust, the
+    // smoke and the HUD are lit off, which is what this column is for.
+    if (car.drifting) sideways += TUNING.dt;
     widest = Math.max(widest, wide);
     // The angle at the APEX — mid-corner, where a drift either is or is not
     // doing the driver any good. The peak alone flatters a yank that spun

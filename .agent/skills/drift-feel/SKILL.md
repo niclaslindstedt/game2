@@ -170,10 +170,18 @@ by the runner, so a `tests/zzprobe_test.ts` has to collect lines and
 helper it would otherwise have to duplicate.
 
 Drive a synthetic straight (`compileTrack(0, [{ kind: "straight", length:
-8000, feature: "none" }])` with a widened `width`), accelerate to a fixed
-entry speed, hold a lock for ~2.5 s, and record the settled slip and the
-cornering radius (`u / |yawRate|`). Sweep the lock in 0.05 steps at two or
-three speeds.
+8000, feature: "none" }])`), accelerate to a fixed entry speed, hold a lock
+for ~2.5 s, and record the settled slip and the cornering radius (`u /
+|yawRate|`). Sweep the lock in 0.05 steps at two or three speeds.
+
+**Widen the TRACK's own `width` — a sample's `width` is not what the ground
+under the car is read from.** A car holding a lock curves off a compiled
+straight within a couple of seconds, and from there it is standing on
+`nature`: a different grip, a different breakaway, and on any per-surface
+knob a probe that silently answers about the wrong surface. Set
+`track.width` to something absurd (900) and assert `state.offRoad === false`
+across the sample window, or the reference surface moves under the
+comparison. Widening only the samples does nothing at all.
 
 Sweep the SURFACE too when the complaint names one. A stage sample carries
 its surface, so `base.samples.map((s) => ({ ...s, surface, bank: 0 }))` on a

@@ -97,6 +97,7 @@ console.log(
     pad("drift", 6),
     pad("dTime", 6),
     pad("score", 6),
+    pad("spin", 5),
     pad("jump", 5),
     pad("air", 6),
     pad("ford", 5),
@@ -123,6 +124,7 @@ for (const seed of seeds) {
         pad(r.stats.driftCount, 6),
         pad(r.stats.driftTime.toFixed(1), 6),
         pad(r.stats.driftScore.toFixed(0), 6),
+        pad(r.stats.spins, 5),
         pad(r.stats.jumps, 5),
         pad(r.stats.airTime.toFixed(1), 6),
         pad(r.stats.splashes, 5),
@@ -156,6 +158,7 @@ console.log(
   `\n${finished}/${rows.length} finished · avg pace ${avg((r) => (r.raceLength / r.time) * 3.6).toFixed(0)} km/h · ` +
     `avg drift time ${avg((r) => r.stats.driftTime).toFixed(1)} s · ` +
     `avg air time ${avg((r) => r.stats.airTime).toFixed(1)} s · ` +
+    `spins ${rows.reduce((a, r) => a + r.stats.spins, 0)} · ` +
     `respawns ${rows.reduce((a, r) => a + r.stats.respawns, 0)} · ` +
     `avg damage ${(avg((r) => r.crush) * 100).toFixed(0)} cm / ${(avg((r) => r.wear) * 100).toFixed(0)}% wear`,
 );

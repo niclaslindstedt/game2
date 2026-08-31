@@ -537,6 +537,9 @@ export function stepGrounded(
   // Brake lights, so only a car being SLOWED lights them — a car backing out
   // of a ditch is under power, not under the brake.
   car.braking = input.brake > 0.2 && car.u > 3;
+  // ...and the rear wheels dragged rather than rolled, which is a different
+  // question from the pedal and from the angle both. See `CarState.locked`.
+  car.locked = input.handbrake && car.u > 3;
   // The weight the BRAKE pitches onto the nose, on the same lag as the lift
   // and for the same reason. Only while the pedal is actually slowing the
   // car: backing out of a ditch on the same pedal loads nothing, and neither
@@ -580,7 +583,29 @@ export function stepGrounded(
   // it, a nervous one stays sharp and stays nervous. It is why a stage of
   // long fast sweepers and a stage of hairpins want different cars.
   const fadeSpeed = T.steering.fadeSpeed / spec.stability;
-  const steerGain = (spec.steerRate / (1 + speed / fadeSpeed)) * speedFactor * rack;
+  // ...and how much of it reaches the road is the TIRES', because the front
+  // wheels are what point the car and a front wheel can only pull as hard as
+  // what it is standing on lets it. Without this term grip only ever took
+  // things away: in the gripped range the yaw is `steer × steerGain` with no
+  // surface in it at all, so every car in the roster held a WIDER line on
+  // tarmac than on gravel at the same lock while arriving a third faster,
+  // and the one surface a car should be quick on was a place to run wide.
+  //
+  // Measured against GRAVEL, not against an abstract 1: gravel is this
+  // game's reference surface, and quoting the advantage against anything
+  // else quietly hands every car a different wheel on the surface most of
+  // the stage is made of. The car's own loose-surface rubber is what makes
+  // that reference the car's own. Sub-linear (`steerGrip` under 1): a tire
+  // with half again the grip does not hand the driver half again the yaw.
+  //
+  // Off the SURFACE's own grip and never `surfaceGrip`, which carries the
+  // landing's transient load with it. What a road is worth to the rack is a
+  // standing fact; what this car has under it half a second after touching
+  // down is not, and folding the two together made a landing take the
+  // steering away at the same moment it took the grip — which nets out as a
+  // landed car sliding LESS than one on the flat.
+  const bite = 1 + T.grip.steerGrip * (surfaceGripFor(spec, ctx.surface) / spec.tyres.loose - 1);
+  const steerGain = (spec.steerRate / (1 + speed / fadeSpeed)) * speedFactor * rack * bite;
   const rev = revs(spec, car, speed);
   // The lateral grip the tires have to spend, and the turn the wheel is
   // asking them for: the handbrake unsticks the rear by lowering the
@@ -643,14 +668,38 @@ export function stepGrounded(
   // and stand a hairpin's pivot straight up. See `CarState.provoked`.
   car.provoked = Math.max(clamp(asking, 0, 1), car.provoked - D.provokeSettle * dt);
   const provoked = car.provoked;
+  // THE LIFT IS THE FOURTH MOVE, and the only one that does not argue with
+  // the speed floor. Coming off the power takes weight off the driven axle
+  // like the rest of them, so it has to lift the DEPTH — on a layout whose
+  // own is 0.42 there is nothing under `liftSpan`'s setpoint for the pedal
+  // to move, which is why a lift used to do nothing at all to a front-driver
+  // on a surface with a small slip vocabulary. But it is not an ASK: the
+  // lever and the brake are things a driver does to get a car round, and a
+  // closed throttle is a driver stopping doing something. So it never claims
+  // `provokeFloor`, and a lift-drift is let go by the floor as the car runs
+  // out of speed — which is exactly the shape a lift should have.
+  //
+  // SQUARED, because the ask belongs to a CLOSED throttle and `car.lift` is
+  // simply `1 - throttle` lagged: read straight, a car cruising a corner on
+  // a third of the pedal is two-thirds lifted, and the depth it opened up
+  // made every layout slide like the one above it whenever the driver was
+  // not flat out. The square leaves a maintenance throttle almost nothing
+  // and hands a driver who genuinely came off the power all of it.
+  const lifted = clamp(car.lift * car.lift * D.liftDepth * DR.liftYaw, 0, 1);
+  // ...and THE CHAIN the last drift left in the tires. Rubber that has just
+  // been scrubbed is past its peak, so the next corner is entered on less
+  // than the last one had: it lets go earlier and it goes deeper once it
+  // has. Booked on drift starts (below) rather than grown from the slide, so
+  // it escalates a SEQUENCE without ever feeding itself.
+  const chain = clamp(car.chain, 0, 1);
   const { asked, sliding, open } = slideFactor(car, demand, {
     // Both of these are `limits.ts`, not restatements of it: a move argues
     // with the speed floor as well as with the depth (the corners that need
     // one are the slow ones), and the bot has to be able to ask the same
     // two questions about a corner it has not reached yet.
     floor: slideFloor(spec, provoked),
-    entryAt: D.entryAt * DR.entry,
-    depth: askedSlide(spec, provoked),
+    entryAt: D.entryAt * DR.entry * (1 - D.linkEntry * chain),
+    depth: askedSlide(spec, Math.max(provoked, lifted)),
     release: D.release * DR.release,
   });
   // The wheel does not just unstick the car — it NAMES the angle. Every
@@ -676,10 +725,55 @@ export function stepGrounded(
   // With the setpoint moved, the band reopens and the whole machinery
   // carries the car to the deeper angle, where `liftGrip` is meanwhile
   // pulling the line tighter — one pedal, both halves of a rally turn-in.
-  const askedSlip = D.angleSpan * breakaway * asked * (1 + D.liftSpan * car.lift);
+  // ...and the chain deepens the same setpoint, for the same reason it
+  // brought the breakaway forward above: the corner is being taken on tires
+  // the last corner already used, and less grip is a bigger angle.
+  const askedSlip =
+    D.angleSpan * breakaway * asked * (1 + D.liftSpan * car.lift) * (1 + D.linkDepth * chain);
   const sat = clamp(1 - (Math.abs(car.slip) - askedSlip) / (D.angleBand * breakaway), 0, 1);
+  // THE SPIN. Past this much slip the fronts are pointed so far from where
+  // the car is going that neither the held lock nor the catch has anything
+  // to pull against, and the car is round: it keeps rotating on the momentum
+  // it has and drags four tires sideways across the road until that momentum
+  // is gone. It is the top edge of the drift and the reason overdoing one
+  // costs something — without it the deepest angle the car could be pushed
+  // to was also a corner it got away with.
+  //
+  // Held through a hysteresis rather than read fresh each step: a bare
+  // threshold flickers a car sitting near it several times a second, and
+  // what is wanted is one moment the player can name. It ends when the angle
+  // comes back under `spinBack`, or at `spinOut` whatever the angle.
+  //
+  // That speed floor is on the ENTRY as well, and it has to be: a car
+  // pointing the wrong way at walking pace — beached on a bank, scrabbling
+  // out of a ditch, reversing off a rock — is not spinning, it is parked
+  // askew. Guarding only the exit let such a car enter on its angle and
+  // leave on its speed in the same step, chattering the counter while the
+  // scrub pinned it there and took away the steering it needed to drive out.
+  //
+  // GROUND speed, not `speed` — which is `|car.u|`, the along-the-nose
+  // component. A car at seventy degrees of slip has almost no `u` however
+  // fast it is actually travelling, so a spin gated on it drops out the
+  // instant it succeeds and re-enters on the next step: twenty-six spin
+  // events and twenty-six counted spins inside two seconds, off one yank of
+  // the lever. It is the same reason `slideFactor`'s own floor reads the
+  // speedo rather than the nose.
+  const wasSpun = car.spun;
+  const overGround = Math.hypot(car.u, car.w);
+  const spinning = Math.abs(car.slip) > (wasSpun ? D.spinBack : D.spinAt) * breakaway;
+  car.spun = spinning && overGround > D.spinOut;
+  if (car.spun && !wasSpun) {
+    events.push({ type: "spin", slip: Math.abs(car.slip), speed: overGround });
+    stats.spins += 1;
+  }
+  const spun = car.spun ? 1 : 0;
   const deepening = Math.sign(steer) === -Math.sign(car.slip) && car.slip !== 0;
-  const steerTerm = steer * backwards * (steerGain + spec.driftYaw * speedFactor * asked);
+  // ...and a spun car has almost none of it: the front wheels are as crossed
+  // up as the body is, so whatever they are pointed at, it is not the road
+  // ahead. `spinSteer` is what is left — enough that the driver is still in
+  // the car, far too little to save the corner.
+  const hands = spun ? D.spinSteer : 1;
+  const steerTerm = steer * backwards * (steerGain + spec.driftYaw * speedFactor * asked) * hands;
   // The slip's self-rotation scales with steering commitment, so holding
   // into the slide sustains it, releasing lets grip straighten the car, and
   // counter-steer exits fast. An unconditional slip term would be a
@@ -915,7 +1009,12 @@ export function stepGrounded(
   // Through the speed floor like everything else that keeps a car sideways:
   // under it the wheel steers the car and that is all it does, so a slow
   // scrabble out of a ditch cannot use a centred wheel to go on sliding.
-  const crossed = tailAt * tailAt * (3 - 2 * tailAt) * (1 - Math.abs(steer)) * open;
+  // ...and a SPUN car has given the lock's exemption up: the fade above is
+  // held off by a wheel that still has something to pull against, and past
+  // `spinAt` it has not. So the fade arrives in full however much lock is
+  // wound on, which is what makes a spin a thing the car does rather than
+  // a thing the driver is doing.
+  const crossed = Math.max(tailAt * tailAt * (3 - 2 * tailAt) * (1 - Math.abs(steer)), spun) * open;
   const tail = 1 - T.grip.tailFade * crossed;
   const latRate = (spec.gripLat + (spec.driftLat - spec.gripLat) * sliding) * grip * tail;
   // THE TRACTION CEILING. The redirect is a RATE, and a rate times a speed
@@ -942,7 +1041,12 @@ export function stepGrounded(
     const swung = car.slip * Math.exp(-heldRate * dt);
     // `travel` is this same speed: nothing between there and here moves the
     // car, and the magnitude is what the redirect keeps.
-    const kept = travel * Math.exp(-T.grip.scrub * Math.sin(car.slip) ** 2 * dt);
+    // ...and a spun car scrubs far harder: sin² is the price of dragging a
+    // tire sideways, and four of them dragged fully sideways is the most
+    // effective brake in the game. It is why a spin costs a run so much more
+    // than the corner it happened in.
+    const scrub = T.grip.scrub * (spun ? D.spinScrub : 1);
+    const kept = travel * Math.exp(-scrub * Math.sin(car.slip) ** 2 * dt);
     car.u = kept * Math.cos(swung);
     car.w = kept * Math.sin(swung);
   } else {
@@ -971,14 +1075,28 @@ export function stepGrounded(
   // Nothing in the model above branches on this: it is what the dust, the
   // HUD and the balance table read off a car that happens to be sideways.
   car.slide = sliding;
-  const angle = car.drifting ? T.drift.exitSlip : T.drift.enterSlip;
+  // In the surface's own units, like every other angle in this group: what
+  // counts as sideways on a sealed road is a fraction of what counts as
+  // sideways on gravel, and one absolute threshold made tarmac a surface
+  // that could not be drifted rather than one that is drifted less.
+  const angle = (car.drifting ? T.drift.exitSlip : T.drift.enterSlip) * breakaway;
   // A car has to be genuinely SLIDING to be drifting, not merely pointed a
   // few degrees off its own line: below the layout's speed floor the slide
   // is shut and a hard turn is understeer, which is not a drift and must not
   // light the dust, the HUD or the balance table's counter.
   const drifting = Math.abs(car.slip) > angle && sliding > 0;
+  // THE CHAIN cools the whole time and is stepped once per drift STARTED,
+  // which is the one place in the step that knows a drift began rather than
+  // continued. Booking it off the count rather than off time spent sliding
+  // is what keeps it out of the feedback loop this whole group is built to
+  // avoid: nothing a deep drift does makes it deeper, and one long committed
+  // slide leaves no more behind than one short one.
+  car.chain = Math.max(0, car.chain - D.linkFade * dt);
   if (drifting) {
-    if (!car.drifting) stats.driftCount += 1;
+    if (!car.drifting) {
+      stats.driftCount += 1;
+      car.chain = Math.min(1, car.chain + D.linkStep);
+    }
     stats.driftTime += dt;
     stats.driftScore += Math.abs(car.slip) * car.u * dt;
   }
@@ -1199,12 +1317,19 @@ export function stepAirborne(
   // it — there is nothing under it to be stuck to.
   car.flick = Math.max(0, car.flick - T.steering.flickSettle * T.dt);
   car.provoked = Math.max(0, car.provoked - D.provokeSettle * T.dt);
+  // The chain the last corner left cools in the air like everything else the
+  // tires are carrying — a jump between two corners is rubber getting a rest
+  // — and nothing off the ground is spinning: a car crossed up in flight is
+  // a car crossed up in flight, and the tires decide again when it lands.
+  car.chain = Math.max(0, car.chain - D.linkFade * T.dt);
+  car.spun = false;
   const dt = T.dt;
   const descent = car.vy;
   car.airTime += dt;
   if (!car.settling) stats.airTime += dt;
   car.steer += (input.steer - car.steer) * clamp(T.steering.rackRate * dt, 0, 1);
   car.braking = false;
+  car.locked = false; // ...and nothing under the wheels to drag them across
   car.reversing = false; // nothing to back out of in the air
 
   car.yawRate += car.steer * T.air.yawAuthority * dt;
