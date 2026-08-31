@@ -142,6 +142,10 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
     const mesh = body.breakables[part];
     if (!mesh || detached.has(part)) return;
     detached.add(part);
+    // The bolt-ons stop being one thing the moment one of them stops being
+    // bolted on: until here they are drawn as a single mesh (car-body.ts),
+    // and this is the frame that hands each of them back its own.
+    body.unbolt();
     // attach() keeps the world transform while re-parenting into the
     // world-anchored debris group — the piece separates mid-motion.
     debris.attach(mesh);
