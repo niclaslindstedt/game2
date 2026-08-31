@@ -498,13 +498,6 @@ describe("driving out again (TUNING.crash.drown.shallows)", () => {
    * off is the water keeping it anyway: the body held down at a waterline
    * the car has already driven past, which finishes the beat buried in the
    * beach it is standing on. */
-  // The list leads with seeds that satisfy BOTH halves, because the search
-  // below only asks whether a seed BEACHES, on neutral input, while the
-  // tests then ask the car to drive away under throttle — and those differ.
-  // Seed 45 beaches and then sits there at 0.15 m/s, which passes the search
-  // and fails the driving. Leading with ones that do both keeps the search
-  // honest and stops at once.
-  //
   // WHICH seeds those are is not stable across generator changes and is not
   // meant to be: the drive that carries the car into the water is 60 s of
   // full lock off whatever road the seed built, so a stage whose road moves
@@ -518,21 +511,42 @@ describe("driving out again (TUNING.crash.drown.shallows)", () => {
   /** Take a seed's plunge and run the drowning out. Reports the seed whose
    * shoreline the car drives back out of — which one that is depends on the
    * handling that carried it in, exactly as `swallows` does above, so this
-   * searches rather than naming one. */
+   * searches rather than naming one.
+   *
+   * It asks EXACTLY what the tests below ask, under the same throttle, and
+   * that is the whole point of it. A search that only checked whether the
+   * seed beaches — on neutral input, which is not what the tests drive —
+   * happily returned a shore the car crawls out of at 0.15 m/s and one it
+   * drives straight back into a second later, and then the fixture was a
+   * list of seed numbers somebody had to re-find by hand every time the
+   * generator moved a road. */
   function scrambles(seed: number): boolean {
     const attempt = plunge(seed, -1);
     if (!attempt) return false;
     const { state } = attempt;
+    const throttle = { ...NEUTRAL_INPUT, throttle: 1 };
     // The lock that found the water has already been driving off-road for
     // up to a minute, and the wedge rule may well have fetched the car
     // once on the way: what marks a car driving ITSELF out is a drowning
     // that ends without the crew, not a run with no respawns in it.
     const fetched = state.stats.respawns;
-    for (let i = 0; i < Math.round(TUNING.crash.drown.duration / TUNING.dt); i++) {
-      step(state, NEUTRAL_INPUT);
-      if (!state.drowning) return state.stats.respawns === fetched;
+    let out = false;
+    for (let i = 0; i < Math.round(TUNING.crash.drown.float / TUNING.dt); i++) {
+      step(state, throttle);
+      if (!state.drowning) {
+        out = true;
+        break;
+      }
     }
-    return false;
+    if (!out || state.stats.respawns !== fetched) return false;
+    // ...and then it stays out, on the ground, driving — the second half of
+    // the beat, and a different question from getting out at all.
+    for (let i = 0; i < Math.round(1 / TUNING.dt); i++) {
+      step(state, throttle);
+      if (state.drowning) return false;
+      if (state.terrain.groundAt(state.car.x, state.car.z) - state.car.y >= 0.05) return false;
+    }
+    return state.car.u > 1;
   }
 
   let shoreSeed: number | undefined;

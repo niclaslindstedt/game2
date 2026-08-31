@@ -333,6 +333,52 @@ export function analyzeRoads(track: Track): MetricReport {
     });
   }
 
+  // ── R20 — DOES THE TARMAC SWEEP? A sealed section is a public road the
+  // rally borrowed, laid out by a highway authority for traffic that is
+  // not racing, and a hairpin on one reads as a race track painted grey.
+  // The tight corners belong to the rally's own gravel.
+  //
+  // Measured in METRES of sealed road tighter than the ceiling, as a share
+  // of the sealed road there is — not as a worst radius, because the whole
+  // question is how much of the borrowed road a driver spends doubling
+  // back on. A single sample clipping the bar is nothing; forty metres of
+  // it is a hairpin.
+  //
+  // The JUNCTIONS themselves are exempt, and deliberately. A minor road
+  // leaving a main one at a sharp angle is a T-junction, which is the most
+  // ordinary thing on any map; the tarmac that reaches into it is the
+  // crossing, and R17 owns how that is built. What this is looking for is
+  // tight sealed road out in the middle of a run, where nothing explains
+  // it.
+  let tightSealed = 0;
+  let sealedRun = 0;
+  let tightestSealed = Infinity;
+  let tightestAt: { x: number; z: number; s: number } | null = null;
+  for (const sample of track.samples) {
+    if (sample.surface !== "asphalt" || sample.deck != null) continue;
+    sealedRun += track.step;
+    if (track.junctions.some((j) => Math.abs(j.s - sample.s) <= R.sweepClear)) continue;
+    const radius = Math.abs(sample.curvature) > 1e-6 ? 1 / Math.abs(sample.curvature) : Infinity;
+    if (radius >= STAGE_RULES.paving.minRadius) continue;
+    tightSealed += track.step;
+    if (radius >= tightestSealed) continue;
+    tightestSealed = radius;
+    tightestAt = { x: sample.x, z: sample.z, s: sample.s };
+  }
+  const tightShare = sealedRun > 0 ? tightSealed / sealedRun : 0;
+  if (tightShare > R.sweeps && tightestAt) {
+    findings.push({
+      code: "roads.sweeps",
+      severity: "error",
+      message: `${tightSealed.toFixed(0)} m of the sealed road bends to ${tightestSealed.toFixed(
+        0,
+      )} m — a public road does not have a hairpin in it (R20)`,
+      at: { x: tightestAt.x, z: tightestAt.z },
+      s: tightestAt.s,
+      value: tightShare - R.sweeps,
+    });
+  }
+
   const points = roads.reduce((sum, road) => sum + road.points.length, 0);
   const checks: Check[] = [
     {
@@ -364,6 +410,14 @@ export function analyzeRoads(track: Track): MetricReport {
       score: rate(unsealed, Math.max(1, track.spurs.length)),
       weight: 2.5,
       value: unsealed,
+    },
+    {
+      id: "sweeps",
+      label: "the sealed road sweeps rather than doubling back (R20)",
+      score: under(tightShare, R.sweeps, R.sweeps * 8),
+      weight: 2,
+      value: tightShare,
+      budget: R.sweeps,
     },
     {
       id: "degrade",

@@ -21,10 +21,23 @@
 // exempt here: a ramp IS a compression met at speed and a lip IS a step.
 // That is the feature, not a defect in it.
 
+import { CARS } from "../game/defs/cars.ts";
+import { clipKerbs } from "../game/collision.ts";
+import { freshCar } from "../game/step.ts";
+import type { GameEvent } from "../game/state.ts";
+import { createKerbField, type KerbMarker } from "../mapgen/kerbs.ts";
 import { STAGE_RULES } from "../mapgen/rules.ts";
 import type { Track, TrackSample } from "../mapgen/compile.ts";
 import { ANALYSIS } from "./budgets.ts";
-import { metricScore, rate, under, type Check, type Finding, type MetricReport } from "./types.ts";
+import {
+  metricScore,
+  rate,
+  under,
+  within,
+  type Check,
+  type Finding,
+  type MetricReport,
+} from "./types.ts";
 
 export function analyzeDrive(track: Track, v: number[]): MetricReport {
   const started = Date.now();
@@ -177,6 +190,9 @@ export function analyzeDrive(track: Track, v: number[]): MetricReport {
   }
 
   const pace = v.reduce((sum, speed) => sum + speed, 0) / Math.max(1, v.length);
+  const tilt = cornerTilt(track, findings);
+  const rolling = undulation(track, findings);
+  const kerb = apexTariff(track, findings);
 
   const checks: Check[] = [
     {
@@ -201,6 +217,36 @@ export function analyzeDrive(track: Track, v: number[]): MetricReport {
       score: rate(adverse, Math.max(1, graded)),
       weight: 1.5,
       value: worstAdverse,
+    },
+    {
+      // R19 — and the other half of the camber question: not merely that a
+      // corner is banked the right WAY, but that it is banked at all.
+      id: "tilt",
+      label: "gravel corners lie over into the turn rather than flat (R19)",
+      score: tilt === null ? 1 : within(tilt, D.tilt, D.tiltSlack),
+      weight: 1.5,
+      value: tilt ?? 0,
+      budget: D.tilt.min,
+    },
+    {
+      // R34 — and the road is laid ALONG a country rather than ruled across
+      // one. A band: a stage that never climbs or falls is a table, and one
+      // that never stops is a rollercoaster.
+      id: "rolling",
+      label: "the road rises and falls with the country it crosses (R34)",
+      score: within(rolling, D.rolling, D.rollingSlack),
+      weight: 1.5,
+      value: rolling,
+      budget: D.rolling.min,
+    },
+    {
+      // R26 — what cutting an apex over the blocks actually costs.
+      id: "kerb",
+      label: "an apex cut over the blocks costs speed without ending the run (R26)",
+      score: kerb === null ? 1 : within(kerb, D.kerb, D.kerbSlack),
+      weight: 1.5,
+      value: kerb ?? 0,
+      budget: D.kerb.max,
     },
     {
       id: "ambush",
@@ -233,7 +279,218 @@ export function analyzeDrive(track: Track, v: number[]): MetricReport {
       adverse,
       ambushes: unbrakeable,
       meanSpeed: pace,
+      cornerTilt: tilt ?? 0,
+      travelPerKm: rolling,
+      apexTariff: kerb ?? 0,
     },
     ms: Date.now() - started,
   };
+}
+
+/** R19 — HOW FAR OVER A GRAVEL CORNER ACTUALLY LIES, as the median
+ * cross-fall of the samples that are in one, m per m. Null on a stage with
+ * no gravel corners, which is not a stage this can say anything about.
+ *
+ * The median rather than the worst, because what is being asked is whether
+ * the ROAD is tilted — a stage can have one hairpin laid right over and
+ * still read flat everywhere a driver spends their time. And gravel only:
+ * a sealed corner's superelevation is designed, reserved for the geometry
+ * that needs it, and a public road that is flat through a fourth-gear
+ * sweeper is not wrong (`STAGE_RULES.bank`).
+ *
+ * Read off `sample.bank` rather than probed off the terrain, because the
+ * bank IS the number the whole corridor is built from: the renderer, the
+ * physics and the ground beside the road all read it (road.ts), so
+ * measuring it here measures all three. */
+function cornerTilt(track: Track, findings: Finding[]): number | null {
+  const D = ANALYSIS.drive;
+  const banks: number[] = [];
+  for (const sample of track.samples) {
+    if (sample.surface !== "gravel" || sample.deck != null) continue;
+    if ((sample.flat ?? 0) > 0.01) continue;
+    if (Math.abs(sample.curvature) < D.tiltAt) continue;
+    banks.push(Math.abs(sample.bank));
+  }
+  if (banks.length === 0) return null;
+  banks.sort((a, b) => a - b);
+  const tilt = banks[Math.floor(banks.length / 2)];
+  if (tilt < D.tilt.min) {
+    findings.push({
+      code: "drive.tilt",
+      severity: "note",
+      message: `gravel corners lie over ${(tilt * 100).toFixed(1)}% — flat ground with a road painted on it`,
+      value: D.tilt.min - tilt,
+    });
+  }
+  return tilt;
+}
+
+/** R34 — HOW UNEVEN THE ROAD IS: metres of climb and descent per kilometre
+ * of it. Add up every step the surface takes, up or down, and divide by the
+ * distance — the simplest honest statement of "this road is not a plane",
+ * and the one number that moves when the road is laid closer along the
+ * country (`STAGE_RULES.elevation.follow.lag`).
+ *
+ * The whole road, both surfaces, because this is a question about the LINE
+ * and not about what it is surfaced with. Jumps are stepped over: a lip is
+ * a metre of climb inside twenty, and a stage with three of them would read
+ * as rolling country for having three ramps on it.
+ *
+ * A band, not a floor. A stage that never leaves its own datum is a table
+ * with a ribbon on it — but the far end is a road that is never level long
+ * enough to settle the car, which is not rally country either, and the sim
+ * finds it as air time. */
+function undulation(track: Track, findings: Finding[]): number {
+  const D = ANALYSIS.drive;
+  const samples = track.samples;
+  const span = Math.ceil(ANALYSIS.rollers.jumpSkip / track.step);
+  const skip = new Array<boolean>(samples.length).fill(false);
+  for (let i = 0; i < samples.length; i++) {
+    if (!samples[i].jump) continue;
+    for (let k = Math.max(0, i - span); k <= Math.min(samples.length - 1, i + span); k++) {
+      skip[k] = true;
+    }
+  }
+  let travel = 0;
+  let run = 0;
+  for (let i = 1; i < samples.length; i++) {
+    if (skip[i] || skip[i - 1]) continue;
+    travel += Math.abs(samples[i].elevation - samples[i - 1].elevation);
+    run += samples[i].s - samples[i - 1].s;
+  }
+  const perKm = run > 0 ? travel / (run / 1000) : 0;
+  if (perKm < D.rolling.min) {
+    findings.push({
+      code: "drive.rolling",
+      severity: "note",
+      message: `the road travels ${perKm.toFixed(0)} m up and down per km — a stage laid on a table`,
+      value: D.rolling.min - perKm,
+    });
+  } else if (perKm > D.rolling.max) {
+    findings.push({
+      code: "drive.rolling",
+      severity: "warn",
+      message: `the road travels ${perKm.toFixed(0)} m up and down per km — the car never settles`,
+      value: perKm - D.rolling.max,
+    });
+  }
+  return perKm;
+}
+
+/** R26 — WHAT AN APEX CUT COSTS, as the share of its speed the reference
+ * car loses running the length of a row of anti-cut blocks. Null on a stage
+ * with no such row.
+ *
+ * DRIVEN, not derived. The tariff is `TUNING.collision.kerb` compounded
+ * over however many blocks the car gets to meet before the row shoves it
+ * off, and that is a loop, not a formula — so the check runs the real
+ * `clipKerbs` against the real markers and reads the speedometer at the
+ * end. Which means it measures the thing the player actually meets, and
+ * moving any of the collision numbers moves this.
+ *
+ * WHY IT IS A BAND. A block that costs nothing is not a deterrent, and the
+ * whole reason the generator lays them is to make cutting the corner a
+ * choice rather than a free line. A block that costs everything is worse:
+ * an apex lined with them stopped the car dead, which reads as a wall
+ * somebody left in the road and takes the run with it. Somewhere around a
+ * fifth is a price a driver pays on purpose.
+ *
+ * The worst row on the stage is what is reported, because that is the one
+ * that decides whether the stage has a corner nobody may go near. */
+function apexTariff(track: Track, findings: Finding[]): number | null {
+  const D = ANALYSIS.drive;
+  const field = createKerbField(track);
+  const rows: KerbMarker[][] = [];
+  let row: KerbMarker[] = [];
+  for (const marker of field.markers) {
+    if (marker.kind !== "block") continue;
+    const last = row[row.length - 1];
+    if (last && (last.side !== marker.side || marker.s - last.s > D.kerbRowGap)) {
+      rows.push(row);
+      row = [];
+    }
+    row.push(marker);
+  }
+  if (row.length > 0) rows.push(row);
+
+  const spec = CARS[0];
+  let worst: number | null = null;
+  let worstAt: KerbMarker | null = null;
+  for (const blocks of rows) {
+    if (blocks.length < 2) continue;
+    const head = blocks[0];
+    const tail = blocks[blocks.length - 1];
+    // Down the line of the row, which is the line a car cutting the apex
+    // takes: the blocks are laid along the inside edge of the bend.
+    const heading = Math.atan2(tail.x - head.x, tail.z - head.z);
+    const kept = driveTheRow(field, spec, head, heading, D.kerbSpeed);
+    const lost = 1 - kept;
+    if (worst === null || lost > worst) {
+      worst = lost;
+      worstAt = head;
+    }
+  }
+  if (worst !== null && worst > D.kerb.max && worstAt) {
+    findings.push({
+      code: "drive.kerb",
+      severity: "error",
+      message: `cutting an apex over the blocks takes ${(worst * 100).toFixed(
+        0,
+      )}% of the car's speed — that is a wall, not a kerb`,
+      at: { x: worstAt.x, z: worstAt.z },
+      s: worstAt.s,
+      value: worst - D.kerb.max,
+    });
+  } else if (worst !== null && worst < D.kerb.min) {
+    findings.push({
+      code: "drive.kerb",
+      severity: "note",
+      message: `cutting an apex over the blocks costs ${(worst * 100).toFixed(
+        0,
+      )}% — the corner can be straightened for free`,
+      value: D.kerb.min - worst,
+    });
+  }
+  return worst;
+}
+
+/** Run the reference car down a row of blocks from `from` on `heading` at
+ * `speed`, and report the share of that speed it comes out with. No physics
+ * but the kerbing: the car is carried forward by its own velocity and the
+ * only thing that touches it is `clipKerbs`, so what comes back is the
+ * kerbing's own tariff rather than a lap of a stage. */
+function driveTheRow(
+  field: ReturnType<typeof createKerbField>,
+  spec: (typeof CARS)[number],
+  from: KerbMarker,
+  heading: number,
+  speed: number,
+): number {
+  const D = ANALYSIS.drive;
+  const car = freshCar();
+  car.heading = heading;
+  car.u = speed;
+  // Start a car's length short of the first block, and on its own foot, so
+  // the height gate in `clipKerbs` is met the way it is on the road.
+  car.x = from.x - Math.sin(heading) * 4;
+  car.z = from.z - Math.cos(heading) * 4;
+  car.y = from.y;
+  const events: GameEvent[] = [];
+  let t = 0;
+  for (let step = 0; step < D.kerbSteps; step++) {
+    const blocks = field.blocksNear(car.x, car.z, 2.5);
+    // The car rides the row: it is ON the corridor the blocks are bedded
+    // into, not floating over it, so the height gate is met the way it is
+    // on the stage rather than by however far the road has climbed since
+    // the first block.
+    if (blocks.length > 0) car.y = blocks[0].y;
+    clipKerbs(spec, car, t, blocks, events);
+    const sinH = Math.sin(car.heading);
+    const cosH = Math.cos(car.heading);
+    car.x += (car.u * sinH + car.w * cosH) * ANALYSIS.drive.kerbStep;
+    car.z += (car.u * cosH - car.w * sinH) * ANALYSIS.drive.kerbStep;
+    car.heading += car.yawRate * ANALYSIS.drive.kerbStep;
+    t += ANALYSIS.drive.kerbStep;
+  }
+  return Math.hypot(car.u, car.w) / speed;
 }

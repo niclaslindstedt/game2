@@ -77,7 +77,12 @@ function freshStats(): RunStats {
   };
 }
 
-function freshCar(): CarState {
+/** A car at rest at the origin, every field at the value a run starts it
+ * at. Exported because anything that has to put a car somewhere WITHOUT
+ * starting a run — the analysis driving the reference car over an apex, a
+ * test staging one contact — needs the same zero state a real run gets, and
+ * a hand-rolled partial is a field somebody forgot. */
+export function freshCar(): CarState {
   return {
     x: 0,
     z: 0,

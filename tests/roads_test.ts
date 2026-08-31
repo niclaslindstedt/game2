@@ -33,6 +33,7 @@ import {
 
 const WIDTH = knobScale(DEFAULT_KNOBS.width, R.roadWidth);
 const HALF = WIDTH / 2;
+const W = R.roughness.width;
 const gravel = { surface: "gravel", lift: 0 } as const;
 const asphalt = { surface: "asphalt", lift: 0 } as const;
 
@@ -241,23 +242,40 @@ describe("junctions (R17)", () => {
     for (const seed of seeds) {
       const track = compileStage(seed, "medium", { asphalt: 0.4 });
       let changes = 0;
+      let runOuts = 0;
       for (let i = 1; i < track.samples.length; i++) {
         const before = track.samples[i - 1];
         const after = track.samples[i];
         if (before.surface === after.surface) continue;
         if (before.surface === "water" || after.surface === "water") continue;
-        changes += 1;
         // Every surface change happens at the edge of a junction's own
         // platform — the two roads MEET there, and the seal stops where
         // the main road's mat does, not at a segment boundary.
         const near = track.junctions.some(
           (j) => Math.hypot(j.x - after.x, j.z - after.z) < j.reach + WIDTH,
         );
-        expect(near).toBe(true);
+        if (near) {
+          changes += 1;
+          continue;
+        }
+        // R20 — with ONE exception: where a seal reaches a corner no public
+        // road would have been laid with, the SURFACING RUNS OUT there. So
+        // a change with no junction at it is legal exactly when it is
+        // tarmac becoming gravel at the start of a corner tighter than
+        // `paving.minRadius`, and never the other way round.
+        runOuts += 1;
+        expect(before.surface, `seed ${seed}: surface change with no junction`).toBe("asphalt");
+        expect(after.surface).toBe("gravel");
+        expect(Math.abs(after.curvature)).toBeGreaterThan(1 / R.paving.minRadius);
       }
       // ...and every junction has the branch the route did not take.
       expect(track.spurs.length).toBe(track.junctions.length);
       expect(track.junctions.length).toBe(changes);
+      // The exception stays an exception: a stage whose tarmac mostly ends
+      // in run-outs is a stage whose junctions have stopped working.
+      expect(runOuts, `seed ${seed}: run-outs vs junctions`).toBeLessThanOrEqual(
+        track.junctions.length,
+      );
     }
   });
 
@@ -500,7 +518,9 @@ describe("junctions (R17)", () => {
         // own length, where no flare is left to explain a wide sample.
         const shut = arm.filter((p) => p.d - arm[0].d > R.junction.mouth.taper * track.width);
         for (const p of shut) {
-          expect(p.width).toBeLessThanOrEqual(track.width * (1 + R.roughness.width.vary) + 1e-6);
+          expect(p.width).toBeLessThanOrEqual(
+            track.width * (W.narrow + W.vary + W.corner.gain) + 1e-6,
+          );
         }
       }
     }
@@ -514,9 +534,22 @@ describe("junctions (R17)", () => {
         // sealed, and so is the arm that carries it on: a band of gravel
         // crossing a tarmac road is the surface change painted across the
         // minor road instead of along the main road's edge.
+        //
+        // ...up to the NEXT junction, and no further. A borrow can be as
+        // short as the crossing itself: where the route joins the tarmac
+        // and leaves it again at the same corner — a rally road crossing a
+        // public one — two junctions sit at one arc position, and the
+        // gravel past the second is inside the first one's window. What
+        // this test is about is the road BETWEEN a crossing and whatever
+        // ends the run, so the window stops where the run does.
+        const ends = track.junctions
+          .filter((other) => other !== junction)
+          .map((other) => (junction.joining ? other.s - junction.s : junction.s - other.s))
+          .filter((d) => d >= 0)
+          .reduce((nearest, d) => Math.min(nearest, d), R.junction.reach.max);
         const through = track.samples.filter((sample) => {
           const d = junction.joining ? sample.s - junction.s : junction.s - sample.s;
-          return d > track.step && d < R.junction.reach.max;
+          return d > track.step && d < ends;
         });
         for (const sample of through) {
           if (sample.deck !== null) continue;

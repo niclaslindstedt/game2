@@ -1,35 +1,34 @@
 ---
-title: Nothing may keep off the road by its NOMINAL width — that is the one width the road mostly is not
+title: Nothing may read the road by its NOMINAL width — that is the one width the road mostly is not
 date: 2026-08-30
-scope: engine/mapgen/props.ts, engine/mapgen/terrain.ts, pwa/src/game/world.ts
-concepts: [placement, junctions, flora, road-width, renderer-seam]
+scope: engine/mapgen/, engine/analysis/rollers.ts, pwa/src/game/world.ts
+concepts: [placement, junctions, flora, road-width, renderer-seam, measurement]
 ---
 
-`track.width` is what the stage was BUILT at. What the road actually is at a
-given metre is `sample.width`, and it differs everywhere: R33 wanders the
-gravel either side of nominal down the whole stage, and R17's junction mouth
-flares it half as wide again. Every keep-off distance that measured against
-the nominal therefore planted things on the road — most visibly a shrub
-standing in the middle of every crossing on the map.
+`track.width` is what the stage was BUILT at. What the road IS at a given
+metre is `sample.width`, and it differs everywhere: R33 cuts the gravel a
+fifth under nominal, wanders it either side of that, opens it out at the
+bends, and R17's junction mouth flares it half as wide again. Two kinds of
+code get this wrong, and they fail differently.
 
-There were four of them and they had to be found separately, because each
-lives with the thing it places rather than with the road:
+**Anything that stands beside the road** planted things ON it — most visibly
+a shrub in the middle of every crossing on the map. `props.ts` (the three
+`*_ROAD_CLEAR` bands and the outcrop), `pwa/src/game/world.ts`'s
+`clearOfRoad` (takes a MARGIN now, adding each sample's own half-width) and
+`kerbs.ts`'s marker foot were all measuring against the nominal.
 
-- `props.ts` — `half + PROP_ROAD_CLEAR` / `OB_ROAD_CLEAR` / `TREE_ROAD_CLEAR`
-  and the outcrop band. All take the nearest sample's own half-width now
-  (`halfAt(near)`; `sampleAt` had to start returning `width`).
-- `pwa/src/game/world.ts` — `clearOfRoad(x, z, r)` took an absolute radius
-  built from `half`. It takes a MARGIN now and adds each guard sample's own
-  half-width, which also fixes the three call sites that passed
-  `half + something`.
-- `terrain.ts`'s `roadClear` is the exception, and deliberately: R18 traces
-  the watercourses against it, so a width that breathes with the road moves
-  every river on every stage to buy a metre of accuracy the water cannot
-  see. Leave that one nominal.
+**Anything that MEASURES the road** scores the difference as a defect.
+`analysis/rollers.ts` built its rank's `want` — the cross-section a contact
+is compared against — and its mat/verge classification off the nominal,
+while `terrain.groundAt` lays the shelf at the sample's own width.
 
-The general rule: anything that STANDS beside the road asks the sample;
-anything that ROUTES past it at map scale may use the nominal. And the
-engine's own populations are only half the problem — the shrub that started
-this is renderer-side flora, invisible to `treesNear`, so the analyzer check
-that catches it has to measure the placement RULE (is the paving further out
-than the keep-off radius) as well as walking the solids.
+`terrain.ts`'s `roadClear` is the deliberate exception: R18 traces the
+watercourses against it, so a width that breathes would move every river on
+every stage to buy a metre of accuracy the water cannot see.
+
+Two riders. A marker needs the WIDEST width within its own length, not the
+width under it — a post is a thing standing in the ground, and where the mat
+widens fastest the two differ by about the tenth of a metre a post has to
+spare. And the engine's populations are only half of it: the shrub that
+started this is renderer-side flora, invisible to `treesNear`, so the check
+that catches it has to measure the placement RULE as well as walk the solids.

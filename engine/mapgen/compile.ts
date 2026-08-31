@@ -368,6 +368,33 @@ function buildRolling(seed: number, knobs: StageKnobs): (s: number) => number {
   };
 }
 
+/** R33 — how wide the gravel is at an arc position, as a multiple of the
+ * stage's nominal width. The road is cut TIGHT and then given three things
+ * back: two slow waves that open it out and pinch it in along the stage,
+ * and the corners, which are wider because everything that ever swung round
+ * one widened it. Nothing short: a width that changes inside a car's length
+ * is a ragged edge, not a road that opens out. */
+type WidthAt = (s: number, surface: Surface, shaped: boolean, curvature: number) => number;
+
+function buildWidth(seed: number): WidthAt {
+  const rng = createRng((seed ^ 0x2f1e8c3d) >>> 0);
+  const W = R.roughness.width;
+  const long = Array.from({ length: NOISE_LATTICE }, () => rng.range(-1, 1));
+  const short = Array.from({ length: NOISE_LATTICE }, () => rng.range(-1, 1));
+  const longOff = rng.range(0, 1e4);
+  const shortOff = rng.range(0, 1e4);
+  return (s: number, surface: Surface, shaped: boolean, curvature: number): number => {
+    // Laid, not bladed: a paving machine and a bridge deck hold their width.
+    if (shaped || surface !== "gravel") return 1;
+    const swing =
+      (1 - W.shortShare) * valueNoise(long, s + longOff, W.wave.long) +
+      W.shortShare * valueNoise(short, s + shortOff, W.wave.short);
+    const tightness = Math.abs(curvature) * W.corner.pivotRadius;
+    const opened = W.corner.gain * (tightness / (1 + tightness));
+    return W.narrow + W.vary * swing + opened;
+  };
+}
+
 /** R33 — the road's BUMPS: how far out of true the surface is at an arc
  * position, m. Sparse impulses rather than a continuous field, and gravel
  * only — see `STAGE_RULES.roughness` for why both of those are the point
@@ -384,27 +411,6 @@ function buildRolling(seed: number, knobs: StageKnobs): (s: number) => number {
  * falls in would cut those bumps in half at the seam, which is a step, which
  * is the one thing this must not produce.
  */
-/** R33 — how wide the gravel is at an arc position, as a multiple of the
- * nominal. Two slow waves so the road does not breathe on one period, and
- * nothing short: a width that changes inside a car's length is a ragged
- * edge, not a road that opens out. */
-function buildWidth(seed: number): (s: number, surface: Surface, shaped: boolean) => number {
-  const rng = createRng((seed ^ 0x2f1e8c3d) >>> 0);
-  const W = R.roughness.width;
-  const long = Array.from({ length: NOISE_LATTICE }, () => rng.range(-1, 1));
-  const short = Array.from({ length: NOISE_LATTICE }, () => rng.range(-1, 1));
-  const longOff = rng.range(0, 1e4);
-  const shortOff = rng.range(0, 1e4);
-  return (s: number, surface: Surface, shaped: boolean): number => {
-    // Laid, not bladed: a paving machine and a bridge deck hold their width.
-    if (shaped || surface !== "gravel") return 1;
-    const swing =
-      (1 - W.shortShare) * valueNoise(long, s + longOff, W.wave.long) +
-      W.shortShare * valueNoise(short, s + shortOff, W.wave.short);
-    return 1 + W.vary * swing;
-  };
-}
-
 function buildBumps(seed: number): (s: number, surface: Surface, shaped: boolean) => number {
   const B = R.roughness;
   const salt = (seed ^ 0x51ed270b) >>> 0;
@@ -651,7 +657,7 @@ function createCompiler(
   rolling: (s: number) => number,
   paving: Paving,
   bumps: (s: number, surface: Surface, shaped: boolean) => number,
-  widthAt: (s: number, surface: Surface, shaped: boolean) => number,
+  widthAt: WidthAt,
   /** R17 — the country the finished stage will occupy, known before it is
    * walked (see `planBounds`). A junction is only worth building where the
    * arm it abandons can LEAVE, and which way is out is a question about the
@@ -726,6 +732,11 @@ function createCompiler(
   // through: it simply starts on the tarmac. Every other stage starts on
   // gravel and meets its first junction where the field asks for one.
   let pavedNow = paving.pavedAt(0);
+  /** R20 — is there gravel on this stage at all? At the top of the
+   * `asphalt` dial the whole route is a public road, which is a different
+   * kind of event and not a borrow, so the rule that keeps hairpins off
+   * borrowed tarmac has nothing to say about it. */
+  const mixedSurface = track.knobs.asphalt <= 1 - R.paving.floor;
   let flipWanted = false;
 
   /** The road's PRISTINE heights and widths, before any junction warped or
@@ -1393,10 +1404,10 @@ function createCompiler(
    * bridge deck is level and a ford is standing water. */
   const bankRate = (curvature: number, sample: TrackSample): number => {
     if (sample.deck != null || sample.surface === "water") return 0;
-    const tightness = Math.abs(curvature) * R.bank.pivotRadius;
+    const kind = sample.surface === "asphalt" ? "asphalt" : "gravel";
+    const tightness = Math.abs(curvature) * R.bank.pivotRadius[kind];
     if (tightness <= 0) return 0;
-    const ceiling = R.bank.max[sample.surface === "asphalt" ? "asphalt" : "gravel"];
-    return Math.sign(curvature) * ceiling * (tightness / (1 + tightness));
+    return Math.sign(curvature) * R.bank.max[kind] * (tightness / (1 + tightness));
   };
 
   /** R19 — roll the cross-fall in and out. A road does not change its
@@ -1420,6 +1431,37 @@ function createCompiler(
         weight += w;
       }
       all[i].bank = weight > 0 ? sum / weight : 0;
+    }
+  };
+
+  /** R33 — and roll the WIDTH in and out the same way, for the same
+   * reason. The corner term is read off a sample's curvature, and curvature
+   * steps at a segment boundary: a straight running into a hairpin gains a
+   * metre and a half of mat inside one 2 m sample, which is a notch cut in
+   * the side of the road rather than a road opening out for a bend. The
+   * blade that widened the corner drove into it and out of it.
+   *
+   * `rawWidth` is smoothed with the samples, because it is the pristine
+   * width the junction pass reads back before it measures a mouth's flare
+   * — leave it unsmoothed and every junction re-lays the notch. */
+  const widthRunoff = (from: number): void => {
+    const all = track.samples;
+    const reach = Math.max(1, Math.round(R.roughness.width.runoff / 2 / SAMPLE_STEP));
+    const start = Math.max(0, from - reach);
+    const raw = rawWidth.slice(start);
+    for (let i = start; i < all.length; i++) {
+      let sum = 0;
+      let weight = 0;
+      for (let k = -reach; k <= reach; k++) {
+        const at = i + k - start;
+        if (at < 0 || at >= raw.length) continue;
+        const w = 1 - Math.abs(k) / (reach + 1);
+        sum += raw[at] * w;
+        weight += w;
+      }
+      if (weight <= 0) continue;
+      all[i].width = sum / weight;
+      rawWidth[i] = all[i].width;
     }
   };
 
@@ -1541,6 +1583,48 @@ function createCompiler(
           flipAt = plan.length - onMain;
           joinAtEnd = plan;
         }
+      }
+      // R20 — WHERE THE SURFACING RUNS OUT. A sealed section is a public
+      // road the rally borrowed, laid out by a highway authority for
+      // traffic that is not racing: it sweeps. A hairpin on one reads as a
+      // race track painted grey, and the tight corners are what the rally
+      // has its own gravel for — so the tarmac ends at the corner's start
+      // and the road is gravel through it.
+      //
+      // This is the ONE surface change that is not a junction (R17), and
+      // the exception is deliberate rather than a gap. A borrow can only be
+      // refused where it STARTS, and where a seal ends is decided by
+      // whether the arm it would abandon can leave the map — a question
+      // about country the join has no cheap way to ask, and one that has to
+      // be answered by walking geometry that is not walked yet. Both of the
+      // places the rule could have gone instead were tried and measured:
+      // capping the corner in the SEARCH straightens the route enough to
+      // run it alongside its own valleys (R18's `water.road` findings went
+      // from 37 to 134 over seeds 1-24, for no tight tarmac removed), and
+      // refusing the JOIN over a window long enough to cover the overrun
+      // throws away two fifths of the stage's tarmac, which is R15's dial
+      // quietly stopping meaning what it says.
+      //
+      // So what is left is to end the surfacing, and a length of tarmac
+      // that simply stops is a smaller lie than a main road doubling back:
+      // it is what every rural road in the world does when the money ran
+      // out, and the mat ramps down through the joint (`paveLift`) exactly
+      // as it ramps up. `analysis/roads.ts`'s `sweeps` check measures what
+      // is left — 6.1% of the sealed road at worst without this, nothing
+      // outside the junction crossings with it.
+      //
+      // Not where the WHOLE stage is sealed: at the top of the `asphalt`
+      // dial there is no gravel for the tarmac to become and no junction to
+      // get it back at, and a tarmac rally's corners are its own.
+      if (
+        pavedNow &&
+        flipAt < 0 &&
+        mixedSurface &&
+        plan.kind === "turn" &&
+        (plan.radius ?? Infinity) < R.paving.minRadius
+      ) {
+        pavedNow = false;
+        flipWanted = paving.pavedAt(cursor.s);
       }
       // R20 — a tarmac section is a public road the rally borrows, and
       // nobody builds a launch ramp into one. A lip that would have landed
@@ -1725,6 +1809,7 @@ function createCompiler(
               cursor.s,
               ford ? "water" : paved ? "asphalt" : "gravel",
               bridge || dip !== null || deckY !== null,
+              curvature,
             ),
         };
         sample.bank = bankRate(curvature, sample);
@@ -1764,6 +1849,7 @@ function createCompiler(
     }
     paveLift(firstNew);
     bankRunoff(firstNew);
+    widthRunoff(firstNew);
     shapeJunctions(firstNew);
     // The mouth is measured from the flared road, so it waits for the pass
     // that flares it — and for the minor arm on BOTH sides of the meeting

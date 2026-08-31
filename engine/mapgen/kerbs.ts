@@ -198,11 +198,20 @@ export const KERB_MARKER = {
    * crest, light enough that hitting one costs nothing but the post.
    * `out` is how far past the road EDGE its centre stands, m. */
   post: { width: 0.16, height: 1.05, out: 0.75 },
-  /** An anti-cut block: a low slab of concrete laid on the inside of a
+  /** An anti-cut block: a slab of concrete BEDDED INTO the inside of a
    * corner, `width` across the road and `depth` along it. Unlike a post it
-   * is meant to be FELT — the car that cuts the apex is thrown, which is
-   * the entire point of putting one there. */
-  block: { width: 1.5, height: 0.28, depth: 0.6, out: 0.55 },
+   * is meant to be FELT — the car that cuts the apex is thrown about, which
+   * is the entire point of putting one there.
+   *
+   * `height` is the slab's own thickness; `proud` is how much of it stands
+   * above the verge, and the difference is buried. That split is the whole
+   * character of the thing. A slab standing its full depth out of the
+   * ground is a step the wheels cannot climb: the contact model reads a
+   * head-on closing speed into it and takes the car's speed off in one
+   * bite, so an apex cut ended the run rather than costing it. Bedded down
+   * to a hand's height it is what it should be — something the wheels ride
+   * OVER, at the price of a scrub, a kick and a thump. */
+  block: { width: 1.5, height: 0.28, proud: 0.11, depth: 0.6, out: 0.55 },
 } as const;
 
 /** One thing standing in the verge. `y` is its FOOT — the ground it is
@@ -264,6 +273,21 @@ export function createKerbField(track: Track): KerbField {
     else grid.set(cellOf(block), [block]);
   };
 
+  /** R33 — the widest the road gets within a marker's own length of sample
+   * `i`, m. Half a post spacing either way: far enough that a marker is
+   * clear of the mat for as long as it is the nearest marker, short enough
+   * that a corner opening out does not push the whole run of posts out into
+   * the trees. */
+  const widestNear = (i: number): number => {
+    const reach = Math.max(1, Math.round(R.kerb.postSpacing / 2 / (track.step || 2)));
+    let widest = 0;
+    for (let k = Math.max(0, i - reach); k <= Math.min(track.samples.length - 1, i + reach); k++) {
+      const w = track.samples[k].width ?? track.width;
+      if (w > widest) widest = w;
+    }
+    return widest;
+  };
+
   const extend = (upTo: number): void => {
     const to = Math.min(upTo, track.samples.length);
     if (to <= indexed) return;
@@ -301,12 +325,20 @@ export function createKerbField(track: Track): KerbField {
         const at = (side + 1) / 2;
         const spacing = apex ? K.blockSpacing : K.postSpacing;
         const shape = apex ? KERB_MARKER.block : KERB_MARKER.post;
-        // R17/R33 — beside the road AS IT IS HERE. The nominal width is the
-        // one width the road mostly is not: R33 wanders it either side down
-        // the whole stage and a junction's mouth flares it half as wide
-        // again, so a marker placed off the nominal stands ON the mat at
-        // every crossing on the map.
-        const out = (sample.shift ?? 0) + ((sample.width ?? track.width) / 2 + shape.out) * side;
+        // R17/R33 — beside the road AS IT IS HERE, and here is a SPAN. The
+        // nominal width is the one width the road mostly is not: R33 cuts
+        // the gravel narrow, wanders it either side down the whole stage
+        // and opens it out at every bend, and a junction's mouth flares it
+        // half as wide again — so a marker placed off the nominal stands ON
+        // the mat at every crossing on the map.
+        //
+        // The WIDEST the road gets within a marker's own length, not the
+        // width under it, because a post is a thing standing in the ground
+        // and the road opening out past it does not move it. Where the mat
+        // is widening at its fastest the two differ by about a tenth of a
+        // metre, which is exactly the margin a post has, and the analyzer
+        // quite correctly reported a post standing in the road.
+        const out = (sample.shift ?? 0) + (widestNear(i) / 2 + shape.out) * side;
         const r = { x: Math.cos(sample.heading), z: -Math.sin(sample.heading) };
         if (onSeal(sample.x + r.x * out, sample.z + r.z * out)) continue;
         // ...and the run ENDS at the seal rather than a post-spacing short
@@ -321,7 +353,11 @@ export function createKerbField(track: Track): KerbField {
         const marker: KerbMarker = {
           kind: apex ? "block" : "post",
           x: sample.x + r.x * out,
-          y: sample.elevation + corridorOffset(sample, out, track.width),
+          // ...and its FOOT is on the corridor as it is here too. The
+          // profile is a function of the road's own width, so reading it
+          // off the nominal plants the marker above or below the ground it
+          // is supposed to be standing in wherever the two differ (R33).
+          y: sample.elevation + corridorOffset(sample, out, sample.width ?? track.width),
           z: sample.z + r.z * out,
           spin: sample.heading,
           s: sample.s,

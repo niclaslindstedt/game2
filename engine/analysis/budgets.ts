@@ -140,6 +140,13 @@ export const ANALYSIS = {
      * bump. Above the analytic profile's own curvature and well under the
      * smallest authored bump, so it separates the two cleanly. */
     bumpFloor: 0.004,
+    /** ...and how much CLEAN ROAD closes one, m. A defect is a defect, not
+     * a run of rough samples: a broad heave curves the other way down its
+     * flanks and so reads as several separate runs, which counted the one
+     * thing a driver feels as three. Comfortably over the inflection
+     * spacing of the longest bump R33 authors (`roughness.halfWidth.max`)
+     * and well under the spacing between two of them. */
+    bumpGap: 9,
 
     /** R21 — HOW WIDE THE ROAD IS. A band, because both ends are wrong: at
      * the bottom of the `width` dial the road is a lane with no room to
@@ -155,15 +162,41 @@ export const ANALYSIS = {
      * the stage: the standard deviation of how far either side of the
      * centre the rank keeps finding ground a car could be on, m.
      *
-     * Note what this is NOT measuring. The mat is a single width for the
-     * whole stage (`track.width`), so none of this variation is the road
-     * changing width — it is the FOREST, the water and the walls crowding
-     * the corridor in places and standing back in others. That is a real
-     * and worthwhile thing to measure, and it is also why a road whose own
-     * width varied would need `track.width` to become per-sample, which is
-     * a change across the physics, the bots and the renderer. */
-    varies: { min: 0.6, max: 5 },
-    variesSlack: 3,
+     * This is the WORLD's half of the question — the forest, the water and
+     * the walls crowding in and standing back — and it now moves with the
+     * road's own width as well, since R33 cuts the gravel narrow and opens
+     * it at the bends. `breathes` and `opens` below are the road's half.
+     *
+     * MEASURED. Across seeds 1-8 at medium the spread runs 6-10 m; the top
+     * of the band is where the corridor is no longer a road with a world
+     * beside it but a clearing with wheel tracks through it. */
+    varies: { min: 0.6, max: 12 },
+    variesSlack: 4,
+
+    /** R33 — THE MAT'S OWN WIDTH, on gravel, as two bands.
+     *
+     * `breathes` is the standard deviation of the cut width as a share of
+     * its own mean. Zero is a ribbon extruded to one number from the line
+     * to the flag, which is the single loudest tell that a road was
+     * generated rather than built; too much is a road that changes width
+     * under the car, which reads as a fault in the mesh rather than as a
+     * road. The generator's `roughness.width` swings ±11% of the nominal on
+     * two long waves and adds up to 24% back at the bends, and what that
+     * comes out at over seeds 1-8 is 9-11%.
+     *
+     * `opens` is how much wider a BEND is cut than the straights, as a
+     * share of them. A drift needs somewhere to go: a corner no wider than
+     * the road either side of it can only be driven neatly. Too much and
+     * the bend is a lay-by. Same seeds: 15-19%.
+     *
+     * `cornerAt` is the curvature a sample counts as being in a bend at,
+     * 1/m — a 150 m radius, which is where a road stops being straight and
+     * starts being a corner a driver places the car for. */
+    breathes: { min: 0.04, max: 0.2 },
+    breathesSlack: 0.06,
+    opens: { min: 0.06, max: 0.35 },
+    opensSlack: 0.12,
+    cornerAt: 1 / 150,
   },
 
   /** The WATER. Every one of these is a rule of nature stated as a number:
@@ -235,6 +268,31 @@ export const ANALYSIS = {
      * of its bounding box over the longer. A stage that runs down a
      * corridor uses none of the country it was given. */
     boxFill: { min: 0.3, max: 1 },
+
+    /** R20 — how much of the SEALED road may bend tighter than
+     * `STAGE_RULES.paving.minRadius`, as a share of the sealed road on the
+     * stage. A public road the rally borrowed sweeps; a hairpin on one
+     * reads as a race track painted grey, and the tight corners are what
+     * the rally has its own gravel for.
+     *
+     * Not zero, and `sweepClear` is why. The tarmac reaches into every
+     * junction the route leaves it at — the main road's mat carries the
+     * corner until the route's own line is clear of it — and a minor road
+     * leaving a main one at a sharp angle is a T-junction, which is R17's
+     * business and not a defect. So the crossings are excluded, out to
+     * `sweepClear` metres of arc either side of the junction.
+     *
+     * That reach is derived rather than guessed: the mat carries a corner
+     * of radius r for `r·acos(1 - half/r)` metres, which at this check's
+     * own ceiling (a 32 m corner on a 16 m road) is 23 m. Thirty is clear
+     * of that and still an order under the shortest hairpin there is — a
+     * 180° turn at 25 m radius is 78 m of road — so a real one is caught
+     * whole while the crossings drop out.
+     *
+     * Measured: with R20 enforced, every seed of 1-24 at medium comes out
+     * at 0.0%; with it off, the worst is 6.1% of the sealed road. */
+    sweeps: 0.01,
+    sweepClear: 30,
   },
 
   /** R17 — THE JUNCTIONS, as places two roads meet at rather than as seams
@@ -320,6 +378,63 @@ export const ANALYSIS = {
      * it is adverse camber, m per m. R19 banks INTO the turn; a corner
      * banked out of it is a corner nothing can hold. */
     adverse: 0.01,
+
+    /** R19 — ...and how far over a gravel corner should LIE, m per m of
+     * road width, as the median cross-fall of the samples in one. The
+     * other half of the camber question, and the half nothing measured: a
+     * stage whose corners are all banked correctly at one percent is a
+     * stage of flat ground with a road painted on it, and it passes
+     * `camber` with full marks.
+     *
+     * A band. Under the floor the corner does not read as a corner from
+     * inside the car; over the ceiling it is a bowl, the inside edge is a
+     * gutter and a car that runs wide on the exit is thrown at the outside
+     * of it. `STAGE_RULES.bank` puts the typical gravel corner at 7-8%
+     * over seeds 1-8, which is the middle of this.
+     *
+     * `tiltAt` is the curvature a sample counts as being in a corner at,
+     * 1/m — a 120 m radius, matching the `camber` check above so the two
+     * halves of R19 are asked about the same corners. */
+    tilt: { min: 0.05, max: 0.11 },
+    tiltSlack: 0.04,
+    tiltAt: 1 / 120,
+
+    /** R34 — HOW UNEVEN THE ROAD IS: metres of climb plus descent per
+     * kilometre of it, jumps excluded. The simplest statement there is of
+     * "the road is not a plane", and the one number that moves when the
+     * road is laid closer along the country it crosses.
+     *
+     * A band at both ends. Under the floor the stage is a table with a
+     * ribbon on it — the tell that the road was drawn rather than laid.
+     * Over the ceiling the car never settles between one heave and the
+     * next, which the sim reports as air time and respawns rather than as
+     * character.
+     *
+     * MEASURED, on seeds 1, 3 and 7 at medium: 30 / 56 / 33 m per km at a
+     * `follow.lag` of 200, 39 / 52 / 41 at 120, and 48 / 64 / 47 at 70.
+     * The floor sits just under what a 120 m lag delivers on the flattest
+     * of them and the ceiling just over the hilliest, so the band is the
+     * population rather than a wish. */
+    rolling: { min: 34, max: 72 },
+    rollingSlack: 14,
+
+    /** R26 — WHAT AN APEX CUT COSTS: the share of its speed the reference
+     * car loses running the length of a row of anti-cut blocks, driven
+     * through the real contact model. A band, because both ends are
+     * defects — see `apexTariff` in `drive.ts` for why.
+     *
+     * `kerbSpeed` is the speed the cut is driven at, m/s (~90 km/h: a car
+     * straightening a third-gear corner). `kerbSteps` at `kerbStep` is
+     * two seconds of it, which is longer than any row on any stage.
+     * `kerbRowGap` is the arc gap, m, past which two blocks belong to
+     * different corners — comfortably over `STAGE_RULES.kerb.blockSpacing`
+     * and well under the shortest straight between two bends. */
+    kerb: { min: 0.08, max: 0.32 },
+    kerbSlack: 0.12,
+    kerbSpeed: 25,
+    kerbStep: 1 / 120,
+    kerbSteps: 240,
+    kerbRowGap: 6,
     /** Share of the brake figure a car can put down as DRIVE at low speed
      * — the forward pass's acceleration limit. Well under 1: everything
      * accelerates slower than it stops. */

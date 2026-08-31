@@ -21,7 +21,14 @@ export {
 } from "./output.ts";
 
 // The simulation.
-export { createGame, skipIntro, startsIn, step, type CreateGameOptions } from "./game/step.ts";
+export {
+  createGame,
+  freshCar,
+  skipIntro,
+  startsIn,
+  step,
+  type CreateGameOptions,
+} from "./game/step.ts";
 export {
   clipKerbs,
   collideCar,

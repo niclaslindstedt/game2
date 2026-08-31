@@ -117,6 +117,13 @@ type Contact = {
   /** What the road's own cross-section says should be there, m — null off
    * the ribbon, where there is no road shape to compare against. */
   want: number | null;
+  /** R33 — whether this contact is on the DRIVEN ribbon, decided against
+   * the road's width HERE. The lane grid is laid once on the stage's
+   * nominal width, but a gravel road is not that width: it is cut tighter
+   * and opens out at the corners, so one lane is mat down a bend and verge
+   * down the straight either side of it. Deciding per lane instead scores
+   * the verge at the mat's tolerance for a third of the stage. */
+  mat: boolean;
 };
 
 /** Where the rank's lanes sit, in signed meters from the centerline. */
@@ -170,19 +177,24 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
     const sample: TrackSample = track.samples[i];
     const rx = Math.cos(sample.heading);
     const rz = -Math.sin(sample.heading);
+    // R33 — the road AS IT IS HERE, which is the width the terrain field
+    // laid its shelf at. Measuring the modelled cross-section against the
+    // stage's nominal instead reports the difference between the two as a
+    // wall down the side of every stretch the blade cut narrow.
+    const hereHalf = sample.width / 2;
     for (let k = 0; k < lanes.length; k++) {
       const lateral = lanes[k];
       const x = sample.x + rx * lateral;
       const z = sample.z + rz * lateral;
+      const mat = onRibbon(lateral, hereHalf);
       rank[k].push({
         s: sample.s,
         index: i,
         x,
         z,
         y: terrain.groundAt(x, z),
-        want: onRibbon(lateral, half)
-          ? sample.elevation + corridorOffset(sample, lateral, track.width)
-          : null,
+        want: mat ? sample.elevation + corridorOffset(sample, lateral, sample.width) : null,
+        mat,
       });
     }
   }
@@ -197,15 +209,18 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
   let worstBump = 0;
   let strides = 0;
   for (let k = 0; k < lanes.length; k++) {
-    const mat = onRibbon(lanes[k], half);
-    const limit = mat ? ANALYSIS.rollers.grade.mat : ANALYSIS.rollers.grade.verge;
-    const broken = mat ? ANALYSIS.rollers.gradeFail.mat : ANALYSIS.rollers.gradeFail.verge;
-    const bumpLimit = mat ? ANALYSIS.rollers.bump.mat : ANALYSIS.rollers.bump.verge;
     const lane = rank[k];
     for (let i = 1; i < lane.length; i++) {
       const run = Math.abs(lane[i].s - lane[i - 1].s);
       if (run < 1e-3) continue;
       strides++;
+      // The stricter tolerance applies where the car is meant to be, and
+      // that is a question about the road HERE (R33) rather than about the
+      // lane this contact happens to sit in.
+      const mat = lane[i].mat;
+      const limit = mat ? ANALYSIS.rollers.grade.mat : ANALYSIS.rollers.grade.verge;
+      const broken = mat ? ANALYSIS.rollers.gradeFail.mat : ANALYSIS.rollers.gradeFail.verge;
+      const bumpLimit = mat ? ANALYSIS.rollers.bump.mat : ANALYSIS.rollers.bump.verge;
       const grade = Math.abs(lane[i].y - lane[i - 1].y) / run;
       if (grade > limit) {
         steps++;
@@ -257,17 +272,18 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
   const diameter = ANALYSIS.rollers.radius * 2;
   const bridged = ANALYSIS.rollers.spacing < diameter;
   for (let k = 1; k < lanes.length; k++) {
-    const mat = onRibbon(lanes[k], half) && onRibbon(lanes[k - 1], half);
-    // A step is an ERROR only where the car is meant to be — on the mat
-    // itself. Out on the shoulder and past it the ribbon is handing over to
-    // the ground lattice, and the seam between two surfaces sampled 14 m
-    // apart is a place to keep an eye on, not a hole in the road.
-    const driven = Math.abs(lanes[k]) <= half && Math.abs(lanes[k - 1]) <= half;
-    const limit = mat ? ANALYSIS.rollers.cross.mat : ANALYSIS.rollers.cross.verge;
     const a = rank[k - 1];
     const b = rank[k];
     for (let i = 0; i < a.length && i < b.length; i++) {
       pairs++;
+      const mat = a[i].mat && b[i].mat;
+      // A step is an ERROR only where the car is meant to be — on the mat
+      // itself. Out on the shoulder and past it the ribbon is handing over
+      // to the ground lattice, and the seam between two surfaces sampled
+      // 14 m apart is a place to keep an eye on, not a hole in the road.
+      const localHalf = track.samples[b[i].index].width / 2;
+      const driven = Math.abs(lanes[k]) <= localHalf && Math.abs(lanes[k - 1]) <= localHalf;
+      const limit = mat ? ANALYSIS.rollers.cross.mat : ANALYSIS.rollers.cross.verge;
       // Subtract the cross-section the road is SUPPOSED to have there, so
       // the camber, the wheel tracks and the bank all cancel and the
       // residual is only what nobody asked for.
@@ -539,14 +555,16 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
   const T = ANALYSIS.rollers;
   let gravelRun = 0;
   let bumpCount = 0;
-  let inBump = false;
+  /** Arc position the last over-floor sample was at, m — how a bump is
+   * separated from the NEXT bump rather than from its own middle. */
+  let bumpEnd = -Infinity;
   let worstBump2 = 0;
   const gravelD2: number[] = [];
   const sealedD2: number[] = [];
   for (let i = 1; i + 1 < track.samples.length; i++) {
     const here = track.samples[i];
     if (skip[i] || here.deck !== null || here.surface === "water") {
-      inBump = false;
+      bumpEnd = -Infinity;
       continue;
     }
     const d2 = Math.abs(
@@ -555,20 +573,24 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
     const run = Math.abs(track.samples[i + 1].s - track.samples[i - 1].s) / 2;
     if (here.surface === "asphalt") {
       sealedD2.push(d2);
-      inBump = false;
+      bumpEnd = -Infinity;
       continue;
     }
     gravelRun += run;
     gravelD2.push(d2);
     if (d2 > worstBump2) worstBump2 = d2;
-    // One BUMP is one run of samples over the threshold, not one sample:
-    // a bump is several metres long and spans several of them.
-    if (d2 > T.bumpFloor) {
-      if (!inBump) bumpCount++;
-      inBump = true;
-    } else {
-      inBump = false;
-    }
+    if (d2 <= T.bumpFloor) continue;
+    // One BUMP is one DEFECT, not one run of samples over the threshold,
+    // and the difference bit as soon as R33's bumps grew long enough to
+    // matter. A second difference reads the CURVATURE of the profile, and
+    // a broad heave curves one way over its crown and the other way down
+    // each flank — so it passes through zero twice on its way over, and a
+    // run-based count reported the single frost heave a driver feels as
+    // three bumps. A defect is therefore closed by CLEAN ROAD after it,
+    // not by its own inflection: nothing inside `bumpGap` of the last
+    // rough sample starts a new one.
+    if (here.s - bumpEnd > T.bumpGap) bumpCount++;
+    bumpEnd = here.s;
   }
   const perKm = gravelRun > 0 ? bumpCount / (gravelRun / 1000) : 0;
 
@@ -632,8 +654,7 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
         const a = rank[k][i];
         const b = rank[k - step][i];
         if (!a || !b) break;
-        const mat = Math.abs(lanes[k]) <= half && Math.abs(lanes[k - step]) <= half;
-        const limit = mat ? ANALYSIS.rollers.cross.mat : ANALYSIS.rollers.cross.verge;
+        const limit = a.mat && b.mat ? ANALYSIS.rollers.cross.mat : ANALYSIS.rollers.cross.verge;
         const modelled =
           a.want !== null && b.want !== null ? (b.want as number) - (a.want as number) : 0;
         if (Math.abs(a.y - b.y - modelled) > limit) break;
@@ -662,6 +683,64 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
         1,
       )} m) — a road that never pinches or opens out`,
       value: ANALYSIS.rollers.varies.min - spread,
+    });
+  }
+
+  // ── R33 — THE MAT'S OWN WIDTH, on the gravel, as two questions.
+  //
+  // The corridor above is what the WORLD leaves the car: the forest and the
+  // water crowding in and standing back. This is the ROAD — how wide the
+  // blade actually cut it — and the two are different facts. A stage can
+  // have a corridor that breathes and a mat ruled to one width from the
+  // line to the flag, and that mat is the tell that nobody built this: a
+  // dirt road is as tight as its traffic can live with and opens out where
+  // something needed the room.
+  //
+  // Gravel only, because a paving machine lays a constant width and a
+  // bridge deck is what it is. Measured as a share of the stage's NOMINAL
+  // width, so the numbers mean the same thing at both ends of the `width`
+  // dial. Junction mouths are left out: a mouth's flare is R17's and would
+  // otherwise be counted here as the road opening out, which it is not.
+  const cut: number[] = [];
+  const bends: number[] = [];
+  const runs: number[] = [];
+  for (const sample of track.samples) {
+    if (sample.surface !== "gravel" || sample.deck != null) continue;
+    if ((sample.flat ?? 0) > 0.01 || (sample.shift ?? 0) !== 0) continue;
+    const share = sample.width / track.width;
+    cut.push(share);
+    if (Math.abs(sample.curvature) > ANALYSIS.rollers.cornerAt) bends.push(share);
+    else runs.push(share);
+  }
+  const mean = (xs: number[]): number =>
+    xs.length > 0 ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+  const cutMean = mean(cut);
+  // The standard deviation of the cut width, as a share of its own mean —
+  // a road that swings a metre either side of eleven is doing something a
+  // road that swings a metre either side of twenty is not.
+  const cutSpread =
+    cut.length > 1
+      ? Math.sqrt(mean(cut.map((w) => (w - cutMean) * (w - cutMean)))) / Math.max(1e-6, cutMean)
+      : 0;
+  // How much wider a bend is cut than the straights either side of it, as a
+  // share of the straights — the room a drift is given.
+  const opening = runs.length > 0 && bends.length > 0 ? mean(bends) / mean(runs) - 1 : 0;
+  if (cut.length > 0 && cutSpread < ANALYSIS.rollers.breathes.min) {
+    findings.push({
+      code: "rollers.breathes",
+      severity: "note",
+      message: `the gravel is cut to ${(cutMean * track.width).toFixed(1)} m the whole way (±${(
+        cutSpread * 100
+      ).toFixed(1)}%) — a road nobody bladed twice`,
+      value: ANALYSIS.rollers.breathes.min - cutSpread,
+    });
+  }
+  if (bends.length > 0 && opening < ANALYSIS.rollers.opens.min) {
+    findings.push({
+      code: "rollers.opens",
+      severity: "note",
+      message: `bends are only ${(opening * 100).toFixed(1)}% wider than the straights — nowhere to put a car sideways`,
+      value: ANALYSIS.rollers.opens.min - opening,
     });
   }
 
@@ -743,6 +822,25 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
       value: spread,
     },
     {
+      // R33 — and the MAT does too, which is a different claim: that one is
+      // the world crowding the road, this one is the road itself.
+      id: "breathes",
+      label: "the gravel is cut wider in places and tighter in others",
+      score: cut.length > 0 ? within(cutSpread, T.breathes, T.breathesSlack) : 1,
+      weight: 1,
+      value: cutSpread,
+    },
+    {
+      // R33 — a BAND at both ends. A bend no wider than the straight is a
+      // corner with nowhere to put the car; a bend twice as wide is a
+      // lay-by with a curve in it.
+      id: "opens",
+      label: "the bends are cut wider than the straights, for the car to go sideways in",
+      score: bends.length > 0 && runs.length > 0 ? within(opening, T.opens, T.opensSlack) : 1,
+      weight: 1,
+      value: opening,
+    },
+    {
       id: "dry",
       label: "no water on road that is not a crossing",
       score: rate(drowned, Math.max(1, checkedMat)),
@@ -779,6 +877,9 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
       gravelRun,
       corridor,
       corridorVaries: spread,
+      gravelWidth: cutMean * track.width,
+      gravelVaries: cutSpread,
+      bendOpening: opening,
     },
     ms: Date.now() - started,
   };

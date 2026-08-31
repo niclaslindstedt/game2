@@ -773,6 +773,18 @@ every solid is a circle, and a hit does several things at once:
   with the run, or every corner on the stage becomes one nobody goes near.
   A marker post is the opposite extreme — it stops nothing, never reaches
   the physics at all, and is knocked flat renderer-side like a cone.
+  - **The BITE CEILING is what keeps it a kerb.** The slab is bedded into
+    the verge — only `KERB_MARKER.block.proud` of its thickness stands
+    above the ground — and climbing that costs what it costs however fast
+    the car arrives. So the shove, the yaw, the roll and the heave are all
+    priced off `min(closing, kerb.biteMax)` rather than off the closing
+    speed itself, and only the scrub (`keep`) is a share of what the car
+    was carrying. Without the ceiling the closing speed into a block dead
+    ahead is the car's whole road speed and the shove off it is a head-on
+    into a wall: a full apex row took a car from 90 km/h to walking pace
+    in five bites. Priced properly it is about a fifth of the car's speed
+    for the whole row, which `analysis/drive.ts`'s `kerb` check measures by
+    driving the reference car down every row on a stage.
 - **The wear.** Every crush adds structural wear; wear 1 is the wreck — a
   car with nothing left to give, which keeps driving exactly where it is.
   Nothing recovers it: a wreck is driven home, and the chassis is patched

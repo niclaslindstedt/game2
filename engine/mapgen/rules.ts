@@ -64,14 +64,23 @@
 //       between them. The ground they share is one graded platform, and the
 //       abandoned arm is taped shut and runs off the map STILL SEALED — a
 //       tarmac road that turns to gravel in an empty field is a road that
-//       goes nowhere.
+//       goes nowhere. ONE surface change is not a junction, and R20 owns
+//       it: where a seal reaches a corner no public road would have, the
+//       surfacing runs out there instead.
 //   R19 Turns are BANKED. A road built through a corner is superelevated so
 //       water and cars both stay on it: the cross-fall rolls from the crown
 //       into the turn over a runoff, tops out at `bank.max` for the
 //       surface, and rolls back out again. Never a wall of a bank — this is
 //       a country road, not a speedway.
-//   R20 A JUMP never sits on sealed road. A tarmac section is a public road
-//       the rally borrows; nobody builds a launch ramp into one.
+//   R20 A JUMP never sits on sealed road, and neither does a HAIRPIN. A
+//       tarmac section is a public road the rally borrows: nobody builds a
+//       launch ramp into one, and a highway authority laying it out for
+//       traffic that is not racing sweeps rather than doubling back. So the
+//       sealed road takes no turn from R3's `hard` bucket — the tight stuff
+//       is the rally's, and the rally's road is the gravel. Where a seal
+//       reaches one anyway, the SURFACING RUNS OUT at the corner's start:
+//       the one surface change on a stage that is not a junction, and the
+//       exception R17 carries.
 //   R21 The road's WIDTH is a dial: `knobs.width` runs from a narrow lane
 //       the trees crowd to a broad boulevard with room to place the car.
 //   R22 A stage is SHAPED as a sprint or as a CIRCUIT. A circuit's last
@@ -436,7 +445,19 @@ export const STAGE_RULES = {
    * genuinely hilly. Applied to GENERATED stages only — synthetic test
    * tracks stay flat rigs. */
   elevation: {
-    /** Height of the longest wave, meters (peak to trough is twice this). */
+    /** Height of the longest wave, meters (peak to trough is twice this).
+     *
+     * A word about what this band is NOT for, because it looks like the
+     * knob to reach for and it is not. How far the road actually travels up
+     * and down over a kilometre is dominated by `follow` below — the
+     * COUNTRY the road is laid along — and this noise is the road's own
+     * character riding on top of it. Measured on seeds 1-8 at medium, the
+     * roll contributes about 5 m/km against the country's 29, and raising
+     * the band by half moved a stage's total travel by under a metre per
+     * kilometre while pushing the road's crossings far enough off the
+     * ground to float R18's watercourses. Reach for `follow.lag` instead:
+     * that is the number that says how much of the country reaches the
+     * road, and it moves the answer. */
     amplitude: { min: 3, max: 7 },
     /** Length of that longest wave, meters. */
     wavelength: { min: 450, max: 750 },
@@ -471,10 +492,29 @@ export const STAGE_RULES = {
      * through this unchanged and a stage is still a pure function of its
      * seed.
      *
-     * `lag` is the response length, m. `grade` is the gradient, and has to
-     * leave room under `ANALYSIS.drive.grade` for the rolling noise riding
-     * on top of it, which is where the rest of that budget goes — the two
-     * ADD, and a follower given the whole budget puts every stage over it.
+     * `lag` is the response length, m — AND IT IS THE STAGE'S UNEVENNESS,
+     * which is not obvious and is worth stating where somebody looking for
+     * that knob will find it. How much the road travels up and down is
+     * almost entirely how much of the country reaches it, and this is the
+     * number that decides that: it is the eye of the man who laid it out.
+     * Long, and he is a highway engineer running a graded line across the
+     * landscape and reading nothing under a quarter of a kilometre — a
+     * road that is smoother than the ground it is on, everywhere, which
+     * over a whole stage reads as a ribbon laid on a picture of a country.
+     * Short, and he is following the ground with a bulldozer, and the road
+     * rises and dips with every shoulder and hollow it crosses.
+     *
+     * MEASURED. Over seeds 1, 3 and 7 at medium the road's total travel is
+     * 30 / 56 / 33 m per km at 200, 39 / 52 / 41 at 120, and 48 / 64 / 47
+     * at 70. 120 is where the road is plainly following the country
+     * without the cut and fill (and the analyzer's ground findings) that
+     * comes with hugging every hummock of it. `analysis/drive.ts`'s
+     * `rolling` check is what holds it there.
+     *
+     * `grade` is the gradient, and has to leave room under
+     * `ANALYSIS.drive.grade` for the rolling noise riding on top of it,
+     * which is where the rest of that budget goes — the two ADD, and a
+     * follower given the whole budget puts every stage over it.
      *
      * `crest` is the VERTICAL CURVATURE, per m: how fast the gradient
      * itself may change. It is the clamp that stops the road being a ramp.
@@ -495,7 +535,7 @@ export const STAGE_RULES = {
      * table, whichever is higher, and low ground crossed at that height
      * comes out as the embankment it should be. Without it a stage that
      * routes across a tarn drives along the bottom of it. */
-    follow: { lag: 200, grade: 0.075, crest: 0.004, freeboard: 3.5 },
+    follow: { lag: 140, grade: 0.075, crest: 0.004, freeboard: 3.5 },
     /** R34 — how far the road may stand OFF the country it crosses, m: up
      * on fill, down in cut. The lag and the grade clamp say how fast the
      * road may follow the land; nothing said how far behind it was allowed
@@ -767,41 +807,85 @@ export const STAGE_RULES = {
    * is wrong in the same way an evenly-sprinkled forest is wrong: real
    * defects come in ones, with clean road between them.
    *
-   * Every bump is MARGINAL by design. A few centimetres is what the car
-   * notices as a road with a surface; ten is a pothole, and a generator that
-   * scatters potholes has made a different and worse game. */
+   * Every bump is MARGINAL by design. A hand's height is what the car
+   * notices as a road with a surface; half a metre is a pothole, and a
+   * generator that scatters potholes has made a different and worse game.
+   *
+   * THE BAND THIS COVERS IS THE POINT, and it is why the numbers are wider
+   * than "a bump" sounds. The road's own rolling profile
+   * (`elevation.wavelength`) is hundreds of metres long and the country it
+   * follows is longer still, so between those and a stone under the blade
+   * there was NOTHING: no shape at the ten-to-thirty-metre scale, which is
+   * exactly the scale a car reads as the road being uneven. A road with
+   * long hills and a clean surface between them reads as a ribbon somebody
+   * extruded, however far it climbs. So a defect here runs from a couple of
+   * metres — a stone, a scour — up to a frost heave the length of a house,
+   * which is what real frost heaves are. */
   roughness: {
     /** One candidate bump per this much arc, m, and the chance it is there.
-     * Together they set the spacing: at 14 m and a third, a bump every forty
-     * metres or so of gravel, which is a road you can feel without a road
-     * that is fighting you. */
+     * Together they set the spacing: at 14 m and a bit under a half, a bump
+     * every thirty metres or so of gravel, which is a road you can feel
+     * without a road that is fighting you. */
     cell: 14,
-    chance: 0.34,
+    chance: 0.45,
     /** How proud or how sunk one is, m — a heave or a hollow, either sign.
      * The ceiling is the number that keeps this a surface rather than an
-     * obstacle. */
-    height: { min: 0.02, max: 0.065 },
+     * obstacle: at the long end of `halfWidth` it is a grade of two per
+     * cent, which the car breathes over, and at the short end it is the
+     * lip of a scour. */
+    height: { min: 0.03, max: 0.14 },
     /** ...and how long it is, m (half-width, so a bump is twice this end to
      * end). Longer than the sample spacing by enough that the compiled road
-     * actually draws the shape rather than aliasing it into a step. */
-    halfWidth: { min: 1.6, max: 4.2 },
+     * actually draws the shape rather than aliasing it into a step, and
+     * capped under `cell` so that summing the three cells around a query
+     * catches the whole of one — a bump whose tail reached past that would
+     * be cut off at a cell boundary, which is a step, which is the one
+     * thing this must not produce. */
+    halfWidth: { min: 2.2, max: 11 },
 
-    /** R33 — and the gravel road's WIDTH wanders too. A blade cuts a road
-     * a little wider on one pass and a little narrower on the next, the
-     * verges creep in where nothing has run wide for a season and get
-     * pushed back at every corner, and the result is a road that breathes
-     * — never the same width for two hundred metres together.
+    /** R33 — and the gravel road's WIDTH is not one number either. A dirt
+     * road is TIGHT for most of its length — as narrow as the traffic on it
+     * can live with, because every metre of it had to be cut and has to be
+     * bladed again every spring — and it opens out here and there where two
+     * vehicles have to be able to meet, and at the corners, where the
+     * sweep of anything long enough to need one has widened the bend.
      *
-     * `vary` is the share of the nominal width it swings either way, so
-     * 0.12 is a road that runs from 12% under to 12% over: enough to see
-     * and to place the car against, nowhere near enough to change what the
-     * corner asks for. `wave` is how far it takes to swing, m — long, so
-     * this reads as the road opening out and pinching in rather than as a
-     * ragged edge.
+     * Three terms, and they are three different facts about the road:
      *
-     * SEALED road does not do this. A paving machine lays a constant width,
-     * which is the same reason the tarmac has no bumps on it. */
-    width: { vary: 0.12, wave: { long: 210, short: 74 }, shortShare: 0.35 },
+     * `narrow` is the share of the stage's nominal width the gravel is
+     * actually cut to. Under 1 on purpose: `roadWidth` is the width the
+     * turn vocabulary, the grid and R23's clearance are all sized from, and
+     * every one of those wants the wide answer, but the road a car drives
+     * down should be tighter than that or a corner is not a commitment.
+     *
+     * `vary` is the share of the nominal it then swings either way, so the
+     * road runs from `narrow - vary` to `narrow + vary` of the stage's
+     * width — enough to see, to place the car against, and to notice
+     * arriving. `wave` is how far it takes to swing, m: long, so this reads
+     * as the road opening out and pinching in rather than as a ragged edge.
+     *
+     * `corner` gives it back at the bends. A drift needs somewhere to go,
+     * and a road cut to a lane everywhere is a stage that can only be
+     * driven neatly — so a corner opens out toward the nominal again,
+     * `gain` of the width at its widest and half of that at `pivotRadius`.
+     * It is the same shape the bank uses and for the same reason: what is
+     * being asked is how much of a corner this is.
+     *
+     * SEALED road does none of this. A paving machine lays a constant
+     * width, which is the same reason the tarmac has no bumps on it. */
+    width: {
+      narrow: 0.8,
+      vary: 0.11,
+      wave: { long: 210, short: 74 },
+      shortShare: 0.35,
+      corner: { gain: 0.24, pivotRadius: 70 },
+      /** Meters of road the width rolls in and out over. Curvature steps at
+       * a segment boundary, so the corner term steps with it — and a mat
+       * that gains a metre inside one 2 m sample is a notch in the edge of
+       * the road, not a road opening out. The same triangular walk the bank
+       * gets (`R.bank.runoff`), for the same reason. */
+      runoff: 40,
+    },
   },
 
   /** R6 — jump placement. */
@@ -1108,6 +1192,44 @@ export const STAGE_RULES = {
      * take forty, and both look like the same place. */
     junctionParts: 2.4,
 
+    /** R20 — THE TIGHTEST BEND A BORROWED ROAD MAY HAVE, m.
+     *
+     * A sealed section is a public road the rally borrowed, and a public
+     * road is laid out by a highway authority for traffic that is not
+     * racing: it sweeps. Hairpins on tarmac belong to mountain passes, and
+     * a rally stage that meets one every time it joins the main road reads
+     * as a race track somebody painted grey — which is the opposite of what
+     * the tarmac is for. The tight stuff is the RALLY's, and the rally's
+     * road is the gravel.
+     *
+     * Stated as `turn.hard`'s ceiling rather than as a number of its own:
+     * the vocabulary already divides corners into the ones a public road
+     * has and the ones it does not, and R3's `hard` bucket IS the drift
+     * moments. So the rule is simply that a borrowed road takes no hard
+     * turns, and moving R3's bands moves this with them.
+     *
+     * Enforced at the JOIN, in `compile.ts`: the route will not turn onto
+     * the tarmac at all if the run it would spend there has a corner
+     * tighter than this in it. Refusing costs nothing — the surface change
+     * already waits for a corner to happen at (R17), so it simply waits for
+     * a later one, or the stage stays on gravel.
+     *
+     * The two places it is NOT enforced are worth stating, because both
+     * look like better homes for it and neither is. Not in the SEARCH: it
+     * cannot know where a seal really ends, so covering that means capping
+     * corners on the gravel around the paving field's bands, and the
+     * straighter route that comes out runs alongside its own valleys —
+     * across seeds 1-24 that took R18's `water.road` findings from 37 to
+     * 134 while leaving the tight tarmac where it was. And not by
+     * UNSEALING a hairpin the road has already arrived at, which is a
+     * surface change with no junction at it: a worse lie than the one it
+     * fixes (R17).
+     *
+     * `analysis/roads.ts`'s `sweeps` check is what says how well it holds:
+     * 6.1% of the sealed road at its worst with the rule off, and with it
+     * on, nothing outside the junction crossings themselves. */
+    minRadius: 32,
+
     /** R17 — BORROWING the tarmac. The sealed roads are laid before the
      * route (`highway.ts`), so a paved stretch of stage is not a stripe the
      * generator painted: it is a piece of a real road the rally went and
@@ -1223,10 +1345,23 @@ export const STAGE_RULES = {
    * always banked harder than a paved one. */
   bank: {
     /** Cross-fall ceiling, m per m of road width, per surface. */
-    max: { gravel: 0.085, asphalt: 0.055 },
+    max: { gravel: 0.125, asphalt: 0.055 },
     /** The radius that earns half the ceiling, m — tighter corners bank
-     * harder, and the curve flattens off rather than running away. */
-    pivotRadius: 42,
+     * harder, and the curve flattens off rather than running away.
+     *
+     * PER SURFACE, because the two cross-falls have different causes. A
+     * sealed road's is DESIGNED: a highway engineer superelevates the
+     * corners that need it and leaves the rest of the road on its camber,
+     * so the tilt is reserved for genuinely tight geometry and the pivot is
+     * short. A gravel road's is WORN — every car that has ever turned here
+     * has pushed loose stone from the inside of the bend to the outside,
+     * and that happens on any corner at all, not just the ones an engineer
+     * would have banked. So the gravel pivot is long: the tilt is in by the
+     * time the road is merely bending, which is what stops a stage of
+     * fourth-gear sweepers reading as flat ground with a line painted on
+     * it. Verified by `analysis/drive.ts`'s `tilt` check, which measures
+     * what the gravel corners on a stage actually come out at. */
+    pivotRadius: { gravel: 105, asphalt: 42 },
     /** Meters of road the cross-fall rolls in and out over. A road does not
      * change its cross-section in a step; the runoff is what makes a banked
      * corner something the car settles into instead of hits. */
