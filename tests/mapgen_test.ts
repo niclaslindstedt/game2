@@ -7,8 +7,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   STAGE_RULES as R,
+  builtTerrain,
   compileStage,
   compileTrack,
+  createTerrain,
   generateStage,
   roadClearance,
   type FiniteStageLength,
@@ -422,6 +424,21 @@ describe("endless stages", () => {
       }
       expect(violations).toEqual([]);
     }
+  });
+
+  it("marks the terrains it built, and never a stub spread over one", () => {
+    // What lets a reader cache an answer against the TRACK instead of the
+    // field that was asked (`exposureAt` in the bot): two genuine terrains
+    // off one track are one country, so they may share the work — while a
+    // test's own `waterAt` must never be handed the real country's answers.
+    // A spread is exactly the thing that would defeat a flag or a property,
+    // so this asserts a spread does NOT inherit the mark.
+    const track = compileStage(11, "short");
+    const real = createTerrain(track);
+    expect(builtTerrain(real)).toBe(true);
+    // Two fields off ONE track are separately built and both genuine.
+    expect(builtTerrain(createTerrain(track))).toBe(true);
+    expect(builtTerrain({ ...real, waterAt: () => null })).toBe(false);
   });
 
   it("always keeps road materialized past what was asked for", () => {

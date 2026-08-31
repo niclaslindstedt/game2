@@ -68,6 +68,7 @@ export {
 export { createStandField, type Stand, type StandField } from "./stands.ts";
 export {
   createTerrain,
+  builtTerrain,
   computeStreams,
   collectAnchors,
   carveGround,

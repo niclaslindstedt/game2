@@ -117,6 +117,7 @@ export {
   roleAt,
   createStandField,
   createTerrain,
+  builtTerrain,
   computeStreams,
   collectAnchors,
   traceRivers,

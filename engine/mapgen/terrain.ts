@@ -386,6 +386,24 @@ export type TerrainField = {
 
 /** Build the terrain field for a track. Deterministic in the track seed —
  * the engine and the renderer each build one and always agree. */
+/** Every field this module actually built.
+ *
+ * It exists so a reader can tell a REAL terrain from a stub, which matters
+ * to anything that wants to cache an answer against the TRACK rather than
+ * against the field it asked: `createTerrain` takes nothing but the track,
+ * so two genuine fields off one track answer identically and may share the
+ * work — while a test that spreads its own `waterAt` over a field
+ * (`{ ...state.terrain, waterAt: () => null }`) must not be handed the real
+ * country's answers. A spread makes a NEW object, which is not in here, so
+ * the distinction survives exactly the thing that would defeat a flag or a
+ * property on the field itself. */
+const BUILT = new WeakSet<TerrainField>();
+
+/** Whether `field` is one this module built, rather than a stub over one. */
+export function builtTerrain(field: TerrainField): boolean {
+  return BUILT.has(field);
+}
+
 export function createTerrain(track: Track): TerrainField {
   const seed = (track.seed ^ 0x1b873593) >>> 0;
   const rng = createRng(seed);
@@ -1511,7 +1529,7 @@ export function createTerrain(track: Track): TerrainField {
 
   const roadDistanceAt = (x: number, z: number): number => nearestRoad(x, z)?.d ?? Infinity;
 
-  return {
+  const field: TerrainField = {
     heightAt,
     groundAt,
     latticeAt,
@@ -1534,4 +1552,6 @@ export function createTerrain(track: Track): TerrainField {
     regionAt: props.regionAt,
     sync,
   };
+  BUILT.add(field);
+  return field;
 }
