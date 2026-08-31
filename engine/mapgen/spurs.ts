@@ -68,6 +68,13 @@ export type BlockKind =
   /** Empty oil drums, laid down in a row. */
   | "drums";
 
+/** R23 + R31 — the heights a road may stand at beside the stage without its
+ * own shelf becoming a face in the stage's shoulder: the stage's verge cone
+ * read as two numbers. Unbounded (`-Infinity`/`Infinity`) out past the
+ * cone's reach, and EMPTY — floor over ceiling — where the stage passes
+ * near enough twice at two heights for no road to fit between them. */
+export type ShelfBand = { floor: number; ceiling: number };
+
 /** R17 — the BLOCK across an abandoned branch: where the barrier stands,
  * how wide the line is, and what it is built of. Placed by the generator
  * rather than by the renderer, for the one reason that matters — the thing
@@ -218,10 +225,10 @@ export function buildSpur(
    * a point and height, once the stage's own verge cone has cut away
    * whatever would have been a wall beside it. */
   shelfHolds: (x: number, z: number, y: number) => boolean,
-  /** R23 + R31 — the highest this branch may stand at a point without its
-   * own shelf becoming a wall beside the stage. Infinity out where the
+  /** R23 + R31 — the band this branch may stand in at a point without its
+   * own shelf becoming a wall beside the stage. Unbounded out where the
    * stage's cone does not reach. */
-  shelfCeiling: (x: number, z: number) => number,
+  shelfBand: (x: number, z: number) => ShelfBand,
 ): Spur {
   const rng = createRng(
     (seed ^ (Math.round(atS) * 2654435761) ^ (end === "entry" ? 0x9e37 : 0x85eb)) >>> 0,
@@ -424,10 +431,18 @@ export function buildSpur(
     // builds exactly the wall on the stage's shoulder that R31 exists to
     // forbid. Neither rule can give way there, so the branch gives way
     // here, and the two roads run at one height until they have genuinely
-    // separated. Past the cone's reach the ceiling is Infinity and the
-    // branch follows the country as it always did.
-    const ceiling = shelfCeiling(x, z);
-    if (y > ceiling) y = ceiling;
+    // separated. Past the cone's reach the band is unbounded and the branch
+    // follows the country as it always did.
+    //
+    // The FLOOR matters as much as the ceiling: a branch that drops away
+    // beside the route leaves the terrain the same impossible job, and the
+    // face it builds between the two lips is a cliff rather than a wall
+    // only because of which side you are standing on. Where the two halves
+    // cross — the stage passing twice at two heights — there is no height a
+    // road can stand at, and the cut below reads that off `shelfHolds`.
+    const band = shelfBand(x, z);
+    if (y > band.ceiling) y = band.ceiling;
+    if (y < band.floor) y = Math.min(band.floor, band.ceiling);
   }
   // R23 — and then the guarantee the steering only tries for: the branch is
   // CUT at the first step that stands inside the clearance. Not backed up
@@ -452,19 +467,23 @@ export function buildSpur(
     // R31 — the HEIGHT rule binds the whole way, the junction window
     // included, and that is the half of R23 this used to let through.
     //
-    // At the mouth the two roads are one graded plane, so `over` is zero
-    // and this passes by construction; what it catches is the branch that
-    // has started to CLIMB AWAY while still inside the stage's verge cone.
-    // Exempting the first `keep` metres from it, and never asking it at all
-    // while the branch was still leaving, let a branch stand seven metres
-    // over the stage three metres from its edge — and the terrain then has
-    // an impossible job, because holding the ground up under the branch
-    // (which it must, or the branch hangs in the air) builds a wall on the
-    // stage's shoulder that R31 says cannot be there. Neither rule can give
-    // way in the terrain; the branch is what has to.
+    // At the mouth the two roads are one graded plane, so the two heights
+    // agree and this passes by construction; what it catches is the branch
+    // that has started to PART IN HEIGHT while still inside the stage's
+    // verge cone. Exempting the first `keep` metres from it, and never
+    // asking it at all while the branch was still leaving, let a branch
+    // stand seven metres over the stage three metres from its edge — and
+    // the terrain then has an impossible job, because holding the ground up
+    // under the branch (which it must, or the branch hangs in the air)
+    // builds a wall on the stage's shoulder that R31 says cannot be there.
+    // Neither rule can give way in the terrain; the branch is what has to.
     if (at.s <= SPUR.keep) continue;
-    // Still leaving: the stage either side of the junction is this branch's
-    // own road, and the ground under both is the junction's one plane.
+    // Still leaving: the ground AT the junction is this branch's own road,
+    // and what is under both there is the junction's one plane. Only at it
+    // — the exemption is `junction.parting` metres of ground around the
+    // meeting point, not every piece of route whose arc happens to be near
+    // the junction's, which is how a branch came to lie on the route a
+    // hundred metres away with a cliff between them.
     if (!departed) {
       if (roadDistance(at.x, at.z, true) >= keepOut) continue;
     } else if (clear >= keepOut && shelfHolds(at.x, at.z, at.elevation)) continue;
@@ -535,6 +554,129 @@ export function buildSpur(
     if (sample.x > box.maxX) box.maxX = sample.x;
     if (sample.z < box.minZ) box.minZ = sample.z;
     if (sample.z > box.maxZ) box.maxZ = sample.z;
+  }
+  return { atS, end, samples, width, endsAt, bounds: box, block: null };
+}
+
+/** R17 — the arm of a BORROWED road: not built, CUT.
+ *
+ * `buildSpur` above invents a road, because when the tarmac was a stripe
+ * painted down the racing line there was nothing at a junction for the
+ * route not to take. With the tarmac laid first (`highway.ts`) there is:
+ * the arm the route abandons is simply the rest of the public road, which
+ * already crosses the map and already leaves it at both ends. So nothing
+ * here steers, wanders or gives up. It walks the road.
+ *
+ * That removes three whole failure modes at a stroke — an arm that stops in
+ * a field, an arm that lies on the route, and an arm that turns to gravel
+ * part way along — because the route was planned to keep R23's clearance
+ * from this line everywhere except at the two meeting points.
+ *
+ * What it still has to decide is HEIGHT, for the reason `highway.ts`'s
+ * header gives: a stage's elevation is a profile along the route's arc, not
+ * a heightfield, so the tarmac's height is only settled once it is known
+ * which piece of it the route drives. It is settled the way a branch's
+ * always was — off the junction's own grade, following the country at the
+ * route's lag inside a minor road's grade, and never outside the stage's
+ * verge cone (R31). */
+export function cutSpur(
+  junction: { x: number; z: number; heading: number; elevation: number },
+  atS: number,
+  end: "entry" | "exit",
+  road: { points: { x: number; z: number; heading: number; s: number }[]; width: number },
+  /** Index on the road of the meeting point — the arm runs away from it. */
+  index: number,
+  land: LandField,
+  width: number,
+  shelfBand: (x: number, z: number) => ShelfBand,
+): Spur {
+  // Which way along the road the route did NOT go. The junction carries the
+  // heading of the arm it abandons (`compile.ts`'s `noteJunction`), so the
+  // arm is whichever direction along the line agrees with it.
+  const at = road.points[index];
+  const along = Math.cos(at.heading - junction.heading) >= 0 ? 1 : -1;
+  const follow = 1 - Math.exp(-SPUR.step / R.elevation.follow.lag);
+  const samples: SpurSample[] = [];
+  const box = { minX: junction.x, maxX: junction.x, minZ: junction.z, maxZ: junction.z };
+  let y = junction.elevation;
+  const endsAt: Spur["endsAt"] = "map";
+  // Resampled at the BRANCH's own spacing rather than the road's, which is
+  // coarser (`HIGHWAY.step`): a `Spur` is read by the terrain, the renderer,
+  // the barrier placer and the analysis, and every one of them takes the
+  // samples to be `SPUR.step` apart. A branch that came out at the road's
+  // spacing would be a road of a different resolution wearing the same
+  // type.
+  //
+  // It STARTS AT THE MEETING POINT, not at the nearest point of the line it
+  // is cut from. The route solved its way onto the road's own tangent, so
+  // the two are a metre or so apart — and that metre is the difference
+  // between a branch leaving a junction and a branch beginning beside one.
+  let px = junction.x;
+  let pz = junction.z;
+  let heading = junction.heading;
+  /** How far along the road's own points the walk has reached, and how much
+   * of the current gap is left to spend. */
+  let i = index;
+  let s = 0;
+  for (;;) {
+    samples.push({
+      x: px,
+      z: pz,
+      heading,
+      elevation: y,
+      s,
+      surface: "asphalt",
+      lift: ROAD_CROSS.asphaltLift * Math.min(1, s / ROAD_CROSS.liftRamp),
+      flat: 0,
+    });
+    if (px < box.minX) box.minX = px;
+    if (px > box.maxX) box.maxX = px;
+    if (pz < box.minZ) box.minZ = pz;
+    if (pz > box.maxZ) box.maxZ = pz;
+    // It runs to THE END OF THE ROAD, not to the edge of the stage's own
+    // bounding box. A built branch stops as soon as it is clear of the
+    // country the rally occupies, because every further metre of it is a
+    // metre of road invented for nobody; a cut one has no such cost —
+    // the road is already there, it is already laid edge to edge of the
+    // map (`highway.ts` walks it from `worldBound + overrun` to the same
+    // again on the far side), and stopping it early is what leaves a public
+    // road ending on a hillside inside the frame. The stage's box is a
+    // fraction of the world, so `SPUR.escape` past it is still well inside
+    // the land a player can see.
+    //
+    // `length.max` is what bounds the cost, and it is generous enough that
+    // an arm reaches the rim from anywhere a junction can be.
+    if (s >= SPUR.length.max) break;
+    // One step of `SPUR.step` along the polyline, over as many of the
+    // road's own points as that takes.
+    let left: number = SPUR.step;
+    while (left > 1e-6) {
+      const next = road.points[i + along];
+      if (!next) break;
+      const gap = Math.hypot(next.x - px, next.z - pz);
+      if (gap <= left + 1e-6) {
+        left -= gap;
+        px = next.x;
+        pz = next.z;
+        heading = along === 1 ? next.heading : next.heading + Math.PI;
+        i += along;
+        continue;
+      }
+      px += ((next.x - px) / gap) * left;
+      pz += ((next.z - pz) / gap) * left;
+      heading = along === 1 ? next.heading : next.heading + Math.PI;
+      left = 0;
+    }
+    if (left > 1e-6) break;
+    s += SPUR.step;
+    // R34 — and it FOLLOWS THE COUNTRY, at the route's own lag, inside a
+    // minor road's grade, and never outside the stage's verge cone (R31).
+    const want = y + (Math.max(land.heightAt(px, pz), LAKE_Y + SPUR.shoreFreeboard) - y) * follow;
+    const cap = SPUR.maxGrade * SPUR.step;
+    y = Math.max(y - cap, Math.min(y + cap, want));
+    const band = shelfBand(px, pz);
+    if (y > band.ceiling) y = band.ceiling;
+    if (y < band.floor) y = Math.min(band.floor, band.ceiling);
   }
   return { atS, end, samples, width, endsAt, bounds: box, block: null };
 }

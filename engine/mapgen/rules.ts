@@ -44,28 +44,41 @@
 //       that bends past `guard.angle` gets the ground between its entry and
 //       its exit filled with a steep mound or a dense grove, so cutting
 //       across the grass costs more than the corner does.
-//   R15 Asphalt comes in RUNS, never a chequerboard: the paving field lays
-//       the road down in sections hundreds of meters long, and the knobs'
-//       `asphalt` is the share of the stage that comes out paved.
+//   R15 Asphalt is not a SURFACE the stage puts on, it is a ROAD the stage
+//       borrows. The public roads are laid across the country before the
+//       route exists (R17), whole and end to end; a stage turns onto one,
+//       runs on it for a while, and turns off again. So a sealed length is
+//       always hundreds of metres long and never a chequerboard, and the
+//       knobs' `asphalt` is what the route SPENDS on borrowing rather than
+//       a share it paints on afterwards.
 //   R16 The road has a CROSS-SECTION, and it is CURVED: five lines across
 //       its width — a loose edge either side that nothing drives on, two
 //       worn wheel tracks a real car's track apart, and the crown between
 //       them — plus a berm of pushed gravel at its edges and a shoulder
 //       that falls gently away to the landscape. No ditch — a trench beside
 //       a rally road is a trap the eye reads as a scar, not as drainage.
-//   R17 Roads MEET at a planned junction, ON the centerline: the route turns
-//       off (or onto) the road at a real corner, and the SEALED road runs
-//       STRAIGHT THROUGH — the route's collinear arm on one side, the arm it
-//       abandons on the other, same width, same surface, its markings
-//       unbroken past the crossing. The dirt road is the MINOR one: it
-//       arrives at an angle and its mouth FLARES, widening as it closes on
-//       the tarmac the way every car that has turned out of it has widened
-//       it, until its mat meets the main road's edge with no country left
-//       between them. The ground they share is one graded platform, and the
-//       abandoned arm is taped shut and runs off the map STILL SEALED — a
-//       tarmac road that turns to gravel in an empty field is a road that
-//       goes nowhere. ONE surface change is not a junction, and R20 owns
-//       it: where a seal reaches a corner no public road would have, the
+//   R17 TARMAC IS LAID BEFORE THE STAGE IS. The public roads belong to the
+//       country, not to the rally: they are drawn across the seed first,
+//       whole, running off one edge of the map and out the other, and they
+//       are where the houses and the towns will stand. THEN the rally road
+//       is routed, and it may borrow one for a while — but it may never
+//       CROSS one, and half of a public road may never turn to gravel
+//       because a stage went that way.
+//       Where the two meet it is a planned junction, ON the centerline: the
+//       route turns off (or onto) the road at a real corner, and the SEALED
+//       road runs STRAIGHT THROUGH — the route's collinear arm on one side,
+//       the arm it abandons on the other, same width, same surface, its
+//       markings unbroken past the crossing. The dirt road is the MINOR
+//       one: it arrives at an angle and its mouth FLARES, widening as it
+//       closes on the tarmac the way every car that has turned out of it
+//       has widened it, until its mat meets the main road's edge with no
+//       country left between them. The ground they share is one graded
+//       platform, their two verges merge into one band across it, and the
+//       abandoned arm is taped shut and carries on to the edge of the map
+//       STILL SEALED — because it was always the whole road, and a tarmac
+//       road that turns to gravel in an empty field is a road that goes
+//       nowhere. ONE surface change is not a junction, and R20 owns it:
+//       where a seal reaches a corner no public road would have, the
 //       surfacing runs out there instead.
 //   R19 Turns are BANKED. A road built through a corner is superelevated so
 //       water and cars both stay on it: the cross-fall rolls from the crown
@@ -96,8 +109,11 @@
 //       in the air with nothing under it and nothing to drive on. R10's
 //       distance is therefore a floor, not the rule: the rule is `roadClear`,
 //       measured centerline to centerline and sized from the road's own
-//       width, and it binds the abandoned branches (R17) exactly as it binds
-//       the route.
+//       width, and it binds the abandoned branches and the public roads
+//       (R17) exactly as it binds the route. Its one exemption is a
+//       JUNCTION, and a junction is a PLACE: inside `junction.parting` of
+//       the point two roads meet at they ARE one road, and everywhere else
+//       — including further along the same two roads — they are not.
 //   R24 The START is a PLACE, not a line: the grid, the APRON of dirt behind
 //       it, and `roadClear` of country around both belong to the start. On a
 //       sprint the route may not come back into it and no branch may cross
@@ -129,6 +145,11 @@
 //       place a lost, drowned or crashed car is put back on the road, so it
 //       belongs where the road has just asked the driver a question rather
 //       than in the middle of a straight where it would cost nothing.
+//       Preferred, not required: past `checkpoint.forced` gaps' worth of
+//       road with no corner worth taking, a board goes down anyway. A
+//       kilometre of borrowed public road (R17) sweeps and asks nothing,
+//       and a stage with no split on it for a kilometre has a clock with
+//       no shape.
 //   R31 The road and the ground beside it are RIDEABLE. Within a BENCH of
 //       a road — the route's or an abandoned branch's — the landscape never
 //       stands above that road's own corridor, and past the bench it may
@@ -1109,6 +1130,17 @@ export const STAGE_RULES = {
      * capped by the road that follows so it never lands in the next bend
      * (a turn takes its board on the exit itself). */
     runOut: 30,
+    /** ...and past THIS many gaps a board goes down wherever the road has
+     * got to, corner or no corner.
+     *
+     * Boards stand at corner exits because that is where one reads — but a
+     * board is a timing split first, and a split the stage never takes is a
+     * stage the clock has no shape. R17's borrowed tarmac is what made the
+     * difference: a public road sweeps, so a kilometre of it closes no
+     * pacenote and offers nothing to hang a board on, and seed 4's medium
+     * went 1166 m between splits where the bar is 1014. Well past `late`,
+     * so a corner is still preferred wherever there is one. */
+    forced: 2.2,
     /** No board within this much road of the finish gate, m: a split
      * measured a few car lengths before the line says nothing the line is
      * not about to say properly. */
@@ -1191,6 +1223,21 @@ export const STAGE_RULES = {
      * proportion: a narrow lane may part in fifteen meters and a boulevard
      * take forty, and both look like the same place. */
     junctionParts: 2.4,
+    /** ...and NOT SO TIGHT that the corner turns inside out. In road
+     * widths, for the same reason `junctionParts` is: a junction is a
+     * proportion, not a length.
+     *
+     * Two things fall out of it, and the second is the one that was asked
+     * for. A corner tighter than the road is wide has an inner kerb of
+     * negative radius — there is no inside to it, and seed 3 drew one at 13
+     * m on a 16 m road. And the angle the dirt road CROSSES the tarmac's
+     * edge at is `acos(1 − half / radius)`, which is a monotonic function
+     * of exactly this ratio: at one width it is 60°, at one and a half 48°,
+     * at two 41°. Anything much shallower reads as two roads merging rather
+     * than meeting, which is what a junction is for. One width is the
+     * tightest a corner can be and still have an inside, and it is also the
+     * squarest crossing the vocabulary can give. */
+    junctionRadius: 1,
 
     /** R20 — THE TIGHTEST BEND A BORROWED ROAD MAY HAVE, m.
      *
@@ -1250,16 +1297,35 @@ export const STAGE_RULES = {
      * says how far the looking goes.
      *
      * `runOn` is how far the route stays on the tarmac, m, before it turns
-     * off again. `share` is the most of what a stage has LEFT that one
-     * borrow may spend: a sprint's whole band is under two kilometres, so a
-     * borrow drawn at the vocabulary's own length is most of the stage —
-     * R11 refuses it every time, and from outside that reads as a route
-     * that never finds a road. */
+     * off again — and it is WHERE THE ASPHALT DIAL SPENDS. The route asks
+     * for what the dial still owes it, so a stage set to a fifth tarmac
+     * takes a kilometre of road and one set to four fifths takes as much of
+     * it as R11 leaves room for. The floor is what makes a borrow worth
+     * making: anything shorter is a detour onto a road and straight off it
+     * again, which reads as a mistake rather than as a stage using a road.
+     *
+     * There is no ceiling, and that is the fix for a dial that did not
+     * work. Capped at 900 m, every borrow on every seed came out the same
+     * length whatever the dial said: over seeds 1-24 at medium the sealed
+     * share was 11% at 0.15 and 13% at 0.80. What bounds a borrow instead
+     * is `share`, the most of what the stage has LEFT that one may spend —
+     * a sprint's whole band is under two kilometres, so a borrow drawn at
+     * the vocabulary's own length is most of the stage, R11 refuses it
+     * every time, and from outside that reads as a route that never finds
+     * a road. */
     borrow: {
       seek: 600,
       meet: { reach: 600, step: 55 },
-      runOn: { min: 320, max: 900 },
+      runOn: { min: 320 },
       share: 0.45,
+      /** How far the route travels before it is worth LOOKING for a road
+       * again, m, after a look that found none. The solve is a few thousand
+       * turn-straight-turn closures over every meeting point in reach and
+       * it is the most expensive thing in the whole search; asked again
+       * forty metres down the same straight it asks the same question and
+       * gets the same answer. A segment's worth of road is enough to have
+       * changed it. */
+      look: 200,
     },
   },
 
@@ -1319,18 +1385,36 @@ export const STAGE_RULES = {
      * under 1, because a branch does not fly straight out: it wanders, and
      * it steers round water and round the road it left. */
     armReach: 0.8,
-    /** R23's exemption around a junction, m of stage arc either side of it.
-     * A branch leaves a junction ON the road it is leaving, so it cannot be
-     * measured against that road while it is still LEAVING. Wide enough to
-     * cover the corner the junction sits on and the run out of it — and it
-     * lapses the moment the branch is properly clear of the stage
-     * (spurs.ts), because a branch that has wandered a kilometre and folded
-     * back has no claim on the road beside its own junction.
+    /** R23's exemption around a junction: how far from the MEETING POINT
+     * the route and the arm it abandons are still one road, m of plain
+     * ground distance.
+     *
+     * A junction IS two carriageways sharing ground, so R23 cannot bind
+     * there. What it binds on is everything else — and the exemption has to
+     * be a PLACE, because that is what a junction is. Stated as an arc
+     * window along the stage instead, it exempted every piece of route
+     * within a few hundred metres of arc no matter where that route had
+     * wandered to on the ground: measured over seeds 1-12 at medium, four
+     * branches lay within a metre of the route a hundred metres and more up
+     * their own length, one of them 5.9 m below it, and the analysis
+     * exempted exactly the same stretch so not one of them was reported.
+     * Two roads on one piece of ground at two heights is a cliff between
+     * them, which is what the terrain has to build to keep both standing.
+     *
+     * The size is what it takes the two to actually part. A junction's own
+     * platform reaches `reach.max`; past that the branch holds the main
+     * road's line (`SPUR.straight`) while the route swings away through the
+     * corner, and by 80 m from the meeting point the pair measure 33-40 m
+     * apart on the seeds above — near enough `roadClearance` that the rule
+     * has nothing left to forgive.
      *
      * The branch builder measures against it and the analysis exempts the
-     * same window, so a junction is not reported as two roads sharing
-     * ground by the one instrument that would otherwise see every one. */
-    spurWindow: 240,
+     * same neighbourhood, so a junction is not reported as two roads
+     * sharing ground by the one instrument that would otherwise see every
+     * one. It also lapses the moment the branch is properly clear of the
+     * stage (spurs.ts): a branch that has wandered a kilometre and folded
+     * back has no claim on the road beside its own junction. */
+    parting: 80,
   },
 
   /** R19 — SUPERELEVATION: how far a turn is banked into itself. A road

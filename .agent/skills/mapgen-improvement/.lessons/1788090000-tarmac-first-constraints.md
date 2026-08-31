@@ -5,26 +5,23 @@ scope: engine/mapgen/highway.ts, engine/mapgen/borrow.ts, engine/mapgen/generate
 concepts: [junctions, asphalt, road-network, search, elevation, architecture]
 ---
 
-"Lay the tarmac first, then route the rally onto it" is the right model —
-deriving the sealed stretches from the racing line is why the arm a junction
-abandons has nowhere to go — but three constraints decide how much of it the
-engine can actually take, and each one costs a rebuild to discover.
+R17 lays the public roads before the route (`highway.ts`) and the route borrows
+one (`borrow.ts`). Three constraints decide how much of that model the engine
+can actually take, and each one costs a rebuild to discover.
 
-**Height cannot be laid first.** The stage's elevation is a profile along
-the ROUTE's arc (`rolling(rollS)`), not a heightfield. A road laid on the
-bare land disagrees with the route the instant the two share ground. So a
-network laid up front can only answer WHERE the tarmac goes; how high it is
-stays the compiler's, settled from the junction outward the way the branch
-builder already does it.
+**Height cannot be laid first.** The stage's elevation is a profile along the
+ROUTE's arc (`rolling(rollS)`), not a heightfield, so a road laid on the bare
+land disagrees with the route the instant the two share ground. A network laid
+up front can only say WHERE the tarmac goes; how high it is stays the
+compiler's, settled from the junction outward.
 
-**An approach that lines up parallel can never join.** The corner onto a
-road covers `radius · (1 − cos turn)` of sideways ground, so a route that
-closes its heading error to zero — the way anything follows a line — needs
-an infinite radius to get on, and every join is refused however close it
-gets. Hold a crossing angle (~50°) right up to the kerb instead: the
-solvable band is `|off| = radius · (1 − cos turn)`, a few dozen metres out.
-The join itself is one solve, not a search — the centre sits on the cursor's
-side of the road, so `r = |off| / (1 − sign·dot)`.
+**An approach that lines up parallel can never join.** The corner onto a road
+covers `radius · (1 − cos turn)` of sideways ground, so a route that closes its
+heading error to zero — the way anything follows a line — needs an infinite
+radius to get on, and every join is refused however close it gets. Hold a
+crossing angle (~50°) right up to the kerb instead: the solvable band is
+`|off| = radius · (1 − cos turn)`, a few dozen metres out, and the join is one
+solve rather than a search (`r = |off| / (1 − sign·dot)`).
 
 **The mouth's width is capped by the ground, not by taste.** `groundAt`
 finds the corridor by the nearest CENTERLINE point, so a mat whose width
@@ -36,8 +33,3 @@ the platform's rim either). Measured on seeds 1-8 at medium: a mouth of
 +0.13 road widths per side is clean, +0.18 puts three `rollers.seam`
 findings on the sweep, +0.45 puts nine. Anything wider needs the terrain to
 stop being a one-road corridor model first.
-
-And the tell that it is a real defect rather than three broken checks: the
-lip test, `rollers.seam` and the splinter sweep all fired at the SAME place.
-Instruments agreeing on a location is evidence; a finding that appears on
-every seed at the same VALUE is the measurement bug.

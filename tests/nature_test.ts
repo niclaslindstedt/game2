@@ -31,9 +31,20 @@ describe("the forest", () => {
   it("stands in clumps rather than one trunk per cell", () => {
     const track = compileTrack(11);
     const terrain = createTerrain(track);
-    const s = track.samples[Math.floor(track.samples.length / 2)];
-    const trees = propsOver(terrain, s.x, s.z, terrain.treesNear);
-    expect(trees.length).toBeGreaterThan(200);
+    // A FORESTED patch, found rather than assumed. What is being measured
+    // here is what the clumping does to a forest, so the patch has to be
+    // one — and how much forest the middle of seed 11 happens to stand in
+    // is a fact about where that stage wanders, which every change to the
+    // generator re-rolls. Measured along this stage the density runs from
+    // 340 m² per trunk to 9600, so a fixed index picks a number out of that
+    // range at random and the band below then passes or fails on it.
+    let trees: WildObstacle[] = [];
+    for (let i = 2; i < 10; i++) {
+      const s = track.samples[Math.floor((track.samples.length * i) / 10)];
+      const here = propsOver(terrain, s.x, s.z, terrain.treesNear);
+      if (here.length > trees.length) trees = here;
+    }
+    expect(trees.length, "no tenth of seed 11 stands in closed forest").toBeGreaterThan(200);
 
     // The tell of a cell grid is that no two trunks are ever closer than the
     // cell is wide. A clumped forest has knots in it: most trunks stand

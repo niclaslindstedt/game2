@@ -54,19 +54,33 @@ describe("checkpoint placement", () => {
   it("stands every board on the exit of a corner, and prefers the tight ones", () => {
     let tight = 0;
     let total = 0;
+    let forced = 0;
     for (const seed of SEEDS) {
       const track = compileStage(seed, "long");
+      let prev = 0;
       for (const board of track.checkpoints) {
         const note = cornerBefore(track, board.s);
-        expect(note).not.toBeNull();
-        // The board sits on the corner's exit, at most one run-out past it.
-        expect(board.s - (note as { endS: number }).endS).toBeLessThanOrEqual(
-          C.runOut + track.step,
-        );
+        const onExit = note !== null && board.s - note.endS <= C.runOut + track.step;
+        // R28 — or the road has simply gone too long without a split and a
+        // board has gone down where it got to (`checkpoint.forced`). R17's
+        // borrowed tarmac sweeps, so a kilometre of it offers no corner to
+        // hang one on, and a stage the clock has no shape to is worse than
+        // a board on a straight.
+        if (!onExit) {
+          expect(board.s - prev, `seed ${seed}: board off a corner exit`).toBeGreaterThanOrEqual(
+            C.spacing * C.pace * C.forced - track.step,
+          );
+          forced += 1;
+          prev = board.s;
+          continue;
+        }
+        prev = board.s;
         total += 1;
         if ((note as { severity: string }).severity !== "soft") tight += 1;
       }
     }
+    // The exception stays one: most boards are still a corner's reward.
+    expect(forced).toBeLessThan(total / 4);
     expect(total).toBeGreaterThan(50);
     // "Prefer tight corners" is a claim about the mix, so measure it: a soft
     // bend only ever gets a board when the stage has run well past its gap.

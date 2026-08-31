@@ -320,6 +320,32 @@ function roadBlock(): { hit: (clear: number, need: number) => boolean; inside: n
   return state;
 }
 
+/** True where a walk has come back onto ground it has already covered.
+ *
+ * Water does not run back over itself. A course that returns to a point it
+ * has already left is not meandering, it is STUCK: two neighbouring cells
+ * the steering swaps between — one pulling the walk downhill, the other
+ * shoving it off a road — with the surface frozen at the floor of the
+ * hollow they share. Nothing else can end it, so it spends its whole
+ * budget on one spot and lays four hundred points and a full-width sheet
+ * of water there: a lake nobody poured, standing over whatever the road
+ * was doing underneath. Seed 21 drew one 30 m from the stage and put 44 m
+ * of road under water.
+ *
+ * What water with nowhere left to run actually does is stand, so the walk
+ * stops and the ending it already has for that case takes over: a POOL for
+ * a mouth, and for a reach between two crossings the same answer a ridge
+ * gets — they are not the same water.
+ *
+ * The last two steps are exempt: a step is `STEP` long and a bend inside
+ * its own length is a bend, not a return. */
+function retraces(trail: { x: number; z: number }[], x: number, z: number): boolean {
+  for (let i = 0; i < trail.length - 2; i++) {
+    if (Math.hypot(trail[i].x - x, trail[i].z - z) < STEP * 0.75) return true;
+  }
+  return false;
+}
+
 /** Drop the tail of a walk that ended against a road: the grace steps are
  * the push TRYING, and when the push has failed those steps are water that
  * was laid inside the corridor. Keeping them is the whole of the "a river
@@ -422,6 +448,7 @@ function traceCourse(
       x += dx * STEP;
       z += dz * STEP;
       if (d >= CROSS_WINDOW && block.hit(roadClear(x, z), head.halfWidth + ROAD_KEEP)) break;
+      if (retraces(climb, x, z)) break;
       // Going upstream the surface only ever RISES, and never above the
       // ground it is cut into. Ground that fails to rise is not upstream of
       // anything: the spring is here, and the climb ends.
@@ -534,6 +561,11 @@ function traceCourse(
         refused = true;
         break;
       }
+      // ...and a reach that has started circling is not going to arrive.
+      if (retraces(leg, x, z)) {
+        refused = true;
+        break;
+      }
       const t = clamp(1 - left / Math.max(1, total), 0, 1);
       const ground = field(x, z);
       // The surface FOLLOWS THE GROUND down and never climbs — that is the
@@ -620,6 +652,9 @@ function traceCourse(
     // a journey to somewhere that already exists.
     let target = standingAt.nearestAt(x, z, MOUTH_REACH);
     let sinceLook = 0;
+    /** Where the walk itself has been — the points carry the meander's
+     * sway on top of it, and it is the WALK that circles. */
+    const trail: { x: number; z: number }[] = [];
     for (let d = 0; d < MOUTH_RUN.max; d += STEP) {
       const grade = downhill(field, x, z);
       if (sinceLook++ >= SEAWARD_REFRESH) {
@@ -657,6 +692,8 @@ function traceCourse(
       x += dx * STEP;
       z += dz * STEP;
       if (d >= CROSS_WINDOW && block.hit(roadClear(x, z), width + ROAD_KEEP)) break;
+      if (retraces(trail, x, z)) break;
+      trail.push({ x, z });
       travelled += STEP;
       width += STEP * GATHER;
       const ground = field(x, z);

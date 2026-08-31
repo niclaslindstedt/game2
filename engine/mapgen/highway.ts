@@ -25,6 +25,7 @@
 import { createRng } from "../lib/prng.ts";
 import { cellKey } from "../lib/math.ts";
 import { LAKE_Y, type LandField } from "./land.ts";
+import { roadClearance } from "./road.ts";
 import { STAGE_RULES as R, type StageKnobs } from "./rules.ts";
 
 /** One point on a tarmac road's centerline. No height: see the header. */
@@ -79,6 +80,20 @@ export const HIGHWAY = {
 /** Cell edge of the lookup grid, m — a couple of points per cell. */
 const INDEX_CELL = 32;
 
+/** How far the network's DILATED cell set reaches, m: the widest distance a
+ * `nearest` query may ask about and still be answered by one set lookup
+ * when there is no road near. Comfortably over R23's clearance at the
+ * widest road the dial builds, which is what the search asks of every probe
+ * point; the borrow's own look is far wider and pays for the ring walk,
+ * but it is asked once a segment rather than once a metre. */
+const NEAR = 128;
+
+/** R24 — how far up +z from the origin the stage's opening straight is
+ * known to run, m, whatever the seed draws: the launch run the grid needs,
+ * the vocabulary's own opening, and the jitter the search adds on top. The
+ * tarmac is laid clear of it. */
+const START_RUN = Math.max(R.openingStraight, R.launch.run) + 40;
+
 export type HighwayHit = {
   road: Highway;
   /** Index of the nearest point on it. */
@@ -89,16 +104,56 @@ export type HighwayHit = {
 
 export type HighwayNetwork = {
   roads: Highway[];
-  /** The nearest piece of tarmac to a point, or null when the map has
-   * none. Spatially hashed: the route's search asks this per candidate. */
-  nearest: (x: number, z: number) => HighwayHit | null;
+  /** The nearest piece of tarmac to a point, or null when the map has none
+   * — or none inside `within`. Spatially hashed: the route's search asks
+   * this of every probe point of every candidate it draws.
+   *
+   * `within` is not a nicety, it is the whole cost model. Most of a map is
+   * nowhere near a road, and without a limit the ring walk has no first hit
+   * to bound itself with and sweeps every cell it has: measured on the
+   * sprint search, unbounded queries took a medium stage from half a second
+   * to build to two and a half. Ask for the distance you actually care
+   * about — R23's clearance, the borrow's reach — and the walk stops at the
+   * first ring that cannot beat it.
+   *
+   * `except` skips one road, which is what a route BORROWING a road needs:
+   * while it is joining that one it is allowed inside its clearance, and it
+   * still is not allowed inside anybody else's. */
+  nearest: (x: number, z: number, except?: Highway, within?: number) => HighwayHit | null;
 };
 
-/** How many sealed roads a stage's country carries. The `asphalt` dial is
- * the share of the ROUTE that comes out paved (R15), and that share is
- * bought by borrowing these — so under the dial's floor there are none at
- * all, and past it the count grows with the country rather than with the
- * dial: one road crosses a sprint's map, a long stage's has room for two. */
+/** How many sealed roads a stage's country carries.
+ *
+ * The `asphalt` dial is the share of the ROUTE that comes out paved (R15),
+ * and the only way the route can buy a metre of it is to be driving on one
+ * of these — so the dial has to move the COUNTRY, not just the surface. A
+ * rally that meets a public road twice in a stage is in country with
+ * several of them; one that never meets one is out in the back of beyond.
+ * Measured over seeds 1-24 at medium with a fixed single road, the dial did
+ * nothing at all past its floor: 11% of the road came out sealed at 0.15
+ * and 13% at 0.80, because one road across a map can only be met so often.
+ *
+ * But the count is NOT where the dial spends, and it was measured twice
+ * before that was believed. The route may not CROSS a public road (R17), so
+ * every road laid partitions the country the search has left — and a medium
+ * stage is four kilometres of road inside a three-kilometre map. Two roads
+ * across one and seed 15 could not be generated at any sub-seed or any dial
+ * position; the sealed share it bought on the seeds that did generate went
+ * DOWN, from 8.9% to 5.8%, because the search spends its retries getting
+ * round the roads instead of onto them.
+ *
+ * So the count grows with the COUNTRY alone: one road crosses a sprint's
+ * map, a long stage's has room for two. The land still has the final say —
+ * `layHighways` refuses a road it will not carry, and R23 keeps two of them
+ * apart — so a seed can come out with fewer, or with none, and roughly half
+ * of them do.
+ *
+ * What that leaves is a dial with a CEILING the country sets, and it is
+ * worth stating plainly because it is a real change: measured over eight
+ * long stages, `asphalt` buys nothing at 0, about 6% of the road at 0.1 and
+ * about 10% at 0.25, and past that the map runs out — there is only so far
+ * a rally can drive down one public road inside a bounded world before R9
+ * puts it outside. The dial asks; the country answers. */
 export function highwayCount(knobs: StageKnobs, worldBound: number): number {
   if (knobs.asphalt < R.paving.floor) return 0;
   return worldBound >= 1800 ? 2 : 1;
@@ -245,10 +300,50 @@ function layOne(
   // construction, and a rim that happens to sit in a sea basin would
   // otherwise veto every road on the seed rather than the piece of one
   // nobody can look at.
+  //
+  // A SETBACK, in metres of ground, and never a freeboard in metres of
+  // height — the distinction `land.ts` states and the reason it states it.
+  // Asked as `flooded(p, shoreFreeboard)` this was "is this point less than
+  // two metres above the water", which on a shore that shelves at two per
+  // cent reaches a hundred metres inland and on a lakeside plain reaches
+  // kilometres. It threw away roads that were nowhere near the water:
+  // measured over seeds 1-24 at medium it vetoed 24 to 40 of every road's
+  // 40 entry attempts on the wet ones, and four seeds — 2, 4, 8 and 19 —
+  // ended up with no public road anywhere in the country, which is a
+  // country with no civilization in it and, since R15's dial can only spend
+  // on a road that exists, a stage that is gravel however far the dial is
+  // turned up.
+  //
+  // What the rule is actually about is a road IN the water, and a road on
+  // the beach. Both are distances: the carriageway and its verge clear of
+  // the waterline.
   const seen = worldBound + HIGHWAY.overrun * 0.35;
+  // The setback is the ROUTE'S OWN (`water.routeClear`), because it is the
+  // same question about the same kind of road: room for the corridor, its
+  // verge, and a watercourse to reach the lake between the two. Sized
+  // smaller it buys public roads on every seed and hands back a lakeside
+  // road that is near water by construction — over seeds 1-24 at medium,
+  // half of it put 27 `water.road` errors on 14 seeds and 49 `drive.grade`
+  // errors on 17, the second from roads climbing the bank they were
+  // skirting. One number for both roads, and neither goes down to the
+  // waterline.
   for (const p of points) {
     if (Math.hypot(p.x, p.z) > seen) continue;
-    if (land.flooded(p.x, p.z, HIGHWAY.shoreFreeboard)) return null;
+    if (land.flooded(p.x, p.z, 0) || land.nearWater(p.x, p.z, R.water.routeClear)) return null;
+  }
+  // R24 — and it keeps off the RALLY'S START. The stage's first two
+  // hundred metres are not a search result: the grid stands on the apron
+  // behind the origin and the opening straight runs from it up +z, always,
+  // on every seed. A public road laid across that is a road the field is
+  // stacked on — and since the route may not cross the tarmac (R17), it is
+  // also a stage that cannot be generated at all: seeds 2, 3 and 12 at
+  // medium put one within 25 m of the start line and the search then failed
+  // every sub-seed it had. The tarmac is what moves, because it is the
+  // thing with somewhere else to go.
+  const startClear = roadClearance(width);
+  for (const p of points) {
+    const along = Math.min(START_RUN, Math.max(-R.startZone.apron, p.z));
+    if (Math.hypot(p.x, p.z - along) < startClear) return null;
   }
   // R23 — and two public roads do not run into each other out in the
   // country either. A crossroads is a place somebody built; two lines that
@@ -268,31 +363,60 @@ function layOne(
  * without walking every point of every road. */
 export function createHighwayNetwork(roads: Highway[]): HighwayNetwork {
   const grid = new Map<number, { road: Highway; index: number }[]>();
+  /** ...and the same cells DILATED by `NEAR`: a cell in here is one from
+   * which tarmac might be within R23's clearance at all.
+   *
+   * The search asks `nearest` of every probe point of every candidate it
+   * draws — over a million queries on a medium stage — and nearly all of
+   * them are out in country with no road in reach, where the ring walk has
+   * no first hit to bound itself with and sweeps its whole radius for an
+   * answer of "nothing". This turns that case into one set lookup. */
+  const inReach = new Set<number>();
+  const rings = Math.ceil(NEAR / INDEX_CELL);
   for (const road of roads) {
     for (let i = 0; i < road.points.length; i++) {
       const p = road.points[i];
-      const key = cellKey(Math.floor(p.x / INDEX_CELL), Math.floor(p.z / INDEX_CELL));
+      const ix = Math.floor(p.x / INDEX_CELL);
+      const iz = Math.floor(p.z / INDEX_CELL);
+      const key = cellKey(ix, iz);
       const bucket = grid.get(key);
-      if (bucket) bucket.push({ road, index: i });
-      else grid.set(key, [{ road, index: i }]);
+      if (bucket) {
+        bucket.push({ road, index: i });
+        continue;
+      }
+      grid.set(key, [{ road, index: i }]);
+      for (let dx = -rings - 1; dx <= rings + 1; dx++) {
+        for (let dz = -rings - 1; dz <= rings + 1; dz++) inReach.add(cellKey(ix + dx, iz + dz));
+      }
     }
   }
-  const nearest = (x: number, z: number): HighwayHit | null => {
+  const nearest = (
+    x: number,
+    z: number,
+    except?: Highway,
+    within = Infinity,
+  ): HighwayHit | null => {
     if (roads.length === 0) return null;
     const cx = Math.floor(x / INDEX_CELL);
     const cz = Math.floor(z / INDEX_CELL);
+    if (within <= NEAR && !inReach.has(cellKey(cx, cz))) return null;
     let best: HighwayHit | null = null;
-    // Out ring by ring until the ring itself cannot beat what is in hand.
+    // Out ring by ring until the ring itself cannot beat what is in hand —
+    // or beat what the caller asked for, which is what bounds the walk
+    // before there is anything in hand at all.
     for (let ring = 0; ring < 64; ring++) {
-      if (best && (ring - 1) * INDEX_CELL >= best.d) break;
+      const bar = best ? best.d : within;
+      if ((ring - 1) * INDEX_CELL >= bar) break;
       for (let dx = -ring; dx <= ring; dx++) {
         const stride = Math.abs(dx) === ring || ring === 0 ? 1 : 2 * ring;
         for (let dz = -ring; dz <= ring; dz += stride) {
           const bucket = grid.get(cellKey(cx + dx, cz + dz));
           if (bucket === undefined) continue;
           for (const entry of bucket) {
+            if (entry.road === except) continue;
             const p = entry.road.points[entry.index];
             const d = Math.hypot(p.x - x, p.z - z);
+            if (d > within) continue;
             if (!best || d < best.d) best = { road: entry.road, index: entry.index, d };
           }
         }

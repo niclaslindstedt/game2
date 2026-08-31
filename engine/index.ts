@@ -91,6 +91,7 @@ export {
   resolveKnobs,
   knobScale,
   generateStage,
+  layStageHighways,
   generateCircuit,
   circuitLapBand,
   createStageStream,

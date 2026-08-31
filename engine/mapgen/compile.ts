@@ -17,13 +17,14 @@ import type {
   TurnSeverity,
 } from "./rules.ts";
 import { SAMPLE_STEP, STAGE_RULES as R, knobScale, resolveKnobs } from "./rules.ts";
-import { createStageStream, generateStage } from "./generate.ts";
+import { createStageStream, generateStage, layStageHighways } from "./generate.ts";
 import { createRng } from "../lib/prng.ts";
 import { cellKey } from "../lib/math.ts";
 import { hash2 } from "../lib/noise.ts";
 import { createLandField } from "./land.ts";
 import { junctionFlat, junctionPlatformY, ROAD_CROSS } from "./road.ts";
-import { buildSpur, placeBlock, SPUR, type Spur } from "./spurs.ts";
+import { buildSpur, cutSpur, placeBlock, SPUR, type ShelfBand, type Spur } from "./spurs.ts";
+import { createHighwayNetwork, type Highway } from "./highway.ts";
 
 export type Surface = "gravel" | "asphalt" | "water";
 
@@ -191,6 +192,19 @@ export type Track = {
    * terrain field, the renderer and the tooling all shape themselves from
    * the same set without being handed it separately. */
   knobs: StageKnobs;
+  /** R17 — THE TARMAC this country carries, laid before the rally was
+   * routed across it (`highway.ts`): whole public roads, edge of the map to
+   * edge of the map, that the route may meet at a junction and borrow but
+   * may never cross.
+   *
+   * On the track rather than thrown away with the search because three
+   * different readers need the same answer to "where are the roads": the
+   * compiler cuts the arms of every borrowed junction out of these lines,
+   * the analysis measures the gravel against them, and anything later that
+   * wants to know where a place would BE — a farm, a hamlet, a signpost —
+   * wants a road to put it on. Empty on a synthetic rig, and on any stage
+   * whose country would not carry a road (a seed that is mostly water). */
+  highways: Highway[];
   /** R17 — the branches the route abandons at every asphalt junction: real
    * road, taped off, there to be explored by anyone who ignores the tape. */
   spurs: Spur[];
@@ -518,12 +532,29 @@ function fordDip(
   const from = plan.featureStart - R.water.apron;
   const to = plan.featureEnd + R.water.apron;
   if (u < from || u > to) return null;
+  const line = (v: number): number => base(v) + roll(v);
   let low = Infinity;
   for (let v = from; v <= to; v += 2) low = Math.min(low, roll(v));
-  const water = base((plan.featureStart + plan.featureEnd) / 2) + low - R.water.bedDepth;
+  // The level the crossing WANTS: the roll's lowest against the landscape
+  // at the crossing's middle, so the water reads as collected rather than
+  // perched on a local rise, and a road descending through the window does
+  // not have to lose the whole window's fall over one apron.
+  const wanted = base((plan.featureStart + plan.featureEnd) / 2) + low - R.water.bedDepth;
+  // ...and never ABOVE the road's own line where an apron has to MEET it.
+  // Where the ground rises into the crossing, `wanted` came out over the
+  // road approaching it; the clamp below then held the whole apron flat at
+  // the water and the road stepped up to it in one 2 m sample. Seed 2 at
+  // medium put a 2.39 m step at 1287 m — a 120% ramp the car left the
+  // ground on at 127 km/h, flew ninety metres and nineteen up, and came
+  // down in an 18 m hairpin it could not then take; 10 of 24 seeds carried
+  // a step like it, worst 121%. Held under both apron mouths instead, so
+  // each ramp starts from the road's own height and there is nothing to
+  // step over. It only ever LOWERS the water, and only on the crossings
+  // that were building a wall: everywhere else the level is the one above.
+  const water = Math.min(wanted, line(from) - R.water.bedDepth, line(to) - R.water.bedDepth);
   if (u >= plan.featureStart && u <= plan.featureEnd) return water;
   const t = u < plan.featureStart ? (u - from) / R.water.apron : (to - u) / R.water.apron;
-  const here = base(u) + roll(u);
+  const here = line(u);
   // ...and never BELOW the water, whatever the road was doing. On a road
   // that is descending through the crossing the far apron's own grade can
   // duck under the level the water was set at, and a road under its own
@@ -606,13 +637,6 @@ const STREAMED_ESCAPE = 460;
  * capped distance it walked past would be a promise the query never made. */
 const ROAD_DISTANCE_REACH = 220;
 
-/** Arc either side of a junction where the route IS the branch's own road,
- * m: inside it the two carriageways are one, so the branch is not measured
- * against them while it is still LEAVING. The window itself is R23's, in
- * the rule book (`STAGE_RULES.junction.spurWindow`), because the analysis
- * has to exempt exactly the same stretch. */
-const SPUR_JUNCTION_WINDOW = R.junction.spurWindow;
-
 /** R23 — how much room a point leaves the branches in `list`, m, reading
  * the list LIVE so a branch added after this was built is measured too.
  *
@@ -673,12 +697,37 @@ function createCompiler(
    * the road following the ground it is not, and a rig that quietly
    * acquired a landscape is a suite of tests measuring the wrong thing. */
   followsLand = true,
+  /** R17 — is this stage's tarmac BORROWED or PAINTED?
+   *
+   * Borrowed is the sprint search: the tarmac was laid on the bare country
+   * first (`highway.ts`) and the route went and found a piece of it
+   * (`borrow.ts`), so the plan already says which segments are a public
+   * road and every junction's abandoned arm is the rest of that road. There
+   * is nothing to decide here and nothing to refuse.
+   *
+   * Painted is the circuit search and the endless stream, neither of which
+   * is routed onto the tarmac yet: there the paving field asks for a
+   * surface change, the change waits for a corner that could be a junction,
+   * and the arm has to be invented and driven off the map before the corner
+   * may carry one.
+   *
+   * Passed in rather than sniffed off the plan, because the two answers
+   * differ most exactly where sniffing fails: a borrowed stage whose
+   * country carried no public road has no paved segment in its plan, and
+   * that must come out ALL GRAVEL rather than quietly falling back to
+   * painting stripes on the racing line. */
+  borrowed = false,
 ): Compiler {
   const cursor: Cursor = { x: 0, z: 0, heading: 0, s: 0, rollS: 0, baseY: 0, baseSlope: 0 };
   /** The bare country the stage is laid across — the branches steer by it
    * so none of them drives out into a lake (R17), and (R34) the road's own
    * height follows it. */
   const land = createLandField(track.seed, track.knobs);
+  /** R17 — and the tarmac laid across it, indexed. Read off the track
+   * because that is where it lives: the search laid it, the analysis
+   * measures against it, and here it is what a borrowed junction's arm is
+   * cut out of. */
+  const highways = createHighwayNetwork(track.highways);
 
   /** R34 — one step of the road builder's eye: move the road's base toward
    * the ground under it, but no faster than the eye smooths and no steeper
@@ -730,8 +779,10 @@ function createCompiler(
    * where one road can meet another instead of merging into it. */
   // A stage that is sealed from end to end has no junction to arrive
   // through: it simply starts on the tarmac. Every other stage starts on
-  // gravel and meets its first junction where the field asks for one.
-  let pavedNow = paving.pavedAt(0);
+  // gravel and meets its first junction where the field asks for one — and
+  // a BORROWED stage always starts on gravel, because the route has to go
+  // and find a road before it can be driving on one.
+  let pavedNow = borrowed ? false : paving.pavedAt(0);
   /** R20 — is there gravel on this stage at all? At the top of the
    * `asphalt` dial the whole route is a public road, which is a different
    * kind of event and not a borrow, so the rule that keeps hairpins off
@@ -803,7 +854,7 @@ function createCompiler(
     end: "entry" | "exit",
   ): boolean => {
     if (!country) return true;
-    const stage = country.roadDistance(atS - SPUR_JUNCTION_WINDOW, atS + SPUR_JUNCTION_WINDOW);
+    const stage = country.roadDistance(pose);
     const others = branchClearance(trialArms);
     const trial = buildSpur(
       track.seed,
@@ -816,7 +867,7 @@ function createCompiler(
       (x: number, z: number, ignoringJunction?: boolean) =>
         Math.min(stage(x, z, ignoringJunction), others(x, z)),
       country.shelfHolds,
-      country.shelfCeiling,
+      country.shelfBand,
     );
     const last = trial.samples[trial.samples.length - 1];
     if (!last) return false;
@@ -839,6 +890,7 @@ function createCompiler(
     if (plan.kind !== "turn" || !plan.radius || plan.feature !== "none") return false;
     const angle = plan.length / plan.radius;
     if (angle < R.paving.junctionAngle.min || angle > R.paving.junctionAngle.max) return false;
+    if (plan.radius < R.paving.junctionRadius * track.width) return false;
     if (partedAt(plan.radius) > R.paving.junctionParts * track.width) return false;
     // Where the route JOINS the tarmac the meeting point is the corner's
     // far end, so the arm leaves from where the cursor will be once the
@@ -1165,7 +1217,8 @@ function createCompiler(
     });
     const first = endOf(track.samples[0], -1);
     const last = endOf(track.samples[track.samples.length - 1], 1);
-    return (ignoreFrom: number, ignoreTo: number) =>
+    const parting2 = BUILT_PARTING * BUILT_PARTING;
+    return (meet: { x: number; z: number }) =>
       (x: number, z: number, ignoring = true): number => {
         let best = apronDistance(first, x, z);
         if (!track.endless) best = Math.min(best, apronDistance(last, x, z));
@@ -1192,7 +1245,6 @@ function createCompiler(
               const bucket = grid.get(key(cx + dx, cz + dz));
               if (bucket === undefined) continue;
               for (const sample of bucket) {
-                if (ignoring && sample.s > ignoreFrom && sample.s < ignoreTo) continue;
                 const ddx = sample.x - x;
                 const ddz = sample.z - z;
                 // Squared first: most of the road in reach is further off
@@ -1202,6 +1254,15 @@ function createCompiler(
                 // measured exactly as before.
                 const d2 = ddx * ddx + ddz * ddz;
                 if (d2 > best * best * (1 + 1e-9)) continue;
+                // R23's junction exemption, and only for road that is
+                // actually AT the junction: the ground the two carriageways
+                // share is the crossing itself, not every metre of route
+                // whose arc happens to fall near the junction's.
+                if (ignoring) {
+                  const mx = sample.x - meet.x;
+                  const mz = sample.z - meet.z;
+                  if (mx * mx + mz * mz < parting2) continue;
+                }
                 const d = Math.hypot(ddx, ddz);
                 if (d < best) best = d;
               }
@@ -1222,6 +1283,16 @@ function createCompiler(
    * from the stage is not its width alone: it is also its height above it,
    * at the grade the verge is allowed to climb.
    *
+   * BOTH WAYS. The cone used to bind only upward, and a branch BELOW the
+   * stage builds precisely the same wall seen from the other side: the
+   * terrain holds the ground flat out to the route's corridor lip and then
+   * hands it to the branch's own shelf, so a branch running low beside the
+   * route drops the difference between them over the few metres between
+   * two lips. Seed 38's arm ran 140 m at twelve metres from the route and
+   * ten below it, and the country between them came out as a sheer earth
+   * face a car falls off — which is the same defect as a branch on stilts
+   * and was let through because the sign was never checked.
+   *
    * Strided over the stage the same way the keep-out field is; the branch
    * asks it in the same pass that cuts it against the horizontal
    * clearance, so the junction's own exemption covers both. */
@@ -1231,13 +1302,13 @@ function createCompiler(
     const all = track.samples;
     for (let k = 0; k < all.length; k += STRIDE) {
       const road = all[k];
-      const over = y - road.elevation;
-      if (over <= 0) continue;
+      const apart = Math.abs(y - road.elevation);
+      if (apart <= 0) continue;
       // The cone is flat out to the bench and opens at `climb` past it, so
       // the room this much height needs is the height itself at that grade
       // — plus half the stride's own spacing, since a sample eight steps
       // from the one measured could be that much nearer.
-      const need = bench + over / R.verge.climb + STRIDE * SAMPLE_STEP * 0.5;
+      const need = bench + apart / R.verge.climb + STRIDE * SAMPLE_STEP * 0.5;
       const dx = road.x - x;
       const dz = road.z - z;
       if (dx * dx + dz * dz < need * need) return false;
@@ -1246,33 +1317,44 @@ function createCompiler(
   };
 
   /** R23 + R31 — the same rule read as a HEIGHT rather than as a verdict:
-   * the highest a branch may stand here without its shelf becoming a wall
+   * the band a branch may stand in here without its shelf becoming a wall
    * beside the stage. `shelfHolds` is the test a finished branch passes or
    * fails; this is what a branch under construction has to be held to, and
    * the two are the same cone.
    *
-   * Infinity where no part of the stage is close enough to have an opinion,
-   * which is most of a branch — so past the corridor it follows the country
-   * exactly as it always did. */
-  const shelfCeiling = (x: number, z: number): number => {
+   * Unbounded where no part of the stage is close enough to have an
+   * opinion, which is most of a branch — so past the corridor it follows
+   * the country exactly as it always did. Where the stage passes twice at
+   * two heights the band can come out EMPTY (`floor` over `ceiling`), and
+   * that is an honest answer: no road can stand there, and the cut pass
+   * below reads it off `shelfHolds` and ends the branch. */
+  const shelfBand = (x: number, z: number): ShelfBand => {
     const STRIDE = 8;
     const bench = Math.max(track.width / 2 + ROAD_CROSS.reach, R.verge.bench);
     const slack = STRIDE * SAMPLE_STEP * 0.5;
     const all = track.samples;
-    let cap = Infinity;
+    let ceiling = Infinity;
+    let floor = -Infinity;
     for (let k = 0; k < all.length; k += STRIDE) {
       const road = all[k];
       const dx = road.x - x;
       const dz = road.z - z;
       const d2 = dx * dx + dz * dz;
       // Out past the point where even ground at this road's own height
-      // would clear the cone, the sample has nothing to say.
-      const reach = bench + slack + Math.max(0, cap - road.elevation) / R.verge.climb;
-      if (cap < Infinity && d2 > reach * reach) continue;
-      const allowed = road.elevation + Math.max(0, Math.sqrt(d2) - bench - slack) * R.verge.climb;
-      if (allowed < cap) cap = allowed;
+      // would clear the cone, the sample has nothing to say — measured on
+      // whichever half of the band is currently the wider, since either can
+      // still be tightened by a sample the other has already ruled out.
+      const room = Math.max(
+        ceiling < Infinity ? ceiling - road.elevation : Infinity,
+        floor > -Infinity ? road.elevation - floor : Infinity,
+      );
+      const reach = bench + slack + Math.max(0, room) / R.verge.climb;
+      if (room < Infinity && d2 > reach * reach) continue;
+      const swing = Math.max(0, Math.sqrt(d2) - bench - slack) * R.verge.climb;
+      if (road.elevation + swing < ceiling) ceiling = road.elevation + swing;
+      if (road.elevation - swing > floor) floor = road.elevation - swing;
     }
-    return cap;
+    return { floor, ceiling };
   };
 
   /** Build the branch every noted junction earns, now that the road they
@@ -1303,31 +1385,50 @@ function createCompiler(
             maxZ: junction.z + STREAMED_ESCAPE,
           }
         : track.bounds;
-      const spur = buildSpur(
-        track.seed,
-        {
-          x: junction.x,
-          z: junction.z,
-          heading: junction.heading,
-          elevation: junction.elevation,
-          slope: junction.slope,
-        },
-        junction.s,
-        junction.joining ? "entry" : "exit",
-        box,
-        land,
-        track.width,
-        (() => {
-          const stage = roadDistance(
-            junction.s - SPUR_JUNCTION_WINDOW,
-            junction.s + SPUR_JUNCTION_WINDOW,
+      const end = junction.joining ? "entry" : "exit";
+      // R17 — a BORROWED junction's arm is the rest of the road, so it is
+      // cut off the line the tarmac was laid on rather than driven out of
+      // the country. `nearest` finds where on that line the meeting point
+      // is: the route arrived there by solving onto the road's own tangent,
+      // so it is a metre or so away, not a search.
+      //
+      // Which is exactly why it is BOUNDED. `borrowed` is the stage's flag,
+      // not the junction's, and a stage that borrowed somewhere can still
+      // put a junction nowhere near tarmac. Asked without a bound, the
+      // query answers with the nearest road however far away it is: seed 1
+      // at 0.4 asphalt cut an arm from a highway 950 m off, and what got
+      // built was a branch that set out from the junction, made for that
+      // road, and crossed its own stage 600 m later at 0.8 m — R23's whole
+      // subject, drawn by the code meant to honour it. A junction that is
+      // not on a public road has no road to be the rest of, and gets a
+      // branch driven out of the country like any other.
+      const hit = borrowed
+        ? highways.nearest(junction.x, junction.z, undefined, track.width)
+        : null;
+      const spur = hit
+        ? cutSpur(junction, junction.s, end, hit.road, hit.index, land, track.width, shelfBand)
+        : buildSpur(
+            track.seed,
+            {
+              x: junction.x,
+              z: junction.z,
+              heading: junction.heading,
+              elevation: junction.elevation,
+              slope: junction.slope,
+            },
+            junction.s,
+            end,
+            box,
+            land,
+            track.width,
+            (() => {
+              const stage = roadDistance(junction);
+              return (x: number, z: number, ignoringJunction?: boolean) =>
+                Math.min(stage(x, z, ignoringJunction), clearOfBranches(x, z));
+            })(),
+            shelfHolds,
+            shelfBand,
           );
-          return (x: number, z: number, ignoringJunction?: boolean) =>
-            Math.min(stage(x, z, ignoringJunction), clearOfBranches(x, z));
-        })(),
-        shelfHolds,
-        shelfCeiling,
-      );
       track.spurs.push(spur);
       standing.push(spur);
     }
@@ -1353,16 +1454,14 @@ function createCompiler(
     // whole line of it is clear of the ROUTE. Last, because it reads the
     // platform warp above (a barrier on the junction's own plane is a
     // barrier inside the crossing) and because it is measured against the
-    // route WITHOUT the junction exemption: the branch is allowed to leave
-    // along the road it is leaving, and a driver on that road is not
-    // allowed to meet a stack of tyres doing it.
-    // Measured against the WHOLE route — an empty ignore window rather than
-    // the junction's — because the branch is allowed to leave along the road
-    // it is leaving and a driver on that road is not allowed to meet a stack
-    // of tyres doing it. Only this call's branches: an endless stream
-    // re-walks the list every append, and a block that moves under a chunk
-    // the renderer has already drawn is a barrier in two places.
-    const wholeRoute = roadDistance(0, 0);
+    // WHOLE route, junction exemption and all: the branch is allowed to
+    // leave along the road it is leaving, and a driver on that road is not
+    // allowed to meet a stack of tyres doing it. Only this call's branches:
+    // an endless stream re-walks the list every append, and a block that
+    // moves under a chunk the renderer has already drawn is a barrier in
+    // two places.
+    const everywhere = roadDistance({ x: 0, z: 0 });
+    const wholeRoute = (x: number, z: number) => everywhere(x, z, false);
     for (const spur of standing) {
       spur.block = placeBlock(spur, wholeRoute, track.width / 2, track.seed);
     }
@@ -1559,29 +1658,57 @@ function createCompiler(
   const append = (plans: SegmentPlan[]): void => {
     const b = track.bounds;
     const firstNew = track.samples.length;
-    for (const plan of plans) {
-      // R15/R17 — the paving field asks for a surface change; the change
-      // waits here for a corner to happen at (R17), and then falls at the
-      // JUNCTION's own edge — where the route's line actually leaves the
-      // main road's mat — rather than at the segment boundary.
-      if (paving.pavedAt(cursor.s) !== pavedNow) flipWanted = true;
+    for (let index = 0; index < plans.length; index++) {
+      const plan = plans[index];
+      // R17 — WHERE THE TARMAC IS. Two ways of knowing, and which one is in
+      // force is decided by the plan rather than by a mode flag.
+      //
+      // BORROWED (`borrowed`, the sprint search): the plan already says
+      // which segments are a public road, because the search went and found
+      // one and solved its way onto it (`highway.ts`, `borrow.ts`). The
+      // junction is simply where the flag changes — there is nothing to
+      // decide here and nothing to refuse, because the arm this junction
+      // abandons is the rest of a road that already crosses the map.
+      //
+      // PAINTED (the paving field): a circuit or an endless stream, neither
+      // of which is routed onto the tarmac yet. There the field asks for a
+      // surface change, the change WAITS for a corner it can be a junction
+      // at (R17), and the arm has to be invented and driven to the map's
+      // edge before the corner is allowed to carry one.
+      const nextPaved = plans[index + 1]?.paved === true;
       let flipAt = -1;
       let joinAtEnd: SegmentPlan | null = null;
-      if (flipWanted && isJunctionTurn(plan, cursor, !pavedNow)) {
-        flipWanted = false;
-        const onMain = Math.min(plan.length, onMainRun(plan.radius ?? 1));
-        if (pavedNow) {
-          // Turning OFF the sealed road: the junction is the corner's
-          // start, and the tarmac carries the route until its own line is
-          // clear of the main road's mat.
-          noteJunction(plan, cursor, false);
-          flipAt = onMain;
-        } else {
-          // Turning ONTO it: the route is on the tarmac from where its
-          // line first reaches the mat, and the junction is at the corner's
-          // end, which the cursor only knows once the corner is walked.
-          flipAt = plan.length - onMain;
+      if (borrowed) {
+        // The change falls at the JUNCTION's own edge — where the route's
+        // line actually reaches or leaves the main road's mat — rather than
+        // at the segment boundary, which is what makes the seam the through
+        // road's kerb instead of a band ruled across the minor road.
+        if (!pavedNow && nextPaved && plan.kind === "turn") {
+          flipAt = plan.length - Math.min(plan.length, onMainRun(plan.radius ?? 1));
           joinAtEnd = plan;
+        } else if (pavedNow && !plan.paved && plan.kind === "turn") {
+          noteJunction(plan, cursor, false);
+          flipAt = Math.min(plan.length, onMainRun(plan.radius ?? 1));
+        }
+      } else {
+        if (paving.pavedAt(cursor.s) !== pavedNow) flipWanted = true;
+        if (flipWanted && isJunctionTurn(plan, cursor, !pavedNow)) {
+          flipWanted = false;
+          const onMain = Math.min(plan.length, onMainRun(plan.radius ?? 1));
+          if (pavedNow) {
+            // Turning OFF the sealed road: the junction is the corner's
+            // start, and the tarmac carries the route until its own line is
+            // clear of the main road's mat.
+            noteJunction(plan, cursor, false);
+            flipAt = onMain;
+          } else {
+            // Turning ONTO it: the route is on the tarmac from where its
+            // line first reaches the mat, and the junction is at the
+            // corner's end, which the cursor only knows once the corner is
+            // walked.
+            flipAt = plan.length - onMain;
+            joinAtEnd = plan;
+          }
         }
       }
       // R20 — WHERE THE SURFACING RUNS OUT. A sealed section is a public
@@ -1616,9 +1743,16 @@ function createCompiler(
       // Not where the WHOLE stage is sealed: at the top of the `asphalt`
       // dial there is no gravel for the tarmac to become and no junction to
       // get it back at, and a tarmac rally's corners are its own.
+      //
+      // And not on a BORROWED stage at all, which is the whole reason to
+      // borrow. There the sealed stretch is a piece of a real road, laid at
+      // `HIGHWAY.minRadius` and cut into segments that track its bend
+      // (`borrow.ts`) — there is no hairpin in it to end the surfacing at,
+      // so the one surface change that was not a junction is gone.
       if (
         pavedNow &&
         flipAt < 0 &&
+        !borrowed &&
         mixedSurface &&
         plan.kind === "turn" &&
         (plan.radius ?? Infinity) < R.paving.minRadius
@@ -1651,6 +1785,14 @@ function createCompiler(
       // middle of a combination marks nothing. `openNote` is that corner —
       // it holds the whole combination and its hardest severity — and its
       // `endS` is the exit the cursor is standing on.
+      // ...and where the road has gone too long without one, a board goes
+      // down here whatever the road is doing. See `checkpoint.forced`.
+      if (
+        checkpointDue < 0 &&
+        cursor.s - checkpointS >= R.checkpoint.spacing * R.checkpoint.pace * R.checkpoint.forced
+      ) {
+        checkpointDue = cursor.s;
+      }
       if (openNote !== null && checkpointDue < 0) {
         const linked = built.kind === "turn" && openNote.dir === built.dir;
         const C = R.checkpoint;
@@ -1748,11 +1890,18 @@ function createCompiler(
         path[Math.max(0, Math.min(steps - 1, Math.round(u / step) - 1))].base;
       const rollAt = (u: number): number => rolling(rollS0 + u);
 
+      // R17 — a surface change that falls ON the segment's first sample.
+      // The walk below flips between two samples, which cannot express a
+      // flip at zero: seed 3's join corner was a 15 m turn whose whole
+      // length is inside the main road's mat, so the crossing was at the
+      // corner's very start and the stage came out with a junction on it
+      // and not one metre of tarmac.
+      if (flipAt === 0) pavedNow = !pavedNow;
       for (let i = 0; i < steps; i++) {
         const uPrev = i * step;
         const u = uPrev + step;
         const at = path[i];
-        if (flipAt >= 0 && uPrev < flipAt && u >= flipAt) pavedNow = !pavedNow;
+        if (flipAt > 0 && uPrev < flipAt && u >= flipAt) pavedNow = !pavedNow;
         cursor.heading = at.heading;
         cursor.x = at.x;
         cursor.z = at.z;
@@ -1876,18 +2025,17 @@ function createCompiler(
  * can only ever under-report the room a branch has, never invent some. */
 type Country = {
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
-  /** R23 — the keep-out field, with an arc window either side of the
-   * junction under test excluded (a branch leaves a junction ON the road it
-   * is leaving). */
-  roadDistance: (
-    ignoreFrom: number,
-    ignoreTo: number,
-  ) => (x: number, z: number, ignoring?: boolean) => number;
+  /** R23 — the keep-out field, with the ground around the junction under
+   * test excluded (a branch leaves a junction ON the road it is leaving). */
+  roadDistance: (meet: {
+    x: number;
+    z: number;
+  }) => (x: number, z: number, ignoring?: boolean) => number;
   /** R31 — whether the ground is still there for a road at this height. */
   shelfHolds: (x: number, z: number, y: number) => boolean;
-  /** R31 — and the height itself: the highest a road may stand here
+  /** R31 — and the heights themselves: the band a road may stand in here
    * without its shelf standing as a wall beside the stage. */
-  shelfCeiling: (x: number, z: number) => number;
+  shelfBand: (x: number, z: number) => ShelfBand;
 };
 
 const PLAN_STEP = 6;
@@ -1902,6 +2050,28 @@ const PLAN_STEP = 6;
 const BRANCH_DISTANCE_SLACK = (8 * SPUR.step) / 2;
 const STAGE_DISTANCE_SLACK = (8 * SAMPLE_STEP) / 2;
 const PLAN_DISTANCE_SLACK = PLAN_STEP / 2;
+
+/** How near a junction's meeting point the route IS the branch's own road,
+ * m: inside it the two carriageways are one, so the branch is not measured
+ * against them while it is still LEAVING. A PLACE and not a stretch of arc
+ * — see `STAGE_RULES.junction.parting`, which is where the rule lives
+ * because the analysis has to exempt exactly the same neighbourhood.
+ *
+ * The two fields that read it apply it at two different radii, and the
+ * difference is load-bearing: THE TRIAL MUST NEVER BE MORE OPTIMISTIC THAN
+ * THE BUILD. `armCanLeave` decides whether a junction may exist at all by
+ * driving a trial branch against the PLAN walk, and the real branch is then
+ * built against the compiled samples — two walks of one plan that diverge
+ * by metres, sampled at two strides. Right at the exemption's rim those
+ * metres decide whether a piece of route is the branch's own road or a road
+ * it may not touch, and where the trial says yes and the build says no what
+ * is left on the map is a tarmac stub in a field. So the trial exempts a
+ * little LESS than the build, by the slack the two fields already carry:
+ * every junction the trial accepts is one the build had at least as much
+ * room for. Seed 38's short sprint is the case that named it — the two
+ * fields put one piece of route either side of an 80 m rim. */
+const TRIAL_PARTING = R.junction.parting - PLAN_DISTANCE_SLACK;
+const BUILT_PARTING = R.junction.parting + STAGE_DISTANCE_SLACK;
 
 function planCountry(
   plans: SegmentPlan[],
@@ -1991,8 +2161,9 @@ function planCountry(
   const n = pts.length;
   const first = apronOf(pts[0], { x: 2 * pts[0].x - pts[1].x, z: 2 * pts[0].z - pts[1].z }, -1);
   const last = apronOf(pts[n - 1], pts[n - 2] ?? pts[n - 1], 1);
+  const parting2 = TRIAL_PARTING * TRIAL_PARTING;
   const roadDistance =
-    (ignoreFrom: number, ignoreTo: number) =>
+    (meet: { x: number; z: number }) =>
     (px: number, pz: number, ignoring = true): number => {
       let best = Math.min(ROAD_DISTANCE_REACH, first(px, pz), last(px, pz));
       const cx = Math.floor(px / CELL);
@@ -2005,9 +2176,14 @@ function planCountry(
             const bucket = grid.get(cellKey(cx + dx, cz + dz));
             if (bucket === undefined) continue;
             for (const p of bucket) {
-              if (ignoring && p.s > ignoreFrom && p.s < ignoreTo) continue;
               const d = Math.hypot(p.x - px, p.z - pz);
-              if (d < best) best = d;
+              if (d >= best) continue;
+              if (ignoring) {
+                const mx = p.x - meet.x;
+                const mz = p.z - meet.z;
+                if (mx * mx + mz * mz < parting2) continue;
+              }
+              best = d;
             }
           }
         }
@@ -2015,33 +2191,41 @@ function planCountry(
       return Math.max(0, best - slack);
     };
   const bench = Math.max(width / 2 + ROAD_CROSS.reach, R.verge.bench);
-  /** The lowest the stage gets. The cone rises with distance from the road
-   * and never falls, so no point further out than this height allows can
-   * lower a ceiling already found — which is what bounds the ring walk
-   * below to a handful of cells instead of the whole stage. */
+  /** How far apart in height the stage gets from end to end. The cone opens
+   * with distance from the road and never closes, so no point further out
+   * than this spread allows can tighten a band already found — which is
+   * what bounds the ring walk below to a handful of cells instead of the
+   * whole stage. */
   let lowest = Infinity;
-  for (const p of pts) if (p.y < lowest) lowest = p.y;
-  /** R23 + R31 — the highest a ROAD may stand at a point without its shelf
-   * becoming a wall beside the stage: the stage's own verge cone, read as a
-   * ceiling instead of as a yes/no.
+  let highest = -Infinity;
+  for (const p of pts) {
+    if (p.y < lowest) lowest = p.y;
+    if (p.y > highest) highest = p.y;
+  }
+  /** R23 + R31 — the band a ROAD may stand in at a point without its shelf
+   * becoming a wall beside the stage: the stage's own verge cone, read as
+   * two heights instead of as a yes/no.
    *
    * `shelfHolds` answers whether a given height is legal; this answers what
-   * the legal height IS, which is what a branch needs while it is being
+   * the legal heights ARE, which is what a branch needs while it is being
    * BUILT rather than after. Asked once per branch step, so it walks the
    * same grid `roadDistance` does and stops at the first ring that cannot
-   * lower the answer — the cone only ever rises with distance, so a ring
-   * whose nearest possible point is already above the best is a ring with
+   * tighten the answer — the cone only ever opens with distance, so a ring
+   * whose nearest possible point is already outside the band is a ring with
    * nothing to say. */
-  const shelfCeiling = (px: number, pz: number): number => {
-    let cap = Infinity;
+  const shelfBand = (px: number, pz: number): ShelfBand => {
+    let ceiling = Infinity;
+    let floor = -Infinity;
     const cx = Math.floor(px / CELL);
     const cz = Math.floor(pz / CELL);
     for (let ring = 0; ring <= rings; ring++) {
-      // The nearest ground this ring could hold, and therefore the lowest
-      // ceiling it could impose on top of the lowest road height seen.
-      if (cap < Infinity && (ring - 1) * CELL > bench + slack + (cap - lowest) / R.verge.climb) {
-        break;
-      }
+      // The most height either half of the band still has to give, and
+      // therefore the furthest ring that could take any of it away.
+      const room = Math.max(
+        ceiling < Infinity ? ceiling - lowest : Infinity,
+        floor > -Infinity ? highest - floor : Infinity,
+      );
+      if (room < Infinity && (ring - 1) * CELL > bench + slack + room / R.verge.climb) break;
       for (let dx = -ring; dx <= ring; dx++) {
         const stride = Math.abs(dx) === ring || ring === 0 ? 1 : 2 * ring;
         for (let dz = -ring; dz <= ring; dz += stride) {
@@ -2049,26 +2233,27 @@ function planCountry(
           if (bucket === undefined) continue;
           for (const p of bucket) {
             const d = Math.hypot(p.x - px, p.z - pz);
-            const allowed = p.y + Math.max(0, d - bench - slack) * R.verge.climb;
-            if (allowed < cap) cap = allowed;
+            const swing = Math.max(0, d - bench - slack) * R.verge.climb;
+            if (p.y + swing < ceiling) ceiling = p.y + swing;
+            if (p.y - swing > floor) floor = p.y - swing;
           }
         }
       }
     }
-    return cap;
+    return { floor, ceiling };
   };
   const shelfHolds = (px: number, pz: number, y: number): boolean => {
     for (const p of pts) {
-      const over = y - p.y;
-      if (over <= 0) continue;
-      const need = bench + over / R.verge.climb + slack;
+      const apart = Math.abs(y - p.y);
+      if (apart <= 0) continue;
+      const need = bench + apart / R.verge.climb + slack;
       const dx = p.x - px;
       const dz = p.z - pz;
       if (dx * dx + dz * dz < need * need) return false;
     }
     return true;
   };
-  return { bounds: box, roadDistance, shelfHolds, shelfCeiling };
+  return { bounds: box, roadDistance, shelfHolds, shelfBand };
 }
 
 function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs, circuit = false): Track {
@@ -2086,6 +2271,7 @@ function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs, circuit =
     circuit,
     finishS: null,
     knobs,
+    highways: [],
     spurs: [],
     junctions: [],
   };
@@ -2140,6 +2326,11 @@ export function compileStage(
     const circuit = shape === "circuit";
     const track = emptyTrack(seed, false, dials, circuit);
     const plans = generateStage(seed, length, dials, shape);
+    // R17 — THE TARMAC, laid on the bare country from the seed alone and
+    // rebuilt here identically to the copy the search planned against. It
+    // is not handed over: both sides derive it, which is what keeps a track
+    // a pure function of its seed however it was built.
+    track.highways = layStageHighways(seed, dials, createLandField(seed, dials), length);
     // R17 — the country the stage will occupy, walked before it is
     // compiled. A junction may only be built where the arm it abandons can
     // leave the map, and which way is out is a question about the whole box
@@ -2151,6 +2342,9 @@ export function compileStage(
       bumps,
       widthAt,
       planCountry(plans, track.width, rolling, createLandField(seed, dials)),
+      true,
+      // R17 — a sprint is routed onto the tarmac; a circuit is not, yet.
+      !circuit,
     ).append(plans);
     if (circuit) closeCircuitHeight(track);
     return track;

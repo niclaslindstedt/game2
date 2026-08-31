@@ -477,8 +477,15 @@ describe("the stone spilled at the road's edge (R16)", () => {
     // every one of them is past the edge. The dial is turned all the way up
     // so the window under test is sealed road rather than whatever mix the
     // seed happened to pave.
-    const grown = tufts(compileStage(4, "medium", { asphalt: 1 }));
-    const sealed = grown.filter((t) => t.surface !== "gravel" || t.deck);
+    // R17 — and the seed is SEARCHED for rather than named: the tarmac is a
+    // public road laid on the bare country before the rally is routed over
+    // it, so which seeds have any is the land's decision and not the dial's.
+    let sealed: ReturnType<typeof tufts> = [];
+    for (const seed of [4, 1, 2, 3, 5, 6, 7, 8]) {
+      const grown = tufts(compileStage(seed, "medium", { asphalt: 1 }));
+      sealed = grown.filter((t) => t.surface !== "gravel" || t.deck);
+      if (sealed.length > 0) break;
+    }
     expect(sealed.length).toBeGreaterThan(0);
     expect(sealed.filter((t) => t.onto > 0)).toHaveLength(0);
   });

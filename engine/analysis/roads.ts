@@ -29,8 +29,9 @@
 // of the map as scenery nobody drives through, and one that scribbles road
 // over every hectare of it leaves nowhere to be lost.
 
-import { roadClearance } from "../mapgen/road.ts";
+import { ROAD_CROSS, roadClearance } from "../mapgen/road.ts";
 import { SPUR, type Spur } from "../mapgen/spurs.ts";
+import { createHighwayNetwork } from "../mapgen/highway.ts";
 import { STAGE_RULES } from "../mapgen/rules.ts";
 import type { Track } from "../mapgen/compile.ts";
 import { ANALYSIS } from "./budgets.ts";
@@ -48,13 +49,20 @@ import {
  * and which way it is pointing there. */
 type Strand = {
   id: string;
-  points: { x: number; z: number; heading: number; s: number }[];
-  /** Branches only: where on the STAGE this one hangs off. Inside R23's
-   * own exemption around it (`junction.spurWindow`) the two carriageways
-   * ARE one road, which is what a junction is — so the sweep has to skip
-   * exactly the stretch the branch builder was allowed to ignore, or every
-   * junction on the map reports as two roads sharing ground. */
-  joinS: number | null;
+  points: { x: number; z: number; heading: number; s: number; y: number }[];
+  /** Branches only: the MEETING POINT this one hangs off. Inside R23's own
+   * exemption around it (`junction.parting`) the two carriageways ARE one
+   * road, which is what a junction is — so the sweep has to skip exactly
+   * the ground the branch builder was allowed to ignore, or every junction
+   * on the map reports as two roads sharing it.
+   *
+   * A PLACE, not a stretch of arc, for the same reason the rule is one: an
+   * arc window exempts whatever the route happens to be doing hundreds of
+   * metres away, which on seeds 1-12 hid every branch that actually lay on
+   * it. */
+  meet: { x: number; z: number } | null;
+  /** ...and where on the STAGE that crossing is, m of route arc. */
+  atS: number;
 };
 
 /** Everything on the map that is a road, on one common spacing so a
@@ -62,10 +70,10 @@ type Strand = {
 function strands(track: Track, spacing: number): Strand[] {
   const out: Strand[] = [];
   const routeStride = Math.max(1, Math.round(spacing / track.step));
-  const route: Strand = { id: "route", points: [], joinS: null };
+  const route: Strand = { id: "route", points: [], meet: null, atS: 0 };
   for (let i = 0; i < track.samples.length; i += routeStride) {
     const s = track.samples[i];
-    route.points.push({ x: s.x, z: s.z, heading: s.heading, s: s.s });
+    route.points.push({ x: s.x, z: s.z, heading: s.heading, s: s.s, y: s.elevation });
   }
   out.push(route);
   track.spurs.forEach((spur, index) => {
@@ -73,9 +81,15 @@ function strands(track: Track, spacing: number): Strand[] {
     const points: Strand["points"] = [];
     for (let i = 0; i < spur.samples.length; i += stride) {
       const p = spur.samples[i];
-      points.push({ x: p.x, z: p.z, heading: p.heading, s: i * SPUR.step });
+      points.push({ x: p.x, z: p.z, heading: p.heading, s: i * SPUR.step, y: p.elevation });
     }
-    out.push({ id: `branch ${index + 1}`, points, joinS: spur.atS });
+    const first = spur.samples[0];
+    out.push({
+      id: `branch ${index + 1}`,
+      points,
+      meet: first ? { x: first.x, z: first.z } : null,
+      atS: spur.atS,
+    });
   });
   return out;
 }
@@ -98,6 +112,61 @@ export function analyzeRoads(track: Track): MetricReport {
   // enough that a 130 m parallel run cannot fall between two samples.
   const spacing = 20;
   const roads = strands(track, spacing);
+
+  // ── R17 — DOES THE GRAVEL CROSS THE TARMAC? ───────────────────────────
+  //
+  // The one thing the road network must never do, and the reason the whole
+  // model was turned round. The sealed roads are laid on the bare country
+  // before the rally is routed over it (`highway.ts`): they are what was
+  // there first, they go somewhere, and a rally stage does not drive across
+  // a public road at speed. It meets one at a junction, borrows it, and
+  // turns off — so every metre of gravel keeps R23's clearance from every
+  // metre of tarmac, and the only ground the two share is the crossing.
+  //
+  // Measured against the LAID roads rather than against the branches,
+  // because those are only the pieces of them the stage happens to touch.
+  // A route that cut across the middle of a public road half a kilometre
+  // from its junction would be invisible to a check that only knew about
+  // the arms, and that is exactly the mistake worth catching.
+  //
+  // The junctions are exempt, and only the junctions: `junction.parting`
+  // metres of ground around each meeting point, which is the same
+  // exemption the branch builder and the parallel sweep below use. It is
+  // the crossing itself.
+  let crossings = 0;
+  let worstCrossing = 0;
+  if (track.highways.length > 0) {
+    const parting = STAGE_RULES.junction.parting;
+    const network = createHighwayNetwork(track.highways);
+    for (const sample of track.samples) {
+      if (sample.surface !== "gravel") continue;
+      const hit = network.nearest(sample.x, sample.z, undefined, clear);
+      if (hit === null) continue;
+      // Exempt where the piece of TARMAC in question is at a junction, not
+      // where the piece of gravel is: the two roads part slowly, so the
+      // route can be a hundred and fifty metres from a crossing while the
+      // road beside it is still fifty. Same predicate as the rule the
+      // search planned against (`generate.ts`'s `clearOfTarmac`).
+      const at = hit.road.points[hit.index];
+      if (track.junctions.some((j) => Math.hypot(j.x - at.x, j.z - at.z) < parting)) continue;
+      crossings++;
+      if (clear - hit.d <= worstCrossing) continue;
+      worstCrossing = clear - hit.d;
+      findings.push({
+        code: "roads.cross",
+        severity: hit.d < track.width ? "error" : "warn",
+        message:
+          hit.d < track.width
+            ? `the rally drives ${hit.d.toFixed(0)} m from the middle of a public road at ${sample.s.toFixed(0)} m — gravel crosses tarmac, it does not join it (R17)`
+            : `the gravel runs ${hit.d.toFixed(
+                0,
+              )} m from a public road at ${sample.s.toFixed(0)} m, at no junction — inside the ${clear.toFixed(0)} m two roads need (R23)`,
+        at: { x: sample.x, z: sample.z },
+        s: sample.s,
+        value: clear - hit.d,
+      });
+    }
+  }
 
   // ── Where does each branch GO? ────────────────────────────────────────
   let stranded = 0;
@@ -185,11 +254,21 @@ export function analyzeRoads(track: Track): MetricReport {
   // too small to catch a parallel run.
   let breaches = 0;
   let worstBreach = 0;
+  let steps = 0;
+  let worstStep = 0;
   let parallelRun = 0;
   let longestParallel = 0;
   const near = R.parallelNear * clear;
   const selfNear = R.selfNear * clear;
   const parallels: Finding[] = [];
+  /** R31 — how much height two roads this far apart may have between them:
+   * the stage's own verge cone, stated the way `compile.ts`'s `shelfHolds`
+   * states it, so the check and the rule cannot drift. Half the sweep's
+   * spacing is added to the bench because the nearest point of the other
+   * road can lie between two of the ones walked, and this may only ever
+   * forgive the roads more than the rule does, never less. */
+  const bench = Math.max(track.width / 2 + ROAD_CROSS.reach, STAGE_RULES.verge.bench) + spacing / 2;
+  const coneAt = (d: number): number => Math.max(0, d - bench) * STAGE_RULES.verge.climb;
   for (let a = 0; a < roads.length; a++) {
     for (let b = a; b < roads.length; b++) {
       const self = a === b;
@@ -197,38 +276,85 @@ export function analyzeRoads(track: Track): MetricReport {
       // parallel run — the neighbours of a point are trivially near it and
       // pointing the same way, which is what a road is.
       const window = clear * 4;
-      // R23's junction exemption, from the rule book the branch builder
-      // measured against: the route beside a branch's own junction is that
-      // branch's road, not another one.
-      const joined = roads[a].joinS ?? roads[b].joinS;
-      const exempt =
-        joined !== null && (roads[a].joinS === null || roads[b].joinS === null) ? joined : null;
+      // R23's junction exemption, and it has to be the SAME PREDICATE the
+      // route was planned against or the two disagree about every crossing.
+      //
+      // The rule (`generate.ts`'s `clearOfTarmac`) reads: a route point may
+      // come inside the clearance of a piece of TARMAC only where that
+      // piece is within `junction.parting` of a meeting point. So the thing
+      // measured against the meeting point is the ROAD's end of the pair,
+      // never the route's. Measured the other way round — exempting route
+      // points near the meeting point — it flags every junction whose two
+      // roads part slowly, because there the route is a hundred and fifty
+      // metres from the crossing while the tarmac beside it is still fifty:
+      // 24 errors over seeds 1-24, none of them a defect.
+      const branch = roads[a].meet !== null ? roads[a] : roads[b].meet !== null ? roads[b] : null;
+      const exempt = branch !== null && (roads[a].meet === null || roads[b].meet === null);
+      const parting = STAGE_RULES.junction.parting;
+      /** Is this pair of points the CROSSING rather than two roads sharing
+       * ground? Both ends have to be in it, and each is measured the way
+       * the rule measures it (`generate.ts`'s `clearOfTarmac`): the branch
+       * by its distance from the meeting point, the route by how far along
+       * its own arc it is from the junction. A junction is a place the
+       * route passes through once — measured on the branch alone, a route
+       * that left a crossing and came back alongside the same road two
+       * hundred metres later is still exempt. */
+      const crossing = (
+        onRoute: { x: number; z: number; s: number },
+        onBranch: { x: number; z: number },
+      ): boolean =>
+        exempt &&
+        branch !== null &&
+        branch.meet !== null &&
+        Math.abs(onRoute.s - branch.atS) < parting &&
+        Math.hypot(onBranch.x - branch.meet.x, onBranch.z - branch.meet.z) < parting;
       // A road against itself is judged on its own numbers: a switchback is
       // not a doubled ribbon.
       const reach = self ? selfNear : near;
       const minRun = self ? R.selfRun : R.parallelRun;
       let run = 0;
       let runFrom: { x: number; z: number } | null = null;
+      const routeIsA = roads[a].meet === null;
       for (const p of roads[a].points) {
-        if (
-          exempt !== null &&
-          roads[a].joinS === null &&
-          Math.abs(p.s - exempt) < STAGE_RULES.junction.spurWindow
-        ) {
-          continue;
-        }
         let hit: { x: number; z: number; d: number } | null = null;
         for (const q of roads[b].points) {
-          if (
-            exempt !== null &&
-            roads[b].joinS === null &&
-            Math.abs(q.s - exempt) < STAGE_RULES.junction.spurWindow
-          ) {
-            continue;
-          }
+          if (crossing(routeIsA ? p : q, routeIsA ? q : p)) continue;
           if (self && Math.abs(p.s - q.s) < window) continue;
           const d = Math.hypot(p.x - q.x, p.z - q.z);
           if (d > reach) continue;
+          // R31 — and how far apart in HEIGHT, because that is what decides
+          // what the country between them has to be. Two roads that keep
+          // R23's distance may still be tens of metres apart vertically, and
+          // the ground joining them is then a face rather than a hillside:
+          // the same defect as a road on stilts, and the one the picture
+          // shows as a raw earth wall down the side of a stage.
+          //
+          // TWO roads, never one against itself. R31's cone is a rule about
+          // what a road's SHELF does to the road beside it, and the stage
+          // against its own switchback is not that: the terrain gives the
+          // ground to whichever of the two arms is nearer and the country
+          // between them is one hillside, which is what a road climbing a
+          // hill looks like. Measured over seeds 1-8, every finding this
+          // raised with the self case in was a switchback on a slope well
+          // under `verge.climb` — the check reporting the design.
+          const drop = Math.abs(p.y - q.y);
+          if (!self && drop > coneAt(d) && drop > R.stepFloor) {
+            steps++;
+            if (drop > worstStep) {
+              worstStep = drop;
+              findings.push({
+                code: "roads.step",
+                severity: drop >= R.stepFail ? "error" : "warn",
+                message: `${roads[a].id} and ${roads[b].id} pass ${d.toFixed(
+                  0,
+                )} m apart with ${drop.toFixed(
+                  1,
+                )} m of height between them — the country in between is a face, not a hillside (R31)`,
+                at: { x: (p.x + q.x) / 2, z: (p.z + q.z) / 2 },
+                value: drop,
+              });
+            }
+          }
           if (d < clear) {
             breaches++;
             if (clear - d > worstBreach) {
@@ -379,6 +505,45 @@ export function analyzeRoads(track: Track): MetricReport {
     });
   }
 
+  // ── R17 — WHERE THE ROUTE'S OWN SURFACE CHANGES. The branches are held
+  // to this above (`roads.degrade`); the road the player actually drives
+  // was not held to it at all, and it is the one they are looking at.
+  //
+  // A surface change is a PLACE: the route arrives on one road, turns onto
+  // the other, and the road it turned off carries on past the crossing. One
+  // in the middle of a straight is a tarmac road that becomes a gravel road
+  // for no reason — the loudest of the two classic mistakes in this file's
+  // header, and the reason it is worth measuring on the route is that R20
+  // makes exactly that trade deliberately: where a borrowed road runs into
+  // a corner too tight for a public road, the surfacing simply ends. That
+  // is a real, argued exception (see `compile.ts`) and it is still a thing
+  // a player sees, so it is COUNTED rather than hidden — the budget says
+  // how much of it a stage may carry, and a change that removes some of it
+  // shows up here as fewer metres of orphaned surfacing.
+  //
+  // A ford is not a surface change of this kind: the water is the crossing,
+  // and R13 owns it.
+  let orphanFlips = 0;
+  for (let i = 1; i < track.samples.length; i++) {
+    const before = track.samples[i - 1];
+    const after = track.samples[i];
+    if (before.surface === after.surface) continue;
+    if (before.surface === "water" || after.surface === "water") continue;
+    if (before.deck != null || after.deck != null) continue;
+    if (track.junctions.some((j) => Math.abs(j.s - after.s) <= R.sweepClear)) continue;
+    orphanFlips++;
+    findings.push({
+      code: "roads.orphan",
+      severity: "warn",
+      message: `the route stops being ${before.surface} ${after.s.toFixed(
+        0,
+      )} m in, at no junction — a surface change is a place two roads meet (R17)`,
+      at: { x: after.x, z: after.z },
+      s: after.s,
+      value: 1,
+    });
+  }
+
   const points = roads.reduce((sum, road) => sum + road.points.length, 0);
   const checks: Check[] = [
     {
@@ -395,6 +560,21 @@ export function analyzeRoads(track: Track): MetricReport {
       weight: 3,
       value: worstBreach,
       budget: clear,
+    },
+    {
+      id: "cross",
+      label: "the gravel never crosses the tarmac, it joins it (R17)",
+      score: under(worstCrossing, 0, clear),
+      weight: 3,
+      value: worstCrossing,
+    },
+    {
+      id: "step",
+      label: "no cliff between two roads that pass each other (R31)",
+      score: under(worstStep, R.stepFail, R.stepFail * 3),
+      weight: 2.5,
+      value: worstStep,
+      budget: R.stepFail,
     },
     {
       id: "parallel",
@@ -425,6 +605,14 @@ export function analyzeRoads(track: Track): MetricReport {
       score: rate(degraded, Math.max(1, track.spurs.length)),
       weight: 2,
       value: degraded,
+    },
+    {
+      id: "orphan",
+      label: "the ROUTE only changes surface where two roads meet (R17)",
+      score: under(orphanFlips, R.orphans, R.orphans + 3),
+      weight: 2,
+      value: orphanFlips,
+      budget: R.orphans,
     },
     {
       id: "stubs",
@@ -461,8 +649,12 @@ export function analyzeRoads(track: Track): MetricReport {
       stranded,
       unsealed,
       degraded,
+      orphanFlips,
       stubs,
       breaches,
+      crossings,
+      steps,
+      worstStep,
       parallelRuns: parallelRun,
       longestParallel,
       coverage,
