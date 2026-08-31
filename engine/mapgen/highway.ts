@@ -300,10 +300,36 @@ function layOne(
   // construction, and a rim that happens to sit in a sea basin would
   // otherwise veto every road on the seed rather than the piece of one
   // nobody can look at.
+  //
+  // A SETBACK, in metres of ground, and never a freeboard in metres of
+  // height — the distinction `land.ts` states and the reason it states it.
+  // Asked as `flooded(p, shoreFreeboard)` this was "is this point less than
+  // two metres above the water", which on a shore that shelves at two per
+  // cent reaches a hundred metres inland and on a lakeside plain reaches
+  // kilometres. It threw away roads that were nowhere near the water:
+  // measured over seeds 1-24 at medium it vetoed 24 to 40 of every road's
+  // 40 entry attempts on the wet ones, and four seeds — 2, 4, 8 and 19 —
+  // ended up with no public road anywhere in the country, which is a
+  // country with no civilization in it and, since R15's dial can only spend
+  // on a road that exists, a stage that is gravel however far the dial is
+  // turned up.
+  //
+  // What the rule is actually about is a road IN the water, and a road on
+  // the beach. Both are distances: the carriageway and its verge clear of
+  // the waterline.
   const seen = worldBound + HIGHWAY.overrun * 0.35;
+  // The setback is the ROUTE'S OWN (`water.routeClear`), because it is the
+  // same question about the same kind of road: room for the corridor, its
+  // verge, and a watercourse to reach the lake between the two. Sized
+  // smaller it buys public roads on every seed and hands back a lakeside
+  // road that is near water by construction — over seeds 1-24 at medium,
+  // half of it put 27 `water.road` errors on 14 seeds and 49 `drive.grade`
+  // errors on 17, the second from roads climbing the bank they were
+  // skirting. One number for both roads, and neither goes down to the
+  // waterline.
   for (const p of points) {
     if (Math.hypot(p.x, p.z) > seen) continue;
-    if (land.flooded(p.x, p.z, HIGHWAY.shoreFreeboard)) return null;
+    if (land.flooded(p.x, p.z, 0) || land.nearWater(p.x, p.z, R.water.routeClear)) return null;
   }
   // R24 — and it keeps off the RALLY'S START. The stage's first two
   // hundred metres are not a search result: the grid stands on the apron

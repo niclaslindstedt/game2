@@ -532,12 +532,29 @@ function fordDip(
   const from = plan.featureStart - R.water.apron;
   const to = plan.featureEnd + R.water.apron;
   if (u < from || u > to) return null;
+  const line = (v: number): number => base(v) + roll(v);
   let low = Infinity;
   for (let v = from; v <= to; v += 2) low = Math.min(low, roll(v));
-  const water = base((plan.featureStart + plan.featureEnd) / 2) + low - R.water.bedDepth;
+  // The level the crossing WANTS: the roll's lowest against the landscape
+  // at the crossing's middle, so the water reads as collected rather than
+  // perched on a local rise, and a road descending through the window does
+  // not have to lose the whole window's fall over one apron.
+  const wanted = base((plan.featureStart + plan.featureEnd) / 2) + low - R.water.bedDepth;
+  // ...and never ABOVE the road's own line where an apron has to MEET it.
+  // Where the ground rises into the crossing, `wanted` came out over the
+  // road approaching it; the clamp below then held the whole apron flat at
+  // the water and the road stepped up to it in one 2 m sample. Seed 2 at
+  // medium put a 2.39 m step at 1287 m — a 120% ramp the car left the
+  // ground on at 127 km/h, flew ninety metres and nineteen up, and came
+  // down in an 18 m hairpin it could not then take; 10 of 24 seeds carried
+  // a step like it, worst 121%. Held under both apron mouths instead, so
+  // each ramp starts from the road's own height and there is nothing to
+  // step over. It only ever LOWERS the water, and only on the crossings
+  // that were building a wall: everywhere else the level is the one above.
+  const water = Math.min(wanted, line(from) - R.water.bedDepth, line(to) - R.water.bedDepth);
   if (u >= plan.featureStart && u <= plan.featureEnd) return water;
   const t = u < plan.featureStart ? (u - from) / R.water.apron : (to - u) / R.water.apron;
-  const here = base(u) + roll(u);
+  const here = line(u);
   // ...and never BELOW the water, whatever the road was doing. On a road
   // that is descending through the crossing the far apron's own grade can
   // duck under the level the water was set at, and a road under its own
@@ -1374,7 +1391,20 @@ function createCompiler(
       // the country. `nearest` finds where on that line the meeting point
       // is: the route arrived there by solving onto the road's own tangent,
       // so it is a metre or so away, not a search.
-      const hit = borrowed ? highways.nearest(junction.x, junction.z) : null;
+      //
+      // Which is exactly why it is BOUNDED. `borrowed` is the stage's flag,
+      // not the junction's, and a stage that borrowed somewhere can still
+      // put a junction nowhere near tarmac. Asked without a bound, the
+      // query answers with the nearest road however far away it is: seed 1
+      // at 0.4 asphalt cut an arm from a highway 950 m off, and what got
+      // built was a branch that set out from the junction, made for that
+      // road, and crossed its own stage 600 m later at 0.8 m — R23's whole
+      // subject, drawn by the code meant to honour it. A junction that is
+      // not on a public road has no road to be the rest of, and gets a
+      // branch driven out of the country like any other.
+      const hit = borrowed
+        ? highways.nearest(junction.x, junction.z, undefined, track.width)
+        : null;
       const spur = hit
         ? cutSpur(junction, junction.s, end, hit.road, hit.index, land, track.width, shelfBand)
         : buildSpur(

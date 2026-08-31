@@ -13,3 +13,11 @@ at the seal, the tarmac's white edge line runs through the crossing and breaks
 only for the mouth, the centre line no longer disappears, and the gravel road's
 dirt stays off the carriageway. The road the stage does not take is blocked, so
 it is clear which way the stage goes.
+
+Two things the new roads turned up on the way. Every seed's country now carries
+a public road — the rule that kept them out of lakes was measuring a height
+instead of a distance, and on a gently shelving shore that reaches inland far
+enough to have vetoed the road on one seed in six. And a ford's water no longer
+stands above the road approaching it: where the ground rose into a crossing it
+used to, and the road stepped up to meet it in a single two-metre sample — a
+wall the car left the ground on at speed and flew ninety metres from.
