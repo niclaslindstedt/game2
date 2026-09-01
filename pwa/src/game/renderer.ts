@@ -340,14 +340,16 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
 
   /** The environment's light tint, pushed onto everything that carries its
    * own baked or vertex colors (the cars, the particles) — and, on the same
-   * trip, the rain the cars' screens are wetted by. */
+   * trip, the rain the cars' screens are wetted by and the shadow that light
+   * throws each of them into (car-shadow.ts). */
   const applyTint = (): void => {
     const tint = environment.carTint();
     const lit = environment.lampsLit();
     const rain = environment.rainfall();
-    if (car) tintCar(car, tint, lit, rain);
-    if (ghostCar) tintCar(ghostCar, tint, lit, rain);
-    field.paint(tint, lit, rain);
+    const shade = environment.sunShade();
+    if (car) tintCar(car, tint, lit, rain, shade);
+    if (ghostCar) tintCar(ghostCar, tint, lit, rain, shade);
+    field.paint(tint, lit, rain, shade);
     carFx.setTint(tint, environment.dustTint());
   };
 

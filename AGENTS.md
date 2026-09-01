@@ -158,6 +158,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | How often the mirror is redrawn, and how far it sees        | `pwa/src/game/mirror-pace.ts` — the ladder the frame rate walks the mirror down; DOM-free, so `mirror_test.ts` reads it          |
 | A particle pool the car throws off, and how it is tinted    | `pwa/src/game/car-fx.ts`; WHEN it is thrown stays in `renderer.ts`                                                               |
 | How the body TREMBLES when the engine is being worked       | `pwa/src/game/car-shake.ts` — DOM-free; read by `car-mesh.ts` (the shell) and `camera-eye.ts` (the seat)                         |
+| The SHADOW a car stands in, and how the light throws it     | `pwa/src/game/car-shadow.ts` (the silhouette and its penumbra) off `sunShadeFor` in `sky.ts` (which way, how hard)               |
 | Things the car knocks loose (cones, posts, torn-off parts)  | `pwa/src/game/cones.ts`, `kerbs.ts`, `car-damage.ts`, over `tumble.ts` — renderer-side; the engine knows nothing of them         |
 | Anything HEARD (a hit, a landing, a menu click)             | `pwa/src/game/audio/bank.ts` (+ a rung in `route.ts`) — the `sound-effects` skill                                                |
 | A continuous sound (engine, tyres, wind, the slide)         | `engine-bed.ts` / `road-grain.ts` in `pwa/src/game/audio/`                                                                       |

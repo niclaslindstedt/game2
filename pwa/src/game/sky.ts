@@ -73,6 +73,13 @@ export type Preset = {
   sunIntensity: number;
   /** Radians above the horizon. */
   sunElevation: number;
+  /** How much of that light arrives as a BEAM rather than as skylight that
+   * has been scattered on the way down, 0..1. An open sky is all beam; a
+   * deck is a lampshade over the stage, and what comes through it arrives
+   * from everywhere at once. Nothing about the KEY reads this — a cloudy
+   * noon is still bright — only the things a beam does that scattered light
+   * cannot, the shadow under a car first among them. */
+  beam: number;
   hemiSky: number;
   hemiGround: number;
   hemiIntensity: number;
@@ -111,6 +118,7 @@ const PRESETS: Record<TimeOfDay, Preset> = {
     sun: 0xffc08a,
     sunIntensity: 1.3,
     sunElevation: 0.14,
+    beam: 1,
     hemiSky: 0xd8dcff,
     hemiGround: 0x8a7a66,
     hemiIntensity: 0.72,
@@ -138,6 +146,7 @@ const PRESETS: Record<TimeOfDay, Preset> = {
     sun: 0xfff2d8,
     sunIntensity: 1.5,
     sunElevation: 0.95,
+    beam: 1,
     hemiSky: 0xffffff,
     hemiGround: 0xb0a894,
     hemiIntensity: 0.95,
@@ -165,6 +174,7 @@ const PRESETS: Record<TimeOfDay, Preset> = {
     sun: 0xff9663,
     sunIntensity: 1.15,
     sunElevation: 0.09,
+    beam: 1,
     hemiSky: 0xc9a0c8,
     hemiGround: 0x6e5a4a,
     hemiIntensity: 0.62,
@@ -192,6 +202,7 @@ const PRESETS: Record<TimeOfDay, Preset> = {
     sun: 0xb8ccff,
     sunIntensity: 0.55,
     sunElevation: 0.65,
+    beam: 1,
     hemiSky: 0x3a5580,
     hemiGround: 0x1e2840,
     hemiIntensity: 0.55,
@@ -348,6 +359,11 @@ function weathered(time: TimeOfDay, weather: Weather, cover: number): Preset {
   // A lit sun behind a deck is a bright PATCH, never a disc with an edge —
   // and behind a storm's deck it is not there at all.
   const through = weather === "rain" ? 1 - cover : 0;
+  // …and the same fraction is all that is left of the BEAM. A thin sheet of
+  // rain cloud still puts a soft shadow under a car; a storm's ceiling puts
+  // none at all, which is the difference between an overcast stage and one
+  // that merely has weather over it.
+  p.beam = through;
   p.haloOpacity *= 0.3 * through;
   p.haloSize *= 1.5;
   p.discSize = 0;
@@ -548,11 +564,72 @@ export function dustTintFor(p: Preset): THREE.Color {
  * the weather for free.
  */
 export function dayLight(p: Preset): number {
-  const here = keyLight(p);
-  const noon = keyLight(NOON);
-  const lum = (c: THREE.Color): number => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
-  const full = lum(noon);
-  return full > 0 ? Math.min(1, lum(here) / full) : 1;
+  const full = lum(keyLight(NOON));
+  return full > 0 ? Math.min(1, lum(keyLight(p)) / full) : 1;
+}
+
+/** Perceived brightness of a colour, 0..1 — the Rec. 709 weights, which is
+ * what "how much light is this" means for anything measured against
+ * another light rather than mixed with it. */
+function lum(c: THREE.Color): number {
+  return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+}
+
+/**
+ * WHERE THE LIGHT THROWS A CAR'S SHADOW, AND HOW HARD.
+ *
+ * The stage is lit by one directional light with no shadow map behind it,
+ * so every shadow in the game is drawn rather than solved (car-shadow.ts).
+ * This is what it has to be drawn FROM: which way the light comes in, how
+ * far down the sun is, and how much of the light is a beam at all.
+ *
+ * Hardness is the beam's SHARE of the light on the ground, not its
+ * strength: a shadow is the absence of the direct half, so what decides how
+ * dark it goes is how much of the light would be missing — a low sun over a
+ * dark sky throws a harder shadow than a high one over a bright one, which
+ * is why dusk shadows read black and a bright overcast noon has none.
+ */
+export type SunShade = {
+  /** The way the shadow is thrown, on the ground plane: the sun's own
+   * azimuth, turned around. Unit length. */
+  x: number;
+  z: number;
+  /** How far a low sun draws a shadow out, as the cotangent of the sun's
+   * elevation: 0 with the sun overhead, and climbing as it drops. Capped
+   * (see below), and capped AGAIN against its own size by whatever spends
+   * it — a shadow that has left the car behind is nobody's. */
+  lean: number;
+  /** How much of the light is the beam, against a clear noon's own share,
+   * 0..1 — 1 in full sun, nothing under a storm's ceiling. Measured against
+   * noon rather than left as a raw fraction for the reason the car's tint
+   * is: the number a shadow is DRAWN from wants the day the game's brightest
+   * shadow is authored for at 1, so retuning the weather carries. */
+  hardness: number;
+};
+
+/** The cotangent is unbounded at the horizon and the two low presets sit
+ * near it, so the lean is capped here as well as where it is spent — past
+ * this it is a number about a sun below the treeline. */
+const LEAN_CAP = 4;
+
+/** The beam's share of the light on the ground, 0..1 — what is missing from
+ * the shadow, which is what makes it dark. */
+function beamShare(p: Preset): number {
+  const beam = lum(new THREE.Color(p.sun)) * p.sunIntensity * Math.sin(Math.max(0, p.sunElevation));
+  const sky = lum(new THREE.Color(p.hemiSky)) * p.hemiIntensity;
+  const total = beam * p.beam + sky;
+  return total > 0 ? (beam * p.beam) / total : 0;
+}
+
+export function sunShadeFor(p: Preset): SunShade {
+  const el = Math.max(0, p.sunElevation);
+  const noon = beamShare(NOON);
+  return {
+    x: -Math.sin(SUN_AZIMUTH),
+    z: -Math.cos(SUN_AZIMUTH),
+    lean: el > 1e-3 ? Math.min(LEAN_CAP, 1 / Math.tan(el)) : LEAN_CAP,
+    hardness: noon > 0 ? Math.min(1, beamShare(p) / noon) : 0,
+  };
 }
 
 /**

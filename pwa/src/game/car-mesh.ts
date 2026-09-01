@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The car in the scene: a body generated part-by-part from the car's
 // CarBodySpec (car-body.ts builds it, car-styles.ts shapes it), plus the
-// one visual that sells the jump — a blob shadow that stays on the ground
-// and shrinks while the car is airborne. The engine owns everything about
-// how the car sits: position, heading, and both attitude angles; this file
-// only spends them on the right three.js axes.
+// shadow it stands in (car-shadow.ts) — which stays on the ground and
+// shrinks while the car is airborne, and is the one visual that sells a
+// jump. The engine owns everything about how the car sits: position,
+// heading, and both attitude angles; this file only spends them on the
+// right three.js axes.
 
 import * as THREE from "three";
 import { clamp } from "../lib/util.ts";
@@ -30,8 +31,10 @@ import { createCarDamage } from "./car-damage.ts";
 import { createCarDirt, groundTravel, wheelSpray } from "./car-dirt.ts";
 import type { Livery } from "./car-livery.ts";
 import { revTremble, trembleAt } from "./car-shake.ts";
+import { createCarShadow } from "./car-shadow.ts";
 import { bodySpecFor } from "./car-styles.ts";
 import { drivenAxles, wheelSurfaceSpeed } from "./car-wheels.ts";
+import type { SunShade } from "./sky.ts";
 import { glowTexture } from "./textures.ts";
 
 /** A lamp's own light: a bloom laid over each cluster so the lamp reads as
@@ -134,8 +137,9 @@ export type CarVisual = {
    * through the inside of the rear screen instead of the road
    * (renderer.ts). */
   cabin: THREE.Object3D;
-  /** The blob shadow, in its own group so it can lie on the ground's slope
-   * while the car above it pitches, rolls and flies. */
+  /** The shadow this car throws (car-shadow.ts), in its own group so it can
+   * lie on the ground's slope while the car above it pitches, rolls and
+   * flies. A scene sibling of the car rather than a child of it. */
   shadow: THREE.Group;
   /** World-anchored debris (torn-off parts) — scene sibling of the car. */
   debris: THREE.Group;
@@ -158,6 +162,10 @@ export type CarVisual = {
    * environment, which owns both decisions, along with the tint itself so
    * an unlit lens can still sit in the light the rest of the car is in. */
   setLights: (on: boolean, tint?: THREE.Color) => void;
+  /** Which way this stage's light throws a shadow, and how hard (sky.ts).
+   * Pushed from the environment on the same trip as the tint, because the
+   * two are the same question asked of the paint and of the ground. */
+  setShade: (shade: SunShade) => void;
   /** How hard it is raining on this car, 0..1 — what wets its screens and
    * sets its wipers going. Pushed from the environment for the same reason
    * the light is: the weather is the stage's, not the car's. */
@@ -211,18 +219,24 @@ function lampSpread(bodySpec: Parameters<typeof frontLampAnchors>[0]): {
   return { front: off(frontLampAnchors(bodySpec)), rear: off(rearLampAnchors(bodySpec)) };
 }
 
-/** Push the environment onto one body: its light, and how hard it is
- * raining on it. Everything on a car carries BAKED vertex colours on
- * fullbright materials, so the time of day arrives as a multiply into
- * `material.color` rather than as a light — except a LAMP, which is the one
- * thing the failing light makes brighter, and is therefore switched rather
- * than tinted. Both of a lamp's surfaces are exempted here: the bloom over
- * it, and the lens under that. `setLights` drives them from the same tint. */
+/** Push the environment onto one body: its light, the shadow that light
+ * throws, and how hard it is raining on it. Everything on a car carries
+ * BAKED vertex colours on fullbright materials, so the time of day arrives
+ * as a multiply into `material.color` rather than as a light — except a
+ * LAMP, which is the one thing the failing light makes brighter, and is
+ * therefore switched rather than tinted. Both of a lamp's surfaces are
+ * exempted here: the bloom over it, and the lens under that. `setLights`
+ * drives them from the same tint.
+ *
+ * The shadow takes no tint at all — it is a hole in the light, not a
+ * surface in it — but it is set from here because it answers to the same
+ * sky, and one route means one thing to call when the conditions change. */
 export function tintCar(
   visual: CarVisual,
   tint: THREE.Color,
   lampsLit: boolean,
   rain: number,
+  shade: SunShade,
 ): void {
   visual.group.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh) && !(obj instanceof THREE.Points)) return;
@@ -241,6 +255,7 @@ export function tintCar(
     }
   });
   visual.setLights(lampsLit, tint);
+  visual.setShade(shade);
   visual.setWet(rain);
 }
 
@@ -377,22 +392,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     }
   };
 
-  const length = bodySpec.profile[0].z - bodySpec.profile[bodySpec.profile.length - 1].z;
-  const blob = new THREE.Mesh(
-    new THREE.CircleGeometry(length * 0.42, 16),
-    new THREE.MeshBasicMaterial({ color: "#000000", transparent: true, opacity: 0.28 * fade }),
-  );
-  // Laid flat, then lifted along whatever "up" its parents end up meaning —
-  // the clearance has to leave the GROUND, not the world's y axis, or the
-  // disc knifes into a hillside and reads as a hole under the car.
-  blob.rotation.x = -Math.PI / 2;
-  blob.position.y = 0.06;
-  // Same two-group nesting as the car itself, so the disc takes the same
-  // heading-then-attitude chain and lands flush on the same triangle.
-  const shadowTilt = new THREE.Group();
-  shadowTilt.add(blob);
-  const shadow = new THREE.Group();
-  shadow.add(shadowTilt);
+  const shadow = createCarShadow(bodySpec, fade);
 
   let steerVisual = 0;
   // The ground's own attitude, held over a flight: in the air the car's
@@ -510,28 +510,17 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     shineLamps();
     damage.update(state, dt);
 
-    // Blob shadow: pinned to the ground under the car, lying on its slope,
-    // fading with height.
     if (!car.airborne) {
       groundPitch = car.pitch;
       groundRoll = car.roll;
     }
-    const ground = groundYUnder(state);
-    const height = Math.max(0, car.y - ground);
-    shadow.position.set(car.x, ground, car.z);
-    shadow.rotation.y = car.heading;
-    shadowTilt.rotation.z = groundRoll;
-    shadowTilt.rotation.x = -groundPitch;
-    const s = clamp(1 - height * 0.12, 0.35, 1);
-    shadow.scale.set(s, s, s);
-    (blob.material as THREE.MeshBasicMaterial).opacity = 0.28 * s * fade;
+    shadow.place(car, groundYUnder(state), groundPitch, groundRoll);
   };
 
   const dispose = (): void => {
     damage.dispose();
     body.dispose();
-    blob.geometry.dispose();
-    (blob.material as THREE.MeshBasicMaterial).dispose();
+    shadow.dispose();
     for (const geo of lampGeos) geo.dispose();
     lampMat.dispose();
     headMat.dispose();
@@ -541,13 +530,14 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     group,
     cabin: body.cabin,
     cockpit: body.cockpit?.group ?? null,
-    shadow,
+    shadow: shadow.group,
     debris: damage.debris,
     update,
     setInside,
     setRearView,
     onEvents: damage.onEvents,
     setLights,
+    setShade: shadow.setShade,
     setWet,
     grime: dirt.level,
     lampSpread: lampSpread(bodySpec),
