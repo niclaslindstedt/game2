@@ -154,5 +154,5 @@ three cars. Both move with the catalog.
 ## Skill self-improvement
 
 Record traps and heuristics as lesson fragments under
-`.agent/skills/car-tuning/.lessons/` via the **`skill-reflection`** skill; it
+`.agents/skills/car-tuning/.lessons/` via the **`skill-reflection`** skill; it
 owns pruning, merging and promoting them into this file.

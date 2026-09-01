@@ -66,7 +66,7 @@ not after the first surprise.
 ## The fragment format
 
 ```
-.agent/skills/<skill>/.lessons/<unix-timestamp>-<slug>.md
+.agents/skills/<skill>/.lessons/<unix-timestamp>-<slug>.md
 ```
 
 ```markdown
@@ -121,7 +121,7 @@ A gotcha, a heuristic, a failure mode, a step you wish you'd known, a tuning
 number that worked. Write it in the **same PR** as the work that taught it:
 
 ```sh
-cat > .agent/skills/<skill>/.lessons/$(date +%s)-short-slug.md <<'EOF'
+cat > .agents/skills/<skill>/.lessons/$(date +%s)-short-slug.md <<'EOF'
 ---
 title: …
 date: YYYY-MM-DD

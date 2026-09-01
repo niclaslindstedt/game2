@@ -93,7 +93,7 @@ Pure refactors, CI and build tweaks, comment and docs edits, test-only
 changes, formatting. Apply the label to the PR; the job re-runs and passes.
 
 A PR is also let through automatically when **every** changed file matches the
-skip-list in `check-changeset.mjs`: `tests/`, `.github/`, `.agent/`,
+skip-list in `check-changeset.mjs`: `tests/`, `.github/`, `.agents/`,
 `.claude/`, `.changes/`, `docs/`, `scripts/`, `Makefile`, **any `*.md`**, the
 dotfile configs (`.nvmrc`, `.editorconfig`, `.prettierrc*`, `.gitignore`,
 `.gitattributes`), `eslint.config.js`, `vite.config.ts`, any
@@ -136,6 +136,6 @@ into `pages.yml` so the tag is served at `/`.
 ## Skill self-improvement
 
 Record traps and drift signals as lesson fragments under
-`.agent/skills/changelog/.lessons/` via the **`skill-reflection`** skill
+`.agents/skills/changelog/.lessons/` via the **`skill-reflection`** skill
 (`node scripts/skill-lessons.mjs changelog --list`); it owns pruning, merging,
 and promoting them into this file.
