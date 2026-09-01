@@ -10,8 +10,8 @@
 //   through. Colours and alpha both interpolate across a cell, so a wiped
 //   edge is a gradient rather than a staircase.
 //
-//   THE BLADES. A tandem pair on the windscreen and a single arm on the
-//   backlight, each a rigid body pivoting in the plane of its own screen.
+//   THE BLADES. One long arm on each screen, pivoting in the plane of that
+//   screen off a boss in the middle of its sill (`ARMS` has why).
 //   What makes them read as wipers rather than as metronomes is that they
 //   only clear THE ARC THEY PASS THROUGH: every vertex of the pane knows
 //   its polar position about each pivot, so a stroke clears exactly the
@@ -33,12 +33,19 @@
 // film has a material of its own because it is the one part of the car that
 // has to be able to disappear. Both take the time of day with everything
 // else, as a multiply into the material colour.
+//
+// WATER IS NOT HERE. The rain on the player's own windscreen is a shader on
+// a pane of its own (car/screen-rain.ts), because a bead is a discrete thing
+// millimetres across and a vertex grid fine enough to carry one would be a
+// hundred thousand triangles on one window. What it needs from this file is
+// where the arm IS — `WipeState`, handed out live.
 
 import * as THREE from "three";
 
 import { NO_DIRT } from "../car-dirt.ts";
-import { MeshBuilder, patchAt, patchNormal, shadeFactor, type V3 } from "./builder.ts";
+import { MeshBuilder, patchAt, shadeFactor, type V3 } from "./builder.ts";
 import { GLASS_LIFT, screenPanes, type ScreenPane } from "./greenhouse.ts";
+import { paneFrame, type PaneFrame } from "./pane-frame.ts";
 import type { CarBodySpec } from "./spec.ts";
 
 /** How far proud of the panel the film and the blades sit, m. Both clear
@@ -246,8 +253,55 @@ const ARM_COLOR = 0x2b2f36;
  * swept. Without it a fast stroke at a low frame rate leaves gaps. */
 const WIPE_EDGE = 0.05;
 
+/** WHAT THE BLADE ON ONE SCREEN IS DOING, in that screen's own frame
+ * (car/pane-frame.ts) — handed out live rather than copied, so a reader gets
+ * this frame's stroke without the wipers having to know who is reading.
+ *
+ * It exists because the blade is no longer the only thing on the glass. The
+ * grime film is cleared by the sweep itself, vertex by vertex, and needs
+ * none of this; the RAIN (car/screen-rain.ts) is a shader that has no
+ * vertices to clear and has to work out for itself how long ago the arm went
+ * past any given point of the pane. Everything below is what that takes: the
+ * geometry of the arc, and where in the out-and-back the arm is right now.
+ *
+ * `park`, `sweep` and `angle` are all measured the way a turn about the
+ * screen's own normal runs — from straight up, TOWARD −x. */
+export type WipeState = {
+  /** The pivot in the pane's own metres: across from the middle of the
+   * sill, and up from it. */
+  pivotX: number;
+  pivotY: number;
+  /** How long the arm is, m, and how much of that length near the pivot is
+   * bare arm rather than rubber. */
+  reach: number;
+  inner: number;
+  /** Where the blade rests, and the signed swing from there, rad. */
+  park: number;
+  sweep: number;
+  /** Where the blade is now, rad, and how far through its own out-and-back,
+   * 0..2π. */
+  angle: number;
+  phase: number;
+  /** How long the out-and-back it is on takes, s. Not a constant: the arms
+   * speed up as the weather does (`STROKE`). */
+  period: number;
+  /** Seconds since the blades last came to rest AT THE PARK — zero while a
+   * stroke is running, and counting up through a beat between strokes and
+   * through the whole time they are switched off. Anything working out how
+   * long ago the arm passed a point needs this on top of the phase: a screen
+   * that has been parked for six seconds is six seconds wetter than the
+   * phase alone can say. */
+  parkAge: number;
+  running: boolean;
+};
+
 export type CarWipers = {
   group: THREE.Group;
+  /** The WINDSCREEN's blade, live — what anything else drawn on that glass
+   * answers to. A car built without arms still has one: parked, never
+   * running, its `parkAge` climbing for the whole stage, which is exactly
+   * what "nothing ever clears this screen" looks like to a reader. */
+  front: WipeState | null;
   /** The grime pane itself — handed out so the assembly can order it over
    * the glass it is laid on, which no distance sort can be trusted to get
    * right for two surfaces three millimetres apart. Null on a car built
@@ -266,54 +320,8 @@ export type CarWipers = {
   dispose: () => void;
 };
 
-/** A screen's own metric frame: an origin at the middle of its bottom edge,
- * `right` across it, `up` along it, `normal` out of it. Built from the
- * patch rather than assumed, because a windscreen is a warped quad and the
- * backlight's own v axis runs the other way. */
-type Frame = {
-  origin: THREE.Vector3;
-  right: THREE.Vector3;
-  up: THREE.Vector3;
-  normal: THREE.Vector3;
-  width: number;
-  height: number;
-};
-
 function vec(p: V3): THREE.Vector3 {
   return new THREE.Vector3(p[0], p[1], p[2]);
-}
-
-function frameOf(pane: ScreenPane): Frame {
-  const { patch, rect } = pane;
-  const uMid = (rect.u0 + rect.u1) / 2;
-  // Which v edge is the BOTTOM is the screen's own business: the windscreen
-  // runs cowl → roof and the backlight roof → deck.
-  const low = vec(patchAt(patch, uMid, rect.v0));
-  const high = vec(patchAt(patch, uMid, rect.v1));
-  const flip = low.y > high.y;
-  const vBottom = flip ? rect.v1 : rect.v0;
-  const vTop = flip ? rect.v0 : rect.v1;
-
-  const origin = vec(patchAt(patch, uMid, vBottom));
-  const up = vec(patchAt(patch, uMid, vTop)).sub(origin);
-  const height = up.length() || 1;
-  up.divideScalar(height);
-
-  const left = vec(patchAt(patch, rect.u0, vBottom));
-  const right = vec(patchAt(patch, rect.u1, vBottom)).sub(left);
-  const width = right.length() || 1;
-  right.divideScalar(width);
-  // Orthogonalise against `up`, then point the frame the same way the panel
-  // faces — a left-handed frame would sweep the blades behind the glass.
-  right.addScaledVector(up, -right.dot(up)).normalize();
-  // OUTWARD, always: the left flank's patch is an x-mirror, so its diagonals
-  // hand back the normal pointing into the cabin (`patchNormal`). Taken as
-  // it comes, every film and every blade on that side of the car is laid
-  // inside the bodywork.
-  const normal = vec(patchNormal(patch));
-  if (pane.mirrored) normal.negate();
-  if (new THREE.Vector3().crossVectors(right, up).dot(normal) < 0) right.negate();
-  return { origin, right, up, normal, width, height };
 }
 
 /** One pivot on a screen, with every film vertex already resolved into
@@ -360,15 +368,14 @@ type Film = {
   ceiling: number;
   pivots: Pivot[];
   blades: THREE.Object3D[];
-  park: number;
-  sweep: number;
+  /** How much slower this screen's arm is than the windscreen's. */
   rate: number;
-  /** Where the blades are in their stroke: the phase of the out-and-back,
-   * the angle it last put them at, and the rest before the next one. */
-  phase: number;
-  angle: number;
+  /** What is left of the beat before the next stroke, s. */
   rest: number;
-  running: boolean;
+  /** The stroke itself, in the form anything else on this glass reads it —
+   * see `WipeState`. A pane with no arm still carries one, parked, so
+   * nothing downstream has to branch on whether a window has a wiper. */
+  wipe: WipeState;
 };
 
 function hash(i: number): number {
@@ -444,7 +451,7 @@ export function buildWipers(
     const pane = screen.pane;
     const grid = screen.grid;
     const arm = screen.arm;
-    const frame = frameOf(pane);
+    const frame: PaneFrame = paneFrame(pane);
     const offset = position.length / 3;
     const cols = grid.cols;
     const rows = grid.rows;
@@ -581,13 +588,21 @@ export function buildWipers(
       ceiling: screen.ceiling,
       pivots,
       blades,
-      park: arm?.park ?? 0,
-      sweep: arm?.sweep ?? 0,
       rate: arm === ARMS.rear ? REAR_RATE : 1,
-      phase: 0,
-      angle: arm?.park ?? 0,
       rest: 0,
-      running: false,
+      wipe: {
+        pivotX: arm ? ((arm.pivots[0] ?? 0) * frame.width) / 2 : 0,
+        pivotY: arm ? arm.base * frame.height : 0,
+        reach,
+        inner: reach * BLADE.from,
+        park: arm?.park ?? 0,
+        sweep: arm?.sweep ?? 0,
+        angle: arm?.park ?? 0,
+        phase: 0,
+        period: STROKE.slow,
+        parkAge: 0,
+        running: false,
+      },
     });
   }
 
@@ -636,43 +651,50 @@ export function buildWipers(
    * different behaviours out of the same arm.
    */
   const sweep = (f: Film, wet: number, coat: number, dt: number): void => {
+    const w = f.wipe;
+    // Time at the park runs whatever the arms are doing — it is what says
+    // how long the glass has been left alone, and a screen with no arm over
+    // it has been left alone since the start of the stage. Zeroed below the
+    // moment a stroke is actually moving.
+    w.parkAge += dt;
     if (f.blades.length === 0) return;
     // Rain starts them at a hint of it; dry grime has to have properly
     // built up first. See `WIPE`.
     const need = Math.max(wet, coat);
-    if (!f.running) {
+    if (!w.running) {
       if (wet < WIPE.rain && coat < WIPE.grime) return;
-      f.running = true;
-      f.phase = 0;
+      w.running = true;
+      w.phase = 0;
     }
     if (f.rest > 0) {
       f.rest -= dt;
       return;
     }
-    const period = (STROKE.slow + (STROKE.fast - STROKE.slow) * Math.min(1, need * 1.3)) * f.rate;
-    const was = f.angle;
-    f.phase += (Math.PI * 2 * dt) / period;
-    if (f.phase >= Math.PI * 2) {
+    w.period = (STROKE.slow + (STROKE.fast - STROKE.slow) * Math.min(1, need * 1.3)) * f.rate;
+    w.parkAge = 0;
+    const was = w.angle;
+    w.phase += (Math.PI * 2 * dt) / w.period;
+    if (w.phase >= Math.PI * 2) {
       // A stroke always finishes: the blades stop at the park, never
       // halfway up the glass. Where they go from there is the whole switch:
       // a clean enough screen parks them, rain keeps them going (with a
       // beat between strokes while it is only spitting), and a DRY screen
       // that is merely dusty gets one stroke and a long wait.
-      f.phase = 0;
+      w.phase = 0;
       // With no pane there is nothing per-vertex to smear, so the stroke
       // takes its share off the one number the arms are reading instead —
       // which is what stops a filmless car's wipers running for the rest of
       // the stage on a coat that never comes down.
       if (f.count === 0) f.level *= SMEAR;
-      if (need < WIPE.off) f.running = false;
+      if (need < WIPE.off) w.running = false;
       else if (wet < WIPE.rain) f.rest = REST.dry;
       else if (wet < 0.4) f.rest = REST.drizzle * (1 - wet);
     }
-    f.angle = f.park + (f.sweep * (1 - Math.cos(f.phase))) / 2;
-    for (const blade of f.blades) blade.rotation.z = f.angle;
+    w.angle = w.park + (w.sweep * (1 - Math.cos(w.phase))) / 2;
+    for (const blade of f.blades) blade.rotation.z = w.angle;
 
-    const lo = Math.min(was, f.angle) - WIPE_EDGE;
-    const hi = Math.max(was, f.angle) + WIPE_EDGE;
+    const lo = Math.min(was, w.angle) - WIPE_EDGE;
+    const hi = Math.max(was, w.angle) + WIPE_EDGE;
     for (const pivot of f.pivots) {
       const inner = pivot.reach * BLADE.from;
       for (let k = 0; k < f.count; k++) {
@@ -734,5 +756,5 @@ export function buildWipers(
     for (const geo of bladeGeos) geo.dispose();
   };
 
-  return { group, film: filmMesh, update, dispose };
+  return { group, front: films[0]?.wipe ?? null, film: filmMesh, update, dispose };
 }

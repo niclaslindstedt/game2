@@ -218,6 +218,21 @@ await scene("cockpit", { start: "1", bot: "1", camera: "cockpit" }, async (page)
   await atStageTime(page, 12);
 });
 
+// The driver's seat IN the weather, which is the one frame the water on the
+// windscreen is drawn in (car/screen-rain.ts). It is the cockpit row's cost
+// plus a copy of the finished frame and one more pass over a pane of nine
+// hundred triangles — and it is nothing at all from any other camera, on any
+// other car, or in any other weather, which is what the two rows either side
+// of it are here to show.
+await scene(
+  "cockpit-storm",
+  { start: "1", bot: "1", camera: "cockpit", weather: "storm" },
+  async (page) => {
+    await racing(page);
+    await atStageTime(page, 12);
+  },
+);
+
 // The same stage under a thunderstorm: the overcast deck, the scud tearing
 // along under it, the rain sheet and both pairs of lamps, all of which are
 // off on a clear day. The one scene that meters what the WEATHER costs.

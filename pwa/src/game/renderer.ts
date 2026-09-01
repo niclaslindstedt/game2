@@ -250,6 +250,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   let mirrorWas = false;
   /** Whether the mirror's own pass runs THIS frame — see where it is set. */
   let mirrorFill = false;
+  /** …and whether the WATER ON THE WINDSCREEN gets its own pass this frame:
+   * the camera is in the car, and there is rain on the glass to draw. */
+  let glassRain = false;
   /** ...and how far it is allowed to see when it does, as a fraction of the
    * forward view's fog. Settled in `render` and read in `drawScene`, so both
    * halves of one frame pull the air in by the same amount. */
@@ -1074,6 +1077,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // field is already drawing, in the wrong paint. A finished run has
     // nowhere on a rally stage to stand, which is the same rule the field
     // keeps for a crew who is home (`onRoad`).
+    glassRain = false;
     if (car) {
       const mine = !watched;
       car.group.visible = mine;
@@ -1086,6 +1090,13 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       // road, so the swap follows the shot rather than the mode.
       const inside = view === "cockpit" && driving;
       car.setInside(inside);
+      // THE WATER ON THE WINDSCREEN is the driver's alone, and the pass that
+      // draws it costs a copy of the whole frame — so it runs only from the
+      // seat, and only while there is something on the glass. The sky is
+      // pushed here rather than by the car, which knows nothing about the
+      // weather it is being rained on by (car/screen-rain.ts).
+      glassRain = mine && inside && !mapView && (car.screenRain?.active() ?? false);
+      if (glassRain) car.screenRain?.setSky(environment.carTint(), environment.flash());
       // From the seat the road behind is read off the mirror hanging in the
       // windscreen, so the strip at the top of the frame stands down and the
       // pane lights up instead. One rear view, in whichever of the two homes
@@ -1219,6 +1230,13 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       renderer.setScissorTest(false);
       renderer.setViewport(0, 0, w, h);
       renderer.render(scene, chase.camera);
+      // THE RAIN ON THE GLASS GOES ON AFTER THE WORLD, because every drop on
+      // it is a lens showing the world BENT — so the world has to have been
+      // drawn before there is anything to bend. It reads the frame that is
+      // now in the buffer, and lays the water over it with the same depth
+      // the scene pass left, so the wiper still passes in front of the
+      // drops it is clearing (car/screen-rain.ts).
+      if (glassRain) car?.screenRain?.draw(renderer, chase.camera);
       if (mirrorStrip) mirror.composite(renderer, w, h);
       return;
     }

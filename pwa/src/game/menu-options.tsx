@@ -350,9 +350,10 @@ function VideoTab({ settings, onSettings }: Pick<OptionsProps, "settings" | "onS
       />
       <div className="opt-note">
         CAR DETAIL is what is behind the glass and what is on it. LOW puts trim, seats and a crew in
-        every cabin, and road grime on every car&apos;s screens for the wipers to clear. FULL adds
-        the roll cage and a steering wheel that turns. OFF puts the old solid windows back and
-        leaves every screen permanently clean. Applies to the next stage you start.
+        every cabin, road grime on every car&apos;s screens for the wipers to clear, and rain
+        beading on your own windscreen from the cockpit. FULL adds the roll cage and a steering
+        wheel that turns. OFF puts the old solid windows back and leaves every screen permanently
+        clean. Applies to the next stage you start.
       </div>
       <div className="opt-note">
         Grass, shrubs and stumps between the trees — the cheapest frames on this page. The trees you
