@@ -258,6 +258,35 @@ A whole stage's frame resolves a junction, a bridge or a guarded hairpin as a fe
 
 The frame fits the road and lets the nature fill the rest, so a longer stage renders from further up. Dials pass straight through (`npm run track -- --elevation 1 --water 0.9`), which is the fastest way to see what one does. Pair with `make sim` (`--length` picks the band) — a rules change must keep bots finishing (see [simulation.md](simulation.md)).
 
+## Describing one stage
+
+`make track` is for judging the RULES across seeds. `make level` is for reasoning about ONE stage — a campaign level, or any seed on any dials — without driving it:
+
+```sh
+make level LEVEL=1                          # campaign stage 1 → previews/level-taiga-1.png + .txt
+make level LEVEL=taiga-3                    # ...by id
+make level LEVEL=1 FOCUS=J1                 # a close-up, 240 m across, around the first jump
+make level LEVEL=1 FOCUS=T4 SPAN=160        # ...around a call, at 160 m across
+make level LEVEL=1 FOCUS=1200               # ...around 1200 m along the stage
+make level SEED=38 LENGTH=short             # any seed on the default dials
+make level SEED=7 SHAPE=circuit ARGS='--asphalt 0.6 --water 0.9'
+make level LEVEL=2 ARGS=--json              # the same features as data
+make level ARGS=--list                      # the campaign's stages and their seeds
+```
+
+It loads the engine and the campaign's level table and nothing else — no build, no browser — and draws:
+
+- the ground tinted by height with contours, and the lakes and streams in blue; the road at its width, coloured by surface (gravel, tarmac, bridge deck, ford), faded past the finish gate; the abandoned branches and the public roads in grey;
+- every co-driver call as a stroke down the road in its severity's colour (green easy, amber medium, red hard), labelled `T3 HR` — the number it is called as, the severity's initial, and the driver's left or right;
+- every jump lip (`J1`), blind crest (`CR1`), ford (`F1`), bridge (`B1`), split board (`CP1`), junction (`JN1`), the start and the finish;
+- every homestead (`H1`, R37): the yard, the drive off the stage and the house's footprint, with its parked cars and lane trees among the solids;
+- the trees, rocks and logs standing within 12 m of the road's edge, and the corner guards;
+- the road's elevation profile against distance under the map, with the same ids on it, and the key down the side.
+
+The map is drawn north up with EAST ON THE LEFT, which is the driver's hand: the engine's heading grows from north toward east and the game reads that as a LEFT turn, so a conventional east-right map would mirror every call.
+
+The table it prints (and writes beside the picture) says what each id is, in stage order — for a call its severity, angle, length, tightest radius and the grade into it; for a jump its lip height, the ramp's grade and length, and which call it lands before; for each of them what is standing within reach of the edge and where the nearest thing is. The ids are the same on the picture, in the table and in `--json`, so "the first jump on level 1" means `J1` in all three.
+
 ## Scoring the output
 
 Looking catches what a picture shows. `make analyze` catches the rest — the
