@@ -98,7 +98,21 @@ export type RoadBlock = {
   kind: BlockKind;
 };
 
-export type Spur = {
+/** What every road that hangs off the stage has in common — an abandoned
+ * branch (R17) or a homestead's drive (R37): where on the stage it leaves,
+ * the samples it is made of, and how wide it is. The terrain's shelf, the
+ * forest's keep-off, the barrier placer and the renderer's ribbon read this
+ * and nothing more, so a drive is laid, flattened, kept clear and drawn by
+ * the same code as a branch without having to pretend it is one. */
+export type SpurLine = {
+  /** Arc position on the stage it leaves from. */
+  atS: number;
+  samples: SpurSample[];
+  /** Full road width, m. */
+  width: number;
+};
+
+export type Spur = SpurLine & {
   /** Arc position of its junction on the stage. */
   atS: number;
   /** Which junction it hangs off: the one where the route JOINS the
@@ -712,11 +726,14 @@ export function cutSpur(
  * choice is the cheaper mistake.
  */
 export function placeBlock(
-  spur: Spur,
+  spur: SpurLine,
   routeClear: (x: number, z: number) => number,
   /** Half the ROUTE's width, m — what the barrier has to clear. */
   routeHalf: number,
   seed: number,
+  /** Tells two lines off the SAME arc position apart for the dice — a
+   * junction's two arms, say. Zero for anything that stands alone. */
+  salt = 0,
 ): RoadBlock | null {
   const want = routeHalf + ROAD_CROSS.reach + SPUR.block.clear;
   const least = routeHalf + SPUR.block.least;
@@ -755,7 +772,7 @@ export function placeBlock(
   if (!best || bestRoom < least) return null;
   // Deterministic per branch, and stable under an endless stream's repeated
   // appends: the junction's arc position and which arm it is.
-  const roll = hash2(Math.round(spur.atS), spur.end === "entry" ? 1 : 0, (seed ^ 0x7f4a) >>> 0);
+  const roll = hash2(Math.round(spur.atS), salt, (seed ^ 0x7f4a) >>> 0);
   const kinds: BlockKind[] = ["cones", "tyres", "bales", "drums"];
   return {
     x: best.x,
@@ -770,18 +787,18 @@ export function placeBlock(
 
 /** Half the width a spur's corridor occupies, m — the mat plus the verge
  * the ribbon draws beside it. */
-export function spurReach(spur: Spur): number {
+export function spurReach(spur: SpurLine): number {
   return spur.width / 2 + ROAD_CROSS.reach;
 }
 
 /** Where the branches run, as a lookup: the terrain field asks it for the
  * nearest branch under every height query, so it has to answer in a fixed
  * few cell probes rather than a walk down every spur it has ever built. */
-export type SpurHit = { spur: Spur; sample: SpurSample; d: number };
+export type SpurHit = { spur: SpurLine; sample: SpurSample; d: number };
 
 export type SpurIndex = {
-  spurs: Spur[];
-  add: (spur: Spur) => void;
+  spurs: SpurLine[];
+  add: (spur: SpurLine) => void;
   nearest: (x: number, z: number) => SpurHit | null;
   /** Endless: forget the branches the run has left far behind. */
   pruneBefore: (atS: number) => void;
@@ -797,7 +814,7 @@ const INDEX_CELL = 24;
  * holds, so a box left as it was stays a superset and costs work rather
  * than correctness. */
 type SpurCell = {
-  entries: { spur: Spur; sample: SpurSample }[];
+  entries: { spur: SpurLine; sample: SpurSample }[];
   minX: number;
   maxX: number;
   minZ: number;
@@ -811,7 +828,7 @@ type SpurCell = {
 const NEAR_BLOCK = blockOffsets(3);
 
 export function createSpurIndex(): SpurIndex {
-  const spurs: Spur[] = [];
+  const spurs: SpurLine[] = [];
   const grid = new Map<number, SpurCell>();
   const key = (x: number, z: number): number =>
     cellKey(Math.floor(x / INDEX_CELL), Math.floor(z / INDEX_CELL));
@@ -825,7 +842,7 @@ export function createSpurIndex(): SpurIndex {
   let nearCz = NaN;
   const nearCells: SpurCell[] = [];
 
-  const add = (spur: Spur): void => {
+  const add = (spur: SpurLine): void => {
     spurs.push(spur);
     for (const sample of spur.samples) {
       const k = key(sample.x, sample.z);
@@ -864,7 +881,7 @@ export function createSpurIndex(): SpurIndex {
         if (cell) nearCells.push(cell);
       }
     }
-    let bestSpur: Spur | null = null;
+    let bestSpur: SpurLine | null = null;
     let bestSample: SpurSample | null = null;
     let bestD2 = Infinity;
     // Squared throughout, and the winner built once at the end: this runs

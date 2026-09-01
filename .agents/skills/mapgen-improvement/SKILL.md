@@ -186,18 +186,19 @@ hold water" rather than "did my change cost anything".
 
 ## The modules, and their jobs
 
-| File          | Job                                                                                                                                                                    |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rules.ts`    | **The rule book.** Every constraint and vocabulary number as DATA. Tuning the generator means editing this file.                                                       |
-| `generate.ts` | **The search.** Draws candidates, validates against the rules, retries bounded, backtracks, rejects a whole attempt rather than ever shipping a violation.             |
-| `compile.ts`  | **The geometry.** Turns the plan into evenly spaced samples — the single geometric truth read by physics, renderer and bots alike.                                     |
-| `geology.ts`  | **The GROUND, in layers (R32).** Bedrock with its glacial smoothness, the groundwater table in it, the soil on top. Everything about the country that is not the road. |
-| `land.ts`     | The road builder's view of that ground: how high is it, can I build here.                                                                                              |
-| `road.ts`     | **The cross-section.** What a road is ACROSS its width. Read by renderer, terrain AND physics — change it once, all three move.                                        |
-| `spurs.ts`    | **The other roads.** The branch each junction abandons: real road that runs off the map.                                                                               |
-| `guards.ts`   | **The corner guards (R14).**                                                                                                                                           |
-| `river.ts`    | **The water (R18).** One watercourse per valley, traced by the rules of nature.                                                                                        |
-| `terrain.ts`  | The field that shapes all of it around the road, and answers every query the game makes about the world.                                                               |
+| File            | Job                                                                                                                                                                                                                                     |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rules.ts`      | **The rule book.** Every constraint and vocabulary number as DATA. Tuning the generator means editing this file.                                                                                                                        |
+| `generate.ts`   | **The search.** Draws candidates, validates against the rules, retries bounded, backtracks, rejects a whole attempt rather than ever shipping a violation.                                                                              |
+| `compile.ts`    | **The geometry.** Turns the plan into evenly spaced samples — the single geometric truth read by physics, renderer and bots alike.                                                                                                      |
+| `geology.ts`    | **The GROUND, in layers (R32).** Bedrock with its glacial smoothness, the groundwater table in it, the soil on top. Everything about the country that is not the road.                                                                  |
+| `land.ts`       | The road builder's view of that ground: how high is it, can I build here.                                                                                                                                                               |
+| `road.ts`       | **The cross-section.** What a road is ACROSS its width. Read by renderer, terrain AND physics — change it once, all three move.                                                                                                         |
+| `spurs.ts`      | **The other roads.** The branch each junction abandons: real road that runs off the map.                                                                                                                                                |
+| `homesteads.ts` | **The country somebody lives in (R37).** A house on a yard, a car or two, a lane of trees, and a dirt drive meeting the stage square. Its own list on the track, NOT a spur: the analysis judges a branch by whether it leaves the map. |
+| `guards.ts`     | **The corner guards (R14).**                                                                                                                                                                                                            |
+| `river.ts`      | **The water (R18).** One watercourse per valley, traced by the rules of nature.                                                                                                                                                         |
+| `terrain.ts`    | The field that shapes all of it around the road, and answers every query the game makes about the world.                                                                                                                                |
 
 And the scoreboard, which is NOT in `mapgen/` on purpose:
 

@@ -56,8 +56,20 @@ export {
   type BlockKind,
   type RoadBlock,
   type Spur,
+  type SpurLine,
   type SpurSample,
 } from "./spurs.ts";
+export {
+  homesteadSolids,
+  placeHomesteads,
+  type Homestead,
+  type HomesteadContext,
+  type HousePlan,
+  type LaneTree,
+  type ParkedCar,
+  type RoofKind,
+  type WallPaint,
+} from "./homesteads.ts";
 export { createGuardField, type CornerGuard, type GuardField } from "./guards.ts";
 export {
   buildKerbs,

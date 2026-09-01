@@ -43,6 +43,13 @@ const ROAD = {
   cone: [0xff, 0x7d, 0x1f],
 };
 
+/** R37 — the three paints a house comes in, as the map shows them. */
+const HOUSE_PAINT = {
+  red: [0x8c, 0x2f, 0x24],
+  yellow: [0xd8, 0xb2, 0x5a],
+  white: [0xe9, 0xe4, 0xd6],
+};
+
 /** The route overlay: the one thing this picture has to answer before any
  * other is WHICH road is the stage. Nothing in a landscape is this color. */
 const ROUTE = [0xff, 0x2f, 0x8e];
@@ -589,6 +596,11 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
   // puts the route's mat over the branch's lines, and the through road's
   // paint then stops dead at the crossing it is supposed to run past.
   for (const spur of track.spurs) drawRoad(spur.samples, spur.width);
+  // R37 — the drives down to the homesteads, before the route for the same
+  // reason as the branches: the stage's mat goes over the mouth.
+  for (const homestead of track.homesteads) {
+    drawRoad(homestead.drive.samples, homestead.drive.width);
+  }
   drawRoad(track.samples, track.width);
   // A branch IS the main road continued past the crossing, so its paint
   // runs the whole way to the meeting point.
@@ -624,6 +636,47 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
     for (let k = -2; k <= 2; k++) {
       const l = (k / 2.4) * (spur.width / 2);
       canvas.disk(px(at.x + r.x * l), pz(at.z + r.z * l), Math.max(2, scale * 1.4), ROAD.cone);
+    }
+  }
+
+  // ── R37 — the homesteads: the yard's gravel, the house on it as a block
+  // in its own paint, the cars as dots, the lane trees, and the barrier
+  // across the drive's mouth. Over-scale like the cones, and for the same
+  // reason: what the picture answers is WHERE the houses are.
+  for (const homestead of track.homesteads) {
+    const { yard, house } = homestead;
+    canvas.disk(px(yard.x), pz(yard.z), Math.max(2, scale * yard.radius), ROAD.gravel.loose);
+    const fwd = { x: Math.sin(house.heading), z: Math.cos(house.heading) };
+    const right = { x: Math.cos(house.heading), z: -Math.sin(house.heading) };
+    const hw = Math.max(house.plan.width / 2, 3 / scale);
+    const hd = Math.max(house.plan.depth / 2, 3 / scale);
+    canvas.poly(
+      [
+        [px(house.x + right.x * hw + fwd.x * hd), pz(house.z + right.z * hw + fwd.z * hd)],
+        [px(house.x - right.x * hw + fwd.x * hd), pz(house.z - right.z * hw + fwd.z * hd)],
+        [px(house.x - right.x * hw - fwd.x * hd), pz(house.z - right.z * hw - fwd.z * hd)],
+        [px(house.x + right.x * hw - fwd.x * hd), pz(house.z + right.z * hw - fwd.z * hd)],
+      ],
+      HOUSE_PAINT[house.plan.walls],
+    );
+    for (const car of homestead.cars) {
+      canvas.disk(px(car.x), pz(car.z), Math.max(1.5, scale * 1.2), [0x2a, 0x2c, 0x30]);
+    }
+    for (const tree of homestead.trees) {
+      canvas.disk(px(tree.x), pz(tree.z), Math.max(1, scale * 2.2), [0x8c, 0xc2, 0x57]);
+    }
+    const block = homestead.block;
+    if (block) {
+      const r = { x: Math.cos(block.heading), z: -Math.sin(block.heading) };
+      for (let k = -1; k <= 1; k++) {
+        const l = (k / 1.2) * (block.width / 2);
+        canvas.disk(
+          px(block.x + r.x * l),
+          pz(block.z + r.z * l),
+          Math.max(2, scale * 1.2),
+          ROAD.cone,
+        );
+      }
     }
   }
 

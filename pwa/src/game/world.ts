@@ -52,6 +52,7 @@ import { buildWild } from "./wild.ts";
 import { buildTerrain, LAKE_Y, type Terrain } from "./terrain.ts";
 import { buildStreamMeshes } from "./streams.ts";
 import { buildFinishGate, buildStartGate, type FinishGate, type Muzzle } from "./finish-gate.ts";
+import { buildHomestead } from "./homestead.ts";
 import { buildKerbing, createPostField } from "./kerbs.ts";
 import { buildCrowd, type Crowd } from "./crowd.ts";
 import { rightOf } from "./ribbon.ts";
@@ -169,7 +170,9 @@ function buildScenery(
       const r = guard[i].width / 2 + margin;
       if (dx * dx + dz * dz < r * r) return false;
     }
-    return true;
+    // ...and off every OTHER road: an abandoned branch (R17), a homestead's
+    // drive and its yard (R37). One cell lookup, cached by the field.
+    return field.spurClearance(x, z) >= margin;
   };
 
   const flora: FloraPlacement[] = [];
@@ -797,6 +800,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
   let fordScan = 0;
   let streamScanS = 0;
   let spurScan = 0;
+  let homesteadScan = 0;
   let finish: FinishGate | null = null;
   /** R26 — the crowd, rebuilt whenever the stage grows a new stand. The
    * whole crowd is a handful of instanced meshes, so it is cheaper to
@@ -837,6 +841,12 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
       const spur = track.spurs[spurScan];
       if (spur.atS > track.samples[to - 1].s) break;
       chunkGroup.add(buildSpur(track, spur, cones, beside));
+    }
+    // R37 — the homesteads whose drives leave this stretch of road.
+    for (; homesteadScan < track.homesteads.length; homesteadScan++) {
+      const homestead = track.homesteads[homesteadScan];
+      if (homestead.atS > track.samples[to - 1].s) break;
+      chunkGroup.add(buildHomestead(track, homestead, cones, beside, season));
     }
     const fords = buildFords(track, fordScan, to);
     fordScan = fords.next;

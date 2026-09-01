@@ -87,7 +87,7 @@ describe("crossings (R13)", () => {
           // A bay stands within one bay's length of every point down both
           // edges — no gap a nose could find, because behind this one is
           // the river.
-          const bays = terrain.parapetsNear(x, z, PARAPET_BAY / 2);
+          const bays = terrain.fixturesNear(x, z, PARAPET_BAY / 2);
           expect(bays.length).toBeGreaterThan(0);
           // And it is a wall, not scenery: bedded into the deck it is cast
           // onto, nothing a car carries breaks it, and it stands well over
@@ -99,7 +99,7 @@ describe("crossings (R13)", () => {
       }
       // ...and nothing stands along a road that is not a deck.
       const open = track.samples.find((s) => s.deck === null);
-      if (open) expect(terrain.parapetsNear(open.x, open.z, 10)).toHaveLength(0);
+      if (open) expect(terrain.fixturesNear(open.x, open.z, 10)).toHaveLength(0);
     }
   });
 
