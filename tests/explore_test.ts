@@ -22,6 +22,7 @@ import {
   corridorOffset,
   createGame,
   createTerrain,
+  stageDirection,
   standSolid,
   step,
   trackLost,
@@ -763,5 +764,127 @@ describe("knowing the player is lost", () => {
     // Back on the road, and only then, it goes.
     state.offRoad = false;
     expect(trackLost(state)).toBe(false);
+  });
+});
+
+// ...AND WHEN THE ROAD IS STILL UNDER THE WHEELS AND BEING DRIVEN THE WRONG
+// WAY DOWN. A different problem from being lost — there is nothing to find —
+// and a different sign, so it owes its own pair of tests: the geometry that
+// tells a turned-round car from the two things that merely look like one,
+// and the dwell and the hysteresis around it.
+describe("knowing the car is going the wrong way", () => {
+  /** Somewhere down a long straight, so the car has road behind it as well
+   * as in front. */
+  const AT = 200;
+
+  /** Set the car down on the road at `AT`, pointed `turn` radians off the
+   * way the stage runs and carrying `u` m/s of its own forward speed. */
+  function pointed(turn: number, u: number): GameState {
+    const state = createGame({
+      seed: 4,
+      skipCountdown: true,
+      track: compileTrack(4, LONG_STRAIGHT),
+    });
+    const s = state.track.samples[AT];
+    state.car.x = s.x;
+    state.car.z = s.z;
+    state.car.y = s.elevation;
+    state.car.heading = s.heading + turn;
+    state.car.u = u;
+    state.progressIndex = AT;
+    state.wrongWayAt = AT;
+    state.progressS = s.s;
+    return state;
+  }
+
+  const BACK = Math.PI;
+
+  it("reads the nose and the travel as two separate questions", () => {
+    // Driving down the stage: nose with the road, ground being covered
+    // forwards.
+    const ahead = stageDirection(pointed(0, 20), AT);
+    expect(ahead.facing).toBeCloseTo(0, 2);
+    expect(ahead.along).toBeCloseTo(20, 1);
+    // Turned round and driving: both against the road.
+    const round = stageDirection(pointed(BACK, 20), AT);
+    expect(round.facing).toBeCloseTo(Math.PI, 2);
+    expect(round.along).toBeCloseTo(-20, 1);
+    // SPUN — pointed back up the stage with the momentum still carrying it
+    // down. The nose says wrong way and the ground covered says otherwise,
+    // which is the whole reason both are asked.
+    const spun = stageDirection(pointed(BACK, -20), AT);
+    expect(spun.facing).toBeCloseTo(Math.PI, 2);
+    expect(spun.along).toBeCloseTo(20, 1);
+  });
+
+  function driveFor(state: GameState, seconds: number): void {
+    for (let i = 0; i < TUNING.physicsHz * seconds; i++) step(state, drive({ throttle: 0.3 }));
+  }
+
+  it("speaks up for a car turned round and driving back up the stage", () => {
+    const state = pointed(BACK, 12);
+    // Not on the first step: a direction has to be held before it is one.
+    step(state, drive({ throttle: 0.3 }));
+    expect(state.wrongWay).toBe(false);
+    driveFor(state, TUNING.wrongWay.after + 0.2);
+    expect(state.wrongWay).toBe(true);
+    expect(state.offRoad).toBe(false);
+  });
+
+  it("says nothing about a car REVERSING out of trouble", () => {
+    // Nose still pointing down the stage, backing up the road on the brake:
+    // travelling the wrong way, and being told to turn round is the
+    // opposite of what this driver needs.
+    const state = pointed(0, 0);
+    for (let i = 0; i < TUNING.physicsHz * 4; i++) step(state, drive({ throttle: 0, brake: 1 }));
+    expect(state.car.reversing).toBe(true);
+    expect(stageDirection(state, state.progressIndex).along).toBeLessThan(-TUNING.wrongWay.speed);
+    expect(state.wrongWay).toBe(false);
+  });
+
+  it("says nothing about a car SPUN and still carrying down the stage", () => {
+    const state = pointed(BACK, -12);
+    driveFor(state, TUNING.wrongWay.after + 0.5);
+    expect(state.wrongWay).toBe(false);
+  });
+
+  it("holds the sign however far back up the road the car drives", () => {
+    // The run's own fix hunts from PROGRESS, which only ever climbs, and it
+    // reaches fifteen samples back from there. Past thirty metres the car
+    // is pinned to the far end of that window — reported off a road it is
+    // squarely on, and then LOST, which would put RETURN TO TRACK over the
+    // top of TURN AROUND for a car whose wheels never left the track. The
+    // sign takes its own fix for exactly this.
+    const state = pointed(BACK, 14);
+    const from = state.progressIndex;
+    driveFor(state, 12);
+    const back = state.track.samples[from].s - state.track.samples[state.wrongWayAt].s;
+    expect(back).toBeGreaterThan(100);
+    expect(state.wrongWay).toBe(true);
+    expect(state.lost).toBe(false);
+    // ...and progress is untouched by the whole excursion: the run is
+    // neither credited with nor charged for road it drove twice.
+    expect(state.progressIndex).toBe(from);
+  });
+
+  it("holds on until the nose comes round, not until the car stops", () => {
+    const state = pointed(BACK, 12);
+    driveFor(state, TUNING.wrongWay.after + 0.2);
+    expect(state.wrongWay).toBe(true);
+    // Stopped dead, still facing back up the stage: TURN AROUND is an
+    // instruction, and stopping has not carried it out.
+    state.car.u = 0;
+    state.car.w = 0;
+    step(state, NEUTRAL_INPUT);
+    expect(state.wrongWay).toBe(true);
+    // Nor has swinging the nose to just inside the angle it came up at —
+    // which on a road this width is a three-point turn part way through.
+    state.car.heading = state.track.samples[AT].heading + TUNING.wrongWay.away - 0.1;
+    step(state, NEUTRAL_INPUT);
+    expect(state.wrongWay).toBe(true);
+    // Round to face down the stage, and it goes.
+    state.car.heading = state.track.samples[AT].heading;
+    step(state, NEUTRAL_INPUT);
+    expect(state.wrongWay).toBe(false);
   });
 });

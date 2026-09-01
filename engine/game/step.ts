@@ -37,8 +37,10 @@ import {
   lastCheckpoint,
   pathCurvature,
   slopeAt,
+  stageDirection,
   trackLost,
   wayHome,
+  type TrackPoint,
   type WayHome,
 } from "./track.ts";
 import {
@@ -319,6 +321,9 @@ export function createGame(options: CreateGameOptions): GameState {
     offRoad: false,
     offRoadSince: 0,
     lost: false,
+    wrongWay: false,
+    wrongWayFor: 0,
+    wrongWayAt: 0,
     stuck: { x: car.x, z: car.z, since: 0 },
     drowning: null,
     surface: "gravel",
@@ -394,6 +399,13 @@ function respawn(state: GameState, events: GameEvent[], home: WayHome): void {
   state.checkpointS = state.progressS;
   state.cheeredS = state.progressS;
   state.offRoad = false;
+  // A respawn sets the car down facing down the stage, so whatever the
+  // TURN AROUND sign was telling the driver has been done for them — and
+  // its search cursor goes with the car, the one move on the stage that no
+  // amount of local searching could follow.
+  state.wrongWay = false;
+  state.wrongWayFor = 0;
+  state.wrongWayAt = home.index;
   state.stuck.x = car.x;
   state.stuck.z = car.z;
   state.stuck.since = state.t;
@@ -582,6 +594,51 @@ function stepStuck(state: GameState, input: CarInput, events: GameEvent[]): void
   } else if (state.t - state.stuck.since >= T.offTrack.stuck.after) {
     respawn(state, events, wayHome(state));
   }
+}
+
+/** THE TURN AROUND SIGN: the car is on the road and driving down it the
+ * wrong way. Both halves of `stageDirection` have to agree before the dwell
+ * timer even starts — a spin and a reverse out of a ditch each satisfy one
+ * of them, and neither is a driver who has set off back up the stage.
+ *
+ * Off the road there is no direction to be wrong about, and the guidance
+ * that is owed there is the way home instead: a car picking its way back
+ * across a clearing is pointed wherever the ground lets it be pointed.
+ *
+ * Coming OFF is not the same threshold as coming on. TURN AROUND is an
+ * instruction, and the one thing that carries it out is the nose coming
+ * back round (`wrongWay.back`) — stopping does not, and neither does
+ * swinging the nose just inside the angle the sign came up at, which on a
+ * narrow road is a three-point turn strobing the sign at every shuffle.
+ *
+ * It takes its own fix whenever the car has dropped behind its progress,
+ * because the run's fix cannot follow it there: that one hunts from
+ * `progressIndex`, which only climbs, and its search reaches fifteen
+ * samples back — so a car more than thirty metres down the road it came up
+ * is pinned to the far end of that window, reading the heading of a corner
+ * it is nowhere near and reported off a road it is squarely on. The extra
+ * search costs a car at its own progress nothing, which is every step of a
+ * run that never doubles back. */
+function stepWrongWay(state: GameState, fix: TrackPoint): void {
+  const W = T.wrongWay;
+  const car = state.car;
+  const here =
+    fix.index < state.progressIndex
+      ? locatePoint(state.track, car.x, car.z, state.wrongWayAt)
+      : fix;
+  state.wrongWayAt = here.index;
+  const { facing, along } = stageDirection(state, here.index);
+  if (state.wrongWay) {
+    if (facing < W.back) {
+      state.wrongWay = false;
+      state.wrongWayFor = 0;
+    }
+    return;
+  }
+  const backwards =
+    state.phase === "racing" && !here.offRoad && facing > W.away && along < -W.speed;
+  state.wrongWayFor = backwards ? state.wrongWayFor + T.dt : 0;
+  if (state.wrongWayFor >= W.after) state.wrongWay = true;
 }
 
 /** R25 — how a car is driven once the clock has stopped. The player is out
@@ -925,7 +982,15 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     events.push({ type: "offRoad", off: fix.offRoad });
   }
   if (state.offRoad) state.stats.offRoadTime += T.dt;
-  state.lost = trackLost(state);
+  // The wrong way first, because it can VETO being lost. A car that has
+  // turned round on the road is reported off it by the fix above — that
+  // search cannot reach back past thirty metres — and the way-home
+  // guidance believes it: RETURN TO TRACK, over a car whose wheels are on
+  // the track. `stepWrongWay` takes an honest fix to answer its own
+  // question, so when it says the car is on the road going backwards, it
+  // is the one that knows.
+  stepWrongWay(state, fix);
+  state.lost = !state.wrongWay && trackLost(state);
 
   // Solid contact: deep water still swallows the car whole, but the wild's
   // props and the forest's trunks BEND it instead of ending it — impulse,

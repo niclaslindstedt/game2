@@ -532,8 +532,29 @@ export type GameState = {
    * pointed away rather than merely beside it (TUNING.offTrack.guide). It
    * is what the way-home guidance waits for: two wheels on the verge and a
    * clearing crossed perpendicular to the stage are both off the road and
-   * neither is a driver who needs telling where the road went. */
+   * neither is a driver who needs telling where the road went. Never true
+   * at the same time as `wrongWay`, which vetoes it: a car that call has
+   * proved is on the road has not lost it. */
   lost: boolean;
+  /** True while the car is driving the stage BACKWARDS — on the road, nose
+   * pointed back up it and travelling that way at pace, for long enough
+   * that it is a direction rather than a moment (TUNING.wrongWay). What the
+   * co-driver's TURN AROUND sign waits for. Being off the road is a
+   * different problem with a different sign: the way home owns that one. */
+  wrongWay: boolean;
+  /** How long the car has been running back up the stage without the sign
+   * being up yet, s. Reset by anything that fails either half of the test,
+   * so only a sustained wrong way ever reaches `wrongWay.after`. */
+  wrongWayFor: number;
+  /** Which centerline sample the wrong-way call is being read at — its own
+   * search cursor, and the only one on the state that FOLLOWS THE CAR BACK
+   * UP THE STAGE. Every other fix hunts from `progressIndex`, which only
+   * ever climbs and whose search reaches fifteen samples behind it: past
+   * thirty metres back, that fix is pinned to road the car has left, and
+   * the road direction read there belongs to another corner. Only the sign
+   * reads this; the physics keeps the progress-anchored fix it has always
+   * had. */
+  wrongWayAt: number;
   /** Where and when the car last actually got somewhere. A car pinned
    * against a trunk with the throttle buried never leaves this anchor, and
    * that is what puts it back on the road (TUNING.offTrack.stuck). */

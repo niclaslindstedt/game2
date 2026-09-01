@@ -64,8 +64,10 @@ export {
   gateHalfWidth,
   lastCheckpoint,
   locate,
+  stageDirection,
   trackLost,
   wayHome,
+  type StageDirection,
   type TrackFix,
   type WayHome,
 } from "./game/track.ts";

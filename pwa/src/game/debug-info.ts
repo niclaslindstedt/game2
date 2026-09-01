@@ -190,7 +190,7 @@ function carBox(state: GameState): DebugBox {
       },
       {
         k: "track",
-        v: `s ${m(state.progressS)} · lat ${m(state.lateral)} · ${state.surface}${state.offRoad ? " · OFF" : ""}${state.lost ? " · LOST" : ""}`,
+        v: `s ${m(state.progressS)} · lat ${m(state.lateral)} · ${state.surface}${state.offRoad ? " · OFF" : ""}${state.lost ? " · LOST" : ""}${state.wrongWay ? " · BACKWARDS" : ""}`,
       },
       {
         k: "damage",
@@ -294,6 +294,7 @@ export function traceLine(ctx: DebugContext, state: GameState): string {
   const flags = [
     state.offRoad ? "off" : "",
     state.lost ? "lost" : "",
+    state.wrongWay ? "backwards" : "",
     c.airborne ? "air" : "",
     state.drowning ? "drowning" : "",
   ]

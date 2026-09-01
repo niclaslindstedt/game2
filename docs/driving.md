@@ -683,6 +683,43 @@ has driven out does not drown in the lake, it drowns in the beach.
   under the wheels. Nearing the road or aiming at it leaves it up, which is
   also what stops a wandering car blinking it on and off.
 
+- **The wrong way** — the other thing the co-driver's slot takes over for,
+  and the opposite problem: the road is still under the wheels and it is
+  being driven back up. `stageDirection` reads the car against the
+  centerline sample under it and answers two questions, because on its own
+  each one is something a rally driver does on purpose. How far the NOSE is
+  off the road's own heading — a car reversing out of a ditch is travelling
+  the wrong way with the nose still pointed down the stage, and telling that
+  driver to turn round is the opposite of what they need. And how fast the
+  car is actually TRAVELLING along the road — a spun car points back up the
+  stage for a second while its momentum still carries it down, and that is a
+  moment to be driven out of. Both have to hold — past `TUNING.wrongWay.away`
+  (110°, the same angle the way home calls pointed away) and running back
+  faster than `wrongWay.speed` (3 m/s) — for `wrongWay.after` (1.2 s), which
+  is long enough that a three-point turn on a narrow road finishes inside it.
+  Then the strip reads TURN AROUND under a U-turn mark, in the HUD's red
+  rather than the way home's amber: this is the one call in the strip that is
+  a mistake already being made rather than a corner coming up. Coming off is
+  its own, narrower threshold: the nose back inside `wrongWay.back` (60°).
+  Stopping does not clear it and neither does swinging the nose to the edge
+  of the angle it came up at, which is what would strobe the sign through
+  every shuffle of a turn on a narrow road. A respawn clears it, having done
+  the turning.
+
+  The call takes ITS OWN fix whenever the car has dropped behind its
+  progress, and that is load-bearing rather than tidiness. Every other fix
+  in the run hunts from `state.progressIndex`, which only ever climbs, and
+  `locatePoint` reaches fifteen samples back from its hint — so a car more
+  than thirty metres down the road it came up is pinned to the far end of
+  that window: measured against the heading of a corner it is nowhere near,
+  and reported OFF a road its wheels never left. `state.wrongWayAt` is the
+  one cursor on the state that follows the car backwards, and the extra
+  search is skipped entirely for a car at its own progress, which is every
+  step of a run that never doubles back. Because that honest fix is the one
+  that knows, the wrong-way call VETOES being lost (`state.lost = !wrongWay
+&& trackLost(state)`): a car on the road going backwards must not be sent
+  RETURN TO TRACK over a track it is standing on.
+
 ## Weight: the springs
 
 The wheels track the ground exactly; the **body does not**. `TUNING.suspension`
