@@ -343,7 +343,11 @@ export type GameEvent =
   /** A drift gone past saving — the car is round and rotating on its own
    * momentum. `slip` is the angle it went at, rad, and `speed` how fast it
    * was travelling when it let go: together they are how big a moment it
-   * was, which is what the camera, the smoke and the sound are sized off. */
+   * was, which is what the sound is sized off (`audio/route.ts`).
+   *
+   * The MOMENT, not the state. What is drawn through a spin — the smoke off
+   * four dragged tyres — rides `CarState.spun` instead, because it lasts as
+   * long as the spin does and this fires once at the start of it. */
   | { type: "spin"; slip: number; speed: number }
   | { type: "offRoad"; off: boolean }
   /** A contact hard enough to matter. `speed` is the closing speed into

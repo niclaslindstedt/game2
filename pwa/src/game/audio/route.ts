@@ -144,6 +144,21 @@ export function soundForEvent(
     case "partBreak":
       return { id: "part_break" };
 
+    // A drift taken past saving. Sized by the SPEED it let go at and not by
+    // the angle: past `drift.spinAt` the car is round either way, and what
+    // decides how big the moment is — how long the scrub lasts, how much
+    // there is to drag — is how much of it there was to lose. The pitch
+    // drops with it for the usual reason, a heavier thing sounding lower,
+    // and the stretch is the honest part: a spin at 30 m/s goes on turning
+    // for most of a second and one at walking pace is over at once.
+    case "spin": {
+      const fast = ramp(event.speed, 8, 30);
+      return {
+        id: "spin",
+        shape: { gain: 0.6 + 0.6 * fast, pitch: 1.12 - 0.24 * fast, stretch: 0.7 + 0.6 * fast },
+      };
+    }
+
     // R26 — an anti-cut block ridden over. One sound at one size band: what
     // a block costs is the LINE, and a slab taken at 40 km/h and one taken
     // at 130 are the same slab. It gets heavier and lower with the speed
