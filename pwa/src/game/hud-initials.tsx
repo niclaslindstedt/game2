@@ -21,10 +21,10 @@
 //     letting them move a cursor, so the arcade's own way in survives the
 //     chevrons going — see `data-nav-own`.
 //
-// The field is a real `<input>`, invisible but laid out, because that is the
-// only thing a mobile browser will open a keyboard for, and only inside the
-// gesture that asked. It is never focused on its own: a keyboard sliding up
-// over the results card nobody asked for is worse than a tap.
+// The field is a real editable surface, invisible but laid out, because that
+// is the only thing a mobile browser will open a keyboard for, and only inside
+// the gesture that asked. It is never focused on its own: a keyboard sliding
+// up over the results card nobody asked for is worse than a tap.
 //
 // The name is not stored here. This component reports the letters and the
 // caller decides what they mean (`scores.ts` owns the board and the
@@ -82,7 +82,7 @@ export function InitialsEntry({ place, initial, onDone }: InitialsEntryProps) {
   entryRef.current = entry;
   const doneRef = useRef(onDone);
   doneRef.current = onDone;
-  const fieldRef = useRef<HTMLInputElement>(null);
+  const fieldRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
   /** Take a press. `next` is the entry the press makes; nothing is said out
@@ -172,11 +172,10 @@ export function InitialsEntry({ place, initial, onDone }: InitialsEntryProps) {
   /** What the field reports, whichever keyboard is driving it. Characters
    * arrive here rather than through keydown because an on-screen keyboard's
    * keydown says nothing about which key was pressed. */
-  const onFieldInput = (e: FormEvent<HTMLInputElement>): void => {
+  const onFieldInput = (e: FormEvent<HTMLDivElement>): void => {
     const field = e.currentTarget;
-    const raw = field.value;
-    field.value = SENTINEL;
-    field.setSelectionRange(SENTINEL.length, SENTINEL.length);
+    const raw = field.textContent ?? "";
+    field.textContent = SENTINEL;
     // The sentinel is gone: the player hit delete on a field that, as far as
     // the browser is concerned, had one character in it.
     if (raw.length < SENTINEL.length) return apply(erase(entryRef.current));
@@ -207,21 +206,20 @@ export function InitialsEntry({ place, initial, onDone }: InitialsEntryProps) {
         ))}
       </div>
       {/* The device's keyboard, and the only thing on this card that can ask
-          for one. Invisible, but laid out and in the page: a field that is
-          display:none, or parked off screen, is a field a mobile browser
-          will not focus. */}
-      <input
+          for one. This is contenteditable rather than an input on purpose:
+          iOS adds its previous/next/done accessory bar to form controls, and
+          none of those actions are useful while entering a high score name. */}
+      <div
         ref={fieldRef}
         className="hud-initials-field"
-        type="text"
-        defaultValue={SENTINEL}
+        contentEditable
         inputMode="text"
-        enterKeyHint="done"
-        autoComplete="off"
+        role="textbox"
+        aria-multiline="false"
+        aria-label="Type your initials"
         autoCapitalize="characters"
         autoCorrect="off"
         spellcheck={false}
-        aria-label="Type your initials"
         onInput={onFieldInput}
         onKeyDown={(e) => {
           // A REAL keyboard's own keys. The characters it sends are left to
@@ -240,7 +238,9 @@ export function InitialsEntry({ place, initial, onDone }: InitialsEntryProps) {
             steerRef.current(e.key === "ArrowLeft" ? "left" : "right");
           }
         }}
-      />
+      >
+        {SENTINEL}
+      </div>
       {/* The card's way ON, for the pad's START (menu-nav.ts) — and the only
           press this card has that is not a letter. */}
       <button type="button" className="hud-start hud-initials-done" data-nav-next onClick={post}>

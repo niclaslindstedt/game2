@@ -894,9 +894,7 @@ body {
 }
 
 /* ── Entering your initials ───────────────────────────────────────────────
-   Three big slots with a chevron over and under each: on a phone the
-   chevrons ARE the control, so they are sized as targets rather than as
-   decoration. The caret slot is the one the keyboard writes into. */
+   Three big slots: the caret slot is the one the keyboard writes into. */
 
 .hud-initials {
   display: flex;
@@ -948,10 +946,10 @@ body {
   animation: hud-pop 0.9s infinite;
 }
 
-/* THE KEYBOARD'S WAY IN. Invisible, but a laid-out field in the page and not
-   a hidden one: a browser opens its on-screen keyboard for a field it can
-   focus, and it can focus neither `display: none` nor something parked off
-   the edge of the world. One pixel under the slots, taking no room. */
+/* THE KEYBOARD'S WAY IN. Invisible, but a laid-out contenteditable in the
+   page and not a hidden one: a browser opens its on-screen keyboard for a
+   focused editing surface. It deliberately avoids a native form input so
+   iOS does not add its previous/next/done accessory bar to this screen. */
 .hud-initials-field {
   position: absolute;
   width: 1px;
@@ -961,6 +959,8 @@ body {
   opacity: 0;
   font-size: 16px; /* anything smaller and iOS zooms the page on focus */
   pointer-events: none;
+  outline: none;
+  white-space: pre;
 }
 
 .hud-initials-done {
@@ -981,6 +981,32 @@ body {
 .hud-finish-next {
   font-size: clamp(0.9rem, 3.4vmin, 1.4rem);
   margin-top: 0;
+}
+
+/* Landscape phones give the keyboard most of the short dimension. During
+   name entry the only important part of the finish card is the name itself,
+   so move that prompt to the top of the card and keep its whole row above the
+   keyboard. The rest of the result remains available by scrolling the card. */
+@media (orientation: landscape) and (max-height: 34rem) {
+  .hud-finish:has(.hud-initials) {
+    top: max(0.4rem, env(safe-area-inset-top));
+    max-height: 48%;
+    padding: 0.45rem 1rem;
+  }
+
+  .hud-finish:has(.hud-initials) .hud-initials {
+    order: -1;
+    gap: 0.15rem;
+    margin-top: 0;
+  }
+
+  .hud-finish:has(.hud-initials) .hud-initial-letter {
+    padding-top: 0.2rem;
+  }
+
+  .hud-finish:has(.hud-initials) .hud-initials-hint {
+    display: none;
+  }
 }
 
 /* ── The spectator's banner (hud-spectate.tsx) ───────────────────────────
