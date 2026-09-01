@@ -40,12 +40,13 @@
 // a little and the bed wobbles 14% at the grain rate; right, under 1%.
 //
 // WHAT THE ENGINE IS MADE OF, in the order the ear finds them: a HUM (the
-// firing note, the one layer whose pitch moves), a CLATTER over it (a dry tick
-// per turn of the crank — the parts), a BASS bed under it (the mass of the
-// car, nearly still), and the INTAKE rasp across the top once it is working.
+// firing note, the one layer whose pitch moves), a BASS bed under it (the mass
+// of the car, nearly still), and the INTAKE rasp across the top once it is working.
 // Four jobs and no two of them answer the same question: the hum says how fast
 // the engine is turning, the clatter says it is machinery, the bass says it is
-// a tonne of it, and the rasp says it is being asked for everything.
+// a tonne of it, and the rasp says it is being asked for everything. The
+// clatter is a quiet overlapping bed rather than separate RPM-timed ticks, so
+// it supplies texture without reading as sparks or an alarm.
 //
 // WHAT MAKES IT PLAYSTATION RATHER THAN CHIP is `drive`. A clean triangle at
 // 120 Hz is a flute; the same triangle folded through a soft-clipper has the
@@ -104,25 +105,6 @@ const LIFE_MS = GRAIN_MS * 4;
  * would stop existing exactly where it is doing the most work — at idle. */
 const BASS_FLOOR_HZ = 44;
 
-/**
- * THE CLATTER — one dry tick per turn of the crank: a tappet, an injector, a
- * driveshaft and every other hard thing in there arriving once a revolution.
- *
- * It is what makes the bed sound like MACHINERY rather than like a tone
- * generator; the hum, the octave and the rasp are one pitch in three flavours
- * and none of them says the noise is coming out of an object with parts in it.
- *
- * ITS RATE IS THE CRANK'S, NOT THE GRAIN'S. Ticks are the layer an ear can
- * COUNT at the bottom of the band — the putter a car makes idling — which
- * quickens as the revs come up until it blurs into the note. Tie their phase to
- * the grains and they lope at the grain rate instead, which is a rhythm nothing
- * in the car is making, so the phase is carried across grains by the caller.
- */
-const TICK_MS = 12;
-/** How close together ticks may get before they are a buzz rather than a
- * clatter. By the revs that reach this they are mostly faded out anyway. */
-const TICK_FLOOR_MS = GRAIN_MS / 4;
-
 /** One engine at one instant — everything a grain needs, and nothing about
  * which car it belongs to. */
 export type EngineVoice = {
@@ -130,7 +112,7 @@ export type EngineVoice = {
    * life so the three sounding together agree about the pitch. */
   hz: number;
   toHz: number;
-  /** What the crank is turning at — the clatter's own rate. */
+  /** What the crank is turning at — used for the firing pitch. */
   rpm: number;
   /** How far up the band the crank is, 0..1 — the rasp's edge. */
   rev: number;
@@ -146,9 +128,9 @@ export type EngineVoice = {
 /**
  * Book one grain of a running engine at absolute time `at`.
  *
- * `tickAtMs` is how far into this grain the clatter's next tick falls; the
- * return is the same thing for the NEXT grain, which the caller hands straight
- * back.
+ * The fourth argument is retained as a harmless compatibility slot for the
+ * scheduler's old clatter phase state; the continuous texture no longer needs
+ * to carry an event position from one grain to the next.
  *
  * THE LEVELS ARE THE SUM'S, NOT THE GRAIN'S. Three grains' worth sounds at
  * once and they add up rather than fight, so every volume here is a third of
@@ -243,25 +225,23 @@ export function playEngineGrain(
     bed: true,
   });
   // ── THE CLATTER ──────────────────────────────────────────────────────────
-  // One tick per revolution across this grain's window. Loudest at idle and as
-  // the car falls apart — a tired engine ticks, and a tired engine that has
-  // lost its bonnet ticks at you — and never gone entirely, because it is the
-  // layer that says the noise has parts in it.
-  //
-  // ALTERNATE TICKS ARE LIGHTER AND BRIGHTER, which is not decoration: a
-  // four-stroke's events are not all the same event, and a perfectly even tick
-  // is the one thing that reads as a metronome instead of an engine.
-  const gap = Math.max(TICK_FLOOR_MS, 60000 / Math.max(1, rpm));
-  const level = (0.005 + 0.01 * wear) * (0.4 + 0.6 * (1 - Math.min(1, rev)));
-  let offset = tickAtMs;
-  for (let i = 0; offset < GRAIN_MS; i++, offset += gap) {
-    synth.noise({
-      durationMs: TICK_MS,
-      at: at + offset / 1000,
-      volume: level * (i % 2 === 0 ? 1 : 0.62),
-      pan: -0.16,
-      filter: { type: "bandpass", frequency: i % 2 === 0 ? 2000 : 2800, q: 2.4 },
-    });
-  }
-  return offset - GRAIN_MS;
+  // Mechanical texture belongs in the same overlapping window as the engine,
+  // not in short events tied to RPM. The old per-revolution bursts sounded like
+  // sparks on Bluetooth headphones. A low, quiet bed keeps the machinery in
+  // the sound without giving the ear a transient to count several times a
+  // second.
+  synth.noise({
+    durationMs: LIFE_MS,
+    at,
+    color: "brown",
+    volume: 0.0016 + 0.0018 * wear + 0.0008 * load,
+    attackMs: ATTACK_MS,
+    holdMs: HOLD_MS,
+    filter: {
+      type: "bandpass",
+      frequency: 650 + Math.min(1000, rpm / 5) + 250 * rev,
+      q: 1.2,
+    },
+  });
+  return tickAtMs;
 }
