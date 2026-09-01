@@ -17,11 +17,20 @@ import {
 
 const SEEDS = [1, 2, 3, 7, 42, 99];
 
+/** How long a bot gets to finish a medium stage, seconds. It is a HARNESS
+ * budget and not a rule — the game has no clock on a stage — so it only has
+ * to be clear of what a real run takes: the slowest of these twelve is the
+ * compact on seed 3's five kilometres, at 78 km/h and a little over four
+ * minutes. R38 put more corners on every stage and took the sweep's mean
+ * pace from 91 km/h to 85, which is what moved the slowest of them past the
+ * 240 s this used to allow. */
+const MAX_TIME = 330;
+
 describe("bot simulations", () => {
   it("the bot finishes every stage with either car, without getting lost", () => {
     for (const seed of SEEDS) {
       for (const carId of ["compact", "classic"]) {
-        const result = simulateStage({ seed, carId, maxTime: 240 });
+        const result = simulateStage({ seed, carId, maxTime: MAX_TIME });
         expect(result.finished, `seed ${seed} / ${carId}`).toBe(true);
         // A lost car means the generator built something undrivable (or the
         // handling broke): allow a single recovery, never a pattern.
@@ -32,7 +41,7 @@ describe("bot simulations", () => {
 
   it("stage pace lands in rally territory", () => {
     for (const seed of SEEDS) {
-      const result = simulateStage({ seed, carId: "classic", maxTime: 240 });
+      const result = simulateStage({ seed, carId: "classic", maxTime: MAX_TIME });
       const avgKmh = (result.trackLength / result.time) * 3.6;
       expect(avgKmh, `seed ${seed}`).toBeGreaterThan(55);
       expect(avgKmh, `seed ${seed}`).toBeLessThan(160);
@@ -47,7 +56,7 @@ describe("bot simulations", () => {
       const hasHard = track.segments.some((p) => p.severity === "hard");
       if (!hasHard) continue;
       hardStages += 1;
-      const result = simulateStage({ seed, carId: "classic", maxTime: 240 });
+      const result = simulateStage({ seed, carId: "classic", maxTime: MAX_TIME });
       if (result.stats.driftCount > 0) driftingStages += 1;
     }
     expect(hardStages).toBeGreaterThan(0);
@@ -59,7 +68,7 @@ describe("bot simulations", () => {
       const track = compileTrack(seed);
       const jumps = track.segments.filter((p) => p.feature === "jump").length;
       if (jumps === 0) continue;
-      const result = simulateStage({ seed, carId: "compact", maxTime: 240 });
+      const result = simulateStage({ seed, carId: "compact", maxTime: MAX_TIME });
       expect(result.stats.jumps, `seed ${seed}`).toBeGreaterThanOrEqual(jumps);
       expect(result.stats.airTime, `seed ${seed}`).toBeGreaterThan(0.3);
     }

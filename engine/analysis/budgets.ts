@@ -490,6 +490,42 @@ export const ANALYSIS = {
      * — the forward pass's acceleration limit. Well under 1: everything
      * accelerates slower than it stops. */
     pullShare: 0.55,
+
+    /** R38 — THE LONGEST THE ROAD ASKS FOR NOTHING, in SECONDS of driving.
+     * A rally stage is corners joined by straights; a straight long enough
+     * to be a destination of its own is the road forgetting what it is for,
+     * and the player holding a wheel that does nothing.
+     *
+     * Seconds rather than metres, because metres are not what the boredom
+     * is made of: two hundred of them out of a hairpin is a gear-change and
+     * a lift, and the same two hundred met at rally pace is a moment. The
+     * speed profile already says how fast the road arrives, so the check
+     * asks the one question a driver would — how long am I doing nothing.
+     *
+     * FIVE, because that is the ask: never drive straight for longer than
+     * that. It is also about where the vocabulary already sat — the long
+     * straight's old 190 m ceiling ran to 6.0-6.4 s out of a slow corner
+     * over seeds 1-16 — so it is a trim of what a straight may be rather
+     * than a new kind of stage.
+     *
+     * `straightFail` is where it stops being a long straight and becomes a
+     * runway: past this the stage has a stretch nobody is driving. */
+    straight: 5,
+    straightFail: 8,
+    /** ...and what counts as STRAIGHT: the radius, m, past which the road
+     * is being held rather than steered. At rally pace a 700 m bend asks
+     * about a third of a g — a lean, not a corner — and it is comfortably
+     * clear of everything either kind of road calls a corner: the rally
+     * vocabulary tops out at a 100 m soft turn (`STAGE_RULES.turn`) and a
+     * public road never bends wider than 220 (`HIGHWAY.minRadius`), so
+     * neither can have a corner of its own counted as straight.
+     *
+     * Geometry alone, deliberately, with no speed in it: the check's
+     * ANSWER is already in seconds, so putting the speed into the
+     * definition as well would let one fast straight and one slow one
+     * disagree about whether they are straights at all. What is straight
+     * is a property of the road; how long it lasts is the driver's. */
+    straightRadius: 700,
   },
 
   /** THE JUMPS. Height and length are not defects — they are what a jump

@@ -37,6 +37,7 @@ import {
   probePoints,
   recomputeSameDirRun,
   straightLength,
+  straightRunAt,
   trackRun,
   type Cursor,
   type Profile,
@@ -655,6 +656,14 @@ function tryGenerateStage(
       const out = Math.abs(cursor.x) > margin || Math.abs(cursor.z) > margin;
       let forcedDir: 1 | -1 | 0 = 0;
       let kind: "straight" | "turn" = rng.chance(R.turnChance) ? "turn" : "straight";
+      // R38 — the road the route has already covered without a corner in
+      // it. What is left of the cap is what a straight drawn here may be,
+      // and where there is not enough left for the shortest one in the
+      // vocabulary the next segment has to be a corner. This is the whole
+      // rule: it binds the RUN, so a straight that follows a straight is
+      // measured against what its neighbour already spent.
+      const straightLeft = R.straightRun.max - straightRunAt(plans);
+      if (straightLeft < R.straightShort.min) kind = "turn";
       if (out) {
         kind = "turn";
         // Heading error toward the origin decides the turn direction.
@@ -679,7 +688,12 @@ function tryGenerateStage(
           first ? R.launch.firstTurn : undefined,
         );
       } else {
-        const length = straightLength(rng);
+        // R38 — drawn from the vocabulary, then trimmed to what the run has
+        // left. Trimmed rather than re-drawn: the bucket the dice picked is
+        // what says whether this is a breather or a top-gear straight, and
+        // a stage that only ever draws short ones after a bend is a stage
+        // with no long straights in it at all.
+        const length = Math.min(straightLength(rng), straightLeft);
         plan = {
           kind: "straight",
           length,
@@ -776,7 +790,18 @@ function tryGenerateStage(
       keepsDry(p) &&
       sitsOnTheLand(p) &&
       clearOfTarmac(p);
+    // R38 — the closing straight lands on whatever the search stopped on,
+    // so a stage that finished its last corner and then drew a straight
+    // arrives at the line with two of them end to end. R2 will not have the
+    // finish preceded by a corner and R38 will not have the run, so the one
+    // thing left to give is the segment underneath: shed the tail until the
+    // road into the line is the closing straight and nothing else.
+    //
+    // Measured on the RACED part only, like R11: the run-out past the gate
+    // is road the clock never sees and is deliberately straight.
+    const runIn = straightRunAt(plans) + R.closingStraight <= R.straightRun.max;
     if (
+      runIn &&
       points.every((p) => inBounds(p, spec.worldBound)) &&
       points.every(clearOfEverything) &&
       past.every(clearOfEverything)

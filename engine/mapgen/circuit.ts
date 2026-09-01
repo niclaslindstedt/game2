@@ -44,6 +44,7 @@ import {
   solveCsc,
   solveRadii,
   straightLength,
+  straightRunAt,
   trackRun,
   type Cursor,
   type PointField,
@@ -333,12 +334,16 @@ function tryCircuit(
       const off = angleDiff(cursor.heading, course);
       const forcedDir: 1 | -1 | 0 =
         Math.abs(off) > COURSE_ERROR * COURSE_PULL ? (off >= 0 ? 1 : -1) : 0;
-      const kind: "straight" | "turn" = rng.chance(R.turnChance) ? "turn" : "straight";
+      // R38 — what is left of the straight run decides whether this may be
+      // a straight at all, exactly as it does on a sprint.
+      const straightLeft = R.straightRun.max - straightRunAt(plans);
+      const kind: "straight" | "turn" =
+        straightLeft < R.straightShort.min || rng.chance(R.turnChance) ? "turn" : "straight";
       let plan: SegmentPlan;
       if (kind === "turn") {
         plan = drawTurn(rng, plans[plans.length - 1].kind === "straight", forcedDir, sameDirRun);
       } else {
-        const straight = straightLength(rng);
+        const straight = Math.min(straightLength(rng), straightLeft);
         plan = {
           kind: "straight",
           length: straight,

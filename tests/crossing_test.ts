@@ -20,11 +20,11 @@ import { STAGE_RULES, compileStage, junctionMainEdge, type Track } from "@engine
  * by sweeping, and pinned here rather than searched at test time: a suite
  * that hunts for its own subject reports "nothing to test" as a pass. */
 const CROSSINGS: { seed: number; length: "short" | "medium" }[] = [
-  { seed: 3, length: "medium" },
-  { seed: 7, length: "medium" },
-  { seed: 14, length: "medium" },
-  { seed: 17, length: "medium" },
-  { seed: 22, length: "medium" },
+  { seed: 6, length: "short" },
+  { seed: 16, length: "medium" },
+  { seed: 18, length: "medium" },
+  { seed: 20, length: "medium" },
+  { seed: 25, length: "medium" },
 ];
 
 const tracks = new Map<string, Track>();

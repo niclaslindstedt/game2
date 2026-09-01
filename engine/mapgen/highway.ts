@@ -60,8 +60,10 @@ export const HIGHWAY = {
   /** Radius the line never turns tighter than, m. A public road through
    * open country bends; it does not corner. */
   minRadius: 220,
-  /** ...and how often it redraws that bend, m. */
-  bend: 260,
+  /** ...and how often it redraws that bend, m. Short enough that a
+   * kilometre of road is several bends and not one, which is what R38 asks
+   * of any stretch of it the rally borrows. */
+  bend: 120,
   /** How far ahead it looks for water, and how far above the water table
    * the ground has to stand before it will drive on it. A road does not
    * strike out across a lake on an embankment. */
@@ -69,9 +71,22 @@ export const HIGHWAY = {
   shoreFreeboard: 2,
   /** ...and the radius it is allowed to bend to while it skirts one, m. */
   avoidRadius: 70,
+  /** How hard the road's own bend is when it draws one, as a share of
+   * `minRadius`'s curvature. A BAND with its floor off zero, because the
+   * thing being drawn is a bend: allowed to come out near zero it mostly
+   * did, and what that produces is not a gently wandering road but a ruled
+   * line with an occasional kink in it. The floor puts the loosest bend at
+   * a 550 m radius and the tightest at the road's own minimum — which is
+   * the country lane this is meant to be, and, since both are inside R38's
+   * `straightRun.bend`, a road with corners on it for a rally to borrow. */
+  wander: { min: 0.4, max: 1 },
   /** How hard it may steer back onto its bearing once it has gone round
-   * something, as a share of `minRadius`'s curvature. */
-  correction: 0.55,
+   * something — or once its own wandering has taken it off the line — as a
+   * share of `minRadius`'s curvature. It is the FULL share on purpose: the
+   * correction is added to the wander rather than blended with it, so only
+   * at parity can it always straighten the road out again, and a road that
+   * cannot straighten out never reaches the far rim. */
+  correction: 1,
   /** How many entry points a road may try before the country is judged not
    * to carry one there. */
   tries: 40,
@@ -247,6 +262,15 @@ function layOne(
   const exit = entry + Math.PI + rng.range(-0.42, 0.42);
   const target = { x: Math.sin(exit) * reach, z: Math.cos(exit) * reach };
   let heading = Math.atan2(target.x - x, target.z - z);
+  /** The bend the road last drew for ITSELF, 1/m. It is HELD until the next
+   * redraw and added to the correction below, never fed back into itself: a
+   * bend that decays toward the aim is gone a few steps after it is drawn,
+   * and what that lays is not a wandering road but a ruled line with an
+   * occasional kink in it. Measured that way over seeds 1-6, the median
+   * radius came out between 1.1 and 29 km and three of the six ran
+   * arrow-straight for over two kilometres, which is not a country road and
+   * is not a road R38 lets a rally borrow. */
+  let wander = 0;
   let curvature = 0;
   const points: HighwayPoint[] = [];
   const limit = Math.ceil((4 * reach) / HIGHWAY.step);
@@ -292,12 +316,14 @@ function layOne(
       // what would steer it straight back in.
       heading += Math.sign(best) * Math.min(Math.abs(best), HIGHWAY.step / HIGHWAY.avoidRadius);
       curvature = 0;
+      wander = 0;
       x += Math.sin(heading) * HIGHWAY.step;
       z += Math.cos(heading) * HIGHWAY.step;
       continue;
     }
     if (i > 0 && i % Math.round(HIGHWAY.bend / HIGHWAY.step) === 0) {
-      curvature = rng.range(-1, 1) / HIGHWAY.minRadius;
+      const W = HIGHWAY.wander;
+      wander = (rng.chance(0.5) ? 1 : -1) * rng.range(W.min, W.max) * (1 / HIGHWAY.minRadius);
     }
     // ...and always back toward where it is GOING, so a road that went
     // round a headland resumes crossing the map instead of carrying on the
@@ -305,8 +331,9 @@ function layOne(
     let err = Math.atan2(target.x - x, target.z - z) - heading;
     while (err > Math.PI) err -= 2 * Math.PI;
     while (err <= -Math.PI) err += 2 * Math.PI;
-    const pull = Math.max(-1, Math.min(1, err * 4)) / HIGHWAY.minRadius;
-    curvature = curvature * (1 - HIGHWAY.correction) + pull * HIGHWAY.correction;
+    const pull = (Math.max(-1, Math.min(1, err * 4)) * HIGHWAY.correction) / HIGHWAY.minRadius;
+    const sharpest = 1 / HIGHWAY.minRadius;
+    curvature = Math.max(-sharpest, Math.min(sharpest, wander + pull));
     heading += curvature * HIGHWAY.step;
     x += Math.sin(heading) * HIGHWAY.step;
     z += Math.cos(heading) * HIGHWAY.step;

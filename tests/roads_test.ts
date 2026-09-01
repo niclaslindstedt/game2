@@ -275,7 +275,11 @@ describe("the road's cross-section (R16)", () => {
 });
 
 describe("junctions (R17)", () => {
-  const seeds = [1, 2, 3, 5, 8, 13, 21];
+  // R38 shortened how much of a public road a rally may borrow, so a
+  // branch is rarer per seed than it was and the sweep has to be wider to
+  // find one. Still a sweep and not a pin: which seeds carry a road is the
+  // land's decision and it moves whenever the routing does.
+  const seeds = [46, 47, 54, 57, 1, 2, 3, 5, 8, 13, 21];
 
   /** The first of these seeds whose stage actually has a branch on it.
    *

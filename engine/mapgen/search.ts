@@ -393,6 +393,35 @@ export function straightLength(rng: Rng): number {
   return rng.range(bucket.min, bucket.max);
 }
 
+/** R38 — how much of a segment the route covers WITHOUT A CORNER IN IT. A
+ * straight is all of it; a bend wider than `straightRun.bend` is a lean the
+ * driver holds rather than a corner they take, so it counts too; anything
+ * tighter is a corner and breaks the run.
+ *
+ * Stated once, here, because three different places have to agree about it:
+ * the search drawing a straight, the borrow deciding how far it may follow
+ * a public road, and the retreat rebuilding the run after a backtrack. */
+export function straightPart(plan: SegmentPlan): number {
+  if (plan.kind === "straight") return plan.length;
+  return (plan.radius ?? 0) > R.straightRun.bend ? plan.length : 0;
+}
+
+/** R38 — the straight run standing at the end of the committed plans, m.
+ *
+ * Recomputed from the tail rather than carried, for the same reason the
+ * same-direction run is: after a backtrack the only honest answer is what
+ * is still committed, and a run carried across an `uncommit` lets the next
+ * straight stack onto one that is no longer there. */
+export function straightRunAt(plans: SegmentPlan[]): number {
+  let run = 0;
+  for (let i = plans.length - 1; i >= 0; i--) {
+    const part = straightPart(plans[i]);
+    if (part === 0) break;
+    run += part;
+  }
+  return run;
+}
+
 type FeatureFields = Pick<
   SegmentPlan,
   "feature" | "featureStart" | "featureEnd" | "lipHeight" | "crestHeight" | "crossing"
