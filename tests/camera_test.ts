@@ -28,6 +28,7 @@ import {
 import { clamp } from "../pwa/src/lib/angles.ts";
 
 import { createGameCamera } from "../pwa/src/game/camera.ts";
+import type { ShakeSource } from "../pwa/src/game/camera-shake.ts";
 
 const FLAT: SegmentPlan[] = [{ kind: "straight", length: 600, feature: "none" }];
 
@@ -545,6 +546,84 @@ describe("the head behind the wheel", () => {
     const fast = neckRun("cockpit", 1 / 144, -20, undefined);
     expect(fast.fwd).toBeGreaterThan(sixty.fwd * 0.75);
     expect(fast.fwd).toBeLessThan(sixty.fwd * 1.25);
+  });
+});
+
+/** WHOSE SHAKE IS IT. A hit happens to the CAR: the engine drops the body
+ * onto its springs, dips the nose and rolls the shell (collision.ts), and
+ * car-mesh.ts draws all of it. A camera stood five metres behind on a boom is
+ * attached to none of that — so the rule camera-shake.ts writes down is that
+ * an outside rig takes no part of a CONTACT, while the three taken from
+ * inside the car take all of it, because in there a head that keeps going
+ * when the car stops is the only thing in frame that says anything was hit.
+ *
+ * The car is parked on flat ground with nothing to answer, so every
+ * millimetre the lens moves after it settles is the blow and nothing else. */
+function blowRun(
+  mode: "chase" | "cockpit",
+  source: ShakeSource,
+  strength: number,
+): { worst: number; tail: number } {
+  const state = game();
+  const cam = createGameCamera(1600, 900);
+  cam.setMode(mode);
+  cam.skipStartShot();
+  const car = state.car;
+  state.terrain = { ...state.terrain, groundAt: () => car.y, waterAt: () => null };
+  car.heading = 0;
+  car.yawRate = 0;
+  car.u = 0;
+  const second = Math.round(1 / FRAME);
+  for (let f = 0; f < second * 2; f++) cam.update(state, FRAME);
+  const datum = cam.camera.position.clone();
+  cam.kick(strength, { x: 0, y: -1, z: 0 }, source);
+  let worst = 0;
+  let tail = 0;
+  for (let f = 0; f < second * 2; f++) {
+    cam.update(state, FRAME);
+    const off = cam.camera.position.distanceTo(datum);
+    worst = Math.max(worst, off);
+    // Past the first second the blow is meant to be over and gone.
+    if (f >= second) tail = Math.max(tail, off);
+  }
+  return { worst, tail };
+}
+
+describe("what a blow does to the picture", () => {
+  it("does not move the outside shot when the car runs into something", () => {
+    // The hardest contact the game can land (`kick` saturates at 0.9) against
+    // the same drive with no blow in it. Not "less" — none: the car is in
+    // frame crushing and rocking, and a lens that jumps with it hides the one
+    // thing worth looking at.
+    const still = blowRun("chase", "contact", 0);
+    const hit = blowRun("chase", "contact", 0.9);
+    expect(hit.worst).toBeCloseTo(still.worst, 9);
+  });
+
+  it("...but still throws the head when the shot is taken from inside", () => {
+    const calm = blowRun("cockpit", "contact", 0);
+    const hit = blowRun("cockpit", "contact", 0.9);
+    expect(hit.worst - calm.worst).toBeGreaterThan(0.01);
+  });
+
+  it("shudders the outside shot on a landing, by centimetres and no more", () => {
+    // Every blow draws its own phase, so this is run a dozen times: the band
+    // has to hold for the whole family of wobbles the model can produce, not
+    // for the one that happened to come up.
+    const still = blowRun("chase", "landing", 0);
+    for (let n = 0; n < 12; n++) {
+      const landed = blowRun("chase", "landing", 0.62);
+      const moved = landed.worst - still.worst;
+      // Felt: a landing that leaves the picture perfectly still reads as the
+      // car having been set down by hand.
+      expect(moved).toBeGreaterThan(0.005);
+      // ...and not read: under a tenth of a metre at nearly six of standoff,
+      // which is a shudder rather than a lost apex.
+      expect(moved).toBeLessThan(0.08);
+      // And it is over well inside a second — a picture still trembling on
+      // the way into the next corner is the camera describing itself.
+      expect(landed.tail).toBeCloseTo(still.tail, 6);
+    }
   });
 });
 
