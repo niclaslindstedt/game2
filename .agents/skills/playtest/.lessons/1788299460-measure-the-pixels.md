@@ -17,7 +17,9 @@ a second patch of the same surface the effect does not touch.
 
 ```js
 // node <script>.mjs shot.png   — playwright-core resolves from the repo root
-const page = await (await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" })).newPage();
+const page = await (
+  await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" })
+).newPage();
 // in-page: draw the image to a canvas, getImageData(x, y, w, h), average the channels
 ```
 
