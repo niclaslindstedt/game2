@@ -374,15 +374,17 @@ export function playRoadGrain(synth: Synth, voice: RoadVoice, at: number): void 
   // linear ramp leaves a fast car sounding like a slightly quicker slow one.
   // It is the one bed that keeps going in the air — louder there, in fact,
   // with nothing under the wheels to mask it.
-  synth.noise({
-    at,
-    durationMs: NOISE_LIFE_MS,
-    attackMs: NOISE_ATTACK_MS,
-    holdMs: NOISE_HOLD_MS,
-    color: "pink",
-    volume: (0.0027 + 0.023 * air * air) * (airborne ? 1.35 : 1),
-    filter: { type: "highpass", frequency: 400 + 1500 * air },
-  });
+  if (air > 0) {
+    synth.noise({
+      at,
+      durationMs: NOISE_LIFE_MS,
+      attackMs: NOISE_ATTACK_MS,
+      holdMs: NOISE_HOLD_MS,
+      color: "pink",
+      volume: 0.023 * air * air * (airborne ? 1.35 : 1),
+      filter: { type: "highpass", frequency: 400 + 1500 * air },
+    });
+  }
 
   // ── The weather ────────────────────────────────────────────────────────
   // Rain is the one bed that has nothing to do with the car: it plays over

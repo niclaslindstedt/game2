@@ -32,7 +32,7 @@ import {
   WET_SURFACES,
   type RoadVoice,
 } from "../pwa/src/game/audio/road-grain.ts";
-import { GRAIN_MS, noteHz, rpmAt } from "../pwa/src/game/audio/engine-bed.ts";
+import { GRAIN_MS, noteHz, playEngineGrain, rpmAt } from "../pwa/src/game/audio/engine-bed.ts";
 import { playDef } from "../pwa/src/game/audio/play.ts";
 import { soundForEvent, soundForThunder } from "../pwa/src/game/audio/route.ts";
 import { UI_BANK } from "../pwa/src/game/audio/bank-ui.ts";
@@ -584,6 +584,27 @@ describe("the road bed", () => {
     expect(wind.length).toBeGreaterThan(0);
   });
 
+  it("does not emit parked wind or spark-like transients on the start line", () => {
+    const rec = recorder();
+    playRoadGrain(
+      rec,
+      {
+        speed: 0,
+        air: 0,
+        surface: "gravel",
+        corner: 0,
+        slide: 0,
+        sideways: 0,
+        airborne: false,
+        wet: 0,
+        squall: 0,
+        gale: 0,
+      },
+      0,
+    );
+    expect(rec.noises).toHaveLength(0);
+  });
+
   it("counts the lights down once each", () => {
     const rec = recorder();
     const bed = createDriveBed(rec);
@@ -610,6 +631,14 @@ describe("the road bed", () => {
 });
 
 describe("the engine's own arithmetic", () => {
+  it("keeps engine texture continuous instead of using spark-like ticks", () => {
+    const rec = recorder();
+    playEngineGrain(rec, { hz: 30, toHz: 30, rpm: 900, rev: 0, load: 0.2, wear: 0 }, 0);
+    expect(rec.noises).toHaveLength(1);
+    expect(rec.noises[0].durationMs).toBeGreaterThanOrEqual(GRAIN_MS * 3);
+    expect(rec.noises[0].holdMs).toBeGreaterThanOrEqual(GRAIN_MS * 2);
+  });
+
   it("turns revs into the firing note of a four-cylinder", () => {
     // Two firings per revolution: 3000 rpm is 100 Hz and nothing chosen by ear.
     expect(noteHz(3000)).toBeCloseTo(100, 6);
