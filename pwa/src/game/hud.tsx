@@ -241,11 +241,11 @@ type HudProps = {
   flying: boolean;
   onPause: () => void;
   onCamera: () => void;
-  /** Whether the rear-view glass is UP. Not the same switch as `show.mirror`:
-   * that one is whether the game has a mirror at all, this one is whether the
-   * one it has is folded away for now (hud-mirror.tsx). */
-  mirrorUp: boolean;
-  /** Fold the glass away, or pull it back down. */
+  /** Whether the rear-view glass has the road in it. Not the same switch as
+   * `show.mirror`: that one is whether the game has a mirror at all, this one
+   * is whether the one it has is showing anything for now (hud-mirror.tsx). */
+  mirrorLive: boolean;
+  /** Blank the glass, or put the road back in it. */
   onMirror: () => void;
   /** Take a picture. Null where there is none to take — the player has
    * switched screenshots off. */
@@ -647,7 +647,7 @@ export function Hud({
   padDriving,
   onPause,
   onCamera,
-  mirrorUp,
+  mirrorLive,
   onMirror,
   onShot,
   nextStage,
@@ -680,9 +680,9 @@ export function Hud({
   const glass: GlassSlot =
     !show.mirror || spectate || flying || snap.phase === "finished"
       ? "off"
-      : mirrorUp
-        ? "up"
-        : "folded";
+      : mirrorLive
+        ? "live"
+        : "blank";
   /** The results card, wherever it ends up being drawn. */
   const finish = (snap.phase === "rollout" || snap.phase === "finished") &&
     snap.finishTime !== null && (
@@ -731,12 +731,12 @@ export function Hud({
       data-off={snap.offRoad ? "1" : undefined}
       data-air={snap.airborne && snap.phase === "racing" ? "1" : undefined}
     >
-      {/* THE MIRROR IS ITS OWN SWITCH: press the glass to fold the rear view
-          away, press the strip it folds to — or swipe it down — to pull it
-          back. Only where there is glass to press (see `glass` above), and
-          FIRST in the bar's DOM so that the top row's own buttons win
-          wherever the folded strip's hit box runs under them. */}
-      {glass !== "off" && <MirrorSwitch up={glass === "up"} onToggle={onMirror} />}
+      {/* THE MIRROR IS ITS OWN SWITCH: press the glass to put the rear view
+          out, press the grey it leaves behind to bring it back. Only where
+          there is glass to press (see `glass` above), and FIRST in the bar's
+          DOM so that the top row's own buttons win wherever their boxes run
+          over the ends of the strip. */}
+      {glass !== "off" && <MirrorSwitch live={glass === "live"} onToggle={onMirror} />}
 
       {/* Top bar: the CLOCK, and the one press that belongs on the road —
           the camera. Which stage this is rides under the minimap instead:

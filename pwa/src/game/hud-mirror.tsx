@@ -5,127 +5,90 @@
 // The mirror is a second pass over the whole scene (mirror.ts) and the most
 // expensive thing in a driving frame, so the press that stands it down
 // belongs on the thing itself rather than three cards deep in the options:
-// tap the glass and it folds away, tap the strip it folds down to and it
-// comes back.
+// tap the glass and the picture goes out, tap it again and it comes back.
+//
+// THE MIRROR NEVER MOVES. What the press takes away is the PICTURE, not the
+// glass: off, the strip stays exactly where it hung and goes flat grey, a
+// mirror with nothing in it. That is the whole reason it is worth pressing
+// on a phone — the target is the same fifth of the screen wide whichever
+// state it is in, so switching the rear view off is not a gesture that makes
+// switching it back on harder. A strip that shrank to a finger's height to
+// say it was off would be the one thing on this screen that punished the
+// player for using it.
 //
 // TWO SWITCHES, AND THEY ARE NOT THE SAME SWITCH:
 //   * OPTIONS ▸ HUD ▸ REAR VIEW is whether the game has a mirror at all.
-//     Off, there is no glass, no strip, and nothing here to press.
-//   * The fold is what the mirror is DOING, for this session. Nothing is
-//     saved: a player who folded it away over one jump is not saying what
-//     they want the next time the game is opened.
-// Which is why the fold only ever hides the RENDERING. To be rid of the
+//     Off, there is no glass and nothing here to press.
+//   * This one is what the mirror is SHOWING, for this session. Nothing is
+//     saved: a player who blanked it over one jump is not saying what they
+//     want the next time the game is opened.
+// Which is why the press only ever stops the RENDERING. To be rid of the
 // mirror, switch it off in the menu.
 //
-// UP, the switch is placed off the same three numbers styles.css restates
-// from mirror.ts (`--glass-*`) — see the parity note there — so it sits
-// exactly on the glass in every viewport. It keeps that place in the views
-// that put the picture somewhere else: from the cockpit the rear view is in
-// the mirror hanging in the windscreen, and the switch for it still stands
-// where the strip would be. One mirror, one place to reach for it.
+// The switch is placed off the same three numbers styles.css restates from
+// mirror.ts (`--glass-*`) — see the parity note there — so it sits exactly on
+// the glass in every viewport. It keeps that place in the views that put the
+// picture somewhere else: from the cockpit the rear view is in the mirror
+// hanging in the windscreen, and the switch for it still stands where the
+// strip would be. One mirror, one place to reach for it.
 //
-// FOLDED, it goes to the top edge of the frame instead — the mirror shut flat
-// against the roof. That is where a strip of chrome belongs when it is not
-// being read, and it is what makes the way back a PULL: swipe it down, or
-// press it, and the glass comes with you.
+// THE WORDS FLOAT OVER IT, because a grey rectangle at the top of the frame
+// has to say what it is or it reads as something broken. Blank, the label
+// stands on the glass for as long as the picture is off; switched back on, it
+// says so over the returning road and fades out of the way, since a mirror
+// showing the road behind explains itself.
 
-import { useRef } from "react";
-
-import { capturePointer } from "./hud-touch.tsx";
+import { useEffect, useRef, useState } from "react";
 
 /** Where the co-driver's slot hangs, which is whatever the mirror is doing
- * over it: the full glass, the strip it folds down to, or nothing at all. */
-export type GlassSlot = "up" | "folded" | "off";
+ * over it: the picture, the blanked glass it toggles to, or nothing at all.
+ * The first two hang in the same box, and only the third frees it. */
+export type GlassSlot = "live" | "blank" | "off";
 
-/** The class that drops a `.hud-pace` strip clear of the mirror. Only the
- * glass needs clearing: folded, the strip is against the top edge of the
- * frame and out of the co-driver's slot entirely. */
+/** The class that drops a `.hud-pace` strip clear of the mirror. Both states
+ * of a mirror that EXISTS need it — the blanked glass takes up exactly the
+ * room the picture did — and a stage with no mirror on it needs none. */
 export function paceUnderGlass(glass: GlassSlot): string {
-  return glass === "up" ? "hud-pace-under-glass" : "";
+  return glass === "off" ? "" : "hud-pace-under-glass";
 }
 
-/** How far a drag has to run before it stops being a press, CSS px. Short on
- * purpose: the folded strip is a finger tall, so the gesture at it is a flick
- * rather than a pull across the screen. */
-const SWIPE_PX = 16;
+/** How long the label stands over a mirror that has just come back on, ms.
+ * Matched to the fade in styles.css: the words are gone from the DOM on the
+ * frame the animation finishes, so nothing is left half-transparent over the
+ * road. */
+const SAID_MS = 1400;
 
-/** What a drag across the switch ASKED FOR — the glass pulled down, pushed
- * up, or neither, which is every press and every sideways wipe. The dominant
- * axis decides, so a swipe down is down however much sideways came with it. */
-export function mirrorSwipe(dx: number, dy: number): "down" | "up" | null {
-  if (Math.abs(dy) < SWIPE_PX || Math.abs(dy) <= Math.abs(dx)) return null;
-  return dy > 0 ? "down" : "up";
-}
-
-/** The chevron on the folded strip: what pulls the glass back down. Drawn
- * wide and shallow because that is all the room a folded mirror leaves. */
-function PullGlyph() {
-  return (
-    <svg className="hud-mirror-pull" viewBox="0 0 24 8" aria-hidden="true">
-      <path
-        d="M 5 2.2 L 12 6 L 19 2.2"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-export function MirrorSwitch({ up, onToggle }: { up: boolean; onToggle: () => void }) {
-  /** Where the press landed, until it lifts — a swipe is only a swipe once
-   * both ends of it are known. */
-  const from = useRef<{ x: number; y: number } | null>(null);
-  /** A swipe already answered this press, so the click that follows it is
-   * not a second answer. */
-  const swiped = useRef(false);
+export function MirrorSwitch({ live, onToggle }: { live: boolean; onToggle: () => void }) {
+  /** Whether the mirror coming back on is still being announced. Only that
+   * direction is transient — blank, the label is the only thing on the glass
+   * and it stays. */
+  const [saying, setSaying] = useState(false);
+  /** The first render is the state the stage STARTED in, not a press, and a
+   * mirror that has always been on has nothing to announce. */
+  const pressed = useRef(false);
+  useEffect(() => {
+    if (!pressed.current) {
+      pressed.current = true;
+      return;
+    }
+    if (!live) return;
+    setSaying(true);
+    const timer = setTimeout(() => setSaying(false), SAID_MS);
+    return () => clearTimeout(timer);
+  }, [live]);
   return (
     <button
       type="button"
-      className={`hud-mirror ${up ? "" : "hud-mirror-folded"}`}
-      // The capture is what makes the gesture possible at all: a swipe down
-      // off a strip a finger tall leaves the button on its first millimetre,
-      // and without it the lift is heard by whatever the finger landed on.
-      onPointerDown={(e) => {
-        capturePointer(e);
-        from.current = { x: e.clientX, y: e.clientY };
-        swiped.current = false;
-      }}
-      onPointerUp={(e) => {
-        const start = from.current;
-        from.current = null;
-        if (!start) return;
-        const dx = e.clientX - start.x;
-        const dy = e.clientY - start.y;
-        const asked = mirrorSwipe(dx, dy);
-        // A PRESS is one that lifts near where it landed, and the click below
-        // is what answers it — so a keyboard and a controller reach the same
-        // switch a finger does. Anything else that travelled without asking
-        // for a direction is a wipe across the screen that happened to start
-        // here, and the mirror does not answer those.
-        if (!asked && Math.abs(dx) < SWIPE_PX && Math.abs(dy) < SWIPE_PX) return;
-        swiped.current = true;
-        // A swipe SAYS WHICH WAY where a press only toggles — pulling down
-        // asks for the glass, pushing up puts it away — so asking for what is
-        // already on screen is nothing at all.
-        if (asked && (asked === "down") !== up) onToggle();
-      }}
-      onPointerCancel={() => {
-        from.current = null;
-      }}
-      onClick={() => {
-        if (swiped.current) {
-          swiped.current = false;
-          return;
-        }
-        onToggle();
-      }}
-      title={up ? "Fold the rear view away" : "Pull the rear view back down"}
-      aria-label={up ? "Fold the rear-view mirror away" : "Pull the rear-view mirror back down"}
+      className={`hud-mirror ${live ? "" : "hud-mirror-blank"}`}
+      onClick={onToggle}
+      title={live ? "Switch the rear view off" : "Switch the rear view on"}
+      aria-label={live ? "Switch the rear-view mirror off" : "Switch the rear-view mirror on"}
     >
-      {!up && <PullGlyph />}
+      {(!live || saying) && (
+        <span className={`hud-mirror-label ${live ? "hud-mirror-said" : ""}`}>
+          Rear view mirror {live ? "on" : "off"}
+        </span>
+      )}
     </button>
   );
 }
