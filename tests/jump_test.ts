@@ -123,6 +123,36 @@ describe("the jump", () => {
     expect(state.car.y).toBeGreaterThan(0);
   });
 
+  it("throws a car that comes at it the other way round, too", () => {
+    // A lip is a crest with a face up to it, and a crest does not care which
+    // way it is met. Answering only for a car driving UP the stage left the
+    // one coming back down driving into the landing face instead of over it:
+    // the road heaved up under the wheels and the springs paid for it, which
+    // is a crash where there should be a jump.
+    const state = game();
+    const lip = state.track.samples.findIndex((s) => s.jump);
+    expect(lip).toBeGreaterThan(0);
+    // Stood well past the lip, pointed back at it, at rally pace.
+    const from = state.track.samples[lip + 60];
+    state.car.x = from.x;
+    state.car.z = from.z;
+    state.car.y = from.elevation;
+    state.car.heading = from.heading + Math.PI;
+    state.car.u = 28;
+    state.progressIndex = lip + 60;
+    state.nearIndex = lip + 60;
+    const events = run(state, { throttle: 0.35 }, 4);
+    const takeoff = events.find((e) => e.type === "takeoff");
+    expect(takeoff).toBeDefined();
+    // Thrown HARDER than the car that took it the way the stage intended,
+    // and rightly so: a lip ramps up gently and drops away steeply, and the
+    // face this car climbed is the steep one.
+    if (takeoff && takeoff.type === "takeoff") expect(takeoff.vy).toBeGreaterThan(7);
+    expect(state.stats.jumps).toBeGreaterThan(0);
+    // It flew. It did not arrive at the lip on its bump stops.
+    expect(state.car.damage.wear).toBe(0);
+  });
+
   it("flight carries: real air time, forward speed nearly kept", () => {
     const state = game();
     driveToLip(state);

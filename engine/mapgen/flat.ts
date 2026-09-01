@@ -26,6 +26,20 @@ const CODE_OF: Record<Surface, number> = { gravel: 0, asphalt: 1, water: 2 };
 export const GROUP_SHIFT = 3;
 export const GROUP = 1 << GROUP_SHIFT;
 
+/** Groups per BLOCK — the coarse tier over the groups, for the one search
+ * that has the whole road to get through rather than a window of it.
+ *
+ * A window walk starts from a hint and only ever reads sixty samples, so
+ * group circles alone are all it can use. The walk that goes looking for a
+ * car whose hint has gone stale has no window to start from, and testing a
+ * circle per eight samples down a stage that an endless run never stops
+ * appending to is a cost that grows with the length of the run. One tier up
+ * divides that by eight again, and against a bound as tight as a car's
+ * distance to the road every block but the one it is standing in fails on
+ * its first test. */
+export const BLOCK_SHIFT = 3;
+export const BLOCK = 1 << BLOCK_SHIFT;
+
 /** Below this, a sample is straight: no corner plan has anything to say
  * about it. The same threshold the bot's scan used inline. */
 export const STRAIGHT = 1e-4;
@@ -66,6 +80,11 @@ export type FlatTrack = {
   groupX: Float64Array;
   groupZ: Float64Array;
   groupR: Float64Array;
+  /** The same, one tier coarser: a circle over every `BLOCK` groups, for a
+   * search with the whole road to cover. See `BLOCK_SHIFT`. */
+  blockX: Float64Array;
+  blockZ: Float64Array;
+  blockR: Float64Array;
 };
 
 const CACHE = new WeakMap<Track, FlatTrack>();
@@ -105,6 +124,9 @@ export function flatTrack(track: Track): FlatTrack {
     groupX: new Float64Array(Math.ceil(n / GROUP)),
     groupZ: new Float64Array(Math.ceil(n / GROUP)),
     groupR: new Float64Array(Math.ceil(n / GROUP)),
+    blockX: new Float64Array(Math.ceil(n / (GROUP * BLOCK))),
+    blockZ: new Float64Array(Math.ceil(n / (GROUP * BLOCK))),
+    blockR: new Float64Array(Math.ceil(n / (GROUP * BLOCK))),
   };
   let from = 0;
   if (cached) {
@@ -117,6 +139,20 @@ export function flatTrack(track: Track): FlatTrack {
     flat.sinHeading.set(cached.sinHeading);
     flat.cosHeading.set(cached.cosHeading);
     flat.surface.set(cached.surface);
+    // ...and the circles over them. The rebuilds below start at the group
+    // and the block the extension lands IN, because those are the only ones
+    // whose samples changed — which means every circle BEHIND the frontier
+    // has to be carried over here or it stays at the zero this array was
+    // allocated with: a circle of no radius, standing at the world origin.
+    // A search then skips it, having proved that nothing three hundred
+    // metres away can be the nearest sample — and the road an endless run
+    // has already driven quietly stops being findable at all.
+    flat.groupX.set(cached.groupX);
+    flat.groupZ.set(cached.groupZ);
+    flat.groupR.set(cached.groupR);
+    flat.blockX.set(cached.blockX);
+    flat.blockZ.set(cached.blockZ);
+    flat.blockR.set(cached.blockR);
   }
   for (let i = from; i < n; i++) {
     const s = samples[i];
@@ -159,6 +195,38 @@ export function flatTrack(track: Track): FlatTrack {
     // Slack, so rounding can never shrink the circle below the samples it
     // is standing in for.
     flat.groupR[g] = Math.sqrt(r2) * (1 + 1e-9) + 1e-6;
+  }
+  // ...and the blocks over them, from the block the extension starts in for
+  // the same reason. Built off the SAMPLES rather than off the group
+  // circles: a circle around a set of circles has to be grown to reach the
+  // furthest point of each, and taking the extremes of the points
+  // themselves gives a tighter one for the same work.
+  const perBlock = GROUP * BLOCK;
+  for (let b = (from / perBlock) | 0; b < flat.blockX.length; b++) {
+    const start = b * perBlock;
+    const end = Math.min(n, start + perBlock);
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    for (let i = start; i < end; i++) {
+      if (flat.x[i] < minX) minX = flat.x[i];
+      if (flat.x[i] > maxX) maxX = flat.x[i];
+      if (flat.z[i] < minZ) minZ = flat.z[i];
+      if (flat.z[i] > maxZ) maxZ = flat.z[i];
+    }
+    const cx = (minX + maxX) / 2;
+    const cz = (minZ + maxZ) / 2;
+    let r2 = 0;
+    for (let i = start; i < end; i++) {
+      const dx = flat.x[i] - cx;
+      const dz = flat.z[i] - cz;
+      const d2 = dx * dx + dz * dz;
+      if (d2 > r2) r2 = d2;
+    }
+    flat.blockX[b] = cx;
+    flat.blockZ[b] = cz;
+    flat.blockR[b] = Math.sqrt(r2) * (1 + 1e-9) + 1e-6;
   }
   // Rebuilt whole rather than extended: a straight tail that a later
   // section puts a corner on has a different answer than it had before.

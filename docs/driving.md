@@ -246,7 +246,7 @@ rewards it, and no drift seconds are counted at the player.
 
 - **The ground** — grounded, the car **rides** the road: its vertical speed is the road's own, sampled between centerline points rather than snapped to the nearest one, so it climbs a ramp smoothly instead of hopping up it in 2 m stairs.
 - **Attitude** — the engine owns how the car SITS, in `CarState.pitch` and `CarState.roll` (positive lifts the nose and the right side). Grounded, both are the ground under the wheels: the nose takes the grade along the heading, the body takes the camber across it. Airborne, the pitch is the flight's own arc and the roll is the tumble the take-off put in. Both ease toward their target at `TUNING.attitude.settle` — that lag IS the suspension travel a landing settles through. The renderer only spends the two angles on the right axes; it never derives them.
-- **Takeoff** — jump segments ramp up to a lip; crossing it throws the car with vertical speed proportional to pace × ramp slope (`takeoff`). The ramp EASES IN, steepest right at the lip, because a ramp that flattens as it reaches the top hands the car no upward speed at the one moment that matters. A crest launches the car too, but only when the ground's own curvature would pull it down harder than gravity can (`TUNING.air.crestSpan`, `crestPull`) — so a real brow throws you at pace and holds you at a crawl, while the rolling ground under every stage is just ridden over. Off the road a sharp EDGE does the same: ground falling away by more than `edgeDrop` under the car's own footprint is a cliff lip, not a face to be driven down. Both gates read the speed the car is COVERING GROUND at rather than the speed it is pointing at, because sideways those are different numbers — a drift over a mountain top flies exactly like a straight one would.
+- **Takeoff** — jump segments ramp up to a lip; crossing it throws the car with vertical speed proportional to pace × ramp slope (`takeoff`). The ramp EASES IN, steepest right at the lip, because a ramp that flattens as it reaches the top hands the car no upward speed at the one moment that matters. A lip is a crest and a crest does not care which way it is met: a car coming back the other way climbs the landing face and is thrown off the top of it — harder, because that face is the steep one. A crest launches the car too, but only when the ground's own curvature would pull it down harder than gravity can (`TUNING.air.crestSpan`, `crestPull`) — so a real brow throws you at pace and holds you at a crawl, while the rolling ground under every stage is just ridden over. Off the road a sharp EDGE does the same: ground falling away by more than `edgeDrop` under the car's own footprint is a cliff lip, not a face to be driven down. Both gates read the speed the car is COVERING GROUND at rather than the speed it is pointing at, because sideways those are different numbers — a drift over a mountain top flies exactly like a straight one would.
 - **...and so does the road taken FROM THE SIDE.** A road is a surface, not a line: along the stage it brows and dips, and across it there is R16's crown, the bank R19 puts on a corner, and the ground beside it leaning away. The curvature the takeoff reads is both of those resolved onto the direction of TRAVEL (`pathCurvature`, over `air.crestSpan` lengthways and `crossSpan` of the road's half-width across), so what a car meets depends on where it is going. Drive down the stage and it is all brows; ride up the verge and over the road and it is all crown — and with enough speed that crown throws the car exactly like a lip does. A narrow road is the sharper hump, because the same 17 cm of camber is bent into a tighter radius the less road there is to spread it over; a sealed one is sharper again, standing `asphaltLift` proud of its own shoulder.
 - **The roll** — a car that leaves the ground crossed up trips over its outside wheels: the take-off puts roll in the body from the slide it was holding plus the rotation already in it, and nothing in the air takes it out. The same trip about the vertical axis puts SPIN in it (`air.yawFromSlide`): the tires that were holding the slide let go all at once, so a car that goes over a ledge sideways keeps turning the way the slide was turning it, all the way down. Straight and level flies flat; properly sideways goes a long way over; the unluckiest launches go all the way round. Landing on your side is never a clean landing. The ground unwinds the roll toward the nearest upright, and then onto the CAMBER under the wheels — level on the road, tipped with the hillside out in the wild.
 - **Airborne** — the velocity vector is committed. Gravity is arcade-heavy (floatier hangs read as slow motion), the nose answers only faintly, and a small seeded turbulence rolls the car — flying, slightly out of control, exactly as intended. No lateral grip: whatever attitude you took off with survives to the ground.
@@ -279,6 +279,8 @@ Time of day is presentation only; weather is the lever that reaches the physics 
 Generated stages roll (`STAGE_RULES.elevation` — long climbs, medium rollers, surface bumps; grades live on straights and flatten through corners). Gravity acts along the grade (`TUNING.hills.gravityAlong`): climbs cost speed, descents give it back, and a crest taken flat-out can go light. Ground height under the car interpolates between centerline samples, so grades stay smooth at any speed — and ACROSS the road it is the same corridor profile the road mesh is drawn from (R16 in [track-generator.md](track-generator.md)), carried out past the mat into the shoulder and the ground leaning away from it, so a car putting two wheels wide rides the verge it can see instead of hovering over it.
 
 The car FEELS that whole profile, not just the height of it. The cross-slope is read over the corridor at the car's real offset rather than off the mat's edge, so going over the edge of a sealed road leans the body onto the drop and pulls the car toward the low side — two wheels on the shoulder is a slope the handling knows about, not a place the height falls away while the physics insists the ground is level. The one exception is a bridge deck, which has no verge: past its parapet is air, so it reads its own mat and nothing outside it.
+
+And the grade is felt on the CAR's own axes, not the road's. A road states its shape in its own frame — the climb down the centerline and the camber across it — and the car on it may be pointed anywhere: down the stage, back up it, or straight across. That pair is turned onto the car's nose and its right before anything reads it, so gravity holds back whichever car is climbing, the body pitches and leans the way the ground under it actually goes, and a car crossing a road feels the crown rather than the hill. A hill is the same hill whichever way you are pointed at it.
 
 ## Surfaces
 
@@ -514,7 +516,12 @@ not a mistake anymore; it is exploration:
   the DRAWN terrain: the physics samples the same triangle lattice the
   renderer builds its ground tiles from (`TerrainField.groundAt`,
   `GROUND_CELL`), so the car sits on the slope on screen instead of
-  sinking into it where the analytic field and the mesh disagree. It
+  sinking into it where the analytic field and the mesh disagree. That
+  rule is not only the car's: everything the renderer STANDS on the
+  ground — every stone, tree, stump and tuft — is planted on the same
+  drawn surface (`Terrain.standOn`), because the analytic field runs
+  metres clear of a 14 m triangle over a rounded shoulder and a boulder
+  bedded on it hangs in the air over the hillside it belongs to. It
   rides that ground on its whole FOOTPRINT rather than on the one point
   under its middle: the body's four corners are sampled and the car is
   seated on the highest of them, so ground the body's own attitude cannot
@@ -667,7 +674,12 @@ has driven out does not drown in the lake, it drowns in the beach.
   the road where the car stands (`wayHome`). A car pinned against a trunk is
   not driving out of it; anything still making ground is left alone. Either
   way `state.progressIndex` comes back with the car: the road in between is
-  road the run has to drive again. The reset key answers the whole time the
+  road the run has to drive again. Progress is a SCORE and only creeps
+  forward; where the car actually is on the centerline is
+  `state.nearIndex`, which follows it back down the stage. Every search for
+  the road under the wheels starts from that one — started from progress, a
+  car that had doubled back was handed the height of road it had reached
+  rather than the road it was on. The reset key answers the whole time the
   car is off the road — a driver two metres into a ditch should not have to
   be lost first — but the ALERT waits for the car to actually be lost (`trackLost`, `TUNING.offTrack.guide`): more than 20 m
   out AND pointed more than 110° away from the way home. Two wheels on the

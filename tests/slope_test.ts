@@ -178,3 +178,61 @@ describe("the slope beside the road", () => {
     expect(drive(half + 0.4)).toBeLessThan(-0.1);
   });
 });
+
+// A ROAD STATES ITS SHAPE IN ITS OWN FRAME — the grade down the centerline
+// and the camber across it — and the car it is under is under no obligation
+// to be pointed either way. Everything that reads the ground reads it on the
+// CAR's axes: gravity is resolved along the nose, the body pitches and leans
+// onto it, and the wheels' vertical speed is that gradient dotted with the
+// car's own velocity. The road's own numbers handed over unturned are the
+// identity for a car driving down the stage, which is why the hill only came
+// out backwards for a car that had turned round — and then it came out
+// exactly backwards: gravity holding a car back down a descent and hurrying
+// it up a climb.
+describe("a hill is a hill whichever way the car is pointed", () => {
+  /** A straight laid at a constant grade — nothing but the climb. */
+  function hill(grade: number) {
+    const base = compileTrack(0, STRAIGHT);
+    return {
+      ...base,
+      samples: base.samples.map((s) => ({ ...s, elevation: s.s * grade })),
+    };
+  }
+
+  /** Roll a car along the hill at 20 m/s with nothing on either pedal, and
+   * hand back what gravity did to its speed. `back` turns it round, so it
+   * drives DOWN a road whose own grade climbs. */
+  function coast(grade: number, back: boolean): number {
+    const track = hill(grade);
+    const state = createGame({ seed: 0, carId: "coupe", skipCountdown: true, track });
+    const at = track.samples[200];
+    state.car.x = at.x;
+    state.car.z = at.z;
+    state.car.y = at.elevation;
+    state.car.heading = at.heading + (back ? Math.PI : 0);
+    state.car.u = 20;
+    state.progressIndex = 200;
+    state.nearIndex = 200;
+    for (let i = 0; i < Math.round(2 / TUNING.dt); i++) {
+      step(state, { ...NEUTRAL_INPUT, throttle: 0 });
+    }
+    return state.car.u - 20;
+  }
+
+  it("costs speed going up and gives it back coming down", () => {
+    const level = coast(0, false);
+    const up = coast(0.1, false) - level;
+    const down = coast(0.1, true) - level;
+    // What a 10% grade is worth over two seconds, measured against the same
+    // coast on the flat so the drag comes out of both sides.
+    const owed = 9.8 * TUNING.hills.gravityAlong * 0.1 * 2;
+    expect(up).toBeCloseTo(-owed, 1);
+    expect(down).toBeCloseTo(owed, 1);
+  });
+
+  it("is dead flat when it is dead flat, whichever way round", () => {
+    // Not exactly equal: the wind blows in ONE direction and the two cars
+    // are pointed at it differently, which is the whole of the difference.
+    expect(coast(0, false)).toBeCloseTo(coast(0, true), 1);
+  });
+});

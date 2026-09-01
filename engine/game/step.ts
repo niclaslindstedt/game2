@@ -11,6 +11,7 @@ import {
   compileTrack,
   createKerbField,
   createTerrain,
+  flatTrack,
   STAGE_RULES,
   type StageKnobs,
   type StageLength,
@@ -314,6 +315,7 @@ export function createGame(options: CreateGameOptions): GameState {
     checkpointS: 0,
     checkpointTimes: [],
     progressIndex: 0,
+    nearIndex: 0,
     progressS: 0,
     lateral: slot,
     offRoad: false,
@@ -387,6 +389,7 @@ function respawn(state: GameState, events: GameEvent[], home: WayHome): void {
   if (car.damage.wear >= 1) car.damage.wear = T.collision.repairTo;
   state.drowning = null;
   state.progressIndex = home.index;
+  state.nearIndex = home.index;
   state.progressS = state.track.samples[home.index].s;
   // The board the car is standing on has already been checked in, so the
   // window opens where it stands: driving off it again must not book the
@@ -766,13 +769,16 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   const car = state.car;
   const track = state.track;
   const terrain = state.terrain;
-  const prevIndex = state.progressIndex;
+  const prevIndex = state.nearIndex;
   const prevX = car.x;
   const prevZ = car.z;
 
   // Locate against the centerline BEFORE the move to know the ground ahead;
   // the fix after the move drives progress, lip detection, and respawn.
-  const preFix = locate(track, car.x, car.z, state.progressIndex);
+  // Both searches start from where the car IS (`nearIndex`), never from how
+  // far the run has GOT: progress is a monotonic score and a car that has
+  // doubled back leaves it standing hundreds of metres up the road.
+  const preFix = locate(track, car.x, car.z, state.nearIndex);
   const gain = driveGain(state);
   // WHERE THE CAR IS GOING, in world space — which sideways is nowhere near
   // where it is pointing. Everything below that asks the ground what it is
@@ -839,11 +845,31 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     const reach = Math.max(1, Math.round(T.air.crestSpan / track.step));
     const lipNear =
       crossedLip(track, Math.max(-1, preFix.index - reach - 1), preFix.index + reach) >= 0;
+    // THE GRADE, TURNED ONTO THE CAR'S OWN AXES. The road states its shape
+    // in its own frame — `slope` down the centerline, `slopeLat` across it —
+    // and a car is under no obligation to agree with either. `GroundContext`
+    // asks for the gradient on the CAR's axes (it is what gravity is
+    // resolved along, what pitches the nose and leans the body, and what the
+    // wheels' vertical speed is dotted against), and the wild's branch below
+    // reads its ground that way. Handing the road's own frame over unturned
+    // gave every car pointed the other way an inverted hill: gravity pushing
+    // it back down a descent and hurrying it up a climb, the camber pulling
+    // it toward the crown, and the nose sitting on the wrong attitude the
+    // whole way. Straight down the stage `turn` is 0 and this is the
+    // identity, which is why it went unnoticed.
+    const flat = flatTrack(track);
+    const fwdX = flat.sinHeading[preFix.index];
+    const fwdZ = flat.cosHeading[preFix.index];
+    // The car's nose against the road's, as a rotation: cos and sin of the
+    // angle between them, taken off the two unit vectors rather than an
+    // atan2 nobody needs the angle from.
+    const turnCos = sinH * fwdX + cosH * fwdZ;
+    const turnSin = sinH * fwdZ - cosH * fwdX;
     ctx = GROUND;
     ctx.surface = preFix.surface;
     ctx.groundY = preFix.elevation;
-    ctx.slope = preFix.slope;
-    ctx.slopeLat = preFix.slopeLat;
+    ctx.slope = preFix.slope * turnCos + preFix.slopeLat * turnSin;
+    ctx.slopeLat = preFix.slopeLat * turnCos - preFix.slope * turnSin;
     ctx.roadCurve = lipNear ? 0 : pathCurvature(track, preFix, dirX, dirZ);
     ctx.windX = state.wind.x;
     ctx.windZ = state.wind.z;
@@ -861,11 +887,12 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     stepGrounded(state.spec, car, drive, ctx, events, state.stats);
   }
 
-  const fix = locatePoint(track, car.x, car.z, state.progressIndex);
+  const fix = locatePoint(track, car.x, car.z, state.nearIndex);
   // The finish is a LINE across the road, and the move just made is what
   // either crossed it or did not. Asked here rather than at the end of the
   // step, so a respawn cannot teleport the car over the gate and win.
   const finished = !track.endless && crossedFinish(track, prevX, prevZ, car.x, car.z);
+  state.nearIndex = fix.index;
   state.progressIndex = Math.max(state.progressIndex, fix.index);
   state.progressS = track.samples[state.progressIndex].s;
   state.lateral = fix.lateral;
@@ -887,19 +914,24 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   state.kerbs.extend(track.samples.length);
   if (track.endless) state.kerbs.pruneBefore(state.progressS - 400);
 
-  // Jump lips are keyed to progress so a lip cannot be skipped by a fast
-  // step; the grounded step already applied ground-follow, so takeoff here
-  // overrides it with the ramp launch.
-  if (!car.airborne && fix.index > prevIndex) {
+  // Jump lips are keyed to the SAMPLES THE CAR CROSSED this step, so a lip
+  // cannot be skipped by a fast one — and so a car meeting the lip the other
+  // way round is thrown by it rather than driven into it. The grounded step
+  // already applied ground-follow, so takeoff here overrides it with the
+  // ramp launch.
+  if (!car.airborne && fix.index !== prevIndex) {
     const lipIndex = crossedLip(track, prevIndex, fix.index);
     if (lipIndex >= 0 && car.u > 6) {
+      // The RAMP that throws the car is the face it just climbed, which is
+      // on whichever side of the lip it came from. `slopeAt` looks backward
+      // down the road by design, so up-index it is the lip's own value and
+      // down-index it is the next sample's, turned round with the car.
+      const back = fix.index < prevIndex;
+      const ramp = back
+        ? -slopeAt(track, Math.min(track.samples.length - 1, lipIndex + 2))
+        : slopeAt(track, lipIndex);
       car.y = track.samples[lipIndex].elevation;
-      launch(
-        car,
-        Math.max(0.5, car.u * slopeAt(track, lipIndex) * T.air.launchScale),
-        events,
-        state.stats,
-      );
+      launch(car, Math.max(0.5, car.u * ramp * T.air.launchScale), events, state.stats);
     }
   }
 

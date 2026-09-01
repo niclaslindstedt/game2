@@ -287,8 +287,10 @@ function streamWaterAt(streams: Stream[], x: number, z: number): number | null {
 
 export type TerrainField = {
   /** Final ground height at a world position — corridor shelf, hills,
-   * mountains, sea floor, stream beds and all. The analytic field scenery
-   * stands on and the renderer samples its ground meshes from. */
+   * mountains, sea floor, stream beds and all. The ANALYTIC field: it is
+   * what the ground mesh's corners are sampled from, and between two of
+   * those corners it is not the ground at all. Nothing STANDS on it — see
+   * `groundAt` and `latticeAt`, which are the surfaces that get drawn. */
   heightAt: (x: number, z: number) => number;
   /** The ground the car RIDES: `heightAt` sampled on the GROUND_CELL
    * lattice and interpolated across the same triangles the renderer draws,
