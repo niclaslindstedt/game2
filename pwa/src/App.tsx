@@ -2315,11 +2315,11 @@ export function App() {
             flash(`CLEAN AIR ${ev.airTime.toFixed(1)}s`, "good");
           } else if (ev.type === "systemFail") {
             // The one exception to the rule above: a bent car announces
-            // itself and hurt MACHINERY does not. There is nothing to look
-            // at — the engine bay is shut, the rack is under the floor — so
-            // the news is said here, where the splits are said.
+            // itself and hurt MACHINERY does not. Valuable machinery gives
+            // the driver a useful adjustment to make; chassis wear remains
+            // gameplay-relevant but is deliberately silent.
             const call = damageCall(ev.system, ev.spent);
-            flash(call.text, call.tone);
+            if (call) flash(call.text, call.tone);
           }
         }
       };

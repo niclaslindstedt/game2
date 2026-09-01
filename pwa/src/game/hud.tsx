@@ -147,13 +147,15 @@ export type HudFlash = { id: number; text: string; tone: "good" | "bad" | "info"
  * to give, once as it goes (`systemFail`, engine-side).
  *
  * Two words each, because it is read at speed out of the corner of an eye
- * on the way into a corner. The first is the part; the second is how bad. */
-const DAMAGE_PARTS: Record<DamageCall, string> = {
+ * on the way into a corner. The first is the part; the second is how bad.
+ * Chassis wear remains meaningful to the driving model, but is deliberately
+ * silent here: it is not a valuable part whose failure gives the driver a
+ * useful adjustment to make. */
+const DAMAGE_PARTS: Record<Exclude<DamageCall, "chassis">, string> = {
   engine: "ENGINE",
   suspension: "SUSPENSION",
   gearbox: "GEARBOX",
   steering: "STEERING",
-  chassis: "CHASSIS",
 };
 
 /** The call itself: what to put on screen, and in which colour. A part that
@@ -164,10 +166,11 @@ const DAMAGE_PARTS: Record<DamageCall, string> = {
 export function damageCall(
   system: DamageCall,
   spent: boolean,
-): { text: string; tone: HudFlash["tone"] } {
+): { text: string; tone: HudFlash["tone"] } | null {
+  if (system === "chassis") return null;
   const part = DAMAGE_PARTS[system];
   if (!spent) return { text: `${part} DAMAGED`, tone: "info" };
-  return { text: system === "chassis" ? "CHASSIS WRECKED" : `${part} BROKEN`, tone: "bad" };
+  return { text: `${part} BROKEN`, tone: "bad" };
 }
 
 /** R28 — the SPLIT: what the board the car has just gone through said. Held
