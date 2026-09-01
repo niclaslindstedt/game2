@@ -79,6 +79,8 @@ function callDistance(u: number): number {
 export type PaceMemory = {
   /** Arc position of the furthest corner already called, meters. */
   calledS: number;
+  /** Arc position of the furthest jump lip already called, meters. */
+  calledJumpS: number;
   /** Progress at the last read. A respawn, a restart or a new stage moves it
    * BACKWARDS, which is the one thing that clears the latch. */
   lastS: number;
@@ -91,7 +93,7 @@ export type PaceMemory = {
 };
 
 export function createPaceMemory(): PaceMemory {
-  return { calledS: -Infinity, lastS: 0, shapes: new Map() };
+  return { calledS: -Infinity, calledJumpS: -Infinity, lastS: 0, shapes: new Map() };
 }
 
 /** Turn angle past which a call earns the LONG modifier, radians (~100°). */
@@ -109,7 +111,10 @@ const LONG_NOTE_ANGLE = 1.75;
  * shows as a LEFT turn — the same one-flip rule input.ts applies to
  * steering. */
 function upcomingPacenotes(state: GameState, mem: PaceMemory): HudPacenote[] {
-  if (state.progressS < mem.lastS) mem.calledS = -Infinity;
+  if (state.progressS < mem.lastS) {
+    mem.calledS = -Infinity;
+    mem.calledJumpS = -Infinity;
+  }
   mem.lastS = state.progressS;
   const lead = callDistance(state.car.u);
   const out: HudPacenote[] = [];
@@ -118,10 +123,26 @@ function upcomingPacenotes(state: GameState, mem: PaceMemory): HudPacenote[] {
    * follows, not to the car that has yet to reach either. */
   let from = state.progressS;
   const drawn: number[] = [];
-  for (const note of state.track.pacenotes) {
-    if (note.endS <= state.progressS) continue;
+  const jumps = state.track.samples.filter((sample) => sample.jump);
+  const events = [
+    ...state.track.pacenotes.map((note) => ({ s: note.s, note })),
+    ...jumps.map((sample) => ({ s: sample.s, jump: sample })),
+  ].sort((a, b) => a.s - b.s);
+  for (const event of events) {
+    if ("note" in event && event.note.endS <= state.progressS) continue;
+    if ("jump" in event && event.jump.s < state.progressS) continue;
+    const eventS = event.s;
+    const called = "note" in event ? event.note.s <= mem.calledS : eventS <= mem.calledJumpS;
     // Close enough to call, or called already and not yet driven through.
-    if (note.s - from > lead && note.s > mem.calledS) break;
+    if (eventS - from > lead && !called) break;
+    if ("jump" in event) {
+      mem.calledJumpS = Math.max(mem.calledJumpS, eventS);
+      from = Math.max(from, eventS);
+      out.push({ kind: "jump", distance: Math.max(0, eventS - state.progressS) });
+      if (out.length >= 2) break;
+      continue;
+    }
+    const note = event.note;
     mem.calledS = Math.max(mem.calledS, note.s);
     from = Math.max(from, note.endS);
     let drawing = mem.shapes.get(note.s);
@@ -131,6 +152,7 @@ function upcomingPacenotes(state: GameState, mem: PaceMemory): HudPacenote[] {
     }
     drawn.push(note.s);
     out.push({
+      kind: "turn",
       dir: note.dir > 0 ? "left" : "right",
       severity: note.severity,
       long: note.angle > LONG_NOTE_ANGLE,

@@ -36,17 +36,24 @@ import type { LiveRun } from "./snapshot.ts";
 
 /** One co-driver call, already flipped into SCREEN space by the snapshot
  * (left means the road bends left through the windshield). */
-export type HudPacenote = {
-  dir: "left" | "right";
-  severity: TurnSeverity;
-  /** True when the turn holds long enough to earn the LONG modifier. */
-  long: boolean;
-  /** Meters from the car to the turn entry (0 while inside the turn). */
-  distance: number;
-  /** The corner's own shape, ready to draw in the sign's 100x100 box — the
-   * stage's plan view of this turn, already in screen axes (pace-shape.ts). */
-  sign: PaceSign;
-};
+export type HudPacenote =
+  | {
+      kind: "turn";
+      dir: "left" | "right";
+      severity: TurnSeverity;
+      /** True when the turn holds long enough to earn the LONG modifier. */
+      long: boolean;
+      /** Meters from the car to the turn entry (0 while inside the turn). */
+      distance: number;
+      /** The corner's own shape, ready to draw in the sign's 100x100 box — the
+       * stage's plan view of this turn, already in screen axes (pace-shape.ts). */
+      sign: PaceSign;
+    }
+  | {
+      kind: "jump";
+      /** Meters from the car to the takeoff lip. */
+      distance: number;
+    };
 
 /** The car is in the start control — either beat of it. Nothing is geared
  * and no clock is running, which is what the instruments read off. */
@@ -376,7 +383,31 @@ const SEVERITY_WORD: Record<TurnSeverity, string> = {
 };
 
 function pacenoteText(note: HudPacenote): string {
+  if (note.kind === "jump") return "JUMP";
   return `${note.long ? "LONG " : ""}${SEVERITY_WORD[note.severity]} ${note.dir.toUpperCase()}`;
+}
+
+function PacenoteIcon({ note }: { note: HudPacenote }) {
+  if (note.kind === "jump") {
+    return (
+      <svg className="hud-pace-arrow hud-pace-jump-icon" viewBox="0 0 100 100" aria-hidden="true">
+        <path
+          d="M 15 72 L 39 72 L 55 35 L 77 35"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="13"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <polygon points="76,17 96,35 76,53" fill="currentColor" />
+      </svg>
+    );
+  }
+  return <PacenoteArrow sign={note.sign} />;
+}
+
+function pacenoteClass(note: HudPacenote): string {
+  return note.kind === "jump" ? "hud-pace-jump" : `hud-pace-${note.severity}`;
 }
 
 /** The way home, in the co-driver's own slot. Off the road there is no next
@@ -498,17 +529,21 @@ function Pacenotes({
   return (
     <div className={`hud-pace ${words ? "" : "hud-pace-glyphs"} ${paceUnderGlass(glass)}`}>
       <div
-        className={`hud-pace-call hud-pace-${now.severity} hud-pace-to-${now.dir}`}
+        className={`hud-pace-call ${pacenoteClass(now)}${
+          now.kind === "turn" ? ` hud-pace-to-${now.dir}` : ""
+        }`}
         style={{ opacity: callFade(now.distance) }}
       >
-        <PacenoteArrow sign={now.sign} />
+        <PacenoteIcon note={now} />
         {words && <span className="hud-pace-text">{pacenoteText(now)}</span>}
       </div>
       {next && (
         <div
-          className={`hud-pace-call hud-pace-next hud-pace-${next.severity} hud-pace-to-${next.dir}`}
+          className={`hud-pace-call hud-pace-next ${pacenoteClass(next)}${
+            next.kind === "turn" ? ` hud-pace-to-${next.dir}` : ""
+          }`}
         >
-          <PacenoteArrow sign={next.sign} />
+          <PacenoteIcon note={next} />
           {words && <span className="hud-pace-text">{pacenoteText(next)}</span>}
         </div>
       )}
