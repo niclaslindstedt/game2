@@ -47,6 +47,7 @@ Two rules that apply to every task in this repo, before any subject skill has a 
 
 - **Change files with the file tools — Read, then Edit or Write. Never through the shell.** No `sed -i`, no `python3 - <<'PY'`, no `cat > file <<'EOF'`. A shell rewrite hides the actual change behind a script, and this repo's prose comments are full of `$`, backticks, em dashes and backslashes that a heredoc quietly eats. The shell stays the right tool for READING (`grep`, `wc -l`, `git show`) and for running the checks.
 - **Lint, typecheck and format ONCE, at the gate — not after every edit.** `make fmt` / `make lint` / `make test` are the commit's gate (the `commit` skill owns the split). Re-running them between one edit and the next re-checks code nobody touched and tells you nothing; batch the whole coherent change, then check it. Mid-loop, if a specific answer is genuinely needed, check only the files you touched (`npx eslint <paths>`, `npx tsc --noEmit -p pwa/tsconfig.json`) — never a whole-repo pass, and never `prettier`, whose every finding `make fmt` fixes at the end for free.
+- **Every work session ends by committing its work with the `commit` skill.** Once the requested change and its gates are complete, load and follow that skill to make a conventional commit; when working in a worktree, follow its required sync step afterward.
 
 ## The iteration workflow: simulate, screenshot, look
 

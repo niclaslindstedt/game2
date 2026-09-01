@@ -175,7 +175,10 @@ export function collectAnchors(track: Track, fromIndex: number): RiverAnchor[] {
       waterY: mid.elevation - (deck ? R.bridge.clearance[deck] : 0),
       halfWidth: deck
         ? Math.max(6, runLength / 2 - 1.5)
-        : Math.min(8, Math.max(3.5, runLength / 2.6)),
+        : Math.max(
+            track.width / 2 + R.water.fordOutside,
+            Math.min(8, Math.max(3.5, runLength / 2.6)),
+          ),
       depth: deck ? R.bridge.depth : BED_DEPTH,
       bridged: deck !== null,
       s: mid.s,
@@ -1305,9 +1308,13 @@ export function createTerrain(track: Track): TerrainField {
    * over it, and what runs under one is still the river it spans (R13). */
   const roadTopAt = (x: number, z: number): number | null => {
     const near = nearestRoad(x, z);
-    if (near && near.d < shelfEnd + 3 && samples[near.index].deck !== null) return null;
+    // Only the actual ribbon hides water. The wider corridor is the graded
+    // ground beside the road; suppressing water there would trim a ford's
+    // channel at the road edge and make it look painted onto the tarmac.
+    if (near && near.d <= samples[near.index].width / 2 + 0.1 && samples[near.index].deck !== null)
+      return null;
     const corridor = corridorGround(x, z);
-    return corridor && corridor.cover > 0.5 ? corridor.y : null;
+    return near && near.d <= samples[near.index].width / 2 + 0.1 && corridor ? corridor.y : null;
   };
 
   const waterAt = (x: number, z: number): number | null => {

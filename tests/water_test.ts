@@ -224,6 +224,25 @@ describe("the river (R18)", () => {
     }
   });
 
+  it("keeps a ford's channel visible beyond both road edges", () => {
+    for (const seed of SEEDS) {
+      const track = compileStage(seed, "long", { water: 0.8 });
+      const terrain = createTerrain(track);
+      for (const anchor of collectAnchors(track, 0).filter((a) => !a.bridged)) {
+        const sample = track.samples.find((s) => Math.abs(s.s - anchor.s) < 2);
+        expect(sample).toBeDefined();
+        if (!sample) continue;
+        const right = { x: Math.cos(sample.heading), z: -Math.sin(sample.heading) };
+        const offset = track.width / 2 + R.water.fordOutside / 2;
+        for (const side of [-1, 1]) {
+          expect(
+            terrain.waterAt(anchor.x + right.x * offset * side, anchor.z + right.z * offset * side),
+          ).not.toBeNull();
+        }
+      }
+    }
+  });
+
   it("meets each crossing ONCE: the road's water is one course, not a fan of them", () => {
     // Every crossing belongs to exactly one traced watercourse, and a
     // stage's crossings collapse into far fewer courses than crossings —

@@ -1004,6 +1004,10 @@ export const STAGE_RULES = {
     clearAfterJump: 50, // meters past a lip before water may start
     apron: 30,
     bedDepth: 0.5,
+    /** Water must remain visible beyond both road edges at a ford. A ford
+     * that only covers the ribbon reads as a puddle painted on the road,
+     * rather than a channel the road passes through. */
+    fordOutside: 2,
     /** R35 — how far back from the standing water a ROUTE has to stay, m,
      * measured ACROSS THE GROUND. The search rejects any line whose probe
      * points come within this of a lake, so a stage is drawn round the
