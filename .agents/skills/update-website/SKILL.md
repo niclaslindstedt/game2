@@ -30,7 +30,7 @@ identity/feature changes is a bug, not a nice-to-have.
 
 ## Tracking mechanism
 
-`.agent/skills/update-website/.last-updated` contains the git commit hash from
+`.agents/skills/update-website/.last-updated` contains the git commit hash from
 the last successful run. Empty means "never run" — fall back to the initial
 commit.
 
@@ -39,7 +39,7 @@ commit.
 1. Read the baseline:
 
    ```sh
-   BASELINE=$(cat .agent/skills/update-website/.last-updated)
+   BASELINE=$(cat .agents/skills/update-website/.last-updated)
    ```
 
 2. Diff the sources of truth against the baseline:
@@ -77,7 +77,7 @@ commit.
 - [ ] Run `make test`
 - [ ] Write the new baseline:
 
-      git rev-parse HEAD > .agent/skills/update-website/.last-updated
+      git rev-parse HEAD > .agents/skills/update-website/.last-updated
 
 ## Verification
 

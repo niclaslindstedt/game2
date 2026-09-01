@@ -17,7 +17,7 @@ Do **not** use this skill for a targeted fix — if you know exactly which artif
 
 ## Registry
 
-The registry is the single source of truth for which sync skills exist in this repo. Every `update-*` directory under `.agent/skills/` must appear here exactly once. Add rows whenever you create a new sync skill.
+The registry is the single source of truth for which sync skills exist in this repo. Every `update-*` directory under `.agents/skills/` must appear here exactly once. Add rows whenever you create a new sync skill.
 
 | Skill            | Fixes                                                        | Spec sections | Run order |
 | ---------------- | ------------------------------------------------------------ | ------------- | --------- |
@@ -37,7 +37,7 @@ For each skill in the registry, decide whether it needs to run:
 1. Read the skill's baseline:
 
    ```sh
-   BASELINE=$(cat .agent/skills/<skill>/.last-updated)
+   BASELINE=$(cat .agents/skills/<skill>/.last-updated)
    ```
 
    An empty or missing file means "never run" — schedule it.
@@ -56,7 +56,7 @@ For each skill in the registry, decide whether it needs to run:
 
 For each scheduled skill, in order:
 
-1. Load `.agent/skills/<skill>/SKILL.md`.
+1. Load `.agents/skills/<skill>/SKILL.md`.
 2. Follow its discovery process, mapping table, and update checklist exactly.
 3. Verify the skill's own verification section passes.
 4. Record the commit hash the skill wrote to its `.last-updated`.
@@ -65,7 +65,7 @@ Between skills, do **not** commit — aggregate all edits into a single working 
 
 ## Tracking mechanism
 
-This skill's own `.agent/skills/maintenance/.last-updated` records the commit of the last full sweep. Individual skills keep their own baselines; this one only marks "a sweep happened".
+This skill's own `.agents/skills/maintenance/.last-updated` records the commit of the last full sweep. Individual skills keep their own baselines; this one only marks "a sweep happened".
 
 ## Update checklist
 

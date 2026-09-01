@@ -168,6 +168,6 @@ whether a forest reads as a forest.
 
 ## Skill self-improvement
 
-Record lessons under `.agent/skills/nature/.lessons/` in the
+Record lessons under `.agents/skills/nature/.lessons/` in the
 `skill-reflection` format; that skill decides at session end what gets
 promoted into this file. Never append lessons here directly.

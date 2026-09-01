@@ -238,7 +238,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 
 ## Skills
 
-Skills live in `.agent/skills/` (`.claude/skills` symlinks there) — each a `SKILL.md` playbook. Load the one that owns the task's SUBJECT, plus the workflow ones its steps name. This file is the router; the procedures live in the skills.
+Skills live in `.agents/skills/` (`.claude/skills` symlinks there) — each a `SKILL.md` playbook. Load the one that owns the task's SUBJECT, plus the workflow ones its steps name. This file is the router; the procedures live in the skills.
 
 **Session workflow** (every task):
 

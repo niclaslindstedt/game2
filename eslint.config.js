@@ -20,7 +20,7 @@ export default [
     // Node tooling scripts (icon generation, SEO checks, sim CLI, release
     // plumbing). These run under Node, so expose its globals rather than
     // the browser's.
-    files: ["scripts/**/*.mjs", ".agent/skills/**/*.mjs"],
+    files: ["scripts/**/*.mjs", ".agents/skills/**/*.mjs"],
     languageOptions: {
       sourceType: "module",
       ecmaVersion: 2022,
