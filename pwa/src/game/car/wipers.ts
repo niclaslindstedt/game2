@@ -129,7 +129,10 @@ const SIDE_COAT_MAX = 0.6;
  * it is moving, so `rain` is coat per SECOND and films a screen in seconds.
  * Road spray is thrown by the wheels, so `road` is coat per METRE driven
  * and takes most of a stage: a car standing still on the gravel has nothing
- * arriving at its glass, however filthy the rest of it already is.
+ * arriving at its glass, however filthy the rest of it already is. Nor has a
+ * car DRIVING on something that throws nothing — the metres are scaled by
+ * what is actually coming off the ground (`glassSpray` in car-dirt.ts), so
+ * tarmac and grass leave the screens exactly as they found them.
  *
  * THE ORDER IS THE POINT, and it is the same order in both columns: the
  * BACKLIGHT dirtiest, the windscreen next, the flanks last. The backlight
@@ -312,11 +315,14 @@ export type CarWipers = {
    * Drive the glass one step.
    *
    * `wet` is how hard it is raining on the car, 0..1 (the environment owns
-   * that number); `dirt` is how filthy the car has got, which is the same
-   * reading the lamps are dimmed by; `travel` is how far it drove this step,
-   * m, which is what decides how much of that filth reaches the glass.
+   * that number); `spray` is how hard the ground under the wheels is
+   * throwing at the glass right now (`glassSpray` in car-dirt.ts — nothing
+   * at all on tarmac and on grass, one on gravel, more in a slide);
+   * `travel` is how far the car drove this step, m, which is what turns that
+   * into an amount, because road spray is thrown by the wheels rather than
+   * settling out of the air.
    */
-  update: (wet: number, dirt: number, travel: number, dt: number) => void;
+  update: (wet: number, spray: number, travel: number, dt: number) => void;
   dispose: () => void;
 };
 
@@ -709,13 +715,15 @@ export function buildWipers(
     }
   };
 
-  const update = (wet: number, dirt: number, travel: number, dt: number): void => {
+  const update = (wet: number, spray: number, travel: number, dt: number): void => {
     for (const f of films) {
       // The two arrivals are metered by different things (see `SOIL`), so
       // they are resolved into this step's COAT before they are added: one
-      // over the seconds that passed, the other over the metres driven.
+      // over the seconds that passed, the other over the metres driven —
+      // and the second only over the metres driven on something that is
+      // throwing anything (`spray`).
       const rain = f.soil.rain * wet * dt;
-      const road = f.soil.road * dirt * travel;
+      const road = f.soil.road * spray * travel;
       const laid = rain + road;
       if (laid > 0) {
         f.mud += (road / laid - f.mud) * Math.min(1, laid * 5);

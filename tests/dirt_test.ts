@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
 
 import { createGame, type GameState } from "@engine";
 
-import { createCarDirt, dirtRate, groundTravel } from "../pwa/src/game/car-dirt.ts";
+import { createCarDirt, dirtRate, glassSpray, groundTravel } from "../pwa/src/game/car-dirt.ts";
 
 /** A racing state parked on the first sample of the given surface.
  *
@@ -104,6 +104,37 @@ describe("what the ground throws at the car, per metre", () => {
     expect(dirtRate(verge).mud).toBeGreaterThan(0);
     // The verge is wet whatever the road under it was doing.
     expect(dirtRate(verge).mud).toBeGreaterThan(dirtRate(stageOn("gravel")).mud);
+  });
+});
+
+describe("what the ground throws at the GLASS, per metre", () => {
+  it("throws nothing on tarmac, whatever the car is doing on it", () => {
+    const state = stageOn("asphalt");
+    expect(glassSpray(state)).toBe(0);
+    state.car.slide = 0.9;
+    expect(glassSpray(state)).toBe(0);
+  });
+
+  it("throws nothing off the road either: turf holds its own soil down", () => {
+    const state = stageOn("gravel");
+    state.offRoad = true;
+    expect(glassSpray(state)).toBe(0);
+    // ...and the PAINT still takes the verge's mud, which is the whole
+    // distinction: what a wheel lifts off grass goes on the sills, not on
+    // the windows.
+    expect(dirtRate(state).mud).toBeGreaterThan(0);
+  });
+
+  it("films the screens on gravel, and harder in a slide", () => {
+    const state = stageOn("gravel");
+    const gripped = glassSpray(state);
+    state.car.slide = 0.9;
+    expect(gripped).toBeGreaterThan(0);
+    expect(glassSpray(state)).toBeGreaterThan(gripped);
+  });
+
+  it("throws through a ford", () => {
+    expect(glassSpray(stageOn("water"))).toBeGreaterThan(0);
   });
 });
 

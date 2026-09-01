@@ -172,9 +172,13 @@ async function main(): Promise<void> {
         // than the wait, so every cell lands on or just after a stroke —
         // which is the state worth looking at, because the swept fan is the
         // whole look of a rally car's glass.
-        const level = Math.max(view.dirt.dust, view.dirt.mud);
-        car.wipers.update(0, level, 500, 20);
-        for (let n = 0; n < 500; n++) car.wipers.update(0, level, 0, 0.02);
+        // Gravel under the wheels for that half kilometre (`glassSpray`'s
+        // calibration point), scaled by how filthy this cell's car is meant
+        // to be, and then a still car on a surface throwing nothing while
+        // the blades do their work.
+        const spray = Math.max(view.dirt.dust, view.dirt.mud);
+        car.wipers.update(0, spray, 500, 20);
+        for (let n = 0; n < 500; n++) car.wipers.update(0, 0, 0, 0.02);
       }
       camera.fov = view.fov;
       camera.updateProjectionMatrix();
