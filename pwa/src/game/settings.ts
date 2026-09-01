@@ -142,7 +142,7 @@ export const HUD_TOGGLES: { id: HudToggle; label: string; hint: string }[] = [
     label: "CAMERA BUTTON",
     hint: "The on-screen view switch (the key still works)",
   },
-  { id: "pacenotes", label: "PACENOTES", hint: "The co-driver's corner calls" },
+  { id: "pacenotes", label: "PACENOTES", hint: "The co-driver's turn and jump calls" },
   {
     id: "pacenoteText",
     label: "PACENOTE WORDS",

@@ -604,6 +604,10 @@ body {
   color: #ff7a1f;
 }
 
+.hud-pace-jump {
+  color: #63d8ff;
+}
+
 /* Off the road the strip is not calling a corner any more: amber, the same
    amber as the arrow hanging over the car, so the two read as one marker. */
 .hud-pace-home {
