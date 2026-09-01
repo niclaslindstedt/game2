@@ -44,22 +44,59 @@ export const NEUTRAL_INPUT: CarInput = {
 export const DAMAGE_ZONES = 8;
 
 /** The pieces an impact can tear off the body. The engine decides WHEN one
- * breaks (zone crush past its bolt strength); the renderer owns what flies. */
+ * breaks — zone crush past its bolt strength for the panels and the glass,
+ * a wheel's own ledger reaching the top for a wheel — and the renderer owns
+ * what flies. The glass SHATTERS rather than flies: the pane is simply no
+ * longer there, and the cabin is seen straight into. A door is bolted
+ * deeper than anything on the flank, and a wheel deeper still: the first
+ * takes a flank folded most of the way to the cage, the second a corner
+ * driven into something at pace, or landed on. */
 export type DamagePart =
-  "bumperF" | "bumperR" | "mirrorL" | "mirrorR" | "spoiler" | "hood" | "hatch";
+  | "bumperF"
+  | "bumperR"
+  | "mirrorL"
+  | "mirrorR"
+  | "spoiler"
+  | "hood"
+  | "hatch"
+  | "glassF"
+  | "glassB"
+  | "glassL"
+  | "glassR"
+  | "doorL"
+  | "doorR"
+  | "wheelFL"
+  | "wheelFR"
+  | "wheelRL"
+  | "wheelRR";
+
+/** The four wheels in the order `CarDamage.wheels` keeps them, and the
+ * part each one becomes when it comes off: front-left, front-right,
+ * rear-left, rear-right. Left and right are the ENGINE's (positive `w`
+ * is the right side) — the screen flips once, in the HUD. */
+export const WHEEL_PARTS: readonly DamagePart[] = ["wheelFL", "wheelFR", "wheelRL", "wheelRR"];
 
 /** The machinery under the panels. Each system takes damage from the crush
- * landing nearest to it and degrades ITS OWN job: the engine loses power,
- * the suspension loses grip and landing tolerance, the gearbox shifts
- * slower and harsher, the steering loses authority. */
-export type InternalSystem = "engine" | "suspension" | "gearbox" | "steering";
+ * landing nearest to it and degrades ITS OWN job: the engine loses power
+ * and, at the end of it, stops for good; the suspension loses grip and
+ * landing tolerance; the gearbox shifts slower and harsher; the steering
+ * loses authority; the brakes lose the pedal and the lever. */
+export type InternalSystem = "engine" | "suspension" | "gearbox" | "steering" | "brakes";
 
 export const INTERNAL_SYSTEMS: readonly InternalSystem[] = [
   "engine",
   "suspension",
   "gearbox",
   "steering",
+  "brakes",
 ];
+
+/** WHY A RUN IS OVER SHORT OF THE LINE. `engine` is a motor that has
+ * stopped for good; `wheels` is a car with fewer than three of them left
+ * on it. Both are a car that is never going to move again under its own
+ * power, which is what separates them from every other line in the
+ * ledger. */
+export type RetireReason = "engine" | "wheels";
 
 /** WHAT A DAMAGE CALL IS ABOUT: one of the four systems, or the shell they
  * are all bolted into. The chassis is not a system — nothing under the
@@ -84,6 +121,12 @@ export type CarDamage = {
   /** Damage per internal system, 0 (sound) .. 1 (broken) — fed by where
    * the crush lands, read back by the handling model. Never repaired. */
   systems: Record<InternalSystem, number>;
+  /** Damage per wheel, 0 (sound) .. 1 (off the car), in `WHEEL_PARTS`
+   * order. Fed by the flank and corner folding nearest each one and by a
+   * landing taken on the side: past `chassis.wheelFlat` the tyre is down
+   * and the rim is bent, at 1 the wheel is on the road behind the car and
+   * the corner is riding on its hub. */
+  wheels: number[];
   /** Parts already torn off, in the order they went. */
   broken: DamagePart[];
   /** Bumped on every deformation change — the renderer re-bends the body
@@ -367,6 +410,16 @@ export type GameEvent =
    * line crossed stays crossed, and only the wreck's patch-up at a respawn
    * can put the chassis back under one. */
   | { type: "systemFail"; system: DamageCall; spent: boolean }
+  /** A WHEEL giving, the same two lines a system crosses: `off` false is
+   * the tyre gone and the rim bent — the car pulls that way and rides on
+   * a flat corner — true is the wheel off the car altogether (and a
+   * `partBreak` for the piece itself). `wheel` indexes `WHEEL_PARTS`. */
+  | { type: "wheelFail"; wheel: number; off: boolean }
+  /** THE RUN IS OVER, SHORT OF THE LINE. The car has stopped and nothing
+   * is going to make it move again: the engine is dead, or too few wheels
+   * are left on it. Emitted once, as the phase goes to `retired`; the app
+   * puts the card up and the stage cannot be finished. */
+  | { type: "retire"; reason: RetireReason }
   /** R26 — the car has ridden over an anti-cut block on the inside of a
    * corner. `speed` is the closing speed into it, m/s. Not an `impact`:
    * nothing folded, nothing broke, and the car drives on — what it cost
@@ -440,8 +493,12 @@ export type RunStats = {
  * the result is already on screen, but the car is still doing what a car
  * crossing a finish line at 180 km/h does — carrying on down R22's run-out
  * road, off the throttle, slowing to a stop. Nothing the player does
- * reaches the car any more; it is being driven home. */
-export type GamePhase = "intro" | "countdown" | "racing" | "rollout" | "finished";
+ * reaches the car any more; it is being driven home.
+ *
+ * `retired` is the run over WITHOUT a time: the car came to rest with a
+ * dead engine or on too few wheels (`retire` event), and nothing steps it
+ * again. A finished car has a time; a retired one has a place it stopped. */
+export type GamePhase = "intro" | "countdown" | "racing" | "rollout" | "finished" | "retired";
 
 /** A car in water too deep to drive. While this is set the run is not being
  * driven: input is ignored, nothing progresses, and the only thing

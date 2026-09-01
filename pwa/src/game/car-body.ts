@@ -25,7 +25,7 @@ import type { DamagePart } from "@engine";
 
 import { MeshBuilder, mergeGeometries, patchNormal } from "./car/builder.ts";
 import { buildFront, buildRear } from "./car/fascia.ts";
-import { buildGreenhouse, screenPanes } from "./car/greenhouse.ts";
+import { buildGreenhouse, screenPanes, type GlassPanes } from "./car/greenhouse.ts";
 import { buildCockpit, cabinOpening, type CarCockpit } from "./car/cockpit.ts";
 import { bayOpening, buildEngineBay } from "./car/engine-bay.ts";
 import { buildInterior, type InteriorDetail } from "./car/interior.ts";
@@ -33,7 +33,7 @@ import type { CrewLook } from "./car-crew.ts";
 import { LENS_MATERIAL } from "./car/lamps.ts";
 import { buildScreenRain, type ScreenRain } from "./car/screen-rain.ts";
 import { buildShell, buildStations } from "./car/shell.ts";
-import { buildTrim } from "./car/trim.ts";
+import { buildTrim, doorSkins, type DoorSkin } from "./car/trim.ts";
 import { buildWheel } from "./car/wheels.ts";
 import { buildWipers, type CarWipers, type FilmDetail } from "./car/wipers.ts";
 
@@ -52,6 +52,8 @@ export type {
 } from "./car/spec.ts";
 export { bodyHalfLength, bodyHalfWidth } from "./car/shell.ts";
 export { LENS_MATERIAL, frontLampAnchors, rearLampAnchors, type LampAnchor } from "./car/lamps.ts";
+export type { GlassPane, GlassPanes } from "./car/greenhouse.ts";
+export type { DoorSkin } from "./car/trim.ts";
 export { crewSeats, steeringTurn, type InteriorDetail } from "./car/interior.ts";
 export type { FilmDetail } from "./car/wipers.ts";
 export {
@@ -129,6 +131,16 @@ export type CarBodyParts = {
    * how much of the cabin shows through it this frame. Null on a spec with
    * no glass at all. */
   glass: THREE.MeshBasicMaterial | null;
+  /** ...the mesh itself, and where each pane sits in its buffer — what the
+   * damage visual takes a shattered pane out of. Null alongside `glass`. */
+  glassMesh: THREE.Mesh | null;
+  panes: GlassPanes;
+  /** The door skins this body was built with (car/trim.ts): where each one
+   * is, so the hole it leaves can be painted into the flank behind it. */
+  doors: DoorSkin[];
+  /** The tyre's radius, m — how far a corner drops onto its hub when the
+   * wheel is gone. */
+  wheelRadius: number;
   /** The lenses' own material — what car-mesh.ts switches between the off
    * and the lit tone. Null alongside `lenses`. */
   lens: THREE.MeshBasicMaterial | null;
@@ -231,7 +243,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     openings: [...(options.cockpit ? [cabinOpening(spec)] : []), ...(bay ? [bay] : [])],
   });
   const engineBay = buildEngineBay(b, spec, stations, axles, detail);
-  buildGreenhouse(b, g, spec);
+  const panes = buildGreenhouse(b, g, spec);
   buildFront({ body: b, lens: l }, spec, axles, part, { engineBay });
   buildRear({ body: b, lens: l }, spec, axles, part);
   buildTrim(b, spec, axles, part);
@@ -274,6 +286,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   const solid = detail === "off";
   let glassMat: THREE.MeshBasicMaterial | null = null;
   let glassGeo: THREE.BufferGeometry | null = null;
+  let glassMesh: THREE.Mesh | null = null;
   if (!g.empty) {
     glassMat = new THREE.MeshBasicMaterial({
       vertexColors: true,
@@ -283,9 +296,9 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
       side: solid ? THREE.FrontSide : THREE.DoubleSide,
     });
     glassGeo = g.geometry();
-    const glass = new THREE.Mesh(glassGeo, glassMat);
-    glass.renderOrder = 1;
-    cabin.add(glass);
+    glassMesh = new THREE.Mesh(glassGeo, glassMat);
+    glassMesh.renderOrder = 1;
+    cabin.add(glassMesh);
   }
 
   const breakables: Partial<Record<DamagePart, THREE.Mesh>> = {};
@@ -447,6 +460,10 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     unbolt,
     wipers,
     glass: glassMat,
+    glassMesh,
+    panes,
+    doors: doorSkins(spec),
+    wheelRadius: spec.wheelRadius,
     lens: lensMat,
     cabin,
     cabinTrim: interior.group,

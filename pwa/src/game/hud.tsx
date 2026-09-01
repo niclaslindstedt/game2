@@ -11,7 +11,7 @@
 
 import type { CSSProperties } from "react";
 
-import type { DamageCall, GamePhase, TurnSeverity } from "@engine";
+import type { DamageCall, GamePhase, RetireReason, TurnSeverity } from "@engine";
 
 import { deviceControls, type InputManager } from "./input.ts";
 import { FlyControls } from "./hud-fly.tsx";
@@ -131,6 +131,10 @@ export type HudSnapshot = {
    * stage are raced against the clock, and a position over an empty road
    * would be a number with nothing behind it. */
   standing: HudStanding | null;
+  /** Why the run ended short of the line, once it has (`retire`): the
+   * engine dead, or the wheels gone. Null on a run that is still going,
+   * and on one that reached the line. */
+  retired: RetireReason | null;
 };
 
 /** R29 — the position board: which place, out of how many cars. Moves only
@@ -162,13 +166,14 @@ const DAMAGE_PARTS: Record<Exclude<DamageCall, "chassis">, string> = {
   suspension: "SUSPENSION",
   gearbox: "GEARBOX",
   steering: "STEERING",
+  brakes: "BRAKES",
 };
 
 /** The call itself: what to put on screen, and in which colour. A part that
  * is GIVING is a warning the driver can still do something about — ease off
  * the kerbs, stop landing it flat — so it goes up in the same tone as a
  * split; a part that is GONE is not news, it is a fact about the rest of the
- * stage, and it goes up red. */
+ * stage, and it goes up red. An engine that is gone is the run: it says so. */
 export function damageCall(
   system: DamageCall,
   spent: boolean,
@@ -176,7 +181,22 @@ export function damageCall(
   if (system === "chassis") return null;
   const part = DAMAGE_PARTS[system];
   if (!spent) return { text: `${part} DAMAGED`, tone: "info" };
+  if (system === "engine") return { text: "ENGINE DEAD", tone: "bad" };
   return { text: `${part} BROKEN`, tone: "bad" };
+}
+
+/** A WHEEL'S call. The engine names its wheels in its own frame (positive
+ * `w` is its right side), and the rendered world mirrors the map view — so
+ * the engine's right-hand wheel is the one the player sees on the LEFT of
+ * the car in front of them, and this is the one place that flip is made,
+ * exactly as the audio route pans an impact. `wheel` indexes `WHEEL_PARTS`:
+ * FL, FR, RL, RR. */
+export function wheelCall(wheel: number, off: boolean): { text: string; tone: HudFlash["tone"] } {
+  const front = wheel < 2;
+  const engineRight = wheel % 2 === 1;
+  const where = `${front ? "FRONT" : "REAR"} ${engineRight ? "LEFT" : "RIGHT"}`;
+  if (!off) return { text: `${where} PUNCTURE`, tone: "info" };
+  return { text: `${where} WHEEL LOST`, tone: "bad" };
 }
 
 /** R28 — the SPLIT: what the board the car has just gone through said. Held
@@ -678,38 +698,42 @@ export function Hud({
   // somebody else's car, or past the line: a slot that cleared a mirror which
   // was not there would leave the co-driver's calls halfway down the screen.
   const glass: GlassSlot =
-    !show.mirror || spectate || flying || snap.phase === "finished"
+    !show.mirror || spectate || flying || snap.phase === "finished" || snap.phase === "retired"
       ? "off"
       : mirrorLive
         ? "live"
         : "blank";
-  /** The results card, wherever it ends up being drawn. */
-  const finish = (snap.phase === "rollout" || snap.phase === "finished") &&
-    snap.finishTime !== null && (
-      <FinishCard
-        time={snap.finishTime}
-        record={snap.record}
-        laps={snap.laps}
-        lapTimes={snap.lapTimes}
-        standing={
-          snap.standing && {
-            ...snap.standing,
-            // A heads-up race has no podium to miss: it pays nothing, it
-            // opens nothing, and every finish in it is simply the result.
-            podium: race !== null || snap.standing.place <= PODIUM_PLACES,
-          }
+  /** The results card, wherever it ends up being drawn — and the same card
+   * with no result on it, over a car that stopped short of the line. */
+  const over =
+    ((snap.phase === "rollout" || snap.phase === "finished") && snap.finishTime !== null) ||
+    (snap.phase === "retired" && snap.retired !== null);
+  const finish = over && (
+    <FinishCard
+      time={snap.finishTime ?? 0}
+      retired={snap.phase === "retired" ? snap.retired : null}
+      record={snap.record}
+      laps={snap.laps}
+      lapTimes={snap.lapTimes}
+      standing={
+        snap.standing && {
+          ...snap.standing,
+          // A heads-up race has no podium to miss: it pays nothing, it
+          // opens nothing, and every finish in it is simply the result.
+          podium: race !== null || snap.standing.place <= PODIUM_PLACES,
         }
-        nextStage={nextStage}
-        onRetry={onRetry}
-        onRetire={onRetire}
-        scores={scores}
-        campaign={campaign}
-        race={race}
-        locked={locked}
-        onSaveRun={onSaveRun}
-        onSpectate={onSpectate}
-      />
-    );
+      }
+      nextStage={nextStage}
+      onRetry={onRetry}
+      onRetire={onRetire}
+      scores={scores}
+      campaign={campaign}
+      race={race}
+      locked={locked}
+      onSaveRun={onSaveRun}
+      onSpectate={onSpectate}
+    />
+  );
   // THE RESULTS CARD OWNS THE SCREEN while the run-out is only its backdrop.
   // Nothing is being watched closely, the player's own car is parked past the
   // line, and a driving layout full of readings off a stationary car nobody

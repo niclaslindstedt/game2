@@ -44,7 +44,7 @@ import * as THREE from "three";
 
 import { NO_DIRT } from "../car-dirt.ts";
 import { MeshBuilder, patchAt, shadeFactor, type V3 } from "./builder.ts";
-import { GLASS_LIFT, screenPanes, type ScreenPane } from "./greenhouse.ts";
+import { GLASS_LIFT, screenPanes, type GlassPane, type ScreenPane } from "./greenhouse.ts";
 import { paneFrame, type PaneFrame } from "./pane-frame.ts";
 import type { CarBodySpec } from "./spec.ts";
 
@@ -311,6 +311,11 @@ export type CarWipers = {
    * without one, where the arms still sweep and there is simply nothing on
    * the glass for them to take off. */
   film: THREE.Mesh | null;
+  /** A pane has gone (car-damage.ts): there is no glass left for a coat to
+   * sit on, so the film over it is cleared for good and stays clear. The
+   * arms keep sweeping — a wiper on a screen with no glass in it is exactly
+   * what a crashed car looks like. */
+  shatter: (pane: GlassPane) => void;
   /**
    * Drive the glass one step.
    *
@@ -759,10 +764,30 @@ export function buildWipers(
     }
   };
 
+  /** The films in pane order: the screen, the backlight, then the flanks'
+   * windows two at a time — the right flank's, then the left's — which is
+   * the order `screenPanes` hands them out in. */
+  const filmsOf = (pane: GlassPane): Film[] => {
+    if (pane === "glassF") return films.slice(0, 1);
+    if (pane === "glassB") return films.slice(1, 2);
+    const perFlank = Math.max(0, (films.length - 2) / 2);
+    const from = pane === "glassR" ? 2 : 2 + perFlank;
+    return films.slice(from, from + perFlank);
+  };
+
+  const shatter = (pane: GlassPane): void => {
+    for (const f of filmsOf(pane)) {
+      f.ceiling = 0;
+      f.coat.fill(0);
+      f.level = 0;
+      paint(f);
+    }
+  };
+
   const dispose = (): void => {
     filmGeo?.dispose();
     for (const geo of bladeGeos) geo.dispose();
   };
 
-  return { group, front: films[0]?.wipe ?? null, film: filmMesh, update, dispose };
+  return { group, front: films[0]?.wipe ?? null, film: filmMesh, shatter, update, dispose };
 }

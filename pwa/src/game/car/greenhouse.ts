@@ -290,9 +290,25 @@ export function screenPanes(spec: CarBodySpec): {
  * glass, and the greenhouse stops reading as one run of glass. */
 type Gradient = { lo: number; hi: number };
 
+/** The four pieces of glass an impact can take out, as the damage ledger
+ * names them: the windscreen, the backlight, and each flank's windows
+ * together (a door window and the quarter light behind it go in the same
+ * hit). Left and right are the ENGINE's — a positive x is its right. */
+export type GlassPane = "glassF" | "glassB" | "glassL" | "glassR";
+
+/** Where each pane's triangles sit in the glass mesh's buffer — one slice
+ * per opening, in build order. The damage visual zeroes a slice's alpha to
+ * shatter it, which is why the glass carries vertex alpha at all. */
+export type GlassPanes = Record<GlassPane, { start: number; count: number }[]>;
+
+/** The pane a cabin panel's windows belong to, in `cabinPanels` order:
+ * the screen, the backlight, the right flank, the left. */
+const PANEL_PANE: GlassPane[] = ["glassF", "glassB", "glassR", "glassL"];
+
 /** The body's cabin panels into `b`, every window into `g`. Two builders
- * because the glass is drawn translucent and the metal is not. */
-export function buildGreenhouse(b: MeshBuilder, g: MeshBuilder, spec: CarBodySpec): void {
+ * because the glass is drawn translucent and the metal is not. Returns
+ * where in `g` each pane landed, so a shattered one can be taken out. */
+export function buildGreenhouse(b: MeshBuilder, g: MeshBuilder, spec: CarBodySpec): GlassPanes {
   const glass = spec.colors.glass ?? 0x1b2430;
   const roofColor = spec.cabin.roofPaint === "accent" ? spec.colors.accent : spec.colors.paint;
   const pillar = spec.cabin.pillarPaint === "accent" ? spec.colors.accent : spec.colors.paint;
@@ -301,14 +317,18 @@ export function buildGreenhouse(b: MeshBuilder, g: MeshBuilder, spec: CarBodySpe
   const grade: Gradient = { lo: Math.min(CL[1], TL[1]), hi: spec.cabin.roofY };
   const top = mixHex(glass, SKY, GRADIENT.skyMix);
   const bottom = mixHex(glass, DEEP, GRADIENT.deepMix);
+  const panes: GlassPanes = { glassF: [], glassB: [], glassL: [], glassR: [] };
 
-  for (const panel of cabinPanels(spec)) {
+  const panels = cabinPanels(spec);
+  for (let p = 0; p < panels.length; p++) {
+    const panel = panels[p];
     const { patch, span, holes, mirrored } = panel;
     for (const strip of panelMinus(holes)) {
       patchQuad(b, patch, strip, pillar, 0, mirrored);
     }
     for (const hole of holes) {
       const pane = glassRect(hole, seal, span);
+      const start = g.count;
       if (seal > 0) {
         for (const band of frameOf(hole, pane)) {
           patchQuad(b, patch, band, SEAL_COLOR, SEAL_PROUD, mirrored);
@@ -337,11 +357,13 @@ export function buildGreenhouse(b: MeshBuilder, g: MeshBuilder, spec: CarBodySpe
         GLASS_PROUD,
         mirrored,
       );
+      panes[PANEL_PANE[p]].push({ start, count: g.count - start });
     }
   }
 
   patchQuad(b, [FL, FR, RR, RL], { u0: 0, u1: 1, v0: 0, v1: 1 }, roofColor);
   buildGutters(b, spec);
+  return panes;
 }
 
 /** Rain gutters: a thin rail down each roof edge, running the length of

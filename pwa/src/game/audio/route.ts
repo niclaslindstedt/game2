@@ -141,8 +141,30 @@ export function soundForEvent(
       };
     }
 
-    case "partBreak":
+    case "partBreak": {
+      // Three things come off a car and none of them sounds like the
+      // others: glass goes in one bright crash, a door or a wheel is a
+      // heavy thing hitting the road, and a mirror or a bumper is the
+      // part-break as authored.
+      const part = event.part;
+      if (part.startsWith("glass")) {
+        return { id: "part_break", shape: { pitch: 1.7, gain: 1.1, stretch: 0.8 } };
+      }
+      if (part.startsWith("wheel") || part.startsWith("door")) {
+        return { id: "impact_hit", shape: { pitch: 0.7, gain: 1.2, stretch: 1.3 } };
+      }
       return { id: "part_break" };
+    }
+
+    // A tyre letting go: the same thump as a block ridden over, lower and
+    // flatter. A wheel coming off is the `partBreak` above.
+    case "wheelFail":
+      return event.off ? null : { id: "kerb_block", shape: { pitch: 0.55, gain: 0.9 } };
+
+    // The run over, short of the line: the same note as the water taking
+    // the car, because it is the same news.
+    case "retire":
+      return { id: "crash" };
 
     // A drift taken past saving. Sized by the SPEED it let go at and not by
     // the angle: past `drift.spinAt` the car is round either way, and what

@@ -1093,6 +1093,61 @@ await captureElement("shot-instrument-cluster", ".hud-speed", async (page) => {
   await page.waitForTimeout(6000);
 });
 
+// THE WRECK. Full throttle up the opening straight and then hard left off
+// the road into whatever stands there, held until the car has been stopped
+// by it; the shutter waits a couple of seconds for the debris to land and
+// the smoke to rise. The acceptance test is that the car LOOKS like what
+// happened to it: a nose that is no longer there rather than a bumper pushed
+// in, the panels torn rather than scaled, the glass gone from its frames, a
+// wheel down or off, and — if the hit was square and fast enough to kill the
+// engine — steam or smoke off the bonnet and the RETIRED card over it. The
+// second frame is the same wreck a few seconds later, which is where the
+// card lands if the engine died, and where a car that lived is sitting
+// crooked on what it has left.
+async function wreck(page, turn = "ArrowLeft", at = 5) {
+  await page.keyboard.down("ArrowUp");
+  await racing(page);
+  await atStageTime(page, at);
+  if (turn) await page.keyboard.down(turn);
+  await slowerThan(page, 25);
+  if (turn) await page.keyboard.up(turn);
+  await page.waitForTimeout(2500);
+}
+await capture("shot-crash", { width: 1280, height: 720 }, wreck, { difficulty: "hard" });
+await capture(
+  "shot-crash-after",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await wreck(page);
+    await page.keyboard.up("ArrowUp");
+    await page.waitForTimeout(6000);
+  },
+  { difficulty: "hard" },
+);
+// ...and STRAIGHT ON at the first corner, which is where a head-on comes
+// from: the car meets whatever stands outside the bend nose first.
+await capture(
+  "shot-crash-headon",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await wreck(page, null, 3);
+    await page.keyboard.up("ArrowUp");
+    await page.waitForTimeout(6000);
+  },
+  { difficulty: "hard" },
+);
+// The same wreck from over the car, where the nose can actually be seen.
+await capture(
+  "shot-crash-headon-heli",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await wreck(page, null, 3);
+    await page.keyboard.up("ArrowUp");
+    await page.waitForTimeout(6000);
+  },
+  { difficulty: "hard", camera: "heli" },
+);
+
 // ── The menu surfaces. The main menu runs a live bot demo under a drone
 // camera, so these want a few seconds on screen before the shutter: a
 // backdrop caught mid-build is not what a player sees.

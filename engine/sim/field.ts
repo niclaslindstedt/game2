@@ -227,6 +227,10 @@ function bookRun(run: RivalRun, events: readonly GameEvent[]): void {
       // Past the line their run tells the classification nothing more, and
       // R25's roll-out is a celebration nobody is watching.
       run.done = true;
+    } else if (event.type === "retire") {
+      // Stopped for good short of the line: a DNF on the sheet, with no
+      // time to sort by, and off the road exactly as a finished car is.
+      run.done = true;
     }
   }
 }

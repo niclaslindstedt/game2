@@ -30,6 +30,7 @@ import {
   type GroundContext,
 } from "./car.ts";
 import { clipKerbs, collideCar } from "./collision.ts";
+import { beyondDriving } from "./damage.ts";
 import {
   crossedFinish,
   crossedLip,
@@ -132,7 +133,8 @@ export function freshCar(): CarState {
       zones: new Array(DAMAGE_ZONES).fill(0),
       belly: 0,
       wear: 0,
-      systems: { engine: 0, suspension: 0, gearbox: 0, steering: 0 },
+      systems: { engine: 0, suspension: 0, gearbox: 0, steering: 0, brakes: 0 },
+      wheels: [0, 0, 0, 0],
       broken: [],
       version: 0,
     },
@@ -809,7 +811,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     state.stuck.since = state.t;
     return events;
   }
-  if (state.phase === "finished") return events;
+  if (state.phase === "finished" || state.phase === "retired") return events;
 
   // R25 — the roll-out. The clock has stopped; the car has not. Nothing the
   // player is doing reaches it any more: it coasts down the run-out on a
@@ -1086,8 +1088,30 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // nothing left to give still sitting where it stopped. Only the wedge
   // check below, or the reset input, ever brings it home — and the two land
   // in different places (see `respawn`).
-  if (drive.reset && !crashed) respawn(state, events, lastCheckpoint(state));
-  else if (!crashed) stepStuck(state, drive, events);
+  //
+  // Neither reaches a car that is BEYOND DRIVING — a dead engine, two
+  // wheels gone. Putting one of those back on the road would only park it
+  // there: the run is over, and it is over where the car comes to rest
+  // (`retire` below), not at a board it will never drive away from.
+  const done = beyondDriving(car);
+  if (done === null) {
+    if (drive.reset && !crashed) respawn(state, events, lastCheckpoint(state));
+    else if (!crashed) stepStuck(state, drive, events);
+  } else if (
+    state.phase === "racing" &&
+    !crashed &&
+    !car.airborne &&
+    Math.abs(car.u) <= T.collision.retire.restSpeed &&
+    Math.abs(car.w) <= T.collision.retire.restSpeed
+  ) {
+    state.phase = "retired";
+    car.u = 0;
+    car.w = 0;
+    car.yawRate = 0;
+    updateSlip(car);
+    events.push({ type: "retire", reason: done });
+    status(`Retired from stage ${state.seed} (${done}) after ${state.raceTime.toFixed(2)} s`);
+  }
 
   // R25 — the crowd, which only exists to be driven past.
   if (state.phase === "racing") cheerFor(state, events);

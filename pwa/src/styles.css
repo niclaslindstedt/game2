@@ -830,6 +830,12 @@ body {
   color: var(--hud-bad);
 }
 
+/* A retirement: the same card in the same red as a run that missed the
+   podium, with room between the headline and the two ways off it. */
+.hud-finish-retired {
+  gap: 0.35rem;
+}
+
 .hud-finish-note {
   font-size: clamp(0.6rem, 2vmin, 0.9rem);
   letter-spacing: 0.1em;

@@ -1661,8 +1661,21 @@ export const TUNING = {
     /** Zone crush that tears each part off its bolts, m. Mirrors pop off
      * a brush; bumpers and the wing take a real hit; a bonnet or boot lid
      * only lets go once the clip around it has folded far enough to pull
-     * its hinges, which is deeper than the bumper in front of it. */
-    partAt: { mirror: 0.04, bumper: 0.12, spoiler: 0.1, lid: 0.2 },
+     * its hinges, which is deeper than the bumper in front of it. The
+     * GLASS goes between the two: a screen shatters once the cap it is
+     * set into has folded past the bumper, and a door window once the
+     * flank behind it has. A DOOR is the deepest thing on the flank —
+     * it takes a side driven into a rock at pace, most of the way to the
+     * cage — and what is left showing is the cabin. */
+    partAt: { mirror: 0.04, bumper: 0.12, spoiler: 0.1, glass: 0.15, lid: 0.2, door: 0.3 },
+    /** THE END OF THE RUN, short of the line. A car whose engine has died
+     * (`systems.engine` at 1) or that has fewer than three wheels left is
+     * never going to move under its own power again, and once it has come
+     * to rest — under this speed, m/s, on the ground — the run is retired
+     * where it stands (`step.ts`, the `retire` event). The wedge rescue
+     * and the reset both stand aside for it: putting a dead car back on
+     * the road would only park it there. */
+    retire: { restSpeed: 0.8 },
     /** WHEN THE CAR SAYS SOMETHING ABOUT ITSELF: the two lines a system
      * (or the shell's wear) crosses on its way out, 0..1, each worth one
      * `systemFail` call. There is nothing to look at any more — the crush
@@ -1727,7 +1740,10 @@ export const TUNING = {
       crushDrag: 0.006,
       /** Drag each part left on the road costs, 1/s. A mirror is a rounding
        * error; a missing bonnet is a scoop with the whole engine bay behind
-       * it, and a missing hatch is the same hole facing the other way. */
+       * it, and a missing hatch is the same hole facing the other way. A
+       * shattered screen is the cabin open to the wind; a missing door is
+       * the same, sideways. The wheels are costed on their own ledger
+       * (`wheelOffDrag`) and sit at zero here. */
       partDrag: {
         mirrorL: 0.0008,
         mirrorR: 0.0008,
@@ -1736,6 +1752,16 @@ export const TUNING = {
         spoiler: 0.002,
         hood: 0.009,
         hatch: 0.007,
+        glassF: 0.005,
+        glassB: 0.004,
+        glassL: 0.0015,
+        glassR: 0.0015,
+        doorL: 0.006,
+        doorR: 0.006,
+        wheelFL: 0,
+        wheelFR: 0,
+        wheelRL: 0,
+        wheelRR: 0,
       },
       /** THE PULL. Lock the car carries with the wheel dead straight, per m
        * of left-right crush difference — a body folded harder down one side
@@ -1776,15 +1802,55 @@ export const TUNING = {
       /** ...faded in by pace, m/s: a wing does nothing at walking speed and
        * all of it at the top end. */
       spoilerSpeed: 34,
+
+      /** THE WHEELS. Each one carries its own ledger (`damage.wheels`), fed
+       * by the crush on its corner and its flank (`systems.wheelFrom…`),
+       * and it costs the car in two steps. Past `wheelFlat` the tyre is
+       * DOWN and the rim is bent: that corner has less to hold with
+       * (`flatGrip` of the lateral grip, per flat), the car pulls toward it
+       * (`flatPull`, in lock), and the rim on the road drags (`flatDrag`,
+       * 1/s). At 1 the wheel is OFF THE CAR and the corner rides on its
+       * hub: `wheelOffGrip`, `wheelOffPull` and `wheelOffDrag` are the same
+       * three costs at the size that buys, and `wheelOffPower` is what is
+       * left of the engine's push once a driven corner is a hub ploughing
+       * the road — a car on three wheels crawls, and it crawls crookedly.
+       * Two wheels gone is a car that cannot be driven at all: it retires
+       * where it stops. */
+      wheelFlat: 0.4,
+      flatGrip: 0.1,
+      flatPull: 0.05,
+      flatDrag: 0.012,
+      wheelOffGrip: 0.28,
+      wheelOffPull: 0.14,
+      wheelOffDrag: 0.06,
+      wheelOffPower: 0.45,
+      /** ...and the floor under grip once a wheel is off: below the
+       * ordinary `gripFloor`, because a car on three wheels genuinely
+       * cannot be pointed well, and never under this. */
+      wheelOffGripFloor: 0.3,
+      /** WHAT STOPS A CAR THAT CANNOT DRIVE. The surface's own drag is a
+       * share of the speed and never quite brings a coasting car to rest;
+       * these are the constant retardations, m/s², that do. A dead engine
+       * with a gear in it is a seized crank on the driven wheels — the car
+       * stops in a few lengths, not a few hundred metres — and a corner on
+       * its hub ploughs the road at every speed, each one. */
+      deadEngineBrake: 2.5,
+      hubBrake: 1.0,
     },
 
     /** The machinery under the panels: how crush becomes internal damage
      * (per m of crush on the zones nearest each system), and how a damaged
-     * system degrades its own job. All damage is 0..1 and never repaired —
-     * every effect is sized so a broken system CRIPPLES, never parks. */
+     * system degrades its own job. All damage is 0..1 and never repaired.
+     * Every effect is sized so a hurt system CRIPPLES the car long before
+     * it parks it — and one of them does park it: an engine at 1 is dead,
+     * and a dead engine is the run over (`retire`). */
     systems: {
-      /** Nose crush → engine (the radiator is the first thing to fold). */
-      engineFromNose: 1.6,
+      /** Nose crush → engine (the radiator is the first thing to fold, and
+       * the block is right behind it). Sized so that a wall met square at
+       * 100 km/h — 0.27 m of fold — is the engine gone, and one met at
+       * 50 km/h is a third of it: a head-on at any road speed is a bad
+       * day, and above about 50 it is the run. */
+      engineFromNose: 4.4,
       /** Flank crush → suspension (arms and uprights live in the arches). */
       suspensionFromFlank: 1.5,
       /** Rear crush → gearbox (the drivetrain hangs off the back). */
@@ -1794,11 +1860,38 @@ export const TUNING = {
       /** Belly crush → suspension, plus a share to the gearbox sump. */
       suspensionFromBelly: 2.2,
       gearboxFromBelly: 0.8,
+      /** Corner and flank crush → the brakes (the lines and calipers live
+       * in the wheel wells), and belly crush → the same, from underneath. */
+      brakesFromCorner: 0.9,
+      brakesFromFlank: 0.5,
+      brakesFromBelly: 0.7,
+      /** Corner crush → THAT corner's wheel; flank crush → both wheels on
+       * that side, half each; belly crush → all four, a little. Per m of
+       * fold, against a wheel ledger that reads flat at `chassis.wheelFlat`
+       * and gone at 1: a corner driven into a trunk hard enough to fold it
+       * a third of a metre is a wheel on the road. */
+      wheelFromCorner: 3.6,
+      wheelFromFlank: 4.0,
+      wheelFromBelly: 0.6,
+      /** ...and a landing taken ON THE SIDE, where the flank crush already
+       * dealt to that side's wheels is not the whole of it: the wheels are
+       * what the car came down on. Per m of the landing's crush, on top. */
+      wheelFromSideLand: 5.0,
 
       /** Fraction of engine power gone at engine damage 1 — half the
        * motor, on top of the misfire that comes with it (chassis below).
-       * A beaten car has to be visibly, tiringly slow up every hill. */
+       * A beaten car has to be visibly, tiringly slow up every hill. And
+       * AT 1 the engine is dead: no power at all, and the car coasts to
+       * wherever it stops. */
       powerLoss: 0.5,
+      /** Fraction of the brake pedal gone at brakes damage 1 — never the
+       * whole pedal: a rally car has two circuits, and one of them is
+       * usually left. */
+      brakeLoss: 0.6,
+      /** ...and of the LEVER. The handbrake is one cable to the rear, and
+       * it goes almost entirely: a car with broken brakes cannot be flicked
+       * round a hairpin on it, which is most of what the lever is for. */
+      leverLoss: 0.9,
       /** Fraction of steering authority gone at steering damage 1. Enough
        * that the corner the sound car turned in for has to be braked for,
        * and short of the car simply refusing to change direction. */

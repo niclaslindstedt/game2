@@ -93,6 +93,30 @@ const SLAM_FLOOR = 0.34;
  * through it. Nothing else in the game throws wood, and a stone-grey burst
  * off a tree reads as the tree having been made of concrete. */
 const SPLINTERS: DustTint = { base: 0xc9b892, fleck: TRUNK_COLOR, fleckMix: 0.35 };
+/** ...and a window going: pale glass, thrown everywhere at once. */
+const GLASS_SHARDS = 0xd4e4f0;
+
+/** Where each pane sits on the car, m off its own axes, for the burst it
+ * leaves behind: along the nose, out to the ENGINE's right, and up. */
+const GLASS_AT: Partial<Record<string, { fwd: number; side: number; up: number }>> = {
+  glassF: { fwd: 0.9, side: 0, up: 1.15 },
+  glassB: { fwd: -1.2, side: 0, up: 1.15 },
+  glassR: { fwd: 0, side: 0.85, up: 1.05 },
+  glassL: { fwd: 0, side: -0.85, up: 1.05 },
+};
+
+/** ENGINE SMOKE, off the bonnet of a car whose engine the crash has
+ * reached. `every` is seconds between puffs at the DAMAGED line and at a
+ * dead engine; the colour runs from steam to soot between the same two;
+ * `bay` is where the engine is, m along the nose and up; `rise` is how
+ * fast a puff climbs off it, m/s. */
+const ENGINE_SMOKE = {
+  every: { first: 0.16, dead: 0.03 },
+  steam: new THREE.Color(0xd9dde2),
+  soot: new THREE.Color(0x2b2c2e),
+  bay: { fwd: 1.25, up: 0.85 },
+  rise: 0.9,
+};
 
 export type GameRenderer = {
   setGame: (state: GameState) => void;
@@ -329,6 +353,8 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
    * one grain every ten spawns, not zero forever. */
   let grainDebt = 0;
   let fumeClock = 0;
+  let smokeClock = 0;
+  const smokeTint = new THREE.Color();
   /** HOW HOT THE TIRES ARE, 0..1 — the soot in the tarmac smoke rides on
    * it. Nothing in `GameState` carries it: heat is the one thing about a
    * tire that is a HISTORY rather than an instant, so the renderer keeps
@@ -736,6 +762,35 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
           Math.round((ev.broke ? 26 : 14) * fx),
           3.5,
         );
+      } else if (ev.type === "partBreak") {
+        // The GLASS does not fly, it goes everywhere: a burst of pale
+        // shards out of the frame that lost it. A WHEEL leaving throws the
+        // road up with it. Every other part is the car mesh's to tumble.
+        const glass = GLASS_AT[ev.part];
+        const sinH = Math.sin(c.heading);
+        const cosH = Math.cos(c.heading);
+        if (glass) {
+          dust.spawn(
+            c.x + sinH * glass.fwd + cosH * glass.side,
+            c.y + glass.up,
+            c.z + cosH * glass.fwd - sinH * glass.side,
+            GLASS_SHARDS,
+            Math.round(22 * fx),
+            4.5,
+          );
+        } else if (ev.part.startsWith("wheel")) {
+          const front = ev.part === "wheelFL" || ev.part === "wheelFR";
+          const side = ev.part === "wheelFR" || ev.part === "wheelRR" ? 1 : -1;
+          const along = front ? AXLE.front : -AXLE.rear;
+          (wetGround ? mud : dust).spawn(
+            c.x + sinH * along + cosH * side * AXLE.side,
+            c.y + AXLE.height,
+            c.z + cosH * along - sinH * side * AXLE.side,
+            groundDust(state),
+            Math.round(28 * fx),
+            4,
+          );
+        }
       } else if (ev.type === "impact") {
         // The hit lands where the engine says it did: a debris-grey burst
         // at that point on the body, and — from inside the car — the
@@ -957,6 +1012,39 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       }
     }
 
+    // ENGINE SMOKE: the one piece of damage news that is otherwise only a
+    // word on the screen. From the moment the engine is called DAMAGED
+    // steam comes off the bonnet — pale and thin at first, thicker and
+    // darker as the damage climbs, and black once the engine is dead and
+    // the car is sitting wherever it stopped. It rises off the bay rather
+    // than streaming from a pipe, so a stopped car is wrapped in it.
+    const hurt = c.damage.systems.engine;
+    const smokeFrom = TUNING.collision.callAt.hurt;
+    if (fx > 0 && hurt >= smokeFrom) {
+      const bad = Math.min(1, (hurt - smokeFrom) / (1 - smokeFrom));
+      const every =
+        ENGINE_SMOKE.every.first + (ENGINE_SMOKE.every.dead - ENGINE_SMOKE.every.first) * bad;
+      smokeClock += dt;
+      const puffs = pipeBursts(smokeClock, every / Math.max(0.2, fx));
+      if (puffs > 0) {
+        smokeClock -= (puffs * every) / Math.max(0.2, fx);
+        smokeTint.copy(ENGINE_SMOKE.steam).lerp(ENGINE_SMOKE.soot, bad);
+        // A dead engine burns: three puffs a burst, so the cloud over a car
+        // that has stopped for good is a cloud and not a wisp.
+        smoke.spawn(
+          c.x + fwdX * ENGINE_SMOKE.bay.fwd,
+          c.y + ENGINE_SMOKE.bay.up,
+          c.z + fwdZ * ENGINE_SMOKE.bay.fwd,
+          smokeTint.getHex(),
+          puffs * (bad >= 1 ? 3 : 1),
+          1.3,
+          state.wind.x * 0.5,
+          state.wind.z * 0.5,
+          ENGINE_SMOKE.rise * (0.4 + 0.6 * bad),
+        );
+      }
+    }
+
     // A car going down keeps the water working the whole time. While the
     // hull rides the surface it is still displacing — droplets slopping
     // off it as it rocks — and once the roof is under, all that is left is
@@ -1127,7 +1215,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // hangs on the same rule as the way home above: the views nobody drives
     // from have nothing behind them worth showing, and neither does a run
     // the water has already taken or a car being paraded past the line.
-    mirrorUp = mirrorOption && driving && state.phase !== "finished";
+    mirrorUp = mirrorOption && driving && state.phase !== "finished" && state.phase !== "retired";
     // The cockpit shows the same picture in its own mirror (car/cockpit.ts),
     // so the strip over the frame is not drawn as well.
     mirrorStrip = mirrorUp && view !== "cockpit";
