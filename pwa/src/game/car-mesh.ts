@@ -27,7 +27,7 @@ import {
 } from "./car-body.ts";
 import type { CrewLook } from "./car-crew.ts";
 import { createCarDamage } from "./car-damage.ts";
-import { createCarDirt, groundTravel, wheelSpray } from "./car-dirt.ts";
+import { createCarDirt, glassSpray, groundTravel, wheelSpray } from "./car-dirt.ts";
 import type { Livery } from "./car-livery.ts";
 import { revTremble, trembleAt } from "./car-shake.ts";
 import type { ScreenRain } from "./car/screen-rain.ts";
@@ -509,11 +509,11 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     }
 
     dirt.update(state, dt);
-    // The glass answers to the weather landing on it, the filth the stage
-    // has thrown at the rest of the car, and — because road spray is thrown
-    // by the wheels rather than settling out of the air — how far the car
-    // actually drove while it was being thrown.
-    body.wipers.update(wet, dirt.level(), groundTravel(car, dt), dt);
+    // The glass answers to the weather landing on it, what the ground under
+    // the wheels is throwing up at it right now — nothing, on tarmac and on
+    // grass — and, because road spray is thrown by the wheels rather than
+    // settling out of the air, how far the car drove while it was thrown.
+    body.wipers.update(wet, glassSpray(state), groundTravel(car, dt), dt);
     // …and the WATER on the windscreen, which answers to the same weather
     // and to the arm that has just been moved. It also needs what the car
     // is doing, and only the car is in a position to say: how fast the air

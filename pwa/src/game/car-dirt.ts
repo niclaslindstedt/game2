@@ -250,6 +250,41 @@ export function dirtRate(state: GameState): DirtCoat {
   return { dust: state.car.slide > 0.15 ? 0.0036 : 0.0006, mud: 0 };
 }
 
+/** What a slide is worth to the glass, against a gripped metre of the same
+ * gravel. Well under what it is worth to the PAINT (six times, above): the
+ * paint takes what the tire throws sideways at it, and the screens take what
+ * is left hanging in the air a car length later, which is a far smaller
+ * multiple of the same event. */
+const SLIDE_SPRAY = 1.8;
+
+/** What the ground under the wheels is throwing UP AT THE GLASS, as a
+ * multiplier on the per-metre rates the screens carry (`SOIL` in
+ * car/wipers.ts). A separate question from `dirtRate`, and the reason it is
+ * a second function rather than a reading of the first: what films a screen
+ * is a raised CLOUD, and only a loose dry surface makes one.
+ *
+ * Sealed road throws nothing — there is nothing on it to raise — and
+ * NEITHER DOES THE VERGE, which is the one that is not obvious. Turf holds
+ * its soil down: what a wheel takes off grass it flings low and wet at the
+ * sills and the arches, which is exactly where `dirtRate` puts it and
+ * nowhere near the windows. So a car that spends a stage between the tarmac
+ * and the grass finishes it looking out of the glass it started with, however
+ * filthy the rest of it has got.
+ *
+ * GRAVEL IS THE CALIBRATION POINT AT 1: the screens' rates are authored
+ * against a loose road being driven, and everything else here is a multiple
+ * of that. Which is also why the reading cannot be taken off HOW FILTHY THE
+ * CAR IS — a dirty car is dirty everywhere it goes, including the sealed
+ * miles where nothing at all is arriving at it. A ford is the same cloud
+ * with water in it. */
+export function glassSpray(state: GameState): number {
+  if (state.offRoad) return 0;
+  const surface = state.track.samples[state.nearIndex]?.surface;
+  if (surface === "water") return 1;
+  if (surface !== "gravel") return 0;
+  return state.car.slide > 0.15 ? SLIDE_SPRAY : 1;
+}
+
 export function createCarDirt(root: THREE.Group, spray: readonly SprayPoint[] = []): CarDirt {
   const paint = createDirtPainter(root, spray);
   let dust = 0;
