@@ -1440,6 +1440,58 @@ body {
   transition: transform 120ms linear;
 }
 
+/* R28 — the split board the run still owes, marked on the route: a ring in
+   the HUD's signal yellow with a halo breathing out of it. Yellow because
+   the two things already on this map are the white route and the car's red
+   arrowhead, and the mark has to be neither; a ring because both the other
+   glyphs are solid.
+
+   The halo is what makes it findable rather than merely present, which is
+   the whole point of it — the mark earns its place when the road is not
+   under the wheels and the route on its own says nothing about which end of
+   itself to drive to. */
+.hud-minimap-next-ring {
+  fill: none;
+  stroke: var(--hud-good);
+  stroke-width: 1.7;
+}
+
+.hud-minimap-next-dot {
+  fill: var(--hud-good);
+}
+
+.hud-minimap-next-halo {
+  fill: none;
+  stroke: var(--hud-good);
+  stroke-width: 1.2;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hud-minimap-next-halo {
+    /* The circle is drawn around its own group's origin, so scaling about
+       0 0 is scaling about the mark — no `transform-box` needed, and none
+       of the ambiguity a percentage origin has on an SVG shape. */
+    transform-origin: 0 0;
+    animation: minimap-next-breathe 1.9s ease-out infinite;
+  }
+}
+
+/* Out of the ring and away. It fades as it goes, so the mark reads as one
+   thing pulsing rather than as two rings that happen to share a centre. */
+@keyframes minimap-next-breathe {
+  0% {
+    opacity: 0.75;
+    transform: scale(0.5);
+  }
+
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
 /* A rival's plate on the route: their door number, in their own paint, on a
    point standing where their car is. The dark outline is what keeps two
    crews running nose to tail readable as two plates rather than one blob —

@@ -170,6 +170,7 @@ describe("event routing", () => {
     finish: [{ type: "finish", time: 120 }],
     cheer: [{ type: "cheer", size: 0.4 }],
     checkpoint: [{ type: "checkpoint", index: 1, count: 3, split: 2.5, time: 61 }],
+    missed: [{ type: "missed", next: 1, count: 3 }],
     systemFail: [{ type: "systemFail", system: "engine", spent: false }],
     wheelFail: [
       { type: "wheelFail", wheel: 1, off: false },

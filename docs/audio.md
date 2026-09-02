@@ -70,7 +70,11 @@ noise. Three kinds of sound come out the other side:
   ladder: an R26 anti-cut block ridden over is concrete felt through the
   floor with no top end in it at all, because a player who hears the car
   break there stops cutting apexes instead of learning what cutting one
-  costs.
+  costs. `missed` — R28's line crossed with a split board still owed — is
+  the one entry on the list whose job is to be heard INSTEAD of another: it
+  is `finish` inverted, two notes falling rather than rising, dry, with no
+  crowd behind them, so it lands as the opposite of the sound the player was
+  expecting at the exact moment they expected it.
 - **Cues** are moments the app knows and the engine never reported. The
   countdown lights are the worked example: nothing happens in the simulation
   when a light changes, so the light is the bed's business. A clap of

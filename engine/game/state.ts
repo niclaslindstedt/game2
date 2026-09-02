@@ -459,6 +459,12 @@ export type GameEvent =
    * the lap index would put lap two's board against lap one's time. `time`
    * is the race clock as it went through — the split itself. */
   | { type: "checkpoint"; index: number; count: number; split: number; time: number }
+  /** R28 — the car crossed the line with split boards still owed, so nothing
+   * was booked: no finish, and on a circuit no lap. `next` is the board it
+   * still has to drive through (0-based on the lap) and `count` how many the
+   * lap has. Fires on the crossing itself, so a driver who cut the stage
+   * hears about it at the one moment they were expecting it to be over. */
+  | { type: "missed"; next: number; count: number }
   /** R27 — the car has come past a stand of spectators at a pace worth
    * cheering. `size` is how big that crowd is, 0..1, so one voice route
    * covers a knot of six at a corner and the bank at the finish. */
@@ -569,15 +575,13 @@ export type GameState = {
    * it has left behind. */
   cheeredS: number;
   /** R28 — how many split boards the car has driven through THIS LAP; 0 on
-   * the grid, and back to 0 when a circuit starts the next one. It is also
-   * which checkpoint a respawn puts the car back at: board `n - 1`, or the
-   * start line while it is still 0. */
+   * the grid, and back to 0 when a circuit starts the next one. Three things
+   * read it: it is which checkpoint a respawn puts the car back at (board
+   * `n - 1`, or the start line while it is still 0), it names the ONE board
+   * whose gate is armed — board `n`, so the boards can only be collected in
+   * the order they stand in — and until it reaches the lap's board count no
+   * crossing of the finish line books anything at all. */
   checkpointsPassed: number;
-  /** R28 — how far along the stage the car has already been checked in,
-   * meters. The window between this and `progressS` is exactly the boards
-   * this step drove through, which is what keeps a board from firing twice
-   * when a respawn puts the car back on top of it. */
-  checkpointS: number;
   /** R28 — the race clock at every board passed this RUN, laps included, in
    * the order they were passed. The splits a ghost is measured against, and
    * what a sealed ghost writes down for the next run to chase. */

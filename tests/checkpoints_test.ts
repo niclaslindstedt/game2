@@ -7,10 +7,12 @@ import {
   NEUTRAL_INPUT,
   STAGE_RULES,
   TUNING,
+  boardHalfWidth,
   botInput,
   compileStage,
   compileTrack,
   createGame,
+  crossedGate,
   finishAt,
   lastCheckpoint,
   step,
@@ -235,5 +237,109 @@ describe("where a respawn lands", () => {
     expect(state.car.x).toBeCloseTo(grid.x, 3);
     expect(state.car.z).toBeCloseTo(grid.z, 3);
     expect(state.progressS).toBe(track.samples[0].s);
+  });
+});
+
+describe("the stage is all of its boards", () => {
+  /** Long enough either side of its hairpin that a board goes down on the
+   * exit and there is still road to the flying finish afterwards. */
+  const RIG: SegmentPlan[] = [
+    { kind: "straight", length: 600, feature: "none" },
+    { kind: "turn", length: 40, dir: 1, radius: 18, severity: "hard", feature: "none" },
+    { kind: "straight", length: 600, feature: "none" },
+  ];
+
+  /** Put the car down on the centerline at `index`, pointed down the road —
+   * a car that got there across country, which is exactly what driving
+   * round the outside of a split board amounts to. */
+  function placeAt(state: ReturnType<typeof createGame>, index: number): void {
+    const s = state.track.samples[index];
+    state.car.x = s.x;
+    state.car.z = s.z;
+    state.car.y = s.elevation;
+    state.car.heading = s.heading;
+    state.nearIndex = index;
+  }
+
+  it("refuses the line to a car with a board still owed, and says which", () => {
+    const track = compileTrack(7, RIG);
+    expect(track.checkpoints).toHaveLength(1);
+    const state = createGame({ seed: 7, track, skipCountdown: true });
+    // Up the opening straight under power, then set down beyond the board
+    // without ever having gone through it.
+    expect(drive(state, botInput, (s) => s.progressS > 200)).toBeGreaterThan(0);
+    placeAt(state, track.checkpoints[0].index + 60);
+    expect(state.checkpointsPassed).toBe(0);
+
+    const missed: { next: number; count: number }[] = [];
+    let finishes = 0;
+    const steps = Math.round(200 / TUNING.dt);
+    for (let i = 0; i < steps && missed.length === 0; i++) {
+      for (const ev of step(state, botInput(state))) {
+        if (ev.type === "missed") missed.push({ next: ev.next, count: ev.count });
+        if (ev.type === "finish") finishes += 1;
+      }
+    }
+    // Over the line, and nothing booked by it: no finish, no roll-out, the
+    // run still live and still owing board one of one.
+    expect(missed).toEqual([{ next: 0, count: 1 }]);
+    expect(finishes).toBe(0);
+    expect(state.phase).toBe("racing");
+    expect(state.checkpointsPassed).toBe(0);
+  });
+
+  it("books the line once the owed board has been driven through", () => {
+    const track = compileTrack(7, RIG);
+    const state = createGame({ seed: 7, track, skipCountdown: true });
+    expect(drive(state, botInput, (s) => s.progressS > 200)).toBeGreaterThan(0);
+    placeAt(state, track.checkpoints[0].index + 60);
+    // Over the line once, refused...
+    expect(drive(state, botInput, (s) => s.progressS > track.length - 40, 200)).toBeGreaterThan(0);
+    expect(state.phase).toBe("racing");
+    // ...so take the way home, which puts a car owing every board back on
+    // the start line, and drive the stage properly this time.
+    step(state, { ...NEUTRAL_INPUT, reset: true });
+    expect(state.progressS).toBe(track.samples[0].s);
+    let finished = false;
+    const steps = Math.round(300 / TUNING.dt);
+    for (let i = 0; i < steps && !finished; i++) {
+      for (const ev of step(state, botInput(state))) {
+        if (ev.type === "finish") finished = true;
+      }
+    }
+    expect(state.checkpointsPassed).toBe(1);
+    expect(finished).toBe(true);
+  });
+
+  it("counts a board the car went WIDE of, and not one it went round", () => {
+    const track = compileTrack(7, RIG);
+    const board = track.checkpoints[0];
+    const s = track.samples[board.index];
+    // Straight across the board's line, offset along the road's own right.
+    const rightX = Math.cos(s.heading);
+    const rightZ = -Math.sin(s.heading);
+    const fwdX = Math.sin(s.heading);
+    const fwdZ = Math.cos(s.heading);
+    const half = boardHalfWidth(track);
+    const across = (offset: number): boolean =>
+      crossedGate(
+        track,
+        board.index,
+        half,
+        s.x + rightX * offset - fwdX,
+        s.z + rightZ * offset - fwdZ,
+        s.x + rightX * offset + fwdX,
+        s.z + rightZ * offset + fwdZ,
+      );
+    // The verge is not a miss; a car out in the country is.
+    expect(across(0)).toBe(true);
+    expect(across(half - 0.5)).toBe(true);
+    expect(across(-(half - 0.5))).toBe(true);
+    expect(across(half + 0.5)).toBe(false);
+    expect(across(-(half + 0.5))).toBe(false);
+    // The board is a one-way gate: reversing back through it books nothing.
+    expect(
+      crossedGate(track, board.index, half, s.x + fwdX, s.z + fwdZ, s.x - fwdX, s.z - fwdZ),
+    ).toBe(false);
   });
 });

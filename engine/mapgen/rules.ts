@@ -154,6 +154,14 @@
 //       kilometre of borrowed public road (R17) sweeps and asks nothing,
 //       and a stage with no split on it for a kilometre has a clock with
 //       no shape.
+//       EVERY BOARD IS A GATE, AND THE STAGE IS THE WHOLE OF THEM, IN
+//       ORDER. A board counts when the car drives THROUGH it — across its
+//       line, between its ends (`checkpoint.gate`), going the way the stage
+//       goes — and the next one due is the only one a car can take, so the
+//       boards are collected in the order they stand in. The finish line
+//       does not end a run, and a circuit's start line does not book a lap,
+//       until every one of them is behind the car: a stage cut short across
+//       country is not a stage that was driven.
 //   R31 The road and the ground beside it are RIDEABLE. Within a BENCH of
 //       a road — the route's or an abandoned branch's — the landscape never
 //       stands above that road's own corridor, and past the bench it may
@@ -1302,6 +1310,15 @@ export const STAGE_RULES = {
      * measured a few car lengths before the line says nothing the line is
      * not about to say properly. */
     finishClear: 150,
+    /** How far OUTSIDE the road's own edge a board still counts a car
+     * through, m. A board is a gate across the stage, and the finish's own
+     * gate is the road plus its verge and nothing more — but the finish is
+     * a line a driver aims at, and a split board is one they go past at the
+     * exit of the hardest corner on the stage, sideways, with the outside
+     * verge under two wheels. Wide enough that anyone actually driving the
+     * stage is through it; far too narrow for the cut across country that
+     * skipping a board is the whole point of catching. */
+    gate: 12,
   },
 
   crowd: {

@@ -94,6 +94,18 @@ export type HudMinimap = {
   cars: MinimapCar[];
   /** The car in that space; `angle` is degrees clockwise for the icon. */
   car: { x: number; y: number; angle: number };
+  /** R28 — where the SPLIT BOARD THE RUN STILL OWES stands, in the same
+   * space, or null when every board on the lap is behind the car (and on a
+   * stage with no boards at all).
+   *
+   * A run is not finished until it has driven through all of them in order,
+   * so the one that is armed is the only place on the stage the driver has
+   * to reach next — and it is the mark to steer at from a field, a river
+   * bed or a wrong turn, which is when the route on its own says least. It
+   * is also the one mark that can be BEHIND the car: a board missed is a
+   * board still owed, and the map saying so is how a driver finds out where
+   * to turn round to. */
+  next: { x: number; y: number } | null;
   /** Gauge fill, 0..1 — the finish line on a staged run, the next whole
    * kilometre on an endless one. */
   progress: number;
@@ -209,6 +221,19 @@ function rivalPlates(field: RivalField | null, project: Project, own: GameState)
   return plated.map((entry) => entry.car);
 }
 
+/** R28 — the board the run owes, placed. Null once they are all behind the
+ * car, and null while it sits outside the drawn window: an endless stage
+ * only maps the road either side of the car, and a mark pinned to the frame
+ * edge would point at a place that is not there. */
+function nextBoard(state: GameState, project: Project): { x: number; y: number } | null {
+  const board = state.track.checkpoints[state.checkpointsPassed];
+  if (board === undefined) return null;
+  const sample = state.track.samples[board.index];
+  const [x, y] = project(-sample.x, -sample.z);
+  if (x < 0 || x > VIEW || y < 0 || y > VIEW) return null;
+  return { x, y };
+}
+
 /** The HUD's minimap payload for this frame. The field is the run's own, or
  * null on the runs nobody else is entered for. */
 export function buildMinimap(state: GameState, field: RivalField | null = null): HudMinimap {
@@ -219,6 +244,7 @@ export function buildMinimap(state: GameState, field: RivalField | null = null):
   return {
     path,
     cars: rivalPlates(field, project, state),
+    next: nextBoard(state, project),
     // Screen space runs the heading backwards (see the sign boundary above),
     // so the icon's clockwise rotation is the negated heading.
     car: { x, y, angle: -state.car.heading * (180 / Math.PI) },
@@ -257,6 +283,17 @@ const RING_PATH = ringPath();
 /** The car icon: an arrowhead with a notched tail, drawn nose-up around the
  * origin so the whole glyph is one translate + rotate. */
 const CAR_ICON = "M 0 -6 L 4 5 L 0 2.6 L -4 5 Z";
+
+/** R28 — the next board's mark: a ring with a dot in it, with a wider ring
+ * breathing out of it. A RING because the two glyphs already on the map are
+ * solid — the car's arrowhead and the field's plates — and a hollow one is
+ * told apart from both at a glance and at the size a phone draws this at.
+ * `MARK_HALO` is the far edge of the breath, and it stays inside `PAD` so
+ * that a board near the end of the route is not shaved off by the SVG root
+ * the way a taller rival plate would be. */
+const MARK_R = 3.9;
+const MARK_DOT = 1.5;
+const MARK_HALO = 7.6;
 
 /** A rival's plate, drawn around the POINT it stands on so the whole glyph
  * is one translate. One closed path rather than a box and a triangle: two
@@ -306,6 +343,21 @@ export function Minimap({ map, onOpen }: { map: HudMinimap; onOpen: () => void }
     <button type="button" className="hud-minimap" onClick={onOpen} aria-label="Race menu">
       <svg className="hud-minimap-face" viewBox={`0 0 ${VIEW} ${VIEW}`} aria-hidden="true">
         <path className="hud-minimap-route" d={map.path} />
+        {/* R28 — the board still owed, over the route and under everything
+            that MOVES. It is a place rather than a car, so a plate closing
+            on you must never be the thing it hides. */}
+        {map.next !== null && (
+          <g
+            className="hud-minimap-next"
+            style={{
+              transform: `translate(${map.next.x.toFixed(2)}px, ${map.next.y.toFixed(2)}px)`,
+            }}
+          >
+            <circle className="hud-minimap-next-halo" r={MARK_HALO} />
+            <circle className="hud-minimap-next-ring" r={MARK_R} />
+            <circle className="hud-minimap-next-dot" r={MARK_DOT} />
+          </g>
+        )}
         {/* The field, backmarker first — SVG paints in document order, so
             the leader's plate is the last one down and the one nothing can
             cover. The player's arrowhead follows the whole list for the

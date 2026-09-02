@@ -165,6 +165,52 @@ export const RUN_BANK: SoundBank = {
     ],
   },
 
+  missed: {
+    description:
+      "R28 — over the line with a split board still owed, and the line does " +
+      "nothing. The finish's brass stab inverted: two notes FALLING, flat and " +
+      "close together, dry, with no crowd behind them and no echo to arrive " +
+      "in. It has to read as the opposite of `finish` at the exact moment the " +
+      "player expected `finish`, which is why it is the same voice and not a " +
+      "buzzer — a buzzer is a menu saying no, and this is the stage saying it " +
+      "is not over.",
+    voices: [
+      {
+        call: "tone",
+        type: "sawtooth",
+        from: 330,
+        durationMs: 200,
+        volume: 0.034,
+        attackMs: 10,
+        holdMs: 110,
+        detuneCents: 14,
+        drive: 0.3,
+        filter: { type: "lowpass", frequency: 1800 },
+      },
+      {
+        call: "tone",
+        type: "sawtooth",
+        from: 233,
+        durationMs: 420,
+        volume: 0.038,
+        delayMs: 170,
+        attackMs: 12,
+        holdMs: 180,
+        detuneCents: 16,
+        drive: 0.32,
+        filter: { type: "lowpass", frequency: 1500 },
+      },
+      {
+        call: "noise",
+        durationMs: 120,
+        volume: 0.014,
+        color: "brown",
+        delayMs: 170,
+        filter: { type: "bandpass", frequency: 420, q: 1.1 },
+      },
+    ],
+  },
+
   cheer: {
     description:
       "Going past a stand of spectators. A CROWD is the hardest thing on this " +
