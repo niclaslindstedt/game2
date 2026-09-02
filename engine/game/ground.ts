@@ -79,8 +79,12 @@ function corners(
       const z = car.z + cosH * lz - sinH * lx;
       const under = ground(x, z);
       const reach = Math.hypot(lz, lx) * T.collision.climbLimit;
-      foot += Math.max(under, centre - reach - T.air.loft);
+      // A corner against a WALL — ground rising harder than the wheels
+      // could climb — is not standing on it either, so it counts at the top
+      // of its reach in the foot as it does in the seat, and the wall's own
+      // slope never becomes a speed the wheels are moving at.
       const rise = Math.min(under, centre + reach);
+      foot += Math.max(rise, centre - reach - T.air.loft);
       const plane = rise - (lz * risePitch + lx * riseRoll);
       if (plane > seat) seat = plane;
     }
@@ -133,6 +137,21 @@ export function seatOn(
  * the wheels' speed from. */
 export function footOn(car: CarState, ground: (x: number, z: number) => number): number {
   return corners(car, ground(car.x, car.z), ground).foot;
+}
+
+/** PUT A CAR DOWN: the foot the first grounded step measures its wheels'
+ * speed from, read now so that step sees wheels that have not moved rather
+ * than a foot that fell the whole cross-section of the ground in one step
+ * — which is a body lifting off its wheels on the grid, and tyres carrying
+ * less than the car's weight into the launch. Everything that places a car
+ * on the ground owes it this (the grid, a respawn, the beaching at the end
+ * of a drowning). */
+export function plant(car: CarState, ground: (x: number, z: number) => number): void {
+  car.foot = footOn(car, ground) - ground(car.x, car.z);
+  car.footVy = 0;
+  car.footMean = 0;
+  car.loft = 0;
+  car.loftRate = 0;
 }
 
 /** Read where the car stands now (see `Seat`). */

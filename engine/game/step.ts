@@ -24,7 +24,7 @@ import { TUNING } from "./defs/tuning.ts";
 import { clutchDump, spinHeadroom, stepAirborne, stepGrounded, type GroundContext } from "./car.ts";
 import { clipKerbs, clipSolids, collideCar } from "./collision.ts";
 import { beyondDriving } from "./damage.ts";
-import { seatOn } from "./ground.ts";
+import { plant, seatOn } from "./ground.ts";
 import {
   boardHalfWidth,
   crossedFinish,
@@ -117,6 +117,7 @@ export function freshCar(): CarState {
     drifting: false,
     chain: 0,
     spun: false,
+    spinDir: 0,
     rolling: false,
     wheelspin: 0,
     launchSpin: 0,
@@ -304,11 +305,13 @@ export function createGame(options: CreateGameOptions): GameState {
             `${track.segments.filter((p) => p.feature === "jump").length} jumps — ${spec.name}`,
     );
   }
+  const terrain = createTerrain(track);
+  plant(car, terrain.groundAt);
   return {
     seed: options.seed,
     spec,
     track,
-    terrain: createTerrain(track),
+    terrain,
     kerbs: createKerbField(track),
     car,
     phase: options.skipCountdown ? "racing" : "intro",
@@ -377,6 +380,7 @@ function respawn(state: GameState, events: GameEvent[], home: WayHome): void {
   car.y = home.y;
   car.heading = home.heading;
   stillCar(car);
+  plant(car, state.terrain.groundAt);
   car.u = T.offTrack.respawnSpeed;
   // The service crew get to a wreck the moment it is back at the road: the
   // chassis is patched to a drivable fraction, and the dents, the torn-off
@@ -466,6 +470,7 @@ function beach(state: GameState, events: GameEvent[]): void {
   car.y = seatOn(car, terrain.groundAt(car.x, car.z), terrain.groundAt);
   car.vy = 0;
   car.wheelVy = 0;
+  plant(car, terrain.groundAt);
   state.stuck.x = car.x;
   state.stuck.z = car.z;
   state.stuck.since = state.t;

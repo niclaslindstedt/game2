@@ -597,7 +597,11 @@ function decide(state: GameState, profile: BotProfile, traffic: readonly Traffic
   // hatch shuddering through the apex. The move is the whole corner.
   const trailing = nearHard && !rotates && hot;
   if (trailing) brake = Math.max(brake, TRAIL_BRAKE);
-  if (car.drifting) {
+  // ...keyed on the ANGLE as well as the engine's own flag: a car light over
+  // a bump mid-slide reads as not drifting for a few steps, and a driver
+  // who took that as leave to lift and brake at forty degrees of slip fed
+  // the run (`drift.overYaw` reads a lift) and spun the car.
+  if (car.drifting || Math.abs(car.slip) > DRIFT_HOLD) {
     // Sideways, the throttle is the thing holding the angle where it is, and
     // it is BREATHED rather than switched: full while the slide is still
     // building, easing as the angle gets deep enough to be running out of

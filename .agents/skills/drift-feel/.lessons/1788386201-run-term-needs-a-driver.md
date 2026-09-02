@@ -22,7 +22,6 @@ spin the player did. Three things it must NOT do, each found the hard way:
   the lever's hairpin pivot a pivot; off once spun, or the spun car keeps
   rotating forever.
 
-Probe it with a held flick at 28 m/s on the rear-driver (`probe-spin`
-style: peak, spins, end slip): the uncaught flick should run to a spin in
-about a second, the catch at 35° should gather it, and `make drift
-ARGS=--table` must move under a tenth of a degree everywhere else.
+Probe the run with a held flick at 28 m/s on the rear-driver (peak, spins,
+end slip): it should park under `spinAt`, the catch at 35° should gather
+it, and `make drift ARGS=--table` must move under a tenth of a degree.

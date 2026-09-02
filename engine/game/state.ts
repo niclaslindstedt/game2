@@ -272,6 +272,10 @@ export type CarState = {
    * moment reads as one event rather than a stutter, and cleared by a
    * respawn like every other thing the car is carrying. */
   spun: boolean;
+  /** Which way a spun car is turning, ±1 — latched as the spin begins and
+   * kept until it is over, so the spin goes round on the momentum it had
+   * rather than reversing whenever the slip's sign does (`drift.spinCarry`). */
+  spinDir: number;
   /** True while the car is ROLLING OVER: tripped over its outside wheels
    * by a landing taken crossed up (`air.tripSlide`), and going over side
    * after side until the roll has spent itself. It is off its wheels the
@@ -431,6 +435,7 @@ export function stillCar(car: CarState): void {
   car.drifting = false;
   car.chain = 0;
   car.spun = false;
+  car.spinDir = 0;
   car.rolling = false;
   car.thrown = 0;
   car.wheelspin = 0;

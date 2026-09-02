@@ -941,10 +941,11 @@ export const TUNING = {
      *
      * Against the wheel's own full counter at pace (`steerRate` through
      * `fadeSpeed`, plus `driftYaw`), sized so a catch made anywhere short
-     * of `spinAt` gathers the car and none at all does not: a flick held
-     * on the rear-driver at 100 km/h runs to a spin in about a second, and
-     * a full lock held on the wheel alone still parks, because the wheel
-     * named that angle. */
+     * of `spinAt` gathers the car and none at all does not: the lever held
+     * on the rear-driver at 120 km/h runs to a spin in about a second, a
+     * flick held on at 100 parks a hand short of the wall (the deepest
+     * drift in the game, and one lift from over it), and a full lock held
+     * on the wheel alone still parks, because the wheel named that angle. */
     overYaw: 6,
     /** ...where in the wheel's fade band the run BEGINS, 0..1 of
      * `angleBand` past the angle the lock asked for. A held slide parks
@@ -995,8 +996,34 @@ export const TUNING = {
     /** ...and how much harder a spinning car scrubs its speed off,
      * ×`grip.scrub`. Four tires dragged sideways across the road is the most
      * effective brake in the game, which is exactly why a spin costs the run
-     * far more than the corner it happened in. */
-    spinScrub: 3.5,
+     * far more than the corner it happened in. Sized for a car going ROUND
+     * (`spinCarry`), which is broadside only half the time: a spin entered
+     * at 130 km/h is under 60% of it inside a second and a half, and at
+     * walking pace inside three. */
+    spinScrub: 6.5,
+    /** THROUGH THE SPIN. A spun car is rotating on the momentum it has,
+     * and nothing under it is holding the tail any more: it keeps turning
+     * the way it was turning (`CarState.spinDir`) at this rate, rad/s, past
+     * `spinAt`, through backwards and on, scrubbing whenever it is
+     * sideways, until the speed is gone (`spinOut`) — where it stops is
+     * where it stops, and often enough that is facing the way it came.
+     * Scaled by the ground speed over the slide floor, and the driver's
+     * counter takes only `spinSteer` of it away, which is the spin the
+     * driver cannot influence enough to save. Without it a spun car
+     * SCRUBBED itself back into a drift: the four dragged tyres took the
+     * speed and the redirect gathered the nose, so the deepest spin in the
+     * game ended thirty degrees out and still driving, and nobody ever
+     * ended up reversing. */
+    spinCarry: 3,
+    /** ...and how much of the tyre's hold on the car's TRAVEL survives a
+     * spin, 0..1 — the redirect that turns the velocity back under the nose
+     * (`grip.latCeiling`), and with it the weathervane and the slip's own
+     * self-straightening, which are the same tyre read as a torque. Past
+     * its peak the tyre has let go: a spun car does not gather its nose
+     * back over its travel at drift rates, it scrubs sideways and keeps
+     * turning. At one, every spin in the game ended thirty degrees out and
+     * still driving forward. */
+    spinHold: 0.3,
   },
 
   /** THE REV COUNTER. There is no crank in this model: on the move the revs

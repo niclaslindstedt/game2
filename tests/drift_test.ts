@@ -257,8 +257,14 @@ describe("turning at pace", () => {
     // goes is now a property of the drivetrain (`TUNING.drivetrain[].depth`).
     // A front-driver washes wide where a rear-driver comes round, and the
     // lever is exactly how the front-driver gets there anyway.
-    run(state, { throttle: 1, steer: 1, handbrake: true }, 0.7);
-    const withLever = Math.abs(state.car.slip);
+    // ...measured at its DEEPEST: held on at this pace the lever is a
+    // spin, and a spun car goes on round to where the slip, read from the
+    // nearer axis, is falling again.
+    let withLever = 0;
+    for (let i = 0; i < Math.round(0.7 / TUNING.dt); i++) {
+      step(state, { ...NEUTRAL_INPUT, throttle: 1, steer: 1, handbrake: true });
+      withLever = Math.max(withLever, Math.abs(state.car.slip));
+    }
 
     const wheelOnly = game();
     upToSpeed(wheelOnly, 5);
@@ -510,10 +516,19 @@ describe("the wheel, and what the surface does with it", () => {
     const angle = (surface: "gravel" | "asphalt"): number => {
       const state = game("compact", surface);
       upToSpeed(state, 10);
-      run(state, { steer: 1, handbrake: true }, 0.5);
-      run(state, { steer: 1, throttle: 0.3 }, 0.5);
+      // The deepest the DRIFT gets: on tarmac the provocation is enough to
+      // spin the car, and a spun car goes on round past any drift angle.
+      let deepest = 0;
+      const deep = (input: Partial<CarInput>, seconds: number): void => {
+        for (let i = 0; i < Math.round(seconds / TUNING.dt); i++) {
+          step(state, { ...NEUTRAL_INPUT, ...input });
+          if (!state.car.spun) deepest = Math.max(deepest, Math.abs(state.car.slip));
+        }
+      };
+      deep({ steer: 1, handbrake: true }, 0.5);
+      deep({ steer: 1, throttle: 0.3 }, 0.5);
       expect(state.car.drifting).toBe(true);
-      return Math.abs(state.car.slip);
+      return deepest;
     };
     const sealed = angle("asphalt");
     const loose = angle("gravel");
