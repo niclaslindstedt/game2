@@ -15,12 +15,16 @@ and the band, taken at `verge.climb`, is gentler than the cut R34 actually
 made (a sealed road's cutting stands at the rock's own angle).
 
 Fit the pad to the terrain's own `heightAt` instead — the ground as the
-cone left it — as a PLANE (least squares over two rings of probes, held
-to a car park's grade) with a residual bound, and let R31 hold by
-construction: the plane is within the residual of ground the cone has
-already passed, everywhere on the pad. Asking the band again at that
-point is asking a stricter question than the terrain did, and it costs
-thirty-three probes per candidate on top.
+cone left it — as a PLANE (least squares over rings of probes, held to a
+car park's grade) with a residual bound, and check the plane against the
+terrain's OWN cone (`ceilingAt`, the `Near.ceiling` the height query
+already computes), never against a restatement of it. Skipping the check
+is not an option either: a pad is the floor on the cone, so a plane six
+metres over the cut ground beside the road fails `explore_test`'s R31
+sweep by exactly that; and a "never fill within the cone's reach" rule
+refuses a plane fitted through bumpy ground at half its probes by
+construction (12,000 refusals a sweep, and the placer three times slower
+for trying more candidates).
 
 The plane matters as much as the ground: a level disc 45 m across on a 6%
 hillside is 3 m of cut at one rim and 3 m of fill at the other, and

@@ -2060,9 +2060,10 @@ export const STAGE_RULES = {
      * past the bay layout its rim reaches, how far past the rim the country
      * is eased back onto it, the steepest plane it may be graded to (m per
      * m: a field the cars are parked across, not a table cut into a hill),
-     * how much the bare ground may differ from that plane across it, the
-     * bare country it keeps between its rim and the route's corridor, and
-     * how far apart two pads have to be. */
+     * how much the ground may differ from that plane across it (the plane
+     * itself never stands over R31's cone — the terrain's own), the bare
+     * country it keeps between its rim and the route's corridor, and how
+     * far apart two pads have to be. */
     pad: { margin: 2.5, blend: 12, maxGrade: 0.09, level: 6, clear: 8, apart: 100 },
     /** THE BAYS: two rows nosed in either side of one aisle down the middle.
      * `count` is how many bays a car park has — at least twenty-two, so

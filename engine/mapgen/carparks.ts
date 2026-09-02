@@ -143,6 +143,9 @@ export type CarParkContext = {
   /** Ground nothing may stand on or walk across: water, a stream's bed and
    * banks, the flank of a guard's mound. */
   blocked: (x: number, z: number) => boolean;
+  /** R31 — the highest the ground may stand at a point for the route's
+   * sake (the terrain's own cone), Infinity where no road reaches. */
+  ceilingAt: (x: number, z: number) => number;
   /** The ground as the terrain shapes it — what a sign is footed on. */
   heightAt: (x: number, z: number) => number;
   /** Called with each car park the moment it is placed, BEFORE the next is
@@ -176,7 +179,6 @@ const ROAD_MAX = SPUR.length.max;
 /** Over how much of its last stretch a lane closes its height onto the
  * road it runs into, m. */
 const JOIN_EASE = 48;
-
 /** One sample in this many of a road a lane may join goes into the coarse
  * picture the search steers by — a point every couple of dozen metres. */
 const JOIN_STRIDE = 6;
@@ -423,7 +425,7 @@ export function createCarParkField(track: Track): CarParkField {
     const out: { x: number; z: number }[] = [{ x, z }];
     for (let k = 0; k < 16; k++) {
       const a = (k / 16) * Math.PI * 2;
-      for (const r of [radius * 0.5, radius]) {
+      for (const r of [radius * 0.35, radius * 0.7, radius]) {
         out.push({ x: x + Math.cos(a) * r, z: z + Math.sin(a) * r });
       }
     }
@@ -495,15 +497,20 @@ export function createCarParkField(track: Track): CarParkField {
       grade.z *= P.pad.maxGrade / steep;
     }
     const pad: CarParkPad = { x, z, y, radius, grade };
+    // R31 — and nowhere above the terrain's OWN cone: a pad is the floor
+    // on the cone (terrain.ts), so a plane standing over it is the wall
+    // beside the road the cone exists to take down. The terrain's cone and
+    // not a restatement of it at the verge's climb — the cut is made at
+    // the grade R34 gives the road, and a gentler copy refused half the
+    // country beside every road with relief in it.
+    let wall = false;
     probes.forEach((p, i) => {
-      if (Math.abs(heights[i] - padHeight(pad, p.x, p.z)) > P.pad.level) heights[i] = NaN;
+      const level = padHeight(pad, p.x, p.z);
+      if (Math.abs(level - heights[i]) > P.pad.level) heights[i] = NaN;
+      if (level > ctx.ceilingAt(p.x, p.z)) wall = true;
     });
     if (heights.some((h) => Number.isNaN(h))) return refuse("level");
-    // R31 holds by construction: the plane is fitted to ground the cone
-    // has already cut, and stands no further from it anywhere than the
-    // residual above — asking the cone again, at a gentler climb than the
-    // cut was made at (R34), refused half the country beside every road
-    // with any relief in it.
+    if (wall) return refuse("band");
     // Never under the crowd: a pad's blend would regrade the ground a stand
     // is standing on.
     for (const stand of stands) {

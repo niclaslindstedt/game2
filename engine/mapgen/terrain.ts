@@ -334,6 +334,13 @@ export type TerrainField = {
    * soil; the analysis reads it to count how much of a stage runs through
    * rock rather than over it. */
   cutAt: (x: number, z: number) => number;
+  /** R31 — the highest the ground may stand at a point for the route's
+   * sake: the lowest nearby corridor's own underside, opening upward past
+   * the bench at the grade it was cut at. Infinity where no road reaches.
+   * What a pad placed beside the road checks its plane against, because a
+   * pad is the floor on this cone and a pad over it is the wall the cone
+   * exists to take down. */
+  ceilingAt: (x: number, z: number) => number;
   /** The surface of any road OTHER than the stage at a point: the mat of
    * an abandoned asphalt branch (R17), or null on open ground. The stage's
    * own surface comes from the track samples — this is what tells the
@@ -1733,6 +1740,7 @@ export function createTerrain(track: Track): TerrainField {
         // and a promise has to be one the grid can keep.
         routeDistance: (x, z) => Math.min(nearestRoad(x, z)?.d ?? Infinity, 3 * GRID),
         builtClearance,
+        ceilingAt: (x, z) => nearestSample(x, z)?.ceiling ?? Infinity,
         blocked: (x, z) =>
           waterAt(x, z) !== null || inStream(streams, x, z, 3) || guards.riseAt(x, z) > 0.5,
         heightAt,
@@ -1776,6 +1784,7 @@ export function createTerrain(track: Track): TerrainField {
   sync(0);
 
   const roadDistanceAt = (x: number, z: number): number => nearestRoad(x, z)?.d ?? Infinity;
+  const ceilingAt = (x: number, z: number): number => nearestSample(x, z)?.ceiling ?? Infinity;
 
   const field: TerrainField = {
     heightAt,
@@ -1787,6 +1796,7 @@ export function createTerrain(track: Track): TerrainField {
     water: land.water,
     roadDistanceAt,
     cutAt,
+    ceilingAt,
     spurSurfaceAt,
     streams,
     rivers,
