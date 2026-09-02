@@ -19,30 +19,30 @@ skill for any code change.
 
 ## Where everything lives
 
-| Piece                            | Role                                                                                                                             |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `pwa/src/game/car-body.ts`       | The assembly line: builds the parts, packages the meshes, names the breakables                                                   |
-| `pwa/src/game/car/spec.ts`       | The whole `CarBodySpec` vocabulary. Pure types — a new part starts with an optional field here                                   |
-| `pwa/src/game/car/builder.ts`    | `MeshBuilder` (baked-sun triangles), `bakeShading`, the bilinear-patch helpers                                                   |
-| `pwa/src/game/car/shell.ts`      | The chassis loft: stations, the ring, wheel-arch openings, shut-line grooves, `flankX`, `sideBand`                               |
-| `pwa/src/game/car/greenhouse.ts` | Windows cut out of a solid cabin; gutters; the two screens as glass (`screenPanes`)                                              |
-| `pwa/src/game/car/wipers.ts`     | The screens' grime film and the blades that sweep it — arms, park and sweep angles, how fast the glass soils                     |
-| `pwa/src/game/car/crew.ts`       | The people, built parametrically: torso, head, helmet styles, hair, face, the wheel hands and the road book                      |
-| `pwa/src/game/car-crew.ts`       | The sixteen characters and their gear colours, plus who drives for which crew. **Pure data, no three.js**                        |
-| `pwa/src/game/car/fascia.ts`     | Nose and tail: grille, lamps, bumpers, air dam, plate, exhaust, the detachable bonnet and boot lid                               |
-| `pwa/src/game/car/engine-bay.ts` | What is under that bonnet once an impact takes it off: the well cut into the deck, and the engine standing in it                 |
-| `pwa/src/game/car/trim.ts`       | Arch extensions, mirrors, handles, mud flaps, livery bands, door numbers, spoilers                                               |
-| `pwa/src/game/car/wheels.ts`     | The tire and three rim styles                                                                                                    |
-| `pwa/src/game/car-styles.ts`     | The specs — one `CarBodySpec` per catalog id. **Pure data, no three.js import** (Node tooling loads it)                          |
-| `pwa/src/game/car-livery.ts`     | The FIELD's paint: palettes × patterns, and `applyLivery`, which repaints any spec. Pure data too                                |
-| `pwa/src/game/car-livery.ts`     | The FIELD's paint: palettes x patterns, and `applyLivery` — a repaint of any spec. Pure data too                                 |
-| `pwa/src/game/car-dirt.ts`       | The grime a stage puts on it. Its painter is what the preview's `dirty` column calls                                             |
-| `tests/car_geometry_test.ts`     | Holds every spec inside `TUNING.collision`'s box and inside real-car dimensions                                                  |
-| `pwa/src/game/car-mesh.ts`       | Scene wrapper: attitude (drift roll / air pitch), wheel spin + steer, blob shadow                                                |
-| `pwa/src/tools/car-preview.ts`   | The harness page the preview tool drives (contact-sheet renderer)                                                                |
-| `scripts/car-preview.mjs`        | The tool: `make cars` / `make liveries` / `make field`; `--variants`, `--cars`, `--liveries`, `--field`, `--out`, `--skip-build` |
-| `scripts/item-preview.mjs`       | The OTHER tool: `make items ITEMS=car,interior,engine-bay,wheel` — one part at a time, fitted and measured, plus a driver's seat |
-| `engine/game/defs/cars.ts`       | NOT this skill's file — handling numbers and the catalog. Only `color`/`accent` feed the default look                            |
+| Piece                            | Role                                                                                                                              |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `pwa/src/game/car-body.ts`       | The assembly line: builds the parts, packages the meshes, names the breakables                                                    |
+| `pwa/src/game/car/spec.ts`       | The whole `CarBodySpec` vocabulary. Pure types — a new part starts with an optional field here                                    |
+| `pwa/src/game/car/builder.ts`    | `MeshBuilder` (baked-sun triangles), `bakeShading`, the bilinear-patch helpers                                                    |
+| `pwa/src/game/car/shell.ts`      | The chassis loft: stations, the ring, wheel-arch openings, shut-line grooves, `flankX`, `sideBand`                                |
+| `pwa/src/game/car/greenhouse.ts` | Windows cut out of a solid cabin; gutters; the two screens as glass (`screenPanes`)                                               |
+| `pwa/src/game/car/wipers.ts`     | The screens' grime film and the blades that sweep it — arms, park and sweep angles, how fast the glass soils                      |
+| `pwa/src/game/car/crew.ts`       | The people, built parametrically: torso, head, helmet styles, hair, face, the wheel hands and the road book                       |
+| `pwa/src/game/car-crew.ts`       | The sixteen characters and their gear colours, plus who drives for which crew. **Pure data, no three.js**                         |
+| `pwa/src/game/car/fascia.ts`     | Nose and tail: grille, lamps, bumpers, air dam, plate, exhaust, the detachable bonnet and boot lid                                |
+| `pwa/src/game/car/engine-bay.ts` | What is under that bonnet once an impact takes it off: the well cut into the deck, and the engine standing in it                  |
+| `pwa/src/game/car/trim.ts`       | Arch extensions, mirrors, handles, mud flaps, livery bands, door numbers, spoilers                                                |
+| `pwa/src/game/car/wheels.ts`     | The tire and three rim styles                                                                                                     |
+| `pwa/src/game/car-styles.ts`     | The specs — one `CarBodySpec` per catalog id. **Pure data, no three.js import** (Node tooling loads it)                           |
+| `pwa/src/game/car-livery.ts`     | The FIELD's paint: palettes × patterns, and `applyLivery`, which repaints any spec. Pure data too                                 |
+| `pwa/src/game/car-livery.ts`     | The FIELD's paint: palettes x patterns, and `applyLivery` — a repaint of any spec. Pure data too                                  |
+| `pwa/src/game/car-dirt.ts`       | The grime a stage puts on it. Its painter is what the preview's `dirty` column calls                                              |
+| `tests/car_geometry_test.ts`     | Holds every spec inside `TUNING.collision`'s box and inside real-car dimensions                                                   |
+| `pwa/src/game/car-mesh.ts`       | Scene wrapper: attitude (drift roll / air pitch), wheel spin + steer; the shell casts into the sun's shadow map (`car-shadow.ts`) |
+| `pwa/src/tools/car-preview.ts`   | The harness page the preview tool drives (contact-sheet renderer)                                                                 |
+| `scripts/car-preview.mjs`        | The tool: `make cars` / `make liveries` / `make field`; `--variants`, `--cars`, `--liveries`, `--field`, `--out`, `--skip-build`  |
+| `scripts/item-preview.mjs`       | The OTHER tool: `make items ITEMS=car,interior,engine-bay,wheel` — one part at a time, fitted and measured, plus a driver's seat  |
+| `engine/game/defs/cars.ts`       | NOT this skill's file — handling numbers and the catalog. Only `color`/`accent` feed the default look                             |
 
 ## The loop: generate → render → LOOK → iterate
 

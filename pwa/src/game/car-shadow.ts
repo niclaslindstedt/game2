@@ -1,323 +1,228 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // THE SHADOW A CAR THROWS ON THE GROUND.
 //
-// Nothing in this game casts a real shadow: the body is fullbright with its
-// shading baked into vertex colors, and the world is lit by one directional
-// light with no shadow map behind it. What lies under the car is therefore
-// DRAWN, and it has to earn the name — three things separate a shadow from a
-// dark disc towed along under the axles:
+// A real one. The stage is lit by one directional light, and this module
+// hangs a shadow map off it. Two things are decided here and nowhere else,
+// and the whole cost of the thing rides on them:
 //
-//   THE PLAN VIEW  a shadow is the car seen from the sun, and a rally car
-//                  seen from above is a blunt-ended box with the wheels and
-//                  the flares standing out of its middle. The silhouette is
-//                  sampled off the same CarBodySpec the body is lofted from,
-//                  so a wide-arched Group-4 car throws a wide-arched shadow.
-//   THE PENUMBRA   no shadow edge in the world is a line. The outline fades
-//                  out through a skirt carried in the vertex alpha, which
-//                  costs one extra band of triangles and no texture.
-//   THE LEAN       which way the light throws it and how far. A shadow that
-//                  sits dead under the car in every light is a decal; one
-//                  that reaches away from a low dusk sun is the car standing
-//                  in that light.
+//   WHO CASTS      the cars, and nothing but the cars (car-body.ts flags
+//                  the shell, the glass and the wheels). Fifteen bodies
+//                  drawn once more into a depth map is a pass the GPU
+//                  barely notices; a forest drawn into one is not.
+//   WHO RECEIVES   the ground — the terrain, the road, the water. Only a
+//                  material that receives pays the shadow lookup, so the
+//                  trees, the crowd and the buildings never see the map.
 //
-// The whole thing is one mesh with one material, because there are fifteen
-// cars on a stage and every one of them owns one of these.
+// That split is also what makes the map CLEAN. The one thing a shadow map
+// classically gets wrong — acne, the receiver shadowing itself where its own
+// depth and the map's disagree by a rounding error — needs the receiver to
+// be IN the map, and the ground never is. So there is no bias to tune and
+// nothing to peter-pan: a car on the ground throws a shadow that starts at
+// its tyres, on any slope, over any crest, on a cambered road or a bridge
+// deck, without anybody having to work out where the ground under it is.
+//
+// The other classic fault is SHIMMER: an orthographic shadow camera towed
+// along behind the player samples the world on a texel grid that slides
+// with it, so the same still car gets a different set of texels every frame
+// and its edges crawl. The frame is snapped to whole texels in the light's
+// own plane before it is placed, so the grid never moves by less than one
+// cell — the standard fix, and the one that separates a shadow that is
+// there from one that flickers.
 
 import * as THREE from "three";
-import { clamp } from "../lib/util.ts";
-import type { CarState } from "@engine";
 
-import { bodyHalfLength, flareAt, sampleProfile } from "./car/shell.ts";
-import type { CarBodySpec } from "./car/spec.ts";
-import type { SunShade } from "./sky.ts";
+import type { VideoSettings } from "./settings.ts";
 
-/** How far the silhouette is grown past the car's own plan outline, m.
- *
- * A shadow is NOT the footprint: it is the whole body projected, and every
- * panel above the ground lands outside the outline the tyres stand in — the
- * roof most of all. Without the pad the sheet hides entirely under the car
- * it belongs to, which is the same picture as having no shadow at all: from
- * any camera the game actually uses, what is seen of a shadow is its
- * FRINGE. Read it as the average of what the body's height throws under the
- * suns the game is played in; the lean below is what aims the rest of it. */
-const PAD = 0.2;
-/** Where the fully dark core of the shadow ends, as a fraction of the way
- * out from the middle to the silhouette. Everything past it is gradient. */
-const CORE = 0.68;
-/** Alpha at the silhouette's own edge, against 1 in the core — how much of
- * the fade has already happened by the time the outline is reached. Under
- * half and the car reads as floating on a smudge; near 1 and the skirt is a
- * halo around a hard-edged shape, which is worse than no skirt at all. */
-const EDGE_ALPHA = 0.7;
-/** How far the skirt spreads past the silhouette, m. Roughly the penumbra a
- * body sitting a third of a metre off the ground actually throws. */
-const BLUR = 0.3;
-/** Stations along the car the silhouette is sampled at, on top of the
- * profile's own and the wheels' ends. Twelve is enough that the flare over
- * an axle reads as a swell rather than as a corner. */
-const STATIONS = 12;
-
-/** How dark the shadow is with no direct sun in the light at all — the
- * ground darkening under any body that sits on it, which is what keeps a car
- * from floating under an overcast sky... */
-const AMBIENT_SHADE = 0.15;
-/** ...and how much more the beam adds at full hardness (sky.ts's
- * `sunShadeFor`). The two together are the core's alpha. */
-const DIRECT_SHADE = 0.28;
-
-/** How high up the body the light is taken to pass, m — the lever the sun's
- * elevation works on, so a low sun throws the shadow clear of the car
- * instead of nudging it. Not the roof: the mass of a car's shadow comes off
- * the waist, and projecting from the roof reads as the car hovering. */
-const CAST_HEIGHT = 0.9;
-/** …and the cap on what that offset is ever allowed to reach, m. A sun on
- * the horizon projects a shadow to infinity; a shadow that has left the car
- * behind stops reading as the car's. */
-const CAST_MAX = 1.2;
-/** How much the same lean also DRAWS THE SHADOW OUT along the light, as a
- * fraction of the lean, and the longest it may ever be drawn. A shadow that
- * only slides is a copy of the car in the wrong place; stretching it is what
- * says the light is coming in low. */
-const STRETCH = 0.45;
-const STRETCH_MAX = 2;
-
-/** What the hardness is multiplied up by before it AIMS the shadow.
- *
- * Darkness and direction fail at different rates, and one number drives
- * both. A weak beam still throws a long shadow — a dusk sun barely lights
- * the ground and lays the car's shadow half across the road — so the aim
- * saturates well short of full sun, and only a light with no beam left in it
- * at all (a storm's ceiling) puts the sheet back dead under the car. */
-const AIM_GAIN = 2.5;
-
-/** Height above the ground the sheet is laid at, m. Along the ground's own
- * up, not the world's — a shadow lifted along +y knifes into a hillside. */
-const LIFT = 0.06;
-
-/** How fast the shadow shrinks as the car climbs away from the ground, per
- * metre, and how small it is ever allowed to get. The shrink is the whole
- * altitude cue on a jump, so it stays a shrink rather than the spreading,
- * lightening penumbra a real shadow would grow: over a crest the player is
- * reading HOW HIGH off this, and a shadow that grows says the opposite. */
-const FLIGHT_SHRINK = 0.12;
-const FLIGHT_FLOOR = 0.35;
-
-export type CarShadow = {
-  /** The scene-side group. It belongs to the GROUND, not to the car: it is
-   * added to the scene as the car's sibling and lies on the ground's slope
-   * while the body above it pitches, rolls and flies. */
-  group: THREE.Group;
-  /** Which way this stage's light throws a shadow and how hard (sky.ts).
-   * Pushed from the environment, along with the tint the paint takes. */
-  setShade: (shade: SunShade) => void;
-  /** Lay the shadow under the car. `ground` is the height of the ground
-   * beneath it, `pitch` and `roll` the attitude of THAT ground — held over
-   * a flight, where the car's own angles are the arc's and the tumble's. */
-  place: (car: CarState, ground: number, pitch: number, roll: number) => void;
-  dispose: () => void;
+/** The side of the depth map, px, per effects level — and whether there is
+ * one at all. A shadow is an effect the way dust is: information about the
+ * car's weight and its height off the ground, worth a pass on any machine
+ * that can afford one and the first thing to go on one that cannot. */
+export const SHADOW_MAP_SIZE: Record<VideoSettings["effects"], number> = {
+  off: 0,
+  low: 1024,
+  full: 2048,
 };
 
-/** Half-width of the shadow at `z`, m: the widest thing the car has over
- * that station. The bodywork with its flares is usually it, but a car on a
- * narrow shell with the tires proud of the arches is shadowed by the tires,
- * and a plan view is the one place that shows. */
-function halfAt(spec: CarBodySpec, axles: number[], z: number): number {
-  let half = sampleProfile(spec.profile, z).half + flareAt(spec, axles, z);
-  const tire = spec.trackHalf + spec.wheelWidth / 2;
-  for (const axle of axles) {
-    if (Math.abs(z - axle) <= spec.wheelRadius) half = Math.max(half, tire);
+/** How far the map reaches from its focus, m, in the light's own plane —
+ * so on the ground it covers at least this far in every direction, and a
+ * good deal further along a low sun's azimuth. Every car inside it throws
+ * a shadow; a car outside throws none. Wide enough that the rivals a chase
+ * camera can actually make out are all in, at a texel small enough on the
+ * `full` map that the shadow's edge is read as an edge. */
+export const SHADOW_REACH = 40;
+
+/** How much of the light has to be a BEAM (sky.ts's `sunHardness`) before a
+ * shadow is thrown at all. Under a storm's ceiling the key light is still
+ * there — the stage would be black without it — but the light it stands in
+ * for arrives from everywhere at once and throws nothing, so a directional
+ * shadow under it is a lie. A thin sheet of rain cloud still clears the
+ * bar, with the shadow faded to match. */
+export const SHADOW_MIN_HARDNESS = 0.08;
+
+/** How far up the sun's ray the light stands off its focus, m, and the
+ * depth range the map covers from there. The ground is never in the map,
+ * so the range only has to hold the cars — but at a low sun the map's
+ * footprint runs hundreds of metres along the azimuth and the cars out
+ * there can stand well above or below the focus, which is what the far
+ * plane is paying for. */
+const LIGHT_DISTANCE = 250;
+const SHADOW_NEAR = 1;
+const SHADOW_FAR = 900;
+
+/** How far ahead of the focused car the map is centred, m, along the
+ * camera's own forward. The player looks up the road, so that is where the
+ * rivals worth a shadow are; a map centred dead on the car spends half its
+ * reach on the stage behind. */
+const FOCUS_AHEAD = 10;
+
+/** The width of one texel of the map on the light's plane, m. */
+export function shadowTexel(size: number): number {
+  return (2 * SHADOW_REACH) / Math.max(1, size);
+}
+
+/** The two axes the map is laid out along, for a light coming FROM `dir`
+ * (unit, pointing at the sun). The same basis three.js's `lookAt` builds
+ * for the shadow camera — it has to be, because the point of having it is
+ * to snap to that camera's texel grid and no other. */
+export function lightFrame(dir: THREE.Vector3): { right: THREE.Vector3; up: THREE.Vector3 } {
+  const z = dir.clone().normalize();
+  const right = new THREE.Vector3(0, 1, 0).cross(z);
+  if (right.lengthSq() < 1e-12) {
+    // The sun straight overhead: `lookAt` nudges the axis off the pole by
+    // this much, along z, rather than failing — so the frame stays defined,
+    // and stays the camera's.
+    z.z += 1e-4;
+    z.normalize();
+    right.set(0, 1, 0).cross(z);
   }
-  return half + PAD;
+  right.normalize();
+  const up = z.clone().cross(right).normalize();
+  return { right, up };
 }
 
-/** The z stations the silhouette is sampled at, nose (+z) → tail (−z): an
- * even ladder, plus every station the profile authored, plus the ends of
- * each wheel — the step where a tire leaves the shadow is a real edge in a
- * plan view, and a ladder that misses it rounds it off into a bulge. */
-function stationsFor(spec: CarBodySpec, axles: number[]): number[] {
-  // The same pad the flanks get, on the ends: `bodyHalfLength` measures to
-  // the bumpers, and the body over them still throws past that.
-  const half = bodyHalfLength(spec) + PAD;
-  const zs = [half, -half];
-  for (let i = 1; i < STATIONS; i++) zs.push(half - (2 * half * i) / STATIONS);
-  for (const p of spec.profile) zs.push(clamp(p.z, -half, half));
-  for (const axle of axles) {
-    zs.push(clamp(axle + spec.wheelRadius, -half, half));
-    zs.push(clamp(axle - spec.wheelRadius, -half, half));
-  }
-  zs.sort((a, b) => b - a);
-  // Nothing closer together than the skirt is wide. Two stations a
-  // centimetre apart with different widths — a wheel's end landing beside a
-  // profile station is where it happens — make a near-vertical wall in the
-  // outline, and a skirt grown outward from both ends of one crosses itself
-  // and turns its triangles inside out (they then vanish, back-face culled).
-  // Six centimetres on a four-metre car costs no shape and removes the case.
-  return zs.filter((z, i) => i === 0 || Math.abs(z - zs[i - 1]) > BLUR / 5);
+/** `focus`, moved by less than a texel so that it lands on the map's own
+ * grid. Written into `out` (which may be `focus` itself). The move is
+ * entirely within the light's plane — nothing along the ray, because a step
+ * along the light does not change which texels the ground falls into and
+ * would only shift the depth range for nothing. */
+export function snapToTexels(
+  focus: THREE.Vector3,
+  dir: THREE.Vector3,
+  texel: number,
+  out: THREE.Vector3 = new THREE.Vector3(),
+): THREE.Vector3 {
+  const { right, up } = lightFrame(dir);
+  const r = focus.dot(right);
+  const u = focus.dot(up);
+  const dr = Math.round(r / texel) * texel - r;
+  const du = Math.round(u / texel) * texel - u;
+  return out.copy(focus).addScaledVector(right, dr).addScaledVector(up, du);
 }
 
-/** The silhouette as a closed loop in the ground plane: down the right
- * flank nose → tail, then back up the left one. Mirrored rather than
- * sampled twice, so the two sides can never disagree. */
-function loopFor(spec: CarBodySpec, axles: number[]): { x: number; z: number }[] {
-  const zs = stationsFor(spec, axles);
-  const loop: { x: number; z: number }[] = [];
-  for (const z of zs) loop.push({ x: halfAt(spec, axles, z), z });
-  for (let i = zs.length - 1; i >= 0; i--) loop.push({ x: -halfAt(spec, axles, zs[i]), z: zs[i] });
-  return loop;
-}
+export type SunShadows = {
+  /** Hand over the renderer the map is drawn with, and the effects level it
+   * starts at. Once, when the renderer is made. */
+  bind: (renderer: THREE.WebGLRenderer, effects: VideoSettings["effects"]) => void;
+  /** The video options' effects level: which map, or none. */
+  setQuality: (effects: VideoSettings["effects"]) => void;
+  /** How much of the stage's light is a beam, 0..1 (sky.ts). Below
+   * `SHADOW_MIN_HARDNESS` nothing is cast; above it the shadow is faded to
+   * match, so a thin overcast throws a soft one. */
+  setHardness: (hardness: number) => void;
+  /** Put the map where this frame needs it: around `car`, biased up the
+   * road the camera is looking along, and snapped to its own texels. Every
+   * frame, after whatever else has moved the light — the frame is rebuilt
+   * from the light's current direction, so a lightning strike that swings
+   * the key light swings the shadows with it. */
+  follow: (car: { x: number; y: number; z: number }, camera: THREE.Camera) => void;
+  /** Whether anything is being cast right now. */
+  active: () => boolean;
+};
 
-/** Outward normals for the loop above — the direction the soft skirt is
- * grown along at each point.
- *
- * The loop runs nose → right flank → tail → left flank, which is CLOCKWISE
- * in x/z (x right, z into the nose), and the outward side of a clockwise
- * loop is the tangent turned the other way: (−dz, dx). Take the other one
- * and the whole skirt is built INSIDE the silhouette, where it reads as a
- * pale rim around a shadow — a bug that looks like a material problem. */
-function normalsFor(loop: { x: number; z: number }[]): { x: number; z: number }[] {
-  const n = loop.length;
-  /** The outward normal of the edge LEAVING point i, unit length. */
-  const edge = loop.map((p, i) => {
-    const next = loop[(i + 1) % n];
-    const dx = next.x - p.x;
-    const dz = next.z - p.z;
-    const len = Math.hypot(dx, dz);
-    return len > 1e-6 ? { x: -dz / len, z: dx / len } : { x: 0, z: 0 };
-  });
-  return loop.map((p, i) => {
-    // The two edges' normals averaged — NOT the normal of the chord across
-    // the corner. Averaging two unit vectors can never reach further out
-    // than either of them, so a sharp corner grows a short bevel; a chord
-    // normal overshoots exactly where the outline turns hardest, and the
-    // skirt built on it folds through itself.
-    const a = edge[(i - 1 + n) % n];
-    const b = edge[i];
-    const nx = a.x + b.x;
-    const nz = a.z + b.z;
-    const len = Math.hypot(nx, nz);
-    return len > 1e-6 ? { x: nx / len, z: nz / len } : { x: Math.sign(p.x) || 1, z: 0 };
-  });
-}
+export function createSunShadows(light: THREE.DirectionalLight): SunShadows {
+  const shadow = light.shadow;
+  const cam = shadow.camera;
+  cam.left = -SHADOW_REACH;
+  cam.right = SHADOW_REACH;
+  cam.top = SHADOW_REACH;
+  cam.bottom = -SHADOW_REACH;
+  cam.near = SHADOW_NEAR;
+  cam.far = SHADOW_FAR;
+  cam.updateProjectionMatrix();
+  // No bias: nothing that reads the map is ever in it (see the module
+  // note), and a bias would only lift every shadow off the tyres that
+  // throw it.
+  shadow.bias = 0;
+  shadow.normalBias = 0;
 
-/** The sheet: a dark core, the silhouette part-faded, and a skirt that goes
- * to nothing. Built flat in x/z with every y at zero, so nothing has to be
- * rotated into the ground plane afterwards and the lean can be composed as
- * plain 2-D maths. */
-function buildSheet(spec: CarBodySpec, axles: number[]): THREE.BufferGeometry {
-  const loop = loopFor(spec, axles);
-  const out = normalsFor(loop);
-  const n = loop.length;
-  const pos: number[] = [];
-  const col: number[] = [];
-  const idx: number[] = [];
-  const vertex = (x: number, z: number, alpha: number): number => {
-    pos.push(x, 0, z);
-    col.push(0, 0, 0, alpha);
-    return pos.length / 3 - 1;
-  };
-  // Three rings out from the middle: the core's edge, the silhouette, and
-  // the outside of the skirt. The core is scaled toward the centre rather
-  // than inset along the normals — an inset nose on a tapered car folds
-  // through itself, a scaled one cannot.
-  const core: number[] = [];
-  const edge: number[] = [];
-  const skirt: number[] = [];
-  for (let i = 0; i < n; i++) {
-    const p = loop[i];
-    core.push(vertex(p.x * CORE, p.z * CORE, 1));
-    edge.push(vertex(p.x, p.z, EDGE_ALPHA));
-    skirt.push(vertex(p.x + out[i].x * BLUR, p.z + out[i].z * BLUR, 0));
-  }
-  const middle = vertex(0, 0, 1);
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n;
-    idx.push(middle, core[i], core[j]);
-    idx.push(core[i], edge[i], edge[j], core[i], edge[j], core[j]);
-    idx.push(edge[i], skirt[i], skirt[j], edge[i], skirt[j], edge[j]);
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  // Four components: three.js reads the fourth as vertex ALPHA once the
-  // material is transparent, which is the whole gradient without a texture.
-  geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 4));
-  geo.setIndex(idx);
-  return geo;
-}
+  let renderer: THREE.WebGLRenderer | null = null;
+  let size = 0;
+  let hardness = 0;
 
-/** No sun at all: a soft patch dead under the car, which is what a heavy
- * deck leaves — and what a car that has not been told the conditions yet
- * stands on, so a shadow is never MISSING while the light is being worked
- * out. */
-export const FLAT_SHADE: SunShade = { x: 0, z: -1, lean: 0, hardness: 0 };
+  const dir = new THREE.Vector3();
+  const fwd = new THREE.Vector3();
+  const focus = new THREE.Vector3();
 
-export function createCarShadow(spec: CarBodySpec, fade: number): CarShadow {
-  const shift = spec.axleShift ?? 0;
-  const axles = [spec.wheelbase / 2 + shift, -spec.wheelbase / 2 + shift];
-  const geometry = buildSheet(spec, axles);
-  const material = new THREE.MeshBasicMaterial({
-    vertexColors: true,
-    transparent: true,
-    // A shadow darkens the ground; it must not hide what is behind it. With
-    // depth writing on, the sheet claims its patch of the depth buffer and
-    // the dust thrown over it disappears.
-    depthWrite: false,
-  });
-  const sheet = new THREE.Mesh(geometry, material);
-  // The lean is composed straight into the mesh's matrix: the lift and the
-  // slide away from the light, then a stretch ALONG the light — which is a
-  // turn into its direction, a scale, and the turn back out of it. Three
-  // matrices held here rather than made per frame: fifteen cars.
-  sheet.matrixAutoUpdate = false;
-  const slide = new THREE.Matrix4();
-  const spin = new THREE.Matrix4();
-  const unspin = new THREE.Matrix4();
-  const stretch = new THREE.Matrix4();
-
-  // Same two-group nesting as the car itself, so the sheet takes the same
-  // heading-then-attitude chain and lands flush on the same triangle.
-  const tilt = new THREE.Group();
-  tilt.add(sheet);
-  const group = new THREE.Group();
-  group.add(tilt);
-
-  let shade = FLAT_SHADE;
-  const setShade = (next: SunShade): void => {
-    shade = next;
+  const refresh = (): void => {
+    light.castShadow = size > 0 && hardness >= SHADOW_MIN_HARDNESS;
+    shadow.intensity = Math.min(1, Math.max(0, hardness));
+    if (renderer) renderer.shadowMap.enabled = size > 0;
   };
 
-  const place = (car: CarState, ground: number, pitch: number, roll: number): void => {
-    group.position.set(car.x, ground, car.z);
-    group.rotation.y = car.heading;
-    tilt.rotation.z = roll;
-    tilt.rotation.x = -pitch;
-
-    const height = Math.max(0, car.y - ground);
-    const shrink = clamp(1 - height * FLIGHT_SHRINK, FLIGHT_FLOOR, 1);
-    group.scale.setScalar(shrink);
-    material.opacity = (AMBIENT_SHADE + DIRECT_SHADE * shade.hardness) * shrink * fade;
-
-    // The light's direction is the world's; the sheet hangs under a group
-    // already turned to the car's heading, so it arrives here turned back
-    // out of it. A drift is exactly the moment the two disagree.
-    const h = -car.heading;
-    const lx = shade.x * Math.cos(h) - shade.z * Math.sin(h);
-    const lz = shade.x * Math.sin(h) + shade.z * Math.cos(h);
-    const aim = Math.min(1, shade.hardness * AIM_GAIN);
-    const reach = Math.min(CAST_HEIGHT * shade.lean, CAST_MAX) * aim;
-    // atan2(x, z) rather than (z, x): the angle wanted is the one that turns
-    // +z onto the light, because the scale below is applied along +z.
-    const theta = Math.atan2(lx, lz);
-    spin.makeRotationY(theta);
-    unspin.makeRotationY(-theta);
-    stretch.makeScale(1, 1, Math.min(STRETCH_MAX, 1 + STRETCH * shade.lean * aim));
-    slide.makeTranslation(lx * reach, LIFT, lz * reach);
-    sheet.matrix.copy(slide).multiply(spin).multiply(stretch).multiply(unspin);
+  const setQuality = (effects: VideoSettings["effects"]): void => {
+    const next = SHADOW_MAP_SIZE[effects];
+    if (next !== size) {
+      size = next;
+      shadow.mapSize.set(Math.max(1, next), Math.max(1, next));
+      // The target is allocated at the size the map had when it was first
+      // drawn; dropping it is what makes the next draw allocate the new one.
+      if (shadow.map) {
+        shadow.map.dispose();
+        shadow.map = null;
+      }
+    }
+    refresh();
   };
 
-  const dispose = (): void => {
-    geometry.dispose();
-    material.dispose();
+  const bind = (next: THREE.WebGLRenderer, effects: VideoSettings["effects"]): void => {
+    renderer = next;
+    // Soft-filtered: the map is read with a small kernel, so the edge is a
+    // short gradient rather than a staircase of texels — the penumbra a
+    // body a third of a metre off the ground actually throws, near enough.
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Drawn ONCE a frame, on the first pass that asks. The driving frame
+    // renders the scene twice when the mirror is up, and the map is the
+    // same picture for both — the mirror looks back down the same road.
+    renderer.shadowMap.autoUpdate = false;
+    setQuality(effects);
   };
 
-  return { group, setShade, place, dispose };
+  const setHardness = (next: number): void => {
+    hardness = next;
+    refresh();
+  };
+
+  const follow = (car: { x: number; y: number; z: number }, camera: THREE.Camera): void => {
+    if (!light.castShadow) return;
+    // Which way the light is coming from is whoever last placed it —
+    // the sky's sun, or a strike for as long as it burns.
+    dir.copy(light.position).sub(light.target.position).normalize();
+    camera.getWorldDirection(fwd);
+    fwd.y = 0;
+    const along = fwd.length();
+    focus.set(car.x, car.y, car.z);
+    if (along > 1e-3) focus.addScaledVector(fwd, FOCUS_AHEAD / along);
+    snapToTexels(focus, dir, shadowTexel(size), focus);
+    light.target.position.copy(focus);
+    light.position.copy(focus).addScaledVector(dir, LIGHT_DISTANCE);
+    if (renderer) renderer.shadowMap.needsUpdate = true;
+  };
+
+  return {
+    bind,
+    setQuality,
+    setHardness,
+    follow,
+    active: () => light.castShadow,
+  };
 }

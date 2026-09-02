@@ -255,6 +255,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
 
   const scene = new THREE.Scene();
   const environment = createEnvironment(scene);
+  // The cars' shadows are a map drawn with this renderer, sized by the
+  // effects option (car-shadow.ts); the environment aims it.
+  environment.shadows.bind(renderer, quality.effects);
 
   const chase = createGameCamera(canvas.clientWidth || 1, canvas.clientHeight || 1);
   const mirror = createMirror();
@@ -369,16 +372,14 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
 
   /** The environment's light tint, pushed onto everything that carries its
    * own baked or vertex colors (the cars, the particles) — and, on the same
-   * trip, the rain the cars' screens are wetted by and the shadow that light
-   * throws each of them into (car-shadow.ts). */
+   * trip, the rain the cars' screens are wetted by. */
   const applyTint = (): void => {
     const tint = environment.carTint();
     const lit = environment.lampsLit();
     const rain = environment.rainfall();
-    const shade = environment.sunShade();
-    if (car) tintCar(car, tint, lit, rain, shade);
-    if (ghostCar) tintCar(ghostCar, tint, lit, rain, shade);
-    field.paint(tint, lit, rain, shade);
+    if (car) tintCar(car, tint, lit, rain);
+    if (ghostCar) tintCar(ghostCar, tint, lit, rain);
+    field.paint(tint, lit, rain);
     carFx.setTint(tint, environment.dustTint(), environment.ceiling());
   };
 
@@ -467,6 +468,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   const setVideo = (next: VideoSettings): void => {
     quality = next;
     applyResolution();
+    environment.shadows.setQuality(quality.effects);
     field.setCarDetail(
       INTERIOR_DETAIL[quality.interior],
       SCREEN_GRIME[quality.interior] ? "coarse" : "off",
@@ -523,7 +525,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       ghostTag = null;
     }
     if (!ghostCar) return;
-    scene.remove(ghostCar.group, ghostCar.shadow, ghostCar.debris);
+    scene.remove(ghostCar.group, ghostCar.debris);
     ghostCar.dispose();
     ghostCar = null;
   };
@@ -533,7 +535,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
    * re-read here rather than only where a whole stage is built. */
   const fitCar = (state: GameState): void => {
     if (car) {
-      scene.remove(car.group, car.shadow, car.debris);
+      scene.remove(car.group, car.debris);
       car.dispose();
     }
     // The player's car is the one car on the stage with a first-person
@@ -549,7 +551,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       // hangs the glass.
       rearView: { texture: mirror.texture, aspect: MIRROR_ASPECT },
     });
-    scene.add(car.group, car.shadow, car.debris);
+    scene.add(car.group, car.debris);
     const eyes = carEyes(state.spec);
     chase.setEyes(eyes);
     driverEyeY = eyes.hood.y;
@@ -646,7 +648,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // information. Its own colour and its own fade, held under a real
     // crew's, so the plate is as much a picture as the car under it.
     ghostTag = createNameTag("Ghost", null, GHOST_LOOK);
-    scene.add(ghostCar.group, ghostCar.shadow, ghostCar.debris, ghostTag.sprite);
+    scene.add(ghostCar.group, ghostCar.debris, ghostTag.sprite);
     applyTint();
   };
 
@@ -1198,7 +1200,6 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     if (car) {
       const mine = !watched;
       car.group.visible = mine;
-      car.shadow.visible = mine;
       car.debris.visible = mine;
       // Behind the wheel the player is looking at the FIRST-PERSON cabin,
       // not the one authored to be read through glass from a car's length
@@ -1224,7 +1225,6 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // the road being chased, not wrapped around the camera.
     if (ghostCar) {
       ghostCar.group.visible = view !== "map";
-      ghostCar.shadow.visible = view !== "map";
     }
     if (ghost && ghostTag) {
       const g = ghost.car;

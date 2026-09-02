@@ -22,9 +22,11 @@ car stays readable. That is linear light, which is the space three.js
 multiplies material colors in, so a 0.35 tint displays at about 0.6 — much less
 dark than the number reads.
 
-Two traps in `renderer.ts`'s `applyTint`, which traverses the car and writes
+Two traps in `tintCar` (car-mesh.ts), which traverses the car and writes
 `mat.color` on every basic material it finds: the TAIL LAMP bloom is one of
 them, and tinting it bleaches the red out of exactly the thing the dark is
-supposed to make brighter (exempt it by `material.name`). And the blob shadow
-survives only because it hangs off `car.shadow`, not `car.group` — put anything
-black inside the car group and the tint turns it into a pale disc.
+supposed to make brighter (exempt it by `material.name`). And anything BLACK
+put inside the car group comes out of the traversal as a pale disc — the tint
+multiplies a black material's colour up to the tint itself. Nothing dark
+belongs in the group; the car's shadow is not geometry at all but the sun's
+shadow map (car-shadow.ts), which the tint never reaches.

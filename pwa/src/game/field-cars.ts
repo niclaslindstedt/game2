@@ -58,13 +58,11 @@ import type { FilmDetail, InteriorDetail } from "./car-body.ts";
 import { buildCar, tintCar, type CarVisual } from "./car-mesh.ts";
 import { crewLookFor } from "./car-crew.ts";
 import { liveryForCrew } from "./car-livery.ts";
-import { FLAT_SHADE } from "./car-shadow.ts";
 import { lightDust } from "./dust-light.ts";
 import { createFumes, PIPE, pipeBursts, pipeWork } from "./fumes.ts";
 import { plumeGround } from "./ground-tint.ts";
 import { createNameTag, type NameTag } from "./name-tag.ts";
 import { createPlume } from "./plume.ts";
-import type { SunShade } from "./sky.ts";
 import { onRoad, type RivalRun } from "./standings.ts";
 import { rockAt } from "./terrain.ts";
 
@@ -213,9 +211,9 @@ export type FieldCars = {
    * ground under the car, read every frame like the player's own.) */
   events: (run: RivalRun, events: GameEvent[]) => void;
   /** The conditions: the tint every baked-colour surface takes, whether the
-   * lamps are lit, how hard it is raining on the glass, and where the light
-   * throws each car's shadow. Pushed by the renderer, which owns all four. */
-  paint: (tint: THREE.Color, lampsLit: boolean, rain: number, shade: SunShade) => void;
+   * lamps are lit, and how hard it is raining on the glass. Pushed by the
+   * renderer, which owns all three. */
+  paint: (tint: THREE.Color, lampsLit: boolean, rain: number) => void;
   /** How much of a rival is built for the sake of what is only visible up
    * close: how much cabin its glass has behind it — the player's VIDEO
    * option, taken down a level here (`fieldInterior`) — and how finely its
@@ -257,7 +255,6 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
   let tint = new THREE.Color(1, 1, 1);
   let lampsLit = false;
   let rain = 0;
-  let shade = FLAT_SHADE;
   let named = true;
   let watched: RivalRun | null = null;
   let wetGround = false;
@@ -293,7 +290,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
   };
 
   const drop = ({ visual, tag }: FieldCar): void => {
-    scene.remove(visual.group, visual.shadow, visual.debris, tag.sprite);
+    scene.remove(visual.group, visual.debris, tag.sprite);
     visual.dispose();
     tag.dispose();
   };
@@ -307,7 +304,6 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
 
   const show = ({ visual, tag }: FieldCar, on: boolean): void => {
     visual.group.visible = on;
-    visual.shadow.visible = on;
     visual.debris.visible = on;
     if (!on) tag.hide();
   };
@@ -379,10 +375,10 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
           const tag = createNameTag(run.entry.crew.alias, livery.number, {
             color: livery.paint,
           });
-          scene.add(visual.group, visual.shadow, visual.debris, tag.sprite);
+          scene.add(visual.group, visual.debris, tag.sprite);
           const fresh = { visual, tag, fumeClock: 0 };
           built.set(run, fresh);
-          tintCar(visual, tint, lampsLit, rain, shade);
+          tintCar(visual, tint, lampsLit, rain);
           visual.update(run.state, 0, camera.position);
           show(fresh, false);
           continue;
@@ -477,12 +473,11 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
       if (run) built.get(run)?.tag.hide();
     },
     events: (run, events) => built.get(run)?.visual.onEvents(run.state, events),
-    paint: (next, lit, wet, sun) => {
+    paint: (next, lit, wet) => {
       tint = next;
       lampsLit = lit;
       rain = wet;
-      shade = sun;
-      for (const { visual } of built.values()) tintCar(visual, tint, lampsLit, rain, shade);
+      for (const { visual } of built.values()) tintCar(visual, tint, lampsLit, rain);
       // The exhaust carries its own colours and is fullbright, so the time of
       // day reaches it the way it reaches every baked-colour surface: through
       // the material tint (car-fx.ts does the same to the player's). Without

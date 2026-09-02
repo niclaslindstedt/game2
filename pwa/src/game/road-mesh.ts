@@ -591,7 +591,12 @@ export function buildRoad(
   geo.setIndex(indices);
   geo.computeVertexNormals();
   const mat = new THREE.MeshLambertMaterial({ map: roadMap, vertexColors: true });
-  return new THREE.Mesh(geo, mat);
+  const mesh = new THREE.Mesh(geo, mat);
+  // The road is what the cars' shadows fall on (car-shadow.ts) — and so is
+  // everything laid ON it below, or the paint would stand bright inside a
+  // shadow that darkens the gravel around it.
+  mesh.receiveShadow = true;
+  return mesh;
 }
 
 /** Dirt skirts: close the gap between the ribbon's outer lip and the ground
@@ -685,7 +690,9 @@ export function buildSkirts(
   geo.setIndex(indices);
   geo.computeVertexNormals();
   const mat = new THREE.MeshLambertMaterial({ color: "#8a6f4d", side: THREE.DoubleSide });
-  return new THREE.Mesh(geo, mat);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.receiveShadow = true;
+  return mesh;
 }
 
 /** The road's PAINT: the lines a road carries because a highways department
@@ -839,7 +846,9 @@ export function buildMarkings(
   geo.setIndex(indices);
   geo.computeVertexNormals();
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
-  return new THREE.Mesh(geo, mat);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.receiveShadow = true;
+  return mesh;
 }
 
 /** The chippings that spill down an asphalt mat's edge. Asphalt is LAID —
@@ -878,6 +887,7 @@ export function buildChippings(
   const geo = new THREE.DodecahedronGeometry(1);
   const mat = new THREE.MeshLambertMaterial({ color: "#7f7a70" });
   const mesh = new THREE.InstancedMesh(geo, mat, stones.length);
+  mesh.receiveShadow = true;
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const v = new THREE.Vector3();
@@ -928,7 +938,9 @@ export function buildFords(
     const normals = new Float32Array(positions.length);
     for (let i = 1; i < normals.length; i += 3) normals[i] = 1;
     geo.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
-    group.add(new THREE.Mesh(geo, waterMaterial()));
+    const sheet = new THREE.Mesh(geo, waterMaterial());
+    sheet.receiveShadow = true;
+    group.add(sheet);
   };
   let i = from;
   let next = from;

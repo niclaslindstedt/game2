@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The car in the scene: a body generated part-by-part from the car's
-// CarBodySpec (car-body.ts builds it, car-styles.ts shapes it), plus the
-// shadow it stands in (car-shadow.ts) — which stays on the ground and
-// shrinks while the car is airborne, and is the one visual that sells a
-// jump. The engine owns everything about how the car sits: position,
-// heading, and both attitude angles; this file only spends them on the
-// right three.js axes.
+// CarBodySpec (car-body.ts builds it, car-styles.ts shapes it). The engine
+// owns everything about how the car sits: position, heading, and both
+// attitude angles; this file only spends them on the right three.js axes.
+// The shadow it throws is nobody's to place — the shell is flagged to cast
+// into the sun's shadow map (car-shadow.ts), and the ground under it, or
+// the ground a jump has left behind, is wherever the light lands.
 
 import * as THREE from "three";
 import { clamp } from "../lib/util.ts";
@@ -31,11 +31,9 @@ import { createCarDamage } from "./car-damage.ts";
 import { createCarDirt, glassSpray, groundTravel, wheelSpray } from "./car-dirt.ts";
 import type { Livery } from "./car-livery.ts";
 import { revTremble, trembleAt } from "./car-shake.ts";
-import { createCarShadow } from "./car-shadow.ts";
 import type { ScreenRain } from "./car/screen-rain.ts";
 import { bodySpecFor } from "./car-styles.ts";
 import { drivenAxles, wheelSurfaceSpeed } from "./car-wheels.ts";
-import type { SunShade } from "./sky.ts";
 import { glowTexture } from "./textures.ts";
 
 /** A lamp's own light: a bloom laid over each cluster so the lamp reads as
@@ -145,10 +143,6 @@ export type CarVisual = {
    * on every car but the player's, and on that one when the video options
    * have asked for clean screens. */
   screenRain: ScreenRain | null;
-  /** The shadow this car throws (car-shadow.ts), in its own group so it can
-   * lie on the ground's slope while the car above it pitches, rolls and
-   * flies. A scene sibling of the car rather than a child of it. */
-  shadow: THREE.Group;
   /** World-anchored debris (torn-off parts) — scene sibling of the car. */
   debris: THREE.Group;
   /** `eye` is where the camera is standing, in world metres — what decides
@@ -170,10 +164,6 @@ export type CarVisual = {
    * environment, which owns both decisions, along with the tint itself so
    * an unlit lens can still sit in the light the rest of the car is in. */
   setLights: (on: boolean, tint?: THREE.Color) => void;
-  /** Which way this stage's light throws a shadow, and how hard (sky.ts).
-   * Pushed from the environment on the same trip as the tint, because the
-   * two are the same question asked of the paint and of the ground. */
-  setShade: (shade: SunShade) => void;
   /** How hard it is raining on this car, 0..1 — what wets its screens and
    * sets its wipers going. Pushed from the environment for the same reason
    * the light is: the weather is the stage's, not the car's. */
@@ -234,17 +224,12 @@ function lampSpread(bodySpec: Parameters<typeof frontLampAnchors>[0]): {
  * LAMP, which is the one thing the failing light makes brighter, and is
  * therefore switched rather than tinted. Both of a lamp's surfaces are
  * exempted here: the bloom over it, and the lens under that. `setLights`
- * drives them from the same tint.
- *
- * The shadow takes no tint at all — it is a hole in the light, not a
- * surface in it — but it is set from here because it answers to the same
- * sky, and one route means one thing to call when the conditions change. */
+ * drives them from the same tint. */
 export function tintCar(
   visual: CarVisual,
   tint: THREE.Color,
   lampsLit: boolean,
   rain: number,
-  shade: SunShade,
 ): void {
   visual.group.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh) && !(obj instanceof THREE.Points)) return;
@@ -263,7 +248,6 @@ export function tintCar(
     }
   });
   visual.setLights(lampsLit, tint);
-  visual.setShade(shade);
   visual.setWet(rain);
 }
 
@@ -406,14 +390,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     }
   };
 
-  const shadow = createCarShadow(bodySpec, fade);
-
   let steerVisual = 0;
-  // The ground's own attitude, held over a flight: in the air the car's
-  // angles are the arc's and the tumble's, and the shadow belongs to the
-  // ground the car left, not to the car.
-  let groundPitch = 0;
-  let groundRoll = 0;
   /** How much of itself the glass is showing this frame: its own baked
    * gradient, brought forward by the angle the eye is standing at and by
    * whatever the stage has caked on it. The angle is taken in the CAR's own
@@ -547,47 +524,39 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     shineGlass(state, eye);
     shineLamps(car.damage.broken);
     damage.update(state, dt);
-
-    if (!car.airborne) {
-      groundPitch = car.pitch;
-      groundRoll = car.roll;
-    }
-    shadow.place(car, groundYUnder(state), groundPitch, groundRoll);
   };
 
   const dispose = (): void => {
     damage.dispose();
     body.dispose();
-    shadow.dispose();
     for (const geo of lampGeos) geo.dispose();
     lampMat.dispose();
     headMat.dispose();
   };
+
+  // A ghost is a picture of a lap, not a body standing in the light: it
+  // throws no shadow, or the lap being chased would darken the road under
+  // a car that is not there.
+  if (options.ghost) {
+    group.traverse((obj) => {
+      obj.castShadow = false;
+    });
+  }
 
   return {
     group,
     cabin: body.cabin,
     cockpit: body.cockpit?.group ?? null,
     screenRain: body.screenRain,
-    shadow: shadow.group,
     debris: damage.debris,
     update,
     setInside,
     setRearView,
     onEvents: damage.onEvents,
     setLights,
-    setShade: shadow.setShade,
     setWet,
     grime: dirt.level,
     lampSpread: lampSpread(bodySpec),
     dispose,
   };
-}
-
-/** Ground height under the car. Out in the wild the road sample the car is
- * measured against can be a hillside away, so the terrain answers directly
- * there — a shadow at the road's elevation floats over the valley below. */
-function groundYUnder(state: GameState): number {
-  if (state.offRoad) return state.terrain.groundAt(state.car.x, state.car.z);
-  return state.track.samples[state.nearIndex]?.elevation ?? 0;
 }
