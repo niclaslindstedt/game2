@@ -517,11 +517,19 @@ export type GameState = {
    * the order they were passed. The splits a ghost is measured against, and
    * what a sealed ghost writes down for the next run to chase. */
   checkpointTimes: number[];
-  /** Index into track.samples the car is nearest to. A respawn is the one
-   * thing that moves it BACKWARDS: it puts the car at a checkpoint, and
-   * progress has to come back with it or the run would be credited with
-   * road it is about to drive again. */
+  /** HOW FAR THE RUN HAS GOT: the furthest sample the car has reached. It
+   * only ever creeps forward — a car that doubles back is still credited
+   * with the road it earned — and a respawn is the one thing that moves it
+   * BACKWARDS, putting the car at a checkpoint so the run is not credited
+   * with road it is about to drive again. */
   progressIndex: number;
+  /** WHERE THE CAR IS: the sample it is actually nearest to, free to move
+   * back down the stage with it. A different question from `progressIndex`,
+   * and it has to be, because this is what every search for the road under
+   * the car starts from. Using progress there made the hint a lie for any
+   * car that had doubled back or been off in the country, and a stale hint
+   * hands the car the height of road it is nowhere near. */
+  nearIndex: number;
   /** Arc position along the stage, meters. */
   progressS: number;
   /** Signed lateral offset from the centerline, meters (positive right). */

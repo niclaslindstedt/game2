@@ -579,5 +579,5 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
  * there — a shadow at the road's elevation floats over the valley below. */
 function groundYUnder(state: GameState): number {
   if (state.offRoad) return state.terrain.groundAt(state.car.x, state.car.z);
-  return state.track.samples[state.progressIndex]?.elevation ?? 0;
+  return state.track.samples[state.nearIndex]?.elevation ?? 0;
 }

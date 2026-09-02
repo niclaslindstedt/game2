@@ -346,7 +346,7 @@ function decide(state: GameState, profile: BotProfile, traffic: readonly Traffic
   const aheadMeters = Math.max(8, car.u * profile.lookahead);
   // What the cars around it are asking the hands and the feet to do.
   const near = readTraffic(state, profile, traffic, aheadMeters);
-  const aim = aheadOf(track, state.progressIndex, Math.round(aheadMeters / step));
+  const aim = aheadOf(track, state.nearIndex, Math.round(aheadMeters / step));
   // The road's right axis at the aim, which is its forward vector with the
   // signs swapped: (cos, -sin).
   const aimX = roadX[aim] + cosHeading[aim] * near.offset;
@@ -366,7 +366,7 @@ function decide(state: GameState, profile: BotProfile, traffic: readonly Traffic
   const horizonMeters = Math.max(20, car.u * profile.planHorizon);
   const scan = Math.min(
     Math.round(horizonMeters / step),
-    track.circuit ? samples.length - 1 : samples.length - 1 - state.progressIndex,
+    track.circuit ? samples.length - 1 : samples.length - 1 - state.nearIndex,
   );
   // What the tires will actually give at a corner, off the handling model's
   // own ceiling rather than a second guess at it (`game/limits.ts`), taken
@@ -382,7 +382,7 @@ function decide(state: GameState, profile: BotProfile, traffic: readonly Traffic
   const progressS = state.progressS;
   const trackLength = track.length;
   const count = samples.length;
-  const from = state.progressIndex;
+  const from = state.nearIndex;
   // How near a hard corner has to be before the flick below can fire. Past
   // it the scan has nothing left to learn about the handbrake, which is
   // what lets the plan stop early.

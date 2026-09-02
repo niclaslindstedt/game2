@@ -141,7 +141,7 @@ function buildScenery(
   const half = track.width / 2;
   /** Room past the road's own edge that nothing grows in, m. */
   const clearance = 3.5;
-  const heightAt = terrain.heightAt;
+  const heightAt = terrain.standOn;
   const field = terrain.field;
 
   const communityAt = (x: number, z: number): Community =>
@@ -835,7 +835,10 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
     );
     const chippings = buildChippings(track, bare, track.width);
     if (chippings) chunkGroup.add(chippings);
-    chunkGroup.add(buildBridges(track, from, to, terrain.heightAt));
+    // The tiles and not `standOn`: a pier stands in the riverbed, and the
+    // ribbon `standOn` blends in over a crossing is the DECK the pier is
+    // holding up.
+    chunkGroup.add(buildBridges(track, from, to, terrain.latticeAt));
     // The branches this stretch of road forks off at its paving junctions.
     for (; spurScan < track.spurs.length; spurScan++) {
       const spur = track.spurs[spurScan];
@@ -1008,7 +1011,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
     swayFlora(dt);
     cones.update(state, dt, knocked);
     posts.update(state, dt, knocked);
-    breakage.update(dt, terrain.heightAt);
+    breakage.update(dt, terrain.standOn);
     crowd?.update(dt, state.car.x, state.car.z);
   };
 

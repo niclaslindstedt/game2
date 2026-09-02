@@ -13,6 +13,7 @@ import {
   SPUR,
   STAGE_RULES as R,
   TUNING,
+  botInput,
   compileStage,
   corridorOffset,
   createLandField,
@@ -829,21 +830,25 @@ describe("one ground under the car and the picture of it", () => {
   });
 });
 
-// `locate` searches a window of sixty-odd samples around its hint, twice on
-// every one of a run's 120 steps a second, and skips whole groups of eight
-// of them whenever a bounding circle proves none can be nearer than what it
-// already has. That is an optimization with a proof behind it, and a proof
-// is worth exactly as much as the test that checks it: everything the run
-// stands on — which sample the car is at, how far off line, whether that is
-// off the road at all — comes out of that search.
+// `locate` answers with the NEAREST SAMPLE ON THE ROAD, and the hint it is
+// given is an optimization and nothing more: a window of sixty-odd samples
+// searched first because the answer is almost always in it, groups of eight
+// skipped whenever a bounding circle proves none can be nearer than what the
+// walk already has, and a three-tier pass over the whole road behind that to
+// make the answer the hint's business only for speed.
+//
+// The hint being merely a hint is the property worth testing, because
+// everything the run stands on comes out of this search — which sample the
+// car is at, how far off line, whether that is off the road, and the HEIGHT
+// of the road it is handed. A window that quietly returned whichever sample
+// it was cornered into handed a car in line with distant road that road's
+// own elevation, and threw it into the air by the difference.
 describe("locating the car against the centerline", () => {
-  /** The window `locate` searches, walked without any of the skipping. */
-  function brute(track: ReturnType<typeof compileStage>, x: number, z: number, hint: number) {
-    const lo = Math.max(0, hint - 15);
-    const hi = Math.min(track.samples.length - 1, hint + 45);
-    let best = lo;
+  /** Every sample on the road, walked without any of the skipping. */
+  function brute(track: ReturnType<typeof compileStage>, x: number, z: number) {
+    let best = 0;
     let bestD2 = Infinity;
-    for (let i = lo; i <= hi; i++) {
+    for (let i = 0; i < track.samples.length; i++) {
       const dx = x - track.samples[i].x;
       const dz = z - track.samples[i].z;
       const d2 = dx * dx + dz * dz;
@@ -855,36 +860,109 @@ describe("locating the car against the centerline", () => {
     return best;
   }
 
-  it("finds the same sample the unskipped search would, everywhere", () => {
+  it("finds the nearest sample on the road, everywhere, whatever the hint", () => {
     let checked = 0;
     for (const seed of [1, 4, 17, 42]) {
       for (const shape of ["sprint", "circuit"] as const) {
         const track = compileStage(seed, "medium", {}, shape);
         const n = track.samples.length;
-        // Probes on the road, out on the verge, far into the country, and
-        // behind the car — a hint is only a hint, and the window reaches
-        // thirty meters back and ninety forward for the steps where the two
-        // have come apart.
+        // Probes on the road, out on the verge and far into the country —
+        // each asked with a hint a step behind the car, one a long way up
+        // the stage, and one at either end of it. A hint that has gone
+        // stale is the ordinary case, not the exotic one: a car that has
+        // been off in the country, or turned round and driven back down the
+        // stage, leaves whatever the last answer was standing.
         for (let i = 0; i < n; i += 7) {
           const s = track.samples[i];
           const rx = Math.cos(s.heading);
           const rz = -Math.sin(s.heading);
-          for (const [out, ahead] of [
-            [0, 0],
-            [track.width / 2 - 0.2, 0],
-            [-track.width, 6],
-            [40, -12],
-            [-120, 30],
-          ]) {
+          for (const out of [0, track.width / 2 - 0.2, -track.width, 40, -120]) {
             const x = s.x + rx * out;
             const z = s.z + rz * out;
-            const hint = Math.max(0, Math.min(n - 1, i + ahead));
-            expect(locate(track, x, z, hint).index).toBe(brute(track, x, z, hint));
-            checked += 1;
+            const want = brute(track, x, z);
+            for (const hint of [i, i + 200, 0, n - 1]) {
+              const at = Math.max(0, Math.min(n - 1, hint));
+              expect(locate(track, x, z, at).index).toBe(want);
+              checked += 1;
+            }
           }
         }
       }
     }
     expect(checked).toBeGreaterThan(5000);
+  });
+
+  it("hands a car on the road its OWN height, however far the run has got", () => {
+    // The teleport, stated as the invariant it broke. A hint that has run up
+    // the stage used to corner the window into a sample a hundred metres
+    // away — and because the lateral offset only measures ACROSS that
+    // sample's piece of road, a car merely IN LINE with it came back as
+    // standing on it, at its elevation. Level 1 alone had eighteen thousand
+    // places where that was a drop or a lift of more than three metres, the
+    // worst of them thirty-two.
+    for (const seed of [1, 4, 17, 42]) {
+      const track = compileStage(seed, "medium");
+      const n = track.samples.length;
+      for (let i = 0; i < n; i += 3) {
+        const s = track.samples[i];
+        const here = locate(track, s.x, s.z, i);
+        expect(here.offRoad).toBe(false);
+        for (const hint of [0, n - 1, i + 150, i - 150]) {
+          const fix = locate(track, s.x, s.z, Math.max(0, Math.min(n - 1, hint)));
+          expect(fix.offRoad).toBe(false);
+          expect(fix.elevation).toBeCloseTo(here.elevation, 9);
+        }
+      }
+    }
+  });
+});
+
+// WHERE THE CAR IS and HOW FAR IT HAS GOT are two different questions, and
+// the run keeps two different numbers for them. It has to: progress is a
+// score and only ever creeps forward, so a car that doubles back leaves it
+// standing — and progress standing somewhere the car is not is a lie to
+// every search that starts from it.
+describe("progress and position", () => {
+  /** Drive `seconds` with the bot, then hand back the state. */
+  function driven(seconds: number) {
+    const state = createGame({ seed: 12, length: "short", skipCountdown: true, quiet: true });
+    for (let i = 0; i < Math.round(seconds / TUNING.dt); i++) step(state, botInput(state));
+    return state;
+  }
+
+  it("keeps progress where the run earned it and the car where the car is", () => {
+    const state = driven(20);
+    expect(state.nearIndex).toBe(state.progressIndex);
+    const reached = state.progressIndex;
+    expect(reached).toBeGreaterThan(60);
+    // Turn round and drive back down the stage. Nobody scores for that, so
+    // progress must not move; the car is somewhere else now, so the place it
+    // is measured from must.
+    state.car.heading += Math.PI;
+    state.car.u = 0;
+    state.car.w = 0;
+    for (let i = 0; i < Math.round(8 / TUNING.dt); i++) {
+      step(state, { ...NEUTRAL_INPUT, throttle: 0.6 });
+    }
+    expect(state.progressIndex).toBe(reached);
+    expect(state.nearIndex).toBeLessThan(reached - 20);
+  });
+
+  it("keeps the wheels on the road all the way back down the stage", () => {
+    const state = driven(20);
+    state.car.heading += Math.PI;
+    state.car.u = 0;
+    state.car.w = 0;
+    let worst = 0;
+    for (let i = 0; i < Math.round(8 / TUNING.dt); i++) {
+      step(state, { ...NEUTRAL_INPUT, throttle: 0.6 });
+      if (state.car.airborne || state.offRoad) continue;
+      const road = locate(state.track, state.car.x, state.car.z, state.nearIndex);
+      worst = Math.max(worst, Math.abs(state.car.y - road.elevation));
+    }
+    // The car rides the road it is on. It used to be handed the height of
+    // the road it had REACHED, which on the stage this was reported from
+    // was thirteen metres over the closing straight and a lake under it.
+    expect(worst).toBeLessThan(0.5);
   });
 });

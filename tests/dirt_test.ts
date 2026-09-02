@@ -45,7 +45,10 @@ function stageOn(surface: "gravel" | "asphalt" | "water"): GameState {
   const at = state.track.samples.findIndex((s) => s.surface === surface);
   expect(at, `the staged seed has ${surface} somewhere`).toBeGreaterThanOrEqual(0);
   state.phase = "racing";
+  // Both: the run has got this far, and this is the sample the car is
+  // standing on. What the ground throws is a question about the second one.
   state.progressIndex = at;
+  state.nearIndex = at;
   state.car.slide = 0;
   state.car.airborne = false;
   return state;

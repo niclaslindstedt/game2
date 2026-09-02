@@ -242,7 +242,7 @@ export function groundTravel(car: CarState, dt: number): number {
  * test can read without a GPU. */
 export function dirtRate(state: GameState): DirtCoat {
   if (state.offRoad) return { dust: 0.004, mud: 0.0055 };
-  const surface = state.track.samples[state.progressIndex]?.surface;
+  const surface = state.track.samples[state.nearIndex]?.surface;
   if (surface === "water") return { dust: 0.01, mud: 0.055 };
   if (surface !== "gravel") return { dust: 0, mud: 0 };
   // A slide drags the tires sideways across the loose stuff, so the same

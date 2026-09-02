@@ -9,7 +9,7 @@
 // again.
 
 import { STAGE_RULES, finishIndex, type Surface, type Track } from "../mapgen/index.ts";
-import { flatTrack, GROUP, GROUP_SHIFT, type FlatTrack } from "../mapgen/flat.ts";
+import { BLOCK, flatTrack, GROUP, GROUP_SHIFT, type FlatTrack } from "../mapgen/flat.ts";
 import { corridorOffset, crossOffset, ROAD_CROSS } from "../mapgen/road.ts";
 import { TUNING } from "./defs/tuning.ts";
 import type { GameState } from "./state.ts";
@@ -228,61 +228,36 @@ export function crossedFinish(
  * so both callers hand the same shape to everything downstream. */
 export function locatePoint(track: Track, x: number, z: number, hint: number): TrackPoint {
   const samples = track.samples;
+  const last = samples.length - 1;
   const lo = Math.max(0, hint - 15);
-  const hi = Math.min(samples.length - 1, hint + 45);
-  let best = lo;
-  let bestD2 = Infinity;
-  // Over the flat arrays, not the sample objects: this window is sixty-odd
-  // samples and the run walks it twice per physics step, which is the
-  // single hottest loop in the engine. Whole groups of eight are stepped
-  // over when their bounding circle proves none of them can beat the
-  // distance the walk is already holding — which is most of the window,
-  // most of the time: it reaches ninety meters up the road for the rare
-  // step that needs it, not for the ordinary one that does not.
+  const hi = Math.min(last, hint + 45);
   const flat = flatTrack(track);
-  const fx = flat.x;
-  const fz = flat.z;
-  // The bound the groups are tested against. It starts at the hint's own
-  // sample, which is IN the window, so it is an upper bound on the nearest
-  // one — and a group further off than an upper bound cannot hold the
-  // answer, so the far end of the window is dropped without being walked.
-  // Only ever read at a group boundary, so the root is taken there rather
-  // than on every improvement along the way.
+  // The bound the group test starts from. It is the hint's own sample, which
+  // is IN the window, so it is an upper bound on the nearest one — and a
+  // group further off than an upper bound cannot hold the answer, so the far
+  // end of the window is dropped without being walked.
   const seed = lo > hint ? lo : hint > hi ? hi : hint;
-  const seedX = x - fx[seed];
-  const seedZ = z - fz[seed];
-  let bound = Math.sqrt(seedX * seedX + seedZ * seedZ);
-  let bounded = true;
-  let i = lo;
-  while (i <= hi) {
-    if ((i & (GROUP - 1)) === 0 && i + GROUP - 1 <= hi) {
-      if (!bounded) {
-        const found = Math.sqrt(bestD2);
-        if (found < bound) bound = found;
-        bounded = true;
-      }
-      const g = i >> GROUP_SHIFT;
-      const gx = x - flat.groupX[g];
-      const gz = z - flat.groupZ[g];
-      const reach = bound + flat.groupR[g];
-      // Strictly conservative: the margin can only ever keep a group in the
-      // walk that could have been dropped, never drop one that holds the
-      // answer.
-      if (gx * gx + gz * gz > reach * reach * (1 + 1e-9)) {
-        i += GROUP;
-        continue;
-      }
-    }
-    const dx = x - fx[i];
-    const dz = z - fz[i];
-    const d2 = dx * dx + dz * dz;
-    if (d2 < bestD2) {
-      bestD2 = d2;
-      best = i;
-      bounded = false;
-    }
-    i++;
-  }
+  const seedX = x - flat.x[seed];
+  const seedZ = z - flat.z[seed];
+  const near = inWindow(flat, x, z, lo, hi, Math.sqrt(seedX * seedX + seedZ * seedZ));
+  // THE WINDOW IS A HEAD START, NOT THE ANSWER. It holds the nearest sample
+  // only while the hint is honest about where the car is — and a hint is the
+  // caller's last answer, which a car that has been off in the country, or
+  // turned round and driven back down the stage, has long since left behind.
+  // A window that has cut the real answer off does not say so: it returns
+  // whichever sample it was cornered into, and since `lateral` only measures
+  // ACROSS that sample's own piece of road, a car in line with a piece it
+  // never reached is reported as standing ON it and handed its height. That
+  // is a car teleported to the elevation of road hundreds of metres away.
+  //
+  // So the road is searched WHOLE, every time. What the window buys is the
+  // bound it is searched under: the car is normally within a few metres of
+  // the road, and against a bound that tight every block of the road but the
+  // one it is standing in fails on its first test. The window costs what it
+  // always did, and the search behind it costs a handful of circle tests.
+  const nearX = x - flat.x[near];
+  const nearZ = z - flat.z[near];
+  const best = whole(flat, x, z, near, nearX * nearX + nearZ * nearZ);
   const s = samples[best];
   // Project the offset onto the sample's right axis for a signed lateral.
   const dx = x - s.x;
@@ -314,6 +289,109 @@ export function locatePoint(track: Track, x: number, z: number, hint: number): T
     slopeLat: 0,
   };
   return fix;
+}
+
+/** The nearest centerline sample to `(x, z)` in the window `[lo, hi]`,
+ * walked over the flat arrays rather than the sample objects: the run does
+ * this twice per physics step and it is the single hottest loop in the
+ * engine.
+ *
+ * Whole groups of eight are stepped over when their bounding circle proves
+ * none of them can beat the distance the walk is already holding — which is
+ * most of any window, most of the time. `bound` is a distance already known
+ * to be achievable (the hint's own sample), so the pruning has something to
+ * bite on from the first group rather than after the first improvement, and
+ * the square root behind it is taken at a group boundary rather than on
+ * every improvement along the way. */
+function inWindow(
+  flat: FlatTrack,
+  x: number,
+  z: number,
+  lo: number,
+  hi: number,
+  bound: number,
+): number {
+  const fx = flat.x;
+  const fz = flat.z;
+  let best = lo;
+  let bestD2 = Infinity;
+  let bounded = true;
+  let i = lo;
+  while (i <= hi) {
+    if ((i & (GROUP - 1)) === 0 && i + GROUP - 1 <= hi) {
+      if (!bounded) {
+        const found = Math.sqrt(bestD2);
+        if (found < bound) bound = found;
+        bounded = true;
+      }
+      if (skip(x, z, flat.groupX, flat.groupZ, flat.groupR, i >> GROUP_SHIFT, bound)) {
+        i += GROUP;
+        continue;
+      }
+    }
+    const dx = x - fx[i];
+    const dz = z - fz[i];
+    const d2 = dx * dx + dz * dz;
+    if (d2 < bestD2) {
+      bestD2 = d2;
+      best = i;
+      bounded = false;
+    }
+    i++;
+  }
+  return best;
+}
+
+/** The nearest centerline sample on the WHOLE road, given one already in
+ * hand — the window's answer, which is almost always the right one and
+ * whose distance is what makes this cheap. Three tiers: a circle per block
+ * of sixty-four samples, a circle per group of eight inside a block that
+ * survives, and the samples themselves inside a group that survives. A car
+ * a few metres off the road rejects every block but its own on one test
+ * each, so an ordinary step pays a couple of dozen multiplies for the
+ * guarantee that the road it is being handed is the road it is on. */
+function whole(flat: FlatTrack, x: number, z: number, best: number, bestD2: number): number {
+  const n = flat.x.length;
+  const perBlock = GROUP * BLOCK;
+  let bound = Math.sqrt(bestD2);
+  for (let b = 0; b < flat.blockX.length; b++) {
+    if (skip(x, z, flat.blockX, flat.blockZ, flat.blockR, b, bound)) continue;
+    const groupTo = Math.min(flat.groupX.length - 1, ((b + 1) * perBlock - 1) >> GROUP_SHIFT);
+    for (let g = (b * perBlock) >> GROUP_SHIFT; g <= groupTo; g++) {
+      if (skip(x, z, flat.groupX, flat.groupZ, flat.groupR, g, bound)) continue;
+      const to = Math.min(n, (g + 1) * GROUP);
+      for (let i = g * GROUP; i < to; i++) {
+        const dx = x - flat.x[i];
+        const dz = z - flat.z[i];
+        const d2 = dx * dx + dz * dz;
+        if (d2 < bestD2) {
+          bestD2 = d2;
+          best = i;
+          bound = Math.sqrt(d2);
+        }
+      }
+    }
+  }
+  return best;
+}
+
+/** True when a bounding circle is provably further off than `bound`, so
+ * nothing inside it can beat what the walk is already holding. Strictly
+ * conservative: the margin can only ever keep a circle in the walk that
+ * could have been dropped, never drop one that holds the answer. */
+function skip(
+  x: number,
+  z: number,
+  cx: Float64Array,
+  cz: Float64Array,
+  cr: Float64Array,
+  at: number,
+  bound: number,
+): boolean {
+  const dx = x - cx[at];
+  const dz = z - cz[at];
+  const reach = bound + cr[at];
+  return dx * dx + dz * dz > reach * reach * (1 + 1e-9);
 }
 
 /** Locate the car against the centerline, and read the road's profile under
@@ -492,9 +570,22 @@ function clampIndex(samples: { length: number }, index: number): number {
   return Math.min(samples.length - 1, Math.max(0, index));
 }
 
-/** True when a jump lip sits between the two progress positions. */
+/** True when a jump lip sits between the two positions on the road — in
+ * EITHER direction. A lip is a crest with a ramp up to it, and a crest does
+ * not care which way it is met: a car that turned round and came back at one
+ * climbs the face it landed on and is thrown off the top of it exactly like
+ * the car that took it the way the stage intended. Answering only for a car
+ * driving up-index left the other one driving into the ramp instead of over
+ * it — the road heaving up under the wheels and the springs paying for it. */
 export function crossedLip(track: Track, fromIndex: number, toIndex: number): number {
-  for (let i = fromIndex + 1; i <= toIndex && i < track.samples.length; i++) {
+  const last = track.samples.length - 1;
+  if (toIndex >= fromIndex) {
+    for (let i = Math.max(0, fromIndex + 1); i <= toIndex && i <= last; i++) {
+      if (track.samples[i].jump) return i;
+    }
+    return -1;
+  }
+  for (let i = Math.min(last, fromIndex - 1); i >= toIndex && i >= 0; i--) {
     if (track.samples[i].jump) return i;
   }
   return -1;
