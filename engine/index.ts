@@ -262,6 +262,7 @@ export {
   type StandField,
   type Track,
   type TrackSample,
+  type Culvert,
   type Pacenote,
   type Checkpoint,
 } from "./mapgen/index.ts";

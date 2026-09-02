@@ -564,6 +564,11 @@ export function renderLevelMap({
         canvas.disk(sx, sy, roadR + 3, MARK[f.kind]);
         canvas.disk(sx, sy, roadR, f.kind === "ford" ? ROAD.ford : ROAD.deck);
         break;
+      case "culvert":
+        // The water goes UNDER: a ring of water round ordinary road.
+        canvas.disk(sx, sy, roadR + 3, MARK.ford);
+        canvas.disk(sx, sy, roadR, ROAD.gravel);
+        break;
       case "checkpoint":
         canvas.disk(sx, sy, roadR + 3, MARK.checkpoint);
         canvas.disk(sx, sy, roadR, WHITE);
@@ -829,6 +834,12 @@ function drawProfile(canvas, { track, features, top, width, lo, range, focus }) 
       case "bridge":
         for (let px = Math.round(x); px <= sx(Math.min(f.endS, toS)); px++)
           canvas.line(px, sy(e) - 3, px, sy(e), WATER);
+        label(canvas, x - 4 * f.id.length, sy(e) - 18, f.id, INK, 2);
+        break;
+      case "culvert":
+        // Under the road, so the water is drawn under the profile's line.
+        for (let px = Math.round(x); px <= sx(Math.min(f.endS, toS)); px++)
+          canvas.line(px, sy(e) + 1, px, sy(e) + 4, WATER);
         label(canvas, x - 4 * f.id.length, sy(e) - 18, f.id, INK, 2);
         break;
       case "checkpoint":

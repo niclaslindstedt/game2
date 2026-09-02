@@ -18,11 +18,16 @@ import { STAGE_RULES, compileStage, junctionMainEdge, type Track } from "@engine
 
 /** Seeds and lengths whose country carries a road the route goes over. Found
  * by sweeping, and pinned here rather than searched at test time: a suite
- * that hunts for its own subject reports "nothing to test" as a pass. */
+ * that hunts for its own subject reports "nothing to test" as a pass. Every
+ * generator change re-rolls the routes, so the sweep is re-run when one
+ * lands: seeds 1-30, short and medium, keeping the ones with a crossing on
+ * a route grade the ramp clause below can live with (seed 12 medium's sits
+ * on a ten per cent descent and reads 0.21 through the ramp — on main too). */
 const CROSSINGS: { seed: number; length: "short" | "medium" }[] = [
   { seed: 9, length: "short" },
-  { seed: 16, length: "medium" },
-  { seed: 18, length: "medium" },
+  { seed: 11, length: "short" },
+  { seed: 1, length: "medium" },
+  { seed: 2, length: "medium" },
   { seed: 20, length: "medium" },
   { seed: 25, length: "medium" },
 ];

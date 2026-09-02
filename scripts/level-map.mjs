@@ -135,7 +135,8 @@ const statLine =
   (summary.circuit ? " per lap" : ` (${(summary.roadM / 1000).toFixed(2)} km of road)`) +
   `, ${summary.turns} calls (${summary.hard} hard, ${summary.medium} medium, ${summary.soft} easy), ` +
   `${summary.jumps} jump${summary.jumps === 1 ? "" : "s"}, ${summary.crests} crest${summary.crests === 1 ? "" : "s"}, ` +
-  `${summary.fords} ford${summary.fords === 1 ? "" : "s"}, ${summary.bridges} bridge${summary.bridges === 1 ? "" : "s"}, ` +
+  `${summary.fords} ford${summary.fords === 1 ? "" : "s"}, ${summary.culverts} culvert${summary.culverts === 1 ? "" : "s"}, ` +
+  `${summary.bridges} bridge${summary.bridges === 1 ? "" : "s"}, ` +
   `${summary.checkpoints} split${summary.checkpoints === 1 ? "" : "s"}, ${summary.junctions} junction${summary.junctions === 1 ? "" : "s"}, ` +
   `${summary.homesteads} homestead${summary.homesteads === 1 ? "" : "s"}, ` +
   `${summary.towns} town${summary.towns === 1 ? "" : "s"}, ` +

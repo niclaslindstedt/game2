@@ -26,7 +26,7 @@
 
 import { createGeology, type GeologyField } from "./geology.ts";
 import { createWaterField, SEA, type WaterField } from "./water.ts";
-import type { StageKnobs } from "./rules.ts";
+import { STAGE_RULES as R, type StageKnobs } from "./rules.ts";
 
 /** The sea's own table, m. The name the rest of the generator has always
  * known it by; `SEA` is where it is defined and what the pour treats as
@@ -36,6 +36,13 @@ export const LAKE_Y = SEA;
 export type LandField = {
   /** Ground height of the bare landscape at a point, m. */
   heightAt: (x: number, z: number) => number;
+  /** The floor a crossing's water is laid against (R12, R13), m: the bare
+   * ground, or — where standing water covers it — the water's own level
+   * plus the bed a crossing cuts under its surface, so a ford beside a
+   * lake wades AT the lake's level: never under it, which put the dip's
+   * whole apron under the lake, and never at the freeboard the ROAD keeps
+   * over it, which is metres of water drawn over the bank. */
+  surfaceAt: (x: number, z: number) => number;
   /** True where the bare landscape is under water — with a margin, so a
    * road keeps off the shallows and the shoreline as well as the lake.
    *
@@ -98,6 +105,11 @@ function buildLandField(seed: number, knobs: StageKnobs): LandField {
   const water = createWaterField(geology.groundAt, heightAt);
   return {
     heightAt,
+    surfaceAt: (x, z) => {
+      const ground = heightAt(x, z);
+      const level = water.shoreLevelAt(x, z);
+      return level === null || level < ground ? ground : level + R.water.bedDepth;
+    },
     // Standing water, and only standing water: a road may not be built
     // into a lake. Waterlogged GROUND is a different question — a mire is
     // ground you can lay a road over, and `geology.wetAt` is where that is

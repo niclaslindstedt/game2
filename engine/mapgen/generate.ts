@@ -24,6 +24,8 @@ import { knobScale, resolveKnobs } from "./rules.ts";
 import { generateCircuit } from "./circuit.ts";
 import { createLandField, type LandField } from "./land.ts";
 import { ROAD_CROSS, roadClearance } from "./road.ts";
+import { buildRolling } from "./rolling.ts";
+import { valleyUnder } from "./terrain.ts";
 import {
   createHighwayNetwork,
   layHighways,
@@ -80,6 +82,10 @@ export function generateStage(
   // the search plans AROUND these roads (it may never cross one) and ONTO
   // them (`planBorrow`), instead of the surface being decided afterwards.
   const network = createHighwayNetwork(layStageHighways(seed, dials, land, length));
+  // R34 — and the road's own roll, from the stage's seed and never a
+  // retry's: the compiler lays this exact roll on whichever attempt wins,
+  // so the height the search judges is the road that gets built.
+  const rolling = buildRolling(seed, dials);
   const ladder = R.water.routeClearLadder;
   for (let attempt = 0; attempt < 40; attempt++) {
     // The setback the water is given, relaxing as the attempts run out:
@@ -93,6 +99,7 @@ export function generateStage(
       length,
       dials,
       land,
+      rolling,
       network,
       clearance,
       R.elevation.fillLadder[rung],
@@ -127,6 +134,7 @@ function tryGenerateStage(
   length: FiniteStageLength,
   knobs: StageKnobs,
   land: LandField,
+  rolling: (s: number) => number,
   network: HighwayNetwork,
   routeClear: number,
   fillScale: number,
@@ -143,13 +151,15 @@ function tryGenerateStage(
   /** R23 — the road's own height as the search walks it, so the rule can
    * ask how far apart two arms are vertically as well as on the map. The
    * ground it follows is what the road may be BUILT on, water's freeboard
-   * included, which is the same thing the compiler follows. */
-  const groundAt = (x: number, z: number): number => {
+   * included, which is the same thing the compiler follows — and the roll
+   * the compiler will lay on it is the same roll, from the same seed, so
+   * the height the search judges is the road's own surface (R34). */
+  const groundAt = (x: number, z: number, roll: number): number => {
     const ground = land.heightAt(x, z);
     const water = land.water.shoreLevelAt(x, z);
-    return water === null ? ground : Math.max(ground, water + R.elevation.follow.freeboard);
+    return water === null ? ground : Math.max(ground, water + R.elevation.follow.freeboard - roll);
   };
-  const profile: Profile = { y: groundAt(0, 0), slope: 0 };
+  const profile: Profile = { y: groundAt(0, 0, rolling(0)), slope: 0, rollS: 0 };
   /** A candidate is walked on a COPY: the search draws several before it
    * keeps one, and a rejected draw must not have moved the road's height.
    * The copy comes back with the points so whichever draw is committed can
@@ -159,7 +169,169 @@ function tryGenerateStage(
     plan: SegmentPlan,
   ): { points: Cursor[]; end: Cursor; walked: Profile } => {
     const walked: Profile = { ...profile };
-    return { ...probePoints(from, plan, { profile: walked, groundAt }), walked };
+    return { ...probePoints(from, plan, { profile: walked, groundAt, rolling }), walked };
+  };
+  /** R12 — A FORD LIES IN ITS VALLEY, and the road dips to it. The water
+   * is laid at the bare land's level at the crossing (`fordDip` in
+   * compile.ts lays it the same way), and the road comes down to it from
+   * wherever its line was running — on a stage rolling over the country,
+   * metres up — over an apron as long as that drop needs to stay a ramp.
+   * Asked here because the apron has to fit inside the straight, and only
+   * the search can draw another straight when it does not.
+   *
+   * Sized on the walked line — base and roll, the road that gets built —
+   * against the same water level the compiler will settle on: the lowest
+   * the roll gets across the window, or the land, whichever is lower. The
+   * drop is read over the whole room the straight has for an apron, so a
+   * ramp that has to reach further up the line is sized for the line it
+   * reaches. A bridge is left alone: its deck stands level over the
+   * ravine, and the ravine is R13's. */
+  const crossingSits = (from: Cursor, plan: SegmentPlan, points: Cursor[]): boolean => {
+    if (
+      plan.feature !== "water" ||
+      plan.featureStart === undefined ||
+      plan.featureEnd === undefined
+    ) {
+      return true;
+    }
+    const W = R.water;
+    const span = plan.featureEnd - plan.featureStart;
+    const at = (u: number): Cursor => {
+      let best = points[0];
+      for (const p of points) {
+        if (Math.abs(p.arc - from.arc - u) < Math.abs(best.arc - from.arc - u)) best = p;
+      }
+      return best;
+    };
+    /** The road's line at `u` metres into the straight, m. */
+    const lineAt = (u: number): number => at(u).y ?? 0;
+    /** The ramp a mouth needs to climb or fall `drop` metres, m. */
+    const rampFor = (drop: number, least: number): number =>
+      Math.max(least, (1.5 * Math.abs(drop)) / W.apronGrade);
+    if (plan.crossing !== undefined && plan.crossing !== "ford") {
+      // R13 — a DECK holds the road level at the highest of its own line
+      // across the crossing, and the road ramps up onto it over a margin
+      // at each end: the same arithmetic as a ford's aprons, the other way
+      // up, and the same failure when the margin is a fixed length — a
+      // road falling away past the far abutment ramped down off the deck
+      // at 23%. Each margin is sized to what its mouth has to climb.
+      const mid = at(plan.featureStart + span / 2);
+      if (mid.y === undefined || mid.rollS === undefined) return true;
+      let high = -Infinity;
+      for (const p of points) {
+        if (p.rollS === undefined) continue;
+        const u = p.arc - from.arc;
+        if (u < plan.featureStart - R.bridge.margin || u > plan.featureEnd + R.bridge.margin)
+          continue;
+        high = Math.max(high, rolling(p.rollS));
+      }
+      const deck = mid.y - rolling(mid.rollS) + high;
+      let apronIn: number = R.bridge.margin;
+      let apronOut: number = R.bridge.margin;
+      for (let round = 0; round < 6; round++) {
+        const needIn = rampFor(deck - lineAt(plan.featureStart - apronIn), R.bridge.margin);
+        const needOut = rampFor(deck - lineAt(plan.featureEnd + apronOut), R.bridge.margin);
+        if (needIn <= apronIn && needOut <= apronOut) break;
+        apronIn = Math.max(apronIn, needIn);
+        apronOut = Math.max(apronOut, needOut);
+        if (apronIn > plan.featureStart || apronOut > plan.length - plan.featureEnd) return false;
+      }
+      plan.apronIn = apronIn;
+      plan.apronOut = apronOut;
+      return true;
+    }
+    /** The two aprons the ford needs with its water starting `start`
+     * metres into the straight, or null where the straight has no room
+     * for them. Each apron reaches as far as the drop at its mouth needs,
+     * and the drop is read at the mouth the apron reaches — and the water
+     * is held under BOTH mouths, the way `fordDip` holds it, so a road on
+     * a grade puts its water at the lower mouth and the far apron carries
+     * the whole fall. A few rounds settle it, from the shortest apron there
+     * is outward; a grade the aprons cannot catch up with (each metre of
+     * apron adds more fall than it takes) never settles, and the ford does
+     * not fit. */
+    type Aprons = { apronIn: number; apronOut: number; drop: number };
+    const fits = (start: number): Aprons | null => {
+      const mid = at(start + span / 2);
+      if (mid.y === undefined || mid.rollS === undefined) {
+        return { apronIn: W.apron, apronOut: W.apron, drop: 0 };
+      }
+      let low = Infinity;
+      for (const p of points) {
+        if (p.rollS === undefined) continue;
+        if (p.arc < from.arc + start - W.apron || p.arc > from.arc + start + span + W.apron)
+          continue;
+        low = Math.min(low, rolling(p.rollS));
+      }
+      // The valley: the land at the crossing, read across the road too.
+      const valley = valleyUnder(mid, land.surfaceAt);
+      const wanted = Math.min(mid.y - rolling(mid.rollS) + low, valley);
+      let apronIn: number = W.apron;
+      let apronOut: number = W.apron;
+      let water = wanted - W.bedDepth;
+      for (let round = 0; ; round++) {
+        water =
+          Math.min(wanted, lineAt(start - apronIn), lineAt(start + span + apronOut)) - W.bedDepth;
+        let dropIn = 0;
+        let dropOut = 0;
+        for (const p of points) {
+          if (p.y === undefined) continue;
+          const u = p.arc - from.arc;
+          if (u >= start - apronIn && u <= start) dropIn = Math.max(dropIn, p.y - water);
+          if (u >= start + span && u <= start + span + apronOut) {
+            dropOut = Math.max(dropOut, p.y - water);
+          }
+        }
+        const needIn = rampFor(dropIn, W.apron);
+        const needOut = rampFor(dropOut, W.apron);
+        if (needIn <= apronIn && needOut <= apronOut) break;
+        if (round >= 6) return null;
+        apronIn = Math.max(apronIn, needIn);
+        apronOut = Math.max(apronOut, needOut);
+        if (apronIn > start || apronOut > plan.length - start - span) return null;
+      }
+      return { apronIn, apronOut, drop: mid.y - water };
+    };
+    /** A FORD here: aprons that fit, and a dip no deeper than a ford's. */
+    const asFord = (start: number): Aprons | null => {
+      const aprons = fits(start);
+      return aprons !== null && aprons.drop <= W.culvert.fordDrop ? aprons : null;
+    };
+    let start = plan.featureStart;
+    let aprons = asFord(start);
+    if (aprons === null) {
+      // No room where the dice put it: the middle of the straight is where
+      // a ford has the most, and the draw was only ever a place inside the
+      // window the rules allow (`assignCrossing`) — the jump before it
+      // still keeps its clearance.
+      const centre = (plan.length - span) / 2;
+      const earliest = Math.max(W.apron, sLastLipEnd + W.clearAfterJump - from.arc);
+      if (centre >= earliest) {
+        aprons = asFord(centre);
+        if (aprons !== null) start = centre;
+      }
+    }
+    if (aprons !== null) {
+      plan.featureStart = start;
+      plan.featureEnd = start + span;
+      plan.apronIn = aprons.apronIn;
+      plan.apronOut = aprons.apronOut;
+      return true;
+    }
+    // R12 — no ford here: a CULVERT, if the road stands over the water by
+    // the pipe's cover. The road keeps its line and the stream goes under
+    // it, which is what a road does over a stream it cannot afford to dip
+    // to. Lower than that over water it cannot dip to, there is no
+    // crossing here and the search draws another straight.
+    const mid = at(plan.featureStart + span / 2);
+    if (mid.y === undefined) return true;
+    const valley = valleyUnder(mid, land.surfaceAt);
+    if (mid.y - (valley - W.bedDepth) < W.culvert.cover) return false;
+    const centre = plan.featureStart + span / 2;
+    plan.crossing = "culvert";
+    plan.featureStart = centre - W.culvert.span / 2;
+    plan.featureEnd = centre + W.culvert.span / 2;
+    return true;
   };
   /** ...and a backtrack has to put it back, so every committed segment's
    * starting height is kept beside its plan. */
@@ -170,20 +342,37 @@ function tryGenerateStage(
     if (!was) return;
     profile.y = was.y;
     profile.slope = was.slope;
+    profile.rollS = was.rollS;
   };
   /** R35 — the line keeps out of the water. A candidate whose probe points
    * come within the route's clearance of a lake's surface is refused like
    * any other rule violation: redrawn, then backtracked out of, never
    * repaired. Repairing it is what the terrain used to do, and what a
    * terrain does when handed a road through a lake is build a causeway. */
-  const keepsDry = (p: Cursor): boolean => !land.nearWater(p.x, p.z, routeClear);
+  const keepsDry = (p: Cursor): boolean => {
+    if (land.nearWater(p.x, p.z, routeClear)) return false;
+    // ...and its SURFACE stays over the water beside it. The road's height
+    // follows the country through a lag, and the freeboard it keeps over a
+    // lake is only asked for where the lake is already in view: a road
+    // running down into a cutting beside one arrived under the lake's
+    // level before the lag had lifted it, and the pour flooded the trench.
+    // A line the road can only take under the water is refused here, where
+    // another can still be drawn.
+    if (p.y === undefined) return true;
+    const level = land.water.shoreLevelAt(p.x, p.z);
+    return level === null || p.y >= level + R.water.underLake;
+  };
   /** R34 — and it keeps within reach of the ground. A line the road can
    * only take by standing twenty-odd metres off the country is refused
    * here, where another line can still be drawn, rather than left to the
    * terrain — which has no good answer to it. */
   const sitsOnTheLand = (p: Cursor): boolean => {
-    if (p.y === undefined || fillScale <= 0) return true;
-    const off = p.y - land.heightAt(p.x, p.z);
+    if (p.y === undefined || p.rollS === undefined || fillScale <= 0) return true;
+    // The BASE against the land — the road's own roll rides on top of it
+    // either way, and the caps were measured on the base: held against the
+    // surface, the roll's swing tightened them by up to six metres and the
+    // search refused thirty times the candidates for it.
+    const off = p.y - rolling(p.rollS) - land.heightAt(p.x, p.z);
     return off <= R.elevation.maxFill * fillScale && -off <= R.elevation.maxCut * fillScale;
   };
   /** R17 + R23 — AND IT NEVER WANDERS ACROSS THE TARMAC. The sealed roads
@@ -227,6 +416,28 @@ function tryGenerateStage(
       (m) => Math.abs(p.arc - m.arc) < m.parting && Math.hypot(at.x - m.x, at.z - m.z) < m.parting,
     );
   };
+  /** R6 — A JUMP LANDS ON ROAD THAT IS STILL THERE. The lip throws the car
+   * by its own height, and every metre the road falls away under the
+   * flight is a metre more of it: a ramp at the gentle end of the band on
+   * a road running downhill came out as a ninety-metre jump. So the line
+   * past the lip may not stand more than `jump.landingFall` under the
+   * lip's own base anywhere in the landing zone — read off the walked
+   * line, which is the road that gets built. */
+  const jumpLands = (from: Cursor, plan: SegmentPlan, points: Cursor[]): boolean => {
+    if (plan.feature !== "jump" || plan.featureEnd === undefined) return true;
+    const lipArc = from.arc + plan.featureEnd;
+    let lipY: number | null = null;
+    for (const p of points) {
+      if (p.y === undefined) return true;
+      if (lipY === null) {
+        if (p.arc >= lipArc) lipY = p.y;
+        continue;
+      }
+      if (p.arc > lipArc + R.jump.landing) break;
+      if (lipY - p.y > R.jump.landingFall) return false;
+    }
+    return true;
+  };
   let cursor: Cursor = { x: 0, z: 0, heading: 0, arc: 0 };
   let total = 0;
   let sLastLipEnd = -Infinity;
@@ -237,6 +448,7 @@ function tryGenerateStage(
     if (walked) {
       profile.y = walked.y;
       profile.slope = walked.slope;
+      profile.rollS = walked.rollS;
     }
     if (plan.feature === "jump") {
       sLastLipEnd = total + (plan.featureEnd ?? plan.length);
@@ -746,7 +958,9 @@ function tryGenerateStage(
             !keepsDry(p) ||
             !sitsOnTheLand(p) ||
             !clearOfTarmac(p),
-        )
+        ) ||
+        !crossingSits(cursor, plan, points) ||
+        !jumpLands(cursor, plan, points)
       ) {
         continue;
       }

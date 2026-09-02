@@ -35,7 +35,18 @@
 //   R11 Total stage length lands inside the selected stage length's band.
 //   R12 A ford sits in a dip: the road eases down to FLAT water and climbs
 //       back out. Water never stands on a rise — it collects at a local low
-//       point, fed by the stream that crosses the road there.
+//       point, fed by the stream that crosses the road there. So a ford
+//       LIES IN ITS VALLEY: its water is laid at the bare land's own level,
+//       the road dips down to it over an apron as long as that drop needs
+//       to stay a ramp (`water.apronGrade`), and the search only lets a
+//       straight carry a ford whose aprons fit inside it. A ford laid at
+//       the road's height instead is a river drawn at the embankment's
+//       height, and a fixed apron on a hillside is a ramp that drops the
+//       hill's whole fall in thirty metres. Where the road stands too far
+//       over the water to dip to it (`water.culvert.fordDrop`) it stays on
+//       its fill and the stream goes UNDER it, through a CULVERT: no dip,
+//       no water on the road, the same water at the same level on both
+//       sides of it, and a pipe's mouth in each side of the embankment.
 //   R13 A water crossing too wide to wade carries a BRIDGE instead of a
 //       ford: the road stays level across it, the water runs in a ravine
 //       below, and the deck is timber up to `bridge.timberMax` — past that
@@ -114,7 +125,13 @@
 //       distance is therefore a floor, not the rule: the rule is `roadClear`,
 //       measured centerline to centerline and sized from the road's own
 //       width, and it binds the abandoned branches and the public roads
-//       (R17) exactly as it binds the route. Its one exemption is a
+//       (R17) exactly as it binds the route. It binds IN HEIGHT as well:
+//       two arms of the route that pass each other need the room for the
+//       ground between them to get from one to the other at the grade R31
+//       allows beside a road (`armSeparation`) — the upper arm's corridor,
+//       the lower arm's bench, and `verge.climb` between the two — or no
+//       ground satisfies both and the difference stands up as a face along
+//       the upper road's edge. Its one exemption is a
 //       JUNCTION, and a junction is a PLACE: inside `junction.parting` of
 //       the point two roads meet at they ARE one road, and everywhere else
 //       — including further along the same two roads — they are not.
@@ -342,8 +359,9 @@ export type TurnSeverity = "soft" | "medium" | "hard";
  * what makes laps possible. */
 export type StageShape = "sprint" | "circuit";
 export type SegmentFeature = "none" | "jump" | "water" | "crest";
-/** How a stage crosses water: wade through it, or span it. */
-export type Crossing = "ford" | "timber" | "concrete";
+/** How a stage crosses water: wade through it, span it, or carry it under
+ * the road in a pipe (R12). */
+export type Crossing = "ford" | "timber" | "concrete" | "culvert";
 
 /** The generator's DIALS — four numbers, each 0..1, that a player (or the
  * tooling) turns to ask for a different kind of stage. They never break a
@@ -1154,6 +1172,14 @@ export const STAGE_RULES = {
      * and the height under the car for every lip on the stage, and that is
      * the measurement this band is set against. */
     lipHeight: { min: 0.9, max: 2.2 },
+    /** R6 — how far the road may FALL AWAY under the flight, m: the most
+     * the line may stand below the lip's own base anywhere in the landing
+     * zone. The lip throws the car by its own height; a road dropping away
+     * past the lip adds every metre of that drop to the flight, and a
+     * ramp drawn at the gentle end of the band on a road running downhill
+     * came out as a ninety-metre jump. Held by the search off the line it
+     * walks (`jumpLands`); the landing zone itself is `landing`. */
+    landingFall: 2.5,
     /** R6 — the RAMP'S OWN GRADE, which is what actually launches the car,
      * drawn directly instead of falling out of two independent bands.
      *
@@ -1186,6 +1212,61 @@ export const STAGE_RULES = {
     clearAfterJump: 50, // meters past a lip before water may start
     apron: 30,
     bedDepth: 0.5,
+    /** R12 — A FORD LIES IN ITS VALLEY. The water is laid at the bare
+     * land's own level at the crossing (never above the road's line), and
+     * the road dips DOWN to it from wherever its line was running — which
+     * on a stage that rolls over the country is metres up. So the apron is
+     * not a fixed length: it is as long as the drop needs to stay a ramp,
+     * `apron` at the least, and the search only lets a straight carry a
+     * ford whose aprons fit inside it (`crossingSits` sets the plan's own
+     * `apron`).
+     *
+     * `apronGrade` is the steepest the ramp may run, m per m. The apron is
+     * a smoothstep, whose slope peaks at one and a half times its average,
+     * so the length is sized as `1.5 · drop / apronGrade`. A SPLASH, not a
+     * highway ramp: a rally ford is a dip the car drops into and climbs
+     * out of, so this sits over `ANALYSIS.drive.grade.warn` and well under
+     * its `fail`, with the road's own grade into the crossing riding on
+     * top. Sized at the warn instead, two fords in three found no straight
+     * long enough to hold their aprons and the taiga lost its water.
+     *
+     * Before the water was laid against the land it was laid against the
+     * ROAD — the roll's lowest point, `bedDepth` under the line — so a ford
+     * on an embankment anchored its river (R18) that far over the country
+     * the water was meant to lie in, and the reach floated above both its
+     * banks; and a ford on a hillside, held at the downhill mouth's level,
+     * gave the uphill apron the whole window's fall to lose in thirty
+     * metres: 25-36% ramps on every hillside ford of a dozen seeds. */
+    apronGrade: 0.16,
+    /** R12 — THE CULVERT: a stream the road goes OVER on its own fill,
+     * through a pipe. The third way across water, and the commonest on
+     * any real road: a ford is a dip to the water where the road can
+     * afford to dip, a bridge is a deck where the water is too wide to
+     * wade, and everything else is a pipe under the embankment. Before it
+     * existed the generator had two answers to a stream below the road —
+     * dip to it, however deep, or refuse the crossing — and the dip left a
+     * sheet on the road standing a metre over the river running off it.
+     *
+     * `fordDrop` is the deepest a ford's dip may be, m, from the road's
+     * line to the water; past it the road is far enough over the valley
+     * that dipping to it is a hole in the road, and the water goes under
+     * instead. `cover` is the least the line may stand over the stream for
+     * the pipe to fit, m — its bore and the fill over it. `bore` is the
+     * pipe's radius, m; `stream` the half-width the water through it is
+     * drawn at — a ford's, not a brook's, because the ground lattice is
+     * fourteen metres a cell and a channel narrower than that runs under
+     * tiles that never dip into it, unseen and undrivable; `span` how much
+     * road the crossing occupies along the stage, m. */
+    culvert: { fordDrop: 2.2, cover: 1.6, bore: 0.9, stream: 5, span: 8 },
+    /** ...and how far either side of the road the land is read for that
+     * valley, m. A stream crosses a road at the bottom of the country
+     * ACROSS the road as well as along it: read at the centerline alone,
+     * a crossing drawn over a low ridge laid its water on the crest, a
+     * metre or more over the banks the analyzer measures it against
+     * (`ANALYSIS.water.float` reads them at the channel's half-width plus
+     * the bank blend plus six, which for the widest deck's river is thirty
+     * metres out). This reaches a little past those. */
+    bankReach: 32,
     /** Water must remain visible beyond both road edges at a ford. A ford
      * that only covers the ribbon reads as a puddle painted on the road,
      * rather than a channel the road passes through. */
@@ -1232,6 +1313,14 @@ export const STAGE_RULES = {
      * cross it, because `flooded` at a margin of zero is the water itself.
      * That part is never negotiable; only the elbow room is. */
     routeClearLadder: [1, 0.5, 0.25, 0],
+    /** R35 — the least the road's SURFACE may stand over a lake in view
+     * of it, m, wherever the route runs (`keepsDry`). Under the freeboard
+     * the road follows the country up to (`elevation.follow.freeboard`),
+     * because that is a target the follower lags toward and this is a
+     * floor the line is refused under: enough for the tile sink and a
+     * ford's wading lip, so no ground tile beside the road is under the
+     * lake. */
+    underLake: 1,
   },
 
   /** R13 — the crossings a car cannot wade. A ford is water the wheels go
@@ -2275,6 +2364,15 @@ export type SegmentPlan = {
   crestHeight?: number;
   /** Water-only (R13): how the road gets across — waded, or on a deck. */
   crossing?: Crossing;
+  /** R12/R13 — set by the search on a ford or a deck: how long the two
+   * ramps either side of the crossing are, m — the one the road arrives on
+   * and the one it leaves on. `water.apron` at the least for a ford's dip,
+   * `bridge.margin` for a deck's approach, and longer by however far the
+   * road's line stands off the water, or the deck, at that mouth. Two
+   * numbers, because a crossing on a grade has one mouth near its level
+   * and the whole of the fall to lose at the other. */
+  apronIn?: number;
+  apronOut?: number;
   /** R25 — set on a sprint's last segment: how many of its meters lie
    * PAST the finish gate. The line is drawn where the segment has this
    * much left to run, and everything after it is run-out. */

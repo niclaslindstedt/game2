@@ -11,6 +11,7 @@
 import type { Rng } from "../lib/prng.ts";
 import { biomeRules } from "./biomes.ts";
 import { cellKey } from "../lib/math.ts";
+import { straightness } from "./rolling.ts";
 import {
   SAMPLE_STEP,
   STAGE_RULES as R,
@@ -25,14 +26,19 @@ export type Cursor = {
   z: number;
   heading: number;
   arc: number;
-  /** R23 — roughly how high the ROAD stands here, m, walked at the probe's
-   * own resolution. Absent where the caller has no landscape to follow (a
+  /** R23 — how high the ROAD stands here, m, walked at the probe's own
+   * resolution. Absent where the caller has no landscape to follow (a
    * synthetic track), and the height half of R23 is then simply not asked.
    *
-   * It is the road's base, not its surface: the rolling profile rides on
-   * top of this and swings a few metres either way, which is noise against
-   * the tens of metres the height rule is about. */
+   * The road's SURFACE — the base the builder's eye followed the country
+   * to, plus the stage's own roll on top of it (`rolling.ts`), read at the
+   * same arc the compiler will read it at. The roll swings several metres
+   * either way, and a rule that has to fit two arms of a stage between
+   * R31's cones, or lay a ford against its valley floor, is about metres. */
   y?: number;
+  /** ...and how far along the roll that is, m — advanced through corners
+   * at `straightness`, exactly as the compiler's cursor advances. */
+  rollS?: number;
 };
 
 /** R34's height walk, at the probe's own resolution — the road builder's
@@ -44,9 +50,18 @@ export type Cursor = {
  * whole point: a road is metres above the country it crosses on an
  * embankment and metres below it in a cutting, and it is the ROAD's height
  * that decides whether two arms of a stage can pass each other. */
-export type Profile = { y: number; slope: number };
+export type Profile = {
+  /** The road's BASE, m — the country's height as the eye has followed it. */
+  y: number;
+  slope: number;
+  /** Arc along the roll, m (`rolling.ts`). Corners advance it slowly, so it
+   * is not the probe's own arc and has to be walked beside it. */
+  rollS: number;
+};
 
-export function stepProfile(profile: Profile, ground: number, step: number): number {
+/** The road's base after one probe step of `step` m toward `ground`, with
+ * the roll's arc advanced for a segment of `curvature`. */
+export function stepProfile(profile: Profile, ground: number, step: number, curvature = 0): number {
   const F = R.elevation.follow;
   const want = profile.y + (ground - profile.y) * (1 - Math.exp(-step / F.lag));
   let next = (want - profile.y) / step;
@@ -57,8 +72,18 @@ export function stepProfile(profile: Profile, ground: number, step: number): num
   else if (next < -F.grade) next = -F.grade;
   profile.slope = next;
   profile.y += next * step;
+  profile.rollS += step * straightness(curvature);
   return profile.y;
 }
+
+/** What the search walks the road's height WITH: the ground the road may
+ * be built on at a point given the roll there (the compiler's `buildable`,
+ * water's freeboard included), and the roll itself. */
+export type HeightWalk = {
+  profile: Profile;
+  groundAt: (x: number, z: number, roll: number) => number;
+  rolling: (s: number) => number;
+};
 
 /** Where a road is and which way it points — a cursor without the arc. */
 export type Pose = { x: number; z: number; heading: number };
@@ -175,12 +200,37 @@ export const PROBE_STEP = 6;
  * and exit); beyond it R10 applies in full. */
 export const SELF_IGNORE_ARC = 80;
 
-/** R23 — the biggest height difference the rule sizes its search grid for,
- * m. Two arms further apart than this in height need more room than the
- * grid's ring walk looks at, so the rule under-reports past it: a ceiling
+/** R23 — the biggest height difference the rule walks its grid for, m.
+ * Two arms further apart than this in height need more room than the
+ * query's ring walk looks at, so the rule under-reports past it: a ceiling
  * on the CHECK, not on the stage. Generous enough to cover any fold-back a
  * stage's own grade clamp can build over a few kilometres. */
 const HEIGHT_SPAN = 60;
+
+/** R23 — how far apart two arms of a stage have to be, centerline to
+ * centerline, to stand `rise` metres apart in height and still both have
+ * the ground R31 promises beside them, m.
+ *
+ * Stated ONCE and read by the search and the analysis (`roads.step`), so
+ * the two cannot drift. It is R31's own geometry read between two roads:
+ * the upper arm owns its corridor out to `shelfEnd` at its own height, the
+ * lower arm's bench keeps the country flat out to `verge.bench` at ITS
+ * height, and between the two the ground may climb no faster than
+ * `verge.climb`. Any closer than that and no ground satisfies both — the
+ * terrain gives each lattice corner to the nearer road and the difference
+ * stands up as a face along the upper road's edge, its verge running out
+ * into thin air.
+ *
+ * Read against R34's steepest cut face instead of the verge's climb, as it
+ * was, it let a stage fold back 45 m from itself with 33 m between the arms
+ * — a rock face the country never earns (a cut opens only where the road
+ * runs UNDER the land, and a road benched along a hillside runs at it) and
+ * the single commonest error the analyzer found on the taiga, on every seed
+ * of a dozen. */
+export function armSeparation(shelfEnd: number, rise: number): number {
+  const bench = Math.max(shelfEnd, R.verge.bench);
+  return shelfEnd + bench + Math.abs(rise) / R.verge.climb;
+}
 
 export type PointField = ReturnType<typeof createPointField>;
 
@@ -191,17 +241,24 @@ export type PointField = ReturnType<typeof createPointField>;
  * (R23's `roadClearance`), so every point within that distance of a query
  * sits in one of the neighbouring cells. */
 export function createPointField(clear: number, shelfEnd = 0) {
-  // R23's height half needs to reach further than its plan half whenever
-  // two arms differ by more than the plain clearance can bridge, so the
-  // grid's cells — and the ring the query walks — are sized on the widest
-  // separation the rule can ask for rather than on `clear` alone.
-  const faceMax = R.verge.cut.face.max;
-  const reach = Math.max(clear, 2 * shelfEnd + HEIGHT_SPAN / faceMax);
-  const cell = reach;
+  const cell = clear;
   const minD2 = clear * clear;
   const points: Cursor[] = [];
-  const grid = new Map<number, Cursor[]>();
+  /** A cell's points, and the band of heights they span. The band is what
+   * lets the height half of R23 reach further than the plan half without
+   * the query scanning further: a cell whose every point is near the
+   * probe's own height cannot trigger the rule from more than a cell away,
+   * and is thrown away unread. It only ever WIDENS — a backtrack leaves it
+   * as it was, which costs a scan and never an answer. */
+  type Bucket = { points: Cursor[]; minY: number; maxY: number };
+  const grid = new Map<number, Bucket>();
   const keyOf = (p: Cursor): number => cellKey(Math.floor(p.x / cell), Math.floor(p.z / cell));
+  // The band of heights the whole field spans, for the same rejection one
+  // level up: a probe no further in height from every point than the
+  // plain clearance can bridge need not walk past the 3×3 block at all.
+  let fieldMinY = Infinity;
+  let fieldMaxY = -Infinity;
+  const span = Math.ceil(armSeparation(shelfEnd, HEIGHT_SPAN) / cell);
 
   return {
     points,
@@ -210,8 +267,19 @@ export function createPointField(clear: number, shelfEnd = 0) {
         points.push(p);
         const key = keyOf(p);
         const bucket = grid.get(key);
-        if (bucket) bucket.push(p);
-        else grid.set(key, [p]);
+        if (bucket) {
+          bucket.points.push(p);
+          if (p.y !== undefined) {
+            if (p.y < bucket.minY) bucket.minY = p.y;
+            if (p.y > bucket.maxY) bucket.maxY = p.y;
+          }
+        } else {
+          grid.set(key, { points: [p], minY: p.y ?? Infinity, maxY: p.y ?? -Infinity });
+        }
+        if (p.y !== undefined) {
+          if (p.y < fieldMinY) fieldMinY = p.y;
+          if (p.y > fieldMaxY) fieldMaxY = p.y;
+        }
       }
     },
     /** Remove the most recently added `n` points (a backtrack). */
@@ -220,8 +288,8 @@ export function createPointField(clear: number, shelfEnd = 0) {
         const p = points.pop() as Cursor;
         const bucket = grid.get(keyOf(p));
         if (bucket) {
-          const at = bucket.lastIndexOf(p);
-          if (at >= 0) bucket.splice(at, 1);
+          const at = bucket.points.lastIndexOf(p);
+          if (at >= 0) bucket.points.splice(at, 1);
         }
       }
     },
@@ -234,8 +302,8 @@ export function createPointField(clear: number, shelfEnd = 0) {
         const p = points[i];
         const bucket = grid.get(keyOf(p));
         if (bucket) {
-          const at = bucket.indexOf(p);
-          if (at >= 0) bucket.splice(at, 1);
+          const at = bucket.points.indexOf(p);
+          if (at >= 0) bucket.points.splice(at, 1);
         }
       }
       points.splice(0, cut);
@@ -249,11 +317,26 @@ export function createPointField(clear: number, shelfEnd = 0) {
     blocked(c: Cursor, cycle = Infinity): boolean {
       const ix = Math.floor(c.x / cell);
       const iz = Math.floor(c.z / cell);
-      for (let dx = -1; dx <= 1; dx++) {
-        for (let dz = -1; dz <= 1; dz++) {
+      // The plan half lives in the 3×3 block; the height half can reach
+      // `rings` out, and a further cell is read only where its band of
+      // heights could put a point inside the separation its distance
+      // demands.
+      let reach = 1;
+      if (c.y !== undefined && fieldMinY <= fieldMaxY) {
+        const rise = Math.max(Math.abs(fieldMinY - c.y), Math.abs(fieldMaxY - c.y));
+        reach = Math.max(1, Math.min(span, Math.ceil(armSeparation(shelfEnd, rise) / cell)));
+      }
+      for (let dx = -reach; dx <= reach; dx++) {
+        for (let dz = -reach; dz <= reach; dz++) {
           const bucket = grid.get(cellKey(ix + dx, iz + dz));
           if (!bucket) continue;
-          for (const p of bucket) {
+          const ring = Math.max(Math.abs(dx), Math.abs(dz));
+          if (ring > 1) {
+            const y = c.y as number;
+            const rise = Math.max(Math.abs(bucket.minY - y), Math.abs(bucket.maxY - y));
+            if (!(armSeparation(shelfEnd, rise) > (ring - 1) * cell)) continue;
+          }
+          for (const p of bucket.points) {
             const gap = c.arc - p.arc;
             if (Math.min(gap, cycle - gap) < SELF_IGNORE_ARC) continue;
             const ddx = p.x - c.x;
@@ -262,9 +345,8 @@ export function createPointField(clear: number, shelfEnd = 0) {
             if (d2 < minD2) return true;
             // R23 IN HEIGHT. Keeping two arms `clear` apart on the map says
             // nothing about how far apart they are vertically, and the
-            // terrain between them has to get from one to the other: each
-            // road owns its corridor out to `shelfEnd`, and the country in
-            // between can climb no faster than R34's steepest cut face.
+            // terrain between them has to get from one to the other at a
+            // grade R31 lets it (`armSeparation`).
             //
             // Without this a stage could legally fold back 43 m from itself
             // with 33 m of height between the two arms — and then no ground
@@ -274,8 +356,7 @@ export function createPointField(clear: number, shelfEnd = 0) {
             // out into thin air, and R31 broken with nothing in the terrain
             // able to fix it.
             if (c.y === undefined || p.y === undefined) continue;
-            const rise = Math.abs(p.y - c.y);
-            const need = 2 * shelfEnd + rise / faceMax;
+            const need = armSeparation(shelfEnd, p.y - c.y);
             if (d2 < need * need) return true;
           }
         }
@@ -310,23 +391,34 @@ export function probePoints(
   /** The road's height as it walks, or undefined to skip it. Advanced by
    * this call and NOT rewound — the caller keeps the authoritative copy and
    * hands in a clone for a candidate it may yet throw away. */
-  height?: { profile: Profile; groundAt: (x: number, z: number) => number },
+  height?: HeightWalk,
 ): { points: Cursor[]; end: Cursor } {
   const points: Cursor[] = [];
   let { x, z, heading, arc } = from;
   const steps = Math.max(1, Math.ceil(plan.length / PROBE_STEP));
   const step = plan.length / steps;
+  const curvature = plan.kind === "turn" && plan.radius ? (plan.dir ?? 1) / plan.radius : 0;
+  /** The road's surface at the walk's current position: the base plus the
+   * roll at the arc the roll has reached. */
+  const surface = (): number | undefined =>
+    height ? height.profile.y + height.rolling(height.profile.rollS) : undefined;
   for (let i = 0; i < steps; i++) {
-    if (plan.kind === "turn" && plan.radius) {
-      heading += ((plan.dir ?? 1) * step) / plan.radius;
-    }
+    if (curvature !== 0) heading += curvature * step;
     x += Math.sin(heading) * step;
     z += Math.cos(heading) * step;
     arc += step;
-    const y = height ? stepProfile(height.profile, height.groundAt(x, z), step) : undefined;
-    points.push({ x, z, heading, arc, y });
+    if (height) {
+      // The roll this step ARRIVES at, read ahead the way the compiler
+      // reads it: the ground the road may be built on is the water's
+      // freeboard less the roll standing on it, so the roll has to be
+      // known before the base is stepped toward that ground.
+      const rollS = height.profile.rollS + step * straightness(curvature);
+      const roll = height.rolling(rollS);
+      stepProfile(height.profile, height.groundAt(x, z, roll), step, curvature);
+    }
+    points.push({ x, z, heading, arc, y: surface(), rollS: height?.profile.rollS });
   }
-  return { points, end: { x, z, heading, arc, y: height?.profile.y } };
+  return { points, end: { x, z, heading, arc, y: surface(), rollS: height?.profile.rollS } };
 }
 
 /** The probe walks at PROBE_STEP while compile samples finer, and the two

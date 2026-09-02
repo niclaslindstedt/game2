@@ -196,8 +196,8 @@ export function surfaceRuns(track, surface) {
 /**
  * The stage's features in stage order. Each has:
  *   id      the name the picture and the table both use
- *   kind    turn | jump | crest | ford | bridge | checkpoint | start |
- *           finish | junction | crossing
+ *   kind    turn | jump | crest | ford | culvert | bridge | checkpoint |
+ *           start | finish | junction | crossing
  *   s       arc position, m (turns and water also carry `endS`)
  *   x z     where that is on the map, and `heading` there
  *   label   the short mark drawn on the map
@@ -299,6 +299,7 @@ export function stageFeatures(track, terrain) {
   // ── Crests and water, from the plan ───────────────────────────────────
   let crestNo = 0;
   let fordNo = 0;
+  let culvertNo = 0;
   let bridgeNo = 0;
   track.segments.forEach((seg, k) => {
     const segStart = starts[k];
@@ -322,11 +323,12 @@ export function stageFeatures(track, terrain) {
       });
     } else if (seg.feature === "water") {
       const ford = seg.crossing === "ford";
-      const id = ford ? `F${++fordNo}` : `B${++bridgeNo}`;
+      const culvert = seg.crossing === "culvert";
+      const id = ford ? `F${++fordNo}` : culvert ? `C${++culvertNo}` : `B${++bridgeNo}`;
       const mid = at((fromS + toS) / 2);
       features.push({
         id,
-        kind: ford ? "ford" : "bridge",
+        kind: ford ? "ford" : culvert ? "culvert" : "bridge",
         s: fromS,
         endS: toS,
         ...mid,
@@ -334,7 +336,9 @@ export function stageFeatures(track, terrain) {
         label: id,
         detail: ford
           ? `ford, ${(toS - fromS).toFixed(0)} m of water on the road`
-          : `${seg.crossing} bridge, ${(toS - fromS).toFixed(0)} m of deck`,
+          : culvert
+            ? "culvert, the stream goes under the road in a pipe"
+            : `${seg.crossing} bridge, ${(toS - fromS).toFixed(0)} m of deck`,
         solids: solids(fromS - 20, toS + 20),
       });
     }
@@ -527,6 +531,7 @@ function rank(feature) {
     "turn",
     "crest",
     "ford",
+    "culvert",
     "bridge",
     "jump",
     "checkpoint",
@@ -551,6 +556,7 @@ export function stageSummary(track, features) {
     jumps: by("jump"),
     crests: by("crest"),
     fords: by("ford"),
+    culverts: by("culvert"),
     bridges: by("bridge"),
     checkpoints: by("checkpoint"),
     junctions: by("junction"),

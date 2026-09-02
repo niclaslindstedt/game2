@@ -145,12 +145,65 @@ function sliceRiver(river: River): Stream[] {
   return out;
 }
 
+/** R12 — the valley floor under a crossing: the lowest ground the
+ * crossing's POOL touches. A ford is a pool the road wades, and a pool has
+ * one level: the water on the road and the water beside it are the same
+ * water. Laid at the road's own ground on a hillside, the sheet on the
+ * road stood a metre over the river running off it on the downhill side —
+ * a step in a water surface, which is the one thing water never does.
+ *
+ * Read at the places the pool actually lies: the road's centerline; the
+ * river's BANKS there, which run ALONG the road (`water.bankReach` either
+ * way, the higher of the two — a crossing on a rise along the road would
+ * lay its water over both), and the ground the water leaves the crossing
+ * over, a step and two steps out across the road on the lower side,
+ * where the course holds the crossing's level before it falls
+ * (`river.ts`'s `POOL_REACH`). Not the higher side: the water comes DOWN
+ * into the pool from there, in its own gully, and reading it would dig
+ * every hillside crossing to the level of the ground below it. */
+export function valleyUnder(
+  at: { x: number; z: number; heading: number },
+  landAt: (x: number, z: number) => number,
+): number {
+  const ax = Math.sin(at.heading);
+  const az = Math.cos(at.heading);
+  const lx = Math.cos(at.heading);
+  const lz = -Math.sin(at.heading);
+  const reach = R.water.bankReach;
+  const banks = Math.max(
+    landAt(at.x + ax * reach, at.z + az * reach),
+    landAt(at.x - ax * reach, at.z - az * reach),
+  );
+  const right = landAt(at.x + lx * POOL_STEP * 2, at.z + lz * POOL_STEP * 2);
+  const left = landAt(at.x - lx * POOL_STEP * 2, at.z - lz * POOL_STEP * 2);
+  const side = right < left ? 1 : -1;
+  const near = landAt(at.x + lx * POOL_STEP * side, at.z + lz * POOL_STEP * side);
+  return Math.min(landAt(at.x, at.z), banks, Math.min(right, left), near);
+}
+
+/** How far the river walks in one step, m — `river.ts`'s stride, read
+ * here so the crossing's valley is read where the course will stand. */
+const POOL_STEP = 14;
+
 /** Collect the road's water crossings in `samples[fromIndex..)` as river
  * anchors (R18): where the road meets water, at what level, how wide, and
  * whether it wades or spans. The WATER itself is then traced through them
  * — the road says where it crosses, the landscape says where the river
  * runs. */
-export function collectAnchors(track: Track, fromIndex: number): RiverAnchor[] {
+export function collectAnchors(
+  track: Track,
+  fromIndex: number,
+  /** The bare land's height at a point, m — where the water under a DECK
+   * is laid (R13). A ford's water is the road's own dip and needs nothing;
+   * a bridge's is the stream the deck spans, and a stream lies in its
+   * valley whatever the road was doing: a road crossing the valley on an
+   * embankment stands that much higher over it, the way a viaduct does.
+   * Held at the deck's own clearance instead, a bridge on fill anchored
+   * its river fifteen metres over the country and R18 drew it floating
+   * above both banks. Optional, for tooling that only wants the crossings;
+   * without it the water sits at the clearance. */
+  valleyAt?: (x: number, z: number) => number,
+): RiverAnchor[] {
   const samples = track.samples;
   const anchors: RiverAnchor[] = [];
   const wet = (s: TrackSample): boolean => s.surface === "water" || s.deck !== null;
@@ -167,21 +220,54 @@ export function collectAnchors(track: Track, fromIndex: number): RiverAnchor[] {
     anchors.push({
       x: mid.x,
       z: mid.z,
-      // A ford's water lies at the road; a deck stands its clearance above
-      // it, and the channel below is cut deep enough to drown a car.
-      waterY: mid.elevation - (deck ? R.bridge.clearance[deck] : 0),
+      // A ford's water lies at the road; a deck stands AT LEAST its
+      // clearance above it — more where the road crosses the valley on
+      // fill — and the channel below is cut deep enough to drown a car.
+      waterY: deck
+        ? Math.min(
+            mid.elevation - R.bridge.clearance[deck],
+            valleyAt ? valleyUnder(mid, valleyAt) - BED_DEPTH : Infinity,
+          )
+        : mid.elevation,
+      heading: mid.heading,
+      // A ford's water is as wide as the ford is long, and a little more
+      // (`fordOutside`): the course leaves the crossing ACROSS the road
+      // (R18's `acrossRoad`), so the sheet the anchor draws lies along
+      // the road for its half-width — and the aprons start climbing where
+      // the flat ends. Sized to the road's own width instead, the sheet
+      // stood two metres deep on the apron of every ford.
       halfWidth: deck
         ? Math.max(6, runLength / 2 - 1.5)
-        : Math.max(
-            track.width / 2 + R.water.fordOutside,
-            Math.min(8, Math.max(3.5, runLength / 2.6)),
-          ),
+        : Math.max(3.5, runLength / 2 + R.water.fordOutside),
       depth: deck ? R.bridge.depth : BED_DEPTH,
       bridged: deck !== null,
+      edge: mid.width / 2 + R.water.fordOutside,
       s: mid.s,
     });
     i = j;
   }
+  // R12 — and the culverts: the road stands on its fill and the stream
+  // goes under it. Not a run of samples — the surface is road the whole
+  // way over one — so the compiler wrote each down (`track.culverts`), at
+  // the valley's own level. Each is a crossing like any other to the water:
+  // the course arrives at it, passes under the road, and leaves across it.
+  const fromS = fromIndex < samples.length ? samples[Math.max(0, fromIndex)].s : Infinity;
+  for (const culvert of track.culverts) {
+    if (culvert.s < fromS) continue;
+    anchors.push({
+      x: culvert.x,
+      z: culvert.z,
+      waterY: culvert.waterY,
+      halfWidth: culvert.halfWidth,
+      depth: BED_DEPTH,
+      bridged: false,
+      culvert: true,
+      edge: culvert.edge,
+      s: culvert.s,
+      heading: culvert.heading,
+    });
+  }
+  anchors.sort((a, b) => a.s - b.s);
   return anchors;
 }
 
@@ -876,7 +962,13 @@ export function createTerrain(track: Track): TerrainField {
     const lean = (valueNoise(s, 0, 210, sideSeed) - 0.5) * 2;
     const tilt = -0.28 + valueNoise(s, 37.1, 330, sideSeed + 3) * 0.55;
     const raw = tilt + side * lean * 0.62;
-    return raw > 0 ? raw * sideLean : raw;
+    // R31, read the other way round: the FALLING side is a fill's own
+    // slope, and a road's edge may fall away no harder than a car could
+    // drive back up it. Drawn from the noise alone it reached 0.9 m per m,
+    // and on a road standing thirty metres over a hollow the lattice
+    // corners just past the lip fell metres below it — a face along the
+    // outside of the embankment on every high fill of a dozen seeds.
+    return raw > 0 ? raw * sideLean : Math.max(raw, -VERGE_CLIMB);
   };
 
   const half = track.width / 2;
@@ -1159,7 +1251,16 @@ export function createTerrain(track: Track): TerrainField {
       if (near.d < lip) {
         base = corridorY;
       } else {
-        const grade = sideGrade(s.s, near.lateral >= 0 ? 1 : -1);
+        let grade = sideGrade(s.s, near.lateral >= 0 ? 1 : -1);
+        // R34 — a cut is only a cut where there is country to cut INTO. On
+        // a side where the land stands BELOW the road there is nothing
+        // above it to climb, and a rising grade drawn there is bounded by
+        // the far field — fifty metres down on a high fill, the whole drop
+        // taken over the blend below: a face along the outside of every
+        // embankment the noise happened to draw as a cutting. Such a side
+        // is a fill's side whatever the dice said, and falls at the fill's
+        // own slope until it lands on the country.
+        if (grade >= 0 && far < s.elevation) grade = -VERGE_CLIMB;
         const embankment = s.elevation + (near.d - lip) * grade;
         // R34 — and the bench STOPS WHERE IT MEETS THE COUNTRY.
         //
@@ -1313,7 +1414,45 @@ export function createTerrain(track: Track): TerrainField {
     return raised < ceiling ? raised : ceiling;
   };
 
-  const heightAt = (x: number, z: number): number => carveGround(streams, x, z, rawHeight(x, z));
+  /** R18 — a stream's channel keeps off the ground a road STANDS ON. The
+   * carve is a bed cut `depth` under the water and blended out over
+   * `BANK`, and beside a crossing the water is inside the corridor by
+   * design: the sheet at the anchor, the first step of the course leaving
+   * across the road, a mouth wandering a flat valley floor. Each of those
+   * cut the corridor's outer band down to a bed metres below the ribbon —
+   * the mouth's first point, fourteen metres out on a hillside, carved a
+   * six-metre face along the apron beside every ford on the slope. So
+   * the channel may go no deeper beside a road than the road's own
+   * embankment: the corridor's underside less a ford's `BED_DEPTH` — which
+   * is exactly the channel a ford has under its water — falling away past
+   * the lip at the grade a fill's side falls at (R31's `climb`, read the
+   * other way round). On flat country that is below every channel and
+   * changes nothing; under a road on nineteen metres of fill it is the
+   * fill's own slope, and a river at the toe of the fill has that slope
+   * for its near bank instead of a bed cut into it. Not a fade over one
+   * cell, as it first was: the lattice corners a cell past the lip are the
+   * ones the band's triangles are interpolated from, and a corner in the
+   * channel pulled the band down with it. A DECK stands over a ravine on
+   * purpose and pins nothing (R13). */
+  const heightAt = (x: number, z: number): number => {
+    const raw = rawHeight(x, z);
+    const carved = carveGround(streams, x, z, raw);
+    if (carved >= raw) return raw;
+    const near = nearestRoad(x, z);
+    if (!near) return carved;
+    const s = samples[near.index];
+    if (s.deck != null) return carved;
+    const lip = lipAt(near.index);
+    const floor =
+      ribbonY(s, sideOf(near.lateral) * Math.min(near.d, lip), s.width) -
+      TILE_SINK -
+      BED_DEPTH -
+      Math.max(0, near.d - lip) * VERGE_CLIMB;
+    // A floor on the CARVE, never a lift of the ground: where the road's
+    // underside stands over ground a pad or a platform graded lower, the
+    // carve is simply refused.
+    return Math.min(raw, carved > floor ? carved : floor);
+  };
 
   /** R34 — how much the ground at a point is a FACE THE ROAD WAS CUT
    * THROUGH, 0 (open country, or a bank battered back to something a car
@@ -1645,10 +1784,18 @@ export function createTerrain(track: Track): TerrainField {
       // The water: every crossing this stretch of road added, traced as
       // one river through them (R18) — born on the high ground, gathering
       // as it runs, ending in the lowest water it can find.
-      // The river reads the ground the ROAD sits in (corridor shelf and
-      // all), not the bare far field: a watercourse routed against a
-      // landscape the road does not stand on would refuse every reach
-      // between two crossings that the road itself made possible.
+      //
+      // The river reads the BARE country, not the ground the road shaped.
+      // It used to read the corridor-shaped field, because a crossing's
+      // water was laid at the ROAD's height and a course traced against
+      // the land the road stood over refused every reach; now a crossing's
+      // water lies in its valley (R12, R13) and the land is the field the
+      // water was always meant to obey. Read the shaped ground instead and
+      // a course leaving a crossing beside an embankment follows the
+      // embankment's flank down — real ground, and the analyzer (which
+      // measures the water against the bare banks, as the world sees it)
+      // reports it ten metres in the air. A stream lies at the toe of a
+      // fill, not on its side.
       // Traced, then sliced: the field queries the slices, and the whole
       // watercourses are kept beside them because a river is only judgeable
       // end to end — the analysis walks one from its source to its mouth to
@@ -1656,8 +1803,8 @@ export function createTerrain(track: Track): TerrainField {
       // in anything.
       for (const river of traceRivers(
         track.seed,
-        collectAnchors(track, streamScan),
-        rawHeight,
+        collectAnchors(track, streamScan, land.surfaceAt),
+        farField,
         // R35 — the water the courses are looking for is the water the
         // pour put on the bare country, at its own levels. Asked of the
         // BARE land and not the shaped terrain: a river ends in a lake,

@@ -19,10 +19,11 @@
 // exactly those points at exactly the water level the road was built for.
 //
 // And it meets the road THERE AND NOWHERE ELSE. Two crossings are joined
-// by a reach that keeps clear of the corridor between them, because this
-// generator has no culverts: water routed under a road it does not cross
-// digs the ground out from under the ribbon and leaves the road standing
-// on a bank of nothing, with a sheet of water drawn through it.
+// by a reach that keeps clear of the corridor between them: a pipe under
+// the road is a crossing the road planned (R12's culvert, an anchor like
+// any other), and water routed under a road anywhere else digs the ground
+// out from under the ribbon and leaves the road standing on a bank of
+// nothing, with a sheet of water drawn through it.
 
 import { createRng } from "../lib/prng.ts";
 
@@ -38,9 +39,18 @@ export type RiverAnchor = {
   depth: number;
   /** True when the road spans it rather than wading it. */
   bridged: boolean;
+  /** How far across the road its mat and shoulder reach from the anchor,
+   * m — where the water leaving the crossing is first its own again. */
+  edge: number;
+  /** True when the road carries it in a pipe under its own fill (R12):
+   * neither waded nor spanned, and no water on the road at all. */
+  culvert?: boolean;
   /** Arc position of the crossing on the stage — how a streaming run
    * prunes the water it has driven past. */
   s: number;
+  /** The road's heading where it crosses, rad — the water leaves the
+   * crossing ACROSS the road, and this is what across means. */
+  heading: number;
 };
 
 export type RiverPoint = {
@@ -95,6 +105,16 @@ const OFF_MAP = 140;
  * water sitting in a hollow is a tarn, not a puddle. */
 const POOL_POINTS = 6;
 const POOL_SPREAD = 2.6;
+/** ...and how far above the pool's own level a point of the tail may have
+ * been walked at and still be part of the pool, m. The walk only ever
+ * descends, so the level is the LAST point's and every point upstream of it
+ * stands higher; flattening a fixed number of them to the level cuts the
+ * ground under each by however much higher it stood. Where the walk was
+ * still running downhill when it was stopped that is a trench, not a tarn
+ * — seed 12's mouth dropped nine metres in its last six points and the
+ * pool carved a canyon along the road beside it. A pool fills a HOLLOW: it
+ * reaches back only over ground that is already nearly at its level. */
+const POOL_FILL = 0.6;
 /** How far under the land a reach may run before joining two crossings
  * would mean cutting a gorge rather than following a valley, m. Past it
  * the two are on different water — which is what a watershed IS. */
@@ -129,12 +149,31 @@ const SINK = 0.4;
 export const BANK = 9;
 /** Room a watercourse keeps between its own edge and a road's, m: the
  * bank it cuts, and then some. Inside this the carve would be eating the
- * ground the ribbon stands on. */
-const ROAD_KEEP = BANK + 4;
+ * ground the ribbon stands on. The "some" is also the room the push has
+ * to bend the course back out in: `water.road` measures the course
+ * against half of R23's clearance, and a walk that only turns once it is
+ * at that line leaves the points it turned on inside it. */
+const ROAD_KEEP = BANK + 7;
 /** ...and how much of a reach either end of it the rule lets go of, m. The
  * last stretch into a ford — or under a deck — is water running at a road
  * ON PURPOSE, and it has to be able to reach it. */
 const CROSS_WINDOW = 40;
+/** How far out of a crossing the water holds the crossing's own level, m,
+ * before it is allowed to fall with the ground: the reach the crossing
+ * read its valley over (`water.bankReach`), and a step, so the pool stands
+ * on ground the crossing knew about. */
+const POOL_REACH = 28;
+/** How far under the pool's level the ground beside a crossing may stand
+ * and still be under the pool rather than a place the water leaves it, m:
+ * the crossing read its valley at a handful of points, and the ground
+ * between them is not read at all. */
+const POOL_SLACK = 0.6;
+/** The steepest a source climbs, m per m — a mountain stream's cascade.
+ * The surface is held under the ground whatever the climb, so this only
+ * ever binds on a slope steeper than a cascade; capped at a brook's five
+ * per cent it fell further and further under a hillside and the channel
+ * it cut was a canyon thirteen metres deep. */
+const SOURCE_CLIMB = 0.35;
 /** How hard a road pushes the course off it, against the anchor it is
  * steering for. Firmer than the valley's pull: a river bends toward low
  * ground, but it does not run down a road. */
@@ -143,7 +182,12 @@ const ROAD_PUSH = 2.2;
  * road is what ends it. A step or two is the push working — the course
  * bending back out of the corridor — and longer than this is water that
  * would have to run down the road to get where it is going. */
-const PUSH_GRACE = 4;
+const PUSH_GRACE = 2;
+/** How far ahead of the keep-out a walk starts turning off a road, m: a
+ * step, so it turns BEFORE it is inside rather than once it is. The points
+ * a walk lays while the push is still winning stay on the course, and the
+ * analyzer measures them against the road like any other. */
+const PUSH_AHEAD = STEP;
 
 /** How far a course's two ENDS are sunk under the level the walk gave them,
  * m: a spring comes out of a hillside and a mouth runs into what it joins,
@@ -182,17 +226,37 @@ function offMap(b: WorldBounds, x: number, z: number): boolean {
  * The level is the LOWEST the walk got to, not the last point's: the tail
  * may have climbed a little out of the hollow it should be sitting in, and
  * standing water is flat. */
-function poolAt(points: RiverPoint[], from: number, width: number, cap: number): void {
+function poolAt(
+  points: RiverPoint[],
+  from: number,
+  width: number,
+  cap: number,
+  roadClear: RoadClear,
+): void {
   const tail = points.slice(from);
   if (tail.length === 0) return;
   let level = Infinity;
   for (const p of tail) level = Math.min(level, p.y);
-  // The pool is the last stretch of the walk, widening into the hollow.
-  const spread = Math.min(tail.length, POOL_POINTS);
-  for (let i = tail.length - spread; i < tail.length; i++) {
-    const t = (i - (tail.length - spread) + 1) / spread;
+  // The pool is the last stretch of the walk, widening into the hollow —
+  // and only the hollow: it reaches back up the walk while the ground it
+  // was walked over is still within `POOL_FILL` of its level.
+  let start = tail.length;
+  while (start > 0 && tail.length - start < POOL_POINTS && tail[start - 1].y - level <= POOL_FILL) {
+    start--;
+  }
+  const spread = tail.length - start;
+  for (let i = start; i < tail.length; i++) {
+    const t = (i - start + 1) / spread;
     tail[i].y = level;
-    tail[i].halfWidth = Math.min(cap, width * (1 + t * (POOL_SPREAD - 1)));
+    // ...and it spreads no further than the road beside it allows. The
+    // walk kept its channel `ROAD_KEEP` off the road; a tarn that widens
+    // to the cap beside one is water back on the ground the road stands
+    // on, and `water.road` reports it as the course running at the road.
+    const room = roadClear(tail[i].x, tail[i].z) - ROAD_KEEP;
+    tail[i].halfWidth = Math.max(
+      tail[i].halfWidth,
+      Math.min(cap, room, width * (1 + t * (POOL_SPREAD - 1))),
+    );
   }
 }
 
@@ -284,6 +348,55 @@ function downhill(field: Field, x: number, z: number): { x: number; z: number } 
   const len = Math.hypot(gx, gz);
   if (len < 1e-3) return null;
   return { x: -gx / len, z: -gz / len };
+}
+
+/** The way ACROSS the road at a crossing, as a unit vector: toward the side
+ * the ground falls to (`down`), or the side it rises to.
+ *
+ * A walk leaving a crossing cannot be left to ask the ground which way is
+ * down, because the ground at a crossing is the ROAD's. A road on an
+ * embankment is a ridge — both sides fall away alike, the lateral
+ * gradients cancel, and what is left is the road's own grade, so the
+ * downhill from a point on the centerline runs ALONG the road. Inside the
+ * crossing window nothing pushes the water off, so a mouth ran a hundred
+ * metres down the verge before the push could win, carving the ground out
+ * from beside the embankment as it went; a source did the same uphill. The
+ * water crosses the road where the road crosses the water, and it gets off
+ * the road the way a stream does: straight across it. */
+function acrossRoad(field: Field, a: RiverAnchor, down: boolean): { x: number; z: number } {
+  const nx = Math.cos(a.heading);
+  const nz = -Math.sin(a.heading);
+  const probe = 26;
+  const right = field(a.x + nx * probe, a.z + nz * probe);
+  const left = field(a.x - nx * probe, a.z - nz * probe);
+  const side = right < left === down ? 1 : -1;
+  return { x: nx * side, z: nz * side };
+}
+
+/** How much of a walk's step is the way ACROSS the road it is leaving,
+ * rather than its own steering, `travelled` metres out of the crossing:
+ * all of it at the crossing — the first step is straight across, so the
+ * sheet it draws lies off the road's aprons — and none by the end of the
+ * crossing window. */
+function leaving(travelled: number): number {
+  if (travelled >= CROSS_WINDOW) return 0;
+  const t = 1 - travelled / CROSS_WINDOW;
+  return t * t;
+}
+
+/** One step's direction: the walk's own steering blended with the way
+ * across the road by `out` (`leaving`), as a unit vector. */
+function stepAcross(
+  sx: number,
+  sz: number,
+  across: { x: number; z: number },
+  out: number,
+): { x: number; z: number } {
+  const len = Math.hypot(sx, sz) || 1;
+  const dx = (sx / len) * (1 - out) + across.x * out;
+  const dz = (sz / len) * (1 - out) + across.z * out;
+  const n = Math.hypot(dx, dz) || 1;
+  return { x: dx / n, z: dz / n };
 }
 
 /** The way OFF a road at a point, as a unit vector — the direction road
@@ -406,9 +519,20 @@ function traceCourse(
    * not un-collect, and the anchors it passes through are of whatever size
    * the road wanted its crossing to be — so a big ford followed by a narrow
    * one must not narrow the river. */
-  const push = (x: number, z: number, y: number, dirX: number, dirZ: number): void => {
+  const push = (
+    x: number,
+    z: number,
+    y: number,
+    dirX: number,
+    dirZ: number,
+    /** True inside a crossing's window, where the course is where the
+     * crossing put it: swayed there, the first point out of a ford landed
+     * fifteen metres down the road and the sheet between it and the
+     * anchor missed the mat it was meant to cover. */
+    steady = false,
+  ): void => {
     if (width > widest) widest = Math.min(cap, width);
-    let sway = amplitude * Math.sin((travelled / wave) * Math.PI * 2 + phase);
+    let sway = steady ? 0 : amplitude * Math.sin((travelled / wave) * Math.PI * 2 + phase);
     for (let tries = 0; tries < 3 && sway !== 0; tries++) {
       const px = x - dirZ * sway;
       const pz = z + dirX * sway;
@@ -430,37 +554,55 @@ function traceCourse(
     const run = rng.range(SOURCE_RUN.min, SOURCE_RUN.max);
     const climb: RiverPoint[] = [];
     const block = roadBlock();
+    const across = acrossRoad(field, head, false);
     let x = head.x;
     let z = head.z;
     let y = head.waterY;
-    for (let d = 0; d < run; d += STEP) {
+    // The first step is to the road's EDGE, straight across: the point the
+    // water is first its own again, at the pool's level, so the sheet
+    // between it and the anchor lies flat over the mat. A full step out
+    // put that point past the apron and the sheet's tilt onto it.
+    for (let d = 0, stride = head.edge; d < run; d += stride, stride = STEP) {
       const grade = downhill(field, x, z);
-      // Walk INTO the slope: upstream is uphill, by definition — bending
-      // off the road the crossing below it stands on, and giving up on the
-      // climb rather than running up the corridor.
+      // Walk INTO the slope: upstream is uphill, by definition — leaving
+      // the crossing across the road, bending off the road the crossing
+      // below it stands on, and giving up on the climb rather than running
+      // up the corridor.
       const away =
-        d < CROSS_WINDOW ? null : awayFromRoad(roadClear, x, z, head.halfWidth + ROAD_KEEP);
-      let dx = (grade ? -grade.x : Math.sin(phase)) + (away ? away.x * ROAD_PUSH : 0);
-      let dz = (grade ? -grade.z : Math.cos(phase)) + (away ? away.z * ROAD_PUSH : 0);
-      const len = Math.hypot(dx, dz) || 1;
-      dx /= len;
-      dz /= len;
-      x += dx * STEP;
-      z += dz * STEP;
+        d < CROSS_WINDOW
+          ? null
+          : awayFromRoad(roadClear, x, z, head.halfWidth + ROAD_KEEP + PUSH_AHEAD);
+      const { x: dx, z: dz } = stepAcross(
+        (grade ? -grade.x : Math.sin(phase)) + (away ? away.x * ROAD_PUSH : 0),
+        (grade ? -grade.z : Math.cos(phase)) + (away ? away.z * ROAD_PUSH : 0),
+        across,
+        leaving(d),
+      );
+      x += dx * stride;
+      z += dz * stride;
       if (d >= CROSS_WINDOW && block.hit(roadClear(x, z), head.halfWidth + ROAD_KEEP)) break;
       if (retraces(climb, x, z)) break;
       // Going upstream the surface only ever RISES, and never above the
       // ground it is cut into. Ground that fails to rise is not upstream of
-      // anything: the spring is here, and the climb ends.
+      // anything: the spring is here, and the climb ends. Inside the
+      // crossing window it does not rise at all: the water just above a
+      // ford stands at the ford's level, and a surface climbing away from
+      // the crossing at the walk's grade drew its sheet half a metre over
+      // the mat's edge on the apron beside every ford.
       const ceiling = field(x, z) - SINK;
-      const next = Math.min(ceiling, y + STEP * 0.05);
-      if (next <= y) break;
+      // The first point out is still the pool: laid at the crossing's own
+      // level, so the sheet between it and the anchor lies flat over the
+      // mat rather than tilting up onto the apron. From there the water
+      // climbs in its own gully, as far as the ground climbs.
+      const rise = d === 0 ? 0 : stride * SOURCE_CLIMB;
+      const next = rise === 0 && ceiling >= y - POOL_SLACK ? y : Math.min(ceiling, y + rise);
+      if (next < y || (rise > 0 && next === y)) break;
       y = next;
       climb.push({ x, z, y, halfWidth: head.halfWidth });
     }
     // The climb ended against a road: the steps it spent trying to get out
     // of the corridor are water inside it, and they go with it.
-    trimToRoad(climb, 0, block.inside - 1);
+    trimToRoad(climb, 0, block.inside);
     // A stream narrows the further up it you go, whatever the climb turned
     // out to be — a spring is a trickle even when the crossing below it is
     // a river. Widths are laid on after the walk, when its length is known.
@@ -477,12 +619,11 @@ function traceCourse(
     // finds nothing, one is placed: a trickle a step upstream, at the head
     // of whatever slope is there.
     if (climb.length === 0) {
-      const grade = downhill(field, head.x, head.z);
-      const ux = grade ? -grade.x : Math.sin(phase);
-      const uz = grade ? -grade.z : Math.cos(phase);
+      // Across the road, like every course leaving a crossing: uphill from
+      // a crossing on an embankment is along the road.
       climb.push({
-        x: head.x + ux * STEP,
-        z: head.z + uz * STEP,
+        x: head.x + across.x * STEP,
+        z: head.z + across.z * STEP,
         // Above the crossing by a real margin, never above the ground it
         // comes out of — and NEVER BELOW the crossing it feeds. Where the
         // country around a ford is lower than the water the road was built
@@ -493,7 +634,10 @@ function traceCourse(
         // honest answer, and it keeps the course monotone.
         y: Math.max(
           head.waterY,
-          Math.min(field(head.x + ux * STEP, head.z + uz * STEP) - SINK, head.waterY + SPRING_RISE),
+          Math.min(
+            field(head.x + across.x * STEP, head.z + across.z * STEP) - SINK,
+            head.waterY + SPRING_RISE,
+          ),
         ),
         halfWidth: Math.max(1.4, Math.min(cap, head.halfWidth) * 0.5),
       });
@@ -523,13 +667,27 @@ function traceCourse(
     // clearance is measured against, so the rule does not tighten and
     // loosen as the channel gathers.
     const legWidth = Math.max(from.halfWidth, to.halfWidth) + total * GATHER;
-    const leg: { x: number; z: number; y: number; w: number; dx: number; dz: number }[] = [];
+    const leg: {
+      x: number;
+      z: number;
+      y: number;
+      w: number;
+      dx: number;
+      dz: number;
+      steady: boolean;
+    }[] = [];
     let x = from.x;
     let z = from.z;
     let level = from.waterY;
     let travelledLeg = 0;
     let refused = false;
     const block = roadBlock();
+    // The reach leaves its crossing across the road, on the side the next
+    // crossing is on.
+    const nx = Math.cos(from.heading);
+    const nz = -Math.sin(from.heading);
+    const side = (to.x - from.x) * nx + (to.z - from.z) * nz < 0 ? -1 : 1;
+    const across = { x: nx * side, z: nz * side };
     let guard = 0;
     while (guard++ < 400) {
       const toX = to.x - x;
@@ -543,14 +701,17 @@ function traceCourse(
       // reach leaves one corridor and arrives at the next, and inside those
       // windows the water is where it is supposed to be.
       const atCrossing = travelledLeg < CROSS_WINDOW || left < CROSS_WINDOW;
-      const away = atCrossing ? null : awayFromRoad(roadClear, x, z, legWidth + ROAD_KEEP);
+      const away = atCrossing
+        ? null
+        : awayFromRoad(roadClear, x, z, legWidth + ROAD_KEEP + PUSH_AHEAD);
       // Water finds the valley — but it has an anchor to reach, so the
       // pull toward low ground only bends the course, never steers it.
-      let dx = aimX + (grade ? grade.x * DOWNHILL_PULL : 0) + (away ? away.x * ROAD_PUSH : 0);
-      let dz = aimZ + (grade ? grade.z * DOWNHILL_PULL : 0) + (away ? away.z * ROAD_PUSH : 0);
-      const len = Math.hypot(dx, dz) || 1;
-      dx /= len;
-      dz /= len;
+      const { x: dx, z: dz } = stepAcross(
+        aimX + (grade ? grade.x * DOWNHILL_PULL : 0) + (away ? away.x * ROAD_PUSH : 0),
+        aimZ + (grade ? grade.z * DOWNHILL_PULL : 0) + (away ? away.z * ROAD_PUSH : 0),
+        across,
+        leaving(travelledLeg),
+      );
       x += dx * STEP;
       z += dz * STEP;
       travelledLeg += STEP;
@@ -582,7 +743,21 @@ function traceCourse(
       // actually is. What still ends a course is high ground: water does
       // not climb over a ridge to reach the next crossing, and two
       // crossings with one between them are on different water.
-      level = Math.max(to.waterY, Math.min(level, ground - SINK));
+      // ...and it leaves a crossing at the crossing's own level, holding it
+      // as far as the crossing read its ground (the same pool the mouth
+      // holds — see there).
+      if (travelledLeg >= POOL_REACH) level = Math.min(level, ground - SINK);
+      level = Math.max(to.waterY, level);
+      // ...and it ARRIVES at the crossing's level, not above it. A reach
+      // held up by the ground on the way can reach the last step before a
+      // ford still metres over it — a gully's side is steeper than a step
+      // is long — and the sheet of the point above the drop then stands
+      // over the road's edge beside the ford. Down to the crossing's level
+      // over the window, on a curve that lands the last point ON it.
+      if (left < CROSS_WINDOW) {
+        const t = Math.max(0, left - STEP) / (CROSS_WINDOW - STEP);
+        level = Math.min(level, to.waterY + (level - to.waterY) * t * t);
+      }
       if (ground - level > RIDGE) {
         refused = true;
         break;
@@ -609,13 +784,14 @@ function traceCourse(
           (travelled + travelledLeg) * GATHER,
         dx,
         dz,
+        steady: atCrossing,
       });
     }
     if (refused) break;
     travelled += travelledLeg;
     for (const p of leg) {
       width = p.w;
-      push(p.x, p.z, p.y, p.dx, p.dz);
+      push(p.x, p.z, p.y, p.dx, p.dz, p.steady);
     }
     width = to.halfWidth;
     if (width > widest) widest = Math.min(cap, width);
@@ -640,6 +816,7 @@ function traceCourse(
   {
     const tail = anchors[joined - 1];
     const block = roadBlock();
+    const across = acrossRoad(field, tail, true);
     let x = tail.x;
     let z = tail.z;
     let y = tail.waterY;
@@ -669,8 +846,11 @@ function traceCourse(
       // "nowhere to go", so it walked its whole run and pooled wherever it
       // had got to — a kilometre and a half of drawn river, wandering past
       // every road on the way, to arrive at the same tarn it could have
-      // made in fifty metres. Now the pour knows, so the course can.
-      if (!reachable) break;
+      // made in fifty metres. Now the pour knows, so the course can — once
+      // it is clear of the crossing: the water is seen to LEAVE the road
+      // and pool beyond it, rather than stopping dead at the far edge of
+      // the mat.
+      if (!reachable && d >= POOL_REACH) break;
       let seaX = 0;
       let seaZ = 0;
       if (target && target.level <= y) {
@@ -683,12 +863,14 @@ function traceCourse(
       // Downhill, bending off any road it runs at — and pooling at one it
       // cannot get around, because the water below the last crossing has
       // nowhere it has to be.
-      const away = d < CROSS_WINDOW ? null : awayFromRoad(roadClear, x, z, width + ROAD_KEEP);
-      let dx = (grade ? grade.x : -Math.sin(phase)) + seaX + (away ? away.x * ROAD_PUSH : 0);
-      let dz = (grade ? grade.z : -Math.cos(phase)) + seaZ + (away ? away.z * ROAD_PUSH : 0);
-      const len = Math.hypot(dx, dz) || 1;
-      dx /= len;
-      dz /= len;
+      const away =
+        d < CROSS_WINDOW ? null : awayFromRoad(roadClear, x, z, width + ROAD_KEEP + PUSH_AHEAD);
+      const { x: dx, z: dz } = stepAcross(
+        (grade ? grade.x : -Math.sin(phase)) + seaX + (away ? away.x * ROAD_PUSH : 0),
+        (grade ? grade.z : -Math.cos(phase)) + seaZ + (away ? away.z * ROAD_PUSH : 0),
+        across,
+        leaving(d),
+      );
       x += dx * STEP;
       z += dz * STEP;
       if (d >= CROSS_WINDOW && block.hit(roadClear(x, z), width + ROAD_KEEP)) break;
@@ -697,8 +879,16 @@ function traceCourse(
       travelled += STEP;
       width += STEP * GATHER;
       const ground = field(x, z);
-      y = Math.min(y, ground - SINK);
-      push(x, z, y, dx, dz);
+      // The crossing's water is ONE level, on the road and beside it: the
+      // ford is a pool the road wades, laid at the lowest ground the
+      // crossing has (`valleyUnder`), and the river holds that level as
+      // far out as that ground was read before it starts to fall. Let fall
+      // from the first step and the sheet on the road stood a metre over
+      // the river running off it — a step in a water surface; held for
+      // the whole crossing window it stood over ground the crossing never
+      // read.
+      if (d >= POOL_REACH) y = Math.min(y, ground - SINK);
+      push(x, z, y, dx, dz, d < CROSS_WINDOW);
       // It reached standing water: the lake IS the end of the river.
       // R35 — ANY standing water, at whatever level the pour left it. A
       // course that only recognises the sea walks straight through the
@@ -719,8 +909,8 @@ function traceCourse(
     // Same for the mouth — and the trim comes FIRST, so a pool forms in the
     // last place the water was actually allowed to be rather than in the
     // corridor the walk died in.
-    trimToRoad(points, from, block.inside - 1);
-    if (endsAt === "pool") poolAt(points, from, widest, cap);
+    trimToRoad(points, from, block.inside);
+    if (endsAt === "pool") poolAt(points, from, widest, cap, roadClear);
   }
 
   const used = anchors.slice(0, joined);

@@ -401,21 +401,29 @@ export function analyzeRoads(track: Track): MetricReport {
           // hill looks like. Measured over seeds 1-8, every finding this
           // raised with the self case in was a switchback on a slope well
           // under `verge.climb` — the check reporting the design.
+          //
+          // What is scored is the EXCESS over the cone — how much higher one
+          // road stands than the country between them may climb to — not
+          // the height itself. A branch thirty metres up a hillside ninety
+          // metres off is a hillside, and read as thirty metres it was an
+          // error whatever the cone allowed; read as the tenth of a metre it
+          // stands over the cone, it is the instrument's stride.
           const drop = Math.abs(p.y - q.y);
-          if (!self && drop > coneAt(d) && drop > R.stepFloor) {
+          const excess = drop - coneAt(d);
+          if (!self && excess > R.stepFloor) {
             steps++;
-            if (drop > worstStep) {
-              worstStep = drop;
+            if (excess > worstStep) {
+              worstStep = excess;
               findings.push({
                 code: "roads.step",
-                severity: drop >= R.stepFail ? "error" : "warn",
+                severity: excess >= R.stepFail ? "error" : "warn",
                 message: `${roads[a].id} and ${roads[b].id} pass ${d.toFixed(
                   0,
-                )} m apart with ${drop.toFixed(
+                )} m apart with ${drop.toFixed(1)} m of height between them, ${excess.toFixed(
                   1,
-                )} m of height between them — the country in between is a face, not a hillside (R31)`,
+                )} m more than the country can climb — a face, not a hillside (R31)`,
                 at: { x: (p.x + q.x) / 2, z: (p.z + q.z) / 2 },
-                value: drop,
+                value: excess,
               });
             }
           }

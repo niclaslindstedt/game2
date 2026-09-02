@@ -22,8 +22,8 @@
 //     map. A river that stops has been drawn, not routed.
 //   Is it IN the ground? Water sits in a channel cut into the land. A
 //     surface drawn over a hillside is the most visible bug there is.
-//   And does it stay OFF the road except where it crosses it? There are no
-//     culverts here: water under a road it does not cross digs the ground
+//   And does it stay OFF the road except where it crosses it? A culvert is
+//     a crossing (R12); water under a road anywhere else digs the ground
 //     out from under the ribbon.
 
 import { roadClearance } from "../mapgen/road.ts";
@@ -252,7 +252,13 @@ export function analyzeWater(track: Track, terrain: TerrainField): MetricReport 
     // pooled is taken at its word, because a pool is water it made itself
     // and there is nothing else to compare it against.
     const mouthGround = terrain.farHeightAt(mouth.x, mouth.z);
-    const inStandingWater = mouthGround < LAKE_Y + 1;
+    // R35 — the water a mouth runs into stands at its OWN level: a tarn on
+    // a shoulder is as much an end as the sea. Asked of the pour's shore,
+    // the way the tracer asks it, rather than of the sea's table alone —
+    // measured against the table, every course that ended in a tarn was
+    // reported as stopping in open country.
+    const inStandingWater =
+      mouthGround < LAKE_Y + 1 || terrain.water.shoreLevelAt(mouth.x, mouth.z) !== null;
     const escaped = offMap(track, mouth.x, mouth.z, W.mouth);
     const ended =
       river.endsAt === "pool" ||
@@ -291,6 +297,23 @@ export function analyzeWater(track: Track, terrain: TerrainField): MetricReport 
   // through it is a puddle the road dips into for no reason.
   let dryCrossings = 0;
   let crossings = 0;
+  // R12 — the culverts first: a stream under the road in a pipe is a
+  // crossing with no wet sample on it, so it is asked by the place the
+  // compiler wrote down.
+  for (const culvert of track.culverts) {
+    crossings++;
+    if (rivers.some((river) => toNearestAnchor(river, culvert.x, culvert.z) < W.crossWindow)) {
+      continue;
+    }
+    dryCrossings++;
+    findings.push({
+      code: "water.dry",
+      severity: "error",
+      message: "the road carries a culvert that no watercourse runs through",
+      at: { x: culvert.x, z: culvert.z },
+      s: culvert.s,
+    });
+  }
   for (let i = 0; i < track.samples.length; i++) {
     const sample = track.samples[i];
     if (sample.surface !== "water" && sample.deck === null) continue;

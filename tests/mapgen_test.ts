@@ -170,6 +170,7 @@ describe("stage generator", () => {
 
   it("R13 — the span decides the architecture: wade it, plank it, or pour it", () => {
     let fords = 0;
+    let culverts = 0;
     let timber = 0;
     let concrete = 0;
     for (const seed of SEEDS) {
@@ -179,6 +180,11 @@ describe("stage generator", () => {
         if (plan.crossing === "ford") {
           fords += 1;
           expect(span).toBeLessThanOrEqual(R.water.fordMax);
+        } else if (plan.crossing === "culvert") {
+          // R12 — a stream the road could not dip to goes under it; the
+          // crossing occupies the pipe's own span of road.
+          culverts += 1;
+          expect(span).toBeCloseTo(R.water.culvert.span, 5);
         } else if (plan.crossing === "timber") {
           timber += 1;
           expect(span).toBeGreaterThan(R.water.fordMax);
@@ -189,9 +195,10 @@ describe("stage generator", () => {
         }
       }
     }
-    // A wet stage band has to actually produce all three, or the rule is
+    // A wet stage band has to actually produce all four, or the rule is
     // only theory.
     expect(fords).toBeGreaterThan(0);
+    expect(culverts).toBeGreaterThan(0);
     expect(timber).toBeGreaterThan(0);
     expect(concrete).toBeGreaterThan(0);
     // Twenty-four LONG stages at the wet end of the dial, which is a good
@@ -259,7 +266,9 @@ describe("stage generator", () => {
     // floor, and never a value at the top.
     expect(share(0.1)).toBeGreaterThan(0.02);
     expect(share(0.25)).toBeGreaterThanOrEqual(share(0.1) * 0.9);
-  }, 90_000);
+    // ...and longer again since R23's height clause: a hilly seed's search
+    // backtracks several times as often for the fold-backs it refuses.
+  }, 150_000);
 
   it("the dials are deterministic, and different dials build different stages", () => {
     const dials = { elevation: 0.8, water: 0.2, trees: 0.9, asphalt: 0.4 };
@@ -323,9 +332,11 @@ describe("stage generator", () => {
     expect(violations).toEqual([]);
   });
 
-  // Sixty seconds because R17 lays the country's tarmac before the route
-  // and the search then has to plan around it: a stage costs roughly twice
-  // what it did, and this walks thirty-two of them.
+  // Two minutes because R17 lays the country's tarmac before the route and
+  // the search then has to plan around it, and R23's height clause refuses
+  // every fold-back the terrain could not build — a hilly seed's search
+  // backtracks several times as often for it — and this walks thirty-two
+  // stages, eight of them on the longest band.
   it("R24 — nothing comes back into the start, on any length", () => {
     const violations: string[] = [];
     for (const length of ["short", "medium", "long", "xlong"] as FiniteStageLength[]) {
@@ -368,7 +379,7 @@ describe("stage generator", () => {
       }
     }
     expect(violations).toEqual([]);
-  }, 60000);
+  }, 120000);
 
   it("R11 — every finite length lands in its band", () => {
     for (const length of ["short", "medium", "long", "xlong"] as FiniteStageLength[]) {
