@@ -343,6 +343,13 @@ export const ANALYSIS = {
      * to move DOWN as the placer gets better at reading the country. */
     unservedShare: 0.5,
 
+    /** R43 — how much more fall a solar farm's ground may show, as a
+     * multiple of the placer's own `energy.solar.slope`, before it is a
+     * hillside. The placer reads the BARE country at a lattice of probes;
+     * the check reads the SHAPED ground at the corners and the middle, and
+     * a road's shelf or a guard's mound at the near corner moves it. */
+    energySlopeSlack: 1.5,
+
     /** R31 — how much HEIGHT two roads passing each other may have between
      * them, over and above what R31's own verge cone allows for the ground
      * they are apart on. Under `stepFloor` nothing is reported at all: the

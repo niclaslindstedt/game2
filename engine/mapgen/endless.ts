@@ -40,6 +40,15 @@ export type StageStream = {
    * of segments is a pure function of the seed — how the calls chunk it
    * makes no difference. */
   extendTo: (upToArc: number) => SegmentPlan[];
+  /** R43 — the road the search has PLANNED but not yet handed out, as the
+   * probe points it holds: what a placer beside the compiled road has to
+   * keep off as well, or the road laid a moment later runs through it. */
+  ahead: () => readonly { x: number; z: number }[];
+  /** R43 — a disc no future road may enter: a thing the compiled road has
+   * stood beside itself (a turbine's pad, a fence) that the search cannot
+   * see any other way. Kept for the life of the stream; a few dozen discs
+   * over an endless run is nothing against the point field. */
+  keepOff: (x: number, z: number, radius: number) => void;
 };
 
 /** The endless stage: the same vocabulary and rules as the finite search,
@@ -108,6 +117,16 @@ export function createStageStream(seed: number, knobs?: Partial<StageKnobs>): St
    * have been handed out (and may never change again). */
   const plans: { plan: SegmentPlan; start: number }[] = [];
   let frozen = 0;
+  /** R43 — the discs the compiled road's own furniture has claimed. */
+  const blocks: { x: number; z: number; r2: number }[] = [];
+  const claimed = (p: Cursor): boolean => {
+    for (const b of blocks) {
+      const dx = p.x - b.x;
+      const dz = p.z - b.z;
+      if (dx * dx + dz * dz < b.r2) return true;
+    }
+    return false;
+  };
 
   const lastLipEnd = (): number => {
     for (let i = plans.length - 1; i >= 0; i--) {
@@ -172,7 +191,11 @@ export function createStageStream(seed: number, knobs?: Partial<StageKnobs>): St
       // error budget is redrawn (a turn's heading is monotonic, so checking
       // the exit covers the whole arc).
       if (Math.abs(angleDiff(end.heading, course)) > R.endless.maxCourseError) continue;
-      if (points.some((p) => field.blocked(p) || entersStart(p, clear) || !keepsDry(p))) continue;
+      if (
+        points.some((p) => field.blocked(p) || claimed(p) || entersStart(p, clear) || !keepsDry(p))
+      ) {
+        continue;
+      }
       commit(plan, points, end);
       return true;
     }
@@ -244,5 +267,11 @@ export function createStageStream(seed: number, knobs?: Partial<StageKnobs>): St
     return added;
   };
 
-  return { extendTo };
+  return {
+    extendTo,
+    ahead: () => field.points,
+    keepOff: (x, z, radius) => {
+      blocks.push({ x, z, r2: radius * radius });
+    },
+  };
 }

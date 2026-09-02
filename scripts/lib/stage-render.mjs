@@ -803,6 +803,37 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
     }
   }
 
+  // ── R43 — the energy: every turbine as its rotor's sweep in pale grey
+  // with the tower a white dot at its middle, and every solar farm as its
+  // fence in the glass's blue with the cabin in it. The rotor is drawn at
+  // its true size — a wind farm is the one thing on the map that needs no
+  // over-scale to be seen.
+  for (const farm of track.windFarms ?? []) {
+    for (const t of farm.turbines) {
+      canvas.disk(px(t.x), pz(t.z), Math.max(3, scale * (farm.rotor / 2)), [0xd9, 0xdd, 0xe2]);
+      canvas.disk(px(t.x), pz(t.z), Math.max(2, scale * 4), [0xff, 0xff, 0xff]);
+    }
+  }
+  const quadOf = (rect, ink) => {
+    const f = { x: Math.sin(rect.heading), z: Math.cos(rect.heading) };
+    const r = { x: Math.cos(rect.heading), z: -Math.sin(rect.heading) };
+    const hw = Math.max(rect.width / 2, 3 / scale);
+    const hd = Math.max(rect.depth / 2, 3 / scale);
+    canvas.poly(
+      [
+        [px(rect.x + r.x * hd + f.x * hw), pz(rect.z + r.z * hd + f.z * hw)],
+        [px(rect.x - r.x * hd + f.x * hw), pz(rect.z - r.z * hd + f.z * hw)],
+        [px(rect.x - r.x * hd - f.x * hw), pz(rect.z - r.z * hd - f.z * hw)],
+        [px(rect.x + r.x * hd - f.x * hw), pz(rect.z + r.z * hd - f.z * hw)],
+      ],
+      ink,
+    );
+  };
+  for (const farm of track.solarFarms ?? []) {
+    quadOf(farm.rect, [0x1c, 0x2d, 0x4f]);
+    if (farm.cabin) quadOf(farm.cabin, [0xcf, 0xd2, 0xd4]);
+  }
+
   // ── R39 — the towns: every lot's pad, its building in its own paint, and
   // the cars outside it. Over-scale like the homesteads, for the same
   // reason: the picture answers WHERE the village is.

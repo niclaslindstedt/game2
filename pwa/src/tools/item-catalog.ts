@@ -26,7 +26,9 @@ import { buildBarn, buildSilo } from "../game/barn.ts";
 import { buildBale, buildFarmGear } from "../game/farm-gear.ts";
 import { createLivestock } from "../game/livestock.ts";
 import { buildFence } from "../game/paddock.ts";
+import { cabinGeometry, tableGeometry } from "../game/solar-farm.ts";
 import { buildTrainCar } from "../game/train.ts";
+import { buildTurbine } from "../game/wind-farm.ts";
 
 import { biomeFor } from "../game/biome.ts";
 import { buildCarBody, type CarBodySpec } from "../game/car-body.ts";
@@ -738,6 +740,41 @@ const RAIL_ITEMS: ItemDef[] = TRAIN_CARS.map((car): ItemDef => ({
   build: ({ rng }) => ({ object: buildTrainCar(car, rng), views: CAR_ORBITS }),
 }));
 
+/** R43 — the energy: the machine on the ridge and the tables in the field.
+ * Both use the lit material every other built thing does, so the sheet
+ * shows them in the world's own light. */
+const ENERGY_ITEMS: ItemDef[] = [
+  {
+    id: "turbine",
+    group: "energy",
+    note: "a wind turbine at the band's middle — two hundred metres to the tip, the beacon on the nacelle",
+    build: ({ rng }) => ({ object: buildTurbine(rng) }),
+  },
+  {
+    id: "solar-table",
+    group: "energy",
+    note: "one table of a solar farm: the glass tilted to the sun, the legs and the beam under it",
+    build: ({ rng }) => ({
+      object: new THREE.Mesh(
+        tableGeometry(rng),
+        new THREE.MeshLambertMaterial({ vertexColors: true }),
+      ),
+      views: CAR_ORBITS,
+    }),
+  },
+  {
+    id: "solar-cabin",
+    group: "energy",
+    note: "the inverter cabin inside the fence",
+    build: ({ rng }) => ({
+      object: new THREE.Mesh(
+        cabinGeometry(rng),
+        new THREE.MeshLambertMaterial({ vertexColors: true }),
+      ),
+    }),
+  },
+];
+
 /** Every item the sheet knows how to stand up, in the order it lists them. */
 export function itemCatalog(): ItemDef[] {
   return [
@@ -749,6 +786,7 @@ export function itemCatalog(): ItemDef[] {
     ...FARM_ITEMS,
     ...TOWN_ITEMS,
     ...RAIL_ITEMS,
+    ...ENERGY_ITEMS,
     ...BREAKAGE_ITEMS,
     stoneItem("boulder", false, 1.3, 0.37),
     stoneItem("boulder", true, 1.3, 0.37),

@@ -18,7 +18,7 @@ import type {
 } from "./rules.ts";
 import { SAMPLE_STEP, STAGE_RULES as R, knobScale, resolveKnobs } from "./rules.ts";
 import { generateStage, layStageHighways } from "./generate.ts";
-import { createStageStream } from "./endless.ts";
+import { createStageStream, type StageStream } from "./endless.ts";
 import { createRng } from "../lib/prng.ts";
 import { cellKey } from "../lib/math.ts";
 import { hash2 } from "../lib/noise.ts";
@@ -31,10 +31,17 @@ import {
   valueNoise1d as valueNoise,
 } from "./rolling.ts";
 import { valleyUnder } from "./terrain.ts";
-import { junctionFlat, junctionMainEdge, junctionPlatformY, ROAD_CROSS } from "./road.ts";
+import {
+  junctionFlat,
+  junctionMainEdge,
+  junctionPlatformY,
+  ROAD_CROSS,
+  roadClearance,
+} from "./road.ts";
 import { buildSpur, cutSpur, placeBlock, SPUR, type ShelfBand, type Spur } from "./spurs.ts";
 import { placeHomesteads, type Homestead } from "./homesteads.ts";
 import { placeTowns, type Town } from "./towns.ts";
+import { placeSolarFarms, placeWindFarms, type SolarFarm, type WindFarm } from "./energy.ts";
 import { createHighwayNetwork, type Highway } from "./highway.ts";
 import { drawSchedule, joinRailLine, type RailCrossing } from "./railway.ts";
 
@@ -279,6 +286,12 @@ export type Track = {
    * The street itself is road already on the track; this is what stands
    * beside it. */
   towns: Town[];
+  /** R43 — the wind farms: each a string of turbines on the high ground
+   * off the stage, the towers solid and their crane pads flattened. */
+  windFarms: WindFarm[];
+  /** R43 — the solar farms: each a fenced rectangle of panel tables on
+   * level ground beside the stage, a clearing the forest keeps off. */
+  solarFarms: SolarFarm[];
   /** R17 — the junctions themselves: where two roads MEET, and the paved
    * apron that makes them one surface there instead of two ribbons that
    * happen to touch. The terrain flattens it and the renderer paves it. */
@@ -779,6 +792,11 @@ function createCompiler(
    * that must come out ALL GRAVEL rather than quietly falling back to
    * painting stripes on the racing line. */
   borrowed = false,
+  /** R43 — the endless stream behind this track, when there is one: the
+   * road it has planned past the frontier, and the discs the compiled road
+   * may claim from its future. A finite stage has its whole route in its
+   * samples and needs neither. */
+  stream?: Pick<StageStream, "ahead" | "keepOff">,
 ): Compiler {
   const cursor: Cursor = { x: 0, z: 0, heading: 0, s: 0, rollS: 0, baseY: 0, baseSlope: 0 };
   /** The bare country the stage is laid across — the branches steer by it
@@ -2477,6 +2495,9 @@ function createCompiler(
     // road there is and off the towns, and the branches are only all there
     // once the forks are built.
     buildHomesteads();
+    // R43 — and the energy after the settled places, because a turbine and
+    // a fence both keep off a yard, and never the other way round.
+    buildEnergy();
   };
 
   /** R39 — the towns whose streets are settled on road committed since the
@@ -2575,6 +2596,85 @@ function createCompiler(
     });
     track.homesteads.push(...placed);
     homesteadFrom = to;
+  };
+
+  /** R43 — the wind farms and the solar farms whose slots fall on road
+   * committed since the last call, on the homesteads' window and for the
+   * homesteads' reasons: none on a synthetic rig, none in a country that
+   * makes no power. */
+  let energyFrom = 0;
+  const buildEnergy = (): void => {
+    if (!followsLand || !biome.energy) return;
+    let to = track.samples.length;
+    if (track.endless) {
+      const horizon = track.samples[to - 1].s - STREAMED_HOLD;
+      while (to > energyFrom && track.samples[to - 1].s > horizon) to--;
+    }
+    if (to <= energyFrom) return;
+    const whole = roadDistanceField()({ x: 0, z: 0 });
+    // On a stream the route does not stop at the frontier: the search is
+    // a commit lag ahead of it, and a tower placed against the compiled
+    // road alone stands in the way of road already decided. So the planned
+    // points count as route too — and what gets placed is claimed back from
+    // the search's future, so no road planned later runs through it.
+    const ahead = stream?.ahead() ?? [];
+    const aheadDistance = (x: number, z: number): number => {
+      let best = Infinity;
+      for (const p of ahead) {
+        const d2 = (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z);
+        if (d2 < best) best = d2;
+      }
+      return Math.sqrt(best);
+    };
+    const ctx = {
+      seed: track.seed,
+      width: track.width,
+      samples: track.samples,
+      from: energyFrom,
+      to,
+      finishS: track.finishS,
+      land,
+      routeDistance: (x: number, z: number) =>
+        Math.min(whole(x, z, false), ahead.length > 0 ? aheadDistance(x, z) : Infinity),
+      branchDistance: branchClearance(track.spurs),
+      highwayDistance: (x: number, z: number) =>
+        highways.nearest(x, z, undefined, HIGHWAY_LOOK)?.d ?? Infinity,
+      shelfBand,
+      settledDistance: (x: number, z: number) => {
+        let best = Infinity;
+        for (const h of track.homesteads) {
+          const d = Math.hypot(h.yard.x - x, h.yard.z - z) - h.yard.radius;
+          if (d < best) best = d;
+        }
+        for (const town of track.towns) {
+          for (const lot of town.lots) {
+            const d = Math.hypot(lot.pad.x - x, lot.pad.z - z) - lot.pad.radius;
+            if (d < best) best = d;
+          }
+        }
+        return best;
+      },
+      wind: track.windFarms,
+      solar: track.solarFarms,
+    };
+    // The wind first: a string of towers is the rarer, bigger thing, and a
+    // fence that keeps off a tower is cheaper than a tower that keeps off a
+    // fence.
+    const wind = placeWindFarms(ctx);
+    track.windFarms.push(...wind);
+    const solar = placeSolarFarms(ctx);
+    track.solarFarms.push(...solar);
+    if (stream) {
+      const keep = roadClearance(track.width);
+      for (const farm of wind) {
+        for (const t of farm.turbines) stream.keepOff(t.x, t.z, R.energy.wind.pad.radius + keep);
+      }
+      for (const farm of solar) {
+        const { rect } = farm;
+        stream.keepOff(rect.x, rect.z, Math.hypot(rect.width, rect.depth) / 2 + keep);
+      }
+    }
+    energyFrom = to;
   };
 
   return { append };
@@ -2857,6 +2957,8 @@ function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs, circuit =
     spurs: [],
     homesteads: [],
     towns: [],
+    windFarms: [],
+    solarFarms: [],
     junctions: [],
     rails: [],
     culverts: [],
@@ -2936,8 +3038,18 @@ export function compileStage(
     return track;
   }
   const track = emptyTrack(seed, true, dials);
-  const compiler = createCompiler(track, rolling, paving, bumps, widthAt);
   const stream = createStageStream(seed, dials);
+  const compiler = createCompiler(
+    track,
+    rolling,
+    paving,
+    bumps,
+    widthAt,
+    undefined,
+    true,
+    false,
+    stream,
+  );
   track.extend = (upToS: number): boolean => {
     if (track.length >= upToS) return false;
     const plans = stream.extendTo(upToS);

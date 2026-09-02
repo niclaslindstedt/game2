@@ -363,6 +363,23 @@
 //       stays unserved, which `roads.served` reports. The pad is a pad the
 //       terrain flattens, the road is a road it shelves, and the cars are
 //       as solid as they look.
+//   R43 THE COUNTRY MAKES POWER. A stage in a modern country
+//       (`BiomeRules.energy`) runs past the two things a hillside has on it
+//       now: WIND FARMS and SOLAR FARMS. A wind farm is a string of three
+//       to seven turbines, each two hundred metres to the blade tip, on the
+//       highest dry ground a band off the road — the first tower where a
+//       lateral probe from the stage finds the country rising, the rest
+//       along a string that follows the road's bearing and walks each tower
+//       onto the highest ground near its slot; every foot stands over the
+//       road it is seen from, off every road's corridor by more than a
+//       rotor, and on a crane pad of graded gravel the terrain flattens.
+//       A solar farm is a fenced rectangle of panel tables on level ground
+//       beside the stage, from a paddock's worth to a field of them, every
+//       one facing the sun's own azimuth (`energy.solar.facing`) — a
+//       clearing the forest keeps off, with the fence, the tables and the
+//       inverter cabin as solid as they look. Both keep off the water,
+//       every road, every town and homestead, and each other, and neither
+//       costs the route anything. `roads.energy` measures every one.
 
 import { isBiomeId, type BiomeId } from "./biomes.ts";
 
@@ -2058,6 +2075,120 @@ export const STAGE_RULES = {
        * rolled one, largest first: a hillside that will not take a hectare
        * often takes half of one. */
       shrink: [1, 0.75, 0.55],
+    },
+  },
+
+  /** R43 — THE ENERGY: the wind farms on the high ground and the solar
+   * farms on the flat. Only in a country modern enough to have built them
+   * (`BiomeRules.energy`). Meters unless noted. */
+  energy: {
+    /** THE WIND FARMS: a string of turbines along a rise off the stage,
+     * each two hundred metres to the blade tip, seen from a kilometre
+     * before the road gets near them. */
+    wind: {
+      /** The stage is walked in slots this far apart, each rolling against
+       * `spacing.mean`; `spacing.min` is the floor between two strings
+       * along the stage. A wind farm is a landmark — one or two on a stage,
+       * never a row of them. */
+      slot: 60,
+      spacing: { mean: 900, min: 800 },
+      /** The stage's two ends are left alone (R2, R25). */
+      keepOff: { start: 300, finish: 200 },
+      /** How far off the route's centerline the string is looked for, and
+       * how finely the lateral ray is probed: the highest dry ground in
+       * that band is where the first tower stands. Near enough that the
+       * towers fill the sky over the road (the fog takes everything past
+       * half a kilometre), far enough that a blade tip never sweeps it. */
+      offset: { min: 170, max: 400 },
+      probe: 30,
+      /** The least a turbine's foot stands over the road it is seen from:
+       * a wind farm is on the HIGH ground, or it is not one. And the most
+       * a tower on the string may stand UNDER the first — the string was
+       * placed for the rise, and a tower that has walked off it into the
+       * bog beside is not on the rise. */
+      rise: 3,
+      drop: 30,
+      /** The least a tower's foot keeps from the route's centerline, from
+       * any other road's, and from a town's or a homestead's pad. The route
+       * figure is the rotor's radius plus the road's own corridor with
+       * room to spare. */
+      clear: { route: 150, road: 70, settled: 160, solar: 90 },
+      /** How many towers a string is: under `count.min` it is not a farm
+       * and is not built. */
+      count: { min: 3, max: 7 },
+      /** How far apart the towers stand along the string — a little over a
+       * rotor's diameter and a half, the closest a real string is packed —
+       * and how far the string may swing off the road's own heading, rad,
+       * so every tower stays in the band the road sees it from. */
+      pitch: { min: 190, max: 260 },
+      swing: 0.45,
+      /** How far each tower may walk off its slot on the string to the
+       * highest ground near it: a string follows the ridge, not a ruler. */
+      seek: 40,
+      /** THE TURBINE: hub height and rotor diameter, drawn once per farm
+       * (a string is one make of machine). Modern onshore sizes. */
+      hub: { min: 105, max: 125 },
+      rotor: { min: 120, max: 140 },
+      /** The crane pad each tower stands on: a disc of graded gravel, how
+       * far past its rim the country is eased back onto it, and how far
+       * out of level the bare ground may be across it. */
+      pad: { radius: 16, blend: 14, level: 7 },
+      /** How far apart two farms' towers have to be on the map. */
+      apart: 500,
+    },
+    /** THE SOLAR FARMS: panels en masse on level ground beside the stage,
+     * fenced, all facing the same way — from a paddock's worth to a field
+     * of them. */
+    solar: {
+      slot: 40,
+      spacing: { mean: 600, min: 520 },
+      /** The stage's two ends, and the road either side of a FORD or a
+       * BRIDGE along it: a ford's channel runs tens of metres either side
+       * of the road (R18), and a fence beside it is a fence in a river. */
+      keepOff: { start: 260, finish: 160, water: 90 },
+      /** Tightest corner (as a radius, m) a farm is laid beside. */
+      straight: 80,
+      /** How far the fence stands off the route's corridor: the gap
+       * between the road's outer verge and the nearest fence line. */
+      gap: { min: 18, max: 90 },
+      /** The bearing the panels FACE, rad — the sun's own azimuth, the one
+       * `pwa/src/game/sky.ts` lights the world from (`SUN_AZIMUTH`; a test
+       * holds the two together). Every farm on every stage faces it, so a
+       * driver learns which way is south. And how steeply they are tilted
+       * toward it, rad. */
+      facing: 0.9,
+      tilt: 0.55,
+      /** THE SIZES: how often each is rolled, and its fence's extent —
+       * `width` along the rows, `depth` across them. */
+      sizes: [
+        { chance: 0.5, width: { min: 30, max: 60 }, depth: { min: 20, max: 40 } },
+        { chance: 0.3, width: { min: 70, max: 120 }, depth: { min: 50, max: 80 } },
+        { chance: 0.2, width: { min: 140, max: 220 }, depth: { min: 90, max: 150 } },
+      ],
+      /** How far out of level the ground may be across the fence, as a
+       * grade over the rect's diagonal: the tables follow the ground, but a
+       * hillside is a hillside. */
+      slope: 0.07,
+      /** THE ROWS: how far in from the fence the rows start across them,
+       * how far in from the fence they END along their length (room for the
+       * cabin and a track round the ends), how far apart the rows stand (a
+       * table's shadow at a low sun), how long one table is along the row
+       * and the gap between tables, and how deep a table is across the row. */
+      margin: 4,
+      end: 6,
+      row: { pitch: 6.5, table: 8, gap: 0.8, depth: 3.2 },
+      /** The fence: a post every `postPitch` metres, and a gate this wide
+       * in the side nearest the road. */
+      fence: { postPitch: 3.2, gate: 5 },
+      /** The inverter cabin just inside the gate. */
+      cabin: { width: 5.5, depth: 3.2 },
+      /** What a fence line keeps from any other road's centerline, from a
+       * town's or a homestead's pad, and from a turbine's foot. */
+      clear: { road: 40, settled: 110, wind: 90 },
+      /** How far apart two farms have to be on the map, fence to fence. */
+      apart: 300,
+      /** The sizes a farm is tried at, as shares of the rolled one. */
+      shrink: [1, 0.75, 0.55, 0.42],
     },
   },
 

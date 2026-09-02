@@ -807,6 +807,101 @@ export function analyzeRoads(track: Track, terrain: TerrainField): MetricReport 
     });
   }
 
+  /** The route's elevation at an arc position: the road a farm was placed
+   * FROM, which is the road the rule's rise is measured over — a stage that
+   * folds back can bring a higher piece of road nearer the string later,
+   * and that one has no claim on it. */
+  const routeElevationAt = (t: Track, atS: number): number => {
+    let sample = t.samples[0];
+    for (const s of t.samples) {
+      sample = s;
+      if (s.s >= atS) break;
+    }
+    return sample.elevation;
+  };
+
+  // ── R43 — DOES THE COUNTRY MAKE POWER WHERE IT SHOULD? ─────────────────
+  //
+  // Every wind farm stands OVER the road it is seen from, every tower off
+  // the route by more than a rotor and off every other road; every solar
+  // farm is fenced on ground level enough for its rows, off the route's
+  // corridor and out of the water at every corner.
+  const E = STAGE_RULES.energy;
+  let badPlants = 0;
+  const plants = track.windFarms.length + track.solarFarms.length;
+  for (const farm of track.windFarms) {
+    const wrong: string[] = [];
+    let top = -Infinity;
+    const roadUnder = routeElevationAt(track, farm.atS);
+    for (const t of farm.turbines) {
+      const d = terrain.roadDistanceAt(t.x, t.z);
+      if (d < farm.rotor / 2 + half + ROAD_CROSS.reach) {
+        wrong.push(`a tower ${d.toFixed(0)} m off the route, inside its rotor's sweep`);
+        break;
+      }
+      if (terrain.waterAt(t.x, t.z) !== null) {
+        wrong.push("a tower standing in water");
+        break;
+      }
+      if (t.y > top) top = t.y;
+    }
+    if (farm.turbines.length < E.wind.count.min) wrong.push("a string too short to be a farm");
+    if (top - roadUnder < E.wind.rise - E.wind.pad.level) {
+      wrong.push(`its top pad ${(top - roadUnder).toFixed(0)} m over the road — no rise`);
+    }
+    if (wrong.length === 0) continue;
+    badPlants++;
+    findings.push({
+      code: "roads.energy",
+      severity: "error",
+      message: `the wind farm @${farm.atS.toFixed(0)} m has ${wrong.join(", ")} (R43)`,
+      at: { x: farm.turbines[0].x, z: farm.turbines[0].z },
+      s: farm.atS,
+      value: wrong.length,
+    });
+  }
+  for (const farm of track.solarFarms) {
+    const wrong: string[] = [];
+    const { rect } = farm;
+    const fwd = { x: Math.sin(rect.heading), z: Math.cos(rect.heading) };
+    const right = { x: Math.cos(rect.heading), z: -Math.sin(rect.heading) };
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const u of [-0.5, 0, 0.5]) {
+      for (const v of [-0.5, 0, 0.5]) {
+        const x = rect.x + right.x * u * rect.depth + fwd.x * v * rect.width;
+        const z = rect.z + right.z * u * rect.depth + fwd.z * v * rect.width;
+        if (terrain.roadDistanceAt(x, z) < half + ROAD_CROSS.reach) {
+          wrong.push("its fence in the route's corridor");
+        }
+        if (terrain.waterAt(x, z) !== null) wrong.push("a corner in the water");
+        const y = terrain.groundAt(x, z);
+        if (y < lo) lo = y;
+        if (y > hi) hi = y;
+      }
+    }
+    if (farm.rows < 1 || farm.perRow < 1) wrong.push("no tables");
+    // A farm laid at the top of a road's cutting shows more fall on the
+    // SHAPED ground than the placer read off the bare country: the tables
+    // follow the ground table by table, so it is a blemish — a farm on a
+    // hillside — and not a defect, which is why it is a warning on its own.
+    const diagonal = Math.hypot(rect.width, rect.depth);
+    const steep = hi - lo > E.solar.slope * diagonal * R.energySlopeSlack;
+    if (wrong.length === 0 && !steep) continue;
+    badPlants++;
+    findings.push({
+      code: "roads.energy",
+      severity: wrong.length > 0 ? "error" : "warn",
+      message:
+        wrong.length > 0
+          ? `the solar farm @${farm.atS.toFixed(0)} m has ${[...new Set(wrong)].join(", ")} (R43)`
+          : `the solar farm @${farm.atS.toFixed(0)} m stands on ${(hi - lo).toFixed(1)} m of fall (R43)`,
+      at: { x: rect.x, z: rect.z },
+      s: farm.atS,
+      value: Math.max(wrong.length, 1),
+    });
+  }
+
   const points = roads.reduce((sum, road) => sum + road.points.length, 0);
   const checks: Check[] = [
     {
@@ -928,6 +1023,13 @@ export function analyzeRoads(track: Track, terrain: TerrainField): MetricReport 
       weight: 1.5,
       value: badParks,
     },
+    {
+      id: "energy",
+      label: "every wind farm stands over the road and every solar farm on the level (R43)",
+      score: rate(badPlants, Math.max(1, plants)),
+      weight: 1,
+      value: badPlants,
+    },
   ];
 
   return {
@@ -960,6 +1062,9 @@ export function analyzeRoads(track: Track, terrain: TerrainField): MetricReport 
       unserved,
       carParks: parks.length,
       badParks,
+      windFarms: track.windFarms.length,
+      solarFarms: track.solarFarms.length,
+      badPlants,
     },
     ms: Date.now() - started,
   };
