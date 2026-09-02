@@ -4,18 +4,21 @@
 //
 // A sound cannot be judged from a diff and a two-minute score cannot be judged
 // by reading its note tokens, so this builds a single self-contained page that
-// plays the ACTUAL shipped audio: the same synth, the same bank, the same
-// sequencer, the same road bed. Three sections:
+// plays the ACTUAL shipped audio: the same synth, the same banks, the same
+// sequencer, the same beds. Four sections:
 //
-//   THE BANK   every sound in the game, one button each, with the description
-//              it was written against printed beside it.
-//   THE SCORES the menu and stage themes, played by the real sequencer, with
-//              a per-voice mute so a mix can actually be picked apart.
-//   THE ROAD   the continuous bed under sliders — revs, load, speed, surface,
-//              how hard it is cornering, how sideways it has gone, in the air.
-//              The engine, the tyres, the wind and the drift are functions of
-//              those numbers and there is no other honest way to hear them
-//              than to move them.
+//   THE SCORES every score in the game, played by the real sequencer, with a
+//              per-voice mute so a mix can actually be picked apart.
+//   THE ROAD   the continuous beds under sliders — revs, load, speed, surface,
+//              how hard it is cornering, how sideways it has gone, the
+//              weather — and a row of SEATS, because the mix moves with the
+//              camera. The engine, the tyres, the wind, the drift and the
+//              weather are functions of those numbers and there is no other
+//              honest way to hear them than to move them.
+//   THE WORLD  the country: which one, what hour, and how near the crowd, a
+//              paddock and a train are — the ambience under sliders.
+//   THE BANKS  every discrete sound in the game, one button each, with the
+//              description it was written against printed beside it.
 //
 // The page carries no scripts of its own beyond the wiring: the audio code is
 // the repo's own TypeScript, compiled by `tsc` and inlined, so this can never
@@ -41,16 +44,20 @@ const out = outArg >= 0 ? args[outArg + 1] : join(root, "previews", "audition.ht
 // to be listed BEFORE the ones that call into it.
 //
 // `voice.ts` is mostly types, which is exactly the trap: it also holds
-// `envelopeShape` and `safeCutoff`, which every voice the synth plays goes
-// through. Leave it out and `tsc` erases the import, the page builds clean,
-// and the first button anyone presses throws `envelopeShape is not defined`.
+// `envelopeShape`, `safeCutoff` and the shaper's arithmetic, which every
+// voice the synth plays goes through. Leave it out and `tsc` erases the
+// import, the page builds clean, and the first button anyone presses throws.
 const RUNTIME = [
   "pwa/src/lib/voice.ts",
   "pwa/src/lib/synth.ts",
   "pwa/src/lib/tracker.ts",
   "pwa/src/game/audio/play.ts",
-  "pwa/src/game/audio/engine-bed.ts",
-  "pwa/src/game/audio/road-grain.ts",
+  "pwa/src/game/audio/rack.ts",
+  "pwa/src/game/audio/listener.ts",
+  "pwa/src/game/audio/engine-voice.ts",
+  "pwa/src/game/audio/road-voice.ts",
+  "pwa/src/game/audio/bank-world.ts",
+  "pwa/src/game/audio/ambience.ts",
 ];
 
 /** Compile the runtime modules to plain JS and return one concatenated blob. */
@@ -65,9 +72,6 @@ function compileRuntime() {
         join(root, "node_modules", ".bin", "tsc"),
         [
           ...RUNTIME.map((rel) => join(root, rel)),
-          // road-grain imports a constant from engine-bed, so that one edge is
-          // real; everything else is types. Stripping the import lines below is
-          // safe because the concatenation order above already satisfies it.
           "--outDir",
           dir,
           "--rootDir",
@@ -82,6 +86,10 @@ function compileRuntime() {
           // the emit-time flag that rewrites them, and the only one compatible
           // with actually producing JavaScript.
           "--rewriteRelativeImportExtensions",
+          // Emit only. The modules are typechecked by `make lint`; here the
+          // `@engine` type imports would fail to resolve without the repo's
+          // tsconfig paths, and they are erased from the emit anyway.
+          "--noCheck",
           "--skipLibCheck",
         ],
         { cwd: dir, stdio: ["ignore", "pipe", "pipe"] },
@@ -92,11 +100,10 @@ function compileRuntime() {
       process.stderr.write(String(err.stdout ?? "") + String(err.stderr ?? ""));
       throw new Error("tsc failed to compile the audio runtime", { cause: err });
     }
-    // EACH MODULE GETS ITS OWN SCOPE. Concatenating them flat put two
-    // private `TICK_MS` constants in one scope and the page died on load, so
-    // every file is wrapped in an IIFE that returns its exports and those are
-    // destructured into the shared scope for the modules that follow. Private
-    // names stay private, which is what the module system was doing.
+    // EACH MODULE GETS ITS OWN SCOPE, wrapped in an IIFE that returns its
+    // exports; those are destructured into the shared scope for the modules
+    // that follow. Private names stay private, which is what the module
+    // system was doing.
     return RUNTIME.map((rel) => {
       const js = readFileSync(join(dir, rel.replace(/\.ts$/, ".js")), "utf8");
       const names = [
@@ -116,17 +123,29 @@ function compileRuntime() {
 
 const { RUN_BANK } = await import(join(root, "pwa/src/game/audio/bank.ts"));
 const { UI_BANK } = await import(join(root, "pwa/src/game/audio/bank-ui.ts"));
-const { MENU_TRACK } = await import(join(root, "pwa/src/game/audio/scores/menu.ts"));
-const { TAIGA_TRACK } = await import(join(root, "pwa/src/game/audio/scores/taiga.ts"));
+const { WORLD_BANK } = await import(join(root, "pwa/src/game/audio/bank-world.ts"));
 const { trackSeconds } = await import(join(root, "pwa/src/lib/tracker.ts"));
+
+/** Every score, its title, and where the game plays it. */
+const SCORE_FILES = [
+  ["menu", "SERVICE PARK", "Behind every menu page", "MENU_TRACK"],
+  ["taiga", "TAIGA, FLAT OUT", "The taiga on a clear day", "TAIGA_TRACK"],
+  ["spruce", "BLACK SPRUCE", "The taiga in rain or a storm", "SPRUCE_TRACK"],
+  ["polar", "MIDNIGHT SUN", "The taiga at dawn, dusk or night", "POLAR_TRACK"],
+  ["desert", "SALT PAN", "The desert, whatever the sky", "DESERT_TRACK"],
+  ["circuit", "SHORT CIRCUIT", "Any circuit stage", "CIRCUIT_TRACK"],
+  ["endless", "LONG HAUL", "Any endless stage", "ENDLESS_TRACK"],
+];
+const scores = {};
+for (const [id, title, where, name] of SCORE_FILES) {
+  const mod = await import(join(root, `pwa/src/game/audio/scores/${id}.ts`));
+  scores[id] = { title, where, track: mod[name] };
+}
 
 const runtime = compileRuntime();
 const data = JSON.stringify({
-  banks: { "THE CAR AND THE STAGE": RUN_BANK, "THE INTERFACE": UI_BANK },
-  scores: {
-    menu: { title: "STARTING RAMP", track: MENU_TRACK },
-    taiga: { title: "TAIGA, FLAT OUT", track: TAIGA_TRACK },
-  },
+  banks: { "THE CAR AND THE STAGE": RUN_BANK, "THE WORLD": WORLD_BANK, "THE INTERFACE": UI_BANK },
+  scores,
 });
 
 const page = `<!doctype html>
@@ -171,8 +190,6 @@ const page = `<!doctype html>
   }
   .wrap { max-width: 1100px; margin: 0 auto; }
 
-  /* The masthead reads like the board over a service bay: a rule, a name in
-     condensed caps, and the count of what is on the truck. */
   header { padding: 40px 0 22px; border-bottom: 2px solid var(--amber); }
   h1 {
     font: 700 clamp(30px, 6vw, 52px)/0.98 var(--display);
@@ -199,8 +216,6 @@ const page = `<!doctype html>
   }
   h2 + .sub { color: var(--dim); font-size: 14px; margin: 0 0 16px; max-width: 62ch; }
 
-  /* The transport strip. Sticky, because the unlock is the one control the
-     page is useless without and the page is long. */
   .transport {
     position: sticky; top: 0; z-index: 5;
     display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
@@ -234,9 +249,6 @@ const page = `<!doctype html>
   .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 16px; }
 
-  /* A sound is a NAME, a play control, its LAYERS, and the sentence it was
-     written against. The layer chips are the information design: they say
-     what a sound is actually made of before you hear it. */
   .sound { display: grid; gap: 10px; align-content: start; }
   .sound .top { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
   .id { font: 500 13px/1 var(--mono); letter-spacing: 0.02em; color: var(--ink); }
@@ -248,33 +260,30 @@ const page = `<!doctype html>
   .chip.tone { border-color: color-mix(in srgb, var(--amber) 45%, var(--line)); color: var(--amber); }
   .desc { color: var(--dim); font-size: 14px; line-height: 1.55; margin: 0; }
 
-  /* A score is a spec line and a rack of voice switches. */
   .score .spec {
     display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px 18px; margin: 14px 0 6px;
   }
   .score .spec div { display: grid; gap: 3px; }
-  .score .spec dt, .score .spec .k {
+  .score .spec .k {
     font: 600 10px/1 var(--display); letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim);
   }
   .score .spec .v { font: 500 17px/1 var(--mono); font-variant-numeric: tabular-nums; }
   .score h3 { font: 700 22px/1.05 var(--display); letter-spacing: 0.04em; text-transform: uppercase; margin: 0; }
+  .score .where { color: var(--amber); font: 600 11px/1.4 var(--display); letter-spacing: 0.2em; text-transform: uppercase; margin: 6px 0 0; }
   .order { font: 400 12px/1.5 var(--mono); color: var(--dim); word-break: break-word; }
   .rack { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 14px; }
   .rack button { padding: 5px 10px; font-size: 11px; letter-spacing: 0.1em; }
-  /* A voice that is SOUNDING is outlined, not filled: twenty amber blocks
-     would spend the page's one bold colour on its least important control.
-     A muted one recedes and wears a rule through it. */
   .rack button.on { background: transparent; color: var(--amber); border-color: color-mix(in srgb, var(--amber) 55%, var(--line)); }
   .rack button:not(.on) { color: var(--dim); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--dim) 60%, transparent); }
 
-  /* The console: sliders that are read as a column of gauges. */
   .sl { display: grid; grid-template-columns: 108px 1fr 52px; gap: 14px; align-items: center; margin: 10px 0; }
   .sl .k { font: 600 11px/1 var(--display); letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim); }
   .sl .v { font: 500 14px/1 var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
   input[type="range"] { width: 100%; accent-color: var(--amber); }
   input[type="range"]:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
-  .switches { display: flex; gap: 6px; flex-wrap: wrap; margin: 16px 0 4px; }
+  .switches { display: flex; gap: 6px; flex-wrap: wrap; margin: 16px 0 4px; align-items: center; }
+  .switches .k { font: 600 11px/1 var(--display); letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim); margin-right: 6px; }
 
   footer { color: var(--dim); font-size: 13px; margin-top: 52px; border-top: 1px solid var(--line); padding-top: 16px; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -299,28 +308,40 @@ const page = `<!doctype html>
 
   <h2>The scores</h2>
   <p class="sub">
-    Two looping tracker arrangements. Mute the voices one at a time — it is the only way to hear
-    what any single line is contributing to a mix.
+    Seven looping tracker arrangements — one for the menu and one for each kind of stage the
+    game can put a car on. Mute the voices one at a time: it is the only way to hear what any
+    single line is contributing to a mix.
   </p>
   <div class="grid" id="scores"></div>
 
   <h2>The road</h2>
   <p class="sub">
-    The continuous bed: the engine, the tyres, the wind, the drift and the weather. None of it is a
-    clip — all five are functions of the numbers below, so the only honest way to judge them is to
-    move them. <b>Rain</b> is the one that changes what a surface IS rather than adding to it: take
-    gravel up to 1 and the stones stop rattling and start squelching.
+    The continuous beds: the engine, the tyres, the wind, the drift and the weather. None of it
+    is a clip — every layer is built once and STEERED by the numbers below, so the only honest
+    way to judge them is to move them. <b>Rain</b> changes what a surface IS: take gravel up to 1
+    and the stones stop rattling and start squelching. And the <b>seat</b> moves the whole mix.
   </p>
   <div class="panel">
     <div class="switches"><button id="road" class="primary" type="button">Start the car</button></div>
     <div id="sliders"></div>
   </div>
 
+  <h2>The world</h2>
+  <p class="sub">
+    The country the road runs through: birds in the spruce, cicadas on the flats, an owl at dusk,
+    the crowd at the line, a paddock, a train. All of it thins with speed — at the top of fourth
+    the wind is the only thing outside the car anyone can hear.
+  </p>
+  <div class="panel">
+    <div class="switches"><button id="world" class="primary" type="button">Open the window</button></div>
+    <div id="worldSliders"></div>
+  </div>
+
   <div id="banks"></div>
 
   <footer>
-    Built by <span class="id">make audition</span> from the repository's own synth, bank, sequencer
-    and road grain. If it sounds right here, it sounds right in the game.
+    Built by <span class="id">make audition</span> from the repository's own synth, banks, sequencer
+    and beds. If it sounds right here, it sounds right in the game.
   </footer>
 </div>
 
@@ -351,6 +372,40 @@ function el(tag, className, text) {
   return node;
 }
 
+/** A row of exclusive switches; \`onPick\` gets the chosen value. */
+function switchRow(parent, label, choices, initial, onPick) {
+  const row = el("div", "switches");
+  row.append(el("span", "k", label));
+  const buttons = [];
+  for (const choice of choices) {
+    const b = el("button", choice === initial ? "on" : null, choice);
+    b.type = "button";
+    b.addEventListener("click", () => {
+      for (const other of buttons) other.className = "";
+      b.className = "on";
+      onPick(choice);
+    });
+    buttons.push(b);
+    row.append(b);
+  }
+  parent.append(row);
+}
+
+/** A slider row bound to \`store[id]\`. */
+function sliderRow(parent, store, id, label, initial) {
+  store[id] = initial;
+  const row = el("label", "sl");
+  const input = document.createElement("input");
+  Object.assign(input, { type: "range", min: 0, max: 1, step: 0.01, value: initial });
+  const read = el("span", "v", initial.toFixed(2));
+  input.addEventListener("input", () => {
+    store[id] = Number(input.value);
+    read.textContent = store[id].toFixed(2);
+  });
+  row.append(el("span", "k", label), input, read);
+  parent.append(row);
+}
+
 // ── The scores ─────────────────────────────────────────────────────────────
 const scores = document.getElementById("scores");
 let playing = null;
@@ -358,7 +413,7 @@ const transports = [];
 for (const [id, entry] of Object.entries(DATA.scores)) {
   const track = entry.track;
   const card = el("div", "panel score");
-  card.append(el("h3", null, entry.title));
+  card.append(el("h3", null, entry.title), el("p", "where", entry.where));
 
   const seconds = (flattenTrack(track).totalSteps * 60) / track.bpm / track.stepsPerBeat;
   const spec = el("div", "spec");
@@ -426,122 +481,158 @@ function withMutes(track, muted) {
 }
 
 // ── The road ───────────────────────────────────────────────────────────────
-const CONTROLS = [
+const road = { surface: "gravel", airborne: false, seat: "chase" };
+const sliders = document.getElementById("sliders");
+for (const [id, label, initial] of [
   ["rev", "Revs", 0.5],
   ["load", "Load", 0.7],
   ["air", "Speed", 0.5],
   ["corner", "Cornering", 0],
   ["slide", "Sideways", 0],
+  ["spin", "Wheelspin", 0],
   ["wear", "Damage", 0],
   ["wet", "Rain", 0],
   ["squall", "Squall", 0.5],
   ["gale", "Wind", 0],
-];
-const value = { surface: "gravel", airborne: false };
-const sliders = document.getElementById("sliders");
-for (const [id, label, initial] of CONTROLS) {
-  value[id] = initial;
-  const row = el("label", "sl");
-  const input = document.createElement("input");
-  Object.assign(input, { type: "range", min: 0, max: 1, step: 0.01, value: initial });
-  const read = el("span", "v", initial.toFixed(2));
-  input.addEventListener("input", () => {
-    value[id] = Number(input.value);
-    read.textContent = value[id].toFixed(2);
-  });
-  row.append(el("span", "k", label), input, read);
-  sliders.append(row);
+]) {
+  sliderRow(sliders, road, id, label, initial);
 }
-const switches = el("div", "switches");
-for (const s of ["gravel", "sand", "asphalt", "nature", "water"]) {
-  const b = el("button", s === "gravel" ? "on" : null, s);
-  b.type = "button";
-  b.addEventListener("click", () => {
-    value.surface = s;
-    for (const other of switches.children) if (other.dataset.surface) other.className = "";
-    b.className = "on";
-  });
-  b.dataset.surface = s;
-  switches.append(b);
-}
+switchRow(sliders, "Surface", ["gravel", "sand", "asphalt", "nature", "water"], "gravel", (s) => {
+  road.surface = s;
+});
+switchRow(sliders, "Seat", Object.keys(LISTENERS), "chase", (s) => {
+  road.seat = s;
+});
+const airRow = el("div", "switches");
 const airBtn = el("button", null, "In the air");
 airBtn.type = "button";
 airBtn.addEventListener("click", () => {
-  value.airborne = !value.airborne;
-  airBtn.className = value.airborne ? "on" : "";
+  road.airborne = !road.airborne;
+  airBtn.className = road.airborne ? "on" : "";
 });
-switches.append(airBtn);
-sliders.append(switches);
+airRow.append(airBtn);
+sliders.append(airRow);
 
-let bed = null;
+let car = null;
 const roadBtn = document.getElementById("road");
 roadBtn.addEventListener("click", () => {
   synth.unlock();
   refreshState();
-  if (bed !== null) {
-    clearInterval(bed);
-    bed = null;
+  if (car !== null) {
+    clearInterval(car.timer);
+    car.engine.stop();
+    car.road.stop();
+    car = null;
     roadBtn.className = "primary";
     roadBtn.textContent = "Start the car";
     return;
   }
   roadBtn.className = "primary on";
   roadBtn.textContent = "Stop the car";
-  let nextAt = 0;
-  let tickMs = 0;
-  let lastHz = 0;
-  bed = setInterval(() => {
-    const now = synth.now();
-    if (now === null) return;
-    // Re-anchor the moment the bed is LATE, exactly as drive-bed.ts does —
-    // WebAudio starts a source whose time has already gone the instant it is
-    // handed over, so grains booked half a second into the past do not wait,
-    // they all fire at once on top of the next one. Tolerating that here made
-    // the page peak two and a half times higher than the mix it is supposed
-    // to be a fair copy of, which is the one thing this page may not do.
-    if (nextAt < now || nextAt > now + 2) nextAt = now + 0.05;
-    while (nextAt < now + 0.24) {
-      const rpm = rpmAt(value.rev);
-      const hz = noteHz(rpm);
-      const toHz = lastHz > 0 ? Math.max(hz * 0.75, Math.min(hz * 1.35, hz + (hz - lastHz))) : hz;
-      lastHz = hz;
-      tickMs = playEngineGrain(
-        synth,
-        { hz, toHz, rpm, rev: value.rev, load: value.load, wear: value.wear },
-        nextAt,
-        tickMs,
-      );
-      playRoadGrain(
-        synth,
+  const engine = createRack(synth, ENGINE_LAYERS, ENGINE_GLIDE);
+  const roadRack = createRack(synth, ROAD_LAYERS, ROAD_GLIDE);
+  // Steered thirty times a second, exactly as the game's frame does it: the
+  // layers hold between calls, so nothing here is booked ahead.
+  const timer = setInterval(() => {
+    if (synth.now() === null) return;
+    const ear = listenerFor(road.seat);
+    engine.apply(
+      engineTargets(
+        { rpm: rpmAt(road.rev), rev: road.rev, load: road.load, wear: road.wear },
+        { engine: ear.engine, exhaust: ear.exhaust, tone: ear.tone },
+      ),
+    );
+    roadRack.apply(
+      roadTargets(
         {
-          speed: value.air * 60,
-          air: value.air,
-          surface: value.surface,
-          corner: value.corner,
-          slide: value.slide,
-          sideways: -value.slide * 10,
-          airborne: value.airborne,
-          wet: value.wet,
-          squall: value.squall,
-          gale: value.gale,
+          speed: road.air * 60,
+          air: road.air,
+          surface: road.surface,
+          corner: road.corner,
+          slide: road.slide,
+          spin: road.spin,
+          sideways: -road.slide * 10,
+          airborne: road.airborne,
+          wet: road.wet,
+          squall: road.squall,
+          gale: road.gale,
         },
-        nextAt,
-      );
-      nextAt += GRAIN_MS / 1000;
-    }
-  }, 60);
+        { tyres: ear.tyres, scrub: ear.scrub, wind: ear.wind, weather: ear.weather },
+      ),
+    );
+  }, 33);
+  car = { timer, engine, road: roadRack };
 });
 
-// ── The bank ───────────────────────────────────────────────────────────────
+// ── The world ──────────────────────────────────────────────────────────────
+const world = { biome: "taiga", timeOfDay: "day", stock: "none", train: "none" };
+const worldSliders = document.getElementById("worldSliders");
+for (const [id, label, initial] of [
+  ["air", "Speed", 0],
+  ["wet", "Rain", 0],
+  ["gale", "Wind", 0],
+  ["crowd", "Crowd", 0],
+  ["near", "How near", 0.6],
+]) {
+  sliderRow(worldSliders, world, id, label, initial);
+}
+switchRow(worldSliders, "Country", ["taiga", "desert"], "taiga", (b) => (world.biome = b));
+switchRow(worldSliders, "Hour", ["dawn", "day", "dusk", "night"], "day", (t) => (world.timeOfDay = t));
+switchRow(worldSliders, "Paddock", ["none", "cows", "sheep"], "none", (s) => (world.stock = s));
+switchRow(worldSliders, "Train", ["none", "on the line", "at the crossing"], "none", (t) => (world.train = t));
+
+let window_ = null;
+const worldBtn = document.getElementById("world");
+worldBtn.addEventListener("click", () => {
+  synth.unlock();
+  refreshState();
+  if (window_ !== null) {
+    clearInterval(window_.timer);
+    window_.world.stop();
+    window_ = null;
+    worldBtn.className = "primary";
+    worldBtn.textContent = "Open the window";
+    return;
+  }
+  worldBtn.className = "primary on";
+  worldBtn.textContent = "Close the window";
+  const w = createWorld(synth);
+  const timer = setInterval(() => {
+    const now = synth.now();
+    if (now === null) return;
+    const ear = listenerFor(road.seat);
+    w.update(
+      {
+        biome: world.biome,
+        timeOfDay: world.timeOfDay,
+        wet: world.wet,
+        gale: world.gale,
+        air: world.air,
+        crowd: world.crowd,
+        stock: world.stock === "none" ? null : { kind: world.stock, near: world.near, pan: 0.5 },
+        train:
+          world.train === "none"
+            ? null
+            : { near: world.near, pan: -0.4, horn: true, bell: world.train === "at the crossing" },
+        world: ear.world,
+      },
+      now,
+    );
+  }, 100);
+  window_ = { timer, world: w };
+});
+
+// ── The banks ──────────────────────────────────────────────────────────────
 const banks = document.getElementById("banks");
 for (const [title, bank] of Object.entries(DATA.banks)) {
   banks.append(el("h2", null, title));
-  const sub = el(
-    "p",
-    "sub",
-    "Every voice is listed before you press it: what a sound is MADE of is most of what it is.",
+  banks.append(
+    el(
+      "p",
+      "sub",
+      "Every voice is listed before you press it: what a sound is MADE of is most of what it is.",
+    ),
   );
-  banks.append(sub);
   const grid = el("div", "grid");
   for (const [id, def] of Object.entries(bank)) {
     const card = el("div", "panel sound");
@@ -558,8 +649,7 @@ for (const [title, bank] of Object.entries(DATA.banks)) {
     const layers = el("div", "layers");
     for (const voice of def.voices) {
       const kind = voice.call === "tone" ? voice.type || "square" : (voice.color || "white") + " noise";
-      const chip = el("span", voice.call === "tone" ? "chip tone" : "chip", kind);
-      layers.append(chip);
+      layers.append(el("span", voice.call === "tone" ? "chip tone" : "chip", kind));
     }
     card.append(top, layers, el("p", "desc", def.description));
     grid.append(card);
@@ -573,8 +663,11 @@ for (const [title, bank] of Object.entries(DATA.banks)) {
 
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, page);
+const loops = Object.entries(scores)
+  .map(([id, s]) => `${id} ${trackSeconds(s.track).toFixed(0)}s`)
+  .join(", ");
 console.log(
   `wrote ${out} — ${Object.keys(RUN_BANK).length} run sounds, ` +
-    `${Object.keys(UI_BANK).length} interface sounds, ` +
-    `menu ${trackSeconds(MENU_TRACK).toFixed(0)}s, taiga ${trackSeconds(TAIGA_TRACK).toFixed(0)}s`,
+    `${Object.keys(WORLD_BANK).length} world sounds, ` +
+    `${Object.keys(UI_BANK).length} interface sounds; ${loops}`,
 );

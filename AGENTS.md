@@ -31,7 +31,7 @@ make traffic      # the HIGH TRAFFIC over a stage: five skies x four moments of 
 make glyphs       # render the menu's marks at the three sizes they are read at
 make transit      # photograph the camera going from the finish line to a crew still out, frame by frame
 make views        # photograph the CAMERA KEY: every step of the ladder, six consecutive frames each
-make audition     # build previews/audition.html — every sound and both scores, playable
+make audition     # build previews/audition.html — every sound, every score, the beds under sliders, playable
 make screenshots  # drive the built app headlessly, screenshot key moments
 make profile      # meter a frame's draw calls / triangles / binds — REQUIRED before/after any rendering change
 make debug-shot   # REPRO='<line off the debug overlay>' — stand where a shot was taken
@@ -188,7 +188,10 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | The SHADOW a car stands in, and how the light throws it     | `pwa/src/game/car-shadow.ts` (the silhouette and its penumbra) off `sunShadeFor` in `sky.ts` (which way, how hard)                 |
 | Things the car knocks loose (cones, posts, torn-off parts)  | `pwa/src/game/cones.ts`, `kerbs.ts`, `car-damage.ts`, over `tumble.ts` — renderer-side; the engine knows nothing of them           |
 | Anything HEARD (a hit, a landing, a menu click)             | `pwa/src/game/audio/bank.ts` (+ a rung in `route.ts`) — the `sound-effects` skill                                                  |
-| A continuous sound (engine, tyres, wind, the slide)         | `engine-bed.ts` / `road-grain.ts` in `pwa/src/game/audio/`                                                                         |
+| A continuous sound (engine, tyres, wind, the slide)         | `engine-voice.ts` / `road-voice.ts` in `pwa/src/game/audio/` — steered LAYERS, never grains; `drive-bed.ts` reads the state        |
+| What the WORLD sounds like (birds, a paddock, a train)      | `pwa/src/game/audio/ambience.ts` (the roster and the layers) + `bank-world.ts` (the calls) — the `sound-effects` skill             |
+| Where the EAR is — what a camera does to the mix            | `pwa/src/game/audio/listener.ts` — one row per `PlayCamera`; the beds and the router both read it                                  |
+| WHICH score a stage gets (country, sky, shape of road)      | `pwa/src/game/audio/music-pick.ts` — DOM-free; `music.ts` only plays what it is told — the `soundtrack` skill                      |
 | A piece of MUSIC                                            | `pwa/src/game/audio/scores/` — the `soundtrack` skill                                                                              |
 | HUD readouts (dials, boards, calls)                         | `pwa/src/game/hud.tsx` + `pwa/src/styles.css`                                                                                      |
 | The SHAPE a corner call is DRAWN as, and the head on it     | `pwa/src/game/pace-shape.ts` — the stage's own plan of that turn, fitted to the sign's box; DOM-free, so the tests read it         |

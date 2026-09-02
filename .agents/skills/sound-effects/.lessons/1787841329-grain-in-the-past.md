@@ -1,21 +1,20 @@
 ---
-title: A grain booked in the past fires IMMEDIATELY — a late scheduler stacks the backlog instead of skipping it
+title: A note booked in the past fires IMMEDIATELY — the sequencer re-anchors the moment it is late, never one step at a time
 date: 2026-08-27
-scope: pwa/src/game/audio/drive-bed.ts, pwa/src/lib/tracker.ts
-concepts: [beds, scheduling, webaudio, jitter]
+scope: pwa/src/lib/tracker.ts
+concepts: [scheduling, webaudio, jitter, music]
 ---
 
 WebAudio starts a source whose `at` has already passed the instant it is
 handed over — it does not drop it and it does not wait. So a scheduler that
 falls behind the clock (a GC pause, a tab throttle) and keeps advancing its
-anchor by one cadence at a time books every missed grain into the past, and
-they all fire at once on top of the next one. The player hears a lurch, not a
-gap, which is why it does not look like a scheduling bug.
+anchor by one step at a time books every missed note into the past, and they
+all fire at once on top of the next one. The player hears half a bar as one
+chord, which is why it does not look like a scheduling bug.
 
-`drive-bed.ts` used to re-anchor only when it was a WHOLE half-second behind,
-so every stall shorter than that produced the lurch. The fix is one line —
-re-anchor the moment `nextAt < now` — and it is free, because a bed's PHASE
-carries no information. Only its regularity does.
-
-Guarding it needs a stall SHORTER than whatever the old catastrophe threshold
-was; a two-second jump passes on the buggy code too.
+The music sequencer is the ONE remaining thing in the audio that books
+ahead (the beds are steered layers and book nothing), and its rule is: the
+moment `nextStepTime < now`, re-anchor to `now + 0.05`. A beat arrives late;
+nothing stacks. Guarding it needs a stall SHORTER than any catastrophic
+threshold you might be tempted to add — a two-second jump passes on the
+buggy code too.

@@ -194,7 +194,14 @@ import {
 import { formatTime } from "./lib/util.ts";
 import { setAudioVolumes, unlockAudio } from "./game/audio/bus.ts";
 import { playUi } from "./game/audio/ui.ts";
-import { armMenuMusic, pauseMusic, playMusic, resumeMusic, stopMusic } from "./game/audio/music.ts";
+import {
+  armMenuMusic,
+  pauseMusic,
+  playMusic,
+  resumeMusic,
+  stageTrack,
+  stopMusic,
+} from "./game/audio/music.ts";
 import type { RunAudio } from "./game/audio/index.ts";
 import { armScreenshots, captureFrame, type Capture, type ShotNotes } from "./game/screenshots.ts";
 import { beginImageCopy } from "./lib/share-image.ts";
@@ -1167,9 +1174,23 @@ export function App() {
     else if (previous.spec.id !== spec.carId) renderer.setCar(state);
     else renderer.setConditions(state);
     setSnap(takeSnapshot(state, paceRef.current, null, null, bookRef.current));
+    // The score is a function of the stage — its country, its sky, its
+    // shape — so it is picked here, where the stage is. Behind a menu the
+    // stage is scenery under the menu's own theme.
+    if (menuRef.current === null) playMusic(stageTrack(state));
   };
   const applyStageRef = useRef(applyStage);
   applyStageRef.current = applyStage;
+
+  /** Play the score of whatever stage is standing. Every path that leaves
+   * the menu for a run — and every restart — goes through here, so a stage
+   * re-lit in the rain gets the rain's score without a rebuild. */
+  const stageMusic = (): void => {
+    const state = gameRef.current;
+    playMusic(state ? stageTrack(state) : "taiga");
+  };
+  const stageMusicRef = useRef(stageMusic);
+  stageMusicRef.current = stageMusic;
 
   /** Arm a run's ghost: a fresh recorder on any stage that keeps a time,
    * and — in a time trial — the best run on it put back on the road as a
@@ -1364,7 +1385,7 @@ export function App() {
     // the next stage from the results card never passes through the menu, so
     // the theme is re-armed here rather than by the menu's own effect; it is
     // a no-op when the score is already the one playing.
-    playMusic("taiga");
+    stageMusicRef.current();
     setPaused(false);
     setRun({ mode, levelId });
     runRef.current = { mode, levelId };
@@ -1375,6 +1396,7 @@ export function App() {
     armGhost(spec, mode, levelId);
     armTape(spec, mode, levelId);
     playCameraRef.current = startCamera(optionsRef.current.camera);
+    audioRef.current?.setView(playCameraRef.current);
     // The god-mode effect owns the camera while it is flying; setting a play
     // camera here as well would land the flight every time a run started.
     if (!godRef.current) rendererRef.current?.setCamera(playCameraRef.current);
@@ -1680,6 +1702,7 @@ export function App() {
     rendererRef.current?.setView(next.view);
     if (reframe && !menuRef.current) {
       playCameraRef.current = next.camera;
+      audioRef.current?.setView(next.camera);
       if (!godRef.current) rendererRef.current?.setCamera(next.camera);
     }
   };
@@ -1802,7 +1825,7 @@ export function App() {
       return undefined;
     }
     if (inMenu) return armMenuMusic();
-    playMusic("taiga");
+    stageMusicRef.current();
     return undefined;
   }, [inMenu, benchmarking]);
 
@@ -1842,7 +1865,12 @@ export function App() {
     // is a breath at most, and never longer than the world takes to build.
     // The menu's own sounds (`audio/ui.ts`) are the only audio in the entry.
     void import("./game/audio/index.ts").then(({ createRunAudio }) => {
-      if (!disposed) audioRef.current = createRunAudio();
+      if (disposed) return;
+      const audio = createRunAudio();
+      // The mix follows the camera from the first frame, not the first
+      // change of it.
+      audio.setView(playCameraRef.current);
+      audioRef.current = audio;
     });
     void import("./game/renderer.ts").then(({ createRenderer }) => {
       if (disposed) return;
@@ -1926,6 +1954,7 @@ export function App() {
         // capturing.
         logRunStart(`url ${stageQuery(spec)}`);
         playCameraRef.current = startCamera(optionsRef.current.camera);
+        audioRef.current?.setView(playCameraRef.current);
         renderer.setCamera(godRef.current ? "free" : playCameraRef.current);
         if (godRef.current) renderer.placeCamera(URL_POSE);
       }
@@ -1941,7 +1970,7 @@ export function App() {
         // from the results card never passes through the menu that would put
         // it back. Both are no-ops mid-race, which is the other way in here.
         audioRef.current?.reset();
-        playMusic("taiga");
+        stageMusicRef.current();
         applyStageRef.current(spec, true);
         const active = runRef.current;
         armFieldRef.current(spec, active.mode);
@@ -1965,7 +1994,12 @@ export function App() {
         // Remembered only when it IS a play camera: the ladder never walks
         // onto the overhead views, and the one god mode lands back on has to
         // be a camera somebody can drive from.
-        if (play) playCameraRef.current = play.id;
+        if (play) {
+          playCameraRef.current = play.id;
+          // The ear moves with the eye: the same key that walks the camera
+          // ladder walks the mix from the cabin to the helicopter.
+          audioRef.current?.setView(play.id);
+        }
         flash(`${play?.label ?? "CHASE"} CAM`, "info");
       };
       actionsRef.current = { restart, menu: goMainMenu, camera };

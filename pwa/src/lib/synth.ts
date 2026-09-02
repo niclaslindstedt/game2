@@ -15,16 +15,22 @@
 //     a rumble is what a car on gravel, a wind and a distant impact are all
 //     made of. Pink sits between them and is the tyre-roar band.
 //   * NOISE HAS AN ENVELOPE. A chip's noise burst is a flat block that stops.
-//     A real texture swells and holds — which is what lets a scrub, a slide
-//     and a wind be built out of overlapping grains rather than out of ticks.
+//     A real texture swells and holds.
 //   * FILTERS SWEEP. A static cutoff is a tone colour; a moving one is a
 //     GESTURE — the whoosh past a rock, the spray leaving a ford, the body of
-//     a crash opening up and closing again. This is the single biggest step
-//     away from chip and it costs one extra ramp.
-//   * OSCILLATORS DISTORT. `drive` folds a waveform through a shaper, which
-//     is how a triangle becomes an engine instead of a flute. A sampled
-//     engine's harmonics come from a real combustion event; a shaped triangle
-//     is the cheapest honest approximation there is.
+//     a crash opening up and closing again.
+//   * OSCILLATORS SATURATE. `drive` folds a waveform through a soft curve,
+//     which is how a triangle becomes an engine instead of a flute.
+//
+// AND THE BEDS ARE NOT ONE-SHOTS. The engine, the tyres, the wind and the
+// weather are LAYERS: node graphs built once and steered with smoothed
+// parameter automation on the audio thread (`layer()`). That is the whole
+// difference between this instrument and a sampler being asked to fake a
+// continuous sound out of overlapping grains — a layer has no cadence to
+// tile, no phase to align, no backlog to fire when the main thread stalls,
+// and it costs the audio thread a fixed handful of nodes instead of a
+// hundred and fifty fresh ones a second. A stalled frame leaves it holding
+// its last value; it never leaves a hole.
 //
 // Everything else is the classic arrangement: an attack/hold/decay envelope,
 // a detuned second oscillator for width, delayed vibrato, stereo pan, and one
@@ -38,6 +44,8 @@
 import {
   envelopeShape,
   safeCutoff,
+  shaperPush,
+  shaperSteepness,
   type FilterOptions,
   type NoiseColor,
   type Synth,
@@ -52,16 +60,21 @@ const ECHO_DAMP_HZ = 2200;
 
 // The master limiter: every voice (and the echo bus) sums into this
 // compressor instead of connecting straight to the destination. A stage runs
-// an engine bed, a tyre bed, wind, and whatever the car just hit, all at once,
-// and their sum regularly exceeds full scale — which the destination renders
-// as hard clipping. The threshold sits above any single sound's peak (volumes
+// an engine, a tyre bed, wind, and whatever the car just hit, all at once,
+// and their sum can exceed full scale — which the destination renders as
+// hard clipping. The threshold sits above any single sound's peak (volumes
 // live in 0.02–0.1 ≈ −34…−20 dBFS), so isolated sounds pass untouched and only
 // overlapping stacks get squeezed.
-const LIMITER_THRESHOLD_DB = -12;
-const LIMITER_KNEE_DB = 6;
-const LIMITER_RATIO = 20;
-const LIMITER_ATTACK_S = 0.002;
-const LIMITER_RELEASE_S = 0.18;
+//
+// A SLOW-ISH one, deliberately. A limiter with a two-millisecond attack
+// reacts INSIDE a cycle of the 30–60 Hz bass the engine bed lives on and
+// modulates it, which is distortion nobody asked for. Five milliseconds and
+// a gentle knee leave the bass alone and still catch a crash.
+const LIMITER_THRESHOLD_DB = -10;
+const LIMITER_KNEE_DB = 12;
+const LIMITER_RATIO = 12;
+const LIMITER_ATTACK_S = 0.005;
+const LIMITER_RELEASE_S = 0.25;
 
 // How long a "running" context's clock may sit still after a foreground or
 // gesture event before it is declared a zombie (see probeZombie below). A
@@ -74,22 +87,34 @@ const ZOMBIE_PROBE_MS = 350;
 const SHAPER_STEPS = 1024;
 
 /**
- * HOW MUCH NOISE IS KEPT PER COLOUR, seconds — and this number is the reason
- * the game does not stutter after ten minutes.
- *
- * The road bed alone asks for about twenty SECONDS of noise per second of
- * play: five overlapping grains, nine times a second, half a second each.
- * Synthesising that per voice meant four megabytes of `Float32Array` churned
- * every second on the same thread as the renderer — which the collector
- * eventually answers with a pause long enough to push the bed's next grain
- * behind the clock, and a grain behind the clock is a grain that fires late.
- * That is what "the sound goes jittery after a while" IS.
- *
- * So noise is generated ONCE per colour and every voice reads a random window
- * of it. Four seconds is long enough that two overlapping grains never land
- * on the same stretch, and costs under a megabyte per colour.
+ * HOW MUCH NOISE IS KEPT PER COLOUR, seconds. Noise is generated ONCE per
+ * colour and every voice — a one-shot burst or a looping layer — reads a
+ * random window of it. Four seconds is long enough that two voices never
+ * audibly share a stretch, and costs under a megabyte per colour.
  */
 const NOISE_POOL_S = 4;
+
+/** The saturation curve every LAYER is folded through. One curve, at a
+ * middling steepness: how hard a layer is driven is the gain in FRONT of
+ * it (`LayerTarget.grit`), which is a smooth parameter where swapping a
+ * curve under a running signal is a step. */
+const LAYER_DRIVE = 0.6;
+
+/** How far `grit` can push a layer into its curve: the pre-gain runs from a
+ * clean 0.35 to this. The floor is under the curve's knee, so a layer with
+ * no grit is a layer that is not being shaped at all. */
+const GRIT_PUSH = 4;
+
+/** A layer parameter that has moved less than this is not re-scheduled: the
+ * automation timeline is a list, and sixty frames a second of no-ops on
+ * thirty layers is a list nobody wants to walk. */
+const SET_EPSILON = 1e-4;
+
+/** How long after the output route changes — a headset connecting, a car
+ * stereo picking the phone up — before the audio session is re-seated. Long
+ * enough for the OS to have finished switching; short enough that the gap
+ * reads as the switch itself. */
+const ROUTE_RESEAT_MS = 250;
 
 /** Is the page in the background right now? Treated as visible wherever there
  * is no document (a test, a headless host) so nothing is silenced by
@@ -97,17 +122,10 @@ const NOISE_POOL_S = 4;
 const pageHidden = (): boolean =>
   typeof document !== "undefined" && document.visibilityState === "hidden";
 
-/**
- * The waveshaper transfer curve for a given drive, 0..1.
- *
- * A soft-clip (`tanh`-shaped) rather than a hard one: hard clipping folds
- * every harmonic in at once and reads as breakage, which is the sound of a
- * broken speaker rather than of an engine under load. The amount is
- * exponential in `drive` because the ear is — a linear knob spends most of its
- * travel in territory that all sounds the same.
- */
+/** The waveshaper transfer curve for a given drive, 0..1 — a normalised
+ * `tanh`, see `shaperSteepness`. */
 function shaperCurve(drive: number): Float32Array<ArrayBuffer> {
-  const k = Math.pow(2, 1 + 6 * drive) - 1;
+  const k = shaperSteepness(drive);
   const curve = new Float32Array(SHAPER_STEPS);
   for (let i = 0; i < SHAPER_STEPS; i++) {
     const x = (i / (SHAPER_STEPS - 1)) * 2 - 1;
@@ -124,13 +142,15 @@ function shaperCurve(drive: number): Float32Array<ArrayBuffer> {
  * pole gets it close enough that no listener could pick the difference out of
  * a car sliding sideways. Both are re-normalised, because an unnormalised
  * brown is roughly a tenth of white's level and every volume in the bank would
- * have to know which colour it was written for.
+ * have to know which colour it was written for. Brown is also HIGHPASSED at
+ * a few hertz on the way out: a one-pole brown wanders below the audio band,
+ * and a limiter reacting to a wander nobody can hear pumps everything else.
  *
  * Called once per colour per context — see `noisePool`. The shape of a burst
  * is the GAIN node's business; nothing is baked into the samples, because
  * samples that carry an envelope cannot be shared.
  */
-function fillNoise(data: Float32Array, color: NoiseColor): void {
+function fillNoise(data: Float32Array, color: NoiseColor, sampleRate: number): void {
   const n = data.length;
   if (color === "white") {
     for (let i = 0; i < n; i++) data[i] = Math.random() * 2 - 1;
@@ -143,12 +163,19 @@ function fillNoise(data: Float32Array, color: NoiseColor): void {
       data[i] = last * 3.2;
     }
   } else {
-    // …and a pole at ~0.96 by about 6, which is a rumble.
+    // …and a pole at ~0.96 by about 6, which is a rumble — with the drift
+    // under the audio band taken back out by a one-pole highpass at 8 Hz.
+    const hp = Math.exp((-2 * Math.PI * 8) / sampleRate);
     let last = 0;
+    let dcIn = 0;
+    let dcOut = 0;
     for (let i = 0; i < n; i++) {
       const white = Math.random() * 2 - 1;
       last = 0.96 * last + 0.04 * white;
-      data[i] = last * 11;
+      const sample = last * 11;
+      dcOut = hp * (dcOut + sample - dcIn);
+      dcIn = sample;
+      data[i] = dcOut;
     }
   }
 }
@@ -159,10 +186,11 @@ export function createSynth(): Synth {
   let master: AudioNode | null = null;
   let listenersArmed = false;
   let probeTimer: ReturnType<typeof setTimeout> | null = null;
+  let reseatTimer: ReturnType<typeof setTimeout> | null = null;
   let healAttempted = false;
   let rebuildOnGesture = false;
   /** Shaper curves are shared by drive, quantised — a curve per voice would
-   * be a kilobyte of Float32 per grain of an engine bed. */
+   * be a kilobyte of Float32 per note of a score. */
   const curves = new Map<number, Float32Array<ArrayBuffer>>();
   /** One long buffer of each colour, read at a random offset by every noise
    * voice. Cleared with the context that owns them. */
@@ -199,7 +227,8 @@ export function createSynth(): Synth {
   };
 
   /** Discard the current context and its per-context buses so `ensure` builds
-   * a fresh one. Only ever called for a confirmed-dead context. */
+   * a fresh one. Only ever called for a confirmed-dead context. Every layer
+   * built on the old one reports itself dead and its owner rebuilds it. */
   const teardown = (): void => {
     const old = ctx;
     ctx = null;
@@ -250,6 +279,28 @@ export function createSynth(): Synth {
     }, ZOMBIE_PROBE_MS);
   };
 
+  // THE OUTPUT ROUTE CHANGED UNDER A RUNNING CONTEXT — a headset connected,
+  // a car stereo picked the phone up, an earbud came out. iOS keeps the
+  // context "running" through that and does not always re-seat the audio
+  // session on the new route, and what comes out of the new route while it
+  // is un-seated is the sound the player reports as crackle. A suspend →
+  // resume cycle is the documented way to make the platform re-open the
+  // session, it needs no gesture, and on a route that did switch cleanly it
+  // costs a quarter of a second of quiet nobody notices under the switch.
+  const reseatRoute = (): void => {
+    if (reseatTimer !== null) clearTimeout(reseatTimer);
+    reseatTimer = setTimeout(() => {
+      reseatTimer = null;
+      const c = ctx;
+      if (!c || c.state !== "running" || pageHidden()) return;
+      if (typeof c.suspend !== "function") return;
+      c.suspend()
+        .then(() => (pageHidden() ? undefined : c.resume()))
+        .catch(() => {})
+        .then(() => probeZombie());
+    }, ROUTE_RESEAT_MS);
+  };
+
   // Wired once, against the live `ctx` binding rather than a specific context,
   // so they keep working across a zombie-context rebuild.
   const armListeners = (): void => {
@@ -292,6 +343,12 @@ export function createSynth(): Synth {
     const gestureOpts = { capture: true, passive: true } as const;
     document.addEventListener("pointerdown", onGesture, gestureOpts);
     document.addEventListener("touchend", onGesture, gestureOpts);
+    // The route watch. `devicechange` is the one signal a page gets that the
+    // output moved; browsers that withhold it simply never fire it.
+    const devices = typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
+    if (devices && typeof devices.addEventListener === "function") {
+      devices.addEventListener("devicechange", reseatRoute);
+    }
   };
 
   // May a context start before the player has touched anything? Chromium is
@@ -317,7 +374,13 @@ export function createSynth(): Synth {
       // context: born outside a gesture it lands in a state iOS will not
       // resume, and it would be born to play into another app anyway.
       if (pageHidden()) return null;
-      ctx = new AudioContext();
+      // "balanced" rather than the default "interactive": the render buffer
+      // is a few tens of milliseconds instead of the smallest the hardware
+      // offers, which is nothing against the latency a Bluetooth link adds
+      // anyway and is the difference between a buffer that survives a busy
+      // frame and one that underruns — an underrun is a crackle, and the
+      // main thread here is also drawing a forest.
+      ctx = new AudioContext({ latencyHint: "balanced" });
       armListeners();
       const c = ctx;
       c.addEventListener("statechange", () => {
@@ -368,11 +431,19 @@ export function createSynth(): Synth {
     return echoInput;
   };
 
-  /** Envelope → optional pan → master limiter (+ optional echo send). */
-  const output = (c: AudioContext, gain: GainNode, pan: number, echo: number): void => {
+  /** Envelope → optional pan → master limiter (+ optional echo send). Returns
+   * the panner when one was made, so a layer can steer it. */
+  const output = (
+    c: AudioContext,
+    gain: GainNode,
+    pan: number,
+    echo: number,
+    alwaysPan = false,
+  ): StereoPannerNode | null => {
     let tail: AudioNode = gain;
-    if (pan !== 0 && typeof c.createStereoPanner === "function") {
-      const panner = c.createStereoPanner();
+    let panner: StereoPannerNode | null = null;
+    if ((pan !== 0 || alwaysPan) && typeof c.createStereoPanner === "function") {
+      panner = c.createStereoPanner();
       panner.pan.value = Math.max(-1, Math.min(1, pan));
       tail.connect(panner);
       tail = panner;
@@ -384,6 +455,7 @@ export function createSynth(): Synth {
       tail.connect(send);
       send.connect(echoBus(c));
     }
+    return panner;
   };
 
   /** Insert the filter, sweeping its cutoff across the sound when asked. */
@@ -420,14 +492,20 @@ export function createSynth(): Synth {
     let pool = pools.get(color);
     if (!pool || pool.sampleRate !== c.sampleRate) {
       pool = c.createBuffer(1, Math.ceil(c.sampleRate * NOISE_POOL_S), c.sampleRate);
-      fillNoise(pool.getChannelData(0), color);
+      fillNoise(pool.getChannelData(0), color, c.sampleRate);
       pools.set(color, pool);
     }
     return pool;
   };
 
-  /** The shaper for this drive, or null when the voice is clean. */
-  const shaper = (c: AudioContext, drive: number): WaveShaperNode | null => {
+  /** The shaper for this drive, or null when the voice is clean. `oversample`
+   * is what keeps the new harmonics from folding back down as aliasing; the
+   * few layers that run for a whole stage can afford the expensive setting. */
+  const shaper = (
+    c: AudioContext,
+    drive: number,
+    oversample: OverSampleType = "2x",
+  ): WaveShaperNode | null => {
     if (drive <= 0 || typeof c.createWaveShaper !== "function") return null;
     const key = Math.round(Math.min(1, drive) * 20) / 20;
     let curve = curves.get(key);
@@ -437,7 +515,7 @@ export function createSynth(): Synth {
     }
     const node = c.createWaveShaper();
     node.curve = curve;
-    node.oversample = "2x";
+    node.oversample = oversample;
     return node;
   };
 
@@ -460,6 +538,20 @@ export function createSynth(): Synth {
       else if (point.ramp === "lin") gain.gain.linearRampToValueAtTime(point.value, point.at);
       else gain.gain.exponentialRampToValueAtTime(point.value, point.at);
     }
+  };
+
+  /** Steer one AudioParam toward `value` over the time constant `tau`, only
+   * when it has actually moved — see `SET_EPSILON`. */
+  const steer = (
+    param: AudioParam,
+    last: number,
+    value: number,
+    at: number,
+    tau: number,
+  ): number => {
+    if (Math.abs(value - last) <= SET_EPSILON * Math.max(1, Math.abs(value))) return last;
+    param.setTargetAtTime(value, at, Math.max(0.005, tau));
+    return value;
   };
 
   return {
@@ -511,7 +603,6 @@ export function createSynth(): Synth {
       echo = 0,
       filter,
       drive = 0,
-      bed = false,
     }) {
       const c = ensure();
       if (!c) return;
@@ -527,13 +618,8 @@ export function createSynth(): Synth {
       const peak = detunes.length > 1 ? volume * 0.6 : volume;
 
       const gain = c.createGain();
-      // Silent until the envelope's own first point: a bed grain starts its
-      // oscillator up to one cycle BEFORE `t0`, and the gain's default of 1
-      // would let that lead-in through at full scale.
       gain.gain.value = 0;
-      // A grain gets LINEAR ramps so consecutive copies cross-fade — see
-      // `bed`. Everything else keeps the exponential fall a note wants.
-      envelope(gain, peak, t0, t1, attackMs, holdMs, bed ? "lin" : "exp");
+      envelope(gain, peak, t0, t1, attackMs, holdMs, "exp");
 
       const mix = c.createGain(); // oscillators sum here, pre-shaper
       // Drive BEFORE the filter, which is the order a real signal chain uses
@@ -542,9 +628,9 @@ export function createSynth(): Synth {
       let chain: AudioNode = mix;
       const shape = shaper(c, drive);
       if (shape) {
-        // A shaper clips at ±1, so the oscillators have to arrive hot enough
-        // to reach the curve's knee — the envelope's level is applied after.
-        mix.gain.value = 1 + 6 * drive;
+        // The curve does nothing to a signal that never reaches its knee —
+        // the gain in front of it is what "drive" is.
+        mix.gain.value = shaperPush(drive);
         chain.connect(shape);
         chain = shape;
       }
@@ -555,17 +641,7 @@ export function createSynth(): Synth {
         const osc = c.createOscillator();
         osc.type = type;
         osc.detune.value = cents;
-        // WHERE THE CYCLE IS ALLOWED TO BEGIN — see `bed`. An oscillator
-        // starts at the top of its cycle, so a grain is started however much
-        // of one cycle early it takes to arrive at `t0` in the phase a
-        // never-stopping oscillator of the same pitch would be in. The lead-in
-        // is under one period (33 ms at a 30 Hz idle) and the envelope holds
-        // it at nothing, so nothing is heard of it — what it buys is that
-        // overlapping grains can only add.
-        const hz = Math.max(1, from) * Math.pow(2, cents / 1200);
-        const lead = bed ? ((t0 * hz) % 1) / hz : 0;
-        const start = t0 - lead >= c.currentTime ? t0 - lead : t0;
-        osc.frequency.setValueAtTime(Math.max(1, from), start);
+        osc.frequency.setValueAtTime(Math.max(1, from), t0);
         osc.frequency.exponentialRampToValueAtTime(Math.max(1, to), t1);
 
         if (vibrato) {
@@ -582,7 +658,7 @@ export function createSynth(): Synth {
         }
 
         osc.connect(mix);
-        osc.start(start);
+        osc.start(t0);
         osc.stop(t1);
       }
     },
@@ -610,15 +686,14 @@ export function createSynth(): Synth {
 
       // TWO SHAPES, and asking for an envelope is what picks between them. A
       // bare burst fades LINEARLY to nothing across its whole length: that is
-      // a hit. A voice that asked for an attack or a hold is a GRAIN of a bed
-      // instead, and gets the shared envelope so a pitched bed and a noise bed
-      // tile the same way.
+      // a hit. A voice that asked for an attack or a hold is a swell, and
+      // gets the exponential tail a note has.
       const shaped = attackMs > 0 || holdMs > 0;
       const gain = c.createGain();
       envelope(gain, volume, t0, t1, attackMs, holdMs, shaped ? "exp" : "lin");
 
       // A WINDOW ONTO THE SHARED POOL, not a buffer of this voice's own — see
-      // NOISE_POOL_S. The offset is random so no two grains read the same
+      // NOISE_POOL_S. The offset is random so no two voices read the same
       // stretch (identical noise twice over is a comb filter, and an ear hears
       // it as a pitch); the loop is only there so a sound longer than the pool
       // still has samples to play.
@@ -630,9 +705,158 @@ export function createSynth(): Synth {
       applyFilter(c, source, filter, t0, t1).connect(gain);
       output(c, gain, pan, echo);
       source.start(t0, offset);
-      // The pool never runs out, so the voice has to be told where to end —
-      // without this every grain of every bed would play until the tab closed.
+      // The pool never runs out, so the voice has to be told where to end.
       source.stop(t1);
+    },
+
+    layer(spec) {
+      const c = ensure();
+      if (!c || c.state !== "running") return null;
+      const owner = c;
+      const t0 = c.currentTime;
+
+      // The chain's tail: level → pan → master (+ echo). Built first so the
+      // source can be wired into whatever sits in front of it.
+      const gain = c.createGain();
+      gain.gain.value = 0;
+      const panner = output(c, gain, 0, spec.echo ?? 0, true);
+
+      let filterNode: BiquadFilterNode | null = null;
+      if (spec.filter) {
+        filterNode = c.createBiquadFilter();
+        filterNode.type = spec.filter.type;
+        filterNode.frequency.value = safeCutoff(1000, c.sampleRate);
+        if (spec.filter.q !== undefined) filterNode.Q.value = spec.filter.q;
+        filterNode.connect(gain);
+      }
+      const head: AudioNode = filterNode ?? gain;
+
+      const oscillators: OscillatorNode[] = [];
+      const sources: AudioScheduledSourceNode[] = [];
+      let push: GainNode | null = null;
+      if (spec.kind === "tone") {
+        const mix = c.createGain();
+        let chain: AudioNode = mix;
+        if ((spec.drive ?? 0) > 0) {
+          // A fixed curve pushed by a steerable gain — see `LAYER_DRIVE`.
+          // Normalised back down after the curve so `grit` changes the
+          // timbre far more than the level.
+          const shape = shaper(c, LAYER_DRIVE, "4x");
+          if (shape) {
+            push = mix;
+            mix.gain.value = 0.35;
+            const trim = c.createGain();
+            trim.gain.value = 0.7;
+            chain.connect(shape);
+            shape.connect(trim);
+            chain = trim;
+          }
+        }
+        chain.connect(head);
+        const width = spec.detuneCents ?? 0;
+        const detunes = width > 0 ? [width, -width] : [0];
+        for (const cents of detunes) {
+          const osc = c.createOscillator();
+          osc.type = spec.type ?? "triangle";
+          osc.detune.value = cents;
+          osc.frequency.value = 100;
+          if (spec.vibrato) {
+            const lfo = c.createOscillator();
+            lfo.frequency.value = spec.vibrato.rateHz;
+            const depth = c.createGain();
+            depth.gain.value = spec.vibrato.depthCents;
+            lfo.connect(depth);
+            depth.connect(osc.detune);
+            lfo.start(t0);
+            sources.push(lfo);
+          }
+          osc.connect(mix);
+          osc.start(t0);
+          oscillators.push(osc);
+          sources.push(osc);
+        }
+      } else {
+        const buffer = noisePool(c, spec.color ?? "white");
+        const source = c.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+        source.connect(head);
+        source.start(t0, Math.random() * buffer.duration);
+        sources.push(source);
+      }
+
+      // What each parameter was last steered to, so a frame that changes
+      // nothing schedules nothing.
+      const pairScale = oscillators.length > 1 ? 0.6 : 1;
+      let lastLevel = 0;
+      let lastHz = 100;
+      let lastCutoff = filterNode ? filterNode.frequency.value : 0;
+      let lastPush = 0.35;
+      let lastPan = 0;
+      let stopped = false;
+
+      return {
+        set(target, glideS) {
+          if (stopped || ctx !== owner || owner.state === "closed") return;
+          const now = owner.currentTime;
+          lastLevel = steer(
+            gain.gain,
+            lastLevel,
+            Math.max(0, target.level) * pairScale,
+            now,
+            glideS,
+          );
+          if (target.hz !== undefined && oscillators.length > 0) {
+            const hz = Math.max(1, target.hz);
+            if (hz !== lastHz) {
+              // A pitch moves on a shorter constant than a level: the ear
+              // follows a glide far more closely than a fade, and a rev
+              // that lags the needle by a tenth reads as a slow engine.
+              for (const osc of oscillators) osc.frequency.setTargetAtTime(hz, now, glideS * 0.5);
+              lastHz = hz;
+            }
+          }
+          if (target.cutoff !== undefined && filterNode) {
+            lastCutoff = steer(
+              filterNode.frequency,
+              lastCutoff,
+              safeCutoff(target.cutoff, owner.sampleRate),
+              now,
+              glideS,
+            );
+          }
+          if (target.grit !== undefined && push) {
+            const amount = 0.35 + (GRIT_PUSH - 0.35) * Math.min(1, Math.max(0, target.grit));
+            lastPush = steer(push.gain, lastPush, amount, now, glideS);
+          }
+          if (target.pan !== undefined && panner) {
+            lastPan = steer(
+              panner.pan,
+              lastPan,
+              Math.max(-1, Math.min(1, target.pan)),
+              now,
+              glideS,
+            );
+          }
+        },
+        stop() {
+          if (stopped) return;
+          stopped = true;
+          if (owner.state === "closed") return;
+          const now = owner.currentTime;
+          // Out over a few hundredths rather than at once — a layer cut at
+          // full level is the step every other part of this file avoids.
+          gain.gain.setTargetAtTime(0, now, 0.02);
+          for (const source of sources) {
+            try {
+              source.stop(now + 0.15);
+            } catch {
+              // Already stopped, or the context went away under it.
+            }
+          }
+        },
+        alive: () => !stopped && ctx === owner && owner.state !== "closed",
+      };
     },
   };
 }
