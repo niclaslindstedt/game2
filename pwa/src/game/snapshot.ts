@@ -6,7 +6,15 @@
 // calls are flipped into SCREEN space here, once, exactly as input.ts flips
 // steering once.
 
-import { TUNING, startsIn, wayHome, type GameState, type RivalField } from "@engine";
+import {
+  TUNING,
+  startsIn,
+  wayHome,
+  type GameState,
+  type Pacenote,
+  type RivalField,
+  type TrackSample,
+} from "@engine";
 
 import { buildMinimap } from "./minimap.tsx";
 import { cornerSign, type PaceSign } from "./pace-shape.ts";
@@ -90,10 +98,71 @@ export type PaceMemory = {
    * beside the shape: on an endless stage the note at the streaming frontier
    * grows as its combination is built, and a grown note is a new picture. */
   shapes: Map<number, { endS: number; sign: PaceSign }>;
+  /** Every corner and every jump lip on the stage, in arc order — the list
+   * the strip walks. Built once per track and held here rather than rebuilt
+   * per frame: the corners and the lips are the STAGE, and the stage does not
+   * change under a running car.
+   *
+   * Three things say the road has changed under it, and it takes all three.
+   * The sample ARRAY's identity catches a new stage or a restart, which
+   * compiles a fresh track. The two COUNTS catch the endless stream, which
+   * does not: it appends to the very same array as the run goes on, so a
+   * cache keyed on identity alone would freeze the co-driver at whatever the
+   * opening stretch happened to hold and never call another corner. */
+  events: PaceEvent[];
+  builtFor: TrackSample[] | null;
+  builtSamples: number;
+  builtNotes: number;
 };
 
+/** One thing worth calling, and where on the stage it is. A corner carries
+ * the note the generator wrote; a jump is the sample the lip crosses. */
+type PaceEvent = { s: number; note: Pacenote } | { s: number; jump: TrackSample };
+
 export function createPaceMemory(): PaceMemory {
-  return { calledS: -Infinity, calledJumpS: -Infinity, lastS: 0, shapes: new Map() };
+  return {
+    calledS: -Infinity,
+    calledJumpS: -Infinity,
+    lastS: 0,
+    shapes: new Map(),
+    events: [],
+    builtFor: null,
+    builtSamples: -1,
+    builtNotes: -1,
+  };
+}
+
+/** The stage's calls in arc order, off the memory when the road has not
+ * changed under it. A medium stage is 2500 samples and a long one 4200, and
+ * two of them carry a jump: filtering, wrapping and sorting that on every
+ * HUD frame is four thousand objects a frame of pure allocation to find two
+ * lips that were already there when the stage was compiled. */
+function paceEvents(state: GameState, mem: PaceMemory): PaceEvent[] {
+  const samples = state.track.samples;
+  const notes = state.track.pacenotes;
+  if (
+    mem.builtFor === samples &&
+    mem.builtSamples === samples.length &&
+    mem.builtNotes === notes.length
+  ) {
+    return mem.events;
+  }
+  // A DIFFERENT road means the drawn corners belong to a stage nobody is on.
+  // A road that merely GREW keeps them: an endless run's frontier appends to
+  // the same array, and throwing the shapes away every time it does would
+  // redraw every sign on the strip for nothing. Read before the rebuild
+  // below writes over it.
+  if (mem.builtFor !== samples) mem.shapes.clear();
+  const events: PaceEvent[] = [
+    ...notes.map((note) => ({ s: note.s, note })),
+    ...samples.filter((s) => s.jump).map((jump) => ({ s: jump.s, jump })),
+  ];
+  events.sort((a, b) => a.s - b.s);
+  mem.events = events;
+  mem.builtFor = samples;
+  mem.builtSamples = samples.length;
+  mem.builtNotes = notes.length;
+  return events;
 }
 
 /** Turn angle past which a call earns the LONG modifier, radians (~100°). */
@@ -123,12 +192,7 @@ function upcomingPacenotes(state: GameState, mem: PaceMemory): HudPacenote[] {
    * follows, not to the car that has yet to reach either. */
   let from = state.progressS;
   const drawn: number[] = [];
-  const jumps = state.track.samples.filter((sample) => sample.jump);
-  const events = [
-    ...state.track.pacenotes.map((note) => ({ s: note.s, note })),
-    ...jumps.map((sample) => ({ s: sample.s, jump: sample })),
-  ].sort((a, b) => a.s - b.s);
-  for (const event of events) {
+  for (const event of paceEvents(state, mem)) {
     if ("note" in event && event.note.endS <= state.progressS) continue;
     if ("jump" in event && event.jump.s < state.progressS) continue;
     const eventS = event.s;

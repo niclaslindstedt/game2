@@ -128,21 +128,17 @@ export type EngineVoice = {
 /**
  * Book one grain of a running engine at absolute time `at`.
  *
- * The fourth argument is retained as a harmless compatibility slot for the
- * scheduler's old clatter phase state; the continuous texture no longer needs
- * to carry an event position from one grain to the next.
+ * Nothing is carried from one grain to the next. It used to be: the clatter
+ * was a tick per turn of the crank, and its phase had to cross the grain
+ * boundary or the ticks loped at the grain rate instead. The clatter is a bed
+ * now, sounding for the grain's whole life, and a bed has no phase to hand on.
  *
  * THE LEVELS ARE THE SUM'S, NOT THE GRAIN'S. Three grains' worth sounds at
  * once and they add up rather than fight, so every volume here is a third of
  * what the player hears — the numbers look quiet beside the rest of the bank
  * and are not.
  */
-export function playEngineGrain(
-  synth: Synth,
-  voice: EngineVoice,
-  at: number,
-  tickAtMs = 0,
-): number {
+export function playEngineGrain(synth: Synth, voice: EngineVoice, at: number): void {
   const { hz, toHz: to, rpm, rev, load, wear } = voice;
 
   // ── THE HUM ──────────────────────────────────────────────────────────────
@@ -243,5 +239,4 @@ export function playEngineGrain(
       q: 1.2,
     },
   });
-  return tickAtMs;
 }
