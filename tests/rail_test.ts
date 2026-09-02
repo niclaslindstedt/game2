@@ -69,7 +69,9 @@ describe("the railway (R41)", () => {
       expect(desert.highways.some((h) => h.kind === "rail")).toBe(false);
       expect(desert.rails).toHaveLength(0);
     }
-  });
+    // Forty-two stage compiles; the sweep is the fixture, and under the
+    // whole suite's load it runs past the default thirty seconds.
+  }, 90_000);
 
   it("is crossed on some seeds, and never borrowed or joined", () => {
     for (const seed of crossings()) {
