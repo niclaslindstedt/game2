@@ -1,0 +1,180 @@
+# The desktop app (tauri/) — checks on every relevant push, and dispatch-only
+# packaging.
+#
+# Split by what each job costs, which this tree has structurally rather than
+# by discipline, because it is two crates:
+#
+#   check    Cheap and automatic. `cargo test -p scanflick-shell` is the whole
+#            decision layer and needs NO GUI libraries — that is the entire
+#            point of the crate split, and the reason this half lands in
+#            seconds on an ordinary runner.
+#
+#   lint     Medium. `cargo clippy --workspace` reaches the app crate too, which
+#            DOES need the platform's webview development libraries — so it is
+#            an apt step and a cache away.
+#
+#   package  Expensive and manual. Real Windows/macOS/Linux runners producing
+#            real installers. Dispatch-only: release.yml runs the same
+#            packaging for a release, and this is for trying one platform's
+#            build without cutting a version.
+#
+# `tauri/` is not an npm workspace member and its crates are not on any other
+# job's path, so without this file `make tauri-test` and `make tauri-lint` run
+# only when somebody remembers.
+name: desktop-tauri
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tauri/**"
+      - "package*.json"
+      # The page's one read of the shell, and the root test that holds the
+      # two sides of it together.
+      - "pwa/src/shell-host.ts"
+      - "tests/tauri_test.ts"
+      - ".github/workflows/desktop-tauri.yml"
+  pull_request:
+    paths:
+      - "tauri/**"
+      - "package*.json"
+      - "pwa/src/shell-host.ts"
+      - "tests/tauri_test.ts"
+      - ".github/workflows/desktop-tauri.yml"
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to package
+        type: choice
+        default: all
+        options: [all, windows, macos, linux]
+
+concurrency:
+  group: desktop-tauri-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  # npm ci resolves @niclaslindstedt/oss-framework from GitHub Packages.
+  packages: read
+
+jobs:
+  check:
+    name: decision layer
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tauri
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tauri
+      # `-p scanflick-shell` and DELIBERATELY only that crate: it depends on
+      # no GUI toolkit, so this job installs nothing beyond a Rust toolchain.
+      # A test that needed more than this is a decision sitting in the wrong
+      # crate.
+      - name: test
+        run: cargo test -p scanflick-shell
+      - name: format
+        run: cargo fmt --all -- --check
+
+  lint:
+    name: clippy (both crates)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tauri
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tauri
+      # The app crate links the platform's webview, so clippy needs its headers
+      # even though nothing here opens a window.
+      - name: webview development libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev patchelf
+      # `tauri.conf.json` declares `webroot` as a bundle resource and the build
+      # script refuses a resource that is not there, so the tree needs one — an
+      # empty page is enough to compile against, and building the real site
+      # here would cost minutes to typecheck Rust.
+      - name: a placeholder webroot
+        run: |
+          mkdir -p webroot
+          echo '<!doctype html><title>placeholder</title>' > webroot/index.html
+      # …and `tauri-build` refuses a MISSING ICON outright. `scripts/icons.mjs`
+      # makes them from the website's own, and needs nothing but Node.
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: icons
+        run: node scripts/icons.mjs
+      - name: clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  package:
+    name: package (${{ matrix.target }})
+    if: github.event_name == 'workflow_dispatch'
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows
+          - os: macos-latest
+            target: macos
+          - os: ubuntu-latest
+            target: linux
+    runs-on: ${{ matrix.os }}
+    env:
+      # macOS signing, exactly as release.yml passes it: an absent secret means
+      # an ad-hoc signature, which is the minimum an arm64 app needs to run at
+      # all.
+      APPLE_SIGNING_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
+    steps:
+      - name: Skip unselected platform
+        if: inputs.platform != 'all' && inputs.platform != matrix.target
+        run: echo "not selected" && exit 0
+
+      - uses: actions/checkout@v7
+        if: inputs.platform == 'all' || inputs.platform == matrix.target
+      # The website build lives in the root workspace; the shell copies its
+      # output and packages around it.
+      - uses: ./.github/actions/setup
+        if: inputs.platform == 'all' || inputs.platform == matrix.target
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: dtolnay/rust-toolchain@stable
+        if: inputs.platform == 'all' || inputs.platform == matrix.target
+      - uses: Swatinem/rust-cache@v2
+        if: inputs.platform == 'all' || inputs.platform == matrix.target
+        with:
+          workspaces: tauri
+
+      - name: Linux packaging libraries
+        if: matrix.target == 'linux' && (inputs.platform == 'all' || inputs.platform == 'linux')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev patchelf
+
+      - name: Package
+        if: inputs.platform == 'all' || inputs.platform == matrix.target
+        shell: bash
+        run: npm run tauri:package
+
+      - uses: actions/upload-artifact@v7
+        if: inputs.platform == 'all' || inputs.platform == matrix.target
+        with:
+          name: desktop-${{ matrix.target }}
+          path: tauri/release
+          if-no-files-found: error
+          retention-days: 7

@@ -1,0 +1,28 @@
+# Build artifacts — regenerated, never committed (OSS_SPEC §11.2).
+
+# The built website, copied in by scripts/bundle-web.mjs. It is the pwa/ build
+# output; committing it would duplicate the whole site in the history.
+webroot/
+
+# Cargo's build output for this workspace.
+target/
+
+# The app icon, re-encoded to RGBA from pwa/public/icons/ by scripts/icons.mjs —
+# Tauri refuses anything but an RGBA PNG at compile time, and the website's
+# icons are RGB. The ART is pwa/public/icons/; these are a format conversion.
+src-tauri/icons/
+
+# Tauri's generated permission schemas — written by tauri-build on every
+# compile, and what capabilities/*.json is validated against.
+src-tauri/gen/
+
+# The packaged downloads, collected by scripts/package.mjs.
+release/
+
+# This tree has its OWN dependency tree — it is not an npm workspace member.
+# It holds one thing: the Tauri CLI, which is what packages a build.
+node_modules/
+
+# Cargo.lock IS committed (this tree builds binaries, not a library), so it is
+# deliberately absent from this file. So is package-lock.json, for the same
+# reason: a packaging run has to be reproducible.

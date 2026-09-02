@@ -13,14 +13,19 @@ export default [
       "pwa/node_modules/**",
       "coverage/**",
       "previews/**",
+      // The desktop shell's build output and its own dependency tree.
+      "tauri/target/**",
+      "tauri/webroot/**",
+      "tauri/release/**",
+      "tauri/node_modules/**",
     ],
   },
   js.configs.recommended,
   {
     // Node tooling scripts (icon generation, SEO checks, sim CLI, release
-    // plumbing). These run under Node, so expose its globals rather than
-    // the browser's.
-    files: ["scripts/**/*.mjs", ".agents/skills/**/*.mjs"],
+    // plumbing, the desktop shell's bundling and packaging). These run under
+    // Node, so expose its globals rather than the browser's.
+    files: ["scripts/**/*.mjs", ".agents/skills/**/*.mjs", "tauri/scripts/**/*.mjs"],
     languageOptions: {
       sourceType: "module",
       ecmaVersion: 2022,
