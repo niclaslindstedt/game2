@@ -222,6 +222,9 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | WHERE the crowd PARKED, the lane in, and the trails to it   | `engine/mapgen/carparks.ts` (R42) over `carpark-map.ts`, placed on the terrain field from the stands; `pwa/src/game/carpark.ts`    |
 | What makes a homestead a FARM: barn, paddock, field, gear   | `engine/mapgen/farms.ts` (R37) lays it out; drawn by `barn.ts`, `paddock.ts`, `farm-gear.ts` in `pwa/src/game/`                    |
 | The COWS and the sheep grazing a paddock                    | `pwa/src/game/livestock.ts` — the crowd's pattern: where they MAY be is the engine's paddock, where each stands is the renderer's  |
+| WHERE a WIND FARM or a SOLAR FARM stands, and what it is    | `engine/mapgen/energy.ts` (R43) places both; the numbers are `STAGE_RULES.energy`, the country's say `BiomeRules.energy`           |
+| What a TURBINE looks like, and how its blades turn          | `pwa/src/game/wind-farm.ts` — its own manager outside the road chunks (seen from far beyond its chunk); reads `state.wind`         |
+| What a SOLAR FARM looks like — the tables, the fence, cabin | `pwa/src/game/solar-farm.ts` — one instanced mesh of tables per farm; `make items GROUP=energy` photographs both                   |
 | The RAILWAY, the crossing's ramp, and the train's timetable | `engine/mapgen/railway.ts` (R41) over `highway.ts`'s `rail` line and `crossing.ts`'s solve; the numbers in `STAGE_RULES.rail`      |
 | What a train LOOKS like, and the rails it runs on           | `pwa/src/game/train.ts` (the consist, posed off `trainCars`) + `railway.ts` (ballast, sleepers, rails, the deck and the boards)    |
 | What a HOUSE looks like — paint, roof, storeys, porch, wing | `pwa/src/game/house.ts` builds one from the engine's `HousePlan`; `make items GROUP=homestead` photographs them                    |

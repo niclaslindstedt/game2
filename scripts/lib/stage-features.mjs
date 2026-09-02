@@ -430,6 +430,56 @@ export function stageFeatures(track, terrain) {
     });
   });
 
+  // ── The energy (R43): the wind farms on the rise, the solar farms beside ─
+  (track.windFarms ?? []).forEach((farm, k) => {
+    const at = samples[indexAtS(samples, farm.atS)];
+    const first = farm.turbines[0];
+    const side = farm.side > 0 ? "right" : "left";
+    let nearest = Infinity;
+    let highest = -Infinity;
+    for (const t of farm.turbines) {
+      nearest = Math.min(nearest, Math.hypot(t.x - at.x, t.z - at.z));
+      highest = Math.max(highest, t.y);
+    }
+    features.push({
+      id: `W${k + 1}`,
+      kind: "windfarm",
+      s: farm.atS,
+      index: indexAtS(samples, farm.atS),
+      x: first.x,
+      z: first.z,
+      heading: at.heading,
+      elevation: highest,
+      side,
+      label: `W${k + 1}`,
+      detail:
+        `wind farm ${side}: ${farm.turbines.length} turbines, hub ${farm.hub.toFixed(0)} m, rotor ${farm.rotor.toFixed(0)} m, ` +
+        `nearest tower ${nearest.toFixed(0)} m off the centreline, top pad ${(highest - at.elevation).toFixed(0)} m over the road`,
+      solids: [],
+    });
+  });
+  (track.solarFarms ?? []).forEach((farm, k) => {
+    const at = samples[indexAtS(samples, farm.atS)];
+    const side = farm.side > 0 ? "right" : "left";
+    const d = Math.hypot(farm.rect.x - at.x, farm.rect.z - at.z);
+    features.push({
+      id: `PV${k + 1}`,
+      kind: "solarfarm",
+      s: farm.atS,
+      index: indexAtS(samples, farm.atS),
+      x: farm.rect.x,
+      z: farm.rect.z,
+      heading: at.heading,
+      elevation: farm.y,
+      side,
+      label: `PV${k + 1}`,
+      detail:
+        `solar farm ${side}: ${farm.rect.width.toFixed(0)} x ${farm.rect.depth.toFixed(0)} m fence ${d.toFixed(0)} m off the centreline, ` +
+        `${farm.rows} row${farm.rows === 1 ? "" : "s"} of ${farm.perRow} table${farm.perRow === 1 ? "" : "s"}`,
+      solids: [],
+    });
+  });
+
   // ── The towns (R39): a village down both sides of a sealed street ─────
   (track.towns ?? []).forEach((town, k) => {
     const index = indexAtS(samples, town.atS);
@@ -565,6 +615,8 @@ function rank(feature) {
     "homestead",
     "town",
     "carpark",
+    "windfarm",
+    "solarfarm",
     "turn",
     "crest",
     "ford",
@@ -601,6 +653,8 @@ export function stageSummary(track, features) {
     homesteads: by("homestead"),
     towns: by("town"),
     carParks: by("carpark"),
+    windFarms: by("windfarm"),
+    solarFarms: by("solarfarm"),
     tarmacShare: paved / track.samples.length,
     tarmac: surfaceRuns(track, "asphalt"),
     climb: Math.max(...elevations) - Math.min(...elevations),

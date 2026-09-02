@@ -73,6 +73,8 @@ const MARK = {
   railcrossing: [60, 40, 30],
   homestead: [178, 52, 40],
   carpark: [40, 80, 170],
+  windfarm: [70, 74, 80],
+  solarfarm: [28, 45, 79],
   ford: WATER,
   bridge: [110, 110, 120],
   guardMound: [150, 108, 60],
@@ -357,6 +359,34 @@ export function renderLevelMap({
     }
   }
 
+  // ── The energy (R43): every turbine as its rotor's sweep at true size,
+  // the tower a white dot at its middle; every solar farm as its fence in
+  // the glass's blue, with the cabin in it ─────────────────────────────
+  for (const farm of track.windFarms ?? []) {
+    for (const t of farm.turbines) {
+      const tx = px(t.x);
+      const tz = pz(t.z);
+      if (!inMap(tx, tz)) continue;
+      canvas.disk(tx, tz, Math.max(3, (farm.rotor / 2) * scale), mix(MARK.windfarm, PAPER, 0.7));
+      canvas.disk(tx, tz, Math.max(1.5, 3 * scale), WHITE);
+    }
+  }
+  const quadOf = (rect, ink) => {
+    const fx = Math.sin(rect.heading);
+    const fz = Math.cos(rect.heading);
+    const corners = [
+      [-rect.depth / 2, -rect.width / 2],
+      [rect.depth / 2, -rect.width / 2],
+      [rect.depth / 2, rect.width / 2],
+      [-rect.depth / 2, rect.width / 2],
+    ].map(([u, v]) => [px(rect.x + fz * u + fx * v), pz(rect.z - fx * u + fz * v)]);
+    if (corners.some(([x, y]) => inMap(x, y))) canvas.poly(corners, ink);
+  };
+  for (const farm of track.solarFarms ?? []) {
+    quadOf(farm.rect, MARK.solarfarm);
+    if (farm.cabin) quadOf(farm.cabin, mix(MARK.windfarm, PAPER, 0.5));
+  }
+
   // ── The road, at its width, by surface ────────────────────────────────
   const finishS = track.finishS ?? Infinity;
   const quad = (a, b, halfA, halfB) => {
@@ -630,6 +660,38 @@ export function renderLevelMap({
         canvas.disk(cx, cy, r * 0.5, WHITE);
         break;
       }
+      case "windfarm": {
+        // R43 — a turbine's own sign: three blades from a hub, stood on
+        // the first tower of the string.
+        const r = roadR + 4;
+        const cx = px(f.x);
+        const cy = pz(f.z);
+        canvas.disk(cx, cy, r, WHITE);
+        canvas.disk(cx, cy, r - 1.2, MARK.windfarm);
+        for (let k = 0; k < 3; k++) {
+          const a = -Math.PI / 2 + (k * Math.PI * 2) / 3;
+          canvas.line(cx, cy, cx + Math.cos(a) * (r - 2), cy + Math.sin(a) * (r - 2), WHITE);
+        }
+        break;
+      }
+      case "solarfarm": {
+        // R43 — a panel: the blue square with a white bar across it,
+        // stood on the fence's middle.
+        const r = roadR + 3;
+        const cx = px(f.x);
+        const cy = pz(f.z);
+        canvas.poly(
+          [
+            [cx - r, cy - r],
+            [cx + r, cy - r],
+            [cx + r, cy + r],
+            [cx - r, cy + r],
+          ],
+          MARK.solarfarm,
+        );
+        canvas.line(cx - r + 2, cy, cx + r - 2, cy, WHITE);
+        break;
+      }
       case "railcrossing": {
         // R41 — a level crossing's own sign: the cross, in the railway's
         // ink, over a white disc.
@@ -769,6 +831,8 @@ function drawLegend(canvas, x, y, { lines, lo, hi, interval }) {
   row("START", MARK.start);
   row("FINISH", MARK.finish);
   row("JNN JUNCTION", MARK.junction);
+  row("WN  WIND FARM (ROTOR SWEEP)", mix(MARK.windfarm, PAPER, 0.5));
+  row("PVN SOLAR FARM", MARK.solarfarm);
   row("CORNER GUARD MOUND", mix(MARK.guardMound, PAPER, 0.25));
   row("CORNER GUARD GROVE", mix(MARK.guardGrove, PAPER, 0.25));
   gap();

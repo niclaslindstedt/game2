@@ -70,6 +70,20 @@ export {
   type LaneTree,
 } from "./homesteads.ts";
 export {
+  placeSolarFarms,
+  placeWindFarms,
+  solarFarmClearings,
+  solarFarmSolids,
+  solarTables,
+  TOWER_BASE,
+  windFarmPads,
+  windFarmSolids,
+  type EnergyContext,
+  type SolarFarm,
+  type WindFarm,
+  type WindTurbine,
+} from "./energy.ts";
+export {
   farmClearings,
   farmSolids,
   placeFarm,

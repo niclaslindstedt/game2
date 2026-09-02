@@ -24,7 +24,10 @@ Avoid it two ways:
   the before happens while the tree is still clean.
 - **If the baseline is only wanted after the fact, use a second worktree**
   (`git worktree add ../base origin/main`) rather than moving the tree the
-  work lives in.
+  work lives in. The worktree is also the only honest TIMING baseline: a
+  web session's container can restart mid-task (`uptime` says so), and a
+  build cost measured an hour ago on the old machine is not comparable to
+  one measured now — run both trees back to back on the same machine.
 
 If a stash is genuinely unavoidable, make the pop its own command so a timeout
 on the long one cannot swallow it.

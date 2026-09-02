@@ -48,6 +48,7 @@ import { bridgeParapets, type WildObstacle } from "./solids.ts";
 import { farmClearings, rectDistance, type FarmRect } from "./farms.ts";
 import { homesteadSolids } from "./homesteads.ts";
 import { townSolids } from "./towns.ts";
+import { solarFarmClearings, solarFarmSolids, windFarmPads, windFarmSolids } from "./energy.ts";
 
 export { LAKE_Y } from "./land.ts";
 export { GROVE_SCALE, REGION_SCALE, type GroveCommunity, type Region } from "./biomes.ts";
@@ -1126,6 +1127,8 @@ export function createTerrain(track: Track): TerrainField {
   }[] = [];
   let homesteadCount = 0;
   let townCount = 0;
+  let windFarmCount = 0;
+  let solarFarmCount = 0;
   /** How much of a pad's level applies at a point — 1 on the pad, fading
    * to 0 over its `blend` past the rim — and the level itself. Where two
    * pads reach the same point (a street's lots overlap at their rims) the
@@ -1687,6 +1690,29 @@ export function createTerrain(track: Track): TerrainField {
     return Math.min(stage, branch);
   };
 
+  /** R43 — distance from a point to the nearest energy plant's ground: a
+   * solar farm's fence or a turbine's crane pad, negative inside. The
+   * watercourses steer by it exactly as they steer by a road, because a
+   * river through a field of panels is a field of panels standing in a
+   * river; the country's paddocks and fields stay where the water finds
+   * them, which is where a real field is. */
+  const energyClear = (x: number, z: number): number => {
+    let best = Infinity;
+    for (const farm of track.solarFarms) {
+      const { rect } = farm;
+      const reach = Math.hypot(rect.width, rect.depth) / 2 + 1;
+      if (Math.abs(x - rect.x) > reach || Math.abs(z - rect.z) > reach) continue;
+      best = Math.min(best, rectDistance(rect, x, z));
+    }
+    for (const farm of track.windFarms) {
+      for (const t of farm.turbines) {
+        best = Math.min(best, Math.hypot(t.x - x, t.z - z) - R.energy.wind.pad.radius);
+      }
+    }
+    return best;
+  };
+  const waterClear: RoadClear = (x, z) => Math.min(roadClear(x, z), energyClear(x, z));
+
   const spurSurfaceAt = (x: number, z: number): Surface | null => {
     if (pads.length > 0 && padClearance(x, z) <= 0) return biome.loose;
     // R37 — a ploughed field is soft going: turned soil to the wheels.
@@ -1773,7 +1799,9 @@ export function createTerrain(track: Track): TerrainField {
       samples.length > indexed ||
       spurCount < track.spurs.length ||
       homesteadCount < track.homesteads.length ||
-      townCount < track.towns.length
+      townCount < track.towns.length ||
+      windFarmCount < track.windFarms.length ||
+      solarFarmCount < track.solarFarms.length
     ) {
       indexSamples(indexed, samples.length);
       indexed = samples.length;
@@ -1804,6 +1832,26 @@ export function createTerrain(track: Track): TerrainField {
           pads.push({ ...lot.pad, blend: R.town.lot.blend, atS: town.atS });
         }
         for (const solid of townSolids(town, heightAt)) fix(solid);
+      }
+      // R43 — the energy: every tower's crane pad is a pad, and the tower a
+      // ring of solids footed on it; a solar farm is a clearing with its
+      // fence, its tables and its cabin standing in it.
+      for (; windFarmCount < track.windFarms.length; windFarmCount++) {
+        const farm = track.windFarms[windFarmCount];
+        for (const pad of windFarmPads(farm)) {
+          pads.push({
+            ...pad,
+            blend: R.energy.wind.pad.blend,
+            grade: { x: 0, z: 0 },
+            atS: farm.atS,
+          });
+        }
+        for (const solid of windFarmSolids(farm, heightAt)) fix(solid);
+      }
+      for (; solarFarmCount < track.solarFarms.length; solarFarmCount++) {
+        const farm = track.solarFarms[solarFarmCount];
+        for (const c of solarFarmClearings(farm)) clearings.push({ ...c, atS: farm.atS });
+        for (const solid of solarFarmSolids(farm, heightAt)) fix(solid);
       }
       // The water: every crossing this stretch of road added, traced as
       // one river through them (R18) — born on the high ground, gathering
@@ -1840,7 +1888,7 @@ export function createTerrain(track: Track): TerrainField {
         // over the course's own last step makes a river walk past the very
         // body it was running into and go looking for the coast.
         { levelAt: land.water.shoreLevelAt, nearestAt: land.water.nearestAt },
-        roadClear,
+        waterClear,
         // The country the stage occupies: a mouth that gets clear of it has
         // left the map, which is one of the two ways a river is allowed to
         // end. Without it every course that would have run off the frame

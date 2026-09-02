@@ -132,6 +132,11 @@ export type BiomeRules = {
    * the map before the rally, that the route may cross square on a ramp and
    * that a train runs down every so often. */
   railway: boolean;
+  /** R43 — whether the country MAKES POWER: the wind farms on its high
+   * ground and the solar farms on its flats. A modern, settled country
+   * does; a desert road a hundred kilometres from anywhere carries no grid
+   * to feed. */
+  energy: boolean;
 };
 
 // ── The taiga ─────────────────────────────────────────────────────────────
@@ -241,6 +246,7 @@ export const TAIGA: BiomeRules = {
   settled: true,
   farms: true,
   railway: true,
+  energy: true,
 };
 
 // ── The desert ────────────────────────────────────────────────────────────
@@ -392,6 +398,10 @@ export const DESERT: BiomeRules = {
   settled: false,
   farms: false,
   railway: false,
+  // No grid out here to feed a wind farm into, and nobody to fence a
+  // solar farm for: the desert is not a place for the modern country's
+  // machinery.
+  energy: false,
 };
 
 export const BIOMES: Record<BiomeId, BiomeRules> = { taiga: TAIGA, desert: DESERT };

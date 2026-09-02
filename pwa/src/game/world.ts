@@ -55,7 +55,9 @@ import { buildCulverts } from "./culvert.ts";
 import { buildFinishGate, buildStartGate, type FinishGate, type Muzzle } from "./finish-gate.ts";
 import { buildCarPark } from "./carpark.ts";
 import { buildHomestead } from "./homestead.ts";
+import { buildSolarFarm } from "./solar-farm.ts";
 import { buildTown } from "./town.ts";
+import { createWindFarms } from "./wind-farm.ts";
 import { buildRailArm, buildRailCrossing } from "./railway.ts";
 import { createTrains } from "./train.ts";
 import { createLivestock } from "./livestock.ts";
@@ -821,6 +823,13 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
   let spurScan = 0;
   let homesteadScan = 0;
   let townScan = 0;
+  let solarScan = 0;
+  let windScan = 0;
+  /** R43 — the wind farms: their own manager outside the chunks, because a
+   * string of two-hundred-metre machines is in view from far outside the
+   * chunk the road placed it from, and because its rotors turn every frame. */
+  const windFarms = createWindFarms();
+  group.add(windFarms.group);
   let finish: FinishGate | null = null;
   /** R26 — the crowd, rebuilt whenever the stage grows a new stand. The
    * whole crowd is a handful of instanced meshes, so it is cheaper to
@@ -900,6 +909,18 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
       const town = track.towns[townScan];
       if (town.atS > track.samples[to - 1].s) break;
       chunkGroup.add(buildTown(track, town));
+    }
+    // R43 — the solar farms beside this stretch of road, in the chunk with
+    // it; and the wind farms placed from it, handed to their own manager.
+    for (; solarScan < track.solarFarms.length; solarScan++) {
+      const farm = track.solarFarms[solarScan];
+      if (farm.atS > track.samples[to - 1].s) break;
+      chunkGroup.add(buildSolarFarm(track, farm, beside));
+    }
+    for (; windScan < track.windFarms.length; windScan++) {
+      const farm = track.windFarms[windScan];
+      if (farm.atS > track.samples[to - 1].s) break;
+      windFarms.add(track, farm, beside);
     }
     const fords = buildFords(track, fordScan, to);
     fordScan = fords.next;
@@ -1026,6 +1047,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
       cones.retireBefore(old.toS);
       posts.retireBefore(old.toS);
       kerbs.pruneBefore(old.toS);
+      windFarms.pruneBefore(old.toS);
       // R42 — the car parks behind go with the road they served. The
       // field's own list is pruned by the same arc, so the counter into it
       // is re-anchored to what the field still holds.
@@ -1090,12 +1112,15 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
     breakage.update(dt, terrain.standOn);
     crowd?.update(dt, state.car.x, state.car.z);
     livestock.update(dt, state.car.x, state.car.z);
+    // R43 — the rotors, in the same wind the rain leans in.
+    windFarms.update(state, dt);
   };
 
   const dispose = (): void => {
     crowd?.dispose();
     trains.dispose();
     livestock.dispose();
+    windFarms.dispose();
     wild.dispose();
     cones.dispose();
     posts.dispose();
