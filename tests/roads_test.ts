@@ -19,6 +19,7 @@ import {
   createLandField,
   createTerrain,
   crossOffset,
+  endApron,
   handoverAt,
   junctionFlat,
   createGame,
@@ -30,6 +31,7 @@ import {
   step,
   vergeOffset,
   wearAt,
+  type TrackSample,
 } from "@engine";
 
 const WIDTH = knobScale(DEFAULT_KNOBS.width, R.roadWidth);
@@ -778,6 +780,53 @@ describe("junctions (R17)", () => {
 // corridor profile above, so these assert that neither reader has lost the
 // SIGN of where it is standing — the corridor is not symmetric, and a bank
 // is the asymmetry that gives it away.
+// The aprons are the one piece of drawn road that is in no sample array,
+// so what gets drawn there is read off `endApron` — the same samples the
+// renderer welds onto the ribbon — rather than inferred from the rules.
+describe("the drawn ends of the road (R24, R25)", () => {
+  it("a sprint carries a level dirt run-up behind the gate and a run-off past the line", () => {
+    const track = compileStage(3, "medium");
+    const n = Math.round(R.startZone.apron / track.step);
+    const first = track.samples[0];
+    const last = track.samples[track.samples.length - 1];
+    for (const [end, at, sign] of [
+      ["start", first, -1],
+      ["finish", last, 1],
+    ] as const) {
+      const apron = endApron(track, end);
+      expect(apron.length, end).toBe(n);
+      apron.forEach((p: TrackSample, k: number) => {
+        // In stage order: the run-up ends at the gate, the run-off starts
+        // at the line, and each step is one sample along the end's heading.
+        const i = end === "start" ? n - k : k + 1;
+        expect(p.s).toBeCloseTo(at.s + sign * i * track.step, 6);
+        expect(p.x).toBeCloseTo(at.x + sign * Math.sin(at.heading) * i * track.step, 6);
+        expect(p.z).toBeCloseTo(at.z + sign * Math.cos(at.heading) * i * track.step, 6);
+        expect(p.elevation).toBe(at.elevation);
+        expect(p.surface).toBe("gravel");
+        expect(p.deck).toBeNull();
+        expect(p.lift).toBe(0);
+        expect(p.jump).toBe(false);
+      });
+    }
+  });
+
+  it("a circuit draws none: the road either side of its line is the lap", () => {
+    for (const seed of [1, 4]) {
+      const track = compileStage(seed, "medium", {}, "circuit");
+      expect(track.circuit).toBe(true);
+      expect(endApron(track, "start")).toEqual([]);
+      expect(endApron(track, "finish")).toEqual([]);
+    }
+  });
+
+  it("an endless stage has a start to launch from and no finish to run off", () => {
+    const track = compileStage(7, "endless");
+    expect(endApron(track, "start").length).toBe(Math.round(R.startZone.apron / track.step));
+    expect(endApron(track, "finish")).toEqual([]);
+  });
+});
+
 describe("one ground under the car and the picture of it", () => {
   /** The most banked piece of open road on a stage, and which way it tilts.
    * The index comes back with it: `locate` searches a window around a hint,

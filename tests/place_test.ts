@@ -47,17 +47,36 @@ function stepUntil(state: GameState, type: GameEvent["type"], seconds: number): 
   return null;
 }
 
+/** An arc position well into the stage with `run` metres of STRAIGHT road
+ * ahead of it — searched off the pacenotes, never named. A car stood here
+ * and handed neutral input coasts down the road; stood on a pinned metre
+ * mark it coasts off whatever corner the generator has since moved under
+ * that mark, and the test reports the stage rather than the placing. */
+function straightAt(track: typeof SPRINT, run: number, after = 100): number {
+  let from = after;
+  for (const note of track.pacenotes) {
+    if (note.endS <= from) continue;
+    if (note.s - from >= run) return from;
+    from = Math.max(from, note.endS);
+  }
+  if (track.length - from >= run) return from;
+  throw new Error(`seed ${track.seed} has no ${run} m straight past ${after} m`);
+}
+
 describe("placing a run", () => {
   it("stands the car on the road at the arc position asked for, racing, at pace", () => {
     const state = createGame({ seed: SEED, track: SPRINT });
     expect(state.phase).toBe("intro");
-    const jumped = placeRun(state, { at: "racing", s: 600 });
+    // Placed at pace, so the second of coasting below needs the road ahead
+    // straight for as far as pace carries — with room to spare.
+    const s = straightAt(SPRINT, 60);
+    const jumped = placeRun(state, { at: "racing", s });
     expect(state.phase).toBe("racing");
     expect(jumped).toBeGreaterThan(TUNING.intro + TUNING.countdown);
     expect(state.t).toBeCloseTo(TUNING.intro + TUNING.countdown + state.raceTime, 6);
     expect(state.raceTime).toBeGreaterThan(0);
     const here = SPRINT.samples[state.progressIndex];
-    expect(Math.abs(here.s - 600)).toBeLessThan(SPRINT.step);
+    expect(Math.abs(here.s - s)).toBeLessThan(SPRINT.step);
     expect(state.car.y).toBe(here.elevation);
     expect(state.car.u).toBeGreaterThan(20);
     expect(state.offRoad).toBe(false);
