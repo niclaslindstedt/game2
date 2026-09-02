@@ -20,6 +20,7 @@ import {
   createGame,
   createTerrain,
   damageZoneAt,
+  landingDamage,
   standSolid,
   step,
   type GameEvent,
@@ -237,10 +238,11 @@ describe("the difficulty's damage assist", () => {
       damageScale,
     });
 
-  /** Drive `state` head-on into the biggest trunk in the forest at 30 m/s. */
-  const ram = (state: GameState, events: GameEvent[] = []): GameEvent[] => {
+  /** Drive `state` head-on into the biggest trunk in the forest at `u`
+   * m/s. */
+  const ram = (state: GameState, events: GameEvent[] = [], u = 30): GameEvent[] => {
     const car = state.car;
-    car.u = 30;
+    car.u = u;
     const tree = solid({
       kind: "tree",
       size: OLD_TREE,
@@ -280,8 +282,10 @@ describe("the difficulty's damage assist", () => {
   it("MEDIUM keeps half of every hit", () => {
     const full = scaled(1);
     const half = scaled(0.5);
-    ram(full);
-    ram(half);
+    // Under the speed that kills the engine outright: a ledger pinned at
+    // its top is not one that can be halved.
+    ram(full, [], 15);
+    ram(half, [], 15);
     expect(half.car.damage.zones[0]).toBeCloseTo(full.car.damage.zones[0] / 2, 6);
     expect(half.car.damage.wear).toBeCloseTo(full.car.damage.wear / 2, 6);
     expect(half.car.damage.systems.engine).toBeCloseTo(full.car.damage.systems.engine / 2, 6);
@@ -309,11 +313,12 @@ describe("what a broken car says about itself", () => {
       x: car.x,
       z: grid + TUNING.collision.halfLength + 0.5,
     });
-    // Nose-first into the trunk, over and over: the engine is the system
-    // behind the panel that folds, so it walks both lines on its own.
+    // Nose-first into the trunk, over and over, at a pace that hurts the
+    // engine a bite at a time rather than killing it outright: the engine
+    // is the system behind the panel that folds, so it walks both lines.
     const events: GameEvent[] = [];
-    for (let i = 0; i < 4; i++) {
-      car.u = 30;
+    for (let i = 0; i < 6; i++) {
+      car.u = 10;
       car.z = grid;
       collideCar(state.spec, car, [tree], events, state.stats);
     }
@@ -550,7 +555,9 @@ describe("a spent chassis and the panels left on the road", () => {
 
   it("an engine past the misfire threshold drops beats — the power comes and goes", () => {
     const state = freshState();
-    state.car.damage.systems.engine = 1;
+    // Nearly gone, and still running: at 1 it is dead, which is the test
+    // after the next.
+    state.car.damage.systems.engine = 0.9;
     state.car.u = 20;
     let dead = 0;
     let firing = 0;
@@ -566,7 +573,7 @@ describe("a spent chassis and the panels left on the road", () => {
     expect(firing).toBeGreaterThan(30);
   });
 
-  it("everything at its worst still leaves a car that can be driven home", () => {
+  it("everything short of the end still leaves a car that can be driven home", () => {
     const state = freshState();
     const damage = state.car.damage;
     damage.wear = 1;
@@ -575,17 +582,246 @@ describe("a spent chassis and the panels left on the road", () => {
     for (const key of Object.keys(damage.systems) as (keyof typeof damage.systems)[]) {
       damage.systems[key] = 1;
     }
-    damage.broken.push("hood", "hatch", "spoiler", "bumperF", "bumperR", "mirrorL", "mirrorR");
+    // The two things that END a run are held one step short of it: an
+    // engine that is nearly dead, and four tyres that are flat but on.
+    damage.systems.engine = 0.99;
+    for (let i = 0; i < damage.wheels.length; i++) damage.wheels[i] = 0.99;
+    damage.broken.push(
+      "hood",
+      "hatch",
+      "spoiler",
+      "bumperF",
+      "bumperR",
+      "mirrorL",
+      "mirrorR",
+      "glassF",
+      "glassB",
+      "glassL",
+      "glassR",
+      "doorL",
+      "doorR",
+    );
     for (let i = 0; i < TUNING.physicsHz * 40; i++) step(state, { ...NEUTRAL_INPUT, throttle: 1 });
     // It still goes — no faster than a country road, and nowhere near what
     // the same car does sound (over 40 m/s).
-    expect(state.car.u).toBeGreaterThan(8);
+    expect(state.phase).toBe("racing");
+    expect(state.car.u).toBeGreaterThan(5);
     expect(state.car.u).toBeLessThan(28);
     // ...and it still steers: the grip floor is what guarantees this.
     const before = state.car.heading;
     for (let i = 0; i < TUNING.physicsHz; i++)
       step(state, { ...NEUTRAL_INPUT, throttle: 0.5, steer: 1 });
     expect(Math.abs(state.car.heading - before)).toBeGreaterThan(0.3);
+  });
+
+  it("a flat tyre pulls the car toward its own side, and a rim on the road costs pace", () => {
+    const pull = (wheel: number): { heading: number; u: number } => {
+      const state = freshState();
+      state.car.damage.wheels[wheel] = TUNING.collision.chassis.wheelFlat;
+      state.car.u = 25;
+      for (let i = 0; i < TUNING.physicsHz * 3; i++)
+        step(state, { ...NEUTRAL_INPUT, throttle: 0.5 });
+      return { heading: state.car.heading, u: state.car.u };
+    };
+    const sound = freshState();
+    sound.car.u = 25;
+    for (let i = 0; i < TUNING.physicsHz * 3; i++) step(sound, { ...NEUTRAL_INPUT, throttle: 0.5 });
+    // FL is the engine's left, FR its right: each pulls its own way, by the
+    // same amount, with the wheel dead straight.
+    const left = pull(0);
+    const right = pull(1);
+    expect(left.heading).toBeLessThan(-0.05);
+    expect(right.heading).toBeGreaterThan(0.05);
+    expect(left.heading).toBeCloseTo(-right.heading, 3);
+    expect(sound.car.heading).toBeCloseTo(0, 6);
+    expect(left.u).toBeLessThan(sound.car.u);
+  });
+
+  it("the brakes give with the corners, and take the lever with them", () => {
+    const stop = (brakes: number): number => {
+      const state = freshState();
+      state.car.damage.systems.brakes = brakes;
+      state.car.u = 30;
+      for (let i = 0; i < TUNING.physicsHz; i++) step(state, { ...NEUTRAL_INPUT, brake: 1 });
+      return state.car.u;
+    };
+    // A cut line loses part of the pedal, never all of it...
+    expect(stop(1)).toBeGreaterThan(stop(0));
+    expect(stop(1)).toBeLessThan(30);
+    // ...and nearly all of the lever, which is one cable: the same yank at
+    // the same speed with the same lock finds a fraction of the angle.
+    const yank = (brakes: number): number => {
+      const state = freshState();
+      state.car.damage.systems.brakes = brakes;
+      state.car.u = 22;
+      let most = 0;
+      for (let i = 0; i < TUNING.physicsHz; i++) {
+        step(state, { ...NEUTRAL_INPUT, throttle: 0.3, steer: 1, handbrake: true });
+        most = Math.max(most, Math.abs(state.car.slip));
+      }
+      return most;
+    };
+    const held = yank(0);
+    const lost = yank(1);
+    expect(held).toBeGreaterThan(0.25);
+    expect(lost).toBeLessThan(held * 0.6);
+  });
+});
+
+describe("the end of the run", () => {
+  it("a wall met square at 100 km/h kills the engine; at 50 it only hurts it", () => {
+    const hit = (kmh: number): GameState => {
+      const state = freshState();
+      const car = state.car;
+      car.u = kmh / 3.6;
+      const rock = solid({
+        kind: "boulder",
+        size: 2.2,
+        x: car.x,
+        z: car.z + TUNING.collision.halfLength + 0.5,
+      });
+      collideCar(state.spec, car, [rock], [], state.stats);
+      return state;
+    };
+    expect(hit(100).car.damage.systems.engine).toBe(1);
+    const fifty = hit(50).car.damage.systems.engine;
+    expect(fifty).toBeGreaterThan(0.3);
+    expect(fifty).toBeLessThan(TUNING.collision.callAt.spent);
+    // The glass and the bonnet are gone on the big one, and the nose is
+    // folded a quarter of a metre: the car LOOKS like what happened to it.
+    expect(hit(100).car.damage.broken).toEqual(
+      expect.arrayContaining(["lampsF", "bumperF", "glassF", "hood"]),
+    );
+    expect(hit(100).car.damage.zones[0]).toBeGreaterThan(0.2);
+  });
+
+  it("the lamps are the first thing a cap loses — headlamps at the nose, tail lamps at the tail", () => {
+    const end = (u: number): string[] => {
+      const state = freshState();
+      const car = state.car;
+      const ahead = u > 0;
+      const rock = solid({
+        kind: "boulder",
+        size: 2.2,
+        x: car.x,
+        z: car.z + (ahead ? 1 : -1) * (TUNING.collision.halfLength + 0.5),
+      });
+      car.u = u;
+      collideCar(state.spec, car, [rock], [], state.stats);
+      return car.damage.broken;
+    };
+    // Backing into a wall at 35 km/h takes the tail lamps and nothing else;
+    // the nose at the same pace loses its headlamps, and the bumper only at
+    // a real hit.
+    expect(end(-35 / 3.6)).toEqual(["lampsR"]);
+    expect(end(35 / 3.6)).toEqual(["lampsF"]);
+    const hard = end(60 / 3.6);
+    expect(hard).toContain("lampsF");
+    expect(hard).toContain("bumperF");
+    expect(hard).not.toContain("lampsR");
+  });
+
+  it("a dead engine stops the car for good, and the run is retired where it stops", () => {
+    const state = freshState();
+    state.car.damage.systems.engine = 1;
+    state.car.u = 20;
+    const from = state.car.z;
+    const events: GameEvent[] = [];
+    for (let i = 0; i < TUNING.physicsHz * 30 && state.phase === "racing"; i++) {
+      events.push(...step(state, { ...NEUTRAL_INPUT, throttle: 1 }));
+    }
+    expect(state.phase).toBe("retired");
+    const retire = events.find((e) => e.type === "retire");
+    expect(retire).toEqual({ type: "retire", reason: "engine" });
+    // It coasted to a stop in a few lengths, not a few hundred metres, and
+    // nothing put it back on the road on the way: a throttle held on a
+    // dead engine is not a wedge.
+    expect(state.car.z - from).toBeLessThan(120);
+    expect(state.car.u).toBe(0);
+    expect(state.stats.respawns).toBe(0);
+    expect(events.some((e) => e.type === "respawn")).toBe(false);
+    // ...and it stays retired: the step does nothing further.
+    const t = state.t;
+    const after = step(state, { ...NEUTRAL_INPUT, throttle: 1, reset: true });
+    expect(after).toHaveLength(0);
+    expect(state.phase).toBe("retired");
+    expect(state.t).toBeGreaterThan(t);
+  });
+
+  it("a corner driven into a trunk at pace takes the wheel off; the second wheel is the run", () => {
+    const state = freshState();
+    const car = state.car;
+    const grid = car.z;
+    // The trunk stands off the right-front corner, so the contact lands in
+    // zone 1 and the crush reaches the front-right wheel.
+    const tree = solid({
+      kind: "tree",
+      size: OLD_TREE,
+      x: car.x + TUNING.collision.halfWidth + 0.15,
+      z: grid + TUNING.collision.halfLength + 0.3,
+    });
+    const events: GameEvent[] = [];
+    for (let i = 0; i < 3 && !car.damage.broken.includes("wheelFR"); i++) {
+      car.u = 30;
+      car.z = grid;
+      collideCar(state.spec, car, [tree], events, state.stats);
+    }
+    expect(car.damage.wheels[1]).toBe(1);
+    expect(car.damage.broken).toContain("wheelFR");
+    expect(events).toContainEqual({ type: "wheelFail", wheel: 1, off: true });
+    expect(events).toContainEqual({ type: "partBreak", part: "wheelFR" });
+    // One wheel off is a car that still crawls...
+    for (let i = 0; i < TUNING.physicsHz * 10; i++) step(state, { ...NEUTRAL_INPUT, throttle: 1 });
+    expect(state.phase).toBe("racing");
+    // ...two is not.
+    car.damage.wheels[3] = 1;
+    car.damage.broken.push("wheelRR");
+    let retired = false;
+    for (let i = 0; i < TUNING.physicsHz * 30 && !retired; i++) {
+      retired = step(state, { ...NEUTRAL_INPUT, throttle: 1 }).some(
+        (e) => e.type === "retire" && e.reason === "wheels",
+      );
+    }
+    expect(retired).toBe(true);
+    expect(state.phase).toBe("retired");
+  });
+
+  it("a landing on the side is the wheels on that side", () => {
+    const state = freshState();
+    const car = state.car;
+    car.roll = TUNING.air.rollLandLimit + 0.2; // right side up: the LEFT flank lands
+    const events: GameEvent[] = [];
+    landingDamage(state.spec, car, 26, events, state.stats);
+    expect(car.damage.zones[6]).toBeGreaterThan(0);
+    expect(car.damage.wheels[0]).toBeGreaterThan(0);
+    expect(car.damage.wheels[2]).toBeGreaterThan(0);
+    expect(car.damage.wheels[1]).toBe(0);
+    expect(car.damage.wheels[3]).toBe(0);
+    // Harder than the flank's own fold alone would have made it.
+    expect(car.damage.wheels[0]).toBeGreaterThan(
+      car.damage.zones[6] * TUNING.collision.systems.wheelFromFlank * 0.5,
+    );
+  });
+
+  it("a flank driven hard into a rock shatters the glass and, harder, takes the door", () => {
+    const state = freshState();
+    const car = state.car;
+    const rock = solid({ kind: "boulder", size: 2.2, x: car.x + TUNING.collision.halfWidth + 0.5 });
+    const events: GameEvent[] = [];
+    car.w = 24;
+    collideCar(state.spec, car, [rock], events, state.stats);
+    expect(car.damage.broken).toContain("mirrorR");
+    expect(car.damage.broken).toContain("glassR");
+    expect(car.damage.broken).not.toContain("doorR");
+    for (let i = 0; i < 3 && !car.damage.broken.includes("doorR"); i++) {
+      car.x = rock.x - TUNING.collision.halfWidth - 0.5;
+      car.w = 24;
+      collideCar(state.spec, car, [rock], events, state.stats);
+    }
+    expect(car.damage.broken).toContain("doorR");
+    // The left side of the car never touched anything.
+    expect(car.damage.broken).not.toContain("glassL");
+    expect(car.damage.broken).not.toContain("doorL");
   });
 });
 

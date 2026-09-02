@@ -552,7 +552,15 @@ describe("the field on the road", () => {
     while (!settleField(field, 4000, 400) && guard < 400) guard += 1;
     expect(guard).toBeLessThan(400);
     for (const run of owing) {
-      expect(run.time).not.toBeNull();
+      // Home is the line — or, for a crew whose crash the car did not
+      // survive, the place it stopped: a retired run is done, timeless
+      // and off the road exactly as a finished one is, and the seam under
+      // test (the debt left standing while it is run home) holds for both.
+      // On this stage one easy crew puts it into the scenery at 130 km/h
+      // and its engine does not come back.
+      if (run.state.phase === "retired") expect(run.time).toBeNull();
+      else expect(run.time).not.toBeNull();
+      expect(run.done).toBe(true);
       expect(run.owed).toBeGreaterThan(0);
       expect(onRoad(run)).toBe(false);
     }

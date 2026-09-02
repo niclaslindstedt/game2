@@ -921,21 +921,38 @@ every solid is a circle, and a hit does several things at once:
 Nothing in the damage ledger is decoration. `engine/game/damage.ts` reads
 the whole of it once per step and hands the handling model the multipliers
 it drives through; `TUNING.collision.systems` and `TUNING.collision.chassis`
-hold every number. The rule sizing all of them is that damage **degrades and
-never disables** — a car the player cannot move is a respawn two seconds
-later, not a consequence — so a car with every gauge at its worst still
-crawls to the finish at somewhere around a third of its sound top speed.
+hold every number. The rule sizing nearly all of them is that damage
+**degrades** — a hurt car drives badly, crookedly and out of breath for as
+long as it can drive at all, so a car with every gauge one step short of its
+worst still crawls to the finish at a fraction of its sound top speed. Two
+things are past that, and they END THE RUN (below): an engine at 1 is dead,
+and a car on fewer than three wheels is not a car.
 
-Under the panels live four **internal systems** (`damage.systems`), each
+Under the panels live five **internal systems** (`damage.systems`), each
 fed by the crush landing nearest to it and each degrading its own job:
 
-| System     | Hurt by                     | Effect when damaged                                                       |
-| ---------- | --------------------------- | ------------------------------------------------------------------------- |
-| Engine     | Nose and front-corner crush | Power fades (`systems.powerLoss`), and past `chassis.misfireFrom` the     |
-|            |                             | ignition drops beats outright — the car lurches instead of pulling        |
-| Suspension | Flank and belly crush       | Less lateral grip, narrower landing tolerance, wobblier touchdowns        |
-| Gearbox    | Rear and belly crush        | Shift cuts stretch; past `chassis.topGearAt` the top ratio stops engaging |
-| Steering   | Front-corner crush          | The rack loses authority (up to `systems.steerLoss`)                      |
+| System     | Hurt by                       | Effect when damaged                                                       |
+| ---------- | ----------------------------- | ------------------------------------------------------------------------- |
+| Engine     | Nose and front-corner crush   | Power fades (`systems.powerLoss`), past `chassis.misfireFrom` the         |
+|            |                               | ignition drops beats outright — the car lurches instead of pulling — and  |
+|            |                               | at 1 it is DEAD: no power, a seized crank, smoke off the bonnet, the run  |
+| Suspension | Flank and belly crush         | Less lateral grip, narrower landing tolerance, wobblier touchdowns        |
+| Gearbox    | Rear and belly crush          | Shift cuts stretch; past `chassis.topGearAt` the top ratio stops engaging |
+| Steering   | Front-corner crush            | The rack loses authority (up to `systems.steerLoss`)                      |
+| Brakes     | Corner, flank and belly crush | The pedal loses `systems.brakeLoss` of its bite, and the LEVER nearly all |
+|            |                               | of it (`leverLoss`): a car with cut lines cannot be flicked on the lever  |
+
+The **wheels** carry a ledger each (`damage.wheels`, FL/FR/RL/RR), fed by the
+crush on their own corner, half of the crush on their flank, a little from the
+belly, and — on a landing taken on the side — the side they came down on
+(`systems.wheelFrom…`). Past `chassis.wheelFlat` the tyre is DOWN and the rim
+bent: the corner loses `flatGrip`, the car pulls toward it (`flatPull`, in
+lock, held down every straight) and the rim drags (`flatDrag`); the drawn wheel
+squashes, leans and wobbles once per turn. At 1 the wheel is OFF THE CAR — a
+`partBreak` the renderer sends tumbling, with the corner dropped onto its hub
+for the rest of the run — and the same three costs come at `wheelOff…` size,
+plus `wheelOffPower` of the engine's push gone into a hub ploughing the road.
+One wheel off is a car that crawls, crookedly; two is the run.
 
 The rest of the ledger is felt too:
 
@@ -956,7 +973,32 @@ The rest of the ledger is felt too:
 Grip is the one place the taxes stack — suspension, structure and the missing
 wing all pull on it — so `chassis.gripFloor` is the floor under all three
 together: below about two thirds of the sound car's grip nothing can be
-pointed, and an unpointable car is not a consequence either.
+pointed, and an unpointable car is not a consequence either. The wheels are
+the one thing allowed under it, to their own floor (`wheelOffGripFloor`): a car
+on three wheels genuinely cannot be pointed well.
+
+### The end of the run
+
+A stage can now be lost to the car rather than to the clock. Two states are
+BEYOND DRIVING (`beyondDriving` in `damage.ts`): an engine at 1, and two wheels
+off. Neither makes any power, both drag the car to a standstill in a few
+lengths (`chassis.deadEngineBrake`, `hubBrake` — a seized crank on the driven
+wheels, a hub ploughing the road), and the moment such a car has come to rest
+on the ground (`collision.retire.restSpeed`) the run's phase goes to `retired`
+and a `retire` event says why. Nothing steps it again; the card comes up over
+the car where it stopped, with the reason and the two ways off — the same stage
+from the grid, or the menu — and no time, place, points or board, because none
+was earned. The wedge rescue and the reset both stand aside for such a car:
+putting a dead engine back on the road would only park it there.
+
+What it takes is a head-on. `systems.engineFromNose` is sized so a wall met
+square at 100 km/h — a quarter of a metre of fold — is the engine gone in one
+hit, and one met at 50 km/h is a third of it, the `ENGINE DAMAGED` line and
+steam off the bonnet. Above about 50 km/h a straight-on hit is really bad; at
+100 it is the run. A rival's engine dies the same way and files them as a DNF.
+The difficulty's damage assist (`CarState.damageScale`) scales all of this
+exactly as it scales every other mark, so an EASY run cannot be retired by the
+car at all.
 
 Nothing repairs mid-run. And nothing about it is drawn as an instrument: the
 damage the player can see is already on the screen — the wing is folded, the
@@ -966,17 +1008,39 @@ shell around them, crosses two lines on its way out
 (`TUNING.collision.callAt`), and each crossing is one `systemFail` event the
 app puts up in the middle of the screen where the splits and the lap times
 are said: `ENGINE DAMAGED` as it gives, `ENGINE BROKEN` as it goes, and
-`CHASSIS WRECKED` at the end of the shell. Once per line per run — damage
-never heals, so a line crossed stays crossed.
+`ENGINE DEAD` at the end of the engine. Once per line per run — damage never
+heals, so a line crossed stays crossed. A wheel says the same two things about
+itself (`wheelFail`): `FRONT LEFT PUNCTURE`, then `FRONT LEFT WHEEL LOST` —
+named as the player sees the car, which is the engine's frame flipped once, in
+the HUD, like every other left and right. And an engine that has been called
+DAMAGED SMOKES: steam off the bonnet, thin at first, thicker and darker as the
+damage climbs, black once it is dead.
 
-Seven pieces can come off: the two bumpers, the two mirrors, the spoiler, and
-the two lids. A bonnet or boot lid is bolted deeper than the bumper in front
-of it (`TUNING.collision.partAt.lid`), so it only lets go once the clip around
-it has folded far enough to pull its hinges — and what is left showing is what
-the panel was covering. Behind a boot lid that is a dark bay painted on the
-deck; behind a BONNET it is a real one, a well cut down into the front of the
-body with an engine standing in it (`pwa/src/game/car/engine-bay.ts`), which
-crumples with the nose the same folds do.
+Nineteen pieces can come off. The two LAMP pairs go first (`partAt.lamp`, the
+first fold past a brush): a smashed headlamp is a dark hole in the face of the
+car — no bloom, no beam on the road ahead, no glow in the dust behind for the
+tail lamps — and the HUD says `HEADLIGHTS BROKEN` or `TAILLIGHTS BROKEN`,
+because a driver looking out of the car cannot see its own lamps. The two
+bumpers, the two mirrors, the spoiler and the two lids fly as they always did: a bonnet or boot lid is bolted deeper
+than the bumper in front of it (`TUNING.collision.partAt.lid`), so it only lets
+go once the clip around it has folded far enough to pull its hinges — and what
+is left showing is what the panel was covering. Behind a boot lid that is a
+dark bay painted on the deck; behind a BONNET it is a real one, a well cut down
+into the front of the body with an engine standing in it
+(`pwa/src/game/car/engine-bay.ts`), which crumples with the nose the same folds
+do. The four pieces of GLASS — windscreen, backlight, and each flank's windows
+together — shatter rather than fly, between the bumper and the lid
+(`partAt.glass`): the pane is simply gone, the grime film over it with it, and
+the cabin is seen straight into. The two DOORS are the deepest thing on the
+flank (`partAt.door`, most of the way to the cage): a skin between the door
+seams that tumbles off and leaves the flank behind it painted into the dark of
+the cabin, stripes and all. And the four WHEELS come off their own ledger.
+
+The polygons fold to match. A quarter of a metre in the ledger reads as half a
+metre of car gone (`FOLD` in `car-damage.ts`), torn about rather than scaled —
+every vertex pulled in by its own share and thrown up and across by the rest —
+and scuffed to primer over the first bad hit. A car that has met a wall at
+100 km/h has no front.
 
 ## The drivetrain
 

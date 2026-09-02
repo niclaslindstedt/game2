@@ -819,6 +819,15 @@ function createCompiler(
    * compounding. */
   const rawY: number[] = [];
   const rawWidth: number[] = [];
+  /** ...and the width and cross-fall as the WALK laid them, before either
+   * runoff smoothed them. The runoffs are re-run over the tail of the
+   * previous chunk when an endless stage extends (the window there was
+   * cut off at the frontier), and a pass that reads its own output back
+   * smooths that tail twice — so the road came out a different width
+   * depending on how the renderer chunked its extends. Smoothing from the
+   * bare values makes the pass idempotent: the same input, the same road. */
+  const bareWidth: number[] = [];
+  const bareBank: number[] = [];
 
   /** Junctions found in this pass, waiting for their branches. The branch
    * has to run until it is clear of the stage's country (R17), and how big
@@ -1758,15 +1767,18 @@ function createCompiler(
     const all = track.samples;
     const reach = Math.max(1, Math.round(R.bank.runoff / 2 / SAMPLE_STEP));
     const start = Math.max(0, from - reach);
-    const raw = all.slice(start).map((sample) => sample.bank);
+    // Indexed into the whole bare array, not a slice from `start`: the
+    // samples the re-run exists for are the ones whose window ran off the
+    // last frontier, and a slice cut at `start` took their left-hand
+    // neighbours away instead.
     for (let i = start; i < all.length; i++) {
       let sum = 0;
       let weight = 0;
       for (let k = -reach; k <= reach; k++) {
-        const at = i + k - start;
-        if (at < 0 || at >= raw.length) continue;
+        const at = i + k;
+        if (at < 0 || at >= bareBank.length) continue;
         const w = 1 - Math.abs(k) / (reach + 1);
-        sum += raw[at] * w;
+        sum += bareBank[at] * w;
         weight += w;
       }
       all[i].bank = weight > 0 ? sum / weight : 0;
@@ -1787,15 +1799,14 @@ function createCompiler(
     const all = track.samples;
     const reach = Math.max(1, Math.round(R.roughness.width.runoff / 2 / SAMPLE_STEP));
     const start = Math.max(0, from - reach);
-    const raw = rawWidth.slice(start);
     for (let i = start; i < all.length; i++) {
       let sum = 0;
       let weight = 0;
       for (let k = -reach; k <= reach; k++) {
-        const at = i + k - start;
-        if (at < 0 || at >= raw.length) continue;
+        const at = i + k;
+        if (at < 0 || at >= bareWidth.length) continue;
         const w = 1 - Math.abs(k) / (reach + 1);
-        sum += raw[at] * w;
+        sum += bareWidth[at] * w;
         weight += w;
       }
       if (weight <= 0) continue;
@@ -2232,6 +2243,8 @@ function createCompiler(
         track.samples.push(sample);
         rawY.push(sample.elevation);
         rawWidth.push(sample.width);
+        bareWidth.push(sample.width);
+        bareBank.push(sample.bank);
         if (checkpointDue >= 0 && cursor.s >= checkpointDue) {
           track.checkpoints.push({ s: cursor.s, index: track.samples.length - 1 });
           checkpointS = cursor.s;

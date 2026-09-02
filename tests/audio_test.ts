@@ -171,6 +171,14 @@ describe("event routing", () => {
     cheer: [{ type: "cheer", size: 0.4 }],
     checkpoint: [{ type: "checkpoint", index: 1, count: 3, split: 2.5, time: 61 }],
     systemFail: [{ type: "systemFail", system: "engine", spent: false }],
+    wheelFail: [
+      { type: "wheelFail", wheel: 1, off: false },
+      { type: "wheelFail", wheel: 1, off: true },
+    ],
+    retire: [
+      { type: "retire", reason: "engine" },
+      { type: "retire", reason: "wheels" },
+    ],
   };
 
   /** The events that are deliberately SILENT, and why. Listed rather than

@@ -108,7 +108,14 @@ export function simulateStage(options: SimOptions): SimResult {
   // past it is the car being driven home with nobody at the wheel — road
   // that costs the sim wall-clock and tells it nothing, and that would
   // fold a coast-down into every pace and top-speed column.
-  while (state.phase !== "rollout" && state.phase !== "finished" && steps < maxSteps) {
+  // ...and a retired car is over too, with nothing to measure: the table
+  // files it as a DNF, which is what a run the car did not survive is.
+  while (
+    state.phase !== "rollout" &&
+    state.phase !== "finished" &&
+    state.phase !== "retired" &&
+    steps < maxSteps
+  ) {
     const input = botInput(state, profile);
     // Copied across rather than spread: a spread of the step's (usually
     // empty) event list allocates and walks an iterator on every one of a

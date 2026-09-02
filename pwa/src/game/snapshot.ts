@@ -12,6 +12,7 @@ import {
   wayHome,
   type GameState,
   type Pacenote,
+  type RetireReason,
   type RivalField,
   type TrackSample,
 } from "@engine";
@@ -264,6 +265,7 @@ export function takeSnapshot(
   book: RunBook | null = null,
   standing: HudStanding | null = null,
   field: RivalField | null = null,
+  retired: RetireReason | null = null,
 ): HudSnapshot {
   const rpm = tachometer(state);
   return {
@@ -309,5 +311,6 @@ export function takeSnapshot(
     record: book !== null && finishTime !== null && (book.best === null || finishTime < book.best),
     ghostGap: ghostS === null ? null : state.progressS - ghostS,
     standing,
+    retired,
   };
 }

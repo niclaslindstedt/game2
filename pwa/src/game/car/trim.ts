@@ -360,6 +360,73 @@ function buildSpoiler(spec: CarBodySpec, part: (name: DamagePart) => MeshBuilder
 }
 
 /** Everything bolted to the shell once it and the greenhouse exist. */
+/** THE DOORS, as things that can come off. A door is a skin laid on the
+ * flank between the first two door seams, from the sill to just under the
+ * belt line, and it is a breakable part of its own: a flank driven into a
+ * rock hard enough to fold it most of the way to the cage takes the door
+ * with it, and what is left is the cabin, open to the side. The skin sits
+ * UNDER the livery bands (`DOOR_PROUD` is less than a band's default), so
+ * a stripe across the door still reads as painted on the car; when the door
+ * goes, the damage visual darkens everything in its rectangle — shell and
+ * stripe alike — into the hole. Where a car has no seams there is no door
+ * to lose: the flank stays one panel. */
+export type DoorSkin = {
+  part: DamagePart;
+  /** The ENGINE's side: +1 is its right. */
+  side: 1 | -1;
+  /** The rectangle the skin covers, m — z along the car, y up it. */
+  zFrom: number;
+  zTo: number;
+  yFrom: number;
+  yTo: number;
+};
+
+const DOOR_PROUD = 0.003;
+/** The sill the door skin stands on, m above the floor, and the gap it
+ * leaves under the belt line. */
+const DOOR_SILL = 0.12;
+const DOOR_BELT_GAP = 0.015;
+
+export function doorSkins(spec: CarBodySpec): DoorSkin[] {
+  const seams = spec.doorSeams;
+  if (!seams || seams.length < 2) return [];
+  const zFrom = Math.max(seams[0], seams[1]);
+  const zTo = Math.min(seams[0], seams[1]);
+  const yFrom = spec.floorY + DOOR_SILL;
+  const yTo = spec.beltY - DOOR_BELT_GAP;
+  if (yTo - yFrom < 0.05 || zFrom - zTo < 0.2) return [];
+  return [
+    { part: "doorR", side: 1, zFrom, zTo, yFrom, yTo },
+    { part: "doorL", side: -1, zFrom, zTo, yFrom, yTo },
+  ];
+}
+
+function buildDoors(
+  spec: CarBodySpec,
+  axles: number[],
+  part: (name: DamagePart) => MeshBuilder,
+): void {
+  // The two-tone is cut at the belt line, and the door lives under it.
+  const color = spec.colors.lower ?? spec.colors.paint;
+  for (const door of doorSkins(spec)) {
+    sideBand(
+      part(door.part),
+      spec,
+      axles,
+      {
+        zFrom: door.zFrom,
+        zTo: door.zTo,
+        yFrom: door.yFrom,
+        yTo: door.yTo,
+        proud: DOOR_PROUD,
+        side: door.side,
+        overArch: "clip",
+      },
+      color,
+    );
+  }
+}
+
 export function buildTrim(
   b: MeshBuilder,
   spec: CarBodySpec,
@@ -367,6 +434,7 @@ export function buildTrim(
   part: (name: DamagePart) => MeshBuilder,
 ): void {
   buildArchTrim(b, spec, axles);
+  buildDoors(spec, axles, part);
   for (const band of spec.sideBands ?? []) sideBand(b, spec, axles, band, band.color);
   buildStripes(b, spec, part);
   buildRaceNumber(b, spec, axles);

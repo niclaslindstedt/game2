@@ -244,7 +244,9 @@ export function race(options: RaceOptions): RaceOutcome {
   };
   const maxSteps = Math.ceil((options.maxTime ?? timeout(stage)) / TUNING.dt);
   for (let i = 0; i < maxSteps; i++) {
-    if (state.phase === "rollout" || state.phase === "finished") break;
+    if (state.phase === "rollout" || state.phase === "finished" || state.phase === "retired") {
+      break;
+    }
     if (field) stepField(field);
     // The driver's own way out of the ceremony, taken before the step and
     // paid for by the field exactly as the app pays for it.

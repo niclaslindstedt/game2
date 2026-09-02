@@ -20,6 +20,7 @@ import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 import {
   DAMAGE_ZONES,
+  WHEEL_PARTS,
   updateSlip,
   type CarState,
   type DamageCall,
@@ -31,15 +32,45 @@ import {
 const T = TUNING;
 
 /** Which zones hold each part on, and how much crush shears its bolts. A
- * part is listed under every zone whose folding can take it off. */
+ * part is listed under every zone whose folding can take it off. The
+ * wheels are not here: a wheel comes off its own ledger (`dealWheels`),
+ * not off a zone's. */
 const PART_BOLTS: { part: DamagePart; zones: number[]; crushAt: number }[] = [
   { part: "bumperF", zones: [7, 0, 1], crushAt: T.collision.partAt.bumper },
   { part: "bumperR", zones: [3, 4, 5], crushAt: T.collision.partAt.bumper },
+  { part: "lampsF", zones: [7, 0, 1], crushAt: T.collision.partAt.lamp },
+  { part: "lampsR", zones: [3, 4, 5], crushAt: T.collision.partAt.lamp },
   { part: "mirrorR", zones: [1, 2], crushAt: T.collision.partAt.mirror },
   { part: "mirrorL", zones: [6, 7], crushAt: T.collision.partAt.mirror },
   { part: "spoiler", zones: [3, 4, 5], crushAt: T.collision.partAt.spoiler },
+  { part: "glassF", zones: [7, 0, 1], crushAt: T.collision.partAt.glass },
+  { part: "glassB", zones: [3, 4, 5], crushAt: T.collision.partAt.glass },
+  { part: "glassR", zones: [1, 2, 3], crushAt: T.collision.partAt.glass },
+  { part: "glassL", zones: [5, 6, 7], crushAt: T.collision.partAt.glass },
   { part: "hood", zones: [7, 0, 1], crushAt: T.collision.partAt.lid },
   { part: "hatch", zones: [3, 4, 5], crushAt: T.collision.partAt.lid },
+  { part: "doorR", zones: [2], crushAt: T.collision.partAt.door },
+  { part: "doorL", zones: [6], crushAt: T.collision.partAt.door },
+];
+
+/** Which wheels each ring zone folds onto, as (wheel index, share) pairs —
+ * `WHEEL_PARTS` order: FL, FR, RL, RR. A corner is one wheel's; a flank is
+ * both wheels on that side, half each; the nose and the tail reach none. */
+const WHEELS_AT: readonly (readonly [number, number])[][] = [
+  [],
+  [[1, 1]],
+  [
+    [1, 0.5],
+    [3, 0.5],
+  ],
+  [[3, 1]],
+  [],
+  [[2, 1]],
+  [
+    [0, 0.5],
+    [2, 0.5],
+  ],
+  [[0, 1]],
 ];
 
 /** The car's mass against the mass every collision number is written for.
@@ -78,19 +109,59 @@ function dealSystems(car: CarState, zone: number | null, crush: number, events: 
   if (zone === null) {
     deal("suspension", crush * S.suspensionFromBelly);
     deal("gearbox", crush * S.gearboxFromBelly);
+    deal("brakes", crush * S.brakesFromBelly);
   } else if (zone === 0) {
     deal("engine", crush * S.engineFromNose);
   } else if (zone === 1 || zone === 7) {
     deal("engine", crush * S.engineFromNose * 0.5);
     deal("steering", crush * S.steeringFromCorner);
+    deal("brakes", crush * S.brakesFromCorner);
   } else if (zone === 2 || zone === 6) {
     deal("suspension", crush * S.suspensionFromFlank);
+    deal("brakes", crush * S.brakesFromFlank);
   } else if (zone === 3 || zone === 5) {
     deal("gearbox", crush * S.gearboxFromRear * 0.5);
     deal("suspension", crush * S.suspensionFromFlank * 0.5);
+    deal("brakes", crush * S.brakesFromCorner * 0.5);
   } else {
     deal("gearbox", crush * S.gearboxFromRear);
   }
+}
+
+/** Hurt one wheel by `amount` and say so as it crosses each of its two
+ * lines: the flat (`chassis.wheelFlat`) and the wheel coming off (1), the
+ * latter also a `partBreak` for the piece itself. Compared against the
+ * value before, like every call: dozens of small bites cross a line once. */
+function dealWheel(car: CarState, wheel: number, amount: number, events: GameEvent[]): void {
+  if (amount <= 0) return;
+  const wheels = car.damage.wheels;
+  const was = wheels[wheel];
+  wheels[wheel] = Math.min(1, was + amount);
+  const flat = T.collision.chassis.wheelFlat;
+  if (was < 1 && wheels[wheel] >= 1) {
+    events.push({ type: "wheelFail", wheel, off: true });
+    const part = WHEEL_PARTS[wheel];
+    if (!car.damage.broken.includes(part)) {
+      car.damage.broken.push(part);
+      events.push({ type: "partBreak", part });
+    }
+  } else if (was < flat && wheels[wheel] >= flat) {
+    events.push({ type: "wheelFail", wheel, off: false });
+  }
+}
+
+/** The crush reaching the wheels: the corner's own, the flank's shared,
+ * and — from underneath — a little to all four. */
+function dealWheels(car: CarState, zone: number | null, crush: number, events: GameEvent[]): void {
+  const S = T.collision.systems;
+  if (zone === null) {
+    for (let i = 0; i < WHEEL_PARTS.length; i++)
+      dealWheel(car, i, crush * S.wheelFromBelly, events);
+    return;
+  }
+  const corner = zone === 1 || zone === 3 || zone === 5 || zone === 7;
+  const per = corner ? S.wheelFromCorner : S.wheelFromFlank;
+  for (const [wheel, share] of WHEELS_AT[zone]) dealWheel(car, wheel, crush * per * share, events);
 }
 
 /** Book one dealt crush: fold the panels (a ring zone, or the underside
@@ -122,6 +193,7 @@ function dealCrush(
   callDamage("chassis", wasWear, damage.wear, events);
   damage.version += 1;
   dealSystems(car, zone, crush, events);
+  dealWheels(car, zone, crush, events);
   if (zone === null) {
     damage.belly = Math.min(T.collision.zoneMax, damage.belly + crush);
     return;
@@ -158,6 +230,11 @@ export function landingDamage(
   if (Math.abs(car.roll) > T.air.rollLandLimit) {
     const zone = car.roll > 0 ? 6 : 2;
     dealCrush(car, zone, crush, zone === 2 ? Math.PI / 2 : -Math.PI / 2, slam, events, stats);
+    // ...and the wheels on that side are what it came down on, over and
+    // above what the flank's fold already reached them with.
+    const extra = crush * car.damageScale * T.collision.systems.wheelFromSideLand;
+    for (const [wheel, share] of WHEELS_AT[zone]) dealWheel(car, wheel, extra * share, events);
+    if (extra > 0) car.damage.version += 1;
   } else {
     dealCrush(car, null, crush, 0, slam, events, stats);
   }

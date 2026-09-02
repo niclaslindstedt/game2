@@ -44,6 +44,12 @@ export class MeshBuilder {
     this.alpha = alpha;
   }
 
+  /** Vertices poured in so far — what a caller reads before and after a
+   * piece to know which slice of the finished buffer is that piece's. */
+  get count(): number {
+    return this.pos.length / 3;
+  }
+
   /** Degenerate triangles are dropped rather than shaded: the shell's ring
    * collapses several of its points onto each other away from the wheel
    * arches, and a zero-area face has no normal to light it with. */
