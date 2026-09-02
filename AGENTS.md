@@ -131,7 +131,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | RAIN ON THE WINDSCREEN, from the driver's own seat          | `pwa/src/game/car/screen-rain.ts` — a shader pane over the glass, drawn in a pass of its own after the frame it refracts         |
 | Where a wiper arm IS, for anything else on the same glass   | `WipeState` in `pwa/src/game/car/wipers.ts`; the pane's own metric frame is `pwa/src/game/car/pane-frame.ts`                     |
 | How dirty the car gets, and where                           | `pwa/src/game/car-dirt.ts`                                                                                                       |
-| Stage generation rules or vocabulary                        | `engine/mapgen/rules.ts` (data); the searches in `generate.ts` (sprint, endless) and `circuit.ts` (R22), over `search.ts`        |
+| Stage generation rules or vocabulary                        | `engine/mapgen/rules.ts` (data); the searches in `generate.ts` (sprint), `endless.ts` and `circuit.ts` (R22), over `search.ts`   |
 | How the rally gets PAST a public road: over it, or onto it  | `engine/mapgen/crossing.ts` (R36, square and free) / `borrow.ts` (R17, a detour the `asphalt` dial pays for)                     |
 | How high the tarmac stands where a stage crosses it         | `STAGE_RULES.crossing` — `stand` is the step, `ramp` the gravel it happens over; the jump is the two together                    |
 | What the GROUND is made of (bedrock, soil, groundwater)     | `engine/mapgen/geology.ts` (R32); its numbers in `STAGE_RULES.geology` — the `nature` and `mapgen-improvement` skills            |

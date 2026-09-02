@@ -119,43 +119,89 @@ const SNAPPED_TREE = standSolid({ x: 0, y: 0, z: 0, kind: "tree", size: 1.2, spi
 const SHOVED_ROCK = standSolid({ x: 0, y: 0, z: 0, kind: "rock", size: 0.6, spin: 0 });
 
 describe("event routing", () => {
-  /** Every shape a `GameEvent` can take, one of each. Written out rather than
-   * derived, because the point is to notice when the union grows. */
-  const EVERY_EVENT: GameEvent[] = [
-    { type: "go" },
-    { type: "takeoff", vy: 6 },
-    { type: "landing", airTime: 1.2, slam: 9, clean: true },
-    { type: "landing", airTime: 1.2, slam: 9, clean: false },
-    { type: "splash", speed: 12, deep: false },
-    { type: "splash", speed: 24, deep: true },
-    { type: "shift", gear: 3 },
-    { type: "offRoad", off: true },
-    { type: "offRoad", off: false },
-    { type: "impact", speed: 4, angle: 0, belly: false },
-    { type: "impact", speed: 10, angle: 1, belly: false },
-    { type: "impact", speed: 24, angle: 2, belly: true },
-    { type: "partBreak", part: "bumperF" },
-    { type: "kerbHit", speed: 5 },
-    { type: "kerbHit", speed: 20 },
-    { type: "solidBreak", solid: SNAPPED_TREE, broke: true, vx: 2, vy: 1, vz: 0 },
-    { type: "solidBreak", solid: SHOVED_ROCK, broke: false, vx: 9, vy: 3, vz: 1 },
-    { type: "crash" },
-    { type: "sink" },
-    { type: "respawn" },
-    { type: "lap", lap: 1, time: 62, best: true },
-    { type: "lap", lap: 2, time: 64, best: false },
-    { type: "finish", time: 120 },
-  ];
+  /** Every shape a `GameEvent` can take, one or more of each — KEYED BY THE
+   * EVENT'S OWN TYPE, so the union cannot grow past this list quietly. A new
+   * member of `GameEvent` is a missing key here, and a missing key is a
+   * compile error rather than a test that goes on passing while the thing it
+   * was written to cover slips through unrouted. That is not hypothetical:
+   * `spin` was added to the union, emitted by the car and read by nobody,
+   * and a hand-written array had nothing to say about it. */
+  const EVERY_EVENT: Record<GameEvent["type"], GameEvent[]> = {
+    go: [{ type: "go" }],
+    takeoff: [{ type: "takeoff", vy: 6 }],
+    landing: [
+      { type: "landing", airTime: 1.2, slam: 9, clean: true },
+      { type: "landing", airTime: 1.2, slam: 9, clean: false },
+    ],
+    splash: [
+      { type: "splash", speed: 12, deep: false },
+      { type: "splash", speed: 24, deep: true },
+    ],
+    shift: [{ type: "shift", gear: 3 }],
+    offRoad: [
+      { type: "offRoad", off: true },
+      { type: "offRoad", off: false },
+    ],
+    impact: [
+      { type: "impact", speed: 4, angle: 0, belly: false },
+      { type: "impact", speed: 10, angle: 1, belly: false },
+      { type: "impact", speed: 24, angle: 2, belly: true },
+    ],
+    partBreak: [{ type: "partBreak", part: "bumperF" }],
+    kerbHit: [
+      { type: "kerbHit", speed: 5 },
+      { type: "kerbHit", speed: 20 },
+    ],
+    solidBreak: [
+      { type: "solidBreak", solid: SNAPPED_TREE, broke: true, vx: 2, vy: 1, vz: 0 },
+      { type: "solidBreak", solid: SHOVED_ROCK, broke: false, vx: 9, vy: 3, vz: 1 },
+    ],
+    spin: [
+      { type: "spin", slip: 1.1, speed: 9 },
+      { type: "spin", slip: 1.4, speed: 28 },
+    ],
+    crash: [{ type: "crash" }],
+    sink: [{ type: "sink" }],
+    respawn: [{ type: "respawn" }],
+    lap: [
+      { type: "lap", lap: 1, time: 62, best: true },
+      { type: "lap", lap: 2, time: 64, best: false },
+    ],
+    finish: [{ type: "finish", time: 120 }],
+    cheer: [{ type: "cheer", size: 0.4 }],
+    checkpoint: [{ type: "checkpoint", index: 1, count: 3, split: 2.5, time: 61 }],
+    systemFail: [{ type: "systemFail", system: "engine", spent: false }],
+  };
+
+  /** The events that are deliberately SILENT, and why. Listed rather than
+   * inferred, so making one silent is a decision somebody wrote down: both
+   * of these are read on the HUD, where a board arriving IS the feedback,
+   * and both fire under sounds — a split under the co-driver, a failure
+   * under whatever just broke the car — that would be masked anyway. */
+  const SILENT = new Set<GameEvent["type"]>(["checkpoint", "systemFail"]);
 
   it("answers every event with a sound the bank actually holds", () => {
-    for (const event of EVERY_EVENT) {
-      const hit = soundForEvent(event, 0);
-      expect(hit, `${event.type} makes no sound`).not.toBeNull();
-      expect(
-        RUN_BANK[(hit as { id: string }).id],
-        `${event.type} names a missing sound`,
-      ).toBeTruthy();
+    for (const [type, events] of Object.entries(EVERY_EVENT)) {
+      for (const event of events) {
+        const hit = soundForEvent(event, 0);
+        if (SILENT.has(type as GameEvent["type"])) {
+          expect(hit, `${type} is listed as silent but makes a sound`).toBeNull();
+          continue;
+        }
+        expect(hit, `${type} makes no sound`).not.toBeNull();
+        expect(RUN_BANK[(hit as { id: string }).id], `${type} names a missing sound`).toBeTruthy();
+      }
     }
+  });
+
+  it("sizes a spin by the speed it let go at", () => {
+    const slow = soundForEvent({ type: "spin", slip: 1.2, speed: 9 }, 0);
+    const fast = soundForEvent({ type: "spin", slip: 1.2, speed: 28 }, 0);
+    expect(slow?.id).toBe("spin");
+    expect(fast?.id).toBe("spin");
+    expect(fast?.shape?.gain).toBeGreaterThan(slow?.shape?.gain ?? 0);
+    expect(fast?.shape?.pitch).toBeLessThan(slow?.shape?.pitch ?? 0);
+    expect(fast?.shape?.stretch).toBeGreaterThan(slow?.shape?.stretch ?? 0);
   });
 
   it("picks the shift direction off the gear it came from", () => {

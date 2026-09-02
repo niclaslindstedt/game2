@@ -84,9 +84,30 @@ const INDEX_CELL = 32;
  * `nearest` query may ask about and still be answered by one set lookup
  * when there is no road near. Comfortably over R23's clearance at the
  * widest road the dial builds, which is what the search asks of every probe
- * point; the borrow's own look is far wider and pays for the ring walk,
- * but it is asked once a segment rather than once a metre. */
+ * point. */
 const NEAR = 128;
+
+/** ...and the same trick again at the range the BORROW and the CROSSING ask
+ * about (`paving.borrow.seek`, `crossing.seek`), on a cell coarse enough
+ * that dilating to it stays cheap.
+ *
+ * The two looks are asked once a segment rather than once a metre, so the
+ * ring walk they used to pay was easy to write off — but the walk they pay
+ * is the WHOLE of it. A query that finds nothing has no first hit to bound
+ * itself with, so at 600 m it sweeps twenty rings of a 32 m grid, some
+ * fourteen hundred cell lookups, to answer "no road here"; and "no road
+ * here" is the answer nearly every time, because the look runs at every
+ * segment of every candidate and a stage meets a public road once or twice.
+ * Answering it out of a set costs one lookup instead, and took the plan
+ * phase of seeds 1-8 at medium from 3.1 s to 2.2 s — the worst of them,
+ * seed 2, from 900 ms to 550.
+ *
+ * `FAR` has to cover the widest bounded query anything asks, and the
+ * dilation has to cover `FAR` from anywhere inside a cell — hence the ring
+ * either side, exactly as `NEAR`'s does. Ask for more than this and the
+ * fast path is skipped rather than answered wrongly. */
+const FAR = 640;
+const FAR_CELL = 128;
 
 /** R24 — how far up +z from the origin the stage's opening straight is
  * known to run, m, whatever the seed draws: the launch run the grid needs,
@@ -372,10 +393,28 @@ export function createHighwayNetwork(roads: Highway[]): HighwayNetwork {
    * no first hit to bound itself with and sweeps its whole radius for an
    * answer of "nothing". This turns that case into one set lookup. */
   const inReach = new Set<number>();
+  /** ...and the same set again at `FAR`, on `FAR_CELL`: the borrow's and the
+   * crossing's look, answered without walking. Its own coarse cell keeps the
+   * dilation cheap — the reach is five times `NEAR`'s, and spreading that
+   * over the fine grid would be twenty-five times the cells to fill. */
+  const farReach = new Set<number>();
+  const seenFar = new Set<number>();
   const rings = Math.ceil(NEAR / INDEX_CELL);
+  const farRings = Math.ceil(FAR / FAR_CELL);
   for (const road of roads) {
     for (let i = 0; i < road.points.length; i++) {
       const p = road.points[i];
+      const fx = Math.floor(p.x / FAR_CELL);
+      const fz = Math.floor(p.z / FAR_CELL);
+      const farKey = cellKey(fx, fz);
+      if (!seenFar.has(farKey)) {
+        seenFar.add(farKey);
+        for (let dx = -farRings - 1; dx <= farRings + 1; dx++) {
+          for (let dz = -farRings - 1; dz <= farRings + 1; dz++) {
+            farReach.add(cellKey(fx + dx, fz + dz));
+          }
+        }
+      }
       const ix = Math.floor(p.x / INDEX_CELL);
       const iz = Math.floor(p.z / INDEX_CELL);
       const key = cellKey(ix, iz);
@@ -399,7 +438,18 @@ export function createHighwayNetwork(roads: Highway[]): HighwayNetwork {
     if (roads.length === 0) return null;
     const cx = Math.floor(x / INDEX_CELL);
     const cz = Math.floor(z / INDEX_CELL);
-    if (within <= NEAR && !inReach.has(cellKey(cx, cz))) return null;
+    // The tighter set first and ONLY: a point inside `NEAR`'s reach is
+    // inside `FAR`'s by construction, so asking both of the probe query —
+    // the one asked a million times a stage — is a lookup that can never
+    // say anything.
+    if (within <= NEAR) {
+      if (!inReach.has(cellKey(cx, cz))) return null;
+    } else if (
+      within <= FAR &&
+      !farReach.has(cellKey(Math.floor(x / FAR_CELL), Math.floor(z / FAR_CELL)))
+    ) {
+      return null;
+    }
     let best: HighwayHit | null = null;
     // Out ring by ring until the ring itself cannot beat what is in hand —
     // or beat what the caller asked for, which is what bounds the walk

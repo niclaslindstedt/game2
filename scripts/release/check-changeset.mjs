@@ -16,6 +16,22 @@
 
 import { execSync } from "node:child_process";
 
+import { readFragments } from "./fragments.mjs";
+
+// EVERY FRAGMENT IN THE DIRECTORY HAS TO PARSE, not just the one this PR
+// added — and this is the only place that ever looks. `readFragments` is the
+// same reader the release runs (`compute-bump`, `collate-changelog`) and it
+// exits non-zero on a bad one, so calling it here moves the failure from
+// release day to the PR that wrote it.
+//
+// Without this the gate only asked whether a fragment EXISTS. Three landed
+// with a type outside the vocabulary — `fix`, `patch`, `changed`, against a
+// case-sensitive Added/Changed/Fixed/Removed/Security/Deprecated — every one
+// of them green at PR time and every one of them fatal to the next release.
+// It runs before the skip-list below, because a malformed fragment is broken
+// whatever else the PR touched.
+readFragments();
+
 const BASE_SHA = process.env.BASE_SHA;
 const LABELS_RAW = process.env.LABELS ?? "[]";
 

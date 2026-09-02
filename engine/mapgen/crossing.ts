@@ -63,11 +63,17 @@ export type Crossing = {
  * approach committed without its crossing is a route that walked up to a
  * public road and turned away along it — which is the thing R23 exists to
  * forbid. Built whole, validated whole, dropped whole.
+ *
+ * Takes no road WIDTH, where the borrow next door does. A borrow's arrival
+ * corner is the junction, so it is cut to the mat it lands on; a crossing's
+ * geometry is `crossing.clear` either side of a centerline, and that number
+ * is already stated to outreach the widest mat the dial builds. Handing this
+ * one a width would be a second place the same ceiling is written down, and
+ * the one that never gets read is the one that goes stale.
  */
 export function planCrossing(
   from: Pose,
   network: HighwayNetwork,
-  width: number,
   /** R4 — whether the segment the route is standing on is a straight. A hard
    * turn is taken out of a straight and never out of another turn. */
   fromStraight: boolean,

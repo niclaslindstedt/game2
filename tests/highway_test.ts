@@ -129,4 +129,39 @@ describe("the tarmac network (R17)", () => {
       }
     }
   });
+
+  it("gives a BOUNDED look the same answer as an unbounded one", () => {
+    // The bounded query is the one the search actually asks — of every probe
+    // point at R23's clearance, and of every segment at the borrow's and the
+    // crossing's reach — and it is the one with the shortcuts in it: a cell
+    // set per reach that answers "no tarmac here" without walking. A set
+    // dilated too tightly answers "nothing" where there IS something, and
+    // the stage that comes out is a rally road laid along a public one with
+    // nothing reporting it. So the bound must change only the ANSWER'S
+    // RANGE, never the answer.
+    const radii = [40, 128, 129, 420, 600, 640, 641, 2000];
+    for (const seed of SEEDS.slice(0, 5)) {
+      const { roads } = lay(seed);
+      if (roads.length === 0) continue;
+      const network = createHighwayNetwork(roads);
+      for (let k = 0; k < 63; k++) {
+        const x = -1200 + (k % 9) * 300;
+        const z = -1200 + Math.floor(k / 9) * 300;
+        const full = network.nearest(x, z);
+        for (const within of radii) {
+          const hit = network.nearest(x, z, undefined, within);
+          if (full && full.d <= within) {
+            expect(
+              hit,
+              `seed ${seed} lost the road at ${within} m from (${x}, ${z})`,
+            ).not.toBeNull();
+            expect(hit?.d).toBeCloseTo(full.d, 6);
+            expect(hit?.index).toBe(full.index);
+          } else {
+            expect(hit, `seed ${seed} found a road past ${within} m from (${x}, ${z})`).toBeNull();
+          }
+        }
+      }
+    }
+  });
 });

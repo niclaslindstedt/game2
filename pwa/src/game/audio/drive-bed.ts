@@ -79,8 +79,6 @@ function follow(previous: number, target: number, dt: number): number {
 type BedState = {
   /** Absolute audio time the next grain is due. 0 = not anchored yet. */
   nextAt: number;
-  /** Where the clatter's next tick falls inside the next grain, ms. */
-  tickMs: number;
   /** The firing note the last grain started on, so the next one can glide on
    * from where the pitch was actually going. */
   lastHz: number;
@@ -126,7 +124,7 @@ function loadFrom(previous: number, accel: number, braking: boolean, dt: number)
 }
 
 export function createDriveBed(synth: Synth): DriveBed {
-  const bed: BedState = { nextAt: 0, tickMs: 0, lastHz: 0, load: 0.2, corner: 0, lastLight: -1 };
+  const bed: BedState = { nextAt: 0, lastHz: 0, load: 0.2, corner: 0, lastLight: -1 };
   let lastU = 0;
 
   /** Book one grain of every bed at absolute time `at`. */
@@ -150,11 +148,10 @@ export function createDriveBed(synth: Synth): DriveBed {
     const toHz =
       bed.lastHz > 0 ? Math.max(hz * 0.75, Math.min(hz * 1.35, hz + (hz - bed.lastHz))) : hz;
     bed.lastHz = hz;
-    bed.tickMs = playEngineGrain(
+    playEngineGrain(
       synth,
       { hz, toHz, rpm, rev: Math.min(1, rev), load: bed.load, wear: car.damage.wear },
       at,
-      bed.tickMs,
     );
 
     playRoadGrain(
@@ -245,7 +242,6 @@ export function createDriveBed(synth: Synth): DriveBed {
 
     reset() {
       bed.nextAt = 0;
-      bed.tickMs = 0;
       bed.lastHz = 0;
       bed.load = 0.2;
       bed.corner = 0;

@@ -323,6 +323,39 @@ export const RUN_BANK: SoundBank = {
     ],
   },
 
+  spin: {
+    description:
+      "The drift gone. Past the angle where the front tyres still have " +
+      "something to pull against, all four are dragged sideways at once and " +
+      "the car is rotating on nothing but the speed it arrived with. It is " +
+      "the drift bed's scrub with the lid off: a wide band that SWELLS " +
+      "rather than hits — nothing struck anything — and then falls away as " +
+      "the sideways drag eats the speed that is making it. Under it, the " +
+      "mass of the car coming round, which is what separates this from a " +
+      "tyre chirp. It must not read as a crash: a spin is a mistake the " +
+      "driver made, not damage the car took, and a player who hears an " +
+      "impact here will brake out of every slide.",
+    voices: [
+      {
+        call: "noise",
+        durationMs: 900,
+        volume: 0.036,
+        color: "pink",
+        attackMs: 110,
+        holdMs: 180,
+        filter: { type: "bandpass", frequency: 1900, to: 700, q: 0.9 },
+      },
+      {
+        call: "noise",
+        durationMs: 700,
+        volume: 0.026,
+        color: "brown",
+        attackMs: 90,
+        filter: { type: "lowpass", frequency: 420, to: 140 },
+      },
+    ],
+  },
+
   splash: {
     description:
       "A ford taken at speed. The front of the car displacing water is a wide " +

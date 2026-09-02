@@ -17,7 +17,8 @@ import type {
   TurnSeverity,
 } from "./rules.ts";
 import { SAMPLE_STEP, STAGE_RULES as R, knobScale, resolveKnobs } from "./rules.ts";
-import { createStageStream, generateStage, layStageHighways } from "./generate.ts";
+import { generateStage, layStageHighways } from "./generate.ts";
+import { createStageStream } from "./endless.ts";
 import { createRng } from "../lib/prng.ts";
 import { cellKey } from "../lib/math.ts";
 import { hash2 } from "../lib/noise.ts";

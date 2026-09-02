@@ -161,12 +161,40 @@ export function InitialsEntry({ place, initial, onDone }: InitialsEntryProps) {
     return () => card.removeEventListener(NAV_EVENT, onNav);
   }, []);
 
+  /** Put the sentinel back and the caret BEHIND it — the contenteditable's
+   * answer to an input's `setSelectionRange`, and just as load-bearing.
+   *
+   * Writing `textContent` throws the old text node away, and the selection
+   * that was anchored in it goes with it: the caret lands at offset 0, in
+   * front of the sentinel. A caret there is a caret with nothing to its left,
+   * so the next Backspace deletes nothing, the browser reports no edit, and
+   * the delete key goes dead — which is the exact failure the sentinel exists
+   * to prevent (see the note on `SENTINEL`). Restored only while the field
+   * still has focus: moving the selection of a field nobody is typing in
+   * would take the caret off whatever does. */
+  const resetField = (field: HTMLElement): void => {
+    field.textContent = SENTINEL;
+    if (document.activeElement !== field) return;
+    const selection = window.getSelection();
+    if (!selection) return;
+    const range = document.createRange();
+    range.selectNodeContents(field);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  };
+
   /** Put the caret on a slot and ask the device for its keyboard. The focus
    * has to happen inside the tap's own handler: a mobile browser opens a
    * keyboard for a gesture and for nothing else. */
   const tap = (slot: number): void => {
     apply(toSlot(entryRef.current, slot));
-    fieldRef.current?.focus();
+    const field = fieldRef.current;
+    if (!field) return;
+    field.focus();
+    // ...and behind the sentinel from the very first press, so the FIRST
+    // thing a player does can be the delete key.
+    resetField(field);
   };
 
   /** What the field reports, whichever keyboard is driving it. Characters
@@ -175,7 +203,7 @@ export function InitialsEntry({ place, initial, onDone }: InitialsEntryProps) {
   const onFieldInput = (e: FormEvent<HTMLDivElement>): void => {
     const field = e.currentTarget;
     const raw = field.textContent ?? "";
-    field.textContent = SENTINEL;
+    resetField(field);
     // The sentinel is gone: the player hit delete on a field that, as far as
     // the browser is concerned, had one character in it.
     if (raw.length < SENTINEL.length) return apply(erase(entryRef.current));
@@ -214,6 +242,14 @@ export function InitialsEntry({ place, initial, onDone }: InitialsEntryProps) {
         className="hud-initials-field"
         contentEditable
         inputMode="text"
+        // The soft keyboard's own return key, which `onInput` reads as DONE
+        // when it arrives as a newline. `enterKeyHint` is a global attribute
+        // and works on an editing host as well as on a form control, so the
+        // key says DONE here exactly as it did on the input this replaced.
+        // Spelled lowercase because Preact types it as the plain HTML
+        // attribute on an ordinary element rather than as a form control's
+        // camel-cased property.
+        enterkeyhint="done"
         role="textbox"
         aria-multiline="false"
         aria-label="Type your initials"
