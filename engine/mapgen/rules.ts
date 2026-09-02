@@ -1797,10 +1797,12 @@ export const STAGE_RULES = {
      * 10 m/s is 3.2 m over them and hits the wagon. That is the rule: fast
      * clears, slow does not. The ramp's own grade is `height / ramp`, and
      * the ramp rises on a square (`segmentElevation`), so the launch angle
-     * at the lip is twice that: 0.11 average, 0.22 at the lip. The
+     * at the lip is twice that: 0.13 average, 0.26 at the lip. The
      * analysis's `jumps` checks (`impact`, `height`) measure the landing
-     * this throws. */
-    lip: { height: 3.1, ramp: 28 },
+     * this throws. The ramp is as long as `clear - gap` leaves after R6's
+     * `jump.runUp` off the approach corner — `rules_test` holds the three
+     * together. */
+    lip: { height: 3.1, ramp: 24 },
     /** THE TRAIN and its timetable. */
     train: {
       /** The pace a driver's arrival at the crossing is guessed at, m/s —
