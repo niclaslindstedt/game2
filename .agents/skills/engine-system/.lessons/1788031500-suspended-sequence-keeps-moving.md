@@ -16,7 +16,7 @@ situation the sequence exists for.
 
 Two things that exit owes:
 
-- **Seat the car with `seatOn` (exported from `car.ts`), never a bare
+- **Seat the car with `seatOn` (exported from `ground.ts`), never a bare
   `terrain.groundAt`.** The centre height leaves a body corner under the
   surface, and `stepGrounded`'s wall check divides that rise by the distance
   covered THAT step — tiny for a car crawling out — so it reads as a face and

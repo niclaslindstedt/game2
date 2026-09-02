@@ -24,7 +24,8 @@ import {
   type GameEvent,
   type RunStats,
 } from "./state.ts";
-import { collideSlope, landingDamage } from "./collision.ts";
+import { landingDamage } from "./collision.ts";
+import { groundJolt, readSeat, standOn, wheelSpeed, type GroundUnder } from "./ground.ts";
 import type { Rng } from "../lib/prng.ts";
 import type { Surface } from "../mapgen/index.ts";
 
@@ -458,10 +459,12 @@ export function tyreLoad(car: CarState): number {
   return Math.max(S.loadFloor, (1 - S.loadSkitter * car.settle) * car.weight);
 }
 
-export type GroundContext = {
+/** Everything a step needs to know about the ground: the height under any
+ * world position and whether it is the open lattice or a road profile
+ * (`GroundUnder`, ground.ts), plus the grade and shape already read under
+ * the car and the weather over it. */
+export type GroundContext = GroundUnder & {
   surface: Surface | "nature";
-  /** Ground elevation under the car before this step's move. */
-  groundY: number;
   /** Road slope dy/ds under the car... */
   slope: number;
   /** Ground slope ACROSS the heading, positive when the ground rises to
@@ -482,10 +485,6 @@ export type GroundContext = {
    * the metres (state.catchUp). It multiplies the engine's pull and nothing
    * else: the grip, the slide and the top end are all still the car's. */
   drive: number;
-  /** Off the road only: the terrain height under any world position. When
-   * set, ground-follow and landings ride this instead of extrapolating the
-   * road's slope — a slide across a hillside tracks the hillside. */
-  groundAt?: (x: number, z: number) => number;
 };
 
 /** How much of the wind carries the car this step. A translation, not a
@@ -506,6 +505,7 @@ export function stepGrounded(
 ): void {
   const dt = T.dt;
   const prevVy = car.vy;
+  const prevWheelVy = car.wheelVy;
   const prevU = car.u;
   // WHAT THE GROUND IS DOING TO THE WEIGHT ON THE TIRES, before anything
   // spends it. The shape under the car's path either lifts weight off it or
@@ -1206,65 +1206,64 @@ export function stepGrounded(
   const roadPull = groundPull(ctx.roadCurve, pace);
   if (pace > T.air.crestSpeed && roadPull > T.air.gravity * T.air.crestPull) {
     launch(car, car.vy, events, stats);
-  } else if (ctx.groundAt) {
-    // Open ground: ride the terrain under the wheels — a slide carries the
-    // car ACROSS the slope, which the along-heading slope can't see, so the
-    // height is read where the car actually is. A sharp edge (a cliff lip,
-    // a cut bank) falls away faster than the smoothed crest check can read;
-    // at pace it throws the car instead of gluing it down the face.
-    // The seat, not the single point under the middle — see seatOn. Both
-    // the edge check and the wall check below are the SAME quantity the car
-    // is standing at, so a car whose body is being held up by one corner
-    // does not read that lift as a cliff it has just driven off.
-    const gy = ctx.groundAt(car.x, car.z);
-    let seat = seatOn(car, gy, ctx.groundAt);
-    if (pace > T.air.crestSpeed && seat < car.y - T.air.edgeDrop) {
-      launch(car, car.vy, events, stats);
-    } else {
-      // The ground can also be a WALL. How far it rose over the ground the
-      // car just covered IS the face's grade, read exactly where the bumper
-      // is rather than over the wide baseline the grade term uses — a cliff
-      // is metres wide, and a smoothed slope would let the car drive up the
-      // side of a mountain at pace.
-      const run = Math.hypot(car.x - fromX, car.z - fromZ);
-      if (run > 1e-4 && seat - car.y > run * T.collision.climbLimit) {
-        hitFace(spec, car, ctx.groundAt, (seat - car.y) / run, fromX, fromZ, events, stats);
-        // The contact gave part of the step back, so the car is no longer
-        // standing where the seat above was measured.
-        seat = seatOn(car, ctx.groundAt(car.x, car.z), ctx.groundAt);
-      }
-      car.y = seat;
-      // Attitude from the smoothed slope: the raw per-step height delta
-      // would pitch-jitter the nose over every ripple of noise.
-      car.vy = roadVy;
-    }
   } else {
-    // ctx.groundY is the elevation the step STARTED from; the slope carries
-    // it forward to where the car has just moved to.
-    car.y = ctx.groundY + roadVy * dt;
-    car.vy = roadVy;
+    // Ride the ground under the wheels, read where the car actually IS — a
+    // slide carries the car ACROSS the slope, which the along-heading slope
+    // can't see, and a road is read the same way so that leaving it and
+    // coming back onto it is one continuous surface.
+    //
+    // THE EDGE. Two readings of the same thing, and either throws the car.
+    // A cliff lip or a cut bank falls away by more than `edgeDrop` under the
+    // car's own footprint in one step — at pace that is a flight, not a face
+    // to be driven down. And any convex KINK the wheels cannot follow: the
+    // car was CLIMBING at some speed and the ground now asks the wheels to
+    // give up more than `edgeSpeed` of it in one step — the drop side of a
+    // jump lip, from either direction: the top of the ramp for a car driving
+    // the stage, the top of the landing face for one coming back. No lip
+    // needs flagging for it: the car is thrown from wherever the ground last
+    // held it, with `launchKeep` of the speed it was climbing at.
+    //
+    // What "climbing at" means is the lesser of two readings, and both are
+    // needed. The wheels' own speed over the last step, read off the ground
+    // under the car's middle along its path: against a wall the grade over
+    // a wheelbase says the car is climbing at absurd speed while the wheels
+    // go nowhere, and a wall must never read as the ground falling away.
+    // And the smoothed grade's speed: a kerb lifts the wheels a hand's width
+    // in a single step, which as a speed is a rally car's whole pace, and
+    // the body has not moved — that is a bump for the springs, not a flight.
+    // Only ground the car has actually been climbing, for long enough that
+    // the grade under it says so, carries the momentum to leave it. Out in
+    // the WILD it also has to have been climbing at all: a car that sets off
+    // down a steep face from a standstill at the foot of a cliff has no
+    // upward momentum for the ground to fall away from, and is glued down
+    // the slope exactly as the crest check would glue it (the cliff rule
+    // above is the one that throws a car off a real edge). On the ROAD the
+    // only kink the generator builds is a lip (R6), and a lip is a jump
+    // whatever grade it sits on — a shallow ramp on the steepest descent
+    // nets no climb at its top, and the car still has to leave it. The edge
+    // checks and the wall check inside `standOn` read the SAME seat, so a car
+    // whose body is being held up by one corner does not read that lift as a
+    // cliff it has just driven off.
+    const at = readSeat(car, ctx);
+    const climbing = Math.min(prevWheelVy, prevVy);
+    const kink = climbing - wheelSpeed(ctx, at.centre);
+    if (pace > T.air.crestSpeed && at.seat < car.y - T.air.edgeDrop) {
+      launch(car, roadVy, events, stats);
+    } else if ((climbing > 0 || !ctx.wild) && kink > T.air.edgeSpeed) {
+      launch(car, Math.max(roadVy, prevWheelVy * T.air.launchKeep), events, stats);
+    } else {
+      standOn(spec, car, ctx, at, fromX, fromZ, roadVy, events, stats);
+    }
   }
 
   // ── Suspension ───────────────────────────────────────────────────────────
   // Whatever the ground just did to the wheels, the body has to catch up
-  // with. A dip flattening out, a crest falling away, a bank stopping the
-  // nose: all of it arrives here as one number — but only up to a point. A
-  // valley floor taken at pace is several g of sustained lift, and a spring
-  // soft enough to feel like a rally car cannot hold a body against that in
-  // anything less than half a metre of travel. Past `joltMax` the springs are
-  // simply out of authority: the wheels stop pushing the body any harder and
-  // the whole car rides the ground up instead, which is what a bottomed
-  // suspension actually does. Landings and impacts arrive as their own
-  // velocity steps below and are not capped here.
-  //
-  // Both ways. Uncapping the ground FALLING AWAY reads like the obvious
-  // improvement — nothing is pushing the body over a brow, so why cap it —
-  // but a brow's fall is well inside the cap already: measured on 1.2 m and
-  // 2.6 m crests from 16 to 44 m/s, the body's own travel moved by nothing.
-  // What that half actually lets through is the road's cross-section.
-  const groundJolt = car.airborne ? 0 : car.vy - prevVy;
-  const joltCap = T.suspension.joltMax * dt;
-  stepSuspension(spec, car, clamp(groundJolt, -joltCap, joltCap), (car.u - prevU) / dt);
+  // with: the shape under the car, capped, and the bumps in it, on their own
+  // ceiling (ground.ts). Landings and impacts arrive as velocity steps of
+  // their own and are not capped here. A car that has just launched has
+  // nothing under its wheels to be jolted by.
+  const jolt = car.airborne ? 0 : groundJolt(car, prevVy, prevWheelVy);
+  stepSuspension(spec, car, jolt, (car.u - prevU) / dt);
   // The hopping dies down with them. Only on the ground: a car back in the
   // air off its own rebound is still the same landing, and it has nothing
   // to settle against up there.
@@ -1278,92 +1277,6 @@ export function stepGrounded(
   // turning faster than their own engine could turn them. An engaging shift
   // takes the pedal away, and with it the spin.
   settleWheelspin(spec, car, wheelspinShare(spec, car, surfaceGrip, input.throttle * shiftCut), dt);
-}
-
-/**
- * WHERE A CAR STANDS ON UNEVEN GROUND — the height of the plane its own
- * body sits on, rather than the height of the one point under its middle.
- *
- * `car.y` is the ground under the car and everything drawn hangs off it at
- * the attitude the ground asked for, so reading it at the centre alone is
- * only honest where the ground is flat under the whole footprint. Out in the
- * wild it is not: a hillside steeper than `attitude.pitchMax`, the crease
- * where two lattice triangles meet, the foot of a cut bank — all of them
- * leave one end of the car metres under the surface the renderer draws, and
- * a car buried to its roof is what the player sees.
- *
- * So the body's four corners are sampled and the plane is LIFTED until none
- * of them is below the ground: the seat is the highest a corner asks for,
- * measured against where that corner sits under the attitude the car is
- * already holding. Flat ground gives back the centre height exactly, which
- * is why this is safe to run everywhere off the road.
- *
- * A corner over ground that rises harder than `collision.climbLimit` is not
- * standing on it, it is up against a WALL — and a wall pushes a car back, it
- * does not hold its nose in the air. So the rise a corner may claim is capped
- * at the grade the wheels could have climbed to get there, which is the same
- * line the ground-as-a-solid check draws; past it the contact model has the
- * car, not this.
- *
- * Exported because anything that PUTS a car on open ground — the beaching at
- * the end of a drowning, in step.ts — owes it the same seat the driving model
- * would have given it. Dropping a car at the bare centre height instead
- * leaves it a body-corner under the surface, and the wall check on the next
- * step reads that as a face and hits the car with it.
- */
-export function seatOn(
-  car: CarState,
-  centre: number,
-  ground: (x: number, z: number) => number,
-): number {
-  const hl = T.collision.halfLength;
-  const hw = T.collision.halfWidth;
-  const sinH = Math.sin(car.heading);
-  const cosH = Math.cos(car.heading);
-  // The body's own rise at a corner: the nose lifts with pitch, the right
-  // side with roll — the same two angles the renderer draws the body at.
-  const risePitch = Math.sin(car.pitch);
-  const riseRoll = Math.sin(car.roll);
-  let seat = centre;
-  for (const lz of [hl, -hl]) {
-    for (const lx of [hw, -hw]) {
-      // Forward is (sin h, cos h) and right is (cos h, -sin h).
-      const x = car.x + sinH * lz + cosH * lx;
-      const z = car.z + cosH * lz - sinH * lx;
-      const reach = Math.hypot(lz, lx) * T.collision.climbLimit;
-      const rise = Math.min(ground(x, z), centre + reach);
-      const plane = rise - (lz * risePitch + lx * riseRoll);
-      if (plane > seat) seat = plane;
-    }
-  }
-  return seat;
-}
-
-/** The car meeting a face it cannot climb. Reads the terrain's gradient at
- * the bumper — that direction is the contact normal — hands the contact to
- * collision.ts, and backs the car out of however much of the step the face
- * refused. A wall gives the whole step back (the car stops against it and
- * the wedge rule in step.ts eventually fetches it); a steep bank gives some
- * of it back and the car scrabbles up the rest. */
-function hitFace(
-  spec: CarSpec,
-  car: CarState,
-  ground: (x: number, z: number) => number,
-  faceSlope: number,
-  fromX: number,
-  fromZ: number,
-  events: GameEvent[],
-  stats: RunStats,
-): void {
-  const span = T.collision.faceSpan;
-  const gradient = {
-    x: (ground(car.x + span, car.z) - ground(car.x - span, car.z)) / (2 * span),
-    z: (ground(car.x, car.z + span) - ground(car.x, car.z - span)) / (2 * span),
-  };
-  const bite = collideSlope(spec, car, faceSlope, gradient, events, stats);
-  if (bite <= 0) return;
-  car.x -= (car.x - fromX) * bite;
-  car.z -= (car.z - fromZ) * bite;
 }
 
 /** One airborne physics step. The velocity vector is committed; the nose
@@ -1436,19 +1349,26 @@ export function stepAirborne(
   // right angle when the forward speed has all but gone.
   settlePitch(car, Math.atan2(car.vy, Math.max(6, Math.hypot(car.u, car.w))));
 
-  // The ground under where the car has just moved TO. Off the road the
-  // terrain answers directly; on the road, `ctx.groundY` is where the step
-  // started, and on a steep descent that stale height is already above the
-  // road, which lands the car in mid-air. The road carry only ever LOWERS
-  // the ground: a rising slope under a car that has just left a lip is the
-  // ramp it is no longer on, and following it up would land the car the
-  // instant it took off.
-  const groundNow = ctx.groundAt
-    ? ctx.groundAt(car.x, car.z)
-    : Math.min(ctx.groundY, ctx.groundY + car.u * ctx.slope * dt);
+  // The ground under where the car has just moved TO — the road's profile
+  // or the terrain, whichever the step is over, read there and not carried
+  // forward from where the flight began: on a steep descent a stale height
+  // is already above the road, which lands the car in mid-air.
+  const groundNow = ctx.groundAt(car.x, car.z);
   if (car.y <= groundNow) {
     car.y = groundNow;
     car.airborne = false;
+    // The wheels arrive at the ground's own speed along the path — read off
+    // the ground itself over the last step's travel, never off the smoothed
+    // grade: at the foot of a cliff the grade over a wheelbase says the car
+    // is climbing at absurd speed, and a first grounded step handed that as
+    // the wheels' momentum reads the slope it landed on as an edge and
+    // throws the car straight back off it. The landing below is the jolt;
+    // this only says what the wheels are doing from here on.
+    const behind = ctx.groundAt(
+      car.x - (sinH * car.u + cosH * car.w) * dt,
+      car.z - (cosH * car.u - sinH * car.w) * dt,
+    );
+    car.wheelVy = (groundNow - behind) / dt;
     // Straight nose AND upright: coming down on your side is never clean,
     // however well the nose was lined up.
     const clean =

@@ -164,9 +164,11 @@ describe("chase camera over a cliff", () => {
       s.car.z += 28 * FRAME;
     });
     // What little there is over the rig's 2 m ride height is its own
-    // descent lift (`dropLift`) on the way down; the cliff hold contributes
-    // none of it.
-    expect(Math.max(...overs.slice(4))).toBeLessThan(2.8);
+    // descent lift (`dropLift`) on the way down, plus the frame or two the
+    // camera takes to settle onto the landed car (HEIGHT_FOLLOW — in the air
+    // it follows one for one, on the ground it eases); the cliff hold
+    // contributes none of it.
+    expect(Math.max(...overs.slice(4))).toBeLessThan(3.0);
   });
 });
 

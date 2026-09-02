@@ -14,6 +14,7 @@ import {
   ROAD_CROSS,
   SOLID_PROP_HEIGHT,
   TUNING,
+  clipSolids,
   collideCar,
   collideCars,
   compileTrack,
@@ -21,6 +22,7 @@ import {
   createTerrain,
   damageZoneAt,
   landingDamage,
+  ridesOver,
   standSolid,
   step,
   type GameEvent,
@@ -945,13 +947,11 @@ describe("the wild's litter and outcrops", () => {
     }
   });
 
-  it("a small rock is knocked flying and barely slows the car", () => {
+  it("the smallest lump the field stands up is ridden over, not hit", () => {
     const state = freshState();
     const car = state.car;
     car.u = 26;
     const events: GameEvent[] = [];
-    // The smallest lump the field will stand up — a couple of hundred kilos
-    // of stone against a tonne of car. It goes, the car does not.
     const rock = solid({
       kind: "rock",
       size: SOLID_PROP_HEIGHT / 1.05,
@@ -959,10 +959,48 @@ describe("the wild's litter and outcrops", () => {
       z: car.z + TUNING.collision.halfLength + 0.2,
       y: car.y,
     });
+    expect(ridesOver(car, rock)).toBe(true);
+    // The body's contact model has nothing to say about it...
+    collideCar(state.spec, car, [rock], events, state.stats);
+    expect(events).toHaveLength(0);
+    expect(car.u).toBe(26);
+    // ...the wheels do: a thump, a lurch, a little speed — and the stone
+    // shoved out of its bed and away — but no fold, no wear.
+    const gone: WildObstacle[] = [];
+    clipSolids(state.spec, car, 1, [rock], events, (ob) => gone.push(ob));
+    expect(events.some((e) => e.type === "kerbHit")).toBe(true);
+    expect(car.u).toBeGreaterThan(26 * 0.85);
+    expect(car.u).toBeLessThan(26);
+    expect(car.damage.wear).toBe(0);
+    expect(car.damage.zones[0]).toBe(0);
+    expect(gone).toEqual([rock]);
+    expect(events.some((e) => e.type === "solidBreak" && !e.broke)).toBe(true);
+    // One bite per stone: the body is deaf to it until it has passed.
+    const before = car.u;
+    clipSolids(state.spec, car, 1 + TUNING.dt, [rock], events);
+    expect(car.u).toBe(before);
+  });
+
+  it("a stone over the ride-over bar is the body's: knocked flying, and it costs", () => {
+    const state = freshState();
+    const car = state.car;
+    car.u = 26;
+    const events: GameEvent[] = [];
+    // Just over the bar: half a tonne of stone against a tonne of car. It
+    // goes, and the car pays its share of the momentum — a bang and a dent,
+    // under half the pace, never a wall.
+    const rock = solid({
+      kind: "rock",
+      size: (TUNING.collision.rideOver + 0.02) / 1.05,
+      x: car.x,
+      z: car.z + TUNING.collision.halfLength + 0.2,
+      y: car.y,
+    });
+    expect(ridesOver(car, rock)).toBe(false);
     expect(rock.mass).toBeLessThan(state.spec.mass);
     collideCar(state.spec, car, [rock], events, state.stats);
 
-    expect(car.u).toBeGreaterThan(26 * 0.7); // a bang and a dent, not a wall
+    expect(car.u).toBeGreaterThan(26 * 0.5);
     const thrown = events.find((e) => e.type === "solidBreak");
     expect(thrown).toBeDefined();
     if (thrown?.type === "solidBreak") {
@@ -1062,7 +1100,7 @@ describe("what gives way", () => {
     const grid = car.z;
     const rock = solid({
       kind: "rock",
-      size: 0.5,
+      size: 0.7,
       x: car.x,
       z: grid + TUNING.collision.halfLength + 0.4,
       y: car.y,
@@ -1080,7 +1118,7 @@ describe("what gives way", () => {
     const events: GameEvent[] = [];
     const rock = solid({
       kind: "rock",
-      size: 0.5,
+      size: 0.7,
       x: car.x,
       z: car.z + TUNING.collision.halfLength + 0.4,
       y: car.y,

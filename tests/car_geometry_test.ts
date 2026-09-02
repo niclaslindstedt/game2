@@ -52,6 +52,16 @@ describe("the solid bar against the hoods it was written from", () => {
     expect(SOLID_PROP_HEIGHT).toBeGreaterThan(lowest * 0.45);
     expect(SOLID_PROP_HEIGHT).toBeLessThan(lowest * 0.6);
   });
+
+  it("the ride-over bar sits over the placement bar and under the lowest hood", () => {
+    // Of what the field stands up, the shortest are mounted by the wheels
+    // rather than hit by the body (`collision.rideOver`). That bar has to
+    // clear the placement bar, or nothing is ever ridden over, and stay
+    // under the hood, or a stone the bonnet plainly meets is driven through.
+    const lowest = Math.min(...bodies.map(([, spec]) => spec.profile[0].topY));
+    expect(TUNING.collision.rideOver).toBeGreaterThan(SOLID_PROP_HEIGHT);
+    expect(TUNING.collision.rideOver).toBeLessThan(lowest * 0.75);
+  });
 });
 
 describe("the springs against the wheel arches", () => {

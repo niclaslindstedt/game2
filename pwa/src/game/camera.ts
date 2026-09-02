@@ -61,6 +61,7 @@
 import * as THREE from "three";
 import { angleLerp, clamp } from "../lib/angles.ts";
 import { verticalFovFor } from "../lib/fov.ts";
+import { createFollow } from "../lib/follow.ts";
 import { createSlack } from "../lib/slack.ts";
 import type { GameState } from "@engine";
 
@@ -459,6 +460,20 @@ const SLACK = {
   ground: { reach: 0.35, recover: 0.2 },
 } as const;
 
+/** ...AND WHAT GETS PAST THE PLAY ARRIVES AS A MOVEMENT, NOT A CUT. The
+ * slack separates by size, so anything bigger than it — a kerb dropped off
+ * at a slant, a lattice crease, the step off a shelf — comes through at full
+ * amplitude in the frame it happens. The car should do that; a camera that
+ * does it too is the car standing still in the frame while the whole world
+ * jumps, the read of a camera welded to the roof. So the height the chase
+ * rigs stand and aim from EASES onto the slack's reading (lib/follow.ts) at
+ * `rate`, 1/s: fast enough that a hill is followed within a fraction of a
+ * metre, slow enough that a step in the ground is sunk or lifted through
+ * over a few frames. In the AIR the height is a smooth arc with nothing to
+ * ease away and the frame must not change for a designed jump (CHASE_RIGS),
+ * so it follows at `flying` there, near enough one for one. */
+const HEIGHT_FOLLOW = { rate: 9, flying: 80, snap: 6 };
+
 /** THE CLIFF. Driving off a cliff top is the one place the chase rig has
  * nothing sensible to follow. Riding the car down keeps it exactly two
  * metres over the roof for the whole plunge, so a twenty-five metre drop
@@ -605,6 +620,8 @@ export function createGameCamera(width: number, height: number): GameCamera {
    * that stands over the car is built from, with the road's own SURFACE
    * taken out of it. */
   const groundSlack = createSlack(SLACK.ground);
+  /** ...eased into the height the chase rigs actually stand on. */
+  const groundFollow = createFollow(HEIGHT_FOLLOW);
   /** Seconds the camera has been alive — the drone's circling walks off it,
    * so it does not depend on frame rate. */
   let orbit = 0;
@@ -643,11 +660,14 @@ export function createGameCamera(width: number, height: number): GameCamera {
   const updateChase = (rig: ChaseRig, state: GameState, dt: number): void => {
     const car = state.car;
     // The height the shot is built from — the car's, less whatever of it is
-    // only the road's cross-section (SLACK). The STAND and the AIM take the
-    // same one, so the play never shows as pitch: what it costs is the car
-    // riding a few centimetres up and down inside the frame, which is the
-    // car dropping into a wheel track, which is what is actually happening.
-    const ground = groundSlack(car.y, dt);
+    // only the road's cross-section (SLACK), eased so that what is left
+    // arrives as movement (HEIGHT_FOLLOW). The STAND and the AIM take the
+    // same one, so neither the play nor the lag ever shows as pitch: what
+    // they cost is the car riding up and down inside the frame, which is
+    // the car dropping into a wheel track or rising off a lip, which is
+    // what is actually happening.
+    const rate = car.airborne ? HEIGHT_FOLLOW.flying : HEIGHT_FOLLOW.rate;
+    const ground = groundFollow(groundSlack(car.y, dt), rate, dt);
     const speed = Math.hypot(car.u, car.w);
     // The Sega Rally read: the camera follows the ROAD, so a drift swings
     // the car across the frame while the road keeps flowing to the

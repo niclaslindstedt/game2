@@ -31,8 +31,10 @@ export {
 } from "./game/step.ts";
 export {
   clipKerbs,
+  clipSolids,
   collideCar,
   collideCars,
+  ridesOver,
   damageZoneAt,
   landingDamage,
   type ContactSide,

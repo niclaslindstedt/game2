@@ -1324,22 +1324,42 @@ export function createTerrain(track: Track): TerrainField {
   type Corridor = { y: number; cover: number; hand: number };
   const corridorGround = (x: number, z: number): Corridor | null => {
     let best: Corridor | null = null;
-    const consider = (s: RibbonSample, d: number, side: number, width: number): void => {
+    const consider = (d: number, width: number, y: number): void => {
       const edge = width / 2 + ROAD_CROSS.reach;
       if (d > edge + 3) return;
       const cover = 1 - smooth(clamp01((d - edge) / 3));
       if (best && best.cover >= cover) return;
-      best = {
-        y: ribbonY(s, side * Math.min(d, edge), width),
-        cover,
-        hand: handoverAt(d - width / 2),
-      };
+      best = { y, cover, hand: handoverAt(d - width / 2) };
     };
     const near = nearestRoad(x, z);
-    if (near && near.d < shelfEnd + 3)
-      consider(samples[near.index], near.d, sideOf(near.lateral), samples[near.index].width);
+    if (near && near.d < shelfEnd + 3) {
+      // The stage's ribbon BETWEEN its samples, not the nearest one's. The
+      // road mesh draws the ribbon interpolated along the stage and the car
+      // on the mat rides that same interpolation (track.ts `locate`), so the
+      // ground beside the road has to as well — elevation AND profile, since
+      // the width, the bank and the lift all move from one sample to the
+      // next. Read off the nearest sample alone, a graded road's shoulder is
+      // a sawtooth of steps every two metres, and the seam between the mat
+      // and its verge is a step the car drops down every time it crosses it.
+      const s = samples[near.index];
+      const along = (x - s.x) * Math.sin(s.heading) + (z - s.z) * Math.cos(s.heading);
+      const next =
+        samples[Math.max(0, Math.min(samples.length - 1, near.index + Math.sign(along)))];
+      const f = Math.min(1, Math.abs(along) / track.step);
+      const side = sideOf(near.lateral);
+      const here = ribbonY(s, side * Math.min(near.d, s.width / 2 + ROAD_CROSS.reach), s.width);
+      const there = ribbonY(
+        next,
+        side * Math.min(near.d, next.width / 2 + ROAD_CROSS.reach),
+        next.width,
+      );
+      consider(near.d, s.width, here + (there - here) * f);
+    }
     const spur = spurs.spurs.length > 0 ? spurs.nearest(x, z) : null;
-    if (spur) consider(spur.sample, spur.d, 1, spur.spur.width);
+    if (spur) {
+      const w = spur.spur.width;
+      consider(spur.d, w, ribbonY(spur.sample, Math.min(spur.d, w / 2 + ROAD_CROSS.reach), w));
+    }
     // The apron wins over both: at a junction the ground IS the junction —
     // one graded plane, right out to its rim, with no hand-over of its own
     // to make (R17).
