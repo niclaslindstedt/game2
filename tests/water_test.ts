@@ -621,6 +621,10 @@ describe("driving out again (TUNING.crash.drown.shallows)", () => {
   // search SPACE, and it is wide on purpose so that a generator change
   // costs the suite a few seconds of scanning rather than a red test.
   const SHORE_SEEDS = [
+    // 109 leads since the body took its own momentum over a bank: a car
+    // that used to drive down 69's shore now flies off it into deeper
+    // water, sideways, and paddles.
+    109,
     69,
     87,
     73,
