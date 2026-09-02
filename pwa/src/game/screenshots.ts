@@ -5,20 +5,19 @@
 // DECIDED about a picture — its size, its name, where the mark goes — is
 // next door in shot-plan.ts; this module is the canvas work.
 //
-// WHAT IS IN THE PICTURE is the rendered frame and nothing else: the world,
-// the car, the weather, the mirror — everything the renderer drew — with
-// the app's mark stamped into the corner. The HUD is NOT in it, and that is
-// a decision rather than an omission. The HUD is DOM over the canvas, so
-// putting it in the picture would mean rasterizing a live stylesheet, and
-// what a rally screenshot is about is the car sideways in the trees. A
-// speedo and a minimap over the top of that is the instrument panel of the
-// machine the picture happened to be taken on.
+// WHAT IS IN THE PICTURE is the screen: the world, the car, the weather,
+// the mirror — everything the renderer drew — and the HUD over it, with the
+// app's mark stamped into the corner. The instruments are DOM rather than
+// pixels the renderer put down, so they are rasterized in on the way past
+// (shot-hud.ts); the picture is what the driver was LOOKING at, which
+// includes the clock they were chasing and the call they took the corner
+// on. A frame with none of that on it is still one press away and always
+// was: OPTIONS' HUD switch takes the instruments down for good, and holding
+// ALT takes them off for as long as the key is held.
 //
-// THE REAR-VIEW MIRROR IS IN IT, and that is not a leak in the rule above:
-// the mirror is a render pass, not DOM (mirror.ts), so it is part of the
-// frame in the same way the road is. It also happens to be right — the
-// picture is what the driver was looking at, and half of what makes a rally
-// screenshot worth sending is the car that was behind you.
+// The mirror comes for free — it is a render pass, not DOM (mirror.ts), so
+// it is part of the frame in the same way the road is, and half of what
+// makes a rally screenshot worth sending is the car that was behind you.
 //
 // WHEN IT IS TAKEN is the delicate half. The renderer runs on a plain WebGL
 // context with no `preserveDrawingBuffer`, which means the drawing buffer
@@ -38,6 +37,7 @@
 
 import { APP_NAME, APP_SHORT_NAME } from "../identity.ts";
 import { configureShotStore, putShot, type ShotMeta } from "../lib/shot-store.ts";
+import { drawHudLayer, type HudLayer } from "./shot-hud.ts";
 import {
   NOTE_MIN,
   STAMP_FONT_STACK,
@@ -47,6 +47,8 @@ import {
   shotSize,
   stampFits,
   stampLayout,
+  stampLift,
+  type HudCover,
   type NotesLayout,
 } from "./shot-plan.ts";
 // The app mark, read from the same SVG the icons are generated from
@@ -170,15 +172,21 @@ export async function keepShot(
   frame: HTMLCanvasElement,
   label: string,
   notes?: ShotNotes | null,
+  hud?: HudLayer | null,
 ): Promise<Capture | null> {
   armScreenshots();
   try {
     const ctx = frame.getContext("2d");
+    // Instruments first, then the caption over them: a developer picture is
+    // read for its boxes, and a minimap is not allowed to sit on one. What
+    // comes back is where the instruments landed, which is what keeps the
+    // signature off them.
+    const cover = ctx && hud ? await drawHudLayer(ctx, hud, frame.width, frame.height) : null;
     if (ctx && notes) drawNotes(ctx, frame.width, frame.height, notes);
     // The mark is awaited rather than skipped when it is late: the first
     // picture of a session is the one most likely to be shown to somebody,
     // and this is a decode of an inlined SVG, not a network trip.
-    if (ctx) drawStamp(ctx, frame.width, frame.height, (await markPromise) ?? null);
+    if (ctx) drawStamp(ctx, frame.width, frame.height, (await markPromise) ?? null, cover);
     const blob = await toPng(frame);
     if (!blob) return null;
     const takenAt = Date.now();
@@ -195,9 +203,10 @@ export function captureFrame(
   source: HTMLCanvasElement,
   label: string,
   notes?: ShotNotes | null,
+  hud?: HudLayer | null,
 ): Promise<Capture | null> {
   const frame = grabFrame(source);
-  return frame ? keepShot(frame, label, notes) : Promise.resolve(null);
+  return frame ? keepShot(frame, label, notes, hud) : Promise.resolve(null);
 }
 
 /** The instrument look, restated for the canvas: the same monospace, the
@@ -418,6 +427,7 @@ function drawStamp(
   width: number,
   height: number,
   mark: CanvasImageSource | null,
+  cover: HudCover | null,
 ): void {
   if (!stampFits(width, height)) return;
   const layout = stampLayout(width, height);
@@ -431,8 +441,17 @@ function drawStamp(
   // the badge is laid out from its RIGHT edge inwards.
   const nameWidth = ctx.measureText(label).width;
   const markWidth = mark ? layout.mark + layout.gap : 0;
-  const bottom = height - layout.pad;
   const left = width - layout.pad - markWidth - nameWidth;
+  // ...and UP the corner, past whatever the instruments are using it for.
+  const foot = height - layout.pad;
+  const bottom =
+    foot -
+    stampLift(
+      cover,
+      { left, right: width - layout.pad, top: foot - layout.mark, bottom: foot },
+      width,
+      height,
+    );
   if (mark) ctx.drawImage(mark, left, bottom - layout.mark, layout.mark, layout.mark);
   // Sky, snow, a white car: the frame under the stamp can be any colour at
   // all, so the name carries its own dark edge rather than trusting the

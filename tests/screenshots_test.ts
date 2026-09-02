@@ -16,7 +16,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  HUD_LAYER_ROOT,
   NOTE_MIN,
+  hudLayerSvg,
   noteFont,
   notesFit,
   notesLayout,
@@ -24,6 +26,8 @@ import {
   shotSize,
   stampFits,
   stampLayout,
+  stampLift,
+  type HudCover,
 } from "../pwa/src/game/shot-plan.ts";
 import { shotId, shotMeta, withShot, withStored, type Shot } from "../pwa/src/lib/shot-roll.ts";
 import { DEFAULT_SETTINGS, loadSettings } from "../pwa/src/game/settings.ts";
@@ -211,6 +215,120 @@ describe("the developer picture's notes", () => {
   it("has a floor a caption is never stepped below", () => {
     expect(noteFont(1280, 720)).toBeGreaterThan(NOTE_MIN);
     expect(noteFont(240, 135)).toBe(NOTE_MIN);
+  });
+});
+
+// The HUD goes into the picture, and it goes in as the browser's own layout
+// of the game's own stylesheet rather than as a second HUD drawn in
+// Canvas2D. That makes the document assembled here the whole contract: an
+// SVG that does not parse, or one whose colours and pinning are lost on the
+// way in, is a screenshot with the instruments missing or piled in a corner
+// — and none of it is visible from a test that only reads pixels.
+describe("the HUD layer", () => {
+  const layer = (over: Partial<Parameters<typeof hudLayerSvg>[0]> = {}): string =>
+    hudLayerSvg({
+      markup: '<div xmlns="http://www.w3.org/1999/xhtml" class="hud">120</div>',
+      css: ":root { --hud-ink: #fff; }\n.hud { color: var(--hud-ink); }",
+      width: 1280,
+      height: 720,
+      inherited: "font-family:Arial Narrow;font-size:16px",
+      ...over,
+    });
+
+  it("is one SVG the size of the window, so the picture is only ever scaled", () => {
+    const svg = layer();
+    expect(svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg"')).toBe(true);
+    expect(svg).toContain('width="1280" height="720"');
+    expect(svg).toContain('viewBox="0 0 1280 720"');
+    expect(svg.endsWith("</svg>")).toBe(true);
+  });
+
+  // Every instrument on the HUD is pinned with `position: absolute` against
+  // the app-root around it. Without a positioned box of the window's own
+  // size standing in for it, the whole panel collapses into the corner.
+  it("stands the instruments in a box the shape of the app-root", () => {
+    expect(layer()).toContain("position:relative;width:1280px;height:720px");
+  });
+
+  // The HUD's ink, its shadow and its steer blue are all declared on
+  // `:root`, and inside an SVG the root element is the `<svg>` — so a sheet
+  // taken in verbatim would style nothing and the HUD would come out black.
+  it("points every :root rule at the wrapper the HUD actually hangs on", () => {
+    const svg = layer();
+    expect(svg).toContain(`.${HUD_LAYER_ROOT} { --hud-ink: #fff; }`);
+    expect(svg).not.toContain(":root");
+  });
+
+  // The font is set on `body` (styles.css), which is not coming with the
+  // HUD — a layer that lost it would come back in the browser's default
+  // serif at the browser's default size.
+  it("carries what the HUD was inheriting from above", () => {
+    expect(layer()).toContain("font-family:Arial Narrow;font-size:16px");
+  });
+
+  // A `<foreignObject>` is parsed as XML, so the stylesheet cannot be
+  // escaped (`&` is a nesting selector) and cannot be raw (`>` is a
+  // combinator). CDATA is the only door, and its own terminator is the one
+  // sequence it cannot carry.
+  it("takes a stylesheet in verbatim, combinators and all", () => {
+    const svg = layer({ css: ".a > .b { color: red } .c { &:hover { color: blue } }" });
+    expect(svg).toContain("<![CDATA[.a > .b { color: red }");
+    expect(svg).toContain("&:hover");
+  });
+
+  it("splits a CDATA close out of a stylesheet rather than ending the section on it", () => {
+    const svg = layer({ css: '.a[x="]]>"] { color: red }' });
+    expect(svg).toContain("]]]]><![CDATA[>");
+    expect(svg.match(/<!\[CDATA\[/g)).toHaveLength(2);
+    expect(svg.endsWith("</svg>")).toBe(true);
+  });
+
+  it("never emits a picture with no area to it", () => {
+    expect(layer({ width: 0, height: -4 })).toContain('width="1" height="1"');
+  });
+});
+
+// With the HUD in the picture the bottom-right corner is no longer reliably
+// empty: a phone held upright runs the whole instrument cluster along the
+// foot, and a signature dropped on it takes the speedo with it.
+describe("the stamp, over instruments", () => {
+  const cols = 32;
+  const rows = 64;
+  /** A cover with the bottom `band` rows filled right across. */
+  const along = (band: number): HudCover => {
+    const on = new Uint8Array(cols * rows);
+    for (let row = rows - band; row < rows; row++) on.fill(1, row * cols, row * cols + cols);
+    return { cols, rows, on };
+  };
+  const badge = { left: 900, right: 1260, top: 660, bottom: 700 };
+
+  it("stays where it was when the corner is empty", () => {
+    expect(stampLift(along(0), badge, 1280, 720)).toBe(0);
+    expect(stampLift(null, badge, 1280, 720)).toBe(0);
+  });
+
+  it("lifts clear of a cluster along the foot", () => {
+    // Four rows of a 64-row map over a 720-tall picture is 45 px of
+    // instruments; the badge has to end up above all of them.
+    const lift = stampLift(along(4), badge, 1280, 720);
+    expect(lift).toBeGreaterThanOrEqual(45);
+    expect(badge.bottom - lift).toBeLessThanOrEqual(720 - 45);
+  });
+
+  // The cluster is over on the LEFT on a window held sideways, and a badge
+  // that climbed anyway would be a signature hovering in the middle of a
+  // frame for no reason at all.
+  it("ignores instruments outside its own column", () => {
+    const on = new Uint8Array(cols * rows);
+    for (let row = rows - 6; row < rows; row++) on.fill(1, row * cols, row * cols + 8);
+    expect(stampLift({ cols, rows, on }, badge, 1280, 720)).toBe(0);
+  });
+
+  // The results card covers the frame corner to corner. There is nowhere
+  // better to be, and a signature floating in the middle of the picture is
+  // worse than one on the card.
+  it("stays put when the whole picture is covered", () => {
+    expect(stampLift(along(rows), badge, 1280, 720)).toBe(0);
   });
 });
 

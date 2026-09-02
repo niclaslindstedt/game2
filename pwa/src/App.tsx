@@ -207,6 +207,7 @@ import {
 } from "./game/audio/music.ts";
 import type { RunAudio } from "./game/audio/index.ts";
 import { armScreenshots, captureFrame, type Capture, type ShotNotes } from "./game/screenshots.ts";
+import { readHudLayer, type HudLayer } from "./game/shot-hud.ts";
 import { beginImageCopy } from "./lib/share-image.ts";
 import { splashSkipped } from "./game/splash.ts";
 import { SplashScreen } from "./game/splash-screen.tsx";
@@ -986,12 +987,15 @@ export function App() {
    * `notes` is the caption painted INTO the picture rather than left on the
    * page (screenshots.ts): the developer map's boxes, or the driving
    * overlay's while it is up. Null on a player's own shot, which is the
-   * frame and nothing else. `done` is how whoever asked finds out — the
-   * capture happens frames later, in the loop, and it is the only place that
-   * ever holds the finished picture. */
+   * frame and its instruments. `hud` is those instruments, serialized at
+   * the press for the same reason the boxes are — both are DOM, and neither
+   * is in the drawing buffer the frame comes off (shot-hud.ts). `done` is
+   * how whoever asked finds out — the capture happens frames later, in the
+   * loop, and it is the only place that ever holds the finished picture. */
   const shotRef = useRef<{
     label: string;
     notes: ShotNotes | null;
+    hud: HudLayer | null;
     done?: (capture: Capture | null) => void;
   } | null>(null);
 
@@ -1050,14 +1054,19 @@ export function App() {
    * press before the first has been served simply relabels the request,
    * which is right — the two would have been the same frame anyway.
    *
-   * TWO THINGS RIDE ON THE PRESS ITSELF and cannot wait for the frame:
+   * THREE THINGS RIDE ON THE PRESS ITSELF and cannot wait for the frame:
    *
-   * The DEBUG BOXES, when the overlay is up. They are DOM over the canvas,
-   * so none of what they say is in the drawing buffer the picture comes off
-   * — which is exactly wrong for the kind of picture whose whole purpose is
-   * to be handed to somebody else. Read here rather than in the loop because
-   * this is the moment the shutter was pressed, and a flying camera has
-   * moved by the time the frame is served.
+   * The HUD. It is DOM over the canvas, so none of it is in the drawing
+   * buffer the picture comes off, and it is rasterized in afterwards
+   * (shot-hud.ts) — but WHICH HUD is decided here, because the clock, the
+   * call and the place the picture has to carry are the ones that were on
+   * screen when the button went down. Null while ALT has the instruments
+   * down, which is still the fastest way to a frame on its own.
+   *
+   * The DEBUG BOXES, when the overlay is up. Same reason, one layer up:
+   * read here rather than in the loop because this is the moment the shutter
+   * was pressed, and a flying camera has moved by the time the frame is
+   * served.
    *
    * The CLIPBOARD, when the player asked for it. `write` wants the gesture's
    * transient activation, which the encode outlives, so the claim is staked
@@ -1077,6 +1086,7 @@ export function App() {
     shotRef.current = {
       label: shotLabel(),
       notes: read ? { boxes: read.boxes, repro: read.repro } : null,
+      hud: readHudLayer(),
       done: (capture) => {
         if (!copy) {
           flash(capture ? "PICTURE SAVED" : "PICTURE FAILED", capture ? "good" : "bad");
@@ -1625,6 +1635,10 @@ export function App() {
       shotRef.current = {
         label: `Map ${spec?.seed ?? seedRef.current}${info ? ` · ${info.label}` : ""}`,
         notes: read ? { boxes: read.boxes, repro: read.repro, legend: info?.legend ?? [] } : null,
+        // Null every time in practice — the map is a menu page and the
+        // driving HUD is not up over one — and asked anyway, so the two
+        // shutters never disagree about what a picture is.
+        hud: readHudLayer(),
         done: (capture) => {
           if (!copy) {
             resolve({ saved: capture !== null, copied: false });
@@ -2543,7 +2557,7 @@ export function App() {
         const wanted = shotRef.current;
         if (wanted === null) return;
         shotRef.current = null;
-        void captureFrame(canvas, wanted.label, wanted.notes).then((capture) => {
+        void captureFrame(canvas, wanted.label, wanted.notes, wanted.hud).then((capture) => {
           // Whoever asked says what happened: the shutter flashes it on the
           // HUD, a menu's button says it on its own face. This is also the
           // one place the finished picture exists, which is why the whole

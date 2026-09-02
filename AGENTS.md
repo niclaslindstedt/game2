@@ -212,6 +212,7 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | What a PRESS does to a name being entered on that board     | `pwa/src/game/initials-entry.ts` — DOM-free: the wheel, the caret, and what an empty slot wakes as                                 |
 | The time trial's ghost: recording, replay, storage          | `pwa/src/game/ghost.ts`                                                                                                            |
 | Taking a picture, and what is stamped on it                 | `pwa/src/game/screenshots.ts` (the canvas work) + `shot-plan.ts` (size, name, where the mark and the notes go — DOM-free)          |
+| Getting the HUD INTO a picture, since it is DOM not pixels  | `pwa/src/game/shot-hud.ts` (serialize at the press, rasterize later) over `hudLayerSvg` / `stampLift` in `shot-plan.ts`            |
 | The CAMPAIGN's own stages, offered to a page that is not it | `StagePicker` in `pwa/src/game/menu-levels.tsx` over `App.tsx`'s `loadRoamLevel`; `levelForRoad` says which one is loaded          |
 | The CAMPAIGN's own maps, opened to be looked at             | `RoamPage`'s `viewing` mode in `pwa/src/game/menu-roam.tsx` — Roam with the driving half off — the `debug-tools` skill             |
 | The roll of pictures, and sending one on                    | `pwa/src/lib/shot-store.ts` over `shot-roll.ts`; the share/copy/save probes in `pwa/src/lib/share-image.ts`                        |
