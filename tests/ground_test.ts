@@ -244,8 +244,9 @@ describe("a jump met from behind", () => {
     let flew = false;
     for (let i = 0; i < TUNING.physicsHz * 4 && !flew; i++) {
       const before = car.y;
-      step(state, drive({ throttle: 0.35 }));
-      flew = car.airborne;
+      // Thrown by the lip — the `takeoff` — and not merely off the ground
+      // for a moment: the road can hop the car on the way to it.
+      flew = step(state, drive({ throttle: 0.35 })).some((e) => e.type === "takeoff");
       if (!flew) worstRise = Math.max(worstRise, car.y - before);
     }
     expect(flew).toBe(true);

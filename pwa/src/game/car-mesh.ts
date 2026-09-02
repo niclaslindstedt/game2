@@ -9,7 +9,7 @@
 
 import * as THREE from "three";
 import { clamp } from "../lib/util.ts";
-import type { CarSpec, DamagePart, GameEvent, GameState } from "@engine";
+import { TUNING, type CarSpec, type DamagePart, type GameEvent, type GameState } from "@engine";
 
 import {
   backlightNormal,
@@ -432,7 +432,14 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
 
   const update = (state: GameState, dt: number, eye?: THREE.Vector3): void => {
     const car = state.car;
-    group.position.set(car.x, car.y, car.z);
+    // THE LOFT: over a brow the body keeps going up while the wheels reach
+    // down after ground that is falling away. The first of that is the
+    // springs' droop — the body up off the arches, the wheels still on the
+    // ground — and past the droop the wheels come up with it: the whole car
+    // skipping, a hand's height off the road, until the engine calls it a
+    // flight.
+    const droop = Math.min(car.loft, TUNING.suspension.droop);
+    group.position.set(car.x, car.y + (car.loft - droop), car.z);
     group.rotation.y = car.heading;
 
     // Both attitude angles come off the engine already settled. In the car's
@@ -462,7 +469,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     // engine says whether it is (the ledger); the shape is the drawing's.
     const tremble = trembleAt(state.t, revTremble(car.rev, car.u));
     const pose = damage.pose;
-    body.chassis.position.y = car.ride + tremble.heave + pose.drop;
+    body.chassis.position.y = car.ride + droop + tremble.heave + pose.drop;
     body.chassis.rotation.x = -car.pitchLoad + tremble.pitch - pose.pitch;
     body.chassis.rotation.z = tremble.roll + pose.roll;
 

@@ -210,6 +210,38 @@ export type CarState = {
    * the grounded step, spent through `tyreLoad`, and reset to 1 by a
    * launch: in the air the tires carry nothing. */
   weight: number;
+  /** HOW FAR THE BODY HAS LIFTED OFF ITS WHEELS, m, over ground that is
+   * falling away faster than the car can follow it. The body has its own
+   * vertical momentum: over a brow it keeps going up while the ground
+   * turns down, and for the first `air.loft` of that the wheels reach
+   * after it — the car is grounded, going light, and drawn with its body
+   * up off the arches. From there to `air.leave` the car is SKIPPING: the
+   * wheels off the ground for a few tenths, the tyres carrying nothing,
+   * the car still steered and driven. Past `leave` the ground has gone and
+   * this hands over to `airborne`. Written by the grounded step, drawn by
+   * the renderer (the body on its springs up to the droop, the whole car
+   * above that), spent through `tyreLoad`. */
+  loft: number;
+  /** ...and how fast the body is lifting, m/s — its vertical speed over
+   * and above the ground's own, which is what it leaves the ground with. */
+  loftRate: number;
+  /** How far the mean ground under the four wheels stood above the ground
+   * under the car's middle as the last grounded step ended, m (ground.ts,
+   * `Seat.foot`). An OFFSET rather than a height, so a car set down
+   * somewhere new — a respawn, a test fixture, the grid — carries no stale
+   * ground into its first step: the middle's height is read fresh every
+   * step, and the foot is measured from there. */
+  foot: number;
+  /** ...and the speed that foot was moving at, m/s — the wheels' own
+   * vertical speed as the body rides it, which is what the body carries
+   * into the next step when the ground has been carrying the body. */
+  footVy: number;
+  /** ...and what that foot has BEEN doing, m/s — the same speed read over
+   * `air.footLag`, which is the slowest fall the body may arrive at a step
+   * with: ground that has carried the car down at a speed for the last few
+   * steps is ground the body is falling at, whatever the smoothed grade
+   * says. */
+  footMean: number;
   /** Load pitch, rad — the dive under brakes, the squat on the power and
    * the nose-dip a hit throws in, positive lifting the nose. Kept apart
    * from `pitch` (the ground's own attitude) because only the BODY takes
@@ -240,6 +272,16 @@ export type CarState = {
    * moment reads as one event rather than a stutter, and cleared by a
    * respawn like every other thing the car is carrying. */
   spun: boolean;
+  /** True while the car is ROLLING OVER: tripped over its outside wheels
+   * by a landing taken crossed up (`air.tripSlide`), and going over side
+   * after side until the roll has spent itself. It is off its wheels the
+   * whole time — flying a little between contacts, with nothing under the
+   * tyres to steer or drive with — and each side that hits the ground is a
+   * landing in its own right, with the flank's crush and the speed it
+   * costs. Cleared when the car comes down within `air.rollLandLimit` of
+   * upright, or when there is no roll left in it; the ground rights it
+   * from there. */
+  rolling: boolean;
   /** How far the DRIVEN wheels are outrunning the road, m/s — 0 hooked up,
    * and never more than the headroom between the road and what the current
    * gear gives at the limiter, because a wheel with a gear engaged cannot
@@ -300,6 +342,13 @@ export type CarState = {
    * comes up in one tick and the weight it moved takes the better part of a
    * second to come back. Set by the grounded step, read by nothing else. */
   provoked: number;
+  /** THE THROW STILL IN THE CAR, 0..1 — the largest provocation of the
+   * last couple of seconds, fading at `drift.thrownSettle`. `provoked` is
+   * the weight a move shifted and comes back in under a second; what a
+   * move put into the car's ROTATION outlives that, and it is what carries
+   * a tail thrown too hard on past the angle the wheel asked for
+   * (`drift.overYaw`). Set by the grounded step, read by nothing else. */
+  thrown: number;
   gear: number;
   /** Engine revs, 0 at idle and 1 at the redline (a shade over is the
    * limiter). On the move it is the DRIVEN WHEELS through the gearing:
@@ -372,11 +421,18 @@ export function stillCar(car: CarState): void {
   car.rideRate = 0;
   car.settle = 0;
   car.weight = 1;
+  car.loft = 0;
+  car.loftRate = 0;
+  car.foot = 0;
+  car.footVy = 0;
+  car.footMean = 0;
   car.pitchLoad = 0;
   car.slide = 0;
   car.drifting = false;
   car.chain = 0;
   car.spun = false;
+  car.rolling = false;
+  car.thrown = 0;
   car.wheelspin = 0;
   car.launchSpin = 0;
   updateSlip(car);
@@ -388,6 +444,17 @@ export function stillCar(car: CarState): void {
  * included). This is the definition of `CarState.slip`, kept beside it. */
 export function updateSlip(car: CarState): void {
   car.slip = Math.atan2(car.w, Math.max(1, Math.abs(car.u)));
+}
+
+/** How far off UPRIGHT the body is, rad in (-π, π], whatever whole turns
+ * `roll` has accumulated. `CarState.roll` is never wrapped — a car that has
+ * been over once carries 2π so the ground can settle it to the nearest
+ * upright rather than rewinding it — so anything that asks "is it on its
+ * side" reads this and not the raw angle, or a car that has rolled once
+ * lands on its side for the rest of the run. */
+export function rollTilt(roll: number): number {
+  const turn = Math.PI * 2;
+  return roll - Math.round(roll / turn) * turn;
 }
 
 /** When the stage is driven — presentation picks lighting from it; the
@@ -436,6 +503,13 @@ export type GameEvent =
    * four dragged tyres — rides `CarState.spun` instead, because it lasts as
    * long as the spin does and this fires once at the start of it. */
   | { type: "spin"; slip: number; speed: number }
+  /** The car going OVER — tripped by a landing taken crossed up, and now
+   * rolling. `rate` is the roll it went over with, rad/s, and `speed` the
+   * ground speed it was carrying; fired once as the roll begins. Each side
+   * hitting the ground after it is a `landing` of its own, sized by the
+   * roll (`air.tumbleSlam`), and the state that lasts as long as the roll
+   * does is `CarState.rolling`. */
+  | { type: "rollover"; rate: number; speed: number }
   | { type: "offRoad"; off: boolean }
   /** A contact hard enough to matter. `speed` is the closing speed into
    * the surface, m/s; `angle` is where on the body it landed, radians in
@@ -520,6 +594,10 @@ export type RunStats = {
    * spins has no upper edge to its drift, and a bot that spins on every
    * stage is being asked for angle it cannot hold. */
   spins: number;
+  /** Landings that tripped the car over (`rollover` events). The other
+   * edge the drift has: a spin is a corner over-done, a roll is a jump
+   * taken sideways. */
+  rolls: number;
   jumps: number;
   airTime: number;
   cleanLandings: number;

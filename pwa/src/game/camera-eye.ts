@@ -72,7 +72,7 @@
 // the neck, the grain, the jolt and the wobble down together, to nothing.
 
 import * as THREE from "three";
-import type { GameState } from "@engine";
+import { TUNING, type GameState } from "@engine";
 
 import { angleLerp, clamp } from "../lib/angles.ts";
 import { MAX_VFOV, verticalFovFor } from "../lib/fov.ts";
@@ -623,7 +623,12 @@ export function createEyeCamera(): EyeCamera {
     // car-mesh.ts), and a positive roll lifts the +x side.
     const cl = Math.cos(car.pitchLoad);
     const sl = Math.sin(car.pitchLoad);
-    const ly = y * cl + z * sl + car.ride;
+    // The seat is on the sprung mass: the springs' heave and, over a brow,
+    // the body's lift off its wheels both carry the eye with them — the
+    // droop's worth on the springs, the rest with the whole car (car-mesh.ts
+    // draws the same split).
+    const droop = Math.min(car.loft, TUNING.suspension.droop);
+    const ly = y * cl + z * sl + car.ride + droop;
     const lz = z * cl - y * sl;
     const cp = Math.cos(car.pitch);
     const sp = Math.sin(car.pitch);
@@ -635,7 +640,7 @@ export function createEyeCamera(): EyeCamera {
     const by = x * sr + py * cr;
     const ch = Math.cos(car.heading);
     const sh = Math.sin(car.heading);
-    out.set(car.x + bx * ch + pz * sh, car.y + by, car.z - bx * sh + pz * ch);
+    out.set(car.x + bx * ch + pz * sh, car.y + (car.loft - droop) + by, car.z - bx * sh + pz * ch);
   };
 
   const reseat = (): void => {

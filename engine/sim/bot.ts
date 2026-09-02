@@ -148,6 +148,42 @@ const DRIFT_HOLD = 0.35;
 const DRIFT_BAND = 0.45;
 const DRIFT_FLOOR = 0.45;
 
+/** How much landing skitter (`CarState.settle`) the bot will still throw a
+ * move on. A hard landing writes 1 and it fades out over about half a
+ * second; under this the tyres are back enough to be asked for a slide. */
+const SETTLED = 0.4;
+
+/** How far ahead a driver reads the road for a BROW, s of travel, and the
+ * share of what the ground can hold (`air.hold`) at which one starts to
+ * count. A crest the ground cannot hold the car to at this pace is a
+ * flight, and a car that flies sideways keeps every bit of the rotation it
+ * took off with — so the slide is shut, and no move is thrown, before the
+ * car gets there. The read is graded rather than switched: it comes in
+ * over the last fifth of the hold, so a brow the car will merely go light
+ * over straightens it a little and one it will leave the ground over
+ * straightens it fully. */
+const BROW_LOOK = 0.8;
+
+/** How far over a corner's speed the car may still be, m/s, for the LEVER
+ * to be the answer rather than the brake. The lever is a deliberate
+ * overspeed the slide scrubs, and a slide scrubs about this much: yanked
+ * at ninety over the corner, the rotation it starts is one the tyres
+ * never catch (`drift.overYaw`), and the car arrives at the hairpin
+ * backwards. Past it the driver stands on the brake, and the lever comes
+ * a few tenths later, once the speed is down to something a slide can
+ * carry. */
+const LEVER_HOT = 12;
+
+/** How long a car is NOT BRAKING after a jump lip, s: the flight itself and
+ * the skitter of the landing after it (`CarState.settle`), neither of which
+ * slows the car. A corner past a lip has to be braked for BEFORE the lip,
+ * and the plan takes that road out of the braking it counts on: without
+ * it a car lands a jump at full pace a few car lengths from a hairpin and
+ * has nothing left but the slide, which at that speed is a spin. */
+const LIP_GLIDE = 1.5;
+const BROW_FROM = 0.8;
+const BROW_BAND = 0.4;
+
 /** The default rally brain: quick hands, plans ~3 s ahead, drifts hairpins. */
 export const RALLY_BOT: BotProfile = {
   latFraction: 0.5,
@@ -334,6 +370,7 @@ function decide(state: GameState, profile: BotProfile, traffic: readonly Traffic
     curvature,
     surface,
     arc,
+    elevation,
     toNextCurve,
     x: roadX,
     z: roadZ,
@@ -387,6 +424,19 @@ function decide(state: GameState, profile: BotProfile, traffic: readonly Traffic
   // it the scan has nothing left to learn about the handbrake, which is
   // what lets the plan stop early.
   const flickReach = Math.max(12, car.u * 0.5);
+  // The nearest jump lip in the horizon, as arc length: the road past it is
+  // road the car cannot brake on (`LIP_GLIDE`). A plain walk — the corner
+  // scan below steps over whole straights, and a lip sits on one.
+  let lipS = Infinity;
+  for (let ahead = 1; ahead <= scan; ahead++) {
+    let i = from + ahead;
+    if (i >= count) i = track.circuit ? i - count : count - 1;
+    if (samples[i].jump) {
+      lipS = arc[i] - progressS + (arc[i] < progressS ? trackLength : 0);
+      break;
+    }
+  }
+  const glide = car.u * LIP_GLIDE;
   let ahead = 1;
   while (ahead <= scan) {
     // The sample `ahead` down the road — see `aheadOf`, inlined because
@@ -452,8 +502,11 @@ function decide(state: GameState, profile: BotProfile, traffic: readonly Traffic
     // with water on it, and a difficulty ladder built on quick crews stops
     // being one.
     const planCap = hard ? safe + hotEntry * (1 - exposed) : safe;
-    // Distance-discounted: a far corner allows more speed now than a near one.
-    const allowed = Math.sqrt(planCap * planCap + braking * Math.max(0, distance - 10));
+    // Distance-discounted: a far corner allows more speed now than a near
+    // one — over the road the car can actually brake on, which past a lip
+    // is short of the whole distance by the flight and the landing.
+    const room = distance > lipS ? Math.max(lipS, distance - glide) : distance;
+    const allowed = Math.sqrt(planCap * planCap + braking * Math.max(0, room - 10));
     if (allowed < targetSpeed) targetSpeed = allowed;
     if (hard && distance < hardDistance) {
       hardDistance = distance;
@@ -494,12 +547,22 @@ function decide(state: GameState, profile: BotProfile, traffic: readonly Traffic
   let throttle = clamp(-over / THROTTLE_BAND, 0, 1);
   let brake = clamp((over - profile.brakeMargin) / BRAKE_BAND, 0, 1);
 
+  // THE BROW AHEAD: the crest the car will fly at this pace, 0..1 (see
+  // `BROW_LOOK`). Read off the road's own profile the way `car.ts` reads
+  // the ground under the car, over the same baseline (`air.crestSpan`).
+  const brow = browAhead(elevation, arc, from, count, track.circuit, step, car.u);
+
   // DRIFT ENTRY. Arriving hot at a hard corner, rotate the car — and WHICH
   // WAY is the car's own answer, not a rule of the bot's: `game/limits.ts`
   // says how much slide this layout finds on the wheel alone and how far
   // under the speed floor a move can still reach, which is exactly what a
   // driver knows about the car they are sitting in.
-  const nearHard = !car.airborne && hardDistance < flickReach;
+  // ...and not on tyres still hopping from a landing: a car that has just
+  // come down hard is skittering (`car.settle`) and holds a fraction of its
+  // grip, and a move thrown on that — the lever, the flick, the trailed
+  // brake — is a spin, not a drift. A driver lets the car settle first.
+  // ...nor over a brow: a move thrown into a crest is thrown into the air.
+  const nearHard = !car.airborne && car.settle < SETTLED && brow < 0.5 && hardDistance < flickReach;
   // A car that already rotates on the wheel needs nothing but the speed to
   // do it with — that is the rear-driver, and this is the old rule. One that
   // does not has to be ASKED, and is asked in the corners the wheel would
@@ -517,7 +580,11 @@ function decide(state: GameState, profile: BotProfile, traffic: readonly Traffic
   // `wary` is the driver having already been shown what happens when it
   // does not, so the corner gets driven rather than attacked.
   const handbrake =
-    nearHard && !car.drifting && !wary && (rotates ? hot : car.u > slideFloor(state.spec, 1) + 1);
+    nearHard &&
+    !car.drifting &&
+    !wary &&
+    car.u < hardCap + LEVER_HOT &&
+    (rotates ? hot : car.u > slideFloor(state.spec, 1) + 1);
   // ...and the TRAILED BRAKE, which is the same ask made with the pedal that
   // is already down. The plan has the car braking for the corner anyway; a
   // driver in a car that will not rotate carries some of that brake PAST the
@@ -553,16 +620,37 @@ function decide(state: GameState, profile: BotProfile, traffic: readonly Traffic
     brake = trailing ? TRAIL_BRAKE : 0;
     // Counter-steer only once the nose is nearly where it should be —
     // mid-hairpin the aim error is huge and the car needs every bit of
-    // rotation; damping there is what runs a drift wide.
-    const counterWeight = clamp(1 - Math.abs(error) / 0.6, 0, 1);
+    // rotation; damping there is what runs a drift wide. Unless the slide
+    // is already DEEP: past the angle the pedal is being breathed back
+    // over, the tail is past the tyre's peak and keeps coming on its own
+    // (`drift.overYaw`), and a driver who waits for the nose to reach the
+    // aim before catching it has spun. The catch comes in with the depth,
+    // whatever the aim still wants — and with the car going LIGHT: a body
+    // lifting off its wheels over a brow (`car.loft`) is about to fly, and
+    // a car that flies sideways keeps every bit of the rotation it took
+    // off with, so a driver straightens it before the crest — and reads
+    // the crest coming (`brow`) rather than waiting to feel it, because by
+    // the time the body has lifted there is a tenth of a second left.
+    const light = Math.max(clamp(car.loft / TUNING.air.loft, 0, 1), brow);
+    const counterWeight = Math.max(clamp(1 - Math.abs(error) / 0.6, 0, 1), deep, light);
     // Sideways, the aim is where the car is GOING, not where its nose is
     // pointing: hold the nose on the lookahead through a slide and the
     // velocity leaves the road by exactly the slip angle. Steering the
     // TRAVEL direction is what puts the nose the necessary few degrees
     // further into the corner — the counter-steer above still damps the
     // rotation once the nose is nearly back on line.
+    //
+    // ...and the aim gives way to the catch as the slide deepens. A car
+    // most of the way round has a travel direction pointing anywhere, and
+    // full lock toward where the road went is full lock INTO the slide: a
+    // driver at that angle is on opposite lock whatever the road is doing,
+    // and finds the road again once the car is theirs.
     const pathError = angleDiff(car.heading + car.slip, desired);
-    steer = clamp(pathError * profile.steerGain + car.slip * 0.9 * counterWeight, -1, 1);
+    steer = clamp(
+      pathError * profile.steerGain * (1 - deep) + car.slip * 0.9 * counterWeight,
+      -1,
+      1,
+    );
   }
   // …and whatever the road plan settled on, the car in front has a veto on
   // it. The brake is held back mid-slide: standing on the middle pedal
@@ -579,7 +667,9 @@ function decide(state: GameState, profile: BotProfile, traffic: readonly Traffic
     brake = car.u > 22 ? 0.7 : 0;
     reset = !car.airborne && state.t - state.offRoadSince > profile.offRoadGiveUp;
   }
-  if (car.airborne) {
+  // A hop over a brow and the bounce out of a landing both carry `settling`:
+  // the ground has the car back before a driver would have lifted for it.
+  if (car.airborne && !car.settling) {
     // Committed: line the nose up with the travel direction for the landing.
     steer = clamp(-car.slip * 2, -1, 1);
     throttle = 0;
@@ -993,4 +1083,48 @@ function gridInput(throttle: number): CarInput {
     shiftDown: false,
     reset: false,
   };
+}
+
+/** THE BROW the road ahead will throw the car over at this pace, 0..1. The
+ * road's vertical curvature over `air.crestSpan` — the baseline `car.ts`
+ * judges a crest on, so the two agree on what a brow is — read over the
+ * next `BROW_LOOK` seconds of travel and turned into the pull the ground
+ * would need to keep the car on it (`pace²·curvature`) against what it CAN
+ * hold (`air.hold` of gravity). The steepest brow in reach is the answer.
+ * A circuit's samples wrap; a stage's stop at the finish. */
+function browAhead(
+  elevation: Float64Array,
+  arc: Float64Array,
+  from: number,
+  count: number,
+  circuit: boolean,
+  step: number,
+  pace: number,
+): number {
+  if (pace < TUNING.air.crestSpeed) return 0;
+  const hold = TUNING.air.hold * TUNING.air.gravity;
+  const span = Math.max(1, Math.round(TUNING.air.crestSpan / step));
+  const reach = Math.ceil((pace * BROW_LOOK) / step);
+  const wrap = (i: number): number =>
+    circuit ? ((i % count) + count) % count : clamp(i, 0, count - 1);
+  let worst = 0;
+  for (let ahead = 0; ahead <= reach; ahead++) {
+    const i = wrap(from + ahead);
+    const back = wrap(i - span);
+    const fwd = wrap(i + span);
+    // The samples sit `step` apart, so the baseline is the span except
+    // where a stage's end has clamped it short (a circuit has no end).
+    const behind = circuit ? span * step : arc[i] - arc[back];
+    const before = circuit ? span * step : arc[fwd] - arc[i];
+    if (behind < 1e-6 || before < 1e-6) continue;
+    const rise = (elevation[fwd] - elevation[i]) / before;
+    const fall = (elevation[i] - elevation[back]) / behind;
+    const curvature = (2 * (rise - fall)) / (behind + before);
+    // A crest is the road falling away: negative curvature, positive pull.
+    const pull = -pace * pace * curvature;
+    const share = clamp((pull / hold - BROW_FROM) / BROW_BAND, 0, 1);
+    if (share > worst) worst = share;
+    if (worst >= 1) break;
+  }
+  return worst;
 }

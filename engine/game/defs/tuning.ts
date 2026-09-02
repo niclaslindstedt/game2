@@ -927,6 +927,49 @@ export const TUNING = {
      * the escalation runs into, and finding it is the mistake the player is
      * being given room to make. */
     spinAt: 1.05,
+    /** THE FALLING SIDE OF THE TYRE — how hard the tail RUNS once the car
+     * is past everything the wheel asked for, rad/s of yaw at `spinAt`.
+     * Up to the top of the fade band (`angleSpan` and its `angleBand`, at
+     * the lock the driver is holding) the model finds an equilibrium for
+     * every lock and a held slide parks in it. Past that top the wheel has
+     * nothing left, and a real rear tyre is past its peak: the force
+     * holding the tail FALLS as the angle grows, so a car carried beyond
+     * what the wheel asked for — a flick thrown too hard, the lever held,
+     * the power kept on, a landing taken crossed up — keeps coming on its
+     * own, and only counter-steer holds it. That is the whole difference
+     * between a drift and a spin being something the player does.
+     *
+     * Against the wheel's own full counter at pace (`steerRate` through
+     * `fadeSpeed`, plus `driftYaw`), sized so a catch made anywhere short
+     * of `spinAt` gathers the car and none at all does not: a flick held
+     * on the rear-driver at 100 km/h runs to a spin in about a second, and
+     * a full lock held on the wheel alone still parks, because the wheel
+     * named that angle. */
+    overYaw: 6,
+    /** ...where in the wheel's fade band the run BEGINS, 0..1 of
+     * `angleBand` past the angle the lock asked for. A held slide parks
+     * about two thirds of the way through the band (the deepening forces
+     * balance the redirect there), so this sits just above the park: what
+     * the wheel finds is still an angle it holds, and the room the moves
+     * take past it is where the tail starts to run. */
+    overFrom: 0.7,
+    /** How fast the throw that drives the run fades out of the car, 1/s
+     * (`CarState.thrown`). Slower than `provokeSettle`: the weight a move
+     * shifted is back inside a second, the rotation it put into the car is
+     * not, and a flick thrown too hard has to be able to keep coming for
+     * the couple of seconds the tail takes to go all the way round. */
+    thrownSettle: 0.4,
+    /** ...and how far past the slide's speed floor (`slideFrom`) the run
+     * reaches full strength, ×`slideFrom`. Nothing at the floor — 70 km/h
+     * on the speedo — and all of it at half again that, so a hairpin taken
+     * on the lever under the floor is a pivot the driver owns, and the same
+     * over-commitment at rally pace is a car that has to be caught. */
+    overSpeed: 0.5,
+    /** ...and the least room the run has to develop in, rad ×`breakaway`.
+     * The band runs from there to `spinAt`, which at full lock is a narrow
+     * gap; this keeps a lift-deepened or chained ask that reaches past the
+     * wall from turning the run into a cliff. */
+    overBand: 0.25,
     /** ...and the angle it has to come back under to be caught, rad — the
      * hysteresis, ×`breakaway` as well. Meaningfully under `spinAt`: a
      * threshold with no gap in it chatters a car sitting near the limit in
@@ -1106,8 +1149,9 @@ export const TUNING = {
      * `g`), and that is the point: going light and flying are one continuum,
      * not two rules. The car crests, the grip bleeds off, the slide comes
      * easier and the nose gets harder to hold — and if there is enough speed
-     * in it the wheels leave the ground at `crestPull`. Nothing here is a
-     * separate "you are about to jump" state.
+     * in it the body comes up off its wheels (`hold`, `loft`) and leaves
+     * the ground (`leave`). Nothing here is a separate "you are about to
+     * jump" state.
      *
      * `weightGain` is how much of that pull reaches the CONTACT PATCH. Not
      * all of it does: the springs and the unsprung mass between the chassis
@@ -1189,11 +1233,71 @@ export const TUNING = {
      * compression: grip went UP in the wheel tracks, on every road, which is
      * the transverse version of exactly what `crestSpan` is wide to avoid. */
     crossSpan: 0.8,
-    /** How much harder than gravity the road has to pull the car down before
-     * it actually leaves the ground (`u²·curvature` against `g`). A brow the
-     * car only just outruns would otherwise separate by a fraction of a
-     * millimetre and land again next frame. */
-    crestPull: 1.4,
+    /** HOW HARD THE GROUND CAN PULL THE CAR DOWN AFTER ITSELF, as a share of
+     * `gravity`. Over a brow the ground asks for `pace²·curvature` of
+     * downward acceleration to be followed; the car's body has only its
+     * weight to answer with, and past this share of it the body stops
+     * following — it carries the vertical speed it had into the shape and
+     * starts to LIFT off the wheels (`car.loft`), which is what the springs
+     * reaching for the ground over a crest is.
+     *
+     * Under 1 on purpose. `gravity` is arcade-heavy so that a FLIGHT comes
+     * down quickly, but a takeoff judged against 1.6 g would keep the car
+     * on every brow a real one leaves: a 30° climb rounding off over forty
+     * metres at 100 km/h asks for 11 m/s², which is more than the world
+     * the player knows can hold and less than this one. So the ground is
+     * allowed to hold the car to about a real g, and the flight's own
+     * gravity takes over once it has let go. A brow between the two is a
+     * HOP — the body lifts, the arcade gravity has it back before it has
+     * gone far, and the car bobs over the crest instead of driving flat
+     * across it (`launch`'s `hop`). */
+    hold: 0.65,
+    /** HOW FAR THE WHEELS REACH FOR GROUND THAT IS FALLING AWAY before the
+     * tyres carry nothing, m — the droop, the tyres unloading and the body
+     * clearing the arches, together. Under this the car is grounded and
+     * going LIGHT (`tyreLoad` bleeds toward `weightFloor` as the gap
+     * opens) with the body drawn lifted by it. It is also how far below
+     * where a wheel should be its ground may fall before the wheel is
+     * hanging and says nothing about the body (ground.ts, `corners`). */
+    loft: 0.15,
+    /** ...and how far the body has to come off its wheels before the car is
+     * FLYING, m. Between `loft` and this the car is SKIPPING: the wheels are
+     * off the ground for a few tenths over a bump, the crown of a road
+     * crossed at pace, a lattice crease — light on its tyres, drawn up off
+     * them, still steered and still driven. A car that skipped over a bump
+     * mid-drift and lost its whole lateral grip for those tenths came
+     * down thirty degrees further round than it went up, and spun; a real
+     * car's wheels touch intermittently there, which is what going light
+     * is. Past this the ground has genuinely gone — a brow at pace, a
+     * steepening descent, an edge — and the body leaves with whatever
+     * vertical speed it has carried. R16's wheel tracks and the bump layer
+     * open a gap to `loft` at rally pace and no further. */
+    leave: 0.45,
+    /** How long the foot's vertical speed is read over, s — what the wheels
+     * have BEEN doing, which is the slowest fall the body may arrive at a
+     * step with (car.ts). A few steps: long enough that one step's blip in
+     * the four-wheel mean — a rut crossed sideways, a kerb under one
+     * wheel — is not a speed the body has to answer, short enough that a
+     * brow's turn-down still reaches the body a step or two after the
+     * wheels. */
+    footLag: 0.04,
+    /** The upward speed under which a launch is a HOP rather than a jump,
+     * m/s — the body's own, as the wheels run out of reach. Under it the
+     * flight is a skip the arcade gravity ends in a few tenths: it bobs
+     * the car and books nothing, and the bot drives through it. A rise
+     * this size is half a metre of air under the flight's gravity — a
+     * lattice crease or a soft kink at pace, and well under the smallest
+     * lip R6 builds. */
+    hopRate: 4,
+    /** ...and how long a hop (or a bounce) may last before it has become a
+     * flight, s. Neither ever lasts this long on its own — a hop's lift is
+     * under `hopRate` and the chassis bounce is capped at
+     * `suspension.bounceMax`, and both are back down inside half a second
+     * — so the only way past it is the ground leaving: a lip, an edge, a
+     * brow that steepens under the car. A DURATION rather than a height,
+     * because a body propped up on a face by its nose and backing off it
+     * drops a metre and a half without ever having flown. */
+    hopTime: 0.6,
     /** Steering yaw authority while airborne, rad/s — barely any. */
     yawAuthority: 0.35,
     /** Random turbulence torque while airborne, rad/s² — out of control. */
@@ -1223,6 +1327,11 @@ export const TUNING = {
      * NEAREST upright, so a car already most of the way over finishes the
      * roll rather than rewinding it. */
     rollRecover: 5,
+    /** ...and how fast a roll RATE the ground was handed dies on the
+     * springs, 1/s — a landing that tripped the car short of going over
+     * lurches it this far before the recovery above has it back. Faster
+     * than the recovery, so the lurch is a beat and not a wobble. */
+    leanDamp: 6,
     /** Roll past this at touchdown means the car came down on its side —
      * a sloppy landing however straight the nose was, rad. */
     rollLandLimit: 0.7,
@@ -1231,33 +1340,24 @@ export const TUNING = {
      * gluing it down the face, m. Comfortably more than the shelf drop at
      * the road boundary, so leaving the verge is a curb, not a takeoff. */
     edgeDrop: 0.8,
-    /** ...and the car's CLIMBING speed being asked to fall by more than
-     * this in one step, m/s, is the wheels LEAVING the ground — a convex
-     * kink too sharp to follow (car.ts, `kink`). This is how a jump lip
-     * throws the car, from either side: the drop past a 2 m lip is its
-     * whole height over one sample, which at rally pace is twenty-odd m/s
-     * of fall the wheels were not making, while the same lip at a crawl is
-     * driven over and down. The climbing speed is the lesser of the wheels'
-     * own and the smoothed grade's, so a kerb (a spike the grade never
-     * saw) and a wall (a grade the wheels never climbed) both read as
-     * nothing, and off the road it has to be UPWARD — a car setting off
-     * down a steep face at the foot of a cliff has no climb for the ground
-     * to fall away from, and is glued down it (on the road the only kink is
-     * a lip, and a lip on a descent still throws the car). What is left is
-     * a grade the car has genuinely been up, and the threshold is set where
-     * a ramp-end at pace throws the car
-     * and a lattice crease does not — a 30° ramp ending at 100 km/h flies,
-     * the same crease at half that grade is driven over. Stated as a speed
-     * because a kink's size is one: the change of grade times the pace,
-     * whatever the physics rate. */
+    /** How fast the body has to be leaving the ground — its own vertical
+     * speed over the wheels' — for the takeoff to be SUDDEN, m/s: the
+     * tyres that were holding a slide a step ago letting go all at once,
+     * which is the trip a crossed-up car takes into the air off a ledge or
+     * a lip (`rollFromSlide`, `yawFromSlide`). A body that lifted off its
+     * wheels over a brow left tyres that had already unloaded across the
+     * whole of the loft, and they let go of nothing. Twenty-odd m/s is a
+     * 2 m lip at rally pace; a rounded brow parts the two by a few. */
     edgeSpeed: 8,
-    /** Share of the wheels' climbing speed the car LEAVES a kink with,
-     * 0..1. The wheels are on the steepest last metre of the ramp when the
-     * ground drops away; the body, a wheelbase long and still pitching up,
-     * is carrying the ramp's average, which on R6's eased-in ramp is about
-     * half the end grade. A flight carrying the wheels' whole speed off the
-     * landing face of a 2 m lip met from behind at rally pace would be a
-     * twenty-metre moon shot. */
+    /** Share of the wheels' climbing speed the car LEAVES a jump lip with,
+     * 0..1 — or the smoothed grade's, whichever is more. The wheels are on
+     * the steepest last metre of the ramp when the ground drops away; the
+     * body, a wheelbase long and still pitching up, is carrying the ramp's
+     * average, which on R6's eased-in ramp is about half the end grade. A
+     * flight carrying the wheels' whole speed off the landing face of a
+     * 2 m lip met from behind at rally pace would be a twenty-metre moon
+     * shot. Only a flagged lip launches this way; every other shape throws
+     * the body at the speed it has actually got. */
     launchKeep: 0.5,
     /** Landing slip beyond this scrubs speed and wobbles the car, rad. */
     cleanSlipLimit: 0.24,
@@ -1266,6 +1366,53 @@ export const TUNING = {
     sloppyKeep: 0.78,
     /** Yaw wobble injected by a sloppy landing, rad/s. */
     sloppyWobble: 1.6,
+
+    /** THE TRIP ON LANDING. A car that comes down crossed up is a car whose
+     * tyres bite while the body is still going sideways: the bottom of it
+     * stops and the top of it does not, and it goes over its outside
+     * wheels. This is the sideways speed at touchdown that is spent
+     * without going over, m/s — a landing a little off line skips and
+     * scrubs and stays on its wheels... */
+    tripSlide: 9,
+    /** ...and past it, the roll rate every further m/s of sideways speed
+     * puts into the body, rad/s. With `tumbleAt` this puts the roll at
+     * about twelve m/s across the car: 26° of yaw at 100 km/h, 20° at 130,
+     * 15° at 170 — the faster the jump, the straighter it has to be landed,
+     * which is the whole reason a flick before a lip is a mistake. Between
+     * `tripSlide` and there the car only leans. */
+    tripRoll: 0.75,
+    /** ...capped here, rad/s: a body does not go over faster than about a
+     * turn and a half a second whatever it was doing, because past that
+     * the sideways speed is spent folding the car rather than turning it
+     * — which is what the flank's crush already books. Without a cap a
+     * cliff-face deflection landed at 25 m/s across the car came down at
+     * thirteen rad/s and took three wheels off in one contact. */
+    tripMax: 9,
+    /** How much of the sideways speed the trip leaves in the car, 0..1 —
+     * the tyres dug in and the rest went into the roll. */
+    tripKeep: 0.35,
+    /** THE TUMBLE. Roll rate a trip has to reach before the car actually
+     * goes over, rad/s: under it the body lurches on its springs and the
+     * ground takes it back, past it the inside wheels come up and the car
+     * is ROLLING — off its wheels, flying a little, and coming down on
+     * whichever side is next. */
+    tumbleAt: 2.4,
+    /** ...the lift a roll throws the body up with each time it goes over,
+     * m/s — the centre of mass rising over the wheels it pivots on. */
+    tumbleHop: 2.6,
+    /** ...how much of the roll survives each side hitting the ground, 0..1.
+     * Under 1 so a roll is over in two or three turns and never a barrel
+     * roll down the whole stage. */
+    tumbleKeep: 0.62,
+    /** ...how much of the forward speed each contact leaves, 0..1, on top
+     * of what a sloppy landing already costs. A roll is the most expensive
+     * thing a car can do short of a tree. */
+    tumbleScrub: 0.72,
+    /** ...and how hard each side hits, m/s of landing slam per rad/s of
+     * roll rate — the flank arriving at the ground at the roll's own speed,
+     * which is what folds it (collision.ts `landingDamage` reads the roll
+     * to pick the side). */
+    tumbleSlam: 2.2,
   },
 
   surfaces: {

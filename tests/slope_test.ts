@@ -5,8 +5,9 @@
 // there is a crown, R19's bank, and the ground beside it leaning away. Which
 // of those a car meets is decided by where it is GOING, not by where it is
 // pointing — and whichever it is, the answer is one number: the vertical
-// acceleration the ground is asking for. Below gravity it takes weight off
-// the tires; past `air.crestPull` there is no weight left and the car flies.
+// acceleration the ground is asking for. Below what the ground can hold
+// (`air.hold`) it takes weight off the tires; past it the body comes up off
+// the wheels (`air.loft`) and, given room, leaves them (`air.leave`).
 //
 // These are the cases the model used to have nothing to say about: the road
 // read only along its own centerline, so a car crossing one was on ground
@@ -48,7 +49,7 @@ function crossRoad(
   width: number,
   speed: number,
   extra: Record<string, unknown> = {},
-): { flew: boolean; lightest: number; state: GameState } {
+): { flew: boolean; lightest: number; lift: number; state: GameState } {
   const track = road(width, extra);
   const state = createGame({ seed: 0, carId: "coupe", skipCountdown: true, track });
   const at = track.samples[60];
@@ -61,22 +62,31 @@ function crossRoad(
   state.car.u = speed;
   state.car.w = 0;
   state.progressIndex = 60;
+  // `lift` is how far the body came up off its wheels: the body carried on
+  // up while the road turned down under it, the wheels reaching after the
+  // ground. `flew` is the wheels leaving it altogether — and a car in the
+  // air has no weight on its tyres at all.
   let flew = false;
   let lightest = 1;
+  let lift = 0;
   for (let i = 0; i < Math.round(2 / TUNING.dt); i++) {
-    for (const e of step(state, { ...NEUTRAL_INPUT, throttle: 0 })) {
-      if (e.type === "takeoff") flew = true;
+    step(state, { ...NEUTRAL_INPUT, throttle: 0 });
+    lift = Math.max(lift, state.car.loft);
+    if (state.car.airborne) {
+      flew = true;
+      lightest = 0;
+    } else {
+      lightest = Math.min(lightest, tyreLoad(state.car));
     }
-    if (!state.car.airborne) lightest = Math.min(lightest, tyreLoad(state.car));
   }
-  return { flew, lightest, state };
+  return { flew, lightest, lift, state };
 }
 
 describe("the road as a shape, taken from the side", () => {
   it("takes weight off the tires, and more of it the faster the crossing", () => {
-    const slow = crossRoad(10, 15).lightest;
-    const quick = crossRoad(10, 25).lightest;
-    const fast = crossRoad(10, 30).lightest;
+    const slow = crossRoad(10, 8).lightest;
+    const quick = crossRoad(10, 12).lightest;
+    const fast = crossRoad(10, 14).lightest;
     // A shape and a speed: the same crown holds a car at a crawl and lets go
     // of one at pace.
     expect(slow).toBeLessThan(1);
@@ -88,23 +98,37 @@ describe("the road as a shape, taken from the side", () => {
     expect(fast).toBeLessThan(0.87);
   });
 
-  it("...and past enough speed there is no weight left and the car flies", () => {
-    // A narrow road is a sharper hump than a wide one: R16's crown is a
+  it("...and past enough speed there is no weight left and the body comes up off the wheels", () => {
+    // The body carried up the near side and over the crown keeps going up
+    // while the road turns down under it, and the wheels reach after the
+    // ground: past `air.loft` of that the tyres carry nothing at all, and
+    // the car is SKIPPING across the road rather than driving over it. A
+    // narrow road is a sharper hump than a wide one — R16's crown is a
     // half-width parabola, so the same 17 cm of camber is bent into a
-    // tighter radius the less road there is to spread it over. Same speed,
-    // same 17 cm, and only the narrow one throws the car.
-    expect(crossRoad(6, 20).flew).toBe(false);
-    expect(crossRoad(6, 25).flew).toBe(true);
-    expect(crossRoad(16, 25).flew).toBe(false);
+    // tighter radius the less road there is to spread it over — and the
+    // same speed lifts the car further off a narrow road than off a wide
+    // one. Only a crossing at an absurd pace makes a flight of it.
+    const gentle = crossRoad(6, 12);
+    expect(gentle.lift).toBeLessThan(TUNING.air.loft);
+    expect(gentle.lightest).toBeGreaterThan(TUNING.suspension.loadFloor);
+    const narrow = crossRoad(6, 25);
+    expect(narrow.lift).toBeGreaterThan(TUNING.air.loft);
+    expect(narrow.lightest).toBe(TUNING.suspension.loadFloor);
+    expect(narrow.flew).toBe(false);
+    expect(crossRoad(16, 25).lift).toBeLessThan(narrow.lift);
+    expect(crossRoad(6, 35).flew).toBe(true);
   });
 
-  it("a sealed road is built UP, and its edge throws a car sooner", () => {
+  it("a sealed road is built UP, and its edge lifts a car sooner", () => {
     // R16's asphalt stands `asphaltLift` proud of the ground beside it and
     // falls away over a short chamfer, where a gravel road of the same width
-    // simply runs out into its shoulder. Same width, same speed, and only
-    // one of them lets go.
-    expect(crossRoad(10, 33).flew).toBe(false);
-    expect(crossRoad(10, 33, { surface: "asphalt", lift: 0.2 }).flew).toBe(true);
+    // simply runs out into its shoulder. Same width, same speed, and the
+    // sealed one has the body further off its wheels.
+    const gravel = crossRoad(10, 14);
+    const sealed = crossRoad(10, 14, { surface: "asphalt", lift: 0.2 });
+    expect(gravel.lift).toBeLessThan(TUNING.air.loft);
+    expect(sealed.lift).toBeGreaterThan(TUNING.air.loft);
+    expect(sealed.lift).toBeGreaterThan(gravel.lift * 1.3);
   });
 
   it("but driving ALONG a level road costs the tires nothing at all", () => {
@@ -211,6 +235,10 @@ describe("a hill is a hill whichever way the car is pointed", () => {
     state.car.y = at.elevation;
     state.car.heading = at.heading + (back ? Math.PI : 0);
     state.car.u = 20;
+    // Set down already climbing (or descending) at the grade's own rate —
+    // a body dropped onto a descent with no vertical speed would first have
+    // to fall onto it, and that is a hop, not a coast.
+    state.car.vy = state.car.wheelVy = state.car.footVy = (back ? -1 : 1) * 20 * grade;
     state.progressIndex = 200;
     state.nearIndex = 200;
     for (let i = 0; i < Math.round(2 / TUNING.dt); i++) {

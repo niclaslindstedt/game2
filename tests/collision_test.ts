@@ -25,6 +25,7 @@ import {
   ridesOver,
   standSolid,
   step,
+  updateSlip,
   type GameEvent,
   type GameState,
   type WildObstacle,
@@ -772,6 +773,19 @@ describe("the end of the run", () => {
     expect(car.damage.broken).toContain("wheelFR");
     expect(events).toContainEqual({ type: "wheelFail", wheel: 1, off: true });
     expect(events).toContainEqual({ type: "partBreak", part: "wheelFR" });
+    // Three hits on the same trunk from the same spot stack three trips and
+    // three shoves into the body — enough to roll it, or to skid it off
+    // the road into the next tree, and either is a different run. What is
+    // under test here is the wheel ledger, so the car is set back on its
+    // wheels, straight, before it drives on.
+    car.rollRate = 0;
+    car.airborne = false;
+    car.settling = false;
+    car.vy = 0;
+    car.w = 0;
+    car.yawRate = 0;
+    car.heading = state.track.samples[0].heading;
+    updateSlip(car);
     // One wheel off is a car that still crawls...
     for (let i = 0; i < TUNING.physicsHz * 10; i++) step(state, { ...NEUTRAL_INPUT, throttle: 1 });
     expect(state.phase).toBe("racing");

@@ -302,9 +302,20 @@ describe("the ground as a solid", () => {
     intoTheWild(state, cliff);
     car.heading = Math.PI / 2 - 0.9; // ~50° onto the face
     car.u = 30;
-    for (let i = 0; i < TUNING.physicsHz * 4; i++) step(state, drive({ throttle: 1 }));
+    // Drive into it, and read the car a quarter of a second after the
+    // contact: what the face did with the car's momentum is decided there.
+    // What the car does with itself AFTER that — thrown off the face's lift
+    // and coming down sideways at twenty m/s, it may well roll — is the
+    // landing's business, not the wall's.
+    let hit = false;
+    let after = 0;
+    for (let i = 0; i < TUNING.physicsHz * 4 && after < TUNING.physicsHz / 4; i++) {
+      if (step(state, drive({ throttle: 1 })).some((e) => e.type === "impact")) hit = true;
+      if (hit) after += 1;
+    }
+    expect(hit).toBe(true);
     // It slid along the wall rather than parking against it.
-    expect(car.u).toBeGreaterThan(6);
+    expect(Math.hypot(car.u, car.w)).toBeGreaterThan(12);
     expect(Math.abs(car.z - state.track.samples[0].z)).toBeGreaterThan(30);
   });
 });

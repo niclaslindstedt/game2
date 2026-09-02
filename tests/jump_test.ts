@@ -46,17 +46,21 @@ function run(state: GameState, input: Partial<CarInput>, seconds: number): GameE
   return events;
 }
 
+/** Drive flat out until the lip THROWS the car — the `takeoff` event, not
+ * merely `airborne`: at pace the road's own bumps can hop the car for a
+ * few tenths on the way, and a hop is not the jump. */
 function driveToLip(state: GameState): GameEvent[] {
   const events: GameEvent[] = [];
   let guard = 0;
-  while (!state.car.airborne && guard < TUNING.physicsHz * 60) {
-    events.push(
-      ...step(state, {
-        ...NEUTRAL_INPUT,
-        throttle: 1,
-        shiftUp: state.car.u > state.spec.gearTop[state.car.gear] * 0.93,
-      }),
-    );
+  let thrown = false;
+  while (!thrown && guard < TUNING.physicsHz * 60) {
+    const stepped = step(state, {
+      ...NEUTRAL_INPUT,
+      throttle: 1,
+      shiftUp: state.car.u > state.spec.gearTop[state.car.gear] * 0.93,
+    });
+    events.push(...stepped);
+    thrown = stepped.some((e) => e.type === "takeoff");
     guard += 1;
   }
   return events;
@@ -203,29 +207,122 @@ describe("the jump", () => {
     expect(Math.abs(state.car.x - xAt)).toBeLessThan(1.5);
   });
 
-  it("a sideways landing scrubs speed and wobbles the car", () => {
+  /** Take the lip at `u` m/s and fly the jump with `w` of sideways speed
+   * pinned on through the air — the air keeps `w` frozen, so a messy takeoff
+   * attitude survives to the landing — and report what the touchdown did.
+   * The pin comes off at the first landing: what the car does after that is
+   * the landing's own. */
+  function landSideways(
+    u: number,
+    w: number,
+  ): { landing: GameEvent | undefined; speedBefore: number; state: GameState } {
     const state = game();
-    driveToLip(state);
-    // Force a sideways attitude midair: hold the wheel the whole flight.
+    let toLip = 0;
+    let thrown = false;
+    while (!thrown && toLip < TUNING.physicsHz * 60) {
+      state.car.u = u;
+      thrown = step(state, { ...NEUTRAL_INPUT, throttle: 0.5 }).some((e) => e.type === "takeoff");
+      toLip += 1;
+    }
     let guard = 0;
     let speedBefore = state.car.u;
-    const events: GameEvent[] = [];
-    while (state.car.airborne && guard < TUNING.physicsHz * 6) {
+    let landing: GameEvent | undefined;
+    while (!landing && guard < TUNING.physicsHz * 6) {
       speedBefore = state.car.u;
-      // Crank sideways speed directly — the air keeps w frozen, so a messy
-      // takeoff attitude survives to the landing. -14 against ~35 m/s
-      // forward is a ~22° slip: well past the clean-landing limit.
-      state.car.w = -14;
-      events.push(...step(state, { ...NEUTRAL_INPUT }));
+      state.car.w = w;
+      landing = step(state, { ...NEUTRAL_INPUT }).find((e) => e.type === "landing");
       guard += 1;
     }
-    const landing = events.find((e) => e.type === "landing");
+    // ...and let the landing finish happening.
+    run(state, {}, 3);
+    return { landing, speedBefore, state };
+  }
+
+  it("a sideways landing scrubs speed and wobbles the car", () => {
+    // -8 against 28 m/s forward is a 16° slip: past the clean-landing
+    // limit, under the trip. It costs speed and is never counted clean, and
+    // the car stays on its wheels.
+    const { landing, speedBefore, state } = landSideways(28, -8);
     expect(landing).toBeDefined();
-    if (landing && landing.type === "landing") {
-      expect(landing.clean).toBe(false);
-    }
+    if (landing && landing.type === "landing") expect(landing.clean).toBe(false);
     expect(state.car.u).toBeLessThan(speedBefore);
     expect(state.stats.cleanLandings).toBe(0);
+    expect(state.stats.rolls).toBe(0);
+    expect(Math.abs(state.car.roll)).toBeLessThan(TUNING.air.rollLandLimit);
+  });
+
+  it("a landing taken properly crossed up trips the car over", () => {
+    // -16 m/s across the car at touchdown — 30° of yaw at 100 km/h — is
+    // well past `tripSlide`: the tyres bite, the body goes over its outside
+    // wheels, and what comes to rest is a car that has rolled — on its
+    // wheels again, the ground having righted it, at a fraction of the
+    // speed and with the flank it came down on folded.
+    const { state } = landSideways(28, -16);
+    expect(state.stats.rolls).toBe(1);
+    expect(state.car.rolling).toBe(false);
+    expect(state.car.airborne).toBe(false);
+    const roll = state.car.roll;
+    expect(Math.abs(roll)).toBeGreaterThan(Math.PI / 2); // it went right over
+    const tilt = roll - Math.round(roll / (Math.PI * 2)) * Math.PI * 2;
+    expect(Math.abs(tilt)).toBeLessThan(0.2); // ...and back onto its wheels
+    expect(Math.hypot(state.car.u, state.car.w)).toBeLessThan(15);
+    const zones = state.car.damage.zones;
+    expect(Math.max(zones[2], zones[6])).toBeGreaterThan(0);
+  });
+
+  it("a hop over a brow is not a landing: no skitter, no speed lost, no jump booked", () => {
+    // A car carried over a brow the arcade gravity would have held it on
+    // lifts off its wheels for a few tenths and comes back down; that is
+    // the car bobbing, and it costs the driver nothing a landing costs.
+    const state = createGame({
+      seed: 3,
+      carId: "classic",
+      skipCountdown: true,
+      track: compileTrack(3, [{ kind: "straight", length: 9000, feature: "none" }]),
+    });
+    const car = state.car;
+    car.x += 200;
+    car.heading = Math.PI / 2;
+    // A 30° climb rounding off into flat over forty metres: 11 m/s² of pull
+    // at 100 km/h, under gravity here and over the hold.
+    const from = car.x + 20;
+    const grade = 0.577;
+    const round = 40;
+    const hill = (x: number): number => {
+      const s = x - from;
+      if (s <= 0) return 0;
+      if (s <= 80 - round / 2) return grade * s;
+      if (s < 80 + round / 2) {
+        const t = (s - (80 - round / 2)) / round;
+        return grade * (80 - round / 2) + grade * round * (t - (t * t) / 2);
+      }
+      return grade * 80;
+    };
+    state.terrain = {
+      ...state.terrain,
+      heightAt: hill,
+      groundAt: hill,
+      waterAt: () => null,
+      obstaclesNear: () => [],
+      treesNear: () => [],
+    };
+    car.y = hill(car.x);
+    car.u = 28;
+    let hopped = 0;
+    let lifted = 0;
+    const events: GameEvent[] = [];
+    for (let i = 0; i < TUNING.physicsHz * 4; i++) {
+      events.push(...step(state, { ...NEUTRAL_INPUT, throttle: 0.55 }));
+      if (car.airborne) hopped += TUNING.dt;
+      lifted = Math.max(lifted, car.loft);
+    }
+    expect(lifted).toBeGreaterThan(0.1); // the body came up off the wheels...
+    expect(hopped).toBeGreaterThan(0.2); // ...and then off the ground
+    expect(events.some((e) => e.type === "takeoff")).toBe(false);
+    expect(state.stats.jumps).toBe(0);
+    expect(state.stats.airTime).toBe(0);
+    expect(car.settle).toBe(0);
+    expect(car.u).toBeGreaterThan(27);
   });
 });
 
@@ -290,12 +387,30 @@ describe("over the edge", () => {
     expect(sideways.spin).toBeGreaterThan(1);
   });
 
-  it("under the crest speed the car stays glued however far the ground drops", () => {
+  it("a car creeping off an edge falls — dropped, not thrown, and never glued to the face", () => {
+    // Under the crest speed there is no pace to throw the car with, and
+    // there is no face to drive down either: the body has its own weight,
+    // and once the wheels have nothing under them it goes over the edge at
+    // the speed it had. That is a DROP — the car is airborne and falling,
+    // but nothing about it is a jump: no takeoff, nothing booked.
     const state = onATable(40);
     const car = state.car;
-    car.z = 38;
+    car.z = 36;
     car.u = TUNING.air.crestSpeed - 4;
-    step(state, NEUTRAL_INPUT);
-    expect(car.airborne).toBe(false);
+    const events: GameEvent[] = [];
+    let guard = 0;
+    while (!car.airborne && guard < TUNING.physicsHz * 3) {
+      events.push(...step(state, NEUTRAL_INPUT));
+      guard += 1;
+    }
+    expect(car.airborne).toBe(true);
+    // It went over — once its front wheels had nothing under them — and it
+    // was not thrown early, or upward.
+    expect(car.z).toBeGreaterThan(40 - TUNING.collision.halfLength - 0.5);
+    expect(car.vy).toBeLessThan(1);
+    expect(events.some((e) => e.type === "takeoff")).toBe(false);
+    expect(state.stats.jumps).toBe(0);
+    run(state, {}, 1);
+    expect(car.y).toBeLessThan(-3); // falling
   });
 });

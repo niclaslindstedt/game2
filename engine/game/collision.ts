@@ -21,6 +21,7 @@ import { TUNING } from "./defs/tuning.ts";
 import {
   DAMAGE_ZONES,
   WHEEL_PARTS,
+  rollTilt,
   updateSlip,
   type CarState,
   type DamageCall,
@@ -227,8 +228,9 @@ export function landingDamage(
   const over = slam - tolerance;
   if (over <= 0) return;
   const crush = T.collision.crushPerSpeed * over * massRatio(spec);
-  if (Math.abs(car.roll) > T.air.rollLandLimit) {
-    const zone = car.roll > 0 ? 6 : 2;
+  const tilt = rollTilt(car.roll);
+  if (Math.abs(tilt) > T.air.rollLandLimit) {
+    const zone = tilt > 0 ? 6 : 2;
     dealCrush(car, zone, crush, zone === 2 ? Math.PI / 2 : -Math.PI / 2, slam, events, stats);
     // ...and the wheels on that side are what it came down on, over and
     // above what the flank's fold already reached them with.
