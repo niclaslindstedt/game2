@@ -28,7 +28,9 @@ import {
   skyFor,
   SUN_AZIMUTH,
   sunDir,
+  sunShadeFor,
   type Preset,
+  type SunShade,
 } from "./sky.ts";
 import { squallOf, type Clap } from "./weather.ts";
 import { glowTexture } from "./textures.ts";
@@ -78,6 +80,10 @@ export type Environment = {
   setSky: (show: boolean) => void;
   /** Current tint for the car's baked vertex lighting. */
   carTint: () => THREE.Color;
+  /** …and where that light throws the car's shadow, and how hard (sky.ts).
+   * Nothing in the scene casts a real one, so the sheet under each car is
+   * drawn from this. */
+  sunShade: () => SunShade;
   /** …and the darker one hanging dust takes (sky.ts's `dustTintFor`): a
    * cloud in the dark is supposed to disappear where a car is not. */
   dustTint: () => THREE.Color;
@@ -658,6 +664,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     withHaze,
     setSky,
     carTint: () => carTintFor(preset),
+    sunShade: () => sunShadeFor(preset),
     dustTint: () => dustTintFor(preset),
     lampsLit: () => preset.headlights,
     lampPower,
