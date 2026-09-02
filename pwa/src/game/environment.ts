@@ -28,10 +28,10 @@ import {
   skyFor,
   SUN_AZIMUTH,
   sunDir,
-  sunShadeFor,
+  sunHardness,
   type Preset,
-  type SunShade,
 } from "./sky.ts";
+import { createSunShadows, type SunShadows } from "./car-shadow.ts";
 import { squallOf, type Clap } from "./weather.ts";
 import { glowTexture } from "./textures.ts";
 
@@ -82,10 +82,11 @@ export type Environment = {
   setSky: (show: boolean) => void;
   /** Current tint for the car's baked vertex lighting. */
   carTint: () => THREE.Color;
-  /** …and where that light throws the car's shadow, and how hard (sky.ts).
-   * Nothing in the scene casts a real one, so the sheet under each car is
-   * drawn from this. */
-  sunShade: () => SunShade;
+  /** …and the shadows that light throws (car-shadow.ts): the map hung off
+   * the sun, which the environment aims and gates — the renderer only
+   * hands it the machine it is drawn with and the video option it is
+   * sized by. */
+  shadows: SunShadows;
   /** …and the darker one hanging dust takes (sky.ts's `dustTintFor`): a
    * cloud in the dark is supposed to disappear where a car is not. */
   dustTint: () => THREE.Color;
@@ -401,6 +402,11 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   const hemi = new THREE.HemisphereLight(0xffffff, 0xb0a894, 0.95);
   const sunLight = new THREE.DirectionalLight(0xfff2d8, 1.5);
   sunLight.target.position.set(0, 0, 0);
+  // The shadows hang off the sun. The light is always placed RELATIVE to
+  // its target from here on — the shadows move the target to whichever car
+  // the frame is about, and a light set from the origin would then point
+  // somewhere else for a frame.
+  const shadows = createSunShadows(sunLight);
   scene.add(hemi, sunLight, sunLight.target);
 
   // Lights come in PAIRS, because a car has two of each. One beam on the
@@ -562,7 +568,9 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     hemi.intensity = preset.hemiIntensity;
     sunLight.color.set(preset.sun);
     sunLight.intensity = preset.sunIntensity;
-    sunLight.position.copy(sunDir(preset.sunElevation)).multiplyScalar(300);
+    sunLight.position
+      .copy(sunLight.target.position)
+      .addScaledVector(sunDir(preset.sunElevation), 300);
   };
 
   const apply = (env: RaceEnv, biome: BiomeId = "taiga"): void => {
@@ -583,6 +591,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     hemi.groundColor.set(preset.hemiGround);
     struck = false;
     restLight();
+    shadows.setHardness(sunHardness(preset));
     starMat.opacity = preset.stars;
     rain.setTone(rainTone(preset));
     paintRidges(preset);
@@ -666,11 +675,13 @@ export function createEnvironment(scene: THREE.Scene): Environment {
       hemi.intensity = preset.hemiIntensity + 2.2 * surge;
       sunLight.color.set(FLASH_COLOR);
       sunLight.intensity = preset.sunIntensity + 1.8 * surge;
-      sunLight.position.copy(storm.from()).multiplyScalar(300);
+      sunLight.position.copy(sunLight.target.position).addScaledVector(storm.from(), 300);
     } else if (struck) {
       struck = false;
       restLight();
     }
+    // Last, so the map is built around wherever the light ended up.
+    shadows.follow(state.car, camera);
   };
 
   const dispose = (): void => {
@@ -708,7 +719,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     withHaze,
     setSky,
     carTint: () => carTintFor(preset),
-    sunShade: () => sunShadeFor(preset),
+    shadows,
     dustTint: () => dustTintFor(preset),
     ceiling: () => preset.deck?.base ?? Infinity,
     lampsLit: () => preset.headlights,

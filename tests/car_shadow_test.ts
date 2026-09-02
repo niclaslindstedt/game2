@@ -1,96 +1,178 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE SHEET EVERY CAR STANDS ON.
+// THE FRAME THE CARS' SHADOW MAP IS DRAWN IN.
 //
-// Nothing in the world casts a real shadow, so the one under each car is a
-// drawn silhouette (pwa/src/game/car-shadow.ts) built off the same
-// CarBodySpec the body is lofted from. It is renderer code and there is no
-// browser here — but the sheet is geometry and arithmetic, so the two ways
-// it fails silently can both be caught from Node:
-//
-//   IT HIDES. A shadow cut to the car's own plan outline is invisible from
-//   every camera the game uses, because the car is standing on it. That is
-//   the same picture as having no shadow at all, and it looks like a
-//   material bug rather than a size one.
-//   IT IS INSIDE OUT. A flat sheet whose triangles wind the other way is
-//   back-face culled and simply never appears.
+// The shadows themselves are a depth map the GPU draws (pwa/src/game/
+// car-shadow.ts), and there is no GPU here. What CAN be held from Node is
+// the arithmetic that decides whether the map flickers: the frame it is
+// drawn in has to land on its own texel grid every time it moves, or a car
+// standing still gets a different set of texels each frame and its edges
+// crawl. That, the gate that keeps a storm from throwing a shadow, and the
+// sizes the video options buy.
 
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
-import { createCarShadow } from "../pwa/src/game/car-shadow.ts";
-import { CAR_BODIES } from "../pwa/src/game/car-styles.ts";
-import { bodyHalfLength, bodyHalfWidth } from "../pwa/src/game/car/shell.ts";
+import {
+  createSunShadows,
+  lightFrame,
+  SHADOW_MAP_SIZE,
+  SHADOW_MIN_HARDNESS,
+  SHADOW_REACH,
+  shadowTexel,
+  snapToTexels,
+} from "../pwa/src/game/car-shadow.ts";
 
-const bodies = Object.entries(CAR_BODIES);
-
-function axlesOf(spec: (typeof CAR_BODIES)[string]): number[] {
-  const shift = spec.axleShift ?? 0;
-  return [spec.wheelbase / 2 + shift, -spec.wheelbase / 2 + shift];
+/** A sun at elevation `el` (rad) and azimuth `az`, as the direction the
+ * light comes FROM. */
+function sunAt(el: number, az: number): THREE.Vector3 {
+  const c = Math.cos(el);
+  return new THREE.Vector3(Math.sin(az) * c, Math.sin(el), Math.cos(az) * c);
 }
 
-/** The one mesh the shadow is drawn as, dug out of its group. */
-function sheetOf(spec: (typeof CAR_BODIES)[string]): THREE.Mesh {
-  const shadow = createCarShadow(spec, 1);
-  let mesh: THREE.Mesh | null = null;
-  shadow.group.traverse((obj) => {
-    if ((obj as THREE.Mesh).isMesh) mesh = obj as THREE.Mesh;
-  });
-  if (!mesh) throw new Error("the shadow has no mesh in it");
-  return mesh;
-}
+const SUNS = [
+  ["noon", sunAt(0.95, 0.9)],
+  ["dusk", sunAt(0.09, 0.9)],
+  ["nearly overhead", sunAt(1.5, 0)],
+  ["low and turned", sunAt(0.3, -2.1)],
+] as const;
 
-describe("the shadow under a car", () => {
-  it.each(bodies)("%s throws a sheet wider than the car itself", (_id, spec) => {
-    const geo = sheetOf(spec).geometry;
-    geo.computeBoundingBox();
-    const box = geo.boundingBox as THREE.Box3;
-    expect(box.max.x).toBeGreaterThan(bodyHalfWidth(spec, axlesOf(spec)));
-    expect(box.min.x).toBeLessThan(-bodyHalfWidth(spec, axlesOf(spec)));
-    expect(box.max.z).toBeGreaterThan(bodyHalfLength(spec));
-    expect(box.min.z).toBeLessThan(-bodyHalfLength(spec));
-    // Mirrored across the centerline: a shadow is aimed by the light at run
-    // time, never by the geometry. (Nose and tail are NOT symmetric — the
-    // silhouette is the car's own, and a car has a front.)
-    expect(box.min.x).toBeCloseTo(-box.max.x, 5);
-    // Flat. The lift off the ground is applied to the mesh, not baked in,
-    // so it can leave along the GROUND's up rather than the world's.
-    expect(box.min.y).toBe(0);
-    expect(box.max.y).toBe(0);
+describe("the light's own frame", () => {
+  it.each(SUNS)("is orthonormal and perpendicular to the light under a %s sun", (_n, dir) => {
+    const { right, up } = lightFrame(dir);
+    expect(right.length()).toBeCloseTo(1, 9);
+    expect(up.length()).toBeCloseTo(1, 9);
+    expect(right.dot(up)).toBeCloseTo(0, 9);
+    expect(right.dot(dir)).toBeCloseTo(0, 6);
+    expect(up.dot(dir)).toBeCloseTo(0, 6);
   });
 
-  it.each(bodies)("%s winds every triangle to face up", (_id, spec) => {
-    const geo = sheetOf(spec).geometry;
-    const pos = geo.getAttribute("position");
-    const idx = geo.getIndex() as THREE.BufferAttribute;
-    const a = new THREE.Vector3();
-    const b = new THREE.Vector3();
-    const c = new THREE.Vector3();
-    for (let t = 0; t < idx.count; t += 3) {
-      a.fromBufferAttribute(pos, idx.getX(t));
-      b.fromBufferAttribute(pos, idx.getX(t + 1)).sub(a);
-      c.fromBufferAttribute(pos, idx.getX(t + 2)).sub(a);
-      // The y of b × c: positive is a normal pointing at the sky, which is
-      // the only side of a ground sheet anybody looks at.
-      expect(b.z * c.x - b.x * c.z).toBeGreaterThan(0);
+  it("matches the basis three.js builds for the shadow camera", () => {
+    // The whole point of the frame is to snap to THAT camera's texel grid,
+    // so its axes must be the camera's own — `lookAt` from the light's
+    // position down onto its target, with the world's up. The sun dead
+    // overhead included: `lookAt` has a way off that pole, and the frame
+    // has to take the same one.
+    const suns = [...SUNS.map(([, d]) => d), new THREE.Vector3(0, 1, 0)];
+    for (const dir of suns) {
+      const cam = new THREE.OrthographicCamera();
+      cam.position.copy(dir).multiplyScalar(250);
+      cam.lookAt(0, 0, 0);
+      cam.updateMatrixWorld();
+      const x = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0);
+      const y = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 1);
+      const { right, up } = lightFrame(dir);
+      expect(right.distanceTo(x)).toBeLessThan(1e-3);
+      expect(up.distanceTo(y)).toBeLessThan(1e-3);
     }
   });
+});
 
-  it.each(bodies)("%s fades out at its edge instead of stopping", (_id, spec) => {
-    const geo = sheetOf(spec).geometry;
-    const col = geo.getAttribute("color");
-    expect(col.itemSize).toBe(4);
-    let solid = 0;
-    let clear = 0;
-    for (let i = 0; i < col.count; i++) {
-      const alpha = col.getW(i);
-      expect(alpha).toBeGreaterThanOrEqual(0);
-      expect(alpha).toBeLessThanOrEqual(1);
-      if (alpha === 1) solid++;
-      if (alpha === 0) clear++;
+describe("snapping the map to its texels", () => {
+  const texel = shadowTexel(SHADOW_MAP_SIZE.full);
+
+  it("sizes a texel off the reach and the map", () => {
+    expect(texel).toBeCloseTo((2 * SHADOW_REACH) / SHADOW_MAP_SIZE.full, 12);
+    expect(shadowTexel(SHADOW_MAP_SIZE.low)).toBeCloseTo(texel * 2, 12);
+    // No map is not a division by zero.
+    expect(Number.isFinite(shadowTexel(SHADOW_MAP_SIZE.off))).toBe(true);
+  });
+
+  it.each(SUNS)("moves the focus by under a texel, only in the light's plane (%s)", (_n, dir) => {
+    const focus = new THREE.Vector3(123.456, 7.89, -321.01);
+    const snapped = snapToTexels(focus, dir, texel);
+    const moved = snapped.clone().sub(focus);
+    // Nothing along the light — the depth range does not shift.
+    expect(moved.dot(dir)).toBeCloseTo(0, 6);
+    // …and less than half a texel each way in the plane.
+    const { right, up } = lightFrame(dir);
+    expect(Math.abs(moved.dot(right))).toBeLessThanOrEqual(texel / 2 + 1e-9);
+    expect(Math.abs(moved.dot(up))).toBeLessThanOrEqual(texel / 2 + 1e-9);
+  });
+
+  it("puts every focus inside one cell on the same point — the frame never crawls", () => {
+    const dir = sunAt(0.6, 0.9);
+    const base = new THREE.Vector3(40, 3, 90);
+    const first = snapToTexels(base, dir, texel);
+    // A car creeping forward by a few millimetres a frame, well inside a
+    // texel: every one of those frames has to draw the same grid.
+    const { right, up } = lightFrame(dir);
+    for (let i = 1; i <= 8; i++) {
+      const creep = base
+        .clone()
+        .addScaledVector(right, (i * texel) / 40)
+        .addScaledVector(up, (i * texel) / 50);
+      expect(snapToTexels(creep, dir, texel).distanceTo(first)).toBeLessThan(1e-9);
     }
-    // Both ends of the gradient are present: a core that is fully dark, and
-    // an outer ring that has faded to nothing.
-    expect(solid).toBeGreaterThan(0);
-    expect(clear).toBeGreaterThan(0);
+    // …and a step of exactly one texel lands exactly one cell over.
+    const next = snapToTexels(base.clone().addScaledVector(right, texel), dir, texel);
+    expect(next.clone().sub(first).dot(right)).toBeCloseTo(texel, 9);
+  });
+
+  it("writes into the vector it is handed when asked to", () => {
+    const focus = new THREE.Vector3(1, 2, 3);
+    const out = snapToTexels(focus, sunAt(0.5, 1), texel, focus);
+    expect(out).toBe(focus);
+  });
+});
+
+describe("the shadows hung off the sun", () => {
+  const rig = (): {
+    light: THREE.DirectionalLight;
+    shadows: ReturnType<typeof createSunShadows>;
+  } => {
+    const light = new THREE.DirectionalLight();
+    const shadows = createSunShadows(light);
+    shadows.setQuality("full");
+    return { light, shadows };
+  };
+
+  it("cast only when the light is a beam", () => {
+    const { light, shadows } = rig();
+    shadows.setHardness(1);
+    expect(light.castShadow).toBe(true);
+    expect(shadows.active()).toBe(true);
+    // A storm's ceiling: the key is still on, and throws nothing.
+    shadows.setHardness(0);
+    expect(light.castShadow).toBe(false);
+    shadows.setHardness(SHADOW_MIN_HARDNESS / 2);
+    expect(light.castShadow).toBe(false);
+    // A thin sheet of cloud: a shadow, faded to match.
+    shadows.setHardness(0.3);
+    expect(light.castShadow).toBe(true);
+    expect(light.shadow.intensity).toBeCloseTo(0.3, 9);
+  });
+
+  it("cast nothing at all with the effects off", () => {
+    const { light, shadows } = rig();
+    shadows.setHardness(1);
+    shadows.setQuality("off");
+    expect(light.castShadow).toBe(false);
+    shadows.setQuality("low");
+    expect(light.castShadow).toBe(true);
+    expect(light.shadow.mapSize.x).toBe(SHADOW_MAP_SIZE.low);
+  });
+
+  it("frame the map around the car, ahead of it, on the grid, without turning the light", () => {
+    const { light, shadows } = rig();
+    shadows.setHardness(1);
+    const dir = sunAt(0.7, 0.9);
+    light.target.position.set(5, 0, 5);
+    light.position.copy(light.target.position).addScaledVector(dir, 300);
+    const camera = new THREE.PerspectiveCamera();
+    camera.position.set(100, 3, 194);
+    camera.lookAt(100, 0, 210);
+    camera.updateMatrixWorld();
+
+    shadows.follow({ x: 100, y: 1, z: 200 }, camera);
+    const focus = light.target.position;
+    // Ahead of the car along the camera's look, and on the texel grid.
+    expect(focus.z).toBeGreaterThan(200);
+    expect(focus.z).toBeLessThan(215);
+    expect(Math.abs(focus.x - 100)).toBeLessThan(shadowTexel(SHADOW_MAP_SIZE.full));
+    const again = snapToTexels(focus, dir, shadowTexel(SHADOW_MAP_SIZE.full));
+    expect(again.distanceTo(focus)).toBeLessThan(1e-9);
+    // The light still comes from where the sky put it.
+    const after = light.position.clone().sub(focus).normalize();
+    expect(after.distanceTo(dir)).toBeLessThan(1e-6);
   });
 });

@@ -378,6 +378,9 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     lakeGeo.computeBoundingSphere();
     if (!lakes) {
       lakes = new THREE.Mesh(lakeGeo, waterMat);
+      // A car standing in a lake still throws its shadow onto it
+      // (car-shadow.ts).
+      lakes.receiveShadow = true;
       // The water never moves and the camera is always outside it; culling
       // it per tile is what the single mesh gave up, and the bounding
       // sphere below is what it gets back.
@@ -449,6 +452,9 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     geo.setIndex(indices);
     const ground = new THREE.Mesh(geo, groundMat);
+    // The ground reads the cars' shadow map (car-shadow.ts); nothing that
+    // stands on it does, so the lookup is paid for the ground alone.
+    ground.receiveShadow = true;
     group.add(ground);
 
     return { ground, water: cutWater(originX, originZ, H, n) };

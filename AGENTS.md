@@ -186,7 +186,7 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | A particle pool the car throws off, and how it is tinted    | `pwa/src/game/car-fx.ts`; WHEN it is thrown stays in `renderer.ts`                                                                 |
 | The ROOSTER TAIL a slide throws sideways, and its knobs     | `DRIFT_SPRAY` in `pwa/src/game/drift-spray.ts` — angle, fan, amount, which axle by drivetrain — the `visual-effects` skill         |
 | How the body TREMBLES when the engine is being worked       | `pwa/src/game/car-shake.ts` — DOM-free; read by `car-mesh.ts` (the shell) and `camera-eye.ts` (the seat)                           |
-| The SHADOW a car stands in, and how the light throws it     | `pwa/src/game/car-shadow.ts` (the silhouette and its penumbra) off `sunShadeFor` in `sky.ts` (which way, how hard)                 |
+| The SHADOW a car throws, and when the light throws one      | `pwa/src/game/car-shadow.ts` (the sun's shadow map: who casts, who receives, the frame) off `sunHardness` in `sky.ts` (how hard)   |
 | Things the car knocks loose (cones, posts, torn-off parts)  | `pwa/src/game/cones.ts`, `kerbs.ts`, `car-damage.ts`, over `tumble.ts` — renderer-side; the engine knows nothing of them           |
 | Anything HEARD (a hit, a landing, a menu click)             | `pwa/src/game/audio/bank.ts` (+ a rung in `route.ts`) — the `sound-effects` skill                                                  |
 | A continuous sound (engine, tyres, wind, the slide)         | `engine-voice.ts` / `road-voice.ts` in `pwa/src/game/audio/` — steered LAYERS, never grains; `drive-bed.ts` reads the state        |

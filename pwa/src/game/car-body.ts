@@ -252,6 +252,11 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   group.add(chassis);
   const bodyGeo = b.geometry();
   const body = new THREE.Mesh(bodyGeo, material);
+  // THE SHELL THROWS THE SHADOW (car-shadow.ts): the body, its lenses, its
+  // glass, the bolt-ons and the wheels — the outline the sun sees. Nothing
+  // inside the glass is flagged: the cabin, the crew and the cockpit would
+  // only be drawn again into a depth map the shell has already filled.
+  body.castShadow = true;
   chassis.add(body);
 
   let lensMat: THREE.MeshBasicMaterial | null = null;
@@ -261,6 +266,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     lensMat = new THREE.MeshBasicMaterial({ name: LENS_MATERIAL, vertexColors: true });
     lensGeo = l.geometry();
     lenses = new THREE.Mesh(lensGeo, lensMat);
+    lenses.castShadow = true;
     chassis.add(lenses);
   }
 
@@ -298,6 +304,9 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     glassGeo = g.geometry();
     glassMesh = new THREE.Mesh(glassGeo, glassMat);
     glassMesh.renderOrder = 1;
+    // The glass casts solid: a car's shadow has no windows in it, because
+    // the cabin behind the pane is what the light would have to get past.
+    glassMesh.castShadow = true;
     cabin.add(glassMesh);
   }
 
@@ -317,8 +326,10 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     // Bolted on, so not drawn: `boltOns` below is drawing all of them at
     // once. It stays parented to the chassis all the same — the mesh a part
     // becomes when it tears off is this one, and it has to be standing in
-    // the right place in the world when `unbolt` hands it back.
+    // the right place in the world when `unbolt` hands it back. A torn-off
+    // bumper tumbling down the road throws its own shadow as it goes.
     mesh.visible = false;
+    mesh.castShadow = true;
     chassis.add(mesh);
     breakables[name] = mesh;
     partGeos.push(geo);
@@ -341,8 +352,10 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
   // `make profile`, that is 702 draws down to 654 on a heads-up grid.
   const boltOnGeo = partGeos.length > 1 ? mergeGeometries(partGeos) : null;
   const boltOns = boltOnGeo ? new THREE.Mesh(boltOnGeo, material) : null;
-  if (boltOns) chassis.add(boltOns);
-  else for (const mesh of Object.values(breakables)) mesh.visible = true;
+  if (boltOns) {
+    boltOns.castShadow = true;
+    chassis.add(boltOns);
+  } else for (const mesh of Object.values(breakables)) mesh.visible = true;
 
   /** The moment one of them tears off: the merged mesh goes and the meshes
    * it stood in for come back, the torn one included — `car-damage.ts`
@@ -422,6 +435,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
       const wheel = new THREE.Group();
       wheel.position.set(side * spec.trackHalf, spec.wheelRadius, axle);
       const spin = new THREE.Mesh(wheelGeo, material);
+      spin.castShadow = true;
       wheel.add(spin);
       group.add(wheel);
       wheelGroups.push(wheel);

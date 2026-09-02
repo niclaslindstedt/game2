@@ -719,41 +719,28 @@ function lum(c: THREE.Color): number {
 }
 
 /**
- * WHERE THE LIGHT THROWS A CAR'S SHADOW, AND HOW HARD.
+ * HOW HARD THE LIGHT THROWS A CAR'S SHADOW, 0..1.
  *
- * The stage is lit by one directional light with no shadow map behind it,
- * so every shadow in the game is drawn rather than solved (car-shadow.ts).
- * This is what it has to be drawn FROM: which way the light comes in, how
- * far down the sun is, and how much of the light is a beam at all.
+ * The stage's one directional light carries the shadow map every car is
+ * drawn into (car-shadow.ts), and which way that light points is already
+ * the shadow's direction. What the light cannot say on its own is whether
+ * it is a BEAM at all: under a deck the key is still there — the stage
+ * would be black without it — but the light it stands in for arrives from
+ * everywhere at once and throws nothing. This is that share.
  *
- * Hardness is the beam's SHARE of the light on the ground, not its
+ * Hardness is the beam's share of the light on the ground, not its
  * strength: a shadow is the absence of the direct half, so what decides how
  * dark it goes is how much of the light would be missing — a low sun over a
  * dark sky throws a harder shadow than a high one over a bright one, which
  * is why dusk shadows read black and a bright overcast noon has none.
+ * Measured against a clear noon's own share rather than left as a raw
+ * fraction for the reason the car's tint is: the day the game's shadows
+ * are authored for sits at 1, so retuning the weather carries.
  */
-export type SunShade = {
-  /** The way the shadow is thrown, on the ground plane: the sun's own
-   * azimuth, turned around. Unit length. */
-  x: number;
-  z: number;
-  /** How far a low sun draws a shadow out, as the cotangent of the sun's
-   * elevation: 0 with the sun overhead, and climbing as it drops. Capped
-   * (see below), and capped AGAIN against its own size by whatever spends
-   * it — a shadow that has left the car behind is nobody's. */
-  lean: number;
-  /** How much of the light is the beam, against a clear noon's own share,
-   * 0..1 — 1 in full sun, nothing under a storm's ceiling. Measured against
-   * noon rather than left as a raw fraction for the reason the car's tint
-   * is: the number a shadow is DRAWN from wants the day the game's brightest
-   * shadow is authored for at 1, so retuning the weather carries. */
-  hardness: number;
-};
-
-/** The cotangent is unbounded at the horizon and the two low presets sit
- * near it, so the lean is capped here as well as where it is spent — past
- * this it is a number about a sun below the treeline. */
-const LEAN_CAP = 4;
+export function sunHardness(p: Preset): number {
+  const noon = beamShare(NOON);
+  return noon > 0 ? Math.min(1, beamShare(p) / noon) : 0;
+}
 
 /** The beam's share of the light on the ground, 0..1 — what is missing from
  * the shadow, which is what makes it dark. */
@@ -762,17 +749,6 @@ function beamShare(p: Preset): number {
   const sky = lum(new THREE.Color(p.hemiSky)) * p.hemiIntensity;
   const total = beam * p.beam + sky;
   return total > 0 ? (beam * p.beam) / total : 0;
-}
-
-export function sunShadeFor(p: Preset): SunShade {
-  const el = Math.max(0, p.sunElevation);
-  const noon = beamShare(NOON);
-  return {
-    x: -Math.sin(SUN_AZIMUTH),
-    z: -Math.cos(SUN_AZIMUTH),
-    lean: el > 1e-3 ? Math.min(LEAN_CAP, 1 / Math.tan(el)) : LEAN_CAP,
-    hardness: noon > 0 ? Math.min(1, beamShare(p) / noon) : 0,
-  };
 }
 
 /**
