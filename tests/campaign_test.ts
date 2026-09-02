@@ -93,8 +93,10 @@ function sheet(order: string[]): ClassRow[] {
     alias: id === PLAYER_ID ? "YOU" : (RIVALS.find((c) => c.id === id)?.alias ?? id),
     driver: "",
     carId: "compact",
+    number: index + 1,
     time: 60 + index,
     place: index + 1,
+    out: false,
     you: id === PLAYER_ID,
   }));
 }

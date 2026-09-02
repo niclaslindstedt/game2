@@ -81,6 +81,8 @@ import {
   type HudSplit,
 } from "./game/hud.tsx";
 import type { FinishRace, FinishScores, FinishStandings } from "./game/hud-finish.tsx";
+import { warmPortraits } from "./game/car-portraits.ts";
+import type { SheetRow } from "./game/results-sheet.tsx";
 import {
   advanceField,
   catchUpField,
@@ -1216,6 +1218,19 @@ export function App() {
     // (field-cars.ts), so entering a field costs the fourteen games and no
     // geometry at all until one of them is actually somewhere you can see.
     rendererRef.current?.field.set(field.runs);
+    // …and their PORTRAITS, for the results sheet at the end of this stage
+    // (car-portraits.ts): ordered now, taken one per idle slot under the
+    // establishing shot and the first corners, so the card at the line has
+    // its pictures before it is asked for them.
+    warmPortraits([
+      { carId: race.carId, crewId: PLAYER_ID, number: field.playerNumber, you: true },
+      ...field.runs.map((run) => ({
+        carId: run.entry.crew.carId,
+        crewId: run.entry.crew.id,
+        number: run.entry.number,
+        you: false,
+      })),
+    ]);
     // Last car on the road until a board says otherwise — which is the truth
     // on the grid, not a placeholder.
     standingRef.current = { place: field.playerNumber, of: field.of };
@@ -2831,31 +2846,54 @@ export function App() {
   // null until the last car is home (`settleField`), which is what the card's
   // own table waits on.
   const here = run.mode === "campaign" && run.levelId ? findLevel(run.levelId) : null;
+  // THE SHEET THE CARD SHOWS. Final once the run-out is booked (`result`);
+  // before that, PROVISIONAL — the same classification read off the field as
+  // it stands, with the crews still out at the bottom marked as such, so the
+  // card has a table on it from the moment it comes up and the rows fill in
+  // as the stragglers come home. Read off the field ref rather than carried
+  // in state: the HUD already redraws a dozen times a second off `snap`, and
+  // fifteen rows are nothing beside what that costs.
+  const sheetRows = ((): { rows: SheetRow[]; settled: boolean } | null => {
+    if (!run.levelId || (run.mode !== "campaign" && run.mode !== "headsup")) return null;
+    const settled = result?.levelId === run.levelId;
+    const field = fieldRef.current;
+    const classed = settled
+      ? result.rows
+      : field && snap?.finishTime !== null && snap?.finishTime !== undefined
+        ? fieldResults(field, { time: snap.finishTime, carId: race.carId })
+        : null;
+    if (!classed) return null;
+    return {
+      settled,
+      rows: classed.map((row) => ({
+        place: row.place,
+        alias: row.alias,
+        driver: row.driver,
+        carId: row.carId,
+        crewId: row.id,
+        number: row.number,
+        time: row.time,
+        out: row.out,
+        you: row.you,
+      })),
+    };
+  })();
   // …and HEADS UP's own, which is the same sheet with the board taken off:
   // where everybody finished, and nothing carried out of the race.
   const headsUp: FinishRace | null =
-    run.mode === "headsup" && run.levelId
+    run.mode === "headsup" && sheetRows
       ? {
-          rows:
-            result?.levelId === run.levelId
-              ? result.rows.map((row) => ({
-                  place: row.place,
-                  name: row.alias,
-                  time: row.time,
-                  you: row.you,
-                }))
-              : null,
+          rows: sheetRows.rows,
+          settled: sheetRows.settled,
           cars: gridSize(race.headsUp.cars),
           massStart: race.headsUp.massStart,
         }
       : null;
   const campaign: FinishStandings | null = ((): FinishStandings | null => {
-    if (!here || !snap?.standing) return null;
+    if (!here || !snap?.standing || !sheetRows) return null;
     const table = locationStandings(here.location, progress);
     const mine = table.find((row) => row.you) ?? table[table.length - 1];
-    const sheet = result?.levelId === here.level.id ? result.rows : null;
     const totals = new Map(table.map((row) => [row.id, row.points]));
-    const paid = sheet ? new Map(sheet.map((row) => [row.id, pointsFor(row.place)])) : null;
     const kept = stagePoints(here.level.id, progress)[PLAYER_ID] ?? 0;
     // What the place paid is known AT THE LINE and is already on the board
     // (`recordFinish`), so the card says it while the last cars are still
@@ -2872,17 +2910,16 @@ export function App() {
       place: mine.place,
       tied: mine.tied,
       of: table.length,
-      won: sheet !== null && locationWon(here.location, progress),
-      rows:
-        sheet &&
-        sheet.map((row) => ({
-          place: row.place,
-          name: row.alias,
-          time: row.time,
-          points: paid?.get(row.id) ?? 0,
-          total: totals.get(row.id) ?? 0,
-          you: row.you,
-        })),
+      won: sheetRows.settled && locationWon(here.location, progress),
+      settled: sheetRows.settled,
+      // A crew still out has earned nothing yet; a provisional place at the
+      // bottom of the sheet is not a fourth place worth nothing, it is no
+      // place at all.
+      rows: sheetRows.rows.map((row) => ({
+        ...row,
+        points: row.out ? 0 : pointsFor(row.place),
+        total: totals.get(row.crewId) ?? 0,
+      })),
     };
   })();
 
@@ -2923,10 +2960,10 @@ export function App() {
         }
       : null;
 
-  // R30 — WHETHER THERE IS ANYTHING TO WATCH. The same condition the FULL
-  // RESULTS button is waiting out, read off the same state: a run with a
-  // field entered, whose sheet has not landed yet. It is the whole of what
-  // the wait is, so it is also the whole of what the offer is.
+  // R30 — WHETHER THERE IS ANYTHING TO WATCH. The same condition the sheet's
+  // OUT rows are waiting out, read off the same state: a run with a field
+  // entered, whose sheet has not landed yet. It is the whole of what the
+  // wait is, so it is also the whole of what the offer is.
   const carsStillOut = (campaign !== null || headsUp !== null) && result?.levelId !== run.levelId;
   const onSpectate = carsStillOut ? (): void => watchActionsRef.current.open() : null;
   /** The feed itself, once one is up. `watchFace` is refreshed on the HUD's

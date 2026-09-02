@@ -1641,6 +1641,18 @@ await capture(
   },
   { shape: "circuit", length: "short", seed: "3", laps: "2", bot: "1" },
 );
+// …and the same card on a phone held up, where the head's ways on take a
+// row of their own and the summary stands over whatever sheet there is.
+await capture(
+  "shot-finish-portrait",
+  { width: 390, height: 844 },
+  async (page) => {
+    await racing(page);
+    await page.waitForSelector(".hud-finish", { timeout: 240000 });
+    await page.waitForTimeout(400);
+  },
+  { shape: "circuit", length: "short", seed: "3", laps: "2", bot: "1" },
+);
 
 await captureElement(
   "shot-clock",
@@ -1894,16 +1906,28 @@ if (only.length === 0 || only.some((f) => "shot-campaign shot-start".includes(f)
   await page.waitForTimeout(600);
   await page.screenshot({ path: join(outDir, "shot-campaign-result.png") });
   console.log("previews/shot-campaign-result.png");
-  // R30 — THE RESULT SHEET: fifteen crews, their times, what the stage paid
-  // them and what they have for the season. The card holds the way in shut
-  // until the last car is home, so this waits for the button to say so
-  // rather than for a number of seconds.
-  const sheet = page.getByRole("button", { name: "FULL RESULTS" });
-  await sheet.waitFor({ timeout: FINISH_WAIT });
-  await sheet.click();
-  await page.waitForSelector(".hud-modal");
+  // R30 — THE RESULT SHEET, FINAL: fifteen crews, their times, what the
+  // stage paid them and what they have for the season, on the card itself.
+  // It is provisional until the last car is home — the crews still out sit
+  // at the bottom marked OUT — so this waits for the last OUT to clear
+  // rather than for a number of seconds, then walks to the sheet's other
+  // page, which is where the pictures of the cars nobody was racing near
+  // are.
+  await page.waitForFunction(
+    "document.querySelector('.rsheet-row') && !document.querySelector('.rsheet-row.is-out')",
+    null,
+    { timeout: FINISH_WAIT },
+  );
+  await page.waitForTimeout(400);
   await page.screenshot({ path: join(outDir, "shot-campaign-points.png") });
   console.log("previews/shot-campaign-points.png");
+  const flip = page.getByRole("button", { name: "Next page" });
+  if (await flip.count()) {
+    await flip.click();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: join(outDir, "shot-campaign-page2.png") });
+    console.log("previews/shot-campaign-page2.png");
+  }
   await page.close();
 }
 
