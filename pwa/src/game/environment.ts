@@ -13,7 +13,7 @@
 // is presentation: it reads GameState (env, wind, car) and never writes it.
 
 import * as THREE from "three";
-import type { GameState, RaceEnv } from "@engine";
+import type { BiomeId, GameState, RaceEnv } from "@engine";
 
 import { createClouds } from "./clouds.ts";
 import { lightDust as hangDustLamps } from "./dust-light.ts";
@@ -41,8 +41,10 @@ import { glowTexture } from "./textures.ts";
 const FLASH_COLOR = 0xdfe9ff;
 
 export type Environment = {
-  /** Re-color the whole atmosphere for the run's conditions. */
-  apply: (env: RaceEnv) => void;
+  /** Re-color the whole atmosphere for the run's conditions, over the
+   * country they are in (R40): the same storm is a downpour in one and a
+   * wall of sand in the other. */
+  apply: (env: RaceEnv, biome?: BiomeId) => void;
   /** Scale how far the fog lets the player see, as a multiple of the
    * preset's own distances — the video options pull it in on a weak device. */
   setRange: (scale: number) => void;
@@ -315,6 +317,9 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   // the only sense of scale a stage gets. The nearest is a treeline: a low
   // serrated band of forest on the last rise before the country the stage
   // is actually in.
+  /** How tall the rings stand in each country, as a scale on the boreal
+   * skyline they were cut for. */
+  const RIDGE_HEIGHT: Record<BiomeId, number> = { taiga: 1, desert: 0.38 };
   addRidge({ haze: 0.24, tone: 1 }, 552, 87, 118, 130);
   addRidge({ haze: 0.4, tone: 0.94 }, 536, 64, 99, 103);
   addRidge({ haze: 0.58, tone: 0.82 }, 518, 41, 75, null);
@@ -544,8 +549,13 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     sunLight.position.copy(sunDir(preset.sunElevation)).multiplyScalar(300);
   };
 
-  const apply = (env: RaceEnv): void => {
-    preset = skyFor(env);
+  const apply = (env: RaceEnv, biome: BiomeId = "taiga"): void => {
+    preset = skyFor(env, biome);
+    // R40 — the horizon is the country's. The rings were cut for a boreal
+    // skyline of ranges; a desert's horizon is low broken hills a long way
+    // off, so the same rings stand at well under half their height there
+    // (and the snow line, painted by height, never reaches them).
+    ridges.scale.y = RIDGE_HEIGHT[biome];
     meanWind = env.windSpeed;
     rainNow = preset.rain;
     paintDome(preset);

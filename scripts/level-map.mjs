@@ -37,7 +37,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 aliasEngine(root);
 const engine = await import(join(root, "engine/index.ts"));
 const { compileStage, createTerrain, resolveKnobs } = engine;
-const { LOCATIONS } = await import(join(root, "pwa/src/game/campaign.ts"));
+const { LOCATIONS, campaignKnobs } = await import(join(root, "pwa/src/game/campaign.ts"));
 
 const args = process.argv.slice(2);
 const has = (name) => args.includes(`--${name}`);
@@ -86,12 +86,15 @@ for (const dial of ["elevation", "water", "trees", "asphalt", "width", "steepnes
   const value = flag(dial);
   if (value !== undefined) knobs[dial] = Number(value);
 }
-const dials = resolveKnobs(level ? undefined : knobs);
+if (flag("biome") !== undefined) knobs.biome = flag("biome");
+// A campaign stage is built on its location's own dials — the rule book's
+// defaults in that location's COUNTRY (R40).
+const dials = resolveKnobs(level ? campaignKnobs(level) : knobs);
 const size = Number(flag("size") ?? 1200);
 const span = Number(flag("span") ?? 240);
 
 // ── Build it ────────────────────────────────────────────────────────────
-const track = compileStage(seed, length, level ? undefined : knobs, shape);
+const track = compileStage(seed, length, dials, shape);
 const terrain = createTerrain(track);
 terrain.sync(track.length);
 const features = stageFeatures(track, terrain);

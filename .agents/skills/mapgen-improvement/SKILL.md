@@ -189,6 +189,7 @@ hold water" rather than "did my change cost anything".
 | File            | Job                                                                                                                                                                                                                                     |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `rules.ts`      | **The rule book.** Every constraint and vocabulary number as DATA. Tuning the generator means editing this file.                                                                                                                        |
+| `biomes.ts`     | **The countries (R40).** The quilt, the water, the loose surface, the relief, the dunes and the sky per biome, as rows. `knobs.biome` picks one; nothing else in `mapgen/` names a country.                                             |
 | `generate.ts`   | **The search.** Draws candidates, validates against the rules, retries bounded, backtracks, rejects a whole attempt rather than ever shipping a violation.                                                                              |
 | `compile.ts`    | **The geometry.** Turns the plan into evenly spaced samples — the single geometric truth read by physics, renderer and bots alike.                                                                                                      |
 | `geology.ts`    | **The GROUND, in layers (R32).** Bedrock with its glacial smoothness, the groundwater table in it, the soil on top. Everything about the country that is not the road.                                                                  |
@@ -256,7 +257,9 @@ before reaching for a number.
 
 ## The dials
 
-Four knobs — `elevation`, `water`, `trees`, `asphalt` (plus `width`), each
+A COUNTRY first (`knobs.biome`, R40 — the taiga or the desert: which set of
+ranges everything below is read against; `--biome desert` on every tool),
+then four knobs — `elevation`, `water`, `trees`, `asphalt` (plus `width`), each
 `0..1` — say what KIND of stage a seed builds. They must never break a rule: a
 dial moves the RANGE a rule draws from, it does not switch a rule off. Every
 entry point takes them, and a track carries the dials it was built with

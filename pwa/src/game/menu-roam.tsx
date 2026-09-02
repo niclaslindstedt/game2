@@ -40,14 +40,15 @@ import { MAP_LAYERS, type LegendStop, type MapLayerId } from "./map-layers.ts";
 import { StagePicker } from "./menu-levels.tsx";
 import { Glyph } from "./menu-glyphs.tsx";
 import {
+  BIOME_OPTIONS,
   OptionRow,
   STAGE_DIALS,
   STAGE_LENGTH_OPTIONS,
   STAGE_SHAPES,
   SEASONS,
   TIMES_OF_DAY,
-  WEATHERS,
   dialStop,
+  weathersOf,
   type RaceSettings,
 } from "./menu.tsx";
 import { playUi } from "./audio/ui.ts";
@@ -693,7 +694,7 @@ export function RoamPage({
               />
               <OptionRow
                 label="WEATHER"
-                options={WEATHERS}
+                options={weathersOf(race.knobs.biome)}
                 value={race.weather}
                 onPick={(weather) => onRace({ ...race, weather })}
               />
@@ -716,6 +717,24 @@ export function RoamPage({
                   comes back cannot be lapped and a setup that half-means
                   something is worse than one that moves. */}
               <div className="roam-dials">
+                {/* R40 — the COUNTRY, first: every other dial is read
+                    against it. Moving it also clears a weather the new
+                    country does not have, for the same reason a circuit
+                    moves the length. */}
+                <OptionRow
+                  label="COUNTRY"
+                  options={BIOME_OPTIONS}
+                  value={race.knobs.biome}
+                  onPick={(biome) =>
+                    onRace({
+                      ...race,
+                      knobs: { ...race.knobs, biome },
+                      weather: weathersOf(biome).some((w) => w.id === race.weather)
+                        ? race.weather
+                        : "clear",
+                    })
+                  }
+                />
                 <OptionRow
                   label="SHAPE"
                   options={STAGE_SHAPES}

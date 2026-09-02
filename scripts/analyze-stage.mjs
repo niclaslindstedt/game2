@@ -19,6 +19,7 @@
 //   npm run analyze -- --count 24         # a sweep
 //   npm run analyze -- --length long --shape circuit
 //   npm run analyze -- --water 1 --elevation 1   # the generator's dials
+//   npm run analyze -- --biome desert            # ...and the country (R40)
 //   npm run analyze -- --steepness 1 --asphalt 1 # R34: rock, and roads cut through it
 //   npm run analyze -- --checks           # every check, not just the metrics
 //   npm run analyze -- --findings 40      # how many findings to print a seed
@@ -56,6 +57,7 @@ for (const dial of ["elevation", "water", "trees", "asphalt", "width", "steepnes
   const value = flag(dial);
   if (value !== undefined) knobs[dial] = Number(value);
 }
+if (flag("biome") !== undefined) knobs.biome = flag("biome");
 
 if (!(length in STAGE_RULES.stageLengths)) {
   console.error(`unknown length "${length}" (${Object.keys(STAGE_RULES.stageLengths).join(", ")})`);

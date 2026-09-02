@@ -453,7 +453,7 @@ for (const [id, label, initial] of CONTROLS) {
   sliders.append(row);
 }
 const switches = el("div", "switches");
-for (const s of ["gravel", "asphalt", "nature", "water"]) {
+for (const s of ["gravel", "sand", "asphalt", "nature", "water"]) {
   const b = el("button", s === "gravel" ? "on" : null, s);
   b.type = "button";
   b.addEventListener("click", () => {

@@ -28,7 +28,7 @@
 // relief that puts every finding in a place.
 
 import * as THREE from "three";
-import { GROVES, REGIONS, STAGE_RULES, type TerrainField, type Track } from "@engine";
+import { STAGE_RULES, biomeRules, type TerrainField, type Track } from "@engine";
 
 import { ISLAND_MARGIN } from "./map-island.ts";
 
@@ -172,6 +172,8 @@ export function buildMapLayers(track: Track, field: TerrainField, clip: THREE.Pl
    * The geology is asked for the BARE country — the road shapes the surface
    * and nothing under it — which is exactly what a question about the
    * generator is about. */
+  // R40 — the quilt this country is planted from, for the FOLIAGE layer.
+  const quilt = biomeRules(track.knobs.biome);
   const sample = (): Field => {
     // The field builds its streams, spurs and guards lazily as the road is
     // synced, and a stage the run has not driven yet has none of them
@@ -217,7 +219,9 @@ export function buildMapLayers(track: Track, field: TerrainField, clip: THREE.Pl
             ? 0
             : Math.min(1, root.thin + (ground.soil - root.depth) / root.full);
         out.flora[v] =
-          rooting * GROVES[field.groveAt(x, z)].density * REGIONS[field.regionAt(x, z)].forest;
+          rooting *
+          quilt.groves[field.groveAt(x, z)].density *
+          quilt.regions[field.regionAt(x, z)].forest;
       }
     }
     return out;

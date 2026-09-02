@@ -96,7 +96,7 @@ function floraItem(id: string): ItemDef {
  * photographed is what the car hits. `spin` is what varies the grey between
  * two stones on a hillside, so it is the sheet's dial too. */
 function stoneItem(kind: SolidKind, mossy: boolean, size: number, spin: number): ItemDef {
-  const ground = biomeFor().ground;
+  const ground = biomeFor("taiga").ground;
   return {
     id: mossy ? `${kind}-mossy` : kind,
     group: "stone",
@@ -141,7 +141,7 @@ function pieceItem(kind: SolidKind, size: number, note: string): ItemDef {
     group: "breakage",
     note,
     build: () => {
-      const fx = createBreakage(TRUNK_COLOR, biomeFor().ground.bedrock);
+      const fx = createBreakage(TRUNK_COLOR, biomeFor("taiga").ground.bedrock);
       fx.spawn(standSolid({ x: 0, y: 0, z: 0, kind, size, spin: 0 }), 0, 0, 0);
       return { object: fx.group, dispose: () => fx.dispose() };
     },

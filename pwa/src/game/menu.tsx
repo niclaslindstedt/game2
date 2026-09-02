@@ -13,8 +13,12 @@
 // button in the way of the driving.
 
 import {
+  BIOMES,
+  BIOME_IDS,
   DEFAULT_KNOBS,
   DIFFICULTIES,
+  biomeRules,
+  type BiomeId,
   DIFFICULTY_IDS,
   GRID_DEFAULT,
   GRID_MAX,
@@ -23,6 +27,7 @@ import {
   gridSize,
   type Difficulty,
   type GearboxMode,
+  type NumericKnob,
   type StageKnobs,
   type StageLength,
   type Season,
@@ -133,7 +138,7 @@ export function raceLaps(race: RaceSettings): number {
 export type DialStop = { id: string; label: string; value: number };
 
 export const STAGE_DIALS: {
-  key: keyof StageKnobs;
+  key: NumericKnob;
   label: string;
   stops: DialStop[];
 }[] = [
@@ -241,6 +246,20 @@ export const WEATHERS: { id: Weather; label: string }[] = [
   { id: "rain", label: "RAIN" },
   { id: "storm", label: "STORM" },
 ];
+
+/** ...of which a COUNTRY offers some (R40): the desert has no rain, and its
+ * storm is sand. The row a page shows is the country's, so the sky can
+ * never be set to a weather the place does not have. */
+export function weathersOf(biome: BiomeId): { id: Weather; label: string }[] {
+  const offered = biomeRules(biome).weathers;
+  return WEATHERS.filter((w) => offered.includes(w.id));
+}
+
+/** R40 — the countries, as the menus name them. First is the default. */
+export const BIOME_OPTIONS: { id: BiomeId; label: string }[] = BIOME_IDS.map((id) => ({
+  id,
+  label: BIOMES[id].label,
+}));
 
 /** The head of a menu page: the way back, and what the page IS, on ONE
  * line. Stacked — a back button, then a title, then a subtitle — those

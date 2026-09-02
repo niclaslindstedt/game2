@@ -17,6 +17,8 @@
 // EXPLANATION of a score below 1 — where it happened and how bad it was —
 // never the score itself, so a check that cannot name a place still counts.
 
+import type { StageKnobs } from "../mapgen/rules.ts";
+
 /** How much a finding matters. `error` is a defect — something a player
  * would see and call a bug. `warn` is a plausibility or quality problem.
  * `note` is information the loop wants and nobody has to fix. */
@@ -70,7 +72,7 @@ export type StageReport = {
   seed: number;
   length: string;
   shape: string;
-  knobs: Record<string, number>;
+  knobs: StageKnobs;
   /** Stage length, m — the road, not the run-out. */
   distance: number;
   metrics: MetricReport[];

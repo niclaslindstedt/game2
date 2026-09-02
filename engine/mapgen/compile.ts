@@ -23,13 +23,27 @@ import { createRng } from "../lib/prng.ts";
 import { cellKey } from "../lib/math.ts";
 import { hash2 } from "../lib/noise.ts";
 import { createLandField } from "./land.ts";
+import { biomeRules } from "./biomes.ts";
 import { junctionFlat, junctionMainEdge, junctionPlatformY, ROAD_CROSS } from "./road.ts";
 import { buildSpur, cutSpur, placeBlock, SPUR, type ShelfBand, type Spur } from "./spurs.ts";
 import { placeHomesteads, type Homestead } from "./homesteads.ts";
 import { placeTowns, type Town } from "./towns.ts";
 import { createHighwayNetwork, type Highway } from "./highway.ts";
 
-export type Surface = "gravel" | "asphalt" | "water";
+/** What the road is made of under the car. Two of these are LOOSE — the
+ * taiga's graded gravel and the desert's sand (R40) — and everything about
+ * a road that is bladed rather than laid (the wander, the bumps, the berm,
+ * the mouth at a junction, the marker posts) asks `isLoose` rather than
+ * naming one of them. Which loose surface a country's roads are is the
+ * biome's (`BiomeRules.loose`); the physics tells them apart in
+ * `TUNING.surfaces`. */
+export type Surface = "gravel" | "sand" | "asphalt" | "water";
+
+/** A road that was BLADED rather than laid: graded stone or graded sand,
+ * as against tarmac, a deck or a ford. */
+export function isLoose(surface: Surface): boolean {
+  return surface === "gravel" || surface === "sand";
+}
 
 /** What carries a bridge over its water — everything except wading it. */
 export type BridgeDeck = Exclude<Crossing, "ford">;
@@ -393,7 +407,11 @@ function valueNoise(values: number[], s: number, spacing: number): number {
  * sines announces itself as a machine on the first two hills. */
 function buildRolling(seed: number, knobs: StageKnobs): (s: number) => number {
   const rng = createRng((seed ^ 0x7e11a7d1) >>> 0);
-  const relief = knobScale(knobs.elevation, R.elevation.knob);
+  // R40 — a worn country rolls its road less too, by the same share it
+  // stands its hills lower (`BiomeLand.relief`): the desert's roll rides on
+  // dunes and pans, and a taiga's roll laid over a pan is a road that dips
+  // under the lake table on flat ground.
+  const relief = knobScale(knobs.elevation, R.elevation.knob) * biomeRules(knobs.biome).land.relief;
   const amplitude = rng.range(R.elevation.amplitude.min, R.elevation.amplitude.max) * relief;
   const wavelength = rng.range(R.elevation.wavelength.min, R.elevation.wavelength.max);
   const roughness = rng.range(R.elevation.roughness.min, R.elevation.roughness.max);
@@ -429,7 +447,7 @@ function buildWidth(seed: number): WidthAt {
   const shortOff = rng.range(0, 1e4);
   return (s: number, surface: Surface, shaped: boolean, curvature: number): number => {
     // Laid, not bladed: a paving machine and a bridge deck hold their width.
-    if (shaped || surface !== "gravel") return 1;
+    if (shaped || !isLoose(surface)) return 1;
     const swing =
       (1 - W.shortShare) * valueNoise(long, s + longOff, W.wave.long) +
       W.shortShare * valueNoise(short, s + shortOff, W.wave.short);
@@ -461,7 +479,7 @@ function buildBumps(seed: number): (s: number, surface: Surface, shaped: boolean
   return (s: number, surface: Surface, shaped: boolean): number => {
     // Tarmac is laid flat, a deck is planks or concrete, and a ford's water
     // and its graded apron are shaped by the crossing (R12).
-    if (shaped || surface !== "gravel") return 0;
+    if (shaped || !isLoose(surface)) return 0;
     const cell = Math.floor(s / B.cell);
     let y = 0;
     for (let c = cell - 1; c <= cell + 1; c++) {
@@ -754,6 +772,8 @@ function createCompiler(
    * so none of them drives out into a lake (R17), and (R34) the road's own
    * height follows it. */
   const land = createLandField(track.seed, track.knobs);
+  // R40 — what an unsealed sample of this country is made of.
+  const loose = biomeRules(track.knobs.biome).loose;
   /** R17 — and the tarmac laid across it, indexed. Read off the track
    * because that is where it lives: the search laid it, the analysis
    * measures against it, and here it is what a borrowed junction's arm is
@@ -1328,7 +1348,7 @@ function createCompiler(
     // measurements of the same crossing taken different ways, and a sample
     // between the two answers would otherwise get the full mouth laid on a
     // piece of tarmac — which a paving machine does not do (R33).
-    if (sample.surface !== "gravel") return { extra: 0, outer: 1 };
+    if (!isLoose(sample.surface)) return { extra: 0, outer: 1 };
     let widest = 0;
     let outer: 1 | -1 = 1;
     for (const junction of track.junctions) {
@@ -2235,10 +2255,10 @@ function createCompiler(
             // standing on a rise.
             bumps(
               cursor.s,
-              ford ? "water" : paved ? "asphalt" : "gravel",
+              ford ? "water" : paved ? "asphalt" : loose,
               bridge || dip !== null || deckY !== null,
             ),
-          surface: ford ? "water" : paved ? "asphalt" : "gravel",
+          surface: ford ? "water" : paved ? "asphalt" : loose,
           deck: bridge ? ((built.crossing ?? "timber") as BridgeDeck) : null,
           lift: 0,
           jump,
@@ -2250,7 +2270,7 @@ function createCompiler(
             track.width *
             widthAt(
               cursor.s,
-              ford ? "water" : paved ? "asphalt" : "gravel",
+              ford ? "water" : paved ? "asphalt" : loose,
               bridge || dip !== null || deckY !== null,
               curvature,
             ),
@@ -2379,6 +2399,7 @@ function createCompiler(
     const placed = placeHomesteads({
       seed: track.seed,
       width: track.width,
+      loose,
       samples: track.samples,
       from: homesteadFrom,
       to,

@@ -41,7 +41,7 @@
 // thing a driver treats as one corner and a marshal marks as one.
 
 import { cellKey } from "../lib/math.ts";
-import type { Track } from "./compile.ts";
+import { isLoose, type Track } from "./compile.ts";
 import { corridorOffset, junctionMainEdge } from "./road.ts";
 import { STAGE_RULES as R } from "./rules.ts";
 
@@ -313,7 +313,7 @@ export function createKerbField(track: Track): KerbField {
       // A ford and a bridge deck carry no marking of their own: the water
       // and the parapet are the markers there. A sealed road wears a
       // continuous kerb instead, which is a surface and not an object.
-      if (sample.surface !== "gravel") continue;
+      if (!isLoose(sample.surface)) continue;
       if (sample.deck != null) continue;
       for (const side of [-1, 1] as const) {
         const role = roleAt(zones, sample.s, side);

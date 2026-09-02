@@ -14,8 +14,8 @@ import {
   APRON,
   GROUND_CELL,
   LAKE_Y,
-  REGIONS,
   ROAD_CROSS,
+  biomeRules,
   createRng,
   createTerrain,
   inStream,
@@ -169,31 +169,35 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
   // The year moves the living half of the palette and leaves the rock and
   // the water where they are.
   const palette = { ...biome.ground, ...biome.seasons[season] };
-  const grass = new THREE.Color(palette.grass);
-  const grassDark = new THREE.Color(palette.grassDark);
-  const moss = new THREE.Color(palette.moss);
-  const heath = new THREE.Color(palette.heath);
-  const floor = new THREE.Color(palette.forestFloor);
+  const grass = new THREE.Color(palette.base);
+  const grassDark = new THREE.Color(palette.baseDark);
+  const moss = new THREE.Color(palette.damp);
+  const heath = new THREE.Color(palette.scrub);
+  const floor = new THREE.Color(palette.litter);
   const rock = new THREE.Color(palette.bedrock);
   const rockDark = new THREE.Color(palette.bedrockDark);
-  const dryGrass = new THREE.Color(palette.dryGrass);
+  const dryGrass = new THREE.Color(palette.straw);
   const soil = new THREE.Color(palette.soil);
   const shore = new THREE.Color(palette.shore);
-  const bed = new THREE.Color(palette.lakeBed);
+  const bed = new THREE.Color(palette.bed);
+  // R40 — the country's own rules: which regions quilt it, and what its
+  // unsealed road is made of.
+  const rules = biomeRules(track.knobs.biome);
   // R16 — what the road leaves on the country beside it. The road's own
   // shoulder colour rather than a brown of its own: the wash has to arrive
   // at exactly the tone the ribbon's outer band is already dissolving into,
   // or the two hand-overs disagree and there are two boundaries instead of
-  // none.
-  const dust = new THREE.Color(ROAD_PAINT.shoulder);
+  // none. A sand road's shoulder is sand, so its wash is the packed sand
+  // of its own wheel tracks rather than a gravel road's earth.
+  const dust = new THREE.Color(rules.loose === "sand" ? ROAD_PAINT.sand.worn : ROAD_PAINT.shoulder);
   const c = new THREE.Color();
 
-  /** Each sub-region's ground, resolved once against the engine's REGIONS
-   * order so a vertex costs an array index rather than a record lookup and
-   * a Color allocation. A region the biome has no row for paints the plain
-   * palette — the zeroed row below. */
-  const PLAIN: RegionGround = { soil: palette.grass, soilMix: 0, moss: 0, dry: 0, bare: 0 };
-  const regionGround = REGIONS.map((region) => {
+  /** Each sub-region's ground, resolved once against the engine's region
+   * order for this country, so a vertex costs an array index rather than a
+   * record lookup and a Color allocation. A region the biome has no row
+   * for paints the plain palette — the zeroed row below. */
+  const PLAIN: RegionGround = { soil: palette.base, soilMix: 0, moss: 0, dry: 0, bare: 0 };
+  const regionGround = rules.regions.map((region) => {
     const look = biome.regions[region.id] ?? PLAIN;
     return { look, ground: new THREE.Color(look.soil) };
   });

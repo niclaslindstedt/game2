@@ -295,6 +295,21 @@
 //       walls and the cars outside them are as solid as they look. One
 //       town on a stage, because a town is a place and two of them in five
 //       kilometres is a suburb.
+//   R40 A STAGE IS BUILT IN A COUNTRY, and the country is a DIAL. The
+//       biome (`knobs.biome`, `biomes.ts`) says what the land is made of
+//       and how it stands, whether there is water in it, what grows on it
+//       and in what company, and what the sky over it can do — as rows the
+//       generator reads, never as a branch in it. The taiga is the country
+//       every other rule was written against, and every multiplier in its
+//       row is 1. The desert has no water at all: no groundwater that
+//       surfaces, no basin that fills, no crossing on the route and no
+//       river traced through one; its hollows flatten into pans instead,
+//       its ranges are low, and the wind has piled its sand into dune
+//       fields the road rides as a run of crests. A biome never switches a
+//       rule off — a desert stage still obeys every one above — it moves
+//       what the rules draw from, exactly as the other dials do.
+
+import { isBiomeId, type BiomeId } from "./biomes.ts";
 
 /** Sample spacing along the compiled centerline, meters. It lives here
  * because it is not only the compiler's business: a search that has to land
@@ -342,11 +357,31 @@ export type StageKnobs = {
    * a CUT: a blasted face standing over the verge instead of a bank
    * battered back to something a car could climb. */
   steepness: number;
+  /** R40 — which COUNTRY the stage is built in (`biomes.ts`). The one dial
+   * that is a name rather than a number: it does not move a range, it says
+   * which set of ranges — the taiga's lakes and spruce, or the desert's
+   * dunes and saguaros — the other five are read against. */
+  biome: BiomeId;
 };
+
+/** The numeric dials — everything in `StageKnobs` that is a position on a
+ * band rather than the name of a country. What the menus put a row of
+ * stops under and the URL readers parse as a number. */
+export type NumericKnob = Exclude<keyof StageKnobs, "biome">;
+
+export const NUMERIC_KNOBS: readonly NumericKnob[] = [
+  "elevation",
+  "water",
+  "trees",
+  "asphalt",
+  "width",
+  "steepness",
+];
 
 /** The default dial positions — the stage the rules built before the knobs
  * existed, so an un-knobbed call keeps its old character. */
 export const DEFAULT_KNOBS: StageKnobs = {
+  biome: "taiga",
   elevation: 0.5,
   water: 0.5,
   trees: 0.5,
@@ -371,6 +406,10 @@ function clamp01(v: number): number {
  * number in 0..1 by the time any rule reads it. */
 export function resolveKnobs(knobs?: Partial<StageKnobs>): StageKnobs {
   return {
+    // A biome this build does not know — a stale URL, a save from another
+    // version — is the taiga, which is the country every seed was built in
+    // before there was a choice.
+    biome: isBiomeId(knobs?.biome) ? knobs.biome : DEFAULT_KNOBS.biome,
     elevation: clamp01(knobs?.elevation ?? DEFAULT_KNOBS.elevation),
     water: clamp01(knobs?.water ?? DEFAULT_KNOBS.water),
     trees: clamp01(knobs?.trees ?? DEFAULT_KNOBS.trees),

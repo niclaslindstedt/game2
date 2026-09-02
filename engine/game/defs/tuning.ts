@@ -1271,8 +1271,17 @@ export const TUNING = {
   surfaces: {
     /** Longitudinal drag per surface, 1/s. `nature` is the open landscape
      * off the road — loose but fast: the wild is a place to DRIVE, not a
-     * wall of molasses at the verge. Sealed road rolls easiest of all. */
-    drag: { gravel: 0.028, asphalt: 0.022, water: 0.5, nature: 0.032 },
+     * wall of molasses at the verge. Sealed road rolls easiest of all.
+     *
+     * SAND (R40, the desert's bladed road) is the one that costs: it holds
+     * a fifth less than graded stone, has to be pushed a fifth further
+     * sideways before it bites, ploughs at the wheels the whole way and
+     * swallows some of the throttle — which together is a road that is
+     * slower in a straight line and sideways sooner in every corner, and a
+     * slide that runs further and settles later than gravel's does. The
+     * car's own loose-surface rubber is what it stands on there, exactly as
+     * on gravel (`surfaceGripFor`). */
+    drag: { gravel: 0.028, sand: 0.042, asphalt: 0.022, water: 0.5, nature: 0.032 },
     /** Lateral grip multiplier per surface. Asphalt is the outlier the
      * stage's paved sections are FOR: the tires hold a third again as
      * much, so the corner that needed a slide on gravel can be driven
@@ -1280,7 +1289,7 @@ export const TUNING = {
      * committed entry, handbrake, or plain too much speed. It is still a
      * rally car on a country road: ask hard enough and it goes sideways,
      * just on smoking rubber instead of flying gravel. */
-    grip: { gravel: 1.0, asphalt: 1.35, water: 0.55, nature: 0.7 },
+    grip: { gravel: 1.0, sand: 0.8, asphalt: 1.35, water: 0.55, nature: 0.7 },
     /** WHERE the tires let go, as a multiple of the slide's slip angles
      * (`TUNING.drift.angleSpan` and its fade band). A surface is not one
      * number: the peak force above says how HARD it holds, this says how
@@ -1305,9 +1314,9 @@ export const TUNING = {
      * altogether and spin. Tarmac now asks for a real, small drift — a
      * provoked one clears the readout and the wheel alone still will not,
      * which is the point of a paved section. */
-    breakaway: { gravel: 1.0, asphalt: 0.62, water: 1.2, nature: 1.1 },
+    breakaway: { gravel: 1.0, sand: 1.2, asphalt: 0.62, water: 1.2, nature: 1.1 },
     /** Throttle effectiveness per surface. */
-    power: { gravel: 1.0, asphalt: 1.08, water: 0.7, nature: 0.8 },
+    power: { gravel: 1.0, sand: 0.88, asphalt: 1.08, water: 0.7, nature: 0.8 },
     /** Rough ground caps pace where gearing cannot: above this speed the
      * nature surface pulls the car back hard (about 150 km/h) — a linear
      * per-surface drag would instead stall the box under its own upshift

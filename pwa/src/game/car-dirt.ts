@@ -25,7 +25,7 @@
 
 import * as THREE from "three";
 import { clamp } from "../lib/util.ts";
-import type { CarState, GameState } from "@engine";
+import { isLoose, type CarState, type GameState } from "@engine";
 
 /** `userData` flag for a mesh the painter must not write. Two kinds carry
  * it. The screens' grime film (car/wipers.ts) paints its own vertex colours
@@ -244,7 +244,7 @@ export function dirtRate(state: GameState): DirtCoat {
   if (state.offRoad) return { dust: 0.004, mud: 0.0055 };
   const surface = state.track.samples[state.nearIndex]?.surface;
   if (surface === "water") return { dust: 0.01, mud: 0.055 };
-  if (surface !== "gravel") return { dust: 0, mud: 0 };
+  if (surface === undefined || !isLoose(surface)) return { dust: 0, mud: 0 };
   // A slide drags the tires sideways across the loose stuff, so the same
   // metre of gravel throws several times as much.
   return { dust: state.car.slide > 0.15 ? 0.0036 : 0.0006, mud: 0 };
@@ -281,7 +281,7 @@ export function glassSpray(state: GameState): number {
   if (state.offRoad) return 0;
   const surface = state.track.samples[state.nearIndex]?.surface;
   if (surface === "water") return 1;
-  if (surface !== "gravel") return 0;
+  if (surface === undefined || !isLoose(surface)) return 0;
   return state.car.slide > 0.15 ? SLIDE_SPRAY : 1;
 }
 

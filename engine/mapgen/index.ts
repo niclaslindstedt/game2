@@ -2,8 +2,10 @@
 export {
   STAGE_RULES,
   DEFAULT_KNOBS,
+  NUMERIC_KNOBS,
   resolveKnobs,
   knobScale,
+  type NumericKnob,
   type SegmentPlan,
   type TurnSeverity,
   type SegmentFeature,
@@ -106,9 +108,7 @@ export {
   LAKE_Y,
   APRON,
   GROUND_CELL,
-  GROVES,
   GROVE_SCALE,
-  REGIONS,
   REGION_SCALE,
   type GroveCommunity,
   type Region,
@@ -131,6 +131,7 @@ export {
 export {
   compileTrack,
   compileStage,
+  isLoose,
   elevationAt,
   finishAt,
   finishIndex,
@@ -151,4 +152,13 @@ export {
   type StandingWater,
 } from "./river.ts";
 export { SEA, type WaterBody, type WaterField } from "./water.ts";
+export {
+  BIOMES,
+  BIOME_IDS,
+  biomeRules,
+  isBiomeId,
+  type BiomeId,
+  type BiomeLand,
+  type BiomeRules,
+} from "./biomes.ts";
 export { flatTrack, SURFACES, type FlatTrack } from "./flat.ts";

@@ -499,7 +499,7 @@ const GRAIN = {
    * clear step above gravel without becoming a picture nobody can drive
    * from — the moment a surface is unreadable the grain has stopped
    * describing it. */
-  surface: { gravel: 1, asphalt: 0.4, nature: 1.6, water: 1.15 },
+  surface: { gravel: 1, sand: 0.75, asphalt: 0.4, nature: 1.6, water: 1.15 },
   /** How fast the grain follows the wheels leaving and finding the ground,
    * 1/s. In the air the road stops arriving, and the silence is most of what
    * makes a jump read as flight from inside the car. */

@@ -89,6 +89,8 @@ export type HomesteadContext = {
   seed: number;
   /** The stage's nominal full width, m. */
   width: number;
+  /** R40 — what a bladed road in this country is made of: the drive is one. */
+  loose: Surface;
   /** The route's samples, in stage order. */
   samples: readonly HomesteadSample[];
   /** Half-open range of sample indices whose slots may be placed on this
@@ -276,7 +278,7 @@ function tryHomestead(
     // mouth is the stage's camber and not a flat mat laid over it with a
     // lip where the two disagree.
     if (s <= lip) y = at.elevation + corridorOffset(at, side * s, at.width);
-    samples.push({ x, z, heading, elevation: y, s, surface: "gravel", lift: 0, flat: 0 });
+    samples.push({ x, z, heading, elevation: y, s, surface: ctx.loose, lift: 0, flat: 0 });
     // Past the road's own shoulder the drive is on its own, and every
     // metre of it has to be somewhere a road could go.
     if (s > ctx.width / 2 + ROAD_CROSS.reach && !clear(x, z)) return null;

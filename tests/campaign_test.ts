@@ -29,16 +29,18 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { RIVALS, compileStage } from "@engine";
+import { DEFAULT_KNOBS, RIVALS, biomeRules, compileStage } from "@engine";
 
 import {
   LOCATIONS,
   PODIUM,
   POINTS,
+  campaignKnobs,
   continueAt,
   ladderAfter,
   latestOpen,
   levelCleared,
+  levelForRoad,
   levelCompleted,
   levelUnlocked,
   loadProgress,
@@ -440,5 +442,56 @@ describe("the stage's classification", () => {
     );
     expect(settleField(stranded, 10_000, 0)).toBe(true);
     for (const run of stranded.runs) expect(run.time).toBeNull();
+  });
+});
+
+describe("the desert (R40)", () => {
+  const DESERT = LOCATIONS[1];
+
+  it("is the second country, with the same six rungs as the first", () => {
+    expect(DESERT.biome).toBe("desert");
+    expect(DESERT.levels).toHaveLength(TAIGA.levels.length);
+    expect(DESERT.levels.map((l) => l.length)).toEqual(TAIGA.levels.map((l) => l.length));
+    expect(DESERT.levels.map((l) => l.shape ?? "sprint")).toEqual(
+      TAIGA.levels.map((l) => l.shape ?? "sprint"),
+    );
+  });
+
+  it("is built on the rule book's defaults in its own country, and only its own sky", () => {
+    const offered = biomeRules("desert").weathers;
+    for (const level of DESERT.levels) {
+      const knobs = campaignKnobs(level);
+      expect(knobs.biome).toBe("desert");
+      expect({ ...knobs, biome: "taiga" }).toEqual(DEFAULT_KNOBS);
+      expect(offered).toContain(level.weather);
+      // No water on any of them — the country guarantees it, and a level
+      // is the country's stage and nothing else.
+      const track = compileStage(level.seed, level.length, knobs, level.shape ?? "sprint");
+      expect(track.samples.some((s) => s.surface === "water" || s.deck !== null)).toBe(false);
+      expect(track.samples.some((s) => s.surface === "sand")).toBe(true);
+    }
+    expect(campaignKnobs(TAIGA.levels[0]).biome).toBe("taiga");
+  });
+
+  it("is the road Roam stands on only in the desert", () => {
+    const level = DESERT.levels[0];
+    const knobs = campaignKnobs(level);
+    expect(levelForRoad(level.seed, level.length, level.shape ?? "sprint", knobs)?.id).toBe(
+      level.id,
+    );
+    const inTaiga = levelForRoad(level.seed, level.length, level.shape ?? "sprint", {
+      ...knobs,
+      biome: "taiga",
+    });
+    expect(inTaiga?.id).not.toBe(level.id);
+  });
+
+  it("opens behind the taiga's table, and the ladder walks into it", () => {
+    stubStorage();
+    expect(locationUnlocked(DESERT, loadProgress())).toBe(false);
+    driveLocation(1);
+    expect(locationUnlocked(DESERT, loadProgress())).toBe(true);
+    const step = ladderAfter(TAIGA.levels[TAIGA.levels.length - 1].id, loadProgress());
+    expect(step.kind === "next" && step.level.id).toBe(DESERT.levels[0].id);
   });
 });

@@ -42,9 +42,14 @@ drawing from the same helpers or their patches stop lining up.
 
 ## The biome model
 
-- **A biome is data, not code.** Ground palette + communities + regions +
-  overrides. A new biome is a new `Biome` row and a `biomeFor()` decision
-  — no new systems. Today `biomeFor()` always returns `TAIGA`.
+- **A biome is data, not code, on BOTH sides of the world.** The engine's
+  row (`engine/mapgen/biomes.ts`, R40: the region/grove quilt, whether there
+  is water, what the bladed road is made of, whether the woods shed timber,
+  the relief, the dunes, the sky's weathers, the latitude) and the app's
+  (`pwa/src/game/biome-<id>.ts`: ground palette + communities + overrides,
+  registered in `biome.ts`). Which one a stage is in is a DIAL —
+  `track.knobs.biome` — and `biomeFor(id)` is how the app reads it. Two
+  exist: the taiga and the desert.
 - **The landscape is quilted at THREE scales**, all placed in the engine
   because the trunks are solid: a SUB-REGION (~900 m) says what kind of
   country this is and re-weights the groves under it; a GROVE (~150 m)
@@ -90,6 +95,19 @@ and the logging block's `logPile`; ground cover
 `tallGrass/fern/largeFern/heathShrub/mossPatch` and the wet ground's
 `reeds/sedgeTuft/cottonGrass` (the grass, fern, reed and sedge families are
 the two-sided, wind-swayed set).
+
+## The desert roster (~22 variants, `flora-desert.ts`)
+
+Columnar cacti `saguaro/saguaroOld/saguaroYoung/deadSaguaro`, the Joshua
+trees `joshuaTree/joshuaYoung`, the wash trees `mesquite/paloVerde`, a
+`pinyon` on the high ground; the spiky middle storey `barrelCactus`,
+`pricklyPear`, `cholla`, `ocotillo`, `agave`, `yucca`; the scrub `creosote`,
+`brittlebush`, `sagebrush`, `deadBrush`, `tumbleweed`; and the ground
+`bunchGrass/desertGrass` (the swayed set), `saltCrust`, `cowSkull`. Only
+the cacti, the Joshua trees and the wash trees are trunks; everything else
+is brush the car goes over. The spring is the loud season here — the
+season table turns the saguaro crowns white, the brittlebush yellow and the
+ocotillo tips red.
 
 ## The seasons
 
@@ -162,9 +180,14 @@ whether a forest reads as a forest.
 - **A new community**: a row in the biome's `communities` with an id,
   weight, density and small species mix. Check it appears at the grove
   scale by driving seeds.
-- **A new biome**: a new `Biome` in `biome.ts` (palette + communities +
-  overrides) and a `biomeFor()` rule for when it applies. The terrain and
-  placement code already speak biome.
+- **A new biome**: an engine row in `engine/mapgen/biomes.ts` (the quilt
+  and the country's rules), an app row in `pwa/src/game/biome-<id>.ts`
+  registered in `biome.ts`'s `BIOMES`, its plants in `flora-<id>.ts` merged
+  into `VARIANTS`, its brush named in `planting.ts`'s `SOFT_FLORA`, a
+  `weathers` list and a sky look (`LOOKS`/`CASTS` in `sky.ts`), and what
+  lives in it (`LIFE` in `ambient-life.ts`). `tests/biome_test.ts` holds
+  the two halves together. The terrain and placement code already speak
+  biome.
 
 ## Skill self-improvement
 

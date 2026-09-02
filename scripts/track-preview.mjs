@@ -26,6 +26,7 @@
 //   npm run track -- --length endless --km 8   # a streamed endless stretch
 //   npm run track -- --asphalt 0.6 --water 0.9 --elevation 1 --trees 0.2 --width 0.2
 //   npm run track -- --steepness 1 --asphalt 1   # R34: the cuttings, at their deepest
+//   npm run track -- --biome desert    # R40: the other country — sand, dunes, no water
 //   npm run track -- --only render     # skip the other picture
 //   npm run track -- --zoom junctions  # one close-up per junction, and
 //   npm run track -- --zoom junctions --span 70   # ...how much country
@@ -40,12 +41,16 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 
+import { aliasEngine } from "./lib/engine-alias.mjs";
 import { createCanvas } from "./lib/png.mjs";
-import { renderStage } from "./lib/stage-render.mjs";
+import { paletteFor, renderStage } from "./lib/stage-render.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+aliasEngine(root);
 const engine = await import(join(root, "engine/index.ts"));
 const { compileStage, createTerrain } = engine;
+// The game's own ground colours, so a desert previews as sand (R40).
+const { biomeFor } = await import(join(root, "pwa/src/game/biome.ts"));
 
 const args = process.argv.slice(2);
 function flag(name) {
@@ -66,6 +71,8 @@ for (const dial of ["elevation", "water", "trees", "asphalt", "width", "steepnes
   const value = flag(dial);
   if (value !== undefined) knobs[dial] = Number(value);
 }
+if (flag("biome") !== undefined) knobs.biome = flag("biome");
+const palette = paletteFor(biomeFor(knobs.biome).ground, knobs.biome);
 
 const SIZE = 900;
 const COLORS = {
@@ -174,7 +181,7 @@ for (const seed of seeds) {
       const file = join(outDir, `junction-${seed}-${k}.png`);
       writeFileSync(
         file,
-        renderStage({ track: framed, terrain, engine, width: 900, height: 900 }).toPng(),
+        renderStage({ track: framed, terrain, engine, width: 900, height: 900, palette }).toPng(),
       );
       written.push(file);
     });
@@ -188,7 +195,7 @@ for (const seed of seeds) {
   }
   if (only !== "schematic") {
     const file = join(outDir, `track-${seed}-render.png`);
-    const canvas = renderStage({ track, terrain, engine, width: 1280, height: 800 });
+    const canvas = renderStage({ track, terrain, engine, width: 1280, height: 800, palette });
     writeFileSync(file, canvas.toPng());
     written.push(file);
   }

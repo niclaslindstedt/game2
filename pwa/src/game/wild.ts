@@ -39,12 +39,9 @@ const WILD_FAR = 430;
  * stone. The wooden ones (fallen trunks, cut stumps) go through flora. */
 const STONE_KINDS = new Set<WildObstacle["kind"]>(["boulder", "rock", "slab"]);
 
-/** The share of the wild's loose stone that has gone over to moss, and the
- * green it wears. Nothing in a boreal forest stays bare for long: a stone
- * lying in the shade for fifty years is a green stone with grey sides, and
- * the difference between rock that has been there and rock that was PUT
- * there is most of what makes a hillside read as old. */
-const MOSSY_SHARE = 0.45;
+/** The green a mossed-over stone wears. How much of the wild's loose stone
+ * has gone over to it is the biome's (`mossyStone`): most of a boreal
+ * hillside, none of a desert. */
 const MOSS_COLOR = 0x86a84e;
 
 /** The lump every wild stone is drawn from. Bare, it carries no colour of
@@ -77,9 +74,9 @@ export function stoneGeometry(rock: number, mossy: boolean): THREE.BufferGeometr
 /** Whether this stone is one of the mossy ones — from where it lies, so it
  * keeps its coat across a cell being dropped and rebuilt. An outcrop's face
  * is freshly broken bedrock and never takes one. */
-function mossGrows(ob: WildObstacle): boolean {
-  if (ob.kind === "slab") return false;
-  return hash2(Math.round(ob.x * 4), Math.round(ob.z * 4), 0x5eaf1a55) < MOSSY_SHARE;
+function mossGrows(ob: WildObstacle, share: number): boolean {
+  if (ob.kind === "slab" || share <= 0) return false;
+  return hash2(Math.round(ob.x * 4), Math.round(ob.z * 4), 0x5eaf1a55) < share;
 }
 
 /** How one stone prop sits in the ground. Each kind has its own seat, and
@@ -244,7 +241,7 @@ export function buildWild(
     const bare: WildObstacle[] = [];
     const mossed: WildObstacle[] = [];
     for (const cell of cells.values()) {
-      for (const ob of cell.stones) (mossGrows(ob) ? mossed : bare).push(ob);
+      for (const ob of cell.stones) (mossGrows(ob, biome.mossyStone) ? mossed : bare).push(ob);
     }
     stoneMesh = writeStones(stoneMesh, stoneGeo, stoneMat, bare);
     mossMesh = writeStones(mossMesh, mossGeo, mossMat, mossed);

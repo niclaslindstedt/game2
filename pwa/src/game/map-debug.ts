@@ -55,7 +55,10 @@ function stageBox(stage: DebugStage, track: Track, build: string): DebugBox {
   // Spelled out rather than initialled, for the same reason the driving
   // overlay spells them: two dials start with the same letter, and a repro
   // read off a screenshot must not depend on guessing which is which.
-  const dials = STAGE_DIALS.map((d) => `${d.key} ${stage.knobs[d.key].toFixed(2)}`).join(" · ");
+  const dials = [
+    stage.knobs.biome,
+    ...STAGE_DIALS.map((d) => `${d.key} ${stage.knobs[d.key].toFixed(2)}`),
+  ].join(" · ");
   return {
     title: "STAGE",
     rows: [

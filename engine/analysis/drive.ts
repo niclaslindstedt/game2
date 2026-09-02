@@ -27,7 +27,7 @@ import { freshCar } from "../game/step.ts";
 import type { GameEvent } from "../game/state.ts";
 import { createKerbField, type KerbMarker } from "../mapgen/kerbs.ts";
 import { STAGE_RULES } from "../mapgen/rules.ts";
-import type { Track, TrackSample } from "../mapgen/compile.ts";
+import { isLoose, type Track, type TrackSample } from "../mapgen/compile.ts";
 import { ANALYSIS } from "./budgets.ts";
 import {
   metricScore,
@@ -418,7 +418,7 @@ function cornerTilt(track: Track, findings: Finding[]): number | null {
   const D = ANALYSIS.drive;
   const banks: number[] = [];
   for (const sample of track.samples) {
-    if (sample.surface !== "gravel" || sample.deck != null) continue;
+    if (!isLoose(sample.surface) || sample.deck != null) continue;
     if ((sample.flat ?? 0) > 0.01) continue;
     if (Math.abs(sample.curvature) < D.tiltAt) continue;
     banks.push(Math.abs(sample.bank));

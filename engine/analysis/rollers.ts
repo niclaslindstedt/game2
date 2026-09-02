@@ -31,7 +31,7 @@
 //   reads as a road full of holes.
 
 import { corridorOffset, ROAD_CROSS } from "../mapgen/road.ts";
-import type { Track, TrackSample } from "../mapgen/compile.ts";
+import { isLoose, type Track, type TrackSample } from "../mapgen/compile.ts";
 import type { TerrainField } from "../mapgen/terrain.ts";
 import { createKerbField, KERB_MARKER, markersBetween } from "../mapgen/kerbs.ts";
 import { STAGE_RULES } from "../mapgen/rules.ts";
@@ -735,7 +735,7 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
   const bends: number[] = [];
   const runs: number[] = [];
   for (const sample of track.samples) {
-    if (sample.surface !== "gravel" || sample.deck != null) continue;
+    if (!isLoose(sample.surface) || sample.deck != null) continue;
     if ((sample.flat ?? 0) > 0.01 || (sample.shift ?? 0) !== 0) continue;
     const share = sample.width / track.width;
     cut.push(share);

@@ -13,10 +13,29 @@
 // DOM-free and three-free on purpose: `sky.ts` is a renderer module and
 // `drive-bed.ts` is an audio one, and they need the same two numbers.
 
-import { TUNING, type RaceEnv } from "@engine";
+import { TUNING, biomeRules, type BiomeId, type RaceEnv, type Weather } from "@engine";
 
 function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+/** How wet each of the three skies leaves the stage, 0..1 — what picks a
+ * surface's wet twin, how loud the rain itself is, and whether the wheels
+ * throw clods or dust. Rain is deliberately a good way past half: drizzle
+ * is not a weather this game has, and a stage billed as wet that sounds a
+ * shade damp is worse than no weather at all. */
+const WETNESS: Record<Weather, number> = { clear: 0, rain: 0.6, storm: 1 };
+
+/**
+ * HOW WET THE STAGE IS, 0..1 — the weather read against the COUNTRY it is
+ * over (R40). A storm in the taiga is a downpour; the same storm in the
+ * desert is wind and sand and puts nothing on the road at all. Everything
+ * that swaps a dry thing for a wet one (the road's voice, the plume for the
+ * clods, the film on the glass) asks this rather than the weather, so no
+ * desert stage is ever a wet one however the sky is set.
+ */
+export function wetnessOf(env: Pick<RaceEnv, "weather">, biome: BiomeId): number {
+  return biomeRules(biome).rain ? WETNESS[env.weather] : 0;
 }
 
 /**

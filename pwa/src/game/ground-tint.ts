@@ -14,12 +14,17 @@
 // whoever owns the effect.
 
 import * as THREE from "three";
+import type { BiomeId } from "@engine";
 
 import { biomeFor } from "./biome.ts";
 import { type DustTint } from "./dust.ts";
 
 /** Dry grit: the loose stuff lying on top of a graded road. */
 export const GRIT = 0xb29268;
+
+/** R40 — and the sand a desert road is bladed out of: paler, and it hangs
+ * in the air as a haze rather than a spray of stones. */
+export const SAND_GRIT = 0xd8bd86;
 
 /** Water, thrown as a blue sheet. */
 export const SPRAY = 0x4fa0f0;
@@ -40,23 +45,42 @@ export const MUD_CLODS: DustTint = { base: 0x4a3a29, fleck: 0x6d5a43, fleckMix: 
  * green cloud coming off a car reads as the effect having picked up the
  * ground's paint rather than as anything the wheels dug up. The blades are
  * the biome's own meadow taken a shade down — a blade in the air is not lit
- * like the field it came out of. */
-export const WILD_DUST: DustTint = {
-  base: 0x4a3520,
-  fleck: new THREE.Color(biomeFor().ground.grass).multiplyScalar(0.86).getHex(),
-  fleckMix: 0.3,
-};
+ * like the field it came out of.
+ *
+ * And what a mountain gives instead (`stone`). Above the tree line and on
+ * the steep flanks there is no turf to tear — a wheel scrabbles on bedrock
+ * and throws the stone itself, the biome's own rock with the darker shade
+ * of it through the cloud. Lighter than the rock face it comes off, because
+ * shattered grit catches the sky where a flat face does not.
+ *
+ * Both are the COUNTRY's (R40): a desert verge is sand with sand through
+ * it, and its rock is red. Resolved once per biome and kept, because the
+ * renderer asks several times a second and the answer never changes. */
+export type GroundTints = { wild: DustTint; stone: DustTint };
 
-/** What a mountain gives instead. Above the tree line and on the steep
- * flanks there is no turf to tear — a wheel scrabbles on bedrock and throws
- * the stone itself, the biome's own rock with the darker shade of it
- * through the cloud. Lighter than the rock face it comes off, because
- * shattered grit catches the sky where a flat face does not. */
-export const STONE_DUST: DustTint = {
-  base: new THREE.Color(biomeFor().ground.bedrock).multiplyScalar(1.06).getHex(),
-  fleck: biomeFor().ground.bedrockDark,
-  fleckMix: 0.32,
-};
+const tintsByBiome = new Map<BiomeId, GroundTints>();
+
+export function groundTints(biome: BiomeId): GroundTints {
+  const kept = tintsByBiome.get(biome);
+  if (kept) return kept;
+  const ground = biomeFor(biome).ground;
+  const built: GroundTints = {
+    wild: {
+      // A boreal verge is earth with turf through it; a desert's is sand
+      // with no earth under it at all, so there the base is the sand.
+      base: biome === "desert" ? SAND_GRIT : 0x4a3520,
+      fleck: new THREE.Color(ground.base).multiplyScalar(0.86).getHex(),
+      fleckMix: 0.3,
+    },
+    stone: {
+      base: new THREE.Color(ground.bedrock).multiplyScalar(1.06).getHex(),
+      fleck: ground.bedrockDark,
+      fleckMix: 0.32,
+    },
+  };
+  tintsByBiome.set(biome, built);
+  return built;
+}
 
 /** Tire smoke — boiled off the rubber, so it is the one cloud in the game
  * that has nothing to do with the ground under the car. */
@@ -109,11 +133,18 @@ export function sootySmoke(heat: number): DustTint {
  * difference between them is a difference between two kinds of DUST and
  * that is exactly what the rain has taken away.
  */
-export function groundTint(surface: string, wet: boolean, rock: () => number): number | DustTint {
+export function groundTint(
+  biome: BiomeId,
+  surface: string,
+  wet: boolean,
+  rock: () => number,
+): number | DustTint {
   if (surface === "water") return SPRAY;
   if (wet && surface !== "asphalt") return MUD_CLODS;
+  if (surface === "sand") return SAND_GRIT;
   if (surface !== "nature") return GRIT;
-  return Math.random() < rock() ? STONE_DUST : WILD_DUST;
+  const tints = groundTints(biome);
+  return Math.random() < rock() ? tints.stone : tints.wild;
 }
 
 /** What HANGS IN THE AIR behind the car, which is a narrower question than
@@ -144,9 +175,19 @@ export type PlumeGround = {
   amount: number;
 } | null;
 
-export function plumeGround(surface: string, wet: boolean, rock: () => number): PlumeGround {
+export function plumeGround(
+  biome: BiomeId,
+  surface: string,
+  wet: boolean,
+  rock: () => number,
+): PlumeGround {
   if (surface === "water" || surface === "asphalt" || wet) return null;
+  if (surface === "sand") return { tint: SAND_GRIT, amount: 1 };
   if (surface !== "nature") return { tint: GRIT, amount: 1 };
+  // R40 — off a desert road the ground is loose sand with nothing binding
+  // it, which is the one case where the WILD lifts a cloud: the turf rule
+  // above is a rule about turf, and there is none.
+  if (biome === "desert") return { tint: SAND_GRIT, amount: 0.7 + 0.3 * rock() };
   const bare = rock();
-  return bare > 0 ? { tint: STONE_DUST, amount: bare } : null;
+  return bare > 0 ? { tint: groundTints(biome).stone, amount: bare } : null;
 }
