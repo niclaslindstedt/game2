@@ -10,15 +10,18 @@ in `make lint` enforces §20.5 — measure with `wc -l` before adding to either.
 
 Two different calls, depending on which side of the line the file is on:
 
-- **Already over** (`camera.ts`): add the new concern as a SIBLING and let the
-  oversized file grow only by the lines that WIRE it. God mode's free-fly rig
-  went in `camera-free.ts`; `camera.ts` grew by a `"free"` arm in `update()`,
-  a hand-over in `setMode`, and the handles on the returned object. Splitting
-  it properly is its own PR — doing it inside a feature change buries both.
-- **Pushed over by your change** (`renderer.ts`, by the rear-view mirror):
+- **Already over**: add the new concern as a SIBLING and let the oversized
+  file grow only by the lines that WIRE it. God mode's free-fly rig went in
+  `camera-free.ts`; `camera.ts` grew by a `"free"` arm in `update()`, a
+  hand-over in `setMode`, and the handles on the returned object. Splitting it
+  properly is its own PR — doing it inside a feature change buries both.
+- **Pushed over by your change** (`renderer.ts`, by the rear-view mirror;
+  `camera.ts`, by the view change):
   a sibling for the new thing is not enough, because the file is over the cap
   either way. Take one cohesive concern OUT of it in the same pass. The
   transient FX pools went to `car-fx.ts` — what the pools are, how the light
   tints them, the four-wheel burst — leaving the renderer every decision about
   WHEN anything is thrown, which is what needs the whole frame. That is ~80
-  lines back and a file that reads as one job again.
+  lines back and a file that reads as one job again. `camera.ts` did the same
+  with `camera-ground.ts` (the footprint, the play, the floor and the cliff —
+  what an outside rig stands on) and `camera-drone.ts`, and came back to 910.
