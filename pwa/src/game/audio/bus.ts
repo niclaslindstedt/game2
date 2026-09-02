@@ -7,10 +7,10 @@
 // Two views rather than two synths is not a saving, it is the requirement: a
 // browser gives a page one usable AudioContext's worth of goodwill, and the
 // echo bus and the master limiter only do their jobs if every voice in the
-// game — a tyre grain, a crash, a bass note — passes through the same pair.
+// game — a tyre layer, a crash, a bass note — passes through the same pair.
 
 import { createSynth } from "../../lib/synth.ts";
-import type { Synth } from "../../lib/voice.ts";
+import type { Layer, Synth } from "../../lib/voice.ts";
 
 const raw = createSynth();
 
@@ -33,9 +33,9 @@ export function setAudioVolumes(v: { music: number; sfx: number }): void {
  *
  * The defaults mirror the synth's own, because a voice that leaves `volume`
  * off still has to be scaled by the slider — and the only way to scale a
- * default is to know it. A scaled-to-nothing voice is skipped outright rather
- * than played at zero: an engine bed is a dozen nodes a second, and a muted
- * game should not be building them.
+ * default is to know it. A one-shot scaled to nothing is skipped outright
+ * rather than played at zero. A LAYER is steered every frame, so the slider
+ * is read every frame and a fader moved mid-stage is heard at once.
  */
 function scaledView(volume: () => number): Synth {
   return {
@@ -52,6 +52,15 @@ function scaledView(volume: () => number): Synth {
       const scaled = (options.volume ?? 0.05) * volume();
       if (scaled < 0.001) return;
       raw.noise({ ...options, volume: scaled });
+    },
+    layer(spec): Layer | null {
+      const inner = raw.layer(spec);
+      if (!inner) return null;
+      return {
+        set: (target, glideS) => inner.set({ ...target, level: target.level * volume() }, glideS),
+        stop: () => inner.stop(),
+        alive: () => inner.alive(),
+      };
     },
   };
 }

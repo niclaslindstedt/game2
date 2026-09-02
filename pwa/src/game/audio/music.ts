@@ -8,17 +8,26 @@
 // when the module lands, so a request that has since been superseded — the
 // player pressed start while the menu theme was still loading — drops silently
 // instead of starting a theme the game has already left behind.
+//
+// WHICH score a stage gets is `music-pick.ts`; this only plays the one it
+// is told.
 
 import { createTrackPlayer, type Track, type TrackPlayer } from "../../lib/tracker.ts";
 
 import { music } from "./bus.ts";
+import type { TrackId } from "./music-pick.ts";
 
-/** Every score this build has. */
-export type TrackId = "menu" | "taiga";
+export type { TrackId } from "./music-pick.ts";
+export { stageTrack, trackFor } from "./music-pick.ts";
 
 const LOADERS: Record<TrackId, () => Promise<Track>> = {
   menu: () => import("./scores/menu.ts").then((m) => m.MENU_TRACK),
   taiga: () => import("./scores/taiga.ts").then((m) => m.TAIGA_TRACK),
+  spruce: () => import("./scores/spruce.ts").then((m) => m.SPRUCE_TRACK),
+  polar: () => import("./scores/polar.ts").then((m) => m.POLAR_TRACK),
+  desert: () => import("./scores/desert.ts").then((m) => m.DESERT_TRACK),
+  circuit: () => import("./scores/circuit.ts").then((m) => m.CIRCUIT_TRACK),
+  endless: () => import("./scores/endless.ts").then((m) => m.ENDLESS_TRACK),
 };
 
 const cache = new Map<TrackId, Track>();

@@ -39,8 +39,7 @@ function ramp(value: number, lo: number, hi: number): number {
   return Math.min(1, Math.max(0, (value - lo) / (hi - lo)));
 }
 
-/** What one event sounds like. Null means the event is silent — several are,
- * and deliberately.
+/** What one event sounds like. Null means the event is silent.
  *
  * `lastGear` is the gear the car was in before this step, which is the only
  * way to tell an upshift from a downshift: the event carries where the box
@@ -61,6 +60,14 @@ export function soundForEvent(
     // second sound.
     case "lap":
       return { id: "lap", shape: event.best ? { pitch: 1.18, gain: 1.15 } : undefined };
+
+    // R28 — a split board, passed. The last board of a lap is the same
+    // gate a touch higher, so a driver counting them hears the count end.
+    case "checkpoint":
+      return {
+        id: "checkpoint",
+        shape: event.index === event.count - 1 ? { pitch: 1.12 } : undefined,
+      };
 
     // R28 — the line, refused. The one event on this list whose job is to be
     // heard INSTEAD of another one, so it is sized to sit where `finish` was
@@ -162,6 +169,17 @@ export function soundForEvent(
       return { id: "part_break" };
     }
 
+    // THE ONE PIECE OF DAMAGE NEWS NOBODY CAN SEE, told. A system giving is
+    // a knock; a system gone is the heavier of the two, and the engine
+    // going — the run's end — is the heaviest of all.
+    case "systemFail":
+      return event.spent
+        ? {
+            id: "system_gone",
+            shape: event.system === "engine" ? { gain: 1.2, pitch: 0.9 } : undefined,
+          }
+        : { id: "system_give" };
+
     // A tyre letting go: the same thump as a block ridden over, lower and
     // flatter — and lower still for the wheel coming off, under the
     // `partBreak` that is the wheel itself hitting the road.
@@ -178,10 +196,7 @@ export function soundForEvent(
     // A drift taken past saving. Sized by the SPEED it let go at and not by
     // the angle: past `drift.spinAt` the car is round either way, and what
     // decides how big the moment is — how long the scrub lasts, how much
-    // there is to drag — is how much of it there was to lose. The pitch
-    // drops with it for the usual reason, a heavier thing sounding lower,
-    // and the stretch is the honest part: a spin at 30 m/s goes on turning
-    // for most of a second and one at walking pace is over at once.
+    // there is to drag — is how much of it there was to lose.
     case "spin": {
       const fast = ramp(event.speed, 8, 30);
       return {
@@ -265,5 +280,18 @@ export function soundForThunder(clap: Clap): { id: string; shape: PlayShape } {
   return {
     id: "thunder_far",
     shape: { gain: 0.9 - 0.62 * far, pitch: 1.02 - 0.3 * far, stretch: 1 + 0.55 * far, pan },
+  };
+}
+
+/** A play, as heard from a seat: the listener's gain on every one-shot and
+ * its muffle on the pitch, which moves every filter with it. */
+export function heardFrom(
+  shape: PlayShape | undefined,
+  ear: { events: number; muffle: number },
+): PlayShape {
+  return {
+    ...shape,
+    gain: (shape?.gain ?? 1) * ear.events,
+    pitch: (shape?.pitch ?? 1) * ear.muffle,
   };
 }

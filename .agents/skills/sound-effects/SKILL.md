@@ -16,12 +16,12 @@ filter. Engines with grit in them, gravel that hisses rather than ticks,
 impacts with a body behind the crack. Four things in the synth exist to reach
 that register, and reaching for them is what stops a new sound sounding chip:
 
-| Reach for                             | When                                                                                                                                           |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `color: "brown" \| "pink"` on a noise | ALWAYS decide this before the filter. Brown is mass and distance, pink is gravel/water/tyre roar, white is glass and grit.                     |
-| `filter.to` — a moving cutoff         | Any sound that is a GESTURE rather than a hit: a whoosh, a spray thinning out, a turbo spooling, a crash opening and closing.                  |
-| `drive` — the waveshaper              | Anything with combustion or violence in it. A clean triangle is a flute; a driven one is an engine. 0.2–0.4 is grit, past 0.7 is a fuzz pedal. |
-| `attackMs` + `holdMs` on a NOISE      | Only for a BED (see below). Never for a hit.                                                                                                   |
+| Reach for                             | When                                                                                                                                                                                                                                                                                         |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `color: "brown" \| "pink"` on a noise | ALWAYS decide this before the filter. Brown is mass and distance, pink is gravel/water/tyre roar, white is glass and grit.                                                                                                                                                                   |
+| `filter.to` — a moving cutoff         | Any sound that is a GESTURE rather than a hit: a whoosh, a spray thinning out, a turbo spooling, a crash opening and closing.                                                                                                                                                                |
+| `drive` — the waveshaper              | Anything with combustion or violence in it. A clean triangle is a flute; a driven one is an engine. It is a SOFT curve at every setting: 0.2–0.4 is warmth, 0.6 an overdriven amp, 1 as far as it goes — never a clip, because a clip aliases and a Bluetooth codec turns that into a swirl. |
+| `attackMs` + `holdMs` on a NOISE      | Only for a SWELL — a crowd, a spin, distant thunder. Never for a hit. A bed is a LAYER (below) and has no envelope at all.                                                                                                                                                                   |
 
 **MUSIC IS NOT HERE.** A score is tracker data with an arrangement, judged by
 its structure and its mix over two minutes. Different format, different review
@@ -35,28 +35,34 @@ job; load it at both ends of the session. Load **`write-code`** too.
 
 ## Files
 
-| File                               | Role                                                                                                                                                                                                                             |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pwa/src/lib/voice.ts`             | **The vocabulary.** Every parameter a sound may be written in, and the `Synth` interface. DOM-free on purpose, so the bank, the router, the beds and the tests can describe a sound without importing a browser.                 |
-| `pwa/src/lib/synth.ts`             | The instrument: `tone()` and `noise()`, the shared echo bus, the master limiter, and the whole audio-context lifecycle (unlock, autostart, iOS interruption and zombie-context recovery). The only module that touches WebAudio. |
-| `pwa/src/game/audio/bank.ts`       | **THE RUN'S SOUND DESIGN.** Every discrete sound the car and the stage make, as data: a description and a list of voices. This is where most SFX work happens.                                                                   |
-| `pwa/src/game/audio/bank-ui.ts`    | The interface's own sounds. Separate because the menu is on the app's STARTUP path and must not pull the run's bank into the entry chunk.                                                                                        |
-| `pwa/src/game/audio/route.ts`      | **WHICH sound an event makes**, and how big — a pure function from `GameEvent` to a bank id plus a `PlayShape`.                                                                                                                  |
-| `pwa/src/game/audio/play.ts`       | Firing one def: voices go to the synth verbatim, scaled by the shape.                                                                                                                                                            |
-| `pwa/src/game/audio/engine-bed.ts` | The engine, as overlapping grains. The one sound whose pitch is arithmetic rather than taste.                                                                                                                                    |
-| `pwa/src/game/audio/road-grain.ts` | The tyres, the wind and the DRIFT's scrub — one grain, as a pure function of how the car is going.                                                                                                                               |
-| `pwa/src/game/audio/drive-bed.ts`  | The scheduler: reads `GameState` each frame and books grains ahead on the audio clock. Also the countdown lights.                                                                                                                |
-| `pwa/src/game/audio/bus.ts`        | One synth, two volume-scaled views (effects / music), and the unlock.                                                                                                                                                            |
-| `pwa/src/game/audio/ui.ts`         | Raising an interface cue, and the repeat cap on it. Deliberately does NOT unlock — see the last section.                                                                                                                         |
-| `scripts/audition.mjs`             | **THE REVIEW SURFACE** (`make audition`).                                                                                                                                                                                        |
+| File                                 | Role                                                                                                                                                                                                                                                                                   |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pwa/src/lib/voice.ts`               | **The vocabulary.** Every parameter a sound may be written in, the `Synth` interface, and the `LayerSpec` / `LayerTarget` / `Layer` a bed is made of. DOM-free on purpose, so the banks, the router, the beds and the tests can describe a sound without importing a browser.          |
+| `pwa/src/lib/synth.ts`               | The instrument: `tone()` and `noise()` for one-shots, `layer()` for the beds, the shared echo bus, the master limiter, and the whole audio-context lifecycle (unlock, autostart, iOS interruption, zombie-context recovery, the route re-seat). The only module that touches WebAudio. |
+| `pwa/src/game/audio/bank.ts`         | **THE RUN'S SOUND DESIGN.** Every discrete sound the car and the stage make, as data: a description and a list of voices. This is where most SFX work happens.                                                                                                                         |
+| `pwa/src/game/audio/bank-ui.ts`      | The interface's own sounds. Separate because the menu is on the app's STARTUP path and must not pull the run's bank into the entry chunk.                                                                                                                                              |
+| `pwa/src/game/audio/route.ts`        | **WHICH sound an event makes**, and how big — a pure function from `GameEvent` to a bank id plus a `PlayShape`.                                                                                                                                                                        |
+| `pwa/src/game/audio/play.ts`         | Firing one def: voices go to the synth verbatim, scaled by the shape.                                                                                                                                                                                                                  |
+| `pwa/src/game/audio/bank-stage.ts`   | The STAGE's sounds — the lights, the split boards, the line, the crowd, the blocks, the sky. Served with the car's as `RUN_BANK`.                                                                                                                                                      |
+| `pwa/src/game/audio/bank-world.ts`   | The COUNTRY's sounds — birds, insects, an owl, a coyote, livestock, a train's horn, a crossing bell, the marshal's whistle. Raised by `ambience.ts`, never by the router.                                                                                                              |
+| `pwa/src/game/audio/listener.ts`     | **WHERE THE EAR IS.** One row per camera: what each seat does to the engine, the exhaust, the tyres, the wind, the weather, the world, the one-shots. The beds and the router both read it.                                                                                            |
+| `pwa/src/game/audio/engine-voice.ts` | The engine, as six LAYERS: `engineTargets` is a pure function from revs, load, wear and a seat to where each should be. The one sound whose pitch is arithmetic rather than taste.                                                                                                     |
+| `pwa/src/game/audio/road-voice.ts`   | The tyres, the wind, the weather, the gale and the DRIFT's scrub — fourteen layers, as a pure function of how the car is going.                                                                                                                                                        |
+| `pwa/src/game/audio/ambience.ts`     | The WORLD: three layers (the canopy, the crowd, a train) and the roster of calls a country makes at an hour, raised on a loose clock and thinned by speed.                                                                                                                             |
+| `pwa/src/game/audio/rack.ts`         | The plumbing every bed shares: build a layer, rebuild one whose context died under it, steer it on its glide.                                                                                                                                                                          |
+| `pwa/src/game/audio/drive-bed.ts`    | The scheduler: reads `GameState` once a frame, turns it into every layer's target, and raises the cues nothing reports — the lights, the lift's crackle, the wipers, the whistle.                                                                                                      |
+| `pwa/src/game/audio/bus.ts`          | One synth, two volume-scaled views (effects / music), and the unlock.                                                                                                                                                                                                                  |
+| `pwa/src/game/audio/ui.ts`           | Raising an interface cue, and the repeat cap on it. Deliberately does NOT unlock — see the last section.                                                                                                                                                                               |
+| `scripts/audition.mjs`               | **THE REVIEW SURFACE** (`make audition`).                                                                                                                                                                                                                                              |
 
 ## An event, a cue, or a bed — the first decision, and the one that matters
 
-| It is…             | When                                                                                               | Where it goes                                       |
-| ------------------ | -------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| **An EVENT sound** | The simulation reported a moment: `step()` pushed a `GameEvent`                                    | A def in `bank.ts` + a rung in `route.ts`           |
-| **A CUE**          | The APP knows something happened and the engine never said so — the countdown lights, a menu click | Raised directly (`playUi`, or the bed's own clock)  |
-| **A BED**          | It has no beginning and no end: the engine, the tyres, the wind, a slide                           | `engine-bed.ts` / `road-grain.ts`, driven per frame |
+| It is…             | When                                                                                               | Where it goes                                                                                       |
+| ------------------ | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **An EVENT sound** | The simulation reported a moment: `step()` pushed a `GameEvent`                                    | A def in `bank.ts` + a rung in `route.ts`                                                           |
+| **A CUE**          | The APP knows something happened and the engine never said so — the countdown lights, a menu click | Raised directly (`playUi`, or the bed's own clock)                                                  |
+| **A BED**          | It has no beginning and no end: the engine, the tyres, the wind, a slide, the birds' floor         | A LAYER in `engine-voice.ts` / `road-voice.ts` / `ambience.ts`, steered per frame by `drive-bed.ts` |
+| **A WORLD CALL**   | The country did it, not the car: a bird, a cow, a horn                                             | A def in `bank-world.ts` + a row in `worldRoster` (`ambience.ts`)                                   |
 
 The trap is reaching for a new engine event to make a noise. **Never add a
 `GameEvent` for presentation**: if the app can work it out from the state it
@@ -69,54 +75,49 @@ it only picks a different SIZE, that is a `PlayShape` (`gain`, `pitch`,
 `stretch`, `pan`) on the sound already there. A bank with nine landings that
 are the same four voices at different volumes is a bank nobody can retune.
 
-## A BED gets a hold; an EVENT never does
+## A BED is a LAYER; an EVENT is a one-shot
 
-Every voice is attack-then-decay: the level falls exponentially across the
+Every one-shot is attack-then-decay: the level falls exponentially across the
 whole duration — a tenth of the peak a quarter of the way in — which is why a
 longer `durationMs` makes a sound RING rather than sustain. That is exactly
-right for a hit, a click or a shift.
+right for a hit, a click or a shift, and a `holdMs` turns it into a swell.
 
-A bed is not made of hits. It is one grain fired over and over so the copies
-fuse into something continuous, and **four things are needed, not one**:
+A bed is not made of one-shots, and **never write one out of them**. It is a
+`Layer` (`Synth.layer`): a node graph built ONCE — an oscillator or a looping
+window onto the noise pool, a filter, a saturation curve, a gain — and then
+STEERED. Every frame the scheduler hands it a `LayerTarget` (level, pitch,
+cutoff, grit, pan) and a glide, and the layer moves there with
+`setTargetAtTime` on the audio thread. The rules:
 
-1. the grain **holds** its peak (`holdMs`),
-2. the grain is a **cross-fade**: `attackMs` and the tail
-   (`durationMs - attackMs - holdMs`) are each **exactly one cadence** and the
-   hold is a whole number of them, so what one grain gives up is exactly what
-   the next has not taken yet. Near enough is not enough — a layer holding for
-   1.2 cadences is up on its own half the time and its level swings ~3 dB at
-   the grain rate. **Never write a layer's envelope as a fraction of the
-   bed's** (`holdMs: HOLD * 0.5`) to make it sound tighter: a layer's character
-   is its BAND, never its envelope.
-3. the cadence is **constant** — a cadence that quickens with the revs makes
-   the rate of the putter the thing the ear follows, when the rate the engine
-   is actually turning at is the PITCH.
-4. a PITCHED grain is marked **`bed: true`**, which phase-locks it to the
-   absolute clock and gives it linear ramps. An oscillator starts at the top of
-   its own cycle, so same-note grains on a fixed cadence reinforce where the
-   note and the cadence divide evenly and CANCEL where they land half a cycle
-   apart — and the note moves while the cadence does not, so a bed walks
-   through both. Once they DO add, the exponential ramps a one-shot wants stop
-   cross-fading and the sum dips between grains, which is why the flag does
-   both. Noise grains need neither: each reads a random window of the pool.
+1. **What a layer IS goes in the `LayerSpec`; what MOVES goes in the target.**
+   The oscillator, the noise colour, the filter's type and Q, the chorus
+   width and the curve cannot be changed smoothly under a running signal, so
+   they are decided once. A surface with a different colour of roar is a
+   second layer (`roarPink` / `roarBrown`), not a colour switch.
+2. **A bed is a PURE FUNCTION from the state to a table of targets**
+   (`engineTargets`, `roadTargets`, `worldTargets`). That is what makes it
+   testable, what lets the audition page drive it from sliders, and what
+   keeps `drive-bed.ts` a reader of the state rather than a sound designer.
+   Add a layer by adding a key to the spec table, the glide table and the
+   target function; the tests read the targets by NAME.
+3. **The glide is the character of the change**, and it is seconds: pitch on
+   a few hundredths (a rev that lags the needle reads as a slow engine), a
+   surface on a tenth (a wheel leaving the road is a cross-fade, not a
+   switch), the weather on a quarter (a squall arrives).
+4. **A driven layer has ONE curve and moves the gain in front of it.**
+   `LayerTarget.grit` is the pre-gain; swapping a curve under a running
+   signal is a step.
+5. **Nothing is booked ahead.** A late frame leaves every layer holding its
+   last target. A bed that had to be fed on a cadence breathed with the frame
+   rate and left a hole in itself whenever it was starved — and a hole is
+   what a player reports as CRACKLE. The one-shots the bed raises (the
+   lights, the crackle, the wipers) play NOW, with no `at`.
+6. **A silent layer costs nothing to keep.** Set its level to 0 and leave it
+   built; `rack.ts` rebuilds a layer only when its context has died.
 
-Get any one wrong and what comes out of the speaker is putt … putt … putt, or
-a shimmer at the grain rate that a player reports as DISTORTION.
-`tests/audio_test.ts` guards the tiling and the alignment; the audition page's
-sliders are how you hear it.
-
-Noise beds want a DEEPER stack than pitched ones (five grains against three):
-uncorrelated noise sums in power rather than in level, so a broadband bed
-flutters where a pitched one is already smooth.
-
-**AND A BED IS EXPENSIVE, so count what it asks for.** Five overlapping grains
-nine times a second is twenty SECONDS of audio per second of play. Nothing on
-that path may synthesise samples per voice — `synth.ts` keeps one long buffer
-per noise colour and every grain reads a random window of it, because the
-alternative was four megabytes of `Float32Array` a second on the renderer's own
-thread, and the collector answers that with a pause long enough to push the
-next grain behind the clock. A bed that is cheap for one grain and run ten
-times a second is not cheap.
+`tests/audio_test.ts` holds the beds to this: built once, steered every
+frame, nothing booked on the clock, rebuilt on a replaced context, and every
+computed cutoff under the headset's Nyquist across the whole range.
 
 ## Sound design vocabulary
 
@@ -154,8 +155,14 @@ Mixing rules, and they are enforced by test:
   Gloss layers sit at 0.015–0.03.
 - **The interface is quieter than the car**, always. `ui_move` is the
   most-played sound in the game.
-- **A bed's numbers look wrong and are not.** Three grains sound at once, so
-  every volume in `engine-bed.ts` is about a third of what the player hears.
+- **A bed's level is heard as written, THROUGH THE LISTENER.** Every target
+  is multiplied by the seat's row in `listener.ts` before it reaches the
+  layer, and every one-shot by its `events` gain and `muffle` pitch. Retune
+  a sound at the CHASE seat (the row of ones), and check it from the cockpit
+  and the helicopter before calling it done.
+- **The world is a third of the car.** `WORLD_BANK`'s loudest voice sits
+  under a third of `RUN_BANK`'s, every call fades with speed and is gone past
+  half of what the car can do, and a test holds both.
 - Keep every sound's `description` current. It is the sentence the next person
   checks their retune against, and a def without one fails the test.
 
@@ -167,7 +174,8 @@ Mixing rules, and they are enforced by test:
    will be heard beside. A sound judged in isolation is a sound that turns out
    to be twice as loud as everything around it.
 3. `npx vitest run tests/audio_test.ts` — the mix budget, the route coverage
-   and the bed's tiling.
+   the beds' targets, and every cutoff — authored or computed — against the
+   headset's rate.
 4. For a BED, move the sliders through the whole range on the audition page.
    The faults are all at the ends: an engine that buzzes at idle, a scrub that
    vanishes at low speed, a wind that arrives all at once.

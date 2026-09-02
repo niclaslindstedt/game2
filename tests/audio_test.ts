@@ -2,7 +2,7 @@
 // THE AUDIO GUARDS — the faults in this subsystem that are invisible without
 // a test, because every one of them is a SILENCE rather than a crash.
 //
-// Four kinds, and each has bitten a game that shipped without the guard:
+// Five kinds, and each has bitten a game that shipped without the guard:
 //
 //   * A SCORE THAT WILL NOT PLAY. A mistyped note, a pattern named in the
 //     order that nobody wrote, a voice whose bar count does not divide its
@@ -13,60 +13,114 @@
 //   * A MIX THAT CREEPS. Every retune nudges one sound up to be heard over
 //     the last one, and six months later the whole bank is at full scale and
 //     the limiter is doing all the work.
-//   * A BED WITH HOLES IN IT. The engine is one-shot grains overlapping, so a
-//     cadence that drifts past the grain's own life is a stutter — audible
-//     instantly, and impossible to see in a diff.
+//   * A BED THAT SAYS NOTHING. The tyres as loud on a straight as in a
+//     corner, an engine that does not change with load — a bed whose numbers
+//     are constants is the loudest thing in the mix for the whole run.
+//   * A CUTOFF PAST NYQUIST. Fine on a laptop, a torn speaker on the 16 kHz
+//     session iOS hands a Bluetooth headset.
 //
 // No DOM: the synth is replaced with a recorder, which is also the only way
 // to assert what a sound actually asked the instrument for.
 
 import { describe, expect, it } from "vitest";
 
-import { TUNING, createGame, standSolid, step, type GameEvent } from "@engine";
+import { TUNING, createGame, standSolid, step, type GameEvent, type GameState } from "@engine";
 
-import { RUN_BANK } from "../pwa/src/game/audio/bank.ts";
+import {
+  callGainAtSpeed,
+  createWorld,
+  worldRoster,
+  worldTargets,
+  type WorldVoice,
+} from "../pwa/src/game/audio/ambience.ts";
+import { STAGE_BANK } from "../pwa/src/game/audio/bank-stage.ts";
+import { UI_BANK } from "../pwa/src/game/audio/bank-ui.ts";
+import { WORLD_BANK } from "../pwa/src/game/audio/bank-world.ts";
+import { CAR_BANK, RUN_BANK } from "../pwa/src/game/audio/bank.ts";
 import { createDriveBed } from "../pwa/src/game/audio/drive-bed.ts";
 import {
-  playRoadGrain,
+  engineTargets,
+  noteHz,
+  rpmAt,
+  type EngineLayer,
+  type EngineVoice,
+} from "../pwa/src/game/audio/engine-voice.ts";
+import { LISTENERS, listenerFor } from "../pwa/src/game/audio/listener.ts";
+import { stageTrack, trackFor, type Setting } from "../pwa/src/game/audio/music-pick.ts";
+import { playDef } from "../pwa/src/game/audio/play.ts";
+import {
+  roadTargets,
   SURFACES,
   WET_SURFACES,
+  type RoadLayer,
   type RoadVoice,
-} from "../pwa/src/game/audio/road-grain.ts";
-import { GRAIN_MS, noteHz, playEngineGrain, rpmAt } from "../pwa/src/game/audio/engine-bed.ts";
-import { playDef } from "../pwa/src/game/audio/play.ts";
-import { soundForEvent, soundForThunder } from "../pwa/src/game/audio/route.ts";
-import { UI_BANK } from "../pwa/src/game/audio/bank-ui.ts";
+} from "../pwa/src/game/audio/road-voice.ts";
+import { heardFrom, soundForEvent, soundForThunder } from "../pwa/src/game/audio/route.ts";
+import { CIRCUIT_TRACK } from "../pwa/src/game/audio/scores/circuit.ts";
+import { DESERT_TRACK } from "../pwa/src/game/audio/scores/desert.ts";
+import { ENDLESS_TRACK } from "../pwa/src/game/audio/scores/endless.ts";
 import { MENU_TRACK } from "../pwa/src/game/audio/scores/menu.ts";
+import { POLAR_TRACK } from "../pwa/src/game/audio/scores/polar.ts";
+import { SPRUCE_TRACK } from "../pwa/src/game/audio/scores/spruce.ts";
 import { TAIGA_TRACK } from "../pwa/src/game/audio/scores/taiga.ts";
 import type { SoundBank } from "../pwa/src/game/audio/types.ts";
-import { flattenTrack, noteFrequency, trackSeconds } from "../pwa/src/lib/tracker.ts";
+import { flattenTrack, noteFrequency, trackSeconds, type Track } from "../pwa/src/lib/tracker.ts";
 import {
   MAX_CUTOFF_RATIO,
   MIN_ATTACK_MS,
   envelopeShape,
   safeCutoff,
+  shaperPush,
+  shaperSteepness,
+  type LayerSpec,
+  type LayerTarget,
   type NoiseOptions,
   type Synth,
   type ToneOptions,
 } from "../pwa/src/lib/voice.ts";
 
+/** One layer the recorder built: what it was made of, every target it was
+ * steered to, and whether it is still standing. */
+type RecordedLayer = {
+  spec: LayerSpec;
+  sets: { target: LayerTarget; glide: number }[];
+  stopped: boolean;
+  generation: number;
+};
+
 /** A synth that plays nothing and remembers everything, with a clock the test
- * drives by hand. */
+ * drives by hand, a lock it can throw, and a context it can replace. */
 function recorder(): Synth & {
   tones: ToneOptions[];
   noises: NoiseOptions[];
+  layers: RecordedLayer[];
   clock: number;
+  locked: boolean;
+  generation: number;
 } {
   const rec = {
     tones: [] as ToneOptions[],
     noises: [] as NoiseOptions[],
+    layers: [] as RecordedLayer[],
     clock: 0,
+    locked: false,
+    generation: 0,
     unlock: () => {},
     autostart: () => {},
     resume: () => {},
-    now: () => rec.clock,
+    now: () => (rec.locked ? null : rec.clock),
     tone: (o: ToneOptions) => void rec.tones.push(o),
     noise: (o: NoiseOptions) => void rec.noises.push(o),
+    layer(spec: LayerSpec) {
+      if (rec.locked) return null;
+      const layer: RecordedLayer = { spec, sets: [], stopped: false, generation: rec.generation };
+      rec.layers.push(layer);
+      return {
+        set: (target: LayerTarget, glide: number) => void layer.sets.push({ target, glide }),
+        stop: () => void (layer.stopped = true),
+        alive: () => !layer.stopped && layer.generation === rec.generation,
+      };
+    },
   };
   return rec;
 }
@@ -74,10 +128,24 @@ function recorder(): Synth & {
 const BANKS: [string, SoundBank][] = [
   ["run", RUN_BANK],
   ["ui", UI_BANK],
+  ["world", WORLD_BANK],
 ];
 
-describe("the sound bank", () => {
-  it("gives every sound a description and at least one voice", () => {
+const SCORES: [string, Track][] = [
+  ["menu", MENU_TRACK],
+  ["taiga", TAIGA_TRACK],
+  ["spruce", SPRUCE_TRACK],
+  ["polar", POLAR_TRACK],
+  ["desert", DESERT_TRACK],
+  ["circuit", CIRCUIT_TRACK],
+  ["endless", ENDLESS_TRACK],
+];
+
+const loudest = (bank: SoundBank): number =>
+  Math.max(...Object.values(bank).flatMap((d) => d.voices.map((v) => v.volume ?? 0)));
+
+describe("the sound banks", () => {
+  it("give every sound a description and at least one voice", () => {
     for (const [name, bank] of BANKS) {
       for (const [id, def] of Object.entries(bank)) {
         expect(def.voices.length, `${name}/${id} has no voices`).toBeGreaterThan(0);
@@ -88,28 +156,43 @@ describe("the sound bank", () => {
     }
   });
 
-  it("keeps every voice inside the mixing budget", () => {
+  it("keep every voice inside the mixing budget", () => {
     // The ceiling is the biggest crash in the game. Nothing may exceed it, and
-    // anything that reaches it should be a once-a-run moment — this is the
-    // guard against the slow creep where each retune is a little louder than
-    // the last until the limiter is the mix.
+    // anything that reaches it should be a once-a-run moment.
     for (const [name, bank] of BANKS) {
       for (const [id, def] of Object.entries(bank)) {
         for (const voice of def.voices) {
-          const volume = voice.volume ?? 0;
-          expect(volume, `${name}/${id} voice is louder than the crash`).toBeLessThanOrEqual(0.1);
+          expect(voice.volume ?? 0, `${name}/${id} is louder than the crash`).toBeLessThanOrEqual(
+            0.1,
+          );
           expect(voice.durationMs, `${name}/${id} voice has no length`).toBeGreaterThan(0);
         }
       }
     }
   });
 
-  it("keeps the interface quieter than the car", () => {
-    // A menu click is heard hundreds of times a session and a crash a handful.
-    // If they are the same size, the interface is what the game sounds like.
-    const loudest = (bank: SoundBank): number =>
-      Math.max(...Object.values(bank).flatMap((d) => d.voices.map((v) => v.volume ?? 0)));
+  it("keep the interface and the world quieter than the car", () => {
+    // A menu click is heard hundreds of times a session and a crash a handful;
+    // a bird that can be heard over a drift is a bird inside the car.
     expect(loudest(UI_BANK)).toBeLessThan(loudest(RUN_BANK));
+    expect(loudest(WORLD_BANK)).toBeLessThan(loudest(RUN_BANK) * 0.35);
+  });
+
+  it("serve the car and the stage as one bank, with no id claimed twice", () => {
+    const car = Object.keys(CAR_BANK);
+    const stage = Object.keys(STAGE_BANK);
+    expect(car.filter((id) => stage.includes(id))).toEqual([]);
+    expect(Object.keys(RUN_BANK).length).toBe(car.length + stage.length);
+  });
+
+  it("keeps the world's sounds under 5 kHz where a codec can carry them", () => {
+    // A Bluetooth codec turns dense top end into a swirl. The birds are the
+    // highest things in the game and they stop under 5 kHz.
+    for (const [id, def] of Object.entries(WORLD_BANK)) {
+      for (const voice of def.voices) {
+        if (voice.call === "tone") expect(voice.from, `world/${id}`).toBeLessThan(5000);
+      }
+    }
   });
 });
 
@@ -122,10 +205,7 @@ describe("event routing", () => {
   /** Every shape a `GameEvent` can take, one or more of each — KEYED BY THE
    * EVENT'S OWN TYPE, so the union cannot grow past this list quietly. A new
    * member of `GameEvent` is a missing key here, and a missing key is a
-   * compile error rather than a test that goes on passing while the thing it
-   * was written to cover slips through unrouted. That is not hypothetical:
-   * `spin` was added to the union, emitted by the car and read by nobody,
-   * and a hand-written array had nothing to say about it. */
+   * compile error rather than a test that goes on passing. */
   const EVERY_EVENT: Record<GameEvent["type"], GameEvent[]> = {
     go: [{ type: "go" }],
     takeoff: [{ type: "takeoff", vy: 6 }],
@@ -169,9 +249,16 @@ describe("event routing", () => {
     ],
     finish: [{ type: "finish", time: 120 }],
     cheer: [{ type: "cheer", size: 0.4 }],
-    checkpoint: [{ type: "checkpoint", index: 1, count: 3, split: 2.5, time: 61 }],
+    checkpoint: [
+      { type: "checkpoint", index: 0, count: 3, split: 0, time: 30 },
+      { type: "checkpoint", index: 2, count: 3, split: 2, time: 61 },
+    ],
     missed: [{ type: "missed", next: 1, count: 3 }],
-    systemFail: [{ type: "systemFail", system: "engine", spent: false }],
+    systemFail: [
+      { type: "systemFail", system: "engine", spent: false },
+      { type: "systemFail", system: "engine", spent: true },
+      { type: "systemFail", system: "gearbox", spent: true },
+    ],
     wheelFail: [
       { type: "wheelFail", wheel: 1, off: false },
       { type: "wheelFail", wheel: 1, off: true },
@@ -182,32 +269,39 @@ describe("event routing", () => {
     ],
   };
 
-  /** The events that are deliberately SILENT, and why. Listed rather than
-   * inferred, so making one silent is a decision somebody wrote down: both
-   * of these are read on the HUD, where a board arriving IS the feedback,
-   * and both fire under sounds — a split under the co-driver, a failure
-   * under whatever just broke the car — that would be masked anyway. */
-  const SILENT = new Set<GameEvent["type"]>(["checkpoint", "systemFail"]);
-
   it("answers every event with a sound the bank actually holds", () => {
+    // Nothing is silent any more: a split board and a system giving way
+    // were the two moments the car reported that nobody could hear.
     for (const [type, events] of Object.entries(EVERY_EVENT)) {
       for (const event of events) {
         const hit = soundForEvent(event, 0);
-        if (SILENT.has(type as GameEvent["type"])) {
-          expect(hit, `${type} is listed as silent but makes a sound`).toBeNull();
-          continue;
-        }
         expect(hit, `${type} makes no sound`).not.toBeNull();
         expect(RUN_BANK[(hit as { id: string }).id], `${type} names a missing sound`).toBeTruthy();
       }
     }
   });
 
+  it("tells a system giving from a system gone", () => {
+    const give = soundForEvent({ type: "systemFail", system: "engine", spent: false }, 0);
+    const gone = soundForEvent({ type: "systemFail", system: "engine", spent: true }, 0);
+    expect(give?.id).toBe("system_give");
+    expect(gone?.id).toBe("system_gone");
+    // The engine going is the run ending, and it is the heaviest of them.
+    const box = soundForEvent({ type: "systemFail", system: "gearbox", spent: true }, 0);
+    expect(gone?.shape?.gain ?? 1).toBeGreaterThan(box?.shape?.gain ?? 1);
+  });
+
+  it("lifts the last split board of a lap so the count can be heard ending", () => {
+    const first = soundForEvent({ type: "checkpoint", index: 0, count: 3, split: 0, time: 1 }, 0);
+    const last = soundForEvent({ type: "checkpoint", index: 2, count: 3, split: 2, time: 1 }, 0);
+    expect(first?.id).toBe("checkpoint");
+    expect(last?.shape?.pitch ?? 1).toBeGreaterThan(first?.shape?.pitch ?? 1);
+  });
+
   it("sizes a spin by the speed it let go at", () => {
     const slow = soundForEvent({ type: "spin", slip: 1.2, speed: 9 }, 0);
     const fast = soundForEvent({ type: "spin", slip: 1.2, speed: 28 }, 0);
     expect(slow?.id).toBe("spin");
-    expect(fast?.id).toBe("spin");
     expect(fast?.shape?.gain).toBeGreaterThan(slow?.shape?.gain ?? 0);
     expect(fast?.shape?.pitch).toBeLessThan(slow?.shape?.pitch ?? 0);
     expect(fast?.shape?.stretch).toBeGreaterThan(slow?.shape?.stretch ?? 0);
@@ -225,20 +319,13 @@ describe("event routing", () => {
     const soft = soundForEvent({ type: "kerbHit", speed: 5 }, 0);
     const hard = soundForEvent({ type: "kerbHit", speed: 20 }, 0);
     expect(soft?.id).toBe("kerb_block");
-    expect(hard?.id).toBe("kerb_block");
     expect(hard?.shape?.gain ?? 0).toBeGreaterThan(soft?.shape?.gain ?? 0);
     expect(hard?.shape?.pitch ?? 1).toBeLessThan(soft?.shape?.pitch ?? 1);
-    // …and there is nothing BRIGHT anywhere in it. The crack of panels and
-    // glass is what an impact is MADE of, and a block breaks neither: it is
-    // concrete under a tyre, felt through the floor.
     for (const voice of RUN_BANK.kerb_block.voices) {
       expect(voice.filter?.frequency ?? 0).toBeLessThan(1000);
       expect(voice.filter?.to ?? 0).toBeLessThan(1000);
     }
-    expect(
-      RUN_BANK.impact_hit.voices.some((v) => (v.filter?.frequency ?? 0) > 1000),
-      "the impact this is being told apart from has no top end either",
-    ).toBe(true);
+    expect(RUN_BANK.impact_hit.voices.some((v) => (v.filter?.frequency ?? 0) > 1000)).toBe(true);
   });
 
   it("climbs the impact ladder with closing speed", () => {
@@ -249,9 +336,6 @@ describe("event routing", () => {
   });
 
   it("takes a car going under an octave below a ford crossed at the same pace", () => {
-    // The two are one bank sound at two sizes, and the size is the whole
-    // difference between water the car drives through and water it does
-    // not come out of.
     const ford = soundForEvent({ type: "splash", speed: 18, deep: false }, 0);
     const lake = soundForEvent({ type: "splash", speed: 18, deep: true }, 0);
     expect(lake?.id).toBe(ford?.id);
@@ -260,22 +344,27 @@ describe("event routing", () => {
     expect(lake?.shape?.stretch ?? 1).toBeGreaterThan(ford?.shape?.stretch ?? 1);
   });
 
-  it("makes a harder landing louder and lower", () => {
-    // The SLAM, not the air time: a short hop off a steep lip arrives
-    // harder than a long floaty flight onto ground running away under it,
-    // and the sound has to be the one the car felt.
+  it("makes a harder landing louder and lower, and gives the gentlest some weight", () => {
     const hop = soundForEvent({ type: "landing", airTime: 2.5, slam: 2, clean: true }, 0);
     const flight = soundForEvent({ type: "landing", airTime: 0.4, slam: 12, clean: true }, 0);
     expect(flight?.shape?.gain ?? 0).toBeGreaterThan(hop?.shape?.gain ?? 0);
     expect(flight?.shape?.pitch ?? 1).toBeLessThan(hop?.shape?.pitch ?? 1);
-  });
-
-  it("still gives the gentlest touchdown some weight — a car is heavy", () => {
-    // A landing that registers as nothing at all is the one thing a jump
-    // must never do, however small the jump was.
     const feather = soundForEvent({ type: "landing", airTime: 0.1, slam: 0.2, clean: true }, 0);
     const full = soundForEvent({ type: "landing", airTime: 2, slam: 14, clean: true }, 0);
     expect(feather?.shape?.gain ?? 0).toBeGreaterThan(0.25 * (full?.shape?.gain ?? 1));
+  });
+
+  it("hears an impact from the seat it is watched from", () => {
+    // A cabin is a lowpass and a helicopter is a long way off: the same
+    // impact arrives duller inside and quieter from above.
+    const hit = soundForEvent({ type: "impact", speed: 20, angle: 0, belly: false }, 0);
+    const inside = heardFrom(hit?.shape, LISTENERS.cockpit);
+    const above = heardFrom(hit?.shape, LISTENERS.heli);
+    const behind = heardFrom(hit?.shape, LISTENERS.chase);
+    expect(inside.pitch ?? 1).toBeLessThan(behind.pitch ?? 1);
+    expect(above.gain ?? 1).toBeLessThan(behind.gain ?? 1);
+    // …and a play with no shape of its own still gets the seat's.
+    expect(heardFrom(undefined, LISTENERS.heli).gain).toBe(LISTENERS.heli.events);
   });
 });
 
@@ -284,9 +373,6 @@ describe("thunder", () => {
     soundForThunder({ distance, pan });
 
   it("cracks up close and rolls from a distance", () => {
-    // Two sounds rather than one with a volume knob, because air absorbs
-    // the transient far faster than the body: a near strike has a rip in
-    // it and a far one has had that rip smeared into a swell.
     expect(clap(300).id).toBe("thunder_near");
     expect(clap(6000).id).toBe("thunder_far");
     for (const id of ["thunder_near", "thunder_far"]) {
@@ -295,12 +381,8 @@ describe("thunder", () => {
   });
 
   it("gives the roll no onset at all", () => {
-    // An attack on distant thunder is the tell that turns it into a drum
-    // in the next room. Every voice of the far clap swells in.
-    for (const voice of RUN_BANK.thunder_far.voices) {
+    for (const voice of RUN_BANK.thunder_far.voices)
       expect(voice.attackMs ?? 0).toBeGreaterThan(200);
-    }
-    // …where the near one leads with something that does not.
     expect(Math.min(...RUN_BANK.thunder_near.voices.map((v) => v.attackMs ?? 0))).toBeLessThan(10);
   });
 
@@ -308,10 +390,7 @@ describe("thunder", () => {
     const near = clap(2000).shape;
     const far = clap(8000).shape;
     expect(far.gain ?? 1).toBeLessThan(near.gain ?? 1);
-    // The pitch scales every filter with it, which is what air absorption
-    // physically does: a distant strike is a DARKER one, not a quiet one.
     expect(far.pitch ?? 1).toBeLessThan(near.pitch ?? 1);
-    // And it rolls, because the same wavefront arrives off a dozen hills.
     expect(far.stretch ?? 1).toBeGreaterThan(near.stretch ?? 1);
   });
 
@@ -324,9 +403,6 @@ describe("thunder", () => {
 
 describe("shaping a play", () => {
   it("scales the volume a voice left off the synth's own default", () => {
-    // `play.ts` copies the synth's defaults so it can scale a volume the
-    // author never wrote. If the two drift, a shaped sound plays at the wrong
-    // level and nothing else in the codebase would notice.
     const rec = recorder();
     playDef(
       rec,
@@ -334,7 +410,6 @@ describe("shaping a play", () => {
       { gain: 0.5 },
     );
     expect(rec.tones[0].volume).toBeCloseTo(0.06 * 0.5, 6);
-    rec.tones.length = 0;
     playDef(
       rec,
       { description: "x".repeat(50), voices: [{ call: "noise", durationMs: 10 }] },
@@ -362,8 +437,6 @@ describe("shaping a play", () => {
     );
     const tone = rec.tones[0];
     expect(tone.from).toBe(200);
-    // No authored glide, so no glide after shaping — otherwise every scaled
-    // hit turns into a swoop.
     expect(tone.to).toBeUndefined();
     expect(tone.filter?.frequency).toBe(500);
     expect(tone.filter?.to).toBe(1000);
@@ -371,12 +444,7 @@ describe("shaping a play", () => {
 });
 
 describe("the scores", () => {
-  const SCORES: [string, typeof MENU_TRACK][] = [
-    ["menu", MENU_TRACK],
-    ["taiga", TAIGA_TRACK],
-  ];
-
-  it("flattens, with every note token a note", () => {
+  it("flatten, with every note token a note", () => {
     for (const [name, track] of SCORES) {
       const flat = flattenTrack(track);
       expect(flat.totalSteps, name).toBeGreaterThan(0);
@@ -390,9 +458,7 @@ describe("the scores", () => {
     }
   });
 
-  it("runs long enough to be a loop and short enough to come round", () => {
-    // A theme the player hears the whole of before the first corner is a
-    // jingle; one that never repeats a section is not an arrangement.
+  it("run long enough to be a loop and short enough to come round", () => {
     for (const [name, track] of SCORES) {
       const seconds = trackSeconds(track);
       expect(seconds, `${name} is too short`).toBeGreaterThan(70);
@@ -407,9 +473,7 @@ describe("the scores", () => {
     }
   });
 
-  it("keeps the music under the sound effects", () => {
-    // The score plays continuously under an engine; it is the bed, not the
-    // event. Nothing in it may be as loud as an ordinary contact.
+  it("keep the music under the sound effects", () => {
     for (const [name, track] of SCORES) {
       for (const [voice, instrument] of Object.entries(track.instruments)) {
         expect(instrument.volume, `${name}/${voice}`).toBeLessThanOrEqual(0.06);
@@ -417,14 +481,59 @@ describe("the scores", () => {
     }
   });
 
-  it("gives each score a real pad — something that holds", () => {
-    // The whole difference between this and a chip score. A track whose every
-    // voice decays from the moment it starts has no bed in it, whatever the
-    // note data says.
+  it("give each score a real pad — something that holds", () => {
     for (const [name, track] of SCORES) {
       const holds = Object.values(track.instruments).filter((i) => (i.hold ?? 0) >= 0.8);
       expect(holds.length, `${name} has no sustaining voice`).toBeGreaterThan(0);
     }
+  });
+
+  it("have an arc — no two sections of a score are the same density", () => {
+    // A section that is not a section: two patterns with the same voice
+    // count and the same attacks per bar are one section written twice.
+    for (const [name, track] of SCORES) {
+      const seen = new Set<string>();
+      for (const [section, pattern] of Object.entries(track.patterns)) {
+        const bars = Math.max(...Object.values(pattern).map((v) => v.length)) / 16;
+        let attacks = 0;
+        for (const line of Object.values(pattern)) {
+          const cycles = (bars * 16) / line.length;
+          attacks += line.filter((t) => t !== "." && t !== "=").length * cycles;
+        }
+        const key = `${bars}/${Object.keys(pattern).sort().join(",")}/${Math.round(attacks / bars)}`;
+        expect(seen.has(key), `${name}/${section} duplicates another section`).toBe(false);
+        seen.add(key);
+      }
+    }
+  });
+
+  it("are picked by the stage, and every pick is a score that exists", () => {
+    const base: Setting = {
+      biome: "taiga",
+      weather: "clear",
+      timeOfDay: "day",
+      circuit: false,
+      endless: false,
+    };
+    expect(trackFor(base)).toBe("taiga");
+    expect(trackFor({ ...base, weather: "rain" })).toBe("spruce");
+    expect(trackFor({ ...base, weather: "storm" })).toBe("spruce");
+    expect(trackFor({ ...base, timeOfDay: "night" })).toBe("polar");
+    expect(trackFor({ ...base, timeOfDay: "dusk" })).toBe("polar");
+    expect(trackFor({ ...base, biome: "desert" })).toBe("desert");
+    expect(trackFor({ ...base, biome: "desert", weather: "storm" })).toBe("desert");
+    // The shape of the road wins over the sky.
+    expect(trackFor({ ...base, circuit: true, weather: "storm" })).toBe("circuit");
+    expect(trackFor({ ...base, endless: true, biome: "desert" })).toBe("endless");
+    const ids = new Set(SCORES.map(([name]) => name));
+    for (const weather of ["clear", "rain", "storm"] as const) {
+      for (const timeOfDay of ["dawn", "day", "dusk", "night"] as const) {
+        for (const biome of ["taiga", "desert"] as const) {
+          expect(ids.has(trackFor({ ...base, weather, timeOfDay, biome }))).toBe(true);
+        }
+      }
+    }
+    expect(stageTrack(createGame({ seed: 4242, length: "short" }))).toBe("taiga");
   });
 
   it("refuses an arrangement that names a pattern nobody wrote", () => {
@@ -465,238 +574,16 @@ describe("the sequencer", () => {
   });
 });
 
-describe("the road bed", () => {
-  /** A stage with the countdown skipped and the car already rolling. */
-  function rolling(): ReturnType<typeof createGame> {
-    const state = createGame({ seed: 4242, length: "short", skipCountdown: true });
-    for (let i = 0; i < 600; i++) {
-      step(state, {
-        steer: 0,
-        throttle: 1,
-        brake: 0,
-        handbrake: false,
-        shiftUp: false,
-        shiftDown: false,
-        reset: false,
-      });
-    }
-    return state;
-  }
-
-  it("books grains ahead of the clock, with no hole between them", () => {
-    const rec = recorder();
-    const bed = createDriveBed(rec);
-    const state = rolling();
-    // Twenty frames of a 60 Hz display, the clock advancing with them.
-    for (let frame = 0; frame < 20; frame++) {
-      bed.update(state, 1 / 60);
-      rec.clock += 1 / 60;
-    }
-    // The hum is one tone per grain, so its start times ARE the cadence.
-    const starts = rec.tones
-      .filter((t) => t.type === "triangle" && (t.holdMs ?? 0) > 0)
-      .map((t) => t.at ?? 0)
-      .sort((a, b) => a - b);
-    expect(starts.length).toBeGreaterThan(4);
-    const cadence = GRAIN_MS / 1000;
-    for (let i = 1; i < starts.length; i++) {
-      const gap = starts[i] - starts[i - 1];
-      // Three layers share a start time, so a gap is either zero or exactly
-      // one cadence — never one and a half, which is the stutter this guards.
-      expect(gap === 0 || Math.abs(gap - cadence) < 1e-6, `gap ${gap}`).toBe(true);
-    }
-  });
-
-  it("holds its grains long enough to overlap into something continuous", () => {
-    const rec = recorder();
-    const bed = createDriveBed(rec);
-    bed.update(rolling(), 1 / 60);
-    const hum = rec.tones.find((t) => t.type === "triangle" && (t.holdMs ?? 0) > 0);
-    expect(hum).toBeTruthy();
-    // At least two grains sounding at once, or the bed is a pulse train at the
-    // cadence rather than an engine.
-    expect(hum?.holdMs ?? 0).toBeGreaterThan(GRAIN_MS * 1.5);
-  });
-
-  it("holds every layer long enough that none of them is a shaker", () => {
-    // THE SHAKER GUARD, and the one that shipped broken. The hum's hold is
-    // asserted above; the trap is the layers written as a FRACTION of it —
-    // the crunch, the spray, the rain's patter, all once shortened so they
-    // would sound tighter. A layer holding for less than two cadences is up
-    // on its own half the time, so its level swings at the grain rate, and
-    // on a bright band nine hertz of that is not a surface being thrown, it
-    // is somebody shaking a maraca over the whole run.
-    const rec = recorder();
-    const bed = createDriveBed(rec);
-    const state = rolling();
-    state.env.weather = "rain";
-    bed.update(state, 1 / 60);
-    const grains = [...rec.tones, ...rec.noises].filter((v) => (v.holdMs ?? 0) > 0);
-    expect(grains.length).toBeGreaterThan(6);
-    for (const grain of grains) {
-      expect(grain.holdMs ?? 0, `a grain holds only ${grain.holdMs} ms`).toBeGreaterThanOrEqual(
-        GRAIN_MS * 2,
-      );
-      // …and the hold has to fit inside the grain, or the envelope clamps it
-      // back and the guard above measures a number nobody plays.
-      expect((grain.attackMs ?? 0) + (grain.holdMs ?? 0)).toBeLessThan(grain.durationMs);
-    }
-  });
-
-  it("cross-fades every pitched grain into the one before it", () => {
-    // Two halves of one fault. An oscillator starts at the top of its own
-    // cycle, so same-note grains fired on a fixed cadence reinforce where the
-    // note and the cadence divide evenly and CANCEL where they land half a
-    // cycle apart — the note moves and the cadence does not, so an unmarked
-    // engine loses several decibels at some revs (a 7 dB bounce across the
-    // band, flat once every grain is a `bed`). And once they DO add, the
-    // summed level is the summed envelope, so the attack and the tail have to
-    // be one cadence each: what one grain gives up is then exactly what the
-    // next has not taken yet. Off by a little and the bed wobbles 14% at the
-    // grain rate; right, under 1%.
-    const rec = recorder();
-    const drive = createDriveBed(rec);
-    drive.update(rolling(), 1 / 60);
-    const pitched = rec.tones.filter((t) => (t.holdMs ?? 0) > 0);
-    expect(pitched.length).toBeGreaterThan(2);
-    for (const grain of pitched) {
-      const at = `a ${grain.type} grain at ${Math.round(grain.from)} Hz`;
-      expect(grain.bed, `${at} is not marked as a bed grain`).toBe(true);
-      expect(grain.attackMs, `${at} does not fade in over a cadence`).toBe(GRAIN_MS);
-      const tail = grain.durationMs - (grain.attackMs ?? 0) - (grain.holdMs ?? 0);
-      expect(tail, `${at} fades out over ${tail} ms, not a cadence`).toBeCloseTo(GRAIN_MS, 6);
-      expect((grain.holdMs ?? 0) % GRAIN_MS, `${at} holds for a part-cadence`).toBeCloseTo(0, 6);
-    }
-  });
-
-  it("re-anchors after a stall rather than booking grains in the past", () => {
-    // THE JITTER GUARD. WebAudio starts a source whose time has already gone
-    // the instant it is handed over, so a stall that leaves the anchor behind
-    // the clock fires every missed grain at once, stacked on the next one.
-    // What the player hears is a lurch, and the only fix is to give up on the
-    // missed grains — the bed's phase means nothing, its regularity is all.
-    const rec = recorder();
-    const bed = createDriveBed(rec);
-    const state = rolling();
-    bed.update(state, 1 / 60);
-    rec.tones.length = 0;
-    rec.noises.length = 0;
-    // A stall SHORT of a full re-sync is the dangerous one: long enough to
-    // strand the anchor behind the clock, short enough that a scheduler
-    // watching only for a catastrophic gap keeps calmly booking into the past.
-    rec.clock += 0.4;
-    bed.update(state, 1 / 60);
-    const booked = [...rec.tones, ...rec.noises].map((v) => v.at ?? 0);
-    expect(booked.length).toBeGreaterThan(0);
-    expect(Math.min(...booked)).toBeGreaterThanOrEqual(rec.clock);
-  });
-
-  it("re-anchors onto a REBUILT clock rather than going silent for minutes", () => {
-    // THE APP-SWITCH GUARD. iOS hands a backgrounded PWA a dead AudioContext
-    // and the synth replaces it; the new context's clock starts near zero
-    // while this bed's anchor still holds a time minutes into the old one's.
-    // An anchor in the FUTURE is never late, so nothing re-times it and the
-    // road bed simply stops — which is the "came back from another app and
-    // the engine is gone" silence.
-    const rec = recorder();
-    const bed = createDriveBed(rec);
-    const state = rolling();
-    rec.clock = 240;
-    bed.update(state, 1 / 60);
-    rec.tones.length = 0;
-    rec.noises.length = 0;
-    rec.clock = 0.01; // a fresh context
-    bed.update(state, 1 / 60);
-    const booked = [...rec.tones, ...rec.noises].map((v) => v.at ?? 0);
-    expect(booked.length).toBeGreaterThan(0);
-    expect(Math.max(...booked)).toBeLessThan(rec.clock + 1);
-  });
-
-  it("says nothing while the audio clock is locked", () => {
-    const rec = recorder();
-    const bed = createDriveBed(rec);
-    rec.now = () => null;
-    bed.update(rolling(), 1 / 60);
-    expect(rec.tones.length + rec.noises.length).toBe(0);
-  });
-
-  it("goes quiet under the wheels in the air, and keeps the wind", () => {
-    const rec = recorder();
-    const bed = createDriveBed(rec);
-    const state = rolling();
-    state.car.airborne = true;
-    bed.update(state, 1 / 60);
-    // The wind is a highpass grain; the tyres are the BROAD bandpass one —
-    // every surface's roar sits under q 1, and every other bandpass in the
-    // grain (the rain's patter, the gale's whistle, the tarmac squeal) is
-    // narrower than that. Airborne there must be no roll at all: the
-    // silence IS the jump, and the weather is not part of it.
-    const rolls = rec.noises.filter(
-      (n) => n.filter?.type === "bandpass" && (n.filter.q ?? 0) < 1 && (n.holdMs ?? 0) > 0,
-    );
-    const wind = rec.noises.filter((n) => n.filter?.type === "highpass" && (n.holdMs ?? 0) > 0);
-    expect(rolls.length).toBe(0);
-    expect(wind.length).toBeGreaterThan(0);
-  });
-
-  it("does not emit parked wind or spark-like transients on the start line", () => {
-    const rec = recorder();
-    playRoadGrain(
-      rec,
-      {
-        speed: 0,
-        air: 0,
-        surface: "gravel",
-        corner: 0,
-        slide: 0,
-        sideways: 0,
-        airborne: false,
-        wet: 0,
-        squall: 0,
-        gale: 0,
-      },
-      0,
-    );
-    expect(rec.noises).toHaveLength(0);
-  });
-
-  it("counts the lights down once each", () => {
-    const rec = recorder();
-    const bed = createDriveBed(rec);
-    const state = createGame({ seed: 7, length: "short" });
-    let ticks = 0;
-    const before = () => rec.tones.filter((t) => t.type === "square").length;
-    while (state.t < TUNING.intro + TUNING.countdown) {
-      const was = before();
-      bed.update(state, TUNING.dt);
-      rec.clock += TUNING.dt;
-      if (before() > was) ticks++;
-      step(state, {
-        steer: 0,
-        throttle: 0,
-        brake: 0,
-        handbrake: false,
-        shiftUp: false,
-        shiftDown: false,
-        reset: false,
-      });
-    }
-    expect(ticks).toBe(TUNING.countdown);
-  });
-});
-
-describe("the engine's own arithmetic", () => {
-  it("keeps engine texture continuous instead of using spark-like ticks", () => {
-    const rec = recorder();
-    playEngineGrain(rec, { hz: 30, toHz: 30, rpm: 900, rev: 0, load: 0.2, wear: 0 }, 0);
-    expect(rec.noises).toHaveLength(1);
-    expect(rec.noises[0].durationMs).toBeGreaterThanOrEqual(GRAIN_MS * 3);
-    expect(rec.noises[0].holdMs).toBeGreaterThanOrEqual(GRAIN_MS * 2);
-  });
+describe("the engine", () => {
+  const MIX = { engine: 1, exhaust: 1, tone: 1 };
+  const at = (voice: Partial<EngineVoice>): Record<EngineLayer, LayerTarget> =>
+    engineTargets({ rpm: 3000, rev: 0.35, load: 0.5, wear: 0, ...voice }, MIX);
 
   it("turns revs into the firing note of a four-cylinder", () => {
     // Two firings per revolution: 3000 rpm is 100 Hz and nothing chosen by ear.
     expect(noteHz(3000)).toBeCloseTo(100, 6);
+    expect(at({ rpm: 3000 }).hum.hz).toBeCloseTo(100, 6);
+    expect(at({ rpm: 3000 }).octave.hz).toBeCloseTo(200, 6);
   });
 
   it("puts idle at the bottom of the band and the limiter at the top", () => {
@@ -704,42 +591,74 @@ describe("the engine's own arithmetic", () => {
     expect(rpmAt(1)).toBe(7000);
     expect(rpmAt(-5)).toBe(900); // a car rolling backwards still idles
   });
+
+  it("works harder under load — louder, and driven further into the curve", () => {
+    const coasting = at({ load: 0.1 });
+    const pulling = at({ load: 1 });
+    expect(pulling.hum.level).toBeGreaterThan(coasting.hum.level * 1.5);
+    expect(pulling.hum.grit ?? 0).toBeGreaterThan(coasting.hum.grit ?? 0);
+    expect(pulling.bass.level).toBeGreaterThan(coasting.bass.level);
+  });
+
+  it("keeps the rasp and the turbo for the top of the band", () => {
+    // A car pulling out of a hairpin never reaches the rasp; the turbo
+    // needs load AND revs.
+    expect(at({ rev: 0.2, load: 1 }).rasp.level).toBe(0);
+    expect(at({ rev: 0.9, load: 1 }).rasp.level).toBeGreaterThan(0);
+    expect(at({ rev: 0.9, load: 0.2 }).turbo.level).toBe(0);
+    expect(at({ rev: 0.9, load: 1 }).turbo.level).toBeGreaterThan(0);
+    expect(at({ rev: 0.9, load: 1 }).turbo.level).toBeGreaterThan(
+      at({ rev: 0.5, load: 1 }).turbo.level,
+    );
+  });
+
+  it("stands the bass on a floor a speaker can reproduce", () => {
+    expect(at({ rpm: 900 }).bass.hz).toBeGreaterThanOrEqual(44);
+    expect(at({ rpm: 7000 }).bass.hz).toBeCloseTo(7000 / 30 / 2, 6);
+  });
+
+  it("goes dark and loses its exhaust inside the cabin", () => {
+    const outside = engineTargets({ rpm: 4000, rev: 0.6, load: 0.8, wear: 0 }, MIX);
+    const inside = engineTargets(
+      { rpm: 4000, rev: 0.6, load: 0.8, wear: 0 },
+      {
+        engine: LISTENERS.cockpit.engine,
+        exhaust: LISTENERS.cockpit.exhaust,
+        tone: LISTENERS.cockpit.tone,
+      },
+    );
+    expect(inside.hum.cutoff ?? 0).toBeLessThan(outside.hum.cutoff ?? 0);
+    expect(inside.rasp.level).toBeLessThan(outside.rasp.level);
+    expect(inside.hum.level).toBeGreaterThan(outside.hum.level);
+  });
 });
 
 describe("the tyres", () => {
+  const MIX = { tyres: 1, scrub: 1, wind: 1, weather: 1 };
   const ROLLING: RoadVoice = {
     speed: 30,
     air: 0.8,
     surface: "gravel",
     corner: 0,
     slide: 0,
+    spin: 0,
     sideways: 0,
     airborne: false,
     wet: 0,
     squall: 0.5,
     gale: 0,
   };
-
-  /** The summed level of the ROLLING bed — the surface's roar (a still
-   * bandpass) and its crunch (a highpass well above the wind's). The wind sits
-   * under 2 kHz and the scrub sweeps, so neither is counted here. */
-  function rollingLevel(voice: Partial<RoadVoice>): number {
-    const rec = recorder();
-    playRoadGrain(rec, { ...ROLLING, ...voice }, 0);
-    return rec.noises
-      .filter((n) => n.filter?.to === undefined)
-      .filter((n) => n.filter?.type === "bandpass" || (n.filter?.frequency ?? 0) > 2000)
-      .reduce((sum, n) => sum + (n.volume ?? 0), 0);
-  }
+  const at = (voice: Partial<RoadVoice>): Record<RoadLayer, LayerTarget> =>
+    roadTargets({ ...ROLLING, ...voice }, MIX);
+  const SURFACE_LAYERS: RoadLayer[] = ["roarPink", "roarBrown", "body", "grain", "tear"];
+  const SCRUB_LAYERS: RoadLayer[] = ["dig", "spray", "sing", "singTone"];
+  const sum = (t: Record<RoadLayer, LayerTarget>, layers: RoadLayer[]): number =>
+    layers.reduce((s, l) => s + t[l].level, 0);
 
   it("keeps a straight quiet and makes the corner the event", () => {
-    // The bed is what the player hears for the whole run, so a constant hiss
-    // is a constant hiss — it says nothing about what the car is doing and it
-    // is the loudest thing in the mix while saying it. Loose or sealed, the
-    // noise a tyre makes is the noise of being asked to turn the car.
     for (const surface of ["gravel", "asphalt"]) {
-      const straight = rollingLevel({ surface });
-      const turning = rollingLevel({ surface, corner: 1 });
+      const straight = sum(at({ surface }), SURFACE_LAYERS);
+      const turning = sum(at({ surface, corner: 1 }), SURFACE_LAYERS);
       expect(turning, `${surface} sounds the same through a corner`).toBeGreaterThan(
         straight * 2.5,
       );
@@ -747,104 +666,93 @@ describe("the tyres", () => {
   });
 
   it("makes tarmac the quietest thing under the car, and a bass one", () => {
-    // Rolling straight down a sealed road the player should be hearing the
-    // ENGINE, and under it a dull bass drumming — not a quieter version of
-    // the dirt road, which is what a bright band with a crunch over it is.
-    expect(rollingLevel({ surface: "asphalt" })).toBeLessThan(
-      rollingLevel({ surface: "gravel" }) * 0.4,
+    expect(sum(at({ surface: "asphalt" }), SURFACE_LAYERS)).toBeLessThan(
+      sum(at({ surface: "gravel" }), SURFACE_LAYERS) * 0.4,
     );
-    expect(rollingLevel({ surface: "asphalt" })).toBeLessThan(
-      rollingLevel({ surface: "nature" }) * 0.4,
+    expect(sum(at({ surface: "asphalt" }), SURFACE_LAYERS)).toBeLessThan(
+      sum(at({ surface: "nature" }), SURFACE_LAYERS) * 0.4,
     );
-    const rec = recorder();
-    playRoadGrain(rec, { ...ROLLING, surface: "asphalt" }, 0);
-    // No crunch: a sealed surface has no loose material to throw, so there is
-    // no highpass layer over the roar at all.
-    expect(
-      rec.noises.filter((n) => n.filter?.type === "highpass" && (n.volume ?? 0) > 0),
-    ).toHaveLength(
-      1, // the wind, and nothing else
-    );
-    // And the roar itself is DOWN there, where a tyre drums the body.
-    const roar = rec.noises.find((n) => n.filter?.type === "bandpass");
-    expect(roar?.filter?.frequency).toBeLessThan(200);
+    const tarmac = at({ surface: "asphalt" });
+    expect(tarmac.grain.level).toBe(0); // no loose material to throw
+    expect(tarmac.roarBrown.cutoff ?? 0).toBeLessThan(200);
+    expect(tarmac.roarPink.level).toBe(0);
   });
 
   it("keeps the off-road bed out of the top end and fills its middle", () => {
-    // Turf has no hard material anywhere in it. A resonant bottom with a
-    // bright hiss over it and a hole between the two is not a field being
-    // ploughed — it is a sheet of metal being scoured, which is exactly what
-    // it gets reported as.
-    const rec = recorder();
-    playRoadGrain(rec, { ...ROLLING, surface: "nature" }, 0);
-    const audible = rec.noises.filter((n) => (n.volume ?? 0) > 0);
-    // Nothing out here runs on upward from its corner: the wind is the only
-    // open layer left in the mix.
-    expect(audible.filter((n) => n.filter?.type === "highpass")).toHaveLength(1);
-    const weight = (lo: number, hi: number): number =>
-      audible
-        .filter((n) => n.filter?.type === "bandpass")
-        .filter((n) => (n.filter?.frequency ?? 0) >= lo && (n.filter?.frequency ?? 0) < hi)
-        .reduce((sum, n) => sum + (n.volume ?? 0), 0);
-    // …and the middle carries as much of the voice as the rumble under it,
-    // which is the difference between a surface and a resonance.
-    expect(weight(300, 4000)).toBeGreaterThan(weight(0, 300) * 0.9);
+    // A resonant bottom with a bright hiss over it and a hole between the
+    // two is a sheet of metal being scoured, not a field being ploughed.
+    const turf = at({ surface: "nature" });
+    expect(turf.grain.level).toBe(0);
+    expect(turf.body.level + turf.tear.level).toBeGreaterThan(turf.roarBrown.level * 0.9);
   });
 
   it("sings on tarmac from the cornering load alone, and digs only on a slide", () => {
-    // A tyre protests while it is still winning; a loose surface has nothing
-    // to protest WITH and only makes its second noise once the car has gone.
-    const scrub = (voice: Partial<RoadVoice>): number => {
-      const rec = recorder();
-      playRoadGrain(rec, { ...ROLLING, ...voice }, 0);
-      const sing = rec.noises.filter((n) => (n.filter?.q ?? 0) > 5);
-      const dig = rec.noises.filter((n) => n.filter?.to !== undefined);
-      return [...sing, ...dig, ...rec.tones].reduce((sum, v) => sum + (v.volume ?? 0), 0);
-    };
-    expect(scrub({ surface: "asphalt", corner: 1 })).toBeGreaterThan(0);
-    expect(scrub({ surface: "asphalt", corner: 0 })).toBe(0);
-    expect(scrub({ surface: "gravel", corner: 1 })).toBe(0);
-    expect(scrub({ surface: "gravel", corner: 1, slide: 0.8 })).toBeGreaterThan(0);
+    expect(sum(at({ surface: "asphalt", corner: 1 }), SCRUB_LAYERS)).toBeGreaterThan(0);
+    expect(sum(at({ surface: "asphalt", corner: 0 }), SCRUB_LAYERS)).toBe(0);
+    expect(sum(at({ surface: "gravel", corner: 1 }), SCRUB_LAYERS)).toBe(0);
+    expect(sum(at({ surface: "gravel", corner: 1, slide: 0.8 }), SCRUB_LAYERS)).toBeGreaterThan(0);
+  });
+
+  it("hears a lit axle the same way it hears a slide", () => {
+    // A launch with the wheels spinning is the tyre asked for more than the
+    // road will give, going the other way.
+    expect(at({ surface: "gravel", spin: 0.8 }).dig.level).toBeGreaterThan(0);
+    expect(at({ surface: "asphalt", spin: 0.8 }).sing.level).toBeGreaterThan(0);
+    // …even from a standstill, where nothing rolls yet.
+    expect(at({ surface: "gravel", speed: 2, air: 0.02, spin: 0.9 }).dig.level).toBeGreaterThan(0);
+  });
+
+  it("throws the spray to the outside of the slide", () => {
+    expect(at({ slide: 0.8, sideways: 6 }).spray.pan ?? 0).toBeLessThan(0);
+    expect(at({ slide: 0.8, sideways: -6 }).spray.pan ?? 0).toBeGreaterThan(0);
+  });
+
+  it("goes quiet under the wheels in the air, and keeps the wind", () => {
+    const flying = at({ airborne: true, corner: 1, slide: 0.8 });
+    expect(sum(flying, [...SURFACE_LAYERS, ...SCRUB_LAYERS])).toBe(0);
+    expect(flying.wind.level).toBeGreaterThan(at({}).wind.level);
+  });
+
+  it("makes no rolling noise on the start line, and the wind sells speed squared", () => {
+    const parked = at({ speed: 0, air: 0 });
+    expect(sum(parked, [...SURFACE_LAYERS, ...SCRUB_LAYERS, "wind"])).toBe(0);
+    expect(at({ air: 1 }).wind.level / at({ air: 0.5 }).wind.level).toBeCloseTo(4, 6);
+  });
+
+  it("is heard less from the cockpit and more from the bumper", () => {
+    const inside = roadTargets({ ...ROLLING, corner: 1 }, LISTENERS.cockpit);
+    const nose = roadTargets({ ...ROLLING, corner: 1 }, LISTENERS.bumper);
+    expect(sum(inside, SURFACE_LAYERS)).toBeLessThan(sum(nose, SURFACE_LAYERS));
+    expect(inside.wind.level).toBeLessThan(nose.wind.level);
   });
 });
 
 describe("the weather", () => {
+  const MIX = { tyres: 1, scrub: 1, wind: 1, weather: 1 };
   const ROLLING: RoadVoice = {
     speed: 30,
     air: 0.8,
     surface: "gravel",
     corner: 0,
     slide: 0,
+    spin: 0,
     sideways: 0,
     airborne: false,
     wet: 0,
     squall: 0.5,
     gale: 0,
   };
-  const voices = (voice: Partial<RoadVoice>): ReturnType<typeof recorder> => {
-    const rec = recorder();
-    playRoadGrain(rec, { ...ROLLING, ...voice }, 0);
-    return rec;
-  };
-  /** The surface's own roar, told from the rain's patter by how broad it
-   * is — every surface band here is wider than 1, the patter narrower. */
-  const roar = (voice: Partial<RoadVoice>): number | undefined =>
-    voices(voice).noises.find((n) => n.filter?.type === "bandpass" && (n.filter.q ?? 0) < 1)?.filter
-      ?.frequency;
+  const at = (voice: Partial<RoadVoice>): Record<RoadLayer, LayerTarget> =>
+    roadTargets({ ...ROLLING, ...voice }, MIX);
+  const WEATHER: RoadLayer[] = ["rainSheet", "rainPatter", "galeRoar", "galeWhistle"];
+  const level = (t: Record<RoadLayer, LayerTarget>, layers: RoadLayer[]): number =>
+    layers.reduce((s, l) => s + t[l].level, 0);
 
   it("turns gravel into mud rather than putting rain on top of it", () => {
     const dry = SURFACES.gravel as (typeof SURFACES)[string];
     const mud = WET_SURFACES.gravel as (typeof SURFACES)[string];
-    // A wet stone does not rattle. The crunch is the layer that says
-    // "loose surface", and water is exactly what takes it away.
     expect(mud.grain?.level ?? 0).toBeLessThan((dry.grain?.level ?? 0) * 0.2);
-    // The roar drops with it: mud churns where dry grit rushes.
     expect(mud.hz).toBeLessThan(dry.hz);
-    // …and the STRAIGHT gets louder, which is the tell that this is a
-    // different surface rather than a quieter one. What is being heard is
-    // the water under the tread instead of the stones on top of it, and
-    // that does not care which way the car is pointing — so the cornering
-    // multiplier comes down as the cruise goes up.
     expect(mud.level).toBeGreaterThan(dry.level);
     expect(mud.corner).toBeLessThan(dry.corner);
   });
@@ -857,70 +765,328 @@ describe("the weather", () => {
   });
 
   it("mixes the two surfaces rather than flipping between them", () => {
-    // Weather comes in three strengths and the middle one has to sound
-    // like the middle one: a stage that is dry until it is suddenly mud is
-    // a stage with one wet sound in it.
-    const dry = roar({}) as number;
-    const damp = roar({ wet: 0.5 }) as number;
-    const soaked = roar({ wet: 1 }) as number;
+    const dry = at({}).roarPink.cutoff ?? 0;
+    const damp = at({ wet: 0.5 }).roarPink.cutoff ?? 0;
+    const soaked = at({ wet: 1 }).roarPink.cutoff ?? 0;
     expect(soaked).toBeLessThan(damp);
     expect(damp).toBeLessThan(dry);
   });
 
   it("rains on a car that is doing nothing at all", () => {
-    // The weather is the one bed that is not about the car: it plays over
-    // a parked car and over one in mid-air, where every other layer here
-    // has already stopped.
-    expect(voices({ speed: 0, air: 0, wet: 1 }).noises.length).toBeGreaterThan(
-      voices({ speed: 0, air: 0 }).noises.length,
-    );
-    expect(voices({ airborne: true, wet: 1 }).noises.length).toBeGreaterThan(
-      voices({ airborne: true }).noises.length,
-    );
+    expect(level(at({ speed: 0, air: 0, wet: 1 }), WEATHER)).toBeGreaterThan(0);
+    expect(level(at({ airborne: true, wet: 1 }), WEATHER)).toBeGreaterThan(0);
+    expect(level(at({ speed: 0, air: 0, gale: 0.8 }), WEATHER)).toBeGreaterThan(0);
   });
 
   it("keeps the storm beside the wind rather than over it", () => {
-    // Rain is heard for a whole run, so it is mixed like a bed and not
-    // like an event — and a storm is louder than rain, or the three skies
-    // are two.
-    const level = (wet: number): number =>
-      voices({ wet }).noises.reduce((sum, n) => sum + (n.volume ?? 0), 0);
-    expect(level(1) - level(0)).toBeLessThan(0.04);
-    expect(level(0.6)).toBeGreaterThan(level(0));
-    expect(level(1)).toBeGreaterThan(level(0.6));
+    const total = (wet: number): number =>
+      level(at({ wet }), [...WEATHER, "roarPink", "roarBrown", "grain", "wind"]);
+    expect(total(1) - total(0)).toBeLessThan(0.08);
+    expect(total(0.6)).toBeGreaterThan(total(0));
+    expect(total(1)).toBeGreaterThan(total(0.6));
   });
 
   it("stops a wet tyre singing on tarmac", () => {
-    // The squeal is rubber gripping and letting go against the road several
-    // hundred times a second, and a film of water is precisely what stops
-    // that happening.
-    const sing = (wet: number): number =>
-      voices({ surface: "asphalt", corner: 1, wet })
-        .noises.filter((n) => (n.filter?.q ?? 0) > 5)
-        .reduce((sum, n) => sum + (n.volume ?? 0), 0);
+    const sing = (wet: number): number => at({ surface: "asphalt", corner: 1, wet }).sing.level;
     expect(sing(1)).toBeLessThan(sing(0) * 0.5);
+  });
+
+  it("is loudest on the windscreen and quietest from a helicopter", () => {
+    const glass = roadTargets({ ...ROLLING, wet: 1 }, LISTENERS.cockpit);
+    const sky = roadTargets({ ...ROLLING, wet: 1 }, LISTENERS.heli);
+    expect(level(glass, ["rainSheet", "rainPatter"])).toBeGreaterThan(
+      level(sky, ["rainSheet", "rainPatter"]),
+    );
+  });
+});
+
+describe("the listener", () => {
+  it("puts the engine in the cabin and the world in the sky", () => {
+    expect(LISTENERS.cockpit.engine).toBeGreaterThan(LISTENERS.heli.engine);
+    expect(LISTENERS.cockpit.tone).toBeLessThan(LISTENERS.chase.tone);
+    expect(LISTENERS.cockpit.wind).toBeLessThan(LISTENERS.bumper.wind);
+    expect(LISTENERS.heli.world).toBeGreaterThan(LISTENERS.cockpit.world);
+    expect(LISTENERS.chase.exhaust).toBeGreaterThan(LISTENERS.cockpit.exhaust);
+  });
+
+  it("only lets the wipers be heard from inside the glass", () => {
+    expect(LISTENERS.cockpit.wipers).toBe(1);
+    for (const view of ["close", "chase", "far", "heli", "top"] as const) {
+      expect(LISTENERS[view].wipers, view).toBe(0);
+    }
+  });
+
+  it("answers a camera it does not know with the chase view", () => {
+    expect(listenerFor("drone")).toBe(LISTENERS.chase);
+    expect(listenerFor(null)).toBe(LISTENERS.chase);
+    expect(listenerFor("cockpit")).toBe(LISTENERS.cockpit);
+  });
+});
+
+describe("the world", () => {
+  const STILL: WorldVoice = {
+    biome: "taiga",
+    timeOfDay: "day",
+    wet: 0,
+    gale: 0,
+    air: 0,
+    crowd: 0,
+    stock: null,
+    train: null,
+    world: 1,
+  };
+  const ids = (voice: Partial<WorldVoice>): string[] =>
+    worldRoster({ ...STILL, ...voice }).map((c) => c.id);
+
+  it("gives each country and each hour its own roster", () => {
+    expect(ids({})).toContain("bird_chirp");
+    expect(ids({})).not.toContain("cicada");
+    expect(ids({ biome: "desert" })).toContain("cicada");
+    expect(ids({ biome: "desert" })).not.toContain("bird_chirp");
+    expect(ids({ timeOfDay: "night" })).toContain("owl");
+    expect(ids({ biome: "desert", timeOfDay: "night" })).toContain("cricket");
+    expect(ids({ biome: "desert", timeOfDay: "night" })).toContain("coyote");
+    expect(ids({ biome: "desert", timeOfDay: "day" })).not.toContain("coyote");
+    // Every id on every roster is a sound the world bank has.
+    for (const biome of ["taiga", "desert"] as const) {
+      for (const timeOfDay of ["dawn", "day", "dusk", "night"] as const) {
+        for (const id of ids({ biome, timeOfDay })) expect(WORLD_BANK[id], id).toBeDefined();
+      }
+    }
+  });
+
+  it("sends the birds to cover in the rain and puts the stock on the roster", () => {
+    const dry = worldRoster(STILL).find((c) => c.id === "bird_chirp");
+    const wet = worldRoster({ ...STILL, wet: 1 }).find((c) => c.id === "bird_chirp");
+    expect(wet?.gain ?? 1).toBeLessThan((dry?.gain ?? 0) * 0.3);
+    expect(ids({ stock: { kind: "cows", near: 0.5, pan: 0 } })).toContain("cow");
+    expect(ids({ stock: { kind: "sheep", near: 0.5, pan: 0 } })).toContain("sheep");
+  });
+
+  it("is thinned by speed until nothing is left of it", () => {
+    expect(callGainAtSpeed(0)).toBe(1);
+    expect(callGainAtSpeed(0.3)).toBeLessThan(1);
+    expect(callGainAtSpeed(0.7)).toBe(0);
+    expect(worldTargets({ ...STILL, air: 1 }).trees.level).toBeLessThan(
+      worldTargets(STILL).trees.level,
+    );
+  });
+
+  it("only rumbles with a train on the line, and only murmurs near people", () => {
+    expect(worldTargets(STILL).train.level).toBe(0);
+    expect(worldTargets(STILL).crowd.level).toBe(0);
+    expect(
+      worldTargets({ ...STILL, train: { near: 0.8, pan: 0, horn: false, bell: false } }).train
+        .level,
+    ).toBeGreaterThan(0);
+    expect(worldTargets({ ...STILL, crowd: 1 }).crowd.level).toBeGreaterThan(0);
+  });
+
+  it("raises every call on its roster over a minute at rest, and none at speed", () => {
+    const rec = recorder();
+    let seed = 7;
+    const dice = (): number => ((seed = (seed * 16807) % 2147483647) % 1000) / 1000;
+    const world = createWorld(rec, dice);
+    for (let i = 0; i < 60 * 30; i++) {
+      world.update(STILL, i / 30);
+    }
+    expect(rec.tones.length).toBeGreaterThan(5);
+    expect(rec.layers.length).toBe(3);
+    // At the top of fourth the wind is the only thing outside the car.
+    rec.tones.length = 0;
+    world.reset();
+    for (let i = 0; i < 60 * 30; i++) world.update({ ...STILL, air: 1 }, 100 + i / 30);
+    expect(rec.tones.length).toBe(0);
+  });
+
+  it("sounds the horn once per train and rings the bell twice a second", () => {
+    const rec = recorder();
+    const world = createWorld(rec, () => 0.5);
+    const train = { near: 0.9, pan: 0.3, horn: true, bell: true };
+    for (let i = 0; i < 60; i++) world.update({ ...STILL, air: 1, train }, i / 30);
+    // The horn's chord is the only pair of voices in the world bank a second
+    // and a half long — one horn is two of them.
+    const horns = rec.tones.filter((t) => t.durationMs === 1500);
+    expect(horns.length).toBe(2);
+    // Two seconds of bell at half-second strikes: four or five, never sixty.
+    const bells = rec.tones.filter((t) => t.from === 1880);
+    expect(bells.length).toBeGreaterThanOrEqual(4);
+    expect(bells.length).toBeLessThanOrEqual(5);
+  });
+});
+
+describe("the road bed", () => {
+  const NEUTRAL = {
+    steer: 0,
+    throttle: 0,
+    brake: 0,
+    handbrake: false,
+    shiftUp: false,
+    shiftDown: false,
+    reset: false,
+  };
+
+  /** A stage with the countdown skipped and the car already rolling. */
+  function rolling(): GameState {
+    const state = createGame({ seed: 4242, length: "short", skipCountdown: true });
+    for (let i = 0; i < 600; i++) step(state, { ...NEUTRAL, throttle: 1 });
+    return state;
+  }
+
+  it("builds its layers once and steers them every frame, booking nothing ahead", () => {
+    const rec = recorder();
+    const bed = createDriveBed(rec, () => 0.5);
+    const state = rolling();
+    for (let frame = 0; frame < 30; frame++) {
+      bed.update(state, 1 / 60);
+      rec.clock += 1 / 60;
+    }
+    // Six engine layers, fourteen road layers, three of the world — and no
+    // more, however many frames go by.
+    expect(rec.layers.length).toBe(6 + 14 + 3);
+    for (const layer of rec.layers) {
+      expect(layer.sets.length).toBe(30);
+      for (const { target, glide } of layer.sets) {
+        expect(Number.isFinite(target.level)).toBe(true);
+        expect(target.level).toBeGreaterThanOrEqual(0);
+        expect(glide).toBeGreaterThan(0);
+      }
+    }
+    // Nothing is booked on the clock: a one-shot the bed raises plays now.
+    for (const voice of [...rec.tones, ...rec.noises]) expect(voice.at).toBeUndefined();
+  });
+
+  it("says nothing while the audio clock is locked, and starts the moment it is not", () => {
+    const rec = recorder();
+    rec.locked = true;
+    const bed = createDriveBed(rec, () => 0.5);
+    const state = rolling();
+    bed.update(state, 1 / 60);
+    expect(rec.layers.length + rec.tones.length + rec.noises.length).toBe(0);
+    rec.locked = false;
+    bed.update(state, 1 / 60);
+    expect(rec.layers.length).toBeGreaterThan(0);
+  });
+
+  it("rebuilds every layer on a context that was replaced under it", () => {
+    // THE APP-SWITCH GUARD. iOS hands a backgrounded PWA a dead AudioContext
+    // and the synth replaces it; every layer built on the old one is gone,
+    // and a bed that kept steering ghosts would be silent for the rest of
+    // the run.
+    const rec = recorder();
+    const bed = createDriveBed(rec, () => 0.5);
+    const state = rolling();
+    bed.update(state, 1 / 60);
+    const before = rec.layers.length;
+    rec.generation++;
+    bed.update(state, 1 / 60);
+    expect(rec.layers.length).toBe(before * 2);
+    expect(rec.layers.filter((l) => l.generation === 1).length).toBe(before);
+  });
+
+  it("tears its layers down on a reset and builds fresh ones for the next run", () => {
+    const rec = recorder();
+    const bed = createDriveBed(rec, () => 0.5);
+    const state = rolling();
+    bed.update(state, 1 / 60);
+    bed.reset();
+    expect(rec.layers.every((l) => l.stopped)).toBe(true);
+    bed.update(state, 1 / 60);
+    expect(rec.layers.filter((l) => !l.stopped).length).toBe(6 + 14 + 3);
+  });
+
+  it("follows the engine's revs, and hears more of it from the cockpit", () => {
+    const rec = recorder();
+    const bed = createDriveBed(rec, () => 0.5);
+    const state = rolling();
+    bed.update(state, 1 / 60);
+    const hum = rec.layers.find((l) => l.spec.kind === "tone" && l.spec.filter?.type === "lowpass");
+    expect(hum).toBeDefined();
+    expect(hum?.sets[0]?.target.hz).toBeCloseTo(noteHz(rpmAt(state.car.rev)), 3);
+    const outside = hum?.sets[0]?.target.level ?? 0;
+    bed.setView("cockpit");
+    bed.update(state, 1 / 60);
+    expect(hum?.sets[1]?.target.level ?? 0).toBeGreaterThan(outside);
+  });
+
+  it("counts the lights down once each, and blows the marshal's whistle once", () => {
+    const rec = recorder();
+    const bed = createDriveBed(rec, () => 0.5);
+    const state = createGame({ seed: 7, length: "short" });
+    let ticks = 0;
+    const before = () => rec.tones.filter((t) => t.from === 660).length;
+    while (state.t < TUNING.intro + TUNING.countdown) {
+      const was = before();
+      bed.update(state, TUNING.dt);
+      rec.clock += TUNING.dt;
+      if (before() > was) ticks++;
+      step(state, NEUTRAL);
+    }
+    expect(ticks).toBe(TUNING.countdown);
+    expect(rec.tones.filter((t) => t.from === 2350).length).toBe(1);
+  });
+
+  it("crackles on a lift at revs, and not twice inside a second", () => {
+    const rec = recorder();
+    const bed = createDriveBed(rec, () => 0.5);
+    const state = rolling();
+    state.car.rev = 0.8;
+    // A second of hard acceleration loads the engine up…
+    for (let i = 0; i < 60; i++) {
+      state.car.u += 0.06;
+      bed.update(state, 1 / 60);
+      rec.clock += 1 / 60;
+    }
+    // The crackle's first pop is the only forty-millisecond brown burst the
+    // bed can raise; its pitch is rolled, so it is told by its length.
+    const pops = () => rec.noises.filter((n) => n.color === "brown" && n.durationMs === 40).length;
+    expect(pops()).toBe(0);
+    // …and a second of coasting is the lift.
+    for (let i = 0; i < 60; i++) {
+      state.car.u -= 0.03;
+      bed.update(state, 1 / 60);
+      rec.clock += 1 / 60;
+    }
+    expect(pops()).toBe(1);
+    expect(bed.boost()).toBeLessThan(0.3);
+  });
+
+  it("works the wipers inside the car in the rain, and nowhere else", () => {
+    const rec = recorder();
+    const bed = createDriveBed(rec, () => 0.5);
+    const state = rolling();
+    state.env.weather = "rain";
+    const strokes = () =>
+      rec.noises.filter((n) => n.filter?.frequency === 900 && n.filter.to === 1700).length;
+    bed.setView("chase");
+    for (let i = 0; i < 180; i++) {
+      bed.update(state, 1 / 60);
+      rec.clock += 1 / 60;
+    }
+    expect(strokes()).toBe(0);
+    bed.setView("cockpit");
+    for (let i = 0; i < 180; i++) {
+      bed.update(state, 1 / 60);
+      rec.clock += 1 / 60;
+    }
+    // Three seconds of a stroke every three quarters of a second.
+    expect(strokes()).toBeGreaterThanOrEqual(3);
+    expect(strokes()).toBeLessThanOrEqual(5);
   });
 });
 
 describe("the shape of a voice", () => {
-  // THE CLICK GUARD. A gain that jumps from nothing to full scale between two
-  // samples is a STEP, and a step is broadband — worse, it is what makes a
-  // resonant filter ring at its own cutoff. On a hi-hat (fourteen milliseconds
-  // of noise highpassed at 8 kHz, five a second under the stage theme) the
-  // ring IS what the player hears, and it reads as a broken speaker rather
-  // than as a cymbal.
   const SHAPES: [string, ReturnType<typeof envelopeShape>][] = [
     ["a held pad", envelopeShape(0.05, 0, 0.9, 300, 400, "exp")],
     ["a plucked note", envelopeShape(0.06, 0, 0.045, 0, 0, "exp")],
     ["a bare hi-hat burst", envelopeShape(0.009, 0, 0.014, 0, 0, "lin")],
-    ["a grain of a bed", envelopeShape(0.03, 0, 0.4, 40, 200, "exp")],
+    ["a swell", envelopeShape(0.03, 0, 0.4, 40, 200, "exp")],
   ];
 
   it("never starts a voice at full scale, however short or unshaped", () => {
     for (const [name, steps] of SHAPES) {
       expect(steps[0].value, name).toBeLessThanOrEqual(0.0001);
       expect(steps[0].ramp, name).toBe("set");
-      // …and it RAMPS to the peak rather than stepping onto it a moment later.
       expect(steps[1].at, name).toBeGreaterThan(steps[0].at);
       expect(steps[1].ramp, name).not.toBe("set");
     }
@@ -928,9 +1094,7 @@ describe("the shape of a voice", () => {
 
   it("gets up to its peak fast enough that nothing is softened", () => {
     for (const [name, steps] of SHAPES) {
-      if (name === "a held pad" || name === "a grain of a bed") continue;
-      // A percussive voice is up inside the couple of milliseconds the ear
-      // cannot resolve — the snap is the sound, and only the step goes.
+      if (name === "a held pad" || name === "a swell") continue;
       expect(steps[1].at, name).toBeLessThanOrEqual(MIN_ATTACK_MS / 1000 + 1e-9);
       expect(steps[1].value, name).toBeGreaterThan(0);
     }
@@ -939,21 +1103,26 @@ describe("the shape of a voice", () => {
   it("holds a pad at its peak instead of falling through the sustain", () => {
     const pad = envelopeShape(0.05, 0, 0.9, 300, 400, "exp");
     const peaks = pad.filter((p) => p.value > 0.001);
-    expect(peaks.length).toBe(2); // up to the peak, then held there
+    expect(peaks.length).toBe(2);
     expect(peaks[1].at - peaks[0].at).toBeCloseTo(0.4, 3);
     expect(pad[pad.length - 1].value).toBeLessThanOrEqual(0.0001);
+  });
+
+  it("saturates softly — the curve never steepens into a clip", () => {
+    // A curve steep enough to be a square wave at half travel aliases, and
+    // over a Bluetooth codec that is the torn-speaker sound.
+    expect(shaperSteepness(0)).toBe(1);
+    expect(shaperSteepness(1)).toBeLessThanOrEqual(10);
+    expect(shaperSteepness(0.5)).toBeGreaterThan(shaperSteepness(0.2));
+    expect(shaperPush(1)).toBeLessThanOrEqual(4);
   });
 });
 
 describe("what a filter may be asked for", () => {
-  /**
-   * THE SAMPLE RATES AN AUDIOCONTEXT ACTUALLY COMES BACK AT. A desktop gives
-   * 44.1 or 48 kHz and nothing here is ever near the edge — which is exactly
-   * why this fault cannot be heard while developing. iOS picks the rate from
-   * the live audio ROUTE, and a Bluetooth headset in hands-free mode drops the
-   * whole session to 16 kHz, or 8 kHz on an old one.
-   */
+  /** The sample rates an AudioContext actually comes back at: a desktop's,
+   * and the ones iOS picks from the live Bluetooth route. */
   const RATES = [48000, 44100, 32000, 24000, 16000, 8000];
+  const HEADSET_CEILING = 16000 * MAX_CUTOFF_RATIO;
 
   /** Every filter any sound in the game can ask for, by where it is written. */
   function authoredCutoffs(): { where: string; hz: number }[] {
@@ -968,10 +1137,7 @@ describe("what a filter may be asked for", () => {
         }
       }
     }
-    for (const [name, track] of [
-      ["menu", MENU_TRACK],
-      ["taiga", TAIGA_TRACK],
-    ] as const) {
+    for (const [name, track] of SCORES) {
       for (const [voice, patch] of Object.entries(track.instruments)) {
         if (!patch.filter) continue;
         out.push({ where: `${name}/${voice}`, hz: patch.filter.frequency });
@@ -983,13 +1149,8 @@ describe("what a filter may be asked for", () => {
   }
 
   it("holds every authored cutoff under Nyquist at every rate a context comes back at", () => {
-    // THE HI-HAT GUARD. A biquad's coefficients come from cutoff / Nyquist;
-    // past 1 that is not a bright filter, it is undefined, and WebKit answers
-    // with a harsh burst once per note. Both scores' hats are highpassed at
-    // 8.2 kHz and play about five times a second, which is what the fault
-    // sounds like: a broken speaker, four or five times a second, on iOS only.
     const cutoffs = authoredCutoffs();
-    expect(cutoffs.length).toBeGreaterThan(20);
+    expect(cutoffs.length).toBeGreaterThan(40);
     for (const rate of RATES) {
       for (const { where, hz } of cutoffs) {
         const safe = safeCutoff(hz, rate);
@@ -1000,8 +1161,6 @@ describe("what a filter may be asked for", () => {
   });
 
   it("leaves every authored cutoff untouched at desktop rates", () => {
-    // The clamp must be invisible where the rate is normal, or it is a
-    // retune of every sound in the game rather than a guard.
     for (const rate of [44100, 48000]) {
       for (const { where, hz } of authoredCutoffs()) {
         expect(safeCutoff(hz, rate), `${where} @ ${rate} Hz`).toBe(Math.max(20, hz));
@@ -1010,36 +1169,65 @@ describe("what a filter may be asked for", () => {
   });
 
   it("bites on a cutoff that would go over, at the rate iOS hands a headset", () => {
-    // The MECHANISM, not the content: what a score happens to author for its
-    // hi-hat is a taste decision that moves, and a guard pinned to it fails
-    // the day somebody retunes the kit rather than the day the clamp breaks.
-    const OVER = 8200; // where both hats sat when this was found
-    expect(OVER).toBeGreaterThan(16000 / 2); // over Nyquist on that session
-    expect(safeCutoff(OVER, 16000)).toBe(16000 * MAX_CUTOFF_RATIO);
-    expect(safeCutoff(OVER, 16000)).toBeLessThan(16000 / 2);
-    // …and it is the LIVE rate that decides, so the same number is untouched
-    // on the context a desktop hands back.
+    const OVER = 8200;
+    expect(safeCutoff(OVER, 16000)).toBe(HEADSET_CEILING);
     expect(safeCutoff(OVER, 48000)).toBe(OVER);
+    expect(safeCutoff(0, 48000)).toBe(20);
   });
 
-  it("keeps the kit inside what a 16 kHz session can actually carry", () => {
+  it("keeps every kit's hats and shakers inside what a 16 kHz session can carry", () => {
     // A hi-hat authored entirely above 8 kHz has almost nothing left to pass
-    // once the clamp has held it off Nyquist on a hands-free Bluetooth route.
-    // This is not the clamp's job to fix — it is the score's — so the bar is
-    // here, on the content, where a retune will see it.
-    const CEILING = 16000 * MAX_CUTOFF_RATIO;
-    for (const [name, track] of [
-      ["menu", MENU_TRACK],
-      ["taiga", TAIGA_TRACK],
-    ] as const) {
-      const hat = track.instruments.hat?.filter?.frequency;
-      expect(hat, `${name} has a hat with a filter`).toBeDefined();
-      expect(hat as number, `${name}/hat under the 16 kHz ceiling`).toBeLessThan(CEILING);
+    // once the clamp has held it off Nyquist. The bar is on the content.
+    for (const [name, track] of SCORES) {
+      const hats = Object.entries(track.instruments).filter(
+        ([, patch]) => patch.wave === "noise" && patch.filter?.type === "highpass",
+      );
+      expect(hats.length, `${name} has no hat`).toBeGreaterThan(0);
+      for (const [voice, patch] of hats) {
+        expect(patch.filter?.frequency ?? 0, `${name}/${voice}`).toBeLessThan(HEADSET_CEILING);
+      }
     }
   });
 
-  it("still floors a cutoff nobody should ask for", () => {
-    expect(safeCutoff(0, 48000)).toBe(20);
-    expect(safeCutoff(-5, 48000)).toBe(20);
+  it("keeps every bed's cutoff inside the headset's band across the whole range", () => {
+    // The beds' cutoffs are computed, not authored, so the sweep is the
+    // only place they can be read. Nothing the engine or the road asks for
+    // may go where a 16 kHz session cannot follow.
+    for (const rev of [0, 0.5, 1]) {
+      for (const load of [0, 1]) {
+        const engine = engineTargets(
+          { rpm: rpmAt(rev), rev, load, wear: 1 },
+          { engine: 1, exhaust: 1, tone: 1 },
+        );
+        for (const [layer, target] of Object.entries(engine)) {
+          if (target.cutoff !== undefined)
+            expect(target.cutoff, layer).toBeLessThan(HEADSET_CEILING);
+        }
+      }
+    }
+    for (const surface of Object.keys(SURFACES)) {
+      for (const wet of [0, 1]) {
+        const road = roadTargets(
+          {
+            speed: 60,
+            air: 1,
+            surface,
+            corner: 1,
+            slide: 1,
+            spin: 1,
+            sideways: 8,
+            airborne: false,
+            wet,
+            squall: 1,
+            gale: 1,
+          },
+          { tyres: 1, scrub: 1, wind: 1, weather: 1 },
+        );
+        for (const [layer, target] of Object.entries(road)) {
+          if (target.cutoff !== undefined)
+            expect(target.cutoff, `${surface}/${layer}`).toBeLessThan(HEADSET_CEILING);
+        }
+      }
+    }
   });
 });

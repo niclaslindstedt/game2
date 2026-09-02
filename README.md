@@ -74,7 +74,7 @@ Open the printed URL. The game opens on the main menu, over a stage a bot is dri
 | `make glyphs`      | Render the menu's marks to a contact sheet (`previews/glyphs.png`) at the three sizes they are read at                                                                             |
 | `make transit`     | Photograph the camera leaving the finish line for a crew still out on the stage (`previews/transit.png`), frame by consecutive frame                                               |
 | `make views`       | Photograph the camera key at every step of the ladder (`previews/views.png`), six consecutive frames per step                                                                      |
-| `make audition`    | Build the audio review page (`previews/audition.html`): every sound, both scores, live                                                                                             |
+| `make audition`    | Build the audio review page (`previews/audition.html`): every sound, every score, the beds under sliders                                                                           |
 | `make screenshots` | Drive the built app headlessly and screenshot the key moments                                                                                                                      |
 | `make profile`     | Meter what one frame costs the renderer — draw calls, triangles and binds per scene                                                                                                |
 | `make debug-shot`  | Stand where a screenshot was taken: `REPRO='<line off the debug overlay or the map's COPY DEBUG INFO>'`, captured to `previews/`; `ARGS=--drive` retakes a map repro from the road |
@@ -134,7 +134,7 @@ More in [docs/troubleshooting.md](docs/troubleshooting.md).
 - [Architecture](docs/architecture.md) — engine / renderer / shell layering
 - [Driving model](docs/driving.md) — the drift, the jump, the surfaces
 - [Track generator](docs/track-generator.md) — the rules engine and its R-rules
-- [Audio](docs/audio.md) — the synth, the sound bank, the beds, and the two scores
+- [Audio](docs/audio.md) — the synth, the sound banks, the beds, the listener, and the seven scores
 - [Simulation & bots](docs/simulation.md) — the headless harness and the balance workflow
 - [Platforms](docs/platforms.md) — the web, the desktop app and the native (App Store / Play Store) shell
 - [Configuration](docs/configuration.md) · [Troubleshooting](docs/troubleshooting.md)

@@ -1,5 +1,5 @@
 ---
-title: For a sound with a JOURNEY, distance picks the def — and the tests identify road-grain layers by filter type plus q
+title: For a sound with a JOURNEY, distance picks the def — and a road layer is found by its NAME, never by its filter
 date: 2026-08-28
 scope: pwa/src/game/audio/
 concepts: [bank, route, weather, beds, filters, test-conventions]
@@ -23,11 +23,9 @@ straight from the app and cap the repeat rate (`THUNDER_GAP_S`), because an
 active cell puts several strikes in the air inside a second and the rolls
 stack into mud.
 
-**The trap when adding a LAYER to `road-grain.ts`:** `tests/audio_test.ts`
-identifies the grain's layers by their FILTER, and the discriminator is
-type plus q — the surface roar is the only bandpass under q 1, everything
-else (the rain's patter, the gale's whistle, the tarmac squeal) is
-narrower. A new bandpass with q under 1 silently becomes "the tyres" and
-breaks assertions that have nothing to do with it. Give a new layer a
-signature outside the existing ones, or sharpen the test's filter in the
-same change.
+**Adding a layer to a bed:** every layer has a NAME — a key in
+`ROAD_LAYERS` / `ENGINE_LAYERS` / `WORLD_LAYERS`, its glide table and its
+target function — and `tests/audio_test.ts` reads the targets by that name.
+So a new layer is a new key in all three and a line in the test that sums
+the right group (`SURFACE_LAYERS`, `SCRUB_LAYERS`, `WEATHER`), never a
+filter-type heuristic that a neighbouring layer can silently satisfy.

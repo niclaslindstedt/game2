@@ -28,13 +28,15 @@ only the instrument they are played on.
 
 ## Files
 
-| File                                | Role                                                                                                                                                      |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pwa/src/game/audio/scores/<id>.ts` | **THE SCORE.** Its instruments, its patterns, its order, and the DECISIONS behind it in the header comment. This is where the work happens.               |
-| `pwa/src/lib/tracker.ts`            | The sequencer: flattens patterns through the order and books each note on the synth with a lookahead. Also `bars()`, `noteFrequency()`, `trackSeconds()`. |
-| `pwa/src/lib/voice.ts` / `synth.ts` | The instrument every note is played on, shared with the sound effects.                                                                                    |
-| `pwa/src/game/audio/music.ts`       | The single player — play/stop/pause, which track is current, the per-track dynamic import, and `armMenuMusic`.                                            |
-| `scripts/audition.mjs`              | **THE REVIEW SURFACE** (`make audition`): both scores under the real sequencer, with a per-voice mute.                                                    |
+| File                                | Role                                                                                                                                                                                                                                                          |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pwa/src/game/audio/scores/<id>.ts` | **THE SCORE.** Its instruments, its patterns, its order, and the DECISIONS behind it in the header comment. This is where the work happens.                                                                                                                   |
+| `pwa/src/lib/tracker.ts`            | The sequencer: flattens patterns through the order and books each note on the synth with a lookahead. Also `bars()`, `noteFrequency()`, `trackSeconds()`.                                                                                                     |
+| `pwa/src/lib/voice.ts` / `synth.ts` | The instrument every note is played on, shared with the sound effects.                                                                                                                                                                                        |
+| `pwa/src/game/audio/scores/kit.ts`  | **THE KIT.** The figures (a chord held, a gallop, brass on the offbeats, an arpeggio) and the patches (a kick, a snare, a hat under 7 kHz, a pad that holds) every score is built from. A score file is its DECISIONS and its tunes; the plumbing lives here. |
+| `pwa/src/game/audio/music-pick.ts`  | **WHICH score a stage gets** — from its country, its sky and the shape of its road. DOM-free; the tests read it.                                                                                                                                              |
+| `pwa/src/game/audio/music.ts`       | The single player — play/stop/pause, which track is current, the per-track dynamic import, and `armMenuMusic`.                                                                                                                                                |
+| `scripts/audition.mjs`              | **THE REVIEW SURFACE** (`make audition`): every score under the real sequencer, with a per-voice mute. Its `SCORE_FILES` table carries each score's title.                                                                                                    |
 
 ## THE ONE THING THIS SEQUENCER DOES THAT A CHIP TRACKER CANNOT
 
@@ -63,7 +65,9 @@ one. A test asserts every score owns at least one voice that holds.
   a hat; noise + bandpass 1700 is a snare; a driven sawtooth is a guitar.
 - **`patterns`**: named sections; each maps a voice to bars of 16 tokens,
   written with `bars()` one bar per line (`=` ties, `.` rests, any other word
-  triggers a noise voice). A short voice line CYCLES inside the pattern — write
+  triggers a noise voice — and ONLY a noise voice: the kick is a pitched
+  triangle, so its line is written in notes, which is why `kit.ts`'s
+  `KICK_*` lines say `C2` where the `SNARE_*` and `HAT_*` lines say `x`). A short voice line CYCLES inside the pattern — write
   a one-bar drum loop under an eight-bar lead — so its length must divide the
   pattern's. A voice a pattern omits is silent through it. **An empty array is
   not how you silence a voice**: a zero-length line has no length to divide the
@@ -80,17 +84,20 @@ comes to be changed in two voices out of three.
 
 ## How long
 
-**Write to the length of the thing it plays under**, and that is two answers:
+**Write to the length of the thing it plays under**, and that is three answers:
 
-| Score    | Loop            | Why                                                                                                        |
-| -------- | --------------- | ---------------------------------------------------------------------------------------------------------- |
-| The menu | **~2 minutes**  | Roughly how long a player spends choosing a car and a stage.                                               |
-| A stage  | **~90 seconds** | A stage lasts minutes, so the player hears it round two or three times; it has to have a real break in it. |
+| Score             | Loop             | Why                                                                                                        |
+| ----------------- | ---------------- | ---------------------------------------------------------------------------------------------------------- |
+| The menu          | **~2 minutes**   | Roughly how long a player spends choosing a car and a stage.                                               |
+| A stage           | **~90 seconds**  | A stage lasts minutes, so the player hears it round two or three times; it has to have a real break in it. |
+| The endless stage | **~130 seconds** | Nothing to build toward and a player settling in — the one loop that can afford an eight-bar horizon.      |
 
-`tests/audio_test.ts` holds both between 70 and 150 s, and also requires at
+`tests/audio_test.ts` holds every score between 70 and 150 s, requires at
 least four patterns and an order longer than the pattern list — so something
-repeats. Settle the length by adding or removing an entry from `order`: the
-tempo is a decision about the piece, the order is arithmetic.
+repeats — and refuses two sections of one score with the same voices, bar
+count and density, which is a section written twice. Settle the length by
+adding or removing an entry from `order`: the tempo is a decision about the
+piece, the order is arithmetic.
 
 ## Composition guidance
 
@@ -117,17 +124,22 @@ music against — both shipped scores do.
 
 ## Where a track gets NAMED
 
-`TrackId` in `pwa/src/game/audio/music.ts`, with a loader beside it. Then:
+`TrackId` in `pwa/src/game/audio/music-pick.ts`, with a loader beside it in
+`music.ts`. Then:
 
-| Who        | How                                                                          |
-| ---------- | ---------------------------------------------------------------------------- |
-| The menu   | `armMenuMusic()` from `App.tsx` when a menu page is up                       |
-| A stage    | `playMusic("taiga")` when the menu comes down                                |
-| The finish | `stopMusic()` — the sting lands in quiet, and the menu re-arms its own theme |
+| Who        | How                                                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------------------------------------- |
+| The menu   | `armMenuMusic()` from `App.tsx` when a menu page is up                                                              |
+| A stage    | `playMusic(stageTrack(state))` — `App.tsx` asks `music-pick.ts` as the stage is applied, and again on every restart |
+| The finish | `stopMusic()` — the sting lands in quiet, and the menu re-arms its own theme                                        |
 
-A new score is a new file, a new `TrackId`, a loader, and a caller. Nothing
-else: the loader's `import()` gives it its own chunk, so a score is never on
-the startup path.
+`trackFor` decides in this order: the SHAPE of the road (a circuit, an
+endless stage), then the COUNTRY (the desert has one score whatever the sky
+does), then the taiga's sky (rain or storm, then dusk/night/dawn, then the
+clear-day anthem). A new score is a new file, a new `TrackId`, a loader, a
+rung in `trackFor`, a row in the audition page's `SCORE_FILES`, and a row in
+`docs/audio.md`'s table. Nothing else: the loader's `import()` gives it its
+own chunk, so a score is never on the startup path.
 
 ## The loop
 
@@ -143,9 +155,11 @@ npx vitest run tests/audio_test.ts
    spectrum analyser, and it is the only way to answer the questions that
    actually decide whether a score works: is the pad a bed or a pulse? is the
    lead audible over the guitars? is the bass doing anything the kick is not?
-4. **Play the two scores back to back.** Whether the menu and the stage sound
-   like two PLACES rather than two tempos is the question a single track cannot
-   answer, and it is the one a soundtrack lives or dies on.
+4. **Play the scores back to back.** Whether the clear taiga, the wet taiga,
+   the night and the desert sound like four PLACES rather than four tempos is
+   the question a single track cannot answer, and it is the one a soundtrack
+   lives or dies on. The header comment's three decisions are what should
+   separate them; if two scores' decisions read alike, they will sound alike.
 5. **Then hear it under the game** (`npm run dev`), with the engine running.
    Half of a stage theme's job is to survive that.
 6. **Fix the worst ONE thing** and go round again. A score changed in six

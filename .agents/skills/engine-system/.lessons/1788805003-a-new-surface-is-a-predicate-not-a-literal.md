@@ -16,7 +16,7 @@ preview's plan. `grep -rn '"gravel"'` is the list; `isLoose(surface)` in
 
 The tables keyed by surface are the other half and they do typecheck:
 `TUNING.surfaces` (drag, grip, breakaway, power), the in-car grain in
-`camera-eye.ts`, the tyre voices in `audio/road-grain.ts` (dry AND wet),
+`camera-eye.ts`, the tyre voices in `audio/road-voice.ts` (dry AND wet),
 `flat.ts`'s `SURFACES` and `CODE_OF` — append the new code at the end there,
 the bot indexes its grip array by it. Which loose surface a country blades
 is the biome's (`BiomeRules.loose`) and the compiler reads it once per

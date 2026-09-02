@@ -3,13 +3,24 @@
 // in, and the interface the instrument that plays them presents.
 //
 // Split from the instrument itself (`synth.ts`) because these types are read
-// by code that must stay DOM-FREE: the sound bank, the event router, the road
-// bed, the sequencer and the tests over all of them describe sounds without
-// ever making one, and the moment any of them reaches for `synth.ts` it drags
+// by code that must stay DOM-FREE: the sound bank, the event router, the beds,
+// the sequencer and the tests over all of them describe sounds without ever
+// making one, and the moment any of them reaches for `synth.ts` it drags
 // `AudioContext` into a build that has no browser in it.
 //
 // So: this file is the vocabulary, `synth.ts` is the only thing that can
 // pronounce it.
+//
+// TWO KINDS OF VOICE, and the split is the whole design of the audio:
+//
+//   * A ONE-SHOT (`tone`, `noise`) starts, does its envelope and stops. A
+//     hit, a note, a click. Everything in the banks and the scores.
+//   * A LAYER (`layer`) never stops. It is a node graph that stays built for
+//     the whole run and is STEERED — its pitch, its level, its cutoff are
+//     moved on the audio thread with smoothed parameter automation. The
+//     engine, the tyres, the wind, the weather and the ambience are all
+//     layers. Nothing about a layer depends on the frame rate: a stalled
+//     main thread leaves it holding its last value, never with a hole in it.
 
 export type WaveType = "sine" | "square" | "sawtooth" | "triangle";
 
@@ -18,8 +29,10 @@ export type WaveType = "sine" | "square" | "sawtooth" | "triangle";
  * distant weight, the body of an impact). */
 export type NoiseColor = "white" | "pink" | "brown";
 
+export type FilterType = "lowpass" | "highpass" | "bandpass";
+
 export type FilterOptions = {
-  type: "lowpass" | "highpass" | "bandpass";
+  type: FilterType;
   /** Cutoff/center frequency in Hz at the start of the sound. */
   frequency: number;
   /** Sweep the cutoff to this Hz across the sound's length — the gesture the
@@ -50,7 +63,7 @@ export type ToneOptions = {
   /** Schedule the sound this far in the future (for little arrangements). */
   delayMs?: number;
   /** Absolute AudioContext start time in seconds (see `now()`); overrides
-   * `delayMs`. Sequencers and beds use this for drift-free scheduling. */
+   * `delayMs`. The sequencer uses this for drift-free scheduling. */
   at?: number;
   /** Volume ramp-up time; 0 (the default) is a hard onset. */
   attackMs?: number;
@@ -60,13 +73,9 @@ export type ToneOptions = {
    * Every tone is otherwise attack-then-decay: the level falls exponentially
    * across the WHOLE remaining duration, a tenth of the peak a quarter of the
    * way in. That is right for a blip, a hit or a plucked note, and it is why a
-   * longer `durationMs` makes a sound ring on rather than sustain.
-   *
-   * A hold is what a BED needs — an engine, a wind, a scrub, anything made of
-   * overlapping grains rather than of events. With the peak held, grains fired
-   * a fraction of a hold apart tile into a level, continuous sound; without
-   * one they sum into a pulse at the cadence, however fast that cadence is.
-   * Clamped so the decay always has the last moment of the note to happen in.
+   * longer `durationMs` makes a sound ring on rather than sustain. A pad, a
+   * swell or a crowd wants a hold. Clamped so the decay always has the last
+   * moment of the note to happen in.
    */
   holdMs?: number;
   /** Layer a second oscillator detuned by ± this many cents — the cheap
@@ -82,34 +91,13 @@ export type ToneOptions = {
    * Waveshaper drive, 0 (clean) to 1 (hard). What turns a smooth oscillator
    * into something with combustion behind it: the shaper adds odd harmonics,
    * so a driven triangle gains the buzz a chip voice can only fake by
-   * stacking a sawtooth on top. 0.2–0.4 is grit; past 0.7 it is a fuzz pedal.
+   * stacking a sawtooth on top. It is a SOFT saturation at every setting —
+   * 0.2–0.4 is warmth, 0.6 is an overdriven amp, 1 is as far as it goes and
+   * still a curve rather than a clip. A hard clip folds every harmonic in
+   * at once and aliases, and over a Bluetooth codec that reads as a torn
+   * speaker rather than as an engine.
    */
   drive?: number;
-  /**
-   * THIS VOICE IS ONE GRAIN OF A PITCHED BED, and two things follow from it.
-   *
-   * PHASE. An oscillator always starts at the top of its cycle, so grains of
-   * the same note fired on a fixed cadence meet each other at whatever phase
-   * the note and the cadence happen to divide into: they REINFORCE where the
-   * two agree and CANCEL where they land half a cycle apart. The note moves
-   * and the cadence does not, so an engine walks through both as it revs —
-   * the bed loses several decibels at some revs and sweeps between the two at
-   * others. A grain instead starts where a never-stopping oscillator of its
-   * pitch would already be, so overlapping copies can only add.
-   *
-   * WINDOW. Once they add, the summed level is the summed ENVELOPE, and the
-   * exponential attack and decay a one-shot wants do not cross-fade: two of
-   * them overlapping dip in the middle. A grain gets LINEAR ramps instead, so
-   * one grain's fade-out fills in exactly what the next one's fade-in has not
-   * reached yet. That only sums flat if the caller makes `attackMs` and the
-   * tail (`durationMs - attackMs - holdMs`) each exactly one cadence, and the
-   * hold a whole number of them — get it right and the wobble at the grain
-   * rate goes from about 14% to under 1%.
-   *
-   * Noise grains want neither: each reads a random window of the shared pool,
-   * so they are incoherent already and sum in power rather than in level.
-   */
-  bed?: boolean;
 };
 
 export type NoiseOptions = {
@@ -127,13 +115,66 @@ export type NoiseOptions = {
   filter?: FilterOptions;
   /** Ramp up over this long instead of starting at full level. */
   attackMs?: number;
-  /** Hold the peak this long before the decay — see `ToneOptions.holdMs`. A
-   * noise BED needs one for exactly the same reason a pitched one does. */
+  /** Hold the peak this long before the decay — see `ToneOptions.holdMs`. */
   holdMs?: number;
   /** Stereo position, -1 to 1. */
   pan?: number;
   /** 0–1 send level into the shared echo bus. */
   echo?: number;
+};
+
+/**
+ * WHAT A LAYER IS MADE OF — decided once, when it is built. Everything that
+ * cannot be automated smoothly lives here: which oscillator or which colour
+ * of noise, the filter's TYPE and resonance, the saturation curve, the
+ * chorus width. Everything that moves is a `LayerTarget`.
+ */
+export type LayerSpec = {
+  kind: "tone" | "noise";
+  /** A pitched layer's oscillator. */
+  type?: WaveType;
+  /** A noise layer's colour. */
+  color?: NoiseColor;
+  /** A pitched layer plays a detuned pair this wide, cents. */
+  detuneCents?: number;
+  /** The saturation curve a pitched layer is folded through; how HARD it is
+   * pushed into that curve is `LayerTarget.grit`, which is smooth. */
+  drive?: number;
+  /** The filter's type and resonance; its cutoff is `LayerTarget.cutoff`.
+   * No filter when omitted. */
+  filter?: { type: FilterType; q?: number };
+  vibrato?: VibratoOptions;
+  /** 0–1 send level into the shared echo bus. */
+  echo?: number;
+};
+
+/** Where a layer is being steered to. Every field is reached over the glide
+ * the caller names, on the audio thread, so a frame that arrives late leaves
+ * the layer holding rather than stepping. */
+export type LayerTarget = {
+  /** Linear level, on the same scale as a one-shot's `volume`. 0 is silence
+   * and costs nothing — the node graph stays but renders quiet. */
+  level: number;
+  /** A pitched layer's frequency, Hz. */
+  hz?: number;
+  /** The filter's cutoff, Hz. Held under Nyquist like every other cutoff. */
+  cutoff?: number;
+  /** How hard a driven layer is pushed into its curve, 0..1. */
+  grit?: number;
+  /** Stereo position, -1..1. */
+  pan?: number;
+};
+
+/** A layer once it exists. */
+export type Layer = {
+  /** Steer the layer. `glideS` is the time constant every parameter moves
+   * on — a few hundredths for a pitch, a tenth or two for a level. */
+  set: (target: LayerTarget, glideS: number) => void;
+  /** Tear the node graph down. The layer is dead afterwards. */
+  stop: () => void;
+  /** False once the audio context that made it is gone — the owner builds a
+   * fresh one on the next frame. */
+  alive: () => boolean;
 };
 
 export type Synth = {
@@ -154,6 +195,9 @@ export type Synth = {
   resume: () => void;
   tone: (options: ToneOptions) => void;
   noise: (options: NoiseOptions) => void;
+  /** Build a continuous voice, silent until steered. Null while the context
+   * is locked or unavailable — try again next frame. */
+  layer: (spec: LayerSpec) => Layer | null;
   /** The AudioContext clock in seconds, or null while locked/unavailable.
    * Absolute `at` times are measured on this clock. */
   now: () => number | null;
@@ -169,8 +213,8 @@ export type Synth = {
  * and a step is broadband: what the ear gets is a CLICK sitting on top of the
  * note, loudest in the treble because that is where a step's energy is. Worse,
  * a step is also what makes a resonant filter RING at its own cutoff — so on a
- * hi-hat (a few milliseconds of noise highpassed at 8 kHz, five a second under
- * the stage theme) the ring IS the sound the player hears, and it reads as a
+ * hi-hat (a few milliseconds of noise highpassed at 6 kHz, several a second
+ * under a score) the ring IS the sound the player hears, and it reads as a
  * broken speaker rather than as a cymbal.
  *
  * A millisecond and a half of ramp is far below the ~10 ms the ear resolves as
@@ -183,7 +227,7 @@ export const MIN_ATTACK_MS = 1.5;
 
 /**
  * THE HIGHEST CUTOFF A FILTER MAY BE ASKED FOR, as a fraction of the sample
- * rate — and the reason the hi-hat does not scream on a phone.
+ * rate — and the reason a hi-hat does not scream on a phone.
  *
  * A biquad's coefficients are computed from its cutoff divided by Nyquist
  * (half the sample rate). At or past 1 that maths is degenerate and what comes
@@ -192,15 +236,12 @@ export const MIN_ATTACK_MS = 1.5;
  * The catch is that the sample rate is NOT a constant. A desktop context runs
  * at 44.1 or 48 kHz, where nothing this game authors comes close. iOS picks
  * the rate from the live audio ROUTE, and a Bluetooth headset in hands-free
- * mode drops the whole session to 16 kHz — Nyquist 8000, under the 8200 Hz
- * highpass both scores' hi-hats are built on. That is a fault nobody can hear
- * on a laptop, that arrives four to five times a second, and that sounds
- * exactly like a broken speaker.
+ * mode drops the whole session to 16 kHz — Nyquist 8000. That is a fault
+ * nobody can hear on a laptop, that arrives several times a second, and that
+ * sounds exactly like a broken speaker.
  *
  * 0.45 rather than 0.5 because a biquad sitting exactly on Nyquist is still
  * numerically nasty; a tenth of an octave of headroom costs nothing anywhere.
- * On a 48 kHz context the ceiling is 21.6 kHz, which is above anything a score
- * or a bank would ever ask for, so this is invisible until it is load-bearing.
  */
 export const MAX_CUTOFF_RATIO = 0.45;
 
@@ -209,6 +250,28 @@ export const MAX_CUTOFF_RATIO = 0.45;
 export function safeCutoff(hz: number, sampleRate: number): number {
   const ceiling = sampleRate * MAX_CUTOFF_RATIO;
   return Math.min(Math.max(20, hz), ceiling);
+}
+
+/**
+ * THE SATURATION CURVE, as arithmetic — so a test can read how hard a drive
+ * actually folds a waveform without a browser.
+ *
+ * `tanh` rather than a hard clip: a hard clip folds every harmonic in at once
+ * and aliases, and over a Bluetooth codec that reads as a torn speaker. The
+ * steepness runs 1 (nearly linear) to 10 (a fully driven amp) — deliberately
+ * NOT exponential in the drive, because a curve steep enough to be a square
+ * wave at half travel leaves the top half of the knob doing nothing but
+ * adding hash.
+ */
+export function shaperSteepness(drive: number): number {
+  return 1 + 9 * Math.min(1, Math.max(0, drive));
+}
+
+/** How hot an oscillator is pushed into the curve for a given drive. A
+ * curve does nothing to a signal that never reaches its knee; the gain in
+ * front of it is what "drive" is. */
+export function shaperPush(drive: number): number {
+  return 1 + 3 * Math.min(1, Math.max(0, drive));
 }
 
 /** One point on a gain curve: where it is going, when it gets there, and how
@@ -220,9 +283,9 @@ export type EnvelopeStep = { at: number; value: number; ramp: "set" | "exp" | "l
  * sound has can be read (and tested) without a browser in the room.
  *
  * `decay` is the difference between the two shapes the instrument plays. An
- * EXPONENTIAL fall is a voice with a tail: a note, a grain of a bed, anything
- * that has to sit under something else. A LINEAR one falls evenly across its
- * whole length and is a HIT — a stick, a hat, a stone off the floorpan.
+ * EXPONENTIAL fall is a voice with a tail: a note, a swell, anything that has
+ * to sit under something else. A LINEAR one falls evenly across its whole
+ * length and is a HIT — a stick, a hat, a stone off the floorpan.
  */
 export function envelopeShape(
   peak: number,

@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE RUN'S SOUND BANK — everything discrete the car and the stage do.
+// THE CAR'S SOUND BANK — everything discrete the car itself does.
 //
 // A sound here is data: a description of what it should feel like, and the
 // list of synth voices that try to. The continuous stuff — the engine, the
 // tyres, the wind, the scrub of a slide — is not here and cannot be, because
 // its pitch and level ride parameters that move every frame; that lives in
-// `engine-bed.ts` and `drive-bed.ts`.
+// `engine-voice.ts`, `road-voice.ts` and the scheduler in `drive-bed.ts`.
+// What the STAGE does — the lights, the line, the crowd, the sky — is the
+// bank beside this one (`bank-stage.ts`); the two are served together as
+// `RUN_BANK` so the router never has to know which is which.
 //
 // THE PALETTE IS PLAYSTATION-ERA RALLY, and three habits carry it:
 //
@@ -16,279 +19,34 @@
 //     and water, white is glass and grit. Picking the colour before picking
 //     the filter is what stops everything sounding like the same hiss.
 //   * FILTERS MOVE. A crash that opens and shuts, a spray that thins out, a
-//     turbo that spools — all one `filter.to` away, and all impossible with a
-//     static cutoff.
+//     wastegate that empties — all one `filter.to` away.
+//
+// AND NOTHING HERE IS BRIGHT FOR ITS OWN SAKE. A Bluetooth codec turns dense
+// top end into a swirl, and the lower half of every sound is where its
+// weight is anyway: the transients live in the 1–4 kHz band, the bodies
+// under 1 kHz, and the only thing above 5 kHz is glass.
 //
 // Mixing: the crash is the ceiling at ~0.1; ordinary contacts sit at 0.04–0.07;
-// anything that can happen twice a second (shifts, scuffs) stays under 0.04.
-// If everything is loud, nothing is.
+// anything that can happen twice a second (shifts, scuffs, pops) stays under
+// 0.04. If everything is loud, nothing is.
 
+import { STAGE_BANK } from "./bank-stage.ts";
 import type { SoundBank } from "./types.ts";
 
-export const RUN_BANK: SoundBank = {
-  // ── The start of it ──────────────────────────────────────────────────────
-  countdown_tick: {
-    description:
-      "One of the lights before the off. A dry mid tone with a contact click " +
-      "on it — a timing device on a pole in a forest, not a musical note. " +
-      "Deliberately plain so that GO can be the same sound transformed.",
-    voices: [
-      {
-        call: "tone",
-        type: "square",
-        from: 660,
-        durationMs: 130,
-        volume: 0.03,
-        holdMs: 70,
-        filter: { type: "lowpass", frequency: 2200 },
-      },
-      {
-        call: "noise",
-        durationMs: 20,
-        volume: 0.018,
-        filter: { type: "bandpass", frequency: 3000, q: 3 },
-      },
-    ],
-  },
-
-  race_go: {
-    description:
-      "Lights out. The countdown tick an octave up, held twice as long and " +
-      "opened out with a resonant sweep and a send into the echo — the same " +
-      "device saying the opposite thing. Nothing celebratory: the celebration " +
-      "is at the finish, this is permission.",
-    voices: [
-      {
-        call: "tone",
-        type: "square",
-        from: 990,
-        durationMs: 420,
-        volume: 0.042,
-        holdMs: 260,
-        detuneCents: 7,
-        echo: 0.28,
-        filter: { type: "lowpass", frequency: 1400, to: 4200 },
-      },
-      {
-        call: "noise",
-        durationMs: 30,
-        volume: 0.026,
-        filter: { type: "bandpass", frequency: 3400, q: 3 },
-      },
-      { call: "tone", type: "sine", from: 165, to: 110, durationMs: 300, volume: 0.03 },
-    ],
-  },
-
-  lap: {
-    description:
-      "Across the line with laps still to run. The finish's brass stab on its " +
-      "own, a fifth lower and half as long, with no swell of crowd under it — " +
-      "the same voice saying 'again' instead of 'done', so the finish still " +
-      "arrives as something the lap board was only counting toward.",
-    voices: [
-      {
-        call: "tone",
-        type: "sawtooth",
-        from: 262,
-        to: 392,
-        durationMs: 220,
-        volume: 0.03,
-        attackMs: 10,
-        holdMs: 110,
-        detuneCents: 8,
-        drive: 0.22,
-        echo: 0.18,
-        filter: { type: "lowpass", frequency: 2400 },
-      },
-      {
-        call: "noise",
-        durationMs: 90,
-        volume: 0.016,
-        color: "pink",
-        attackMs: 8,
-        filter: { type: "bandpass", frequency: 1600, q: 1.2 },
-      },
-    ],
-  },
-
-  finish: {
-    description:
-      "Through the flying finish. A rising two-note brass stab over a swell of " +
-      "pink air — the noise of arriving somewhere with people at it — cut off " +
-      "clean rather than allowed to ring, so the results screen lands in quiet.",
-    voices: [
-      {
-        call: "noise",
-        durationMs: 900,
-        volume: 0.03,
-        color: "pink",
-        attackMs: 260,
-        holdMs: 220,
-        filter: { type: "bandpass", frequency: 700, to: 1800, q: 0.9 },
-      },
-      {
-        call: "tone",
-        type: "sawtooth",
-        from: 392,
-        durationMs: 260,
-        volume: 0.036,
-        attackMs: 14,
-        holdMs: 130,
-        detuneCents: 10,
-        drive: 0.3,
-        echo: 0.24,
-        filter: { type: "lowpass", frequency: 2600 },
-      },
-      {
-        call: "tone",
-        type: "sawtooth",
-        from: 587,
-        durationMs: 620,
-        volume: 0.04,
-        delayMs: 230,
-        attackMs: 16,
-        holdMs: 300,
-        detuneCents: 12,
-        drive: 0.28,
-        echo: 0.36,
-        filter: { type: "lowpass", frequency: 3000 },
-      },
-      {
-        call: "tone",
-        type: "sine",
-        from: 98,
-        durationMs: 700,
-        volume: 0.038,
-        delayMs: 230,
-        holdMs: 340,
-      },
-    ],
-  },
-
-  missed: {
-    description:
-      "R28 — over the line with a split board still owed, and the line does " +
-      "nothing. The finish's brass stab inverted: two notes FALLING, flat and " +
-      "close together, dry, with no crowd behind them and no echo to arrive " +
-      "in. It has to read as the opposite of `finish` at the exact moment the " +
-      "player expected `finish`, which is why it is the same voice and not a " +
-      "buzzer — a buzzer is a menu saying no, and this is the stage saying it " +
-      "is not over.",
-    voices: [
-      {
-        call: "tone",
-        type: "sawtooth",
-        from: 330,
-        durationMs: 200,
-        volume: 0.034,
-        attackMs: 10,
-        holdMs: 110,
-        detuneCents: 14,
-        drive: 0.3,
-        filter: { type: "lowpass", frequency: 1800 },
-      },
-      {
-        call: "tone",
-        type: "sawtooth",
-        from: 233,
-        durationMs: 420,
-        volume: 0.038,
-        delayMs: 170,
-        attackMs: 12,
-        holdMs: 180,
-        detuneCents: 16,
-        drive: 0.32,
-        filter: { type: "lowpass", frequency: 1500 },
-      },
-      {
-        call: "noise",
-        durationMs: 120,
-        volume: 0.014,
-        color: "brown",
-        delayMs: 170,
-        filter: { type: "bandpass", frequency: 420, q: 1.1 },
-      },
-    ],
-  },
-
-  cheer: {
-    description:
-      "Going past a stand of spectators. A CROWD is the hardest thing on this " +
-      "list to synthesize, because it has no transient and no pitch — it is a " +
-      "band of noise with voices somewhere in it. So: pink air swelling and " +
-      "falling through a wide, resonant bandpass around the vowel region, " +
-      "which is what turns hiss into people; a second, brighter band a beat " +
-      "later for the ones further down the line; and two barely-pitched " +
-      "sawtooth swells under it, detuned hard against each other, which is a " +
-      "hundred throats never quite agreeing on a note. Nothing percussive — a " +
-      "cheer has no attack, it ARRIVES, so every layer fades in over a long " +
-      "attack and the car goes past before it has finished. Quiet: this fires " +
-      "at every stand on the stage, and a crowd louder than the engine is a " +
-      "crowd standing inside the car.",
-    voices: [
-      {
-        call: "noise",
-        durationMs: 1500,
-        volume: 0.026,
-        color: "pink",
-        attackMs: 420,
-        holdMs: 330,
-        echo: 0.2,
-        filter: { type: "bandpass", frequency: 620, to: 1250, q: 0.75 },
-      },
-      {
-        call: "noise",
-        durationMs: 1150,
-        volume: 0.016,
-        color: "pink",
-        delayMs: 260,
-        attackMs: 340,
-        holdMs: 220,
-        filter: { type: "bandpass", frequency: 1800, to: 2500, q: 1.1 },
-      },
-      {
-        call: "tone",
-        type: "sawtooth",
-        from: 196,
-        to: 233,
-        durationMs: 1250,
-        volume: 0.012,
-        attackMs: 460,
-        holdMs: 320,
-        detuneCents: 38,
-        vibrato: { rateHz: 4.4, depthCents: 55, delayMs: 200 },
-        filter: { type: "lowpass", frequency: 1100, to: 1900 },
-      },
-      {
-        call: "tone",
-        type: "sawtooth",
-        from: 294,
-        to: 262,
-        durationMs: 1050,
-        volume: 0.009,
-        delayMs: 180,
-        attackMs: 400,
-        holdMs: 240,
-        detuneCents: 46,
-        vibrato: { rateHz: 5.1, depthCents: 62, delayMs: 160 },
-        filter: { type: "lowpass", frequency: 1500 },
-      },
-    ],
-  },
-
+export const CAR_BANK: SoundBank = {
   // ── The drivetrain ───────────────────────────────────────────────────────
   shift_up: {
     description:
       "A gear going in: the mechanical clack of the selector and the momentary " +
       "hole in the exhaust while the clutch is out. Short, dry, and quiet — it " +
-      "happens five times up every straight, and the engine bed's pitch drop " +
-      "is what the player actually reads the shift from.",
+      "happens five times up every straight, and the engine's pitch drop is " +
+      "what the player actually reads the shift from.",
     voices: [
       {
         call: "noise",
-        durationMs: 32,
-        volume: 0.03,
-        filter: { type: "bandpass", frequency: 1700, to: 900, q: 2.2 },
+        durationMs: 30,
+        volume: 0.028,
+        filter: { type: "bandpass", frequency: 1600, to: 900, q: 2.2 },
       },
       {
         call: "tone",
@@ -296,8 +54,8 @@ export const RUN_BANK: SoundBank = {
         from: 220,
         to: 150,
         durationMs: 70,
-        volume: 0.022,
-        drive: 0.4,
+        volume: 0.02,
+        drive: 0.5,
         filter: { type: "lowpass", frequency: 900 },
       },
     ],
@@ -311,9 +69,9 @@ export const RUN_BANK: SoundBank = {
     voices: [
       {
         call: "noise",
-        durationMs: 30,
-        volume: 0.028,
-        filter: { type: "bandpass", frequency: 1500, to: 2400, q: 2.2 },
+        durationMs: 28,
+        volume: 0.026,
+        filter: { type: "bandpass", frequency: 1400, to: 2200, q: 2.2 },
       },
       {
         call: "tone",
@@ -321,9 +79,91 @@ export const RUN_BANK: SoundBank = {
         from: 170,
         to: 300,
         durationMs: 110,
+        volume: 0.024,
+        drive: 0.55,
+        filter: { type: "lowpass", frequency: 1500 },
+      },
+    ],
+  },
+
+  overrun_pop: {
+    description:
+      "Unburnt fuel going off in the exhaust on a lift — the crackle a rally " +
+      "car makes coming off the throttle at the top of a gear. Three short " +
+      "brown pops, spaced unevenly, each a filtered thump with a little " +
+      "square bark in it, thrown behind the car. Quiet and quick: it is " +
+      "texture on the lift, never a bang.",
+    voices: [
+      {
+        call: "noise",
+        durationMs: 40,
         volume: 0.026,
-        drive: 0.45,
-        filter: { type: "lowpass", frequency: 1600 },
+        color: "brown",
+        filter: { type: "bandpass", frequency: 520, to: 260, q: 1.4 },
+      },
+      {
+        call: "tone",
+        type: "square",
+        from: 180,
+        to: 90,
+        durationMs: 50,
+        volume: 0.012,
+        drive: 0.6,
+        filter: { type: "lowpass", frequency: 700 },
+      },
+      {
+        call: "noise",
+        durationMs: 34,
+        volume: 0.02,
+        color: "brown",
+        delayMs: 110,
+        filter: { type: "bandpass", frequency: 600, to: 280, q: 1.4 },
+      },
+      {
+        call: "noise",
+        durationMs: 44,
+        volume: 0.023,
+        color: "brown",
+        delayMs: 290,
+        filter: { type: "bandpass", frequency: 480, to: 240, q: 1.4 },
+      },
+      {
+        call: "tone",
+        type: "square",
+        from: 160,
+        to: 80,
+        durationMs: 60,
+        volume: 0.011,
+        delayMs: 290,
+        drive: 0.6,
+        filter: { type: "lowpass", frequency: 700 },
+      },
+    ],
+  },
+
+  wastegate: {
+    description:
+      "The turbo dumping its boost on an upshift under full load: a short " +
+      "sharp PSSHT of pink air, opening bright and shutting fast, with the " +
+      "whistle of the impeller winding down under it. Over in a fifth of a " +
+      "second and only ever raised with the engine on boost.",
+    voices: [
+      {
+        call: "noise",
+        durationMs: 190,
+        volume: 0.03,
+        color: "pink",
+        attackMs: 6,
+        filter: { type: "bandpass", frequency: 3400, to: 1400, q: 1.1 },
+      },
+      {
+        call: "tone",
+        type: "sine",
+        from: 3600,
+        to: 1500,
+        durationMs: 240,
+        volume: 0.008,
+        attackMs: 10,
       },
     ],
   },
@@ -338,10 +178,10 @@ export const RUN_BANK: SoundBank = {
       {
         call: "noise",
         durationMs: 260,
-        volume: 0.032,
+        volume: 0.03,
         color: "pink",
         attackMs: 18,
-        filter: { type: "bandpass", frequency: 2400, to: 1100, q: 1.2 },
+        filter: { type: "bandpass", frequency: 2200, to: 1000, q: 1.2 },
       },
       {
         call: "noise",
@@ -362,9 +202,9 @@ export const RUN_BANK: SoundBank = {
       {
         call: "noise",
         durationMs: 170,
-        volume: 0.026,
+        volume: 0.024,
         color: "pink",
-        filter: { type: "bandpass", frequency: 1600, to: 3000, q: 1.4 },
+        filter: { type: "bandpass", frequency: 1500, to: 2600, q: 1.4 },
       },
     ],
   },
@@ -373,23 +213,21 @@ export const RUN_BANK: SoundBank = {
     description:
       "The drift gone. Past the angle where the front tyres still have " +
       "something to pull against, all four are dragged sideways at once and " +
-      "the car is rotating on nothing but the speed it arrived with. It is " +
-      "the drift bed's scrub with the lid off: a wide band that SWELLS " +
-      "rather than hits — nothing struck anything — and then falls away as " +
-      "the sideways drag eats the speed that is making it. Under it, the " +
-      "mass of the car coming round, which is what separates this from a " +
-      "tyre chirp. It must not read as a crash: a spin is a mistake the " +
-      "driver made, not damage the car took, and a player who hears an " +
-      "impact here will brake out of every slide.",
+      "the car is rotating on nothing but the speed it arrived with. A wide " +
+      "band that SWELLS rather than hits — nothing struck anything — and " +
+      "then falls away as the sideways drag eats the speed that is making " +
+      "it, with the mass of the car coming round underneath. It must not " +
+      "read as a crash: a spin is a mistake the driver made, and a player " +
+      "who hears an impact here will brake out of every slide.",
     voices: [
       {
         call: "noise",
         durationMs: 900,
-        volume: 0.036,
+        volume: 0.034,
         color: "pink",
         attackMs: 110,
         holdMs: 180,
-        filter: { type: "bandpass", frequency: 1900, to: 700, q: 0.9 },
+        filter: { type: "bandpass", frequency: 1800, to: 700, q: 0.9 },
       },
       {
         call: "noise",
@@ -417,7 +255,7 @@ export const RUN_BANK: SoundBank = {
         color: "pink",
         attackMs: 30,
         holdMs: 120,
-        filter: { type: "bandpass", frequency: 900, to: 4200, q: 0.8 },
+        filter: { type: "bandpass", frequency: 900, to: 3800, q: 0.8 },
       },
       {
         call: "noise",
@@ -430,9 +268,10 @@ export const RUN_BANK: SoundBank = {
       {
         call: "noise",
         durationMs: 900,
-        volume: 0.02,
+        volume: 0.016,
+        color: "pink",
         delayMs: 180,
-        filter: { type: "highpass", frequency: 3600 },
+        filter: { type: "highpass", frequency: 3200 },
         echo: 0.2,
       },
     ],
@@ -459,8 +298,8 @@ export const RUN_BANK: SoundBank = {
         from: 210,
         to: 150,
         durationMs: 130,
-        volume: 0.024,
-        drive: 0.3,
+        volume: 0.022,
+        drive: 0.4,
       },
     ],
   },
@@ -470,8 +309,8 @@ export const RUN_BANK: SoundBank = {
       "Landing on the wheels with the car pointing where it is going. The " +
       "suspension takes it: a compressed brown thump, the tyres finding the " +
       "surface again in a scatter of loose material, and no metal anywhere. " +
-      "Scaled by air time by the caller, so a hop and a forty-metre flight are " +
-      "the same sound at very different sizes.",
+      "Scaled by the slam by the caller, so a hop and a forty-metre flight " +
+      "are the same sound at very different sizes.",
     voices: [
       {
         call: "noise",
@@ -483,10 +322,10 @@ export const RUN_BANK: SoundBank = {
       {
         call: "noise",
         durationMs: 300,
-        volume: 0.03,
+        volume: 0.028,
         color: "pink",
         delayMs: 25,
-        filter: { type: "bandpass", frequency: 2000, to: 900, q: 1.1 },
+        filter: { type: "bandpass", frequency: 1900, to: 900, q: 1.1 },
       },
       { call: "tone", type: "sine", from: 90, to: 52, durationMs: 240, volume: 0.04 },
     ],
@@ -496,8 +335,8 @@ export const RUN_BANK: SoundBank = {
     description:
       "Landing badly: sideways, nose-first, or from further up than the springs " +
       "have travel for. Everything `land_clean` has, plus the two things that " +
-      "say it hurt — the bang of the floorpan reaching its stop, and a bright " +
-      "scrape of the underside taking some of the impact the wheels should have.",
+      "say it hurt — the bang of the floorpan reaching its stop, and a scrape " +
+      "of the underside taking some of the impact the wheels should have.",
     voices: [
       {
         call: "noise",
@@ -509,7 +348,7 @@ export const RUN_BANK: SoundBank = {
       {
         call: "noise",
         durationMs: 60,
-        volume: 0.055,
+        volume: 0.05,
         filter: { type: "bandpass", frequency: 1400, q: 1.6 },
       },
       { call: "tone", type: "sine", from: 110, to: 40, durationMs: 340, volume: 0.055 },
@@ -519,18 +358,19 @@ export const RUN_BANK: SoundBank = {
         from: 340,
         to: 190,
         durationMs: 180,
-        volume: 0.024,
+        volume: 0.022,
         delayMs: 20,
-        drive: 0.5,
+        drive: 0.6,
         echo: 0.2,
         filter: { type: "bandpass", frequency: 1800, q: 2.4 },
       },
       {
         call: "noise",
         durationMs: 420,
-        volume: 0.02,
+        volume: 0.016,
+        color: "pink",
         delayMs: 60,
-        filter: { type: "highpass", frequency: 2800 },
+        filter: { type: "highpass", frequency: 2600 },
       },
     ],
   },
@@ -546,8 +386,9 @@ export const RUN_BANK: SoundBank = {
       {
         call: "noise",
         durationMs: 130,
-        volume: 0.036,
-        filter: { type: "bandpass", frequency: 3200, to: 1400, q: 1.8 },
+        volume: 0.034,
+        color: "pink",
+        filter: { type: "bandpass", frequency: 3000, to: 1300, q: 1.8 },
       },
       { call: "tone", type: "sine", from: 170, to: 120, durationMs: 90, volume: 0.02 },
     ],
@@ -581,7 +422,7 @@ export const RUN_BANK: SoundBank = {
         to: 130,
         durationMs: 220,
         volume: 0.03,
-        drive: 0.55,
+        drive: 0.65,
         echo: 0.16,
         filter: { type: "bandpass", frequency: 900, to: 420, q: 2 },
       },
@@ -616,7 +457,7 @@ export const RUN_BANK: SoundBank = {
         to: 70,
         durationMs: 380,
         volume: 0.045,
-        drive: 0.65,
+        drive: 0.8,
         echo: 0.24,
         filter: { type: "lowpass", frequency: 1400, to: 340 },
       },
@@ -632,75 +473,11 @@ export const RUN_BANK: SoundBank = {
       {
         call: "noise",
         durationMs: 500,
-        volume: 0.022,
+        volume: 0.02,
+        color: "pink",
         delayMs: 220,
         filter: { type: "highpass", frequency: 2400 },
         echo: 0.4,
-      },
-    ],
-  },
-
-  kerb_block: {
-    description:
-      "R26 — riding over an anti-cut block on the inside of a corner. Concrete " +
-      "under a tyre, felt through the floor rather than heard through the " +
-      "panels: a short dry knock with the whole weight of the car behind it, a " +
-      "low thump as the suspension takes the drop off the far side, and no " +
-      "brightness at all. It must NOT sound like an impact — nothing broke, " +
-      "and a player who hears a crash here will stop cutting the apex " +
-      "altogether instead of learning what it costs.",
-    voices: [
-      {
-        call: "noise",
-        durationMs: 55,
-        volume: 0.05,
-        color: "brown",
-        filter: { type: "bandpass", frequency: 260, q: 1.4 },
-      },
-      {
-        call: "noise",
-        durationMs: 190,
-        volume: 0.038,
-        color: "brown",
-        delayMs: 25,
-        filter: { type: "lowpass", frequency: 700, to: 160 },
-      },
-      { call: "tone", type: "sine", from: 96, to: 44, durationMs: 220, volume: 0.045 },
-      {
-        call: "tone",
-        type: "triangle",
-        from: 190,
-        to: 118,
-        durationMs: 120,
-        volume: 0.02,
-        drive: 0.3,
-        filter: { type: "lowpass", frequency: 900 },
-      },
-    ],
-  },
-
-  knock: {
-    description:
-      "Something light going over: a marshal's cone, a marker post out of the " +
-      "verge. Hollow plastic struck once and then gone — a short mid knock with " +
-      "a bit of a rattle behind it as the thing lands. Deliberately small: at " +
-      "pace through a run of posts this fires several times a second, and " +
-      "anything with weight in it would read as the car breaking.",
-    voices: [
-      {
-        call: "noise",
-        durationMs: 40,
-        volume: 0.03,
-        filter: { type: "bandpass", frequency: 900, to: 520, q: 2.2 },
-      },
-      { call: "tone", type: "triangle", from: 320, to: 190, durationMs: 90, volume: 0.022 },
-      {
-        call: "noise",
-        durationMs: 150,
-        volume: 0.012,
-        delayMs: 60,
-        filter: { type: "bandpass", frequency: 1900, q: 1.6 },
-        echo: 0.12,
       },
     ],
   },
@@ -716,7 +493,7 @@ export const RUN_BANK: SoundBank = {
         call: "noise",
         durationMs: 110,
         volume: 0.05,
-        filter: { type: "bandpass", frequency: 1200, to: 4600, q: 2.8 },
+        filter: { type: "bandpass", frequency: 1200, to: 4400, q: 2.8 },
       },
       {
         call: "tone",
@@ -724,8 +501,8 @@ export const RUN_BANK: SoundBank = {
         from: 620,
         to: 310,
         durationMs: 160,
-        volume: 0.026,
-        drive: 0.5,
+        volume: 0.024,
+        drive: 0.6,
         echo: 0.2,
         filter: { type: "bandpass", frequency: 2200, q: 2.6 },
       },
@@ -778,7 +555,7 @@ export const RUN_BANK: SoundBank = {
         to: 62,
         durationMs: 220,
         volume: 0.05,
-        drive: 0.7,
+        drive: 0.85,
         filter: { type: "lowpass", frequency: 1400, to: 400 },
       },
       {
@@ -812,7 +589,7 @@ export const RUN_BANK: SoundBank = {
         to: 84,
         durationMs: 130,
         volume: 0.045,
-        drive: 0.6,
+        drive: 0.75,
         filter: { type: "lowpass", frequency: 900 },
       },
       {
@@ -822,6 +599,82 @@ export const RUN_BANK: SoundBank = {
         delayMs: 110,
         filter: { type: "bandpass", frequency: 2100, q: 2.8 },
         echo: 0.25,
+      },
+    ],
+  },
+
+  // ── The car giving up ────────────────────────────────────────────────────
+  system_give: {
+    description:
+      "A system crossing its first line — the engine down a third, a spring " +
+      "gone soft, the box baulking. A metallic knock felt through the " +
+      "bulkhead, a short rattle behind it, and nothing bright: it is news the " +
+      "player cannot see, so it is a sound with a body and no drama, small " +
+      "enough to sit under whatever just happened to the car.",
+    voices: [
+      {
+        call: "noise",
+        durationMs: 50,
+        volume: 0.034,
+        color: "brown",
+        filter: { type: "bandpass", frequency: 640, q: 2 },
+      },
+      {
+        call: "tone",
+        type: "triangle",
+        from: 240,
+        to: 150,
+        durationMs: 140,
+        volume: 0.024,
+        drive: 0.5,
+        filter: { type: "lowpass", frequency: 900 },
+      },
+      {
+        call: "noise",
+        durationMs: 220,
+        volume: 0.014,
+        color: "pink",
+        delayMs: 70,
+        filter: { type: "bandpass", frequency: 1500, q: 2.6 },
+      },
+    ],
+  },
+
+  system_gone: {
+    description:
+      "A system finished: the engine dead, the box jammed, the steering " +
+      "bent. `system_give` with the weight left in: a heavier clunk, a " +
+      "descending driven note that stalls rather than rings, and a hiss of " +
+      "something venting — steam, oil, air — that goes on after the rest.",
+    voices: [
+      {
+        call: "noise",
+        durationMs: 80,
+        volume: 0.045,
+        color: "brown",
+        filter: { type: "bandpass", frequency: 420, q: 1.6 },
+      },
+      {
+        call: "tone",
+        type: "square",
+        from: 200,
+        to: 70,
+        durationMs: 420,
+        volume: 0.028,
+        attackMs: 10,
+        holdMs: 60,
+        drive: 0.6,
+        filter: { type: "lowpass", frequency: 800, to: 300 },
+      },
+      {
+        call: "noise",
+        durationMs: 900,
+        volume: 0.018,
+        color: "pink",
+        delayMs: 120,
+        attackMs: 60,
+        holdMs: 300,
+        filter: { type: "bandpass", frequency: 2600, to: 1600, q: 1.2 },
       },
     ],
   },
@@ -856,11 +709,11 @@ export const RUN_BANK: SoundBank = {
       {
         call: "noise",
         durationMs: 1100,
-        volume: 0.022,
+        volume: 0.02,
         color: "white",
         delayMs: 140,
         attackMs: 40,
-        filter: { type: "bandpass", frequency: 3200, to: 900, q: 2.2 },
+        filter: { type: "bandpass", frequency: 3000, to: 900, q: 2.2 },
         echo: 0.35,
       },
     ],
@@ -909,119 +762,9 @@ export const RUN_BANK: SoundBank = {
         durationMs: 900,
         volume: 0.022,
         delayMs: 40,
-        drive: 0.4,
+        drive: 0.5,
         echo: 0.4,
         filter: { type: "lowpass", frequency: 800, to: 260 },
-      },
-    ],
-  },
-
-  // ── The sky ──────────────────────────────────────────────────────────────
-  // Thunder is the one sound in the bank with a JOURNEY behind it. Air
-  // absorbs high frequencies far faster than low ones and the ground and
-  // the hills scatter what is left, so what a strike sounds like is almost
-  // entirely a question of how far away it happened — which is why there
-  // are two of these rather than one with a volume knob.
-
-  thunder_near: {
-    description:
-      "A strike close enough to be frightening. The rip of the channel itself " +
-      "first — broadband, no body, the sound of air being torn — then the " +
-      "crack of it collapsing back in, a sub that drops away underneath, and " +
-      "only then the roll, arriving late off the hills. Near the crash in " +
-      "size, because a bolt inside a kilometre IS the loudest thing on the " +
-      "stage and a polite one is worse than none.",
-    voices: [
-      {
-        call: "noise",
-        durationMs: 90,
-        volume: 0.055,
-        color: "white",
-        filter: { type: "highpass", frequency: 1800, to: 500 },
-      },
-      {
-        call: "noise",
-        durationMs: 700,
-        volume: 0.08,
-        color: "brown",
-        attackMs: 4,
-        holdMs: 60,
-        echo: 0.3,
-        filter: { type: "lowpass", frequency: 1600, to: 200 },
-      },
-      {
-        call: "tone",
-        type: "sine",
-        from: 62,
-        to: 27,
-        durationMs: 900,
-        volume: 0.06,
-        attackMs: 8,
-        holdMs: 120,
-      },
-      {
-        call: "noise",
-        durationMs: 2800,
-        volume: 0.055,
-        color: "brown",
-        delayMs: 180,
-        attackMs: 220,
-        holdMs: 500,
-        echo: 0.55,
-        filter: { type: "lowpass", frequency: 260, to: 80 },
-      },
-      {
-        call: "noise",
-        durationMs: 1800,
-        volume: 0.03,
-        color: "brown",
-        delayMs: 900,
-        attackMs: 400,
-        holdMs: 300,
-        echo: 0.6,
-        filter: { type: "lowpass", frequency: 170, to: 65 },
-      },
-    ],
-  },
-
-  thunder_far: {
-    description:
-      "A strike out in the weather somewhere. NO transient at all — the crack " +
-      "has been smeared into a swell by kilometres of air, and an attack on " +
-      "this is the tell that turns distant thunder into a nearby drum. Two " +
-      "brown swells, the second arriving off the hills behind the first, over " +
-      "a sub that never quite resolves into a note.",
-    voices: [
-      {
-        call: "noise",
-        durationMs: 3400,
-        volume: 0.05,
-        color: "brown",
-        attackMs: 700,
-        holdMs: 700,
-        echo: 0.6,
-        filter: { type: "lowpass", frequency: 220, to: 70 },
-      },
-      {
-        call: "noise",
-        durationMs: 2400,
-        volume: 0.03,
-        color: "brown",
-        delayMs: 800,
-        attackMs: 500,
-        holdMs: 400,
-        echo: 0.55,
-        filter: { type: "lowpass", frequency: 150, to: 60 },
-      },
-      {
-        call: "tone",
-        type: "sine",
-        from: 44,
-        to: 26,
-        durationMs: 2600,
-        volume: 0.028,
-        attackMs: 500,
-        holdMs: 600,
       },
     ],
   },
@@ -1038,7 +781,7 @@ export const RUN_BANK: SoundBank = {
         volume: 0.03,
         color: "pink",
         attackMs: 300,
-        filter: { type: "bandpass", frequency: 3600, to: 800, q: 1.4 },
+        filter: { type: "bandpass", frequency: 3400, to: 800, q: 1.4 },
       },
       {
         call: "noise",
@@ -1059,4 +802,47 @@ export const RUN_BANK: SoundBank = {
       },
     ],
   },
+
+  // ── The screen ───────────────────────────────────────────────────────────
+  wiper: {
+    description:
+      "One stroke of the wiper across a wet screen, heard from the seat: the " +
+      "rubber dragging up the glass as a soft pink sweep rising in pitch, a " +
+      "tiny knock at the top of the stroke, and the sweep back down. Only " +
+      "ever raised inside the car, in time with the blades, and quiet enough " +
+      "to be noticed rather than heard.",
+    voices: [
+      {
+        call: "noise",
+        durationMs: 330,
+        volume: 0.014,
+        color: "pink",
+        attackMs: 40,
+        holdMs: 160,
+        filter: { type: "bandpass", frequency: 900, to: 1700, q: 1.4 },
+      },
+      {
+        call: "noise",
+        durationMs: 18,
+        volume: 0.012,
+        color: "brown",
+        delayMs: 340,
+        filter: { type: "bandpass", frequency: 700, q: 2 },
+      },
+      {
+        call: "noise",
+        durationMs: 300,
+        volume: 0.011,
+        color: "pink",
+        delayMs: 380,
+        attackMs: 40,
+        holdMs: 140,
+        filter: { type: "bandpass", frequency: 1600, to: 800, q: 1.4 },
+      },
+    ],
+  },
 };
+
+/** Everything a RUN can make a noise with: the car and the stage, served
+ * as one bank so the router never has to know which is which. */
+export const RUN_BANK: SoundBank = { ...CAR_BANK, ...STAGE_BANK };
