@@ -339,6 +339,30 @@ await capture(
   { bot: "1" },
 );
 
+// The same slide, held on: the ROOSTER TAIL (drift-spray.ts). By now the
+// angle is developed and the tyres are being dragged sideways at pace, so
+// the acceptance test is the stones — a fan of them off the side the tail
+// is going, out and back, low and arcing, darker than the dust and landing
+// on the road rather than hanging over it.
+await capture(
+  "shot-drift-tail",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await racing(page);
+    await atStageTime(page, 10);
+    await atOpenRoad(page);
+    const turn = await atNextCall(page);
+    const entry = await stageTime(page);
+    await page.keyboard.down("ArrowUp");
+    await page.keyboard.down(turn);
+    // A beat past the drift shot and no more: held past a second, full lock
+    // on full throttle carries the car off the outside of the corner and
+    // the shot is a picture of turf being thrown instead.
+    await atStageTime(page, entry + 0.9);
+  },
+  { bot: "1" },
+);
+
 /** Off the road and into the wild, and hold it there. `data-off` on the HUD
  * root is the honest cursor: it is the engine's own verdict that the car has
  * left the track, so what is behind the wheels is turf rather than grit, and

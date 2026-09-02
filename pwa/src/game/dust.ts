@@ -98,6 +98,14 @@ export type DustStyle = {
    * before they reach the glass is what lets the cloud be big enough to
    * matter without ever being the thing you are looking at. */
   nearFade?: number;
+  /** The most of the frame one particle may fill, as a fraction of HALF
+   * the frame's height (three's own `scale` uniform, so it means the same
+   * thing at 720p and 4K). A point sprite's size falls off with distance
+   * and nothing else, so a grain flung PAST the chase camera swells into a
+   * square a hand across for the frame it takes to go by — and a rooster
+   * tail streams stones past the camera all corner long. Grains only; a
+   * puff has `nearFade` for the same moment. 0 or unset is no cap. */
+  pixelCap?: number;
   /** Air resistance, 1/s, on all three axes. Grit is dense and keeps
    * whatever it was thrown with; anything LIGHT — a scrap of paper, a cloud
    * of smoke — gives that speed up almost at once, and the difference
@@ -616,7 +624,7 @@ export type Dust = {
  * shader. It is what fades a cloud out of the lens as the camera runs into
  * it.
  */
-function graftDust(mat: THREE.PointsMaterial, puffy: boolean, near: number): void {
+function graftDust(mat: THREE.PointsMaterial, puffy: boolean, near: number, cap: number): void {
   mat.onBeforeCompile = (shader) => {
     // Assigned by REFERENCE, so every dust material in the scene shares one
     // set of arrays and the register is written once a frame rather than
@@ -674,6 +682,15 @@ function graftDust(mat: THREE.PointsMaterial, puffy: boolean, near: number): voi
           vLamp += uDustLampGlow[ i ] * cone * fall * fall;
         }`,
       );
+    if (cap > 0) {
+      // After the attenuation, which is what the cap is for: the size has
+      // already been divided by the depth by the time the fog include runs.
+      shader.vertexShader = shader.vertexShader.replace(
+        "#include <fog_vertex>",
+        `#include <fog_vertex>
+        gl_PointSize = min( gl_PointSize, scale * ${cap.toFixed(4)} );`,
+      );
+    }
     shader.fragmentShader = shader.fragmentShader
       .replace(
         "#include <common>",
@@ -708,11 +725,12 @@ function graftDust(mat: THREE.PointsMaterial, puffy: boolean, near: number): voi
         #endif`,
       );
   };
-  // Styles that compile to different programs — a grain against a puff, and
-  // two puffy styles with different lens fades — must not share a key.
-  // Without this three sees one PointsMaterial cache key for all of them and
-  // hands the second one the first one's shader.
-  mat.customProgramCacheKey = () => `dust-${puffy ? near : "grain"}`;
+  // Styles that compile to different programs — a grain against a puff, two
+  // puffy styles with different lens fades, a capped grain against a bare
+  // one — must not share a key. Without this three sees one PointsMaterial
+  // cache key for all of them and hands the second one the first one's
+  // shader.
+  mat.customProgramCacheKey = () => `dust-${puffy ? near : "grain"}-${cap}`;
 }
 
 export function createDust(style: DustStyle = GRAVEL_DUST): Dust {
@@ -757,7 +775,7 @@ export function createDust(style: DustStyle = GRAVEL_DUST): Dust {
     geo.setAttribute("aFade", new THREE.BufferAttribute(fades, 1));
     geo.setAttribute("aSpin", new THREE.BufferAttribute(angles, 1));
   }
-  graftDust(mat, puffy, style.nearFade ?? 0);
+  graftDust(mat, puffy, style.nearFade ?? 0, style.pixelCap ?? 0);
   const points = new THREE.Points(geo, mat);
   points.frustumCulled = false;
   const tint = new THREE.Color();

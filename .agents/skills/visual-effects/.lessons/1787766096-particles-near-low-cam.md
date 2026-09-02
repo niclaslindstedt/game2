@@ -1,7 +1,7 @@
 ---
-title: Near a low chase cam, big point sprites read as glitchy squares — shrink GRAINS, mask SMOKE, and keep dust tones light on dark paint
+title: Near a low chase cam, big point sprites read as glitchy squares — shrink GRAINS, CAP the ones that fly past the lens, mask SMOKE, and keep dust tones light on dark paint
 date: 2026-08-26
-scope: pwa/src/game/dust.ts, pwa/src/game/fumes.ts, pwa/src/game/car-dirt.ts
+scope: pwa/src/game/dust.ts, pwa/src/game/fumes.ts, pwa/src/game/car-dirt.ts, pwa/src/game/drift-spray.ts
 concepts: [particles, dust, fumes, dirt, readability]
 ---
 
@@ -12,8 +12,14 @@ it at size 0.55 (fixed to 0.22 with 2-3x counts). Seed particles with a
 fraction of the car's velocity (the wake) — plus the wind, now that
 state.wind exists — so plumes stream instead of hanging.
 
-Small is the answer for anything made of GRAINS. It is not the answer for
-smoke: shrinking tire smoke to 0.28 only made the squares smaller, and the
+Small is the answer for anything made of GRAINS — and where the grains
+FLY PAST the camera (the drift's rooster tail streams stones back past the
+chase rig all corner long), small is not enough: attenuation has no floor
+on distance, so a 0.09 m stone half a metre from the lens is still a square
+a hand across for a frame. `pixelCap` on the DustStyle clamps
+`gl_PointSize` after attenuation, as a fraction of three's `scale` uniform
+(half the frame height), so it means the same thing at every resolution.
+It is not the answer for smoke: shrinking tire smoke to 0.28 only made the squares smaller, and the
 puffs stopped reading as puffs. What a big particle needs is a MASK — the
 `puffy` flag on a DustStyle gives its points `puffTexture()` (textures.ts):
 a lumpy three-step blob on a 16 px canvas, nearest-filtered so the edge is
