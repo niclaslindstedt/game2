@@ -147,6 +147,9 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | Where a wiper arm IS, for anything else on the same glass   | `WipeState` in `pwa/src/game/car/wipers.ts`; the pane's own metric frame is `pwa/src/game/car/pane-frame.ts`                       |
 | How dirty the car gets, and where                           | `pwa/src/game/car-dirt.ts`                                                                                                         |
 | Stage generation rules or vocabulary                        | `engine/mapgen/rules.ts` (data); the searches in `generate.ts` (sprint), `endless.ts` and `circuit.ts` (R22), over `search.ts`     |
+| Which COUNTRY a stage is built in, and what that decides    | `engine/mapgen/biomes.ts` (R40: the quilt, the water, the sand, the sky's weathers) + `pwa/src/game/biome-<id>.ts` (the look)      |
+| A new biome's PLANTS, and what each one is shaped like      | `pwa/src/game/flora-<id>.ts` (recipes over `flora-build.ts`), merged into the roster in `flora-species.ts` — the `nature` skill    |
+| What a SURFACE does to the car (gravel, sand, tarmac)       | `TUNING.surfaces` in `engine/game/defs/tuning.ts`; which loose surface a country blades is `BiomeRules.loose`                      |
 | How the rally gets PAST a public road: over it, or onto it  | `engine/mapgen/crossing.ts` (R36, square and free) / `borrow.ts` (R17, a detour the `asphalt` dial pays for)                       |
 | How high the tarmac stands where a stage crosses it         | `STAGE_RULES.crossing` — `stand` is the step, `ramp` the gravel it happens over; the jump is the two together                      |
 | What the GROUND is made of (bedrock, soil, groundwater)     | `engine/mapgen/geology.ts` (R32); its numbers in `STAGE_RULES.geology` — the `nature` and `mapgen-improvement` skills              |

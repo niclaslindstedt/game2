@@ -10,9 +10,9 @@
 // and a breathing engine is the most obvious tell there is that a game's audio
 // is being generated rather than played.
 
-import { startsIn, type GameState, type Weather } from "@engine";
+import { startsIn, type GameState } from "@engine";
 
-import { squallOf } from "../weather.ts";
+import { squallOf, wetnessOf } from "../weather.ts";
 
 import type { Synth } from "../../lib/voice.ts";
 
@@ -47,13 +47,6 @@ const STALE_S = 2;
  * 1.5 m/s² and its corners run 8–15, so this is where "at the limit" is.
  */
 const LAT_LIMIT = 14;
-
-/** How wet each of the three skies leaves the stage, 0..1 — what picks the
- * surface's wet twin and how loud the rain itself is. Rain is deliberately
- * a good way past half: drizzle is not a weather this game has, and a
- * stage billed as wet that sounds a shade damp is worse than no weather at
- * all. */
-const WETNESS: Record<Weather, number> = { clear: 0, rain: 0.6, storm: 1 };
 
 /** The wind speed at which the gale layer is as loud as it gets, m/s. A
  * storm's mean runs to 11 and the gusts swing it half as far again, so this
@@ -164,10 +157,11 @@ export function createDriveBed(synth: Synth): DriveBed {
         slide: car.slide,
         sideways: car.w,
         airborne: car.airborne,
-        // The weather, as one number. Fixed for the whole run, so it is
-        // read rather than smoothed — nothing here can change under the
-        // car the way the surface can.
-        wet: WETNESS[state.env.weather],
+        // The weather, as one number, read against the country it is over
+        // (a desert storm is dry). Fixed for the whole run, so it is read
+        // rather than smoothed — nothing here can change under the car the
+        // way the surface can.
+        wet: wetnessOf(state.env, state.track.knobs.biome),
         // The weather's two live numbers. Both come off the wind, so the
         // gust the car is being shoved by is the same gust the player
         // HEARS arrive — see `weather.ts`.

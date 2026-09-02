@@ -13,6 +13,7 @@
 
 import * as THREE from "three";
 
+import { DESERT_VARIANTS } from "./flora-desert.ts";
 import {
   GeoBuilder,
   ASPEN_BARK,
@@ -161,7 +162,7 @@ function branchStub(
 
 export type VariantDef = { build: (b: GeoBuilder) => void; twoSided?: boolean };
 
-export const VARIANTS: Record<string, VariantDef> = {
+const TAIGA_VARIANTS: Record<string, VariantDef> = {
   // Spruces — the taiga's backbone, dark spires at every height.
   spruceTall: { build: (b) => conifer(b, 12, 2.3, 4, SPRUCE, TRUNK, 0.16) },
   spruceOld: { build: (b) => conifer(b, 16, 2.5, 5, SPRUCE_DARK, TRUNK_DARK, 0.24) },
@@ -662,3 +663,12 @@ export const VARIANTS: Record<string, VariantDef> = {
     },
   },
 };
+
+/** Everything plantable, every country's roster in one table: the ids a
+ * biome's mixes name, and the one place `buildFlora` looks them up. Two
+ * countries may not spell a species the same way — a `yucca` is a yucca —
+ * so the merge is checked for collisions at import. */
+export const VARIANTS: Record<string, VariantDef> = { ...TAIGA_VARIANTS, ...DESERT_VARIANTS };
+for (const id of Object.keys(DESERT_VARIANTS)) {
+  if (id in TAIGA_VARIANTS) throw new Error(`flora variant "${id}" is in two rosters`);
+}

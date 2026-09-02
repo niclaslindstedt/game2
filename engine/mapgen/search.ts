@@ -9,6 +9,7 @@
 // circuit.ts own.
 
 import type { Rng } from "../lib/prng.ts";
+import { biomeRules } from "./biomes.ts";
 import { cellKey } from "../lib/math.ts";
 import {
   SAMPLE_STEP,
@@ -509,7 +510,10 @@ export function assignFeature(
       lipHeight: Math.min(R.jump.lipHeight.max, Math.max(R.jump.lipHeight.min, ratio * ramp)),
     };
   }
+  // R40 — a dry country has no water for a straight to cross, so the roll
+  // is never made there: the desert's straights go on to the crests.
   if (
+    biomeRules(knobs.biome).water &&
     length >= R.water.minStraight &&
     rng.chance(R.featureChance.water * knobScale(knobs.water, R.wet.crossingChance))
   ) {

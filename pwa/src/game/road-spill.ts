@@ -21,7 +21,7 @@
 // actually hit is a prop the ENGINE placed and the wild cells draw.
 
 import * as THREE from "three";
-import { ROAD_CROSS, wearAt, type Rng, type Track } from "@engine";
+import { ROAD_CROSS, isLoose, wearAt, type Rng, type Track } from "@engine";
 
 import { valueNoise } from "../lib/noise.ts";
 import { rightOf } from "./ribbon.ts";
@@ -175,7 +175,7 @@ export function buildRoadSpill(
       // nothing down the two tracks every car before you drove in. A sealed
       // run gets none: tarmac's own loose stone is the chipping band down
       // its edge, which `buildChippings` already lays.
-      if (s.surface === "gravel" && s.deck == null) {
+      if (isLoose(s.surface) && s.deck == null) {
         for (let n = 0; n < MAT_TRIES; n++) {
           if (density < 1 && !rng.chance(density)) continue;
           const t = rng.next();
@@ -235,7 +235,7 @@ export function buildRoadSpill(
       // at both of them, so their tufts only ever go outward. The roll is
       // still taken either way, so the two surfaces scatter the same verge
       // from the same stream and only the reach onto the road differs.
-      const closes = s.surface === "gravel" && s.deck == null;
+      const closes = isLoose(s.surface) && s.deck == null;
       for (let n = 0; n < GRASS_TRIES; n++) {
         if (density < 1 && !rng.chance(density)) continue;
         const t = rng.next();

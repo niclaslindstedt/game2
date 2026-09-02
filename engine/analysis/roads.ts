@@ -34,7 +34,7 @@ import { SPUR, type Spur } from "../mapgen/spurs.ts";
 import { createHighwayNetwork } from "../mapgen/highway.ts";
 import { crossingParting } from "../mapgen/crossing.ts";
 import { STAGE_RULES } from "../mapgen/rules.ts";
-import type { Track } from "../mapgen/compile.ts";
+import { isLoose, type Track } from "../mapgen/compile.ts";
 import { ANALYSIS } from "./budgets.ts";
 import {
   metricScore,
@@ -150,7 +150,7 @@ export function analyzeRoads(track: Track): MetricReport {
     const parting = STAGE_RULES.junction.parting;
     const network = createHighwayNetwork(track.highways);
     for (const sample of track.samples) {
-      if (sample.surface !== "gravel") continue;
+      if (!isLoose(sample.surface)) continue;
       const hit = network.nearest(sample.x, sample.z, undefined, clear);
       if (hit === null) continue;
       // Exempt where the piece of TARMAC in question is at a junction, not

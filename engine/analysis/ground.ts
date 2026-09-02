@@ -37,7 +37,7 @@
 //   it looks like from the driver's seat.
 
 import { LAKE_Y } from "../mapgen/land.ts";
-import { GROVES } from "../mapgen/props.ts";
+import { biomeRules } from "../mapgen/biomes.ts";
 import type { Track } from "../mapgen/compile.ts";
 import type { TerrainField } from "../mapgen/terrain.ts";
 import { ANALYSIS } from "./budgets.ts";
@@ -54,6 +54,9 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
   const started = Date.now();
   const findings: Finding[] = [];
   const G = ANALYSIS.ground;
+  // R40 — the country the shares are judged against, and its quilt.
+  const biome = biomeRules(track.knobs.biome);
+  const country = G.country[biome.id];
   const cells = ANALYSIS.sampling.groundGrid;
   const margin = ANALYSIS.sampling.groundMargin;
   const b = track.bounds;
@@ -112,7 +115,7 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       const dx = (geology.surfaceAt(x + step, z) - geology.surfaceAt(x - step, z)) / (2 * step);
       const dz = (geology.surfaceAt(x, z + step) - geology.surfaceAt(x, z - step)) / (2 * step);
       const slope = Math.hypot(dx, dz);
-      if (slope > G.soil.steep) {
+      if (slope > country.soilSteep) {
         steepCells++;
         if (ground.soil > G.soil.deep) {
           soilOnCliffs++;
@@ -133,7 +136,7 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       if (slope > 1) cliffs++;
 
       // Forest, from the quilt: what this ground is MEANT to be.
-      const grove = GROVES[terrain.groveAt(x, z)];
+      const grove = biome.groves[terrain.groveAt(x, z)];
       if (grove && grove.density >= G.closed) forest++;
       // ...and rooting, from the TRUNKS that actually stand there. The
       // quilt is the intention and the trunks are the result, and R32 is a
@@ -242,7 +245,7 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
   const meanSwampDepth = swamp > 0 ? swampDepth / swamp : 0;
   const meanSoil = soilSum / Math.max(1, total);
 
-  if (waterShare > G.water.max) {
+  if (waterShare > country.water.max) {
     // Past the DROWNED ceiling this is not a wet stage, it is a seascape
     // with a causeway drawn on it — the road stands up out of the water on
     // its own verge cone and everything else has gone. That is an error, not
@@ -260,15 +263,15 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       value: waterShare,
     });
   }
-  if (relief < G.relief.min) {
+  if (relief < country.relief.min) {
     findings.push({
       code: "ground.flat",
       severity: "warn",
       message: `${relief.toFixed(0)} m of relief across the whole map — the country is a table`,
-      value: G.relief.min - relief,
+      value: country.relief.min - relief,
     });
   }
-  if (swampShare < G.swamp.share.min) {
+  if (country.swamps && swampShare < G.swamp.share.min) {
     findings.push({
       code: "ground.swamp",
       severity: "note",
@@ -298,15 +301,18 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       // fifth that is left, so every other check in this metric goes on
       // reporting a healthy country.
       id: "water",
-      label: "some of the country is water, and not most of it",
-      score: within(waterShare, G.water, G.slack),
+      label:
+        country.water.max > 0
+          ? "some of the country is water, and not most of it"
+          : "the country is dry (R40)",
+      score: within(waterShare, country.water, G.slack),
       weight: 3,
       value: waterShare,
     },
     {
       id: "forest",
-      label: "the country is forested",
-      score: within(forestShare, G.forest, G.slack),
+      label: country.forest.min > 0 ? "the country is forested" : "the country is open (R40)",
+      score: within(forestShare, country.forest, G.slack),
       weight: 1,
       value: forestShare,
     },
@@ -320,7 +326,7 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
     {
       id: "relief",
       label: "the country has shape to it",
-      score: within(relief, G.relief, G.reliefSlack),
+      score: within(relief, country.relief, G.reliefSlack),
       weight: 1.5,
       value: relief,
     },
@@ -338,8 +344,12 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       // tarns and no mires, and pits that are all shallow make a marsh with
       // nothing to drive past. The band wants both on the map.
       id: "swamp",
-      label: "the country has shallow water as well as deep (R32)",
-      score: within(swampShare, G.swamp.share, G.slack * 0.3),
+      label: country.swamps
+        ? "the country has shallow water as well as deep (R32)"
+        : "no water stands in the pans (R40)",
+      // A dry country is held to no swamp at all: the band is the wet
+      // one's, and here it is a point.
+      score: within(swampShare, country.swamps ? G.swamp.share : { min: 0, max: 0 }, G.slack * 0.3),
       weight: 1,
       value: swampShare,
     },

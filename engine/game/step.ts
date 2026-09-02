@@ -324,7 +324,9 @@ export function createGame(options: CreateGameOptions): GameState {
     wrongWayAt: 0,
     stuck: { x: car.x, z: car.z, since: 0 },
     drowning: null,
-    surface: "gravel",
+    // What the car is stood on before its first step: the road it starts
+    // on, whatever this country blades its roads out of (R40).
+    surface: track.samples[0]?.surface ?? "gravel",
     env,
     wind,
     catchUp: options.catchUp ?? null,

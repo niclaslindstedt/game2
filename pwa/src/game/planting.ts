@@ -7,17 +7,18 @@
 // road chunk carries (world.ts) and the open country beyond it (wild.ts) —
 // so both answer "what grows here" the same way.
 
-import { GROVES, type WildObstacle } from "@engine";
+import { biomeRules, type WildObstacle } from "@engine";
 
 import type { Biome, Community, FloraMix } from "./biome.ts";
 import type { FloraPlacement } from "./flora.ts";
 import { LAKE_Y } from "./terrain.ts";
 
 /** The community a grove-quilt index names — the quilt itself lives in the
- * ENGINE's prop field now (terrain.field.groveAt), because the trunks it
- * places are solid; the biome only supplies what grows in each patch. */
+ * ENGINE's prop field (terrain.field.groveAt), because the trunks it
+ * places are solid; the biome only supplies what grows in each patch. The
+ * index is into the engine's grove table for THIS country (R40). */
 export function communityByGrove(biome: Biome, grove: number): Community {
-  const id = GROVES[grove]?.id;
+  const id = biomeRules(biome.id).groves[grove]?.id;
   return biome.communities.find((c) => c.id === id) ?? biome.communities[0];
 }
 
@@ -38,6 +39,22 @@ const SOFT_FLORA = new Set([
   "pineSapling",
   "fallenBranch",
   "driftwood",
+  // The desert's scrub and its spiky middle storey: a barrel cactus is
+  // knee-high, an ocotillo is whips, a cholla is spines on a stick — every
+  // one of them something a rally car goes over rather than into. The
+  // saguaros, the Joshua trees and the wash trees are the trunks.
+  "barrelCactus",
+  "pricklyPear",
+  "cholla",
+  "ocotillo",
+  "creosote",
+  "brittlebush",
+  "sagebrush",
+  "agave",
+  "yucca",
+  "deadBrush",
+  "tumbleweed",
+  "bunchGrass",
 ]);
 
 /** ...and what a solid TRUNK may never be dressed as: the brush above plus
@@ -69,7 +86,10 @@ export type Ground = {
  * highland, and only the ground that is none of those grows whatever the
  * quilt says it grows. */
 export function mixAt(biome: Biome, ground: Ground): FloraMix {
-  if (ground.y < LAKE_Y + 4) return biome.lakeshoreTrees;
+  // R40 — a country with no water has no shoreline, however low its pans
+  // lie: the height test is only a shoreline where there is water to
+  // stand at.
+  if (biomeRules(biome.id).water && ground.y < LAKE_Y + 4) return biome.lakeshoreTrees;
   if (ground.riparian) return biome.riparianTrees;
   if (ground.y > HIGHLAND_Y) return biome.highlandTrees;
   return communityByGrove(biome, ground.grove).trees;

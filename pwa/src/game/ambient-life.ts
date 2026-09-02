@@ -1,15 +1,25 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// Ambient life: the world keeps moving whether or not the car does. Bird
-// flocks wheel over the stage on flapping swept wings, and far above them
-// airliners cross the wilderness leaving contrails that hang there for
-// minutes — a pooled ribbon of point sprites that spreads, thins, drifts on
-// the wind aloft and takes the sky's light (white at noon, embered at
-// dusk). Pure presentation; all randomness here is renderer-side and can
-// never touch the simulation.
+// Ambient life: the world keeps moving whether or not the car does, and
+// what moves depends on the country (R40).
 //
-// The two halves are anchored differently, and that is the design. Birds
-// are a few dozen metres up and belong to a PLACE — the flock is parked
-// near the stage start and the car drives past it. Everything in
+//   TAIGA   Bird flocks wheel over the stage on flapping swept wings, and
+//           far above them airliners cross the wilderness leaving contrails
+//           that hang there for minutes — a pooled ribbon of point sprites
+//           that spreads, thins, drifts on the wind aloft and takes the
+//           sky's light (white at noon, embered at dusk).
+//   DESERT  Vultures. Two or three to a kettle, twice the span, circling
+//           high on held wings and flapping only to catch the thermal
+//           again — and no traffic, because nothing crosses this sky.
+//           On the ground, LIZARDS: a dozen basking within sight of the
+//           car that dart for cover as it comes past, which is the one
+//           thing in a desert that moves when you do.
+//
+// Pure presentation; all randomness here is renderer-side and can never
+// touch the simulation.
+//
+// The sky's two halves are anchored differently, and that is the design.
+// Birds are a few dozen metres up and belong to a PLACE — the flock is
+// parked near the stage start and the car drives past it. Everything in
 // sky-traffic.ts is hundreds of metres up and belongs to the SKY, so it
 // rides the camera in x/z with no parallax, exactly as the clouds do: at
 // that height a stage is not long enough for parallax to be visible, and
@@ -17,6 +27,7 @@
 // where they would be drawn over the mountains.
 
 import * as THREE from "three";
+import type { BiomeId } from "@engine";
 
 import {
   createSkyTraffic,
@@ -31,7 +42,6 @@ import {
 import { contrailTexture } from "./textures.ts";
 
 const FLOCKS = 2;
-const BIRDS_PER_FLOCK = 7;
 
 /** How many airframes can be in the sky at once. A crossing lasts about
  * twenty seconds and they come over every fifteen to thirty, so two is the
@@ -51,6 +61,56 @@ const PUFF_POOL = 3500;
  * frames it, since the pool is never culled. */
 const PARKED = -3000;
 
+/** What one country's sky and ground carry. */
+type Life = {
+  /** Birds per flock, and the wingspan as a multiple of the sparrow-sized
+   * default. */
+  birds: number;
+  span: number;
+  /** The beat: how fast the wings go, Hz, and how much of a full stroke
+   * they take. A vulture holds its wings and rocks; a small bird flaps. */
+  beatHz: number;
+  stroke: number;
+  /** ...and how much of the time the wings are beating at all, 0..1 — the
+   * rest is a glide. A crow flaps most of the way; a vulture almost never. */
+  beating: number;
+  /** How high the flock wheels over the ground, m, and how wide. */
+  height: number;
+  radius: number;
+  /** Turns per second round the circle. */
+  turn: number;
+  /** Whether anything crosses this sky at altitude. */
+  traffic: boolean;
+  lizards: boolean;
+};
+
+const LIFE: Record<BiomeId, Life> = {
+  taiga: {
+    birds: 7,
+    span: 1,
+    beatHz: 9,
+    stroke: 1,
+    beating: 1,
+    height: 30,
+    radius: 26,
+    turn: 0.28,
+    traffic: true,
+    lizards: false,
+  },
+  desert: {
+    birds: 3,
+    span: 2.3,
+    beatHz: 2.2,
+    stroke: 0.35,
+    beating: 0.18,
+    height: 70,
+    radius: 55,
+    turn: 0.1,
+    traffic: false,
+    lizards: true,
+  },
+};
+
 export type AmbientLife = {
   group: THREE.Group;
   /** The sky's light, which tints the contrails and dims the birds — and
@@ -58,7 +118,21 @@ export type AmbientLife = {
    * sky. High traffic is above the weather, so an overcast stage sees none
    * of it, and drawing it anyway paints aeroplanes over the ceiling. */
   setSky: (tint: THREE.Color, ceiling: number) => void;
-  update: (camX: number, camZ: number, windX: number, windZ: number, dt: number) => void;
+  /** Which country's life this is — what flies, and whether anything
+   * crawls. Idempotent, and cheap to call on every re-light. */
+  setBiome: (biome: BiomeId) => void;
+  /** `ground` and `car` are what the lizards need — where the sand is, and
+   * what they are running from. Either may be left out for a frame that
+   * has no world under it. */
+  update: (
+    camX: number,
+    camZ: number,
+    windX: number,
+    windZ: number,
+    dt: number,
+    ground?: (x: number, z: number) => number,
+    car?: { x: number; z: number },
+  ) => void;
   dispose: () => void;
 };
 
@@ -79,6 +153,52 @@ function wingShape(): THREE.BufferGeometry {
  * shallow on the recovery, and a little dihedral held at the crossing. A
  * symmetric beat reads as a metronome. */
 const BEAT = { down: 0.95, up: 0.5, dihedral: 0.08 };
+/** ...and the dihedral a SOARING bird holds instead: a vulture glides in a
+ * shallow V and rocks on it, which is how one is told from a hawk a mile
+ * off. */
+const SOAR_DIHEDRAL = 0.32;
+
+// ── The lizards ───────────────────────────────────────────────────────────
+
+/** How many are kept near the car, how far out they are stood, and how
+ * close the car has to come before one bolts. */
+const LIZARDS = 12;
+const LIZARD_REACH = 70;
+const LIZARD_FLEE = 16;
+/** How fast one runs, m/s, for how long, s — a dash, not a journey. */
+const LIZARD_DASH = 3.2;
+const LIZARD_DASH_S = 0.9;
+
+/** A lizard is a flattened body, a tapering tail and a head, all one dark
+ * lump: what reads at any distance is the SHAPE against the sand and the
+ * fact that it moved. */
+function lizardShape(): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  const body = new THREE.IcosahedronGeometry(0.11, 0);
+  body.scale(1, 0.45, 1.9);
+  body.translate(0, 0.05, 0);
+  parts.push(body);
+  const tail = new THREE.ConeGeometry(0.05, 0.34, 4);
+  tail.rotateX(Math.PI / 2);
+  tail.translate(0, 0.04, -0.35);
+  parts.push(tail);
+  const head = new THREE.IcosahedronGeometry(0.06, 0);
+  head.scale(1, 0.7, 1.4);
+  head.translate(0, 0.06, 0.24);
+  parts.push(head);
+  const positions: number[] = [];
+  for (const part of parts) {
+    const flat = part.toNonIndexed();
+    const pos = flat.getAttribute("position");
+    for (let i = 0; i < pos.count; i++) positions.push(pos.getX(i), pos.getY(i), pos.getZ(i));
+    flat.dispose();
+    part.dispose();
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.computeVertexNormals();
+  return geo;
+}
 
 /**
  * THE CONTRAIL'S SHADER — two attributes grafted onto three's own points
@@ -142,6 +262,8 @@ function airframe(mat: THREE.Material): THREE.Group {
 
 export function createAmbientLife(): AmbientLife {
   const group = new THREE.Group();
+  let life: Life = LIFE.taiga;
+  let biome: BiomeId = "taiga";
 
   // ── Birds: two swept wings per bird, flapped in code ─────────────────────
   //
@@ -161,9 +283,12 @@ export function createAmbientLife(): AmbientLife {
     birds: Bird[];
   };
   const flocks: Flock[] = [];
+  /** Every bird ever made, so a country with fewer per flock hides the
+   * rest rather than rebuilding them. */
+  const most = Math.max(...Object.values(LIFE).map((l) => l.birds));
   for (let f = 0; f < FLOCKS; f++) {
     const birds: Bird[] = [];
-    for (let b = 0; b < BIRDS_PER_FLOCK; b++) {
+    for (let b = 0; b < most; b++) {
       const root = new THREE.Group();
       const left = new THREE.Mesh(wingGeo, birdMat);
       left.scale.x = -1; // mirrored, so both wings sweep back off the body
@@ -173,13 +298,27 @@ export function createAmbientLife(): AmbientLife {
       birds.push({ root, left, right, phase: Math.random() * Math.PI * 2 });
     }
     flocks.push({
-      center: new THREE.Vector3((f - 0.5) * 300, 30 + f * 14, 120 + f * 260),
-      radius: 26 + f * 10,
-      speed: (0.28 + f * 0.05) * (f % 2 === 0 ? 1 : -1),
+      center: new THREE.Vector3((f - 0.5) * 300, 0, 120 + f * 260),
+      radius: 0,
+      speed: 0,
       angle: f * 2.1,
       birds,
     });
   }
+
+  /** Put the flocks the way this country flies them. */
+  const flockAs = (): void => {
+    flocks.forEach((flock, f) => {
+      flock.center.y = life.height + f * 14;
+      flock.radius = life.radius + f * 10;
+      flock.speed = (life.turn + f * 0.05) * (f % 2 === 0 ? 1 : -1);
+      flock.birds.forEach((bird, i) => {
+        bird.root.visible = i < life.birds;
+        bird.root.scale.setScalar(life.span);
+      });
+    });
+  };
+  flockAs();
 
   // ── The high traffic and its contrails ───────────────────────────────────
   //
@@ -264,28 +403,98 @@ export function createAmbientLife(): AmbientLife {
   };
   for (const cross of traffic.open()) enter(cross);
 
+  /** The cloud base the last re-light reported, m — kept so a change of
+   * country can re-decide the sky without waiting for the next one. */
+  let ceilingNow = Infinity;
+
+  /** Whether the high traffic is drawn at all: only over a country that
+   * has any, and only when there is no deck between it and the car. Every
+   * lane runs above the lowest cloud base the weather can build, so the
+   * ceiling test is the whole of the second rule. */
+  const showSky = (): void => {
+    sky.visible = life.traffic && ceilingNow > LANE.low;
+  };
+
+  // ── The lizards ──────────────────────────────────────────────────────────
+  const lizardGeo = lizardShape();
+  const lizardMat = new THREE.MeshLambertMaterial({ color: 0x6f6a4a });
+  const lizards = new THREE.InstancedMesh(lizardGeo, lizardMat, LIZARDS);
+  lizards.visible = false;
+  lizards.frustumCulled = false;
+  group.add(lizards);
+  type Lizard = {
+    x: number;
+    z: number;
+    heading: number;
+    /** Seconds of dash left; 0 is basking. */
+    dash: number;
+    /** Stood at all — false until the ground has been asked for a spot. */
+    placed: boolean;
+  };
+  const herd: Lizard[] = Array.from({ length: LIZARDS }, () => ({
+    x: 0,
+    z: 0,
+    heading: 0,
+    dash: 0,
+    placed: false,
+  }));
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const whip = new THREE.Quaternion();
+  const v = new THREE.Vector3();
+  const s = new THREE.Vector3(1, 1, 1);
+  const up = new THREE.Vector3(0, 1, 0);
+
+  /** Stand a lizard somewhere new within reach of the camera — ahead of it
+   * more often than not, which is where the car is going. */
+  const restand = (lizard: Lizard, camX: number, camZ: number): void => {
+    const a = Math.random() * Math.PI * 2;
+    const d = LIZARD_REACH * (0.35 + Math.random() * 0.65);
+    lizard.x = camX + Math.sin(a) * d;
+    lizard.z = camZ + Math.cos(a) * d;
+    lizard.heading = Math.random() * Math.PI * 2;
+    lizard.dash = 0;
+    lizard.placed = true;
+  };
+
   const setSky = (tint: THREE.Color, ceiling: number): void => {
     trailMat.color.copy(tint);
     // Birds go from near-black silhouettes by day to invisible-dark at
     // night without ever turning grey.
     birdMat.color.set(0x2a2d33).multiply(tint);
     planeMat.color.set(0xd8dde4).multiply(tint);
-    // Every lane runs above the lowest cloud base the weather can build, so
-    // this is the whole of the rule: under a deck there is no high traffic
-    // to see, because the ceiling is between it and the car.
-    sky.visible = ceiling > LANE.low;
+    ceilingNow = ceiling;
+    showSky();
   };
 
-  const update = (camX: number, camZ: number, windX: number, windZ: number, dt: number): void => {
+  const setBiome = (next: BiomeId): void => {
+    if (next === biome) return;
+    biome = next;
+    life = LIFE[next];
+    flockAs();
+    showSky();
+    lizards.visible = life.lizards;
+    for (const lizard of herd) lizard.placed = false;
+  };
+
+  const update = (
+    camX: number,
+    camZ: number,
+    windX: number,
+    windZ: number,
+    dt: number,
+    ground?: (x: number, z: number) => number,
+    car?: { x: number; z: number },
+  ): void => {
     const t = performance.now() / 1000;
 
     for (const flock of flocks) {
       flock.angle += flock.speed * dt;
       // The flock wheels around a center parked near the stage start; far
       // from the camera it still reads as motion on the skyline.
-      for (let i = 0; i < flock.birds.length; i++) {
+      for (let i = 0; i < life.birds; i++) {
         const bird = flock.birds[i];
-        const a = flock.angle + (i / flock.birds.length) * 0.9;
+        const a = flock.angle + (i / life.birds) * 0.9;
         const r = flock.radius + (i % 3) * 4;
         bird.root.position.set(
           flock.center.x + Math.sin(a) * r,
@@ -300,12 +509,52 @@ export function createAmbientLife(): AmbientLife {
         // The mirrored wing takes the same angle with the opposite sign, so
         // the pair opens and closes TOGETHER. Give them opposite signs and
         // the bird is one straight line rotating about its middle.
-        const beat = Math.sin(t * 9 + bird.phase);
-        const swing = beat > 0 ? beat * beat * BEAT.up : -(beat * beat) * BEAT.down;
-        const flap = swing + BEAT.dihedral;
+        //
+        // A soaring bird beats only now and then: a slow gate on the beat
+        // opens for a few strokes and shuts again, and between them the
+        // wings sit up in their V and rock with the air.
+        const gate =
+          life.beating >= 1 ? 1 : Math.sin(t * 0.45 + bird.phase) > 1 - 2 * life.beating ? 1 : 0;
+        const beat = Math.sin(t * life.beatHz * Math.PI * 2 + bird.phase) * gate;
+        const swing = (beat > 0 ? beat * beat * BEAT.up : -(beat * beat) * BEAT.down) * life.stroke;
+        const rock = life.beating >= 1 ? 0 : Math.sin(t * 1.3 + bird.phase * 2) * 0.06;
+        const held = life.beating >= 1 ? BEAT.dihedral : SOAR_DIHEDRAL;
+        const flap = swing + held + rock;
         bird.left.rotation.z = -flap;
         bird.right.rotation.z = flap;
       }
+    }
+
+    // The lizards: basking until the car is on them, then a dash straight
+    // away from it, then basking again wherever they stopped. One that the
+    // camera has left far behind is stood up again somewhere ahead.
+    if (life.lizards && ground) {
+      for (const lizard of herd) {
+        if (!lizard.placed || Math.hypot(lizard.x - camX, lizard.z - camZ) > LIZARD_REACH * 1.4) {
+          restand(lizard, camX, camZ);
+        }
+        if (car && lizard.dash <= 0) {
+          const dx = lizard.x - car.x;
+          const dz = lizard.z - car.z;
+          if (dx * dx + dz * dz < LIZARD_FLEE * LIZARD_FLEE) {
+            lizard.heading = Math.atan2(dx, dz) + (Math.random() - 0.5) * 0.8;
+            lizard.dash = LIZARD_DASH_S;
+          }
+        }
+        if (lizard.dash > 0) {
+          lizard.dash -= dt;
+          lizard.x += Math.sin(lizard.heading) * LIZARD_DASH * dt;
+          lizard.z += Math.cos(lizard.heading) * LIZARD_DASH * dt;
+        }
+      }
+      herd.forEach((lizard, i) => {
+        q.setFromAxisAngle(up, lizard.heading);
+        // A running lizard's tail whips: a little yaw wobble at a run.
+        if (lizard.dash > 0) q.multiply(whip.setFromAxisAngle(up, Math.sin(t * 22) * 0.2));
+        m.compose(v.set(lizard.x, ground(lizard.x, lizard.z) + 0.02, lizard.z), q, s);
+        lizards.setMatrixAt(i, m);
+      });
+      lizards.instanceMatrix.needsUpdate = true;
     }
 
     if (!sky.visible) return;
@@ -388,7 +637,10 @@ export function createAmbientLife(): AmbientLife {
     planeMat.dispose();
     trailGeo.dispose();
     trailMat.dispose();
+    lizardGeo.dispose();
+    lizardMat.dispose();
+    lizards.dispose();
   };
 
-  return { group, setSky, update, dispose };
+  return { group, setSky, setBiome, update, dispose };
 }

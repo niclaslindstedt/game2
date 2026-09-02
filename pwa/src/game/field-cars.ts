@@ -409,7 +409,7 @@ export function createFieldCars(scene: THREE.Scene): FieldCars {
           state,
           dt,
           fx,
-          plumeGround(state.surface, wetGround, () =>
+          plumeGround(state.track.knobs.biome, state.surface, wetGround, () =>
             rockAt(state.terrain.groundAt, state.car.x, state.car.z),
           ),
         );

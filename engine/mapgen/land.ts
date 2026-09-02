@@ -83,7 +83,7 @@ const memo: { key: string; land: LandField }[] = [];
  * Everything it hands out is read-only, so sharing one field between the
  * search, the compiler and the terrain is sharing a value, not state. */
 export function createLandField(seed: number, knobs: StageKnobs): LandField {
-  const key = `${seed}|${knobs.elevation}|${knobs.steepness}|${knobs.water}|${knobs.trees}|${knobs.asphalt}|${knobs.width}`;
+  const key = `${seed}|${knobs.biome}|${knobs.elevation}|${knobs.steepness}|${knobs.water}|${knobs.trees}|${knobs.asphalt}|${knobs.width}`;
   const had = memo.find((entry) => entry.key === key);
   if (had) return had.land;
   const land = buildLandField(seed, knobs);

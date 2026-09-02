@@ -32,8 +32,10 @@
 
 import {
   DEFAULT_KNOBS,
+  NUMERIC_KNOBS,
   RIVALS,
   STAGE_RULES,
+  type BiomeId,
   type Difficulty,
   type FiniteStageLength,
   type StageKnobs,
@@ -84,18 +86,18 @@ export function levelLaps(level: CampaignLevel): number {
  *
  * The dials ARE part of it, and have to be: the campaign builds every stage
  * off the rule book's defaults, so a seed driven on a WIDE road with no
- * water in it is a different road that happens to share a number. */
+ * water in it is a different road that happens to share a number. So is
+ * the COUNTRY (R40): the same seed in the desert is a different road again. */
 export function levelForRoad(
   seed: number,
   length: StageLength,
   shape: StageShape,
   knobs: StageKnobs,
 ): CampaignLevel | null {
-  const stock = (Object.keys(DEFAULT_KNOBS) as (keyof StageKnobs)[]).every(
-    (key) => knobs[key] === DEFAULT_KNOBS[key],
-  );
+  const stock = NUMERIC_KNOBS.every((key) => knobs[key] === DEFAULT_KNOBS[key]);
   if (!stock) return null;
   for (const location of LOCATIONS) {
+    if (location.biome !== knobs.biome) continue;
     for (const level of location.levels) {
       if (level.seed !== seed || level.length !== length) continue;
       if ((level.shape ?? "sprint") !== shape) continue;
@@ -109,8 +111,18 @@ export type CampaignLocation = {
   id: string;
   name: string;
   blurb: string;
+  /** R40 — the country every stage of the location is built in. A
+   * location IS a biome: the ladder walks the countries in order. */
+  biome: BiomeId;
   levels: CampaignLevel[];
 };
+
+/** The dials a campaign stage is built on: the rule book's defaults, in
+ * the location's own country. The same road for everybody — the dials are
+ * Roam's to play with, not the campaign's to inherit. */
+export function campaignKnobs(level: CampaignLevel): StageKnobs {
+  return { ...DEFAULT_KNOBS, biome: findLevel(level.id)?.location.biome ?? DEFAULT_KNOBS.biome };
+}
 
 /** The Taiga ladder. The four seeds were chosen by scoring every seed in
  * 1..40 per length band on what actually makes a stage hard — hairpins
@@ -139,6 +151,7 @@ const TAIGA: CampaignLocation = {
   id: "taiga",
   name: "Taiga",
   blurb: "Spruce, granite and cold water",
+  biome: "taiga",
   levels: [
     {
       id: "taiga-1",
@@ -205,7 +218,100 @@ const TAIGA: CampaignLocation = {
   ],
 };
 
-export const LOCATIONS: CampaignLocation[] = [TAIGA];
+/** The Desert ladder — the second country (R40), opened by winning the
+ * taiga's table. The same six rungs in the same order: four sprints up the
+ * length bands, then two circuits. Its seeds were picked the way the
+ * taiga's were — every seed in 1..40 per band scored on hairpins, jumps,
+ * crests and mean curvature, in the DESERT (a seed is a different road in
+ * a different country), then confirmed with the bot sim on the sand, which
+ * is slower than the taiga's gravel by about a tenth everywhere:
+ *
+ *   seed 16 short   1.75 km   84 s   75 km/h    3 hard turns  1 jump   1.1 s drift
+ *   seed 13 medium  4.58 km  226 s   73 km/h    9 hard turns  2 jumps  4.3 s drift
+ *   seed 11 long    7.59 km  355 s   77 km/h   14 hard turns  6 jumps  5.5 s air
+ *   seed 30 xlong  11.65 km  560 s   75 km/h   21 hard turns  3 jumps  12 s drift
+ *
+ * The circuits were picked the same way and sat the same three laps; the
+ * bot is a poor judge of a circuit in either country, so the two chosen
+ * are the ones it FINISHES, and the rest of the scoring did the ordering:
+ *
+ *   seed 27 medium circuit  1.68 km × 3  209 s  4 hard  1 jump   17% tarmac
+ *   seed 23 long   circuit  2.60 km × 3  274 s  4 hard  1 jump   the most bend per metre of any
+ *
+ * There is no rain here: the conditions run from a clear noon down through
+ * dusk into the dust storm, which is the desert's own bad weather. */
+const DESERT: CampaignLocation = {
+  id: "desert",
+  name: "Desert",
+  blurb: "Sand, saguaro and a sky with nothing in it",
+  biome: "desert",
+  levels: [
+    {
+      id: "desert-1",
+      name: "Bajada",
+      seed: 16,
+      length: "short",
+      timeOfDay: "day",
+      weather: "clear",
+      season: "summer",
+      blurb: "Sand under the saguaros, two jumps",
+    },
+    {
+      id: "desert-2",
+      name: "Creosote Flats",
+      seed: 13,
+      length: "medium",
+      timeOfDay: "dawn",
+      weather: "clear",
+      season: "spring",
+      blurb: "Fast, open, and further than it looks",
+    },
+    {
+      id: "desert-3",
+      name: "Dune Sea",
+      seed: 11,
+      length: "long",
+      timeOfDay: "dusk",
+      weather: "clear",
+      season: "autumn",
+      blurb: "Crests you cannot see over",
+    },
+    {
+      id: "desert-4",
+      name: "Haboob",
+      seed: 30,
+      length: "xlong",
+      timeOfDay: "night",
+      weather: "storm",
+      season: "summer",
+      blurb: "The whole desert, in a wall of sand",
+    },
+    {
+      id: "desert-5",
+      name: "Joshua Ring",
+      seed: 27,
+      length: "medium",
+      shape: "circuit",
+      timeOfDay: "day",
+      weather: "clear",
+      season: "spring",
+      blurb: "Three laps between the Joshua trees",
+    },
+    {
+      id: "desert-6",
+      name: "Salt Pan Loop",
+      seed: 23,
+      length: "long",
+      shape: "circuit",
+      timeOfDay: "dusk",
+      weather: "storm",
+      season: "autumn",
+      blurb: "Three laps, the dust coming in",
+    },
+  ],
+};
+
+export const LOCATIONS: CampaignLocation[] = [TAIGA, DESERT];
 
 export function locationById(id: string): CampaignLocation {
   return LOCATIONS.find((l) => l.id === id) ?? LOCATIONS[0];

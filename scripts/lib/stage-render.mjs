@@ -14,13 +14,15 @@
 
 import { createCanvas } from "./png.mjs";
 
-/** The taiga palette, mirroring pwa/src/game/biome.ts — the preview is
- * useless if it is not the colors the game paints with. */
-const GROUND = {
+/** The taiga palette, as the picture paints it when nobody hands it a
+ * country (`paletteFor` below builds one from the game's own biome table,
+ * which is what the preview tools do — the preview is useless if it is not
+ * the colours the game paints with). */
+const TAIGA_GROUND = {
   grass: [0x74, 0xb2, 0x3c],
   grassDark: [0x57, 0x8f, 0x2b],
   moss: [0x8a, 0xa8, 0x48],
-  heath: [0x7d, 0x74, 0x34],
+  heath: [0x6f, 0x5f, 0x30],
   rock: [0x8d, 0x8f, 0x94],
   rockDark: [0x6f, 0x72, 0x78],
   shore: [0xc2, 0xa8, 0x78],
@@ -32,6 +34,7 @@ const GROUND = {
  * down the wheel tracks, loose at the edges. */
 const ROAD = {
   gravel: { loose: [0xd2, 0xb4, 0x89], worn: [0x8a, 0x70, 0x46] },
+  sand: { loose: [0xe2, 0xc4, 0x8c], worn: [0xb0, 0x93, 0x64] },
   asphalt: { loose: [0x3a, 0x3b, 0x40], worn: [0x54, 0x55, 0x5c] },
   water: { loose: [0x8f, 0xa6, 0xc6], worn: [0x8f, 0xa6, 0xc6] },
   deck: { loose: [0xb7, 0xb3, 0xa8], worn: [0xa4, 0xa0, 0x96] },
@@ -57,11 +60,41 @@ const HOUSE_PAINT = {
  * other is WHICH road is the stage. Nothing in a landscape is this color. */
 const ROUTE = [0xff, 0x2f, 0x8e];
 
-const TREE = {
+const TAIGA_TREE = {
   crown: [0x2f, 0x5c, 0x2a],
   crownLight: [0x46, 0x77, 0x33],
   shadow: [0x33, 0x44, 0x28],
 };
+
+/** R40 — the desert's trunks are saguaros, Joshua trees and mesquite:
+ * grey-green over sand, with a warm shadow. */
+const DESERT_TREE = {
+  crown: [0x5f, 0x8a, 0x4a],
+  crownLight: [0x8f, 0xb8, 0x6a],
+  shadow: [0x8a, 0x70, 0x4a],
+};
+
+/** The picture's palette for a country, from the game's own ground table
+ * (`Biome.ground` in pwa/src/game/biome.ts) — so a preview of a desert
+ * stage is sand, and a change to the game's paint reaches the preview
+ * without a copy of it here going stale. */
+export function paletteFor(ground, biome) {
+  const rgb = (hex) => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
+  return {
+    ground: {
+      grass: rgb(ground.base),
+      grassDark: rgb(ground.baseDark),
+      moss: rgb(ground.damp),
+      heath: rgb(ground.scrub),
+      rock: rgb(ground.bedrock),
+      rockDark: rgb(ground.bedrockDark),
+      shore: rgb(ground.shore),
+      water: TAIGA_GROUND.water,
+      deepWater: TAIGA_GROUND.deepWater,
+    },
+    tree: biome === "desert" ? DESERT_TREE : TAIGA_TREE,
+  };
+}
 
 function mix(a, b, t) {
   const k = t < 0 ? 0 : t > 1 ? 1 : t;
@@ -89,11 +122,16 @@ function shade(color, light) {
  * @param {object} opts.engine   the engine module (constants + helpers)
  * @param {number} opts.width    image width, px
  * @param {number} opts.height   image height, px
+ * @param {object} opts.palette  `paletteFor(...)`'s ground and tree colours;
+ *                               the taiga's when omitted
  */
-export function renderStage({ track, terrain, engine, width = 1280, height = 800 }) {
+export function renderStage({ track, terrain, engine, width = 1280, height = 800, palette }) {
+  const GROUND = palette?.ground ?? TAIGA_GROUND;
+  const TREE = palette?.tree ?? TAIGA_TREE;
   const {
     LAKE_Y,
     ROAD_CROSS,
+    isLoose,
     corridorOffset,
     wearAt,
     junctionDust,
@@ -176,7 +214,7 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
     track.samples.filter(
       (s) =>
         Math.abs(s.s - j.s) < j.reach * 2.5 &&
-        s.surface === "gravel" &&
+        isLoose(s.surface) &&
         (j.joining ? s.s < j.s : s.s > j.s),
     ),
   );
@@ -367,7 +405,8 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
         ? "water"
         : sample.surface === "asphalt"
           ? "asphalt"
-          : "gravel";
+          : sample.surface;
+    const loose = kind === "gravel" || kind === "sand";
     if (out <= 0) {
       // Inside a junction the wear flattens: two roads' wheel tracks
       // crossing is the tell that two ribbons were laid over one another.
@@ -380,7 +419,7 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
         if (dust <= 0) return own;
         return mix(own, mix(ROAD.gravel.loose, ROAD.gravel.worn, 0.5), dust * DRAG_ON);
       }
-      if (kind !== "gravel") return own;
+      if (!loose) return own;
       // R17 — the dirt road STOPS at the main road's edge, cut at that
       // angle, and nothing of it carries on past. Not its surfacing, not
       // its verge, not its marking: past that line the ground is the road
@@ -416,7 +455,7 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
     // one here, and at a crossing it always is: nobody turns, so the route
     // never becomes the through road the way it does inside a borrow's
     // junction (which is the case the gravel guard exists to protect).
-    if (kind === "gravel" || onCrossingMat(x, z)) {
+    if (loose || onCrossingMat(x, z)) {
       const pastEdge = pastMainEdge(x, z);
       if (pastEdge !== null && pastEdge < 0) return null;
     }

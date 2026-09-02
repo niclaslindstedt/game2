@@ -163,6 +163,21 @@ export const SURFACES: Record<string, SurfaceVoice> = {
     // faster means more of them a second and each one hit harder.
     grain: { level: 0.0013, color: "white", hz: 1500, climb: 0.87 },
   },
+  // SAND (R40, the desert's road): gravel with the stones taken out of it.
+  // Nothing rattles — a tyre in sand is being ploughed rather than pelted —
+  // so the grain layer goes and the bed drops into a soft, heavy hiss that
+  // is louder pointed straight than gravel's is (the drag is audible) and
+  // gains less in the corner, because a slide on sand throws a sheet rather
+  // than a spray. The top of the voice is the sand itself blowing off the
+  // tread, up where the wind sits.
+  sand: {
+    color: "pink",
+    hz: 210,
+    q: 0.6,
+    level: 0.0044,
+    corner: 3.6,
+    body: { level: 0.0024, color: "pink", hz: 700, climb: 0.5, q: 0.5 },
+  },
   // Water: a hiss with weight behind it and no crunch at all. Barely cares
   // which way the car is pointing — a ford is loud because it is being ploughed
   // through, not because it is being cornered on.
@@ -211,6 +226,18 @@ export const WET_SURFACES: Record<string, SurfaceVoice> = {
     level: 0.0078,
     corner: 3.4,
     grain: { level: 0.0002, color: "white", hz: 1500, climb: 0.87 },
+  },
+  // Wet sand packs hard and goes quiet — a beach at low tide. The drag's
+  // hiss drops with it, and what is left is the dull drum of the tread on
+  // something that has briefly become a road. (It only ever happens off a
+  // Roam dial: the desert's own sky never rains.)
+  sand: {
+    color: "brown",
+    hz: 170,
+    q: 0.7,
+    level: 0.0036,
+    corner: 2.2,
+    body: { level: 0.0008, color: "pink", hz: 600, climb: 0.3, q: 0.5 },
   },
   // Wet tarmac: the one surface the rain makes BRIGHTER. A sealed road
   // holds a film of water the tread has to cut through, and that hiss is

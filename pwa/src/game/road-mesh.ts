@@ -48,6 +48,10 @@ const UP = new THREE.Vector3(0, 1, 0);
  * and grey-black between. */
 export const ROAD_PAINT = {
   gravel: { loose: "#d2b489", worn: "#8a7046" },
+  // R40 — the desert's road: paler and warmer than graded stone, and the
+  // wheel tracks are packed sand rather than worn-through subgrade, so the
+  // split between loose and worn is shallower.
+  sand: { loose: "#e2c48c", worn: "#b09364" },
   asphalt: { loose: "#3a3b40", worn: "#54555c" },
   water: { loose: "#8fa6c6", worn: "#8fa6c6" },
   deck: { loose: "#b7b3a8", worn: "#a4a096" },
@@ -364,7 +368,7 @@ export function buildRoad(
         ? "water"
         : s.surface === "asphalt"
           ? "asphalt"
-          : "gravel";
+          : s.surface;
     loose.set(ROAD_PAINT[kind].loose);
     worn.set(ROAD_PAINT[kind].worn);
     // R33 — the road's own width HERE. The station list is built once at the
@@ -479,7 +483,7 @@ export function buildRoad(
           // its own edge line and the gravel starts there, smeared out over
           // the drag-out every car turning off it leaves behind. Read per
           // vertex, so the seam is that edge, at that angle.
-          if (kind === "gravel") {
+          if (kind === "gravel" || kind === "sand") {
             const past = mainEdgeAt(track, px, pz);
             if (past !== null && past < SEAM) {
               const t = Math.max(0, past) / SEAM;
@@ -502,7 +506,11 @@ export function buildRoad(
           // ...and coming the other way, the bare shoulder keeps a memory of
           // the surfacing it just left, so the handover is one blend rather
           // than two halves of a step.
-          paint.copy(shoulder).lerp(loose, 0.28 * (1 - out / ROAD_CROSS.verge.bareTo));
+          // A sand road's shoulder IS sand — the blade pushed the same
+          // stuff aside — so it keeps far more of the mat's colour than a
+          // gravel road's earth shoulder keeps of the stone.
+          const memory = kind === "sand" ? 0.72 : 0.28;
+          paint.copy(shoulder).lerp(loose, memory * (1 - out / ROAD_CROSS.verge.bareTo));
         } else {
           // R16 — THE DISSOLVE. Past the bare shoulder the road runs out into
           // the country, and this is the half of that a player actually sees.

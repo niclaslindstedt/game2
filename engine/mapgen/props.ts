@@ -24,6 +24,7 @@
 
 import { cellKey } from "../lib/math.ts";
 import { hash2, valueNoise } from "../lib/noise.ts";
+import { GROVE_SCALE, REGION_SCALE, type BiomeRules } from "./biomes.ts";
 import type { CornerGuard, GuardField } from "./guards.ts";
 import { LAKE_Y } from "./land.ts";
 import { ROAD_CROSS } from "./road.ts";
@@ -46,121 +47,17 @@ const PROP_ROAD_CLEAR = ROAD_CROSS.reach;
  * road properly finds the forest. */
 const TREE_ROAD_CLEAR = ROAD_CROSS.reach + 1;
 
-// ── The sub-regions ───────────────────────────────────────────────────────
+// ── The quilt's rows ──────────────────────────────────────────────────────
+// The regions and the communities are the BIOME's (R40, biomes.ts): the
+// taiga's spruce woods and bogs, the desert's saguaro stands and salt pans.
+// This module only knows how to read a quilt, not what is on it.
 
-/** One kind of country. `forest` scales the trunk density across the whole
- * region; `groves` multiplies each community's share of the quilt inside
- * it (a community not named keeps its own weight, one at 0 never appears
- * there at all). */
-export type Region = {
-  id: string;
-  weight: number;
-  forest: number;
-  groves: Record<string, number>;
-};
+export { GROVE_SCALE, REGION_SCALE, type GroveCommunity, type Region } from "./biomes.ts";
 
-/** The five kinds of country a taiga stage is quilted from. Lakeside and
- * river valley are deliberately NOT here: those are decided by where the
- * water actually is (the biome's contextual overrides), and a noise field
- * that put a lakeside where there is no lake would be lying. */
-export const REGIONS: readonly Region[] = [
-  {
-    id: "denseForest",
-    weight: 3,
-    forest: 1.3,
-    groves: {
-      denseStand: 5,
-      spruceWood: 3,
-      oldGrowth: 2.5,
-      clearing: 0.6,
-      meadow: 0.1,
-      logging: 0,
-    },
-  },
-  {
-    id: "openTaiga",
-    weight: 3,
-    forest: 0.85,
-    groves: {
-      pineHeath: 2,
-      birchGrove: 1.6,
-      meadow: 2,
-      clearing: 1.6,
-      denseStand: 0.2,
-      logging: 0,
-    },
-  },
-  {
-    id: "logging",
-    weight: 1.1,
-    forest: 0.75,
-    groves: {
-      logging: 7,
-      youngStand: 4,
-      clearing: 2,
-      spruceWood: 1,
-      denseStand: 0.4,
-      oldGrowth: 0.2,
-      meadow: 0.4,
-    },
-  },
-  {
-    id: "bog",
-    weight: 1.1,
-    forest: 0.5,
-    groves: { bog: 8, meadow: 1.4, pineHeath: 0.8, spruceWood: 0.15, denseStand: 0, logging: 0 },
-  },
-  {
-    id: "burn",
-    weight: 0.8,
-    forest: 0.7,
-    groves: {
-      deadStand: 7,
-      youngStand: 2.5,
-      clearing: 1.5,
-      meadow: 0.8,
-      denseStand: 0,
-      oldGrowth: 0,
-      logging: 0,
-    },
-  },
-];
-
-/** Meters of region-noise period — how big one kind of country is. Several
- * hundred metres of stage, so a run crosses a handful of them. */
-export const REGION_SCALE = 900;
-
-// ── The plant communities ─────────────────────────────────────────────────
-
-/** One plant community's PLACEMENT data: its share of the landscape (before
- * the region re-weights it) and how much of its ground carries a solid tree
- * (0 open, 1 closed forest, above 1 a wall). */
-export type GroveCommunity = { id: string; weight: number; density: number };
-
-export const GROVES: readonly GroveCommunity[] = [
-  { id: "spruceWood", weight: 3, density: 1 },
-  { id: "denseStand", weight: 1.4, density: 1.7 },
-  { id: "pineHeath", weight: 2.5, density: 0.8 },
-  { id: "birchGrove", weight: 2, density: 0.9 },
-  { id: "oldGrowth", weight: 2, density: 1 },
-  { id: "broadleafGrove", weight: 1.5, density: 0.85 },
-  { id: "larchStand", weight: 1, density: 0.85 },
-  { id: "youngStand", weight: 1.2, density: 1.35 },
-  { id: "deadStand", weight: 0.8, density: 0.5 },
-  { id: "clearing", weight: 1.4, density: 0.14 },
-  { id: "logging", weight: 0.9, density: 0.22 },
-  { id: "bog", weight: 1, density: 0.3 },
-  { id: "meadow", weight: 2.5, density: 0.06 },
-];
-
-/** Meters of grove-noise period — how big one community's patch is. */
-export const GROVE_SCALE = 150;
-
-/** R32 — the community wet ground is always in, and how far the groundwater
- * has to stand above the surface before it takes over, m. A couple of
- * centimetres is a damp patch; this is ground you would not walk across in
- * boots, which is where the sedge and the drowned trunks belong. */
-const BOG_GROVE = GROVES.findIndex((g) => g.id === "bog");
+/** R32 — how far the groundwater has to stand above the surface before the
+ * biome's wet community takes over, m. A couple of centimetres is a damp
+ * patch; this is ground you would not walk across in boots, which is where
+ * the sedge and the drowned trunks belong. */
 const BOG_WET = 0.05;
 
 /** Meters of stand-noise period — the clumping inside ONE community. Small
@@ -276,11 +173,9 @@ const STUMP_SHARE = 0.3;
 const STUMP_SIZE_MIN = 0.75;
 const STUMP_SIZE_MAX = 1.35;
 /** Grove density at or above which the ground counts as wooded — a meadow
- * has nothing to have been felled. */
+ * has nothing to have been felled. (The communities that are ALL stumps
+ * whatever their density says are the biome's `felled` list.) */
 const STUMP_GROVE_DENSITY = 0.5;
-/** ...and the communities that are ALL stumps whatever their density says,
- * because being cut over is what they are. */
-const FELLED_GROVES = new Set(["logging", "deadStand"]);
 
 /** ROCKY OUTCROPS: one candidate per grid cell of this edge, m, and the
  * share of those that carry one. A lone boulder in a field reads as a prop
@@ -340,6 +235,8 @@ const TIMBER_CHANCE = 0.55;
  * the renderer each build their own field and always agree. */
 export type PropContext = {
   seed: number;
+  /** R40 — the country: its quilt, and whether its woods shed timber. */
+  biome: BiomeRules;
   /** Road half-width, m. */
   half: number;
   /** The `trees` dial's multiplier on forest density. */
@@ -383,20 +280,24 @@ export type PropField = {
   invalidate: () => void;
 };
 
-/** Per-region grove weights, resolved once against the GROVES order so the
- * quilt's inner loop reads an array rather than a record lookup. */
-const REGION_GROVES: number[][] = REGIONS.map((region) =>
-  GROVES.map((grove) => grove.weight * (region.groves[grove.id] ?? 1)),
-);
-const REGION_GROVE_TOTAL: number[] = REGION_GROVES.map((weights) =>
-  weights.reduce((sum, w) => sum + w, 0),
-);
-const REGION_TOTAL = REGIONS.reduce((sum, r) => sum + r.weight, 0);
-
 export function createPropField(ctx: PropContext): PropField {
-  const { groundAt, roadNear, sampleAt, spurClearance, inAnyStream, half, guards } = ctx;
+  const { groundAt, roadNear, sampleAt, spurClearance, inAnyStream, half, guards, biome } = ctx;
+  const { regions, groves } = biome;
 
   // ── The quilt ─────────────────────────────────────────────────────────
+  /** Per-region grove weights, resolved once against the biome's grove
+   * order so the quilt's inner loop reads an array rather than a record
+   * lookup. */
+  const regionGroves: number[][] = regions.map((region) =>
+    groves.map((grove) => grove.weight * (region.groves[grove.id] ?? 1)),
+  );
+  const regionGroveTotal: number[] = regionGroves.map((weights) =>
+    weights.reduce((sum, w) => sum + w, 0),
+  );
+  const regionTotal = regions.reduce((sum, r) => sum + r.weight, 0);
+  const wetGrove = biome.wetGrove === null ? -1 : groves.findIndex((g) => g.id === biome.wetGrove);
+  const felledGroves = new Set(biome.felled);
+
   // Both lookups wobble their sample point before snapping it to a cell, so
   // borders meander through the landscape instead of running cell-straight.
   const regionSeed = (ctx.seed ^ 0x27d4eb2f) >>> 0;
@@ -404,13 +305,12 @@ export function createPropField(ctx: PropContext): PropField {
     const wx = x + (valueNoise(x, z, 300, regionSeed + 1) - 0.5) * 460;
     const wz = z + (valueNoise(z, x, 330, regionSeed + 2) - 0.5) * 460;
     let t =
-      hash2(Math.floor(wx / REGION_SCALE), Math.floor(wz / REGION_SCALE), regionSeed) *
-      REGION_TOTAL;
-    for (let i = 0; i < REGIONS.length; i++) {
-      t -= REGIONS[i].weight;
+      hash2(Math.floor(wx / REGION_SCALE), Math.floor(wz / REGION_SCALE), regionSeed) * regionTotal;
+    for (let i = 0; i < regions.length; i++) {
+      t -= regions[i].weight;
       if (t <= 0) return i;
     }
-    return REGIONS.length - 1;
+    return regions.length - 1;
   };
 
   const groveSeed = (ctx.seed ^ 0x9e3779b9) >>> 0;
@@ -423,19 +323,19 @@ export function createPropField(ctx: PropContext): PropField {
     // the water table, the community is the BOG, whatever the quilt rolled.
     // This is what makes the reeds, the sedge and the drowned trunks appear
     // where a player would expect them rather than at random.
-    if (BOG_GROVE >= 0 && ctx.wetAt(x, z) > BOG_WET) return BOG_GROVE;
+    if (wetGrove >= 0 && ctx.wetAt(x, z) > BOG_WET) return wetGrove;
     const wx = x + (valueNoise(x, z, 47, groveSeed + 1) - 0.5) * 70;
     const wz = z + (valueNoise(z, x, 53, groveSeed + 2) - 0.5) * 70;
     const region = regionAt(x, z);
-    const weights = REGION_GROVES[region];
+    const weights = regionGroves[region];
     let t =
       hash2(Math.floor(wx / GROVE_SCALE), Math.floor(wz / GROVE_SCALE), groveSeed) *
-      REGION_GROVE_TOTAL[region];
-    for (let i = 0; i < GROVES.length; i++) {
+      regionGroveTotal[region];
+    for (let i = 0; i < groves.length; i++) {
       t -= weights[i];
       if (t <= 0) return i;
     }
-    return GROVES.length - 1;
+    return groves.length - 1;
   };
 
   const standSeed = (ctx.seed ^ 0x6b43a9b5) >>> 0;
@@ -537,6 +437,7 @@ export function createPropField(ctx: PropContext): PropField {
    * below, and for the same reason: a patch of country that reads as ONE
    * event beats dice that happened to run hot. */
   const windthrown = (x: number, z: number): number => {
+    if (!biome.deadwood) return 0;
     const n = valueNoise(x, z, WINDTHROW_SCALE, (obSeed + 11) >>> 0);
     return n <= WINDTHROW_FROM ? 0 : (n - WINDTHROW_FROM) / (1 - WINDTHROW_FROM);
   };
@@ -557,8 +458,9 @@ export function createPropField(ctx: PropContext): PropField {
     if (hash2(cx, cz, obSeed) < OB_DENSITY * (1 + gale * (WINDTHROW_DENSITY - 1))) {
       // Stone is what the ground sheds and wood is what the weather takes
       // down, so a blowdown is nearly all timber even where the same country
-      // is otherwise strewn with boulders.
-      const boulder = hash2(cx, cz, obSeed + 3) < 0.55 * (1 - gale * 0.85);
+      // is otherwise strewn with boulders — and a country with no forest to
+      // blow down sheds nothing but stone.
+      const boulder = !biome.deadwood || hash2(cx, cz, obSeed + 3) < 0.55 * (1 - gale * 0.85);
       const roll = hash2(cx, cz, obSeed + 6);
       const spin = hash2(cx, cz, obSeed + 5) * Math.PI * 2;
       if (boulder) {
@@ -640,9 +542,10 @@ export function createPropField(ctx: PropContext): PropField {
     const shed = Math.max(SHED_MIN, 1 - ctx.soilAt(x, z) / SHED_BURIES);
     if (hash2(cx, cz, rockSeed) < ROCK_DENSITY * shed * (1 + field * (BOULDER_DENSITY - 1))) {
       const roll = hash2(cx, cz, rockSeed + 3);
-      const grove = GROVES[groveAt(x, z)];
-      const cutOver = FELLED_GROVES.has(grove.id);
+      const grove = groves[groveAt(x, z)];
+      const cutOver = felledGroves.has(grove.id);
       const stump =
+        biome.deadwood &&
         (cutOver || hash2(cx, cz, rockSeed + 5) < STUMP_SHARE) &&
         (cutOver || grove.density >= STUMP_GROVE_DENSITY);
       const kind = stump ? "stump" : "rock";
@@ -802,7 +705,7 @@ export function createPropField(ctx: PropContext): PropField {
     if (hash2(cx, cz, timberSeed) < TIMBER_CHANCE) {
       const x = (cx + 0.15 + hash2(cx, cz, timberSeed + 1) * 0.7) * TIMBER_CELL;
       const z = (cz + 0.15 + hash2(cx, cz, timberSeed + 2) * 0.7) * TIMBER_CELL;
-      if (GROVES[groveAt(x, z)].id === "logging") {
+      if (biome.timber !== null && groves[groveAt(x, z)].id === biome.timber) {
         const size = 0.85 + hash2(cx, cz, timberSeed + 3) * 0.5;
         const { radius } = solidShape("timber", size);
         if (offEveryRoad(x, z, radius) && !inAnyStream(x, z, radius)) {
@@ -923,8 +826,8 @@ export function createPropField(ctx: PropContext): PropField {
         STAND_CEILING,
         TREE_DENSITY *
           ctx.forestScale *
-          REGIONS[regionAt(x, z)].forest *
-          GROVES[grove].density *
+          regions[regionAt(x, z)].forest *
+          groves[grove].density *
           stand *
           rooting,
       ) / mean;

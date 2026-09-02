@@ -618,33 +618,64 @@ export const ANALYSIS = {
   /** The GROUND the stage is laid across — the layers, and whether the
    * shares of them read as a country. */
   ground: {
-    /** Share of the analyzed country standing under water. Some water is
-     * what makes a landscape; a map that is mostly lake is a seascape with
-     * a road drawn on it. */
-    water: { min: 0.01, max: 0.34 },
+    /** R40 — what a COUNTRY has to come out like, per biome: the shares
+     * that say "this is a taiga" are not the shares that say "this is a
+     * desert", and a check that held both to one band would fail the one
+     * it was not written for on every seed. */
+    country: {
+      taiga: {
+        /** Share of the analyzed country standing under water. Some water
+         * is what makes a landscape; a map that is mostly lake is a
+         * seascape with a road drawn on it. */
+        water: { min: 0.01, max: 0.34 },
+        /** Share carrying closed forest. */
+        forest: { min: 0.12, max: 0.78 },
+        /** Relief: the spread between the 5th and 95th percentile of
+         * ground height across the country, m. Flat is boring, and a wall
+         * of mountain either side of the road is a corridor. */
+        relief: { min: 18, max: 260 },
+        /** Whether the country is expected to hold shallow water as well
+         * as deep — the swamp band below is only asked where it is. */
+        swamps: true,
+        /** The slope past which soil has no business lying, m per m — the
+         * `soil` check's `steep`. Till is washed off anything steeper. */
+        soilSteep: 0.45,
+      },
+      desert: {
+        /** None. A drop of standing water on a desert stage is a defect. */
+        water: { min: 0, max: 0 },
+        /** A saguaro stand is the closest thing the desert has to a wood,
+         * and it is nowhere near closed: the band is a ceiling, not a
+         * floor. */
+        forest: { min: 0, max: 0.2 },
+        /** Worn low, but still country: the dunes alone are a seven-metre
+         * spread, and the ranges behind them are what stops it reading as
+         * a table. */
+        relief: { min: 10, max: 200 },
+        swamps: false,
+        /** Sand is soil the WIND put there, and it lies at its own angle of
+         * repose — about 34°, which is 0.67 m per m — on the slip face of
+         * every dune. Till's rule would report every dune on the map. */
+        soilSteep: 0.7,
+      },
+    },
     /** ...and the share past which it is not a wet stage but a SEASCAPE: the
      * land has gone and what is left is the road standing on its own verge
      * cone. An error rather than a warning, because no dial position should
      * be able to produce it. */
     drowned: 0.5,
-    /** Share carrying closed forest. */
-    forest: { min: 0.12, max: 0.78 },
     /** Share where the bedrock is at or near the surface — rock, scree and
      * thin moss rather than soil. This is the number that separates a
      * glaciated Swedish landscape from a Norwegian one. */
     rock: { min: 0.02, max: 0.55 },
-    /** Relief: the spread between the 5th and 95th percentile of ground
-     * height across the country, m. Flat is boring, and a wall of mountain
-     * either side of the road is a corridor. */
-    relief: { min: 18, max: 260 },
     /** Share of the country steep enough that a car could not climb it. */
     cliff: { max: 0.3 },
     /** SOIL PLAUSIBILITY: soil is till and washed sediment, so it collects
      * in hollows and is scoured off steep ground. Deep soil standing on a
-     * cliff is the layering not being obeyed. `steep` is the slope past
-     * which ground counts as steep, m per m; `deep` is the soil depth that
-     * has no business being there, m. */
-    soil: { steep: 0.45, deep: 1.4, share: 0.06 },
+     * cliff is the layering not being obeyed. The slope past which ground
+     * counts as steep is the country's (`country.soilSteep`); `deep` is the
+     * soil depth that has no business being there, m. */
+    soil: { deep: 1.4, share: 0.06 },
     /** Soil depth under which the ground counts as BARE ROCK, m — moss,
      * grass and flowers, nothing with a root. */
     bare: 0.25,

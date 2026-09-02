@@ -308,7 +308,7 @@ function buildScenery(
       // Scrappy: what survives on a graded shoulder is half the size of
       // what grows a metre further out.
       flora.push({
-        id: rng.chance(0.75) ? "tallGrass" : "heathShrub",
+        id: pickFlora(biome.vergeCover, rng.next()),
         x,
         y,
         z,
@@ -378,9 +378,10 @@ function buildScenery(
     q.setFromAxisAngle(UP, p.s * 20);
     m.compose(v.set(p.x, p.y + scale * 0.35, p.z), q, sc.set(scale, scale * 0.7, scale));
     rockMesh.setMatrixAt(i, m);
-    // Every third stone carries a mossy cast; the rest vary in grey.
+    // Every third stone carries a mossy cast where the country grows
+    // moss at all; the rest vary in grey.
     tint.setScalar(0.8 + p.s * 0.35);
-    if (i % 3 === 0) tint.lerp(mossy, 0.5);
+    if (biome.mossyStone > 0 && i % 3 === 0) tint.lerp(mossy, 0.5);
     rockMesh.setColorAt(i, tint);
   });
   group.add(rockMesh);
@@ -751,7 +752,9 @@ function disposeGroup(group: THREE.Group): void {
  * but cannot see is worse than any frame it would buy. */
 export function buildWorld(track: Track, density = 1, season: Season = "summer", stone = 1): World {
   const group = new THREE.Group();
-  const biome = biomeFor();
+  // R40 — the country the stage's dials name. The engine placed every
+  // solid thing from the same id; this is what dresses it.
+  const biome = biomeFor(track.knobs.biome);
   const terrain = buildTerrain(track, biome, season);
   group.add(terrain.group);
   terrain.sync(track, 0, track.samples[0].x, track.samples[0].z);

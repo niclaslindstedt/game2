@@ -48,6 +48,8 @@ import {
   type TimeOfDay,
   type Track,
   type Weather,
+  biomeRules,
+  isBiomeId,
 } from "@engine";
 
 import { cacheIdForBase } from "./app-pwa.ts";
@@ -164,6 +166,7 @@ import {
   unlockEverything,
   type CampaignLevel,
   type CampaignProgress,
+  campaignKnobs,
 } from "./game/campaign.ts";
 import {
   createGhostRecorder,
@@ -402,7 +405,14 @@ function initialRace(): RaceSettings {
     const raw = params.get(dial.key);
     if (raw !== null && Number.isFinite(Number(raw))) race.knobs[dial.key] = Number(raw);
   }
+  // ...and the country (R40), the one dial that is a name. A stored race
+  // from a build with no countries in it resolves to the taiga.
+  const biome = params.get("biome");
+  if (isBiomeId(biome)) race.knobs.biome = biome;
   race.knobs = resolveKnobs(race.knobs);
+  // A weather the country does not have (a desert save left on RAIN by a
+  // build that offered it) is cleared rather than drawn as something else.
+  if (!biomeRules(race.knobs.biome).weathers.includes(race.weather)) race.weather = "clear";
   return race;
 }
 
@@ -503,6 +513,7 @@ function sameStage(a: StageSpec | null, b: StageSpec): boolean {
     a.length === b.length &&
     a.shape === b.shape &&
     a.laps === b.laps &&
+    a.knobs.biome === b.knobs.biome &&
     STAGE_DIALS.every((dial) => a.knobs[dial.key] === b.knobs[dial.key]) &&
     a.carId === b.carId &&
     a.gearbox === b.gearbox &&
@@ -1098,7 +1109,7 @@ export function App() {
     // An endless track is never reused: a restart must begin from a fresh
     // opening window, not from however far the last run streamed (the
     // renderer has long since dropped the world around the start).
-    const key = `${spec.seed}/${spec.length}/${spec.shape}/${STAGE_DIALS.map((d) => spec.knobs[d.key]).join(",")}`;
+    const key = `${spec.seed}/${spec.length}/${spec.shape}/${spec.knobs.biome}/${STAGE_DIALS.map((d) => spec.knobs[d.key]).join(",")}`;
     if (trackRef.current?.key !== key || spec.length === "endless") {
       trackRef.current = {
         key,
@@ -1365,8 +1376,9 @@ export function App() {
         shape: level.shape ?? "sprint",
         laps: lapsOverride() ?? levelLaps(level),
         // A campaign stage is the same country for everybody: the dials are
-        // Roam's to play with, not the campaign's to inherit.
-        knobs: DEFAULT_STAGE_KNOBS,
+        // Roam's to play with, not the campaign's to inherit — the location
+        // says which country, and the rule book's defaults say the rest.
+        knobs: campaignKnobs(level),
         carId: race.carId,
         timeOfDay: level.timeOfDay,
         weather: level.weather,
@@ -1423,7 +1435,7 @@ export function App() {
       length: level.length,
       shape: level.shape ?? "sprint",
       laps: levelLaps(level),
-      knobs: DEFAULT_STAGE_KNOBS,
+      knobs: campaignKnobs(level),
       carId: BENCHMARK.carId,
       gearbox: BENCHMARK.gearbox,
       timeOfDay: level.timeOfDay,
@@ -1607,7 +1619,7 @@ export function App() {
       ...raceRef.current,
       length: level.length,
       shape: level.shape ?? "sprint",
-      knobs: DEFAULT_STAGE_KNOBS,
+      knobs: campaignKnobs(level),
       timeOfDay: level.timeOfDay,
       weather: level.weather,
       season: level.season,

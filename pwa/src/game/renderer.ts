@@ -34,11 +34,11 @@ import {
   type DustTint,
 } from "./dust.ts";
 import { clearDustLamps } from "./dust-light.ts";
-import { SOOT, sootySmoke, STONE_DUST, type PlumeGround } from "./ground-tint.ts";
+import { SOOT, groundTints, sootySmoke, type PlumeGround } from "./ground-tint.ts";
 import { createCarFx } from "./car-fx.ts";
 import { createEnvironment } from "./environment.ts";
 import { createFieldCars, type FieldCars } from "./field-cars.ts";
-import type { Clap } from "./weather.ts";
+import { wetnessOf, type Clap } from "./weather.ts";
 import { TRUNK_COLOR } from "./flora.ts";
 import { PIPE, pipeBursts, pipeWork } from "./fumes.ts";
 import { createWayHomeArrow } from "./way-home.ts";
@@ -448,13 +448,16 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
       scene.add(world.group);
       applyIsland();
     }
-    environment.apply(state.env);
+    const biome = state.track.knobs.biome;
+    environment.apply(state.env, biome);
+    life.setBiome(biome);
     // Rain settles the stage. There is no cloud to tow once the surface is
     // soaked — what the wheels lift is clods — so the two swap over here,
     // once, rather than being decided per frame per particle. How hard it
     // is actually coming down is the environment's per-frame business: the
-    // squall breathes, and the sheet has to breathe with it.
-    wetGround = state.env.weather !== "clear";
+    // squall breathes, and the sheet has to breathe with it. Read against
+    // the country (R40): a desert storm is wind and sand, and soaks nothing.
+    wetGround = wetnessOf(state.env, biome) > 0;
     plume.points.visible = !wetGround;
     mud.points.visible = wetGround;
     applyRange();
@@ -758,7 +761,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
           ev.solid.x,
           ev.solid.y + ev.solid.height * 0.3,
           ev.solid.z,
-          wooden ? SPLINTERS : STONE_DUST,
+          wooden ? SPLINTERS : groundTints(state.track.knobs.biome).stone,
           Math.round((ev.broke ? 26 : 14) * fx),
           3.5,
         );
@@ -1138,7 +1141,9 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     environment.lightDust(state.car);
     field.lightDust(environment.lampPower());
     const cam = chase.camera.position;
-    if (fx > 0) life.update(cam.x, cam.z, state.wind.x, state.wind.z, dt);
+    if (fx > 0) {
+      life.update(cam.x, cam.z, state.wind.x, state.wind.z, dt, state.terrain.groundAt, state.car);
+    }
     life.group.visible = fx > 0;
     // The map framing changes with the stage and the pane, and the fog rides
     // it — see MAP_FOG_NEAR.

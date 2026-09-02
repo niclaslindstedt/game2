@@ -188,6 +188,7 @@ npm run sim -- --shape circuit        # race a closed lap circuit (R22)
 npm run sim -- --shape circuit --laps 5
 npm run sim -- --weather storm        # race in rain/storm wind
 npm run sim -- --gearbox manual       # drive the bot with a manual box
+npm run sim -- --biome desert         # the other country (R40): sand roads, dunes, no water
 npm run sim -- --asphalt 0.8          # the generator's dials, each 0..1:
                                       # --elevation --water --trees --asphalt
 npm run sim -- --sweep                # the ROSTER BALANCE table (see below)

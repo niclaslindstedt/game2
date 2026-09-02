@@ -75,6 +75,46 @@ export const BULRUSH_HEAD = new THREE.Color(0x6b4a2c); // the brown sausage on a
 export const SPHAGNUM = new THREE.Color(0x93b055); // bog moss: brighter and wetter than cushion moss
 export const SPHAGNUM_RUST = new THREE.Color(0xa8894a); // ...and the rust it turns where it is drying
 
+// ── The desert's paint box (flora-desert.ts) ──────────────────────────────
+// Grey-green, olive and silver, over bark that is more often green or
+// bleached than brown; the saturated colours are the SPRING's and live in
+// the season table below.
+export const SAGUARO = new THREE.Color(0x5f8a4a);
+export const SAGUARO_DARK = new THREE.Color(0x4a7038); // the shaded side of a rib
+/** The crown of a saguaro: green all year, and where the blossom and then
+ * the fruit sit — so this is the colour the season table moves. */
+export const SAGUARO_TIP = new THREE.Color(0x6f9a55);
+export const SAGUARO_RIB = new THREE.Color(0xc9b99a); // the woody ribs a dead one leaves standing
+export const BARREL = new THREE.Color(0x5d8548);
+export const BARREL_SPINE = new THREE.Color(0xd8b06a); // the yellow spines that catch the light
+export const PRICKLY_PEAR = new THREE.Color(0x6f9a5c);
+export const PEAR_FRUIT = new THREE.Color(0x7d9c60); // green in summer; the season turns it purple
+export const CHOLLA = new THREE.Color(0xa3a882); // silvery — a cholla is mostly spines
+export const CHOLLA_DARK = new THREE.Color(0x6f6b50);
+export const OCOTILLO = new THREE.Color(0x6d5a48);
+/** An ocotillo's cane tips: bare most of the year, a red flame in spring. */
+export const OCOTILLO_TIP = new THREE.Color(0x8a6a4e);
+export const JOSHUA_LEAF = new THREE.Color(0x5d7a4a);
+export const JOSHUA_BARK = new THREE.Color(0x8a7a66); // shaggy, grey, fibrous
+export const MESQUITE_LEAF = new THREE.Color(0x6d8a45);
+export const MESQUITE_BARK = new THREE.Color(0x5a4636);
+export const PALO_VERDE = new THREE.Color(0x8fb86a); // green BARK — the whole tree is this colour
+export const PINYON = new THREE.Color(0x4f6f45);
+export const CREOSOTE = new THREE.Color(0x6b7a3e); // small, resinous, olive
+export const CREOSOTE_STEM = new THREE.Color(0x5a4d3a);
+export const BRITTLEBUSH = new THREE.Color(0x8c9a6e); // grey-green; the season turns the whole bush yellow
+export const SAGEBRUSH = new THREE.Color(0x8e957a);
+export const AGAVE = new THREE.Color(0x7f9a86); // blue-green blades
+export const AGAVE_TIP = new THREE.Color(0x4a4034); // the black spine on each
+export const YUCCA = new THREE.Color(0x6f8f62);
+export const YUCCA_STALK = new THREE.Color(0xa8916a);
+export const DEAD_BRUSH = new THREE.Color(0x9a8c74);
+export const TUMBLEWEED = new THREE.Color(0xb8a882);
+export const BUNCH_BASE = new THREE.Color(0xb9a65c);
+export const BUNCH_TIP = new THREE.Color(0xe0cf8a);
+export const SALT_CRUST = new THREE.Color(0xece6d4);
+export const BONE = new THREE.Color(0xe9e1cf);
+
 // ── The seasons ────────────────────────────────────────────────────────────
 // What a boreal forest actually does over a year, and — just as important —
 // what it does NOT do. The conifers are evergreen: a spruce in September is
@@ -153,6 +193,23 @@ const SEASONAL: SeasonalColor[] = [
   { summer: BOG_SHRUB, spring: 0x5a7040, autumn: 0xa04a2c },
   // Bog cotton heads are a June thing; by September they have blown.
   { summer: COTTON, spring: 0xf7f4ea, autumn: 0xe8e2d0 },
+
+  // THE DESERT. Its year is the opposite shape: spring is the loud one —
+  // a wet winter puts a yellow hillside of brittlebush, white saguaro
+  // crowns and red ocotillo tips on a country that is grey-green the rest
+  // of the time — and autumn is a small drying and reddening. Every cactus
+  // body, every bark and the dead wood hold still, as the conifers do.
+  { summer: SAGUARO_TIP, spring: 0xf4efdc, autumn: 0xc23a2e },
+  { summer: PEAR_FRUIT, spring: 0xd9c85a, autumn: 0x8e2f52 },
+  { summer: OCOTILLO_TIP, spring: 0xd23c2c, autumn: 0x8a6a4e },
+  { summer: BRITTLEBUSH, spring: 0xe6c93a, autumn: 0x9a9268 },
+  { summer: CREOSOTE, spring: 0x7d8f43, autumn: 0x6b7038 },
+  { summer: PALO_VERDE, spring: 0xd9c848, autumn: 0x8fb06a },
+  { summer: MESQUITE_LEAF, spring: 0x86a04e, autumn: 0x9a9048 },
+  { summer: SAGEBRUSH, spring: 0x98a27e, autumn: 0x8a8a6c },
+  { summer: YUCCA_STALK, spring: 0xf3eedd, autumn: 0xa8916a },
+  { summer: BUNCH_BASE, spring: 0x9aa858, autumn: 0xc0a24e },
+  { summer: BUNCH_TIP, spring: 0xcfcf7e, autumn: 0xe8d08c },
 ];
 
 /** What one season does to the paint box: authored colour → this season's.

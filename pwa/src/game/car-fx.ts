@@ -129,10 +129,10 @@ export function createCarFx(scene: THREE.Scene): CarFx {
     rockAt(state.terrain.groundAt, state.car.x, state.car.z);
 
   const groundDust = (state: GameState, wet: boolean): number | DustTint =>
-    groundTint(state.surface, wet, () => bareRock(state));
+    groundTint(state.track.knobs.biome, state.surface, wet, () => bareRock(state));
 
   const plumeDust = (state: GameState, wet: boolean): PlumeGround =>
-    plumeGround(state.surface, wet, () => bareRock(state));
+    plumeGround(state.track.knobs.biome, state.surface, wet, () => bareRock(state));
 
   const atWheels = (
     cloud: Dust,

@@ -99,7 +99,10 @@ function stageBox(ctx: DebugContext, state: GameState): DebugBox {
   // Spelled out rather than initialled: two of the dials start with the
   // same letter, and a repro read off a screenshot must not depend on
   // guessing which `w` is the water and which is the width.
-  const dials = STAGE_DIALS.map((d) => `${d.key} ${ctx.stage.knobs[d.key].toFixed(2)}`).join(" · ");
+  const dials = [
+    ctx.stage.knobs.biome,
+    ...STAGE_DIALS.map((d) => `${d.key} ${ctx.stage.knobs[d.key].toFixed(2)}`),
+  ].join(" · ");
   return {
     title: "STAGE",
     rows: [
@@ -247,6 +250,7 @@ export function stageParams(stage: DebugStage): URLSearchParams {
     car: stage.carId,
   });
   for (const dial of STAGE_DIALS) params.set(dial.key, stage.knobs[dial.key].toFixed(3));
+  params.set("biome", stage.knobs.biome);
   params.set("start", "1");
   params.set("debug", "1");
   return params;

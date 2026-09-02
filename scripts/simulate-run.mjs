@@ -16,6 +16,7 @@
 //   npm run sim -- --asphalt 0.8         # generator dials, each 0..1:
 //                                        # --elevation --water --trees --asphalt --width
 //                                        # --steepness
+//   npm run sim -- --biome desert        # the other country (R40): sand roads, dunes
 //   npm run sim -- --gearbox manual      # drive the bot with a manual box
 //   npm run sim -- --sweep               # the ROSTER BALANCE table: every
 //                                        # car over five stage archetypes,
@@ -63,6 +64,7 @@ for (const dial of ["elevation", "water", "trees", "asphalt", "width", "steepnes
   const value = flag(dial);
   if (value !== undefined) knobs[dial] = Number(value);
 }
+if (flag("biome") !== undefined) knobs.biome = flag("biome");
 const gearbox = flag("gearbox") ?? "auto";
 // The CAMPAIGN FIELD drives the box each crew actually drives (`gearboxFor`
 // — the crews with the hands take their own gears), because that is the

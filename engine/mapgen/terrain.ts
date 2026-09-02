@@ -41,20 +41,14 @@ import type { WaterField } from "./water.ts";
 import type { GeologyField } from "./geology.ts";
 import { STAGE_RULES as R, knobScale } from "./rules.ts";
 import { createSpurIndex, type SpurIndex } from "./spurs.ts";
+import { biomeRules } from "./biomes.ts";
 import { createPropField } from "./props.ts";
 import { bridgeParapets, type WildObstacle } from "./solids.ts";
 import { homesteadSolids } from "./homesteads.ts";
 import { townSolids } from "./towns.ts";
 
 export { LAKE_Y } from "./land.ts";
-export {
-  GROVES,
-  GROVE_SCALE,
-  REGIONS,
-  REGION_SCALE,
-  type GroveCommunity,
-  type Region,
-} from "./props.ts";
+export { GROVE_SCALE, REGION_SCALE, type GroveCommunity, type Region } from "./biomes.ts";
 /** Edge length of the ground lattice the physics rides and the renderer
  * triangulates its ground tiles on, m. The two must agree — see groundAt. */
 export const GROUND_CELL = 14;
@@ -850,6 +844,8 @@ export function createTerrain(track: Track): TerrainField {
   // with where the water is.
   const land = createLandField(track.seed, track.knobs);
   const farField = land.heightAt;
+  // R40 — the country: its quilt, its loose surface, what its woods shed.
+  const biome = biomeRules(track.knobs.biome);
 
   // Per-side embankment grade along the stage, m per m of distance from the
   // shoulder: positive climbs into a hillside wall, negative drops toward a
@@ -1491,7 +1487,7 @@ export function createTerrain(track: Track): TerrainField {
   };
 
   const spurSurfaceAt = (x: number, z: number): Surface | null => {
-    if (pads.length > 0 && padClearance(x, z) <= 0) return "gravel";
+    if (pads.length > 0 && padClearance(x, z) <= 0) return biome.loose;
     if (spurs.spurs.length === 0) return null;
     const spur = spurs.nearest(x, z);
     if (!spur || spur.d > spur.spur.width / 2) return null;
@@ -1504,6 +1500,7 @@ export function createTerrain(track: Track): TerrainField {
   // engine's copy and the renderer's copy of the world always agree.
   const props = createPropField({
     seed: track.seed,
+    biome,
     half,
     forestScale: knobScale(track.knobs.trees, R.forest.density),
     groundAt,

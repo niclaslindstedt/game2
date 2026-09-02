@@ -17,7 +17,14 @@
 //                its beam has to come through to arrive.
 
 import * as THREE from "three";
-import type { RaceEnv, Season, TimeOfDay, Weather } from "@engine";
+import {
+  biomeRules,
+  type BiomeId,
+  type RaceEnv,
+  type Season,
+  type TimeOfDay,
+  type Weather,
+} from "@engine";
 
 import { coverOf } from "./weather.ts";
 
@@ -272,9 +279,15 @@ type WeatherLook = {
   rain: [number, number];
   /** How electric it is, thin → thick. */
   thunder: [number, number];
+  /** How much of the sun's BEAM comes through the deck, thin → thick — a
+   * lit patch on a thin sheet of rain cloud, nothing at all behind a
+   * thunderstorm's, and a pale disc the whole way through blowing sand. */
+  through: [number, number];
 };
 
-const LOOKS: Record<Exclude<Weather, "clear">, WeatherLook> = {
+type Looks = Record<Exclude<Weather, "clear">, WeatherLook>;
+
+const TAIGA_LOOKS: Looks = {
   // RAIN IS A WHITE SKY. The deck is thin enough that the sun lights it
   // from above and it glows — overhead it is the brightest thing in the
   // frame, brighter than the road, which is exactly why a photograph of a
@@ -298,6 +311,7 @@ const LOOKS: Record<Exclude<Weather, "clear">, WeatherLook> = {
     // Rain has weather in it without being a thunderstorm: the odd distant
     // flash on the heaviest stages, never the overhead crack.
     thunder: [0, 0.25],
+    through: [1, 0],
   },
   // A STORM IS A BLACK ONE, and it is black for the opposite reason: the
   // deck is kilometres thick, nothing gets through it, and the underside is
@@ -321,8 +335,108 @@ const LOOKS: Record<Exclude<Weather, "clear">, WeatherLook> = {
     relief: [0.3, 0.55],
     rain: [0.85, 1],
     thunder: [0.6, 1],
+    through: [0, 0],
   },
 };
+
+/** R40 — THE DESERT'S WEATHER, which is dry. Its `storm` is a DUST STORM:
+ * a wall of blown sand the colour of the ground, so low the base is on
+ * the ridges and so thick the road runs out a hundred metres ahead; the
+ * sun is a pale disc in it, never gone, and the one bright thing left is
+ * the strip under the base where clear air still shows. Dry lightning
+ * rides the heaviest of them. Nothing here rains: the `rain` pair is zero
+ * on both rows, which is what keeps the wipers parked and the road dry.
+ *
+ * Its `rain` is not offered by the country (`biomeRules().weathers`), but
+ * a dial can still be left on it, so it has a look: a HAZE, the same sand
+ * in the air at a fraction of the density — the desert on a windy day. */
+const DESERT_LOOKS: Looks = {
+  rain: {
+    grey: 0xc9ad7c,
+    mix: 0.3,
+    dim: [0.92, 0.75],
+    hemi: [0.98, 0.85],
+    lampsAt: 2,
+    fogNear: [0.8, 0.55],
+    fogFar: [0.85, 0.55],
+    fogDeck: 0.5,
+    overhead: [0xd8c39a, 0xbfa070],
+    rim: 0xdcc59a,
+    rimMix: 0.5,
+    base: [420, 260],
+    relief: [0.05, 0.15],
+    rain: [0, 0],
+    thunder: [0, 0],
+    through: [0.9, 0.55],
+  },
+  storm: {
+    grey: 0xb8925c,
+    mix: 0.72,
+    dim: [0.55, 0.28],
+    hemi: [0.82, 0.55],
+    lampsAt: 0.45,
+    fogNear: [0.38, 0.14],
+    fogFar: [0.42, 0.16],
+    fogDeck: 0.88,
+    overhead: [0xc9a36a, 0x8f6a3c],
+    rim: 0xdcb87a,
+    rimMix: 0.7,
+    base: [150, 70],
+    relief: [0.5, 0.8],
+    rain: [0, 0],
+    thunder: [0.05, 0.35],
+    through: [0.55, 0.12],
+  },
+};
+
+const LOOKS: Record<BiomeId, Looks> = { taiga: TAIGA_LOOKS, desert: DESERT_LOOKS };
+
+/** R40 — what a COUNTRY does to the clear sky over it, before any weather
+ * is put on top. The presets were authored for the taiga; the desert's air
+ * is drier and clearer, its horizon hazed warm by the dust that is always
+ * in it, its sun a shade warmer and harder, and — the one that matters
+ * most to the look of the ground — the light bouncing back up off it is
+ * sand, not moss. Every mix is toward a colour, so the four times of day
+ * keep their own character under it. */
+type Cast = {
+  horizon: [number, number];
+  zenith: [number, number];
+  fog: [number, number];
+  fogReach: number;
+  sun: [number, number];
+  sunStrength: number;
+  hemiGround: [number, number];
+  cloudCover: number;
+};
+
+const CASTS: Record<BiomeId, Cast | null> = {
+  taiga: null,
+  desert: {
+    horizon: [0xe8d3b0, 0.28],
+    zenith: [0x2f7fd8, 0.18],
+    fog: [0xe6d2a8, 0.32],
+    fogReach: 1.25,
+    sun: [0xfff0d0, 0.3],
+    sunStrength: 1.06,
+    hemiGround: [0xc9a870, 0.65],
+    cloudCover: 0.55,
+  },
+};
+
+function countried(p: Preset, biome: BiomeId): Preset {
+  const cast = CASTS[biome];
+  if (!cast) return p;
+  p.horizon = mixHex(p.horizon, cast.horizon[0], cast.horizon[1]);
+  p.zenith = mixHex(p.zenith, cast.zenith[0], cast.zenith[1]);
+  p.fog = mixHex(p.fog, cast.fog[0], cast.fog[1]);
+  p.fogNear *= cast.fogReach;
+  p.fogFar *= cast.fogReach;
+  p.sun = mixHex(p.sun, cast.sun[0], cast.sun[1]);
+  p.sunIntensity *= cast.sunStrength;
+  p.hemiGround = mixHex(p.hemiGround, cast.hemiGround[0], cast.hemiGround[1]);
+  p.cloudOpacity *= cast.cloudCover;
+  return p;
+}
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
@@ -335,10 +449,10 @@ function mixHex(a: number, b: number, t: number): number {
 
 /** Weather sits on top of the time of day. Clear leaves it alone; anything
  * else puts a lid on the sky, closes the air, and takes the sun away. */
-function weathered(time: TimeOfDay, weather: Weather, cover: number): Preset {
-  const p = { ...PRESETS[time] };
+function weathered(time: TimeOfDay, weather: Weather, cover: number, biome: BiomeId): Preset {
+  const p = countried({ ...PRESETS[time] }, biome);
   if (weather === "clear") return p;
-  const look = LOOKS[weather];
+  const look = LOOKS[biome][weather];
   const toward = (c: number): number => mixHex(c, look.grey, look.mix);
   p.zenith = toward(p.zenith);
   p.horizon = toward(p.horizon);
@@ -357,8 +471,9 @@ function weathered(time: TimeOfDay, weather: Weather, cover: number): Preset {
   p.fogNear *= lerp(look.fogNear[0], look.fogNear[1], cover);
   p.fogFar *= lerp(look.fogFar[0], look.fogFar[1], cover);
   // A lit sun behind a deck is a bright PATCH, never a disc with an edge —
-  // and behind a storm's deck it is not there at all.
-  const through = weather === "rain" ? 1 - cover : 0;
+  // behind a storm's deck it is not there at all, and through blowing sand
+  // it is a pale coin the whole way.
+  const through = lerp(look.through[0], look.through[1], cover);
   // …and the same fraction is all that is left of the BEAM. A thin sheet of
   // rain cloud still puts a soft shadow under a car; a storm's ceiling puts
   // none at all, which is the difference between an overcast stage and one
@@ -405,20 +520,20 @@ function weathered(time: TimeOfDay, weather: Weather, cover: number): Preset {
 // here falls out of that one number: longer shadows, a dimmer and warmer
 // beam, and a colder, lower key over the whole landscape.
 
-/** Where the taiga is, degrees north. */
-const LATITUDE = 62;
-
 /** The sun's declination in the middle of each season, degrees — mid-May,
  * the June solstice, and the last week of September, which is when "ruska"
  * (the north's autumn colour) peaks. Winter is not a season of this biome:
- * the boreal forest under snow is the arctic one. */
+ * the boreal forest under snow is the arctic one. The desert keeps the
+ * same three moments of the year; where it is on the earth is the
+ * country's (`biomeRules().latitude`, R40), and at 33°N the same
+ * September sun stands fifty degrees up instead of twenty-six. */
 const DECLINATION: Record<Season, number> = { spring: 17.5, summer: 23.4, autumn: -1.8 };
 
 /** The sine of the noon solar elevation — which is both how high the sun
  * gets and, because irradiance on flat ground goes as the cosine of the
  * zenith angle, how much of its light lands there. */
-function noonSun(season: Season): number {
-  return Math.sin(((90 - LATITUDE + DECLINATION[season]) * Math.PI) / 180);
+function noonSun(season: Season, latitude: number): number {
+  return Math.sin(((90 - latitude + DECLINATION[season]) * Math.PI) / 180);
 }
 
 /** Rayleigh optical depth of the whole clear atmosphere at sea level, per
@@ -436,10 +551,11 @@ const RAYLEIGH = { r: 0.049, g: 0.097, b: 0.221 };
  * lower beam has to come through is charged once, at the season's own noon,
  * rather than compounded onto a dawn that is already the length of the
  * atmosphere. */
-function seasoned(p: Preset, season: Season): Preset {
+function seasoned(p: Preset, season: Season, biome: BiomeId): Preset {
   if (season === "summer") return p;
-  const here = noonSun(season);
-  const peak = noonSun("summer");
+  const latitude = biomeRules(biome).latitude;
+  const here = noonSun(season, latitude);
+  const peak = noonSun("summer", latitude);
   p.sunElevation = Math.asin(Math.min(1, Math.sin(p.sunElevation) * (here / peak)));
   // Air mass is 1/sin(elevation): the path a beam takes through the
   // atmosphere, in units of the straight-up one.
@@ -454,6 +570,14 @@ function seasoned(p: Preset, season: Season): Preset {
   // multiply says both.
   const sun = new THREE.Color(p.sun);
   p.sun = sun.setRGB(sun.r * tr, sun.g * tg, sun.b * tb).getHex();
+  // The colour casts below are the TAIGA's year — pollen haze in May, the
+  // straw-and-bilberry bounce in September. The desert's year is the
+  // astronomy above and very little else: a wet spring puts a little more
+  // dust in the air, and that is the whole of it.
+  if (biome !== "taiga") {
+    if (season === "spring") p.fogFar *= 0.96;
+    return p;
+  }
   if (season === "autumn") {
     // September air in the north is dry and clean — the humidity and the
     // pollen haze of high summer are gone — so the sky reads deeper and
@@ -480,9 +604,9 @@ function seasoned(p: Preset, season: Season): Preset {
   return p;
 }
 
-/** The whole sky for one run's conditions. */
-export function skyFor(env: RaceEnv): Preset {
-  return seasoned(weathered(env.timeOfDay, env.weather, coverOf(env)), env.season);
+/** The whole sky for one run's conditions, over one country (R40). */
+export function skyFor(env: RaceEnv, biome: BiomeId = "taiga"): Preset {
+  return seasoned(weathered(env.timeOfDay, env.weather, coverOf(env), biome), env.season, biome);
 }
 
 /** How dark the car is ever allowed to get, as a fraction of its daylight
