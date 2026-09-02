@@ -1232,7 +1232,15 @@ export function stepGrounded(
     // in a single step, which as a speed is a rally car's whole pace, and
     // the body has not moved — that is a bump for the springs, not a flight.
     // Only ground the car has actually been climbing, for long enough that
-    // the grade under it says so, carries the momentum to leave it. The edge
+    // the grade under it says so, carries the momentum to leave it. Out in
+    // the WILD it also has to have been climbing at all: a car that sets off
+    // down a steep face from a standstill at the foot of a cliff has no
+    // upward momentum for the ground to fall away from, and is glued down
+    // the slope exactly as the crest check would glue it (the cliff rule
+    // above is the one that throws a car off a real edge). On the ROAD the
+    // only kink the generator builds is a lip (R6), and a lip is a jump
+    // whatever grade it sits on — a shallow ramp on the steepest descent
+    // nets no climb at its top, and the car still has to leave it. The edge
     // checks and the wall check inside `standOn` read the SAME seat, so a car
     // whose body is being held up by one corner does not read that lift as a
     // cliff it has just driven off.
@@ -1241,7 +1249,7 @@ export function stepGrounded(
     const kink = climbing - wheelSpeed(ctx, at.centre);
     if (pace > T.air.crestSpeed && at.seat < car.y - T.air.edgeDrop) {
       launch(car, roadVy, events, stats);
-    } else if (kink > T.air.edgeSpeed) {
+    } else if ((climbing > 0 || !ctx.wild) && kink > T.air.edgeSpeed) {
       launch(car, Math.max(roadVy, prevWheelVy * T.air.launchKeep), events, stats);
     } else {
       standOn(spec, car, ctx, at, fromX, fromZ, roadVy, events, stats);
@@ -1349,9 +1357,18 @@ export function stepAirborne(
   if (car.y <= groundNow) {
     car.y = groundNow;
     car.airborne = false;
-    // The wheels arrive at the ground's own speed: the landing below is the
-    // jolt, and the first grounded step must not read the flight as a bump.
-    car.wheelVy = car.u * ctx.slope;
+    // The wheels arrive at the ground's own speed along the path — read off
+    // the ground itself over the last step's travel, never off the smoothed
+    // grade: at the foot of a cliff the grade over a wheelbase says the car
+    // is climbing at absurd speed, and a first grounded step handed that as
+    // the wheels' momentum reads the slope it landed on as an edge and
+    // throws the car straight back off it. The landing below is the jolt;
+    // this only says what the wheels are doing from here on.
+    const behind = ctx.groundAt(
+      car.x - (sinH * car.u + cosH * car.w) * dt,
+      car.z - (cosH * car.u - sinH * car.w) * dt,
+    );
+    car.wheelVy = (groundNow - behind) / dt;
     // Straight nose AND upright: coming down on your side is never clean,
     // however well the nose was lined up.
     const clean =

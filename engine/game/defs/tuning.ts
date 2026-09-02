@@ -1240,10 +1240,14 @@ export const TUNING = {
      * driven over and down. The climbing speed is the lesser of the wheels'
      * own and the smoothed grade's, so a kerb (a spike the grade never
      * saw) and a wall (a grade the wheels never climbed) both read as
-     * nothing; what is left is a grade the car has genuinely been up, and
-     * the threshold is set where a ramp-end at pace throws the car and a
-     * lattice crease does not — a 30° ramp ending at 100 km/h flies, the
-     * same crease at half that grade is driven over. Stated as a speed
+     * nothing, and off the road it has to be UPWARD — a car setting off
+     * down a steep face at the foot of a cliff has no climb for the ground
+     * to fall away from, and is glued down it (on the road the only kink is
+     * a lip, and a lip on a descent still throws the car). What is left is
+     * a grade the car has genuinely been up, and the threshold is set where
+     * a ramp-end at pace throws the car
+     * and a lattice crease does not — a 30° ramp ending at 100 km/h flies,
+     * the same crease at half that grade is driven over. Stated as a speed
      * because a kink's size is one: the change of grade times the pace,
      * whatever the physics rate. */
     edgeSpeed: 8,
