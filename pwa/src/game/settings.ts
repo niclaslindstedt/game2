@@ -20,18 +20,20 @@
 
 import type { GearboxMode } from "@engine";
 
-/** Where the camera watches the car from, inside out. This is both the
- * order the camera key walks and the order the options screen lists, and
- * every entry is a mode the car can be DRIVEN from — the menu's drone and
- * the Roam map are placed by the app and are not offered here. The
- * geometry behind each name lives in camera.ts (the three inside the car in
- * camera-eye.ts); this is the vocabulary the player picks from. */
-export type PlayCamera = "cockpit" | "hood" | "bumper" | "close" | "chase" | "far" | "heli" | "top";
+/** Where the camera watches the car from, walked from the nose BACKWARDS:
+ * the three seats first, closest to the road first, then out onto the boom
+ * and up. This is both the order the camera key walks and the order the
+ * options screen lists, and every entry is a mode the car can be DRIVEN
+ * from — the menu's drone and the Roam map are placed by the app and are
+ * not offered here. The geometry behind each name lives in camera.ts (the
+ * three inside the car in camera-eye.ts); this is the vocabulary the
+ * player picks from. */
+export type PlayCamera = "bumper" | "hood" | "cockpit" | "close" | "chase" | "far" | "heli" | "top";
 
 export const PLAY_CAMERAS: { id: PlayCamera; label: string; hint: string }[] = [
-  { id: "cockpit", label: "COCKPIT", hint: "Behind the wheel — dials, rim and screen pillars" },
-  { id: "hood", label: "HOOD", hint: "From the seat, over your own bonnet" },
   { id: "bumper", label: "BUMPER", hint: "Down at the nose — no bodywork, just road" },
+  { id: "hood", label: "HOOD", hint: "From the seat, over your own bonnet" },
+  { id: "cockpit", label: "COCKPIT", hint: "Behind the wheel — dials, rim and screen pillars" },
   { id: "close", label: "CLOSE", hint: "Tight behind the bumper, low and fast" },
   { id: "chase", label: "CHASE", hint: "The arcade rally view: roof height, close behind" },
   { id: "far", label: "FAR", hint: "Stood back — more road, more warning" },
@@ -42,7 +44,7 @@ export const PLAY_CAMERAS: { id: PlayCamera; label: string; hint: string }[] = [
 /** The three views taken from inside the car — the ones the seat, lens and
  * head-motion knobs apply to. Nothing outside the car has a seat to raise
  * or a head to steady. */
-export const IN_CAR_CAMERAS: PlayCamera[] = ["cockpit", "hood", "bumper"];
+export const IN_CAR_CAMERAS: PlayCamera[] = ["bumper", "hood", "cockpit"];
 
 /** THE IN-CAR VIEW, AS FOUR KNOBS. Every one of them is a ladder of named
  * stops rather than a slider: a value nobody can quite reproduce is worse
