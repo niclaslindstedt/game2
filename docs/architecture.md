@@ -86,4 +86,8 @@ vocabulary is ever legible.
 
 ## Deployment
 
-The app deploys to GitHub Pages at [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/) in three slots — `/` (latest release tag), `/preview/` (main), `/branch/` (parked feature branch) — via `pages.yml`; `release.yml` cuts versions from changeset fragments and chains the deploy. Details in [configuration.md](configuration.md); platform shells beyond the web in [platforms.md](platforms.md).
+The app deploys to GitHub Pages at [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/) in three slots — `/` (latest release tag), `/preview/` (main), `/branch/` (parked feature branch) — via `pages.yml`; `release.yml` cuts versions from changeset fragments, packages the desktop downloads and chains the deploy. Details in [configuration.md](configuration.md); platform shells beyond the web in [platforms.md](platforms.md).
+
+## `tauri/` — the desktop app
+
+The same built site, bundled inside a native window for Windows, macOS and Linux: a thin [Tauri](https://tauri.app) shell in the platform's own webview, serving `pwa/dist` from a private `game://` scheme so the player's origin-keyed storage survives every update. Two Rust crates — `shell/` is every decision and has no GUI dependency (its whole suite runs anywhere a Rust toolchain does), `src-tauri/` is every effect — with their own toolchain and their own checks (`make tauri-test`, `make tauri-lint`), outside the root suite's path. The engine never learns it exists; the app's one read of it is `pwa/src/shell-host.ts`, which keeps the PWA update lifecycle off inside the window. [platforms.md](platforms.md) says what it adds and what it deliberately does not; [`tauri/README.md`](../tauri/README.md) is the tree.

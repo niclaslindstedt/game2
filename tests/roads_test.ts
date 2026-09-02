@@ -970,3 +970,30 @@ describe("progress and position", () => {
     expect(worst).toBeLessThan(0.5);
   });
 });
+
+describe("the runoffs on a streamed road (R19, R33)", () => {
+  it("builds the same road however an endless stage's extends are chunked", () => {
+    const whole = compileStage(7, "endless");
+    whole.extend?.(6000);
+    const pieces = compileStage(7, "endless");
+    for (let s = 1500; s <= 6000; s += 331) pieces.extend?.(s);
+    pieces.extend?.(6000);
+    expect(pieces.samples.length).toBeGreaterThan(2000);
+    // The bank and the width are each rolled in and out over a window, and
+    // at a chunk's frontier that window is cut off — so the pass is re-run
+    // over the tail of the last chunk when the next one lands. It used to
+    // re-run over its OWN OUTPUT, and with the tail's left-hand neighbours
+    // sliced away, which put a different road (up to three quarters of a
+    // metre of width, at every seam) under a car depending on how far
+    // ahead the renderer happened to ask for road. A road is a function of
+    // its seed, whatever the chunking: every field, on every sample, exact.
+    for (let i = 0; i < pieces.samples.length; i++) {
+      const a = whole.samples[i];
+      const b = pieces.samples[i];
+      expect(b.width, `width at ${a.s.toFixed(0)} m`).toBe(a.width);
+      expect(b.bank, `bank at ${a.s.toFixed(0)} m`).toBe(a.bank);
+      expect(b.elevation, `elevation at ${a.s.toFixed(0)} m`).toBe(a.elevation);
+      expect(b.shift ?? 0, `shift at ${a.s.toFixed(0)} m`).toBe(a.shift ?? 0);
+    }
+  });
+});

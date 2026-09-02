@@ -583,9 +583,15 @@ export function stepGrounded(
   // Brake lights, so only a car being SLOWED lights them — a car backing out
   // of a ditch is under power, not under the brake.
   car.braking = input.brake > 0.2 && car.u > 3;
+  // THE LEVER, as much of it as the car still has: one cable to the rear,
+  // and a cut brake line takes most of it (damage.ts). Every place below
+  // that used to ask whether the handbrake is pulled asks how much of it
+  // is doing anything instead, so a broken lever is a weak one, not a
+  // switch that is either there or not.
+  const lever = input.handbrake ? hurt.lever : 0;
   // ...and the rear wheels dragged rather than rolled, which is a different
   // question from the pedal and from the angle both. See `CarState.locked`.
-  car.locked = input.handbrake && car.u > 3;
+  car.locked = lever > 0.5 && car.u > 3;
   // The weight the BRAKE pitches onto the nose, on the same lag as the lift
   // and for the same reason. Only while the pedal is actually slowing the
   // car: backing out of a ditch on the same pedal loads nothing, and neither
@@ -656,7 +662,13 @@ export function stepGrounded(
   // The lateral grip the tires have to spend, and the turn the wheel is
   // asking them for: the handbrake unsticks the rear by lowering the
   // ceiling, so the same lock asks far more of what is left.
-  const gripCeiling = spec.gripAccel * surfaceGrip * (input.handbrake ? T.grip.handbrakeGrip : 1);
+  // Written so a whole lever is EXACTLY `handbrakeGrip` and no lever is
+  // exactly 1: `1 - (1 - g)` is not bit-equal to `g`, and the field's crews
+  // are deterministic to the bit — a rounding of that size, applied to
+  // every sound car on every step, is a different race.
+  const leverGrip =
+    lever >= 1 ? T.grip.handbrakeGrip : lever <= 0 ? 1 : 1 - (1 - T.grip.handbrakeGrip) * lever;
+  const gripCeiling = spec.gripAccel * surfaceGrip * leverGrip;
   // Speed is not the only way to unstick a driven axle. At the bottom of the
   // gear a rear axle with real torque under it spins up under power and the
   // tail steps out at walking pace, where the wheel's own lateral ask is
@@ -703,7 +715,7 @@ export function stepGrounded(
   // wins rather than the sum — they are all the same axle letting go, and a
   // driver doing two at once is not owed twice the angle for it.
   const asking = Math.max(
-    input.handbrake ? D.leverDepth : 0,
+    lever * D.leverDepth,
     flick * D.flickDepth,
     car.brakeLoad * D.brakeDepth * DR.brake,
   );
@@ -834,9 +846,8 @@ export function stepGrounded(
   // Through the speed floor like everything else that swings the tail: under
   // it the handbrake is a pair of locked rear wheels and nothing more, which
   // is what stops the lever from being a way round the floor at 30 km/h.
-  const handbrakeYaw = input.handbrake
-    ? Math.sign(steer) * backwards * T.grip.handbrakeYaw * speedFactor * open
-    : 0;
+  const handbrakeYaw =
+    lever * Math.sign(steer) * backwards * T.grip.handbrakeYaw * speedFactor * open;
   // The weight throw itself. Signed by the direction the RACK IS MOVING,
   // which is the way the mass is being sent — during the crossing the lock
   // itself is still on the old side and would throw the car backwards.
@@ -942,7 +953,9 @@ export function stepGrounded(
   settleLaunchSpin(spec, car, surfaceGrip, input.throttle * shiftCut, dt);
   // A folded radiator starves the engine, and past the misfire threshold the
   // ignition drops beats outright: a badly hurt car lurches up the road
-  // instead of pulling up it. It limps, it never parks.
+  // instead of pulling up it. It limps — right up until the engine is dead,
+  // and then nothing here pushes at all (step.ts retires the run once it
+  // has coasted to a stop).
   const damagePower = hurt.power * hurt.firing;
   const accel =
     engineAccel(spec, car, surfaceGrip) *
@@ -969,6 +982,12 @@ export function stepGrounded(
   // Torn bodywork, a ploughing floorpan and a shell that is no longer the
   // shape it was drawn as, all on top of what the surface itself costs.
   car.u -= (surfaceDrag + hurt.drag) * car.u * dt;
+  // ...and what a seized engine or a hub on the road takes at ANY speed:
+  // the constant part, which is what brings a car that cannot drive to
+  // the standstill the retire rule is waiting for (damage.ts).
+  if (hurt.coastBrake > 0 && !car.reversing) {
+    car.u -= Math.sign(car.u) * Math.min(Math.abs(car.u), hurt.coastBrake * dt);
+  }
   if (ctx.surface === "nature") {
     // The rough-ground cap: open nature is fast but never road-fast.
     car.u -= Math.max(0, car.u - T.surfaces.natureTop) * T.surfaces.natureOverDrag * dt;
@@ -1022,7 +1041,7 @@ export function stepGrounded(
   // up at the slide threshold): cut the two together and the car pivots
   // beautifully while carrying straight on past the apex, which is the one
   // thing the lever is supposed to be for.
-  const leverLat = input.handbrake ? 1 + (T.grip.handbrakeLat - 1) * open : 1;
+  const leverLat = 1 + (T.grip.handbrakeLat - 1) * open * lever;
   // Bent arms, a twisted shell that moves the geometry under load, and the
   // downforce of a wing that is no longer on the car — all three through
   // `hurt.grip`, floored so they can never stack into an unpointable car.

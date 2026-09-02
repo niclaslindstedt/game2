@@ -36,6 +36,11 @@ make debug-shot   # REPRO='<line off the debug overlay>' — stand where a shot 
 make icons        # regenerate icons/favicon/og.png from the app mark
 make check-seo    # build + structural SEO/PWA/bundle assertions
 make hooks        # install pre-commit + commit-msg hooks
+make tauri        # THE DESKTOP APP: bundle the site into tauri/webroot/, compile the shell, launch it (needs Rust)
+make tauri-test   # its decision layer's suite — a Rust toolchain and nothing else; NOT on `make test`'s path
+make tauri-lint   # clippy at zero warnings over both crates (needs the webview dev libraries)
+make tauri-fmt    # rustfmt in place
+make desktop      # package this machine's desktop downloads into tauri/release/
 ```
 
 `@niclaslindstedt/oss-framework` resolves from GitHub Packages, which requires auth even for public reads. Web sessions: `.claude/hooks/session-start.sh` writes the token from the environment (`GITHUB_PAT` et al.) into `~/.npmrc` and installs dependencies automatically. Locally: add `//npm.pkg.github.com/:_authToken=<token>` to your own `~/.npmrc`.
@@ -105,115 +110,123 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 - **`pwa/`** — the browser shell: Preact app, three.js renderer (reads `GameState`, never steps physics), input, HUD, the audio surface (a WebAudio synth, the sound bank, the road bed and the tracker scores — nothing is a file), PWA plumbing (hand-rolled service worker via `pwa-plugin.ts` + the framework's `usePwaUpdate` behind the app's own `update-card.tsx`).
 - **`tests/` + `scripts/`** — root-level vitest suites over the engine, and Node tooling (sim CLI, track previews, screenshots, icons, SEO checks, release plumbing).
 
+Beside them, OUTSIDE the npm workspace and outside the root suite's path:
+
+- **`tauri/`** — the desktop app for Windows, macOS and Linux: a THIN wrapper around the built site, in the platform's own webview, served from a private `game://` scheme. Two Rust crates, and the split is the design: `shell/` is every DECISION (no Tauri, no GUI — `make tauri-test` runs its whole suite with a Rust toolchain and nothing else), `src-tauri/` is every EFFECT (the window, the scheme, the one command). Checked by `make tauri-test` + `make tauri-lint`, which `.github/workflows/desktop-tauri.yml` runs on every push that touches it; packaged onto every release by `release.yml`'s `desktop` matrix. **Nothing in `engine/` may learn it exists, and the ONE line of `pwa/` that does is `pwa/src/shell-host.ts`** — the page reads a frozen global to keep its PWA update lifecycle off in there, and nothing else about the page changes. A feature the desktop app needs is a feature the website needs first; a shell-only behaviour is a decision in `tauri/shell/` with a test beside it. → `tauri/README.md`, `docs/platforms.md`.
+
 ## Where new code goes
 
-| Kind of change                                              | Where it goes                                                                                                                    |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Handling/feel (drift, jump, grip, gearbox)                  | `engine/game/car.ts`; numbers in `engine/game/defs/`                                                                             |
-| How a turn becomes a drift, and how it lets go              | `TUNING.drift` in `engine/game/defs/tuning.ts` — the `drift-feel` skill                                                          |
-| What a MOVE (flick, trailed brake, lever) buys a slide      | `drift.flickDepth` / `brakeDepth` / `leverDepth` / `provokeFloor` — the `drift-feel` skill                                       |
-| What a car CAN do, for anything that has to plan around it  | `engine/game/limits.ts` — stated once, read by `car.ts` AND `sim/bot.ts`; never restate a ceiling                                |
-| What a standing start costs, and what waiting pays          | `TUNING.engine`'s launch group + `clutchDump` (`engine/game/car.ts`); `CarState.launchSpin` carries it                           |
-| A new car                                                   | A data row in `engine/game/defs/cars.ts` — the `car-tuning` skill                                                                |
-| What separates one CAR from another                         | `cars.ts` + `TUNING.drivetrain` — the `car-tuning` skill                                                                         |
-| A car's LOOK (silhouette, panels, wheels, livery)           | `pwa/src/game/car-styles.ts` (specs); generator in `pwa/src/game/car/`                                                           |
-| What is BEHIND the glass (trim, seats, crew, cage, wheel)   | `pwa/src/game/car/interior.ts` — the `car-design` skill                                                                          |
-| What the DRIVER sees: fascia, dials, wheel, pedals, mirror  | `pwa/src/game/car/cockpit.ts` — the player's car only; the deck it needs cut out is a `DeckOpening` in `car/shell.ts`            |
-| What is UNDER THE BONNET, once an impact takes it off       | `pwa/src/game/car/engine-bay.ts` — the well, and the engine standing in it; its own `DeckOpening` — the `car-design` skill       |
-| How an IN-CAR camera sits, moves and takes a hit            | `pwa/src/game/camera-eye.ts` (`EYE_RIGS`) — the `game-feel` skill                                                                |
-| WHO is behind the wheel (build, hair, helmet, gear colours) | `pwa/src/game/car-crew.ts` (the sixteen, as data); the models are built in `pwa/src/game/car/crew.ts` — the `car-design` skill   |
-| What a MAP READER is, and what the pair are wearing         | `MAP_READER` + the crew's `CrewColors` in `pwa/src/game/car-crew.ts` — one model, in the driver's own colours                    |
-| How see-through a window is, and what it reflects           | `car/greenhouse.ts` bakes the gradient; `car-mesh.ts` adds the per-frame glint                                                   |
-| The head- and tail lamps, and what a LIT one looks like     | `pwa/src/game/car/lamps.ts` builds the bowls; `car-mesh.ts` switches them and blooms them — the `car-design` skill               |
-| A PAINT SCHEME an opponent is dressed in                    | `pwa/src/game/car-livery.ts` (palettes + patterns) — the `car-design` skill                                                      |
-| A new PART on the car (a light pod, a snorkel, a vent)      | a builder in `pwa/src/game/car/`, driven by an optional `spec.ts` field                                                          |
-| The wipers, and the grime on the glass they clear           | `pwa/src/game/car/wipers.ts` — the `car-design` skill                                                                            |
-| RAIN ON THE WINDSCREEN, from the driver's own seat          | `pwa/src/game/car/screen-rain.ts` — a shader pane over the glass, drawn in a pass of its own after the frame it refracts         |
-| Where a wiper arm IS, for anything else on the same glass   | `WipeState` in `pwa/src/game/car/wipers.ts`; the pane's own metric frame is `pwa/src/game/car/pane-frame.ts`                     |
-| How dirty the car gets, and where                           | `pwa/src/game/car-dirt.ts`                                                                                                       |
-| Stage generation rules or vocabulary                        | `engine/mapgen/rules.ts` (data); the searches in `generate.ts` (sprint), `endless.ts` and `circuit.ts` (R22), over `search.ts`   |
-| How the rally gets PAST a public road: over it, or onto it  | `engine/mapgen/crossing.ts` (R36, square and free) / `borrow.ts` (R17, a detour the `asphalt` dial pays for)                     |
-| How high the tarmac stands where a stage crosses it         | `STAGE_RULES.crossing` — `stand` is the step, `ramp` the gravel it happens over; the jump is the two together                    |
-| What the GROUND is made of (bedrock, soil, groundwater)     | `engine/mapgen/geology.ts` (R32); its numbers in `STAGE_RULES.geology` — the `nature` and `mapgen-improvement` skills            |
-| How a generated stage is SCORED, and against what           | `engine/analysis/` — one module per metric, every threshold in `analysis/budgets.ts` — the `mapgen-improvement` skill            |
-| Track geometry/compilation                                  | `engine/mapgen/compile.ts`                                                                                                       |
-| Run orchestration (phases, laps, respawn, events)           | `engine/game/step.ts`                                                                                                            |
-| Collision / damage (crush, parts, wreck, systems)           | `engine/game/collision.ts` — the `collision` skill                                                                               |
-| What a DAMAGED car drives like (power, grip, pull, drag)    | `engine/game/damage.ts` + `TUNING.collision.chassis` — the `collision` skill                                                     |
-| Bot behavior                                                | `engine/sim/bot.ts`                                                                                                              |
-| How GOOD a bot is (difficulty, skill budgets)               | `engine/sim/skill.ts` — the `bot-improvement` skill                                                                              |
-| Who the campaign's rivals ARE (aliases, cars, characters)   | `engine/sim/rivals.ts` — the `bot-improvement` skill                                                                             |
-| What a rival is PAINTED (colour, pattern, door number)      | `RIVAL_SCHEMES` in `pwa/src/game/car-livery.ts` — the `car-design` skill                                                         |
-| The field on the road, and what place a run is in           | `engine/sim/field.ts`; `pwa/src/game/standings.ts` is the frame's half (+ `campaign.ts` for the podium rule)                     |
-| WATCHING the run-out once your own run is over              | `pwa/src/game/spectate.ts` (the feed) + `hud-spectate.tsx`; the run-out at race speed is `watchField` in `engine/sim/field.ts`   |
-| The camera GOING from one car to another                    | `pwa/src/game/camera-sweep.ts` (`make transit` photographs it); the shot a stage closes on is `camera-finish.ts`                 |
-| RECORDING a run, and driving it again to calibrate a field  | `engine/sim/tape.ts` + `race.ts`, over `pwa/src/game/run-tape.ts` — the `bot-improvement` skill                                  |
-| The rival cars you can see and hit                          | `pwa/src/game/field-cars.ts`; the plate over each one is `name-tag.ts`                                                           |
-| The name over a car that is not the player's                | `pwa/src/game/name-tag.ts` — a label, a colour and a point; it must never learn what a bot is                                    |
-| Anything drawn (meshes, textures, camera, effects)          | `pwa/src/game/` (renderer.ts and friends)                                                                                        |
-| Where the camera stands OUTSIDE the car                     | `CHASE_RIGS` in `pwa/src/game/camera.ts` — one row per angle                                                                     |
-| How much a BLOW shakes the picture, and which blows do      | `pwa/src/game/camera-shake.ts` — DOM-free; a contact shakes the CAR, never an outside rig — the `game-feel` skill                |
-| What WATER looks like — lakes, fords and streams alike      | `pwa/src/game/water-look.ts` — one flat semi-transparent material for all three; the SHEETS are cut in `terrain.ts`              |
-| What colour the sky is under given conditions               | `pwa/src/game/sky.ts` (the presets and the weather/season colour maths)                                                          |
-| What is IN the sky (cumulus, the overcast deck, scud)       | `pwa/src/game/clouds.ts`                                                                                                         |
-| Lightning and the thunder behind it                         | `pwa/src/game/storm.ts` (drawn) + `thunder_*` in `audio/bank.ts` (heard)                                                         |
-| How heavy the weather is, and how hard it is coming down    | `pwa/src/game/weather.ts` — read off the wind, and DOM-free so the road bed shares it                                            |
-| The rear-view mirror: where the glass sits, how it aims     | `pwa/src/game/mirror.ts` (its box is restated in `styles.css` — see the parity rules)                                            |
-| The press that FOLDS the mirror away mid-stage, and back    | `pwa/src/game/hud-mirror.tsx` — the glass as a switch; the menu option is still the only way to be rid of it                     |
-| How often the mirror is redrawn, and how far it sees        | `pwa/src/game/mirror-pace.ts` — the ladder the frame rate walks the mirror down; DOM-free, so `mirror_test.ts` reads it          |
-| A particle pool the car throws off, and how it is tinted    | `pwa/src/game/car-fx.ts`; WHEN it is thrown stays in `renderer.ts`                                                               |
-| How the body TREMBLES when the engine is being worked       | `pwa/src/game/car-shake.ts` — DOM-free; read by `car-mesh.ts` (the shell) and `camera-eye.ts` (the seat)                         |
-| The SHADOW a car stands in, and how the light throws it     | `pwa/src/game/car-shadow.ts` (the silhouette and its penumbra) off `sunShadeFor` in `sky.ts` (which way, how hard)               |
-| Things the car knocks loose (cones, posts, torn-off parts)  | `pwa/src/game/cones.ts`, `kerbs.ts`, `car-damage.ts`, over `tumble.ts` — renderer-side; the engine knows nothing of them         |
-| Anything HEARD (a hit, a landing, a menu click)             | `pwa/src/game/audio/bank.ts` (+ a rung in `route.ts`) — the `sound-effects` skill                                                |
-| A continuous sound (engine, tyres, wind, the slide)         | `engine-bed.ts` / `road-grain.ts` in `pwa/src/game/audio/`                                                                       |
-| A piece of MUSIC                                            | `pwa/src/game/audio/scores/` — the `soundtrack` skill                                                                            |
-| HUD readouts (dials, boards, calls)                         | `pwa/src/game/hud.tsx` + `pwa/src/styles.css`                                                                                    |
-| The SHAPE a corner call is DRAWN as, and the head on it     | `pwa/src/game/pace-shape.ts` — the stage's own plan of that turn, fitted to the sign's box; DOM-free, so the tests read it       |
-| The TOUCH controls — the wheel and the pedal thumb zones    | `pwa/src/game/hud-touch.tsx`; a zone's grip on a finger is `thumb-guard.ts`, what a drag MEANS is `pedal-gesture.ts`             |
-| Which gears a thumb flick may take, and why a key may not   | `pwa/src/game/shift-window.ts` — DOM-free, and the shift light reads off it too                                                  |
-| Input mapping                                               | `pwa/src/game/input.ts` (bindings in `settings.ts`)                                                                              |
-| A CONTROLLER: its sticks, its triggers, what its buttons do | `pwa/src/game/gamepad.ts` reads a polled pad (DOM-free); `input.ts` does the polling, bindings in `settings.ts`                  |
-| Walking a MENU on a controller                              | `pwa/src/game/menu-nav.ts` (the cards, and `data-nav-back`) over `menu-cursor.ts` (where the cursor goes — DOM-free)             |
-| Main menu pages / routing                                   | `pwa/src/game/main-menu.tsx` (+ `menu-roam`, `menu-options`, `menu-car`)                                                         |
-| The GLYPH a menu row leads with instead of a sentence       | `pwa/src/game/menu-glyphs.tsx` — one 24x24 mark per idea; `make glyphs` contact-sheets them                                      |
-| The pre-race card: car, spec sheet, gearbox                 | `pwa/src/game/menu-car.tsx`; the numbers on it in `car-stats.ts` (derived from the catalog)                                      |
-| Campaign stages, locations, points, unlocks                 | `pwa/src/game/campaign.ts` — one board: the points a stage pays ARE what opens the next stage and the next location              |
-| The mass-start GRID, and the only catch-up in the game      | `engine/sim/grid.ts` + `TUNING.massStart` — the zig-zag on the apron, and the drive a row back is owed                           |
-| The HEADS UP page and its three settings                    | `pwa/src/game/menu-headsup.tsx`; the stage boxes all three grids share are `pwa/src/game/menu-levels.tsx`                        |
-| The standings sheet, drawn                                  | `pwa/src/game/results-table.tsx` (the results card's modal and the menu's own table)                                             |
-| The time trial's high score board and its initials          | `pwa/src/game/scores.ts` (storage) + `score-board.tsx` / `hud-initials.tsx`                                                      |
-| What a PRESS does to a name being entered on that board     | `pwa/src/game/initials-entry.ts` — DOM-free: the wheel, the caret, and what an empty slot wakes as                               |
-| The time trial's ghost: recording, replay, storage          | `pwa/src/game/ghost.ts`                                                                                                          |
-| Taking a picture, and what is stamped on it                 | `pwa/src/game/screenshots.ts` (the canvas work) + `shot-plan.ts` (size, name, where the mark and the notes go — DOM-free)        |
-| The CAMPAIGN's own stages, offered to a page that is not it | `StagePicker` in `pwa/src/game/menu-levels.tsx` over `App.tsx`'s `loadRoamLevel`; `levelForRoad` says which one is loaded        |
-| The CAMPAIGN's own maps, opened to be looked at             | `RoamPage`'s `viewing` mode in `pwa/src/game/menu-roam.tsx` — Roam with the driving half off — the `debug-tools` skill           |
-| The roll of pictures, and sending one on                    | `pwa/src/lib/shot-store.ts` over `shot-roll.ts`; the share/copy/save probes in `pwa/src/lib/share-image.ts`                      |
-| The gallery the pictures are browsed in                     | `pwa/src/game/menu-gallery.tsx`                                                                                                  |
-| How the road's EDGE runs out into the grass (R16)           | `handoverAt` in `engine/mapgen/road.ts` (the shape), `road-mesh.ts` (the paint), `pwa/src/game/road-spill.ts` (the stones)       |
-| WHERE an abandoned branch is shut, and WHAT with            | `placeBlock` in `engine/mapgen/spurs.ts` picks the place; `pwa/src/game/blockade.ts` builds the barrier                          |
-| WHERE a house stands off the stage, and its drive and yard  | `engine/mapgen/homesteads.ts` (R37) places it all; `pwa/src/game/homestead.ts` draws it — the `mapgen-improvement` skill         |
-| What a HOUSE looks like — paint, roof, storeys, porch, wing | `pwa/src/game/house.ts` builds one from the engine's `HousePlan`; `make items GROUP=homestead` photographs them                  |
-| WHERE a TOWN stands, and which lots and buildings it has    | `engine/mapgen/towns.ts` (R39) places it on the borrowed tarmac or an abandoned arm; `pwa/src/game/town.ts` draws it             |
-| What a BUILDING IS — its kind, plan and the walls it makes  | `engine/mapgen/buildings.ts` (the plans both placers draw, and the footprint-to-solids walk) — the `mapgen-improvement` skill    |
-| A VILLAGE building's look — flats, grocery, post, workshop  | `pwa/src/game/building.ts` over the house's primitives; `make items GROUP=town` photographs them                                 |
-| A car that only STANDS there (a yard, later a car park)     | `pwa/src/game/parked-car.ts` — a dozen boxes from one roll; never the catalog's builder, which is a thousand times the geometry  |
-| The marking beside the road, and what a block COSTS to cut  | `engine/mapgen/kerbs.ts` places every marker (one is solid); `pwa/src/game/kerbs.ts` draws them — the `mapgen-improvement` skill |
-| Where the split boards stand on a stage (R28)               | `STAGE_RULES.checkpoint` + the placement in `engine/mapgen/compile.ts` — the `mapgen-improvement` skill                          |
-| What a split is measured against, and where a respawn lands | `engine/game/track.ts` (`lastCheckpoint`) + `pwa/src/game/standings.ts` (the field's leader)                                     |
-| A player option (HUD, video, controls)                      | `pwa/src/game/settings.ts`, then its reader                                                                                      |
-| The debug overlay, god mode, the debug log                  | `pwa/src/game/debug-*.ts(x)`, `camera-free.ts`, `menu-dev.tsx` — the `debug-tools` skill                                         |
-| How god mode is FLOWN on a pad or a phone                   | `readFlyPad` in `pwa/src/game/gamepad.ts` (sticks) + `pwa/src/game/hud-fly.tsx` (thumbs); merged in `input.ts`'s `flyMove`       |
-| The generator's LAYERS, X-rayed over the map view           | `pwa/src/game/map-layers.ts` — the `debug-tools` and `mapgen-improvement` skills                                                 |
-| What a full-screen MAP says about itself, and its repro     | `pwa/src/game/map-debug.ts` + `App.tsx`'s `?roam= ?layer= ?mapfull= ?m…=` readers — the `debug-tools` skill                      |
-| A DEVELOPER switch (god, overlay, collecting race data)     | `DevSettings` in `pwa/src/game/settings.ts` + a row in `menu-dev.tsx`; `devFromUrl` in `App.tsx` pins it for tooling             |
-| How long THIS MACHINE takes to draw a fixed piece of racing | `pwa/src/game/benchmark.ts` (the race it pins, and the pump); its card in `menu-dev.tsx` — the `debug-tools` skill               |
-| The studio card / boot cover                                | `pwa/src/game/splash.ts` (policy) + `splash-screen.tsx`                                                                          |
-| App identity (name, palette, URLs)                          | `pwa/src/identity.ts` (single source)                                                                                            |
-| What a stage HAS on it, by id (T3, J1, CP2), and its map    | `scripts/lib/stage-features.mjs` (the ids) + `level-map-render.mjs` (the picture), both under `scripts/level-map.mjs`            |
-| A Node script that needs an APP module (`@engine` inside)   | `aliasEngine` in `scripts/lib/engine-alias.mjs` before the `import()` — never a Vite build to read a table                       |
-| New CLI tooling                                             | `scripts/*.mjs` (Node, no deps beyond `scripts/lib/`)                                                                            |
-| Engine tests                                                | `tests/<topic>_test.ts`                                                                                                          |
+| Kind of change                                              | Where it goes                                                                                                                      |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Handling/feel (drift, jump, grip, gearbox)                  | `engine/game/car.ts`; numbers in `engine/game/defs/`                                                                               |
+| How a turn becomes a drift, and how it lets go              | `TUNING.drift` in `engine/game/defs/tuning.ts` — the `drift-feel` skill                                                            |
+| What a MOVE (flick, trailed brake, lever) buys a slide      | `drift.flickDepth` / `brakeDepth` / `leverDepth` / `provokeFloor` — the `drift-feel` skill                                         |
+| What a car CAN do, for anything that has to plan around it  | `engine/game/limits.ts` — stated once, read by `car.ts` AND `sim/bot.ts`; never restate a ceiling                                  |
+| What a standing start costs, and what waiting pays          | `TUNING.engine`'s launch group + `clutchDump` (`engine/game/car.ts`); `CarState.launchSpin` carries it                             |
+| A new car                                                   | A data row in `engine/game/defs/cars.ts` — the `car-tuning` skill                                                                  |
+| What separates one CAR from another                         | `cars.ts` + `TUNING.drivetrain` — the `car-tuning` skill                                                                           |
+| A car's LOOK (silhouette, panels, wheels, livery)           | `pwa/src/game/car-styles.ts` (specs); generator in `pwa/src/game/car/`                                                             |
+| What is BEHIND the glass (trim, seats, crew, cage, wheel)   | `pwa/src/game/car/interior.ts` — the `car-design` skill                                                                            |
+| What the DRIVER sees: fascia, dials, wheel, pedals, mirror  | `pwa/src/game/car/cockpit.ts` — the player's car only; the deck it needs cut out is a `DeckOpening` in `car/shell.ts`              |
+| What is UNDER THE BONNET, once an impact takes it off       | `pwa/src/game/car/engine-bay.ts` — the well, and the engine standing in it; its own `DeckOpening` — the `car-design` skill         |
+| How an IN-CAR camera sits, moves and takes a hit            | `pwa/src/game/camera-eye.ts` (`EYE_RIGS`) — the `game-feel` skill                                                                  |
+| WHO is behind the wheel (build, hair, helmet, gear colours) | `pwa/src/game/car-crew.ts` (the sixteen, as data); the models are built in `pwa/src/game/car/crew.ts` — the `car-design` skill     |
+| What a MAP READER is, and what the pair are wearing         | `MAP_READER` + the crew's `CrewColors` in `pwa/src/game/car-crew.ts` — one model, in the driver's own colours                      |
+| How see-through a window is, and what it reflects           | `car/greenhouse.ts` bakes the gradient; `car-mesh.ts` adds the per-frame glint                                                     |
+| The head- and tail lamps, and what a LIT one looks like     | `pwa/src/game/car/lamps.ts` builds the bowls; `car-mesh.ts` switches them and blooms them — the `car-design` skill                 |
+| A PAINT SCHEME an opponent is dressed in                    | `pwa/src/game/car-livery.ts` (palettes + patterns) — the `car-design` skill                                                        |
+| A new PART on the car (a light pod, a snorkel, a vent)      | a builder in `pwa/src/game/car/`, driven by an optional `spec.ts` field                                                            |
+| The wipers, and the grime on the glass they clear           | `pwa/src/game/car/wipers.ts` — the `car-design` skill                                                                              |
+| RAIN ON THE WINDSCREEN, from the driver's own seat          | `pwa/src/game/car/screen-rain.ts` — a shader pane over the glass, drawn in a pass of its own after the frame it refracts           |
+| Where a wiper arm IS, for anything else on the same glass   | `WipeState` in `pwa/src/game/car/wipers.ts`; the pane's own metric frame is `pwa/src/game/car/pane-frame.ts`                       |
+| How dirty the car gets, and where                           | `pwa/src/game/car-dirt.ts`                                                                                                         |
+| Stage generation rules or vocabulary                        | `engine/mapgen/rules.ts` (data); the searches in `generate.ts` (sprint), `endless.ts` and `circuit.ts` (R22), over `search.ts`     |
+| How the rally gets PAST a public road: over it, or onto it  | `engine/mapgen/crossing.ts` (R36, square and free) / `borrow.ts` (R17, a detour the `asphalt` dial pays for)                       |
+| How high the tarmac stands where a stage crosses it         | `STAGE_RULES.crossing` — `stand` is the step, `ramp` the gravel it happens over; the jump is the two together                      |
+| What the GROUND is made of (bedrock, soil, groundwater)     | `engine/mapgen/geology.ts` (R32); its numbers in `STAGE_RULES.geology` — the `nature` and `mapgen-improvement` skills              |
+| How a generated stage is SCORED, and against what           | `engine/analysis/` — one module per metric, every threshold in `analysis/budgets.ts` — the `mapgen-improvement` skill              |
+| Track geometry/compilation                                  | `engine/mapgen/compile.ts`                                                                                                         |
+| Run orchestration (phases, laps, respawn, events)           | `engine/game/step.ts`                                                                                                              |
+| Collision / damage (crush, parts, wreck, systems)           | `engine/game/collision.ts` — the `collision` skill                                                                                 |
+| What a DAMAGED car drives like (power, grip, pull, drag)    | `engine/game/damage.ts` + `TUNING.collision.chassis` — the `collision` skill                                                       |
+| Bot behavior                                                | `engine/sim/bot.ts`                                                                                                                |
+| How GOOD a bot is (difficulty, skill budgets)               | `engine/sim/skill.ts` — the `bot-improvement` skill                                                                                |
+| Who the campaign's rivals ARE (aliases, cars, characters)   | `engine/sim/rivals.ts` — the `bot-improvement` skill                                                                               |
+| What a rival is PAINTED (colour, pattern, door number)      | `RIVAL_SCHEMES` in `pwa/src/game/car-livery.ts` — the `car-design` skill                                                           |
+| The field on the road, and what place a run is in           | `engine/sim/field.ts`; `pwa/src/game/standings.ts` is the frame's half (+ `campaign.ts` for the podium rule)                       |
+| WATCHING the run-out once your own run is over              | `pwa/src/game/spectate.ts` (the feed) + `hud-spectate.tsx`; the run-out at race speed is `watchField` in `engine/sim/field.ts`     |
+| The camera GOING from one car to another                    | `pwa/src/game/camera-sweep.ts` (`make transit` photographs it); the shot a stage closes on is `camera-finish.ts`                   |
+| RECORDING a run, and driving it again to calibrate a field  | `engine/sim/tape.ts` + `race.ts`, over `pwa/src/game/run-tape.ts` — the `bot-improvement` skill                                    |
+| The rival cars you can see and hit                          | `pwa/src/game/field-cars.ts`; the plate over each one is `name-tag.ts`                                                             |
+| The name over a car that is not the player's                | `pwa/src/game/name-tag.ts` — a label, a colour and a point; it must never learn what a bot is                                      |
+| Anything drawn (meshes, textures, camera, effects)          | `pwa/src/game/` (renderer.ts and friends)                                                                                          |
+| Where the camera stands OUTSIDE the car                     | `CHASE_RIGS` in `pwa/src/game/camera.ts` — one row per angle                                                                       |
+| How much a BLOW shakes the picture, and which blows do      | `pwa/src/game/camera-shake.ts` — DOM-free; a contact shakes the CAR, never an outside rig — the `game-feel` skill                  |
+| What WATER looks like — lakes, fords and streams alike      | `pwa/src/game/water-look.ts` — one flat semi-transparent material for all three; the SHEETS are cut in `terrain.ts`                |
+| What colour the sky is under given conditions               | `pwa/src/game/sky.ts` (the presets and the weather/season colour maths)                                                            |
+| What is IN the sky (cumulus, the overcast deck, scud)       | `pwa/src/game/clouds.ts`                                                                                                           |
+| Lightning and the thunder behind it                         | `pwa/src/game/storm.ts` (drawn) + `thunder_*` in `audio/bank.ts` (heard)                                                           |
+| How heavy the weather is, and how hard it is coming down    | `pwa/src/game/weather.ts` — read off the wind, and DOM-free so the road bed shares it                                              |
+| The rear-view mirror: where the glass sits, how it aims     | `pwa/src/game/mirror.ts` (its box is restated in `styles.css` — see the parity rules)                                              |
+| The press that FOLDS the mirror away mid-stage, and back    | `pwa/src/game/hud-mirror.tsx` — the glass as a switch; the menu option is still the only way to be rid of it                       |
+| How often the mirror is redrawn, and how far it sees        | `pwa/src/game/mirror-pace.ts` — the ladder the frame rate walks the mirror down; DOM-free, so `mirror_test.ts` reads it            |
+| A particle pool the car throws off, and how it is tinted    | `pwa/src/game/car-fx.ts`; WHEN it is thrown stays in `renderer.ts`                                                                 |
+| How the body TREMBLES when the engine is being worked       | `pwa/src/game/car-shake.ts` — DOM-free; read by `car-mesh.ts` (the shell) and `camera-eye.ts` (the seat)                           |
+| The SHADOW a car stands in, and how the light throws it     | `pwa/src/game/car-shadow.ts` (the silhouette and its penumbra) off `sunShadeFor` in `sky.ts` (which way, how hard)                 |
+| Things the car knocks loose (cones, posts, torn-off parts)  | `pwa/src/game/cones.ts`, `kerbs.ts`, `car-damage.ts`, over `tumble.ts` — renderer-side; the engine knows nothing of them           |
+| Anything HEARD (a hit, a landing, a menu click)             | `pwa/src/game/audio/bank.ts` (+ a rung in `route.ts`) — the `sound-effects` skill                                                  |
+| A continuous sound (engine, tyres, wind, the slide)         | `engine-bed.ts` / `road-grain.ts` in `pwa/src/game/audio/`                                                                         |
+| A piece of MUSIC                                            | `pwa/src/game/audio/scores/` — the `soundtrack` skill                                                                              |
+| HUD readouts (dials, boards, calls)                         | `pwa/src/game/hud.tsx` + `pwa/src/styles.css`                                                                                      |
+| The SHAPE a corner call is DRAWN as, and the head on it     | `pwa/src/game/pace-shape.ts` — the stage's own plan of that turn, fitted to the sign's box; DOM-free, so the tests read it         |
+| The TOUCH controls — the wheel and the pedal thumb zones    | `pwa/src/game/hud-touch.tsx`; a zone's grip on a finger is `thumb-guard.ts`, what a drag MEANS is `pedal-gesture.ts`               |
+| Which gears a thumb flick may take, and why a key may not   | `pwa/src/game/shift-window.ts` — DOM-free, and the shift light reads off it too                                                    |
+| Input mapping                                               | `pwa/src/game/input.ts` (bindings in `settings.ts`)                                                                                |
+| A CONTROLLER: its sticks, its triggers, what its buttons do | `pwa/src/game/gamepad.ts` reads a polled pad (DOM-free); `input.ts` does the polling, bindings in `settings.ts`                    |
+| Walking a MENU on a controller                              | `pwa/src/game/menu-nav.ts` (the cards, and `data-nav-back`) over `menu-cursor.ts` (where the cursor goes — DOM-free)               |
+| Main menu pages / routing                                   | `pwa/src/game/main-menu.tsx` (+ `menu-roam`, `menu-options`, `menu-car`)                                                           |
+| The GLYPH a menu row leads with instead of a sentence       | `pwa/src/game/menu-glyphs.tsx` — one 24x24 mark per idea; `make glyphs` contact-sheets them                                        |
+| The pre-race card: car, spec sheet, gearbox                 | `pwa/src/game/menu-car.tsx`; the numbers on it in `car-stats.ts` (derived from the catalog)                                        |
+| Campaign stages, locations, points, unlocks                 | `pwa/src/game/campaign.ts` — one board: the points a stage pays ARE what opens the next stage and the next location                |
+| The mass-start GRID, and the only catch-up in the game      | `engine/sim/grid.ts` + `TUNING.massStart` — the zig-zag on the apron, and the drive a row back is owed                             |
+| The HEADS UP page and its three settings                    | `pwa/src/game/menu-headsup.tsx`; the stage boxes all three grids share are `pwa/src/game/menu-levels.tsx`                          |
+| The standings sheet, drawn                                  | `pwa/src/game/results-table.tsx` (the results card's modal and the menu's own table)                                               |
+| The time trial's high score board and its initials          | `pwa/src/game/scores.ts` (storage) + `score-board.tsx` / `hud-initials.tsx`                                                        |
+| What a PRESS does to a name being entered on that board     | `pwa/src/game/initials-entry.ts` — DOM-free: the wheel, the caret, and what an empty slot wakes as                                 |
+| The time trial's ghost: recording, replay, storage          | `pwa/src/game/ghost.ts`                                                                                                            |
+| Taking a picture, and what is stamped on it                 | `pwa/src/game/screenshots.ts` (the canvas work) + `shot-plan.ts` (size, name, where the mark and the notes go — DOM-free)          |
+| The CAMPAIGN's own stages, offered to a page that is not it | `StagePicker` in `pwa/src/game/menu-levels.tsx` over `App.tsx`'s `loadRoamLevel`; `levelForRoad` says which one is loaded          |
+| The CAMPAIGN's own maps, opened to be looked at             | `RoamPage`'s `viewing` mode in `pwa/src/game/menu-roam.tsx` — Roam with the driving half off — the `debug-tools` skill             |
+| The roll of pictures, and sending one on                    | `pwa/src/lib/shot-store.ts` over `shot-roll.ts`; the share/copy/save probes in `pwa/src/lib/share-image.ts`                        |
+| The gallery the pictures are browsed in                     | `pwa/src/game/menu-gallery.tsx`                                                                                                    |
+| How the road's EDGE runs out into the grass (R16)           | `handoverAt` in `engine/mapgen/road.ts` (the shape), `road-mesh.ts` (the paint), `pwa/src/game/road-spill.ts` (the stones)         |
+| WHERE an abandoned branch is shut, and WHAT with            | `placeBlock` in `engine/mapgen/spurs.ts` picks the place; `pwa/src/game/blockade.ts` builds the barrier                            |
+| WHERE a house stands off the stage, and its drive and yard  | `engine/mapgen/homesteads.ts` (R37) places it all; `pwa/src/game/homestead.ts` draws it — the `mapgen-improvement` skill           |
+| What a HOUSE looks like — paint, roof, storeys, porch, wing | `pwa/src/game/house.ts` builds one from the engine's `HousePlan`; `make items GROUP=homestead` photographs them                    |
+| WHERE a TOWN stands, and which lots and buildings it has    | `engine/mapgen/towns.ts` (R39) places it on the borrowed tarmac or an abandoned arm; `pwa/src/game/town.ts` draws it               |
+| What a BUILDING IS — its kind, plan and the walls it makes  | `engine/mapgen/buildings.ts` (the plans both placers draw, and the footprint-to-solids walk) — the `mapgen-improvement` skill      |
+| A VILLAGE building's look — flats, grocery, post, workshop  | `pwa/src/game/building.ts` over the house's primitives; `make items GROUP=town` photographs them                                   |
+| A car that only STANDS there (a yard, later a car park)     | `pwa/src/game/parked-car.ts` — a dozen boxes from one roll; never the catalog's builder, which is a thousand times the geometry    |
+| The marking beside the road, and what a block COSTS to cut  | `engine/mapgen/kerbs.ts` places every marker (one is solid); `pwa/src/game/kerbs.ts` draws them — the `mapgen-improvement` skill   |
+| Where the split boards stand on a stage (R28)               | `STAGE_RULES.checkpoint` + the placement in `engine/mapgen/compile.ts` — the `mapgen-improvement` skill                            |
+| What a split is measured against, and where a respawn lands | `engine/game/track.ts` (`lastCheckpoint`) + `pwa/src/game/standings.ts` (the field's leader)                                       |
+| A player option (HUD, video, controls)                      | `pwa/src/game/settings.ts`, then its reader                                                                                        |
+| The debug overlay, god mode, the debug log                  | `pwa/src/game/debug-*.ts(x)`, `camera-free.ts`, `menu-dev.tsx` — the `debug-tools` skill                                           |
+| How god mode is FLOWN on a pad or a phone                   | `readFlyPad` in `pwa/src/game/gamepad.ts` (sticks) + `pwa/src/game/hud-fly.tsx` (thumbs); merged in `input.ts`'s `flyMove`         |
+| The generator's LAYERS, X-rayed over the map view           | `pwa/src/game/map-layers.ts` — the `debug-tools` and `mapgen-improvement` skills                                                   |
+| What a full-screen MAP says about itself, and its repro     | `pwa/src/game/map-debug.ts` + `App.tsx`'s `?roam= ?layer= ?mapfull= ?m…=` readers — the `debug-tools` skill                        |
+| A DEVELOPER switch (god, overlay, collecting race data)     | `DevSettings` in `pwa/src/game/settings.ts` + a row in `menu-dev.tsx`; `devFromUrl` in `App.tsx` pins it for tooling               |
+| How long THIS MACHINE takes to draw a fixed piece of racing | `pwa/src/game/benchmark.ts` (the race it pins, and the pump); its card in `menu-dev.tsx` — the `debug-tools` skill                 |
+| The studio card / boot cover                                | `pwa/src/game/splash.ts` (policy) + `splash-screen.tsx`                                                                            |
+| App identity (name, palette, URLs)                          | `pwa/src/identity.ts` (single source)                                                                                              |
+| What a stage HAS on it, by id (T3, J1, CP2), and its map    | `scripts/lib/stage-features.mjs` (the ids) + `level-map-render.mjs` (the picture), both under `scripts/level-map.mjs`              |
+| A Node script that needs an APP module (`@engine` inside)   | `aliasEngine` in `scripts/lib/engine-alias.mjs` before the `import()` — never a Vite build to read a table                         |
+| New CLI tooling                                             | `scripts/*.mjs` (Node, no deps beyond `scripts/lib/`)                                                                              |
+| Engine tests                                                | `tests/<topic>_test.ts`                                                                                                            |
+| A DESKTOP-APP concern that is a DECISION (a rule, a name)   | `tauri/shell/src/<topic>.rs` + `tauri/shell/tests/<topic>_test.rs`; a `use tauri::` there is the review comment                    |
+| A DESKTOP-APP concern that is an EFFECT (window, scheme)    | `tauri/src-tauri/src/`; what the page may reach is the ACL in `tauri/src-tauri/capabilities/`                                      |
+| What the PAGE knows about the desktop app                   | `pwa/src/shell-host.ts` — one global, one word; `tests/tauri_test.ts` holds it to the Rust constant                                |
+| How the desktop app is bundled, iconed, packaged            | `tauri/scripts/{bundle-web,icons,package}.mjs` (Node, no deps); the static half of the bundle is `tauri/src-tauri/tauri.conf.json` |
 
 **Hard rules:** the engine never imports three.js, Preact, or anything from `pwa/`; the renderer never mutates `GameState`; engine randomness only via the state's seeded RNG (determinism is test-enforced); source files stay under 1000 lines. **The game ships no audio files** — every sound and every note is synthesized from authored parameters, and `pwa/src/lib/synth.ts` is the only module that touches WebAudio (everything that merely DESCRIBES a sound imports `lib/voice.ts`, which is DOM-free so the bank and the tests can read it).
 
@@ -239,6 +252,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | App identity, domain, deploy slots         | `pwa/src/identity.ts`, README, `docs/configuration.md`, `pwa/public/*` SEO files             |
 | Cars, controls, install flow               | README (What/Usage) + `docs/getting-started.md`                                              |
 | Shell/platform plans                       | `docs/platforms.md`                                                                          |
+| The desktop app's tree, its env vars       | `tauri/README.md`, `docs/configuration.md` (the launch environment), `docs/platforms.md`     |
 
 ## Parity and cross-cutting rules
 
@@ -249,6 +263,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 - `pwa/src/game/mirror.ts` places the rear-view glass from a width, a top offset and an aspect; `.hud` in `pwa/src/styles.css` restates the same three so the co-driver's calls hang under the glass instead of across it. The strip is a canvas pass and the calls are DOM, so there is no shared measurement to read — change one, change both.
 - `make profile` counts a FRAME as an animation callback that drew something, not as a `gl.clear`. A frame is not one three.js `render()`: the driving frame issues two, the map view draws its pane over a cleared canvas, and the mirror fills its own target first. Anything that adds a pass must not go back to counting clears, or every per-frame number in the table halves and the fps doubles.
 - The deployed site IS the product (§11.2-as-webapp): there is no separate `website/` tree. SEO copy lives in `pwa/index.html` + `pwa/public/`; keep it in sync with identity.ts, and treat a stale deployed site after identity/feature changes as a bug.
+- The desktop app's names restate identity.ts and cannot import it: `productName` and `longDescription` in `tauri/src-tauri/tauri.conf.json` and `WINDOW_TITLE` in `tauri/shell/src/config.rs` are `APP_NAME` / `APP_DESCRIPTION` spelled again, and `SHELL_GLOBAL` there is `pwa/src/shell-host.ts`'s. `tests/tauri_test.ts` holds all four; a rename touches every one in the same change.
 
 ## Skills
 

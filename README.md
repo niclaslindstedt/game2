@@ -79,6 +79,12 @@ Open the printed URL. The game opens on the main menu, over a stage a bot is dri
 | `make icons`       | Regenerate PWA icons, favicon, and the OG image from the app mark                                                                                                                  |
 | `make check-seo`   | Build + structural SEO/PWA/bundle-budget assertions                                                                                                                                |
 | `make hooks`       | Install the pre-commit / commit-msg git hooks                                                                                                                                      |
+| `make tauri`       | Build the site into the desktop app and launch it (needs a Rust toolchain — see [`tauri/README.md`](tauri/README.md))                                                              |
+| `make tauri-test`  | The desktop app's decision layer, tested — a Rust toolchain and nothing else                                                                                                       |
+| `make tauri-lint`  | clippy at zero warnings over both of the desktop app's crates (needs the platform's webview libraries)                                                                             |
+| `make desktop`     | Package this machine's desktop downloads into `tauri/release/`                                                                                                                     |
+
+**On the desktop:** every release attaches a download per platform — an installer for Windows, a `.dmg` for macOS, a `.deb` or `.AppImage` for Linux — which is the same game in a window of its own, offline, with the platform's webview doing the drawing. See [Releases](https://github.com/niclaslindstedt/game2/releases); the macOS build is signed but not notarized, so the first launch is refused once (System Settings → Privacy & Security → **Open Anyway**). F11 or Alt+Enter toggles fullscreen.
 
 **On a controller:** plug in or pair a pad — anywhere, on any platform — press one of its buttons, and it takes over. The analogue triggers are the pedals (R2 gas, L2 brake, so half a trigger is half the pedal and a slide is catchable), the left stick steers, A is the handbrake, X switches camera, the shoulders shift, B puts a lost car back on the road, SELECT takes a picture and START opens the in-race card. **The menus are on the pad too**: the stick and the d-pad walk every card in the game, A presses what the gold cursor is on and B is the way back — so a run can be picked, driven, paused and left without ever reaching for the glass. START is NEXT rather than a second A: it takes each screen's own way on, wherever the cursor is standing, so pressing it from the front door goes campaign → the stage you are up to → START and puts you on a start line without a single choice made. Every card also opens with the cursor on the press you probably came for, and left/right over the car on its stand changes the car. Every binding is yours to change in Options → Controls, which grows a CONTROLLER section the moment a pad appears. On a touch device a connected pad also takes the on-screen wheel and pedal away — which is what makes this playable as an installed Android PWA on a handheld like a Retroid Pocket, driven on the buttons it already has.
 
@@ -127,7 +133,7 @@ More in [docs/troubleshooting.md](docs/troubleshooting.md).
 - [Track generator](docs/track-generator.md) — the rules engine and its R-rules
 - [Audio](docs/audio.md) — the synth, the sound bank, the beds, and the two scores
 - [Simulation & bots](docs/simulation.md) — the headless harness and the balance workflow
-- [Platforms](docs/platforms.md) — web today; desktop (Steam) and native (App Store) roadmap
+- [Platforms](docs/platforms.md) — the web and the desktop app today; native (App Store) roadmap
 - [Configuration](docs/configuration.md) · [Troubleshooting](docs/troubleshooting.md)
 
 ## Contributing

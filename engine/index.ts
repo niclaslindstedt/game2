@@ -37,11 +37,14 @@ export {
   landingDamage,
   type ContactSide,
 } from "./game/collision.ts";
+export { beyondDriving, damageEffects, type DamageEffects } from "./game/damage.ts";
 export {
   NEUTRAL_INPUT,
   DAMAGE_ZONES,
   INTERNAL_SYSTEMS,
+  WHEEL_PARTS,
   updateSlip,
+  type RetireReason,
   type CarDamage,
   type CarInput,
   type CarState,

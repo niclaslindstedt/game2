@@ -20,6 +20,13 @@ import { ResultsModal, type ResultRow } from "./results-table.tsx";
 import { ScoreBoard } from "./score-board.tsx";
 import type { ScoreEntry } from "./scores.ts";
 import { formatTime, ordinal } from "../lib/util.ts";
+import type { RetireReason } from "@engine";
+
+/** What the card says a retirement WAS, under the headline. */
+const RETIRED_BY: Record<RetireReason, string> = {
+  engine: "ENGINE DEAD — THE CAR WILL NOT RUN",
+  wheels: "WHEELS GONE — THE CAR WILL NOT ROLL",
+};
 
 /** Where the run goes on to, when it has anywhere to go: the ladder's next
  * rung. Null on Roam, in a time trial, and at the end of a location. */
@@ -89,8 +96,14 @@ export type FinishRace = {
 };
 
 export type FinishCardProps = {
-  /** Total time, seconds. */
+  /** Total time, seconds. Meaningless — and not shown — on a retirement. */
   time: number;
+  /** THE RUN ENDED SHORT OF THE LINE: the engine is dead, or the wheels
+   * are gone, and the car is sitting where it stopped. There is no time,
+   * no place, no points and no board — the card says what happened and
+   * offers the two ways out, the same stage again or the menu. Null on
+   * every run that reached the line. */
+  retired: RetireReason | null;
   /** Set when the run beat the stored record. */
   record: boolean;
   /** R22 — the lap book, shown only on a run that had more than one. */
@@ -149,6 +162,7 @@ function SaveRunButton({ onSave }: { onSave: () => boolean }) {
 
 export function FinishCard({
   time,
+  retired,
   record,
   laps,
   lapTimes,
@@ -170,6 +184,45 @@ export function FinishCard({
   // dress it as one: the confetti is off, the way on is gone, and the
   // headline says the only thing that happened.
   const slow = standing !== null && !standing.podium;
+  // ...and a RETIREMENT is not a result at all. The car is stopped on the
+  // stage with nothing to show for the run, so the card is the headline,
+  // the reason, and the two ways off it: nothing below is worth printing
+  // over a time that was never set.
+  if (retired) {
+    return (
+      <div className="hud-finish hud-finish-slow hud-finish-retired">
+        <div className="hud-finish-title">RETIRED</div>
+        <div className="hud-finish-note">{RETIRED_BY[retired]}</div>
+        <div className="hud-finish-note">THE STAGE CANNOT BE FINISHED</div>
+        <div className="hud-finish-acts pointer-events-auto">
+          {onRetry && (
+            <button
+              type="button"
+              className="hud-start hud-finish-next"
+              data-nav-next
+              onClick={() => {
+                playUi("start");
+                onRetry();
+              }}
+            >
+              RESTART STAGE
+            </button>
+          )}
+          <button
+            type="button"
+            className="hud-pause-act"
+            onClick={() => {
+              playUi("select");
+              onRetire();
+            }}
+          >
+            RETIRE
+          </button>
+          {onSaveRun && <SaveRunButton onSave={onSaveRun} />}
+        </div>
+      </div>
+    );
+  }
   return (
     <>
       <div className={`hud-finish ${slow ? "hud-finish-slow" : ""}`}>

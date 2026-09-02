@@ -200,7 +200,14 @@ describe("R22 — racing a circuit over laps", () => {
   it("drives the whole race, not one lap of it", () => {
     const one = simulateStage({ seed: 3, length: "short", shape: "circuit", laps: 1 });
     const three = simulateStage({ seed: 3, length: "short", shape: "circuit", laps: 3 });
-    expect(three.time).toBeGreaterThan(one.time * 2.4);
+    // Twice the single lap, not three times it: the laps of a circuit are
+    // not the same lap — the first is driven from the grid and this stage's
+    // later ones are twenty seconds quicker, and a crash on one of them can
+    // go either way. The claim is that the race is more than one lap, and a
+    // bar set to the lap arithmetic sits on a coin toss (2.41 on one tree,
+    // 2.39 on the next, for the same three laps).
+    expect(three.time).toBeGreaterThan(one.time * 2);
+    expect(three.lapTimes).toHaveLength(3);
     expect(three.stats.topSpeed).toBeGreaterThanOrEqual(one.stats.topSpeed);
   }, 30_000);
 

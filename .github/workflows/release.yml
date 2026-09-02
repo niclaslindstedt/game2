@@ -18,9 +18,11 @@ name: release
 # chain, not a cross-workflow trigger), the default GITHUB_TOKEN is
 # sufficient — no RELEASE_TOKEN PAT is needed.
 #
-# When the desktop shells land (docs/platforms.md), their packaging jobs
-# slot in between `release` and a `publish` flag-flip, the same shape as
-# the sibling game repo's release workflow.
+# The desktop downloads (tauri/, docs/platforms.md) are packaged by the
+# `desktop` matrix between `release` and the `publish` flag-flip: the
+# release is created as a DRAFT, every platform attaches its download,
+# and only then is it made public — so no player ever finds a release
+# page whose download for their machine is missing.
 
 on:
   workflow_dispatch:
@@ -126,6 +128,17 @@ jobs:
           Play this release at https://game2.niclaslindstedt.se/ — it is an
           installable PWA (add it to your home screen) and works offline
           once loaded.
+
+          ### Desktop downloads
+
+          The same game as a desktop app, below: an installer for Windows,
+          a `.dmg` for macOS (`aarch64` for Apple Silicon, `x64` for an
+          Intel Mac), and a `.deb` or `.AppImage` for Linux.
+
+          **macOS:** the app is signed but not notarized, so the first
+          launch is refused. Open **System Settings → Privacy & Security**,
+          scroll to the message about Scandinavian Flick and choose
+          **Open Anyway**. macOS remembers after that.
           NOTES
 
       - name: make build
@@ -146,10 +159,23 @@ jobs:
           git push origin HEAD:main
           git push origin "$TAG"
 
+      # A DRAFT, and the `publish` job at the bottom is what makes it
+      # public — once every platform's download is attached to it.
+      #
+      # Published here instead, the release would be visible the moment the
+      # tag exists, minutes before the desktop downloads finish uploading
+      # and regardless of whether they succeed at all: a Windows packaging
+      # failure (`fail-fast: false`, so the other two carry on) would leave
+      # a public release whose Windows download simply is not there, and
+      # the people who find it are the ones who came to download the game.
+      #
       # Idempotent on purpose: the tag is already pushed by the step above,
       # so a bare `gh release create` that fails (or a re-run after one did)
-      # would leave a tagged version with no release at all.
-      - name: Create GitHub Release
+      # would leave a tagged version with no release at all. The edit
+      # deliberately does NOT pass `--draft`, so re-running against a
+      # release that is already public refreshes its notes instead of
+      # retracting it.
+      - name: Create GitHub Release (draft)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.bump.outputs.tag }}
@@ -158,12 +184,117 @@ jobs:
             echo "Release $TAG already exists — updating its notes."
             gh release edit "$TAG" --title "$TAG" --notes-file .release-notes.md
           else
-            gh release create "$TAG" --title "$TAG" --notes-file .release-notes.md
+            gh release create "$TAG" --draft --title "$TAG" --notes-file .release-notes.md
           fi
+
+  # The desktop downloads, attached to the draft the job above created. One
+  # runner per platform, because each one packages the shell for its own OS
+  # in the platform's own webview, and the bundle has to be built where the
+  # app will run. `tauri/scripts/package.mjs` names every download
+  # `scanflick-<version>-<os>-<arch>.<ext>`.
+  desktop:
+    needs: release
+    name: desktop (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows
+          - os: macos-latest
+            target: macos
+          - os: ubuntu-latest
+            target: linux
+    runs-on: ${{ matrix.os }}
+    # contents: write — the downloads are uploaded onto the GitHub Release.
+    permissions:
+      contents: write
+      packages: read
+    env:
+      # The release commit is on the tag, so the build is made from exactly
+      # what was tagged rather than from whatever main looks like by now.
+      TAG: ${{ needs.release.outputs.tag }}
+      # NEVER UNSIGNED on macOS: Apple Silicon refuses to execute unsigned
+      # arm64 code and reports it to the player as "the app is damaged". An
+      # absent secret means the ad-hoc signature `package.mjs` falls back to
+      # — the app runs, and the player answers one Gatekeeper prompt (the
+      # release notes say how). A Developer ID identity here signs for real.
+      APPLE_SIGNING_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+      # The website build lives in the root workspace; the shell copies its
+      # output and packages around it.
+      - uses: ./.github/actions/setup
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tauri
+
+      - name: Linux packaging libraries
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev patchelf
+
+      - name: Package
+        shell: bash
+        run: npm run tauri:package
+
+      # Whatever this platform's packager produced — a job that listed
+      # filenames would silently upload nothing the day a target changed
+      # its suffix.
+      - name: Attach to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          shopt -s nullglob
+          assets=(tauri/release/*)
+          if [ ${#assets[@]} -eq 0 ]; then
+            echo "::error::${{ matrix.target }} produced no downloads"
+            ls -R tauri/release || true
+            exit 1
+          fi
+          printf 'uploading %s\n' "${assets[@]}"
+          gh release upload "$TAG" "${assets[@]}" --clobber
+
+  # THE RELEASE BECOMES VISIBLE HERE, and nowhere else: `needs: desktop`
+  # means every platform in the matrix has packaged AND uploaded before
+  # anybody can see the release page. If one target fails, the draft stays
+  # a draft — a release that is missing a download is a bug report from
+  # every player on that platform, and the fix (re-dispatch, or upload the
+  # file by hand and flip the draft off) is much cheaper while nobody has
+  # seen it yet.
+  publish:
+    needs: [release, desktop]
+    runs-on: ubuntu-latest
+    # contents: write — this is the flag flip on the release itself.
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          gh release edit "$TAG" --draft=false --latest
+          gh release view "$TAG" --json assets \
+            --jq '.assets[] | "published asset: \(.name)"'
 
   # Chain straight into pages.yml so the new tag is served at `/`
   # immediately — without this, deployment would wait for the next
   # push to main.
+  #
+  # Deliberately `needs: release` and not `needs: publish`: the website IS
+  # the game, it is built from the tag that already exists, and holding the
+  # web deploy hostage to a desktop packaging failure would take the
+  # free-to-play version down over a download nobody has yet.
   pages:
     needs: release
     uses: ./.github/workflows/pages.yml

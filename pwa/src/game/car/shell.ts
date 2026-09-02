@@ -431,6 +431,10 @@ export type BandShape = {
   yTo: number;
   rise?: number;
   proud?: number;
+  /** ONE flank rather than both — a door skin is a door, and a car has one
+   * on each side that come off separately. Left off, the band is laid on
+   * both sides, which is what a stripe is. */
+  side?: 1 | -1;
   overArch?: "clip" | "ride";
   wave?: { amp: number; cycles?: number; phase?: number };
   taper?: number;
@@ -533,7 +537,7 @@ function bandStrip(
     const c = at(i + 1);
     // Where the arch has eaten the whole band there is nothing to draw.
     if (a.y1 - a.y0 < 0.008 && c.y1 - c.y0 < 0.008) continue;
-    for (const side of [1, -1]) {
+    for (const side of band.side ? [band.side] : [1, -1]) {
       const p = (s: { z: number; y0: number; y1: number }, y: number): V3 => [
         side * (flankX(spec, axles, s.z, y) + proud),
         y,

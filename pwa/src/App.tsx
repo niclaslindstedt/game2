@@ -38,6 +38,7 @@ import {
   type GameEvent,
   type GameState,
   type GearboxMode,
+  type RetireReason,
   type GridSlot,
   type StageKnobs,
   type StageLength,
@@ -50,6 +51,7 @@ import {
 } from "@engine";
 
 import { cacheIdForBase } from "./app-pwa.ts";
+import { shellHost } from "./shell-host.ts";
 import { BENCHMARK, runBenchmark, type BenchmarkStatus } from "./game/benchmark.ts";
 import { connectOutput } from "./output-bridge.ts";
 import { createInput } from "./game/input.ts";
@@ -67,7 +69,15 @@ import {
 } from "./game/debug-info.ts";
 import { debugLogging, log as debugLog, logRunStart, setDebugLogging } from "./game/debug-log.ts";
 import type { GameRenderer } from "./game/renderer.ts";
-import { Hud, damageCall, type HudFlash, type HudSnapshot, type HudSplit } from "./game/hud.tsx";
+import {
+  Hud,
+  damageCall,
+  partCall,
+  wheelCall,
+  type HudFlash,
+  type HudSnapshot,
+  type HudSplit,
+} from "./game/hud.tsx";
 import type { FinishRace, FinishScores, FinishStandings } from "./game/hud-finish.tsx";
 import {
   advanceField,
@@ -854,6 +864,10 @@ export function App() {
    * mirrored into state only so the results card re-renders on the finish. */
   const standingRef = useRef<{ place: number; of: number } | null>(null);
   const finishTimeRef = useRef<number | null>(null);
+  /** Why the run ended short of the line, once it has (`retire`): what the
+   * card says over a car that is never going to move again. Null on a run
+   * still going, and on one that reached the line. */
+  const retiredRef = useRef<RetireReason | null>(null);
   /** The controls of the run being driven, written down step by step so a
    * time worth keeping can be raced against later. Null on a stage that
    * keeps no time — Roam, and the menu's demo. */
@@ -952,10 +966,13 @@ export function App() {
     done?: (capture: Capture | null) => void;
   } | null>(null);
 
+  // Off in dev, and off inside the desktop app: there the site is bundled
+  // and served off local disk, so the bundle is the update and a worker
+  // precaching it would only ever prompt about a build it already is.
   const pwa = usePwaUpdate({
     base: import.meta.env.BASE_URL,
     cacheId: cacheIdForBase(import.meta.env.BASE_URL),
-    enabled: !import.meta.env.DEV,
+    enabled: !import.meta.env.DEV && shellHost() === null,
   });
   const forcedUpdate = useMemo(() => updateCardForced(), []);
   const [updateDismissed, setUpdateDismissed] = useState(false);
@@ -1096,6 +1113,7 @@ export function App() {
       };
     }
     finishTimeRef.current = null;
+    retiredRef.current = null;
     // The board belongs to the run that set it. Cleared here rather than in
     // `startStage` so a RESTART — which comes straight through this and never
     // through that — drops the last attempt's table too.
@@ -2324,6 +2342,30 @@ export function App() {
             // gameplay-relevant but is deliberately silent.
             const call = damageCall(ev.system, ev.spent);
             if (call) flash(call.text, call.tone);
+          } else if (ev.type === "wheelFail") {
+            const call = wheelCall(ev.wheel, ev.off);
+            flash(call.text, call.tone);
+          } else if (ev.type === "partBreak") {
+            // Only the parts whose loss the driver cannot see: the lamps.
+            const call = partCall(ev.part);
+            if (call) flash(call.text, call.tone);
+          } else if (ev.type === "retire") {
+            // THE RUN IS OVER, and there is no time to post. The car is
+            // sitting where it stopped; the card goes up over it with the
+            // reason on it, the field is stood down (nothing is classified
+            // off a run that did not reach the line), and the theme stops
+            // the way it does at a finish — this is the end of the stage,
+            // just not the one anybody wanted.
+            if (demo) {
+              setDemoSeed((s) => s + 1);
+              continue;
+            }
+            retiredRef.current = ev.reason;
+            stopMusic();
+            const field = fieldRef.current;
+            if (field) stopField(field);
+            const call = damageCall("engine", true);
+            if (ev.reason === "engine" && call) flash(call.text, call.tone);
           }
         }
       };
@@ -2354,6 +2396,7 @@ export function App() {
             bookRef.current,
             standingRef.current,
             fieldRef.current,
+            retiredRef.current,
           ),
         );
         // R28 — and the split ages on the race clock beside it.
@@ -2854,8 +2897,10 @@ export function App() {
   // button: the stage is still there, and the field will run it again.
   // …and a HEADS-UP race wants it for the same reason a time trial does: the
   // race is the whole thing, and the only way on from one is another.
+  // …and a RETIREMENT wants it in every mode: the stage was not cleared,
+  // and running it again is the only way it ever will be.
   const onRetry =
-    run.mode === "timetrial" || run.mode === "headsup" || missedPodium
+    run.mode === "timetrial" || run.mode === "headsup" || missedPodium || snap?.phase === "retired"
       ? (): void => actionsRef.current.restart()
       : null;
 

@@ -100,6 +100,10 @@ Once that tile is out, the **frame rate** is also on the HUD for good — under 
 
 The game is a PWA. iOS Safari: Share → **Add to Home Screen**. Android Chrome: menu → **Install app** (or accept the install prompt). The installed game launches fullscreen, works offline once loaded, and shows an in-app prompt when a new build ships.
 
+### Installing on your computer
+
+Every [release](https://github.com/niclaslindstedt/game2/releases) carries the same game as a desktop app: a `-setup.exe` for Windows, a `.dmg` for macOS (`aarch64` for Apple Silicon, `x64` for an Intel Mac), a `.deb` or `.AppImage` for Linux. It is the website in a window of its own — offline, remembering its size and place, with F11 or Alt+Enter for fullscreen — and it updates when you install the next release. On macOS the first launch is refused, because the app is signed but not notarized: open System Settings → Privacy & Security, find the message about Scandinavian Flick and choose **Open Anyway**.
+
 ### How a run works
 
 Stages are point-to-point: start gate to finish gate. The cluster in the bottom-left is the instrument panel: rev counter, gear with a shift light, and speed. Hold the engine on its limiter and the rev counter shakes. What the car has broken is not drawn anywhere — you can see the dents, and the machinery under them tells you itself, in the middle of the screen: ENGINE DAMAGED as it starts to give, ENGINE BROKEN once it has gone.

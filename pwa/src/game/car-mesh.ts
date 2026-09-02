@@ -9,7 +9,7 @@
 
 import * as THREE from "three";
 import { clamp } from "../lib/util.ts";
-import type { CarSpec, GameEvent, GameState } from "@engine";
+import type { CarSpec, DamagePart, GameEvent, GameState } from "@engine";
 
 import {
   backlightNormal,
@@ -384,10 +384,16 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
   /** The blooms, dimmed by whatever the run has thrown at the lenses — and
    * the lenses themselves, which are switched between the world's light and
    * their own rather than tinted along with the paint. */
-  const shineLamps = (): void => {
+  const shineLamps = (broken: readonly DamagePart[]): void => {
     const clean = 1 - LAMP_GRIME * dirt.level();
-    lampMat.opacity = (lit ? LAMP_NIGHT : LAMP_DAY) * clean * fade;
-    headMat.opacity = (lit ? HEAD_NIGHT : HEAD_DAY) * clean * fade;
+    // A lamp that the crash has taken out of its cap glows with nothing:
+    // the bloom is the light escaping the lamp, and there is no lamp. The
+    // lens under it is left to the crumple, which has already scuffed it
+    // dark — a smashed lamp is a dark hole in the face of the car.
+    const front = broken.includes("lampsF") ? 0 : 1;
+    const rear = broken.includes("lampsR") ? 0 : 1;
+    lampMat.opacity = (lit ? LAMP_NIGHT : LAMP_DAY) * clean * fade * rear;
+    headMat.opacity = (lit ? HEAD_NIGHT : HEAD_DAY) * clean * fade * front;
     if (lensMat) {
       if (lit) lensMat.color.setRGB(1, 1, 1);
       else lensMat.color.copy(worldLight).lerp(WHITE, LENS_DARK);
@@ -472,10 +478,16 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     // reason: it is the BODY that is shaken by what is bolted under it,
     // while the wheels stay where the ground put them. Millimetres, and only
     // while the revs are up and the car is not (car-shake.ts).
+    //
+    // ...and how crooked it sits on what is left of its wheels: a corner
+    // that has lost its wheel is riding on the hub, and the body over it is
+    // down by that much for the rest of the run (car-damage.ts). The
+    // engine says whether it is (the ledger); the shape is the drawing's.
     const tremble = trembleAt(state.t, revTremble(car.rev, car.u));
-    body.chassis.position.y = car.ride + tremble.heave;
-    body.chassis.rotation.x = -car.pitchLoad + tremble.pitch;
-    body.chassis.rotation.z = tremble.roll;
+    const pose = damage.pose;
+    body.chassis.position.y = car.ride + tremble.heave + pose.drop;
+    body.chassis.rotation.x = -car.pitchLoad + tremble.pitch - pose.pitch;
+    body.chassis.rotation.z = tremble.roll + pose.roll;
 
     // Wheels: the front pair points where the driver points them —
     // counter-steer in a drift shows because the input does — and each wheel
@@ -520,12 +532,20 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     // is dragging the runs up the glass, and how hard the corner is pushing
     // them sideways. Speed times yaw rate is the honest centripetal figure
     // — positive is a left turn, which throws the water to the right.
+    // A windscreen that has SHATTERED (car-damage.ts) has no glass for the
+    // rain to land on: what is on it drains and nothing more arrives.
+    const screenGone = car.damage.broken.includes("glassF");
     body.screenRain?.update(
-      { wet, speed: Math.abs(car.u), lateral: car.u * car.yawRate, wipe: body.wipers.front },
+      {
+        wet: screenGone ? 0 : wet,
+        speed: Math.abs(car.u),
+        lateral: car.u * car.yawRate,
+        wipe: body.wipers.front,
+      },
       dt,
     );
     shineGlass(state, eye);
-    shineLamps();
+    shineLamps(car.damage.broken);
     damage.update(state, dt);
 
     if (!car.airborne) {
