@@ -21,6 +21,20 @@ Scandinavian Flick has no runtime configuration surface (no accounts, no server)
 | `VITE_PWA_IGNORE_PATHS`            | Comma-separated absolute paths the built service worker must NOT claim. Only the root slot sets it (`/preview/,/branch/`) so nested slots own their own pages. |
 | `GITHUB_SHA` / `GITHUB_RUN_NUMBER` | Provided by CI; baked into the build label the HUD corner and the new-build card show.                                                                         |
 
+## The desktop app's launch environment
+
+The desktop app (`tauri/`, see [platforms.md](platforms.md)) reads three variables at LAUNCH, all optional and all for debugging a build rather than configuring the game:
+
+| Variable       | Meaning                                                                                                                                         |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SF_GAME_URL`  | Load a remote URL instead of the bundled site (e.g. `https://game2.niclaslindstedt.se/preview/`), for debugging the shell against live content. |
+| `SF_WEBROOT`   | Serve the site from another directory without rebuilding the app.                                                                               |
+| `SF_VERBOSE=1` | Keep the informational log lines in a release build (a debug build prints them anyway). Warnings and errors are never suppressed.               |
+
+Packaging reads one more: `APPLE_SIGNING_IDENTITY`, the Developer ID a macOS build is signed with. Absent, the app is signed ad hoc — enough to run on Apple Silicon, at the cost of one Gatekeeper prompt the release notes explain.
+
+Every launch is written to `launch.log` in the app's own user-data directory — `%APPDATA%\scanflick` on Windows, `~/Library/Application Support/scanflick` on macOS, `~/.local/share/scanflick` on Linux — with the previous launch kept beside it as `launch.log.prev`. The window's remembered geometry (`window-state.json`) is there too. The player's settings and scores are NOT: those are the webview's own origin-keyed storage, exactly as in a browser.
+
 ## The deploy slots
 
 `pages.yml` builds three whole sites and merges them into one Pages artifact served at `game2.niclaslindstedt.se` (the custom domain in `pwa/public/CNAME`; DNS is a CNAME on `niclaslindstedt.github.io`, and the repo's Pages settings must say "GitHub Actions" + that domain):

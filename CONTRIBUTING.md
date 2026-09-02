@@ -32,6 +32,13 @@ make fmt-check   # what CI runs
 make sim         # the balance sweep (also a CI job)
 ```
 
+The desktop app (`tauri/`) is Rust, so it has its own two, run by `desktop-tauri.yml` on every push that touches it:
+
+```sh
+make tauri-test  # the decision layer — a Rust toolchain and nothing else
+make tauri-lint  # clippy at zero warnings, both crates (needs the webview dev libraries)
+```
+
 **Verify with `make test` / `make lint`, not ad-hoc tool invocations** — the Make targets are the definition of green.
 
 ## The workflow

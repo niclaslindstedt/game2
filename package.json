@@ -38,7 +38,14 @@
     "glyphs": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/glyph-preview.mjs",
     "transit": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/transit-preview.mjs",
     "audition": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/audition.mjs",
-    "profile": "node scripts/profile-render.mjs"
+    "profile": "node scripts/profile-render.mjs",
+    "tauri": "npm --prefix tauri run start --",
+    "tauri:bundle": "npm --prefix tauri run bundle",
+    "tauri:test": "npm --prefix tauri test",
+    "tauri:lint": "npm --prefix tauri run lint",
+    "tauri:fmt": "npm --prefix tauri run fmt",
+    "tauri:install": "npm --prefix tauri install",
+    "tauri:package": "npm run tauri:install && npm --prefix tauri run package --"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

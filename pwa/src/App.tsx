@@ -50,6 +50,7 @@ import {
 } from "@engine";
 
 import { cacheIdForBase } from "./app-pwa.ts";
+import { shellHost } from "./shell-host.ts";
 import { BENCHMARK, runBenchmark, type BenchmarkStatus } from "./game/benchmark.ts";
 import { connectOutput } from "./output-bridge.ts";
 import { createInput } from "./game/input.ts";
@@ -952,10 +953,13 @@ export function App() {
     done?: (capture: Capture | null) => void;
   } | null>(null);
 
+  // Off in dev, and off inside the desktop app: there the site is bundled
+  // and served off local disk, so the bundle is the update and a worker
+  // precaching it would only ever prompt about a build it already is.
   const pwa = usePwaUpdate({
     base: import.meta.env.BASE_URL,
     cacheId: cacheIdForBase(import.meta.env.BASE_URL),
-    enabled: !import.meta.env.DEV,
+    enabled: !import.meta.env.DEV && shellHost() === null,
   });
   const forcedUpdate = useMemo(() => updateCardForced(), []);
   const [updateDismissed, setUpdateDismissed] = useState(false);
