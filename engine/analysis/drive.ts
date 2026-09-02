@@ -132,8 +132,13 @@ export function analyzeDrive(track: Track, v: number[]): MetricReport {
     // and the driver felt texture. Anything shorter than the car's own
     // wheelbase belongs to the suspension, not to this.
     const span = Math.max(1, Math.round(D.heaveSpan / track.step));
-    const lo = samples[Math.max(0, i - span)];
-    const hi = samples[Math.min(samples.length - 1, i + span)];
+    // Only where the whole baseline is road: clamped to the stage's ends
+    // the second difference is one-sided, and a run-out on a plain grade
+    // read as a compression twice the budget on the last sample of one
+    // stage in three.
+    if (i - span < 0 || i + span >= samples.length) continue;
+    const lo = samples[i - span];
+    const hi = samples[i + span];
     const halfRun = Math.max(1e-3, (hi.s - lo.s) / 2);
     const secondDiff = (hi.elevation - 2 * here.elevation + lo.elevation) / (halfRun * halfRun);
     const heave = Math.abs(secondDiff) * v[i] * v[i];

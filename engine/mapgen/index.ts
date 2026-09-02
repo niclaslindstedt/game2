@@ -174,6 +174,7 @@ export {
   type TrackSample,
   type Surface,
   type BridgeDeck,
+  type Culvert,
   type RoadJunction,
   type Pacenote,
   type Checkpoint,

@@ -395,6 +395,12 @@ function tryTown(ctx: TownContext, street: Street, rng: Rng): Town | null {
   if (n < T.size.min) return null;
   const lots = walkStreet(ctx, street, rng, { fromS, toS, n, pending: drawKinds(rng) });
   if (lots.length < T.size.min) return null;
+  // ...and on BOTH sides of it. A street whose one side the country
+  // refused every lot on — a hillside, a shore, the route's own corridor
+  // running close behind it — is a row of houses looking across the road
+  // at a field: a lane, not a village (R39). The walk lets a side stall
+  // out so the other can go on filling; this is where that has to add up.
+  if (!lots.some((lot) => lot.side === 1) || !lots.some((lot) => lot.side === -1)) return null;
   return {
     atS: street.atS,
     street: {
@@ -452,7 +458,26 @@ function walkStreet(
       continue;
     }
     const at = sampleAtS(street.samples, centreS);
-    const lot = usable(ctx, street, at) ? tryLot(ctx, street, at, side, built, rng) : null;
+    let lot = usable(ctx, street, at) ? tryLot(ctx, street, at, side, built, rng) : null;
+    // ...and clear of the last building on this side, measured across the
+    // ground rather than along the street: the cursor spaces the fronts by
+    // their widths in arc, and on the inside of a bend two fronts a
+    // building's width apart along the kerb stand closer than that. Two
+    // footprints on one piece of ground is what the spacing exists to
+    // rule out, so a lot the bend has closed up is refused and the walk
+    // steps on.
+    if (lot) {
+      for (let i = lots.length - 1; i >= 0; i--) {
+        const prev = lots[i];
+        if (prev.side !== side) continue;
+        const apart = Math.hypot(
+          prev.building.x - lot.building.x,
+          prev.building.z - lot.building.z,
+        );
+        if (apart <= (prev.building.plan.width + built.width) / 2 + T.lot.gap.min / 2) lot = null;
+        break;
+      }
+    }
     if (!lot) {
       // Nothing fits here — try a little further along, and give up on
       // the side once it has stalled for a whole building's worth.

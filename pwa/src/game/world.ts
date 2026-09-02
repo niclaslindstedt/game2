@@ -51,6 +51,7 @@ import { buildRoadSpill } from "./road-spill.ts";
 import { buildWild } from "./wild.ts";
 import { buildTerrain, LAKE_Y, type Terrain } from "./terrain.ts";
 import { buildStreamMeshes } from "./streams.ts";
+import { buildCulverts } from "./culvert.ts";
 import { buildFinishGate, buildStartGate, type FinishGate, type Muzzle } from "./finish-gate.ts";
 import { buildHomestead } from "./homestead.ts";
 import { buildTown } from "./town.ts";
@@ -857,6 +858,8 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
     // ribbon `standOn` blends in over a crossing is the DECK the pier is
     // holding up.
     chunkGroup.add(buildBridges(track, from, to, terrain.latticeAt));
+    // R12 — and the pipes the road carries its streams under.
+    chunkGroup.add(buildCulverts(track, from, to));
     // The branches this stretch of road forks off at its paving junctions.
     for (; spurScan < track.spurs.length; spurScan++) {
       const spur = track.spurs[spurScan];

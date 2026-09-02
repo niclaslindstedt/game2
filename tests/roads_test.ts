@@ -297,7 +297,10 @@ describe("junctions (R17)", () => {
   } {
     for (const seed of seeds) {
       const track = compileStage(seed, "medium", { asphalt });
-      if (track.spurs.length > 0) return { seed, track, spur: track.spurs[0] };
+      // A public ROAD's arm: a railway's is ballast (R41), and what a car
+      // finds under it out there is that block's own question.
+      const spur = track.spurs.find((s) => !s.rail);
+      if (spur) return { seed, track, spur };
     }
     throw new Error("no seed in the sweep carried a public road");
   }
@@ -422,7 +425,10 @@ describe("junctions (R17)", () => {
         // ...and it is TARMAC the whole way. A branch is the sealed road
         // the route borrowed, carried on past the junction; a tarmac road
         // that turns to gravel in an empty field is a road that goes
-        // nowhere, and it is the loudest thing on the map from above.
+        // nowhere, and it is the loudest thing on the map from above. A
+        // RAILWAY's arm is the one exception, by design: ballast, which
+        // the physics reads as the loose surface it is (R41).
+        if (spur.rail) continue;
         for (const sample of spur.samples) expect(sample.surface).toBe("asphalt");
       }
     }

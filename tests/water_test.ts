@@ -213,7 +213,13 @@ describe("the river (R18)", () => {
     for (const seed of SEEDS) {
       const track = compileStage(seed, "medium", { water: 0.8 });
       const terrain = createTerrain(track);
-      for (const anchor of collectAnchors(track, 0)) {
+      terrain.sync(0);
+      // The anchors as the field traced them — a deck's water lies in its
+      // valley, which the field read and a bare `collectAnchors` did not.
+      // A culvert's water is under the road on purpose (R12), and the
+      // culvert test asks about it beside the road instead.
+      for (const anchor of terrain.rivers.flatMap((r) => r.anchors)) {
+        if (anchor.culvert) continue;
         const water = terrain.waterAt(anchor.x, anchor.z);
         expect(water).not.toBeNull();
         // ...unless the crossing stands in country already under the water
@@ -239,7 +245,7 @@ describe("the river (R18)", () => {
     for (const seed of [1, 2, 21, 34, 4, 6, 7, 9]) {
       const track = compileStage(seed, "long", { water: 0.8 });
       const terrain = createTerrain(track);
-      for (const anchor of collectAnchors(track, 0).filter((a) => !a.bridged)) {
+      for (const anchor of collectAnchors(track, 0).filter((a) => !a.bridged && !a.culvert)) {
         const sample = track.samples.find((s) => Math.abs(s.s - anchor.s) < 2);
         expect(sample).toBeDefined();
         if (!sample) continue;
@@ -309,6 +315,69 @@ describe("the river (R18)", () => {
     expect(dry).toBeGreaterThan(1000);
     expect(flooded).toBe(0);
   });
+
+  it("carries a stream under a road that stands over it, in a culvert (R12)", () => {
+    // Where the road's line is too far over the valley to dip to the water
+    // the crossing is a CULVERT: the road stays on its fill, the water is
+    // the same water at the same level on both sides of it, and there is
+    // none on the road. The sweep is searched for stages that carry one —
+    // which seeds do depends on every rule upstream, so none is pinned.
+    let culverts = 0;
+    for (const seed of [...SEEDS, 4, 6, 7, 9]) {
+      const track = compileStage(seed, "long", { water: 0.9 });
+      if (track.culverts.length === 0) continue;
+      const terrain = createTerrain(track);
+      terrain.sync(0);
+      const anchors = collectAnchors(track, 0, terrain.geology.surfaceAt);
+      for (const culvert of track.culverts) {
+        culverts++;
+        const sample = track.samples.find((s) => Math.abs(s.s - culvert.s) < 2);
+        expect(sample).toBeDefined();
+        if (!sample) continue;
+        // Ordinary road over it, standing the pipe's cover over the water,
+        // and dry.
+        expect(sample.surface).not.toBe("water");
+        expect(sample.deck).toBeNull();
+        expect(sample.elevation - culvert.waterY).toBeGreaterThanOrEqual(
+          R.water.culvert.cover - 0.01,
+        );
+        expect(terrain.waterAt(culvert.x, culvert.z)).toBeNull();
+        // The river is anchored to it...
+        expect(anchors.some((a) => a.culvert && Math.abs(a.s - culvert.s) < 1)).toBe(true);
+        expect(
+          terrain.rivers.some((r) => r.anchors.some((a) => Math.abs(a.s - culvert.s) < 1)),
+        ).toBe(true);
+        // ...and the course stands at ONE level either side of the road:
+        // the pool the crossing is, held through the pipe. Read off the
+        // traced course rather than `waterAt`, which answers off the ground
+        // lattice and cannot see a channel narrower than a cell.
+        const river = terrain.rivers.find((r) =>
+          r.anchors.some((a) => Math.abs(a.s - culvert.s) < 1),
+        );
+        expect(river).toBeDefined();
+        if (!river) continue;
+        const right = { x: Math.cos(culvert.heading), z: -Math.sin(culvert.heading) };
+        for (const side of [-1, 1]) {
+          // The nearest point of the course past the mat on this side: the
+          // water as it comes out of the pipe.
+          let nearest: { y: number } | null = null;
+          let best = Infinity;
+          for (const p of river.points) {
+            const lateral = (p.x - culvert.x) * right.x + (p.z - culvert.z) * right.z;
+            const d = Math.hypot(p.x - culvert.x, p.z - culvert.z);
+            if (lateral * side > 8 && d < best) {
+              best = d;
+              nearest = p;
+            }
+          }
+          expect(nearest).not.toBeNull();
+          expect(best).toBeLessThan(30);
+          expect(Math.abs((nearest?.y ?? 0) - culvert.waterY)).toBeLessThan(0.05);
+        }
+      }
+    }
+    expect(culverts).toBeGreaterThan(0);
+  }, 120_000);
 
   it("keeps the water under the ground the car rides, never over it", () => {
     // The physics and the renderer both ask the field what is water. A
@@ -552,6 +621,8 @@ describe("driving out again (TUNING.crash.drown.shallows)", () => {
   // search SPACE, and it is wide on purpose so that a generator change
   // costs the suite a few seconds of scanning rather than a red test.
   const SHORE_SEEDS = [
+    69,
+    87,
     73,
     39,
     49,

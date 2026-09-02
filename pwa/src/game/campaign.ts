@@ -144,8 +144,13 @@ export function campaignKnobs(level: CampaignLevel): StageKnobs {
  * the same way — scored on hairpins and features, then confirmed with the
  * bot sim over the full three laps:
  *
- *   seed 3 medium circuit 1.59 km × 3  179 s  15 turns (4 hard)  1 jump, 1 crest, 57% tarmac
- *   seed 6 long   circuit 2.67 km × 3  316 s  26 turns (6 hard)  2 jumps, 1 crest
+ *   seed 3 medium circuit 1.70 km × 3  214 s, best lap 71 s
+ *   seed 6 long   circuit 2.52 km × 3  best lap 106 s
+ *
+ * (The laps and times are the bot's on the compact, re-run whenever the
+ * generator moves — the routes re-roll with it, and so do the turn counts
+ * these once carried; `npm run sim -- --shape circuit --seeds N` says what
+ * they are today.)
  */
 const TAIGA: CampaignLocation = {
   id: "taiga",

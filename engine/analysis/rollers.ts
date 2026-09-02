@@ -32,7 +32,7 @@
 
 import { corridorOffset, ROAD_CROSS } from "../mapgen/road.ts";
 import { isLoose, type Track, type TrackSample } from "../mapgen/compile.ts";
-import type { TerrainField } from "../mapgen/terrain.ts";
+import { GROUND_CELL, type TerrainField } from "../mapgen/terrain.ts";
 import { createKerbField, KERB_MARKER, markersBetween } from "../mapgen/kerbs.ts";
 import { STAGE_RULES } from "../mapgen/rules.ts";
 import { ANALYSIS } from "./budgets.ts";
@@ -180,6 +180,19 @@ function jumpMask(track: Track): boolean[] {
   for (let i = 0; i < track.samples.length; i++) {
     if (!track.samples[i].jump) continue;
     for (let k = Math.max(0, i - 2); k <= Math.min(mask.length - 1, i + span); k++) {
+      mask[k] = true;
+    }
+  }
+  // R13 — and the DECKS, with their abutments: the road within a ground
+  // cell either side of one. Beside a deck is air over a ravine, and beside
+  // an abutment is the ravine's bank, drawn on a lattice whose corners are
+  // either on the embankment or in the ravine — a wall, and the one wall
+  // on a stage that is there on purpose. The rank has nothing to say about
+  // any of it: a parapet is R13's, the deck is level by construction.
+  const cell = Math.ceil(GROUND_CELL / track.step);
+  for (let i = 0; i < track.samples.length; i++) {
+    if (track.samples[i].deck == null) continue;
+    for (let k = Math.max(0, i - cell); k <= Math.min(mask.length - 1, i + cell); k++) {
       mask[k] = true;
     }
   }
@@ -502,7 +515,8 @@ export function analyzeRollers(track: Track, terrain: TerrainField): MetricRepor
       if (skip[i]) continue;
       const sample = track.samples[i];
       // A deck has no edge to run out at: it is a road over a ravine, and
-      // the drop off the side of it is a parapet's problem (R13).
+      // the drop off the side of it is a parapet's problem (R13). The
+      // abutments either side of it are in `skip` (`jumpMask`).
       if (sample.deck != null) continue;
       const rx = Math.cos(sample.heading);
       const rz = -Math.sin(sample.heading);

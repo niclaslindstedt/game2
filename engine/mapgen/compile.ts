@@ -24,6 +24,13 @@ import { cellKey } from "../lib/math.ts";
 import { hash2 } from "../lib/noise.ts";
 import { createLandField } from "./land.ts";
 import { biomeRules } from "./biomes.ts";
+import {
+  buildRolling,
+  NOISE_LATTICE,
+  straightness,
+  valueNoise1d as valueNoise,
+} from "./rolling.ts";
+import { valleyUnder } from "./terrain.ts";
 import { junctionFlat, junctionMainEdge, junctionPlatformY, ROAD_CROSS } from "./road.ts";
 import { buildSpur, cutSpur, placeBlock, SPUR, type ShelfBand, type Spur } from "./spurs.ts";
 import { placeHomesteads, type Homestead } from "./homesteads.ts";
@@ -47,7 +54,7 @@ export function isLoose(surface: Surface): boolean {
 }
 
 /** What carries a bridge over its water — everything except wading it. */
-export type BridgeDeck = Exclude<Crossing, "ford">;
+export type BridgeDeck = Exclude<Crossing, "ford" | "culvert">;
 
 /** R17 — where the route meets the road it borrows. A junction is a PLACE,
  * not a seam. It sits ON the route's centerline, at a corner: the sealed
@@ -178,6 +185,25 @@ export type Pacenote = {
   angle: number;
 };
 
+/** R12 — a CULVERT: where a stream passes under the road in a pipe. The
+ * road's own sample there is ordinary road; this is the water's half. */
+export type Culvert = {
+  x: number;
+  z: number;
+  /** Arc position on the stage, m. */
+  s: number;
+  /** The road's heading there, rad — the pipe runs square across it. */
+  heading: number;
+  /** The stream's surface through the pipe, m — the valley's own level,
+   * `water.culvert.cover` or more under the road. */
+  waterY: number;
+  /** Half-width of the water through the pipe, m. */
+  halfWidth: number;
+  /** How far across the road its mat reaches from the centerline, m —
+   * where the pipe's mouths and the open water begin. */
+  edge: number;
+};
+
 /** R28 — a CHECKPOINT: a place on the stage the run is timed through, and
  * the place a car that drowned, wedged itself or gave up is put back on the
  * road. Only the sample it stands on is recorded — the pose is read off
@@ -263,6 +289,12 @@ export type Track = {
    * railway crossing is a place two roads share a platform, and every
    * reader of `junctions` asks which road turns. */
   rails: RailCrossing[];
+  /** R12 — the culverts: every place the road carries a stream UNDER
+   * itself in a pipe. Not a run of samples, because the surface is road
+   * the whole way over one; the compiler writes each down so the terrain
+   * can anchor the river to it and the renderer can stand the pipe's
+   * mouths in the embankment. */
+  culverts: Culvert[];
   /** Endless only: materialize road until `length >= upToS`. Deterministic
    * in the seed — when it is called makes no difference to what it builds.
    * Returns true when new samples were appended. */
@@ -314,7 +346,7 @@ function inCrossing(plan: SegmentPlan, u: number): boolean {
 }
 
 function isBridge(plan: SegmentPlan): boolean {
-  return plan.feature === "water" && plan.crossing !== undefined && plan.crossing !== "ford";
+  return plan.feature === "water" && (plan.crossing === "timber" || plan.crossing === "concrete");
 }
 
 /** R15 — the paving field. Asphalt is laid in RUNS: the stage is cut into
@@ -390,53 +422,6 @@ function buildPaving(seed: number, asphalt: number): Paving {
   };
 }
 
-/** Lattice size for the elevation noise. The shortest octave's lattice is
- * tens of meters apart, so even a long stage never gets far enough along
- * the profile to notice the wrap. */
-const NOISE_LATTICE = 256;
-
-/** Seeded 1-D value noise: random heights every `spacing` meters, joined by
- * smootherstep so the road has no kinks (a kink is a grade discontinuity,
- * which the car feels as a step). */
-function valueNoise(values: number[], s: number, spacing: number): number {
-  const t = s / spacing;
-  const i = Math.floor(t);
-  const f = t - i;
-  const a = values[((i % values.length) + values.length) % values.length];
-  const b = values[(((i + 1) % values.length) + values.length) % values.length];
-  return a + (b - a) * (f * f * f * (f * (f * 6 - 15) + 10));
-}
-
-/** The rolling ground under a generated stage: octaves of seeded value noise
- * (R.elevation) summed along arc length. Long waves put the horizon above or
- * below the hood and shorter ones load and unload the car through a
- * straight — but every wave is a different shape, because a road built from
- * sines announces itself as a machine on the first two hills. */
-function buildRolling(seed: number, knobs: StageKnobs): (s: number) => number {
-  const rng = createRng((seed ^ 0x7e11a7d1) >>> 0);
-  // R40 — a worn country rolls its road less too, by the same share it
-  // stands its hills lower (`BiomeLand.relief`): the desert's roll rides on
-  // dunes and pans, and a taiga's roll laid over a pan is a road that dips
-  // under the lake table on flat ground.
-  const relief = knobScale(knobs.elevation, R.elevation.knob) * biomeRules(knobs.biome).land.relief;
-  const amplitude = rng.range(R.elevation.amplitude.min, R.elevation.amplitude.max) * relief;
-  const wavelength = rng.range(R.elevation.wavelength.min, R.elevation.wavelength.max);
-  const roughness = rng.range(R.elevation.roughness.min, R.elevation.roughness.max);
-  const octaves = Array.from({ length: R.elevation.octaves }, (_, o) => ({
-    values: Array.from({ length: NOISE_LATTICE }, () => rng.range(-1, 1)),
-    spacing: wavelength / 2 ** o,
-    amplitude: amplitude * roughness ** o,
-    // Each octave reads its own lattice from a different place, so they
-    // never line up into a shape that looks deliberate.
-    offset: rng.range(0, 1e4),
-  }));
-  return (s: number): number => {
-    let y = 0;
-    for (const o of octaves) y += o.amplitude * valueNoise(o.values, s + o.offset, o.spacing);
-    return y;
-  };
-}
-
 /** R33 — how wide the gravel is at an arc position, as a multiple of the
  * stage's nominal width. The road is cut TIGHT and then given three things
  * back: two slow waves that open it out and pinch it in along the stage,
@@ -505,17 +490,6 @@ function buildBumps(seed: number): (s: number, surface: Surface, shaped: boolean
   };
 }
 
-/** How fast the rolling layers advance through a sample, 0–1. Grades live
- * on the straights and flatten through corners — partly stage-design taste
- * (Sega Rally climbs between turns, not through them), but load-bearing
- * too: a car cutting inside a turn sweeps whole samples of arc per physics
- * step, and any real grade across that sweep reads as the ground falling
- * away — a phantom launch. */
-function straightness(curvature: number): number {
-  const c = Math.abs(curvature);
-  return Math.max(0.06, Math.min(1, 1 / (1 + c * 120)));
-}
-
 function smoothstep(t: number): number {
   const c = t < 0 ? 0 : t > 1 ? 1 : t;
   return c * c * (3 - 2 * c);
@@ -580,21 +554,40 @@ function fordDip(
   u: number,
   base: (u: number) => number,
   roll: (u: number) => number,
+  /** The bare land's own level at the crossing's middle, m — the valley
+   * the water lies in (R12), read through `buildableAt` so a ford beside a
+   * lake keeps the lake's freeboard. */
+  valley: () => number,
 ): number | null {
   if (plan.feature !== "water" || plan.featureStart === undefined || plan.featureEnd === undefined)
     return null;
-  if (isBridge(plan)) return null;
-  const from = plan.featureStart - R.water.apron;
-  const to = plan.featureEnd + R.water.apron;
+  // A deck holds the road level and a culvert leaves it on its line:
+  // neither dips.
+  if (isBridge(plan) || plan.crossing === "culvert") return null;
+  // R12 — the aprons are the search's, each sized to the drop its mouth
+  // has to make (`crossingSits`); the rule book's is the least either is.
+  const apronIn = plan.apronIn ?? R.water.apron;
+  const apronOut = plan.apronOut ?? R.water.apron;
+  const from = plan.featureStart - apronIn;
+  const to = plan.featureEnd + apronOut;
   if (u < from || u > to) return null;
   const line = (v: number): number => base(v) + roll(v);
   let low = Infinity;
-  for (let v = from; v <= to; v += 2) low = Math.min(low, roll(v));
+  const inner = R.water.apron;
+  for (let v = plan.featureStart - inner; v <= plan.featureEnd + inner; v += 2) {
+    low = Math.min(low, roll(v));
+  }
   // The level the crossing WANTS: the roll's lowest against the landscape
   // at the crossing's middle, so the water reads as collected rather than
   // perched on a local rise, and a road descending through the window does
-  // not have to lose the whole window's fall over one apron.
-  const wanted = base((plan.featureStart + plan.featureEnd) / 2) + low - R.water.bedDepth;
+  // not have to lose the whole window's fall over one apron — and never
+  // above the LAND there. A ford's water is the stream's, and the stream
+  // lies in the valley floor: a road crossing it on an embankment dips down
+  // to it, it does not lift the water up to the road. Laid against the road
+  // instead, a ford on fill anchored its river metres over the country and
+  // R18 drew the reach floating above both its banks.
+  const wanted =
+    Math.min(base((plan.featureStart + plan.featureEnd) / 2) + low, valley()) - R.water.bedDepth;
   // ...and never ABOVE the road's own line where an apron has to MEET it.
   // Where the ground rises into the crossing, `wanted` came out over the
   // road approaching it; the clamp below then held the whole apron flat at
@@ -608,7 +601,7 @@ function fordDip(
   // that were building a wall: everywhere else the level is the one above.
   const water = Math.min(wanted, line(from) - R.water.bedDepth, line(to) - R.water.bedDepth);
   if (u >= plan.featureStart && u <= plan.featureEnd) return water;
-  const t = u < plan.featureStart ? (u - from) / R.water.apron : (to - u) / R.water.apron;
+  const t = u < plan.featureStart ? (u - from) / apronIn : (to - u) / apronOut;
   const here = line(u);
   // ...and never BELOW the water, whatever the road was doing. On a road
   // that is descending through the crossing the far apron's own grade can
@@ -635,18 +628,31 @@ function bridgeDeck(
   if (!isBridge(plan) || plan.featureStart === undefined || plan.featureEnd === undefined) {
     return null;
   }
-  const from = plan.featureStart - R.bridge.margin;
-  const to = plan.featureEnd + R.bridge.margin;
+  // R13 — the margins are the search's, each sized to what its mouth has
+  // to climb onto the deck (`crossingSits`); the rule book's is the least
+  // either is.
+  const marginIn = plan.apronIn ?? R.bridge.margin;
+  const marginOut = plan.apronOut ?? R.bridge.margin;
+  const from = plan.featureStart - marginIn;
+  const to = plan.featureEnd + marginOut;
   if (u < from || u > to) return null;
   // R34 — the roll is searched, the landscape is read at the middle. Same
   // split, and for the same reason, as the ford above: a deck pinned to the
   // highest point of a road that is climbing through the crossing has to be
-  // ramped down from at the far end, and the ramp is a wall.
+  // ramped down from at the far end, and the ramp is a wall. The roll is
+  // searched over the rule book's own margin, the same window the search
+  // read it over, whatever the margins came out at.
   let high = -Infinity;
-  for (let v = from; v <= to; v += 2) high = Math.max(high, roll(v));
+  for (
+    let v = plan.featureStart - R.bridge.margin;
+    v <= plan.featureEnd + R.bridge.margin;
+    v += 2
+  ) {
+    high = Math.max(high, roll(v));
+  }
   const deck = base((plan.featureStart + plan.featureEnd) / 2) + high;
   if (u >= plan.featureStart && u <= plan.featureEnd) return deck;
-  const t = u < plan.featureStart ? (u - from) / R.bridge.margin : (to - u) / R.bridge.margin;
+  const t = u < plan.featureStart ? (u - from) / marginIn : (to - u) / marginOut;
   const here = base(u) + roll(u);
   return here + (deck - here) * smoothstep(t);
 }
@@ -2303,6 +2309,15 @@ function createCompiler(
       const baseAt = (u: number): number =>
         path[Math.max(0, Math.min(steps - 1, Math.round(u / step) - 1))].base;
       const rollAt = (u: number): number => rolling(rollS0 + u);
+      /** R12 — the valley a ford's water lies in: the bare land at the
+       * crossing's middle, read across the road too (`valleyUnder`), or a
+       * lake's own surface where the land is under one. */
+      const valleyAt = (): number => {
+        const mid =
+          (built.featureStart ?? 0) + ((built.featureEnd ?? 0) - (built.featureStart ?? 0)) / 2;
+        const at = path[Math.max(0, Math.min(steps - 1, Math.round(mid / step) - 1))];
+        return valleyUnder(at, land.surfaceAt);
+      };
 
       // R36 — the public road this straight goes over. Noted from the walk,
       // before any sample of it is emitted, so `shapeJunctions` finds the
@@ -2339,13 +2354,33 @@ function createCompiler(
         // leaves. That sample sits at full lip height; past it the road is
         // back at grade, which is the drop that throws the car.
         const jump = lipAt >= 0 && uPrev < lipAt && u >= lipAt;
-        const dip = fordDip(built, u, baseAt, rollAt);
+        const dip = fordDip(built, u, baseAt, rollAt, valleyAt);
         const deckY = bridgeDeck(built, u, baseAt, rollAt);
-        // A crossing is a ford OR a deck, never both: the wheels go through
-        // the water or ride over it (R13).
+        // A crossing is a ford OR a deck OR a culvert, never two: the
+        // wheels go through the water, ride over it on a deck, or ride
+        // over it on the road's own fill with the water in a pipe under
+        // them (R12, R13).
         const crossed = inCrossing(built, u);
         const bridge = crossed && isBridge(built);
-        const ford = crossed && !bridge;
+        const culvert = built.crossing === "culvert";
+        const ford = crossed && !bridge && !culvert;
+        // R12 — the culvert is written down as the walk passes its middle:
+        // the stream's level is the valley's, the pipe runs square across
+        // the road, and the road over it is ordinary road.
+        if (culvert && built.featureStart !== undefined && built.featureEnd !== undefined) {
+          const midU = (built.featureStart + built.featureEnd) / 2;
+          if (uPrev < midU && u >= midU) {
+            track.culverts.push({
+              x: cursor.x,
+              z: cursor.z,
+              s: cursor.s,
+              heading: cursor.heading,
+              waterY: valleyAt() - R.water.bedDepth,
+              halfWidth: R.water.culvert.stream,
+              edge: track.width / 2 + R.water.fordOutside,
+            });
+          }
+        }
         // R36 — and the road width the route spends on a public road it is
         // crossing is sealed, because it is on one.
         const paved = !ford && (pavedNow || onCrossingSeal(cursor.x, cursor.z));
@@ -2824,6 +2859,7 @@ function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs, circuit =
     towns: [],
     junctions: [],
     rails: [],
+    culverts: [],
   };
 }
 

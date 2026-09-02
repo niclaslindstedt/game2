@@ -87,7 +87,10 @@ describe("checkpoint placement", () => {
     // "Prefer tight corners" is a claim about the mix, so measure it: a soft
     // bend only ever gets a board when the stage has run well past its gap.
     expect(tight / total).toBeGreaterThan(0.9);
-  });
+    // Seven LONG stages: a hilly seed's search backtracks against R23's
+    // height clause, and under the whole suite's load the seven run past
+    // the default thirty seconds.
+  }, 120_000);
 
   it("keeps the boards on the samples they name, and clear of the finish gate", () => {
     for (const seed of SEEDS) {
