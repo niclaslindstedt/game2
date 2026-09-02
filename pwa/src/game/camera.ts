@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The camera — where a lot of the FEEL lives. Cameras are MODES. Eight can
-// be driven from, and they are one ladder from behind the wheel to high
-// above the roof (the ids and the order are PLAY_CAMERAS in settings.ts):
+// be driven from, and they are one ladder walked BACKWARDS from the nose to
+// high above the roof (the ids and the order are PLAY_CAMERAS in
+// settings.ts):
 //
+//   bumper  — down at the nose, ahead of every panel: no bodywork at all.
+//   hood    — on the car's own scuttle, over its bonnet.
 //   cockpit — from the driver's seat, inside the car: the fascia, the dials
 //             and the wheel are in frame and the road is what is left
 //             between the screen pillars.
-//   hood    — on the car's own scuttle, over its bonnet.
-//   bumper  — down at the nose, ahead of every panel: no bodywork at all.
 //   close   — the same rig as chase pulled in tight behind the bumper.
 //   chase   — the classic arcade rally view: low, tight behind the car,
 //             tracking a blend of nose and travel direction so a drift
@@ -98,12 +99,12 @@ import { DEFAULT_SETTINGS, PLAY_CAMERAS, type PlayCamera } from "./settings.ts";
  * deliberately or not at all. */
 export type CameraMode = PlayCamera | "drone" | "map" | "free";
 /** The modes the camera key walks, in the order it walks them — the same
- * inside-out ladder the options screen lists, so the key and the setting
- * never disagree about what "the next camera" means. */
+ * nose-backwards ladder the options screen lists, so the key and the
+ * setting never disagree about what "the next camera" means. */
 export const PLAY_MODES: CameraMode[] = PLAY_CAMERAS.map((cam) => cam.id);
 
 /** The modes camera-eye.ts owns — the ones taken from inside the car. */
-const IN_CAR: InCarCamera[] = ["cockpit", "hood", "bumper"];
+const IN_CAR: InCarCamera[] = ["bumper", "hood", "cockpit"];
 
 /** How far to the side the drone flies, m. The menu's cards sit in the
  * middle of the screen, so a drone parked squarely behind the car puts the

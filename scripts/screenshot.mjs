@@ -852,7 +852,7 @@ await capture(
 // the driver. `?camera=` pins the angle rather than counting presses of the
 // camera key — a press count silently shoots the wrong camera the day the
 // ladder grows.
-for (const angle of ["cockpit", "hood", "bumper", "close", "chase", "far", "heli", "top"]) {
+for (const angle of ["bumper", "hood", "cockpit", "close", "chase", "far", "heli", "top"]) {
   await capture(
     `shot-cam-${angle}`,
     { width: 1280, height: 720 },

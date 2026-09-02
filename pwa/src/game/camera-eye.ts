@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // THE VIEW FROM INSIDE THE CAR — three of them, one rig.
 //
-//   cockpit — behind the wheel: the fascia, the dials, the rim and the
-//             screen pillars are all in frame, and the road is what is left
-//             between them. The most involving and the least forgiving.
+//   bumper  — down at the nose, ahead of every panel: no bodywork at all,
+//             the ground close under the lens, and speed nowhere to hide.
 //   hood    — on the car's own scuttle, over its bonnet. The screen and the
 //             cabin are behind the lens; what fills the bottom of the frame
 //             is the car's own paint.
-//   bumper  — down at the nose, ahead of every panel: no bodywork at all,
-//             the ground close under the lens, and speed nowhere to hide.
+//   cockpit — behind the wheel: the fascia, the dials, the rim and the
+//             screen pillars are all in frame, and the road is what is left
+//             between them. The most involving and the least forgiving.
 //
 // What separates these three from the chase rigs is not where they stand —
 // it is that a camera bolted to a bodyshell is a STILL PHOTOGRAPH. The
@@ -81,7 +81,7 @@ import { revTremble } from "./car-shake.ts";
 
 /** The three views that are taken from inside (or off the nose of) the car,
  * as opposed to the five rigs that stand behind it. */
-export type InCarCamera = "cockpit" | "hood" | "bumper";
+export type InCarCamera = "bumper" | "hood" | "cockpit";
 
 /** Where one of them mounts on the car, in body-local metres (+z the nose,
  * +x its right side, y from the ground). */
