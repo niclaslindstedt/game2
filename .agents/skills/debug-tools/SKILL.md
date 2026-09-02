@@ -232,8 +232,8 @@ it is a number.
   therefore in nothing the drawing buffer holds, so without this a
   screenshot taken IN the game says less than one taken with the operating
   system's own key. Every picture also lands on the CLIPBOARD as it is
-  taken (OPTIONS ▸ CONTROLS ▸ COPY TO CLIPBOARD), so what a reporter has to
-  do is press one key and paste.
+  taken (the `copyShots` switch in settings.ts, on by default), so what a
+  reporter has to do is press one key and paste.
 - **COPY DEBUG INFO, in the bottom corner, while god mode flies with the
   overlay OFF.** Flying to LOOK at something is the case where four panels
   of numbers are four panels over the subject — so the numbers get a button

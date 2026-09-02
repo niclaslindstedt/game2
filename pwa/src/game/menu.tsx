@@ -4,11 +4,13 @@
 // segmented `OptionRow` they are all picked with.
 //
 // PauseMenu is the one you reach mid-stage, by tapping the minimap: the run
-// holds where it stands, and it carries the four ways on — resume, set the
-// game up (OPTIONS, opened over the held run and handing back to this card),
-// run this stage again, or leave for the main menu. It lives here rather
-// than in the top bar because the bar is a strip over the road, and every
-// button on it is a button in the way of the driving.
+// holds where it stands, and it carries the three ways on — resume, run this
+// stage again, or leave for the main menu — and between them the handful of
+// knobs a player actually stops mid-stage for: the camera they cannot see
+// out of, the HUD, the mirror, the two volumes. Everything else is the
+// options page, off the front door. It lives here rather than in the top
+// bar because the bar is a strip over the road, and every button on it is a
+// button in the way of the driving.
 
 import {
   DEFAULT_KNOBS,
@@ -30,7 +32,8 @@ import {
 } from "@engine";
 
 import { playToggle, playUi } from "./audio/ui.ts";
-import type { DevSettings } from "./settings.ts";
+import { FadeRow, StepRow, type Stop } from "./menu-knobs.tsx";
+import { PLAY_CAMERAS, type DevSettings, type Settings } from "./settings.ts";
 
 /** How a stage was entered — the campaign is what records a clear, a time
  * trial is a lap you drive for the clock alone, and a heads-up race is the
@@ -442,10 +445,16 @@ type PauseProps = {
   onResume: () => void;
   onRestart: () => void;
   onMainMenu: () => void;
-  /** Open OPTIONS over the held run — the same page the front door opens,
-   * with its way back onto this card (menu-options.tsx's `PauseOptions`). */
-  onOptions: () => void;
+  /** The player's options, for the knobs on the card. Every change applies
+   * to the run standing behind the scrim the moment it is made. */
+  settings: Settings;
+  onSettings: (settings: Settings) => void;
 };
+
+const ON_OFF: Stop<"off" | "on">[] = [
+  { id: "off", label: "OFF" },
+  { id: "on", label: "ON" },
+];
 
 /** The in-race menu, opened by tapping the minimap. The backdrop resumes:
  * a menu you opened by mis-aiming for the map must cost one tap to leave. */
@@ -457,8 +466,10 @@ export function PauseMenu({
   onResume,
   onRestart,
   onMainMenu,
-  onOptions,
+  settings,
+  onSettings,
 }: PauseProps) {
+  const set = (patch: Partial<Settings>): void => onSettings({ ...settings, ...patch });
   return (
     <div className="hud-menu-wrap pointer-events-auto" onPointerDown={onResume} role="presentation">
       <div className="hud-menu hud-pause" onPointerDown={(e) => e.stopPropagation()}>
@@ -484,21 +495,43 @@ export function PauseMenu({
         >
           RESUME
         </button>
-        {/* Directly under RESUME because it is the row that costs nothing:
-            the camera you cannot see out of, the effects level the last
-            corner was costing you, the pedal a thumb keeps missing are all
-            settings you want changed HERE, with the stage still standing —
-            and reaching them used to mean abandoning the run. */}
-        <button
-          type="button"
-          className="hud-pause-act"
-          onClick={() => {
-            playUi("select");
-            onOptions();
-          }}
-        >
-          OPTIONS
-        </button>
+        {/* THE KNOBS, between RESUME and the two presses that throw the
+            stage away. The camera you cannot see out of, the HUD in the
+            way of a picture, the score you want quieter are settings you
+            want changed HERE, with the stage still standing — and they
+            are all this card offers, so it stays a card. Standing between
+            RESUME and RESTART is also what keeps a thumb aiming for the
+            first from landing on the second. */}
+        <div className="hud-pause-knobs">
+          <StepRow
+            label="CAMERA"
+            stops={PLAY_CAMERAS}
+            value={settings.camera}
+            onPick={(camera) => set({ camera })}
+          />
+          <StepRow
+            label="HUD"
+            stops={ON_OFF}
+            value={settings.hud.on ? "on" : "off"}
+            onPick={(id) => set({ hud: { ...settings.hud, on: id === "on" } })}
+          />
+          <StepRow
+            label="REAR VIEW"
+            stops={ON_OFF}
+            value={settings.hud.mirror ? "on" : "off"}
+            onPick={(id) => set({ hud: { ...settings.hud, mirror: id === "on" } })}
+          />
+          <FadeRow
+            label="EFFECTS"
+            value={settings.audio.sfx}
+            onChange={(sfx) => set({ audio: { ...settings.audio, sfx } })}
+          />
+          <FadeRow
+            label="MUSIC"
+            value={settings.audio.music}
+            onChange={(music) => set({ audio: { ...settings.audio, music } })}
+          />
+        </div>
         <button
           type="button"
           className="hud-pause-act"

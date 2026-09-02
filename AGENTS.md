@@ -207,7 +207,8 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | The marking beside the road, and what a block COSTS to cut  | `engine/mapgen/kerbs.ts` places every marker (one is solid); `pwa/src/game/kerbs.ts` draws them — the `mapgen-improvement` skill   |
 | Where the split boards stand on a stage (R28)               | `STAGE_RULES.checkpoint` + the placement in `engine/mapgen/compile.ts` — the `mapgen-improvement` skill                            |
 | What a split is measured against, and where a respawn lands | `engine/game/track.ts` (`lastCheckpoint`) + `pwa/src/game/standings.ts` (the field's leader)                                       |
-| A player option (HUD, video, controls)                      | `pwa/src/game/settings.ts`, then its reader                                                                                        |
+| A player option (HUD, video, controls)                      | `pwa/src/game/settings.ts`, then its reader; offered on `menu-options.tsx` only if a player needs it, the rest stay code knobs     |
+| The ROW every settings surface is built from                | `pwa/src/game/menu-knobs.tsx` — name, value, two arrows, pips; the pause card and the options page share it                        |
 | The debug overlay, god mode, the debug log                  | `pwa/src/game/debug-*.ts(x)`, `camera-free.ts`, `menu-dev.tsx` — the `debug-tools` skill                                           |
 | How god mode is FLOWN on a pad or a phone                   | `readFlyPad` in `pwa/src/game/gamepad.ts` (sticks) + `pwa/src/game/hud-fly.tsx` (thumbs); merged in `input.ts`'s `flyMove`         |
 | The generator's LAYERS, X-rayed over the map view           | `pwa/src/game/map-layers.ts` — the `debug-tools` and `mapgen-improvement` skills                                                   |
