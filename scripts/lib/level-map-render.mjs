@@ -300,6 +300,28 @@ export function renderLevelMap({
     if (corners.some(([x, y]) => inMap(x, y))) canvas.poly(corners, SOLID.building);
   }
 
+  // ── The towns (R39): every lot's pad and its building's footprint ─────
+  for (const town of track.towns ?? []) {
+    for (const lot of town.lots) {
+      const { pad, building } = lot;
+      const lx = px(pad.x);
+      const lz = pz(pad.z);
+      if (inMap(lx, lz)) {
+        canvas.disk(lx, lz, Math.max(2, pad.radius * scale), mix(ROAD.gravel, PAPER, 0.35));
+      }
+      const { plan } = building;
+      const hx = Math.sin(building.heading);
+      const hz = Math.cos(building.heading);
+      const corners = [
+        [-plan.width / 2, -plan.depth / 2],
+        [plan.width / 2, -plan.depth / 2],
+        [plan.width / 2, plan.depth / 2],
+        [-plan.width / 2, plan.depth / 2],
+      ].map(([w, d]) => [px(building.x + hz * w + hx * d), pz(building.z - hx * w + hz * d)]);
+      if (corners.some(([x, y]) => inMap(x, y))) canvas.poly(corners, SOLID.building);
+    }
+  }
+
   // ── The road, at its width, by surface ────────────────────────────────
   const finishS = track.finishS ?? Infinity;
   const quad = (a, b, halfA, halfB) => {
@@ -686,7 +708,7 @@ function drawLegend(canvas, x, y, { lines, lo, hi, interval }) {
   row("TREE TRUNK", SOLID.tree);
   row("ROCK / BOULDER", SOLID.rock);
   row("LOG / STUMP / TIMBER", SOLID.wood);
-  row("HN HOUSE, YARD, PARKED CAR", SOLID.building);
+  row("HN HOUSE, YARD, PARKED CAR / VN TOWN LOT", SOLID.building);
   gap();
   row("GROUND HEIGHT", null);
   {

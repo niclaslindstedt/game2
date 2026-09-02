@@ -27,14 +27,23 @@ import { GeoBuilder } from "./flora-build.ts";
 import { shareOne } from "../lib/shared-gpu.ts";
 import { detailTexture } from "./textures.ts";
 
+/** A roof with a pitch to it — everything the plan can ask for but flat,
+ * which is a village building's (`building.ts`) and never a house's. */
+export type PitchedRoof = Exclude<RoofKind, "flat">;
+
 /** The paint box. Falu red is the iron-oxide red every second house in the
  * country is painted; the ochre is the manor's yellow; the white is a warm
- * white, never a printer's. The trims are a shade off pure so the jitter
- * has somewhere to go. */
-const PAINT = {
+ * white, never a printer's. The grey render, the yellow brick and the green
+ * are the village's — what a block of flats, a post office and a workshop
+ * are done in. The trims are a shade off pure so the jitter has somewhere
+ * to go. */
+export const PAINT = {
   red: new THREE.Color(0x8c2f24),
   yellow: new THREE.Color(0xd8b25a),
   white: new THREE.Color(0xe9e4d6),
+  grey: new THREE.Color(0xa3a49e),
+  brick: new THREE.Color(0xb6875a),
+  green: new THREE.Color(0x4f6a4b),
   trim: new THREE.Color(0xf1ede2),
   /** White walls get trim a shade greyer, or there is no trim to see. */
   trimOnWhite: new THREE.Color(0xd2cdbf),
@@ -47,15 +56,21 @@ const PAINT = {
   post: new THREE.Color(0xf1ede2),
 };
 
-const ROOF: Record<RoofKind, { face: THREE.Color; ridge: THREE.Color }> = {
+export const ROOF: Record<PitchedRoof, { face: THREE.Color; ridge: THREE.Color }> = {
   tile: { face: new THREE.Color(0xb35b34), ridge: new THREE.Color(0x8f452a) },
   metal: { face: new THREE.Color(0x2b2d30), ridge: new THREE.Color(0x1f2124) },
   slate: { face: new THREE.Color(0x4e5865), ridge: new THREE.Color(0x3a424c) },
 };
 
+/** The roof a house gets: its plan's, or sheet metal where a plan asks a
+ * house for the flat roof only a village building carries. */
+export function pitched(roof: RoofKind): PitchedRoof {
+  return roof === "flat" ? "metal" : roof;
+}
+
 /** Dimensions a plan does not carry, m — the same on every house because
  * they are what a house IS, not what distinguishes one from another. */
-const HOUSE = {
+export const HOUSE = {
   /** The stone plinth the timber stands on. */
   plinth: 0.4,
   storey: 2.7,
@@ -74,14 +89,14 @@ const HOUSE = {
   chimney: { w: 0.6, h: 0.9 },
 } as const;
 
-/** One material for every house: vertex colours under the world's speckle,
- * lit by the scene. */
-const houseMaterial = shareOne(
+/** One material for every building: vertex colours under the world's
+ * speckle, lit by the scene. */
+export const houseMaterial = shareOne(
   () => new THREE.MeshLambertMaterial({ vertexColors: true, map: detailTexture() }),
 );
 
 /** A box by its centre and size — the one shape a house is mostly made of. */
-function box(
+export function box(
   b: GeoBuilder,
   color: THREE.Color,
   cx: number,
@@ -100,9 +115,9 @@ function box(
  * footprint `w` (along X) by `d` (along Z) centred at (cx, cz), eaves at
  * height `eaveY`. The gable ends are the wall's own colour, filled as a
  * triangular prism so the attic is closed. Returns the ridge height. */
-function gableRoof(
+export function gableRoof(
   b: GeoBuilder,
-  roof: RoofKind,
+  roof: PitchedRoof,
   wall: THREE.Color,
   cx: number,
   cz: number,
@@ -159,7 +174,7 @@ function gableRoof(
  * glazing bar over the pane. `face` is the outward normal's axis and sign:
  * the wall's plane is at `at` along it, and (u, v) place the window across
  * the wall and up it. */
-function windowOn(
+export function windowOn(
   b: GeoBuilder,
   face: { axis: "x" | "z"; sign: 1 | -1 },
   at: number,
@@ -189,8 +204,9 @@ function windowOn(
 }
 
 /** The block's walls, plinth and corner boards: a box `w` by `d` centred at
- * (cx, cz), `storeys` high. Returns the eaves' height. */
-function walls(
+ * (cx, cz), `storeys` high — each `storey` metres, a house's unless a
+ * caller has taller rooms. Returns the eaves' height. */
+export function walls(
   b: GeoBuilder,
   plan: HousePlan,
   cx: number,
@@ -198,10 +214,11 @@ function walls(
   w: number,
   d: number,
   storeys: number,
+  storey: number = HOUSE.storey,
 ): number {
   const wall = PAINT[plan.walls];
   const trim = plan.walls === "white" ? PAINT.trimOnWhite : PAINT.trim;
-  const height = storeys * HOUSE.storey;
+  const height = storeys * storey;
   box(b, PAINT.plinth, cx, HOUSE.plinth / 2, cz, w + 0.12, HOUSE.plinth, d + 0.12);
   box(b, wall, cx, HOUSE.plinth + height / 2, cz, w, height, d);
   const c = HOUSE.cornerBoard;
@@ -221,8 +238,9 @@ export function houseGeometry(plan: HousePlan, rand: () => number): THREE.Buffer
   const wall = PAINT[plan.walls];
   const w = plan.width;
   const d = plan.depth;
+  const roof = pitched(plan.roof);
   const eave = walls(b, plan, 0, 0, w, d, plan.storeys);
-  const ridge = gableRoof(b, plan.roof, wall, 0, 0, w, d, eave);
+  const ridge = gableRoof(b, roof, wall, 0, 0, w, d, eave);
 
   // The windows: an even row across the front and the back on every
   // storey, one on each gable end, and the door where the plan's roll puts
@@ -310,7 +328,7 @@ export function houseGeometry(plan: HousePlan, rand: () => number): THREE.Buffer
       );
     }
     // A little pitched roof with its ridge running out from the wall.
-    gableRoof(b, plan.roof, wall, doorU, d / 2 + p.d / 2, p.d + 0.2, p.w, HOUSE.plinth + p.h, true);
+    gableRoof(b, roof, wall, doorU, d / 2 + p.d / 2, p.d + 0.2, p.w, HOUSE.plinth + p.h, true);
   }
 
   // The chimney, on the ridge, a third of the way along it.
@@ -328,7 +346,7 @@ export function houseGeometry(plan: HousePlan, rand: () => number): THREE.Buffer
     const cx = g.side * (w / 2 - g.width / 2);
     const cz = -d / 2 - g.depth / 2;
     const wingEave = walls(b, plan, cx, cz, g.width, g.depth + 0.3, 1);
-    gableRoof(b, plan.roof, wall, cx, cz, g.depth + 0.3, g.width, wingEave, true);
+    gableRoof(b, roof, wall, cx, cz, g.depth + 0.3, g.width, wingEave, true);
     const sill = HOUSE.plinth + HOUSE.window.sill;
     windowOn(b, { axis: "z", sign: -1 }, cz - g.depth / 2 - 0.15, cx, sill);
     windowOn(b, { axis: "x", sign: g.side }, g.side * (w / 2), cz, sill);
@@ -336,7 +354,8 @@ export function houseGeometry(plan: HousePlan, rand: () => number): THREE.Buffer
   return b.build();
 }
 
-/** The house as a mesh, standing on local y = 0 facing +z. */
+/** The house as a mesh, standing on local y = 0 facing +z. A HOUSE — for
+ * the village's other kinds, `buildBuilding` in `building.ts` dispatches. */
 export function buildHouse(plan: HousePlan, rand: () => number): THREE.Mesh {
   const mesh = new THREE.Mesh(houseGeometry(plan, rand), houseMaterial());
   mesh.frustumCulled = true;

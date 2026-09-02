@@ -26,6 +26,7 @@ import { createLandField } from "./land.ts";
 import { junctionFlat, junctionMainEdge, junctionPlatformY, ROAD_CROSS } from "./road.ts";
 import { buildSpur, cutSpur, placeBlock, SPUR, type ShelfBand, type Spur } from "./spurs.ts";
 import { placeHomesteads, type Homestead } from "./homesteads.ts";
+import { placeTowns, type Town } from "./towns.ts";
 import { createHighwayNetwork, type Highway } from "./highway.ts";
 
 export type Surface = "gravel" | "asphalt" | "water";
@@ -231,6 +232,12 @@ export type Track = {
    * that ends at a house, which is everything a branch is not allowed to
    * be. */
   homesteads: Homestead[];
+  /** R39 — the towns: each a village of lots along a piece of sealed road
+   * — the borrowed run the rally drives through, or the arm the tape shuts
+   * at a junction — with a building on every lot and the cars outside it.
+   * The street itself is road already on the track; this is what stands
+   * beside it. */
+  towns: Town[];
   /** R17 — the junctions themselves: where two roads MEET, and the paved
    * apron that makes them one surface there instead of two ribbons that
    * happen to touch. The terrain flattens it and the renderer paves it. */
@@ -670,12 +677,13 @@ const ROAD_DISTANCE_REACH = 220;
  * Strided to match the stage's own coarsening, and the slack is taken off
  * the answer so this can only ever under-report the room a branch has,
  * never invent some. */
-function branchClearance(list: Spur[]): (x: number, z: number) => number {
+function branchClearance(list: Spur[]): (x: number, z: number, except?: Spur) => number {
   const STRIDE = 8;
   const slack = BRANCH_DISTANCE_SLACK;
-  return (x: number, z: number): number => {
+  return (x: number, z: number, except?: Spur): number => {
     let best = Infinity;
     for (const other of list) {
+      if (other === except) continue;
       const b = other.bounds;
       if (
         x < b.minX - ROAD_DISTANCE_REACH ||
@@ -1416,7 +1424,14 @@ function createCompiler(
     const last = endOf(track.samples[track.samples.length - 1], 1);
     const parting2 = BUILT_PARTING * BUILT_PARTING;
     return (meet: { x: number; z: number }) =>
-      (x: number, z: number, ignoring = true): number => {
+      (
+        x: number,
+        z: number,
+        ignoring = true,
+        /** R39 — a stretch of the route to leave out of the answer: the
+         * street a town stands on, which the lots are beside on purpose. */
+        except?: { fromS: number; toS: number },
+      ): number => {
         let best = apronDistance(first, x, z);
         if (!track.endless) best = Math.min(best, apronDistance(last, x, z));
         const cx = Math.floor(x / CELL);
@@ -1460,6 +1475,7 @@ function createCompiler(
                   const mz = sample.z - meet.z;
                   if (mx * mx + mz * mz < parting2) continue;
                 }
+                if (except && sample.s >= except.fromS && sample.s <= except.toS) continue;
                 const d = Math.hypot(ddx, ddz);
                 if (d < best) best = d;
               }
@@ -2271,10 +2287,58 @@ function createCompiler(
     // that flares it — and for the minor arm on BOTH sides of the meeting
     // point to have been walked.
     buildForks();
+    // R39 — the towns, once the forks are built: a town stands on the
+    // borrowed tarmac or on an abandoned arm, and keeps off every other
+    // road there is.
+    buildTowns();
     // R37 — and the homesteads last of all, because a drive keeps off every
-    // road there is, and the branches are only all there once the forks
-    // are built.
+    // road there is and off the towns, and the branches are only all there
+    // once the forks are built.
     buildHomesteads();
+  };
+
+  /** R39 — the towns whose streets are settled on road committed since the
+   * last call: the whole stage on a finite one, everything behind the
+   * streaming frontier on an endless one, for the homesteads' reason. */
+  let townFrom = 0;
+  const buildTowns = (): void => {
+    if (!followsLand) return;
+    let to = track.samples.length;
+    if (track.endless) {
+      const horizon = track.samples[to - 1].s - STREAMED_HOLD;
+      while (to > townFrom && track.samples[to - 1].s > horizon) to--;
+    }
+    if (to <= townFrom) return;
+    const whole = roadDistanceField()({ x: 0, z: 0 });
+    const branches = branchClearance(track.spurs);
+    const placed = placeTowns({
+      seed: track.seed,
+      width: track.width,
+      samples: track.samples,
+      from: townFrom,
+      to,
+      finishS: track.finishS,
+      endless: track.endless,
+      land,
+      spurs: track.spurs,
+      junctions: track.junctions,
+      routeDistance: (x, z, except) => whole(x, z, false, except),
+      branchDistance: branches,
+      highwayAt: (x, z) => highways.nearest(x, z, undefined, 40)?.road ?? null,
+      highwayDistance: (x, z, except) => highways.nearest(x, z, except)?.d ?? Infinity,
+      shelfBand,
+      homesteadDistance: (x, z) => {
+        let best = Infinity;
+        for (const h of track.homesteads) {
+          const d = Math.hypot(h.yard.x - x, h.yard.z - z) - h.yard.radius;
+          if (d < best) best = d;
+        }
+        return best;
+      },
+      placed: track.towns,
+    });
+    track.towns.push(...placed.towns);
+    townFrom = placed.scanned;
   };
 
   /** R37 — the homesteads whose slots fall on road committed since the last
@@ -2307,6 +2371,16 @@ function createCompiler(
       branchDistance: branchClearance(track.spurs),
       highwayDistance: (x, z) => highways.nearest(x, z)?.d ?? Infinity,
       shelfBand,
+      townDistance: (x, z) => {
+        let best = Infinity;
+        for (const town of track.towns) {
+          for (const lot of town.lots) {
+            const d = Math.hypot(lot.pad.x - x, lot.pad.z - z) - lot.pad.radius;
+            if (d < best) best = d;
+          }
+        }
+        return best;
+      },
       placed: track.homesteads,
     });
     track.homesteads.push(...placed);
@@ -2585,6 +2659,7 @@ function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs, circuit =
     highways: [],
     spurs: [],
     homesteads: [],
+    towns: [],
     junctions: [],
   };
 }

@@ -268,6 +268,25 @@
 //       the run either: at rally pace that is a lean and not a corner, so a
 //       kilometre of dead-flat public road is a straight no matter which
 //       vocabulary drew it.
+//   R39 TARMAC LEADS TO A TOWN. A public road (R17) was laid to reach
+//       somewhere, and every so often the somewhere is on the stage: a
+//       small town of ten to twenty buildings standing along the sealed
+//       road, on both sides of it, each on its own graded lot with its
+//       front to the street. It stands on the piece of tarmac the rally
+//       BORROWS — so the stage runs straight through it between the walls
+//       — or, where the stage only meets the road at a junction or a
+//       crossing, along the arm the tape shuts, so the road the rally does
+//       not take can be seen going somewhere. A town is a VILLAGE, not a
+//       row of farms: most of it is houses, but it has what a farm has not
+//       — a block of flats, a grocery, the post office, a workshop — and
+//       the shops stand in the middle of it. The lots keep off the road's
+//       own verge (R31's bench is still the bench), off every other road
+//       (R23) and its junctions' platforms, out of the water (R35), and
+//       clear of the homesteads (R37), which keep clear of them; the ground
+//       is graded level with the street's edge under each one, and the
+//       walls and the cars outside them are as solid as they look. One
+//       town on a stage, because a town is a place and two of them in five
+//       kilometres is a suburb.
 
 /** Sample spacing along the compiled centerline, meters. It lives here
  * because it is not only the compiler's business: a search that has to land
@@ -1726,6 +1745,67 @@ export const STAGE_RULES = {
      * on itself can bring two arc positions a kilometre apart within a
      * field of each other. */
     apart: 150,
+  },
+
+  /** R39 — THE TOWNS: where the tarmac leads. */
+  town: {
+    /** How many buildings a town is. Under `size.min` it is not a town and
+     * is not built; the dice pick a target inside the band and the street
+     * decides how much of it fits. */
+    size: { min: 10, max: 20 },
+    /** How many towns a finite stage may carry, and — on an endless one —
+     * the least stage arc between two, m. */
+    perStage: 1,
+    spacing: 4000,
+    /** How likely a town is on a street the stage only MEETS (an abandoned
+     * arm past a junction or a crossing) rather than drives. The borrowed
+     * run itself always gets one where one fits: that tarmac was laid to
+     * reach somewhere, and the rally is about to find out where. */
+    armChance: 0.8,
+    /** THE STREET: how long a piece of sealed road has to be before a town
+     * fits on it, m, and how far along an abandoned arm the town may reach
+     * — past which the arm is out in the country and out of the fog. The
+     * tightest bend (as a radius, m) a lot may stand beside: a village
+     * street sweeps, and a house on the outside of a corner is a wall a car
+     * arrives at. */
+    street: { min: 150, reach: 420, minRadius: 70 },
+    /** THE LOT: how far the front wall stands past the road's verge, m
+     * (the front yard — a shop gets the deep end, for the cars outside
+     * it), the gap between two buildings along the street, how far past
+     * the building's footprint its graded pad reaches, how far past the
+     * pad's rim the country is eased back onto it, and how much the bare
+     * ground may differ from the pad's level across it before the lot
+     * would be a cut or a fill nobody would build on. */
+    lot: {
+      front: { min: 4.5, max: 9 },
+      shopFront: 8.5,
+      gap: { min: 4, max: 9 },
+      margin: 1.5,
+      blend: 6,
+      level: 6,
+    },
+    /** How likely a town is to have each kind of building at all, and the
+     * most of each it may have (a second one is half as likely as the
+     * first, a third half as likely again). Houses fill in whatever is
+     * left, and the shops stand in the middle of the town. */
+    kinds: {
+      villa: { chance: 0.9, max: 3 },
+      apartments: { chance: 0.75, max: 2 },
+      grocery: { chance: 0.9, max: 1 },
+      post: { chance: 0.7, max: 1 },
+      workshop: { chance: 0.65, max: 1 },
+    },
+    /** The cars outside: how many stand in front of each kind of building,
+     * as a band, and the spacing between two along a front. */
+    cars: {
+      house: { min: 0, max: 2 },
+      villa: { min: 1, max: 2 },
+      apartments: { min: 2, max: 4 },
+      grocery: { min: 2, max: 4 },
+      post: { min: 1, max: 2 },
+      workshop: { min: 1, max: 3 },
+      pitch: 3.2,
+    },
   },
 
   /** R19 — SUPERELEVATION: how far a turn is banked into itself. A road

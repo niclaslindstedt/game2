@@ -311,6 +311,20 @@ export const ANALYSIS = {
     sweeps: 0.01,
     sweepClear: 30,
 
+    /** R39 — how much BORROWED tarmac a stage may carry before it owes a
+     * town on it, m of sealed route in one run. The town placer needs
+     * `town.street.min` of open street between the two junctions' own
+     * ground (`junction.parting` each), plus some slack for the corners at
+     * either end of the run, which are sealed and not straight. A run this
+     * long with no town on it is tarmac that leads nowhere. */
+    townRun: 370,
+    /** ...and how far past the road's verge a lot's front wall may stand,
+     * m. The placer's own front yards top out at `town.lot.front.max`, and
+     * a wide building pushes its wall back by what its pad needs to clear
+     * the verge — a block of flats lands a couple of metres further out
+     * than a house. Past this the building is not ON the street. */
+    townFront: 12,
+
     /** R31 — how much HEIGHT two roads passing each other may have between
      * them, over and above what R31's own verge cone allows for the ground
      * they are apart on. Under `stepFloor` nothing is reported at all: the

@@ -60,12 +60,29 @@ export {
   placeHomesteads,
   type Homestead,
   type HomesteadContext,
-  type HousePlan,
   type LaneTree,
+} from "./homesteads.ts";
+export {
+  buildingSolids,
+  drawHousePlan,
+  drawTownPlan,
+  parkedSolids,
+  wallStoreys,
+  type Building,
+  type BuildingKind,
+  type HousePlan,
   type ParkedCar,
   type RoofKind,
   type WallPaint,
-} from "./homesteads.ts";
+} from "./buildings.ts";
+export {
+  placeTowns,
+  townSolids,
+  type Lot,
+  type Town,
+  type TownContext,
+  type TownStreet,
+} from "./towns.ts";
 export { createGuardField, type CornerGuard, type GuardField } from "./guards.ts";
 export {
   buildKerbs,

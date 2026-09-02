@@ -603,6 +603,89 @@ export function analyzeRoads(track: Track): MetricReport {
     });
   }
 
+  // ── R39 — DOES THE TARMAC LEAD ANYWHERE? ──────────────────────────────
+  //
+  // A public road was laid to reach somewhere. Where the stage borrows
+  // enough of one to hold a village, a village stands on it; and wherever
+  // a town stands, every lot fronts the sealed street from behind its
+  // verge — never on the road, never out in the field behind it.
+  let longestRun = 0;
+  let runStart = -1;
+  for (let i = 0; i <= track.samples.length; i++) {
+    const paved = i < track.samples.length && track.samples[i].surface === "asphalt";
+    if (paved && runStart < 0) runStart = i;
+    if (!paved && runStart >= 0) {
+      longestRun = Math.max(longestRun, track.samples[i - 1].s - track.samples[runStart].s);
+      runStart = -1;
+    }
+  }
+  let townless = 0;
+  if (longestRun >= R.townRun && track.towns.length === 0) {
+    townless = 1;
+    findings.push({
+      code: "roads.town",
+      severity: "warn",
+      message: `${longestRun.toFixed(0)} m of borrowed tarmac with no town on it`,
+      value: longestRun,
+    });
+  }
+  let lots = 0;
+  let badLots = 0;
+  const T = STAGE_RULES.town;
+  for (const town of track.towns) {
+    const street =
+      town.street.kind === "route"
+        ? { samples: track.samples, width: track.width }
+        : (() => {
+            const spur = track.spurs.find((s) => s.atS === town.atS && s.end === town.street.end);
+            return spur ? { samples: spur.samples, width: spur.width } : null;
+          })();
+    if (town.lots.length < T.size.min || town.lots.length > T.size.max) {
+      findings.push({
+        code: "roads.town",
+        severity: "error",
+        message: `a town of ${town.lots.length} buildings @${town.atS.toFixed(0)} m`,
+        s: town.atS,
+        value: town.lots.length,
+      });
+    }
+    const lip = (street?.width ?? track.width) / 2 + ROAD_CROSS.reach;
+    for (const lot of town.lots) {
+      lots++;
+      const b = lot.building;
+      let d = Infinity;
+      let surface = "gravel";
+      for (const s of street?.samples ?? []) {
+        const here = Math.hypot(s.x - b.x, s.z - b.z);
+        if (here < d) {
+          d = here;
+          surface = s.surface;
+        }
+      }
+      const front = d - b.plan.depth / 2 - lip;
+      const wrong =
+        street === null
+          ? "stands on a street the track does not have"
+          : surface !== "asphalt"
+            ? "stands on gravel"
+            : front < T.lot.front.min - 0.5
+              ? `stands ${front.toFixed(1)} m past the verge, in the road's own margin`
+              : front > R.townFront
+                ? `stands ${front.toFixed(1)} m back from the street`
+                : null;
+      if (!wrong) continue;
+      badLots++;
+      findings.push({
+        code: "roads.lots",
+        severity: "error",
+        message: `a ${b.plan.kind} ${wrong} @${town.atS.toFixed(0)} m`,
+        at: { x: b.x, z: b.z },
+        s: town.atS,
+        value: front,
+      });
+    }
+  }
+
   const points = roads.reduce((sum, road) => sum + road.points.length, 0);
   const checks: Check[] = [
     {
@@ -694,6 +777,21 @@ export function analyzeRoads(track: Track): MetricReport {
       weight: 1,
       value: boxFill,
     },
+    {
+      id: "town",
+      label: "the borrowed tarmac leads to a town (R39)",
+      score: under(townless, 0, 1),
+      weight: 1,
+      value: longestRun,
+      budget: R.townRun,
+    },
+    {
+      id: "lots",
+      label: "every lot fronts its sealed street from behind the verge (R39)",
+      score: rate(badLots, Math.max(1, lots)),
+      weight: 1.5,
+      value: badLots,
+    },
   ];
 
   return {
@@ -718,6 +816,10 @@ export function analyzeRoads(track: Track): MetricReport {
       longestParallel,
       coverage,
       boxFill,
+      towns: track.towns.length,
+      lots,
+      badLots,
+      longestRun,
     },
     ms: Date.now() - started,
   };
