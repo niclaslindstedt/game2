@@ -50,10 +50,14 @@ export const DAMAGE_ZONES = 8;
  * longer there, and the cabin is seen straight into. A door is bolted
  * deeper than anything on the flank, and a wheel deeper still: the first
  * takes a flank folded most of the way to the cage, the second a corner
- * driven into something at pace, or landed on. */
+ * driven into something at pace, or landed on. The LAMPS are the first
+ * thing a cap loses: a headlamp is glass at the very front of the car, and
+ * once it is gone nothing at that end lights or glows. */
 export type DamagePart =
   | "bumperF"
   | "bumperR"
+  | "lampsF"
+  | "lampsR"
   | "mirrorL"
   | "mirrorR"
   | "spoiler"

@@ -71,6 +71,7 @@ import type { GameRenderer } from "./game/renderer.ts";
 import {
   Hud,
   damageCall,
+  partCall,
   wheelCall,
   type HudFlash,
   type HudSnapshot,
@@ -2340,6 +2341,10 @@ export function App() {
           } else if (ev.type === "wheelFail") {
             const call = wheelCall(ev.wheel, ev.off);
             flash(call.text, call.tone);
+          } else if (ev.type === "partBreak") {
+            // Only the parts whose loss the driver cannot see: the lamps.
+            const call = partCall(ev.part);
+            if (call) flash(call.text, call.tone);
           } else if (ev.type === "retire") {
             // THE RUN IS OVER, and there is no time to post. The car is
             // sitting where it stopped; the card goes up over it with the

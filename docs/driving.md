@@ -1016,8 +1016,12 @@ the HUD, like every other left and right. And an engine that has been called
 DAMAGED SMOKES: steam off the bonnet, thin at first, thicker and darker as the
 damage climbs, black once it is dead.
 
-Seventeen pieces can come off. The two bumpers, the two mirrors, the spoiler
-and the two lids fly as they always did: a bonnet or boot lid is bolted deeper
+Nineteen pieces can come off. The two LAMP pairs go first (`partAt.lamp`, the
+first fold past a brush): a smashed headlamp is a dark hole in the face of the
+car — no bloom, no beam on the road ahead, no glow in the dust behind for the
+tail lamps — and the HUD says `HEADLIGHTS BROKEN` or `TAILLIGHTS BROKEN`,
+because a driver looking out of the car cannot see its own lamps. The two
+bumpers, the two mirrors, the spoiler and the two lids fly as they always did: a bonnet or boot lid is bolted deeper
 than the bumper in front of it (`TUNING.collision.partAt.lid`), so it only lets
 go once the clip around it has folded far enough to pull its hinges — and what
 is left showing is what the panel was covering. Behind a boot lid that is a

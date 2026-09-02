@@ -690,9 +690,35 @@ describe("the end of the run", () => {
     // The glass and the bonnet are gone on the big one, and the nose is
     // folded a quarter of a metre: the car LOOKS like what happened to it.
     expect(hit(100).car.damage.broken).toEqual(
-      expect.arrayContaining(["bumperF", "glassF", "hood"]),
+      expect.arrayContaining(["lampsF", "bumperF", "glassF", "hood"]),
     );
     expect(hit(100).car.damage.zones[0]).toBeGreaterThan(0.2);
+  });
+
+  it("the lamps are the first thing a cap loses — headlamps at the nose, tail lamps at the tail", () => {
+    const end = (u: number): string[] => {
+      const state = freshState();
+      const car = state.car;
+      const ahead = u > 0;
+      const rock = solid({
+        kind: "boulder",
+        size: 2.2,
+        x: car.x,
+        z: car.z + (ahead ? 1 : -1) * (TUNING.collision.halfLength + 0.5),
+      });
+      car.u = u;
+      collideCar(state.spec, car, [rock], [], state.stats);
+      return car.damage.broken;
+    };
+    // Backing into a wall at 35 km/h takes the tail lamps and nothing else;
+    // the nose at the same pace loses its headlamps, and the bumper only at
+    // a real hit.
+    expect(end(-35 / 3.6)).toEqual(["lampsR"]);
+    expect(end(35 / 3.6)).toEqual(["lampsF"]);
+    const hard = end(60 / 3.6);
+    expect(hard).toContain("lampsF");
+    expect(hard).toContain("bumperF");
+    expect(hard).not.toContain("lampsR");
   });
 
   it("a dead engine stops the car for good, and the run is retired where it stops", () => {

@@ -371,8 +371,11 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
       return;
     }
     const mesh = body.breakables[part];
-    if (!mesh) return;
+    // A part with nothing of its own to throw — a smashed lamp is glass
+    // that the crumple has already scuffed dark, and the bloom over it is
+    // car-mesh.ts's to switch off — is booked and nothing more.
     detached.add(part);
+    if (!mesh) return;
     // The bolt-ons stop being one thing the moment one of them stops being
     // bolted on: until here they are drawn as a single mesh (car-body.ts),
     // and this is the frame that hands each of them back its own.

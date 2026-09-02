@@ -110,6 +110,10 @@ export type Environment = {
   onThunder: (play: (clap: Clap) => void) => void;
   /** How filthy the car is, 0..1 — every beam fades under a caked lens. */
   setGrime: (level: number) => void;
+  /** Which of the car's lamp pairs the crash has taken out. A beam with no
+   * lamp behind it lights nothing: the road ahead goes dark with the
+   * headlamps, the dust behind with the tail lamps. */
+  setLampsBroken: (front: boolean, rear: boolean) => void;
   /** How far off the centerline the car's lamps sit, m — front and rear. */
   setLampSpread: (front: number, rear: number) => void;
   /** Hang the PLAYER's lamps on the register the dust clouds are lit from
@@ -459,6 +463,13 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   const setGrime = (level: number): void => {
     grime = level < 0 ? 0 : level > 1 ? 1 : level;
   };
+  /** What is left of each pair once the crash has had them: 1 or 0. */
+  let headLamps = 1;
+  let tailLamps = 1;
+  const setLampsBroken = (front: boolean, rear: boolean): void => {
+    headLamps = front ? 0 : 1;
+    tailLamps = rear ? 0 : 1;
+  };
 
   let preset: Preset = skyFor({
     timeOfDay: "day",
@@ -583,7 +594,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
       const fwd = { x: Math.sin(car.heading), z: Math.cos(car.heading) };
       const right = { x: fwd.z, z: -fwd.x };
       aimLamps(headlights, car, fwd, right, {
-        intensity: 150 * lampPower() * (1 - HEAD_GRIME * grime),
+        intensity: 150 * lampPower() * (1 - HEAD_GRIME * grime) * headLamps,
         spread: headSpread,
         from: 1.4,
         up: 0.8,
@@ -592,7 +603,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
         splay: 5,
       });
       aimLamps(taillights, car, fwd, right, {
-        intensity: 20 * lampPower() * (1 - TAIL_GRIME * grime),
+        intensity: 20 * lampPower() * (1 - TAIL_GRIME * grime) * tailLamps,
         spread: tailSpread,
         from: -1.6,
         up: 0.55,
@@ -678,6 +689,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
       playThunder = play;
     },
     setGrime,
+    setLampsBroken,
     setLampSpread,
     lightDust: (car) => {
       // The same two switches the beams are on — the lamps are lit or they
@@ -686,7 +698,11 @@ export function createEnvironment(scene: THREE.Scene): Environment {
       // real beams: see dust-light.ts.
       if (!preset.headlights) return;
       const power = lampPower();
-      hangDustLamps(car, power * (1 - HEAD_GRIME * grime), power * (1 - TAIL_GRIME * grime));
+      hangDustLamps(
+        car,
+        power * (1 - HEAD_GRIME * grime) * headLamps,
+        power * (1 - TAIL_GRIME * grime) * tailLamps,
+      );
     },
     update,
     dispose,

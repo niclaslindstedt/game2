@@ -23,8 +23,12 @@ that gives with the corners: the pedal loses part of its bite and the handbrake
 nearly all of it, so a car with cut lines cannot be flicked round a hairpin on
 the lever.
 
-The glass shatters — windscreen, backlight, each flank's windows — and stays
-gone, grime and all, so the cabin is seen straight into. A flank driven hard
+The lamps are the first thing a cap loses: a headlamp or a tail lamp pair
+smashed in a hit stops glowing, its beam goes off the road and out of the dust,
+and the HUD says HEADLIGHTS BROKEN or TAILLIGHTS BROKEN, because a driver
+looking out of the car cannot see its own lamps. The glass shatters —
+windscreen, backlight, each flank's windows — and stays gone, grime and all,
+so the cabin is seen straight into. A flank driven hard
 into a rock takes the door with it, and what is left is the dark of the cabin
 where the door was, stripes and all. The bodywork folds twice as far as it did
 for the same hit and buckles rather than scales: a car that has met a wall at

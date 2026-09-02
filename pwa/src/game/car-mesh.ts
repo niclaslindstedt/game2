@@ -9,7 +9,7 @@
 
 import * as THREE from "three";
 import { clamp } from "../lib/util.ts";
-import type { CarSpec, GameEvent, GameState } from "@engine";
+import type { CarSpec, DamagePart, GameEvent, GameState } from "@engine";
 
 import {
   backlightNormal,
@@ -384,10 +384,16 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
   /** The blooms, dimmed by whatever the run has thrown at the lenses — and
    * the lenses themselves, which are switched between the world's light and
    * their own rather than tinted along with the paint. */
-  const shineLamps = (): void => {
+  const shineLamps = (broken: readonly DamagePart[]): void => {
     const clean = 1 - LAMP_GRIME * dirt.level();
-    lampMat.opacity = (lit ? LAMP_NIGHT : LAMP_DAY) * clean * fade;
-    headMat.opacity = (lit ? HEAD_NIGHT : HEAD_DAY) * clean * fade;
+    // A lamp that the crash has taken out of its cap glows with nothing:
+    // the bloom is the light escaping the lamp, and there is no lamp. The
+    // lens under it is left to the crumple, which has already scuffed it
+    // dark — a smashed lamp is a dark hole in the face of the car.
+    const front = broken.includes("lampsF") ? 0 : 1;
+    const rear = broken.includes("lampsR") ? 0 : 1;
+    lampMat.opacity = (lit ? LAMP_NIGHT : LAMP_DAY) * clean * fade * rear;
+    headMat.opacity = (lit ? HEAD_NIGHT : HEAD_DAY) * clean * fade * front;
     if (lensMat) {
       if (lit) lensMat.color.setRGB(1, 1, 1);
       else lensMat.color.copy(worldLight).lerp(WHITE, LENS_DARK);
@@ -539,7 +545,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
       dt,
     );
     shineGlass(state, eye);
-    shineLamps();
+    shineLamps(car.damage.broken);
     damage.update(state, dt);
 
     if (!car.airborne) {

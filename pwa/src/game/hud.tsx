@@ -11,7 +11,7 @@
 
 import type { CSSProperties } from "react";
 
-import type { DamageCall, GamePhase, RetireReason, TurnSeverity } from "@engine";
+import type { DamageCall, DamagePart, GamePhase, RetireReason, TurnSeverity } from "@engine";
 
 import { deviceControls, type InputManager } from "./input.ts";
 import { FlyControls } from "./hud-fly.tsx";
@@ -183,6 +183,18 @@ export function damageCall(
   if (!spent) return { text: `${part} DAMAGED`, tone: "info" };
   if (system === "engine") return { text: "ENGINE DEAD", tone: "bad" };
   return { text: `${part} BROKEN`, tone: "bad" };
+}
+
+/** A PART'S call, for the parts whose loss is not on the screen in front of
+ * the driver: the lamps. A bonnet going over the roof announces itself and
+ * a mirror is in the corner of the eye, but a headlamp is glass at the
+ * very front of a car the driver is looking out of, and the first sign of
+ * it being gone would otherwise be the next dark corner. Null for every
+ * other part. */
+export function partCall(part: DamagePart): { text: string; tone: HudFlash["tone"] } | null {
+  if (part === "lampsF") return { text: "HEADLIGHTS BROKEN", tone: "bad" };
+  if (part === "lampsR") return { text: "TAILLIGHTS BROKEN", tone: "bad" };
+  return null;
 }
 
 /** A WHEEL'S call. The engine names its wheels in its own frame (positive

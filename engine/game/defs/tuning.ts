@@ -1667,7 +1667,18 @@ export const TUNING = {
      * flank behind it has. A DOOR is the deepest thing on the flank —
      * it takes a side driven into a rock at pace, most of the way to the
      * cage — and what is left showing is the cabin. */
-    partAt: { mirror: 0.04, bumper: 0.12, spoiler: 0.1, glass: 0.15, lid: 0.2, door: 0.3 },
+    partAt: {
+      mirror: 0.04,
+      /** The lamps sit in the very face of each cap, and they are glass:
+       * they go on the first fold that is more than a brush — a wall met
+       * at 30 km/h — well before the bumper under them lets go. */
+      lamp: 0.05,
+      bumper: 0.12,
+      spoiler: 0.1,
+      glass: 0.15,
+      lid: 0.2,
+      door: 0.3,
+    },
     /** THE END OF THE RUN, short of the line. A car whose engine has died
      * (`systems.engine` at 1) or that has fewer than three wheels left is
      * never going to move under its own power again, and once it has come
@@ -1749,6 +1760,8 @@ export const TUNING = {
         mirrorR: 0.0008,
         bumperF: 0.004,
         bumperR: 0.003,
+        lampsF: 0,
+        lampsR: 0,
         spoiler: 0.002,
         hood: 0.009,
         hatch: 0.007,

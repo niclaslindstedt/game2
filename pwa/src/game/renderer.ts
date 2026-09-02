@@ -1121,6 +1121,10 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     if (driving) wayHomeArrow.update(state, chase.camera, dt);
     chase.update(state, dt);
     environment.setGrime(car?.grime() ?? 0);
+    // ...and which of its lamp pairs the crash has taken: a beam with no
+    // lamp behind it lights nothing (car-mesh.ts darkens the lamp itself).
+    const broken = state.car.damage.broken;
+    environment.setLampsBroken(broken.includes("lampsF"), broken.includes("lampsR"));
     // The weather is the environment's, the FX budget is the renderer's.
     environment.setEffects(fx);
     environment.update(state, chase.camera, dt);
