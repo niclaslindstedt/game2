@@ -112,6 +112,41 @@ export function trackLost(state: GameState): boolean {
   return home.distance > guide.near && Math.abs(home.bearing) > guide.away;
 }
 
+/** WHICH WAY THE CAR IS GOING ALONG THE STAGE, read at one centerline
+ * sample. The two fields answer different questions and the wrong-way call
+ * needs both: a spun car POINTS back up the stage while its momentum still
+ * carries it down, and a car reversing out of a ditch TRAVELS back up it
+ * while still pointing down the road. */
+export type StageDirection = {
+  /** How far the nose is off the road's own heading, rad — 0 pointing down
+   * the stage, π straight back up it. Unsigned: which side of the road's
+   * line the car has swung to says nothing about the way it is facing. */
+  facing: number;
+  /** Ground speed along the road, m/s — negative running back up it.
+   * Measured off the car's whole velocity rather than its forward speed, so
+   * a car crossed up at the exit of a corner is credited with the ground it
+   * is actually covering and reverse is simply a negative one. */
+  along: number;
+};
+
+/** Read the direction of travel against the road at `index`. */
+export function stageDirection(state: GameState, index: number): StageDirection {
+  const flat = flatTrack(state.track);
+  const roadX = flat.sinHeading[index];
+  const roadZ = flat.cosHeading[index];
+  const car = state.car;
+  const sinH = Math.sin(car.heading);
+  const cosH = Math.cos(car.heading);
+  // The car's world velocity: forward along (sin h, cos h) plus sideways
+  // along its right, (cos h, -sin h) — the frame the handling works in.
+  const vx = car.u * sinH + car.w * cosH;
+  const vz = car.u * cosH - car.w * sinH;
+  return {
+    facing: Math.acos(Math.max(-1, Math.min(1, sinH * roadX + cosH * roadZ))),
+    along: vx * roadX + vz * roadZ,
+  };
+}
+
 /** Where the car sits against the centerline: everything a fix knows that
  * costs only the search. */
 export type TrackPoint = {

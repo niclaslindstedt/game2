@@ -237,6 +237,9 @@ export function takeSnapshot(
     // reaches it.
     offRoad: state.offRoad && !state.drowning,
     lost: state.lost && !state.drowning,
+    // ...and for the same reason a sinking car is never told to turn round:
+    // the wheels it would turn on are already under water.
+    wrongWay: state.wrongWay && !state.drowning,
     homeDistance: state.lost && !state.drowning ? wayHome(state).distance : 0,
     finishTime,
     record: book !== null && finishTime !== null && (book.best === null || finishTime < book.best),

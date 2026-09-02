@@ -614,6 +614,15 @@ body {
   color: #ffa726;
 }
 
+/* Turned round on the road: the HUD's own red, because this is the one call
+   in the strip that is not a corner coming up but a mistake already being
+   made — the same red the damage instrument and the tape across a closed
+   road are painted in. It also has to be told apart at a glance from the
+   amber way home, which is the OTHER thing that takes this slot over. */
+.hud-pace-turn {
+  color: var(--hud-bad);
+}
+
 /* The price of the button, beside the distance the arrow is quoting: small
    enough to be a footnote on the call rather than a second instruction. */
 .hud-pace-cost {

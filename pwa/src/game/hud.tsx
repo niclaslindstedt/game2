@@ -111,6 +111,12 @@ export type HudSnapshot = {
    * strip waits for this rather than for a wheel merely clipping the verge:
    * a sign that fires every time it does is one the player stops reading. */
   lost: boolean;
+  /** True while the car is driving the stage BACKWARDS — on the road, going
+   * the wrong way down it. The co-driver's strip says TURN AROUND. Never
+   * true at the same time as `lost`: the engine's wrong-way call is the one
+   * that took an honest fix, so it vetoes being lost rather than losing to
+   * it. */
+  wrongWay: boolean;
   /** Ground distance back to the point the reset would put the car, m —
    * only meaningful while `lost`. */
   homeDistance: number;
@@ -445,6 +451,35 @@ function WayHomeCall({ distance, glass }: { distance: number; glass: GlassSlot }
               the two has to be told the price. */}
           <span className="hud-pace-cost">↺ LAST CP</span>
         </span>
+      </div>
+    </div>
+  );
+}
+
+/** Turned round and driving back up the stage, in the co-driver's slot. The
+ * road is still under the wheels, so there is nothing to find and no
+ * distance to quote — the whole call is one instruction and the mark that
+ * says it without being read. */
+function TurnAroundCall({ glass }: { glass: GlassSlot }) {
+  return (
+    <div className={`hud-pace ${paceUnderGlass(glass)}`}>
+      <div className="hud-pace-call hud-pace-turn">
+        {/* The U-turn off a road sign: up the near side, over the top, and
+            back down the far one under a solid head. Drawn in the strip's
+            own hand — one colour, chunky rounded strokes — so it reads as
+            the same instrument as the corner calls it stands in for. */}
+        <svg className="hud-pace-arrow" viewBox="0 0 100 100" aria-hidden="true">
+          <path
+            d="M 76 86 L 76 42 A 24 24 0 0 0 28 42 L 28 54"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="13"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <polygon points="6,52 50,52 28,90" fill="currentColor" />
+        </svg>
+        <span className="hud-pace-text">TURN AROUND</span>
       </div>
     </div>
   );
@@ -815,9 +850,13 @@ export function Hud({
       </div>
 
       {/* The co-driver's slot: corner calls while there is a road to call,
-          the way back the moment there isn't. The way home is not behind the
-          pacenote toggle — switching off the corner calls is a driver saying
-          they know the stage, not one who wants to stay lost.
+          the way back the moment there isn't, and TURN AROUND for the road
+          that is still there and being driven the wrong way down. The first
+          two can never both be true — the engine's wrong-way call vetoes
+          being lost — so the order here only settles which one is written
+          first, not which one wins. Neither is behind the pacenote toggle:
+          switching off the corner calls is a driver saying they know the
+          stage, not one who wants to stay lost.
           WATCHING, the slot is the spectator's banner instead: there is
           nobody in this car to call a corner to, and nobody to send home. */}
       {spectate ? (
@@ -826,6 +865,8 @@ export function Hud({
         snap.phase === "racing" &&
         (snap.lost ? (
           <WayHomeCall distance={snap.homeDistance} glass={glass} />
+        ) : snap.wrongWay ? (
+          <TurnAroundCall glass={glass} />
         ) : (
           show.pacenotes &&
           snap.pacenotes.length > 0 && (
