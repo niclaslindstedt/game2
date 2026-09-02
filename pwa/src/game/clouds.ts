@@ -335,7 +335,8 @@ export function createClouds(): Clouds {
     }
     let litAt = 0;
     let shadedAt = 0;
-    for (const cloud of cloudList) {
+    for (let c = 0; c < shown; c++) {
+      const cloud = cloudList[c];
       const x = Math.sin(cloud.angle) * cloud.radius;
       const z = Math.cos(cloud.angle) * cloud.radius;
       if (camera) {
@@ -366,10 +367,18 @@ export function createClouds(): Clouds {
   const litTone = new THREE.Color(0xffffff);
   const shadedTone = new THREE.Color(0xdde4ee);
   let scudding = false;
+  /** How many of the ring's clusters this sky flies (`Preset.cloudShare`).
+   * The clusters were built in a random order, so the first N of them are a
+   * fair sample of sizes and heights rather than a slice of one kind. */
+  let shown = CLOUDS;
 
   const apply = (p: Preset): void => {
     const d = p.deck;
     scudding = d !== null;
+    // A country's share thins the FAIR-WEATHER ring only. Under a deck the
+    // same clusters are the scud torn along beneath it, and a lid is a lid
+    // in any country — a dry thunderstorm is not a half-empty one.
+    shown = d !== null ? CLOUDS : Math.max(1, Math.round(CLOUDS * p.cloudShare));
     deck.visible = d !== null;
     if (d) {
       paintDeck(d);

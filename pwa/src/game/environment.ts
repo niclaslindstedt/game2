@@ -249,6 +249,11 @@ export function createEnvironment(scene: THREE.Scene): Environment {
    * modulation the profile itself carries. */
   type Ridge = { haze: number; tone: number };
   const ridgeShade: number[] = [];
+  /** The same profile with every summit left as bare rock — the horizon of
+   * a country that has no snowline. Kept as a second array rather than
+   * rebuilt per country: the rings are one static mesh, and swapping which
+   * shade the painter reads costs nothing. */
+  const ridgeBare: number[] = [];
   const ridgeHaze: number[] = [];
   const ridgeTone: number[] = [];
   const ridgePos: number[] = [];
@@ -294,6 +299,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
       const rock = 0.92 + 0.14 * Math.min(1, h / Math.max(1, lift + jag));
       const snow = snowY !== null && h > snowY ? 1.7 : rock;
       ridgeShade.push(rock, rock, snow);
+      ridgeBare.push(rock, rock, rock);
       for (let k = 0; k < 3; k++) {
         ridgeHaze.push(ridge.haze);
         ridgeTone.push(ridge.tone);
@@ -320,6 +326,11 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   /** How tall the rings stand in each country, as a scale on the boreal
    * skyline they were cut for. */
   const RIDGE_HEIGHT: Record<BiomeId, number> = { taiga: 1, desert: 0.38 };
+  /** …and whether its peaks hold snow at all. The snowline is baked into
+   * the profile at the height the rings were CUT at, so scaling them down
+   * only lowers the white caps rather than losing them: a country with no
+   * snow in it has to say so. */
+  const RIDGE_SNOW: Record<BiomeId, boolean> = { taiga: true, desert: false };
   addRidge({ haze: 0.24, tone: 1 }, 552, 87, 118, 130);
   addRidge({ haze: 0.4, tone: 0.94 }, 536, 64, 99, 103);
   addRidge({ haze: 0.58, tone: 0.82 }, 518, 41, 75, null);
@@ -342,6 +353,10 @@ export function createEnvironment(scene: THREE.Scene): Environment {
   ridges.renderOrder = -1;
   group.add(ridges);
 
+  /** Whether this country's horizon holds snow — `RIDGE_SNOW`, read by the
+   * painter below. */
+  let snowy = true;
+
   /** Repaint the horizon for the conditions: each ring dissolved into the
    * sky by its own haze, darkened by its own tone, and the snow picked back
    * out of whatever that leaves. */
@@ -355,8 +370,9 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     // grey, and left at its clear-day value it is the brightest thing on
     // the screen.
     const lit = 0.35 + 0.65 * dayLight(p);
-    for (let i = 0; i < ridgeShade.length; i++) {
-      const shade = 1 + (ridgeShade[i] - 1) * lit;
+    const shades = snowy ? ridgeShade : ridgeBare;
+    for (let i = 0; i < shades.length; i++) {
+      const shade = 1 + (shades[i] - 1) * lit;
       rock
         .copy(fogColor)
         .lerp(zenith, ridgeHaze[i])
@@ -553,9 +569,11 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     preset = skyFor(env, biome);
     // R40 — the horizon is the country's. The rings were cut for a boreal
     // skyline of ranges; a desert's horizon is low broken hills a long way
-    // off, so the same rings stand at well under half their height there
-    // (and the snow line, painted by height, never reaches them).
+    // off, so the same rings stand at well under half their height there —
+    // and take no snow, because a scaled-down range keeps every white cap
+    // the profile was cut with, just closer to the ground.
     ridges.scale.y = RIDGE_HEIGHT[biome];
+    snowy = RIDGE_SNOW[biome];
     meanWind = env.windSpeed;
     rainNow = preset.rain;
     paintDome(preset);
