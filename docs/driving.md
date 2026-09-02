@@ -1199,7 +1199,7 @@ pins both the ranking and the spread.
 
 **The gearbox is the driver's, not the car's.** Every car in the roster takes
 either box; which one is a player setting — offered on the pre-race card
-where the car is chosen, and again under OPTIONS → CONTROLS — carried for
+where the car is chosen, and again under OPTIONS ▸ DRIVING — carried for
 the run on `CarState.gearbox` and defaulting to the automatic. The bot
 shifts a manual by the same thresholds the auto box uses, so both are
 simulated fairly (see [simulation.md](simulation.md)).

@@ -10,7 +10,8 @@
 //                you chase on a road you have already driven to the end.
 //                Then the same car card.
 //   Roam       → any seed at all, previewed as the map itself (menu-roam).
-//   Options    → HUD, video and controls (menu-options).
+//   Options    → the dozen knobs, and the keyboard's and the controller's
+//                bindings behind two of them (menu-options).
 //
 // Picking a stage does not start it: both grids hand off to the pre-race
 // card, which is where the car and the gearbox are chosen and where START
@@ -58,7 +59,7 @@ import {
   type PlayMode,
   type RaceSettings,
 } from "./menu.tsx";
-import { OptionsPage, type OptionsTab } from "./menu-options.tsx";
+import { OptionsPage, type OptionsSub } from "./menu-options.tsx";
 import { unlockAudio } from "./audio/bus.ts";
 import { playUi } from "./audio/ui.ts";
 import { RoamPage, type MapDebug, type MapRect, type MapView } from "./menu-roam.tsx";
@@ -93,7 +94,10 @@ export type MenuPage =
    * the map camera and the pane's rectangle belong to the page underneath
    * it either way. */
   | { page: "roam"; picking?: boolean; viewing?: boolean }
-  | { page: "options"; tab: OptionsTab }
+  /** Options — and, with `sub` set, one of the binding pages behind its
+   * CONTROLS rows. A step of the page rather than a page of its own, the
+   * way Roam's stage list is: BACK from it lands on the rows. */
+  | { page: "options"; sub?: OptionsSub }
   | { page: "developer" }
   | { page: "debuglog" };
 
@@ -193,7 +197,7 @@ const ROOT_ITEMS: {
     key: "options",
     glyph: "sliders",
     label: "OPTIONS",
-    page: { page: "options", tab: "hud" },
+    page: { page: "options" },
     quiet: true,
   },
 ];
@@ -595,6 +599,7 @@ const DEPTH: Record<MenuPage["page"], number> = {
  * page as deep as it is, and the stage list over either — so without this,
  * opening the list and shutting it would make the same noise as each other. */
 function depthOf(page: MenuPage): number {
+  if (page.page === "options") return DEPTH.options + (page.sub ? 1 : 0);
   if (page.page !== "roam") return DEPTH[page.page];
   return DEPTH.roam + (page.viewing === true ? 1 : 0) + (page.picking === true ? 1 : 0);
 }
@@ -611,6 +616,7 @@ function parentOf(page: MenuPage): MenuPage | null {
     if (page.picking === true) return { page: "roam", viewing: page.viewing };
     return page.viewing === true ? { page: "developer" } : { page: "root" };
   }
+  if (page.page === "options" && page.sub) return { page: "options" };
   if (page.page === "location") return locationParent();
   if (page.page === "scores") return { page: "timetrial" };
   if (page.page === "car") return carParent(page.levelId, page.mode);
@@ -650,8 +656,7 @@ export function MainMenu(props: MainMenuProps) {
   /** Every navigation in the menu passes through here, so the interface's
    * sounds are wired in ONE place rather than on forty buttons. */
   const navigate = (next: MenuPage): void => {
-    if (next.page === page.page && next.page === "options") playUi("page");
-    else if (depthOf(next) < depthOf(page)) playUi("back");
+    if (depthOf(next) < depthOf(page)) playUi("back");
     else playUi("select");
     onNavigate(next);
   };
@@ -797,8 +802,8 @@ export function MainMenu(props: MainMenuProps) {
         )}
         {page.page === "options" && (
           <OptionsPage
-            tab={page.tab}
-            onTab={(tab) => navigate({ page: "options", tab })}
+            sub={page.sub ?? null}
+            onSub={(sub) => navigate(sub ? { page: "options", sub } : { page: "options" })}
             settings={props.settings}
             onSettings={props.onSettings}
             onBack={() => navigate({ page: "root" })}

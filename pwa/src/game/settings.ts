@@ -1,14 +1,22 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The player's options — what the HUD shows, how hard the renderer works,
-// and how the car is driven — in one persisted blob, plus the device probe
-// that decides which control sections are worth showing at all.
+// and how the car is driven — in one persisted blob.
 //
 // Almost everything here is SCREEN-space and app-side: the engine neither
 // knows nor cares. The one exception is the gearbox, which the engine does
 // read — it is a choice about how the car is DRIVEN rather than how it is
-// drawn, and it is offered for every car in the roster. The renderer reads `VideoSettings`, the HUD reads
-// `HudSettings`, input.ts reads the key bindings, and the audio bus reads
-// `AudioSettings`.
+// drawn, and it is offered for every car in the roster. The renderer reads
+// `VideoSettings`, the HUD reads the `HudShow` derived from `HudSettings`,
+// input.ts reads the key bindings, and the audio bus reads `AudioSettings`.
+//
+// THE BLOB HOLDS MORE KNOBS THAN THE MENU OFFERS, on purpose. The options
+// page (menu-options.tsx) asks a player a dozen questions; the six video
+// levers, the in-car seat and lens, the pad's deadzone and the pedal
+// gestures are all still here with their defaults and their readers, and
+// the tooling still sets some of them from the URL. They are the game's
+// knobs rather than the player's — a simple game does not hand somebody
+// six questions about undergrowth density, it asks whether the picture is
+// smooth and answers the six itself (`QUALITY_PRESETS`).
 
 import type { GearboxMode } from "@engine";
 
@@ -31,20 +39,21 @@ export const PLAY_CAMERAS: { id: PlayCamera; label: string; hint: string }[] = [
   { id: "top", label: "TOP", hint: "Straight over the roof, tilted down the road" },
 ];
 
-/** The three views taken from inside the car — the ones OPTIONS ▸ VIEW's
- * seat, lens and head-motion settings apply to. Nothing outside the car has
- * a seat to raise or a head to steady. */
+/** The three views taken from inside the car — the ones the seat, lens and
+ * head-motion knobs apply to. Nothing outside the car has a seat to raise
+ * or a head to steady. */
 export const IN_CAR_CAMERAS: PlayCamera[] = ["cockpit", "hood", "bumper"];
 
 /** THE IN-CAR VIEW, AS FOUR KNOBS. Every one of them is a ladder of named
- * stops rather than a slider, for the same reason the volumes are: a value
- * nobody can quite reproduce is worse than one they can name, and these are
- * numbers a player will want to come back to.
+ * stops rather than a slider: a value nobody can quite reproduce is worse
+ * than one they can name.
  *
- * They are also the tuning surface this view is DEVELOPED against — the
- * tooling sweeps the same four from the URL (`?seat=`, `?reach=`, `?vfov=`,
- * `?headmotion=`), so a contact sheet of variants costs a loop rather than
- * a rebuild. */
+ * Only HEAD MOTION reaches the menu, and there as a switch — OFF is the
+ * stop somebody the movement makes ill needs, and it has to be one press
+ * away. The other three are the tuning surface this view is DEVELOPED
+ * against: the tooling sweeps all four from the URL (`?seat=`, `?reach=`,
+ * `?vfov=`, `?headmotion=`), so a contact sheet of variants costs a loop
+ * rather than a rebuild. */
 export type ViewSettings = {
   /** Seat height over the car's own mount, m. */
   seat: number;
@@ -118,7 +127,28 @@ function snapToStop(
   return stops.find((stop) => stop.id === id)?.value ?? fallback;
 }
 
-export type HudToggle =
+/** THE HUD, AS THE PLAYER SETS IT: on or off, and whether the car has a
+ * rear-view mirror. Two switches rather than one per instrument, because a
+ * rally HUD is one instrument panel — nobody wants the clock without the
+ * map — and the one part of it that is not an instrument is the glass. The
+ * mirror is the CAR's, drawn by the renderer, and it stays up with the HUD
+ * off for anyone who drives by the road behind them. */
+export type HudSettings = {
+  /** The instrument panel: clock, map, cluster, calls, tags and the buttons
+   * on the top bar. Off is a clean frame with the pause chip left on it —
+   * the one door back that a phone with no keys cannot do without. */
+  on: boolean;
+  /** The rear-view glass at the top of the screen, in every view. */
+  mirror: boolean;
+};
+
+/** Every part of the HUD that can be switched, one flag each — the HUD's
+ * own contract (hud.tsx reads it), kept per instrument so a build can still
+ * take one part down on its own. The player's two switches map onto it
+ * through `hudShow`. Speed, gear and the countdown are not on it: the
+ * countdown is the start line itself, and the cluster comes and goes with
+ * the panel as a whole. */
+export type HudInstrument =
   | "minimap"
   | "mirror"
   | "nameTags"
@@ -126,31 +156,30 @@ export type HudToggle =
   | "pacenotes"
   | "pacenoteText"
   | "tachometer"
-  | "timer";
+  | "timer"
+  | "stage"
+  | "cluster"
+  | "position";
 
-export type HudSettings = Record<HudToggle, boolean>;
+export type HudShow = Record<HudInstrument, boolean>;
 
-/** The HUD parts a player may switch off, with what each one costs them.
- * Speed, gear and the countdown are not here: a rally game with no speedo
- * is a different game, and the countdown is the start line itself. */
-export const HUD_TOGGLES: { id: HudToggle; label: string; hint: string }[] = [
-  { id: "minimap", label: "MINIMAP", hint: "Route, position and progress" },
-  { id: "mirror", label: "REAR VIEW", hint: "The road behind, from the car, in every view" },
-  { id: "nameTags", label: "NAME TAGS", hint: "Who the other cars on the road are" },
-  {
-    id: "cameraButton",
-    label: "CAMERA BUTTON",
-    hint: "The on-screen view switch (the key still works)",
-  },
-  { id: "pacenotes", label: "PACENOTES", hint: "The co-driver's turn and jump calls" },
-  {
-    id: "pacenoteText",
-    label: "PACENOTE WORDS",
-    hint: "Off leaves the corner arrows alone, nothing to read",
-  },
-  { id: "tachometer", label: "TACHOMETER", hint: "Revs and the shift light" },
-  { id: "timer", label: "STAGE CLOCK", hint: "Running time on the top bar" },
-];
+/** The two switches, spread over the panel. */
+export function hudShow(hud: HudSettings): HudShow {
+  const on = hud.on;
+  return {
+    minimap: on,
+    mirror: hud.mirror,
+    nameTags: on,
+    cameraButton: on,
+    pacenotes: on,
+    pacenoteText: on,
+    tachometer: on,
+    timer: on,
+    stage: on,
+    cluster: on,
+    position: on,
+  };
+}
 
 /** The two faders. Kept apart because they are two different jobs: the
  * effects are information the player needs to drive, and the music is the
@@ -307,6 +336,72 @@ export const GROUND_SCALE: Record<VideoSettings["ground"], number> = {
   rich: 1.6,
 };
 
+/** THE ONE PICTURE SETTING THE PLAYER SEES. The six video levers above are
+ * all real and every one is still read by the renderer, but what a player
+ * knows is whether the game is smooth, not what undergrowth density costs
+ * them. So the menu offers three pictures, and each is a full set of the
+ * six. Changing a preset's numbers here changes what LOW, MEDIUM and HIGH
+ * mean everywhere, including for every blob already stored. */
+export type Quality = "low" | "medium" | "high";
+
+export const QUALITY_PRESETS: Record<Quality, VideoSettings> = {
+  // The phone that stutters: the cheapest canvas, the fog pulled in, the
+  // windows solid and the ground a third as busy.
+  low: {
+    resolution: "low",
+    drawDistance: "near",
+    effects: "low",
+    interior: "off",
+    flora: "sparse",
+    ground: "plain",
+  },
+  // The design point — every lever at the number the game was tuned on.
+  medium: {
+    resolution: "medium",
+    drawDistance: "normal",
+    effects: "full",
+    interior: "full",
+    flora: "normal",
+    ground: "normal",
+  },
+  // A machine with headroom: a retina canvas, the far ridges drawn, a
+  // thicker forest floor.
+  high: {
+    resolution: "high",
+    drawDistance: "far",
+    effects: "full",
+    interior: "full",
+    flora: "lush",
+    ground: "rich",
+  },
+};
+
+export const QUALITY_STOPS: { id: Quality; label: string; hint: string }[] = [
+  {
+    id: "low",
+    label: "LOW",
+    hint: "The smoothest frame on a weak phone — fewer pixels, less fog to see through, solid windows",
+  },
+  { id: "medium", label: "MEDIUM", hint: "The picture the game was tuned on" },
+  {
+    id: "high",
+    label: "HIGH",
+    hint: "Sharper, further and busier — for a machine with frames to spare",
+  },
+];
+
+/** Which preset a set of video knobs IS: by exact match, else by the
+ * resolution, which is the lever that decides most of the frame — so a blob
+ * written on another build's ladder lands on the picture it most feels
+ * like rather than on a name it is not. */
+export function qualityOf(video: Partial<VideoSettings>): Quality {
+  const ids = Object.keys(QUALITY_PRESETS) as Quality[];
+  const keys = Object.keys(QUALITY_PRESETS.medium) as (keyof VideoSettings)[];
+  const exact = ids.find((id) => keys.every((key) => QUALITY_PRESETS[id][key] === video[key]));
+  if (exact) return exact;
+  return ids.find((id) => QUALITY_PRESETS[id].resolution === video.resolution) ?? "medium";
+}
+
 /** Everything the keyboard can be asked to do. `menu` leaves the run for
  * the main menu; `pause` opens the in-race card. */
 export type KeyAction =
@@ -430,7 +525,7 @@ export type PadSettings = {
   hideTouch: boolean;
 };
 
-/** The rows on the CONTROLS tab, in the order they are printed: the car
+/** The rows on the CONTROLLER page, in the order they are printed: the car
  * first, then the menus. */
 export const PAD_ACTIONS: { id: PadAction; label: string; menu?: true }[] = [
   { id: "throttle", label: "THROTTLE" },
@@ -547,7 +642,9 @@ export function padAxisLabel(axis: number, invert: boolean, standard: boolean): 
   return `${named ?? `AXIS ${axis}`}${invert ? " (INVERTED)" : ""}`;
 }
 
-/** The deadzone's stops, as fractions of full stick travel. */
+/** The deadzone's stops, as fractions of full stick travel. A knob the menu
+ * no longer offers — the default suits every pad tried — kept as the ladder
+ * for whoever wires a row back. */
 export const PAD_DEADZONES: { id: string; label: string }[] = [
   { id: "0.05", label: "5%" },
   { id: "0.1", label: "10%" },
@@ -567,7 +664,8 @@ export const PEDAL_DIRS: { id: PedalDir; label: string }[] = [
 /** The touch layout: which half of the screen steers (the other half is the
  * pedal), and which drag direction off the pedal anchor does what. Plain
  * gas needs no direction — it is what a touch that has not been dragged
- * anywhere already means. */
+ * anywhere already means. Only the side reaches the menu; the gestures ship
+ * as `DEFAULT_TOUCH` and `assignPedalDir` is the rule for changing them. */
 export type TouchSettings = {
   steerSide: "left" | "right";
   brake: PedalDir;
@@ -656,16 +754,7 @@ export type DevSettings = {
 };
 
 export const DEFAULT_SETTINGS: Settings = {
-  hud: {
-    minimap: true,
-    mirror: true,
-    nameTags: true,
-    cameraButton: true,
-    pacenotes: true,
-    pacenoteText: true,
-    tachometer: true,
-    timer: true,
-  },
+  hud: { on: true, mirror: true },
   // The shortest boom outside the car: the car is big in the frame, a drift
   // swings it right across, and standing that close is what makes it
   // the calmest read at pace — the nearer the camera, the fewer metres of
@@ -679,14 +768,7 @@ export const DEFAULT_SETTINGS: Settings = {
   // down. Music sits under the effects, because the effects are what the
   // player is actually driving on.
   audio: { music: 0.7, sfx: 0.9 },
-  video: {
-    resolution: "medium",
-    drawDistance: "normal",
-    effects: "full",
-    flora: "normal",
-    ground: "normal",
-    interior: "full",
-  },
+  video: { ...QUALITY_PRESETS.medium },
   keys: DEFAULT_KEYS,
   touch: DEFAULT_TOUCH,
   pad: DEFAULT_PAD,
@@ -776,8 +858,10 @@ function isSource(value: unknown): value is PadSource {
   return source.kind === "axis" && (source.dir === 1 || source.dir === -1);
 }
 
-export function loadSettings(): Settings {
-  const settings: Settings = {
+/** The defaults, as a blob nothing else shares a reference with — what a
+ * first launch loads, and what RESTORE DEFAULTS puts back. */
+export function freshSettings(): Settings {
+  return {
     hud: { ...DEFAULT_SETTINGS.hud },
     camera: DEFAULT_SETTINGS.camera,
     view: { ...DEFAULT_SETTINGS.view },
@@ -792,11 +876,19 @@ export function loadSettings(): Settings {
     developer: false,
     dev: { ...DEFAULT_SETTINGS.dev },
   };
+}
+
+export function loadSettings(): Settings {
+  const settings = freshSettings();
   try {
     const stored = localStorage.getItem(SETTINGS_KEY);
     if (!stored) return settings;
     const parsed = JSON.parse(stored) as Partial<Settings>;
-    if (parsed.hud) Object.assign(settings.hud, parsed.hud);
+    // Field by field rather than merged: a blob written when the HUD was
+    // eight switches still carries them, and they are not settings any more.
+    const hud = parsed.hud as Partial<Record<string, unknown>> | undefined;
+    if (typeof hud?.on === "boolean") settings.hud.on = hud.on;
+    if (typeof hud?.mirror === "boolean") settings.hud.mirror = hud.mirror;
     // Checked against the list rather than merged: a build that renames or
     // drops an angle must not leave the player pointed at one that no
     // longer exists, which would be a run with no camera at all.
@@ -816,7 +908,11 @@ export function loadSettings(): Settings {
       settings.view.headMotion = snapToStop(HEAD_STOPS, view.headMotion, base.headMotion);
     }
     if (parsed.audio) Object.assign(settings.audio, parsed.audio);
-    if (parsed.video) Object.assign(settings.video, parsed.video);
+    // Snapped to a preset, for the reason the view is snapped to its
+    // ladders: the menu can only ever put the six levers back on one of
+    // three pictures, so a blob standing between two of them is a picture
+    // the player could never get back to once they had moved off it.
+    if (parsed.video) settings.video = { ...QUALITY_PRESETS[qualityOf(parsed.video)] };
     if (parsed.keys) Object.assign(settings.keys, parsed.keys);
     if (parsed.touch) Object.assign(settings.touch, parsed.touch);
     if (parsed.pad) mergePad(settings.pad, parsed.pad);

@@ -28,7 +28,7 @@ import { SpectateBanner, SpectateGap, type SpectateProps } from "./hud-spectate.
 import { MirrorSwitch, paceUnderGlass, type GlassSlot } from "./hud-mirror.tsx";
 import { Minimap, type HudMinimap } from "./minimap.tsx";
 import type { PaceSign } from "./pace-shape.ts";
-import type { HudSettings, TouchSettings } from "./settings.ts";
+import type { HudShow, TouchSettings } from "./settings.ts";
 import type { ShiftWindow } from "./shift-window.ts";
 import { clamp, formatTime } from "../lib/util.ts";
 import { RaceClock, StartLights } from "./hud-clock.tsx";
@@ -241,8 +241,11 @@ type HudProps = {
   /** The split board just driven through, until it times out. */
   split: HudSplit | null;
   input: InputManager;
-  /** Which instruments the player has left switched on. */
-  show: HudSettings;
+  /** Which instruments are up — the player's two switches, spread over the
+   * panel by `hudShow`. With the HUD off every flag but the mirror's is
+   * down, and what is left on screen is the pause chip, the start lights,
+   * the results and the calls that get a lost car home. */
+  show: HudShow;
   /** The frame rate, for the readout under the minimap — or null for the
    * players who have never let the developer menu out, which is everybody
    * but whoever is working on the game. It hangs off the map rather than
@@ -846,7 +849,7 @@ export function Hud({
               the last thing on the row, which puts it hard against the
               minimap: place and route are the two things a driver glances
               right for, and they should be one glance. */}
-          {snap.standing && <PositionBoard standing={snap.standing} />}
+          {show.position && snap.standing && <PositionBoard standing={snap.standing} />}
         </div>
       </div>
 
@@ -872,18 +875,17 @@ export function Hud({
         </div>
       )}
 
-      {/* Which stage, and in what — hung off the bottom edge of the map (or
-          of the row that stands in for it), where a label the player reads
-          once a run belongs. */}
-      <div className={`hud-chip hud-stage ${show.minimap ? "" : "hud-stage-nomap"}`}>
-        STAGE {snap.seed}
-        <span className="hud-chip-sub">{snap.carName}</span>
-        {/* The frame rate, under the map with the rest of the run's label —
-            developers only. In the same chip rather than beside it so it
-            hangs off whatever that chip is currently hanging off: the map's
-            bottom edge, or the button row when the map is switched off. */}
-        {fps !== null && <span className="hud-chip-sub hud-fps">{fps} FPS</span>}
-      </div>
+      {/* Which stage, and in what — hung off the bottom edge of the map,
+          where a label the player reads once a run belongs. */}
+      {show.stage && (
+        <div className="hud-chip hud-stage">
+          STAGE {snap.seed}
+          <span className="hud-chip-sub">{snap.carName}</span>
+          {/* The frame rate, under the map with the rest of the run's
+              label — developers only. */}
+          {fps !== null && <span className="hud-chip-sub hud-fps">{fps} FPS</span>}
+        </div>
+      )}
 
       {/* The co-driver's slot: corner calls while there is a road to call,
           the way back the moment there isn't, and TURN AROUND for the road
@@ -938,22 +940,24 @@ export function Hud({
           off the right edge. The top bar is the same bargain: the stage, the
           clock and the camera. News about the car is SAID instead, in the
           middle of the screen (`damageCall`). */}
-      <div className="hud-speed">
-        <div className="hud-cluster">
-          {show.tachometer && <Tachometer rpm={snap.rpm} />}
-          <div className={`hud-gearbox ${snap.shiftUp ? "hud-gearbox-shift" : ""}`}>
-            {/* NEUTRAL ON THE GRID: nothing has been geared yet, and a box
-                reading first before the lights have gone is the instrument
-                telling the player the run has started when it has not. */}
-            <span className="hud-gear">
-              {snap.reversing ? "R" : onTheLine(snap.phase) ? "N" : snap.gear + 1}
-            </span>
-            <span className="hud-shiftlight">{snap.gearbox === "auto" ? "AUTO" : "SHIFT"}</span>
+      {show.cluster && (
+        <div className="hud-speed">
+          <div className="hud-cluster">
+            {show.tachometer && <Tachometer rpm={snap.rpm} />}
+            <div className={`hud-gearbox ${snap.shiftUp ? "hud-gearbox-shift" : ""}`}>
+              {/* NEUTRAL ON THE GRID: nothing has been geared yet, and a box
+                  reading first before the lights have gone is the instrument
+                  telling the player the run has started when it has not. */}
+              <span className="hud-gear">
+                {snap.reversing ? "R" : onTheLine(snap.phase) ? "N" : snap.gear + 1}
+              </span>
+              <span className="hud-shiftlight">{snap.gearbox === "auto" ? "AUTO" : "SHIFT"}</span>
+            </div>
+            <span className="hud-speed-num">{Math.round(snap.speedKmh)}</span>
+            <span className="hud-speed-unit">km/h</span>
           </div>
-          <span className="hud-speed-num">{Math.round(snap.speedKmh)}</span>
-          <span className="hud-speed-unit">km/h</span>
         </div>
-      </div>
+      )}
 
       {/* Touch controls — one half of the screen anchors a steering wheel
           under the thumb, the other is the gesture pedal (gas / brake /

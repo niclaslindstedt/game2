@@ -1023,28 +1023,35 @@ for (const [name, viewport] of [
   });
 }
 
-// OPTIONS, opened FROM the pause card — the page a player reaches without
-// abandoning the stage. Two things are being looked at: that the card wears
-// the same chrome as the one off the front door and sits over the held frame
-// rather than under the HUD, and that its way out says PAUSED, because a
-// back button reading MENU here is a promise to throw the run away. Portrait
-// as well: this is the longest card in the game on the narrowest screen.
-for (const [name, viewport] of [
-  ["shot-pause-options", { width: 1280, height: 720 }],
-  ["shot-pause-options-portrait", { width: 390, height: 844 }],
-]) {
-  await capture(name, viewport, async (page) => {
-    await page.keyboard.down("ArrowUp");
-    await racing(page);
-    await page.waitForTimeout(6000);
-    await page.keyboard.up("ArrowUp");
-    await page.click(".hud-minimap");
-    await page.waitForSelector(".hud-pause");
-    await page.getByRole("button", { name: "OPTIONS" }).click();
-    await page.waitForSelector(".menu-held .menu-card");
-    await page.waitForTimeout(400);
-  });
-}
+// THE HUD OFF: the clean frame the switch promises, with the pause chip the
+// only chrome left on it. The switch is the player's own, so the scene
+// writes the blob and reloads before it races — there is no URL for it,
+// because a stored choice is what it is.
+await capture("shot-hud-off", { width: 1280, height: 720 }, async (page) => {
+  await page.evaluate(
+    `localStorage.setItem("scandi-flick-options", JSON.stringify({ hud: { on: false, mirror: true } }))`,
+  );
+  await page.reload();
+  await page.waitForSelector("canvas.game-canvas");
+  await page.keyboard.down("ArrowUp");
+  // No clock to read with the HUD down: the run is given the seconds the
+  // world takes to build and the lights take to go, and then some.
+  await page.waitForTimeout(24000);
+  await page.keyboard.up("ArrowUp");
+});
+
+// The same card on a phone held sideways — the one shape where its knobs
+// pair up two abreast, and the one where it would otherwise be taller than
+// the screen.
+await capture("shot-pause-landscape", { width: 844, height: 390 }, async (page) => {
+  await page.keyboard.down("ArrowUp");
+  await racing(page);
+  await page.waitForTimeout(6000);
+  await page.keyboard.up("ArrowUp");
+  await page.click(".hud-minimap");
+  await page.waitForSelector(".hud-pause");
+  await page.waitForTimeout(400);
+});
 
 // ...and the same card opened during the ESTABLISHING SHOT, which is the one
 // moment the HUD has something of its own in the middle of the screen — so
@@ -1299,44 +1306,41 @@ for (const [name, viewport] of [
   );
 }
 
-for (const tab of ["HUD", "AUDIO", "VIDEO", "CONTROLS"]) {
-  for (const [suffix, viewport] of [
-    ["", { width: 1280, height: 720 }],
-    ["-landscape", { width: 844, height: 390 }],
-  ]) {
-    await capture(
-      `shot-menu-options-${tab.toLowerCase()}${suffix}`,
-      viewport,
-      async (page) => {
-        await menuUp(page);
-        await tile(page, "options");
-        await page.locator(".opt-tab", { hasText: tab }).click();
-        await page.waitForTimeout(500);
-      },
-      { menu: "1" },
-    );
-  }
-}
-
-// The camera card: seven angles with their descriptions, over the HUD tab.
-// It is the one options control that is not on the page it belongs to, so
-// it needs a frame of its own to be looked at.
-for (const [name, viewport] of [
-  ["shot-menu-camera", { width: 1280, height: 720 }],
-  ["shot-menu-camera-landscape", { width: 844, height: 390 }],
+// OPTIONS: one page of knobs, in the three shapes it has to stand on
+// without scrolling. The pointer is parked on the CAMERA row so the caption
+// bar under the rows is photographed lit — it is the page's only sentence,
+// and a shot with it resting says nothing about whether it reads.
+for (const [suffix, viewport] of [
+  ["", { width: 1280, height: 720 }],
+  ["-landscape", { width: 844, height: 390 }],
+  ["-portrait", { width: 390, height: 844 }],
 ]) {
   await capture(
-    name,
+    `shot-menu-options${suffix}`,
     viewport,
     async (page) => {
       await menuUp(page);
       await tile(page, "options");
-      await page.locator(".opt-picker").click();
-      await page.waitForTimeout(400);
+      await page.locator(".knob", { hasText: "CAMERA" }).hover();
+      await page.waitForTimeout(500);
     },
     { menu: "1" },
   );
 }
+
+// ...and the keyboard's bindings behind its CONTROLS row: the longest page
+// in the menu, so it is the one whose grid has to be looked at.
+await capture(
+  "shot-menu-keyboard",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await menuUp(page);
+    await tile(page, "options");
+    await page.locator(".knob-link", { hasText: "KEYBOARD" }).click();
+    await page.waitForTimeout(500);
+  },
+  { menu: "1" },
+);
 
 // The new-build card, over the menu and over a run: it wears the menu's
 // chrome, and both are places it can turn up. `?update=1` stands it up —
