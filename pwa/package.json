@@ -14,13 +14,13 @@
   "dependencies": {
     "@niclaslindstedt/oss-framework": "^2.4.0",
     "preact": "^10.29.8",
-    "three": "^0.180.0",
+    "three": "^0.185.1",
     "workbox-window": "^7.0.0"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.6",
     "@tailwindcss/vite": "^4.3.1",
-    "@types/three": "^0.180.0",
+    "@types/three": "^0.185.4",
     "tailwindcss": "^4.3.1",
     "vite": "^8.1.0"
   }
