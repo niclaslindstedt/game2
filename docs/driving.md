@@ -689,7 +689,7 @@ has driven out does not drown in the lake, it drowns in the beach.
   costs (the last checkpoint), and a small arrow hangs in the frame just
   UNDER that sign, pointing at the road itself — measured off the sign
   rather than parked at a fixed height, so the two stay stacked in either
-  orientation and on both sides of the mirror toggle.
+  orientation and with or without a mirror hanging over them.
   Going OFF has no threshold of its own: the alert is an
   instruction, so the only thing that clears it is the track being back
   under the wheels. Nearing the road or aiming at it leaves it up, which is
