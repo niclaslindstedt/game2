@@ -115,7 +115,8 @@ export function planBorrow(
    * half of the vocabulary. */
   fromStraight: boolean,
 ): Borrow | null {
-  const hit = network.nearest(from.x, from.z, undefined, R.paving.borrow.seek);
+  // A ROAD, never a railway (R41): nothing borrows a line it cannot drive.
+  const hit = network.nearest(from.x, from.z, undefined, R.paving.borrow.seek, "road");
   if (!hit) return null;
   const road = hit.road;
   const meet = R.paving.borrow.meet;

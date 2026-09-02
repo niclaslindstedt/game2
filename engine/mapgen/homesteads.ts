@@ -33,6 +33,7 @@ import {
   type ParkedCar,
 } from "./buildings.ts";
 import type { BridgeDeck, Surface } from "./compile.ts";
+import { farmSolids, placeFarm, type Farm } from "./farms.ts";
 import type { LandField } from "./land.ts";
 import { corridorOffset, ROAD_CROSS } from "./road.ts";
 import { STAGE_RULES as R } from "./rules.ts";
@@ -47,6 +48,7 @@ import {
 } from "./spurs.ts";
 
 export type { BuildingKind, HousePlan, ParkedCar, RoofKind, WallPaint } from "./buildings.ts";
+export type { Farm } from "./farms.ts";
 
 function clamp01(t: number): number {
   return t < 0 ? 0 : t > 1 ? 1 : t;
@@ -80,6 +82,10 @@ export type Homestead = {
   /** Where the drive is shut, just off the stage. Null on the rare drive
    * that leaves no room for a barrier to stand clear of the route. */
   block: RoadBlock | null;
+  /** R37 — what makes this homestead a FARM: the barn, the paddock and
+   * its stock, the field, the machinery. Null on a house that is only a
+   * house, and everywhere in a country that is not farmed. */
+  farm: Farm | null;
 };
 
 /** Everything the placer has to ask about the country. Functions rather
@@ -91,6 +97,9 @@ export type HomesteadContext = {
   width: number;
   /** R40 — what a bladed road in this country is made of: the drive is one. */
   loose: Surface;
+  /** R40 — whether the country is FARMED: whether a homestead may be a
+   * farm at all. */
+  farms: boolean;
   /** The route's samples, in stage order. */
   samples: readonly HomesteadSample[];
   /** Half-open range of sample indices whose slots may be placed on this
@@ -193,16 +202,19 @@ export function placeHomesteads(ctx: HomesteadContext): Homestead[] {
     const rng = createRng((ctx.seed ^ 0x3b9a4f11 ^ Math.imul(slot, 2654435761)) >>> 0);
     const first: 1 | -1 = rng.chance(0.5) ? 1 : -1;
     const length = rng.range(H.drive.length.min, H.drive.length.max);
+    // R37 — a FARM or a house: rolled off the slot's own dice so a country
+    // that is not farmed draws the same houses in the same places.
+    const farm = ctx.farms && hash2(slot, 1, gate) < H.farm.chance;
     // Both sides get a try, the dice's first, and then both again with the
     // shortest drive there is: a house is where the country lets one stand,
     // the far side of the road is as good a place as the near one, and a
     // yard that will not fit at the end of a long lane often fits at the
     // end of a short one.
     const homestead =
-      tryHomestead(ctx, at, first, rng, all, length) ??
-      tryHomestead(ctx, at, -first as 1 | -1, rng, all, length) ??
-      tryHomestead(ctx, at, first, rng, all, H.drive.length.min) ??
-      tryHomestead(ctx, at, -first as 1 | -1, rng, all, H.drive.length.min);
+      tryHomestead(ctx, at, first, rng, all, length, farm) ??
+      tryHomestead(ctx, at, -first as 1 | -1, rng, all, length, farm) ??
+      tryHomestead(ctx, at, first, rng, all, H.drive.length.min, farm) ??
+      tryHomestead(ctx, at, -first as 1 | -1, rng, all, H.drive.length.min, farm);
     if (!homestead) continue;
     out.push(homestead);
     all.push(homestead);
@@ -241,12 +253,15 @@ function tryHomestead(
   standing: readonly Homestead[],
   /** How far the drive runs before the yard, m. */
   length: number,
+  /** R37 — whether this is to be a farm, with the bigger yard a barn needs. */
+  farm = false,
 ): Homestead | null {
   const drive = H.drive;
   // The drive leaves SQUARE: a right turn off the road is the road's
   // heading plus a quarter turn (`rightOf` in the renderer says the same).
   let heading = at.heading + (side * Math.PI) / 2;
-  const yardRadius = rng.range(H.yard.radius.min, H.yard.radius.max);
+  const yardBand = farm ? H.farm.yard.radius : H.yard.radius;
+  const yardRadius = rng.range(yardBand.min, yardBand.max);
   const routeNear = ctx.routeDistance({ x: at.x, z: at.z });
   /** The ROUTE's corridor plus the drive's own: how much room a piece of
    * drive needs from any route that is not the road it is leaving. */
@@ -387,6 +402,22 @@ function tryHomestead(
     });
   }
 
+  // R37 — the farm, when this is one: the barn across the yard from the
+  // house, and the paddock, the field and the machinery round it. A yard
+  // the barn will not fit on is a house after all.
+  const farmed = farm
+    ? placeFarm({
+        rng,
+        yard,
+        forward,
+        right,
+        heading: end.heading,
+        houseDepth: plan.depth,
+        land: ctx.land,
+        clear,
+      })
+    : null;
+
   // The barrier across the drive's mouth: the first place up the drive
   // where the whole line of it clears the route — measured against the
   // WHOLE route, junction exemption and all, exactly as a branch's is.
@@ -423,7 +454,7 @@ function tryHomestead(
     }
   }
 
-  return { atS: at.s, side, drive: line, yard, house, cars, trees, block };
+  return { atS: at.s, side, drive: line, yard, house, cars, trees, block, farm: farmed };
 }
 
 /** The sample at arc position `s`, or the last one past the end. */
@@ -447,6 +478,7 @@ export function homesteadSolids(
   const out: WildObstacle[] = [];
   buildingSolids(h.house, groundAt, out);
   parkedSolids(h.cars, groundAt, out);
+  if (h.farm) farmSolids(h.farm, groundAt, out);
   for (const tree of h.trees) {
     const y = groundAt(tree.x, tree.z);
     out.push(

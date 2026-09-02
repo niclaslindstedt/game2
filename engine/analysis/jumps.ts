@@ -36,6 +36,7 @@
 
 import { ROAD_CROSS } from "../mapgen/road.ts";
 import { STAGE_RULES } from "../mapgen/rules.ts";
+import { RAILCAR } from "../mapgen/solids.ts";
 import type { Track, TrackSample } from "../mapgen/compile.ts";
 import type { TerrainField } from "../mapgen/terrain.ts";
 import { ANALYSIS } from "./budgets.ts";
@@ -143,6 +144,8 @@ export function analyzeJumps(track: Track, terrain: TerrainField, speeds: number
   let tooHard = 0;
   let obstructed = 0;
   let tight = 0;
+  let underTrain = 0;
+  let leastOverRails = Infinity;
   let maxLength = 0;
   let maxHeight = 0;
   let maxImpact = 0;
@@ -221,6 +224,33 @@ export function analyzeJumps(track: Track, terrain: TerrainField, speeds: number
         value: flight.struck,
       });
     }
+    // R41 — a lip at a railway crossing has a train to clear. Fly the same
+    // ballistics as far as the rails and ask how much air is under the car
+    // there against a wagon's roof: the rule says a car at stage pace goes
+    // over, so at the profile's speed it has to, with a margin.
+    const rail = track.rails.find((r) => Math.abs(r.lipS - flight.lip.s) < track.step * 1.5);
+    if (rail) {
+      const run = Math.max(1, rail.s - flight.lip.s);
+      const t = run / Math.max(1, flight.speed * Math.cos(flight.pitch));
+      const y =
+        flight.lip.elevation + flight.speed * Math.sin(flight.pitch) * t - 0.5 * GRAVITY * t * t;
+      const over = y - rail.y;
+      leastOverRails = Math.min(leastOverRails, over);
+      const need = RAILCAR.height + J.train.margin;
+      if (over < need) {
+        underTrain++;
+        findings.push({
+          code: "jumps.train",
+          severity: over < RAILCAR.height ? "error" : "warn",
+          message: `the railway ramp puts the car ${over.toFixed(1)} m over the rails at ${(
+            flight.speed * 3.6
+          ).toFixed(0)} km/h — a train stands ${RAILCAR.height} m (R41)`,
+          at: { x: rail.x, z: rail.z },
+          s: rail.s,
+          value: need - over,
+        });
+      }
+    }
     // R6's own spacing, re-measured on the built stage rather than on the
     // plan the search validated.
     const gap = flight.lip.s - lastLip;
@@ -288,6 +318,14 @@ export function analyzeJumps(track: Track, terrain: TerrainField, speeds: number
       score: rate(tight, n),
       weight: 1,
       value: tight,
+    },
+    {
+      id: "train",
+      label: "the railway ramp clears the train at stage pace",
+      score: rate(underTrain, Math.max(1, track.rails.length)),
+      weight: 2,
+      value: Number.isFinite(leastOverRails) ? leastOverRails : undefined,
+      budget: RAILCAR.height + J.train.margin,
     },
     {
       id: "density",

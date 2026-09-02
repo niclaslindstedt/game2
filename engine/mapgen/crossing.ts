@@ -32,7 +32,7 @@
 // property of the built road (`compile.ts`), not of the plan: the height of
 // a stage is a profile along its own arc and nothing here has one yet.
 
-import type { HighwayNetwork } from "./highway.ts";
+import type { HighwayKind, HighwayNetwork } from "./highway.ts";
 import { STAGE_RULES as R, type SegmentPlan } from "./rules.ts";
 import { DIR_PAIRS, solveCsc, solveRadii, type Pose } from "./search.ts";
 
@@ -77,11 +77,15 @@ export function planCrossing(
   /** R4 — whether the segment the route is standing on is a straight. A hard
    * turn is taken out of a straight and never out of another turn. */
   fromStraight: boolean,
+  /** R41 — which kind of line to cross. A railway is crossed by the same
+   * solve on its own numbers (`rail`), and the straight over it carries the
+   * ramp. */
+  kind: HighwayKind = "road",
 ): Crossing | null {
-  const hit = network.nearest(from.x, from.z, undefined, R.crossing.seek);
+  const C = kind === "rail" ? R.rail : R.crossing;
+  const hit = network.nearest(from.x, from.z, undefined, C.seek, kind);
   if (!hit) return null;
   const road = hit.road;
-  const C = R.crossing;
   const perPoint = road.points[1].s - road.points[0].s;
   const stride = Math.max(1, Math.round(C.meet.step / perPoint));
   const span = Math.ceil(C.meet.reach / perPoint);
@@ -152,12 +156,25 @@ export function planCrossing(
                   // R36 — and over. Featureless: the step in the road IS the
                   // feature, and a jump lip laid on top of the one the
                   // tarmac already makes is two jumps in one straight.
-                  {
-                    kind: "straight",
-                    length: over,
-                    feature: "none",
-                    overRoad: { road: network.roads.indexOf(road), index },
-                  },
+                  // R41 — over a RAILWAY the straight carries the ramp: a
+                  // jump whose lip stands `gap` short of the rails, so
+                  // the car leaves the ground right at the line.
+                  kind === "rail"
+                    ? {
+                        kind: "straight",
+                        length: over,
+                        feature: "jump",
+                        featureStart: C.clear - R.rail.gap - R.rail.lip.ramp,
+                        featureEnd: C.clear - R.rail.gap,
+                        lipHeight: R.rail.lip.height,
+                        overRoad: { road: network.roads.indexOf(road), index },
+                      }
+                    : {
+                        kind: "straight",
+                        length: over,
+                        feature: "none",
+                        overRoad: { road: network.roads.indexOf(road), index },
+                      },
                 ],
                 road: network.roads.indexOf(road),
                 index,
@@ -183,6 +200,6 @@ export function planCrossing(
  * over a mat and nothing else. Stated from the straight's own geometry,
  * which is what it is about — and no larger, because every metre of it is a
  * metre where a route may lie beside a public road unreported. */
-export function crossingParting(width: number): number {
-  return R.crossing.clear + width;
+export function crossingParting(width: number, kind: HighwayKind = "road"): number {
+  return (kind === "rail" ? R.rail.clear : R.crossing.clear) + width;
 }

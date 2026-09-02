@@ -20,6 +20,7 @@
 
 import * as THREE from "three";
 import type { HousePlan } from "@engine";
+import { buildBarn } from "./barn.ts";
 import { GeoBuilder } from "./flora-build.ts";
 import {
   box,
@@ -293,6 +294,7 @@ function workshopGeometry(b: GeoBuilder, plan: HousePlan): THREE.Mesh | null {
  * as a group when they carry a sign. `rand` is the facet jitter's only. */
 export function buildBuilding(plan: HousePlan, rand: () => number): THREE.Object3D {
   if (plan.kind === "house" || plan.kind === "villa") return buildHouse(plan, rand);
+  if (plan.kind === "barn") return buildBarn(plan, rand);
   const b = new GeoBuilder(rand);
   let sign: THREE.Mesh | null = null;
   switch (plan.kind) {

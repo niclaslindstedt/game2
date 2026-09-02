@@ -569,6 +569,11 @@ export const ANALYSIS = {
     /** How wide a corridor around the flight path has to be clear of
      * anything solid, m — a car in the air cannot steer round a tree. */
     corridor: 3,
+    /** R41 — how much daylight the car has to have over a train's roof
+     * (`RAILCAR.height`) as it passes over the rails at the profile's speed,
+     * m. A third of a metre is a wheel's bounce: under it the ramp is a
+     * ramp INTO the wagon on a bad day. Under the roof itself is an error. */
+    train: { margin: 0.3 },
     /** Jumps per kilometre a stage wants at least one of. Not a defect —
      * a stage with no air on it is a legal stage — but it is the number
      * that says the vocabulary went quiet, and it is worth seeing. */

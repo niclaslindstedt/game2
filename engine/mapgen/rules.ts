@@ -308,6 +308,25 @@
 //       fields the road rides as a run of crests. A biome never switches a
 //       rule off — a desert stage still obeys every one above — it moves
 //       what the rules draw from, exactly as the other dials do.
+//   R41 THE RAILWAY IS LAID BEFORE THE STAGE IS, like the tarmac (R17), and
+//       the rally goes OVER it on a ramp. A country that carries one
+//       (`biomes.ts`, `rail.chance` of its seeds) has a single track laid
+//       across the map edge to edge on nothing but the seed and the bare
+//       country, at a railway's radii, held off every road; the route plans
+//       round it exactly as it plans round tarmac (R23), may never borrow
+//       or join it, and may cross it once, SQUARE, by R36's own solve. The
+//       crossing is a JUMP the organisers built: the gravel climbs
+//       `rail.lip.height` metres over `rail.lip.ramp` of ramp to a lip
+//       `rail.gap` short of the rails, and the road on the far side is at
+//       grade — so a car arriving at pace flies over the line, and over
+//       whatever is on it. A train IS on it, every so often: a timetable
+//       drawn per crossing runs one through around the time a driver at
+//       stage pace arrives and every `rail.train.period` after, each way in
+//       turn, and the train is as solid as it looks and moving as fast as
+//       it looks (`railway.ts`). A car that arrives slow lands on the rails
+//       under it. Both arms of the line are cut to the edge of the map and
+//       neither is shut: nobody drives a railway, and the crossing is
+//       signed rather than taped.
 
 import { isBiomeId, type BiomeId } from "./biomes.ts";
 
@@ -1737,6 +1756,88 @@ export const STAGE_RULES = {
     drag: 0.45,
   },
 
+  /** R41 — THE RAILWAY, and the ramp the rally crosses it on. Meters and
+   * seconds unless noted. */
+  rail: {
+    /** How many of a railway country's seeds carry a line at all. Most:
+     * the train is the point, and a railway with no crossing on the stage
+     * costs nothing but the search's clearance round it. The land still
+     * refuses some (a rim in a lake, a line that never gets clear). */
+    chance: 0.75,
+    /** THE LINE itself: how wide its formation is, ballast shoulder to
+     * shoulder — what the terrain shelves, the forest keeps off, and the
+     * search keeps the route clear of, in place of a road's carriageway. */
+    line: { width: 6 },
+    /** How far the route runs dead straight either side of the rails: the
+     * crossing's own `clear`, longer than a road's because the run-up and
+     * the ramp have to fit in it before the lip, and R6's landing after.
+     * `2 * clear` has to be a straight the vocabulary can draw
+     * (`straightLong`). */
+    clear: 65,
+    /** How far off the route a line is worth crossing from, the stretch of
+     * it the rendezvous is looked for over, and how far the route travels
+     * before a look that found nothing is repeated — the road crossing's
+     * numbers, for the road crossing's reasons. */
+    seek: 420,
+    meet: { reach: 420, step: 55 },
+    look: 200,
+    /** How far short of the rails' centerline the lip stands, m. The rails
+     * are laid flush with the road at grade, so past the lip the car is in
+     * the air over a drop of the lip's height with the line under it — and
+     * the closer the lip is to the rails, the higher the car is over them.
+     * Just past the crossing deck's own half-width, so the ramp is built
+     * beside the line rather than on it. */
+    gap: 6,
+    /** THE RAMP: how high its lip stands over the road at grade, m, and how
+     * much road it climbs over. This is what a car has to be thrown over a
+     * train by — `RAILCAR.height` (3.4 m) of it, standing on rails at
+     * grade — so the lip is a third of a metre short of the train's roof
+     * and the flight makes up the rest: a car leaving a 22% lip at 15 m/s
+     * is climbing at 3.2 m/s and is 4 m over the rails 6 m out, a car at
+     * 10 m/s is 3.2 m over them and hits the wagon. That is the rule: fast
+     * clears, slow does not. The ramp's own grade is `height / ramp`, and
+     * the ramp rises on a square (`segmentElevation`), so the launch angle
+     * at the lip is twice that: 0.13 average, 0.26 at the lip. The
+     * analysis's `jumps` checks (`impact`, `height`) measure the landing
+     * this throws. The ramp is as long as `clear - gap` leaves after R6's
+     * `jump.runUp` off the approach corner — `rules_test` holds the three
+     * together. */
+    lip: { height: 3.1, ramp: 24 },
+    /** THE TRAIN and its timetable. */
+    train: {
+      /** The pace a driver's arrival at the crossing is guessed at, m/s —
+       * the sim's mean over the roster, near enough — from which the first
+       * train's time is set. */
+      pace: 22,
+      /** How far either side of that guessed arrival the first train's
+       * head reaches the crossing, s. Skewed late: a train that has just
+       * gone is a train nobody saw, one arriving as the car does is the
+       * whole feature. */
+      lead: { min: -3, max: 9 },
+      /** How far either side of the crossing a train exists, m: it comes
+       * out of the fog there and goes back into it. Past the fog ceiling,
+       * so it is never seen appearing; short enough that one train has
+       * cleared the whole of it before the next is due. */
+      reach: 700,
+      /** Seconds between trains. A single line is not this busy anywhere,
+       * and it is this busy here so a second run at the stage meets one.
+       * The floor is the reach's transit at the slowest speed with the
+       * longest train (`rules_test` holds it), or two trains would be on
+       * one line pointing at each other. */
+      period: { min: 90, max: 140 },
+      /** Line speed, m/s — a country railway's, not a main line's. */
+      speed: { min: 18, max: 26 },
+      /** How often the train is a RAILBUS (one or two cars, no wagons)
+       * rather than a locomotive and freight. */
+      railbus: 0.35,
+      /** How many wagons a freight hauls. */
+      wagons: { min: 3, max: 7 },
+      /** Vehicle lengths over the buffers, m — a two-axle railbus, a
+       * four-axle diesel, and the wagons. */
+      length: { railbus: 24.5, loco: 15.5, timber: 19, box: 15, tank: 13 },
+    },
+  },
+
   /** R37 — THE HOMESTEADS: where a house may stand off the stage, what its
    * drive is like, and what is in the yard. Meters unless noted. */
   homestead: {
@@ -1801,6 +1902,55 @@ export const STAGE_RULES = {
      * on itself can bring two arc positions a kilometre apart within a
      * field of each other. */
     apart: 150,
+
+    /** R37 — THE FARMS: which homesteads are one, and what a farm has.
+     * Only in a country that is farmed (`BiomeRules.farms`). */
+    farm: {
+      /** How many homesteads roll a farm. Half: a stage sees two or three
+       * houses, and one of them being a farm is a country that is worked. */
+      chance: 0.5,
+      /** A farm's yard is bigger than a house's, because the barn stands
+       * on it: its corners have to be on the pad, and a barn is long. */
+      yard: { radius: { min: 21, max: 24 } },
+      /** THE BARN: its footprint — `width` along the front, which faces
+       * the yard, and `depth` back from it — and how far in from the
+       * yard's rim its front stands, as a share of the radius. Longer,
+       * wider and taller (two storeys of byre and loft) than any house. */
+      barn: { width: { min: 18, max: 27 }, depth: { min: 9, max: 11.5 }, setIn: 0.28 },
+      /** A tower silo beside the barn's gable, on some farms. */
+      silo: { chance: 0.35, radius: { min: 2.2, max: 3 }, height: { min: 9, max: 14 } },
+      /** THE PADDOCK: a fenced rectangle of grazing, this far past the
+       * barn or the house, no more than `slope` out of level corner to
+       * corner, a post every `postPitch` metres and a `gate`-metre gate in
+       * the side nearest the yard. `cows` is how often it is cattle rather
+       * than sheep, and `head` how many of each graze it. */
+      paddock: {
+        width: { min: 40, max: 70 },
+        depth: { min: 28, max: 45 },
+        gap: 4,
+        slope: 9,
+        postPitch: 3.2,
+        gate: 4.5,
+        cows: 0.65,
+        head: { cows: { min: 5, max: 12 }, sheep: { min: 8, max: 18 } },
+      },
+      /** THE FIELD: bigger than the paddock, flatter, and the bales the
+       * baler leaves across a hay field. */
+      field: {
+        width: { min: 60, max: 110 },
+        depth: { min: 40, max: 70 },
+        gap: 6,
+        slope: 7,
+        bales: { min: 6, max: 12 },
+      },
+      /** The machinery: how far in front of the barn the tractor stands,
+       * and how often there is a trailer. */
+      gear: { apron: 5, trailer: 0.6 },
+      /** The sizes a paddock or a field is tried at, as shares of the
+       * rolled one, largest first: a hillside that will not take a hectare
+       * often takes half of one. */
+      shrink: [1, 0.75, 0.55],
+    },
   },
 
   /** R39 — THE TOWNS: where the tarmac leads. */
@@ -1860,6 +2010,9 @@ export const STAGE_RULES = {
       grocery: { min: 2, max: 4 },
       post: { min: 1, max: 2 },
       workshop: { min: 1, max: 3 },
+      /** A village has no barn (R37's farms do); the row is here so the
+       * vocabulary's every kind has one. */
+      barn: { min: 0, max: 0 },
       pitch: 3.2,
     },
   },
@@ -2138,6 +2291,8 @@ export type SegmentPlan = {
   onRoad?: { road: number; from: number; to: number };
   /** R36 — set on the STRAIGHT that carries the route square over a public
    * road, saying which road and which of its points the crossing sits on.
+   * R41 — or over the RAILWAY: the line's `kind` says which, and a railway
+   * crossing's straight carries the ramp as its `jump` feature.
    *
    * The search decides it for the same reason it decides `paved`: only the
    * search knows the line went there, and a compiler left to notice a

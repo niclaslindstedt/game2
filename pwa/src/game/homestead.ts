@@ -16,10 +16,13 @@
 
 import * as THREE from "three";
 import { createRng, type Homestead, type Season, type Track } from "@engine";
+import { buildBarn, buildSilo } from "./barn.ts";
 import { buildBlockade } from "./blockade.ts";
 import type { ConeField } from "./cones.ts";
+import { BALE, buildBale, buildFarmGear } from "./farm-gear.ts";
 import { buildFlora, type FloraPlacement } from "./flora.ts";
 import { buildHouse } from "./house.ts";
+import { buildFence, buildField, buildMeadow } from "./paddock.ts";
 import { buildParkedCar, parkedCarSpec } from "./parked-car.ts";
 import { buildRoad, buildSkirts, type GroundBeside } from "./road-mesh.ts";
 import { shareOne } from "../lib/shared-gpu.ts";
@@ -108,6 +111,50 @@ export function buildHomestead(
     mesh.position.set(car.x, car.y + YARD_LIFT, car.z);
     mesh.rotation.y = car.heading;
     group.add(mesh);
+  }
+
+  // R37 — the farm, when this is one: the barn across the yard, the silo
+  // at its gable, the machinery where it was left, the fence round the
+  // paddock with the meadow inside it, the field, and the bales the baler
+  // dropped — those last through the cone field, so the car can send them
+  // rolling. The animals are the world's (`livestock.ts`), not this
+  // chunk's: they move.
+  const { farm } = homestead;
+  if (farm) {
+    const barn = buildBarn(farm.barn.plan, rand);
+    barn.position.set(farm.barn.x, farm.barn.y, farm.barn.z);
+    barn.rotation.y = farm.barn.heading;
+    group.add(barn);
+    if (farm.silo) {
+      const silo = buildSilo(farm.silo.radius, farm.silo.height, rand);
+      silo.position.set(farm.silo.x, farm.silo.y, farm.silo.z);
+      group.add(silo);
+    }
+    for (const gear of farm.gear) {
+      const mesh = buildFarmGear(gear, rand);
+      mesh.position.set(gear.x, beside.heightAt(gear.x, gear.z) + 0.02, gear.z);
+      mesh.rotation.y = gear.heading;
+      group.add(mesh);
+    }
+    if (farm.paddock) {
+      group.add(buildFence(farm.paddock, beside.heightAt, rand));
+      const meadow = buildMeadow(farm.paddock, beside.heightAt, track.seed, season);
+      if (meadow) group.add(meadow);
+    }
+    if (farm.field) {
+      group.add(buildField(farm.field, beside.heightAt, rand));
+      const wrapped = farm.field.bales.length > 0 && rng.chance(0.4);
+      for (const at of farm.field.bales) {
+        const bale = buildBale(wrapped, rand);
+        bale.position.set(at.x, beside.heightAt(at.x, at.z), at.z);
+        bale.rotation.y = at.heading;
+        cones.plantProp(bale, homestead.atS, {
+          reach: BALE.length / 2,
+          height: BALE.radius * 2,
+          rest: BALE.radius,
+        });
+      }
+    }
   }
 
   // The lane trees, through the flora so they are instanced, seasoned and

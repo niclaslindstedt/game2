@@ -29,6 +29,7 @@ import { buildSpur, cutSpur, placeBlock, SPUR, type ShelfBand, type Spur } from 
 import { placeHomesteads, type Homestead } from "./homesteads.ts";
 import { placeTowns, type Town } from "./towns.ts";
 import { createHighwayNetwork, type Highway } from "./highway.ts";
+import { drawSchedule, joinRailLine, type RailCrossing } from "./railway.ts";
 
 /** What the road is made of under the car. Two of these are LOOSE — the
  * taiga's graded gravel and the desert's sand (R40) — and everything about
@@ -256,6 +257,12 @@ export type Track = {
    * apron that makes them one surface there instead of two ribbons that
    * happen to touch. The terrain flattens it and the renderer paves it. */
   junctions: RoadJunction[];
+  /** R41 — where the rally crosses the RAILWAY: the ramp's lip, the line
+   * the train runs (its two arms are among `spurs`, flagged `rail`), and
+   * the timetable. Its own list, not among the junctions: nothing about a
+   * railway crossing is a place two roads share a platform, and every
+   * reader of `junctions` asks which road turns. */
+  rails: RailCrossing[];
   /** Endless only: materialize road until `length >= upToS`. Deterministic
    * in the seed — when it is called makes no difference to what it builds.
    * Returns true when new samples were appended. */
@@ -772,8 +779,10 @@ function createCompiler(
    * so none of them drives out into a lake (R17), and (R34) the road's own
    * height follows it. */
   const land = createLandField(track.seed, track.knobs);
-  // R40 — what an unsealed sample of this country is made of.
-  const loose = biomeRules(track.knobs.biome).loose;
+  // R40 — what an unsealed sample of this country is made of, and whether
+  // anybody lives in it.
+  const biome = biomeRules(track.knobs.biome);
+  const loose = biome.loose;
   /** R17 — and the tarmac laid across it, indexed. Read off the track
    * because that is where it lives: the search laid it, the analysis
    * measures against it, and here it is what a borrowed junction's arm is
@@ -884,6 +893,9 @@ function createCompiler(
     road?: { road: Highway; index: number };
   };
   const junctions: Junction[] = [];
+  /** R41 — the railway crossings noted in this pass, waiting for their arms
+   * the way the junctions wait for their branches. */
+  const railMeets: { crossing: RailCrossing; road: Highway; slope: number }[] = [];
 
   /** R17 — can the arm this junction would abandon get OUT of the country
    * the stage occupies? A branch runs until it is clear of the map and then
@@ -1178,6 +1190,50 @@ function createCompiler(
       joining: false,
       crossing: true,
     });
+  };
+
+  /** R41 — note the RAILWAY CROSSING an `overRoad` straight makes where the
+   * line it goes over is a railway. Nothing here is a platform: the rails
+   * are laid flush with the road at its own grade, the ramp is the
+   * straight's own jump feature (already in the samples' elevation, the way
+   * any lip is), and what has to be recorded is the PLACE — for the arms
+   * to be cut from, for the train to be timed against, and for the
+   * renderer to lay the crossing deck and stand the signs at. */
+  const noteRailCrossing = (
+    over: NonNullable<SegmentPlan["overRoad"]>,
+    path: { x: number; z: number; heading: number; s: number; base: number; slope: number }[],
+    rollAt: (u: number) => number,
+    step: number,
+    lipS: number,
+  ): void => {
+    const road = track.highways[over.road];
+    if (!road) return;
+    const on = road.points[over.index];
+    if (!on) return;
+    let best = 0;
+    let nearest = Infinity;
+    for (let i = 0; i < path.length; i++) {
+      const d = Math.hypot(path[i].x - on.x, path[i].z - on.z);
+      if (d >= nearest) continue;
+      nearest = d;
+      best = i;
+    }
+    const at = path[best];
+    const y = at.base + rollAt((best + 1) * step);
+    const crossing: RailCrossing = {
+      x: at.x,
+      z: at.z,
+      y,
+      heading: on.heading,
+      s: at.s,
+      road: over.road,
+      index: over.index,
+      lipS,
+      schedule: drawSchedule(track.seed, track.rails.length, at.s),
+      line: { samples: [], length: 0, crossingS: 0, cells: new Map() },
+    };
+    track.rails.push(crossing);
+    railMeets.push({ crossing, road, slope: at.slope });
   };
 
   /** R36 — is this point ON the public road's mat at a crossing?
@@ -1599,11 +1655,58 @@ function createCompiler(
     return { floor, ceiling };
   };
 
+  /** R41 — cut the two arms of the railway at every crossing noted in this
+   * pass, from the crossing point out to the edge of the map each way, and
+   * join them into the line the train runs. Cut, never driven, exactly as
+   * a road crossing's arms are: the railway is already laid edge to edge.
+   * Neither arm is shut — nobody drives a railway — and neither is warped
+   * onto a platform, because there is none: the rails meet the road at its
+   * own grade and the crossing point is where the two heights agree. */
+  const buildRailArms = (): Spur[] => {
+    const out: Spur[] = [];
+    if (railMeets.length === 0) return out;
+    for (const { crossing, road } of railMeets) {
+      const arms: Spur[] = [];
+      for (const [end, turn] of [
+        ["entry", 0],
+        ["exit", Math.PI],
+      ] as const) {
+        const arm = cutSpur(
+          {
+            x: crossing.x,
+            z: crossing.z,
+            heading: crossing.heading + turn,
+            elevation: crossing.y,
+          },
+          crossing.s,
+          end,
+          road,
+          crossing.index,
+          land,
+          track.width,
+          shelfBand,
+          loose,
+        );
+        arm.crossing = true;
+        arm.rail = true;
+        track.spurs.push(arm);
+        arms.push(arm);
+        out.push(arm);
+      }
+      crossing.line = joinRailLine(arms[0], arms[1]);
+    }
+    railMeets.length = 0;
+    return out;
+  };
+
   /** Build the branch every noted junction earns, now that the road they
    * hang off is compiled. A finite stage hands each branch the stage's own
    * bounding box to escape; a streamed one has no box, so the branch just
    * has to get out of the junction's neighbourhood. */
   const buildForks = (): void => {
+    // R41 — the railway's arms first, so every branch built below keeps
+    // off them as it would off any other road (R23).
+    const railArms = buildRailArms();
     if (junctions.length === 0) return;
     const roadDistance = roadDistanceField();
     /** R23 — the branches already standing. A branch measures itself against
@@ -1616,7 +1719,7 @@ function createCompiler(
      * off the answer so this can only ever under-report the room a branch
      * has, never invent some.
      */
-    const standing: Spur[] = [];
+    const standing: Spur[] = [...railArms];
     const clearOfBranches = branchClearance(standing);
     for (const junction of junctions) {
       const box = track.endless
@@ -1742,6 +1845,8 @@ function createCompiler(
     const everywhere = roadDistance({ x: 0, z: 0 });
     const wholeRoute = (x: number, z: number) => everywhere(x, z, false);
     for (const spur of standing) {
+      // R41 — a railway is not shut: nobody drives one.
+      if (spur.rail) continue;
       spur.block = placeBlock(
         spur,
         wholeRoute,
@@ -2070,7 +2175,9 @@ function createCompiler(
       // R20 — a tarmac section is a public road the rally borrows, and
       // nobody builds a launch ramp into one. A lip that would have landed
       // on sealed road is simply not built, and the segment says so.
-      const sealedJump = plan.feature === "jump" && pavedNow && flipAt < 0;
+      // R41 — except the ramp over the railway, which IS built, whatever the
+      // paving field was saying here: without it the car meets the train.
+      const sealedJump = plan.feature === "jump" && pavedNow && flipAt < 0 && !plan.overRoad;
       const built: SegmentPlan = sealedJump
         ? { ...plan, feature: "none", featureStart: undefined, featureEnd: undefined }
         : plan;
@@ -2199,8 +2306,15 @@ function createCompiler(
 
       // R36 — the public road this straight goes over. Noted from the walk,
       // before any sample of it is emitted, so `shapeJunctions` finds the
-      // platform waiting when it warps the road onto it.
-      if (built.overRoad) noteCrossing(built.overRoad, path, rollAt, step);
+      // platform waiting when it warps the road onto it. R41 — or the
+      // railway, which gets no platform and a record of its own.
+      if (built.overRoad) {
+        if (track.highways[built.overRoad.road]?.kind === "rail") {
+          noteRailCrossing(built.overRoad, path, rollAt, step, cursor.s + lipAt);
+        } else {
+          noteCrossing(built.overRoad, path, rollAt, step);
+        }
+      }
 
       // R17 — a surface change that falls ON the segment's first sample.
       // The walk below flips between two samples, which cannot express a
@@ -2335,7 +2449,8 @@ function createCompiler(
    * streaming frontier on an endless one, for the homesteads' reason. */
   let townFrom = 0;
   const buildTowns = (): void => {
-    if (!followsLand) return;
+    // R40 — only in a country somebody lives in.
+    if (!followsLand || !biome.settled) return;
     let to = track.samples.length;
     if (track.endless) {
       const horizon = track.samples[to - 1].s - STREAMED_HOLD;
@@ -2357,7 +2472,8 @@ function createCompiler(
       junctions: track.junctions,
       routeDistance: (x, z, except) => whole(x, z, false, except),
       branchDistance: branches,
-      highwayAt: (x, z) => highways.nearest(x, z, undefined, 40)?.road ?? null,
+      // A town stands on tarmac, never along a railway (R41).
+      highwayAt: (x, z) => highways.nearest(x, z, undefined, 40, "road")?.road ?? null,
       // BOUNDED, because the answer is only ever compared against the
       // corridor: an unbounded query with no road near walks every ring of
       // the index, and a town asks it a couple of thousand times a stage.
@@ -2388,8 +2504,8 @@ function createCompiler(
     // A synthetic rig is a measuring device, and a house beside a drift
     // test's straight is a wall the car under test slides into. No country,
     // no homesteads — the same line every other piece of the landscape
-    // draws on a rig.
-    if (!followsLand) return;
+    // draws on a rig. R40 — and no country nobody lives in.
+    if (!followsLand || !biome.settled) return;
     let to = track.samples.length;
     if (track.endless) {
       const horizon = track.samples[to - 1].s - STREAMED_HOLD;
@@ -2400,6 +2516,7 @@ function createCompiler(
       seed: track.seed,
       width: track.width,
       loose,
+      farms: biome.farms,
       samples: track.samples,
       from: homesteadFrom,
       to,
@@ -2706,6 +2823,7 @@ function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs, circuit =
     homesteads: [],
     towns: [],
     junctions: [],
+    rails: [],
   };
 }
 

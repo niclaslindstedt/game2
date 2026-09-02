@@ -24,7 +24,14 @@ import { knobScale, resolveKnobs } from "./rules.ts";
 import { generateCircuit } from "./circuit.ts";
 import { createLandField, type LandField } from "./land.ts";
 import { ROAD_CROSS, roadClearance } from "./road.ts";
-import { createHighwayNetwork, layHighways, type Highway, type HighwayNetwork } from "./highway.ts";
+import {
+  createHighwayNetwork,
+  layHighways,
+  layRailways,
+  type Highway,
+  type HighwayKind,
+  type HighwayNetwork,
+} from "./highway.ts";
 import { planBorrow } from "./borrow.ts";
 import { crossingParting, planCrossing } from "./crossing.ts";
 import {
@@ -108,13 +115,11 @@ export function layStageHighways(
   land: LandField,
   length: FiniteStageLength,
 ): Highway[] {
-  return layHighways(
-    seed,
-    knobs,
-    land,
-    R.stageLengths[length].worldBound,
-    knobScale(knobs.width, R.roadWidth),
-  );
+  const bound = R.stageLengths[length].worldBound;
+  const width = knobScale(knobs.width, R.roadWidth);
+  const roads = layHighways(seed, knobs, land, bound, width);
+  // R41 — and the railway, after the roads so it keeps off them.
+  return [...roads, ...layRailways(seed, knobs, land, bound, width, roads)];
 }
 
 function tryGenerateStage(
@@ -411,9 +416,12 @@ function tryGenerateStage(
       ...road.points[crossing.index],
       arc,
       at: plans.length,
-      parting: crossingParting(width),
+      parting: crossingParting(width, road.kind),
     });
     if (!commitBundle(crossing.plans, marks)) return false;
+    // R41 — a railway crossing's straight carries a real lip, and `commit`
+    // has already booked it as one.
+    if (road.kind === "rail") return true;
     // R6/R36 — AND THE CROSSING IS A LIP, for spacing's purposes.
     //
     // R6 keeps two jump lips `jump.minSpacing` apart because two launches
@@ -509,7 +517,13 @@ function tryGenerateStage(
     if (total - leftTarmacAt < R.paving.gap.min) return false;
     if (total + R.paving.borrow.runOn.min >= targetLength) return false;
     if (
-      !network.nearest(cursor.x, cursor.z, undefined, Math.min(R.paving.borrow.seek, borrowReach))
+      !network.nearest(
+        cursor.x,
+        cursor.z,
+        undefined,
+        Math.min(R.paving.borrow.seek, borrowReach),
+        "road",
+      )
     ) {
       return false;
     }
@@ -578,7 +592,8 @@ function tryGenerateStage(
    * a stretch of country rather than a point. Asked once, at the far side of
    * one crossing, it fired only on seeds whose aim happened to be perfect:
    * two of twenty-four. */
-  const tryCrossing = (needed: boolean): boolean => {
+  const tryCrossing = (needed: boolean, kind: HighwayKind = "road"): boolean => {
+    const C = kind === "rail" ? R.rail : R.crossing;
     // R15 — AND THE ASPHALT DIAL HAS FIRST REFUSAL ON THE ROAD.
     //
     // A road can be met once and once only (see `used` below), so the two
@@ -597,25 +612,39 @@ function tryGenerateStage(
     // road that is an answer about the road in the way rather than a guess.
     // `needed` is the search boxed in against the tarmac, where the
     // alternative is not less tarmac but no stage.
-    if (!needed && sealed < wantSealed && total - lookedAt >= R.paving.borrow.look) return false;
-    if (total - lookedAcross < R.crossing.look) return false;
+    // R41 — a railway is nobody's tarmac: the dial has no claim on it.
+    if (
+      kind === "road" &&
+      !needed &&
+      sealed < wantSealed &&
+      total - lookedAt >= R.paving.borrow.look
+    ) {
+      return false;
+    }
+    if (total - lookedAcross < C.look) return false;
     if (total - crossedAt < R.paving.gap.min) return false;
     // R6 — ...and it keeps its distance from a jump lip, the same way one
     // lip keeps its distance from the next. The crossing lands at least a
     // straight past the cursor, so measuring from here is conservative in
     // the direction that matters.
     if (total - sLastLipEnd < R.jump.minSpacing) return false;
-    const ahead = 2 * R.crossing.clear;
+    const ahead = 2 * C.clear;
     const inTheWay = [1, 2, 3].some((n) =>
       network.nearest(
         cursor.x + Math.sin(cursor.heading) * ahead * n,
         cursor.z + Math.cos(cursor.heading) * ahead * n,
         undefined,
         clear,
+        kind,
       ),
     );
     if (!inTheWay) return false;
-    const crossing = planCrossing(cursor, network, plans[plans.length - 1].kind === "straight");
+    const crossing = planCrossing(
+      cursor,
+      network,
+      plans[plans.length - 1].kind === "straight",
+      kind,
+    );
     // R36/R23 — ONE MEETING PER ROAD, and it is the same rule the borrow
     // keeps for the same reason: both arms of a crossing are CUT from the
     // road and run to the edge of the map, so a route that meets one road
@@ -648,6 +677,8 @@ function tryGenerateStage(
     // borrowed spends a public road on four seconds of jump and leaves the
     // dial to find another.
     if (!placed && tryCrossing(false)) placed = true;
+    // R41 — and the railway, which there is only one way past.
+    if (!placed && tryCrossing(false, "rail")) placed = true;
     for (let attempt = 0; attempt < 10 && !placed; attempt++) {
       // R9 — near the boundary, steer back toward the middle: force a turn
       // whose direction reduces the outward heading.
@@ -734,6 +765,7 @@ function tryGenerateStage(
     // and it spends none of the `asphalt` dial on a stage that never asked
     // for tarmac.
     if (!placed && tryCrossing(true)) placed = true;
+    if (!placed && tryCrossing(true, "rail")) placed = true;
     if (!placed && tryBorrow(true)) placed = true;
     if (!placed) {
       // Search is stuck (boxed in by its own line). End the stage early if a

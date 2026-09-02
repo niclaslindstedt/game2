@@ -414,6 +414,9 @@ export function analyzeJunctions(track: Track, terrain: TerrainField): MetricRep
   for (let i = 0; i < track.spurs.length; i++) {
     const spur = track.spurs[i];
     const block = spur.block;
+    // R41 — a railway's arms are not shut, and are not roads to be shut:
+    // nobody drives one, and the crossing is signed instead.
+    if (spur.rail) continue;
     if (block && block.s <= SPUR.block.to) {
       shut++;
       continue;
@@ -491,7 +494,7 @@ export function analyzeJunctions(track: Track, terrain: TerrainField): MetricRep
       standing,
       splinters,
       detached,
-      open: track.spurs.length - shut,
+      open: track.spurs.filter((s) => !s.rail).length - shut,
       tightestAngle: (tightestAngle * 180) / Math.PI,
       worstMarkGap: worstBreak,
       offAngle,

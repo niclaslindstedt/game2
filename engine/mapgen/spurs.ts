@@ -124,6 +124,12 @@ export type Spur = SpurLine & {
    * these come in pairs, pointing opposite ways out of one meeting point,
    * and both of them are shut. */
   crossing?: boolean;
+  /** R41 — set on both arms of a RAILWAY crossing: this is not a road but
+   * the line the train runs, cut from the railway to the edge of the map.
+   * The terrain shelves it and the forest keeps off it like any branch; the
+   * renderer lays ballast and rails on it instead of a mat, and nothing
+   * shuts it. */
+  rail?: boolean;
   samples: SpurSample[];
   /** Full road width, meters — the MAIN road's, continued: a branch is the
    * far arm of the road the route turned onto, not a road of its own. */
@@ -609,6 +615,9 @@ export function cutSpur(
   land: LandField,
   width: number,
   shelfBand: (x: number, z: number) => ShelfBand,
+  /** R41 — what the arm is made of. Tarmac, unless it is a railway's
+   * ballast, which the physics reads as the loose surface it is. */
+  surface: "asphalt" | "gravel" | "sand" = "asphalt",
 ): Spur {
   // Which way along the road the route did NOT go. The junction carries the
   // heading of the arm it abandons (`compile.ts`'s `noteJunction`), so the
@@ -645,7 +654,7 @@ export function cutSpur(
       heading,
       elevation: y,
       s,
-      surface: "asphalt",
+      surface,
       lift: ROAD_CROSS.asphaltLift * Math.min(1, s / ROAD_CROSS.liftRamp),
       flat: 0,
     });

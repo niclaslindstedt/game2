@@ -366,8 +366,16 @@ export function collideCar(
     // The impulse: velocity into the surface comes back at `restitution`,
     // velocity along it keeps `tangentKeep` — then the lever arm turns the
     // net velocity change into spin. Velocity in the car frame is (w, u)
-    // on the (right, fwd) axes the normal is expressed in.
-    const closing = car.u * ez + car.w * ex;
+    // on the (right, fwd) axes the normal is expressed in — RELATIVE to
+    // the solid's own, for the one kind that moves (R41's train): a car
+    // standing on the rails is closed on by the wagon, and what it is left
+    // with afterwards is the wagon's speed plus the bounce, not a bounce
+    // off nothing.
+    const obU = (ob.vx ?? 0) * sinH + (ob.vz ?? 0) * cosH;
+    const obW = (ob.vx ?? 0) * cosH - (ob.vz ?? 0) * sinH;
+    const relU = car.u - obU;
+    const relW = car.w - obW;
+    const closing = relU * ez + relW * ex;
     if (closing <= 0) continue;
 
     // How much of a WALL this solid turns out to be. Everything below is
@@ -385,15 +393,15 @@ export function collideCar(
     car.x -= (cosH * ex + sinH * ez) * push;
     car.z -= (-sinH * ex + cosH * ez) * push;
 
-    const tanR = car.w - closing * ex;
-    const tanF = car.u - closing * ez;
+    const tanR = relW - closing * ex;
+    const tanF = relU - closing * ez;
     // Normal velocity after the exchange — `-e·closing` against a wall,
     // barely dented by something light, and `closing − snap/mass` through
     // something that broke.
     const after = closing - (1 + e) * bite * closing;
     const keep = 1 - (1 - T.collision.tangentKeep) * bite;
-    const newW = after * ex + keep * tanR;
-    const newU = after * ez + keep * tanF;
+    const newW = obW + after * ex + keep * tanR;
+    const newU = obU + after * ez + keep * tanF;
     // Lever kick: force at the contact point, torque about the center.
     // Sign check: a nose contact (pz=+hl) whose velocity change points
     // right swings the nose right — heading grows, like positive steer.

@@ -68,6 +68,10 @@ export function solidGroup(ob) {
   if (ob.kind === "parapet") return "parapet";
   // R37 — a homestead's house wall and the two halves of a parked car.
   if (ob.kind === "wall" || ob.kind === "parked") return "building";
+  // R37 — a fence post is a stick of wood.
+  if (ob.kind === "post") return "wood";
+  // R41 — a bay of the train.
+  if (ob.kind === "railcar") return "train";
   return "rock";
 }
 
@@ -336,13 +340,23 @@ export function stageFeatures(track, terrain) {
     }
     if (seg.overRoad) {
       const mid = at(segStart + seg.length / 2);
+      // R41 — over the railway the crossing is a ramp with a train under
+      // it; the lip itself is listed as the jump it is (`J…`).
+      const rail = track.highways[seg.overRoad.road]?.kind === "rail";
+      const crossing = rail
+        ? (track.rails ?? []).find((r) => Math.abs(r.s - (segStart + seg.length / 2)) < 30)
+        : null;
       features.push({
-        id: `X${k}`,
-        kind: "crossing",
+        id: rail ? `RX${k}` : `X${k}`,
+        kind: rail ? "railcrossing" : "crossing",
         s: segStart + seg.length / 2,
         ...mid,
-        label: "X",
-        detail: "crosses a public road square on",
+        label: rail ? "RX" : "X",
+        detail: rail
+          ? crossing
+            ? `crosses the railway square on a ramp; a train every ${crossing.schedule.period.toFixed(0)} s at ${(crossing.schedule.speed * 3.6).toFixed(0)} km/h, the first at ${crossing.schedule.first.toFixed(0)} s (${crossing.schedule.cars.length} cars)`
+            : "crosses the railway square on a ramp"
+          : "crosses a public road square on",
         solids: [],
       });
     }
@@ -507,6 +521,7 @@ function rank(feature) {
     "start",
     "junction",
     "crossing",
+    "railcrossing",
     "homestead",
     "town",
     "turn",
@@ -539,6 +554,7 @@ export function stageSummary(track, features) {
     bridges: by("bridge"),
     checkpoints: by("checkpoint"),
     junctions: by("junction"),
+    railCrossings: by("railcrossing"),
     homesteads: by("homestead"),
     towns: by("town"),
     tarmacShare: paved / track.samples.length,

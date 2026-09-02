@@ -118,6 +118,20 @@ export type BiomeRules = {
   /** Where on earth it is, degrees north — what the sun's height and the
    * warmth of its light are derived from (pwa/src/game/sky.ts). */
   latitude: number;
+  /** R37/R39 — whether anybody LIVES in this country: the homesteads off
+   * the stage and the towns along its tarmac. A desert road runs for a
+   * hundred kilometres between one place and the next, and a stage is four
+   * of them — so a desert stage is empty country, and the tarmac it meets
+   * is going somewhere the rally never sees. */
+  settled: boolean;
+  /** R37 — whether a homestead here may be a FARM: a barn bigger than the
+   * house, a fenced paddock with stock in it, a field, and the machinery
+   * outside the barn. Only where the country is farmed at all. */
+  farms: boolean;
+  /** R41 — whether the country carries a RAILWAY: a single track laid across
+   * the map before the rally, that the route may cross square on a ramp and
+   * that a train runs down every so often. */
+  railway: boolean;
 };
 
 // ── The taiga ─────────────────────────────────────────────────────────────
@@ -224,6 +238,9 @@ export const TAIGA: BiomeRules = {
   weathers: ["clear", "rain", "storm"],
   rain: true,
   latitude: 62,
+  settled: true,
+  farms: true,
+  railway: true,
 };
 
 // ── The desert ────────────────────────────────────────────────────────────
@@ -369,6 +386,12 @@ export const DESERT: BiomeRules = {
   weathers: ["clear", "storm"],
   rain: false,
   latitude: 33,
+  // Nobody lives out here and nothing is farmed: no homestead, no town, and
+  // no barn. The railway that does cross a desert is a different railway
+  // from the one through the forest and is not laid yet.
+  settled: false,
+  farms: false,
+  railway: false,
 };
 
 export const BIOMES: Record<BiomeId, BiomeRules> = { taiga: TAIGA, desert: DESERT };

@@ -28,8 +28,9 @@ import { shareOne } from "../lib/shared-gpu.ts";
 import { detailTexture } from "./textures.ts";
 
 /** A roof with a pitch to it — everything the plan can ask for but flat,
- * which is a village building's (`building.ts`) and never a house's. */
-export type PitchedRoof = Exclude<RoofKind, "flat">;
+ * which is a village building's (`building.ts`) and never a house's, and
+ * the gambrel, which is a barn's (`barn.ts`) and never anything else's. */
+export type PitchedRoof = Exclude<RoofKind, "flat" | "gambrel">;
 
 /** The paint box. Falu red is the iron-oxide red every second house in the
  * country is painted; the ochre is the manor's yellow; the white is a warm
@@ -65,7 +66,7 @@ export const ROOF: Record<PitchedRoof, { face: THREE.Color; ridge: THREE.Color }
 /** The roof a house gets: its plan's, or sheet metal where a plan asks a
  * house for the flat roof only a village building carries. */
 export function pitched(roof: RoofKind): PitchedRoof {
-  return roof === "flat" ? "metal" : roof;
+  return roof === "flat" || roof === "gambrel" ? "metal" : roof;
 }
 
 /** Dimensions a plan does not carry, m — the same on every house because

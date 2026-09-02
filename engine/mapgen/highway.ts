@@ -24,6 +24,7 @@
 
 import { createRng } from "../lib/prng.ts";
 import { cellKey } from "../lib/math.ts";
+import { biomeRules } from "./biomes.ts";
 import { LAKE_Y, type LandField } from "./land.ts";
 import { roadClearance } from "./road.ts";
 import { STAGE_RULES as R, type StageKnobs } from "./rules.ts";
@@ -38,15 +39,41 @@ export type HighwayPoint = {
   s: number;
 };
 
+/** What a laid line IS. A public road the rally may borrow, meet at a
+ * junction or cross (R17, R36); or — R41 — a RAILWAY, which it may only
+ * cross, on a ramp, and which a train runs down. Both are laid here, before
+ * the route, and both hold the route off by the same clearance: the search
+ * plans round a line without asking what it is. */
+export type HighwayKind = "road" | "rail";
+
 export type Highway = {
   points: HighwayPoint[];
   /** Full carriageway width, m — the stage's own, because a rally borrows
-   * the road it meets rather than one built to a different gauge. */
+   * the road it meets rather than one built to a different gauge. For a
+   * railway, the formation's width: ballast shoulder to ballast shoulder. */
   width: number;
+  kind: HighwayKind;
+};
+
+/** How a line is laid: the numbers `layOne` walks by. The tarmac's are
+ * `HIGHWAY`; a railway's are `RAILWAY`, and the difference between the two
+ * is the difference between a road and a railway — one bends, the other
+ * very nearly does not. */
+export type LineRules = {
+  step: number;
+  overrun: number;
+  minRadius: number;
+  bend: number;
+  shoreLook: number;
+  shoreFreeboard: number;
+  avoidRadius: number;
+  wander: { min: number; max: number };
+  correction: number;
+  tries: number;
 };
 
 /** How the tarmac is laid, in meters unless noted. */
-export const HIGHWAY = {
+export const HIGHWAY: LineRules = {
   /** Spacing along a road's centerline, m. Coarser than the stage's own
    * sampling: nothing drives this line until the compiler has resampled the
    * piece the route uses, and everything else asks it for distances
@@ -90,7 +117,31 @@ export const HIGHWAY = {
   /** How many entry points a road may try before the country is judged not
    * to carry one there. */
   tries: 40,
-} as const;
+};
+
+/** R41 — how a RAILWAY is laid. The same walk, with a railway's numbers: a
+ * single track through forest country holds a curve a rally road would
+ * call a straight, so it bends at radii of half a kilometre and up, redraws
+ * its bend rarely, and where a lake is in the way it goes round on a sweep
+ * rather than a dodge — and where it cannot, there is no railway on this
+ * seed, which is what most seeds have. Fewer tries than a road: a line that
+ * will not fit at forty entry points will not fit at the forty-first. */
+export const RAILWAY: LineRules = {
+  step: 8,
+  overrun: 320,
+  minRadius: 480,
+  bend: 260,
+  // It sees the water further off than a road does and goes round it on
+  // a curve a branch line would actually have — held to a main line's
+  // radius it was refused by the water on five attempts in six, and a
+  // country whose lakes refuse every railway is a country with none.
+  shoreLook: 300,
+  shoreFreeboard: 2,
+  avoidRadius: 95,
+  wander: { min: 0.3, max: 1 },
+  correction: 1,
+  tries: 30,
+};
 
 /** Cell edge of the lookup grid, m — a couple of points per cell. */
 const INDEX_CELL = 32;
@@ -154,8 +205,18 @@ export type HighwayNetwork = {
    *
    * `except` skips one road, which is what a route BORROWING a road needs:
    * while it is joining that one it is allowed inside its clearance, and it
-   * still is not allowed inside anybody else's. */
-  nearest: (x: number, z: number, except?: Highway, within?: number) => HighwayHit | null;
+   * still is not allowed inside anybody else's.
+   *
+   * `only` narrows the answer to one KIND of line — a borrow wants the
+   * nearest ROAD, a rail crossing the nearest RAILWAY — where a clearance
+   * query wants the nearest anything and leaves it unset. */
+  nearest: (
+    x: number,
+    z: number,
+    except?: Highway,
+    within?: number,
+    only?: HighwayKind,
+  ) => HighwayHit | null;
 };
 
 /** How many sealed roads a stage's country carries.
@@ -222,6 +283,8 @@ export function layHighways(
         worldBound,
         width,
         roads,
+        HIGHWAY,
+        "road",
       );
       if (road) {
         roads.push(road);
@@ -230,6 +293,59 @@ export function layHighways(
     }
   }
   return roads;
+}
+
+/** R41 — lay the RAILWAY for a seed, in a country that carries one: at
+ * most a single line, on `rail.chance` of the seeds, walked the way a road
+ * is and held off every road already laid. Nothing to do with the
+ * `asphalt` dial — a railway is not tarmac and the rally never drives it —
+ * so a stage with no sealed road on it can still have a train go by.
+ *
+ * `width` is the ROUTE's, as it is for a road: the R24 start clearance is
+ * measured in it, and the formation's own width is the railway's
+ * (`rail.line.width`). Deterministic in the seed, the dials and the country,
+ * for `layHighways`'s reason. */
+export function layRailways(
+  seed: number,
+  knobs: StageKnobs,
+  land: LandField,
+  worldBound: number,
+  width: number,
+  /** The roads already laid, which the line keeps off. */
+  standing: readonly Highway[],
+): Highway[] {
+  if (!biomeRules(knobs.biome).railway) return [];
+  const rng = createRng((seed ^ 0x51a7e3b9) >>> 0);
+  if (!rng.chance(R.rail.chance)) return [];
+  const rails: Highway[] = [];
+  // Two lines laid edge to edge across one map cross each other unless
+  // they run the same way, and a railway is not allowed to cross the road
+  // (`layOne`'s R23 keep): entered anywhere on the rim it was refused on
+  // three seeds in four. So where there is a road, the railway sets out
+  // from the same side of the country as the road did — the way a line
+  // and a road share a valley — and the dice spread it either side of that.
+  // The spread is wide enough that the two are never simply parallel.
+  const road = standing[0];
+  const aim = road
+    ? { entry: Math.atan2(road.points[0].x, road.points[0].z), spread: 0.55 }
+    : undefined;
+  for (let attempt = 0; attempt < RAILWAY.tries; attempt++) {
+    const line = layOne(
+      (seed ^ 0x3c6ef372 ^ (attempt * 0x85ebca6b)) >>> 0,
+      land,
+      worldBound,
+      width,
+      [...standing, ...rails],
+      RAILWAY,
+      "rail",
+      aim,
+    );
+    if (line) {
+      rails.push(line);
+      break;
+    }
+  }
+  return rails;
 }
 
 /** One road, walked from an entry on the map's rim to wherever it leaves.
@@ -241,7 +357,12 @@ function layOne(
   land: LandField,
   worldBound: number,
   width: number,
-  standing: Highway[],
+  standing: readonly Highway[],
+  HIGHWAY: LineRules,
+  kind: HighwayKind,
+  /** Where on the rim to enter, radians, and how far either side of it the
+   * dice may put the entry. Unset, anywhere on the rim. */
+  aim?: { entry: number; spread: number },
 ): Highway | null {
   const rng = createRng(seed);
   const reach = worldBound + HIGHWAY.overrun;
@@ -249,7 +370,7 @@ function layOne(
   // road THROUGH the country rather than a line clipping a corner of it.
   // The aim wanders as it goes; what this fixes is only which way it set
   // out.
-  const entry = rng.range(0, Math.PI * 2);
+  const entry = aim ? aim.entry + rng.range(-aim.spread, aim.spread) : rng.range(0, Math.PI * 2);
   let x = Math.sin(entry) * reach;
   let z = Math.cos(entry) * reach;
   // A road goes somewhere, so it is steered at a PLACE — the point on the
@@ -395,7 +516,8 @@ function layOne(
   }
   // R23 — and two public roads do not run into each other out in the
   // country either. A crossroads is a place somebody built; two lines that
-  // happen to touch is not.
+  // happen to touch is not. Nor does a railway cross a road: a level
+  // crossing on the public road is a place too, and not one that is built.
   const keep = 4 * width;
   for (const other of standing) {
     for (const p of other.points) {
@@ -404,7 +526,7 @@ function layOne(
       }
     }
   }
-  return { points, width };
+  return { points, width: kind === "rail" ? R.rail.line.width : width, kind };
 }
 
 /** Index the network so the route's search can ask where the tarmac is
@@ -461,6 +583,7 @@ export function createHighwayNetwork(roads: Highway[]): HighwayNetwork {
     z: number,
     except?: Highway,
     within = Infinity,
+    only?: HighwayKind,
   ): HighwayHit | null => {
     if (roads.length === 0) return null;
     const cx = Math.floor(x / INDEX_CELL);
@@ -491,6 +614,7 @@ export function createHighwayNetwork(roads: Highway[]): HighwayNetwork {
           if (bucket === undefined) continue;
           for (const entry of bucket) {
             if (entry.road === except) continue;
+            if (only !== undefined && entry.road.kind !== only) continue;
             const p = entry.road.points[entry.index];
             const d = Math.hypot(p.x - x, p.z - z);
             if (d > within) continue;
