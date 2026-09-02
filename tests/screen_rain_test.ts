@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE WATER ON THE WINDSCREEN, and the arm that clears it.
+// THE WATER ON THE GLASS — the windscreen and the arm that clears it, and
+// the doors that nothing clears.
 //
 // Almost all of what car/screen-rain.ts does happens in a fragment shader,
 // where no test can reach it — the drops, the runs and the swept arc are
 // looked at with `make screenshots`, not asserted. What IS assertable is
 // everything the shader is DRIVEN by, and it is the half that goes wrong
-// silently: which way the water is being carried, how far it has gone, where
-// the arm is in its stroke, and — the one that is invisible until somebody
-// looks at a frame — whether the water is laid under the blade or over it.
+// silently: which way the water is being carried on each pane, how far it
+// has gone, where the arm is in its stroke, and — the one that is invisible
+// until somebody looks at a frame — whether the water is laid under the
+// blade or over it.
 //
 // It reaches into pwa/ for the same reason car_geometry_test.ts does: the
 // pane frame and the body specs are arithmetic over plain data. three.js is
@@ -127,8 +129,11 @@ describe("where the water is laid", () => {
   it("the pane spans the glass in the coordinates the shader solves in", () => {
     const water = rain();
     const local = water.mesh.geometry.getAttribute("pane");
-    const half = uniformsOf(water).uSize.value.x as number;
-    const height = uniformsOf(water).uSize.value.y as number;
+    // Every vertex carries its own pane's size, so one mesh can hold
+    // several; on the windscreen's mesh they all agree.
+    const size = water.mesh.geometry.getAttribute("size");
+    const half = size.getX(0);
+    const height = size.getY(0);
     let maxX = 0;
     let maxY = 0;
     let minY = Infinity;
@@ -214,6 +219,107 @@ describe("which way the water runs", () => {
 
     for (let i = 0; i < 400; i++) water.update(still({ speed: 25, lateral: 0 }), 0.02);
     expect(Math.abs(uniformsOf(water).uLean.value as number)).toBeLessThan(0.02);
+    water.dispose();
+  });
+});
+
+describe("the water on the doors", () => {
+  it.each(bodies)("%s: every flank pane's x runs toward the tail", (_id, spec) => {
+    // Both doors are on one mesh under one shader, and the shader has one
+    // answer to "which way is back": +x. The left flank's frame points the
+    // other way (car/pane-frame.ts keeps every frame right-handed against
+    // its own outward normal), so the geometry has to turn it. Read the
+    // vertices back: the further toward the tail a vertex stands in the
+    // car (smaller z — the nose is +z), the larger its pane x must be.
+    const water = rain(spec);
+    const pos = water.sides.geometry.getAttribute("position");
+    const local = water.sides.geometry.getAttribute("pane");
+    // Per pane (each vertex carries its own pane's size, so a change of
+    // size is a change of pane): x against z must trend the same way.
+    let sumXZ = 0;
+    let n = 0;
+    // Along a ROW of one pane's grid (seven vertices across — a step onto
+    // the next row, or onto the next pane, is a jump to somewhere else).
+    for (let i = 1; i < pos.count; i++) {
+      if (i % 7 === 0) continue;
+      const dz = pos.getZ(i) - pos.getZ(i - 1);
+      const dx = local.getX(i) - local.getX(i - 1);
+      if (Math.abs(dz) < 1e-6 || Math.abs(dx) < 1e-6) continue;
+      sumXZ += Math.sign(dx) * Math.sign(dz);
+      n++;
+    }
+    expect(n).toBeGreaterThan(0);
+    // Every step along a row moves x and z in OPPOSITE directions.
+    expect(sumXZ).toBe(-n);
+    water.dispose();
+  });
+
+  it("carries every flank window in one mesh", () => {
+    const water = rain();
+    const sides = screenPanes(SPEC).sides.length;
+    expect(sides).toBeGreaterThan(1);
+    // Six by five cells per pane, and every pane is on the one buffer: a
+    // draw call per door window is what the mesh exists to avoid.
+    expect(water.sides.geometry.getAttribute("pane").count).toBe(sides * 7 * 6);
+    expect((water.sides.material as THREE.ShaderMaterial).uniforms.uSide.value).toBe(1);
+    expect((water.mesh.material as THREE.ShaderMaterial).uniforms.uSide.value).toBe(0);
+    // …with smaller drops on it. The door glass is a third of the distance
+    // from the eye that the screen is, so a bead sized for the screen is a
+    // puddle there.
+    const scale = (water.sides.material as THREE.ShaderMaterial).uniforms.uScale.value as number;
+    expect(scale).toBeGreaterThan(0.3);
+    expect(scale).toBeLessThan(0.8);
+    expect((water.mesh.material as THREE.ShaderMaterial).uniforms.uScale.value).toBe(1);
+    water.dispose();
+  });
+
+  it("only beads on the grid, and streams back along the car at speed", () => {
+    const flank = (w: ReturnType<typeof rain>) =>
+      (w.sides.material as THREE.ShaderMaterial).uniforms;
+    const water = rain();
+    // Standing still nothing on a door window is being carried anywhere:
+    // no runs, no trail, and no travel accumulating for later.
+    for (let i = 0; i < 100; i++) water.update(still(), 0.02);
+    expect(flank(water).uFlowing.value as number).toBe(0);
+    expect(flank(water).uRun.value as number).toBe(0);
+    expect(flank(water).uTrail.value as number).toBe(0);
+
+    // Moving, the air blows every drop BACK — the run only ever grows, and
+    // the only sign it has is the geometry's own toward-the-tail x.
+    for (let i = 0; i < 100; i++) water.update(still({ speed: 30 }), 0.02);
+    expect(flank(water).uFlowing.value as number).toBe(1);
+    expect(flank(water).uRun.value as number).toBeGreaterThan(1);
+    expect(flank(water).uDir.value as number).toBe(1);
+    expect(flank(water).uTrail.value as number).toBe(1);
+    // …and further drawn out than the screen's, which has a rake to climb.
+    const front = (water.mesh.material as THREE.ShaderMaterial).uniforms;
+    expect(flank(water).uStretch.value as number).toBeGreaterThan(front.uStretch.value as number);
+
+    // The screen's own crossover — creeping down, then dragged up — never
+    // reaches the doors: slowing to a walk again, the doors simply stop.
+    for (let i = 0; i < 100; i++) water.update(still({ speed: 0 }), 0.02);
+    const parked = flank(water).uRun.value as number;
+    water.update(still({ speed: 0 }), 1);
+    expect(flank(water).uRun.value as number).toBe(parked);
+    water.dispose();
+  });
+
+  it("never wipes — there is no arm over a door", () => {
+    const water = rain();
+    const wipers = buildWipers(
+      SPEC,
+      new THREE.MeshBasicMaterial(),
+      new THREE.MeshBasicMaterial(),
+      "fine",
+    );
+    for (let i = 0; i < 60; i++) wipers.update(1, 0, 0, 0.02);
+    water.update(still({ wipe: wipers.front }), 0.02);
+    const flank = (water.sides.material as THREE.ShaderMaterial).uniforms;
+    // An arm of no reach: the shader's wipeAge answers "never" for every
+    // point on the pane, which is the whole of what a flank needs.
+    expect((flank.uArm.value as THREE.Vector2).y).toBe(0);
+    expect((flank.uStroke.value as THREE.Vector4).w).toBe(0);
+    wipers.dispose();
     water.dispose();
   });
 });

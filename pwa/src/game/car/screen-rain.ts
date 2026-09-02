@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// RAIN ON THE WINDSCREEN — what the driver, and only the driver, is looking
-// through. A single pane laid on the outside of the glass, carrying a shader
-// that beads, runs, streaks and is scrubbed off again by the arm sweeping
-// over it.
+// RAIN ON THE GLASS — what the driver, and only the driver, is looking
+// through. A pane laid on the outside of the windscreen, and another over
+// the flanks' windows, each carrying a shader that beads, runs and streaks —
+// and on the windscreen is scrubbed off again by the arm sweeping over it.
 //
 // WHY THIS IS NOT car/wipers.ts's FILM. The grime film is a coat carried on
 // the VERTICES of a tessellated pane: the wipe walks them and multiplies each
@@ -12,26 +12,30 @@
 // millimetres across, and the runs they leave when one breaks loose — and at
 // arm's length from the driver's eye those millimetres are tens of pixels. A
 // vertex grid fine enough to carry one bead would be a hundred thousand
-// triangles on one window. So the water is procedural: the pane is nine
-// hundred triangles of nothing, and every drop on it is solved per pixel.
+// triangles on one window. So the water is procedural: the panes are a few
+// hundred triangles of nothing, and every drop on them is solved per pixel.
 //
 // THE THREE THINGS THAT MAKE IT READ AS WATER RATHER THAN AS SPOTS:
 //
 //   IT REFRACTS. A drop is a lens. What sells one is not that it is a pale
 //   blob but that the world behind it is bent, turned over and pulled in at
-//   its edges. So the finished frame is copied to a texture before this pane
-//   is drawn, and every covered pixel samples that copy at an offset taken
+//   its edges. So the finished frame is copied to a texture before the panes
+//   are drawn, and every covered pixel samples that copy at an offset taken
 //   from the drop's own surface slope. That is the whole reason this is a
 //   second pass rather than another mesh in the scene: it needs the picture
 //   the scene has already made.
 //
-//   IT RUNS THE RIGHT WAY. Water on a windscreen does not fall. Below about
-//   twenty kilometres an hour it creeps DOWN under its own weight; above it
-//   the air coming over the scuttle drags it UP the screen, faster the
-//   faster the car goes, and a corner leans the runs over toward the outside
-//   of the bend. One signed number (`RUN`) covers all of it, crossing zero
-//   through a moment where the water barely moves at all — which is exactly
-//   what a windscreen does as a car rolls to a halt.
+//   IT RUNS THE RIGHT WAY, AND THE RIGHT WAY IS A DIFFERENT WAY ON EACH
+//   PANE. Water on a windscreen does not fall. Below about twenty kilometres
+//   an hour it creeps DOWN under its own weight; above it the air coming
+//   over the scuttle drags it UP the screen, faster the faster the car goes,
+//   and a corner leans the runs over toward the outside of the bend. One
+//   signed number (`RUN`) covers all of it, crossing zero through a moment
+//   where the water barely moves at all — which is exactly what a windscreen
+//   does as a car rolls to a halt. A SIDE window is edge-on to the same air:
+//   standing still it only beads, and at speed every drop on it is blown
+//   BACK along the car in a horizontal streak. Same shader, with the frame
+//   the runs are solved in turned a quarter (`uSide`).
 //
 //   THE ARM ACTUALLY CLEARS IT. There is no per-pixel memory to write a
 //   wipe into, so the glass is not cleared: it is ASKED how long ago the
@@ -43,7 +47,8 @@
 //   else is a function of that one number: nothing behind the blade, beads
 //   filling in over the second after it, a full screen out at the corners
 //   the arm never reaches, and the faint arcs of smear the rubber leaves
-//   for the half second after it passes.
+//   for the half second after it passes. The flanks have no arm, so on them
+//   that age is simply forever, and they stream for the whole stage.
 //
 // It is the PLAYER'S CAR ONLY, and only while the camera is in it. Nobody
 // reads beading on a rival two hundred metres up the road, and the pass
@@ -52,7 +57,7 @@
 import * as THREE from "three";
 
 import { patchAt, type V3 } from "./builder.ts";
-import { GLASS_LIFT, screenPanes } from "./greenhouse.ts";
+import { GLASS_LIFT, screenPanes, type ScreenPane } from "./greenhouse.ts";
 import { paneFrame } from "./pane-frame.ts";
 import type { CarBodySpec } from "./spec.ts";
 import type { WipeState } from "./wipers.ts";
@@ -64,15 +69,15 @@ import type { WipeState } from "./wipers.ts";
  * round. car/wipers.ts owns the two numbers this sits between. */
 const RAIN_LIFT = GLASS_LIFT + 0.006;
 
-/** How finely the pane is tessellated. It carries nothing per-vertex — every
+/** How finely a pane is tessellated. It carries nothing per-vertex — every
  * drop is solved in the fragment shader — so this is only about following
- * the windscreen's own warp closely enough that the metric coordinates
- * handed to the shader do not shear across a cell. A dozen across is more
- * than that costs to be sure of. */
-const GRID = { cols: 12, rows: 9 };
+ * the glass's own warp closely enough that the metric coordinates handed to
+ * the shader do not shear across a cell. A dozen across is more than that
+ * costs to be sure of; the flanks are flatter and get by on half. */
+const GRID = { front: { cols: 12, rows: 9 }, side: { cols: 6, rows: 5 } };
 
-/** HOW THE WATER TRAVELS OVER THE GLASS, m/s along the pane's own up axis,
- * and it is ONE SIGNED NUMBER on purpose.
+/** HOW THE WATER TRAVELS OVER THE WINDSCREEN, m/s along the pane's own up
+ * axis, and it is ONE SIGNED NUMBER on purpose.
  *
  * `gravity` is what a standing car has: a slow creep down the screen. `air`
  * is what the airflow over the scuttle adds once there is any, and it is up
@@ -89,6 +94,21 @@ const RUN = {
   lift: 4,
   full: 34,
 };
+
+/** …AND OVER A SIDE WINDOW, which is a different pane in a different wind.
+ *
+ * It stands edge-on to the air, so nothing over the scuttle lifts what is
+ * on it: standing still the water only beads, and the little that runs,
+ * runs down too slowly to draw. Moving, the whole sheet of air going past
+ * the door blows every drop BACK along the car — faster than the screen's
+ * runs, because there is no rake to climb, and drawn out into longer
+ * streaks for the same reason. `flowing` is the road speed at which the
+ * runs are fully going; under `RUN.lift` they are not going at all, which
+ * is what lets the pane sit still on the grid without a flip anywhere.
+ * `scale` is how big its drops are against the screen's: the door glass is
+ * a third of the distance from the eye, so the same millimetres are three
+ * times the pixels, and a bead sized for the screen is a puddle there. */
+const SIDE = { air: 1.6, flowing: 14, stretch: 3.4, scale: 0.55 };
 
 /** How far the runs LEAN, as metres across the glass per metre up it, at the
  * hardest cornering a rally car does. Water has mass: it keeps going while
@@ -178,19 +198,22 @@ export type ScreenRainDrive = {
   /** How hard it is raining on the car, 0..1 — the same number the wipers
    * and the sheet in the air are scaled by. */
   wet: number;
-  /** Road speed, m/s: what drags the water up the screen. */
+  /** Road speed, m/s: what drags the water up the screen and back along
+   * the doors. */
   speed: number;
   /** Lateral acceleration, m/s², positive to the car's right: what leans
    * the runs over. */
   lateral: number;
-  /** What the arm on this glass is doing (car/wipers.ts). */
+  /** What the arm on the windscreen is doing (car/wipers.ts). */
   wipe: WipeState | null;
 };
 
 export type ScreenRain = {
-  /** The pane. It lives in a scene of its OWN rather than on the car — see
-   * `draw` — so nothing else in the renderer should be adding it anywhere. */
+  /** The windscreen's pane, and the one mesh carrying every flank window.
+   * Both live in a scene of their OWN rather than on the car — see `draw`
+   * — so nothing else in the renderer should be adding them anywhere. */
   mesh: THREE.Mesh;
+  sides: THREE.Mesh;
   /** Whether there is enough on the glass to be worth drawing. */
   active: () => boolean;
   /** Advance the water one frame — everything the CAR knows about it. */
@@ -203,31 +226,35 @@ export type ScreenRain = {
   /**
    * Draw the drops over the frame that is already in the buffer.
    *
-   * This is the whole reason the pane is not simply another mesh hanging off
+   * This is the whole reason the panes are not simply meshes hanging off
    * the chassis. A drop refracts, so it has to sample the picture behind it,
-   * so the picture has to already exist — which means the pane is drawn
+   * so the picture has to already exist — which means the panes are drawn
    * AFTER the scene, from a copy of the finished frame.
    *
-   * The depth buffer is left exactly as the scene pass wrote it, so the pane
-   * is still occluded by everything nearer the eye than the windscreen: the
-   * screen pillars, the mirror hanging in the glass, the fascia under it,
-   * and the blade itself, which is the one that matters.
+   * The depth buffer is left exactly as the scene pass wrote it, so a pane
+   * is still occluded by everything nearer the eye than its glass: the
+   * pillars, the door lining, the mirror hanging in the screen, the fascia
+   * under it, and the blade itself, which is the one that matters.
    */
   draw: (renderer: THREE.WebGLRenderer, camera: THREE.Camera) => void;
   dispose: () => void;
 };
 
-/** The pane in the shader's own terms: metres across the glass from the
- * middle of its sill, and metres up it. Both the drop field and the wipe arc
- * are solved in these, which is why the arm's pivot can be handed over as a
+/** A pane in the shader's own terms: metres across the glass from the
+ * middle of its sill and metres up it, plus how big the pane is in each, so
+ * one mesh can carry several. Both the drop field and the wipe arc are
+ * solved in these, which is why the arm's pivot can be handed over as a
  * plain pair of numbers. */
 const VERT = /* glsl */ `
 attribute vec2 pane;
+attribute vec2 size;
 varying vec2 vPane;
+varying vec2 vSize;
 varying vec4 vClip;
 
 void main() {
   vPane = pane;
+  vSize = size;
   vClip = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   gl_Position = vClip;
 }
@@ -244,16 +271,32 @@ uniform sampler2D uScene;
  * same bead at four pixels barely bends anything. A fixed offset in texture
  * coordinates gets both of those wrong at once. */
 uniform vec2 uTexel;
-/** Metres of travel the water has done along the pane's up axis since the
- * stage began, and how far it is leaning. INTEGRATED on the CPU rather than
- * taken as speed times time: the rate changes with the car, and a rate
- * multiplied by a running clock teleports every drop on the glass the
- * instant it does. */
+/** WHICH GLASS THIS IS. On the windscreen the runs go up and down the pane
+ * and lean with the corner; on a flank they go along the car, which in the
+ * pane's own metres is ACROSS it — so the frame the runs are solved in is
+ * turned a quarter, and everything else falls out unchanged. */
+uniform float uSide;
+/** How much of the water is being carried anywhere at all, 0..1. Always on
+ * a windscreen, whose runs merely change direction; on a flank the air is
+ * the only thing that moves a drop, so standing still there is nothing to
+ * run and the pane is beads alone. */
+uniform float uFlowing;
+/** How big the drops on this pane are, as a multiple of the windscreen's.
+ * Every size below is metres of glass, and the door window is a third of
+ * the distance from the driver's eye that the middle of the screen is: the
+ * same bead is three times the pixels there, and what reads as rain on the
+ * screen reads as a puddle on the door. */
+uniform float uScale;
+/** Metres of travel the water has done along the run axis since the stage
+ * began, and how far it is leaning. INTEGRATED on the CPU rather than taken
+ * as speed times time: the rate changes with the car, and a rate multiplied
+ * by a running clock teleports every drop on the glass the instant it
+ * does. */
 uniform float uRun;
 uniform float uLean;
-/** Which way the water is going, +1 up the screen and -1 down it, and how
- * much of a TRAIL it is leaving — nothing at all when it is barely moving,
- * which is what hides the moment the sign changes. */
+/** Which way the water is going, +1 along the run axis and -1 against it,
+ * and how much of a TRAIL it is leaving — nothing at all when it is barely
+ * moving, which is what hides the moment the sign changes. */
 uniform float uDir;
 uniform float uTrail;
 /** How far the air going past has drawn a drop out along its own run, 1 at
@@ -276,11 +319,11 @@ uniform vec2 uArm;
 /** The stroke: phase 0..2PI, how long one out-and-back is taking, how long
  * the blades have been sat at the park, and whether they are running. */
 uniform vec4 uStroke;
-/** The pane: half its width and its height, m — for the feather at the
- * edges and the pooling along the sill. */
-uniform vec2 uSize;
 
 varying vec2 vPane;
+/** This pane: half its width and its height, m — for the feather at the
+ * edges and the pooling along the sill. */
+varying vec2 vSize;
 varying vec4 vClip;
 
 const float TAU = 6.28318530718;
@@ -303,7 +346,8 @@ vec3 hash31(vec2 p) {
  * the way out and one on the way back. The age is then however far the
  * stroke has run since the nearer of those, plus however long the arm has
  * been sat at the park since. Points off the end of the arm, inside its
- * boss, or outside the arc it swings through were never wiped at all. */
+ * boss, or outside the arc it swings through were never wiped at all —
+ * which on a pane with no arm over it is every point there is. */
 float wipeAge(vec2 p) {
   vec2 d = p - uArc.xy;
   float r = length(d);
@@ -416,35 +460,39 @@ vec4 mist(vec2 q, float across, float seed, float grow, float aa, float shape) {
 
 void main() {
   vec2 p = vPane;
+
+  // THE FRAME THE WATER RUNS IN: x across the runs, y along them. On the
+  // windscreen that is the pane's own frame, sheared over by however hard
+  // the car is cornering so every run on the glass leans the same way at
+  // once. On a flank the runs go along the CAR, so the two axes swap — the
+  // pane's x already runs toward the tail there (see the geometry).
+  vec2 q = uSide > 0.5 ? vec2(p.y, p.x) : vec2(p.x - uLean * p.y, p.y);
+
   // HOW BIG A PIXEL IS, in metres of glass. The pane is not flat, is not
   // square on and is not the same shape in portrait, so this is different at
   // the header from at the sill — asking the derivative is the honest way to
   // find out and it costs nothing. Everything drawn on the glass is sized
   // and antialiased against it.
-  float perPixel = max(fwidth(vPane.x), 1e-6);
+  float perPixel = max(fwidth(q.x), 1e-6);
 
-  // HOW MUCH THE RAKE FORESHORTENS THE GLASS: a metre UP a windscreen laid
-  // back this far covers a fraction of the pixels a metre across it does, so
-  // a drop that is round on the glass comes out a lozenge on the screen —
-  // and worse toward the sill, where the eye is looking along the pane
-  // rather than at it. Most of that is given back, because a drop has to
-  // READ as a drop, and the air drawing it out along its run is folded into
-  // the same number.
-  float rake = clamp(max(fwidth(vPane.y), 1e-6) / perPixel, 1.0, 4.0);
-  float shape = min(mix(1.0, rake, 0.75) * uStretch, 3.0);
+  // HOW MUCH THE VIEW FORESHORTENS THE GLASS along the run: a metre UP a
+  // windscreen laid back this far covers a fraction of the pixels a metre
+  // across it does, and a metre ALONG a door window seen from the seat
+  // beside it is worse still — so a drop that is round on the glass comes
+  // out a lozenge on the screen. Most of that is given back, because a drop
+  // has to READ as a drop, and the air drawing it out along its run is
+  // folded into the same number.
+  float rake = clamp(max(fwidth(q.y), 1e-6) / perPixel, 1.0, 4.0);
+  float shape = min(mix(1.0, rake, 0.75) * uStretch, 4.0);
 
   // HOW WET THIS POINT IS. Everything on the glass is a function of how long
   // ago the blade cleared it and how fast the weather is putting it back.
   float age = wipeAge(p);
   float refill = mix(${REFILL.drizzle.toFixed(2)}, ${REFILL.downpour.toFixed(2)}, sat(uWet)) / uCatch;
-  // Water runs down to the sill and stands there, so the bottom of a screen
+  // Water runs down to the sill and stands there, so the bottom of a pane
   // is always the wettest part of it.
-  float pooling = 1.0 + 0.18 * (1.0 - sat(p.y / uSize.y));
+  float pooling = 1.0 + 0.18 * (1.0 - sat(p.y / vSize.y));
   float wet = sat(age / refill) * sat(uWet * 2.4) * pooling;
-
-  // The layer frame: sheared over by however hard the car is cornering, so
-  // every run on the glass leans the same way at once.
-  vec2 q = vec2(p.x - uLean * p.y, p.y);
 
   // Three passes of water, coarse to fine — the sizes being metres of real
   // glass, and generous ones. A windscreen bead is two or three millimetres
@@ -454,15 +502,17 @@ void main() {
   // life. The coarse layer is the drops that are actually going somewhere,
   // the fine one the haze of beading that fills in between them within a
   // second of a wipe.
-  vec4 w = runners(q, vec2(0.115, 0.50), 0.0, sat(wet * 1.35 - 0.3), shape, perPixel);
-  vec4 b = runners(q + vec2(0.047, 0.21), vec2(0.072, 0.31), 7.3, sat(wet * 1.2 - 0.45), shape, perPixel);
+  float carried = wet * uFlowing;
+  float s = uScale;
+  vec4 w = runners(q, vec2(0.115, 0.50) * s, 0.0, sat(carried * 1.35 - 0.3), shape, perPixel);
+  vec4 b = runners(q + vec2(0.047, 0.21) * s, vec2(0.072, 0.31) * s, 7.3, sat(carried * 1.2 - 0.45), shape, perPixel);
   w = mix(w, b, step(w.x, b.x));
   // Two passes of mist rather than one, at scales that do not divide each
   // other: one grid at one size is a grid however hard its cells are
   // jittered, and two laid over each other is a scatter.
-  vec4 m = mist(q, 0.042, 21.7, sat(wet * 1.6 - 0.05), perPixel, shape);
+  vec4 m = mist(q, 0.042 * s, 21.7, sat(wet * 1.6 - 0.05), perPixel, shape);
   w = mix(w, m, step(w.x, m.x));
-  vec4 m2 = mist(q + vec2(0.017, 0.011), 0.027, 53.1, sat(wet * 1.4 - 0.3), perPixel, shape);
+  vec4 m2 = mist(q + vec2(0.017, 0.011) * s, 0.027 * s, 53.1, sat(wet * 1.4 - 0.3), perPixel, shape);
   w = mix(w, m2, step(w.x, m2.x));
 
   // THE FILM UNDER THEM. Between the beads a wet screen carries a continuous
@@ -518,9 +568,14 @@ void main() {
   cover = max(cover, smear * 0.4);
   rad = max(rad, smear * 0.010);
 
+  // The slope is solved in the run frame; the bend it buys is applied on
+  // the screen, whose axes are the pane's. On a flank that is the swap
+  // back.
+  if (uSide > 0.5) slope = slope.yx;
+
   // Feathered at the very edge, so the pane ends in water thinning out
   // against the seal rather than in a cut line across the glass.
-  float edge = min(min(uSize.x - abs(p.x), p.y), uSize.y - p.y);
+  float edge = min(min(vSize.x - abs(p.x), p.y), vSize.y - p.y);
   cover *= smoothstep(0.0, 0.012, edge);
 
   // WHAT IS BEHIND, BENT. The drop is a lens: the world through it comes in
@@ -556,49 +611,75 @@ void main() {
 }
 `;
 
-/** Build the water on one car's windscreen. `anchor` is the object the pane
- * rides — the sprung chassis, so the glass squats into a landing with the
- * body around it. It is READ rather than parented to: the pane lives in a
- * scene of its own, because it is drawn in a pass of its own (`draw`). */
-export function buildScreenRain(spec: CarBodySpec, anchor: THREE.Object3D): ScreenRain {
-  const pane = screenPanes(spec).front;
-  const frame = paneFrame(pane);
-
+/** One mesh over a set of panes, tessellated on each pane's own warp and
+ * carrying, per vertex, where on its pane it stands and how big that pane
+ * is. `side` turns the flank panes' x to run TOWARD THE TAIL on both sides
+ * of the car — the left flank's frame points the other way (car/pane-frame.ts
+ * keeps every frame right-handed against its own outward normal) — so the
+ * shader has one answer to "which way is back" on both doors. */
+function paneMesh(
+  panes: ScreenPane[],
+  grid: { cols: number; rows: number },
+  side: boolean,
+  material: THREE.Material,
+): THREE.Mesh {
   const position: number[] = [];
   const local: number[] = [];
+  const size: number[] = [];
   const index: number[] = [];
   const at = new THREE.Vector3();
-  for (let j = 0; j <= GRID.rows; j++) {
-    for (let i = 0; i <= GRID.cols; i++) {
-      const u = pane.rect.u0 + ((pane.rect.u1 - pane.rect.u0) * i) / GRID.cols;
-      const v = pane.rect.v0 + ((pane.rect.v1 - pane.rect.v0) * j) / GRID.rows;
-      const q: V3 = patchAt(pane.patch, u, v);
-      at.set(q[0], q[1], q[2]).addScaledVector(frame.normal, RAIN_LIFT);
-      position.push(at.x, at.y, at.z);
-      at.sub(frame.origin);
-      local.push(at.dot(frame.right), at.dot(frame.up));
+  for (const pane of panes) {
+    const frame = paneFrame(pane);
+    // The car's nose is +z, so a frame whose `right` runs toward -z already
+    // points back down the car; one running the other way is turned.
+    const tail = side && frame.right.z > 0 ? -1 : 1;
+    const base = position.length / 3;
+    for (let j = 0; j <= grid.rows; j++) {
+      for (let i = 0; i <= grid.cols; i++) {
+        const u = pane.rect.u0 + ((pane.rect.u1 - pane.rect.u0) * i) / grid.cols;
+        const v = pane.rect.v0 + ((pane.rect.v1 - pane.rect.v0) * j) / grid.rows;
+        const q: V3 = patchAt(pane.patch, u, v);
+        at.set(q[0], q[1], q[2]).addScaledVector(frame.normal, RAIN_LIFT);
+        position.push(at.x, at.y, at.z);
+        at.sub(frame.origin);
+        local.push(at.dot(frame.right) * tail, at.dot(frame.up));
+        size.push(frame.width / 2, frame.height);
+      }
+    }
+    for (let j = 0; j < grid.rows; j++) {
+      for (let i = 0; i < grid.cols; i++) {
+        const a = base + j * (grid.cols + 1) + i;
+        const c = a + grid.cols + 1;
+        index.push(a, a + 1, c + 1, a, c + 1, c);
+      }
     }
   }
-  for (let j = 0; j < GRID.rows; j++) {
-    for (let i = 0; i < GRID.cols; i++) {
-      const a = j * (GRID.cols + 1) + i;
-      const b = a + 1;
-      const c = a + GRID.cols + 1;
-      index.push(a, b, c + 1, a, c + 1, c);
-    }
-  }
-
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(position, 3));
   geometry.setAttribute("pane", new THREE.Float32BufferAttribute(local, 2));
+  geometry.setAttribute("size", new THREE.Float32BufferAttribute(size, 2));
   geometry.setIndex(index);
+  const mesh = new THREE.Mesh(geometry, material);
+  // Placed from the chassis every time it is drawn, so nothing about it is
+  // worth recomposing from a position and a quaternion it never has.
+  mesh.matrixAutoUpdate = false;
+  mesh.frustumCulled = false;
+  return mesh;
+}
 
-  const uniforms = {
+/** The shader's knobs, for one pane. The two panes carry the same shader
+ * with different answers in these, which is what makes them two materials
+ * (and one compiled program). */
+function rainUniforms(side: boolean) {
+  return {
     uScene: { value: null as THREE.Texture | null },
     uTexel: { value: new THREE.Vector2(1 / 1920, 1 / 1080) },
+    uSide: { value: side ? 1 : 0 },
+    uFlowing: { value: side ? 0 : 1 },
+    uScale: { value: side ? SIDE.scale : 1 },
     uRun: { value: 0 },
     uLean: { value: 0 },
-    uDir: { value: -1 },
+    uDir: { value: side ? 1 : -1 },
     uTrail: { value: 0 },
     uStretch: { value: 1 },
     uWet: { value: 0 },
@@ -608,10 +689,11 @@ export function buildScreenRain(spec: CarBodySpec, anchor: THREE.Object3D): Scre
     uArc: { value: new THREE.Vector4(0, 0, 0, 1) },
     uArm: { value: new THREE.Vector2(0, 0) },
     uStroke: { value: new THREE.Vector4(0, 1, 1000, 0) },
-    uSize: { value: new THREE.Vector2(frame.width / 2, frame.height) },
   };
+}
 
-  const material = new THREE.ShaderMaterial({
+function rainMaterial(uniforms: ReturnType<typeof rainUniforms>): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
     uniforms,
     vertexShader: VERT,
     fragmentShader: FRAG,
@@ -620,19 +702,28 @@ export function buildScreenRain(spec: CarBodySpec, anchor: THREE.Object3D): Scre
     // writing more of it would only put the water in front of the wiper the
     // next frame round.
     depthWrite: false,
-    // Seen from the driver's seat this pane is being looked at from BEHIND,
+    // Seen from the driver's seat a pane is being looked at from BEHIND,
     // and from a bonnet camera it would be looked at from the front. One
     // material either way — there is one of these on one car.
     side: THREE.DoubleSide,
   });
+}
 
-  const mesh = new THREE.Mesh(geometry, material);
-  // Placed from the chassis every time it is drawn, so nothing about it is
-  // worth recomposing from a position and a quaternion it never has.
-  mesh.matrixAutoUpdate = false;
-  mesh.frustumCulled = false;
+/** Build the water on one car's glass. `anchor` is the object the panes
+ * ride — the sprung chassis, so the glass squats into a landing with the
+ * body around it. It is READ rather than parented to: the panes live in a
+ * scene of their own, because they are drawn in a pass of their own
+ * (`draw`). */
+export function buildScreenRain(spec: CarBodySpec, anchor: THREE.Object3D): ScreenRain {
+  const panes = screenPanes(spec);
+  const front = rainUniforms(false);
+  const flank = rainUniforms(true);
+  const frontMat = rainMaterial(front);
+  const flankMat = rainMaterial(flank);
+  const mesh = paneMesh([panes.front], GRID.front, false, frontMat);
+  const sides = paneMesh(panes.sides, GRID.side, true, flankMat);
   const stage = new THREE.Scene();
-  stage.add(mesh);
+  stage.add(mesh, sides);
 
   /** The finished frame, copied so the drops have something to bend. Cut to
    * the drawing buffer the first time it is needed and re-cut whenever that
@@ -643,9 +734,12 @@ export function buildScreenRain(spec: CarBodySpec, anchor: THREE.Object3D): Scre
 
   /** The rain as the glass has it, which lags the rain that is falling. */
   let shown = 0;
-  /** Metres of water travel along the pane, integrated. */
+  /** Metres of water travel along each pane's run axis, integrated: up the
+   * screen (signed), and back along the doors. */
   let run = 0;
-  /** Which way it is going, held through the crossover — see `RUN`. */
+  let sideRun = 0;
+  /** Which way the screen's water is going, held through the crossover —
+   * see `RUN`. */
   let dir = -1;
   let lean = 0;
 
@@ -653,46 +747,59 @@ export function buildScreenRain(spec: CarBodySpec, anchor: THREE.Object3D): Scre
     const want = Math.max(0, Math.min(1, drive.wet));
     shown += (want - shown) * Math.min(1, dt * (want > shown ? FOLLOW.wet : FOLLOW.dry));
 
-    // The signed rate the water is travelling at, and the distance that
-    // makes over this frame. Integrated, never speed × clock: see `uRun`.
-    const air =
-      RUN.air * Math.max(0, Math.min(1, (drive.speed - RUN.lift) / (RUN.full - RUN.lift)));
-    const rate = RUN.gravity + air;
+    // The signed rate the screen's water is travelling at, and the distance
+    // that makes over this frame. Integrated, never speed × clock: see
+    // `uRun`.
+    const lift = Math.max(0, Math.min(1, (drive.speed - RUN.lift) / (RUN.full - RUN.lift)));
+    const rate = RUN.gravity + RUN.air * lift;
     run += rate * dt;
     // The trail dies away as the water slows, which is what hides the frame
     // the direction flips on: there is nothing behind a drop that is not
     // going anywhere.
     const creep = Math.abs(rate);
     if (creep > 0.02) dir = rate > 0 ? 1 : -1;
-    uniforms.uDir.value = dir;
-    uniforms.uTrail.value = Math.min(1, creep / 0.28);
-    uniforms.uRun.value = run;
+    front.uDir.value = dir;
+    front.uTrail.value = Math.min(1, creep / 0.28);
+    front.uRun.value = run;
     // Drawn out along the run by the air going past — a tear at pace, a
     // bead at a standstill — and arriving that much faster for being driven
     // into rather than merely stood under.
     const pace = Math.min(1, Math.max(0, drive.speed / RUN.full));
-    uniforms.uStretch.value = 1 + STRETCH * pace;
-    uniforms.uCatch.value = 1 + CATCH * pace;
+    front.uStretch.value = 1 + STRETCH * pace;
+    front.uCatch.value = 1 + CATCH * pace;
 
     // Water keeps going while the car turns under it, so it is pushed the
     // way the car is NOT: a left-hander leans the runs to the right.
     const bend = -LEAN * Math.max(-1, Math.min(1, drive.lateral / LEAN_AT));
     lean += (bend - lean) * Math.min(1, dt * 3);
-    uniforms.uLean.value = lean;
+    front.uLean.value = lean;
 
-    uniforms.uWet.value = shown;
+    // THE DOORS. Only the air moves what is on them, and only backward: no
+    // gravity term, no crossover, no lean — a pane that beads on the grid
+    // and streams the moment the car is rolling (`SIDE`).
+    const blown = Math.max(0, Math.min(1, (drive.speed - RUN.lift) / (SIDE.flowing - RUN.lift)));
+    sideRun += SIDE.air * blown * dt;
+    flank.uRun.value = sideRun;
+    flank.uFlowing.value = blown;
+    flank.uTrail.value = blown;
+    flank.uStretch.value = 1 + SIDE.stretch * pace;
+
+    front.uWet.value = shown;
+    flank.uWet.value = shown;
 
     const w = drive.wipe;
     if (w) {
-      uniforms.uArc.value.set(w.pivotX, w.pivotY, w.park, w.sweep);
-      uniforms.uArm.value.set(w.inner, w.reach);
-      uniforms.uStroke.value.set(w.phase, w.period, w.parkAge, w.running ? 1 : 0);
+      front.uArc.value.set(w.pivotX, w.pivotY, w.park, w.sweep);
+      front.uArm.value.set(w.inner, w.reach);
+      front.uStroke.value.set(w.phase, w.period, w.parkAge, w.running ? 1 : 0);
     }
   };
 
   const setSky = (tint: THREE.Color, flash: number): void => {
-    uniforms.uTint.value.copy(tint);
-    uniforms.uFlash.value = flash;
+    for (const u of [front, flank]) {
+      u.uTint.value.copy(tint);
+      u.uFlash.value = flash;
+    }
   };
 
   const active = (): boolean => shown > NOTHING;
@@ -711,16 +818,20 @@ export function buildScreenRain(spec: CarBodySpec, anchor: THREE.Object3D): Scre
       scene.generateMipmaps = false;
       sceneW = w;
       sceneH = h;
-      uniforms.uScene.value = scene;
-      uniforms.uTexel.value.set(1 / w, 1 / h);
+      for (const u of [front, flank]) {
+        u.uScene.value = scene;
+        u.uTexel.value.set(1 / w, 1 / h);
+      }
     }
     renderer.copyFramebufferToTexture(scene);
 
-    // The pane rides the sprung body. Its matrix is taken from the chassis
-    // the scene pass has just placed rather than recomposed here, so the
-    // water cannot end up a frame behind the glass it is on.
-    mesh.matrix.copy(anchor.matrixWorld);
-    mesh.matrixWorldNeedsUpdate = true;
+    // The panes ride the sprung body. Their matrix is taken from the
+    // chassis the scene pass has just placed rather than recomposed here,
+    // so the water cannot end up a frame behind the glass it is on.
+    for (const m of [mesh, sides]) {
+      m.matrix.copy(anchor.matrixWorld);
+      m.matrixWorldNeedsUpdate = true;
+    }
 
     const autoClear = renderer.autoClear;
     // The depth the scene pass wrote is what keeps the pillars, the mirror
@@ -732,10 +843,12 @@ export function buildScreenRain(spec: CarBodySpec, anchor: THREE.Object3D): Scre
   };
 
   const dispose = (): void => {
-    geometry.dispose();
-    material.dispose();
+    mesh.geometry.dispose();
+    sides.geometry.dispose();
+    frontMat.dispose();
+    flankMat.dispose();
     scene?.dispose();
   };
 
-  return { mesh, active, update, setSky, draw, dispose };
+  return { mesh, sides, active, update, setSky, draw, dispose };
 }
