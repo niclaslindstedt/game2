@@ -14,6 +14,7 @@ import {
   NEUTRAL_INPUT,
   START_INTERVAL,
   TUNING,
+  botInput,
   compileStage,
   createField,
   createGame,
@@ -60,10 +61,14 @@ describe("placing a run", () => {
     expect(state.car.y).toBe(here.elevation);
     expect(state.car.u).toBeGreaterThan(20);
     expect(state.offRoad).toBe(false);
-    // …and it DRIVES from there: a second of neutral input is a car
-    // coasting down the road it was stood on, not one respawning off it.
+    // …and it DRIVES from there: a second in the bot's hands is a car going
+    // on down the road it was stood on, not one respawning off it. The bot
+    // and not neutral input, because the claim is that the placed car is
+    // DRIVEABLE — not that metre 600 of this seed's stage happens to be
+    // followed by a straight, which is a fact about the country that every
+    // generator change re-rolls.
     const events: GameEvent[] = [];
-    for (let i = 0; i < TUNING.physicsHz; i++) events.push(...step(state, NEUTRAL_INPUT));
+    for (let i = 0; i < TUNING.physicsHz; i++) events.push(...step(state, botInput(state)));
     expect(events.some((e) => e.type === "respawn")).toBe(false);
     expect(state.progressIndex).toBeGreaterThan(state.nearIndex - 1);
     expect(state.offRoad).toBe(false);
