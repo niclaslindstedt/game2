@@ -141,7 +141,7 @@ function pieceItem(kind: SolidKind, size: number, note: string): ItemDef {
     group: "breakage",
     note,
     build: () => {
-      const fx = createBreakage(TRUNK_COLOR, biomeFor().ground.bedrock);
+      const fx = createBreakage(TRUNK_COLOR, biomeFor("taiga").ground.bedrock);
       fx.spawn(standSolid({ x: 0, y: 0, z: 0, kind, size, spin: 0 }), 0, 0, 0);
       return { object: fx.group, dispose: () => fx.dispose() };
     },
