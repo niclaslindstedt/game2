@@ -105,8 +105,19 @@ export type Terrain = {
   /** The engine's terrain field this ground is drawn from — heights,
    * streams, water, road distance, wild props. */
   field: TerrainField;
-  /** Landscape height at a world position (what scenery stands on). */
-  heightAt: (x: number, z: number) => number;
+  /** WHAT SCENERY STANDS ON: the drawn ground at a world position — the
+   * tile lattice with the road ribbon over it where there is one, which is
+   * the same surface the car rides (`TerrainField.groundAt`).
+   *
+   * NOT the analytic field. The two are the same thing only at the lattice
+   * corners: between them the tiles are flat triangles 14 m across and the
+   * analytic height keeps curving, so on a rounded shoulder it stands
+   * proud of the mesh and in a hollow it sinks under it. Beside this
+   * stage's roads that gap runs to nine metres, and a boulder placed on the
+   * analytic height is a boulder hanging in the air over the hillside it is
+   * supposed to be sitting on. Whatever is drawn has to stand on what is
+   * drawn. */
+  standOn: (x: number, z: number) => number;
   /** The GROUND TILES' own surface at a point, m — the drawn lattice, with
    * no road ribbon over it. R16's hand-over gives the road's outer band
    * this height, so the two meshes meet instead of one stopping in the air
@@ -127,6 +138,10 @@ export type Terrain = {
 
 export function buildTerrain(track: Track, biome: Biome, season: Season): Terrain {
   const field = createTerrain(track);
+  // The analytic field, and the one place in the app that may read it: the
+  // tile CORNERS are where the mesh and the field agree by construction, so
+  // sampling it here is what DEFINES the drawn lattice. Anything asking
+  // where the ground is between two corners wants `standOn`.
   const heightAt = field.heightAt;
   const samples = track.samples;
   /** Where the road's corridor ends, m from its centerline — the lip the
@@ -654,7 +669,16 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     paintGround(x, z, y, 1 / Math.hypot(dx, 1, dz), inStream(field.streams, x, z, 0), out);
   };
 
-  return { group, field, heightAt, latticeAt: field.latticeAt, paintAt, sync, update, dispose };
+  return {
+    group,
+    field,
+    standOn: field.groundAt,
+    latticeAt: field.latticeAt,
+    paintAt,
+    sync,
+    update,
+    dispose,
+  };
 }
 
 function parseKey(key: string): [number, number] {

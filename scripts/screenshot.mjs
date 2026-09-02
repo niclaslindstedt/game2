@@ -402,6 +402,47 @@ await capture("shot-crawl-dust", { width: 1280, height: 720 }, async (page) => {
   await page.keyboard.up("ArrowDown");
 });
 
+// TURN AROUND: the co-driver's strip when the road is still under the
+// wheels and being driven back up. Reached by an actual three-point turn on
+// an actual road, because that is the only honest way in — the engine wants
+// the nose past 110° AND the car covering ground that way for over a
+// second, which is precisely the pair a reverse or a spin cannot fake. Each
+// shuffle is on the RUN's clock rather than wall time, and the loop stops
+// as soon as the sign is up: how many shuffles a car this length needs on
+// a road this width is a fact about the stage, not a number to hard-code.
+await capture("shot-turn-around", { width: 1280, height: 720 }, async (page) => {
+  await racing(page);
+  // Road behind as well as in front — the sign is about a stage being
+  // driven backwards, and a car still on the start line has none to drive.
+  await page.keyboard.down("ArrowUp");
+  await atStageTime(page, 6);
+  await page.keyboard.up("ArrowUp");
+  await page.keyboard.down("ArrowDown");
+  await atStageTime(page, (await stageTime(page)) + 3);
+  // The first bite of the turn: stopped, the same pedal backs the car out,
+  // and it does it on full lock so the nose starts coming round.
+  await page.keyboard.down("ArrowLeft");
+  await atStageTime(page, (await stageTime(page)) + 2.5);
+  await page.keyboard.up("ArrowDown");
+  await page.keyboard.up("ArrowLeft");
+  for (let shuffle = 0; shuffle < 5; shuffle++) {
+    // Forward on full lock, then back on the other, which is a three-point
+    // turn — the lock stays over while the car changes direction.
+    await page.keyboard.down("ArrowUp");
+    await page.keyboard.down("ArrowRight");
+    await atStageTime(page, (await stageTime(page)) + 1.4);
+    await page.keyboard.up("ArrowUp");
+    await page.keyboard.up("ArrowRight");
+    await page.keyboard.down("ArrowDown");
+    await page.keyboard.down("ArrowLeft");
+    await atStageTime(page, (await stageTime(page)) + 2.2);
+    await page.keyboard.up("ArrowDown");
+    await page.keyboard.up("ArrowLeft");
+    if (await page.evaluate("!!document.querySelector('.hud-pace-turn')")) break;
+  }
+  await page.waitForSelector(".hud-pace-turn", { timeout: 60000 });
+});
+
 // THE PLUME: a car at rally pace on dry gravel, which is the shot this
 // whole effect exists for. Driven by the bot so the frame lands on the
 // road at a speed well past the cloud's 30 km/h threshold — the acceptance
@@ -854,6 +895,51 @@ await capture(
     await page.waitForTimeout(4500);
   },
   { camera: "cockpit", tod: "night" },
+);
+
+// THE COCKPIT IN THE RAIN, which is the one place in the game where the
+// glass itself is the thing being looked at (car/screen-rain.ts). Three
+// shots, because the effect is a cycle and one frame of a cycle proves
+// nothing:
+//
+//   `wet` is the screen a few seconds in, driven by the bot so the car is
+//   at a pace where the airflow is carrying the water UP the glass. The
+//   acceptance test is beading with the world visibly BENT through it — a
+//   drop that is only a pale spot is a drop that is not refracting.
+//
+//   `storm` is the same at the top of the weather, where the screen is
+//   beading again before the arm has finished its stroke. What has to read
+//   there is the arc: a clean fan cut out of a streaming screen, with the
+//   corners the blade cannot reach still running.
+//
+//   `parked` is the car standing still on the grid before the flag, which
+//   is the opposite half of the same model: no air over the scuttle, so the
+//   water creeps DOWN the screen instead of up it, and the drops are round
+//   rather than drawn out into tears.
+for (const scene of [
+  { name: "wet", at: 8, params: { weather: "rain", bot: "1" } },
+  { name: "storm", at: 12, params: { weather: "storm", bot: "1" } },
+]) {
+  await capture(
+    `shot-cockpit-rain-${scene.name}`,
+    { width: 1280, height: 720 },
+    async (page) => {
+      await racing(page);
+      await atStageTime(page, scene.at);
+    },
+    { camera: "cockpit", ...scene.params },
+  );
+}
+await capture(
+  "shot-cockpit-rain-parked",
+  { width: 1280, height: 720 },
+  async (page) => {
+    // Before the clock starts there is no clock to wait on, so this one is
+    // the exception that waits on the wall: long enough for the world to
+    // build and for the screen to have gone over.
+    await page.waitForTimeout(25000);
+  },
+  { camera: "cockpit", weather: "storm" },
 );
 
 // The cockpit in a corner, which is where three of its four moving parts

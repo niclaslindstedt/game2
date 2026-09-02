@@ -228,6 +228,30 @@
 //       both ramps are gravel, and so is the far edge the car leaves. So the
 //       one piece of this that throws a car is on the rally's own surface,
 //       where every other jump on a stage is.
+//   R37 The country is LIVED IN. Every so often — far between, never two in
+//       sight of each other — a HOMESTEAD stands off the stage: a house on
+//       its own graded yard, a car or two outside it, and a dirt drive that
+//       comes down to the rally road and meets it SQUARE, the way a track
+//       off a farm meets the road it was built to reach. Squareness is what
+//       keeps R23 honest, exactly as it does for R36: a drive that ran
+//       alongside the stage would be a second carriageway on the stage's
+//       own shelf, a square one shares one place and parts at once. The
+//       drive is a real road — the ground flattens a shelf under it, the
+//       physics gives it gravel, the forest keeps off it — and it is shut
+//       where it leaves the stage with whatever the marshals had on the
+//       lorry, for the same reason a branch is: a driver arriving at a fork
+//       must not have to wonder which way the rally goes. The house is on
+//       gravel of its own that the drive runs onto, and the trees along the
+//       drive are planted, not survived — a lane of them, on both sides,
+//       which is the one shape of forest a stage has that somebody put
+//       there on purpose. Nothing about a homestead may cost the route
+//       anything: it goes where a straight, dry, gently graded piece of
+//       country beside the road allows one, and where none does, there is
+//       no homestead. It never stands on another road (R17's tarmac or a
+//       branch), never in the water (R35), never beside a ford or a bridge
+//       (R18's channel has to be seen past the road's edge), never on the
+//       start's apron or inside the last stretch before the line, and its
+//       walls and its parked cars are as solid as they look.
 
 /** Sample spacing along the compiled centerline, meters. It lives here
  * because it is not only the compiler's business: a search that has to land
@@ -1563,6 +1587,72 @@ export const STAGE_RULES = {
      * the exact lie R17 spends a paragraph forbidding. At full strength the
      * seal disappeared under it for the whole width of the rally road. */
     drag: 0.45,
+  },
+
+  /** R37 — THE HOMESTEADS: where a house may stand off the stage, what its
+   * drive is like, and what is in the yard. Meters unless noted. */
+  homestead: {
+    /** The stage is walked in SLOTS this far apart, and every slot rolls
+     * for a homestead against `spacing.mean` — so the mean distance between
+     * two is the mean, and the actual distance is whatever the dice and the
+     * country made it. `spacing.min` is the least the dice may do: two
+     * houses in one view is a village, and a village is a different
+     * feature. */
+    slot: 40,
+    spacing: { mean: 250, min: 380 },
+    /** The stage's two ends are left alone: the start's apron and the field
+     * standing on it, and the run into the line (R2, R25). And so is the
+     * road either side of a FORD or a BRIDGE, along the stage: a drive's
+     * shelf beside the road fills the channel the water is supposed to be
+     * seen running through (R18), and nobody builds the track to their
+     * house down into a river. */
+    keepOff: { start: 240, finish: 140, water: 90 },
+    /** Tightest corner (as a radius, m) the drive may leave from. A drive
+     * meets a straight — nobody builds the track to their house onto the
+     * outside of a bend, and a square meeting is only square against a
+     * road that is going somewhere definite. */
+    straight: 150,
+    /** The DRIVE: a lane's width of gravel (a car and a half), how far it
+     * runs before the yard, how tightly it may wander doing it (as a
+     * radius, m) and how steep it may climb. It leaves the stage straight
+     * for `straight` metres, so the junction reads as a junction. */
+    drive: {
+      width: 4.2,
+      length: { min: 46, max: 118 },
+      minRadius: 90,
+      straight: 24,
+      bend: 28,
+      maxGrade: 0.08,
+      /** The least room the drive keeps between itself and any OTHER piece
+       * of route, branch or public road, m — past the corridor it is
+       * leaving. A track that comes down to two roads is a shortcut, and
+       * the stage has R14 for what to do about those. */
+      clear: 26,
+    },
+    /** The YARD: the graded gravel the house stands on, as a disc — its
+     * radius, how far past its rim the country is eased back onto it, and
+     * how much the bare ground may differ from the yard's level anywhere on
+     * it before the pad would be a cliff or a pit. */
+    yard: { radius: { min: 10.5, max: 13.5 }, blend: 11, level: 4.2 },
+    /** Where the house stands on the yard, as a share of its radius past
+     * the centre, and how far back from the drive's own line its front
+     * wall keeps. */
+    house: { setBack: 0.42 },
+    /** The cars outside: how often there are two. */
+    cars: { two: 0.36 },
+    /** The lane trees, on both sides: their spacing, how far off the
+     * drive's edge they stand, and how big they are (the trunk field's
+     * `size`). They start past the barrier, so the barrier is seen. */
+    trees: {
+      spacing: { min: 9, max: 14 },
+      offset: { min: 3, max: 4.6 },
+      size: { min: 0.8, max: 1.2 },
+    },
+    /** How far apart two homesteads' yards have to be on the MAP, m —
+     * `spacing` is measured along the stage, and a stage that folds back
+     * on itself can bring two arc positions a kilometre apart within a
+     * field of each other. */
+    apart: 150,
   },
 
   /** R19 — SUPERELEVATION: how far a turn is banked into itself. A road

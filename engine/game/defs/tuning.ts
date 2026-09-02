@@ -1343,6 +1343,38 @@ export const TUNING = {
     guide: { near: 20, away: 1.92 },
   },
 
+  /** DRIVING THE STAGE BACKWARDS — what the co-driver's TURN AROUND sign
+   * waits for, and what takes it back down. Two things have to be true at
+   * once, because on its own each one is something a rally driver does on
+   * purpose. The nose has to be POINTED back up the stage: a car reversing
+   * out of a ditch is travelling the wrong way with its nose still pointing
+   * down the road, and being told to turn round is the opposite of what it
+   * needs. And the car has to actually be TRAVELLING that way at more than
+   * walking pace: a spun car points back up the stage for a second while
+   * its momentum still carries it down, and that is a moment to be driven
+   * out of rather than an instruction. */
+  wrongWay: {
+    /** How fast the car has to be running back up the stage before the sign
+     * is owed at all, m/s (~11 km/h) — measured along the ROAD, so a car
+     * crossing it sideways at speed reads as barely moving up it. */
+    speed: 3,
+    /** Seconds both tests have to hold before the sign comes up. Long
+     * enough that a three-point turn on a narrow road is finished inside
+     * it, short enough that a driver who has genuinely set off the wrong
+     * way is told before the next corner. */
+    after: 1.2,
+    /** How far off the road's own heading the nose has to be, rad — past
+     * 110°, the same angle the way-home guidance calls pointed away, and
+     * comfortably beyond the 90° of a car parked across the road. */
+    away: 1.92,
+    /** ...and how far inside it the nose has to come back for the
+     * instruction to have been carried out, rad (~60°). The gap between
+     * the two is the whole hysteresis: TURN AROUND is an instruction, so
+     * stopping does not clear it and neither does swinging the nose to the
+     * edge of the threshold it came up at. */
+    back: 1.05,
+  },
+
   /** R25 — the roll-out past the finish gate: what drives the car once the
    * clock has stopped and the player is out of the loop. The brake is a
    * TRAILING one — a car that stands on the pedal at the line stops dead

@@ -517,11 +517,19 @@ export type GameState = {
    * the order they were passed. The splits a ghost is measured against, and
    * what a sealed ghost writes down for the next run to chase. */
   checkpointTimes: number[];
-  /** Index into track.samples the car is nearest to. A respawn is the one
-   * thing that moves it BACKWARDS: it puts the car at a checkpoint, and
-   * progress has to come back with it or the run would be credited with
-   * road it is about to drive again. */
+  /** HOW FAR THE RUN HAS GOT: the furthest sample the car has reached. It
+   * only ever creeps forward — a car that doubles back is still credited
+   * with the road it earned — and a respawn is the one thing that moves it
+   * BACKWARDS, putting the car at a checkpoint so the run is not credited
+   * with road it is about to drive again. */
   progressIndex: number;
+  /** WHERE THE CAR IS: the sample it is actually nearest to, free to move
+   * back down the stage with it. A different question from `progressIndex`,
+   * and it has to be, because this is what every search for the road under
+   * the car starts from. Using progress there made the hint a lie for any
+   * car that had doubled back or been off in the country, and a stale hint
+   * hands the car the height of road it is nowhere near. */
+  nearIndex: number;
   /** Arc position along the stage, meters. */
   progressS: number;
   /** Signed lateral offset from the centerline, meters (positive right). */
@@ -532,8 +540,29 @@ export type GameState = {
    * pointed away rather than merely beside it (TUNING.offTrack.guide). It
    * is what the way-home guidance waits for: two wheels on the verge and a
    * clearing crossed perpendicular to the stage are both off the road and
-   * neither is a driver who needs telling where the road went. */
+   * neither is a driver who needs telling where the road went. Never true
+   * at the same time as `wrongWay`, which vetoes it: a car that call has
+   * proved is on the road has not lost it. */
   lost: boolean;
+  /** True while the car is driving the stage BACKWARDS — on the road, nose
+   * pointed back up it and travelling that way at pace, for long enough
+   * that it is a direction rather than a moment (TUNING.wrongWay). What the
+   * co-driver's TURN AROUND sign waits for. Being off the road is a
+   * different problem with a different sign: the way home owns that one. */
+  wrongWay: boolean;
+  /** How long the car has been running back up the stage without the sign
+   * being up yet, s. Reset by anything that fails either half of the test,
+   * so only a sustained wrong way ever reaches `wrongWay.after`. */
+  wrongWayFor: number;
+  /** Which centerline sample the wrong-way call is being read at — its own
+   * search cursor, and the only one on the state that FOLLOWS THE CAR BACK
+   * UP THE STAGE. Every other fix hunts from `progressIndex`, which only
+   * ever climbs and whose search reaches fifteen samples behind it: past
+   * thirty metres back, that fix is pinned to road the car has left, and
+   * the road direction read there belongs to another corner. Only the sign
+   * reads this; the physics keeps the progress-anchored fix it has always
+   * had. */
+  wrongWayAt: number;
   /** Where and when the car last actually got somewhere. A car pinned
    * against a trunk with the throttle buried never leaves this anchor, and
    * that is what puts it back on the road (TUNING.offTrack.stuck). */

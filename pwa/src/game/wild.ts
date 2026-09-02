@@ -180,7 +180,7 @@ export function buildWild(
   const communityAt = (x: number, z: number): Community =>
     communityByGrove(biome, terrain.field.groveAt(x, z));
   const cells = new Map<string, WildCell>();
-  const heightAt = terrain.heightAt;
+  const heightAt = terrain.standOn;
   const field = terrain.field;
 
   const plants = buildFloraField(season);

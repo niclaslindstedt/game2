@@ -11,6 +11,7 @@ import {
   compileTrack,
   createKerbField,
   createTerrain,
+  flatTrack,
   STAGE_RULES,
   type StageKnobs,
   type StageLength,
@@ -37,8 +38,10 @@ import {
   lastCheckpoint,
   pathCurvature,
   slopeAt,
+  stageDirection,
   trackLost,
   wayHome,
+  type TrackPoint,
   type WayHome,
 } from "./track.ts";
 import {
@@ -314,11 +317,15 @@ export function createGame(options: CreateGameOptions): GameState {
     checkpointS: 0,
     checkpointTimes: [],
     progressIndex: 0,
+    nearIndex: 0,
     progressS: 0,
     lateral: slot,
     offRoad: false,
     offRoadSince: 0,
     lost: false,
+    wrongWay: false,
+    wrongWayFor: 0,
+    wrongWayAt: 0,
     stuck: { x: car.x, z: car.z, since: 0 },
     drowning: null,
     surface: "gravel",
@@ -387,6 +394,7 @@ function respawn(state: GameState, events: GameEvent[], home: WayHome): void {
   if (car.damage.wear >= 1) car.damage.wear = T.collision.repairTo;
   state.drowning = null;
   state.progressIndex = home.index;
+  state.nearIndex = home.index;
   state.progressS = state.track.samples[home.index].s;
   // The board the car is standing on has already been checked in, so the
   // window opens where it stands: driving off it again must not book the
@@ -394,6 +402,13 @@ function respawn(state: GameState, events: GameEvent[], home: WayHome): void {
   state.checkpointS = state.progressS;
   state.cheeredS = state.progressS;
   state.offRoad = false;
+  // A respawn sets the car down facing down the stage, so whatever the
+  // TURN AROUND sign was telling the driver has been done for them — and
+  // its search cursor goes with the car, the one move on the stage that no
+  // amount of local searching could follow.
+  state.wrongWay = false;
+  state.wrongWayFor = 0;
+  state.wrongWayAt = home.index;
   state.stuck.x = car.x;
   state.stuck.z = car.z;
   state.stuck.since = state.t;
@@ -584,6 +599,51 @@ function stepStuck(state: GameState, input: CarInput, events: GameEvent[]): void
   }
 }
 
+/** THE TURN AROUND SIGN: the car is on the road and driving down it the
+ * wrong way. Both halves of `stageDirection` have to agree before the dwell
+ * timer even starts — a spin and a reverse out of a ditch each satisfy one
+ * of them, and neither is a driver who has set off back up the stage.
+ *
+ * Off the road there is no direction to be wrong about, and the guidance
+ * that is owed there is the way home instead: a car picking its way back
+ * across a clearing is pointed wherever the ground lets it be pointed.
+ *
+ * Coming OFF is not the same threshold as coming on. TURN AROUND is an
+ * instruction, and the one thing that carries it out is the nose coming
+ * back round (`wrongWay.back`) — stopping does not, and neither does
+ * swinging the nose just inside the angle the sign came up at, which on a
+ * narrow road is a three-point turn strobing the sign at every shuffle.
+ *
+ * It takes its own fix whenever the car has dropped behind its progress,
+ * because the run's fix cannot follow it there: that one hunts from
+ * `progressIndex`, which only climbs, and its search reaches fifteen
+ * samples back — so a car more than thirty metres down the road it came up
+ * is pinned to the far end of that window, reading the heading of a corner
+ * it is nowhere near and reported off a road it is squarely on. The extra
+ * search costs a car at its own progress nothing, which is every step of a
+ * run that never doubles back. */
+function stepWrongWay(state: GameState, fix: TrackPoint): void {
+  const W = T.wrongWay;
+  const car = state.car;
+  const here =
+    fix.index < state.progressIndex
+      ? locatePoint(state.track, car.x, car.z, state.wrongWayAt)
+      : fix;
+  state.wrongWayAt = here.index;
+  const { facing, along } = stageDirection(state, here.index);
+  if (state.wrongWay) {
+    if (facing < W.back) {
+      state.wrongWay = false;
+      state.wrongWayFor = 0;
+    }
+    return;
+  }
+  const backwards =
+    state.phase === "racing" && !here.offRoad && facing > W.away && along < -W.speed;
+  state.wrongWayFor = backwards ? state.wrongWayFor + T.dt : 0;
+  if (state.wrongWayFor >= W.after) state.wrongWay = true;
+}
+
 /** R25 — how a car is driven once the clock has stopped. The player is out
  * of the loop from the moment the nose crosses the line, so the roll-out is
  * driven by the stage instead: off the throttle, easing onto the brakes
@@ -766,13 +826,16 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   const car = state.car;
   const track = state.track;
   const terrain = state.terrain;
-  const prevIndex = state.progressIndex;
+  const prevIndex = state.nearIndex;
   const prevX = car.x;
   const prevZ = car.z;
 
   // Locate against the centerline BEFORE the move to know the ground ahead;
   // the fix after the move drives progress, lip detection, and respawn.
-  const preFix = locate(track, car.x, car.z, state.progressIndex);
+  // Both searches start from where the car IS (`nearIndex`), never from how
+  // far the run has GOT: progress is a monotonic score and a car that has
+  // doubled back leaves it standing hundreds of metres up the road.
+  const preFix = locate(track, car.x, car.z, state.nearIndex);
   const gain = driveGain(state);
   // WHERE THE CAR IS GOING, in world space — which sideways is nowhere near
   // where it is pointing. Everything below that asks the ground what it is
@@ -839,11 +902,31 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     const reach = Math.max(1, Math.round(T.air.crestSpan / track.step));
     const lipNear =
       crossedLip(track, Math.max(-1, preFix.index - reach - 1), preFix.index + reach) >= 0;
+    // THE GRADE, TURNED ONTO THE CAR'S OWN AXES. The road states its shape
+    // in its own frame — `slope` down the centerline, `slopeLat` across it —
+    // and a car is under no obligation to agree with either. `GroundContext`
+    // asks for the gradient on the CAR's axes (it is what gravity is
+    // resolved along, what pitches the nose and leans the body, and what the
+    // wheels' vertical speed is dotted against), and the wild's branch below
+    // reads its ground that way. Handing the road's own frame over unturned
+    // gave every car pointed the other way an inverted hill: gravity pushing
+    // it back down a descent and hurrying it up a climb, the camber pulling
+    // it toward the crown, and the nose sitting on the wrong attitude the
+    // whole way. Straight down the stage `turn` is 0 and this is the
+    // identity, which is why it went unnoticed.
+    const flat = flatTrack(track);
+    const fwdX = flat.sinHeading[preFix.index];
+    const fwdZ = flat.cosHeading[preFix.index];
+    // The car's nose against the road's, as a rotation: cos and sin of the
+    // angle between them, taken off the two unit vectors rather than an
+    // atan2 nobody needs the angle from.
+    const turnCos = sinH * fwdX + cosH * fwdZ;
+    const turnSin = sinH * fwdZ - cosH * fwdX;
     ctx = GROUND;
     ctx.surface = preFix.surface;
     ctx.groundY = preFix.elevation;
-    ctx.slope = preFix.slope;
-    ctx.slopeLat = preFix.slopeLat;
+    ctx.slope = preFix.slope * turnCos + preFix.slopeLat * turnSin;
+    ctx.slopeLat = preFix.slopeLat * turnCos - preFix.slope * turnSin;
     ctx.roadCurve = lipNear ? 0 : pathCurvature(track, preFix, dirX, dirZ);
     ctx.windX = state.wind.x;
     ctx.windZ = state.wind.z;
@@ -861,11 +944,12 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     stepGrounded(state.spec, car, drive, ctx, events, state.stats);
   }
 
-  const fix = locatePoint(track, car.x, car.z, state.progressIndex);
+  const fix = locatePoint(track, car.x, car.z, state.nearIndex);
   // The finish is a LINE across the road, and the move just made is what
   // either crossed it or did not. Asked here rather than at the end of the
   // step, so a respawn cannot teleport the car over the gate and win.
   const finished = !track.endless && crossedFinish(track, prevX, prevZ, car.x, car.z);
+  state.nearIndex = fix.index;
   state.progressIndex = Math.max(state.progressIndex, fix.index);
   state.progressS = track.samples[state.progressIndex].s;
   state.lateral = fix.lateral;
@@ -887,19 +971,24 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   state.kerbs.extend(track.samples.length);
   if (track.endless) state.kerbs.pruneBefore(state.progressS - 400);
 
-  // Jump lips are keyed to progress so a lip cannot be skipped by a fast
-  // step; the grounded step already applied ground-follow, so takeoff here
-  // overrides it with the ramp launch.
-  if (!car.airborne && fix.index > prevIndex) {
+  // Jump lips are keyed to the SAMPLES THE CAR CROSSED this step, so a lip
+  // cannot be skipped by a fast one — and so a car meeting the lip the other
+  // way round is thrown by it rather than driven into it. The grounded step
+  // already applied ground-follow, so takeoff here overrides it with the
+  // ramp launch.
+  if (!car.airborne && fix.index !== prevIndex) {
     const lipIndex = crossedLip(track, prevIndex, fix.index);
     if (lipIndex >= 0 && car.u > 6) {
+      // The RAMP that throws the car is the face it just climbed, which is
+      // on whichever side of the lip it came from. `slopeAt` looks backward
+      // down the road by design, so up-index it is the lip's own value and
+      // down-index it is the next sample's, turned round with the car.
+      const back = fix.index < prevIndex;
+      const ramp = back
+        ? -slopeAt(track, Math.min(track.samples.length - 1, lipIndex + 2))
+        : slopeAt(track, lipIndex);
       car.y = track.samples[lipIndex].elevation;
-      launch(
-        car,
-        Math.max(0.5, car.u * slopeAt(track, lipIndex) * T.air.launchScale),
-        events,
-        state.stats,
-      );
+      launch(car, Math.max(0.5, car.u * ramp * T.air.launchScale), events, state.stats);
     }
   }
 
@@ -925,7 +1014,15 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     events.push({ type: "offRoad", off: fix.offRoad });
   }
   if (state.offRoad) state.stats.offRoadTime += T.dt;
-  state.lost = trackLost(state);
+  // The wrong way first, because it can VETO being lost. A car that has
+  // turned round on the road is reported off it by the fix above — that
+  // search cannot reach back past thirty metres — and the way-home
+  // guidance believes it: RETURN TO TRACK, over a car whose wheels are on
+  // the track. `stepWrongWay` takes an honest fix to answer its own
+  // question, so when it says the car is on the road going backwards, it
+  // is the one that knows.
+  stepWrongWay(state, fix);
+  state.lost = !state.wrongWay && trackLost(state);
 
   // Solid contact: deep water still swallows the car whole, but the wild's
   // props and the forest's trunks BEND it instead of ending it — impulse,
@@ -937,10 +1034,12 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // that has only just put a wheel wide, and by the time the road is
   // willing to call that car off-road it is already through the wall and
   // into the river. Nothing to pay where there are no bridges near — the
-  // field answers an empty list off one lookup.
-  const parapets = terrain.parapetsNear(car.x, car.z, 2.5);
-  if (parapets.length > 0) {
-    collideCar(state.spec, car, parapets, events, state.stats, terrain.fell);
+  // field answers an empty list off one lookup. A homestead's walls, cars
+  // and lane trees (R37) come out of the same query for the same reason: a
+  // car up the drive is on a road, and the trees beside it are still trees.
+  const fixtures = terrain.fixturesNear(car.x, car.z, 2.5);
+  if (fixtures.length > 0) {
+    collideCar(state.spec, car, fixtures, events, state.stats, terrain.fell);
   }
   if (fix.offRoad) {
     const water = terrain.waterAt(car.x, car.z);

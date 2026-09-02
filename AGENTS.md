@@ -126,6 +126,8 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | A PAINT SCHEME an opponent is dressed in                    | `pwa/src/game/car-livery.ts` (palettes + patterns) — the `car-design` skill                                                      |
 | A new PART on the car (a light pod, a snorkel, a vent)      | a builder in `pwa/src/game/car/`, driven by an optional `spec.ts` field                                                          |
 | The wipers, and the grime on the glass they clear           | `pwa/src/game/car/wipers.ts` — the `car-design` skill                                                                            |
+| RAIN ON THE WINDSCREEN, from the driver's own seat          | `pwa/src/game/car/screen-rain.ts` — a shader pane over the glass, drawn in a pass of its own after the frame it refracts         |
+| Where a wiper arm IS, for anything else on the same glass   | `WipeState` in `pwa/src/game/car/wipers.ts`; the pane's own metric frame is `pwa/src/game/car/pane-frame.ts`                     |
 | How dirty the car gets, and where                           | `pwa/src/game/car-dirt.ts`                                                                                                       |
 | Stage generation rules or vocabulary                        | `engine/mapgen/rules.ts` (data); the searches in `generate.ts` (sprint, endless) and `circuit.ts` (R22), over `search.ts`        |
 | How the rally gets PAST a public road: over it, or onto it  | `engine/mapgen/crossing.ts` (R36, square and free) / `borrow.ts` (R17, a detour the `asphalt` dial pays for)                     |
@@ -187,6 +189,9 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | The gallery the pictures are browsed in                     | `pwa/src/game/menu-gallery.tsx`                                                                                                  |
 | How the road's EDGE runs out into the grass (R16)           | `handoverAt` in `engine/mapgen/road.ts` (the shape), `road-mesh.ts` (the paint), `pwa/src/game/road-spill.ts` (the stones)       |
 | WHERE an abandoned branch is shut, and WHAT with            | `placeBlock` in `engine/mapgen/spurs.ts` picks the place; `pwa/src/game/blockade.ts` builds the barrier                          |
+| WHERE a house stands off the stage, and its drive and yard  | `engine/mapgen/homesteads.ts` (R37) places it all; `pwa/src/game/homestead.ts` draws it — the `mapgen-improvement` skill         |
+| What a HOUSE looks like — paint, roof, storeys, porch, wing | `pwa/src/game/house.ts` builds one from the engine's `HousePlan`; `make items GROUP=homestead` photographs them                  |
+| A car that only STANDS there (a yard, later a car park)     | `pwa/src/game/parked-car.ts` — a dozen boxes from one roll; never the catalog's builder, which is a thousand times the geometry  |
 | The marking beside the road, and what a block COSTS to cut  | `engine/mapgen/kerbs.ts` places every marker (one is solid); `pwa/src/game/kerbs.ts` draws them — the `mapgen-improvement` skill |
 | Where the split boards stand on a stage (R28)               | `STAGE_RULES.checkpoint` + the placement in `engine/mapgen/compile.ts` — the `mapgen-improvement` skill                          |
 | What a split is measured against, and where a respawn lands | `engine/game/track.ts` (`lastCheckpoint`) + `pwa/src/game/standings.ts` (the field's leader)                                     |

@@ -179,7 +179,9 @@ const MOVES = {
 function pursue(state, aheadMeters) {
   const { car, track } = state;
   const step = Math.round(aheadMeters / track.step);
-  const aim = track.samples[Math.min(track.samples.length - 1, state.progressIndex + step)];
+  // From where the car IS, not from how far the run has got: a lab car
+  // holding a slide across the road is still on the sample it is beside.
+  const aim = track.samples[Math.min(track.samples.length - 1, state.nearIndex + step)];
   const desired = Math.atan2(aim.x - car.x, aim.z - car.z);
   let error = desired - car.heading;
   while (error > Math.PI) error -= 2 * Math.PI;

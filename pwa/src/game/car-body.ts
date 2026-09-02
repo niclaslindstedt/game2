@@ -31,6 +31,7 @@ import { bayOpening, buildEngineBay } from "./car/engine-bay.ts";
 import { buildInterior, type InteriorDetail } from "./car/interior.ts";
 import type { CrewLook } from "./car-crew.ts";
 import { LENS_MATERIAL } from "./car/lamps.ts";
+import { buildScreenRain, type ScreenRain } from "./car/screen-rain.ts";
 import { buildShell, buildStations } from "./car/shell.ts";
 import { buildTrim } from "./car/trim.ts";
 import { buildWheel } from "./car/wheels.ts";
@@ -153,6 +154,12 @@ export type CarBodyParts = {
   /** The cabin's own material, so the night can black the room out without
    * touching the paint outside it. Null on a car with no cockpit. */
   cockpitMaterial: THREE.MeshBasicMaterial | null;
+  /** THE WATER ON THE WINDSCREEN (car/screen-rain.ts), for the one car
+   * whose driver is behind it. Not in `group` with everything else: it is
+   * drawn in a pass of its own, after the frame it refracts. Null on any car
+   * built without a cockpit, and on every car when the screens are set to
+   * stay clean. */
+  screenRain: ScreenRain | null;
   dispose: () => void;
 };
 
@@ -380,6 +387,18 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     chassis.add(cockpit.group);
   }
 
+  // THE WATER ON THAT SCREEN, for the driver sat behind it. It rides the
+  // same sprung chassis as the glass it is on — but it is not PARENTED to
+  // it, because a drop refracts the frame and therefore has to be drawn
+  // after the frame exists (car/screen-rain.ts). The chassis is handed over
+  // as the thing to read a matrix off instead. It rides the same video row
+  // as the grime film: a player who has asked for clean screens is asking
+  // for clean screens.
+  const screenRain =
+    options.cockpit && (options.screens ?? "fine") !== "off"
+      ? buildScreenRain(spec, chassis)
+      : null;
+
   const wheelGroups: THREE.Group[] = [];
   const wheelSpin: THREE.Object3D[] = [];
   // All four wheels share one geometry — only their transforms differ, so
@@ -401,6 +420,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     wipers.dispose();
     interior.dispose();
     cockpit?.dispose();
+    screenRain?.dispose();
     bodyGeo.dispose();
     for (const geo of partGeos) geo.dispose();
     boltOnGeo?.dispose();
@@ -433,6 +453,7 @@ export function buildCarBody(spec: CarBodySpec, options: CarBodyOptions = {}): C
     cockpitMaterial: cockpitMat,
     steering: interior.steering,
     cockpit,
+    screenRain,
     dispose,
   };
 }

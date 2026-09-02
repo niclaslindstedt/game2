@@ -24,6 +24,7 @@ import { hash2 } from "../lib/noise.ts";
 import { createLandField } from "./land.ts";
 import { junctionFlat, junctionMainEdge, junctionPlatformY, ROAD_CROSS } from "./road.ts";
 import { buildSpur, cutSpur, placeBlock, SPUR, type ShelfBand, type Spur } from "./spurs.ts";
+import { placeHomesteads, type Homestead } from "./homesteads.ts";
 import { createHighwayNetwork, type Highway } from "./highway.ts";
 
 export type Surface = "gravel" | "asphalt" | "water";
@@ -223,6 +224,12 @@ export type Track = {
   /** R17 — the branches the route abandons at every asphalt junction: real
    * road, taped off, there to be explored by anyone who ignores the tape. */
   spurs: Spur[];
+  /** R37 — the homesteads off the stage: each a house on its yard, the
+   * cars outside it, the lane down to the road and the barrier across the
+   * lane's mouth. Their own list, not among the branches: a drive is a road
+   * that ends at a house, which is everything a branch is not allowed to
+   * be. */
+  homesteads: Homestead[];
   /** R17 — the junctions themselves: where two roads MEET, and the paved
    * apron that makes them one surface there instead of two ribbons that
    * happen to touch. The terrain flattens it and the renderer paves it. */
@@ -1689,7 +1696,13 @@ function createCompiler(
     const everywhere = roadDistance({ x: 0, z: 0 });
     const wholeRoute = (x: number, z: number) => everywhere(x, z, false);
     for (const spur of standing) {
-      spur.block = placeBlock(spur, wholeRoute, track.width / 2, track.seed);
+      spur.block = placeBlock(
+        spur,
+        wholeRoute,
+        track.width / 2,
+        track.seed,
+        spur.end === "entry" ? 1 : 0,
+      );
     }
   };
 
@@ -2257,10 +2270,54 @@ function createCompiler(
     // that flares it — and for the minor arm on BOTH sides of the meeting
     // point to have been walked.
     buildForks();
+    // R37 — and the homesteads last of all, because a drive keeps off every
+    // road there is, and the branches are only all there once the forks
+    // are built.
+    buildHomesteads();
+  };
+
+  /** R37 — the homesteads whose slots fall on road committed since the last
+   * call. On a finite stage that is the whole stage, once; on an endless one
+   * it is everything behind the streaming frontier, because a slot decided
+   * against road that is still being shaped would move under a chunk the
+   * renderer has already drawn. */
+  let homesteadFrom = 0;
+  const buildHomesteads = (): void => {
+    // A synthetic rig is a measuring device, and a house beside a drift
+    // test's straight is a wall the car under test slides into. No country,
+    // no homesteads — the same line every other piece of the landscape
+    // draws on a rig.
+    if (!followsLand) return;
+    let to = track.samples.length;
+    if (track.endless) {
+      const horizon = track.samples[to - 1].s - STREAMED_HOLD;
+      while (to > homesteadFrom && track.samples[to - 1].s > horizon) to--;
+    }
+    if (to <= homesteadFrom) return;
+    const placed = placeHomesteads({
+      seed: track.seed,
+      width: track.width,
+      samples: track.samples,
+      from: homesteadFrom,
+      to,
+      finishS: track.finishS,
+      land,
+      routeDistance: roadDistanceField(),
+      branchDistance: branchClearance(track.spurs),
+      highwayDistance: (x, z) => highways.nearest(x, z)?.d ?? Infinity,
+      shelfBand,
+      placed: track.homesteads,
+    });
+    track.homesteads.push(...placed);
+    homesteadFrom = to;
   };
 
   return { append };
 }
+
+/** How far behind an endless stage's frontier the road is settled enough
+ * to put a homestead on, m — the guards' and the crowd's own margin. */
+const STREAMED_HOLD = 250;
 
 /** R17 — THE COUNTRY, walked off the plan before anything is built.
  *
@@ -2526,6 +2583,7 @@ function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs, circuit =
     knobs,
     highways: [],
     spurs: [],
+    homesteads: [],
     junctions: [],
   };
 }

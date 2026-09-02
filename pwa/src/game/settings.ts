@@ -183,7 +183,10 @@ export type VideoSettings = {
    * leaves every screen permanently clean, and both levels above it wet the
    * whole road's glass — a rival's at a resolution that costs 48 triangles
    * rather than 3,456, which is what makes giving it to a whole grid
-   * affordable at all.
+   * affordable at all. The RAIN on the player's own windscreen
+   * (car/screen-rain.ts) rides the same row for the same reason: it is one
+   * more thing on the glass, and a player who has asked for clean screens is
+   * asking for clean screens.
    *
    * Applies to the NEXT stage built, like the undergrowth: both are
    * geometry, and geometry is decided when a car is made. */
