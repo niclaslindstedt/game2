@@ -29,6 +29,8 @@ export {
   step,
   type CreateGameOptions,
 } from "./game/step.ts";
+// A run stood at a moment instead of driven to it (place.ts).
+export { placeRun, type RunMoment } from "./game/place.ts";
 export {
   clipKerbs,
   clipSolids,
@@ -327,6 +329,7 @@ export {
   payHeadStart,
   placeAtFinish,
   placeAtSplit,
+  placeField,
   playerSlot,
   rubRivals,
   settleField,

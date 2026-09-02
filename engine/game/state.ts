@@ -351,6 +351,37 @@ export type CarState = {
   damageScale: number;
 };
 
+/** Bring the car to a dead stop in the pose it has: every velocity, the
+ * flight, the springs, the slide and the launch all gone, the tyres
+ * carrying their whole weight. What a respawn and a placement both start
+ * from before they hand the car its speed — the pose itself (`x`, `z`,
+ * `y`, `heading`) and the damage ledger are the caller's, and neither is
+ * touched here. */
+export function stillCar(car: CarState): void {
+  car.u = 0;
+  car.w = 0;
+  car.vy = 0;
+  car.wheelVy = 0;
+  car.yawRate = 0;
+  car.airborne = false;
+  car.settling = false;
+  car.roll = 0;
+  car.rollRate = 0;
+  car.pitch = 0;
+  car.ride = 0;
+  car.rideRate = 0;
+  car.settle = 0;
+  car.weight = 1;
+  car.pitchLoad = 0;
+  car.slide = 0;
+  car.drifting = false;
+  car.chain = 0;
+  car.spun = false;
+  car.wheelspin = 0;
+  car.launchSpin = 0;
+  updateSlip(car);
+}
+
 /** Refresh the slip angle after anything rewrites `u`/`w` directly — the
  * grounded step's lateral-grip redirect rebuilds the velocity FROM this
  * angle, so a stale slip silently erases the change (collision impulses

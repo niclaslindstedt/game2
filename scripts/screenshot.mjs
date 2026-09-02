@@ -1627,19 +1627,19 @@ await capture(
   },
   { shape: "circuit", length: "medium", seed: "3", bot: "1" },
 );
-// The results card, with the lap board on it. Two laps rather than three:
-// a scripted pass has to DRIVE to a finish to photograph one, and what the
-// card has to prove is that the laps read as a board — which two of them
-// say as well as three.
+// The results card, with the lap board on it. The run is STOOD at its
+// finish (`at=finish`, engine/game/place.ts): a step short of the line on
+// the last lap with the laps before it in the book, and the loop's first
+// step drives through the gate and fires the finish the way a driven one
+// fires. Nothing has to be driven to photograph a card any more.
 await capture(
   "shot-finish",
   { width: 1280, height: 720 },
   async (page) => {
-    await racing(page);
-    await page.waitForSelector(".hud-finish", { timeout: 240000 });
+    await page.waitForSelector(".hud-finish", { timeout: 120000 });
     await page.waitForTimeout(400);
   },
-  { shape: "circuit", length: "short", seed: "3", laps: "2", bot: "1" },
+  { shape: "circuit", length: "short", seed: "3", laps: "3", at: "finish" },
 );
 // …and the same card on a phone held up, where the head's ways on take a
 // row of their own and the summary stands over whatever sheet there is.
@@ -1647,11 +1647,21 @@ await capture(
   "shot-finish-portrait",
   { width: 390, height: 844 },
   async (page) => {
-    await racing(page);
-    await page.waitForSelector(".hud-finish", { timeout: 240000 });
+    await page.waitForSelector(".hud-finish", { timeout: 120000 });
     await page.waitForTimeout(400);
   },
-  { shape: "circuit", length: "short", seed: "3", laps: "2", bot: "1" },
+  { shape: "circuit", length: "short", seed: "3", laps: "3", at: "finish" },
+);
+// THE RETIREMENT: the run over short of the line, the car sitting where it
+// stopped with a dead engine, and the card saying so with its two ways out.
+await capture(
+  "shot-retired",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await page.waitForSelector(".hud-finish", { timeout: 120000 });
+    await page.waitForTimeout(400);
+  },
+  { at: "retire", s: "400" },
 );
 
 await captureElement(
@@ -1724,11 +1734,11 @@ await capture(
   { length: "short", bot: "1", mode: "headsup" },
 );
 
-// THE SALUTE, and the run-out behind it (R23/R24/R25). The one scene that
-// cannot be staged: the car has to actually drive a whole stage to reach a
-// finish, so the BOT drives a short SPRINT — a circuit's finish is its own
-// start line and has no run-out to coast down — and the shots wait for the
-// results card, which goes up the instant the line is crossed.
+// THE SALUTE, and the run-out behind it (R23/R24/R25), on a short SPRINT —
+// a circuit's finish is its own start line and has no run-out to coast
+// down. The run is stood a step short of the gate at rally pace
+// (`at=finish`), so the car comes THROUGH the line on the first frames and
+// the shots wait for the results card, which goes up the instant it does.
 //
 // Two frames, because the finish is two moments. The first catches the
 // cannons going off over the car as it comes through the gate, with the
@@ -1744,36 +1754,97 @@ await capture(
   "shot-salute",
   { width: 1280, height: 720 },
   async (page) => {
-    await page.waitForSelector(".hud-finish", { timeout: FINISH_WAIT });
+    await page.waitForSelector(".hud-finish", { timeout: 120000 });
     await slowerThan(page, 105);
   },
-  { bot: "1", length: "short", seed: "38" },
+  { at: "finish", length: "short", seed: "38" },
 );
 await capture(
   "shot-runout",
   { width: 1280, height: 720 },
   async (page) => {
-    await page.waitForSelector(".hud-finish", { timeout: FINISH_WAIT });
+    await page.waitForSelector(".hud-finish", { timeout: 120000 });
     await slowerThan(page, 12);
   },
-  { bot: "1", length: "short", seed: "38" },
+  { at: "finish", length: "short", seed: "38" },
 );
 
-// R30's SPECTATOR MODE has no scene here, and the reason is worth writing
-// down so the next session does not spend an afternoon rediscovering it: the
-// run-out only exists on a run that has a LEVEL, and a `?start=1` link never
-// passes through `startStage`, so every scene on this page finishes a stage
-// that was never entered for points and has no field to run home. Reaching
-// the card with cars still out means clicking through the menu — the better
-// part of ten minutes of software-rendered driving on a campaign stage,
-// against the forty seconds a scene here is worth.
+// R29/R30 — THE CAMPAIGN'S RESULTS CARD, stood at rather than driven to:
+// `level=` enters the run on a campaign stage with the whole field on the
+// road, and `at=finish` stands it a step short of the line with every crew
+// placed at the same moment — the ones who have already made the line home,
+// the rest still out at their stagger. So the card comes up with the sheet
+// PROVISIONAL (the crews still out at the bottom marked OUT) and SPECTATE on
+// offer, which is the state of it a player actually sees, and the one no
+// scene could reach while reaching it meant driving the stage.
 //
-// It IS reachable when a change has to be looked at, and two things decide
-// whether the trip pays: pick EASY, because a staggered rally with a quick
-// field is home before the player is and the card then offers no SPECTATE
-// at all; and take every viewport off the ONE drive (`page.setViewportSize`
-// between shots) rather than paying for the stage again per orientation.
-// The route is the campaign scene below, with EASY for HARD.
+// HARD on purpose, for the same reason the driven campaign scene is: a card
+// that always says STAGE CLEAR photographs half the feature. `time=` pins
+// the placed run's own clock — quick, so that the field is still out there
+// and there is a run-out worth watching.
+await capture(
+  "shot-campaign-card",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await page.waitForSelector(".hud-finish", { timeout: 120000 });
+    await page.waitForTimeout(600);
+  },
+  { level: "taiga-1", at: "finish", time: "75", difficulty: "hard" },
+);
+// R30 — THE RESULT SHEET, FINAL: the same card once the last car is home.
+// The run-out plays at race speed behind the card, so this waits for the
+// last OUT to clear rather than for a number of seconds, then walks to the
+// sheet's other page, which is where the pictures of the cars nobody was
+// racing near are.
+await capture(
+  "shot-campaign-sheet",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await page.waitForSelector(".hud-finish", { timeout: 120000 });
+    await page.waitForFunction(
+      "document.querySelector('.rsheet-row') && !document.querySelector('.rsheet-row.is-out')",
+      null,
+      { timeout: FINISH_WAIT },
+    );
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: join(outDir, "shot-campaign-sheet-page1.png") });
+    console.log("previews/shot-campaign-sheet-page1.png");
+    const flip = page.getByRole("button", { name: "Next page" });
+    if (await flip.count()) {
+      await flip.click();
+      await page.waitForTimeout(300);
+    }
+  },
+  { level: "taiga-1", at: "finish", time: "75", difficulty: "hard" },
+);
+// R30's SPECTATOR MODE: the card's SPECTATE pressed while the road still has
+// somebody on it, and the driving layout back up over the crew under the
+// camera with the banner naming them. The placed time is QUICK — a hard
+// field is home in under a minute of its own clock, and the crew in front
+// left only one interval before the player, so a placed time much past
+// forty seconds is a card with nobody left to watch.
+await capture(
+  "shot-spectate",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await page.waitForSelector(".hud-finish", { timeout: 120000 });
+    await page.getByRole("button", { name: "SPECTATE" }).click();
+    await page.waitForSelector(".hud-spectate", { timeout: 120000 });
+    await page.waitForTimeout(1500);
+  },
+  { level: "taiga-1", at: "finish", time: "30", difficulty: "hard" },
+);
+// …and HEADS UP's own sheet: the same card with the board taken off, on a
+// grid the whole field left together.
+await capture(
+  "shot-headsup-card",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await page.waitForSelector(".hud-finish", { timeout: 120000 });
+    await page.waitForTimeout(600);
+  },
+  { mode: "headsup", at: "finish", length: "short", seed: "38" },
+);
 
 // THE DEVELOPER TOOLS, which only exist to be photographed: the debug
 // overlay is a contract that a screenshot of the game carries enough to

@@ -43,6 +43,7 @@ import {
 import {
   DAMAGE_ZONES,
   NEUTRAL_INPUT,
+  stillCar,
   updateSlip,
   type CarInput,
   type CarState,
@@ -367,27 +368,8 @@ function respawn(state: GameState, events: GameEvent[], home: WayHome): void {
   car.z = home.z;
   car.y = home.y;
   car.heading = home.heading;
+  stillCar(car);
   car.u = T.offTrack.respawnSpeed;
-  car.w = 0;
-  car.vy = 0;
-  car.wheelVy = 0;
-  car.yawRate = 0;
-  car.airborne = false;
-  car.settling = false;
-  car.roll = 0;
-  car.rollRate = 0;
-  car.pitch = 0;
-  car.ride = 0;
-  car.rideRate = 0;
-  car.settle = 0;
-  car.weight = 1;
-  car.pitchLoad = 0;
-  car.slide = 0;
-  car.drifting = false;
-  car.chain = 0;
-  car.spun = false;
-  car.wheelspin = 0;
-  car.launchSpin = 0;
   // The service crew get to a wreck the moment it is back at the road: the
   // chassis is patched to a drivable fraction, and the dents, the torn-off
   // parts and the hurt systems all stay.

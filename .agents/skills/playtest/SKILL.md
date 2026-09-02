@@ -47,9 +47,19 @@ runs one.
 
 **A new player-visible feature earns a scene in the same change.** The scenes
 are scripted keyboard input against the countdown clock (hold throttle N ms,
-flick, screenshot), so staging a moment means scripting the drive into it —
-see the `test-scenario` skill for the staging mindset. A surface no scene
-captures is a surface no future sweep will ever look at.
+flick, screenshot), so staging a moment of DRIVING means scripting the drive
+into it — see the `test-scenario` skill for the staging mindset. A surface no
+scene captures is a surface no future sweep will ever look at.
+
+**A surface that only exists at a moment of the run is stood at, not driven
+to.** The results card, the retirement card, the spectator's feed and the
+pause card each have a scene that opens on `?at=finish` / `?at=retire` /
+`?paused=1` (with `?level=` and `?mode=` for the campaign's own card, so the
+sheet, the points and SPECTATE are on it) and waits for the card — seconds of
+world-building instead of a stage driven under software rendering. The
+menu-walking campaign scene stays for what it alone photographs: the
+establishing shot and the split against a real field. The `debug-tools` skill
+owns the parameter table.
 
 **A new STEP in an existing flow owes an edit to every scene that walks it.**
 Several scenes click through the menu the way a player does rather than

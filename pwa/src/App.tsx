@@ -29,6 +29,7 @@ import {
   compileStage,
   createGame,
   damageScaleFor,
+  placeRun,
   resolveKnobs,
   skipIntro,
   status,
@@ -93,6 +94,7 @@ import {
   onRoad,
   placeAtFinish,
   placeAtSplit,
+  placeField,
   rubRivals,
   settleField,
   settleLimit,
@@ -108,6 +110,7 @@ import {
   type RivalField,
   type RivalRun,
 } from "./game/standings.ts";
+import { placeFromQuery } from "./game/place-url.ts";
 import { readWatch, walkWatch, watchLeader, type Watched } from "./game/spectate.ts";
 import type { SpectateProps } from "./game/hud-spectate.tsx";
 import {
@@ -248,14 +251,26 @@ function lapsOverride(): number | null {
   return Number.isFinite(raw) && raw >= 1 ? Math.round(raw) : null;
 }
 
-/** ?mode=headsup (tooling): open a `?start=1` link on a GRID, with the field
- * entered and the whole of it on the road at once, rather than alone on a
- * Roam stage. The only discipline a link can ask for — the others hang off a
- * campaign level, and a run with no level has no book to keep and no points
- * to pay. The grid's own three settings come from the player's HEADS UP
- * page, exactly as they do when a person starts one. */
-function headsUpFromUrl(): boolean {
-  return new URLSearchParams(location.search).get("mode") === "headsup";
+/** ?mode= ?level= ?at= ?paused=1 (tooling): WHERE a `?start=1` link opens.
+ * `mode=headsup` opens on a GRID, with the field entered and the whole of it
+ * on the road at once, rather than alone on a Roam stage — the grid's own
+ * three settings come from the player's HEADS UP page, exactly as they do
+ * when a person starts one. `level=` enters the run on a campaign stage, in
+ * the campaign unless `mode=` says a time trial, so it has a book to keep
+ * and points to pay; and `at=` stands the run at a MOMENT of it — mid-stage,
+ * a step short of the line, stopped with a dead engine — instead of on the
+ * lights (place-url.ts, over engine/game/place.ts). Read once, like the
+ * camera poses below: a link names the frame it was cut for. */
+const URL_PLACE = placeFromQuery(location.search);
+
+/** The discipline a link opens in: what it asked for, else the campaign on
+ * a link that named a level, else Roam. A heads-up link with a level on it
+ * is a heads-up race on that stage, exactly as the HEADS UP page enters
+ * one. */
+function modeFromUrl(): { mode: PlayMode; levelId?: string } {
+  const level = URL_PLACE.levelId ? findLevel(URL_PLACE.levelId) : null;
+  const mode = URL_PLACE.mode ?? (level ? "campaign" : "roam");
+  return level && mode !== "roam" ? { mode, levelId: level.level.id } : { mode };
 }
 
 /** ?debug=1 / ?god=1 (tooling, and the repro line the debug overlay prints):
@@ -757,9 +772,7 @@ export function App() {
   /** The run in progress: how it was entered, and which campaign level it
    * is, so a finish can record the clear. A `?start=1` link never passes
    * through `startStage`, so the discipline it opens in is settled here. */
-  const [run, setRun] = useState<{ mode: PlayMode; levelId?: string }>(() => ({
-    mode: headsUpFromUrl() ? "headsup" : "roam",
-  }));
+  const [run, setRun] = useState<{ mode: PlayMode; levelId?: string }>(modeFromUrl);
   const [snap, setSnap] = useState<HudSnapshot | null>(null);
   /** THE TIME TRIAL'S BOARD, for the run that has just ended. `pending` is the
    * run waiting on its three letters; it is what holds the results card's ways
@@ -784,7 +797,10 @@ export function App() {
    * and asks for that press. Tooling runs pass ?start=1 and never see it. */
   const [splashUp, setSplashUp] = useState(() => !splashSkipped(location.search));
   const [booted, setBooted] = useState(false);
-  const [paused, setPaused] = useState(false);
+  // Up from the first frame on a `?paused=1` link: the card is the one
+  // surface a screenshot of it wants, and a press to raise it is a press a
+  // scene has to time.
+  const [paused, setPaused] = useState(URL_PLACE.paused);
   /** True while ALT is held: the game's chrome comes off so a frame can be
    * judged on the pixels alone. The debug overlay is NOT part of it — a
    * screenshot with nothing to say where it was taken is the one thing the
@@ -1878,30 +1894,54 @@ export function App() {
       if (page) showBackdropRef.current(page);
       else {
         const r = raceRef.current;
-        const mode = runRef.current.mode;
-        const spec: StageSpec = {
-          seed: seedRef.current,
-          length: r.length,
-          shape: r.shape,
-          laps: lapsOverride() ?? raceLaps(r),
-          knobs: r.knobs,
-          carId: r.carId,
-          timeOfDay: r.timeOfDay,
-          weather: r.weather,
-          season: r.season,
-          skipCountdown: false,
-          // The back row, on a `?mode=headsup` grid; alone on the line
-          // otherwise, which is every other way into here.
-          grid: mode === "headsup" && r.headsUp.massStart ? playerSlot(r.headsUp.cars) : null,
-        };
+        const { mode, levelId } = runRef.current;
+        // A link that names a campaign level opens THAT stage — its seed,
+        // its country, its conditions — exactly as `playLevel` would, so the
+        // card at the end of it has a book, a field and a ladder to read.
+        const level = levelId ? findLevel(levelId)?.level : undefined;
+        const spec: StageSpec = level
+          ? {
+              seed: level.seed,
+              length: level.length,
+              shape: level.shape ?? "sprint",
+              laps: lapsOverride() ?? levelLaps(level),
+              knobs: campaignKnobs(level),
+              carId: r.carId,
+              timeOfDay: level.timeOfDay,
+              weather: level.weather,
+              season: level.season,
+              skipCountdown: false,
+              grid: mode === "headsup" && r.headsUp.massStart ? playerSlot(r.headsUp.cars) : null,
+            }
+          : {
+              seed: seedRef.current,
+              length: r.length,
+              shape: r.shape,
+              laps: lapsOverride() ?? raceLaps(r),
+              knobs: r.knobs,
+              carId: r.carId,
+              timeOfDay: r.timeOfDay,
+              weather: r.weather,
+              season: r.season,
+              skipCountdown: false,
+              // The back row, on a `?mode=headsup` grid; alone on the line
+              // otherwise, which is every other way into here.
+              grid: mode === "headsup" && r.headsUp.massStart ? playerSlot(r.headsUp.cars) : null,
+            };
+        // The time to beat, on a stage that keeps one — read before the run
+        // starts, as `startStage` reads it, or a placed finish could never
+        // say NEW RECORD.
+        bookRef.current = levelId ? { best: loadProgress().best[levelId] ?? null } : null;
         applyStageRef.current(spec, true);
         // The field, on the same link: a heads-up race with nobody entered
         // is a Roam stage on a grid.
         armFieldRef.current(spec, mode);
         // …and the run tape, if `?record=1` asked for one: a scripted pass
         // that drives a stage is exactly the drive somebody wants the file
-        // for, and this path never reaches `startStage`.
-        armTapeRef.current(spec, mode);
+        // for, and this path never reaches `startStage`. Never on a PLACED
+        // run: a tape of a run that was stood at its finish is a tape of
+        // nothing anybody drove.
+        if (!URL_PLACE.moment) armTapeRef.current(spec, mode);
         // The establishing shot is ten seconds of camera before a tooling
         // run has done anything, and every screenshot scene would sit
         // through it. A `?start=1` link therefore lands straight on the
@@ -1919,6 +1959,18 @@ export function App() {
           // it is. A tape whose header claimed the ceremony was never built
           // would replay ten seconds of camera the run did not sit through.
           tapeRef.current?.skipped();
+        }
+        // …and further along, if the link asked to be stood at a moment of
+        // the run rather than at its start. The engine still owns the
+        // moment itself: a finish placement is a step short of the line,
+        // and the loop's first step drives through it and fires `finish`
+        // through the same handler every finish goes through, so the card,
+        // the salute and the run-out are the real ones. The field is stood
+        // at the same moment, or the sheet would read a stagger nobody
+        // drove.
+        if (URL_PLACE.moment && gameRef.current) {
+          const jumped = placeRun(gameRef.current, URL_PLACE.moment);
+          if (fieldRef.current) placeField(fieldRef.current, gameRef.current, jumped);
         }
         // A `?start=1` run never passes through `startStage`, and a debug log
         // with no run section is one COPY LATEST RUN can say nothing about —

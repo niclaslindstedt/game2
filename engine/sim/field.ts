@@ -447,6 +447,30 @@ export function advanceField(field: RivalField, seconds: number): void {
   }
 }
 
+/** THE FIELD, STOOD AT THE MOMENT THE PLAYER WAS (game/place.ts). `jumped`
+ * is the sim the player's clock skipped to get there, and everybody on the
+ * road has to have driven it, or the stagger the classification rests on
+ * is the one thing a placed run would get wrong.
+ *
+ * A rally start is `advanceField`'s own rule — the crews on the road drive
+ * the seconds, the crews still in the control owe them — with the debt paid
+ * off HERE rather than in frame slices under an establishing shot nobody
+ * placed a run to watch: a placed frame is honest from its first render.
+ * A mass start shares the player's clock exactly, so its crews are driven
+ * from their own lights until their sim time reaches the player's. */
+export function placeField(field: RivalField, state: GameState, jumped: number): void {
+  if (field.massStart) {
+    for (const run of field.runs) {
+      if (run.done) continue;
+      skipIntro(run.state);
+      while (!run.done && run.state.t < state.t - TUNING.dt / 2) advanceRun(run);
+    }
+    return;
+  }
+  advanceField(field, jumped);
+  payHeadStart(field);
+}
+
 /** Retire anybody who has been out there past `limit` seconds of their own
  * race clock, and say whether that leaves the road clear. Stated once and
  * read by both run-outs below, so a sheet read off a card the player watched
