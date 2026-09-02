@@ -662,7 +662,13 @@ export function stepGrounded(
   // The lateral grip the tires have to spend, and the turn the wheel is
   // asking them for: the handbrake unsticks the rear by lowering the
   // ceiling, so the same lock asks far more of what is left.
-  const gripCeiling = spec.gripAccel * surfaceGrip * (1 - (1 - T.grip.handbrakeGrip) * lever);
+  // Written so a whole lever is EXACTLY `handbrakeGrip` and no lever is
+  // exactly 1: `1 - (1 - g)` is not bit-equal to `g`, and the field's crews
+  // are deterministic to the bit — a rounding of that size, applied to
+  // every sound car on every step, is a different race.
+  const leverGrip =
+    lever >= 1 ? T.grip.handbrakeGrip : lever <= 0 ? 1 : 1 - (1 - T.grip.handbrakeGrip) * lever;
+  const gripCeiling = spec.gripAccel * surfaceGrip * leverGrip;
   // Speed is not the only way to unstick a driven axle. At the bottom of the
   // gear a rear axle with real torque under it spins up under power and the
   // tail steps out at walking pace, where the wheel's own lateral ask is
