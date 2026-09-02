@@ -732,70 +732,161 @@ body {
    shot instead. */
 .hud-finish {
   position: absolute;
-  top: 8%;
+  top: 7%;
+  width: min(34rem, 94vw);
   text-align: center;
-  background: rgb(18 48 105 / 78%);
+  background: rgb(18 48 105 / 82%);
+  border: 3px solid rgb(255 255 255 / 55%);
   border-radius: 1rem;
-  padding: 0.85rem 1.8rem;
-  /* The card grew a ten-row board and two buttons, and a phone held sideways
-     is 390 px tall. Capping its height and letting it scroll is not enough on
-     its own: what ends up under the fold is the BOARD's last rows and then
-     the way out, and a results card whose RETIRE has to be scrolled to is a
-     card the player is stuck on. So it is a COLUMN — the time at the top and
-     the buttons at the bottom hold their size, and the board in the middle is
-     the only thing that gives. Pointer events come with the scroll; nothing
-     under the card is being driven anyway, since the run-out drives itself
-     (R25). */
+  padding: clamp(0.6rem, 2.2vmin, 1rem) clamp(0.7rem, 2.6vmin, 1.2rem);
+  backdrop-filter: blur(3px);
+  /* A COLUMN: the head with the ways on, the body, the caption. The card
+     holds the whole field now, and the field is PAGED to fit rather than
+     scrolled (results-sheet.tsx) — a card whose way out has to be scrolled
+     to is a card the player is stuck on. The scroll is the floor under
+     that: a page is never cut below three rows, so on a screen too short
+     even for those the card gives up its bottom edge rather than its
+     table. Pointer events come with it; nothing under the card is being
+     driven anyway, since the run-out drives itself (R25). */
   display: flex;
   flex-direction: column;
+  gap: clamp(0.4rem, 1.6vmin, 0.7rem);
+  /* THE CARD'S SHARE OF THE SCREEN. Restated as `CARD_SHARE` in
+     results-pages.ts — the sheet measures its page against that number, so
+     if this one moves and that one does not, the last row of every page is
+     under the fold or a row's worth of air sits under the table. */
   max-height: 86%;
   overflow-y: auto;
   overscroll-behavior: contain;
   pointer-events: auto;
 }
 
-/* The two ends of that column never shrink. */
-.hud-finish-title,
-.hud-finish-time,
-.hud-finish-acts {
-  flex: 0 0 auto;
+/* ── The head: the way out, the word, the ways on ────────────────────────
+   The options page's own head row (`.menu-head`): BACK on the left, the
+   title beside it — and here, the presses that end the card on the right,
+   so RETIRE, SPECTATE and the way on stand together where the first look
+   lands, and none of them is ever under the fold. */
+.fin-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem clamp(0.6rem, 2.5vmin, 1rem);
+  text-align: left;
 }
 
-/* …and the board scrolls INSIDE it, so the ways on never leave the frame
-   however deep the table is. */
-/* …and the board is what gives. `min-height` has to be stated: a flex item
-   defaults to `auto`, which refuses to shrink below its own content, and a
-   board that will not shrink pushes the buttons out of the card however tall
-   the card is allowed to be. Two rows is the floor — below that it is not a
-   table any more, and the card would rather scroll. */
-.hud-finish .score-board {
-  flex: 0 1 auto;
-  min-height: 3.2em;
-  max-height: min(13rem, 32vh);
-  overflow-y: auto;
-  overscroll-behavior: contain;
+.fin-head .menu-back {
+  flex: none;
+  align-self: center;
 }
 
-.hud-finish-title {
-  font-size: clamp(1.3rem, 5.4vmin, 2.4rem);
-  color: var(--hud-good);
+.fin-head-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 8rem;
+  gap: 0.05rem;
+  min-width: 0;
 }
 
-.hud-finish-label {
-  font-size: clamp(0.6rem, 2vmin, 0.9rem);
-  letter-spacing: 0.14em;
-  color: var(--hud-good);
-}
-
-.hud-finish-time {
-  font-size: clamp(1.8rem, 7.5vmin, 3.4rem);
-  font-variant-numeric: tabular-nums;
+.fin-title {
+  font-size: clamp(1.1rem, 4.4vmin, 1.7rem);
   line-height: 1.05;
+  color: var(--hud-good);
+}
+
+.fin-sub {
+  font-size: clamp(0.55rem, 1.9vmin, 0.74rem);
+  letter-spacing: 0.14em;
+  opacity: 0.75;
+}
+
+.fin-acts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+/* Both wear a shared button's chrome (`.hud-pause-act`, `.hud-start`) that
+   is declared further down the sheet, so the sizes here carry the head's
+   class to outrank it — a bare `.fin-act` would lose on source order. */
+.fin-head .fin-act {
+  font-size: clamp(0.64rem, 2.2vmin, 0.82rem);
+  padding: 0.4rem 0.8rem;
+}
+
+.fin-head .fin-next {
+  font-size: clamp(0.85rem, 3.2vmin, 1.15rem);
+  padding: 0.4rem 1rem;
+  margin-top: 0;
+}
+
+/* A phone held up has no room for three presses beside a title: the ways
+   on take a row of their own under the head, the width of the card, so a
+   thumb cannot miss either of them. */
+@media (max-width: 40rem) {
+  .fin-acts {
+    flex: 1 1 100%;
+  }
+
+  .fin-acts > * {
+    flex: 1 1 auto;
+  }
+}
+
+/* ── The body: the summary, and the sheet ───────────────────────────────
+   Stacked on a phone held up; side by side on anything wide enough,
+   where the summary is the narrow column and the sheet takes the rest —
+   the same two-column split the options page makes at the same width. */
+.fin-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  /* NEVER SHRUNK under the card's cap. The sheet measures the card's
+     chrome off `scrollHeight`, and a body that gave under the cap would
+     hide most of its own overflow behind the caption — the card's scroll
+     height would then read a hundred pixels short, and the page would be
+     cut two rows too long. The card scrolls instead, which only ever
+     happens under the three-row floor. */
+  flex: none;
+}
+
+.fin-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.fin-sheet {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+@media (min-width: 48rem) {
+  .hud-finish.has-sheet {
+    width: min(54rem, 94vw);
+  }
+
+  .hud-finish.has-sheet .fin-body {
+    display: grid;
+    grid-template-columns: minmax(11rem, 1fr) minmax(0, 2.2fr);
+    align-items: start;
+    gap: 0.5rem 1rem;
+  }
+
+  /* Beside the sheet the summary reads top-down from the same line the
+     sheet's own word does. */
+  .hud-finish.has-sheet .fin-summary {
+    padding-top: 0.4rem;
+  }
 }
 
 /* R29 — where the run finished, under the headline that already said
    whether that was good enough. */
-.hud-finish-place {
+.fin-place {
   display: flex;
   align-items: baseline;
   justify-content: center;
@@ -803,48 +894,84 @@ body {
   line-height: 1.05;
 }
 
-.hud-finish-place-no {
-  font-size: clamp(1.4rem, 5.6vmin, 2.6rem);
+.fin-place-no {
+  font-size: clamp(1.6rem, 6.4vmin, 3rem);
   color: var(--hud-good);
 }
 
-.hud-finish-place-of {
+.fin-place-of {
   font-size: clamp(0.65rem, 2.2vmin, 0.95rem);
   opacity: 0.8;
+}
+
+/* R30 — what the place was WORTH, directly under it: the same sentence.
+   Third is one point, and fourth is the reason the podium matters at all. */
+.fin-points {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.35rem;
+  line-height: 1.05;
+}
+
+.fin-pts {
+  font-size: clamp(1rem, 4vmin, 1.7rem);
+  font-variant-numeric: tabular-nums;
+  color: var(--hud-good);
+}
+
+.fin-pts-label {
+  font-size: clamp(0.56rem, 1.9vmin, 0.8rem);
+  letter-spacing: 0.14em;
+  opacity: 0.8;
+}
+
+.fin-label {
+  margin-top: 0.35rem;
+  font-size: clamp(0.56rem, 1.9vmin, 0.8rem);
+  letter-spacing: 0.16em;
+  color: var(--hud-good);
+}
+
+.fin-time {
+  font-size: clamp(1.7rem, 7vmin, 3rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
 }
 
 /* Off the podium the stage is not cleared, and the card says so in the one
    way a card can: the colour every good thing in this game is written in
    goes away. */
 .hud-finish-slow {
-  background: rgb(72 26 40 / 82%);
+  background: rgb(72 26 40 / 84%);
 }
 
-.hud-finish-slow .hud-finish-title,
-.hud-finish-slow .hud-finish-place-no,
-.hud-finish-slow .hud-finish-label {
+.hud-finish-slow .fin-title,
+.hud-finish-slow .fin-place-no,
+.hud-finish-slow .fin-label,
+.hud-finish-slow .fin-pts {
   color: var(--hud-bad);
 }
 
 /* A retirement: the same card in the same red as a run that missed the
-   podium, with room between the headline and the two ways off it. */
+   podium — the head, and one line under it. */
 .hud-finish-retired {
-  gap: 0.35rem;
+  gap: 0.5rem;
 }
 
-.hud-finish-note {
-  font-size: clamp(0.6rem, 2vmin, 0.9rem);
+.fin-note {
+  font-size: clamp(0.56rem, 1.9vmin, 0.8rem);
   letter-spacing: 0.1em;
   opacity: 0.85;
 }
 
-.hud-finish-record {
-  font-size: clamp(0.8rem, 2.8vmin, 1.2rem);
+.fin-record {
+  font-size: clamp(0.8rem, 2.8vmin, 1.15rem);
   color: var(--hud-good);
   animation: hud-pop 0.8s infinite;
 }
 
-.hud-finish-laps {
+.fin-laps {
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
@@ -854,9 +981,85 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.hud-finish-lap-label {
+.fin-lap-label {
   color: var(--hud-good);
   margin-right: 0.3rem;
+}
+
+/* The foot's one sentence wears the options page's caption bar
+   (`.knob-caption`, declared further down — hence the parent class). */
+.hud-finish .fin-caption {
+  min-height: 0;
+  text-align: left;
+}
+
+/* The time trial's board stands where the field's sheet would, and it is
+   what gives when the card is short: `min-height` has to be stated, because
+   a flex item defaults to `auto` and refuses to shrink below its content.
+   Two rows is the floor — below that it is not a table any more, and the
+   card would rather scroll. */
+.hud-finish .score-board {
+  flex: 0 1 auto;
+  min-height: 3.2em;
+  max-height: min(13rem, 32vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* A phone held sideways: the card's own chrome comes off first, then the
+   big numbers come down a size — never the rows, which are what a thumb
+   presses. Sized off the height, never `vmin`, which IS the height here. */
+@media (orientation: landscape) and (max-height: 34rem) {
+  .hud-finish {
+    top: max(0.4rem, env(safe-area-inset-top));
+    padding: 0.5rem 0.8rem;
+    gap: 0.3rem;
+  }
+
+  .fin-head {
+    gap: 0.3rem 0.6rem;
+  }
+
+  .fin-title {
+    font-size: 1.1rem;
+  }
+
+  .fin-head .fin-next {
+    font-size: 0.95rem;
+    padding: 0.3rem 0.8rem;
+  }
+
+  .fin-head .fin-act {
+    padding: 0.3rem 0.7rem;
+  }
+
+  .fin-body {
+    gap: 0.3rem 0.8rem;
+  }
+
+  .hud-finish.has-sheet .fin-summary {
+    padding-top: 0.2rem;
+  }
+
+  .fin-place-no {
+    font-size: 1.5rem;
+  }
+
+  .fin-pts {
+    font-size: 1rem;
+  }
+
+  .fin-label {
+    margin-top: 0.15rem;
+  }
+
+  .fin-time {
+    font-size: 1.6rem;
+  }
+
+  .hud-finish .fin-caption {
+    padding: 0.2rem 0.6rem;
+  }
 }
 
 /* ── The high score board ─────────────────────────────────────────────────
@@ -983,35 +1186,25 @@ body {
   margin-top: 0.25rem;
 }
 
-/* The ways on off the results card. Stacked rather than side by side so the
-   next stage's NAME fits on a phone in portrait, and so the two presses are
-   never a thumb's width apart. */
-.hud-finish-acts {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.4rem;
-  margin-top: 0.7rem;
-}
-
-.hud-finish-next {
-  font-size: clamp(0.9rem, 3.4vmin, 1.4rem);
-  margin-top: 0;
-}
-
 /* Landscape phones give the keyboard most of the short dimension. During
    name entry the only important part of the finish card is the name itself,
    so move that prompt to the top of the card and keep its whole row above the
    keyboard. The rest of the result remains available by scrolling the card. */
 @media (orientation: landscape) and (max-height: 34rem) {
   .hud-finish:has(.hud-initials) {
-    top: max(0.4rem, env(safe-area-inset-top));
     max-height: 48%;
-    padding: 0.45rem 1rem;
+  }
+
+  .hud-finish:has(.hud-initials) .fin-body {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .hud-finish:has(.hud-initials) .fin-board {
+    order: -1;
   }
 
   .hud-finish:has(.hud-initials) .hud-initials {
-    order: -1;
     gap: 0.15rem;
     margin-top: 0;
   }
@@ -5073,52 +5266,188 @@ a.menu-version:focus-visible {
   margin-top: 0.7rem;
 }
 
-/* ── R30: the points, on the results card ────────────────────────────────
-   Directly under the place, because it is the same sentence: third is one
-   point, and fourth is the reason the podium matters at all. */
+/* ── R30: the result sheet, PAGED, on the results card ───────────────────
+   (results-sheet.tsx) The whole field, a page at a time, each crew with a
+   picture of their car: the rows wear the options page's own row
+   silhouette (`.knob`), the pager its arrows and pips, and the player's own
+   row is lit the way it is on every board in the game. */
 
-.hud-finish-points {
+.rsheet {
   display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 0.35rem;
-  line-height: 1.05;
+  flex-direction: column;
+  gap: 0.3rem;
 }
 
-.hud-finish-pts {
-  font-size: clamp(1.1rem, 4.4vmin, 2rem);
+/* The sheet's word and its pager on one underlined row — the group title
+   the options page draws, with the arrows standing on its line. */
+.rsheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-bottom: 0.1rem;
+  border-bottom: 2px solid rgb(255 210 62 / 30%);
+}
+
+.rsheet-head .knob-group-title {
+  border: 0;
+  padding: 0 0.25rem;
+}
+
+.rsheet-pager {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.rsheet-page {
+  width: auto;
+  min-width: 6.5rem;
+}
+
+.rsheet-count {
+  font-size: clamp(0.56rem, 1.9vmin, 0.72rem);
+  letter-spacing: 0.16em;
+  opacity: 0.7;
+  padding-right: 0.25rem;
+}
+
+/* The rows never shrink: the page was cut to fit, and a page that then
+   gave under the card's cap would put its last row under the fold. */
+.rsheet-rows {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A row: place, the car, who, the time, what it paid, what they have.
+   Monospaced numerals and fixed columns — a table whose figures wander is a
+   list, and nobody scans a list for their own row. */
+.rsheet-row {
+  display: grid;
+  grid-template-columns: 1.6em 3.6rem minmax(0, 1fr) 4.6em 2.4em 2.6em;
+  gap: 0.5em;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0.15rem 0.55rem 0.15rem 0.4rem;
+  border: 2px solid transparent;
+  border-radius: 0.6rem;
+  background: rgb(255 255 255 / 7%);
+  font-size: clamp(0.66rem, 2.2vmin, 0.86rem);
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  text-shadow: none;
+}
+
+/* A HEADS-UP race is places and times and no board behind either. */
+.rsheet.is-race .rsheet-row {
+  grid-template-columns: 1.6em 3.6rem minmax(0, 1fr) 4.6em;
+}
+
+/* The rows a short last page has going spare — drawn, so the card keeps
+   its height under the arrows. */
+.rsheet-row.is-blank {
+  background: rgb(255 255 255 / 3%);
+}
+
+/* Your own row. Loud on purpose: finding it is the only thing anybody does
+   with a table they are already looking at. */
+.rsheet-row.is-you {
+  background: rgb(255 210 62 / 88%);
+  color: var(--hud-shadow);
+}
+
+.rsheet-row.is-you .rsheet-pts,
+.rsheet-row.is-you .rsheet-pos {
+  color: inherit;
+  opacity: 0.85;
+}
+
+.rsheet-pos {
+  text-align: right;
+  opacity: 0.75;
+}
+
+/* The picture (car-portraits.ts): a fixed box whether or not the shot has
+   landed yet, so the rows do not jump as the roll fills in. */
+.rsheet-car {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.2rem;
+}
+
+.rsheet-car img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.rsheet-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.rsheet-alias {
+  letter-spacing: 0.14em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rsheet-driver {
+  font-size: 0.78em;
+  font-style: normal;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rsheet-time,
+.rsheet-pts,
+.rsheet-total {
+  text-align: right;
+}
+
+.rsheet-pts {
   color: var(--hud-good);
 }
 
-.hud-finish-pts-label {
-  font-size: clamp(0.58rem, 2vmin, 0.85rem);
-  letter-spacing: 0.14em;
-  opacity: 0.8;
+/* Still out there: the amber the way-home arrow wears, because it is the
+   same news — not a result, a car that has not arrived. */
+.rsheet-row.is-out .rsheet-time {
+  color: #ffa726;
 }
 
-.hud-finish-slow .hud-finish-pts {
-  color: var(--hud-bad);
+.rsheet-row.is-dnf .rsheet-time {
+  opacity: 0.6;
 }
 
-/* …and the location table those points went onto. */
-.hud-finish-standings {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.25rem;
-  margin-top: 0.5rem;
-}
+/* A phone held sideways: shorter rows, and the pictures with them. */
+@media (orientation: landscape) and (max-height: 34rem) {
+  .rsheet-row {
+    min-height: 2.1rem;
+    padding-top: 0.05rem;
+    padding-bottom: 0.05rem;
+  }
 
-.hud-finish-standings-line {
-  font-size: clamp(0.6rem, 2vmin, 0.85rem);
-  letter-spacing: 0.1em;
-  font-variant-numeric: tabular-nums;
-}
+  .rsheet-car {
+    height: 1.9rem;
+  }
 
-.hud-finish-sheet:disabled {
-  opacity: 0.5;
-  cursor: default;
+  .rsheet-rows {
+    gap: 0.15rem;
+  }
 }
 
 /* ── R30: the standings panel on a location page ────────────────────────

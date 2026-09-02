@@ -664,17 +664,26 @@ export type ClassRow = {
   alias: string;
   driver: string;
   carId: string;
+  /** The number on their doors — which, with the crew's id, is the whole of
+   * what their paint scheme is read off (the app's car-livery.ts). */
+  number: number;
   /** Stage time, or null for a crew who never reached the line. */
   time: number | null;
   /** 1 is the stage win. Retirements are classified behind every finisher. */
   place: number;
+  /** Still on the road — a sheet read before `settleField` says the road is
+   * clear carries the crews who have not finished yet as OUT rather than as
+   * retirements, so a provisional table can be shown honestly. Always false
+   * on a settled sheet. */
+  out: boolean;
   you: boolean;
 };
 
 /** THE STAGE'S RESULT SHEET — everybody who started, in the order they
- * finished, with the retirements at the bottom in start order. Only honest
- * once `settleField` says the road is clear: a rival still out there has no
- * time yet, and would be classified as a retirement they never made. */
+ * finished, with the retirements at the bottom in start order. FINAL only
+ * once `settleField` says the road is clear; read before that, a rival still
+ * out there has no time yet and is carried at the bottom flagged `out`
+ * rather than as a retirement they never made. */
 export function fieldResults(
   field: RivalField,
   player: { time: number | null; carId: string },
@@ -684,7 +693,9 @@ export function fieldResults(
     alias: run.entry.crew.alias,
     driver: run.entry.crew.driver,
     carId: run.entry.crew.carId,
+    number: run.entry.number,
     time: run.time,
+    out: run.time === null && !run.done,
     you: false,
   }));
   rows.push({
@@ -692,7 +703,9 @@ export function fieldResults(
     alias: "YOU",
     driver: "You",
     carId: player.carId,
+    number: field.playerNumber,
     time: player.time,
+    out: false,
     you: true,
   });
   // Times first, quickest first; anybody without one is out of the results

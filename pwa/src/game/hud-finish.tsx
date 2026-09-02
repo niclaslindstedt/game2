@@ -7,16 +7,26 @@
 // too — a player who is done reading their time never waits for the confetti
 // to finish.
 //
+// ONE PAGE, built the way the options page is (menu-options.tsx): the way
+// out and the page's title on one head row with the ways on beside them,
+// the content under that in a column — or two columns, on a screen wide
+// enough — and one caption line at the foot. The content is two things: the
+// SUMMARY (the place, what it paid, the time) and the SHEET — the whole
+// field, paged, with a picture of every car (results-sheet.tsx). Where the
+// run finished is the first thing a player wants off this card, and it is on
+// the card itself, not behind a button.
+//
 // AND IT NEVER TIMES OUT. A card that counted itself down to the main menu was
 // the ladder taking its own next rung away: where a run goes next is a press,
 // not a countdown.
 
+import type { ComponentChildren } from "preact";
 import { useState } from "react";
 
 import { playUi } from "./audio/ui.ts";
 import { PODIUM } from "./campaign.ts";
 import { InitialsEntry } from "./hud-initials.tsx";
-import { ResultsModal, type ResultRow } from "./results-table.tsx";
+import { ResultsSheet, type SheetRow } from "./results-sheet.tsx";
 import { ScoreBoard } from "./score-board.tsx";
 import type { ScoreEntry } from "./scores.ts";
 import { formatTime, ordinal } from "../lib/util.ts";
@@ -75,9 +85,12 @@ export type FinishStandings = {
    * tie-break, written with the equals sign a results sheet uses. */
   tied: boolean;
   of: number;
-  /** The whole result sheet, for the table the card opens. Null until the
-   * last car is home. */
-  rows: readonly ResultRow[] | null;
+  /** The whole result sheet. PROVISIONAL until the last car is home: the
+   * crews still out are on it as OUT, at the bottom, and move up as they
+   * come in. */
+  rows: readonly SheetRow[];
+  /** …and whether it is. */
+  settled: boolean;
   /** Set when this result topped the location's table with every stage of it
    * driven — the country behind this one is open. */
   won: boolean;
@@ -87,8 +100,9 @@ export type FinishStandings = {
  * There is no table, no points and no ladder — the sheet IS the result, which
  * is the whole difference between this mode and the campaign. */
 export type FinishRace = {
-  /** Places and times, the player included. Null until the last car is home. */
-  rows: readonly ResultRow[] | null;
+  /** Places and times, the player included — provisional, as above. */
+  rows: readonly SheetRow[];
+  settled: boolean;
   /** Cars that started, the player included. */
   cars: number;
   /** How they started, for the one line that says what kind of race it was. */
@@ -134,9 +148,8 @@ export type FinishCardProps = {
    * actually reached the disk, so the button can say when it did not. */
   onSaveRun: (() => boolean) | null;
   /** WATCH THE REST OF THEM COME HOME (spectate.ts). Offered only while the
-   * road still has somebody on it — which is the same condition the FULL
-   * RESULTS button is waiting out, and the reason the two sit together: this
-   * is what there is to do with the wait. */
+   * road still has somebody on it — which is exactly as long as the sheet
+   * has an OUT on it. */
   onSpectate: (() => void) | null;
 };
 
@@ -148,7 +161,7 @@ function SaveRunButton({ onSave }: { onSave: () => boolean }) {
   return (
     <button
       type="button"
-      className="hud-pause-act"
+      className="hud-pause-act fin-act"
       onClick={() => {
         playUi("select");
         setSaid(onSave() ? "SAVED" : "SAVE FAILED");
@@ -157,6 +170,44 @@ function SaveRunButton({ onSave }: { onSave: () => boolean }) {
     >
       {said ?? "SAVE RUN DATA"}
     </button>
+  );
+}
+
+/** THE HEAD ROW: the way out, what the card says, and the ways on. The same
+ * row the options page opens with — back on the left, the title beside it —
+ * with the presses that end the card on the right, so every way off it is
+ * in one place and none of them has to be scrolled to. */
+function Head({
+  title,
+  sub,
+  onRetire,
+  acts,
+}: {
+  title: string;
+  sub: string | null;
+  onRetire: () => void;
+  acts: ComponentChildren;
+}) {
+  return (
+    <div className="fin-head">
+      {/* `data-nav-back` is what a controller's B button presses (menu-nav.ts). */}
+      <button
+        type="button"
+        className="menu-back"
+        data-nav-back
+        onClick={() => {
+          playUi("select");
+          onRetire();
+        }}
+      >
+        ‹ RETIRE
+      </button>
+      <div className="fin-head-text">
+        <div className="fin-title">{title}</div>
+        {sub && <div className="fin-sub">{sub}</div>}
+      </div>
+      <div className="fin-acts pointer-events-auto">{acts}</div>
+    </div>
   );
 }
 
@@ -177,9 +228,6 @@ export function FinishCard({
   onSaveRun,
   onSpectate,
 }: FinishCardProps) {
-  // The full result sheet is a DELIBERATE look: fifteen rows over the top of
-  // the card, opened by the player who wants them and gone again in a press.
-  const [sheet, setSheet] = useState(false);
   // A run outside the podium is not a stage clear, and the card must not
   // dress it as one: the confetti is off, the way on is gone, and the
   // headline says the only thing that happened.
@@ -191,225 +239,187 @@ export function FinishCard({
   if (retired) {
     return (
       <div className="hud-finish hud-finish-slow hud-finish-retired">
-        <div className="hud-finish-title">RETIRED</div>
-        <div className="hud-finish-note">{RETIRED_BY[retired]}</div>
-        <div className="hud-finish-note">THE STAGE CANNOT BE FINISHED</div>
-        <div className="hud-finish-acts pointer-events-auto">
-          {onRetry && (
-            <button
-              type="button"
-              className="hud-start hud-finish-next"
-              data-nav-next
-              onClick={() => {
-                playUi("start");
-                onRetry();
-              }}
-            >
-              RESTART STAGE
-            </button>
-          )}
-          <button
-            type="button"
-            className="hud-pause-act"
-            onClick={() => {
-              playUi("select");
-              onRetire();
-            }}
-          >
-            RETIRE
-          </button>
-          {onSaveRun && <SaveRunButton onSave={onSaveRun} />}
-        </div>
+        <Head
+          title="RETIRED"
+          sub={RETIRED_BY[retired]}
+          onRetire={onRetire}
+          acts={
+            <>
+              {onRetry && (
+                <button
+                  type="button"
+                  className="hud-start fin-next"
+                  data-nav-next
+                  onClick={() => {
+                    playUi("start");
+                    onRetry();
+                  }}
+                >
+                  RESTART STAGE
+                </button>
+              )}
+              {onSaveRun && <SaveRunButton onSave={onSaveRun} />}
+            </>
+          }
+        />
+        <div className="fin-note">THE STAGE CANNOT BE FINISHED</div>
       </div>
     );
   }
+
+  const title = race
+    ? standing?.place === 1
+      ? "WON"
+      : "FINISHED"
+    : slow
+      ? "TOO SLOW"
+      : "STAGE CLEAR";
+  // The head's one line under the title: what this run WAS. The place goes
+  // in the summary, where there is room to make it big.
+  const sub = campaign
+    ? campaign.location.toUpperCase()
+    : race
+      ? `${race.cars} CARS — ${race.massStart ? "MASS START" : "RALLY START"}`
+      : scores
+        ? "TIME TRIAL"
+        : null;
+  const sheet = campaign ?? race;
+  const out = sheet ? sheet.rows.filter((row) => row.out).length : 0;
+
+  // The foot's one sentence: the table the points went onto, and how far
+  // the sheet above it is from being final.
+  const caption = [
+    campaign &&
+      `${campaign.location.toUpperCase()} STANDINGS — ${campaign.total} PTS, ${campaign.tied ? "=" : ""}${ordinal(campaign.place)} OF ${campaign.of}`,
+    campaign?.kept !== null &&
+      campaign?.kept !== undefined &&
+      `YOUR BEST RUN HERE STANDS — ${campaign.kept} PTS`,
+    out > 0 && `${out} CAR${out === 1 ? "" : "S"} STILL OUT`,
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join(" · ");
+
   return (
-    <>
-      <div className={`hud-finish ${slow ? "hud-finish-slow" : ""}`}>
-        <div className="hud-finish-title">
-          {race ? (standing?.place === 1 ? "WON" : "FINISHED") : slow ? "TOO SLOW" : "STAGE CLEAR"}
-        </div>
-        {standing && (
-          <div className="hud-finish-place">
-            <span className="hud-finish-place-no">{ordinal(standing.place)}</span>
-            <span className="hud-finish-place-of">of {standing.of}</span>
-          </div>
-        )}
-        {slow && <div className="hud-finish-note">TOP {PODIUM} TO GO ON — RUN IT AGAIN</div>}
-        {/* R30 — what the place was WORTH. It sits directly under the place
-          because it is the same sentence: third is one point, and fourth is
-          the reason the podium matters at all. */}
-        {campaign && (
-          <div className="hud-finish-points">
-            <span className="hud-finish-pts">+{campaign.points}</span>
-            <span className="hud-finish-pts-label">
-              {campaign.points === 1 ? "POINT" : "POINTS"}
-            </span>
-          </div>
-        )}
-        <div className="hud-finish-label">TOTAL TIME</div>
-        <div className="hud-finish-time">{formatTime(time)}</div>
-        {record && <div className="hud-finish-record">NEW RECORD</div>}
-        {laps > 1 && (
-          <div className="hud-finish-laps">
-            {lapTimes.map((t, i) => (
-              <span key={i} className="hud-finish-lap">
-                <span className="hud-finish-lap-label">LAP {i + 1}</span>
-                {formatTime(t)}
-              </span>
-            ))}
-          </div>
-        )}
-        {/* …and the table those points went onto, with the whole field's sheet
-          one press away. While the last cars are still coming home the table
-          is not a table yet, so the way into it is held shut rather than
-          opening on a half-written one. */}
-        {campaign && (
-          <div className="hud-finish-standings">
-            <div className="hud-finish-standings-line">
-              {campaign.location.toUpperCase()} STANDINGS — {campaign.total} PTS,{" "}
-              {campaign.tied ? "=" : ""}
-              {ordinal(campaign.place)} OF {campaign.of}
+    <div
+      className={`hud-finish ${slow ? "hud-finish-slow" : ""} ${sheet || scores ? "has-sheet" : ""}`}
+    >
+      <Head
+        title={title}
+        sub={sub}
+        onRetire={onRetire}
+        acts={
+          scores?.entering ? null : (
+            <>
+              {/* …and the way to spend the wait the sheet is otherwise
+                  asking the player to sit through: the cars still out there
+                  are a race, and this is the seat to watch it from. */}
+              {onSpectate && (
+                <button
+                  type="button"
+                  className="hud-pause-act fin-act"
+                  onClick={() => {
+                    playUi("select");
+                    onSpectate();
+                  }}
+                >
+                  SPECTATE
+                </button>
+              )}
+              {onSaveRun && <SaveRunButton onSave={onSaveRun} />}
+              {/* The card's way ON, for the pad's START (menu-nav.ts): a run
+                  that has just ended and a player still holding the button
+                  should land on the next start line, not on a card. */}
+              {nextStage && (
+                <button
+                  type="button"
+                  className="hud-start fin-next"
+                  data-nav-next
+                  onClick={() => {
+                    playUi("start");
+                    nextStage.go();
+                  }}
+                >
+                  NEXT: {nextStage.name.toUpperCase()}
+                </button>
+              )}
+              {/* The time trial's own way on, and it is the PRIMARY one: a
+                  trial has no next rung to climb to, so running it again is
+                  what the player came here to do. */}
+              {onRetry && (
+                <button
+                  type="button"
+                  className="hud-start fin-next"
+                  data-nav-next
+                  onClick={() => {
+                    playUi("start");
+                    onRetry();
+                  }}
+                >
+                  RETRY
+                </button>
+              )}
+            </>
+          )
+        }
+      />
+      <div className="fin-body">
+        <section className="fin-summary">
+          {standing && (
+            <div className="fin-place">
+              <span className="fin-place-no">{ordinal(standing.place)}</span>
+              <span className="fin-place-of">of {standing.of}</span>
             </div>
-            {campaign.kept !== null && (
-              <div className="hud-finish-note">YOUR BEST RUN HERE STANDS — {campaign.kept} PTS</div>
-            )}
-            {campaign.won && (
-              <div className="hud-finish-record">{campaign.location.toUpperCase()} WON</div>
-            )}
-            <button
-              type="button"
-              className="hud-pause-act hud-finish-sheet"
-              disabled={campaign.rows === null}
-              onClick={() => {
-                playUi("select");
-                setSheet(true);
-              }}
-            >
-              {campaign.rows === null ? "CARS STILL OUT…" : "FULL RESULTS"}
-            </button>
-          </div>
-        )}
-        {/* …and the heads-up race's own sheet. Same press, same wait for the
-          last car — but the line above it says what the race WAS rather than
-          what it paid, because it paid nothing and was never going to. */}
-        {race && (
-          <div className="hud-finish-standings">
-            <div className="hud-finish-standings-line">
-              {race.cars} CARS — {race.massStart ? "MASS START" : "RALLY START"}
+          )}
+          {/* R30 — what the place was WORTH. It sits directly under the place
+              because it is the same sentence: third is one point, and fourth
+              is the reason the podium matters at all. */}
+          {campaign && (
+            <div className="fin-points">
+              <span className="fin-pts">+{campaign.points}</span>
+              <span className="fin-pts-label">{campaign.points === 1 ? "POINT" : "POINTS"}</span>
             </div>
-            <button
-              type="button"
-              className="hud-pause-act hud-finish-sheet"
-              disabled={race.rows === null}
-              onClick={() => {
-                playUi("select");
-                setSheet(true);
-              }}
-            >
-              {race.rows === null ? "CARS STILL OUT…" : "FULL RESULTS"}
-            </button>
-          </div>
+          )}
+          {slow && <div className="fin-note">TOP {PODIUM} TO GO ON — RUN IT AGAIN</div>}
+          <div className="fin-label">TOTAL TIME</div>
+          <div className="fin-time">{formatTime(time)}</div>
+          {record && <div className="fin-record">NEW RECORD</div>}
+          {laps > 1 && (
+            <div className="fin-laps">
+              {lapTimes.map((t, i) => (
+                <span key={i} className="fin-lap">
+                  <span className="fin-lap-label">LAP {i + 1}</span>
+                  {formatTime(t)}
+                </span>
+              ))}
+            </div>
+          )}
+          {campaign?.won && <div className="fin-record">{campaign.location.toUpperCase()} WON</div>}
+          {/* The lock between this country and the next one, said where the
+              player is looking for the way on. */}
+          {locked && <div className="fin-note">TOP THE {locked.toUpperCase()} TABLE TO GO ON</div>}
+        </section>
+        {sheet && (
+          <section className="fin-sheet">
+            <ResultsSheet rows={sheet.rows} board={campaign !== null} title="RESULTS" />
+          </section>
         )}
-        {/* The lock between this country and the next one, said where the
-          player is looking for the way on. */}
-        {locked && (
-          <div className="hud-finish-note">TOP THE {locked.toUpperCase()} TABLE TO GO ON</div>
-        )}
-        {scores && !scores.entering && (
-          <ScoreBoard entries={scores.board} highlight={scores.place} />
-        )}
-        {scores?.entering ? (
-          <InitialsEntry
-            place={scores.place}
-            initial={scores.entering.initial}
-            onDone={scores.entering.onDone}
-          />
-        ) : (
-          <div className="hud-finish-acts pointer-events-auto">
-            {/* The card's way ON, for the pad's START (menu-nav.ts): a run
-                that has just ended and a player still holding the button
-                should land on the next start line, not on a card. */}
-            {nextStage && (
-              <button
-                type="button"
-                className="hud-start hud-finish-next"
-                data-nav-next
-                onClick={() => {
-                  playUi("start");
-                  nextStage.go();
-                }}
-              >
-                NEXT: {nextStage.name.toUpperCase()}
-              </button>
+        {/* The time trial's board stands where the field's sheet would: a
+            trial is raced against the times already on it. */}
+        {scores && (
+          <section className="fin-sheet fin-board">
+            {scores.entering ? (
+              <InitialsEntry
+                place={scores.place}
+                initial={scores.entering.initial}
+                onDone={scores.entering.onDone}
+              />
+            ) : (
+              <ScoreBoard entries={scores.board} highlight={scores.place} />
             )}
-            {/* The time trial's own way on, and it is the PRIMARY one: a trial
-              has no next rung to climb to, so running it again is what the
-              player came here to do. */}
-            {onRetry && (
-              <button
-                type="button"
-                className="hud-start hud-finish-next"
-                data-nav-next
-                onClick={() => {
-                  playUi("start");
-                  onRetry();
-                }}
-              >
-                RETRY
-              </button>
-            )}
-            {/* …and the way to spend the wait the card is otherwise asking
-              the player to sit through: the cars still out there are a race,
-              and this is the seat to watch it from. */}
-            {onSpectate && (
-              <button
-                type="button"
-                className="hud-pause-act"
-                onClick={() => {
-                  playUi("select");
-                  onSpectate();
-                }}
-              >
-                SPECTATE
-              </button>
-            )}
-            <button
-              type="button"
-              className="hud-pause-act"
-              onClick={() => {
-                playUi("select");
-                onRetire();
-              }}
-            >
-              RETIRE
-            </button>
-            {/* The developer switch's payoff: the run just driven, as a file
-              something else can drive. Absent for every player who never
-              turned COLLECT RACE DATA on, which is all of them. */}
-            {onSaveRun && <SaveRunButton onSave={onSaveRun} />}
-          </div>
+          </section>
         )}
       </div>
-      {sheet && campaign?.rows && (
-        <ResultsModal
-          title="CLASSIFICATION"
-          sub={`${campaign.location.toUpperCase()} STANDINGS — POINTS AFTER THIS STAGE`}
-          rows={campaign.rows}
-          stage
-          onClose={() => setSheet(false)}
-        />
-      )}
-      {sheet && race?.rows && (
-        <ResultsModal
-          title="CLASSIFICATION"
-          sub={`${race.cars} cars, ${race.massStart ? "one grid, one green" : "one at a time"}`}
-          rows={race.rows}
-          stage
-          board={false}
-          onClose={() => setSheet(false)}
-        />
-      )}
-    </>
+      {caption && <div className="knob-caption knob-caption-on fin-caption">{caption}</div>}
+    </div>
   );
 }

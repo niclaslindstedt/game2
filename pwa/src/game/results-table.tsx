@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE RESULT SHEET, DRAWN — fifteen rows of place, crew, time and points, in
-// the one layout both places that show it use: the modal the results card
-// opens the moment a stage lands, and the location's standings table the
-// campaign menu shows before the player picks the next stage.
+// THE STANDINGS TABLE, DRAWN — fifteen rows of place, crew and points, in
+// the modal the campaign menu opens over a location's page before the
+// player picks the next stage: "how does the location stand", with the whole
+// field on screen at once.
 //
-// Fifteen rows is more than a card can hold, which is exactly why it is a
-// MODAL rather than another block on the results card: the card answers "how
-// did I do", and this answers "how does the location stand" — a different
-// question, asked deliberately, with the whole field on screen at once.
+// The STAGE's own sheet — the one on the results card, with the times, the
+// pictures of the cars and the pages — is results-sheet.tsx. This one keeps
+// the plain fifteen-row layout because the question it answers is the
+// table's, not a run's.
 
 import { playUi } from "./audio/ui.ts";
 import { formatTime } from "../lib/util.ts";
