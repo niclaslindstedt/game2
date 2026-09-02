@@ -133,6 +133,19 @@ it is asked for, rebuilds one whose context has been replaced under it (iOS
 hands a backgrounded PWA a dead `AudioContext` and the synth swaps it), and
 tries again next frame when the context is still locked.
 
+**SILENCE HAS TO BE SAID.** The same property that stops the beds crackling —
+nothing is booked ahead, so a late frame leaves every layer holding its last
+value — means a bed that is simply no longer fed does not stop: it holds. So
+a frame that is not hearing the run says so, through `DriveBed.silence()`
+(`RunAudio.silence()` from the app): the layers come down and the run keeps
+everything it has already spent — the countdown light it called, the whistle
+it blew — so RESUME picks the note back up instead of starting the stage
+again. `App.tsx` hushes on every path that skips the bed: the pause card, god
+mode's held camera, the Roam map, the frozen run-out, and every menu page,
+where the stage is scenery under a theme and an engine bed over the top of it
+would be two pieces of music at once. `reset()` is the heavier one — a run
+started, restarted or walked out of — and forgets the run's memory too.
+
 **Every layer's cutoff is held under Nyquist against the LIVE sample rate.**
 A biquad's coefficients come from its cutoff divided by half the sample rate;
 at or past 1 that is not a bright filter, it is undefined, and WebKit answers

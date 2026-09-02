@@ -1379,6 +1379,11 @@ export function App() {
     setResult(null);
     rendererRef.current?.setGhost(null);
     rendererRef.current?.field.clear();
+    // The run's noise goes with the run. The frame loop hushes the beds for
+    // as long as a menu is up, but a stage walked out of halfway is over:
+    // its countdown, its whistle and its engine note are not owed to the
+    // demo now driving behind the cards, nor to whatever is started next.
+    audioRef.current?.reset();
     setMenu({ page: "root" });
   };
 
@@ -2588,6 +2593,15 @@ export function App() {
         cutTo(leader, "backdrop");
       };
 
+      /** THIS FRAME IS NOT BEING HEARD. The beds are steered by `audio.frame`
+       * and by nothing else — nothing is booked ahead — so a frame that
+       * simply does not feed them leaves every layer holding the level it was
+       * last given: the engine note, the tyres and the wind carry on behind a
+       * pause card that stopped the car, and behind the menu the player left
+       * the run for. Every path out of the frame that skips the beds says so
+       * through here, and the next fed frame builds them again. */
+      const hushAudio = (): void => audioRef.current?.silence();
+
       /** R30 — ONE FRAME OF THE RUN-OUT BEING WATCHED (spectate.ts), and
        * false when nothing is being followed and the run below the loop is
        * the player's own.
@@ -2647,7 +2661,7 @@ export function App() {
           // The engine note of the car being WATCHED. There is no road bed
           // for a car nobody is in, and this is the one the picture is of.
           audioRef.current?.frame(watching.state, dtFrame);
-        }
+        } else hushAudio();
         renderer.render(watching.state, frozen ? 0 : dtFrame);
         servePendingShot();
         // Only the FEED has instruments to refresh. Behind the card the
@@ -2748,6 +2762,9 @@ export function App() {
         // either, but the map camera is still turning, so it keeps its time.
         if (page === null && (pausedRef.current || held)) {
           acc = 0;
+          // A frozen run is a SILENT one. The card stops the car, so it stops
+          // the noise the car was making too.
+          hushAudio();
           // …and the one thing that still moves under god mode's hold is the
           // camera, on its own clock: the frame below it is drawn with dt 0,
           // so the flight has no dt to take its step from.
@@ -2774,6 +2791,7 @@ export function App() {
         }
         if (page?.page === "roam") {
           acc = 0;
+          hushAudio();
           renderer.render(state, dtFrame);
           servePendingShot();
           return;
@@ -2854,7 +2872,8 @@ export function App() {
         // The road bed belongs to a run the player is IN. Behind the menu the
         // stage is scenery under a theme, and an engine bed over the top of
         // that is two pieces of music at once.
-        if (!page) audioRef.current?.frame(state, dtFrame);
+        if (page) hushAudio();
+        else audioRef.current?.frame(state, dtFrame);
         renderer.render(state, dtFrame);
         servePendingShot();
         // Every frame, ahead of the throttled snapshot: the clock's

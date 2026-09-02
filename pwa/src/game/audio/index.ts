@@ -46,6 +46,17 @@ export type RunAudio = {
   knock: (speed: number) => void;
   /** Which camera the run is watched from. The whole mix moves with it. */
   setView: (view: string) => void;
+  /**
+   * NOTHING IS BEING HEARD THIS FRAME — the run is behind a pause card, held
+   * under god mode's camera, or scenery under a menu. The beds go quiet and
+   * the run keeps everything else it knows, so resuming picks the note back
+   * up rather than starting the stage again.
+   *
+   * Cheap enough to call on every frame that does not feed the beds, and
+   * that is how it is meant to be called: `frame` is the only thing keeping
+   * a layer alive, so every path that skips it has to come through here.
+   */
+  silence: () => void;
   /** A run ended or the player left it. */
   reset: () => void;
 };
@@ -131,6 +142,10 @@ export function createRunAudio(): RunAudio {
     setView(view) {
       ear = listenerFor(view);
       bed.setView(view);
+    },
+
+    silence() {
+      bed.silence();
     },
 
     reset() {
