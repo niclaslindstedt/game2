@@ -30,6 +30,7 @@ make sky          # render the atmosphere to previews/sky.png (every weather x t
 make traffic      # the HIGH TRAFFIC over a stage: five skies x four moments of ONE race — REQUIRED before/after any change to the aircraft or their contrails
 make glyphs       # render the menu's marks at the three sizes they are read at
 make transit      # photograph the camera going from the finish line to a crew still out, frame by frame
+make views        # photograph the CAMERA KEY: every step of the ladder, six consecutive frames each
 make audition     # build previews/audition.html — every sound and both scores, playable
 make screenshots  # drive the built app headlessly, screenshot key moments
 make profile      # meter a frame's draw calls / triangles / binds — REQUIRED before/after any rendering change
@@ -170,6 +171,8 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | The name over a car that is not the player's                | `pwa/src/game/name-tag.ts` — a label, a colour and a point; it must never learn what a bot is                                      |
 | Anything drawn (meshes, textures, camera, effects)          | `pwa/src/game/` (renderer.ts and friends)                                                                                          |
 | Where the camera stands OUTSIDE the car                     | `CHASE_RIGS` in `pwa/src/game/camera.ts` — one row per angle                                                                       |
+| What an outside rig may STAND on (floor, play, cliff)       | `pwa/src/game/camera-ground.ts` — read over a footprint, sunk at a bounded rate; the menu's backdrop is `camera-drone.ts`          |
+| The camera going from one VIEW to the next on the ladder    | `pwa/src/game/camera-change.ts` — a flown move, never a cut; `tests/camera_test.ts` measures it — the `game-feel` skill            |
 | How much a BLOW shakes the picture, and which blows do      | `pwa/src/game/camera-shake.ts` — DOM-free; a contact shakes the CAR, never an outside rig — the `game-feel` skill                  |
 | What WATER looks like — lakes, fords and streams alike      | `pwa/src/game/water-look.ts` — one flat semi-transparent material for all three; the SHEETS are cut in `terrain.ts`                |
 | What colour the sky is under given conditions               | `pwa/src/game/sky.ts` (the presets and the weather/season colour maths)                                                            |

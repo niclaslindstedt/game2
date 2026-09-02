@@ -27,7 +27,7 @@ import {
 
 import { clamp } from "../pwa/src/lib/angles.ts";
 
-import { createGameCamera } from "../pwa/src/game/camera.ts";
+import { PLAY_MODES, createGameCamera, type CameraMode } from "../pwa/src/game/camera.ts";
 import type { ShakeSource } from "../pwa/src/game/camera-shake.ts";
 
 const FLAT: SegmentPlan[] = [{ kind: "straight", length: 600, feature: "none" }];
@@ -885,5 +885,153 @@ describe("the transit between two cars", () => {
     cam.update(state, FRAME);
     const p = cam.camera.position;
     expect(Math.hypot(p.x - state.car.x, p.z - state.car.z)).toBeLessThan(40);
+  });
+});
+
+// ...and the same question one rung down: the camera key walks a ladder of
+// eight, four of whose steps cross between a seat inside the car and a boom
+// behind it (camera-change.ts). Every one of them is a MOVE, and the failure
+// this section exists to catch is the cut it replaced — a frame that does
+// not belong beside the one before it, at either end of the ladder.
+
+/** A frame of a change, read in the CAR's frame: where the lens stands
+ * relative to the car and which way it points. The heading is zero and the
+ * ground is level in every drive below, so subtracting the car's position is
+ * exactly the car's own frame — and it is the frame that matters, because
+ * both ends of a change ride the car and a world reading would only measure
+ * the road going past. */
+type Frame = { at: THREE.Vector3; aim: THREE.Vector3 };
+
+/** Two seconds in the first view before anything is asked of the camera: the
+ * rig it is LEAVING has to be settled, or what gets measured is the standoff
+ * still easing out rather than the change. */
+const SETTLE = 120;
+/** …of which the last few frames are recorded, so the series spans the press
+ * itself. A cut is invisible to a series that begins after it. */
+const LEAD = 10;
+
+/** A car held at pace on dead flat ground, with the camera up and the views
+ * in `walk` taken one after another every `hold` frames. */
+function ladderDrive(walk: CameraMode[], hold: number): Frame[] {
+  const state = game();
+  const car = state.car;
+  state.terrain = { ...state.terrain, groundAt: () => car.y, waterAt: () => null };
+  car.heading = 0;
+  car.yawRate = 0;
+  car.u = 30;
+  const cam = createGameCamera(1600, 900);
+  // The three seats, as a real car's meshes would push them (setEyes): left
+  // to the fallback they are all the SAME point, and a move between two
+  // views that share a mount is a move with nowhere to go.
+  cam.setEyes({
+    bumper: { x: 0, y: 0.5, z: 1.95 },
+    hood: { x: -0.16, y: 1.21, z: 0.66 },
+    cockpit: { x: -0.36, y: 1.08, z: 0.1 },
+  });
+  cam.setMode(walk[0]);
+  cam.skipStartShot();
+  const frames: Frame[] = [];
+  for (let f = 0; f < SETTLE + hold * (walk.length - 1); f++) {
+    if (f >= SETTLE && (f - SETTLE) % hold === 0) {
+      cam.setMode(walk[Math.floor((f - SETTLE) / hold) + 1]);
+    }
+    car.z += car.u * FRAME;
+    cam.update(state, FRAME);
+    if (f < SETTLE - LEAD) continue;
+    const aim = new THREE.Vector3();
+    cam.camera.getWorldDirection(aim);
+    frames.push({
+      at: new THREE.Vector3(
+        cam.camera.position.x - car.x,
+        cam.camera.position.y - car.y,
+        cam.camera.position.z - car.z,
+      ),
+      aim,
+    });
+  }
+  return frames;
+}
+
+/** One step of the ladder, taken and then held long enough to land. */
+function walkTo(from: CameraMode, to: CameraMode, hold: number): Frame[] {
+  return ladderDrive([from, to], hold);
+}
+
+/** Every step the camera key takes, in the order it takes them — including
+ * the one that wraps the top of the ladder back onto the nose. */
+const LADDER: [CameraMode, CameraMode][] = PLAY_MODES.map((mode, i) => [
+  mode,
+  PLAY_MODES[(i + 1) % PLAY_MODES.length],
+]);
+
+/** The names of the steps `bad` holds against — an empty list is the pass,
+ * and a failure says which rung of the ladder broke. */
+function stepsFailing(check: (frames: Frame[]) => boolean, hold: number): string[] {
+  return LADDER.filter(([from, to]) => !check(walkTo(from, to, hold))).map(
+    ([from, to]) => `${from}->${to}`,
+  );
+}
+
+describe("changing view", () => {
+  it("is a move and never a cut, at every step of the ladder", () => {
+    // A cut spends the WHOLE distance between the two poses in one frame.
+    // The eased clock peaks at about a twelfth of it over the shortest beat
+    // on the ladder, so a sixth is a wide bar that a cut cannot get under.
+    const carried = (frames: Frame[]): boolean => {
+      const span = frames[0].at.distanceTo(frames[frames.length - 1].at);
+      const swing = frames[0].aim.angleTo(frames[frames.length - 1].aim);
+      let move = 0;
+      let turn = 0;
+      for (let i = 1; i < frames.length; i++) {
+        move = Math.max(move, frames[i].at.distanceTo(frames[i - 1].at));
+        turn = Math.max(turn, frames[i].aim.angleTo(frames[i - 1].aim));
+      }
+      return move < Math.max(span, 0.3) / 6 && turn < Math.max(swing, 0.15) / 6;
+    };
+    expect(stepsFailing(carried, 90)).toEqual([]);
+  });
+
+  it("lands on the pose the new rig would have stood in", () => {
+    // Held for five seconds, which is far longer than the longest move on
+    // the ladder AND longer than the slowest rig takes to settle — the two
+    // that fly (`heli`, `top`) answer the car over the best part of a
+    // second, so a shorter hold measures the REFERENCE still easing out.
+    // By the end the lens stands where it would have been standing had the
+    // view never changed, with nothing left over to ease away after.
+    const landed = LADDER.filter(([from, to]) => {
+      const walked = walkTo(from, to, 300);
+      const sat = walkTo(to, to, 300);
+      return walked[walked.length - 1].at.distanceTo(sat[sat.length - 1].at) > 0.05;
+    });
+    expect(landed.map(([from, to]) => `${from}->${to}`)).toEqual([]);
+  });
+
+  it("carries the lens with the car rather than leaving it standing", () => {
+    // At 30 m/s the car covers eighteen metres inside the longest move, so a
+    // path drawn between two WORLD points strands the lens in a field behind
+    // it. Both ends ride the car: the lens never falls further back than the
+    // two rigs themselves stand.
+    const kept = (frames: Frame[]): boolean => {
+      const behind = frames.map((f) => Math.hypot(f.at.x, f.at.z));
+      return Math.max(...behind) <= Math.max(behind[0], behind[behind.length - 1]) + 0.5;
+    };
+    expect(stepsFailing(kept, 90)).toEqual([]);
+  });
+
+  it("arrives, and then STAYS — the rig it lands on is already stood up", () => {
+    // Walking the ladder from over the roof down into the car leaves the
+    // boom's height and standoff wherever `top` left them: twenty metres
+    // up. A rig that eased out of THAT when the player came back to `close`
+    // would hand the move a destination still travelling, and the lens
+    // would go on sinking for a second after it had supposedly landed.
+    // Nothing here is turning and the pace is constant, so a settled rig on
+    // this drive is a lens that does not move at all in the car's frame.
+    const frames = ladderDrive(["top", "bumper", "hood", "cockpit", "close"], 90);
+    const settled = frames.slice(-30);
+    let after = 0;
+    for (let i = 1; i < settled.length; i++) {
+      after += settled[i].at.distanceTo(settled[i - 1].at);
+    }
+    expect(after).toBeLessThan(0.05);
   });
 });

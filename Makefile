@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift heat record replay track level analyze cars liveries field crew items items-list sky traffic glyphs audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-android shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift heat record replay track level analyze cars liveries field crew items items-list sky traffic glyphs transit views audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-android shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
 
 build:
 	npm run build
@@ -197,6 +197,15 @@ glyphs:
 # Chromium requirements as `screenshots`.
 transit:
 	npm run transit
+
+# Photograph the CAMERA KEY being pressed, at every step of the ladder
+# (previews/views.png) — six consecutive frames per step, with the lens's own
+# reading under each, so a frame that does not belong beside the last shows
+# up as one big number in a column of small ones. REQUIRED before/after any
+# change to how one view hands over to the next. `OUT=` names the sheet.
+# Same Chromium requirements as `screenshots`.
+views:
+	npm run views
 
 # Build the audio review page: every sound in the bank on a button, both
 # scores under the real sequencer with per-voice mutes, and the continuous

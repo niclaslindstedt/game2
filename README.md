@@ -73,6 +73,7 @@ Open the printed URL. The game opens on the main menu, over a stage a bot is dri
 | `make traffic`     | Photograph the high traffic over a stage (`previews/traffic.png`): five skies against four moments of one race                                                                     |
 | `make glyphs`      | Render the menu's marks to a contact sheet (`previews/glyphs.png`) at the three sizes they are read at                                                                             |
 | `make transit`     | Photograph the camera leaving the finish line for a crew still out on the stage (`previews/transit.png`), frame by consecutive frame                                               |
+| `make views`       | Photograph the camera key at every step of the ladder (`previews/views.png`), six consecutive frames per step                                                                      |
 | `make audition`    | Build the audio review page (`previews/audition.html`): every sound, both scores, live                                                                                             |
 | `make screenshots` | Drive the built app headlessly and screenshot the key moments                                                                                                                      |
 | `make profile`     | Meter what one frame costs the renderer — draw calls, triangles and binds per scene                                                                                                |

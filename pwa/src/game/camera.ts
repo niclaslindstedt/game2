@@ -22,7 +22,10 @@
 // can be driven from:
 //
 //   drone — high overhead, trailing and slowly circling: the menu's living
-//           backdrop, where a bot is driving and nobody is watching the apex.
+//           backdrop, where a bot is driving and nobody is watching the
+//           apex. Its own rig, in camera-drone.ts — it carries none of the
+//           chase machinery, only the slow circling that keeps a backdrop
+//           from reading as a paused screenshot.
 //   map   — the whole stage framed from the sky, turning: the Roam page's
 //           look at what a seed actually builds. Its own rig, in
 //           camera-map.ts — it frames a FOOTPRINT rather than following a
@@ -50,6 +53,15 @@
 // (or bolted to) the car, and what makes them worth driving from is that the
 // eye has WEIGHT, the road has GRAIN, and a hit throws the head.
 //
+// WALKING THE LADDER IS A MOVE, NEVER A CUT. The lens is FLOWN from where it
+// was standing to where the new rig has stood it, over about a third of a
+// second (camera-change.ts). Between the outside rigs most of that hand-over
+// was already in the numbers — they share a standoff and a height, and those
+// ease — and the flight only carries the part that never eased, which is the
+// aim. The four steps that cross between the two families had nothing in
+// common to ease at all, and the flight is the whole of them: it reads as
+// climbing into the car and back out of it, which is what it is.
+//
 // And two BEATS override whichever of them is up. The establishing shot
 // opens every stage: the camera circles the start control while the crew in
 // front leaves, then comes down onto the car it will be driven from
@@ -60,7 +72,7 @@
 
 import * as THREE from "three";
 import { angleLerp, clamp } from "../lib/angles.ts";
-import { verticalFovFor } from "../lib/fov.ts";
+import { MAX_VFOV, verticalFovFor } from "../lib/fov.ts";
 import { createFollow } from "../lib/follow.ts";
 import { createSlack } from "../lib/slack.ts";
 import type { GameState } from "@engine";
@@ -80,7 +92,17 @@ import {
   type FreeFlyPose,
   type FreeFlyRig,
 } from "./camera-free.ts";
+import { createViewChange } from "./camera-change.ts";
+import { createDroneCamera } from "./camera-drone.ts";
 import { createFinishCamera } from "./camera-finish.ts";
+import {
+  CHASE_CLEARANCE,
+  CLIFF,
+  FLOOR,
+  HEIGHT_FOLLOW,
+  SLACK,
+  groundOver,
+} from "./camera-ground.ts";
 import {
   CAMERA_SHAKE,
   fadeShake,
@@ -107,12 +129,6 @@ export const PLAY_MODES: CameraMode[] = PLAY_CAMERAS.map((cam) => cam.id);
 /** The modes camera-eye.ts owns — the ones taken from inside the car. */
 const IN_CAR: InCarCamera[] = ["bumper", "hood", "cockpit"];
 
-/** How far to the side the drone flies, m. The menu's cards sit in the
- * middle of the screen, so a drone parked squarely behind the car puts the
- * one thing worth watching underneath them. Offsetting the CAMERA walks the
- * car off to the side of frame, where it stays visible beside the card at
- * every viewport. */
-const DRONE_SIDE = 26;
 /** Far plane while driving, m — comfortably past the widest fog ceiling. The
  * map view solves its own, along with its own near plane, because a stage is
  * kilometres wide and a quarter-metre near plane under a far one that distant
@@ -372,143 +388,6 @@ const RIG_EASE = 0.67;
 /** Longest step the swing spring is integrated over, s. */
 const SPRING_STEP = 1 / 90;
 
-/** Clearance a chase camera is never allowed under, m — over the ground
- * AND over any water. The camera trails the car, so on any real descent the
- * ground behind is higher than the ground under the wheels and a fixed
- * roof-height camera is simply inside the hill; run along a shoreline and
- * the same camera drops under the lake, which is the sheet of flat blue
- * that swallows half the frame. Both are checked at the camera's own
- * position, never the car's. */
-const CHASE_CLEARANCE = 1.3;
-
-/** How that floor is allowed to MOVE, which matters far more than where it
- * is. The ground under a trailing camera is not a smooth reading: the
- * terrain's lattice kinks at every cell edge, a shoreline swaps the ground
- * for the water's surface, and the far country can step outright where two
- * fields meet. Taken as a bare `groundAt` under a single point, each of
- * those arrives in the picture in ONE FRAME — a cut, not a movement — and
- * the steeper the ground, the bigger it is. That is the shake on a cliff
- * top, and the reason a cliff top has felt broken.
- *
- * Two rules fix it. The ground is read over the camera's own FOOTPRINT
- * rather than under a point, so a lateral wobble on steep ground (the swing,
- * the impact shake) cannot pump the camera up and down. And the floor may
- * rise at once — a camera inside a hill shows nothing at all — but only ever
- * SINKS at a bounded rate, so ground falling away under the camera is
- * something it flies down, never something it is cut to. */
-const FLOOR = {
-  /** Radius of the footprint the ground is read over, m. */
-  span: 1.8,
-  /** How fast the floor closes on a target below it, 1/s, and the ceiling on
-   * that, m/s. The rate is brisk enough that an ordinary descent — the
-   * ground under a trailing camera drops some 8 m/s on a steep one — tracks
-   * within a metre; the ceiling is what turns a cliff-sized step into a
-   * second of descent. */
-  sink: 10,
-  sinkMax: 16,
-  /** A jump this big between frames is a respawn or a fresh stage, m: the
-   * floor is taken where it is found rather than flown down to. */
-  snap: 24,
-};
-
-/** The footprint's points: the middle and the four corners. */
-const FOOTPRINT: [number, number][] = [
-  [0, 0],
-  [FLOOR.span, FLOOR.span],
-  [FLOOR.span, -FLOOR.span],
-  [-FLOOR.span, FLOOR.span],
-  [-FLOOR.span, -FLOOR.span],
-];
-
-/** THE SURFACE IS NOT THE SHAPE. R16 builds a real dirt road across its
- * width: a crown down the middle, two worn wheel tracks either side of it,
- * a loose edge outside those, and a shoulder that steps down into the
- * verge. The car RIDES all of it — it drops fifteen centimetres into a
- * track and climbs back out over the crown, and it should: that is what
- * tells a driver from inside the car that the road has been used. The
- * CAMERA should not. Line a corner up so the car crosses the road and a
- * camera hung off the car's own height heaves nearly ten centimetres up and
- * down on a stage that is DEAD FLAT — a bump with nothing under it,
- * arriving exactly where the shot is supposed to be at its steadiest.
- *
- * So the camera hangs off the car on a LOOSE LINKAGE. There is `reach` of
- * play in it, and the linkage recovers that play at `recover` per second.
- * Inside the play the camera barely moves; past it the linkage is tight and
- * the camera moves one for one, so a crest, a landing, a cliff and a jump
- * all arrive at full size and only ever late by the play itself. The clamp
- * is also what makes a respawn free: the reading can never be further than
- * the play from the truth, so there is no jump to catch and no snap case to
- * write.
- *
- * The two quantities it is hung on are separated by different things, and
- * the numbers say which.
- *
- * The HEIGHT is separated by SIZE, and it has to be: a long sweeper crosses
- * the wheel tracks over several seconds, and no filter quick enough to
- * leave a crest alone would ever reject that. What separates them instead
- * is that the cross-section is BOUNDED and the terrain is not — so the play
- * covers the whole cross-section and the recovery is slow enough that
- * almost nothing leaks through it.
- *
- * The in-car views hang their HORIZON on the same idea and separate it by
- * TIME instead — camera-eye.ts states why. */
-const SLACK = {
-  /** The camera's height. The play is clear of the cross-section's whole
-   * range — a crown to the bottom of a wheel track is under 0.2 m, and the
-   * step off the mat onto the verge under 0.4 — and far under the smallest
-   * thing the generator builds that the camera is meant to fly. */
-  ground: { reach: 0.35, recover: 0.2 },
-} as const;
-
-/** ...AND WHAT GETS PAST THE PLAY ARRIVES AS A MOVEMENT, NOT A CUT. The
- * slack separates by size, so anything bigger than it — a kerb dropped off
- * at a slant, a lattice crease, the step off a shelf — comes through at full
- * amplitude in the frame it happens. The car should do that; a camera that
- * does it too is the car standing still in the frame while the whole world
- * jumps, the read of a camera welded to the roof. So the height the chase
- * rigs stand and aim from EASES onto the slack's reading (lib/follow.ts) at
- * `rate`, 1/s: fast enough that a hill is followed within a fraction of a
- * metre, slow enough that a step in the ground is sunk or lifted through
- * over a few frames. In the AIR the height is a smooth arc with nothing to
- * ease away and the frame must not change for a designed jump (CHASE_RIGS),
- * so it follows at `flying` there, near enough one for one. */
-const HEIGHT_FOLLOW = { rate: 9, flying: 80, snap: 6 };
-
-/** THE CLIFF. Driving off a cliff top is the one place the chase rig has
- * nothing sensible to follow. Riding the car down keeps it exactly two
- * metres over the roof for the whole plunge, so a twenty-five metre drop
- * reads as nothing happening; and the floor alone cannot save it, because
- * the camera clears the lip a fifth of a second after the car does and from
- * then on there is no ground under it either.
- *
- * So the camera simply declines to come all the way down. It holds part of
- * the height it had at the top and lets the car sink away below it — which
- * is what the moment actually is: the car is gone, nothing the driver does
- * matters now, and all that is left to do is watch it fall. The aim is
- * already at the car, so the shot pitches over the edge on its own.
- *
- * The hold is keyed to how far the car has fallen BELOW WHERE IT LEFT THE
- * GROUND, not to how long it has been in the air, so a lip, a crest and a
- * designed ramp jump — every one of which lands near the height it launched
- * from — never touch it. The frame does not change for a jump (CHASE_RIGS);
- * it changes for a fall. */
-const CLIFF = {
-  /** How far the car has to be under its own takeoff before the camera
-   * starts holding back, m. A stage's jumps live well inside this. */
-  slack: 6,
-  /** Share of the drop past that the camera keeps, and the most it ever
-   * keeps, m. Half means a twenty-five metre cliff leaves the car ten
-   * metres further down the frame than the rig would ever put it. */
-  gain: 0.5,
-  max: 12,
-  /** How fast the hold winds on and comes back off, 1/s. Winding on is
-   * quick because the drop itself is the shape of the gesture; coming off
-   * is slow, so the camera settles back over the couple of seconds after
-   * the landing instead of dropping onto the car like a lift. */
-  rise: 5,
-  settle: 1.4,
-};
-
 export type { MapPose };
 
 export type GameCamera = {
@@ -616,6 +495,21 @@ export function createGameCamera(width: number, height: number): GameCamera {
    * it, m. */
   let takeoff = 0;
   let held = 0;
+  /** Everything a chase rig carries from frame to frame — an angle, a
+   * standoff, a spring and a floor — belongs to the road the lens was on.
+   * When the camera is picked up and put down, on another crew's car
+   * (`retake`) or in another seat on this one (a view change), it is HUNG
+   * BACK ON THE CAR rather than eased across the gap: a rig that eases in
+   * from a stale reading spends the first second of its shot aimed down a
+   * road it is no longer on, and gives a view change a destination that is
+   * still travelling. Read and cleared by `updateChase`, because the car it
+   * is hung on is what that function is handed. */
+  let restand = false;
+  /** Whether a chase rig has already stood in the mode now up. The standoff
+   * and the height EASE between the outside rigs — walking close → chase →
+   * far runs the boom out, and that movement IS the hand-over — but a rig
+   * arriving from a seat inside the car has nothing to ease from. */
+  let planted = false;
   /** The play the camera hangs on (SLACK): the ground height every camera
    * that stands over the car is built from, with the road's own SURFACE
    * taken out of it. */
@@ -638,27 +532,25 @@ export function createGameCamera(width: number, height: number): GameCamera {
   /** …and the flight between two cars, for a spectator changing crew
    * (camera-sweep.ts). */
   const sweepShot = createSweepCamera();
+  /** The menu's backdrop, flown (camera-drone.ts). */
+  const drone = createDroneCamera();
+  /** …and the move from one seat to the next, for a player changing view
+   * (camera-change.ts). */
+  const change = createViewChange();
   const free = createFreeFly();
   const freeMove: FreeFlyMove = { ...NEUTRAL_MOVE };
 
-  /** The highest thing under the camera's footprint — ground or water,
-   * whichever is nearer the lens — over a square of FLOOR.span about the
-   * point. Sampling the corners as well as the middle is what makes the
-   * reading a SURFACE the camera stands on rather than a needle it balances
-   * on: at the top of a slope steep enough to matter, the difference between
-   * two points a metre apart is metres of height, and a camera that reads
-   * one point is a camera that jitters by that difference. */
-  const groundOver = (state: GameState, x: number, z: number): number => {
-    const { groundAt, waterAt } = state.terrain;
-    let high = -Infinity;
-    for (const [dx, dz] of FOOTPRINT) {
-      high = Math.max(high, groundAt(x + dx, z + dz), waterAt(x + dx, z + dz) ?? -Infinity);
-    }
-    return high;
-  };
-
   const updateChase = (rig: ChaseRig, state: GameState, dt: number): void => {
     const car = state.car;
+    if (restand) {
+      headYaw = car.heading;
+      yaw = headYaw;
+      driftOff = 0;
+      swing = 0;
+      swingVel = 0;
+      floored = false;
+      restand = false;
+    }
     // The height the shot is built from — the car's, less whatever of it is
     // only the road's cross-section (SLACK), eased so that what is left
     // arrives as movement (HEIGHT_FOLLOW). The STAND and the AIM take the
@@ -700,14 +592,17 @@ export function createGameCamera(width: number, height: number): GameCamera {
     const gradeLift = car.airborne ? 0 : -grade * (grade < 0 ? rig.dropLift : rig.climbDuck);
     const wantDist = rig.dist + car.u * rig.distPerSpeed;
     const wantHeight = rig.height + gradeLift;
-    const ease = clamp(rig.followRate * RIG_EASE * dt, 0, 1);
+    // Stood in one frame the first time a rig is used after the camera has
+    // been put down somewhere else (`planted`), and eased from then on.
+    const ease = planted ? clamp(rig.followRate * RIG_EASE * dt, 0, 1) : 1;
     dist += (wantDist - dist) * ease;
     height_ += (wantHeight - height_) * ease;
 
     // Speed lives in the FOV: it stretches hard with pace, capped before
     // the stretch turns the world into a tunnel.
     const wantFov = Math.min(rig.fovMax, rig.fov + car.u * rig.fovPerSpeed);
-    fov += (wantFov - fov) * clamp(4 * dt, 0, 1);
+    fov += (wantFov - fov) * (planted ? clamp(4 * dt, 0, 1) : 1);
+    planted = true;
 
     const wantSwing = clamp(-car.yawRate * rig.swing, -rig.swingMax, rig.swingMax);
     // Integrated in bounded substeps rather than over the whole frame: a
@@ -775,43 +670,6 @@ export function createGameCamera(width: number, height: number): GameCamera {
     );
   };
 
-  /** The drone: high above and behind, trailing the car and circling it
-   * slowly. The yaw follows the nose far more lazily than the chase cam
-   * does — a drone has mass and a pilot, and a camera at this altitude that
-   * snapped to every corner would read as a map scrolling rather than
-   * something flying. The circling and the altitude breathe are what stop a
-   * menu backdrop from looking like a paused screenshot. */
-  const updateDrone = (state: GameState, dt: number): void => {
-    const car = state.car;
-    headYaw = angleLerp(headYaw, car.heading, clamp(0.9 * dt, 0, 1));
-    // A full circle every ~46 s, ±0.55 rad off the car's heading.
-    const circle = Math.sin(orbit * ((Math.PI * 2) / 46)) * 0.55;
-    yaw = headYaw + circle;
-    const wantDist = 40 + car.u * 0.22;
-    // Breathes ±3 m over ~19 s, so the shot never sits perfectly still.
-    const wantHeight = 34 + Math.sin(orbit * ((Math.PI * 2) / 19)) * 3;
-    dist += (wantDist - dist) * clamp(1.2 * dt, 0, 1);
-    height_ += (wantHeight - height_) * clamp(1.2 * dt, 0, 1);
-    fov += (52 - fov) * clamp(2 * dt, 0, 1);
-    const rightX = Math.cos(yaw);
-    const rightZ = -Math.sin(yaw);
-    const ground = groundSlack(car.y, dt);
-    camera.position.set(
-      car.x - Math.sin(yaw) * dist + rightX * DRONE_SIDE,
-      ground + height_,
-      car.z - Math.cos(yaw) * dist + rightZ * DRONE_SIDE,
-    );
-    // Aimed ahead of the car rather than at it, so the road the bot is
-    // about to take is the thing in frame — and pitched to keep some sky in
-    // the top of the shot, which is what makes it read as flying rather
-    // than as a map scrolling past.
-    camera.lookAt(
-      car.x + Math.sin(yaw) * 46 + rightX * DRONE_SIDE * 0.55,
-      ground + 12,
-      car.z + Math.cos(yaw) * 46 + rightZ * DRONE_SIDE * 0.55,
-    );
-  };
-
   /** One step of the free camera, and the accumulated nudges it consumes.
    * Wanted from two places — the ordinary update below, and `flyOnly`, for a
    * frame whose world is deliberately being held still — so the clearing of
@@ -834,14 +692,65 @@ export function createGameCamera(width: number, height: number): GameCamera {
    * of that is the cabin jumping about rather than the car being hit. */
   const placeFor = (inCar: InCarCamera | null, state: GameState, dt: number): void => {
     if (inCar) fov = eye.update(inCar, state, dt, camera);
-    else if (mode === "drone") updateDrone(state, dt);
-    else if (mode === "map") fov = map.update(camera, state, dt);
+    else if (mode === "drone") {
+      fov = drone.update(camera, state, groundSlack(state.car.y, dt), orbit, dt);
+    } else if (mode === "map") fov = map.update(camera, state, dt);
     else updateChase(CHASE_RIGS[mode as Exclude<PlayCamera, InCarCamera>], state, dt);
+  };
+
+  /** What a view owns of the LENS rather than of the pose: the near plane the
+   * nearest bodywork decides, and where hor+ is allowed to stop for it
+   * (lib/fov.ts). Both are read for the view being LEFT as well as the one
+   * being taken while a change is in the air — a plane that steps at the
+   * press opens a hole in the bodywork for one frame, and a ceiling that
+   * steps re-frames a portrait viewport mid-move. */
+  const nearFor = (view: CameraMode): number =>
+    IN_CAR.includes(view as InCarCamera) ? eye.rigOf(view as InCarCamera).near : DRIVING_NEAR;
+  const capFor = (view: CameraMode): number =>
+    IN_CAR.includes(view as InCarCamera) ? eye.rigOf(view as InCarCamera).vfovMax : MAX_VFOV;
+
+  /** Where the lens was sitting when the current change started — the view
+   * itself has already been replaced by the time any of it is read. */
+  let changeFrom: CameraMode = mode;
+  /** The car the last frame was drawn around. A view is taken BETWEEN
+   * frames, so this is what the pose on screen belongs to, and holding that
+   * pose against any other car opens the move with the lens standing still
+   * while the car drives out from under it. Null until the camera has stood
+   * anywhere at all, which is the one case that cannot be flown from. */
+  let drawnAround: GameState | null = null;
+
+  /** Whether a view is one of the five hung off the boom behind the car —
+   * the ones that share a standoff, a height and a yaw, and therefore the
+   * only ones that have anything to ease between. */
+  const onBoom = (view: CameraMode): boolean =>
+    PLAY_MODES.includes(view) && !IN_CAR.includes(view as InCarCamera);
+
+  /** Take a new view. A step between two cameras a player can DRIVE from is
+   * flown (camera-change.ts); everything else is placed rather than walked
+   * to — the overhead pair are the menu's own framing and god mode hands
+   * over on its own terms — so those cut, as they always have. */
+  const takeView = (next: CameraMode): void => {
+    if (next === mode) return;
+    if (PLAY_MODES.includes(next) && PLAY_MODES.includes(mode) && drawnAround) {
+      changeFrom = mode;
+      change.start(camera, fov, drawnAround.car);
+    } else change.reset();
+    // Arriving on the boom from anywhere else — a seat in the car, the
+    // menu's drone — there is nothing to ease FROM: the standoff, the yaw
+    // and the floor all belong to a shot that ended. Easing out of a stale
+    // reading would hand the flight a destination still travelling, and put
+    // the player twenty metres behind their own car while it arrived.
+    if (onBoom(next) && !onBoom(mode)) {
+      restand = true;
+      planted = false;
+    }
+    mode = next;
   };
 
   const update = (state: GameState, dt: number): void => {
     shake = fadeShake(shake, dt);
     orbit += dt;
+    drawnAround = state;
     // The height the car last left the ground at, kept in every mode so a
     // camera switched to mid-flight knows how far the fall already is
     // (CLIFF). Grounded it tracks the car, which is the same thing.
@@ -858,12 +767,17 @@ export function createGameCamera(width: number, height: number): GameCamera {
     // car whichever view it planted from, so it takes the outside near plane
     // even when the player was behind the wheel a moment ago.
     if (mode !== "map") {
-      camera.near = inCar ? eye.rigOf(inCar).near : DRIVING_NEAR;
+      const near = inCar ? eye.rigOf(inCar).near : DRIVING_NEAR;
+      camera.near = change.flying() ? Math.min(near, nearFor(changeFrom)) : near;
       camera.far = DRIVING_FAR;
     }
     // God mode is nobody's shot but the pilot's: the finish never takes it,
     // and it keeps flying whatever phase the run beneath it is in.
     if (watching && mode !== "free" && mode !== "drone" && mode !== "map") {
+      // The shot the stage closes on is a bigger gesture than a change of
+      // seat, and it plants from wherever the lens is: a half-finished move
+      // is abandoned rather than flown out under it.
+      change.reset();
       fov = finishShot.fly(camera, state, fov, CHASE_CLEARANCE, dt);
       camera.fov = verticalFovFor(fov, camera.aspect);
       camera.updateProjectionMatrix();
@@ -875,6 +789,10 @@ export function createGameCamera(width: number, height: number): GameCamera {
       return;
     }
     placeFor(inCar, state, dt);
+    // THE VIEW CHANGE rides over the rig rather than instead of it: the rig
+    // has just written the pose the move is landing on, so the last flown
+    // frame and the first driven one are the same frame (camera-change.ts).
+    if (change.flying()) fov = change.fly(camera, state, fov, dt);
     // …and the transit rides over it in exactly the same way, and for the
     // same reason: the rig has just written the pose this flight is aiming
     // at, so the last frame of the flight and the first frame after it are
@@ -892,7 +810,17 @@ export function createGameCamera(width: number, height: number): GameCamera {
     const overhead = mode === "drone" || mode === "map";
     if (overhead) startShot.reset();
     const shot = !overhead && startShot.flying(state) ? startShot.fly(camera, state, fov, dt) : fov;
-    camera.fov = verticalFovFor(shot, camera.aspect, inCar ? eye.rigOf(inCar).vfovMax : undefined);
+    // The hor+ ceiling belongs to the view (`capFor`), so a move between two
+    // of them carries it across with everything else: stepped at the press,
+    // it would re-frame a portrait viewport a whole move before the lens got
+    // there.
+    const cap = inCar ? eye.rigOf(inCar).vfovMax : MAX_VFOV;
+    const at = change.at();
+    camera.fov = verticalFovFor(
+      shot,
+      camera.aspect,
+      change.flying() ? capFor(changeFrom) + (cap - capFor(changeFrom)) * at : cap,
+    );
     camera.updateProjectionMatrix();
   };
 
@@ -908,7 +836,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
       // the frame that was already on screen, so the first thing the pilot
       // sees is the thing they were just looking at.
       if (next === "free" && mode !== "free") free.takeOver(camera);
-      mode = next;
+      takeView(next);
     },
     /** Fly the free camera on a clock of its OWN. God mode holds the run
      * (App.tsx), and a held frame is drawn with dt 0 so that nothing on the
@@ -939,17 +867,15 @@ export function createGameCamera(width: number, height: number): GameCamera {
       // somebody else's car, kilometres up the road — so the plant is
       // dropped and the rig is stood around THIS car again first.
       finishShot.reset();
+      // A change of SEAT on the road the lens is leaving means nothing on the
+      // road it is going to.
+      change.reset();
       // Everything the rig carries from frame to frame, hung back on the car
-      // rather than eased across the gap: an angle, a floor and a spring
-      // that all belonged to a different road.
-      headYaw = state.car.heading;
-      driftOff = 0;
-      yaw = headYaw;
-      swing = 0;
-      swingVel = 0;
+      // rather than eased across the gap: an angle, a standoff, a floor and a
+      // spring that all belonged to a different road.
+      restand = true;
       held = 0;
       takeoff = state.car.y;
-      floored = false;
       // No time in it, so nothing eases: this writes the pose, it does not
       // fly to it.
       placeFor(IN_CAR.includes(mode as InCarCamera) ? (mode as InCarCamera) : null, state, 0);
@@ -960,7 +886,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
       // leave a menu page standing over a shot nobody asked for.
       const at = PLAY_MODES.indexOf(mode);
       if (at < 0) return mode;
-      mode = PLAY_MODES[(at + 1) % PLAY_MODES.length];
+      takeView(PLAY_MODES[(at + 1) % PLAY_MODES.length]);
       return mode;
     },
     setEyes: (next) => {
@@ -970,7 +896,8 @@ export function createGameCamera(width: number, height: number): GameCamera {
       // left the rig holding — the ground under a new stage is found, not
       // flown down to, and nobody starts a run mid-plunge.
       eye.setEyes(next);
-      floored = false;
+      change.reset();
+      restand = true;
       held = 0;
     },
     setViewTuning: (next) => {
