@@ -681,7 +681,14 @@ function tryGenerateStage(
   // well under a thousand iterations; past this cap the attempt is hopeless
   // — reject it and let the caller retry with the next sub-seed. Longer
   // bands earn proportionally more iterations before giving up.
-  const maxIterations = 2000 + spec.band.max;
+  //
+  // The cap is where a hilly seed's time goes: with R23 binding in height
+  // the field boxes the walk in more often, and every attempt that runs to
+  // the cap is two seconds of walking a pocket with no exit. Halved from
+  // `2000 + band.max`, every winning attempt on seeds 1-12, medium and
+  // long, is the same attempt (none of them had needed more than this),
+  // and the hopeless ones cost half — seed 7 long from 13 s to 9.
+  const maxIterations = 1000 + spec.band.max / 2;
   let iterations = 0;
 
   // R15/R17 — HOW MUCH OF THE STAGE IS TARMAC, and the state that decides
