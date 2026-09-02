@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift heat record replay track level analyze cars liveries field crew items items-list sky glyphs audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-android shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift heat record replay track level analyze cars liveries field crew items items-list sky traffic glyphs audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-android shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
 
 build:
 	npm run build
@@ -175,6 +175,14 @@ items-list:
 # Chromium requirements as `screenshots`.
 sky:
 	npm run sky
+
+# Photograph the HIGH TRAFFIC over a stage (previews/traffic.png): five
+# skies down, four moments of the same race across — the grid, twenty
+# seconds, a minute, the flag. What it reviews is a RATE (do a few aircraft
+# come over, and does their wake build a sky), which no screenshot of a run
+# carries. Same Chromium requirements as `screenshots`.
+traffic:
+	npm run traffic
 
 # Render the menu's glyphs to a contact sheet at the three sizes they are
 # read at (previews/glyphs.png). A mark is judged small — see the header of

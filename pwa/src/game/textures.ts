@@ -231,6 +231,30 @@ export const glowTexture = once((): THREE.CanvasTexture => {
   return tex;
 });
 
+/** One puff of contrail: a white disc with only a short soft rim on it.
+ *
+ * A contrail is drawn as a close-packed line of these, and the mask is what
+ * decides whether that line reads as a SCRATCH on the sky or as a light
+ * shaft. `glowTexture`, which this was first built from, carries most of
+ * its alpha in a wide halo — laid in a row, the halos merge into a soft
+ * bright wedge with a core down the middle, which is a sunbeam. The alpha
+ * here is nearly all inside the disc, so a row of them is a line with an
+ * edge, and the sprite still has enough rim not to read as a chain of
+ * circles. */
+export const contrailTexture = once((): THREE.CanvasTexture => {
+  const { canvas, ctx } = makeCanvas(64);
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, "rgba(255,255,255,1)");
+  g.addColorStop(0.5, "rgba(255,255,255,0.92)");
+  g.addColorStop(0.82, "rgba(255,255,255,0.3)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+});
+
 /** A tire-smoke puff, chunky rather than misty: three steps of a lumpy blob
  * on a tiny canvas, nearest-filtered so its edge is made of visible pixels.
  * A bare point sprite is a screen-aligned SQUARE, and a square big enough to

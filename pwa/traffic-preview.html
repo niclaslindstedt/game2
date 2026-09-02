@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>High traffic preview harness</title>
+    <!-- Tooling page for scripts/traffic-preview.mjs — not part of the app
+         build (vite only builds index.html) and never deployed. -->
+    <style>
+      body {
+        margin: 0;
+        background: #101319;
+        font: 12px/1.3 monospace;
+      }
+      .label {
+        position: absolute;
+        color: #fff;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+        padding: 6px 8px;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+    <div id="labels"></div>
+    <script type="module" src="/src/tools/traffic-preview.ts"></script>
+  </body>
+</html>
