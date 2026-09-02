@@ -379,7 +379,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     if (car) tintCar(car, tint, lit, rain, shade);
     if (ghostCar) tintCar(ghostCar, tint, lit, rain, shade);
     field.paint(tint, lit, rain, shade);
-    carFx.setTint(tint, environment.dustTint());
+    carFx.setTint(tint, environment.dustTint(), environment.ceiling());
   };
 
   /** How thick the transient FX are right now: the effects budget, and

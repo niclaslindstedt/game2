@@ -87,6 +87,11 @@ export type Environment = {
   /** …and the darker one hanging dust takes (sky.ts's `dustTintFor`): a
    * cloud in the dark is supposed to disappear where a car is not. */
   dustTint: () => THREE.Color;
+  /** How high the LID is overhead, m — the cloud base under this stage's
+   * weather, or Infinity when there is no deck at all. What lives above the
+   * weather rather than under it (ambient-life.ts's high traffic) reads it
+   * to know whether the car can see any of it. */
+  ceiling: () => number;
   /** Whether the run's light is gone and the car has its lights on. */
   lampsLit: () => boolean;
   /** …and how much of a beam survives the daylight it is competing with,
@@ -677,6 +682,7 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     carTint: () => carTintFor(preset),
     sunShade: () => sunShadeFor(preset),
     dustTint: () => dustTintFor(preset),
+    ceiling: () => preset.deck?.base ?? Infinity,
     lampsLit: () => preset.headlights,
     lampPower,
     rainfall: () => preset.rain,

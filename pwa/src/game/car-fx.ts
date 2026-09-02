@@ -61,8 +61,13 @@ export type CarFx = {
    * a floor holding it up so the car still reads as a car, and hanging dust
    * has almost none, because a plume at midnight is supposed to be
    * whatever the lamps put back on it. The exhaust and the ambient life
-   * keep the car's: a moth is a lit thing and a puff of soot is a solid. */
-  setTint: (tint: THREE.Color, dust: THREE.Color) => void;
+   * keep the car's: a moth is a lit thing and a puff of soot is a solid.
+   *
+   * `ceiling` is the third thing the sky has to say, and only the ambient
+   * life reads it: the cloud base overhead in metres (Infinity when there
+   * is none), which decides whether the high traffic above the weather can
+   * be seen from under it at all. */
+  setTint: (tint: THREE.Color, dust: THREE.Color, ceiling: number) => void;
   /** The ground under the car right now, as a color for whatever is about
    * to be thrown off it. The rock test is deferred: it is a terrain lookup,
    * and only one of the branches ever asks for it. */
@@ -112,12 +117,12 @@ export function createCarFx(scene: THREE.Scene): CarFx {
   );
   for (const cloud of celebration.clouds) scene.add(cloud);
 
-  const setTint = (tint: THREE.Color, dustLight: THREE.Color): void => {
+  const setTint = (tint: THREE.Color, dustLight: THREE.Color, ceiling: number): void => {
     for (const pool of [dust, smoke, plume, mud]) {
       (pool.points.material as THREE.PointsMaterial).color.copy(dustLight);
     }
     (fumes.points.material as THREE.PointsMaterial).color.copy(tint);
-    life.setTint(tint);
+    life.setSky(tint, ceiling);
   };
 
   const bareRock = (state: GameState): number =>

@@ -27,6 +27,7 @@ make crew         # render the sixteen crew characters (previews/crew.png)
 make items        # photograph ONE THING at a time — a turntable per item, on a metre grid
 make items-list   # every item the turntable sheet knows, by group
 make sky          # render the atmosphere to previews/sky.png (every weather x time, plus a strike)
+make traffic      # the HIGH TRAFFIC over a stage: five skies x four moments of ONE race — REQUIRED before/after any change to the aircraft or their contrails
 make glyphs       # render the menu's marks at the three sizes they are read at
 make transit      # photograph the camera going from the finish line to a crew still out, frame by frame
 make audition     # build previews/audition.html — every sound and both scores, playable
@@ -170,6 +171,7 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | What colour the sky is under given conditions               | `pwa/src/game/sky.ts` (the presets and the weather/season colour maths)                                                            |
 | What is IN the sky (cumulus, the overcast deck, scud)       | `pwa/src/game/clouds.ts`                                                                                                           |
 | Lightning and the thunder behind it                         | `pwa/src/game/storm.ts` (drawn) + `thunder_*` in `audio/bank.ts` (heard)                                                           |
+| The BIRDS, and the aircraft crossing far above them         | `pwa/src/game/ambient-life.ts` (drawn); how often one comes over and how its contrail ages is `sky-traffic.ts` (DOM-free)          |
 | How heavy the weather is, and how hard it is coming down    | `pwa/src/game/weather.ts` — read off the wind, and DOM-free so the road bed shares it                                              |
 | The rear-view mirror: where the glass sits, how it aims     | `pwa/src/game/mirror.ts` (its box is restated in `styles.css` — see the parity rules)                                              |
 | The press that FOLDS the mirror away mid-stage, and back    | `pwa/src/game/hud-mirror.tsx` — the glass as a switch; the menu option is still the only way to be rid of it                       |
@@ -253,6 +255,7 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | Bot, sim harness, rival skill model        | `docs/simulation.md`                                                                         |
 | The sound bank, the beds, or a score       | `docs/audio.md`                                                                              |
 | The sky, the weather, or the storm         | `docs/architecture.md` (the atmosphere bullet), then `make sky` and read the sheet           |
+| The aircraft over a stage, or a contrail   | `docs/architecture.md` (the high-traffic bullet), then `make traffic` and read the sheet     |
 | Commands / npm scripts / Make targets      | README Usage table + this file's command block                                               |
 | The debug overlay's REPRO line             | `App.tsx`'s URL readers — writer and reader move together, or a screenshot stops reproducing |
 | App identity, domain, deploy slots         | `pwa/src/identity.ts`, README, `docs/configuration.md`, `pwa/public/*` SEO files             |
