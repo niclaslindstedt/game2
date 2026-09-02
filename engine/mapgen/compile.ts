@@ -2338,7 +2338,11 @@ function createCompiler(
       routeDistance: (x, z, except) => whole(x, z, false, except),
       branchDistance: branches,
       highwayAt: (x, z) => highways.nearest(x, z, undefined, 40)?.road ?? null,
-      highwayDistance: (x, z, except) => highways.nearest(x, z, except)?.d ?? Infinity,
+      // BOUNDED, because the answer is only ever compared against the
+      // corridor: an unbounded query with no road near walks every ring of
+      // the index, and a town asks it a couple of thousand times a stage.
+      highwayDistance: (x, z, except) =>
+        highways.nearest(x, z, except, HIGHWAY_LOOK)?.d ?? Infinity,
       shelfBand,
       homesteadDistance: (x, z) => {
         let best = Infinity;
@@ -2382,7 +2386,7 @@ function createCompiler(
       land,
       routeDistance: roadDistanceField(),
       branchDistance: branchClearance(track.spurs),
-      highwayDistance: (x, z) => highways.nearest(x, z)?.d ?? Infinity,
+      highwayDistance: (x, z) => highways.nearest(x, z, undefined, HIGHWAY_LOOK)?.d ?? Infinity,
       shelfBand,
       townDistance: (x, z) => {
         let best = Infinity;
@@ -2406,6 +2410,13 @@ function createCompiler(
 /** How far behind an endless stage's frontier the road is settled enough
  * to put a homestead on, m — the guards' and the crowd's own margin. */
 const STREAMED_HOLD = 250;
+
+/** How far a homestead or a town looks for a public road, m. Past this the
+ * answer is "none near", which is all either placer ever asks: the widest
+ * clearance they hold is `homestead.drive.clear` plus a road width, well
+ * inside it. Under the index's `NEAR`, so a probe out in the country is one
+ * set lookup rather than a walk of every ring. */
+const HIGHWAY_LOOK = 96;
 
 /** R17 — THE COUNTRY, walked off the plan before anything is built.
  *
