@@ -31,10 +31,10 @@ import { valueNoise } from "../lib/noise.ts";
 // the scattered stones agree instead of reading as two effects.
 import { DISSOLVE } from "./road-spill.ts";
 
-// `APRON` straight from the engine rather than through terrain.ts, which
-// only re-exports it: the ground's paint reads this module's palette for
-// R16's dust wash, and the two must not import each other.
-import { APRON, biomeRules } from "@engine";
+// Straight from the engine rather than through terrain.ts: the ground's
+// paint reads this module's palette for R16's dust wash, and the two must
+// not import each other.
+import { biomeRules, endApron } from "@engine";
 import { detailTexture, gravelTexture, sandTexture, textureMean } from "./textures.ts";
 import { rightOf, type Ribbon } from "./ribbon.ts";
 import { waterMaterial } from "./water-look.ts";
@@ -232,46 +232,13 @@ function stations(width: number): number[] {
 }
 
 /** A chunk's samples for ribbon building: the range overlapped one sample
- * back so consecutive chunks weld, plus a straight dirt apron extrapolated
- * past the stage's ends — a rally car launches from dirt already laid
- * before the start gate, and a finite stage's flying finish has road to
- * run off onto. Only the drawn ribbon — the physics' samples are
- * untouched. */
+ * back so consecutive chunks weld, plus the stage's end aprons where the
+ * chunk holds an end (R24/R25, `endApron` — which is where a circuit gets
+ * none). Only the drawn ribbon — the physics' samples are untouched. */
 export function chunkSamples(track: Track, from: number, to: number): Track["samples"] {
   const base = track.samples.slice(Math.max(0, from - 1), to);
-  const n = Math.round(APRON / track.step);
-  if (from === 0) {
-    const first = track.samples[0];
-    const pre: Track["samples"] = [];
-    for (let i = n; i >= 1; i--) {
-      pre.push({
-        ...first,
-        x: first.x - Math.sin(first.heading) * track.step * i,
-        z: first.z - Math.cos(first.heading) * track.step * i,
-        s: first.s - track.step * i,
-        surface: "gravel",
-        deck: null,
-        lift: 0,
-        jump: false,
-      });
-    }
-    base.unshift(...pre);
-  }
-  if (!track.endless && to === track.samples.length) {
-    const last = track.samples[track.samples.length - 1];
-    for (let i = 1; i <= n; i++) {
-      base.push({
-        ...last,
-        x: last.x + Math.sin(last.heading) * track.step * i,
-        z: last.z + Math.cos(last.heading) * track.step * i,
-        s: last.s + track.step * i,
-        surface: "gravel",
-        deck: null,
-        lift: 0,
-        jump: false,
-      });
-    }
-  }
+  if (from === 0) base.unshift(...endApron(track, "start"));
+  if (to === track.samples.length) base.push(...endApron(track, "finish"));
   return base;
 }
 

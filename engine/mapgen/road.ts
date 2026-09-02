@@ -28,7 +28,7 @@
 // three move together — which is the whole reason it is not three sets of
 // numbers in three files.
 
-import type { BridgeDeck, Surface } from "./compile.ts";
+import type { BridgeDeck, Surface, Track, TrackSample } from "./compile.ts";
 import { STAGE_RULES as R } from "./rules.ts";
 
 /** The cross-section, in meters unless noted. Lateral positions are given
@@ -158,6 +158,47 @@ export function handoverAt(out: number): number {
 export function roadClearance(width: number): number {
   const corridor = width / 2 + ROAD_CROSS.reach;
   return Math.max(R.minSelfDistance, 2 * corridor + R.roadClear.margin);
+}
+
+/** R24 / R25 — the road at a stage's two ENDS that is in no sample array:
+ * `startZone.apron` metres of plain dirt extrapolated straight back from
+ * the start gate for the grid to stand on, and the same forward past a
+ * sprint's flying finish for the car to run off onto. Each is the end
+ * sample carried on along its own heading, level, as gravel — as
+ * samples, in stage order, so the renderer welds them onto the ribbon and
+ * a test can read exactly what gets drawn.
+ *
+ * A CIRCUIT has neither. Its last sample IS its first (R22), so the road
+ * behind the start line is the closing straight and the road past the
+ * finish is the opening one — both already in the array, both on grades
+ * of their own. An apron laid past either end there is a level dirt slab
+ * running over real road that is climbing or falling under it: on a lap
+ * dropping off the line it stands a car's height over the mat within
+ * forty metres, and a car driving the true road underneath is drawn
+ * buried to its windows. An endless stage has a start and no finish. */
+export function endApron(track: Track, end: "start" | "finish"): TrackSample[] {
+  if (track.circuit) return [];
+  if (end === "finish" && track.endless) return [];
+  const n = Math.round(R.startZone.apron / track.step);
+  const at = end === "start" ? track.samples[0] : track.samples[track.samples.length - 1];
+  const sign = end === "start" ? -1 : 1;
+  const out: TrackSample[] = [];
+  for (let k = 1; k <= n; k++) {
+    // Counted from the far end for the run-up so both aprons come out in
+    // ascending `s`: the run-up ends at the gate, the run-off starts at it.
+    const i = end === "start" ? n + 1 - k : k;
+    out.push({
+      ...at,
+      x: at.x + Math.sin(at.heading) * track.step * i * sign,
+      z: at.z + Math.cos(at.heading) * track.step * i * sign,
+      s: at.s + track.step * i * sign,
+      surface: "gravel",
+      deck: null,
+      lift: 0,
+      jump: false,
+    });
+  }
+  return out;
 }
 
 function sq(v: number): number {

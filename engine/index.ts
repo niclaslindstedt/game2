@@ -126,6 +126,7 @@ export {
   ROAD_CROSS,
   corridorOffset,
   crossOffset,
+  endApron,
   handoverAt,
   vergeOffset,
   wearAt,
