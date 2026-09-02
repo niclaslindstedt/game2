@@ -72,7 +72,23 @@ export type SolidKind =
   /** R13 — a bay of a concrete bridge's PARAPET. The one solid on a stage
    * that is there on purpose: a wall between the deck and a drop, and the
    * only thing that makes a bridge a place you have to be accurate. */
-  | "parapet";
+  | "parapet"
+  /** R37 — a bay of a HOUSE WALL: a metre of timber house, `size` storeys
+   * tall. A run of them round a footprint is the house, to the physics. */
+  | "wall"
+  /** R37 — half a PARKED CAR: a car in a yard is two of these, nose and
+   * tail, and a rally car that arrives sideways stops against it. */
+  | "parked";
+
+/** R37 — one bay of a house wall, m, how fat its circle is (and so how far
+ * in from the drawn wall's face the bays are centred), how tall a storey
+ * stands, and half the distance between a parked car's two solids. Stated
+ * beside the solid table because the footprint walk in homesteads.ts needs
+ * the bay and the table needs the radius, and the two have to agree. */
+export const WALL_BAY = 1;
+export const WALL_RADIUS = 0.55;
+export const WALL_STOREY = 2.7;
+export const PARKED_HALF = 1.1;
 
 /** A prop standing this tall over its foot is SOLID — the car hits it.
  * The catalog's bonnets sit about 0.87 m over the ground, so this is the
@@ -113,7 +129,7 @@ export const PARAPET_INSET = PARAPET_RADIUS - PARAPET_THICK / 2;
  * shy of the textbook figure for the SHAPE: a wild boulder is fissured and
  * a trunk is not a solid cylinder of heartwood, and the volumes below are
  * measured off the drawn silhouette, which is generous to both. */
-const DENSITY = { stone: 1500, wood: 500 };
+const DENSITY = { stone: 1500, wood: 500, steel: 7800 };
 
 /** The impulse a material's structure survives per kilogram of itself,
  * N·s/kg. Wood at 30 puts the smallest trunk on a stage inside a rally
@@ -121,7 +137,7 @@ const DENSITY = { stone: 1500, wood: 500 };
  * the whole point of the number: a sapling goes down under an ordinary
  * excursion, an old spruce is a wall until you are properly committed —
  * and going through one costs very nearly everything you arrived with. */
-const SNAP_PER_MASS = { stone: Infinity, wood: 30 };
+const SNAP_PER_MASS = { stone: Infinity, wood: 30, steel: Infinity };
 
 /** How much of a tree's collision circle is actually WOOD — the rest of it
  * is the lowest boughs, which stop nothing and weigh little — and what the
@@ -147,6 +163,12 @@ const MATERIAL: Record<SolidKind, { of: keyof typeof DENSITY; rooted: number }> 
   slab: { of: "stone", rooted: 1 },
   // Cast onto the deck it stands on: as immovable as the bridge is.
   parapet: { of: "stone", rooted: 1 },
+  // A house is timber, but a house wall is not a trunk: it is tied to the
+  // walls either side of it and to the plinth under it, and a car does not
+  // move it or snap it. Stone, to the contact model, is what that is.
+  wall: { of: "stone", rooted: 1 },
+  // A tonne of car on its tyres: heavy, and shoved rather than held.
+  parked: { of: "steel", rooted: 0.25 },
 };
 
 /** Is this thing made of WOOD? What breaks off it, what colour the
@@ -193,6 +215,13 @@ export function solidShape(kind: SolidKind, size: number): { radius: number; hei
       // One bay of a wall — see PARAPET_BAY for why the circle is fatter
       // than the concrete is thick.
       return { radius: PARAPET_RADIUS * size, height: PARAPET_HEIGHT * size };
+    case "wall":
+      // A metre of house wall, `size` storeys of it: the circle is the bay's
+      // (fat, for the parapet's reason) and does not grow with the house.
+      return { radius: WALL_RADIUS, height: WALL_STOREY * size };
+    case "parked":
+      // Half a car: a circle the car's own width, standing roof-high.
+      return { radius: 1.0 * size, height: 1.45 * size };
     default:
       // An outcrop: sunk near half its depth and stretched tall, a face of
       // rock nothing but a cliff flight gets over.
@@ -225,6 +254,15 @@ function solidVolume(ob: {
       // The bay the renderer draws: a metre of wall, half a metre thick,
       // standing to the top of a door handle.
       return PARAPET_BAY * PARAPET_THICK * height;
+    case "wall":
+      // A metre of timber wall a third of a metre thick, every storey of it
+      // — plus the share of floor and roof the bay carries, which is why
+      // the thickness is generous for boards.
+      return WALL_BAY * 0.32 * height;
+    case "parked":
+      // Half a car: the steel in half of one, which is the volume that
+      // makes a small hatchback weigh what it weighs.
+      return 0.075 * size * size * size;
     case "log":
       // A trunk lying down: its collision circle is the length it covers,
       // its height the thickness of the bole.

@@ -43,6 +43,7 @@ import { STAGE_RULES as R, knobScale } from "./rules.ts";
 import { createSpurIndex, type SpurIndex } from "./spurs.ts";
 import { createPropField } from "./props.ts";
 import { bridgeParapets, type WildObstacle } from "./solids.ts";
+import { homesteadSolids } from "./homesteads.ts";
 
 export { LAKE_Y } from "./land.ts";
 export {
@@ -339,6 +340,12 @@ export type TerrainField = {
    * own surface comes from the track samples — this is what tells the
    * physics that a car exploring a spur is on tarmac, not in a field. */
   spurSurfaceAt: (x: number, z: number) => Surface | null;
+  /** Distance from a point to the nearest BUILT road that is not the stage
+   * — an abandoned branch's mat edge (R17), a homestead's drive or the rim
+   * of its yard (R37) — or Infinity when there is none near. Negative on
+   * the thing itself. Nothing is planted or scattered where it is small:
+   * the engine's forest reads it, and so does the renderer's ground cover. */
+  spurClearance: (x: number, z: number) => number;
   /** The stream valleys cut so far (the renderer draws their water). */
   streams: Stream[];
   /** ...and the whole watercourses they were sliced from, source point
@@ -361,11 +368,15 @@ export type TerrainField = {
    * as obstaclesNear, kept separate because trees are far denser and the
    * renderer draws them through the flora system rather than as props. */
   treesNear: (x: number, z: number, r: number) => WildObstacle[];
-  /** R13 — the bays of a concrete bridge's PARAPET near a point (within
-   * `r`). Its own query rather than part of `obstaclesNear`: these are not
-   * wild props scattered on the ground, they are a wall on a road, and the
-   * renderer draws them as part of the bridge rather than as scenery. */
-  parapetsNear: (x: number, z: number, r: number) => WildObstacle[];
+  /** The BUILT solids near a point (within `r`): the bays of a concrete
+   * bridge's parapet (R13), and a homestead's walls, parked cars and lane
+   * trees (R37). Its own query rather than part of `obstaclesNear`: these
+   * are not wild props scattered on the ground, they are things standing
+   * on or beside a road, the renderer draws them as part of what they
+   * belong to rather than as scenery — and the physics asks for them
+   * whether or not the car is off the stage, because a car on a bridge or
+   * up a drive is on a road and still has to stop against them. */
+  fixturesNear: (x: number, z: number, r: number) => WildObstacle[];
   /** Take a solid OUT of the world: a trunk the car snapped, a rock it
    * knocked flying. The field stops standing it, so nothing collides with
    * it again and nothing draws it — the piece that is left is a loose body
@@ -985,6 +996,40 @@ export function createTerrain(track: Track): TerrainField {
   /** How many of `track.spurs` are in the index — an ingest cursor, so it
    * never rewinds when an endless run prunes the branches behind it. */
   let spurCount = 0;
+  /** R37 — the yards: discs of graded gravel the ground is flattened to.
+   * A homestead's DRIVE goes into the branch index above (it is a road,
+   * and gets a road's shelf); the yard it runs onto is this. Same ingest
+   * cursor discipline as the branches. */
+  const pads: { x: number; z: number; y: number; radius: number; atS: number }[] = [];
+  let homesteadCount = 0;
+  /** How much of a yard's level applies at a point — 1 on the pad, fading
+   * to 0 over `homestead.yard.blend` past its rim — and the level itself.
+   * Null anywhere no yard reaches. */
+  const padAt = (x: number, z: number): { y: number; weight: number } | null => {
+    let best: { y: number; weight: number } | null = null;
+    for (let i = 0; i < pads.length; i++) {
+      const pad = pads[i];
+      const reach = pad.radius + R.homestead.yard.blend;
+      const dx = x - pad.x;
+      const dz = z - pad.z;
+      if (dx * dx + dz * dz >= reach * reach) continue;
+      const d = Math.sqrt(dx * dx + dz * dz);
+      const weight = 1 - smooth(clamp01((d - pad.radius) / R.homestead.yard.blend));
+      if (!best || weight > best.weight) best = { y: pad.y, weight };
+    }
+    return best;
+  };
+  /** Distance from a point to the nearest yard's rim, m — negative on the
+   * pad, Infinity when there is none near. */
+  const padClearance = (x: number, z: number): number => {
+    let best = Infinity;
+    for (let i = 0; i < pads.length; i++) {
+      const pad = pads[i];
+      const d = Math.hypot(x - pad.x, z - pad.z) - pad.radius;
+      if (d < best) best = d;
+    }
+    return best;
+  };
 
   /** Anything with a road's cross-section: a stage sample or a branch's
    * (the branch has no bridges, so its deck is simply absent). */
@@ -1094,12 +1139,26 @@ export function createTerrain(track: Track): TerrainField {
         // A branch is never banked, so its cross-section is symmetric and
         // the unsigned distance is the whole story (the index does not carry
         // a signed lateral).
-        const shelf = ribbonY(spur.sample, Math.min(spur.d, edge), spur.spur.width) - TILE_SINK;
+        let shelf = ribbonY(spur.sample, Math.min(spur.d, edge), spur.spur.width) - TILE_SINK;
+        // ...and inside the stage's own corridor a branch or a drive may not
+        // cut a groove into the shoulder of the road it is leaving: its own
+        // verge falls away from its mat, and where that mat is the stage's
+        // shoulder (R37's drives lie ON the stage's cross-section there) the
+        // fall lands below the stage's verge as a step across the rank.
+        // The stage's shoulder is the floor there.
+        if (near && near.d < lipAt(near.index) + ROAD_CROSS.reach && shelf < base) shelf = base;
         const reach = 1 - smooth(clamp01((spur.d - edge) / SPUR_BLEND));
         const mine = smooth(clamp01((roadD - spur.d) / 12));
         const t = reach * mine;
         base = shelf * t + base * (1 - t);
       }
+    }
+    // R37 — a yard is graded flat, and the drive that runs onto it was
+    // already eased onto its level, so the two agree where they overlap.
+    const pad = pads.length > 0 ? padAt(x, z) : null;
+    if (pad) {
+      const flat = pad.y - TILE_SINK;
+      base = flat * pad.weight + base * (1 - pad.weight);
     }
     const apron = apronAt(x, z);
     if (apron) {
@@ -1345,9 +1404,10 @@ export function createTerrain(track: Track): TerrainField {
    * Infinity when there is none near — nothing is planted on a road, and a
    * spur is as much a road as the stage is (R17). */
   const spurClearance = (x: number, z: number): number => {
-    if (spurs.spurs.length === 0) return Infinity;
+    const yard = pads.length > 0 ? padClearance(x, z) : Infinity;
+    if (spurs.spurs.length === 0) return yard;
     const spur = spurs.nearest(x, z);
-    return spur ? spur.d - spur.spur.width / 2 : Infinity;
+    return Math.min(yard, spur ? spur.d - spur.spur.width / 2 : Infinity);
   };
 
   /** Distance from a point to the nearest road's outer EDGE — stage or
@@ -1371,6 +1431,7 @@ export function createTerrain(track: Track): TerrainField {
   };
 
   const spurSurfaceAt = (x: number, z: number): Surface | null => {
+    if (pads.length > 0 && padClearance(x, z) <= 0) return "gravel";
     if (spurs.spurs.length === 0) return null;
     const spur = spurs.nearest(x, z);
     if (!spur || spur.d > spur.spur.width / 2) return null;
@@ -1405,30 +1466,33 @@ export function createTerrain(track: Track): TerrainField {
   // stage streams road in, so the build has a cursor of its own; a whole
   // stage's bridges are a few hundred bays, which is a rounding error
   // beside the forest.
-  const parapets: WildObstacle[] = [];
-  const parapetGrid = new Map<number, WildObstacle[]>();
-  const PARAPET_CELL = 24;
+  const fixtures: WildObstacle[] = [];
+  const fixtureGrid = new Map<number, WildObstacle[]>();
+  const FIXTURE_CELL = 24;
   let parapetScan = 0;
+  const fix = (solid: WildObstacle): void => {
+    fixtures.push(solid);
+    const key = cellKey(Math.floor(solid.x / FIXTURE_CELL), Math.floor(solid.z / FIXTURE_CELL));
+    const bucket = fixtureGrid.get(key);
+    if (bucket) bucket.push(solid);
+    else fixtureGrid.set(key, [solid]);
+  };
   const indexParapets = (): void => {
-    for (const bay of bridgeParapets(samples, track.width, parapetScan, samples.length)) {
-      parapets.push(bay);
-      const key = cellKey(Math.floor(bay.x / PARAPET_CELL), Math.floor(bay.z / PARAPET_CELL));
-      const bucket = parapetGrid.get(key);
-      if (bucket) bucket.push(bay);
-      else parapetGrid.set(key, [bay]);
-    }
+    for (const bay of bridgeParapets(samples, track.width, parapetScan, samples.length)) fix(bay);
     parapetScan = samples.length;
   };
 
-  const parapetsNear = (x: number, z: number, r: number): WildObstacle[] => {
-    if (parapets.length === 0) return [];
+  const fixturesNear = (x: number, z: number, r: number): WildObstacle[] => {
+    if (fixtures.length === 0) return [];
     const found: WildObstacle[] = [];
-    const reach = Math.ceil((r + 1) / PARAPET_CELL);
-    const cx = Math.floor(x / PARAPET_CELL);
-    const cz = Math.floor(z / PARAPET_CELL);
+    // The fattest fixture is a parked car's half; anything further off than
+    // that past `r` cannot touch.
+    const reach = Math.ceil((r + 1.2) / FIXTURE_CELL);
+    const cx = Math.floor(x / FIXTURE_CELL);
+    const cz = Math.floor(z / FIXTURE_CELL);
     for (let dx = -reach; dx <= reach; dx++) {
       for (let dz = -reach; dz <= reach; dz++) {
-        for (const bay of parapetGrid.get(cellKey(cx + dx, cz + dz)) ?? []) {
+        for (const bay of fixtureGrid.get(cellKey(cx + dx, cz + dz)) ?? []) {
           const ddx = bay.x - x;
           const ddz = bay.z - z;
           const hit = r + bay.radius;
@@ -1442,10 +1506,26 @@ export function createTerrain(track: Track): TerrainField {
   let streamScan = 0;
 
   const sync = (carS: number): void => {
-    if (samples.length > indexed || spurCount < track.spurs.length) {
+    if (
+      samples.length > indexed ||
+      spurCount < track.spurs.length ||
+      homesteadCount < track.homesteads.length
+    ) {
       indexSamples(indexed, samples.length);
       indexed = samples.length;
       indexParapets();
+      // R37 — the homesteads, before the water is traced: a yard and a
+      // drive are places a stream is not allowed to run, and they are only
+      // that if the trace can see them. The drive is a road to everything
+      // below (shelf, keep-off, grip); the yard is a pad; and the walls,
+      // the parked cars and the lane trees are solids — footed on the
+      // ground as the yard and the drive have just made it.
+      for (; homesteadCount < track.homesteads.length; homesteadCount++) {
+        const h = track.homesteads[homesteadCount];
+        spurs.add(h.drive);
+        pads.push({ ...h.yard, atS: h.atS });
+        for (const solid of homesteadSolids(h, heightAt)) fix(solid);
+      }
       // The water: every crossing this stretch of road added, traced as
       // one river through them (R18) — born on the high ground, gathering
       // as it runs, ending in the lowest water it can find.
@@ -1527,6 +1607,7 @@ export function createTerrain(track: Track): TerrainField {
       guards.pruneBefore(floorS);
       stands.pruneBefore(floorS);
       spurs.pruneBefore(floorS);
+      while (pads.length > 0 && pads[0].atS < floorS) pads.shift();
       props.invalidate();
       cornerCache = new Map();
     }
@@ -1552,7 +1633,8 @@ export function createTerrain(track: Track): TerrainField {
     guards: guards.guards,
     stands: stands.stands,
     obstaclesNear: props.obstaclesNear,
-    parapetsNear,
+    fixturesNear,
+    spurClearance,
     treesNear: props.treesNear,
     fell: props.fell,
     groveAt: props.groveAt,

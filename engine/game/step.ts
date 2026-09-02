@@ -1002,10 +1002,12 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // that has only just put a wheel wide, and by the time the road is
   // willing to call that car off-road it is already through the wall and
   // into the river. Nothing to pay where there are no bridges near — the
-  // field answers an empty list off one lookup.
-  const parapets = terrain.parapetsNear(car.x, car.z, 2.5);
-  if (parapets.length > 0) {
-    collideCar(state.spec, car, parapets, events, state.stats, terrain.fell);
+  // field answers an empty list off one lookup. A homestead's walls, cars
+  // and lane trees (R37) come out of the same query for the same reason: a
+  // car up the drive is on a road, and the trees beside it are still trees.
+  const fixtures = terrain.fixturesNear(car.x, car.z, 2.5);
+  if (fixtures.length > 0) {
+    collideCar(state.spec, car, fixtures, events, state.stats, terrain.fell);
   }
   if (fix.offRoad) {
     const water = terrain.waterAt(car.x, car.z);

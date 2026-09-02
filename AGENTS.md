@@ -188,6 +188,9 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 | The gallery the pictures are browsed in                     | `pwa/src/game/menu-gallery.tsx`                                                                                                  |
 | How the road's EDGE runs out into the grass (R16)           | `handoverAt` in `engine/mapgen/road.ts` (the shape), `road-mesh.ts` (the paint), `pwa/src/game/road-spill.ts` (the stones)       |
 | WHERE an abandoned branch is shut, and WHAT with            | `placeBlock` in `engine/mapgen/spurs.ts` picks the place; `pwa/src/game/blockade.ts` builds the barrier                          |
+| WHERE a house stands off the stage, and its drive and yard  | `engine/mapgen/homesteads.ts` (R37) places it all; `pwa/src/game/homestead.ts` draws it — the `mapgen-improvement` skill         |
+| What a HOUSE looks like — paint, roof, storeys, porch, wing | `pwa/src/game/house.ts` builds one from the engine's `HousePlan`; `make items GROUP=homestead` photographs them                  |
+| A car that only STANDS there (a yard, later a car park)     | `pwa/src/game/parked-car.ts` — a dozen boxes from one roll; never the catalog's builder, which is a thousand times the geometry  |
 | The marking beside the road, and what a block COSTS to cut  | `engine/mapgen/kerbs.ts` places every marker (one is solid); `pwa/src/game/kerbs.ts` draws them — the `mapgen-improvement` skill |
 | Where the split boards stand on a stage (R28)               | `STAGE_RULES.checkpoint` + the placement in `engine/mapgen/compile.ts` — the `mapgen-improvement` skill                          |
 | What a split is measured against, and where a respawn lands | `engine/game/track.ts` (`lastCheckpoint`) + `pwa/src/game/standings.ts` (the field's leader)                                     |

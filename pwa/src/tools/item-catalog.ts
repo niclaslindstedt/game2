@@ -28,7 +28,9 @@ import { createConeField } from "../game/cones.ts";
 import { buildCrowd } from "../game/crowd.ts";
 import { buildFinishGate, buildStartGate } from "../game/finish-gate.ts";
 import { FLORA_IDS, buildFlora } from "../game/flora.ts";
+import { buildHouse, type HousePlan } from "../game/house.ts";
 import { markerShape } from "../game/kerbs.ts";
+import { buildParkedCar, parkedCarSpec, PARKED_BODIES } from "../game/parked-car.ts";
 import { stoneGeometry, stoneMatrix } from "../game/wild.ts";
 
 /** Where a camera stands for one column of the sheet. */
@@ -334,12 +336,86 @@ const STAGE_ITEMS: ItemDef[] = [
   },
 ];
 
+// ── The homesteads (R37) ──────────────────────────────────────────────────
+
+/** Three houses that between them show every choice the plan carries: the
+ * paints, the roofs, one and two storeys, a porch and a wing. The plans are
+ * written out rather than rolled so the sheet photographs the same houses
+ * every time — the engine's dice are tested elsewhere. */
+const HOUSE_PLANS: { id: string; note: string; plan: HousePlan }[] = [
+  {
+    id: "house-red",
+    note: "falu red, clay tile, a storey and a porch",
+    plan: {
+      width: 10.5,
+      depth: 7,
+      storeys: 1,
+      roof: "tile",
+      walls: "red",
+      porch: true,
+      wing: null,
+      detail: 0.3,
+    },
+  },
+  {
+    id: "house-yellow",
+    note: "ochre, black sheet metal, two storeys and a wing",
+    plan: {
+      width: 11.5,
+      depth: 8,
+      storeys: 2,
+      roof: "metal",
+      walls: "yellow",
+      porch: false,
+      wing: { side: 1, width: 5.5, depth: 4.5 },
+      detail: 0.72,
+    },
+  },
+  {
+    id: "house-white",
+    note: "white boards under slate, a wing and a porch",
+    plan: {
+      width: 8.5,
+      depth: 6.5,
+      storeys: 1,
+      roof: "slate",
+      walls: "white",
+      porch: true,
+      wing: { side: -1, width: 4.5, depth: 4 },
+      detail: 0.55,
+    },
+  },
+];
+
+const HOMESTEAD_ITEMS: ItemDef[] = [
+  ...HOUSE_PLANS.map(({ id, note, plan }): ItemDef => ({
+    id,
+    group: "homestead",
+    note,
+    build: ({ rng }) => ({ object: buildHouse(plan, rng) }),
+  })),
+  ...PARKED_BODIES.map((body, index): ItemDef => {
+    // Walk the roll until it lands on this body, so each row is one kind.
+    let roll = index / PARKED_BODIES.length;
+    for (let tries = 0; tries < 400 && parkedCarSpec(roll).body !== body; tries++) {
+      roll = (roll + 0.0137) % 1;
+    }
+    return {
+      id: `parked-${body}`,
+      group: "homestead",
+      note: "a car left in the yard",
+      build: ({ rng }) => ({ object: buildParkedCar(parkedCarSpec(roll), rng), views: CAR_ORBITS }),
+    };
+  }),
+];
+
 /** Every item the sheet knows how to stand up, in the order it lists them. */
 export function itemCatalog(): ItemDef[] {
   return [
     ...CAR_ITEMS,
     ...ROADSIDE_ITEMS,
     ...STAGE_ITEMS,
+    ...HOMESTEAD_ITEMS,
     stoneItem("boulder", false, 1.3, 0.37),
     stoneItem("boulder", true, 1.3, 0.37),
     stoneItem("rock", false, 1.1, 0.62),
@@ -360,6 +436,8 @@ export const DEFAULT_ITEMS: readonly string[] = [
   "kerb-post",
   "kerb-block",
   "spectators",
+  "house-red",
+  "parked-estate",
   "boulder-mossy",
   "rock",
   "slab",
