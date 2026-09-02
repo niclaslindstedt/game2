@@ -412,6 +412,42 @@ export function stageFeatures(track, terrain) {
     });
   });
 
+  // ── The towns (R39): a village down both sides of a sealed street ─────
+  (track.towns ?? []).forEach((town, k) => {
+    const index = indexAtS(samples, town.atS);
+    const at = samples[index];
+    const lots = town.lots;
+    const cx = lots.reduce((sum, lot) => sum + lot.building.x, 0) / Math.max(1, lots.length);
+    const cz = lots.reduce((sum, lot) => sum + lot.building.z, 0) / Math.max(1, lots.length);
+    const kinds = {};
+    for (const lot of lots)
+      kinds[lot.building.plan.kind] = (kinds[lot.building.plan.kind] ?? 0) + 1;
+    const cars = lots.reduce((sum, lot) => sum + lot.cars.length, 0);
+    const where =
+      town.street.kind === "route"
+        ? `on the borrowed tarmac ${town.street.fromS.toFixed(0)}–${town.street.toS.toFixed(0)} m`
+        : `down the arm the tape shuts at the ${town.street.end === "exit" ? "junction the route leaves by" : "junction the route joins at"}`;
+    features.push({
+      id: `V${k + 1}`,
+      kind: "town",
+      s: town.atS,
+      index,
+      x: cx,
+      z: cz,
+      heading: at.heading,
+      elevation: lots[0]?.building.y ?? at.elevation,
+      side: "both",
+      label: `V${k + 1}`,
+      detail:
+        `town ${where}: ${lots.length} buildings (` +
+        Object.entries(kinds)
+          .map(([kind, n]) => `${n} ${kind}`)
+          .join(", ") +
+        `), ${cars} parked car${cars === 1 ? "" : "s"}`,
+      solids: town.street.kind === "route" ? solids(town.street.fromS, town.street.toS) : [],
+    });
+  });
+
   // ── The splits, the start and the finish ──────────────────────────────
   track.checkpoints.forEach((board, k) => {
     const sample = samples[board.index];
@@ -472,6 +508,7 @@ function rank(feature) {
     "junction",
     "crossing",
     "homestead",
+    "town",
     "turn",
     "crest",
     "ford",
@@ -503,6 +540,7 @@ export function stageSummary(track, features) {
     checkpoints: by("checkpoint"),
     junctions: by("junction"),
     homesteads: by("homestead"),
+    towns: by("town"),
     tarmacShare: paved / track.samples.length,
     tarmac: surfaceRuns(track, "asphalt"),
     climb: Math.max(...elevations) - Math.min(...elevations),

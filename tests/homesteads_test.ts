@@ -287,11 +287,32 @@ describe("homesteads (R37)", () => {
     expect(b.homesteads.length).toBeGreaterThan(0);
     // Every homestead the chunked stream settled is one the single call
     // built, in the same place; the single call may hold a few more that
-    // the chunked one's last frontier has not yet committed.
+    // the chunked one's last frontier has not yet committed. The same
+    // house to the millimetre, not to the bit: a drive's height is clamped
+    // to R31's cone, and the cone reaches further down the road than the
+    // streaming hold does, so road the single call had already laid can
+    // move a drive by microns.
     for (const h of b.homesteads) {
       const match = a.homesteads.find((o) => o.atS === h.atS);
       expect(match).toBeDefined();
-      expect(match).toEqual(h);
+      expectClose(match, h);
     }
   });
 });
+
+/** Deep equality with a millimetre's tolerance on every number. */
+function expectClose(actual: unknown, expected: unknown): void {
+  if (typeof expected === "number") {
+    expect(actual).toBeCloseTo(expected, 3);
+  } else if (Array.isArray(expected)) {
+    expect(Array.isArray(actual)).toBe(true);
+    const list = actual as unknown[];
+    expect(list.length).toBe(expected.length);
+    expected.forEach((item, i) => expectClose(list[i], item));
+  } else if (expected && typeof expected === "object") {
+    const record = actual as Record<string, unknown>;
+    for (const [key, value] of Object.entries(expected)) expectClose(record[key], value);
+  } else {
+    expect(actual).toBe(expected);
+  }
+}

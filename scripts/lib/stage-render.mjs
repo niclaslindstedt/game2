@@ -48,6 +48,9 @@ const HOUSE_PAINT = {
   red: [0x8c, 0x2f, 0x24],
   yellow: [0xd8, 0xb2, 0x5a],
   white: [0xe9, 0xe4, 0xd6],
+  grey: [0xa3, 0xa4, 0x9e],
+  brick: [0xb6, 0x87, 0x5a],
+  green: [0x4f, 0x6a, 0x4b],
 };
 
 /** The route overlay: the one thing this picture has to answer before any
@@ -676,6 +679,32 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
           Math.max(2, scale * 1.2),
           ROAD.cone,
         );
+      }
+    }
+  }
+
+  // ── R39 — the towns: every lot's pad, its building in its own paint, and
+  // the cars outside it. Over-scale like the homesteads, for the same
+  // reason: the picture answers WHERE the village is.
+  const footprint = (building) => {
+    const fwd = { x: Math.sin(building.heading), z: Math.cos(building.heading) };
+    const right = { x: Math.cos(building.heading), z: -Math.sin(building.heading) };
+    const hw = Math.max(building.plan.width / 2, 3 / scale);
+    const hd = Math.max(building.plan.depth / 2, 3 / scale);
+    return [
+      [px(building.x + right.x * hw + fwd.x * hd), pz(building.z + right.z * hw + fwd.z * hd)],
+      [px(building.x - right.x * hw + fwd.x * hd), pz(building.z - right.z * hw + fwd.z * hd)],
+      [px(building.x - right.x * hw - fwd.x * hd), pz(building.z - right.z * hw - fwd.z * hd)],
+      [px(building.x + right.x * hw - fwd.x * hd), pz(building.z + right.z * hw - fwd.z * hd)],
+    ];
+  };
+  for (const town of track.towns ?? []) {
+    for (const lot of town.lots) {
+      const { pad, building } = lot;
+      canvas.disk(px(pad.x), pz(pad.z), Math.max(2, scale * pad.radius), ROAD.gravel.loose);
+      canvas.poly(footprint(building), HOUSE_PAINT[building.plan.walls]);
+      for (const car of lot.cars) {
+        canvas.disk(px(car.x), pz(car.z), Math.max(1.5, scale * 1.2), [0x2a, 0x2c, 0x30]);
       }
     }
   }

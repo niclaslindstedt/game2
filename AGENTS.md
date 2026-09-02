@@ -203,6 +203,9 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | WHERE an abandoned branch is shut, and WHAT with            | `placeBlock` in `engine/mapgen/spurs.ts` picks the place; `pwa/src/game/blockade.ts` builds the barrier                            |
 | WHERE a house stands off the stage, and its drive and yard  | `engine/mapgen/homesteads.ts` (R37) places it all; `pwa/src/game/homestead.ts` draws it — the `mapgen-improvement` skill           |
 | What a HOUSE looks like — paint, roof, storeys, porch, wing | `pwa/src/game/house.ts` builds one from the engine's `HousePlan`; `make items GROUP=homestead` photographs them                    |
+| WHERE a TOWN stands, and which lots and buildings it has    | `engine/mapgen/towns.ts` (R39) places it on the borrowed tarmac or an abandoned arm; `pwa/src/game/town.ts` draws it               |
+| What a BUILDING IS — its kind, plan and the walls it makes  | `engine/mapgen/buildings.ts` (the plans both placers draw, and the footprint-to-solids walk) — the `mapgen-improvement` skill      |
+| A VILLAGE building's look — flats, grocery, post, workshop  | `pwa/src/game/building.ts` over the house's primitives; `make items GROUP=town` photographs them                                   |
 | A car that only STANDS there (a yard, later a car park)     | `pwa/src/game/parked-car.ts` — a dozen boxes from one roll; never the catalog's builder, which is a thousand times the geometry    |
 | The marking beside the road, and what a block COSTS to cut  | `engine/mapgen/kerbs.ts` places every marker (one is solid); `pwa/src/game/kerbs.ts` draws them — the `mapgen-improvement` skill   |
 | Where the split boards stand on a stage (R28)               | `STAGE_RULES.checkpoint` + the placement in `engine/mapgen/compile.ts` — the `mapgen-improvement` skill                            |

@@ -28,6 +28,7 @@ import { createConeField } from "../game/cones.ts";
 import { buildCrowd } from "../game/crowd.ts";
 import { buildFinishGate, buildStartGate } from "../game/finish-gate.ts";
 import { FLORA_IDS, buildFlora } from "../game/flora.ts";
+import { buildBuilding } from "../game/building.ts";
 import { buildHouse, type HousePlan } from "../game/house.ts";
 import { markerShape } from "../game/kerbs.ts";
 import { buildParkedCar, parkedCarSpec, PARKED_BODIES } from "../game/parked-car.ts";
@@ -347,6 +348,7 @@ const HOUSE_PLANS: { id: string; note: string; plan: HousePlan }[] = [
     id: "house-red",
     note: "falu red, clay tile, a storey and a porch",
     plan: {
+      kind: "house",
       width: 10.5,
       depth: 7,
       storeys: 1,
@@ -361,6 +363,7 @@ const HOUSE_PLANS: { id: string; note: string; plan: HousePlan }[] = [
     id: "house-yellow",
     note: "ochre, black sheet metal, two storeys and a wing",
     plan: {
+      kind: "house",
       width: 11.5,
       depth: 8,
       storeys: 2,
@@ -375,6 +378,7 @@ const HOUSE_PLANS: { id: string; note: string; plan: HousePlan }[] = [
     id: "house-white",
     note: "white boards under slate, a wing and a porch",
     plan: {
+      kind: "house",
       width: 8.5,
       depth: 6.5,
       storeys: 1,
@@ -386,6 +390,95 @@ const HOUSE_PLANS: { id: string; note: string; plan: HousePlan }[] = [
     },
   },
 ];
+
+// ── The town (R39) ────────────────────────────────────────────────────────
+
+/** One of each building a village has that a farm has not, written out so
+ * the sheet photographs the same ones every time. */
+const TOWN_PLANS: { id: string; note: string; plan: HousePlan }[] = [
+  {
+    id: "villa",
+    note: "the village's best plot: two storeys, a wing, a porch",
+    plan: {
+      kind: "villa",
+      width: 12.5,
+      depth: 9,
+      storeys: 2,
+      roof: "tile",
+      walls: "white",
+      porch: true,
+      wing: { side: 1, width: 6, depth: 5 },
+      detail: 0.4,
+    },
+  },
+  {
+    id: "apartments",
+    note: "three storeys of flats, balconies chequered down the front",
+    plan: {
+      kind: "apartments",
+      width: 20,
+      depth: 11,
+      storeys: 3,
+      roof: "flat",
+      walls: "grey",
+      porch: false,
+      wing: null,
+      detail: 0.35,
+    },
+  },
+  {
+    id: "grocery",
+    note: "one tall storey, glass the whole front, the sign over it",
+    plan: {
+      kind: "grocery",
+      width: 17,
+      depth: 12,
+      storeys: 1,
+      roof: "flat",
+      walls: "white",
+      porch: false,
+      wing: null,
+      detail: 0.2,
+    },
+  },
+  {
+    id: "post",
+    note: "the post office: postal yellow, a canopy, the postbox by the step",
+    plan: {
+      kind: "post",
+      width: 11.5,
+      depth: 9,
+      storeys: 2,
+      roof: "metal",
+      walls: "yellow",
+      porch: false,
+      wing: null,
+      detail: 0.1,
+    },
+  },
+  {
+    id: "workshop",
+    note: "the workshop: a shed with the roller doors in the gable",
+    plan: {
+      kind: "workshop",
+      width: 15,
+      depth: 11,
+      storeys: 1,
+      roof: "metal",
+      walls: "green",
+      porch: false,
+      wing: null,
+      detail: 0.6,
+    },
+  },
+];
+
+const TOWN_ITEMS: ItemDef[] = TOWN_PLANS.map(({ id, note, plan }): ItemDef => ({
+  id,
+  group: "town",
+  note,
+  build: ({ rng }) => ({ object: buildBuilding(plan, rng) }),
+}));
 
 const HOMESTEAD_ITEMS: ItemDef[] = [
   ...HOUSE_PLANS.map(({ id, note, plan }): ItemDef => ({
@@ -416,6 +509,7 @@ export function itemCatalog(): ItemDef[] {
     ...ROADSIDE_ITEMS,
     ...STAGE_ITEMS,
     ...HOMESTEAD_ITEMS,
+    ...TOWN_ITEMS,
     stoneItem("boulder", false, 1.3, 0.37),
     stoneItem("boulder", true, 1.3, 0.37),
     stoneItem("rock", false, 1.1, 0.62),

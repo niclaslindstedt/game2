@@ -25,11 +25,18 @@
 
 import { hash2, smooth } from "../lib/noise.ts";
 import { createRng, type Rng } from "../lib/prng.ts";
+import {
+  buildingSolids,
+  drawHousePlan,
+  parkedSolids,
+  type Building,
+  type ParkedCar,
+} from "./buildings.ts";
 import type { BridgeDeck, Surface } from "./compile.ts";
 import type { LandField } from "./land.ts";
 import { corridorOffset, ROAD_CROSS } from "./road.ts";
 import { STAGE_RULES as R } from "./rules.ts";
-import { PARKED_HALF, standSolid, WALL_BAY, WALL_RADIUS, type WildObstacle } from "./solids.ts";
+import { standSolid, type WildObstacle } from "./solids.ts";
 import {
   placeBlock,
   SPUR,
@@ -39,48 +46,11 @@ import {
   type SpurSample,
 } from "./spurs.ts";
 
+export type { BuildingKind, HousePlan, ParkedCar, RoofKind, WallPaint } from "./buildings.ts";
+
 function clamp01(t: number): number {
   return t < 0 ? 0 : t > 1 ? 1 : t;
 }
-
-/** What the roof is made of — the three a Nordic house actually has. */
-export type RoofKind = "tile" | "metal" | "slate";
-/** What the boards are painted: falu red with white trim, ochre yellow
- * with white trim, or white throughout. */
-export type WallPaint = "red" | "yellow" | "white";
-
-/** THE PLAN of a house — everything the renderer needs to build it, decided
- * here so the same seed stands the same house on both sides of the wire. A
- * plan is dimensions and choices, not geometry: the builder in the app turns
- * it into walls, a roof and a porch. */
-export type HousePlan = {
-  /** Footprint of the main block, m: `width` along the front (the wall that
-   * faces the yard), `depth` back from it. */
-  width: number;
-  depth: number;
-  storeys: 1 | 2;
-  roof: RoofKind;
-  walls: WallPaint;
-  /** A porch over the front door, with its own little roof on posts. */
-  porch: boolean;
-  /** An L: a second, lower block off one end of the back wall. `side` is
-   * which end, looking at the front; its `width` runs along the front's
-   * line and its `depth` back from the main block's rear wall. */
-  wing: { side: -1 | 1; width: number; depth: number } | null;
-  /** A roll for the details the plan does not dictate — where the windows
-   * fall, which way the door is offset, whether there is a chimney. */
-  detail: number;
-};
-
-/** A car parked in the yard. `roll` picks its body and paint in the app. */
-export type ParkedCar = {
-  x: number;
-  z: number;
-  y: number;
-  /** Which way the nose points. */
-  heading: number;
-  roll: number;
-};
 
 /** One of the lane trees along the drive. Solid — it is a tree — and `roll`
  * picks the species in the app, from the short list of what somebody
@@ -104,7 +74,7 @@ export type Homestead = {
    * stands on. The terrain flattens the ground to `y` inside `radius`. */
   yard: { x: number; z: number; y: number; radius: number };
   /** The house: where it stands, which way its FRONT faces, and what it is. */
-  house: { x: number; z: number; y: number; heading: number; plan: HousePlan };
+  house: Building;
   cars: ParkedCar[];
   trees: LaneTree[];
   /** Where the drive is shut, just off the stage. Null on the rare drive
@@ -143,6 +113,10 @@ export type HomesteadContext = {
   /** R23 + R31 — the band a road may stand in here without its shelf
    * becoming a wall beside the stage. */
   shelfBand: (x: number, z: number) => ShelfBand;
+  /** R39 — distance to the nearest town lot's pad, m (Infinity when the
+   * stage has no town). A homestead is a house on its own; one standing at
+   * the end of a village street is a house in the village. */
+  townDistance: (x: number, z: number) => number;
   /** The homesteads already standing — this stage's own, from every
    * earlier call. */
   placed: readonly Homestead[];
@@ -280,6 +254,7 @@ function tryHomestead(
     ctx.branchDistance(x, z) >= drive.clear + drive.width &&
     ctx.highwayDistance(x, z) >= drive.clear + ctx.width &&
     !ctx.land.flooded(x, z, SPUR.shoreFreeboard) &&
+    ctx.townDistance(x, z) >= H.apart &&
     standing.every((h) => Math.hypot(h.yard.x - x, h.yard.z - z) >= H.apart);
 
   const follow = 1 - Math.exp(-SPUR.step / R.elevation.follow.lag);
@@ -377,7 +352,7 @@ function tryHomestead(
     }
   }
 
-  const plan = drawPlan(rng);
+  const plan = drawHousePlan(rng);
   // The house stands at the back of the yard facing the way the car comes
   // in, its front wall set back from the drive's end so the yard in front
   // of it is a yard and not a step.
@@ -455,35 +430,11 @@ function sampleAtS(samples: SpurSample[], s: number): SpurSample {
   return samples[i];
 }
 
-/** Draw a house. The proportions are a Nordic timber house's: a block a
- * room or two deep under a pitched roof, one storey more often than two,
- * red more often than anything, and a porch on about half of them. */
-function drawPlan(rng: Rng): HousePlan {
-  const storeys: 1 | 2 = rng.chance(0.38) ? 2 : 1;
-  const width = rng.range(7.5, 12.5);
-  const depth = rng.range(6, 8.5);
-  const roofRoll = rng.next();
-  const roof: RoofKind = roofRoll < 0.42 ? "tile" : roofRoll < 0.76 ? "metal" : "slate";
-  const wallRoll = rng.next();
-  const walls: WallPaint = wallRoll < 0.48 ? "red" : wallRoll < 0.72 ? "yellow" : "white";
-  const porch = rng.chance(0.5);
-  const wing = rng.chance(0.34)
-    ? {
-        side: (rng.chance(0.5) ? 1 : -1) as 1 | -1,
-        width: rng.range(4, Math.max(4.5, width * 0.55)),
-        depth: rng.range(3.5, 5.5),
-      }
-    : null;
-  return { width, depth, storeys, roof, walls, porch, wing, detail: rng.next() };
-}
-
 /** R37 — everything about a homestead the car can HIT, as solids: the
- * house's walls as a run of bays round its footprint (the same construction
- * as a bridge parapet, and for the same reason — a run of circles with a gap
- * in it is a wall with a door a car can find), a parked car as two, and the
- * lane trees as the trunks they are. One function, read by the terrain
- * field that collides them and by any test that wants to know where the
- * walls are. */
+ * house's walls as a run of bays round its footprint, a parked car as two,
+ * and the lane trees as the trunks they are. One function, read by the
+ * terrain field that collides them and by any test that wants to know where
+ * the walls are. */
 export function homesteadSolids(
   h: Homestead,
   /** The ground as the terrain field shapes it, once the yard and the drive
@@ -492,71 +443,15 @@ export function homesteadSolids(
   groundAt: (x: number, z: number) => number = (_x, _z) => NaN,
 ): WildObstacle[] {
   const out: WildObstacle[] = [];
-  const { house } = h;
-  const foot = (x: number, z: number, fallback: number): number => {
-    const y = groundAt(x, z);
-    return Number.isNaN(y) ? fallback : y;
-  };
-  const plan = house.plan;
-  const fwd = { x: Math.sin(house.heading), z: Math.cos(house.heading) };
-  const right = { x: Math.cos(house.heading), z: -Math.sin(house.heading) };
-  /** A wall bay at house-local (u right, v forward). */
-  const wall = (u: number, v: number, storeys: number): void => {
-    const x = house.x + right.x * u + fwd.x * v;
-    const z = house.z + right.z * u + fwd.z * v;
-    out.push(
-      standSolid({
-        x,
-        z,
-        y: foot(x, z, house.y),
-        kind: "wall",
-        size: storeys,
-        spin: house.heading,
-      }),
-    );
-  };
-  /** The four walls of a block whose front-left corner is at (u0, v0) and
-   * back-right at (u1, v1), one bay per metre, inset so the bays' faces
-   * stand on the drawn wall. */
-  const block = (u0: number, v0: number, u1: number, v1: number, storeys: number): void => {
-    const inset = WALL_RADIUS * 0.5;
-    const a = u0 + inset;
-    const b = u1 - inset;
-    const c = v0 + inset;
-    const d = v1 - inset;
-    const along = (from: number, to: number, place: (t: number) => void): void => {
-      const n = Math.max(1, Math.ceil((to - from) / WALL_BAY));
-      for (let i = 0; i <= n; i++) place(from + ((to - from) * i) / n);
-    };
-    along(a, b, (u) => wall(u, c, storeys));
-    along(a, b, (u) => wall(u, d, storeys));
-    along(c, d, (v) => wall(a, v, storeys));
-    along(c, d, (v) => wall(b, v, storeys));
-  };
-  const hw = plan.width / 2;
-  block(-hw, -plan.depth / 2, hw, plan.depth / 2, plan.storeys);
-  if (plan.wing) {
-    // The wing hangs off the BACK wall, flush with one end.
-    const w = plan.wing;
-    const u1 = w.side > 0 ? hw : -hw + w.width;
-    block(u1 - w.width, -plan.depth / 2 - w.depth, u1, -plan.depth / 2, 1);
-  }
-  for (const car of h.cars) {
-    const cf = { x: Math.sin(car.heading), z: Math.cos(car.heading) };
-    for (const along of [-PARKED_HALF, PARKED_HALF]) {
-      const x = car.x + cf.x * along;
-      const z = car.z + cf.z * along;
-      out.push(
-        standSolid({ x, z, y: foot(x, z, car.y), kind: "parked", size: 1, spin: car.heading }),
-      );
-    }
-  }
+  buildingSolids(h.house, groundAt, out);
+  parkedSolids(h.cars, groundAt, out);
   for (const tree of h.trees) {
+    const y = groundAt(tree.x, tree.z);
     out.push(
       standSolid({
         x: tree.x,
         z: tree.z,
-        y: foot(tree.x, tree.z, tree.y),
+        y: Number.isNaN(y) ? tree.y : y,
         kind: "tree",
         size: tree.size,
         spin: 0,

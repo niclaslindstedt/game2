@@ -53,6 +53,7 @@ import { buildTerrain, LAKE_Y, type Terrain } from "./terrain.ts";
 import { buildStreamMeshes } from "./streams.ts";
 import { buildFinishGate, buildStartGate, type FinishGate, type Muzzle } from "./finish-gate.ts";
 import { buildHomestead } from "./homestead.ts";
+import { buildTown } from "./town.ts";
 import { buildKerbing, createPostField } from "./kerbs.ts";
 import { buildCrowd, type Crowd } from "./crowd.ts";
 import { rightOf } from "./ribbon.ts";
@@ -801,6 +802,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
   let streamScanS = 0;
   let spurScan = 0;
   let homesteadScan = 0;
+  let townScan = 0;
   let finish: FinishGate | null = null;
   /** R26 — the crowd, rebuilt whenever the stage grows a new stand. The
    * whole crowd is a handful of instanced meshes, so it is cheaper to
@@ -850,6 +852,13 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
       const homestead = track.homesteads[homesteadScan];
       if (homestead.atS > track.samples[to - 1].s) break;
       chunkGroup.add(buildHomestead(track, homestead, cones, beside, season));
+    }
+    // R39 — the towns met on this stretch of road: the one the route drives
+    // through, or the one down the arm at a junction it passes.
+    for (; townScan < track.towns.length; townScan++) {
+      const town = track.towns[townScan];
+      if (town.atS > track.samples[to - 1].s) break;
+      chunkGroup.add(buildTown(track, town));
     }
     const fords = buildFords(track, fordScan, to);
     fordScan = fords.next;

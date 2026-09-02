@@ -44,6 +44,7 @@ import { createSpurIndex, type SpurIndex } from "./spurs.ts";
 import { createPropField } from "./props.ts";
 import { bridgeParapets, type WildObstacle } from "./solids.ts";
 import { homesteadSolids } from "./homesteads.ts";
+import { townSolids } from "./towns.ts";
 
 export { LAKE_Y } from "./land.ts";
 export {
@@ -998,28 +999,65 @@ export function createTerrain(track: Track): TerrainField {
   /** How many of `track.spurs` are in the index — an ingest cursor, so it
    * never rewinds when an endless run prunes the branches behind it. */
   let spurCount = 0;
-  /** R37 — the yards: discs of graded gravel the ground is flattened to.
-   * A homestead's DRIVE goes into the branch index above (it is a road,
-   * and gets a road's shelf); the yard it runs onto is this. Same ingest
+  /** R37 + R39 — the PADS: discs of graded ground the landscape is
+   * flattened to. A homestead's yard (its DRIVE goes into the branch index
+   * above — it is a road, and gets a road's shelf) and every lot of a
+   * town. Each carries its own `blend`: a yard out in a field is eased back
+   * onto the country over a long rim, a lot on a village street over a
+   * short one, because the next lot is a few metres away. Same ingest
    * cursor discipline as the branches. */
-  const pads: { x: number; z: number; y: number; radius: number; atS: number }[] = [];
+  const pads: {
+    x: number;
+    z: number;
+    y: number;
+    radius: number;
+    blend: number;
+    /** The plane the pad is graded to, m per m: level for a yard, the
+     * street's own fall for a lot on one. */
+    grade: { x: number; z: number };
+    /** Where on the stage it belongs, for the endless prune. */
+    atS: number;
+  }[] = [];
   let homesteadCount = 0;
-  /** How much of a yard's level applies at a point — 1 on the pad, fading
-   * to 0 over `homestead.yard.blend` past its rim — and the level itself.
-   * Null anywhere no yard reaches. */
+  let townCount = 0;
+  /** How much of a pad's level applies at a point — 1 on the pad, fading
+   * to 0 over its `blend` past the rim — and the level itself. Where two
+   * pads reach the same point (a street's lots overlap at their rims) the
+   * nearest pad's level holds on the pad itself and gives way to the
+   * others' only through its rim, so a row of lots on a grade is a row of
+   * level pads with a shallow step in each gap, and never a face where two
+   * discs meet — nor a lot that leans toward its neighbour. Null anywhere
+   * no pad reaches. */
   const padAt = (x: number, z: number): { y: number; weight: number } | null => {
-    let best: { y: number; weight: number } | null = null;
+    let weight = 0;
+    let level = 0;
+    let othersSum = 0;
+    let othersWeight = 0;
     for (let i = 0; i < pads.length; i++) {
       const pad = pads[i];
-      const reach = pad.radius + R.homestead.yard.blend;
+      const reach = pad.radius + pad.blend;
       const dx = x - pad.x;
       const dz = z - pad.z;
       if (dx * dx + dz * dz >= reach * reach) continue;
       const d = Math.sqrt(dx * dx + dz * dz);
-      const weight = 1 - smooth(clamp01((d - pad.radius) / R.homestead.yard.blend));
-      if (!best || weight > best.weight) best = { y: pad.y, weight };
+      const w = 1 - smooth(clamp01((d - pad.radius) / pad.blend));
+      if (w <= 0) continue;
+      const here = pad.y + pad.grade.x * dx + pad.grade.z * dz;
+      if (w > weight) {
+        if (weight > 0) {
+          othersSum += level * weight;
+          othersWeight += weight;
+        }
+        weight = w;
+        level = here;
+      } else {
+        othersSum += here * w;
+        othersWeight += w;
+      }
     }
-    return best;
+    if (weight <= 0) return null;
+    if (othersWeight <= 0) return { y: level, weight };
+    return { y: level * weight + (othersSum / othersWeight) * (1 - weight), weight };
   };
   /** Distance from a point to the nearest yard's rim, m — negative on the
    * pad, Infinity when there is none near. */
@@ -1511,7 +1549,8 @@ export function createTerrain(track: Track): TerrainField {
     if (
       samples.length > indexed ||
       spurCount < track.spurs.length ||
-      homesteadCount < track.homesteads.length
+      homesteadCount < track.homesteads.length ||
+      townCount < track.towns.length
     ) {
       indexSamples(indexed, samples.length);
       indexed = samples.length;
@@ -1525,8 +1564,18 @@ export function createTerrain(track: Track): TerrainField {
       for (; homesteadCount < track.homesteads.length; homesteadCount++) {
         const h = track.homesteads[homesteadCount];
         spurs.add(h.drive);
-        pads.push({ ...h.yard, atS: h.atS });
+        pads.push({ ...h.yard, blend: R.homestead.yard.blend, grade: { x: 0, z: 0 }, atS: h.atS });
         for (const solid of homesteadSolids(h, heightAt)) fix(solid);
+      }
+      // R39 — the towns: every lot is a pad, and the walls and the cars on
+      // it are solids footed on the pad. The street itself is road the
+      // field already has — the route, or a branch.
+      for (; townCount < track.towns.length; townCount++) {
+        const town = track.towns[townCount];
+        for (const lot of town.lots) {
+          pads.push({ ...lot.pad, blend: R.town.lot.blend, atS: town.atS });
+        }
+        for (const solid of townSolids(town, heightAt)) fix(solid);
       }
       // The water: every crossing this stretch of road added, traced as
       // one river through them (R18) — born on the high ground, gathering
@@ -1609,7 +1658,9 @@ export function createTerrain(track: Track): TerrainField {
       guards.pruneBefore(floorS);
       stands.pruneBefore(floorS);
       spurs.pruneBefore(floorS);
-      while (pads.length > 0 && pads[0].atS < floorS) pads.shift();
+      // Not in stage order: a town's lots and a homestead's yard are
+      // ingested list by list, so the whole set is sifted.
+      for (let i = pads.length - 1; i >= 0; i--) if (pads[i].atS < floorS) pads.splice(i, 1);
       props.invalidate();
       cornerCache = new Map();
     }
