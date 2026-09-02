@@ -352,6 +352,23 @@ wheels then run through everything the fronts have loosened, and the wake
 that carries a plume at all sits behind the car. The drivetrain tilts the
 split rather than deciding it.
 
+The third thing is the ROOSTER TAIL, and it has a direction the other two
+do not: the stones a sliding car throws out SIDEWAYS, off the side the tail
+is going (`drift-spray.ts`, every number of it in `DRIFT_SPRAY`). Two things
+throw it and they add. A tyre dragged across loose ground ploughs what is in
+front of it, so the leading wheels — the ones on the side the car is sliding
+towards — fan stones out ahead of themselves however the car is driven, and
+the rear axle does this on every layout because a sliding tail moves
+sideways whatever is turning it. A DRIVEN wheel that is also outrunning the
+road (`wheelspin`) is spinning on the same patch and fires what it digs out
+backward as well, so the axle the drivetrain lights up throws more and
+throws it further back: a rear-driver sprays off its tail, a front-driver
+off its nose, all-wheel drive off both. The tail thickens with the slide,
+with how fast the tyres are being dragged sideways and with pace, leaves the
+ground at a low rally angle rather than as a fountain, and is made of the
+ground it came off — the same tint the grit takes, so a soaked stage throws
+clods and a sealed one throws nothing.
+
 EVERY CAR ON THE ROAD TOWS ONE, not just the one being driven. The field's
 crews raise a cloud of their own from a second instance of the same system
 (`field-cars.ts` over `plume.ts`), and they raise it out to a wider range

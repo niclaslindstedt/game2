@@ -8,7 +8,7 @@
 // It owns nothing about WHEN any of it happens: the renderer reads the car
 // and the events and decides that, because the decision needs the whole
 // frame. What this file removes from the renderer is the bookkeeping —
-// eleven pools to build, add, tint and throw away.
+// a dozen pools to build, add, tint and throw away.
 
 import * as THREE from "three";
 import type { GameState } from "@engine";
@@ -25,6 +25,7 @@ import {
   type Dust,
   type DustTint,
 } from "./dust.ts";
+import { createDriftSpray, type DriftSpray } from "./drift-spray.ts";
 import { groundTint, plumeGround, type PlumeGround } from "./ground-tint.ts";
 import { createPlume, type Plume } from "./plume.ts";
 import { createFumes, type Fumes } from "./fumes.ts";
@@ -42,6 +43,12 @@ export type CarFx = {
    * stage — the weather decides which when the conditions are set — so the
    * pair costs one draw call, not two. */
   plume: Plume;
+  /** The rooster tail: the stones a sliding car throws out SIDEWAYS, off
+   * the side it is sliding towards, and harder off the axle the drivetrain
+   * is spinning. Its own pool because it is its own substance — stones,
+   * not grit — and its own module because the throw has a direction the
+   * wheel logic's grains do not. */
+  gravel: DriftSpray;
   /** Water the CAR throws, which is a different cloud from the sheet a
    * rolling wheel sprays: the column an entry displaces, and the froth it
    * leaves working on the surface afterwards. */
@@ -98,6 +105,7 @@ export function createCarFx(scene: THREE.Scene): CarFx {
   const dust = createDust();
   const smoke = createDust(TIRE_SMOKE);
   const plume = createPlume();
+  const gravel = createDriftSpray();
   const mud = createDust(MUD);
   mud.points.visible = false;
   const spray = createDust(SPLASH_WATER);
@@ -109,6 +117,7 @@ export function createCarFx(scene: THREE.Scene): CarFx {
     dust.points,
     smoke.points,
     plume.points,
+    gravel.points,
     mud.points,
     spray.points,
     foam.points,
@@ -118,7 +127,7 @@ export function createCarFx(scene: THREE.Scene): CarFx {
   for (const cloud of celebration.clouds) scene.add(cloud);
 
   const setTint = (tint: THREE.Color, dustLight: THREE.Color, ceiling: number): void => {
-    for (const pool of [dust, smoke, plume, mud]) {
+    for (const pool of [dust, smoke, plume, gravel, mud]) {
       (pool.points.material as THREE.PointsMaterial).color.copy(dustLight);
     }
     (fumes.points.material as THREE.PointsMaterial).color.copy(tint);
@@ -172,6 +181,7 @@ export function createCarFx(scene: THREE.Scene): CarFx {
   const dispose = (): void => {
     for (const pool of [dust, smoke, mud, spray, foam]) pool.dispose();
     plume.dispose();
+    gravel.dispose();
     fumes.dispose();
     life.dispose();
     celebration.dispose();
@@ -182,6 +192,7 @@ export function createCarFx(scene: THREE.Scene): CarFx {
     mud,
     smoke,
     plume,
+    gravel,
     spray,
     foam,
     fumes,

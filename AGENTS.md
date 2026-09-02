@@ -184,6 +184,7 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | The press that FOLDS the mirror away mid-stage, and back    | `pwa/src/game/hud-mirror.tsx` — the glass as a switch; the menu option is still the only way to be rid of it                       |
 | How often the mirror is redrawn, and how far it sees        | `pwa/src/game/mirror-pace.ts` — the ladder the frame rate walks the mirror down; DOM-free, so `mirror_test.ts` reads it            |
 | A particle pool the car throws off, and how it is tinted    | `pwa/src/game/car-fx.ts`; WHEN it is thrown stays in `renderer.ts`                                                                 |
+| The ROOSTER TAIL a slide throws sideways, and its knobs     | `DRIFT_SPRAY` in `pwa/src/game/drift-spray.ts` — angle, fan, amount, which axle by drivetrain — the `visual-effects` skill         |
 | How the body TREMBLES when the engine is being worked       | `pwa/src/game/car-shake.ts` — DOM-free; read by `car-mesh.ts` (the shell) and `camera-eye.ts` (the seat)                           |
 | The SHADOW a car stands in, and how the light throws it     | `pwa/src/game/car-shadow.ts` (the silhouette and its penumbra) off `sunShadeFor` in `sky.ts` (which way, how hard)                 |
 | Things the car knocks loose (cones, posts, torn-off parts)  | `pwa/src/game/cones.ts`, `kerbs.ts`, `car-damage.ts`, over `tumble.ts` — renderer-side; the engine knows nothing of them           |

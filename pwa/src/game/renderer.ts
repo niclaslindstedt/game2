@@ -295,7 +295,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
   // in the scene together (car-fx.ts). The renderer keeps the decisions —
   // what is thrown, when, and how much of it — and none of the plumbing.
   const carFx = createCarFx(scene);
-  const { dust, mud, smoke, plume, spray, foam, fumes, life, celebration } = carFx;
+  const { dust, mud, smoke, plume, gravel, spray, foam, fumes, life, celebration } = carFx;
   const { atWheels } = carFx;
   const wayHomeArrow = createWayHomeArrow(canvas);
   // The arrow lives in camera space, and a camera only draws its children
@@ -853,6 +853,20 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     // in it. `plumeDust` is that whole judgement — a sealed road, water, a
     // stage the rain has settled and a grass verge all come back null.
     plume.update(state, dt, fx, plumeDust(state));
+    // THE ROOSTER TAIL — the stones a slide throws out sideways, off the side
+    // the car is going. Its own module (drift-spray.ts) because its throw
+    // has a direction none of the wheel logic's grains have, and its own
+    // rate: it is a continuous effect written per second, not a burst every
+    // few frames. The ground decides what it is made of and how much: a
+    // sealed road has no stones to throw, the wild gives up less than a
+    // graded road, and a soaked one throws clods where a dry one throws grit.
+    gravel.update(
+      state,
+      dt,
+      fx,
+      sealed ? 0 : (state.surface === "nature" ? WILD_THROW : 1) * (wetGround ? WET_THROW : 1),
+      () => groundDust(state),
+    );
 
     // How hot the tires are, which only tarmac has any use for. A tire
     // cooks while it is sliding and cools the moment it hooks back up, and
