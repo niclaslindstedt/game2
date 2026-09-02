@@ -13,13 +13,18 @@
 //           On the ground, LIZARDS: a dozen basking within sight of the
 //           car that dart for cover as it comes past, which is the one
 //           thing in a desert that moves when you do.
+//   BOTH    BIRDS OF PREY, one at a time and higher than either kettle
+//           flies — a buzzard over the forest, a vulture over the sand,
+//           the same bird in different light. raptor.ts owns them.
 //
 // Pure presentation; all randomness here is renderer-side and can never
 // touch the simulation.
 //
-// The sky's two halves are anchored differently, and that is the design.
-// Birds are a few dozen metres up and belong to a PLACE — the flock is
-// parked near the stage start and the car drives past it. Everything in
+// The sky's THREE parts are anchored differently, and that is the design.
+// Flocks are a few dozen metres up and belong to a PLACE — parked near the
+// stage start, and the car drives past them. The birds of prey belong to
+// the DRIVE: pitched ahead of where the camera looks and re-pitched once
+// left behind, so a long stage always has one growing in. Everything in
 // sky-traffic.ts is hundreds of metres up and belongs to the SKY, so it
 // rides the camera in x/z with no parallax, exactly as the clouds do: at
 // that height a stage is not long enough for parallax to be visible, and
@@ -29,6 +34,7 @@
 import * as THREE from "three";
 import type { BiomeId } from "@engine";
 
+import { createRaptors } from "./raptor.ts";
 import {
   createSkyTraffic,
   puffFade,
@@ -79,6 +85,12 @@ type Life = {
   radius: number;
   /** Turns per second round the circle. */
   turn: number;
+  /** How many solitary birds of prey hang over this country at once, and
+   * how far above the flocks they hold — raptor.ts flies them, and adds its
+   * own spread on top. Both countries have them: hot open sky is where a
+   * soaring bird belongs, and a forest has its buzzards. */
+  raptors: number;
+  raptorsOver: number;
   /** Whether anything crosses this sky at altitude. */
   traffic: boolean;
   lizards: boolean;
@@ -94,6 +106,8 @@ const LIFE: Record<BiomeId, Life> = {
     height: 30,
     radius: 26,
     turn: 0.28,
+    raptors: 3,
+    raptorsOver: 50,
     traffic: true,
     lizards: false,
   },
@@ -106,6 +120,8 @@ const LIFE: Record<BiomeId, Life> = {
     height: 70,
     radius: 55,
     turn: 0.1,
+    raptors: 3,
+    raptorsOver: 60,
     traffic: false,
     lizards: true,
   },
@@ -121,12 +137,14 @@ export type AmbientLife = {
   /** Which country's life this is — what flies, and whether anything
    * crawls. Idempotent, and cheap to call on every re-light. */
   setBiome: (biome: BiomeId) => void;
-  /** `ground` and `car` are what the lizards need — where the sand is, and
+  /** The CAMERA rather than a point, because the birds of prey are pitched
+   * ahead of where it is LOOKING, so the player drives up to them.
+   *
+   * `ground` and `car` are what the lizards need — where the sand is, and
    * what they are running from. Either may be left out for a frame that
    * has no world under it. */
   update: (
-    camX: number,
-    camZ: number,
+    camera: THREE.Camera,
     windX: number,
     windZ: number,
     dt: number,
@@ -320,6 +338,16 @@ export function createAmbientLife(): AmbientLife {
   };
   flockAs();
 
+  // ── The birds of prey ────────────────────────────────────────────────────
+  //
+  // Built for the country that flies the most of them and hidden down to the
+  // count this one wants, exactly as the flocks are: a change of country is
+  // a re-light, never a rebuild.
+  const raptors = createRaptors(Math.max(...Object.values(LIFE).map((l) => l.raptors)));
+  group.add(raptors.group);
+  const raptorsAs = (): void => raptors.setCountry(life.raptors, life.height + life.raptorsOver);
+  raptorsAs();
+
   // ── The high traffic and its contrails ───────────────────────────────────
   //
   // Everything below hangs off `sky`, which follows the camera over the
@@ -462,6 +490,7 @@ export function createAmbientLife(): AmbientLife {
     // Birds go from near-black silhouettes by day to invisible-dark at
     // night without ever turning grey.
     birdMat.color.set(0x2a2d33).multiply(tint);
+    raptors.setTint(tint);
     planeMat.color.set(0xd8dde4).multiply(tint);
     ceilingNow = ceiling;
     showSky();
@@ -472,14 +501,14 @@ export function createAmbientLife(): AmbientLife {
     biome = next;
     life = LIFE[next];
     flockAs();
+    raptorsAs();
     showSky();
     lizards.visible = life.lizards;
     for (const lizard of herd) lizard.placed = false;
   };
 
   const update = (
-    camX: number,
-    camZ: number,
+    camera: THREE.Camera,
     windX: number,
     windZ: number,
     dt: number,
@@ -487,6 +516,9 @@ export function createAmbientLife(): AmbientLife {
     car?: { x: number; z: number },
   ): void => {
     const t = performance.now() / 1000;
+    const camX = camera.position.x;
+    const camZ = camera.position.z;
+    raptors.update(camera, windX, windZ, dt);
 
     for (const flock of flocks) {
       flock.angle += flock.speed * dt;
@@ -632,6 +664,7 @@ export function createAmbientLife(): AmbientLife {
   const dispose = (): void => {
     wingGeo.dispose();
     birdMat.dispose();
+    raptors.dispose();
     for (const plane of planes)
       for (const part of plane.children) (part as THREE.Mesh).geometry.dispose();
     planeMat.dispose();

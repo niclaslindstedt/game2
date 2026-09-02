@@ -130,6 +130,14 @@ shape (one instance per run, or a beat too brief to catch), build it a
 harness page under `pwa/src/tools/` with a `scripts/*.mjs` driver, the way
 `make cars` and `make sky` are built.
 
+**Before building one, check whether `make items` already is it.** Anything
+with a SHAPE — a bird, a marker, a part that breaks off — is five lines in
+`pwa/src/tools/item-catalog.ts`: an id, a group, a `build` returning the
+object, optionally the `views` worth seeing it from. `make items ITEMS=<id>`
+then turntables it against a metre grid, which is the only honest look at a
+silhouette a run shows as six pixels. It cannot photograph MOTION, so an
+effect whose subject is movement still owes a driven shot beside it.
+
 ## Ship checklist
 
 - [ ] Effect is presentation-only — no simulation state touched, no state-RNG
