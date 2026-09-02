@@ -112,7 +112,16 @@ cutoff, grit, pan) and a glide, and the layer moves there with
    rate and left a hole in itself whenever it was starved — and a hole is
    what a player reports as CRACKLE. The one-shots the bed raises (the
    lights, the crackle, the wipers) play NOW, with no `at`.
-6. **A silent layer costs nothing to keep.** Set its level to 0 and leave it
+6. **…so SILENCE HAS TO BE SAID.** That same property is why a bed which
+   simply stops being FED does not stop: it holds, at whatever level the car
+   was last doing, until something takes it down. Every frame that is not
+   hearing the run — a pause card, god mode's hold, a menu over the top —
+   calls `DriveBed.silence()` (`RunAudio.silence()` from the app), which
+   drops the layers and rerolls the world's roster while leaving what the RUN
+   has spent alone, so RESUME picks the note back up. `reset()` is the
+   heavier one and forgets that too. Adding a path that skips `frame()`
+   without hushing is how the engine ends up playing under the main menu.
+7. **A silent layer costs nothing to keep.** Set its level to 0 and leave it
    built; `rack.ts` rebuilds a layer only when its context has died.
 
 `tests/audio_test.ts` holds the beds to this: built once, steered every
