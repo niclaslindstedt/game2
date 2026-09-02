@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift heat record replay track analyze cars liveries field crew items items-list sky glyphs audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift heat record replay track level analyze cars liveries field crew items items-list sky glyphs audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs
 
 build:
 	npm run build
@@ -84,6 +84,18 @@ heat:
 # rules engine's output.
 track:
 	npm run track
+
+# THE LEVEL MAP: one stage top down, annotated and described, from the
+# engine alone — no build, no browser. Every call, jump, crest, ford,
+# bridge, split board and junction gets an id (T3, J1, CP2) on the picture
+# and a row in the table, so a claim about "the first jump on level 1" is
+# about J1 in previews/level-taiga-1.png. FOCUS= re-frames around one id.
+# `make level LEVEL=1` · `make level LEVEL=1 FOCUS=J1 SPAN=160`
+# `make level SEED=38 LENGTH=short` · `make level LEVEL=3 ARGS=--json`
+level:
+	npm run level -- $(if $(LEVEL),--level $(LEVEL),) $(if $(SEED),--seed $(SEED),) \
+		$(if $(LENGTH),--length $(LENGTH),) $(if $(SHAPE),--shape $(SHAPE),) \
+		$(if $(FOCUS),--focus $(FOCUS),) $(if $(SPAN),--span $(SPAN),) $(ARGS)
 
 # SCORE generated stages instead of looking at them: the rollers over the
 # road surface, the water's flow, the road network, drivability, the jumps,

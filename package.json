@@ -29,6 +29,7 @@
     "sim": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/simulate-run.mjs",
     "tape": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/run-tape.mjs",
     "track": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/track-preview.mjs",
+    "level": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/level-map.mjs",
     "analyze": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/analyze-stage.mjs",
     "drift": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/drift-lab.mjs",
     "cars": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/car-preview.mjs",
