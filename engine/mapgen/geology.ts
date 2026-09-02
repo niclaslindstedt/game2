@@ -63,10 +63,11 @@ const ARID_TABLE = 40;
 const PAN_KNEE = 8;
 
 /** R40 — the share of the dune mask under which there is no sand, and the
- * span it fades in over. About half the country a dune field, the rest of
- * it pan and scrub. */
-const DUNE_FIELD_FROM = 0.42;
-const DUNE_FIELD_SPAN = 0.3;
+ * span it fades in over. Value noise sits mostly between 0.3 and 0.7, so
+ * this puts full-height dunes over roughly a third of the country, fading
+ * ones over another third, and pan and scrub over the rest. */
+const DUNE_FIELD_FROM = 0.3;
+const DUNE_FIELD_SPAN = 0.25;
 
 function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;

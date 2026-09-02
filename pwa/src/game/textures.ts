@@ -90,6 +90,21 @@ export const gravelTexture = once((): THREE.CanvasTexture => {
   return toTexture(canvas, 1);
 });
 
+/** R40 — the grain of a SAND road: the same speckle as the gravel's with
+ * the stone taken out of it. Pale and nearly hueless, because a road bladed
+ * out of sand is the colour of the sand and nothing else, and the gravel
+ * map's brown would turn a bleached ribbon to ochre. */
+export const sandTexture = once((): THREE.CanvasTexture => {
+  const { canvas, ctx } = makeCanvas(128);
+  speckle(ctx, 128, "#e9e0cc", [
+    { color: "#d9cdb2", count: 900, min: 1, max: 3 },
+    { color: "#f4ecd8", count: 700, min: 1, max: 3 },
+    { color: "#c9bb9c", count: 250, min: 1, max: 3 },
+    { color: "#fbf6e8", count: 200, min: 1, max: 2 },
+  ]);
+  return toTexture(canvas, 1);
+});
+
 /** A near-white speckle that multiplies vertex colors: pure grain, no hue.
  * The ground and every flora instance share it, so grass, bedrock and
  * foliage all carry the same chunky arcade noise whatever color they are. */

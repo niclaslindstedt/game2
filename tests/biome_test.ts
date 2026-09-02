@@ -139,14 +139,19 @@ describe("R40 — the desert", () => {
     expect(desert.land.mountains).toBeLessThan(1);
     expect(desert.land.dunes).not.toBeNull();
     expect(desert.land.floor).not.toBeNull();
-    // The dunes are SOIL: somewhere on every desert stage the cover is
-    // deeper than the taiga's till ever gets.
+    // The dunes are SOIL: somewhere in the desert the cover is deeper than
+    // the taiga's till ever gets. SEARCHED across the seeds rather than
+    // pinned to one — a stage that happens to run across the pans between
+    // the dune fields has none, and which seed does is a fact about where
+    // that stage wanders, not about the dunes.
     let deepest = 0;
-    const { track, terrain } = stage(2, "desert");
-    const b = track.bounds;
-    for (let x = b.minX; x <= b.maxX; x += 50) {
-      for (let z = b.minZ; z <= b.maxZ; z += 50) {
-        deepest = Math.max(deepest, terrain.geology.soilAt(x, z));
+    for (const seed of SEEDS) {
+      const { track, terrain } = stage(seed, "desert");
+      const b = track.bounds;
+      for (let x = b.minX; x <= b.maxX; x += 50) {
+        for (let z = b.minZ; z <= b.maxZ; z += 50) {
+          deepest = Math.max(deepest, terrain.geology.soilAt(x, z));
+        }
       }
     }
     expect(deepest).toBeGreaterThan(3);

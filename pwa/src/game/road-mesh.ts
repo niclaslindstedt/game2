@@ -34,8 +34,8 @@ import { DISSOLVE } from "./road-spill.ts";
 // `APRON` straight from the engine rather than through terrain.ts, which
 // only re-exports it: the ground's paint reads this module's palette for
 // R16's dust wash, and the two must not import each other.
-import { APRON } from "@engine";
-import { detailTexture, gravelTexture, textureMean } from "./textures.ts";
+import { APRON, biomeRules } from "@engine";
+import { detailTexture, gravelTexture, sandTexture, textureMean } from "./textures.ts";
 import { rightOf, type Ribbon } from "./ribbon.ts";
 import { waterMaterial } from "./water-look.ts";
 
@@ -48,10 +48,13 @@ const UP = new THREE.Vector3(0, 1, 0);
  * and grey-black between. */
 export const ROAD_PAINT = {
   gravel: { loose: "#d2b489", worn: "#8a7046" },
-  // R40 — the desert's road: paler and warmer than graded stone, and the
-  // wheel tracks are packed sand rather than worn-through subgrade, so the
-  // split between loose and worn is shallower.
-  sand: { loose: "#e2c48c", worn: "#b09364" },
+  // R40 — the desert's road: bleached, near-white sand rather than graded
+  // stone, and the wheel tracks are packed sand rather than worn-through
+  // subgrade, so the split between loose and worn is shallow and stays
+  // pale. Read under the same speckle map as the gravel, which darkens
+  // everything it covers — so both are authored a shade lighter than the
+  // sand they are meant to come out as.
+  sand: { loose: "#f2e2b4", worn: "#d6bf8a" },
   asphalt: { loose: "#3a3b40", worn: "#54555c" },
   water: { loose: "#8fa6c6", worn: "#8fa6c6" },
   deck: { loose: "#b7b3a8", worn: "#a4a096" },
@@ -331,8 +334,12 @@ export function buildRoad(
   // canvases rather than declared, so re-speckling a texture keeps the seam
   // shut. Built here, once per ribbon, rather than at module scope: both
   // textures are painted lazily and neither exists until something asks.
+  // R40 — the grain the ribbon is drawn under is the country's: stone
+  // speckle over a gravel road, a pale hueless one over sand. One map per
+  // ribbon, because a stage is in one country.
+  const roadMap = biomeRules(track.knobs.biome).loose === "sand" ? sandTexture() : gravelTexture();
   const EDGE_FIX = ((): THREE.Color => {
-    const road = textureMean(gravelTexture());
+    const road = textureMean(roadMap);
     const land = textureMean(detailTexture());
     return new THREE.Color(
       land.r / Math.max(1e-3, road.r),
@@ -509,7 +516,7 @@ export function buildRoad(
           // A sand road's shoulder IS sand — the blade pushed the same
           // stuff aside — so it keeps far more of the mat's colour than a
           // gravel road's earth shoulder keeps of the stone.
-          const memory = kind === "sand" ? 0.72 : 0.28;
+          const memory = kind === "sand" ? 0.88 : 0.28;
           paint.copy(shoulder).lerp(loose, memory * (1 - out / ROAD_CROSS.verge.bareTo));
         } else {
           // R16 — THE DISSOLVE. Past the bare shoulder the road runs out into
@@ -616,7 +623,7 @@ export function buildRoad(
   geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
   geo.setIndex(indices);
   geo.computeVertexNormals();
-  const mat = new THREE.MeshLambertMaterial({ map: gravelTexture(), vertexColors: true });
+  const mat = new THREE.MeshLambertMaterial({ map: roadMap, vertexColors: true });
   return new THREE.Mesh(geo, mat);
 }
 
