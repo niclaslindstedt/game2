@@ -33,6 +33,7 @@ import { buildBuilding } from "../game/building.ts";
 import { buildHouse, type HousePlan } from "../game/house.ts";
 import { markerShape } from "../game/kerbs.ts";
 import { buildParkedCar, parkedCarSpec, PARKED_BODIES } from "../game/parked-car.ts";
+import { raptorModel } from "../game/raptor.ts";
 import { stoneGeometry, stoneMatrix } from "../game/wild.ts";
 
 /** Where a camera stands for one column of the sheet. */
@@ -326,6 +327,32 @@ const ROADSIDE_ITEMS: ItemDef[] = [
   })),
 ];
 
+// ── What is in the sky ────────────────────────────────────────────────────
+
+const SKY_ITEMS: ItemDef[] = [
+  {
+    id: "raptor",
+    group: "sky",
+    note: "half a kilometre out this is six pixels — the silhouette is all of it",
+    build: () => {
+      const bird = raptorModel();
+      return {
+        object: bird.object,
+        // A soaring bird is only ever seen from BELOW and from the side, so
+        // those are the seats: the plan view is the one nobody on the road
+        // will ever have.
+        views: [
+          { name: "from under", orbit: { az: 0.1, el: -1.15 } },
+          { name: "from under, ahead", orbit: { az: Math.PI / 2, el: -0.75 } },
+          { name: "level", orbit: { az: Math.PI / 2 - 0.5, el: 0.08 } },
+          { name: "plan", orbit: { az: 0.1, el: 1.2 } },
+        ],
+        dispose: bird.dispose,
+      };
+    },
+  },
+];
+
 // ── What the stage is dressed with ────────────────────────────────────────
 
 /** A dead-straight rig for the things that are built AGAINST a road — the
@@ -537,6 +564,7 @@ export function itemCatalog(): ItemDef[] {
   return [
     ...CAR_ITEMS,
     ...ROADSIDE_ITEMS,
+    ...SKY_ITEMS,
     ...STAGE_ITEMS,
     ...HOMESTEAD_ITEMS,
     ...TOWN_ITEMS,
@@ -569,4 +597,5 @@ export const DEFAULT_ITEMS: readonly string[] = [
   "spruceTall",
   "birch",
   "fern",
+  "raptor",
 ];

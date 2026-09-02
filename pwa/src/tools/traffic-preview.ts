@@ -133,7 +133,8 @@ async function main(): Promise<void> {
     // by the first update rather than by the constructor — so this IS the
     // grid, and photographing an untouched instance would only show that a
     // pool starts empty.
-    life.update(0, 0, state.wind.x, state.wind.z, STEP);
+    camera.position.set(0, 2.2, 0);
+    life.update(camera, state.wind.x, state.wind.z, STEP);
     let clock = STEP;
     MOMENTS.forEach((moment, c) => {
       while (clock < moment) {
@@ -142,7 +143,7 @@ async function main(): Promise<void> {
         camera.position.set(0, 2.2, z);
         state.car.z = z + 7;
         environment.update(state, camera, STEP);
-        life.update(0, z, state.wind.x, state.wind.z, STEP);
+        life.update(camera, state.wind.x, state.wind.z, STEP);
       }
       camera.position.set(0, 2.2, z);
       camera.lookAt(0, 2.2 + Math.sin(PITCH) * 100, z + Math.cos(PITCH) * 100);

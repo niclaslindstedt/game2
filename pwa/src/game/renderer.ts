@@ -1140,9 +1140,8 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     clearDustLamps();
     environment.lightDust(state.car);
     field.lightDust(environment.lampPower());
-    const cam = chase.camera.position;
     if (fx > 0) {
-      life.update(cam.x, cam.z, state.wind.x, state.wind.z, dt, state.terrain.groundAt, state.car);
+      life.update(chase.camera, state.wind.x, state.wind.z, dt, state.terrain.groundAt, state.car);
     }
     life.group.visible = fx > 0;
     // The map framing changes with the stage and the pane, and the fog rides

@@ -103,6 +103,12 @@ export type Preset = {
   stars: number;
   cloud: number;
   cloudOpacity: number;
+  /** How much of the fair-weather cumulus ring this sky carries, 0..1 — a
+   * COUNT, not a fade. A country with little weather in it gets fewer
+   * clouds rather than see-through ones, because a thin cumulus reads as a
+   * rendering fault and a half-empty sky reads as a dry one. Ignored while
+   * a deck is up: a lid is a lid in any country. */
+  cloudShare: number;
   headlights: boolean;
   /** The lid over the sky, or null for an open one. */
   deck: Deck | null;
@@ -140,6 +146,7 @@ const PRESETS: Record<TimeOfDay, Preset> = {
     stars: 0,
     cloud: 0xffd9c0,
     cloudOpacity: 1,
+    cloudShare: 1,
     headlights: false,
     deck: null,
     rain: 0,
@@ -168,6 +175,7 @@ const PRESETS: Record<TimeOfDay, Preset> = {
     stars: 0,
     cloud: 0xffffff,
     cloudOpacity: 1,
+    cloudShare: 1,
     headlights: false,
     deck: null,
     rain: 0,
@@ -196,6 +204,7 @@ const PRESETS: Record<TimeOfDay, Preset> = {
     stars: 0.15,
     cloud: 0xd86a8a,
     cloudOpacity: 1,
+    cloudShare: 1,
     headlights: true,
     deck: null,
     rain: 0,
@@ -224,6 +233,7 @@ const PRESETS: Record<TimeOfDay, Preset> = {
     stars: 1,
     cloud: 0x2b3a5a,
     cloudOpacity: 0.85,
+    cloudShare: 1,
     headlights: true,
     deck: null,
     rain: 0,
@@ -407,6 +417,9 @@ type Cast = {
   sunStrength: number;
   hemiGround: [number, number];
   cloudCover: number;
+  /** …and how many of them there are at all. See `Preset.cloudShare`: over
+   * a dry country the sky is EMPTIER, not hazier. */
+  cloudShare: number;
 };
 
 const CASTS: Record<BiomeId, Cast | null> = {
@@ -419,7 +432,12 @@ const CASTS: Record<BiomeId, Cast | null> = {
     sun: [0xfff0d0, 0.3],
     sunStrength: 1.06,
     hemiGround: [0xc9a870, 0.65],
-    cloudCover: 0.55,
+    // It almost never rains here, and a desert sky shows it: a handful of
+    // cumulus in a great deal of blue. Nearly solid where they are, because
+    // what makes the sky read as dry is the EMPTINESS between them — faded
+    // clouds over the whole ring only read as a rendering fault.
+    cloudCover: 0.92,
+    cloudShare: 0.3,
   },
 };
 
@@ -435,6 +453,7 @@ function countried(p: Preset, biome: BiomeId): Preset {
   p.sunIntensity *= cast.sunStrength;
   p.hemiGround = mixHex(p.hemiGround, cast.hemiGround[0], cast.hemiGround[1]);
   p.cloudOpacity *= cast.cloudCover;
+  p.cloudShare *= cast.cloudShare;
   return p;
 }
 
