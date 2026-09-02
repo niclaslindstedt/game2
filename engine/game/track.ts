@@ -186,21 +186,29 @@ export function gateHalfWidth(track: Track): number {
   return track.width / 2 + TUNING.offTrack.verge;
 }
 
-/** True when the move from (x0,z0) to (x1,z1) took the car through the
- * finish gate, forwards. Progress alone does not end a run: progress is the
- * nearest sample, and a car climbing the mountain beside the closing
- * straight passes every one of them without ever crossing the line. The
- * test is the LINE — the plane across the road at the gate, entered between
- * its posts, in the direction of travel — so it counts a car airborne over
- * it and refuses one that drove around it. */
-export function crossedFinish(
+/** R28 — half the width of a SPLIT BOARD's gate, m. Wider than the finish's
+ * on purpose: see `checkpoint.gate`. */
+export function boardHalfWidth(track: Track): number {
+  return track.width / 2 + STAGE_RULES.checkpoint.gate;
+}
+
+/** True when the move from (x0,z0) to (x1,z1) took the car through the gate
+ * at sample `at`, forwards, within `halfWidth` of the centerline. Progress
+ * alone does not carry a car through a gate: progress is the nearest sample,
+ * and a car climbing the mountain beside the closing straight passes every
+ * one of them without ever crossing the line. The test is the LINE — the
+ * plane across the road at the gate, entered between its ends, in the
+ * direction of travel — so it counts a car airborne over it and refuses one
+ * that drove around it. */
+export function crossedGate(
   track: Track,
+  at: number,
+  halfWidth: number,
   x0: number,
   z0: number,
   x1: number,
   z1: number,
 ): boolean {
-  const at = finishIndex(track);
   const s = track.samples[at];
   const flat = flatTrack(track);
   const fwdX = flat.sinHeading[at];
@@ -214,7 +222,19 @@ export function crossedFinish(
   const cx = x0 + (x1 - x0) * t;
   const cz = z0 + (z1 - z0) * t;
   const lateral = (cx - s.x) * fwdZ + (cz - s.z) * -fwdX;
-  return Math.abs(lateral) <= gateHalfWidth(track);
+  return Math.abs(lateral) <= halfWidth;
+}
+
+/** True when the move from (x0,z0) to (x1,z1) took the car through the
+ * finish gate, forwards. */
+export function crossedFinish(
+  track: Track,
+  x0: number,
+  z0: number,
+  x1: number,
+  z1: number,
+): boolean {
+  return crossedGate(track, finishIndex(track), gateHalfWidth(track), x0, z0, x1, z1);
 }
 
 /** Locate the car against the centerline, searching near `hint` — POSITION

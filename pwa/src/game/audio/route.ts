@@ -62,6 +62,12 @@ export function soundForEvent(
     case "lap":
       return { id: "lap", shape: event.best ? { pitch: 1.18, gain: 1.15 } : undefined };
 
+    // R28 — the line, refused. The one event on this list whose job is to be
+    // heard INSTEAD of another one, so it is sized to sit where `finish` was
+    // going to and nowhere quieter.
+    case "missed":
+      return { id: "missed" };
+
     case "cheer":
       // R27 — how big the crowd is decides how loud and how WIDE it is: a
       // knot of six at a corner is a thinner, tighter sound than the bank

@@ -492,18 +492,40 @@ The generator does the placing (`engine/mapgen/compile.ts`); no board is
 laid inside `finishClear` of the finish gate, where a split would only say
 what the line is about to say properly.
 
-Driving through one books a split: `checkpoint` fires with the board's
-index, how many the lap has, and the race clock as it passed, and the time
-goes on `state.checkpointTimes`. The window is arc position (the same
-mechanism R27's crowd uses), so a car put back on a board it has already
-driven through never books it twice. A circuit re-arms all of them each lap;
-the times stay on one list for the whole run.
+A board is a GATE, tested exactly as the finish line is: the plane across
+the road at the board, entered between its ends, in the direction the stage
+runs. The ends are the road plus `checkpoint.gate` either side — wider than
+the finish's own gate, because the finish is a line a driver aims at and a
+board is one they go past at the exit of the hardest corner on the stage,
+sideways, with the outside verge under two wheels. Progress alone would not
+do: progress is the nearest sample, so a car cutting across country walks it
+past every board it never went near.
+
+Only ONE board is armed at a time — the next one due, `checkpoints[state.checkpointsPassed]`.
+That is what makes the boards ordered (the fourth cannot be taken without
+the third), what stops a car put back on a board it has already driven
+through from booking it twice, and what makes a missed board recoverable:
+driving back down the stage and through it forwards is still a crossing.
+Taking one books a split — `checkpoint` fires with the board's index, how
+many the lap has, and the race clock as it passed, and the time goes on
+`state.checkpointTimes`. A circuit re-arms all of them each lap; the times
+stay on one list for the whole run.
+
+**A run is not over until every board is behind it.** Crossing the finish
+line owing a split books nothing — no finish, no roll-out, and on a circuit
+no lap; the run simply carries on, and `missed` fires with the board still
+owed so the HUD can say which one it is. The way back is the way it always
+is: turn round and drive to it, or take the way-home button, which puts the
+car at the last board it DID take and hands it the road from there.
 
 Two things read the splits. The HUD puts the gap up under the race clock for
 a few seconds — measured against the ghost's own splits, which ride on the
 tape (`GhostRun.splits`) rather than being read back off the replay, so the
 number is there from the first board even on a run that is well up the road
-on its ghost. And a respawn goes to the last board (above).
+on its ghost. And a respawn goes to the last board (above). The minimap
+marks the board still owed as a ring on the route, which is the mark to
+steer at from a field or a wrong turn — the one mark on that map that can be
+BEHIND the car.
 
 ## The open world
 

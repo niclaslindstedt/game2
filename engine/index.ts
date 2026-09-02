@@ -63,7 +63,9 @@ export {
   type Weather,
 } from "./game/state.ts";
 export {
+  boardHalfWidth,
   crossedFinish,
+  crossedGate,
   gateHalfWidth,
   lastCheckpoint,
   locate,

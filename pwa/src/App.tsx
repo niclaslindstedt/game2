@@ -2313,6 +2313,12 @@ export function App() {
               `LAP ${ev.lap} — ${formatTime(ev.time)}${ev.best ? " BEST" : ""}`,
               ev.best ? "good" : "info",
             );
+          } else if (ev.type === "missed") {
+            // R28 — the line went by and nothing happened, which is the one
+            // thing on the stage a player cannot be left to work out for
+            // themselves. Say WHICH board is owed, in the same numbering the
+            // split card has been counting up in all run.
+            flash(`SPLIT ${ev.next + 1}/${ev.count} MISSED — GO BACK`, "bad");
           } else if (ev.type === "landing" && ev.clean && ev.airTime >= REAL_AIR) {
             flash(`CLEAN AIR ${ev.airTime.toFixed(1)}s`, "good");
           } else if (ev.type === "systemFail") {

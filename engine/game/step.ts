@@ -32,7 +32,9 @@ import {
 import { clipKerbs, collideCar } from "./collision.ts";
 import { beyondDriving } from "./damage.ts";
 import {
+  boardHalfWidth,
   crossedFinish,
+  crossedGate,
   crossedLip,
   locate,
   locatePoint,
@@ -316,7 +318,6 @@ export function createGame(options: CreateGameOptions): GameState {
     rollout: 0,
     cheeredS: 0,
     checkpointsPassed: 0,
-    checkpointS: 0,
     checkpointTimes: [],
     progressIndex: 0,
     nearIndex: 0,
@@ -398,10 +399,6 @@ function respawn(state: GameState, events: GameEvent[], home: WayHome): void {
   state.progressIndex = home.index;
   state.nearIndex = home.index;
   state.progressS = state.track.samples[home.index].s;
-  // The board the car is standing on has already been checked in, so the
-  // window opens where it stands: driving off it again must not book the
-  // same split twice.
-  state.checkpointS = state.progressS;
   state.cheeredS = state.progressS;
   state.offRoad = false;
   // A respawn sets the car down facing down the stage, so whatever the
@@ -686,28 +683,39 @@ function cheerFor(state: GameState, events: GameEvent[]): void {
   }
 }
 
-/** R28 — the split boards this step drove through. Windowed on arc position
- * exactly as the crowd is, so a respawn winding progress back re-arms the
- * boards ahead of it without ever re-booking the one it is standing on. */
-function checkIn(state: GameState, events: GameEvent[]): void {
-  const from = state.checkpointS;
-  const to = state.progressS;
-  if (to <= from) return;
-  state.checkpointS = to;
+/** R28 — DID THIS MOVE TAKE THE CAR THROUGH THE BOARD IT OWES? The gate is
+ * a line across the stage exactly as the finish is (`boardHalfWidth`), and
+ * only ONE of them is ever armed: the next board due. That is what makes
+ * the boards ordered — a car cannot take the fourth without the third — and
+ * it is also what makes a missed board recoverable, since driving back down
+ * the stage and through it forwards is still a crossing.
+ *
+ * Asked off the move the handling just made, before anything else in the
+ * step can pick the car up: a respawn lands it ON the board behind it, and
+ * a teleport must never be allowed to count as driving through anything.
+ *
+ * Progress alone would not do. Progress is the nearest sample, so a car
+ * cutting the stage across country walks it past every board it never went
+ * near — which is the whole thing the boards are here to catch. */
+function throughBoard(state: GameState, x0: number, z0: number, x1: number, z1: number): boolean {
   const boards = state.track.checkpoints;
-  for (let i = state.checkpointsPassed; i < boards.length; i++) {
-    if (boards[i].s <= from) continue;
-    if (boards[i].s > to) break;
-    state.checkpointsPassed = i + 1;
-    events.push({
-      type: "checkpoint",
-      index: i,
-      count: boards.length,
-      split: state.checkpointTimes.length,
-      time: state.raceTime,
-    });
-    state.checkpointTimes.push(state.raceTime);
-  }
+  const due = boards[state.checkpointsPassed];
+  if (due === undefined) return false;
+  return crossedGate(state.track, due.index, boardHalfWidth(state.track), x0, z0, x1, z1);
+}
+
+/** R28 — book the board the car has just driven through. */
+function checkIn(state: GameState, events: GameEvent[]): void {
+  const index = state.checkpointsPassed;
+  state.checkpointsPassed = index + 1;
+  events.push({
+    type: "checkpoint",
+    index,
+    count: state.track.checkpoints.length,
+    split: state.checkpointTimes.length,
+    time: state.raceTime,
+  });
+  state.checkpointTimes.push(state.raceTime);
 }
 
 /** The ground under the car, refilled every step. `stepGrounded` and
@@ -951,8 +959,26 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // either crossed it or did not. Asked here rather than at the end of the
   // step, so a respawn cannot teleport the car over the gate and win.
   const finished = !track.endless && crossedFinish(track, prevX, prevZ, car.x, car.z);
+  // R28 — and the split board it owes, asked here for the same reason.
+  const checkedIn = throughBoard(state, prevX, prevZ, car.x, car.z);
   state.nearIndex = fix.index;
-  state.progressIndex = Math.max(state.progressIndex, fix.index);
+  // R22 — A CIRCUIT'S ROAD RUNS BACK INTO ITS OWN START LINE, so its first
+  // sample and its last are the same piece of gravel and the nearest-sample
+  // search is free to answer with either. Progress only ever creeps forward,
+  // which on a sprint is the whole of the rule — but on a circuit the car
+  // stands ON that seam twice a lap: once on the grid, once on the line it
+  // laps at. Taking the far end there pins progress at the length of the
+  // road for the WHOLE of the next lap, and everything downstream reads it:
+  // the pacenotes, the crowd, the gauge on the map, and the bot's plan,
+  // which is why a bot that drove lap one cleanly used to spend laps two
+  // and three driving a stage it thought it had already finished.
+  //
+  // So a jump of more than half a lap ahead is the ROAD wrapping, not the
+  // run advancing, and progress ignores it. There is nothing to weigh: a
+  // car cannot cover half a lap in one step, so the only thing this rule
+  // can ever throw away is the seam.
+  const wrapped = track.circuit && fix.index - state.progressIndex > track.samples.length / 2;
+  if (!wrapped) state.progressIndex = Math.max(state.progressIndex, fix.index);
   state.progressS = track.samples[state.progressIndex].s;
   state.lateral = fix.lateral;
   state.stats.topSpeed = Math.max(state.stats.topSpeed, car.u);
@@ -1115,9 +1141,19 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
 
   // R25 — the crowd, which only exists to be driven past.
   if (state.phase === "racing") cheerFor(state, events);
-  // R28 — the split boards. After the respawn above, so a car put back at a
-  // board does not immediately book it again.
-  if (state.phase === "racing") checkIn(state, events);
+  // R28 — the split board this move drove through, if it drove through one.
+  if (checkedIn && state.phase === "racing") checkIn(state, events);
+
+  // R28 — THE STAGE IS ALL OF ITS BOARDS. A line crossed with splits still
+  // owed is a stage that was cut rather than driven, so it books nothing:
+  // not the lap, not the finish. The run simply carries on, and the way
+  // back to the board it owes is the way it always is — turn round and
+  // drive to it, or take the way-home button, which puts the car at the
+  // last board it DID take and hands it the road from there.
+  const owed = track.checkpoints.length - state.checkpointsPassed;
+  if (finished && owed > 0 && state.phase === "racing") {
+    events.push({ type: "missed", next: state.checkpointsPassed, count: track.checkpoints.length });
+  }
 
   // Through the gate. On a circuit (R22) it is the same line the run
   // started on, so crossing it books a lap and — until the last one — puts
@@ -1126,7 +1162,7 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // has R25's run-out behind its gate and coasts down it. Whatever has no
   // run-out — a circuit, a synthetic rig, an endless stage's absent finish
   // — is simply over at the line, having nothing to coast down.
-  if (finished && state.phase === "racing") {
+  if (finished && owed <= 0 && state.phase === "racing") {
     const lapTime = state.raceTime - state.lapStart;
     const best = state.lapTimes.every((t) => lapTime < t);
     state.lapTimes.push(lapTime);
@@ -1143,7 +1179,6 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
       // R28 — the boards are the LAP's, so the next lap drives through all
       // of them again. The times stay on one list for the whole run.
       state.checkpointsPassed = 0;
-      state.checkpointS = state.progressS;
       // R27's crowd is windowed on the same arc position, so it needs the
       // same rewind: a mark left at the end of the last lap is one the
       // whole of the next lap sits behind, and nobody would cheer again.
