@@ -34,12 +34,19 @@
 
 import type { Highway, HighwayNetwork } from "./highway.ts";
 import { STAGE_RULES as R, type SegmentPlan } from "./rules.ts";
-import { DIR_PAIRS, solveCsc, solveRadii, type Pose } from "./search.ts";
+import {
+  DIR_PAIRS,
+  solveCsc,
+  solveRadii,
+  straightPart,
+  straightRunAt,
+  type Pose,
+} from "./search.ts";
 
 /** How far apart the followed road is cut into segments, m. Short enough
  * that a public road's bend is tracked rather than chorded across, long
  * enough that a borrowed kilometre is a dozen segments and not a hundred. */
-const FOLLOW_STEP = 70;
+const FOLLOW_STEP = 35;
 
 /** How many radii per severity the approach solves at. Three is the ladder
  * the circuit's closure uses; the approach has a whole road to aim at
@@ -98,7 +105,9 @@ export function planBorrow(
   from: Pose,
   network: HighwayNetwork,
   width: number,
-  /** How far the route stays on the tarmac once it is on it, m. */
+  /** How far the route would LIKE to stay on the tarmac, m — what the
+   * asphalt dial is asking for. What it gets is however much of that the
+   * road can offer inside R38, down to `paving.borrow.runOn.min`. */
   runOn: number,
   /** R4 — whether the segment the route is standing on is a straight. A
    * hard turn is taken out of a straight and never out of another turn, so
@@ -219,10 +228,24 @@ export function planBorrow(
 /** Cut `runOn` metres of the road into segments that track its bend, from
  * `index` onward, appending them to `plans`. Returns the index it reached,
  * or null where the road runs out first — a route that would drive off the
- * end of the tarmac it borrowed is not a borrow.
+ * end of the tarmac it borrowed is not a borrow — or where the road runs
+ * STRAIGHTER than R38 allows, which is the same refusal for the same
+ * reason: the route may not be left somewhere it does not belong.
  *
- * A public road's curvature is gentle by construction, so most of what
- * comes out is straight — which is what a road across open country is. */
+ * A chunk becomes a straight when the road is straight BY R38 — the same
+ * `straightRun.bend` the rule counts a run with, so what the route drives
+ * and what the rule measures cannot disagree. It is emphatically not the
+ * turn vocabulary's widest radius: the vocabulary tops out at a 100 m soft
+ * turn and a public road bends at 220 at its tightest, so measured against
+ * that every chunk of every road came out "straight" and the route stopped
+ * tracking the bend at all — it left the junction on the road's tangent and
+ * ran off into the field beside it, one chord at a time, with the terrain
+ * able to lay its shelf under only one of the two.
+ *
+ * What a chunk drawn as a straight still gives up is the chord across the
+ * bend it ignores: `length² / 8r`, which at the threshold is under a metre
+ * over a 70 m chunk — inside the carriageway on the narrowest road the
+ * width dial builds, and gone entirely on anything straighter. */
 function followRoad(
   road: Highway,
   index: number,
@@ -230,21 +253,28 @@ function followRoad(
   runOn: number,
   plans: SegmentPlan[],
 ): number | null {
+  /** The shortest run that is still a borrow rather than a mistake. */
+  const least = R.paving.borrow.runOn.min;
   const step = forward ? 1 : -1;
   const perPoint = road.points[1].s - road.points[0].s;
   const chunk = Math.max(2, Math.round(FOLLOW_STEP / perPoint));
-  const widest = R.turn.soft.radius.max;
+  const widest = R.straightRun.bend;
   let i = index;
   let ran = 0;
+  // R38 — and how far the route has come along the tarmac without a corner
+  // in it. Seeded from what the approach left standing, because the
+  // junction corner and the straight in front of it are part of the same
+  // run the driver is sitting through.
+  let straight = straightRunAt(plans);
   while (ran < runOn) {
     const next = i + step * chunk;
-    if (next < 0 || next >= road.points.length) return null;
+    if (next < 0 || next >= road.points.length) return ran >= least ? i : null;
     const a = road.points[i];
     const b = road.points[next];
     const length = Math.abs(b.s - a.s);
     const turn = wrap(forward ? b.heading - a.heading : a.heading - b.heading);
     const bend = Math.abs(turn) > 1e-4 ? length / Math.abs(turn) : Infinity;
-    plans.push(
+    const plan: SegmentPlan =
       bend > widest
         ? { kind: "straight", length, feature: "none", paved: true }
         : {
@@ -255,8 +285,23 @@ function followRoad(
             severity: "soft",
             feature: "none",
             paved: true,
-          },
-    );
+          };
+    // R38 — THE RALLY LEAVES THE ROAD BEFORE THE ROAD GETS BORING. A
+    // public road is laid to get somewhere and runs straight for hundreds
+    // of metres at a time between its bends, so this is not a rare case to
+    // refuse: measured over seeds 1-8 at long it is most of every road, and
+    // a borrow that insisted on the whole of `runOn` being interesting was
+    // refused 92% of the time and left the `asphalt` dial with nothing to
+    // spend on.
+    //
+    // So the run ENDS here instead, at the last chunk before the straight
+    // would break the rule, and the caller turns off onto the dirt. What it
+    // may not do is end so early that the borrow was never worth making —
+    // that really is a detour onto a road and straight off it again — which
+    // is what `least` is.
+    straight += straightPart(plan);
+    if (straight > R.straightRun.borrowed) return ran >= least ? i : null;
+    plans.push(plan);
     ran += length;
     i = next;
   }

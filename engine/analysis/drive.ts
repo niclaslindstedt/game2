@@ -217,6 +217,7 @@ export function analyzeDrive(track: Track, v: number[]): MetricReport {
   const tilt = cornerTilt(track, findings);
   const rolling = undulation(track, findings);
   const kerb = apexTariff(track, findings);
+  const straight = longestStraight(track, v, findings);
 
   const checks: Check[] = [
     {
@@ -273,6 +274,16 @@ export function analyzeDrive(track: Track, v: number[]): MetricReport {
       budget: D.kerb.max,
     },
     {
+      // R38 — and the opposite complaint from `ambush`: not a corner with
+      // no road in front of it, but road with no corner in front of it.
+      id: "straight",
+      label: "no straight runs longer than five seconds (R38)",
+      score: under(straight.seconds, D.straight, D.straightFail),
+      weight: 1.5,
+      value: straight.seconds,
+      budget: D.straight,
+    },
+    {
       id: "ambush",
       label: "no corner arrives without a run-up",
       score: rate(unbrakeable, Math.max(1, corners)),
@@ -306,9 +317,86 @@ export function analyzeDrive(track: Track, v: number[]): MetricReport {
       cornerTilt: tilt ?? 0,
       travelPerKm: rolling,
       apexTariff: kerb ?? 0,
+      longestStraightS: straight.seconds,
+      longestStraightM: straight.meters,
+      straightsOverBudget: straight.over,
     },
     ms: Date.now() - started,
   };
+}
+
+/** R38 — THE LONGEST THE STAGE ASKS FOR NOTHING, in seconds of driving.
+ *
+ * A stage is corners joined by straights. This is the check that says so:
+ * it walks the raced road, marks every metre the wheel is merely being
+ * held, and times the longest unbroken stretch of it at the speed the
+ * profile says that stretch is met at.
+ *
+ * TIME, not length, because length is not what the player experiences.
+ * Two hundred metres out of a hairpin is second gear, third, a glance at
+ * the pace note; the same two hundred entered at 200 km/h is three
+ * seconds of nothing. Only the clock tells those apart, and the clock is
+ * what the ask was stated in.
+ *
+ * The RACED stage only (R11): the run-out past the finish is road the
+ * clock never sees and is a straight on purpose, and the opening straight
+ * is measured like any other because a grid still has to sit through it.
+ *
+ * Every over-budget stretch is reported, not just the worst — a stage
+ * with one nine-second runway and a stage with four six-second ones are
+ * different complaints, and the findings are where the difference shows. */
+function longestStraight(
+  track: Track,
+  v: number[],
+  findings: Finding[],
+): { seconds: number; meters: number; over: number } {
+  const D = ANALYSIS.drive;
+  const samples = track.samples;
+  const finish = track.finishS ?? track.length;
+  let worst = 0;
+  let worstMeters = 0;
+  let over = 0;
+  let seconds = 0;
+  let meters = 0;
+  let from = 0;
+
+  const close = (at: TrackSample): void => {
+    if (seconds > worst) {
+      worst = seconds;
+      worstMeters = meters;
+    }
+    if (seconds > D.straight) {
+      over++;
+      findings.push({
+        code: "drive.straight",
+        severity: seconds > D.straightFail ? "error" : "warn",
+        message: `${meters.toFixed(0)} m of straight — ${seconds.toFixed(
+          1,
+        )} s with nothing to steer for`,
+        at: { x: at.x, z: at.z },
+        s: from,
+        value: seconds - D.straight,
+      });
+    }
+    seconds = 0;
+    meters = 0;
+  };
+
+  for (let i = 1; i < samples.length; i++) {
+    const here = samples[i];
+    if (here.s > finish) break;
+    const step = here.s - samples[i - 1].s;
+    const speed = Math.max(1, v[i]);
+    if (Math.abs(here.curvature) * D.straightRadius < 1) {
+      if (meters === 0) from = samples[i - 1].s;
+      meters += step;
+      seconds += step / speed;
+    } else if (seconds > 0) {
+      close(samples[i - 1]);
+    }
+  }
+  if (seconds > 0) close(samples[samples.length - 1]);
+  return { seconds: worst, meters: worstMeters, over };
 }
 
 /** R19 — HOW FAR OVER A GRAVEL CORNER ACTUALLY LIES, as the median

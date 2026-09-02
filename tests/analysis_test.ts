@@ -199,8 +199,8 @@ describe("the rollers", () => {
     // R17 — the seed is SEARCHED for rather than named: a stage has a
     // branch only where its country carries a public road for the route to
     // leave, and which seeds those are is the land's decision.
-    let track = compileStage(3, "medium", { asphalt: 0.4 });
-    for (const seed of [3, 1, 2, 5, 8, 13, 21]) {
+    let track = compileStage(26, "medium", { asphalt: 0.4 });
+    for (const seed of [26, 41, 46, 3, 1, 2, 5, 8, 13, 21]) {
       track = compileStage(seed, "medium", { asphalt: 0.4 });
       if (track.spurs.some((s) => s.block)) break;
     }

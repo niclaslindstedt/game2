@@ -52,12 +52,49 @@ describe("stage generator", () => {
     for (const seed of SEEDS) {
       for (const plan of generateStage(seed)) {
         if (plan.kind !== "turn") continue;
+        // R3 governs the corners the rally DRAWS. A borrowed public road's
+        // bends are the road's own (R17) — tracked, not drawn, and as wide
+        // as R38 lets a road be and still count as bending at all.
+        if (plan.paved) continue;
         const vocab = R.turn[plan.severity ?? "soft"];
         expect(plan.radius).toBeGreaterThanOrEqual(vocab.radius.min);
         expect(plan.radius).toBeLessThanOrEqual(vocab.radius.max);
         const angle = plan.length / (plan.radius ?? 1);
         expect(angle).toBeGreaterThanOrEqual(vocab.angle.min - 1e-9);
         expect(angle).toBeLessThanOrEqual(vocab.angle.max + 1e-9);
+      }
+    }
+  });
+
+  it("R38 — the route never runs far without a corner in it", () => {
+    for (const seed of SEEDS) {
+      // Both shapes, but the circuit only on a slice of the seeds: it draws
+      // from the same vocabulary through the same tracker, and a closure is
+      // the dearest thing the generator does.
+      for (const shape of ["sprint", "circuit"] as const) {
+        if (shape === "circuit" && seed % 3 !== 1) continue;
+        const plans = generateStage(seed, "medium", {}, shape);
+        let run = 0;
+        let worst = 0;
+        for (const plan of plans) {
+          // The run breaks at a corner and carries on through anything too
+          // wide to be one — a straight, or a borrowed road's own lean.
+          const part =
+            plan.kind === "straight"
+              ? plan.length
+              : (plan.radius ?? 0) > R.straightRun.bend
+                ? plan.length
+                : 0;
+          run = part === 0 ? 0 : run + part;
+          // The closing straight carries R25's run-out on its back, and the
+          // run-out is road the clock never sees (R11) — so what is measured
+          // here is the raced part of it, exactly as the analysis measures
+          // the raced stage.
+          if (plan.runOut) run -= plan.runOut;
+          worst = Math.max(worst, run);
+        }
+        const cap = Math.max(R.straightRun.max, R.straightRun.borrowed);
+        expect({ seed, shape, worst }).toEqual({ seed, shape, worst: Math.min(worst, cap) });
       }
     }
   });
@@ -157,7 +194,10 @@ describe("stage generator", () => {
     expect(fords).toBeGreaterThan(0);
     expect(timber).toBeGreaterThan(0);
     expect(concrete).toBeGreaterThan(0);
-  });
+    // Twenty-four LONG stages at the wet end of the dial, which is a good
+    // way over the file's own 30 s: it passed on an idle machine and timed
+    // out beside the rest of the file, which is a coin toss and not a test.
+  }, 90_000);
 
   // Twenty-four LONG stages, sixteen of them with the public roads laid
   // across the country first (R17) and a borrow solved against them. This is
@@ -206,13 +246,17 @@ describe("stage generator", () => {
     // the contract is exact, and it is the half that matters: a stage with
     // no tarmac asked for has none.
     expect(share(0)).toBe(0);
-    // Past it the dial buys some, and asking for more of it buys more —
-    // up to the ceiling the country sets, which is where it stops. Measured
-    // over these eight long stages: 0% at 0, 6.3% at 0.1, 6.5% at 0.25, and
-    // no further at 0.5 or 1, because there is only so far a rally can
-    // drive down one public road inside a bounded world before R9 puts it
-    // outside. What is asserted is therefore the response at the bottom of
-    // the dial, where it has room to answer, and never a value at the top.
+    // Past it the dial buys some, up to the ceiling the country sets, which
+    // is where it stops. Measured over these eight long stages: 0% at 0 and
+    // 3.5% everywhere above it.
+    //
+    // That ceiling is now R38's, and it is lower and flatter than it was —
+    // 10.3% at 0.25 before the rule, against 3.5% now. A public road runs
+    // straight for two or three hundred metres at a time between its bends,
+    // the rally may not sit on a straight that long, so a borrow ends where
+    // the road stops bending rather than where the dial stops asking. What
+    // is asserted is therefore that the dial buys tarmac at all past its
+    // floor, and never a value at the top.
     expect(share(0.1)).toBeGreaterThan(0.02);
     expect(share(0.25)).toBeGreaterThanOrEqual(share(0.1) * 0.9);
   }, 90_000);

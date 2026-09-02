@@ -680,13 +680,30 @@ export function collideCars(a: ContactSide, b: ContactSide): boolean {
   const relX = vax - vbx;
   const relZ = vaz - vbz;
   const closing = relX * nx + relZ * nz;
-  if (closing <= 0) return false;
 
   const mA = a.spec.mass;
   const mB = b.spec.mass;
   const invA = 1 / mA;
   const invB = 1 / mB;
   const invSum = invA + invB;
+
+  // Inside each other, but no longer closing: one car has come alongside
+  // the other and the two are now travelling together. There is no impulse
+  // left to exchange and nothing to fold — but they ARE still inside each
+  // other, and a pair nothing pushes apart stays there. Two rivals ground
+  // along a corner side by side at 6 m/s and sat 0.75 m between centres,
+  // which is most of a car's width of overlap, for as long as neither
+  // steered away: the resolver had already returned by the time the
+  // separation below was reached.
+  //
+  // So the position is corrected either way and only the IMPULSE is gated
+  // on closing. It still reports `false`, which is what it is: nobody was
+  // hit, nothing was bent, and a contact booked every step of a long
+  // sideways rub is a hundred and twenty scrapes a second in the ledger.
+  if (closing <= 0) {
+    part(carA, carB, nx, nz, penetration, invA, invB, invSum);
+    return false;
+  }
   // Along the normal: the exchange. Across it: friction, which bleeds the
   // relative slide by whatever `tangentKeep` does not keep.
   const jn = ((1 + C.restitution) * closing) / invSum;
@@ -698,10 +715,7 @@ export function collideCars(a: ContactSide, b: ContactSide): boolean {
 
   // Out of each other, by the share of the overlap each one's mass earns —
   // the lighter car gives more ground, exactly as it takes more speed.
-  carA.x -= nx * penetration * (invA / invSum);
-  carA.z -= nz * penetration * (invA / invSum);
-  carB.x += nx * penetration * (invB / invSum);
-  carB.z += nz * penetration * (invB / invSum);
+  part(carA, carB, nx, nz, penetration, invA, invB, invSum);
 
   applyContact(a, impX * invA, impZ * invA, sinA, cosA, raF, nx, nz);
   applyContact(b, -impX * invB, -impZ * invB, sinB, cosB, rbF, -nx, -nz);
@@ -714,6 +728,26 @@ export function collideCars(a: ContactSide, b: ContactSide): boolean {
   dealContactCrush(a, closing * (mB / (mA + mB)), share, sinA, cosA, nx, nz);
   dealContactCrush(b, closing * (mA / (mA + mB)), share, sinB, cosB, -nx, -nz);
   return true;
+}
+
+/** Take two overlapping cars out of each other along `(nx, nz)`, by the
+ * share of the overlap each one's mass earns — the lighter car gives more
+ * ground, exactly as it takes more speed. Position only: whether there is
+ * an impulse to go with it is the caller's question. */
+function part(
+  carA: CarState,
+  carB: CarState,
+  nx: number,
+  nz: number,
+  penetration: number,
+  invA: number,
+  invB: number,
+  invSum: number,
+): void {
+  carA.x -= nx * penetration * (invA / invSum);
+  carA.z -= nz * penetration * (invA / invSum);
+  carB.x += nx * penetration * (invB / invSum);
+  carB.z += nz * penetration * (invB / invSum);
 }
 
 /** Spend one side's half of a car-to-car impulse: the velocity change into

@@ -12,7 +12,11 @@
 //       final turn. (An endless stage never closes.)
 //   R3  Turns come in three severities with distinct radius/angle
 //       vocabularies: soft (fast, open), medium (a real corner), and hard
-//       (slow, tight — up to hairpin).
+//       (slow, tight — up to hairpin). It governs the corners the rally
+//       DRAWS. A BORROWED public road (R17) is not drawn at all — it is a
+//       line being tracked, and its bends are the road's own — so those
+//       segments are outside the vocabulary, exactly as R5 already exempts
+//       them from the same-direction run.
 //   R4  A hard turn only follows a straight: there is always a braking zone.
 //   R5  At most two consecutive same-direction turns — no endless spirals.
 //   R6  Jumps sit on straights, with a clear run-up before the lip and a
@@ -252,6 +256,18 @@
 //       (R18's channel has to be seen past the road's edge), never on the
 //       start's apron or inside the last stretch before the line, and its
 //       walls and its parked cars are as solid as they look.
+//   R38 The route never runs more than `straightRun.max` meters without a
+//       corner in it. A stage is corners joined by straights, and the
+//       straight is the joint — long enough to change up through the box
+//       and pick a line into the next corner, and never long enough to
+//       become somewhere the driver is going. The rule is about the RUN and
+//       not the segment, because a straight followed by a straight is one
+//       straight however the plan is written, and stringing them together
+//       was how a stage ended up with four hundred metres of nothing in the
+//       middle of it. A bend wider than `straightRun.bend` does not break
+//       the run either: at rally pace that is a lean and not a corner, so a
+//       kilometre of dead-flat public road is a straight no matter which
+//       vocabulary drew it.
 
 /** Sample spacing along the compiled centerline, meters. It lives here
  * because it is not only the compiler's business: a search that has to land
@@ -427,15 +443,19 @@ export const STAGE_RULES = {
      * same vocabulary as every other corner (R3), and the solve's job is
      * to find a place on the lap where one of them fits. */
     closeRadii: 3,
-    /** The straight between the closure's two arcs. The ceiling is where a
-     * circuit gets its MAIN STRAIGHT from — a lap wants one long enough to
-     * pull top gear down before the line — and it is also what decides how
-     * far from the grid a closure can be solved at all, so it is the one
-     * number that says how often a lap manages to shut. Long enough to read
-     * as a straight,
-     * short enough that the closure is a corner combination and not a
-     * runway bolted onto the end of the lap. */
-    closeStraight: { min: 25, max: 380 },
+    /** The straight between the closure's two arcs. The ceiling decides how
+     * far from the grid a closure can be solved at all, so it is also the
+     * one number that says how often a lap manages to shut.
+     *
+     * It is R38's cap (`straightRun.max`), and it used to be 380. A lap
+     * does want a main straight — somewhere to pull top gear down before
+     * the line — but the closure is not where it comes from: a straight
+     * that long is a runway bolted onto the end of the lap, and it is the
+     * one the driver meets on every single lap. What a circuit gets
+     * instead is the closing straight and the grid's own opening run at
+     * the line, which are R1's and R2's and are a start-finish straight by
+     * design. */
+    closeStraight: { min: 25, max: 135 },
   },
 
   /** R1/R2 — opening and closing straights, meters. */
@@ -469,10 +489,63 @@ export const STAGE_RULES = {
   /** Straight vocabulary, meters. Short breathers between corners are the
    * norm; the long bucket is where the top gears live, drawn less often so
    * the stage reads as corners connected by straights rather than the other
-   * way around. */
+   * way around. The long bucket's ceiling is R38's cap — the longest
+   * straight the vocabulary may draw is the longest run the route may
+   * make. */
   straightShort: { min: 30, max: 70 },
-  straightLong: { min: 100, max: 190 },
+  straightLong: { min: 100, max: 135 },
   longStraightChance: 0.4,
+
+  /** R38 — THE STRAIGHT RUN: the most road the route may cover without a
+   * corner in it.
+   *
+   * `max` is stated in METRES because that is what the search can count,
+   * but the number behind it is a TIME: five seconds, which is as long as
+   * anyone wants to sit holding a wheel that is doing nothing. Metres come
+   * out of seconds through the speed the road is met at, and the binding
+   * case is not the fast one — it is a straight taken OUT OF A SLOW CORNER,
+   * where the car spends the first half of it accelerating. So the cap is
+   * set by the slow case and the fast case comes in well under it.
+   *
+   * MEASURED, on the analyzer's reference profile over seeds 1-24 at
+   * medium: at 145 m the slowest exits ran to 5.0-5.1 s and seven runs on
+   * six seeds sat over the line; at 135 the worst anywhere is 4.9 and
+   * nothing is over. It is the ceiling of the long straight bucket too —
+   * the longest straight the vocabulary may draw is the longest run the
+   * route may make — and it clears everything a straight has to be long
+   * enough to CARRY: a jump with its run-up and landing (`jump.minStraight`
+   * is 107), a crest, a bridge, and R36's passage over a public road.
+   *
+   * It is a RUN and not a segment. Two straights drawn back to back are one
+   * straight to the person driving them, and stringing four of them
+   * together is how a stage came out with four hundred metres of nothing in
+   * the middle of it — every one of them legal on its own.
+   *
+   * `borrowed` is the same five seconds on TARMAC (R17), and it is longer
+   * because the road under it is faster: a sealed stretch is entered off a
+   * junction the car takes at speed and held at speed, where a gravel
+   * straight is most often taken out of a corner the car has had to stop
+   * for. One rule, one budget in seconds, two proxies for it in metres,
+   * each measured against the speed its own road is driven at — and the
+   * check in `analysis/drive.ts` reads the clock on both, so neither proxy
+   * can drift away from the rule it stands in for.
+   *
+   * It is also what makes R17 possible at all. A public road is not a
+   * rally stage: it is laid to get somewhere, and it runs straight for two
+   * or three hundred metres at a time between its bends whatever the
+   * generator does. At 135 m the rally could borrow almost nothing —
+   * measured over seeds 1-8 at long, 95% of every stretch the search
+   * looked at was refused and the `asphalt` dial stopped buying tarmac.
+   *
+   * `bend` is how wide a corner may be and still count as one, m. Under it
+   * the road breaks the run; over it the run carries straight on through
+   * the bend. The rally's own vocabulary never draws anything near this
+   * wide (a soft turn tops out at 100 m), so the number is there for the
+   * borrowed road: one of those bends at 220 m at its tightest and runs
+   * arrow-straight for kilometres at its loosest, and only the second of
+   * those is a straight. `ANALYSIS.drive.straightRadius` measures the
+   * built stage against the same radius, for the same reason. */
+  straightRun: { max: 135, borrowed: 220, bend: 700 },
 
   /** R3 — turn vocabulary: radius in meters, angle in radians. Soft turns
    * are taken flat-out or near it; mediums are real corners that ask for a

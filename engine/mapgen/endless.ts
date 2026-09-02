@@ -28,6 +28,7 @@ import {
   probePoints,
   recomputeSameDirRun,
   straightLength,
+  straightPart,
   trackRun,
   type Cursor,
   type SameDirRun,
@@ -137,7 +138,19 @@ export function createStageStream(seed: number, knobs?: Partial<StageKnobs>): St
       // forced turn keeps getting flipped can starve the draw loop.
       const forcedDir: 1 | -1 | 0 =
         Math.abs(off) > R.endless.maxCourseError * 0.55 ? (off >= 0 ? 1 : -1) : 0;
-      const kind: "straight" | "turn" = rng.chance(R.turnChance) ? "turn" : "straight";
+      // R38 — the straight run behind the cursor. Walked here rather than
+      // through `straightRunAt` because the stream carries its plans paired
+      // with the arc they start at; the rule is the same one and reads the
+      // same `straightPart`.
+      let run = 0;
+      for (let i = plans.length - 1; i >= 0; i--) {
+        const part = straightPart(plans[i].plan);
+        if (part === 0) break;
+        run += part;
+      }
+      const straightLeft = R.straightRun.max - run;
+      const kind: "straight" | "turn" =
+        straightLeft < R.straightShort.min || rng.chance(R.turnChance) ? "turn" : "straight";
       let plan: SegmentPlan;
       if (kind === "turn") {
         plan = drawTurn(
@@ -147,7 +160,7 @@ export function createStageStream(seed: number, knobs?: Partial<StageKnobs>): St
           sameDirRun,
         );
       } else {
-        const length = straightLength(rng);
+        const length = Math.min(straightLength(rng), straightLeft);
         plan = {
           kind: "straight",
           length,

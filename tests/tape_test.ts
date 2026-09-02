@@ -152,16 +152,23 @@ describe("the run tape", () => {
   });
 
   it("places a time against a field without putting a car on the road", () => {
-    const recorded = recordBotRun({ difficulty: "medium", cars: 15 });
+    // A HARD field, and the difficulty is the fixture rather than a detail:
+    // it is the one where the bot's own run is quick enough that no crew
+    // ever shares road with it. That is the precondition the claim below
+    // needs — a crew that CATCHES the player sees it in its traffic and
+    // drives around it, so the crew that raced is not the crew the
+    // standalone placing simulates, and on this stage a medium run is slow
+    // enough for exactly that to happen (place 13 raced against 12 placed).
+    const recorded = recordBotRun({ difficulty: "hard", cars: 15 });
     const placed = placeAmongField({
       stage: STAGE,
-      field: { difficulty: "medium", cars: 15, massStart: false },
+      field: { difficulty: "hard", cars: 15, massStart: false },
       time: recorded.time,
       carId: CAR.id,
     });
-    // The same time, against the same field, placed the same way — the
-    // crews are never resolved against each other, so racing them alone and
-    // racing them with somebody out there gives one answer.
+    // The same time, against the same field, placed the same way — nobody
+    // met anybody, so racing them alone and racing them with somebody out
+    // there gives one answer.
     expect(placed.place).toBe(recorded.place);
     expect(placed.of).toBe(recorded.of);
     expect(placed.rows.filter((row) => row.you).length).toBe(1);

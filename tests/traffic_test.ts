@@ -203,16 +203,25 @@ describe("two cars meeting", () => {
     expect(b.car.u).toBeGreaterThan(30);
   });
 
-  it("holds a stationary field on one start line until it is stepped", () => {
-    // Every rival in the field is built on the same grid sample, so a whole
-    // field spawns inside itself. Nothing separates them because nothing is
-    // closing: the contact only exists once somebody is going somewhere.
+  it("takes two cars out of each other even when neither is closing", () => {
+    // A pair that has stopped closing is still a pair inside each other,
+    // and nothing else in the model will ever separate them: two rivals
+    // ground along a corner side by side and sat most of a body width
+    // overlapped for as long as neither steered away. So the POSITION is
+    // corrected whatever the relative speed is, and only the impulse and
+    // the bodywork wait for a real hit — hence no events here.
+    //
+    // It is not what keeps a whole field from exploding off one grid
+    // sample: every rival is built on the same start sample, and what makes
+    // that safe is that a crew still in the start control is not ON THE
+    // ROAD, so no contact between them is ever asked about (`onRoad`).
     const { a, b } = pair();
     b.car.x = a.car.x;
     b.car.z = a.car.z;
     b.car.heading = a.car.heading;
     collideCars(a, b);
-    expect(a.car.x).toBe(b.car.x);
+    const apart = Math.hypot(a.car.x - b.car.x, a.car.z - b.car.z);
+    expect(apart).toBeCloseTo(TUNING.collision.halfWidth * 2, 6);
     expect(a.events).toHaveLength(0);
   });
 });
