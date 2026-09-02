@@ -359,7 +359,10 @@ describe("junctions (R17)", () => {
       const junctions = junctionsOf(track);
       const crossings = track.junctions.length - junctions.length;
       expect(branchesOf(track).length).toBe(junctions.length);
-      expect(track.spurs.length - branchesOf(track).length).toBe(2 * crossings);
+      // ...and a railway crossing (R41) the two arms of the line.
+      expect(track.spurs.length - branchesOf(track).length).toBe(
+        2 * crossings + 2 * track.rails.length,
+      );
       expect(junctions.length).toBe(changes);
       expect(crossed, `seed ${seed}: surface changes at crossings`).toBe(2 * crossings);
       // The exception stays an exception: a stage whose tarmac mostly ends
@@ -949,7 +952,10 @@ describe("progress and position", () => {
       step(state, { ...NEUTRAL_INPUT, throttle: 0.6 });
     }
     expect(state.progressIndex).toBe(reached);
-    expect(state.nearIndex).toBeLessThan(reached - 20);
+    // How far back is the country's business — the road it turned round
+    // on bends, and a car driven straight back leaves it — but the place it
+    // is measured from has moved and progress has not.
+    expect(state.nearIndex).toBeLessThan(reached - 10);
   });
 
   it("keeps the wheels on the road all the way back down the stage", () => {

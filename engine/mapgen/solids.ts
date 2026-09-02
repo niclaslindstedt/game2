@@ -54,6 +54,12 @@ export type WildObstacle = {
    * trunk stands and how thick it is. */
   roll?: number;
   grove?: number;
+  /** R41 — a solid that is MOVING: the train's own velocity, m/s in the
+   * ground plane. The contact model closes on the relative speed, so a car
+   * standing on the rails is hit by a train, not merely stopped by one.
+   * Absent (zero) on everything that stands still. */
+  vx?: number;
+  vz?: number;
 };
 
 export type SolidKind =
@@ -78,7 +84,22 @@ export type SolidKind =
   | "wall"
   /** R37 — half a PARKED CAR: a car in a yard is two of these, nose and
    * tail, and a rally car that arrives sideways stops against it. */
-  | "parked";
+  | "parked"
+  /** R37 — a FENCE POST: a young spruce pole in the ground round a paddock.
+   * Wood, and thin — a car goes through a fence, it does not stop at one. */
+  | "post"
+  /** R41 — one bay of a TRAIN: a couple of metres of wagon, standing on the
+   * rails and moving at the train's speed. A run of them is the train, to
+   * the physics, exactly as a run of bays is a wall. */
+  | "railcar";
+
+/** R41 — a train, to the contact model: half the width of a vehicle's body
+ * (its collision circle, fatter than the body so a run of them has no gap
+ * a nose can find — the parapet's argument below), how tall it stands over
+ * the rails, and how far apart the bays are spaced along it. The height is
+ * the one the crossing's ramp has to throw a car over (`rail.lip`), so the
+ * two are held together by `tests/rail_test.ts`. */
+export const RAILCAR = { half: 1.5, height: 3.4, bay: 2.2 } as const;
 
 /** R37 — one bay of a house wall, m, how fat its circle is (and so how far
  * in from the drawn wall's face the bays are centred), how tall a storey
@@ -171,6 +192,11 @@ const MATERIAL: Record<SolidKind, { of: keyof typeof DENSITY; rooted: number }> 
   wall: { of: "stone", rooted: 1 },
   // A tonne of car on its tyres: heavy, and shoved rather than held.
   parked: { of: "steel", rooted: 0.25 },
+  // A pole driven half a metre into the ground and tied to the rails
+  // either side: held, but only until the wood gives, which is at once.
+  post: { of: "wood", rooted: 0.5 },
+  // Forty tonnes on steel rails: nothing a car does moves it or marks it.
+  railcar: { of: "steel", rooted: 1 },
 };
 
 /** Is this thing made of WOOD? What breaks off it, what colour the
@@ -224,6 +250,12 @@ export function solidShape(kind: SolidKind, size: number): { radius: number; hei
     case "parked":
       // Half a car: a circle the car's own width, standing roof-high.
       return { radius: 1.0 * size, height: 1.45 * size };
+    case "post":
+      // A fence pole: as thin as it looks, chest-high.
+      return { radius: 0.14 * size, height: 1.5 * size };
+    case "railcar":
+      // One bay of a wagon: the body's half-width, and the roof height.
+      return { radius: RAILCAR.half * size, height: RAILCAR.height * size };
     default:
       // An outcrop: sunk near half its depth and stretched tall, a face of
       // rock nothing but a cliff flight gets over.
@@ -265,6 +297,14 @@ function solidVolume(ob: {
       // Half a car: the steel in half of one, which is the volume that
       // makes a small hatchback weigh what it weighs.
       return 0.075 * size * size * size;
+    case "post":
+      // A spruce pole of the drawn thickness, over its standing height.
+      return Math.PI * 0.05 * 0.05 * height;
+    case "railcar":
+      // The steel in a couple of metres of wagon: a bay of an empty box
+      // van weighs about two tonnes, a loaded one far more, and the
+      // difference is nothing a car can tell against `rooted: 1`.
+      return 0.28 * size * size;
     case "log":
       // A trunk lying down: its collision circle is the length it covers,
       // its height the thickness of the bole.

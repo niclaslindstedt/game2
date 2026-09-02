@@ -13,6 +13,7 @@ import {
   createTerrain,
   flatTrack,
   STAGE_RULES,
+  trainSolidsNear,
   type StageKnobs,
   type StageLength,
   type StageShape,
@@ -1059,6 +1060,14 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   const fixtures = terrain.fixturesNear(car.x, car.z, 2.5);
   if (fixtures.length > 0) {
     collideCar(state.spec, car, fixtures, events, state.stats, terrain.fell);
+  }
+  // R41 — and the TRAIN, wherever it is on its line this second: a run of
+  // moving solids on the rails, standing only where the car is near the
+  // line and a wagon is over that piece of it. Checked on the road or off
+  // it, for the parapet's reason — the crossing IS the road.
+  for (const crossing of state.track.rails) {
+    const wagons = trainSolidsNear(crossing, state.t, car.x, car.z, 2.5);
+    if (wagons.length > 0) collideCar(state.spec, car, wagons, events, state.stats);
   }
   if (fix.offRoad) {
     const water = terrain.waterAt(car.x, car.z);

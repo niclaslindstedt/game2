@@ -44,6 +44,7 @@ import { createSpurIndex, type SpurIndex } from "./spurs.ts";
 import { biomeRules } from "./biomes.ts";
 import { createPropField } from "./props.ts";
 import { bridgeParapets, type WildObstacle } from "./solids.ts";
+import { farmClearings, rectDistance, type FarmRect } from "./farms.ts";
 import { homesteadSolids } from "./homesteads.ts";
 import { townSolids } from "./towns.ts";
 
@@ -1066,6 +1067,29 @@ export function createTerrain(track: Track): TerrainField {
     }
     return best;
   };
+  /** R37 — the CLEARINGS: a farm's paddock and its field. Not pads — the
+   * ground under them is the country's own, a meadow lies on a slope — but
+   * ground the forest and the scatter keep off, and (a ploughed field)
+   * ground with a surface of its own. Read through `spurClearance` like
+   * everything else that is not forest, so one function still answers
+   * "may anything stand here". */
+  const clearings: { rect: FarmRect; surface: Surface | null; atS: number }[] = [];
+  const clearingAt = (x: number, z: number): { d: number; surface: Surface | null } => {
+    let best = Infinity;
+    let surface: Surface | null = null;
+    for (let i = 0; i < clearings.length; i++) {
+      const c = clearings[i];
+      // A cheap box first: a rect's reach is its half-diagonal.
+      const reach = Math.hypot(c.rect.width, c.rect.depth) / 2 + 1;
+      if (Math.abs(x - c.rect.x) > reach || Math.abs(z - c.rect.z) > reach) continue;
+      const d = rectDistance(c.rect, x, z);
+      if (d < best) {
+        best = d;
+        surface = c.surface;
+      }
+    }
+    return { d: best, surface };
+  };
 
   /** Anything with a road's cross-section: a stage sample or a branch's
    * (the branch has no bridges, so its deck is simply absent). */
@@ -1192,9 +1216,13 @@ export function createTerrain(track: Track): TerrainField {
     // R37 — a yard is graded flat, and the drive that runs onto it was
     // already eased onto its level, so the two agree where they overlap.
     const pad = pads.length > 0 ? padAt(x, z) : null;
+    /** The pad's own level here, weighted — a floor on the cone below. */
+    let padFlat = -Infinity;
+    let padWeight = 0;
     if (pad) {
-      const flat = pad.y - TILE_SINK;
-      base = flat * pad.weight + base * (1 - pad.weight);
+      padFlat = pad.y - TILE_SINK;
+      padWeight = pad.weight;
+      base = padFlat * pad.weight + base * (1 - pad.weight);
     }
     const apron = apronAt(x, z);
     if (apron) {
@@ -1272,6 +1300,15 @@ export function createTerrain(track: Track): TerrainField {
     // valley, a ford's dip and the ravine under a bridge are all exactly as
     // deep as the landscape made them.
     if (hold > 0 && floor > ceiling) ceiling += (floor - ceiling) * hold;
+    // R37 — nor may a cone cut a PAD. A yard is graded level with the drive
+    // that runs onto it, so it is never the wall beside a road that R31
+    // exists to take down — but the drive's own cone, read from its
+    // underside, sits under the pad's level along the drive and above it
+    // out at the rim, and a farm's yard is wide enough for the difference
+    // to show: cut along the drive and flat at the rim is a yard with a
+    // trough down the middle. The pad's level is the floor on the ceiling,
+    // by the pad's own weight.
+    if (padWeight > 0 && padFlat > ceiling) ceiling += (padFlat - ceiling) * padWeight;
     const raised = base + guards.riseAt(x, z);
     return raised < ceiling ? raised : ceiling;
   };
@@ -1460,7 +1497,8 @@ export function createTerrain(track: Track): TerrainField {
    * Infinity when there is none near — nothing is planted on a road, and a
    * spur is as much a road as the stage is (R17). */
   const spurClearance = (x: number, z: number): number => {
-    const yard = pads.length > 0 ? padClearance(x, z) : Infinity;
+    let yard = pads.length > 0 ? padClearance(x, z) : Infinity;
+    if (clearings.length > 0) yard = Math.min(yard, clearingAt(x, z).d);
     if (spurs.spurs.length === 0) return yard;
     const spur = spurs.nearest(x, z);
     return Math.min(yard, spur ? spur.d - spur.spur.width / 2 : Infinity);
@@ -1488,6 +1526,11 @@ export function createTerrain(track: Track): TerrainField {
 
   const spurSurfaceAt = (x: number, z: number): Surface | null => {
     if (pads.length > 0 && padClearance(x, z) <= 0) return biome.loose;
+    // R37 — a ploughed field is soft going: turned soil to the wheels.
+    if (clearings.length > 0) {
+      const clearing = clearingAt(x, z);
+      if (clearing.d <= 0 && clearing.surface !== null) return clearing.surface;
+    }
     if (spurs.spurs.length === 0) return null;
     const spur = spurs.nearest(x, z);
     if (!spur || spur.d > spur.spur.width / 2) return null;
@@ -1582,6 +1625,11 @@ export function createTerrain(track: Track): TerrainField {
         const h = track.homesteads[homesteadCount];
         spurs.add(h.drive);
         pads.push({ ...h.yard, blend: R.homestead.yard.blend, grade: { x: 0, z: 0 }, atS: h.atS });
+        // R37 — a farm's paddock and field keep the forest off and, when
+        // ploughed, give the wheels turned soil.
+        if (h.farm) {
+          for (const c of farmClearings(h.farm)) clearings.push({ ...c, atS: h.atS });
+        }
         for (const solid of homesteadSolids(h, heightAt)) fix(solid);
       }
       // R39 — the towns: every lot is a pad, and the walls and the cars on
@@ -1678,6 +1726,9 @@ export function createTerrain(track: Track): TerrainField {
       // Not in stage order: a town's lots and a homestead's yard are
       // ingested list by list, so the whole set is sifted.
       for (let i = pads.length - 1; i >= 0; i--) if (pads[i].atS < floorS) pads.splice(i, 1);
+      for (let i = clearings.length - 1; i >= 0; i--) {
+        if (clearings[i].atS < floorS) clearings.splice(i, 1);
+      }
       props.invalidate();
       cornerCache = new Map();
     }

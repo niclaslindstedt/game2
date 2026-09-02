@@ -25,10 +25,14 @@ export {
   createHighwayNetwork,
   highwayCount,
   layHighways,
+  layRailways,
+  RAILWAY,
   type Highway,
   type HighwayHit,
+  type HighwayKind,
   type HighwayNetwork,
   type HighwayPoint,
+  type LineRules,
 } from "./highway.ts";
 export { createGeology, type GeologyField, type GroundSample } from "./geology.ts";
 export {
@@ -65,7 +69,36 @@ export {
   type LaneTree,
 } from "./homesteads.ts";
 export {
+  farmClearings,
+  farmSolids,
+  placeFarm,
+  rectDistance,
+  type Crop,
+  type CropField,
+  type Farm,
+  type FarmGear,
+  type FarmRect,
+  type FarmSite,
+  type GearKind,
+  type Paddock,
+  type Stock,
+} from "./farms.ts";
+export {
+  drawSchedule,
+  joinRailLine,
+  lineAt,
+  trainAt,
+  trainCars,
+  trainSolidsNear,
+  type RailCrossing,
+  type RailLine,
+  type TrainCar,
+  type TrainSchedule,
+} from "./railway.ts";
+export {
+  BARN_STOREY,
   buildingSolids,
+  drawBarnPlan,
   drawHousePlan,
   drawTownPlan,
   parkedSolids,
@@ -121,6 +154,7 @@ export {
   PARAPET_INSET,
   PARAPET_OUT,
   PARAPET_THICK,
+  RAILCAR,
   SOLID_PROP_HEIGHT,
   bridgeParapets,
   isWooden,

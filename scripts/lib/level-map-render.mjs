@@ -52,6 +52,8 @@ const ROAD = {
   edge: [96, 76, 50],
   spur: [156, 156, 162],
   highway: [126, 126, 132],
+  /** R41 — the railway: ballast brown, darker than any road. */
+  railway: [92, 76, 62],
 };
 
 export const SEVERITY_COLOR = {
@@ -68,6 +70,7 @@ const MARK = {
   finish: INK,
   junction: [150, 70, 200],
   crossing: [150, 70, 200],
+  railcrossing: [60, 40, 30],
   homestead: [178, 52, 40],
   ford: WATER,
   bridge: [110, 110, 120],
@@ -81,6 +84,7 @@ const SOLID = {
   wood: [132, 84, 40],
   parapet: [200, 200, 206],
   building: [178, 52, 40],
+  train: [60, 40, 30],
 };
 
 function mix(a, b, t) {
@@ -244,10 +248,11 @@ export function renderLevelMap({
   // ── Roads that are not the stage: the public tarmac and the branches ──
   for (const highway of track.highways) {
     const r = Math.max(1, (highway.width / 2) * scale);
+    const ink = highway.kind === "rail" ? ROAD.railway : ROAD.highway;
     for (const p of highway.points) {
       const sx = px(p.x);
       const sy = pz(p.z);
-      if (inMap(sx, sy)) canvas.disk(sx, sy, r, ROAD.highway);
+      if (inMap(sx, sy)) canvas.disk(sx, sy, r, ink);
     }
   }
   /** A road that is not the stage, as a run of overlapping disks: the
@@ -572,6 +577,16 @@ export function renderLevelMap({
         canvas.disk(sx, sy, roadR + 2.5, WHITE);
         canvas.disk(sx, sy, roadR, INK);
         break;
+      case "railcrossing": {
+        // R41 — a level crossing's own sign: the cross, in the railway's
+        // ink, over a white disc.
+        const r = roadR + 4;
+        canvas.disk(sx, sy, r, MARK.railcrossing);
+        canvas.disk(sx, sy, r - 1.5, WHITE);
+        canvas.line(sx - r + 1, sy - r + 1, sx + r - 1, sy + r - 1, MARK.railcrossing);
+        canvas.line(sx - r + 1, sy + r - 1, sx + r - 1, sy - r + 1, MARK.railcrossing);
+        break;
+      }
       case "junction":
       case "crossing": {
         const r = roadR + 3;

@@ -14,11 +14,19 @@ import * as THREE from "three";
 import {
   compileTrack,
   standSolid,
+  type FarmGear,
+  type Paddock,
   type Season,
   type SolidKind,
   type Stand,
+  type TrainCar,
   type WildObstacle,
 } from "@engine";
+import { buildBarn, buildSilo } from "../game/barn.ts";
+import { buildBale, buildFarmGear } from "../game/farm-gear.ts";
+import { createLivestock } from "../game/livestock.ts";
+import { buildFence } from "../game/paddock.ts";
+import { buildTrainCar } from "../game/train.ts";
 
 import { biomeFor } from "../game/biome.ts";
 import { buildCarBody, type CarBodySpec } from "../game/car-body.ts";
@@ -559,6 +567,177 @@ const HOMESTEAD_ITEMS: ItemDef[] = [
   }),
 ];
 
+// ── The farms (R37) ───────────────────────────────────────────────────────
+
+/** Three barns that between them show the roofs and the paints, the loft
+ * ramp on either gable, a lean-to and a stone byre. */
+const BARN_PLANS: { id: string; note: string; plan: HousePlan }[] = [
+  {
+    id: "barn-gambrel",
+    note: "falu red over a stone byre, gambrel roof, ramp on the right gable, lean-to",
+    plan: {
+      kind: "barn",
+      width: 24,
+      depth: 10.5,
+      storeys: 2,
+      roof: "gambrel",
+      walls: "red",
+      porch: false,
+      wing: { side: -1, width: 7.5, depth: 5 },
+      detail: 0.72,
+    },
+  },
+  {
+    id: "barn-metal",
+    note: "red boards over render, sheet-metal gable, ramp on the left",
+    plan: {
+      kind: "barn",
+      width: 19,
+      depth: 9.5,
+      storeys: 2,
+      roof: "metal",
+      walls: "red",
+      porch: false,
+      wing: null,
+      detail: 0.3,
+    },
+  },
+  {
+    id: "barn-tarred",
+    note: "the black-tarred one, tile roof, the long one",
+    plan: {
+      kind: "barn",
+      width: 27,
+      depth: 11,
+      storeys: 2,
+      roof: "tile",
+      walls: "grey",
+      porch: false,
+      wing: { side: 1, width: 8, depth: 4.5 },
+      detail: 0.55,
+    },
+  },
+];
+
+const GEAR_KINDS: FarmGear["kind"][] = ["tractor", "trailer", "plough", "harrow", "baler"];
+
+/** A paddock on the origin for the fence and the animals to stand in. */
+const ITEM_PADDOCK: Paddock = {
+  rect: { x: 0, z: 0, heading: 0, width: 18, depth: 12 },
+  stock: "cows",
+  head: 5,
+  posts: [],
+  gate: { x: -6, z: 0, heading: 0 },
+  roll: 0.3,
+};
+for (let k = 0; k < 4; k++) {
+  const corners = [
+    [-6, -9],
+    [6, -9],
+    [6, 9],
+    [-6, 9],
+  ];
+  const a = corners[k];
+  const b = corners[(k + 1) % 4];
+  const n = Math.round(Math.hypot(b[0] - a[0], b[1] - a[1]) / 3);
+  for (let i = 0; i < n; i++) {
+    const t = i / n;
+    const x = a[0] + (b[0] - a[0]) * t;
+    const z = a[1] + (b[1] - a[1]) * t;
+    if (k === 3 && Math.abs(z) < 2.3 && i > 0) continue;
+    ITEM_PADDOCK.posts.push({ x, z });
+  }
+}
+
+const FARM_ITEMS: ItemDef[] = [
+  ...BARN_PLANS.map(({ id, note, plan }): ItemDef => ({
+    id,
+    group: "farm",
+    note,
+    build: ({ rng }) => ({ object: buildBarn(plan, rng) }),
+  })),
+  {
+    id: "silo",
+    group: "farm",
+    note: "a tower silo, the ladder up one side",
+    build: ({ rng }) => ({ object: buildSilo(2.6, 12, rng) }),
+  },
+  ...GEAR_KINDS.map((kind): ItemDef => ({
+    id: kind,
+    group: "farm",
+    note:
+      kind === "tractor"
+        ? "the yard's tractor — big lugged rear wheels, a tall cab, the stack up the bonnet"
+        : kind === "trailer"
+          ? "the tipping trailer it pulls"
+          : kind === "plough"
+            ? "a four-furrow plough, unhitched"
+            : kind === "harrow"
+              ? "a disc harrow — under the ride-over bar, the car goes over it"
+              : "the round baler",
+    build: ({ rng }) => ({
+      object: buildFarmGear({ kind, x: 0, z: 0, y: 0, heading: 0, roll: 0.37 }, rng),
+      views: CAR_ORBITS,
+    }),
+  })),
+  {
+    id: "bale",
+    group: "farm",
+    note: "a round bale, and the wrapped kind beside it",
+    build: ({ rng }) => {
+      const group = new THREE.Group();
+      const straw = buildBale(false, rng);
+      straw.position.x = -0.9;
+      const wrapped = buildBale(true, rng);
+      wrapped.position.x = 0.9;
+      group.add(straw, wrapped);
+      return { object: group };
+    },
+  },
+  {
+    id: "fence",
+    group: "farm",
+    note: "the paddock's roundpole fence and its gate, part open",
+    build: ({ rng }) => ({ object: buildFence(ITEM_PADDOCK, () => 0, rng) }),
+  },
+  ...(["cows", "sheep"] as const).map((stock): ItemDef => ({
+    id: stock,
+    group: "farm",
+    note:
+      stock === "cows"
+        ? "a herd: the red-and-white and the black-and-white, grazing and looking about"
+        : "a flock of sheep",
+    build: () => {
+      const livestock = createLivestock();
+      livestock.add({ ...ITEM_PADDOCK, stock, head: stock === "cows" ? 6 : 9 }, () => 0, 7);
+      livestock.update(0, 0, 0);
+      return { object: livestock.group, dispose: livestock.dispose };
+    },
+  })),
+];
+
+// ── The railway (R41) ─────────────────────────────────────────────────────
+
+const TRAIN_CARS: TrainCar[] = [
+  { kind: "railbus", length: 24.5 },
+  { kind: "loco", length: 15.5 },
+  { kind: "timber", length: 19 },
+  { kind: "box", length: 15 },
+  { kind: "tank", length: 13 },
+];
+
+const RAIL_ITEMS: ItemDef[] = TRAIN_CARS.map((car): ItemDef => ({
+  id: `train-${car.kind}`,
+  group: "rail",
+  note:
+    car.kind === "railbus"
+      ? "the railbus — cream over red, the Inland Line's own"
+      : car.kind === "loco"
+        ? "the diesel: a long hood, an orange cab, the road-switcher shape"
+        : `a ${car.kind} wagon`,
+  build: ({ rng }) => ({ object: buildTrainCar(car, rng), views: CAR_ORBITS }),
+}));
+
 /** Every item the sheet knows how to stand up, in the order it lists them. */
 export function itemCatalog(): ItemDef[] {
   return [
@@ -567,7 +746,9 @@ export function itemCatalog(): ItemDef[] {
     ...SKY_ITEMS,
     ...STAGE_ITEMS,
     ...HOMESTEAD_ITEMS,
+    ...FARM_ITEMS,
     ...TOWN_ITEMS,
+    ...RAIL_ITEMS,
     ...BREAKAGE_ITEMS,
     stoneItem("boulder", false, 1.3, 0.37),
     stoneItem("boulder", true, 1.3, 0.37),

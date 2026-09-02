@@ -175,18 +175,23 @@ export function analyzeRoads(track: Track): MetricReport {
       ) {
         continue;
       }
+      // R41 — and the railway's crossing, over the reach its own solve was
+      // planned against.
+      const railParting = crossingParting(track.width, "rail");
+      if (track.rails.some((r) => Math.hypot(r.x - at.x, r.z - at.z) < railParting)) continue;
       crossings++;
       if (clear - hit.d <= worstCrossing) continue;
       worstCrossing = clear - hit.d;
+      const line = hit.road.kind === "rail" ? "the railway" : "a public road";
       findings.push({
         code: "roads.cross",
         severity: hit.d < track.width ? "error" : "warn",
         message:
           hit.d < track.width
-            ? `the rally drives ${hit.d.toFixed(0)} m from the middle of a public road at ${sample.s.toFixed(0)} m — gravel crosses tarmac, it does not join it (R17)`
+            ? `the rally drives ${hit.d.toFixed(0)} m from the middle of ${line} at ${sample.s.toFixed(0)} m — gravel crosses it square, it does not run along it (R17, R41)`
             : `the gravel runs ${hit.d.toFixed(
                 0,
-              )} m from a public road at ${sample.s.toFixed(0)} m, at no junction — inside the ${clear.toFixed(0)} m two roads need (R23)`,
+              )} m from ${line} at ${sample.s.toFixed(0)} m, at no crossing — inside the ${clear.toFixed(0)} m two roads need (R23)`,
         at: { x: sample.x, z: sample.z },
         s: sample.s,
         value: clear - hit.d,

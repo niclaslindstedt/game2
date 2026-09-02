@@ -54,6 +54,9 @@ import { buildStreamMeshes } from "./streams.ts";
 import { buildFinishGate, buildStartGate, type FinishGate, type Muzzle } from "./finish-gate.ts";
 import { buildHomestead } from "./homestead.ts";
 import { buildTown } from "./town.ts";
+import { buildRailArm, buildRailCrossing } from "./railway.ts";
+import { createTrains } from "./train.ts";
+import { createLivestock } from "./livestock.ts";
 import { buildKerbing, createPostField } from "./kerbs.ts";
 import { buildCrowd, type Crowd } from "./crowd.ts";
 import { rightOf } from "./ribbon.ts";
@@ -787,6 +790,16 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
   // endless run would take a trunk still in the air with it.
   const breakage = createBreakage(TRUNK_COLOR, biome.ground.bedrock);
   group.add(breakage.group);
+  // R41 — the trains: one consist per railway crossing, posed each frame
+  // off the engine's timetable. Their facet jitter is the seed's, so a
+  // stage's train is the same train every run.
+  const trainRng = createRng((track.seed ^ 0x2c9f1b57) >>> 0);
+  const trains = createTrains(() => trainRng.next());
+  group.add(trains.group);
+  // R37 — the livestock: every farm's herd, wandering its paddock on the
+  // renderer's own clock. Herds arrive with the chunk their farm is in.
+  const livestock = createLivestock();
+  group.add(livestock.group);
 
   type Chunk = {
     toS: number;
@@ -848,6 +861,19 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
     for (; spurScan < track.spurs.length; spurScan++) {
       const spur = track.spurs[spurScan];
       if (spur.atS > track.samples[to - 1].s) break;
+      // R41 — a railway's arm is ballast and rails, not a mat, and the
+      // crossing's deck and boards come with its first arm.
+      if (spur.rail) {
+        chunkGroup.add(buildRailArm(spur));
+        if (spur.end === "entry") {
+          const crossing = track.rails.find((r) => r.s === spur.atS);
+          if (crossing) {
+            const jitter = createRng((track.seed ^ 0x2c9f1b57 ^ Math.round(spur.atS)) >>> 0);
+            chunkGroup.add(buildRailCrossing(track, crossing, () => jitter.next()));
+          }
+        }
+        continue;
+      }
       chunkGroup.add(buildSpur(track, spur, cones, beside));
     }
     // R37 — the homesteads whose drives leave this stretch of road.
@@ -855,6 +881,9 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
       const homestead = track.homesteads[homesteadScan];
       if (homestead.atS > track.samples[to - 1].s) break;
       chunkGroup.add(buildHomestead(track, homestead, cones, beside, season));
+      if (homestead.farm?.paddock) {
+        livestock.add(homestead.farm.paddock, terrain.field.groundAt, track.seed);
+      }
     }
     // R39 — the towns met on this stretch of road: the one the route drives
     // through, or the one down the arm at a junction it passes.
@@ -1018,6 +1047,8 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
 
   const update = (state: GameState, dt: number, knocked?: (speed: number) => void): void => {
     terrain.update(dt);
+    // R41 — the trains, posed off the stage clock the engine times them on.
+    if (state.track.rails.length > 0) trains.update(state.track, state.t);
     // The breeze is ONE uniform over the world's shared leafy material, so
     // it is advanced once here rather than per patch of planted ground.
     swayFlora(dt);
@@ -1025,10 +1056,13 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
     posts.update(state, dt, knocked);
     breakage.update(dt, terrain.standOn);
     crowd?.update(dt, state.car.x, state.car.z);
+    livestock.update(dt, state.car.x, state.car.z);
   };
 
   const dispose = (): void => {
     crowd?.dispose();
+    trains.dispose();
+    livestock.dispose();
     wild.dispose();
     cones.dispose();
     posts.dispose();

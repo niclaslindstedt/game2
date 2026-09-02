@@ -44,6 +44,9 @@ const ROAD = {
   rumbleRed: [0xe2, 0x3c, 0x2c],
   rumbleWhite: [0xf6, 0xf3, 0xea],
   cone: [0xff, 0x7d, 0x1f],
+  /** R41 — the railway's ballast, and the rails on it. */
+  ballast: [0x7c, 0x6e, 0x60],
+  rail: [0x3a, 0x36, 0x34],
 };
 
 /** R37 — the three paints a house comes in, as the map shows them. */
@@ -637,16 +640,35 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
   // junction the two carriageways overlap: painting each road as it is laid
   // puts the route's mat over the branch's lines, and the through road's
   // paint then stops dead at the crossing it is supposed to run past.
-  for (const spur of track.spurs) drawRoad(spur.samples, spur.width);
+  for (const spur of track.spurs) if (!spur.rail) drawRoad(spur.samples, spur.width);
   // R37 — the drives down to the homesteads, before the route for the same
   // reason as the branches: the stage's mat goes over the mouth.
   for (const homestead of track.homesteads) {
     drawRoad(homestead.drive.samples, homestead.drive.width);
   }
   drawRoad(track.samples, track.width);
+  // R41 — the railway's two arms: a band of ballast with the two rails on
+  // it, over the route where they cross it, because the rails are laid
+  // through the crossing deck and the road is what gives way.
+  for (const spur of track.spurs) {
+    if (!spur.rail) continue;
+    const ballastR = Math.max(1, (spur.width / 2) * scale);
+    for (const p of spur.samples) canvas.disk(px(p.x), pz(p.z), ballastR, ROAD.ballast);
+    for (const p of spur.samples) {
+      const r = { x: Math.cos(p.heading), z: -Math.sin(p.heading) };
+      for (const side of [-0.72, 0.72]) {
+        canvas.disk(
+          px(p.x + r.x * side),
+          pz(p.z + r.z * side),
+          Math.max(0.7, scale * 0.2),
+          ROAD.rail,
+        );
+      }
+    }
+  }
   // A branch IS the main road continued past the crossing, so its paint
   // runs the whole way to the meeting point.
-  for (const spur of track.spurs) drawMarkings(spur.samples, spur.width, true);
+  for (const spur of track.spurs) if (!spur.rail) drawMarkings(spur.samples, spur.width, true);
   drawMarkings(track.samples, track.width);
   // The tape and cones across every abandoned branch: the stage does not
   // go this way. Drawn LAST, because a closure the road is painted over is
@@ -656,6 +678,8 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
   // traffic cone is a fifth of a pixel, and what this picture has to
   // answer is "which way does the route go", not "how big is a cone".
   for (const spur of track.spurs) {
+    // R41 — a railway is not shut.
+    if (spur.rail) continue;
     const at =
       spur.samples.find((sample) => sample.flat <= 0) ?? spur.samples[spur.samples.length - 1];
     const r = { x: Math.cos(at.heading), z: -Math.sin(at.heading) };
@@ -701,6 +725,61 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
       ],
       HOUSE_PAINT[house.plan.walls],
     );
+    // R37 — the farm: the barn in its paint, the paddock and the field as
+    // outlined rectangles in the grazing's green and the crop's brown.
+    const farm = homestead.farm;
+    if (farm) {
+      const quad = (cx, cz, heading, w, d, ink) => {
+        const f = { x: Math.sin(heading), z: Math.cos(heading) };
+        const r = { x: Math.cos(heading), z: -Math.sin(heading) };
+        const hw = Math.max(w / 2, 3 / scale);
+        const hd = Math.max(d / 2, 3 / scale);
+        canvas.poly(
+          [
+            [px(cx + r.x * hd + f.x * hw), pz(cz + r.z * hd + f.z * hw)],
+            [px(cx - r.x * hd + f.x * hw), pz(cz - r.z * hd + f.z * hw)],
+            [px(cx - r.x * hd - f.x * hw), pz(cz - r.z * hd - f.z * hw)],
+            [px(cx + r.x * hd - f.x * hw), pz(cz + r.z * hd - f.z * hw)],
+          ],
+          ink,
+        );
+      };
+      if (farm.paddock) {
+        const { rect } = farm.paddock;
+        quad(rect.x, rect.z, rect.heading, rect.width, rect.depth, [0x7d, 0xa3, 0x4a]);
+      }
+      if (farm.field) {
+        const { rect, crop } = farm.field;
+        const ink =
+          crop === "plough"
+            ? [0x5a, 0x42, 0x2e]
+            : crop === "stubble"
+              ? [0xb7, 0xa2, 0x5c]
+              : [0x9f, 0xb0, 0x4e];
+        quad(rect.x, rect.z, rect.heading, rect.width, rect.depth, ink);
+      }
+      const { barn } = farm;
+      // A barn's `depth` is across its front and its `width` along it, the
+      // house's way round.
+      quad(
+        barn.x,
+        barn.z,
+        barn.heading,
+        barn.plan.depth,
+        barn.plan.width,
+        HOUSE_PAINT[barn.plan.walls],
+      );
+      if (farm.silo)
+        canvas.disk(
+          px(farm.silo.x),
+          pz(farm.silo.z),
+          Math.max(1.5, scale * farm.silo.radius),
+          [0x9e, 0xa3, 0xa6],
+        );
+      for (const g of farm.gear) {
+        canvas.disk(px(g.x), pz(g.z), Math.max(1.5, scale * 1.4), [0xb8, 0x26, 0x1c]);
+      }
+    }
     for (const car of homestead.cars) {
       canvas.disk(px(car.x), pz(car.z), Math.max(1.5, scale * 1.2), [0x2a, 0x2c, 0x30]);
     }

@@ -481,7 +481,7 @@ describe("the stone spilled at the road's edge (R16)", () => {
     // public road laid on the bare country before the rally is routed over
     // it, so which seeds have any is the land's decision and not the dial's.
     let sealed: ReturnType<typeof tufts> = [];
-    for (const seed of [4, 1, 2, 3, 5, 6, 7, 8]) {
+    for (const seed of Array.from({ length: 24 }, (_, i) => i + 1)) {
       const grown = tufts(compileStage(seed, "medium", { asphalt: 1 }));
       sealed = grown.filter((t) => t.surface !== "gravel" || t.deck);
       if (sealed.length > 0) break;

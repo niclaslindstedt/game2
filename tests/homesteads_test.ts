@@ -239,9 +239,15 @@ describe("homesteads (R37)", () => {
         const trunks = terrain.fixturesNear(tree.x, tree.z, 0.3).filter((s) => s.kind === "tree");
         expect(trunks.length).toBeGreaterThanOrEqual(1);
       }
-      // The same solids, from the record alone, in the same places.
-      const own = homesteadSolids(homestead);
-      expect(own.filter((s) => s.kind === "wall").length).toBe(walls.length);
+      // The same solids, from the record alone, in the same places. The
+      // house's own: a farm's barn and silo are walls too, and
+      // `farms_test.ts` counts those.
+      const own = homesteadSolids({ ...homestead, farm: null });
+      const ownWalls = own.filter((s) => s.kind === "wall");
+      expect(ownWalls.length).toBeLessThanOrEqual(walls.length);
+      for (const bay of ownWalls) {
+        expect(walls.some((w) => Math.hypot(w.x - bay.x, w.z - bay.z) < 0.01)).toBe(true);
+      }
       expect(own.filter((s) => s.kind === "tree").length).toBe(trees.length);
       expect(own.filter((s) => s.kind === "parked").length).toBe(cars.length * 2);
     }

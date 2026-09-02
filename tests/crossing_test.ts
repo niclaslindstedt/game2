@@ -20,7 +20,7 @@ import { STAGE_RULES, compileStage, junctionMainEdge, type Track } from "@engine
  * by sweeping, and pinned here rather than searched at test time: a suite
  * that hunts for its own subject reports "nothing to test" as a pass. */
 const CROSSINGS: { seed: number; length: "short" | "medium" }[] = [
-  { seed: 6, length: "short" },
+  { seed: 9, length: "short" },
   { seed: 16, length: "medium" },
   { seed: 18, length: "medium" },
   { seed: 20, length: "medium" },

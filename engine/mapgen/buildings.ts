@@ -14,18 +14,37 @@
 // with either placer.
 
 import type { Rng } from "../lib/prng.ts";
-import { PARKED_HALF, standSolid, WALL_BAY, WALL_RADIUS, type WildObstacle } from "./solids.ts";
+import { STAGE_RULES } from "./rules.ts";
+import {
+  PARKED_HALF,
+  standSolid,
+  WALL_BAY,
+  WALL_RADIUS,
+  WALL_STOREY,
+  type WildObstacle,
+} from "./solids.ts";
 
 /** What a building IS. `house` is the timber house every farm and every
  * village street is mostly made of; `villa` the bigger two-storey one on a
  * village's best plot; the rest are what a small town has that a farm does
  * not — a block of flats, a grocery with a shop front, the post office, and
  * the workshop that fixes the cars. */
-export type BuildingKind = "house" | "villa" | "apartments" | "grocery" | "post" | "workshop";
+export type BuildingKind =
+  | "house"
+  | "villa"
+  | "apartments"
+  | "grocery"
+  | "post"
+  | "workshop"
+  /** R37 — the BARN on a farm: a byre under a hayloft, the biggest thing
+   * standing on any stage. */
+  | "barn";
 
-/** What the roof is made of — the three a Nordic house actually has, and
- * the flat felt roof a shop or a block of flats gets instead of any of them. */
-export type RoofKind = "tile" | "metal" | "slate" | "flat";
+/** What the roof is made of — the three a Nordic house actually has, the
+ * flat felt roof a shop or a block of flats gets instead of any of them,
+ * and the GAMBREL — the broken pitch a barn carries so the loft has room
+ * in it. */
+export type RoofKind = "tile" | "metal" | "slate" | "flat" | "gambrel";
 
 /** What the boards are painted: falu red with white trim, ochre yellow with
  * white trim, or white throughout — plus the grey render, the yellow brick
@@ -94,6 +113,39 @@ export function drawHousePlan(rng: Rng): HousePlan {
       }
     : null;
   return { kind: "house", width, depth, storeys, roof, walls, porch, wing, detail: rng.next() };
+}
+
+/** R37 — draw a BARN. The proportions are a Swedish ladugård's: a long
+ * block, wider than a house is long, two storeys of it — the byre below,
+ * the hayloft above — under a roof steeper and taller than any house's,
+ * more often than not the broken pitch that gives the loft its room. Red
+ * nearly always; the rest black-tarred or grey with age. `detail` carries
+ * the rest: which gable the loft ramp climbs, how many ventilators stand
+ * on the ridge, whether the byre is stone or rendered. */
+export function drawBarnPlan(rng: Rng): HousePlan {
+  const B = STAGE_RULES.homestead.farm.barn;
+  const width = rng.range(B.width.min, B.width.max);
+  const depth = rng.range(B.depth.min, B.depth.max);
+  const roofRoll = rng.next();
+  const wallRoll = rng.next();
+  return {
+    kind: "barn",
+    width,
+    depth,
+    storeys: 2,
+    roof: roofRoll < 0.55 ? "gambrel" : roofRoll < 0.85 ? "metal" : "tile",
+    walls: wallRoll < 0.72 ? "red" : wallRoll < 0.88 ? "grey" : "white",
+    porch: false,
+    // The lean-to along the back: a machinery shed under a single pitch.
+    wing: rng.chance(0.45)
+      ? {
+          side: (rng.chance(0.5) ? 1 : -1) as 1 | -1,
+          width: rng.range(6, 9),
+          depth: rng.range(4, 5.5),
+        }
+      : null,
+    detail: rng.next(),
+  };
 }
 
 /** Draw a building of a given KIND for a village street (R39). The village
@@ -184,6 +236,10 @@ export function drawTownPlan(rng: Rng, kind: BuildingKind): HousePlan {
         wing: null,
         detail,
       };
+    case "barn":
+      // A village has no barn — a farm does — but the vocabulary is one
+      // vocabulary, and a caller that asks gets the farm's own draw.
+      return drawBarnPlan(rng);
   }
 }
 
@@ -191,8 +247,14 @@ export function drawTownPlan(rng: Rng, kind: BuildingKind): HousePlan {
  * what the renderer builds to, so a wall is hit where it is drawn. A flat
  * roof carries a parapet, which is the top of the wall for the physics. */
 export function wallStoreys(plan: HousePlan): number {
+  if (plan.kind === "barn") return plan.storeys * (BARN_STOREY / WALL_STOREY);
   return plan.roof === "flat" ? plan.storeys + 0.25 : plan.storeys;
 }
+
+/** R37 — how tall one of a barn's two storeys stands, m: a byre a beast
+ * stands in and a loft a wagon is forked into are both taller than a
+ * room. The renderer builds to the same number (`barn.ts`). */
+export const BARN_STOREY = 3.3;
 
 /** Everything about a building the car can HIT, as solids: its walls as a
  * run of bays round the footprint (the same construction as a bridge
