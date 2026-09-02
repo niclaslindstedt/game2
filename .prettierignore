@@ -20,3 +20,13 @@ OSS_SPEC.md
 pwa/public/icons/*.png
 pwa/public/og.png
 pwa/public/favicon.ico
+native/assets/*.png
+# The native shell's own dependency tree, its prebuild output and its packed
+# site — none of it is source (native/.gitignore lists the same set, and
+# Prettier does not read a nested .gitignore).
+native/node_modules/
+native/package-lock.json
+native/.expo/
+native/ios/
+native/android/
+native/assets/webroot.zip

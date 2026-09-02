@@ -33,8 +33,11 @@ make audition     # build previews/audition.html — every sound and both scores
 make screenshots  # drive the built app headlessly, screenshot key moments
 make profile      # meter a frame's draw calls / triangles / binds — REQUIRED before/after any rendering change
 make debug-shot   # REPRO='<line off the debug overlay>' — stand where a shot was taken
-make icons        # regenerate icons/favicon/og.png from the app mark
+make icons        # regenerate icons/favicon/og.png AND native/assets/ from the app mark
 make check-seo    # build + structural SEO/PWA/bundle assertions
+make native-bundle    # pack the built site into native/assets/webroot.zip — before EVERY native build
+make native-ios       # the native app on an iOS simulator (native-android for Android); native-install first
+make native-typecheck # tsc over the native shell — its own tree, so `make lint` does not reach it
 make hooks        # install pre-commit + commit-msg hooks
 make tauri        # THE DESKTOP APP: bundle the site into tauri/webroot/, compile the shell, launch it (needs Rust)
 make tauri-test   # its decision layer's suite — a Rust toolchain and nothing else; NOT on `make test`'s path
@@ -113,6 +116,7 @@ Three layers, one direction of dependency (details: [docs/architecture.md](docs/
 Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 
 - **`tauri/`** — the desktop app for Windows, macOS and Linux: a THIN wrapper around the built site, in the platform's own webview, served from a private `game://` scheme. Two Rust crates, and the split is the design: `shell/` is every DECISION (no Tauri, no GUI — `make tauri-test` runs its whole suite with a Rust toolchain and nothing else), `src-tauri/` is every EFFECT (the window, the scheme, the one command). Checked by `make tauri-test` + `make tauri-lint`, which `.github/workflows/desktop-tauri.yml` runs on every push that touches it; packaged onto every release by `release.yml`'s `desktop` matrix. **Nothing in `engine/` may learn it exists, and the ONE line of `pwa/` that does is `pwa/src/shell-host.ts`** — the page reads a frozen global to keep its PWA update lifecycle off in there, and nothing else about the page changes. A feature the desktop app needs is a feature the website needs first; a shell-only behaviour is a decision in `tauri/shell/` with a test beside it. → `tauri/README.md`, `docs/platforms.md`.
+- **`native/`** — the App Store / Play Store wrapper: a thin Expo / React Native shell whose entire content is a full-screen WebView over a copy of the built site bundled inside the app (`assets/webroot.zip`, served off a local HTTP server on a fixed port so `localStorage` keeps its origin), plus an audio session that plays through the ringer switch. It writes `"native"` into the same frozen global the desktop app writes `"tauri"` into (`pwa/src/shell-host.ts`), which is how the PWA update lifecycle stays off inside it. **Its own dependency tree, outside the npm workspace** — `make lint` / `make test` do not reach it (`make native-typecheck` does; the root suite tests its pure modules, `src/navigation.ts` and the injected script's word). Built on demand only, by the `native` workflow or `npm run native:*`; never on push. → `native/README.md`. **Never leak shell code into `engine/` or `pwa/`**: a platform service (haptics, cloud save, a share sheet) is a bridge module under `native/src/` and a flag on the WebView message channel, with the page's half behind a probe the browser answers too.
 
 ## Where new code goes
 
@@ -219,15 +223,16 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | A DEVELOPER switch (god, overlay, collecting race data)     | `DevSettings` in `pwa/src/game/settings.ts` + a row in `menu-dev.tsx`; `devFromUrl` in `App.tsx` pins it for tooling               |
 | How long THIS MACHINE takes to draw a fixed piece of racing | `pwa/src/game/benchmark.ts` (the race it pins, and the pump); its card in `menu-dev.tsx` — the `debug-tools` skill                 |
 | The studio card / boot cover                                | `pwa/src/game/splash.ts` (policy) + `splash-screen.tsx`                                                                            |
-| App identity (name, palette, URLs)                          | `pwa/src/identity.ts` (single source)                                                                                              |
+| App identity (name, palette, URLs)                          | `pwa/src/identity.ts` (single source) — `native/app.config.js` reads its name and sky off the file, never restates them            |
 | What a stage HAS on it, by id (T3, J1, CP2), and its map    | `scripts/lib/stage-features.mjs` (the ids) + `level-map-render.mjs` (the picture), both under `scripts/level-map.mjs`              |
 | A Node script that needs an APP module (`@engine` inside)   | `aliasEngine` in `scripts/lib/engine-alias.mjs` before the `import()` — never a Vite build to read a table                         |
 | New CLI tooling                                             | `scripts/*.mjs` (Node, no deps beyond `scripts/lib/`)                                                                              |
 | Engine tests                                                | `tests/<topic>_test.ts`                                                                                                            |
 | A DESKTOP-APP concern that is a DECISION (a rule, a name)   | `tauri/shell/src/<topic>.rs` + `tauri/shell/tests/<topic>_test.rs`; a `use tauri::` there is the review comment                    |
 | A DESKTOP-APP concern that is an EFFECT (window, scheme)    | `tauri/src-tauri/src/`; what the page may reach is the ACL in `tauri/src-tauri/capabilities/`                                      |
-| What the PAGE knows about the desktop app                   | `pwa/src/shell-host.ts` — one global, one word; `tests/tauri_test.ts` holds it to the Rust constant                                |
+| What the PAGE knows about the shell it is in                | `pwa/src/shell-host.ts` — one global, one word per shell; `tests/tauri_test.ts` holds it to the Rust constant                      |
 | How the desktop app is bundled, iconed, packaged            | `tauri/scripts/{bundle-web,icons,package}.mjs` (Node, no deps); the static half of the bundle is `tauri/src-tauri/tauri.conf.json` |
+| Anything the STORE APP does that a browser can't            | `native/src/<service>.ts` (a bridge, driven off the WebView message channel) — never `engine/` or `pwa/`; see `native/README.md`   |
 
 **Hard rules:** the engine never imports three.js, Preact, or anything from `pwa/`; the renderer never mutates `GameState`; engine randomness only via the state's seeded RNG (determinism is test-enforced); source files stay under 1000 lines. **The game ships no audio files** — every sound and every note is synthesized from authored parameters, and `pwa/src/lib/synth.ts` is the only module that touches WebAudio (everything that merely DESCRIBES a sound imports `lib/voice.ts`, which is DOM-free so the bank and the tests can read it).
 
@@ -254,6 +259,7 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | Cars, controls, install flow               | README (What/Usage) + `docs/getting-started.md`                                              |
 | Shell/platform plans                       | `docs/platforms.md`                                                                          |
 | The desktop app's tree, its env vars       | `tauri/README.md`, `docs/configuration.md` (the launch environment), `docs/platforms.md`     |
+| The native shell (a bridge, a build knob)  | `native/README.md` + `docs/configuration.md` (the `EXPO_*` rows)                             |
 
 ## Parity and cross-cutting rules
 

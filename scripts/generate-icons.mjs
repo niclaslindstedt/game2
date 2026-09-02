@@ -214,4 +214,16 @@ writeFileSync(join(iconsDir, "pwa-512-maskable.png"), renderIcon(512, 0.78));
 writeFileSync(join(iconsDir, "apple-touch-icon-180.png"), renderIcon(180));
 writeFileSync(join(root, "pwa", "public", "favicon.ico"), pngToIco(renderIcon(32), 32));
 writeFileSync(join(root, "pwa", "public", "og.png"), renderOg(1200, 630));
-console.log("icons: pwa-192, pwa-512, pwa-512-maskable, apple-touch-180, favicon.ico, og.png");
+
+// The native app's set (native/app.config.js): the App Store wants the icon at
+// 1024, and the splash shows the same tile at 200 px on the brand sky — the
+// launcher icon, held up while the WebView paints its first frame.
+const nativeDir = join(root, "native", "assets");
+mkdirSync(nativeDir, { recursive: true });
+writeFileSync(join(nativeDir, "icon.png"), renderIcon(1024));
+writeFileSync(join(nativeDir, "splash-icon.png"), renderIcon(1024));
+writeFileSync(join(nativeDir, "favicon.png"), renderIcon(48));
+console.log(
+  "icons: pwa-192, pwa-512, pwa-512-maskable, apple-touch-180, favicon.ico, og.png, " +
+    "native/assets/{icon,splash-icon,favicon}.png",
+);

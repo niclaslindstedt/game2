@@ -18,6 +18,11 @@ export default [
       "tauri/webroot/**",
       "tauri/release/**",
       "tauri/node_modules/**",
+      // The native app (native/) is a self-contained Expo/React Native project
+      // with its own toolchain (tsc, expo-doctor) and is not part of the npm
+      // workspace; it is typechecked on its own (`make native-typecheck`),
+      // not linted by the root config.
+      "native/**",
     ],
   },
   js.configs.recommended,

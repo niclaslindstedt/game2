@@ -1,0 +1,46 @@
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Generated web bundle (built by scripts/bundle-web.mjs before an EAS build).
+# A build artifact, not source; .easignore re-includes it in the EAS upload.
+assets/webroot.zip
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files — the Expo token and the build-time overrides. `.env.example`
+# is the committed template and is re-included below.
+.env
+.env*.local
+!.env.example
+
+# typescript
+*.tsbuildinfo
+
+# generated native folders
+/ios
+/android

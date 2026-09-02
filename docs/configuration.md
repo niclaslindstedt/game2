@@ -35,6 +35,16 @@ Packaging reads one more: `APPLE_SIGNING_IDENTITY`, the Developer ID a macOS bui
 
 Every launch is written to `launch.log` in the app's own user-data directory — `%APPDATA%\scanflick` on Windows, `~/Library/Application Support/scanflick` on macOS, `~/.local/share/scanflick` on Linux — with the previous launch kept beside it as `launch.log.prev`. The window's remembered geometry (`window-state.json`) is there too. The player's settings and scores are NOT: those are the webview's own origin-keyed storage, exactly as in a browser.
 
+## The native shell's build environment
+
+Read by the Expo app's own build (`native/`, see [platforms.md](platforms.md)), never by the website's. All optional; `native/.env.example` says where each one comes from.
+
+| Variable               | Meaning                                                                                                                                                                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `EXPO_PUBLIC_GAME_URL` | Points the WebView at a deployed slot instead of the copy of the game bundled inside the app, and skips the local server. Debugging only — a store build that streams the website is the shape App Store guideline 4.2 rejects. |
+| `EAS_PROJECT_ID`       | The Expo project the app builds under, until it is pinned in `native/app.config.js`; the `native` workflow reads it from a repository variable of the same name.                                                                |
+| `EXPO_TOKEN`           | An Expo access token for non-interactive EAS builds; the `native` workflow reads it from a repository secret of the same name. A laptop uses `eas login` instead.                                                               |
+
 ## The deploy slots
 
 `pages.yml` builds three whole sites and merges them into one Pages artifact served at `game2.niclaslindstedt.se` (the custom domain in `pwa/public/CNAME`; DNS is a CNAME on `niclaslindstedt.github.io`, and the repo's Pages settings must say "GitHub Actions" + that domain):
