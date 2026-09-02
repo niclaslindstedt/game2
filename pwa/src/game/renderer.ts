@@ -649,7 +649,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         const slam = SLAM_FLOOR + (1 - SLAM_FLOOR) * Math.min(1, Math.abs(ev.slam) / SLAM_FULL);
         // Straight down: the wheels stop falling and the driver's head does
         // not, which is the whole of what a landing feels like from inside.
-        chase.kick((ev.clean ? 0.34 : 0.62) * slam, DOWN);
+        chase.kick((ev.clean ? 0.34 : 0.62) * slam, DOWN, "landing");
         // Four tyres hitting the ground at once, and each of them throws.
         atWheels(
           wetGround ? mud : dust,
@@ -670,11 +670,11 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         // front of the car and carries part of its way in with it.
         const nose = c.heading;
         const reach = ev.deep ? 1.4 : 1;
-        chase.kick(ev.deep ? 0.45 + 0.25 * force : 0.2 + 0.2 * force, {
-          x: Math.sin(nose),
-          y: -0.4,
-          z: Math.cos(nose),
-        });
+        chase.kick(
+          ev.deep ? 0.45 + 0.25 * force : 0.2 + 0.2 * force,
+          { x: Math.sin(nose), y: -0.4, z: Math.cos(nose) },
+          "water",
+        );
         spray.spawn(
           c.x + Math.sin(nose) * reach,
           surface,
@@ -697,7 +697,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         // The water closing over the roof: the column is long gone, and
         // what is left is the hole in the surface filling itself in.
         const surface = (state.drowning?.waterY ?? c.y) + 0.06;
-        chase.kick(0.18);
+        chase.kick(0.18, undefined, "water");
         spray.spawn(c.x, surface, c.z, WATER_DROPS, Math.round(46 * fx), 2.2);
         foam.spawn(c.x, surface, c.z, FOAM, Math.round(30 * fx), 2.4);
       } else if (ev.type === "takeoff") {
@@ -711,14 +711,16 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         // R26 — a block on the inside of an apex. Nothing folds and nothing
         // breaks, so there is no burst and no shake: what there IS, from
         // inside, is the car being thrown off its line, and the head going
-        // with it a beat late.
-        chase.kick(Math.min(0.22, 0.06 + ev.speed * 0.004), {
-          x: Math.cos(c.heading),
-          y: 0.5,
-          z: -Math.sin(c.heading),
-        });
+        // with it a beat late. From outside there is the car climbing the
+        // block and rolling onto the springs it just loaded, and the shot
+        // holds still and lets it.
+        chase.kick(
+          Math.min(0.22, 0.06 + ev.speed * 0.004),
+          { x: Math.cos(c.heading), y: 0.5, z: -Math.sin(c.heading) },
+          "contact",
+        );
       } else if (ev.type === "respawn") {
-        chase.kick(0.3);
+        chase.kick(0.3, undefined, "reset");
       } else if (ev.type === "solidBreak") {
         // Something came out of the landscape. The engine has already taken
         // it out of the field and worked out where the piece is going; the
@@ -736,15 +738,18 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
         );
       } else if (ev.type === "impact") {
         // The hit lands where the engine says it did: a debris-grey burst
-        // at that point on the body, a camera jolt sized to the speed, and
-        // — from inside the car — the driver's head thrown at the part of
-        // the body that took it. A shunt on the nose throws the head
-        // forward, one on the left throws it left, and a belly slam throws
-        // it down, because the car stopped and the driver did not.
+        // at that point on the body, and — from inside the car — the
+        // driver's head thrown at the part of the body that took it. A shunt
+        // on the nose throws the head forward, one on the left throws it
+        // left, and a belly slam throws it down, because the car stopped and
+        // the driver did not. From outside the shot does not move at all:
+        // the car crushing, dipping and rocking on its springs IS the hit,
+        // and a camera that jumps with it hides the one thing worth seeing.
         const a = c.heading + ev.angle;
         chase.kick(
           Math.min(0.9, 0.25 + ev.speed * 0.02),
           ev.belly ? DOWN : { x: Math.sin(a), y: 0.15, z: Math.cos(a) },
+          "contact",
         );
         const reach = ev.belly ? 0 : 1.6;
         dust.spawn(

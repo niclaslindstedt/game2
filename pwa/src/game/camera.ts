@@ -38,9 +38,11 @@
 // character and differ only in where they stand: a boom is answered
 // briskly and settles without overshooting, at either length.
 // In the air the framing goes loose and pulls wide, which reads as flying.
-// Landings and splashes kick a decaying shake. Over a CLIFF they stay up at
-// the top and let the car fall away below them, which is the one thing a
-// chase rig must not follow.
+// Landings and splashes leave a small decaying rattle; running into things
+// leaves the outside shot alone, because a boom did not hit the tree and the
+// car is right there in frame taking it on its own springs (camera-shake.ts).
+// Over a CLIFF they stay up at the top and let the car fall away below them,
+// which is the one thing a chase rig must not follow.
 //
 // The three IN-CAR cameras are their own table and their own update, in
 // camera-eye.ts, because none of them is standing anywhere: they are sat in
@@ -77,6 +79,14 @@ import {
   type FreeFlyRig,
 } from "./camera-free.ts";
 import { createFinishCamera } from "./camera-finish.ts";
+import {
+  CAMERA_SHAKE,
+  fadeShake,
+  inCarBlow,
+  outsideBlow,
+  rattleAt,
+  type ShakeSource,
+} from "./camera-shake.ts";
 import { createMapCamera, type MapPose } from "./camera-map.ts";
 import { createStartCamera } from "./camera-start.ts";
 import { createSweepCamera } from "./camera-sweep.ts";
@@ -94,12 +104,6 @@ export const PLAY_MODES: CameraMode[] = PLAY_CAMERAS.map((cam) => cam.id);
 
 /** The modes camera-eye.ts owns — the ones taken from inside the car. */
 const IN_CAR: InCarCamera[] = ["cockpit", "hood", "bumper"];
-
-/** How much relative head speed a unit of `kick` is worth, m/s. The kick's
- * own scale runs 0..~0.9 over everything from a kerb to a head-on shunt, and
- * the neck's travel is a tenth of a metre: this is what turns one into the
- * other, and the per-rig `jolt` scales it again. */
-const JOLT_PER_KICK = 5;
 
 /** How far to the side the drone flies, m. The menu's cards sit in the
  * middle of the screen, so a drone parked squarely behind the car puts the
@@ -183,10 +187,15 @@ type ChaseRig = {
   swingDamp: number;
   /** Share of the body's suspension travel the camera rides, 0..1 — a
    * touch, so a landing lands in the FRAME too and does not just happen to
-   * the car in front of it. */
+   * the car in front of it. Scaled again by `CAMERA_SHAKE.heave`, which is
+   * the one dial over how much of the car's own bobbing the outside shot
+   * takes at all. */
   heave: number;
-  /** Scale on the impact shake. Distance is its own damping: a hit that
-   * rattles a bumper cam is barely a wobble from a hundred feet up. */
+  /** Scale on the rattle a blow leaves in the shot (camera-shake.ts, which
+   * owns how big one is and which blows an outside camera takes at all —
+   * running into something is not one of them). Distance is its own damping:
+   * a landing that shudders a bumper cam is barely a wobble from a hundred
+   * feet up. */
   shake: number;
   /** Share of the CLIFF hold this rig takes, 0..1 (see CLIFF). The low
    * rigs take all of it — they are the ones the drop happens TO. The two
@@ -546,11 +555,14 @@ export type GameCamera = {
    * at is not worth a second. */
   retake: (state: GameState, fly?: boolean) => void;
   update: (state: GameState, dt: number) => void;
-  /** Rattle the shot. `dir` is the world direction the blow came FROM the
+  /** Hand the shot a blow. `dir` is the world direction it came FROM the
    * car's middle toward — the in-car views throw the driver's head along it
-   * and let the neck spend the impulse, which is the only thing in an
-   * in-car frame that says the car hit something. */
-  kick: (strength: number, dir?: { x: number; y: number; z: number }) => void;
+   * and let the neck spend the impulse, which is the only thing in an in-car
+   * frame that says the car hit something. `source` says what KIND of blow it
+   * was, and camera-shake.ts decides from that how much of it each family of
+   * camera takes: an outside rig takes none of a `contact`, because the car
+   * is the thing that ran into the tree and the car is what is in frame. */
+  kick: (strength: number, dir?: { x: number; y: number; z: number }, source?: ShakeSource) => void;
   resize: (width: number, height: number) => void;
 };
 
@@ -565,7 +577,11 @@ export function createGameCamera(width: number, height: number): GameCamera {
   let driftOff = 0;
   let dist = 6.2;
   let height_ = 2.0;
+  /** How much blow the shot is still carrying, 0..`CAMERA_SHAKE.ceiling`,
+   * and the phase its rattle is riding — redrawn per blow, so two hits in a
+   * row are not the same wobble played twice. */
   let shake = 0;
+  let shakePhase = 0;
   let fov = 60;
   /** Lateral camera offset toward the outside of the current turn, m, and
    * the speed it is moving at — the swing is a sprung mass, so it carries
@@ -716,9 +732,15 @@ export function createGameCamera(width: number, height: number): GameCamera {
     const holdRate = wantHold > held ? CLIFF.rise : CLIFF.settle;
     held += (wantHold - held) * clamp(holdRate * dt, 0, 1);
 
-    const sx = (Math.random() - 0.5) * shake * rig.shake;
-    const sy = (Math.random() - 0.5) * shake * rig.shake;
-    const ride = ground + height_ + car.ride * rig.heave + held;
+    // The rattle a blow left behind: a decaying WAVE the shot rides, not a
+    // fresh random offset per frame (camera-shake.ts). The body's own
+    // suspension travel comes in beside it through `heave` — that one is the
+    // CAR moving in the frame, which is the half of a bump the outside shot
+    // is supposed to show.
+    const rattle = rattleAt(orbit, shake * rig.shake, shakePhase);
+    const sx = rattle.x;
+    const sy = rattle.y;
+    const ride = ground + height_ + car.ride * rig.heave * CAMERA_SHAKE.heave + held;
     camera.position.set(camX + sx, Math.max(ride, floor) + sy, camZ);
     // The drop from camera to aim point over the run between them IS the
     // pitch of the shot — a few degrees for the chase rigs, most of a right
@@ -797,7 +819,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
   };
 
   const update = (state: GameState, dt: number): void => {
-    shake = Math.max(0, shake - 6 * dt * shake - 0.4 * dt);
+    shake = fadeShake(shake, dt);
     orbit += dt;
     // The height the car last left the ground at, kept in every mode so a
     // camera switched to mid-flight knows how far the fall already is
@@ -935,9 +957,16 @@ export function createGameCamera(width: number, height: number): GameCamera {
       eye.setTuning(tuning);
     },
     update,
-    kick: (strength, dir) => {
-      shake = Math.min(0.8, shake + strength);
-      if (dir) eye.jolt(dir.x, dir.y, dir.z, strength * JOLT_PER_KICK);
+    kick: (strength, dir, source = "contact") => {
+      const rattle = outsideBlow(strength, source);
+      if (rattle > 0) {
+        shake = Math.min(CAMERA_SHAKE.ceiling, shake + rattle);
+        // A fresh phase per blow, so a second hit is a second wobble rather
+        // than the first one getting louder in place. Renderer-side
+        // randomness only: nothing here is ever read back by the engine.
+        shakePhase = Math.random() * Math.PI * 2;
+      }
+      if (dir) eye.jolt(dir.x, dir.y, dir.z, inCarBlow(strength, source));
     },
     resize: (width2, height2) => {
       camera.aspect = width2 / height2;
