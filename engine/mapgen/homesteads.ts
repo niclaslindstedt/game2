@@ -230,7 +230,13 @@ export function placeHomesteads(ctx: HomesteadContext): Homestead[] {
     if (!homestead) continue;
     out.push(homestead);
     all.push(homestead);
-    lastAtS = s;
+    // Where it actually STANDS, not the slot it was rolled in. The drive
+    // comes down at the straightest sample in the slot's window, which is
+    // up to `slot` metres past `s` — so gating the next roll on `s` let two
+    // houses end up `slot` closer together than `spacing.min` allows. It is
+    // what `lastAtS` is initialised from a few lines up, and the rule reads
+    // on the built stage rather than on the dice.
+    lastAtS = homestead.atS;
   }
   return out;
 }
