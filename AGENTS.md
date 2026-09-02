@@ -123,6 +123,7 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | Kind of change                                              | Where it goes                                                                                                                      |
 | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | Handling/feel (drift, jump, grip, gearbox)                  | `engine/game/car.ts`; numbers in `engine/game/defs/`                                                                               |
+| Where the car STANDS: the seat, the edge, the bump          | `engine/game/ground.ts` — one rule for the road and the country; `TUNING.air` (edges) and `TUNING.suspension` (bumps)              |
 | How a turn becomes a drift, and how it lets go              | `TUNING.drift` in `engine/game/defs/tuning.ts` — the `drift-feel` skill                                                            |
 | What a MOVE (flick, trailed brake, lever) buys a slide      | `drift.flickDepth` / `brakeDepth` / `leverDepth` / `provokeFloor` — the `drift-feel` skill                                         |
 | What a car CAN do, for anything that has to plan around it  | `engine/game/limits.ts` — stated once, read by `car.ts` AND `sim/bot.ts`; never restate a ceiling                                  |

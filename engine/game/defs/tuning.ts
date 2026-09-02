@@ -1001,13 +1001,26 @@ export const TUNING = {
     /** Fraction of a sudden change in the wheels' vertical speed that the
      * body refuses to follow, 0..1 — the jolt that loads the spring. */
     absorb: 0.85,
-    /** Ground acceleration the springs can pass to the body, m/s². A valley
-     * floor at pace is several g held for a fifth of a second, and no spring
-     * this soft holds a body against that inside a wheel arch — past this the
-     * dampers are out of authority and the whole car rides the ground up,
-     * which is what a bottomed suspension does. Only the ground-follow jolt
-     * is capped: a landing and an impact are velocity steps of their own. */
+    /** Ground acceleration the springs can pass to the body from the SHAPE
+     * of the ground, m/s². A valley floor at pace is several g held for a
+     * fifth of a second, and no spring this soft holds a body against that
+     * inside a wheel arch — past this the dampers are out of authority and
+     * the whole car rides the ground up, which is what a bottomed suspension
+     * does. Only the smoothed ground-follow is capped here: a landing and an
+     * impact are velocity steps of their own, and a bump has its own
+     * ceiling below. */
     joltMax: 13,
+    /** The most wheel speed one BUMP may throw into the springs, m/s — a
+     * kerb, the shoulder's step off the mat, a lattice crease, the face of a
+     * jump met from behind: everything the smoothed grade did not predict
+     * (ground.ts, `groundJolt`). A bump is a one-step spike, so this is the
+     * whole of it arriving at once, and it has to clear what a real step
+     * puts in — a hand's width of kerb at rally pace is fifteen-odd m/s —
+     * or the kerb is quietly clamped out of existence. What bounds the body
+     * is the bump stops and `heaveMax`, not this; this only keeps a
+     * degenerate reading (a lattice seam metres tall) from throwing a
+     * number into the springs that the next step cannot take back. */
+    bumpMax: 25,
     /** THE TRAVEL IS A BODYWORK MEASUREMENT, not a spring one: the arches
      * clear the tires by 0.08–0.11 m (car-styles.ts), and past that the
      * chassis is visibly sliding off its own wheels. Compression before the
@@ -1036,9 +1049,15 @@ export const TUNING = {
      * tightest arch gap on the roster, so the worst landing in the game still
      * draws as a car on its bump stops. */
     heaveMax: 0.1,
-    /** Cap on spring velocity, m/s. Sized to the travel above: the springs
-     * cross their whole compression in about a tenth of a second. */
-    rateMax: 3,
+    /** Cap on spring velocity, m/s — a guard against a runaway integration,
+     * not a look budget. It has to sit ABOVE the wheel speed a kerb puts in
+     * (a hand's width of step at rally pace is fifteen-odd m/s for one
+     * step), because a bump is a one-step spike that the next step takes
+     * back out: clamp the spike and the take-back is left standing, and the
+     * body ends the pair exactly where it started — a kerb the springs
+     * never felt. What bounds the travel is the bump stops above, and the
+     * `heaveMax` clamp under them. */
+    rateMax: 20,
     /** A CAR THAT HAS JUST ARRIVED IS NOT STANDING ON ITS TIRES YET. The
      * wheels hammer on their own rubber for the better part of a second
      * after a landing, and a wheel that is intermittently in the air holds
@@ -1146,8 +1165,6 @@ export const TUNING = {
   air: {
     /** Gravity, m/s². */
     gravity: 9.8 * 1.6, // arcade gravity: floatier hangs read as slow-motion
-    /** Vertical launch scale from the lip's ramp slope. */
-    launchScale: 1.0,
     /** Below this speed the car stays glued to the road however fast the
      * ground falls away — only pace launches you off a crest, m/s. */
     crestSpeed: 12,
@@ -1209,12 +1226,35 @@ export const TUNING = {
     /** Roll past this at touchdown means the car came down on its side —
      * a sloppy landing however straight the nose was, rad. */
     rollLandLimit: 0.7,
-    /** Off the road only: ground falling away by more than this in one
-     * step is an edge — a cliff lip, a cut bank — and throws the car
-     * instead of gluing it down the face, m. Comfortably more than the
-     * shelf drop at the road boundary, so leaving the verge is a curb,
-     * not a takeoff. */
+    /** Ground falling away by more than this in one step, at pace, is an
+     * edge — a cliff lip, a cut bank — and throws the car instead of
+     * gluing it down the face, m. Comfortably more than the shelf drop at
+     * the road boundary, so leaving the verge is a curb, not a takeoff. */
     edgeDrop: 0.8,
+    /** ...and the car's CLIMBING speed being asked to fall by more than
+     * this in one step, m/s, is the wheels LEAVING the ground — a convex
+     * kink too sharp to follow (car.ts, `kink`). This is how a jump lip
+     * throws the car, from either side: the drop past a 2 m lip is its
+     * whole height over one sample, which at rally pace is twenty-odd m/s
+     * of fall the wheels were not making, while the same lip at a crawl is
+     * driven over and down. The climbing speed is the lesser of the wheels'
+     * own and the smoothed grade's, so a kerb (a spike the grade never
+     * saw) and a wall (a grade the wheels never climbed) both read as
+     * nothing; what is left is a grade the car has genuinely been up, and
+     * the threshold is set where a ramp-end at pace throws the car and a
+     * lattice crease does not — a 30° ramp ending at 100 km/h flies, the
+     * same crease at half that grade is driven over. Stated as a speed
+     * because a kink's size is one: the change of grade times the pace,
+     * whatever the physics rate. */
+    edgeSpeed: 8,
+    /** Share of the wheels' climbing speed the car LEAVES a kink with,
+     * 0..1. The wheels are on the steepest last metre of the ramp when the
+     * ground drops away; the body, a wheelbase long and still pitching up,
+     * is carrying the ramp's average, which on R6's eased-in ramp is about
+     * half the end grade. A flight carrying the wheels' whole speed off the
+     * landing face of a 2 m lip met from behind at rally pace would be a
+     * twenty-metre moon shot. */
+    launchKeep: 0.5,
     /** Landing slip beyond this scrubs speed and wobbles the car, rad. */
     cleanSlipLimit: 0.24,
     /** Speed kept on a clean landing vs a sloppy one (fractions). */
@@ -1520,6 +1560,14 @@ export const TUNING = {
        * Deliberately ABOVE what wood survives (solids.ts), so a rooted
        * tree always breaks before it is pulled out of the ground. */
       anchorPerMass: 40,
+      /** How much of the closing speed comes BACK off a solid the car has
+       * knocked out of its bed, 0..1 — the free-body exchange's own
+       * restitution, under the wall's `collision.restitution`. A stone
+       * that is going to leave does not first bounce the car off itself;
+       * it is shoved, and the car pays its share of the momentum and
+       * little else. This is what makes the smallest solid on a stage a
+       * bang and a dent rather than a third of the car's speed. */
+      looseRestitution: 0.1,
       /** Cap on how fast a solid the car knocked loose leaves, m/s. Past
        * it a stone reads as a bullet rather than as something heavy that
        * was hit very hard. */
@@ -1643,6 +1691,17 @@ export const TUNING = {
        * at any speed; without this it is jolted on every one of them, and
        * one block costs what a whole apex should. */
       again: 0.08,
+      /** A SOLID ridden over (`clipSolids`) counts as this many blocks at
+       * most, however tall it stands under the bar: the bite, the shove,
+       * the roll and the heave all scale with how far it stands proud of a
+       * block's `KERB_MARKER.block.proud`, capped here so the biggest stone
+       * the wheels take is a hard lurch and never a launch... */
+      overMax: 3,
+      /** ...and the longest the body stays deaf to the next one after it,
+       * s — normally the time the whole body takes to pass over the stone
+       * at the pace it is doing, so a stone is one bite; at a crawl that
+       * would be longer than the stone deserves. */
+      overFor: 0.6,
     },
 
     /** Panel crush per m/s of closing speed past the scuff floor, m. A
@@ -1704,14 +1763,40 @@ export const TUNING = {
      * tree, folds deeper for the same closing speed (the energy is real),
      * and rides its springs more slowly. */
     refMass: 1200,
+    /** THE RIDE-OVER BAR, m over the car's own ground. A solid whose top
+     * stands under it is under the bumper's lower lip and the floor — the
+     * WHEELS climb it and the body passes over, resolved like an anti-cut
+     * block (`clipSolids`: speed, a lurch, a thump, never a fold). Above it
+     * the thing meets the body and the contact model has it. It sits a
+     * little over the placement bar (`SOLID_PROP_HEIGHT`, 0.5 m — the
+     * field stands up anything taller than that), so the SHORTEST solids
+     * the field places are mounted rather than hit: the bottom of the nose
+     * is soft, and a stone the height of a wheel is a bump in the ride and
+     * not the end of the run. Held under the lowest hood by
+     * tests/car_geometry_test.ts, because past the hood the body plainly
+     * meets it. */
+    rideOver: 0.6,
     /** THE GROUND AS A SOLID. Grade (dy/dx) the wheels can still scrabble
      * up: below it a rise is a hill the car climbs and the grade term
-     * pushes back on, above it the ground starts REFUSING the car. 0.7 is
-     * about 35°. */
-    climbLimit: 0.7,
+     * pushes back on, above it the ground starts REFUSING the car. 0.95 is
+     * a little under 45° — arcade-generous on purpose: a bank, a cut verge
+     * or the landing face of a jump met from behind is a thing the car
+     * bounces up over, and only ground a car plainly could not climb is
+     * a wall. The generator's own verges (`STAGE_RULES.verge.climb`) stay
+     * well under it. */
+    climbLimit: 0.95,
     /** ...and the grade at which it refuses entirely — a cliff face, hit
-     * at the full closing speed. 2.1 is about 65°. */
-    wallSlope: 2.1,
+     * at the full closing speed. 2.6 is about 69°. The wide band between
+     * the two is what makes a steep bank a berm to lean on rather than a
+     * wall: at 55° the face takes about a third of the closing speed. */
+    wallSlope: 2.6,
+    /** Closing speed into a FACE under which the contact is a scrape and
+     * not a fold, m/s — its own floor, above the solids' `scuffSpeed`,
+     * because a bank is met with the wheels first and a trunk with the
+     * bumper. A cliff at pace still folds the nose (the refused speed is
+     * the whole closing speed); a steep bank taken at 50 km/h costs speed
+     * and paint, never the run. */
+    faceScuff: 6,
     /** Baseline the struck face's gradient is read over, m — short, because
      * what matters is the wall the bumper is against, not the shape of the
      * mountain behind it. */

@@ -244,9 +244,9 @@ rewards it, and no drift seconds are counted at the player.
 
 ## The jump
 
-- **The ground** — grounded, the car **rides** the road: its vertical speed is the road's own, sampled between centerline points rather than snapped to the nearest one, so it climbs a ramp smoothly instead of hopping up it in 2 m stairs.
+- **The ground** — grounded, the car **rides** the ground under it, read where the car has just moved TO (`engine/game/ground.ts`): on the road that is the road's own profile sampled between centerline points rather than snapped to the nearest one, so it climbs a ramp smoothly instead of hopping up it in 2 m stairs; off it, the terrain lattice. The two are ONE surface — the terrain beside a road interpolates the stage's elevation exactly as the road does — so leaving the mat and coming back onto it is a bump the springs take rather than a step the car is dropped down. Its vertical speed (`CarState.vy`) is the smoothed grade's, which the attitude, the camera and the landings read; what the wheels actually did this step is `CarState.wheelVy`, and the difference between the two is a BUMP for the springs (below).
 - **Attitude** — the engine owns how the car SITS, in `CarState.pitch` and `CarState.roll` (positive lifts the nose and the right side). Grounded, both are the ground under the wheels: the nose takes the grade along the heading, the body takes the camber across it. Airborne, the pitch is the flight's own arc and the roll is the tumble the take-off put in. Both ease toward their target at `TUNING.attitude.settle` — that lag IS the suspension travel a landing settles through. The renderer only spends the two angles on the right axes; it never derives them.
-- **Takeoff** — jump segments ramp up to a lip; crossing it throws the car with vertical speed proportional to pace × ramp slope (`takeoff`). The ramp EASES IN, steepest right at the lip, because a ramp that flattens as it reaches the top hands the car no upward speed at the one moment that matters. A lip is a crest and a crest does not care which way it is met: a car coming back the other way climbs the landing face and is thrown off the top of it — harder, because that face is the steep one. A crest launches the car too, but only when the ground's own curvature would pull it down harder than gravity can (`TUNING.air.crestSpan`, `crestPull`) — so a real brow throws you at pace and holds you at a crawl, while the rolling ground under every stage is just ridden over. Off the road a sharp EDGE does the same: ground falling away by more than `edgeDrop` under the car's own footprint is a cliff lip, not a face to be driven down. Both gates read the speed the car is COVERING GROUND at rather than the speed it is pointing at, because sideways those are different numbers — a drift over a mountain top flies exactly like a straight one would.
+- **Takeoff** — a jump lip is a KINK the wheels cannot follow, and that is the whole rule: the wheels were climbing at one speed over the last step, and the ground now asks them to give up more than `TUNING.air.edgeSpeed` of it in this one, so they leave it (`takeoff`). The car is thrown from wherever the ground last held it with `launchKeep` of the speed the wheels were climbing at — the wheels are on the steepest last metre of the ramp, the body is carrying its average. Nothing about the lip is flagged for it, which is why it works from either direction: a car coming back the other way climbs the landing face (steep, but under `climbLimit`, so a face to be bounced up rather than a wall) and is thrown off the top of it — harder, because that face is the steep one — instead of being teleported to the top of it. The ramp EASES IN, steepest right at the lip, because a ramp that flattens as it reaches the top hands the car no upward speed at the one moment that matters. A crest launches the car too, but only when the ground's own curvature would pull it down harder than gravity can (`TUNING.air.crestSpan`, `crestPull`) — so a real brow throws you at pace and holds you at a crawl, while the rolling ground under every stage is just ridden over. A sharp EDGE does the same wherever it is: ground falling away by more than `edgeDrop` under the car's own footprint at pace is a cliff lip, not a face to be driven down. The crest and edge gates read the speed the car is COVERING GROUND at rather than the speed it is pointing at, because sideways those are different numbers — a drift over a mountain top flies exactly like a straight one would; the kink reads the wheels' own speed, so a wall the grade term reads as a mountain can never read as the ground falling away.
 - **...and so does the road taken FROM THE SIDE.** A road is a surface, not a line: along the stage it brows and dips, and across it there is R16's crown, the bank R19 puts on a corner, and the ground beside it leaning away. The curvature the takeoff reads is both of those resolved onto the direction of TRAVEL (`pathCurvature`, over `air.crestSpan` lengthways and `crossSpan` of the road's half-width across), so what a car meets depends on where it is going. Drive down the stage and it is all brows; ride up the verge and over the road and it is all crown — and with enough speed that crown throws the car exactly like a lip does. A narrow road is the sharper hump, because the same 17 cm of camber is bent into a tighter radius the less road there is to spread it over; a sealed one is sharper again, standing `asphaltLift` proud of its own shoulder.
 - **The roll** — a car that leaves the ground crossed up trips over its outside wheels: the take-off puts roll in the body from the slide it was holding plus the rotation already in it, and nothing in the air takes it out. The same trip about the vertical axis puts SPIN in it (`air.yawFromSlide`): the tires that were holding the slide let go all at once, so a car that goes over a ledge sideways keeps turning the way the slide was turning it, all the way down. Straight and level flies flat; properly sideways goes a long way over; the unluckiest launches go all the way round. Landing on your side is never a clean landing. The ground unwinds the roll toward the nearest upright, and then onto the CAMBER under the wheels — level on the road, tipped with the hillside out in the wild.
 - **Airborne** — the velocity vector is committed. Gravity is arcade-heavy (floatier hangs read as slow motion), the nose answers only faintly, and a small seeded turbulence rolls the car — flying, slightly out of control, exactly as intended. No lateral grip: whatever attitude you took off with survives to the ground.
@@ -529,8 +529,11 @@ not a mistake anymore; it is exploration:
   where two lattice triangles meet, the foot of a cut bank — no longer
   buries one end of it. A corner over ground rising harder than
   `TUNING.collision.climbLimit` is against a WALL rather than standing on
-  a slope, so its claim is capped there and the contact model takes over.
-  The
+  a slope, so its claim is capped there and the contact model takes over —
+  and the limit is arcade-generous, a little under 45°, with the full
+  refusal (`wallSlope`) not until nearly 70°: a bank, a cut verge, the
+  landing face of a jump are things the car bounces up over, and only
+  ground it plainly could not climb is a wall. The
   grade under the wheels is read over a wheelbase-scale baseline
   (`TUNING.hills.gradeSpan`) along the heading AND across it: banks push
   back the moment the wheels touch them, the nose pitches with the local
@@ -590,12 +593,24 @@ not a mistake anymore; it is exploration:
   expected size, so a hectare of forest carries exactly as many trunks as
   it did — what changes is that they arrive in knots with light between
   them instead of one per ten-metre cell.
-- **What counts as an obstacle** — `SOLID_PROP_HEIGHT` (0.45 m) is the
-  bar, and it is the MIDDLE OF THE HOOD: the catalog's bonnets sit about
-  0.87 m over the ground, so anything standing higher than half of that
+- **What counts as an obstacle** — `SOLID_PROP_HEIGHT` (0.5 m) is the
+  bar, set as high up the hood as the catalog allows: the bonnets sit
+  about 0.87 m over the ground, and anything standing higher than the bar
   meets the body and is placed as a solid. Stone shorter than the bar is
   litter the renderer scatters for itself and the wheels ride straight
-  over, and it is the only stone the renderer is allowed to plant. Nothing
+  over, and it is the only stone the renderer is allowed to plant. Of what
+  IS placed, the shortest are still the wheels' business: a solid whose top
+  stands under `TUNING.collision.rideOver` (0.6 m) over the car's own
+  ground is under the bumper's lower lip, and the car drives OVER it the
+  way it drives over an anti-cut block (`clipSolids`) — speed, a lurch, a
+  thump, the stone shoved out of its bed and away, never a fold. Only what
+  stands taller meets the body. The
+  litter field is deliberately sparse (`ROCK_DENSITY` in `props.ts`): the
+  wild is a place to drive, and the solids that stand in it are the ones a
+  driver can see coming. What a solid that GIVES costs is a shove, not a
+  wall: a rock the car knocks off its bed hands back only
+  `solids.looseRestitution` of the closing speed, so the smallest solid on
+  a stage is a bang and a dent rather than a third of the car's pace. Nothing
   solid stands inside the road ribbon's own reach (`ROAD_CROSS.reach`,
   6.5 m past the mat) — rim included, not just centre — so the shoulder
   and the ditch stay as survivable as they ever were, and the first thing
@@ -757,21 +772,29 @@ car in grip.
   tightest gap between arch and tire on the roster (0.08–0.11 m — see
   `arches.radius` against `wheelRadius` in `pwa/src/game/car-styles.ts`),
   because past that the shell is visibly sliding off its own wheels rather
-  than riding on them. Two things keep the springs inside it. The ground-
-  follow jolt is capped at `joltMax`: a valley floor at pace is several g held
-  for a fifth of a second, no spring soft enough to feel like a rally car
-  holds a body against that inside a wheel arch, and past the cap the dampers
-  are simply out of authority and the whole car rides the ground up — which is
-  what a bottomed suspension does. A landing and an impact are velocity steps
-  of their own and are not capped. And the wheels' vertical speed is read from
-  the car's DIRECTION OF TRAVEL, not its heading (`slope` × `u` plus
-  `slopeLat` × `w`, which is the ground's gradient dotted with the velocity),
-  so a car sliding across a uniform hillside no longer reports a vertical
-  speed that swings with its own yaw. The cap runs in both directions:
-  uncapping the ground falling away reads like the obvious improvement — over
-  a brow nothing is pushing the body — but a brow's fall is already well
-  inside it, and measured on 1.2 m and 2.6 m crests from 16 to 44 m/s the
-  body's travel moved by nothing at all.
+  than riding on them. What the ground hands the springs comes in TWO
+  CHANNELS (`groundJolt` in `ground.ts`), because the ground does two
+  different things and one cap cannot serve both. The SHAPE — a valley
+  floor, a brow, a bank — arrives through the smoothed grade and is capped at
+  `joltMax`: a valley floor at pace is several g held for a fifth of a
+  second, no spring soft enough to feel like a rally car holds a body against
+  that inside a wheel arch, and past the cap the dampers are simply out of
+  authority and the whole car rides the ground up — which is what a bottomed
+  suspension does. The BUMP — a kerb, the shoulder's step off the mat, a
+  lattice crease, the landing face of a jump met from behind — is everything
+  the smoothed grade did not predict: the change, step to step, in how far the
+  wheels' real vertical speed (`CarState.wheelVy`) runs ahead of the smoothed
+  one. It is a spike by nature and carries its own ceiling, `bumpMax`, sized
+  so the worst step in the ground squats the body onto its stops and no
+  further. Without it the shape cap swallowed every step along with the
+  shapes it was written for, and a car crossing the verge at pace moved on its
+  springs by nothing at all — the read that made the car look bolted to the
+  road. A landing and an impact are velocity steps of their own and are not
+  capped. And the wheels' vertical speed is read from the car's DIRECTION OF
+  TRAVEL, not its heading (`slope` × `u` plus `slopeLat` × `w`, which is the
+  ground's gradient dotted with the velocity), so a car sliding across a
+  uniform hillside never reports a vertical speed that swings with its own
+  yaw.
 
 - **`CarState.settle`** — how much the car is still SKITTERING after
   arriving, 0..1: the wheels themselves hopping on their own rubber, which is
@@ -876,12 +899,16 @@ every solid is a circle, and a hit does several things at once:
   into tumbling debris. **Hard landings are impacts too**: descent the
   suspension cannot absorb (`hardLandSpeed`) crushes the underside (the
   `belly`), or the flank the car came down on. **So is the ground itself**:
-  off the road, a face rising faster than `climbLimit` under the wheels stops
-  being a hill and starts refusing the car, at `wallSlope` completely. The
-  terrain's gradient at the bumper IS the contact normal, so a cliff met head
-  on takes the pace and folds the nose while one met at an angle deflects the
-  car along it — and the car is backed out of however much of the step the
-  face refused, which is why it never ends up inside a mountain.
+  a face rising faster than `climbLimit` under the wheels — the terrain, or
+  a road profile where it stands up — stops being a hill and starts refusing
+  the car, at `wallSlope` completely. The ground's gradient at the bumper IS
+  the contact normal, so a cliff met head on takes the pace and folds the
+  nose while one met at an angle deflects the car along it — and the car is
+  backed out of however much of the step the face refused, which is why it
+  never ends up inside a mountain. A face has its own scuff floor
+  (`faceScuff`, above the solids' `scuffSpeed`): a steep bank taken at
+  50 km/h costs speed and paint, never the run, while a cliff at pace still
+  folds the nose.
 - **The springs.** Every contact also loads them (`TUNING.suspension`):
   the wheels stop and the body does not, so the car rocks and the nose dips
   for a beat afterwards. See [Weight: the springs](#weight-the-springs).

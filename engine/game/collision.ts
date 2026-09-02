@@ -327,9 +327,11 @@ export function collideCar(
   const hw = T.collision.halfWidth;
 
   for (const ob of solids) {
-    // Vertical gate: a flight clears what it is higher than, and a trunk
-    // whose foot is up a bank the car is below never reaches down to it.
-    if (car.y > ob.y + ob.height) continue;
+    // Vertical gate: a flight clears what it is higher than, a trunk whose
+    // foot is up a bank the car is below never reaches down to it — and a
+    // solid standing under the ride-over bar is the wheels' business
+    // (`clipSolids`), never the body's.
+    if (ridesOver(car, ob)) continue;
     if (ob.y > car.y + 2) continue;
 
     const sinH = Math.sin(car.heading);
@@ -373,7 +375,10 @@ export function collideCar(
     // and a stone the car flicks into the trees: the speed lost, the paint
     // scrubbed off the flank, the fold in the panels, and the spin.
     const { bite, yields, broke } = meetSolid(ob, closing, spec.mass);
-    const e = T.collision.restitution;
+    // A thing that came out of the ground is shoved, not bounced off
+    // (`looseRestitution`); a wall, and a trunk that stood until it broke,
+    // hand the closing speed back at the full figure.
+    const e = yields && !broke ? T.collision.solids.looseRestitution : T.collision.restitution;
     // Only what did NOT give way pushes the car back out: a rock knocked
     // off its bed is not still occupying the ground the car is standing on.
     const push = penetration * (yields ? 1 - bite : 1);
@@ -500,65 +505,159 @@ export function clipKerbs(
   // above the slab has already climbed something else to get there.
   if (car.airborne) return;
 
+  const radius = KERB_MARKER.block.width / 2;
+  for (const block of blocks) {
+    if (Math.abs(car.y - block.y) > KERB_MARKER.block.proud + 0.5) continue;
+    // One bite per step: a car crossing two blocks at once has ridden over
+    // a kerb, not over two of them, and it should thump once.
+    if (mount(spec, car, block.x, block.z, radius, 1, events)) {
+      car.kerbFrom = now + K.again;
+      return;
+    }
+  }
+}
+
+/** Is this solid one the WHEELS deal with rather than the body? A thing
+ * whose top stands under `collision.rideOver` over the car's own ground is
+ * below the bumper's lower lip and the floor: the wheels climb it and the
+ * body passes over. It is the contact model's half of the placement bar
+ * (`SOLID_PROP_HEIGHT`): the field stands up anything taller than the
+ * middle of the hood, and of those the shortest are mounted, not hit. A
+ * flight clears anything it is higher than by the same test. */
+export function ridesOver(car: CarState, ob: WildObstacle): boolean {
+  return ob.y + ob.height < car.y + T.collision.rideOver;
+}
+
+/** THE SOLIDS THE WHEELS RIDE OVER. Everything under the ride-over bar —
+ * the smallest rocks the field stands up, a stone bedded lower than the
+ * ground the car is on — is resolved the way an anti-cut block is: the car
+ * drives OVER it, and pays for it in speed, a lurch and a thump, never in
+ * panels. The size of the thing sets how many kerbs' worth it is (`overMax`
+ * caps it), and the body is deaf to the next one until it has passed over
+ * this one, so a stone is one bite and not twenty.
+ *
+ * A stone the car's momentum beats is knocked out of its bed all the same
+ * (`meetSolid`) — it leaves the world and the renderer tumbles it — so the
+ * wheels do not appear to pass through a rock that stays exactly where it
+ * was. What the car never gets from one of these is a fold. */
+export function clipSolids(
+  spec: CarSpec,
+  car: CarState,
+  now: number,
+  solids: WildObstacle[],
+  events: GameEvent[],
+  fell?: (ob: WildObstacle) => void,
+): void {
+  if (now < car.kerbFrom || car.airborne) return;
+  const K = T.collision.kerb;
+  const S = T.collision.solids;
+  for (const ob of solids) {
+    // Only what stands under the bar, and only what stands at all: a stone
+    // whose top is under the wheels is litter the field never placed.
+    const top = ob.y + ob.height - car.y;
+    if (top <= 0 || !ridesOver(car, ob)) continue;
+    const scale = clamp(top / KERB_MARKER.block.proud, 1, K.overMax);
+    const closing = mount(spec, car, ob.x, ob.z, ob.radius, scale, events);
+    if (closing === null) continue;
+    // Deaf until the whole body has passed over it — one bite per stone.
+    const pace = Math.max(1, Math.hypot(car.u, car.w));
+    car.kerbFrom = now + Math.min(K.overFor, (2 * T.collision.halfLength + 2 * ob.radius) / pace);
+    const { bite, yields, broke } = meetSolid(ob, closing, spec.mass);
+    if (yields) {
+      fell?.(ob);
+      const sinH = Math.sin(car.heading);
+      const cosH = Math.cos(car.heading);
+      const e = broke ? T.collision.restitution : S.looseRestitution;
+      const speed = broke
+        ? closing * S.toppleKeep
+        : Math.min(S.throwMax, ((1 + e) * bite * closing * spec.mass) / ob.mass);
+      // Thrown the way the car is going: the wheels shoved it forward.
+      events.push({
+        type: "solidBreak",
+        solid: ob,
+        broke,
+        vx: sinH * speed,
+        vy: speed * S.throwLift,
+        vz: cosH * speed,
+      });
+    }
+    return;
+  }
+}
+
+/** MOUNT one low thing standing at (`x`, `z`) with a circle of `radius`, if
+ * the body box is over it and closing on it: the wheels climb it and drop
+ * off the far side, the car is shoved across itself and its nose dragged
+ * round, and the body rocks on its springs. `scale` is how many anti-cut
+ * blocks' worth of step it is — 1 for a block, more for a stone standing
+ * higher. Returns the closing speed it was met at, or null for no contact
+ * (not over it, or merely stepping over it under `kerb.clipSpeed`).
+ *
+ * Everything is priced off the BITE — the closing speed capped at
+ * `kerb.biteMax` — rather than the closing speed itself: climbing a hand's
+ * height of concrete costs what it costs, and arriving twice as fast does
+ * not make it taller. That ceiling is what separates a kerb from a wall;
+ * see `clipKerbs` for what a whole apex row is worth. */
+function mount(
+  spec: CarSpec,
+  car: CarState,
+  x: number,
+  z: number,
+  radius: number,
+  scale: number,
+  events: GameEvent[],
+): number | null {
+  const K = T.collision.kerb;
   // A heavier car is shrugged around less by the same slab, exactly as it
   // is by the same trunk.
   const mass = massRatio(spec);
   const hl = T.collision.halfLength;
   const hw = T.collision.halfWidth;
-  const radius = KERB_MARKER.block.width / 2;
   const sinH = Math.sin(car.heading);
   const cosH = Math.cos(car.heading);
+  // The thing's centre in the car frame: `fwd` along the nose, `right`
+  // along the right axis — the same box the body meets a trunk with.
+  const dx = x - car.x;
+  const dz = z - car.z;
+  const fwd = dx * sinH + dz * cosH;
+  const right = dx * cosH - dz * sinH;
+  const ex = right - clamp(right, -hw, hw);
+  const ez = fwd - clamp(fwd, -hl, hl);
+  if (Math.hypot(ex, ez) >= radius) return null;
 
-  for (const block of blocks) {
-    if (Math.abs(car.y - block.y) > KERB_MARKER.block.proud + 0.5) continue;
-    // The block's centre in the car frame: `fwd` along the nose, `right`
-    // along the right axis — the same box the body meets a trunk with.
-    const dx = block.x - car.x;
-    const dz = block.z - car.z;
-    const fwd = dx * sinH + dz * cosH;
-    const right = dx * cosH - dz * sinH;
-    const ex = right - clamp(right, -hw, hw);
-    const ez = fwd - clamp(fwd, -hl, hl);
-    if (Math.hypot(ex, ez) >= radius) continue;
+  // Closing speed, measured along the line from the body to it — a car
+  // running down a row of blocks parallel to the road barely touches one, a
+  // car cutting across the apex mounts it square.
+  const d = Math.hypot(ex, ez) || 1;
+  const nx = ex / d;
+  const nz = ez / d;
+  const closing = car.u * nz + car.w * nx;
+  if (closing <= K.clipSpeed) return null;
+  const bite = Math.min(closing, K.biteMax) * scale;
 
-    // Closing speed into the block, measured along the line from the body
-    // to it — a car running down the row parallel to the road barely
-    // touches one, a car cutting across the apex mounts it square.
-    const d = Math.hypot(ex, ez) || 1;
-    const nx = ex / d;
-    const nz = ez / d;
-    const closing = car.u * nz + car.w * nx;
-    if (closing <= K.clipSpeed) continue;
-    // What climbing a slab this low can cost, whatever the car brought to
-    // it — see the ceiling above.
-    const bite = Math.min(closing, K.biteMax);
+  // Everything the car is carrying pays the same share: a block does not
+  // care which way the speed was pointing, only that the wheels had to
+  // climb it. This scrub IS the price of an apex cut — a full row of
+  // blocks is a handful of bites, and `keep` is set so that comes out at
+  // about a fifth of the car's speed; a taller stone is that many blocks.
+  const keep = Math.pow(K.keep, scale);
+  car.u *= keep;
+  car.w *= keep;
+  // ...then the shove back out from under it, ACROSS the car, with the nose
+  // dragged round after it.
+  car.w -= nx * ((bite * K.shove) / mass);
+  car.yawRate -= (Math.sign(right) * bite * K.yaw) / mass;
+  updateSlip(car);
 
-    car.kerbFrom = now + K.again;
-    // Everything the car is carrying pays the same share: a block does not
-    // care which way the speed was pointing, only that the wheels had to
-    // climb it. This scrub IS the price of an apex cut — a full row of
-    // blocks is a handful of bites, and `keep` is set so that comes out at
-    // about a fifth of the car's speed.
-    car.u *= K.keep;
-    car.w *= K.keep;
-    // ...then the shove back out of the inside, ACROSS the car, with the
-    // nose dragged round after it.
-    car.w -= nx * ((bite * K.shove) / mass);
-    car.yawRate -= (Math.sign(right) * bite * K.yaw) / mass;
-    updateSlip(car);
-
-    // The body over the wheels. Positive roll lifts the car's RIGHT side,
-    // so a block under the right wheels rolls the car positive — and the
-    // lift is capped well under `solids.tripLaunch`, because a kerb that
-    // can put a car on its roof is a barrier and not a kerb.
-    const lift = Math.min(K.liftMax, (bite * K.lift) / mass);
-    car.rollRate += Math.sign(right) * lift;
-    loadSprings(car, bite * K.heave, nz);
-    events.push({ type: "kerbHit", speed: closing });
-    // One bite per step: a car crossing two blocks at once has ridden over
-    // a kerb, not over two of them, and it should thump once.
-    return;
-  }
+  // The body over the wheels. Positive roll lifts the car's RIGHT side, so
+  // a block under the right wheels rolls the car positive — and the lift is
+  // capped well under `solids.tripLaunch`, because a kerb that can put a
+  // car on its roof is a barrier and not a kerb.
+  const lift = Math.min(K.liftMax, (bite * K.lift) / mass);
+  car.rollRate += Math.sign(right) * lift;
+  loadSprings(car, bite * K.heave, nz);
+  events.push({ type: "kerbHit", speed: closing });
+  return closing;
 }
 
 /** What a contact does to the SPRINGS: the wheels stop, the body does not.
@@ -572,12 +671,14 @@ function loadSprings(car: CarState, closing: number, ez: number): void {
   car.pitchLoad -= closing * S.impactPitch * ez;
 }
 
-/** The ground refusing the car. Off the road the terrain is a solid like
- * any other: below `climbLimit` a rise is a hill the wheels scrabble up and
- * the grade term in car.ts pushes back on, above it the face starts giving
- * the car back its own speed, and at `wallSlope` it is a cliff that takes
- * all of it. Returns how much of this step's move the face refused, 0..1,
- * for the caller to undo — a car cannot be inside a mountain.
+/** The ground refusing the car. The ground is a solid like any other — the
+ * terrain, or a road profile met where it stands up (the landing face of a
+ * jump, from behind): below `climbLimit` a rise is a hill the wheels
+ * scrabble up and the grade term in car.ts pushes back on, above it the
+ * face starts giving the car back its own speed, and at `wallSlope` it is
+ * a cliff that takes all of it. Returns how much of this step's move the
+ * face refused, 0..1, for the caller to undo — a car cannot be inside a
+ * mountain.
  *
  * `gradientAt` answers the terrain's horizontal gradient (dy/dx, dy/dz) at
  * a world position; the uphill direction it gives IS the contact normal,
@@ -616,7 +717,7 @@ export function collideSlope(
   updateSlip(car);
   loadSprings(car, refused, ez);
 
-  const crush = C.crushPerSpeed * Math.max(0, refused - C.scuffSpeed) * massRatio(spec);
+  const crush = C.crushPerSpeed * Math.max(0, refused - C.faceScuff) * massRatio(spec);
   if (crush > 0) {
     const angle = Math.atan2(ex, ez);
     dealCrush(car, damageZoneAt(angle), crush, angle, refused, events, stats);

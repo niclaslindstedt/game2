@@ -148,7 +148,16 @@ export type CarState = {
   u: number;
   /** Sideways speed along the right axis, m/s. */
   w: number;
+  /** Vertical speed, m/s. Grounded it is the SMOOTHED one — the grade under
+   * the car, read over a wheelbase, times the pace — which is what the
+   * attitude, the camera and a landing's slam read; airborne it is the
+   * flight's own. */
   vy: number;
+  /** The vertical speed the WHEELS actually moved at over the last grounded
+   * step, m/s — the raw one, kerbs and creases included. What it says that
+   * `vy` does not is a bump, and the springs are the only reader
+   * (ground.ts). */
+  wheelVy: number;
   yawRate: number;
   /** Current slip angle, radians (atan2(w, |u|)). */
   slip: number;

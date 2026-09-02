@@ -20,17 +20,10 @@ import {
 } from "../mapgen/index.ts";
 import { carById, gearedSpec, type GearboxMode } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
-import {
-  clutchDump,
-  launch,
-  seatOn,
-  spinHeadroom,
-  stepAirborne,
-  stepGrounded,
-  type GroundContext,
-} from "./car.ts";
-import { clipKerbs, collideCar } from "./collision.ts";
+import { clutchDump, spinHeadroom, stepAirborne, stepGrounded, type GroundContext } from "./car.ts";
+import { clipKerbs, clipSolids, collideCar } from "./collision.ts";
 import { beyondDriving } from "./damage.ts";
+import { seatOn } from "./ground.ts";
 import {
   crossedFinish,
   crossedLip,
@@ -38,7 +31,6 @@ import {
   locatePoint,
   lastCheckpoint,
   pathCurvature,
-  slopeAt,
   stageDirection,
   trackLost,
   wayHome,
@@ -96,6 +88,7 @@ export function freshCar(): CarState {
     u: 0,
     w: 0,
     vy: 0,
+    wheelVy: 0,
     yawRate: 0,
     slip: 0,
     airborne: false,
@@ -373,6 +366,7 @@ function respawn(state: GameState, events: GameEvent[], home: WayHome): void {
   car.u = T.offTrack.respawnSpeed;
   car.w = 0;
   car.vy = 0;
+  car.wheelVy = 0;
   car.yawRate = 0;
   car.airborne = false;
   car.settling = false;
@@ -478,6 +472,7 @@ function beach(state: GameState, events: GameEvent[]): void {
   state.drowning = null;
   car.y = seatOn(car, terrain.groundAt(car.x, car.z), terrain.groundAt);
   car.vy = 0;
+  car.wheelVy = 0;
   state.stuck.x = car.x;
   state.stuck.z = car.z;
   state.stuck.since = state.t;
@@ -726,7 +721,8 @@ const GROUND: GroundContext = {
   t: 0,
   rng: createRng(0),
   drive: 1,
-  groundAt: undefined,
+  groundAt: () => 0,
+  wild: false,
 };
 
 /** What this step multiplies the drive by, and the SPENDING of the mass
@@ -828,16 +824,22 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   const car = state.car;
   const track = state.track;
   const terrain = state.terrain;
-  const prevIndex = state.nearIndex;
   const prevX = car.x;
   const prevZ = car.z;
 
+  const sinH = Math.sin(car.heading);
+  const cosH = Math.cos(car.heading);
   // Locate against the centerline BEFORE the move to know the ground ahead;
-  // the fix after the move drives progress, lip detection, and respawn.
-  // Both searches start from where the car IS (`nearIndex`), never from how
-  // far the run has GOT: progress is a monotonic score and a car that has
-  // doubled back leaves it standing hundreds of metres up the road.
-  const preFix = locate(track, car.x, car.z, state.nearIndex);
+  // the fix after the move drives progress and respawn. Both searches start
+  // from where the car IS (`nearIndex`), never from how far the run has
+  // GOT: progress is a monotonic score and a car that has doubled back
+  // leaves it standing hundreds of metres up the road. The road's grade is
+  // read from behind the CAR, so a car pointed down the stage asks for it
+  // from up the stage (`locate`'s `back`).
+  const hint = state.nearIndex;
+  const flat = flatTrack(track);
+  const back = sinH * flat.sinHeading[hint] + cosH * flat.cosHeading[hint] < 0;
+  const preFix = locate(track, car.x, car.z, hint, back);
   const gain = driveGain(state);
   // WHERE THE CAR IS GOING, in world space — which sideways is nowhere near
   // where it is pointing. Everything below that asks the ground what it is
@@ -846,8 +848,6 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // brow in a drift meets it just as squarely as one driving straight at
   // it. (Both takeoff gates already read `pace` for the same reason — this
   // is the direction half of the same idea.)
-  const sinH = Math.sin(car.heading);
-  const cosH = Math.cos(car.heading);
   const dirX = sinH * car.u + cosH * car.w;
   const dirZ = cosH * car.u - sinH * car.w;
   let ctx: GroundContext;
@@ -892,15 +892,17 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     ctx.rng = state.rng;
     ctx.drive = gain;
     ctx.groundAt = ground;
+    ctx.wild = true;
   } else {
     // How sharply the road curves under the car ALONG ITS PATH — what
     // decides whether it throws the car, and how much of the car's weight
     // is still on the tires while it does not. Both the stage's brows and
     // the road's own cross-section, weighted by which way the car is going
     // (`pathCurvature`). A jump lip anywhere in that window is NOT a brow:
-    // its drop belongs to the ramp launch below, and reading it here would
-    // fire a stutter of hops on the run-up instead — and the lip owns the
-    // whole surface there, cross-section included.
+    // its drop is an EDGE the ground-follow throws the car off (car.ts,
+    // `air.edgeSpeed`), and reading it here would fire a stutter of hops on
+    // the run-up instead — and the lip owns the whole surface there,
+    // cross-section included.
     const reach = Math.max(1, Math.round(T.air.crestSpan / track.step));
     const lipNear =
       crossedLip(track, Math.max(-1, preFix.index - reach - 1), preFix.index + reach) >= 0;
@@ -916,7 +918,6 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     // it toward the crown, and the nose sitting on the wrong attitude the
     // whole way. Straight down the stage `turn` is 0 and this is the
     // identity, which is why it went unnoticed.
-    const flat = flatTrack(track);
     const fwdX = flat.sinHeading[preFix.index];
     const fwdZ = flat.cosHeading[preFix.index];
     // The car's nose against the road's, as a rotation: cos and sin of the
@@ -935,9 +936,18 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     ctx.t = state.t;
     ctx.rng = state.rng;
     ctx.drive = gain;
-    // On the road the road IS the ground; the wild's probe must not carry
-    // over from an earlier step.
-    ctx.groundAt = undefined;
+    // On the road the road IS the ground: its own profile — crown, tracks,
+    // shoulder and the grassed slope past it (R16), interpolated between
+    // samples — read wherever the step lands the car, exactly as the wild
+    // reads its lattice. It is the same surface `terrain.groundAt` hands the
+    // car once it counts as off the road, so the seam at the verge line is
+    // one the car drives over rather than a step it is dropped down. Nothing
+    // is seated on the profile: a road is smooth across the body's length,
+    // and the cross-section under the wheels is what the car is meant to
+    // ride, not a face to be lifted clear of.
+    const near = preFix.index;
+    ctx.groundAt = (x, z) => locate(track, x, z, near).elevation;
+    ctx.wild = false;
   }
 
   if (car.airborne) {
@@ -972,27 +982,6 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // terrain does, and an endless run forgets what it has driven past.
   state.kerbs.extend(track.samples.length);
   if (track.endless) state.kerbs.pruneBefore(state.progressS - 400);
-
-  // Jump lips are keyed to the SAMPLES THE CAR CROSSED this step, so a lip
-  // cannot be skipped by a fast one — and so a car meeting the lip the other
-  // way round is thrown by it rather than driven into it. The grounded step
-  // already applied ground-follow, so takeoff here overrides it with the
-  // ramp launch.
-  if (!car.airborne && fix.index !== prevIndex) {
-    const lipIndex = crossedLip(track, prevIndex, fix.index);
-    if (lipIndex >= 0 && car.u > 6) {
-      // The RAMP that throws the car is the face it just climbed, which is
-      // on whichever side of the lip it came from. `slopeAt` looks backward
-      // down the road by design, so up-index it is the lip's own value and
-      // down-index it is the next sample's, turned round with the car.
-      const back = fix.index < prevIndex;
-      const ramp = back
-        ? -slopeAt(track, Math.min(track.samples.length - 1, lipIndex + 2))
-        : slopeAt(track, lipIndex);
-      car.y = track.samples[lipIndex].elevation;
-      launch(car, Math.max(0.5, car.u * ramp * T.air.launchScale), events, state.stats);
-    }
-  }
 
   // Water reads as an event on entry (the splash) and as a surface while
   // in it (the grounded step already slowed the car down) — on the road's
@@ -1070,8 +1059,11 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
       // The field is handed the right to take a solid OUT of the world: a
       // trunk the car snapped, a stone it knocked off its bed. Nothing
       // stands there afterwards on either side of the wall — the piece is
-      // a `solidBreak` the renderer tumbles away.
+      // a `solidBreak` the renderer tumbles away. What stands under the
+      // ride-over bar is the WHEELS' business first (a thump and a lurch,
+      // `clipSolids`); the body only meets what stands over it.
       if (solids.length > 0) {
+        clipSolids(state.spec, car, state.t, solids, events, terrain.fell);
         collideCar(state.spec, car, solids, events, state.stats, terrain.fell);
       }
     }

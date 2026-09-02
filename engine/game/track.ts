@@ -395,8 +395,10 @@ function skip(
 }
 
 /** Locate the car against the centerline, and read the road's profile under
- * where it lands. */
-export function locate(track: Track, x: number, z: number, hint: number): TrackFix {
+ * where it lands. `back` is a car pointed DOWN the stage: the grade is then
+ * read from the road ahead of the sample rather than behind it, so that it is
+ * still the road behind the CAR — see `slopeOn`. */
+export function locate(track: Track, x: number, z: number, hint: number, back = false): TrackFix {
   // `locatePoint` allocates the profile's fields zeroed; this is the one
   // function that fills them, which is why it may look at them.
   const fix = locatePoint(track, x, z, hint) as TrackFix;
@@ -418,8 +420,9 @@ export function locate(track: Track, x: number, z: number, hint: number): TrackF
   const f = Math.min(1, Math.abs(along) / track.step);
   const here = flat.elevation[best];
   const crown = here + (flat.elevation[next] - here) * f;
-  const hereSlope = slopeOn(flat, best);
-  const slope = hereSlope + (slopeOn(flat, next) - hereSlope) * f;
+  const grade = back ? slopeAhead : slopeOn;
+  const hereSlope = grade(flat, best);
+  const slope = hereSlope + (grade(flat, next) - hereSlope) * f;
   // Across the road: the sample's elevation is the CROWN, and where the car
   // actually sits depends on how far out it is — down the camber, or in one
   // of the two tracks every car before it wore into the gravel. Past the mat
@@ -431,9 +434,18 @@ export function locate(track: Track, x: number, z: number, hint: number): TrackF
   // at the boundary. A bridge is the exception — past a deck's edge is air,
   // not a verge, and a car with two wheels on the parapet is still on the
   // deck.
-  const onRoad = Math.max(-halfRoad, Math.min(halfRoad, fix.lateral));
+  //
+  // The profile is blended between the two samples exactly as the crown is,
+  // because the profile is not the same shape at both: the width wanders
+  // (R33), a corner's bank ramps in, a paved run lifts. Down the middle the
+  // two agree to a millimetre; at the edge — the berm, the chamfer off a
+  // lifted mat, the outside of a banked turn — they can differ by a hand's
+  // width, and read off the nearest sample alone that is a step in the
+  // ground every two metres along the shoulder, which is a car running wide
+  // at pace being thrown by a kerb nobody laid.
   const cross =
-    s.deck != null ? crossOffset(s, onRoad, s.width) : corridorOffset(s, fix.lateral, s.width);
+    profileOf(s, fix.lateral) +
+    (profileOf(samples[next], fix.lateral) - profileOf(s, fix.lateral)) * f;
   // The camber the car SITS on, read over the SAME profile its height came
   // from. Two wheels on the verge is still on the road (`offTrack.verge`),
   // and for as long as this read the mat alone — clamped at the edge — the
@@ -446,14 +458,22 @@ export function locate(track: Track, x: number, z: number, hint: number): TrackF
   // A DECK is the exception the clamp was really for: past a parapet is air,
   // not a verge, so a bridge reads its own mat and nothing outside it.
   const probe = 0.5;
-  const profile = s.deck != null ? crossOffset : corridorOffset;
-  const at = s.deck != null ? onRoad : fix.lateral;
+  const at = s.deck != null ? Math.max(-halfRoad, Math.min(halfRoad, fix.lateral)) : fix.lateral;
   const lo = s.deck != null ? Math.max(-halfRoad, at - probe) : at - probe;
   const hi = s.deck != null ? Math.min(halfRoad, at + probe) : at + probe;
   fix.elevation = crown + cross;
   fix.slope = slope;
-  fix.slopeLat = (profile(s, hi, s.width) - profile(s, lo, s.width)) / (hi - lo);
+  fix.slopeLat = (profileOf(s, hi) - profileOf(s, lo)) / (hi - lo);
   return fix;
+}
+
+/** The corridor's height at a signed lateral offset from a sample's centre,
+ * relative to its crown: the mat, the shoulder and the slope past it — or,
+ * on a deck, the mat alone and nothing outside it. */
+function profileOf(s: Track["samples"][number], lateral: number): number {
+  if (s.deck == null) return corridorOffset(s, lateral, s.width);
+  const half = s.width / 2;
+  return crossOffset(s, Math.max(-half, Math.min(half, lateral)), s.width);
 }
 
 /** How sharply the road's CROSS-SECTION curves under the car, 1/m —
@@ -622,5 +642,18 @@ function slopeOn(flat: FlatTrack, index: number): number {
   const i1 = Math.max(0, index - 2);
   const rise = flat.elevation[index] - flat.elevation[i1];
   const run = Math.max(1e-6, flat.arc[index] - flat.arc[i1]);
+  return rise / run;
+}
+
+/** The same grade read from the ground AHEAD of the sample, for a car pointed
+ * down the stage: "behind" is a fact about the car, not the road, and a
+ * turned-round car at a lip has just climbed the landing face, which is up
+ * the stage from where it stands. Read the other way it reports the ramp
+ * running away under its nose, and the ground-follow throws it off the wrong
+ * side of the lip — or not at all. */
+function slopeAhead(flat: FlatTrack, index: number): number {
+  const i1 = Math.min(flat.elevation.length - 1, index + 2);
+  const rise = flat.elevation[i1] - flat.elevation[index];
+  const run = Math.max(1e-6, flat.arc[i1] - flat.arc[index]);
   return rise / run;
 }

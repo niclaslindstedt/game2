@@ -253,7 +253,7 @@ const FALL_SLOPE = 0.06;
  * own because it runs much closer to the road than the deep-wild props
  * above and because most of the landscape carries some. */
 const ROCK_CELL = 30;
-const ROCK_DENSITY = 0.55;
+const ROCK_DENSITY = 0.38;
 /** How big a loose rock gets, as the radius of the lump before it is
  * squashed: the small end is pebble litter the field drops (see
  * SOLID_PROP_HEIGHT), the big end is a boulder that ends a run. */
@@ -266,7 +266,7 @@ const ROCK_SIZE_MAX = 2.1;
  * which is the whole reason to have them. */
 const BOULDER_SCALE = 130;
 const BOULDER_FROM = 0.62;
-const BOULDER_DENSITY = 1.7;
+const BOULDER_DENSITY = 1.5;
 const BOULDER_SIZE = 1.5;
 /** Share of the litter under a WOODED grove that is a cut stump rather
  * than a rock, and the size band one comes in. A stump is a round solid a
