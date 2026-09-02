@@ -88,6 +88,7 @@ const columns = [
   "jumps",
   "ends",
   "ground",
+  "lanes",
   "perf",
 ];
 

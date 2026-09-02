@@ -165,9 +165,10 @@ describe("chase camera over a cliff", () => {
     });
     // What little there is over the rig's 2 m ride height is its own
     // descent lift (`dropLift`) on the way down, plus the frame or two the
-    // camera takes to settle onto the landed car (HEIGHT_FOLLOW — in the air
-    // it follows one for one, on the ground it eases); the cliff hold
-    // contributes none of it.
+    // camera takes to settle onto the landed car (HEIGHT_SPRING — in the air
+    // the spring is stiff enough to sit on the arc, on the ground it is a
+    // mass that has to be got moving); the cliff hold contributes none of
+    // it.
     expect(Math.max(...overs.slice(4))).toBeLessThan(3.0);
   });
 });
@@ -264,6 +265,55 @@ function steady(cam: ReturnType<typeof createGameCamera>, mode: "close" | "chase
     travel: spread(run.heights.slice(SETTLED)),
   };
 }
+
+describe("the chase camera over a crease in the ground", () => {
+  /** Level ground that turns into a 10% climb at `edge`: the kink every
+   * lattice cell edge off the road hands the car, at its sharpest. */
+  function creaseGround(state: GameState, edge: number, level: number): void {
+    state.terrain = {
+      ...state.terrain,
+      groundAt: (_x, z) => (z < edge ? level : level + (z - edge) * 0.1),
+      waterAt: () => null,
+    };
+  }
+
+  it("answers the kink as a curve and still climbs the hill", () => {
+    const state = game();
+    const car = state.car;
+    const edge = car.z + 60;
+    creaseGround(state, edge, car.y);
+    const cam = createGameCamera(1600, 900);
+    cam.setMode("chase");
+    car.heading = 0;
+    car.u = 24;
+    car.airborne = false;
+    const { heights } = run(state, cam, 300, (s) => {
+      s.car.z += 24 * FRAME;
+      s.car.y = s.terrain.groundAt(s.car.x, s.car.z);
+      s.car.vy = s.car.z > edge ? 2.4 : 0;
+    });
+    // The height is carried on a MASS: its velocity is built up by the
+    // spring, so no frame turns it by more than a whisker. A first-order
+    // ease at the old 9/s turns a kink in the ground into a kink in the
+    // camera's path — 0.006 m per frame² over this crease — where the
+    // spring, led by the climb, stays under 0.003.
+    let worstTurn = 0;
+    for (let i = 2; i < heights.length; i++) {
+      worstTurn = Math.max(worstTurn, Math.abs(heights[i] - 2 * heights[i - 1] + heights[i - 2]));
+    }
+    expect(worstTurn).toBeLessThan(0.004);
+    // ...and the hill is followed rather than trailed: led by the car's
+    // climb, the camera stands near the same height over the car on the
+    // grade as it did on the flat — less the slack's play, the rig's own
+    // duck on a climb and the spring's residual, which together are well
+    // under a metre. A spring with no lead trails a 2.4 m/s climb by most
+    // of a metre on its own.
+    const flatOver = heights[60] - state.terrain.groundAt(0, edge - 1);
+    const climbOver = heights[heights.length - 1] - car.y;
+    expect(flatOver - climbOver).toBeGreaterThan(0);
+    expect(flatOver - climbOver).toBeLessThan(0.8);
+  });
+});
 
 describe("the two shots the game is driven from", () => {
   it("are equally steady over the same drive", () => {

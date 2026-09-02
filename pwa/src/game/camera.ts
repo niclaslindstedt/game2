@@ -73,8 +73,8 @@
 import * as THREE from "three";
 import { angleLerp, clamp } from "../lib/angles.ts";
 import { MAX_VFOV, verticalFovFor } from "../lib/fov.ts";
-import { createFollow } from "../lib/follow.ts";
 import { createSlack } from "../lib/slack.ts";
+import { createSprung } from "../lib/sprung.ts";
 import type { GameState } from "@engine";
 
 import {
@@ -99,7 +99,7 @@ import {
   CHASE_CLEARANCE,
   CLIFF,
   FLOOR,
-  HEIGHT_FOLLOW,
+  HEIGHT_SPRING,
   SLACK,
   groundOver,
 } from "./camera-ground.ts";
@@ -514,8 +514,20 @@ export function createGameCamera(width: number, height: number): GameCamera {
    * that stands over the car is built from, with the road's own SURFACE
    * taken out of it. */
   const groundSlack = createSlack(SLACK.ground);
-  /** ...eased into the height the chase rigs actually stand on. */
-  const groundFollow = createFollow(HEIGHT_FOLLOW);
+  /** ...carried on a spring into the height the chase rigs actually stand
+   * on, led by the car's own vertical speed (HEIGHT_SPRING). */
+  const groundSpring = createSprung(HEIGHT_SPRING);
+  /** The car's CLIMB as the chase rigs read it, m/s: how fast the slack's
+   * own reading is moving, eased. Inside the play the reading barely moves
+   * — a wheel track, a crown, a ripple in the ground all stay inside it —
+   * so this is zero across all of them and the car's own vertical speed on
+   * a hill, which is what the spring's lead, the lift on a descent, the
+   * duck on a climb and the aim's climb all want: the HILL, and nothing the
+   * engine's grade term lets through. Snapped across a takeoff or a
+   * landing, which are changes of movement rather than bumps in it. */
+  let climbVy = 0;
+  let slackWas = Number.NaN;
+  let wasAirborne = false;
   /** Seconds the camera has been alive — the drone's circling walks off it,
    * so it does not depend on frame rate. */
   let orbit = 0;
@@ -550,16 +562,29 @@ export function createGameCamera(width: number, height: number): GameCamera {
       swingVel = 0;
       floored = false;
       restand = false;
+      groundSpring.drop();
+      climbVy = car.vy;
+      slackWas = Number.NaN;
     }
     // The height the shot is built from — the car's, less whatever of it is
-    // only the road's cross-section (SLACK), eased so that what is left
-    // arrives as movement (HEIGHT_FOLLOW). The STAND and the AIM take the
-    // same one, so neither the play nor the lag ever shows as pitch: what
-    // they cost is the car riding up and down inside the frame, which is
-    // the car dropping into a wheel track or rising off a lip, which is
-    // what is actually happening.
-    const rate = car.airborne ? HEIGHT_FOLLOW.flying : HEIGHT_FOLLOW.rate;
-    const ground = groundFollow(groundSlack(car.y, dt), rate, dt);
+    // only the road's cross-section (SLACK), carried on a spring led by the
+    // car's climb so that a hill is followed and a bump is not
+    // (HEIGHT_SPRING). The STAND and the AIM take the same one, so neither
+    // the play nor the spring ever shows as pitch: what they cost is the
+    // car riding up and down inside the frame, which is the car dropping
+    // into a wheel track or rising off a lip, which is what is actually
+    // happening.
+    const slacked = groundSlack(car.y, dt);
+    const moving = dt > 0 && !Number.isNaN(slackWas) ? (slacked - slackWas) / dt : climbVy;
+    slackWas = slacked;
+    if (car.airborne !== wasAirborne) climbVy = car.vy;
+    else
+      climbVy +=
+        ((car.airborne ? car.vy : moving) - climbVy) * clamp(HEIGHT_SPRING.lead * dt, 0, 1);
+    wasAirborne = car.airborne;
+    const freq = car.airborne ? HEIGHT_SPRING.flying : HEIGHT_SPRING.ground;
+    const lead = car.airborne ? car.vy : climbVy;
+    const ground = groundSpring.step(slacked, freq, dt, lead);
     const speed = Math.hypot(car.u, car.w);
     // The Sega Rally read: the camera follows the ROAD, so a drift swings
     // the car across the frame while the road keeps flowing to the
@@ -587,8 +612,10 @@ export function createGameCamera(width: number, height: number): GameCamera {
     // Grounded, vy/u is the slope under the wheels, and the camera rides
     // high over a descent and settles toward the road on a climb. Both
     // directions serve the same read — what is ahead of the car should own
-    // the frame, and on a hill that is either the drop or the brow.
-    const grade = clamp(car.vy / Math.max(8, car.u), -0.5, 0.5);
+    // the frame, and on a hill that is either the drop or the brow. Read
+    // off the EASED climb: the lift is metres per unit of grade, and a
+    // grade that jitters with the ground is a camera that pumps.
+    const grade = clamp(climbVy / Math.max(8, car.u), -0.5, 0.5);
     const gradeLift = car.airborne ? 0 : -grade * (grade < 0 ? rig.dropLift : rig.climbDuck);
     const wantDist = rig.dist + car.u * rig.distPerSpeed;
     const wantHeight = rig.height + gradeLift;
@@ -661,8 +688,11 @@ export function createGameCamera(width: number, height: number): GameCamera {
     // The drop from camera to aim point over the run between them IS the
     // pitch of the shot — a few degrees for the chase rigs, most of a right
     // angle for the one over the roof. On a slope the aim rides the climb
-    // (vy/u is the road's gradient while grounded).
-    const climb = clamp(car.vy / Math.max(10, car.u), -0.4, 0.4);
+    // (vy/u is the road's gradient while grounded) — the eased one, since
+    // this is metres of aim height per unit of grade applied straight to
+    // the lookAt, and read raw it was the pitch of the shot flickering with
+    // every ripple in the ground.
+    const climb = clamp(climbVy / Math.max(10, car.u), -0.4, 0.4);
     camera.lookAt(
       car.x + Math.sin(yaw) * rig.aimAhead,
       ground + rig.aimHeight + climb * rig.aimClimb + sy * 0.5,

@@ -501,6 +501,23 @@ describe("the borrowed road's corners (R20)", () => {
   });
 });
 
+describe("the other roads", () => {
+  it("rolls every branch, drive and car park lane, and finds them rideable", () => {
+    for (const seed of SEEDS) {
+      const lanes = report(seed).metrics.find((m) => m.id === "lanes");
+      expect(lanes, `seed ${seed}`).toBeDefined();
+      expect(lanes?.checks.map((c) => c.id)).toEqual(["step", "bump", "grade", "crest", "agree"]);
+      if ((lanes?.stats.lanes ?? 0) === 0) continue;
+      expect(lanes?.stats.strides, `seed ${seed}`).toBeGreaterThan(0);
+      // The staircase this metric was written for read as a 0.3 m tread
+      // every four metres under every branch; nothing a car can be asked
+      // to drive steps that hard, and the ground under a road is the road.
+      expect(lanes?.stats.worstStep, `seed ${seed}`).toBeLessThan(ANALYSIS.lanes.step.fail);
+      expect(lanes?.stats.worstOff, `seed ${seed}`).toBeLessThan(ANALYSIS.lanes.agree.fail);
+    }
+  }, 20_000);
+});
+
 describe("the jumps", () => {
   it("measures every lip's flight, and lands them all on the road", () => {
     for (const seed of SEEDS) {

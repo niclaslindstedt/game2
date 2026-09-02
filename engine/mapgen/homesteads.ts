@@ -45,6 +45,7 @@ import {
   type ShelfBand,
   type SpurLine,
   type SpurSample,
+  followStep,
 } from "./spurs.ts";
 
 export type { BuildingKind, HousePlan, ParkedCar, RoofKind, WallPaint } from "./buildings.ts";
@@ -243,6 +244,11 @@ function nearCrossing(samples: readonly HomesteadSample[], index: number): boole
   return false;
 }
 
+/** How far before the yard's blend the drive starts climbing onto the
+ * yard's level, m — the approach: room to make up a couple of metres at a
+ * road's grade, so the rim's blend is left with a residual and not a ramp. */
+const YARD_AIM = 24;
+
 /** Drive the lane out from the road on one side and see whether a yard
  * fits at the end of it. Null where the country says no. */
 function tryHomestead(
@@ -275,10 +281,8 @@ function tryHomestead(
     standing.every((h) => Math.hypot(h.yard.x - x, h.yard.z - z) >= H.apart);
 
   const follow = 1 - Math.exp(-SPUR.step / R.elevation.follow.lag);
-  const samples: SpurSample[] = [];
   let x = at.x;
   let z = at.z;
-  let y = at.elevation;
   let curvature = 0;
   let nextBend = drive.straight;
   /** How far out the road's own cross-section reaches: its mat, then the
@@ -287,15 +291,16 @@ function tryHomestead(
   /** How far out the stage's verge cone starts to have an opinion (R31):
    * its bench, plus the slack the band's strided walk carries. */
   const bench = Math.max(ctx.width / 2 + ROAD_CROSS.reach, R.verge.bench) + SPUR.step * 2;
+  // WHERE the drive goes, first. The walk is a draw of bends, and every
+  // metre of it past the road's own shoulder has to be somewhere a road
+  // could go. Its heights are laid afterwards, once the yard at the end of
+  // it is known: a drive is laid to ARRIVE on its yard's level, and that
+  // level is settled where the drive reaches the yard's approach: settled
+  // at the end, the whole difference between the yard and the country
+  // lands in the rim's blend, at twice the grade of any road.
+  const points: { x: number; z: number; heading: number; s: number }[] = [];
   for (let s = 0; s <= length; s += SPUR.step) {
-    // Across the road's own corridor the drive is not a road of its own: it
-    // lies ON the road's cross-section, crown to shoulder to verge, so the
-    // mouth is the stage's camber and not a flat mat laid over it with a
-    // lip where the two disagree.
-    if (s <= lip) y = at.elevation + corridorOffset(at, side * s, at.width);
-    samples.push({ x, z, heading, elevation: y, s, surface: ctx.loose, lift: 0, flat: 0 });
-    // Past the road's own shoulder the drive is on its own, and every
-    // metre of it has to be somewhere a road could go.
+    points.push({ x, z, heading, s });
     if (s > ctx.width / 2 + ROAD_CROSS.reach && !clear(x, z)) return null;
     if (s >= nextBend) {
       curvature = rng.range(-1 / drive.minRadius, 1 / drive.minRadius);
@@ -304,30 +309,13 @@ function tryHomestead(
     heading += curvature * SPUR.step;
     x += Math.sin(heading) * SPUR.step;
     z += Math.cos(heading) * SPUR.step;
-    // R34 — and it follows the country at the route's own lag, inside a
-    // track's grade, and never outside the stage's verge cone (R31).
-    const want = y + (ctx.land.heightAt(x, z) - y) * follow;
-    const cap = drive.maxGrade * SPUR.step;
-    y = Math.max(y - cap, Math.min(y + cap, want));
-    // ...but only once it is PAST the stage's bench. Inside it the band is
-    // degenerate — the cone has no swing there, so the road's own grade
-    // puts its floor over its ceiling — and clamping to it snapped the
-    // drive three quarters of a metre down one step past the lip, onto the
-    // lowest nearby crown: a step across the rank the analysis could see
-    // from a kilometre up. Inside the bench the ground IS the stage's
-    // cross-section, and the drive has just been laid on it.
-    if (s > bench) {
-      const band = ctx.shelfBand(x, z);
-      if (y > band.ceiling) y = band.ceiling;
-      if (y < band.floor) y = Math.min(band.floor, band.ceiling);
-    }
   }
 
-  // The yard is centred on the drive's end, at the height the drive
-  // arrived at — and it has to be a place a yard could be graded: the bare
-  // ground all over it near enough to that level that the pad is neither a
-  // cliff nor a pit, none of it wet, and none of it another road's.
-  const end = samples[samples.length - 1];
+  // The yard is centred on the drive's end — and it has to be a place a
+  // yard could be graded: the bare ground all over it near enough to its
+  // level that the pad is neither a cliff nor a pit, none of it wet, and
+  // none of it another road's.
+  const end = points[points.length - 1];
   const forward = { x: Math.sin(end.heading), z: Math.cos(end.heading) };
   const right = { x: Math.cos(end.heading), z: -Math.sin(end.heading) };
   /** The points the yard is judged at: its centre, and two rings. */
@@ -343,13 +331,67 @@ function tryHomestead(
     }
   }
   // The yard is graded to the country's own mean level across it, not to
-  // whatever height the drive happened to arrive at — a pad cut into the
+  // whatever height the drive happens to arrive at — a pad cut into the
   // middle of the ground it sits on is half a metre of fill and half a
   // metre of cut, where a pad held at the lane's height is all one or the
   // other. Within the grade the last stretch of drive can make up, that is.
   const mean = probes.reduce((sum, p) => sum + p.h, 0) / probes.length;
-  const reach = drive.maxGrade * (yardRadius + H.yard.blend);
-  const level = Math.max(end.elevation - reach, Math.min(end.elevation + reach, mean));
+
+  // Then the HEIGHTS: across the road's own corridor the drive is not a
+  // road of its own — it lies ON the road's cross-section, crown to
+  // shoulder to verge, so the mouth is the stage's camber and not a flat
+  // mat laid over it with a lip where the two disagree. Past that, R34: it
+  // follows the country at the route's own lag, inside a track's grade and
+  // the crest rule (`followStep`), never outside the stage's verge cone
+  // (R31) — and from the yard's approach in, it climbs onto the yard's
+  // level, which is settled there: the country's mean, moved no further
+  // toward the drive than the run to the rim can make up at most of a
+  // road's grade.
+  const samples: SpurSample[] = [];
+  let y = at.elevation;
+  let slope = 0;
+  let level = Number.NaN;
+  for (const p of points) {
+    const { s } = p;
+    const toCentre = Math.hypot(p.x - end.x, p.z - end.z);
+    if (s <= lip) {
+      const was = y;
+      y = at.elevation + corridorOffset(at, side * s, at.width);
+      if (s > 0) slope = (y - was) / SPUR.step;
+    } else {
+      if (Number.isNaN(level) && toCentre <= yardRadius + H.yard.blend + YARD_AIM) {
+        const reach = drive.maxGrade * Math.max(0, toCentre - yardRadius) * 0.6;
+        level = Math.max(y - reach, Math.min(y + reach, mean));
+      }
+      let target = Number.isNaN(level) ? y + (ctx.land.heightAt(p.x, p.z) - y) * follow : level;
+      // The cone's band, but only once the drive is PAST the stage's bench.
+      // Inside it the band is degenerate — the cone has no swing there, so
+      // the road's own grade puts its floor over its ceiling — and clamping
+      // to it snaps the drive three quarters of a metre down one step past
+      // the lip, onto the lowest nearby crown: a step across the rank the
+      // analysis can see from a kilometre up. Inside the bench the ground
+      // IS the stage's cross-section, and the drive has just been laid on
+      // it. Past it the band is AIMED at, so the drive climbs to a floor at
+      // a road's grade, and clamped to only as a last resort.
+      const band = Number.isNaN(level) && s > bench ? ctx.shelfBand(p.x, p.z) : null;
+      if (band) target = Math.min(band.ceiling, Math.max(band.floor, target));
+      ({ y, slope } = followStep(y, slope, target, drive.maxGrade));
+      if (!Number.isNaN(level) && toCentre <= yardRadius) {
+        y = level;
+        slope = 0;
+      } else if (band) {
+        if (y > band.ceiling) y = band.ceiling;
+        if (y < band.floor) y = Math.min(band.floor, band.ceiling);
+      }
+    }
+    samples.push({ ...p, elevation: y, surface: ctx.loose, lift: 0, flat: 0 });
+  }
+  if (Number.isNaN(level)) {
+    // A drive too short to have an approach: the yard takes the level its
+    // last stretch can make up.
+    const reach = drive.maxGrade * H.yard.blend;
+    level = Math.max(y - reach, Math.min(y + reach, mean));
+  }
   const yard = { x: end.x, z: end.z, y: level, radius: yardRadius };
   for (const p of probes) {
     if (!clear(p.x, p.z)) return null;

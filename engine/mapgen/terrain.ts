@@ -1516,12 +1516,35 @@ export function createTerrain(track: Track): TerrainField {
   type Corridor = { y: number; cover: number; hand: number };
   const corridorGround = (x: number, z: number): Corridor | null => {
     let best: Corridor | null = null;
+    /** Two roads covering one point — a drive's mat across the stage's
+     * verge, a lane's across an arm's — are not decided, they are SHARED:
+     * each ribbon's height weighted by how much of it it is still holding
+     * there (`hand`), so the ground goes from one road to the other as the
+     * one's hand-over fades and the other's comes in. Decided by a PICK
+     * instead — the fuller cover, or the fuller hand — the ground steps
+     * wherever the pick changes hands: the stage's verge sags into its
+     * ditch under the drive's mat, a half-metre step across the mouth, or
+     * the drive's ribbon takes over a hand's width off its own edge. A blend
+     * has no such point. */
+    let sumY = 0;
+    let sumHand = 0;
     const consider = (d: number, width: number, y: number): void => {
       const edge = width / 2 + ROAD_CROSS.reach;
       if (d > edge + 3) return;
       const cover = 1 - smooth(clamp01((d - edge) / 3));
-      if (best && best.cover >= cover) return;
-      best = { y, cover, hand: handoverAt(d - width / 2) };
+      const hand = handoverAt(d - width / 2);
+      sumY += y * hand;
+      sumHand += hand;
+      if (best && best.cover >= cover) {
+        if (hand > best.hand) best.hand = hand;
+        if (sumHand > 0) best.y = sumY / sumHand;
+        return;
+      }
+      best = {
+        y: sumHand > 0 ? sumY / sumHand : y,
+        cover,
+        hand: Math.max(hand, best?.hand ?? 0),
+      };
     };
     const near = nearestRoad(x, z);
     if (near && near.d < shelfEnd + 3) {

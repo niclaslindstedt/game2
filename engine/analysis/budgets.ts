@@ -790,6 +790,52 @@ export const ANALYSIS = {
    * starts; the analyzer runs here. So the analyzer is allowed to be slow
    * and the generator is not, and the only way that stays true is for the
    * analyzer to time it. */
+  /** THE OTHER ROADS (`lanes.ts`): every branch, drive and car park lane,
+   * rolled down on the ridden ground the way the rollers roll the stage. */
+  lanes: {
+    /** Stride along the road, m. A metre — under the samples' own spacing
+     * (`SPUR.step`), so a step that falls BETWEEN two samples is met: the
+     * staircase this metric was written to catch had a tread every four
+     * metres and read as an 8% grade at a four-metre stride. */
+    stride: 1,
+    /** How far past a road's end the walk runs onto the pad or the yard it
+     * reaches, m, so the hand-over there is measured as road. Never past
+     * the end that stands on another road: that walk crosses the other
+     * road's crown square, which is a bump no car drives. */
+    past: 6,
+    /** The two wheel-track balls' offset from the centerline, m — inside a
+     * lane's own mat (the narrowest is `carPark.road.width`, 5 m). */
+    track: 0.9,
+    /** Biggest step the ground may take over one stride, m per m — the
+     * rollers' mat budget, and the same failure bar: past `fail` the car
+     * meets an edge. */
+    step: { warn: 0.16, fail: 0.5 },
+    /** A BUMP, m: the second difference over three strides. Tighter than
+     * the rollers' because the stride is shorter — the same hollow reads a
+     * quarter as big at a quarter the spacing. MEASURED: after the index
+     * was made to interpolate, seeds 1, 38, 75 and 112 roll under 0.03 m
+     * everywhere but the joins into another lane, which reach 0.25. */
+    bump: { warn: 0.06, fail: 0.25 },
+    /** How far over its own ceiling a road's grade may be laid before it
+     * is reported, m per m — the pad's plane is allowed to be a shade
+     * steeper than the lane onto it — and where a grade is an error
+     * whatever the road: the drivability metric's own failure bar. */
+    gradeSlack: 0.02,
+    gradeFail: 0.22,
+    /** How fast the grade may change, m per m per m: a shade over the
+     * minor road's own crest rule (`elevation.follow.minorCrest`), which is
+     * what every road off the stage is bent by — and a lane still meets a
+     * pad's plane and a road's cross-section at a kink of its own; `fail`
+     * is a brow a car leaves the ground over. */
+    crest: { warn: 0.016, fail: 0.05 },
+    /** How far the ridden ground may stand off the profile at a sample,
+     * m — a crown's worth — and where it is a face. */
+    agree: { warn: 0.3, fail: 1 },
+    /** As the rollers': a few marginal strides in thousands are the
+     * measurement, not the road. */
+    tolerated: 0.001,
+  },
+
   perf: {
     /** Wall time to build a whole stage — plan, compile, terrain field —
      * ms. A stage is built behind a loading card, so a quarter second is
@@ -835,6 +881,10 @@ export const ANALYSIS = {
      * whether a mode runs on it. */
     ends: 1.8,
     ground: 1,
+    /** The roads off the stage are driven by a player who ignores the
+     * tape, and by nobody else — but a staircase down one is a staircase
+     * on every branch of every stage. */
+    lanes: 0.8,
     perf: 0.8,
   },
 } as const;

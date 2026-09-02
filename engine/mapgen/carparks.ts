@@ -49,7 +49,7 @@ import {
 import { corridorOffset, ROAD_CROSS, roadClearance } from "./road.ts";
 import { STAGE_RULES as R } from "./rules.ts";
 import type { WildObstacle } from "./solids.ts";
-import { SPUR, type ShelfBand, type SpurLine, type SpurSample } from "./spurs.ts";
+import { SPUR, followStep, type ShelfBand, type SpurLine, type SpurSample } from "./spurs.ts";
 import type { Stand } from "./stands.ts";
 
 const P = R.carPark;
@@ -177,8 +177,16 @@ const ROW_DEPTH = 1.1;
 const ROAD_MAX = SPUR.length.max;
 
 /** Over how much of its last stretch a lane closes its height onto the
- * road it runs into, m. */
+ * road it runs into, m — at least. A lane that meets the road standing
+ * higher or lower than this can close at its own grade starts closing
+ * further out (`layRoadOut`), because the alternative is arriving beside
+ * the road and dropping onto it. */
 const JOIN_EASE = 48;
+/** How far the road that leaves a pad runs ON the pad's own plane before it
+ * is allowed to bend away toward the country, m past the rim — so the
+ * lane leaves the car park at the car park's own grade and the pad's
+ * blend (`easeOntoPad`) has nothing to make up. */
+const PLANE_RUN = 8;
 /** One sample in this many of a road a lane may join goes into the coarse
  * picture the search steers by — a point every couple of dozen metres. */
 const JOIN_STRIDE = 6;
@@ -525,8 +533,37 @@ export function createCarParkField(track: Track): CarParkField {
     return pad;
   };
 
+  /** One step of a lane's height: the minor road's rule (`followStep`), at
+   * a car park lane's own grade. */
+  const profileStep = (y: number, slope: number, target: number): { y: number; slope: number } =>
+    followStep(y, slope, target, P.road.maxGrade);
+
+  /** The pad's plane's own slope along a heading, m per m — what a lane
+   * that leaves the pad along it is already climbing. */
+  const planeSlope = (pad: CarParkPad, heading: number): number =>
+    pad.grade.x * Math.sin(heading) + pad.grade.z * Math.cos(heading);
+
+  /** Is the lane, as it stands, a road end to end — no step in it steeper
+   * than a lane or a pad is built to? The last word on a lane, asked
+   * after the pad's blend: everything above lays the profile to arrive on
+   * the plane, and where the country gave it too short a run to, the blend
+   * turns what is left into a ramp. A lane that fails this is not built,
+   * and the search tries another way in (R42: reject, never repair). */
+  const gradesHold = (samples: SpurSample[]): boolean => {
+    const most = Math.max(P.road.maxGrade, P.pad.maxGrade) + 0.02;
+    for (let i = 1; i < samples.length; i++) {
+      const run = samples[i].s - samples[i - 1].s;
+      if (run <= 1e-6) return false;
+      if (Math.abs(samples[i].elevation - samples[i - 1].elevation) > most * run) return false;
+    }
+    return true;
+  };
+
   /** Ease a road's last stretch onto the pad it runs onto, so the two are
-   * one piece of ground rather than a ramp meeting a table. */
+   * one piece of ground rather than a ramp meeting a table. The lanes are
+   * laid to arrive on the plane already (`profileStep` toward it on the
+   * way in, `PLANE_RUN` of it on the way out), so what is blended here is
+   * a residual, not a step. */
   const easeOntoPad = (samples: SpurSample[], pad: CarParkPad): void => {
     for (const sample of samples) {
       const d = Math.hypot(sample.x - pad.x, sample.z - pad.z);
@@ -710,30 +747,77 @@ export function createCarParkField(track: Track): CarParkField {
     const lip = roadHalf + ROAD_CROSS.reach;
     const approach = Math.max(
       rng.range(P.road.approach.min, P.road.approach.max),
-      lip + radius + 4,
+      lip + radius + P.road.rim,
     );
     const cx = at.x + fx * approach;
     const cz = at.z + fz * approach;
     const fit = padFits(ctx, cx, cz, radius, stands, { x: at.x, z: at.z, heading });
     if (fit === null) return null;
     // The lane: on the public road's own cross-section while inside its
-    // lip, then following the country at the road's grade, held inside the
-    // stage's cone, and eased onto the pad at the end.
+    // lip, then following the country at the road's grade and the route's
+    // crest rule, held inside the stage's cone — and, from the pad's blend
+    // in, climbing onto the pad's own plane, so that it arrives ON the pad
+    // rather than beside it.
     const follow = 1 - Math.exp(-SPUR.step / R.elevation.follow.lag);
     const samples: SpurSample[] = [];
     const shape = { surface: at.surface, lift: at.lift, flat: at.flat };
     let y = at.elevation;
+    let slope = 0;
+    let pad: CarParkPad | null = null;
     for (let s = 0; s <= approach; s += SPUR.step) {
       const x = at.x + fx * s;
       const z = at.z + fz * s;
-      if (s <= lip) y = at.elevation + corridorOffset(shape, side * s, access.line.width);
-      else {
-        const want = y + (ctx.land.heightAt(x, z) - y) * follow;
-        const cap = P.road.maxGrade * SPUR.step;
-        y = Math.max(y - cap, Math.min(y + cap, want));
-        const band = shelfBand(x, z);
-        if (y > band.ceiling) y = band.ceiling;
-        if (y < band.floor) y = Math.min(band.floor, band.ceiling);
+      const toCentre = approach - s;
+      if (s <= lip) {
+        // Across the road's mat the lane is the mat; across its shoulder
+        // it HOLDS the mat's edge, the way a junction's mouth is graded
+        // up to the road rather than dropped off it — the shoulder's fall
+        // is half a metre, and taken in one step it is the first thing a
+        // car turning in meets. The slope the lane leaves on is whatever
+        // that last step was, so the profile bends away from it rather
+        // than from level.
+        const was = y;
+        y = at.elevation + corridorOffset(shape, side * Math.min(s, roadHalf), access.line.width);
+        if (s > 0) slope = (y - was) / SPUR.step;
+      } else {
+        if (!pad) {
+          // The pad's LEVEL is settled where the lane steps off the road:
+          // the country's own fit, moved no further toward the level that
+          // puts the plane exactly under the lane here than the run to
+          // the rim can make up at most of a road's grade. Settled from
+          // the centre instead, the whole difference lands in the pad's
+          // twelve-metre blend, which is a ramp steeper than any road on
+          // the stage.
+          const level = y - fit.grade.x * (x - cx) - fit.grade.z * (z - cz);
+          // What the run to the rim can make up: the road's grade over the
+          // run, less the stretch the crest rule spends winding that grade
+          // on, and a share of that for the plane's own slope against it.
+          const winding = P.road.maxGrade / R.elevation.follow.minorCrest / 2;
+          const run = Math.max(0, toCentre - radius - winding);
+          const reach = Math.min(2, P.road.maxGrade * run * 0.6);
+          pad = { ...fit, y: Math.max(level - reach, Math.min(level + reach, fit.y)) };
+        }
+        const band = pad ? null : shelfBand(x, z);
+        const want = pad ? padHeight(pad, x, z) : y + (ctx.land.heightAt(x, z) - y) * follow;
+        const target = band ? Math.min(band.ceiling, Math.max(band.floor, want)) : want;
+        // Onto the plane at the plane's own grade, which a pad may hold a
+        // shade steeper than a lane: capped at the lane's, a lane falls
+        // behind a plane at the pad's ceiling and meets the rim as a step.
+        ({ y, slope } = pad
+          ? followStep(y, slope, target, Math.max(P.road.maxGrade, P.pad.maxGrade))
+          : profileStep(y, slope, target));
+        if (pad && toCentre <= radius) {
+          y = padHeight(pad, x, z);
+          slope = planeSlope(pad, heading);
+        } else if (band) {
+          const bent = y;
+          if (y > band.ceiling) y = band.ceiling;
+          if (y < band.floor) y = Math.min(band.floor, band.ceiling);
+          // R31's band is a hard clamp, and a clamp that moves the road by
+          // more than a step's grade IS a step: the cone's floor standing
+          // metres over a lane is a lane there is no laying here.
+          if (Math.abs(y - bent) > P.road.maxGrade * SPUR.step * 1.5) return null;
+        }
       }
       samples.push({ x, z, heading, elevation: y, s, surface: ctx.loose, lift: 0, flat: 0 });
       if (s > lip) {
@@ -744,15 +828,24 @@ export function createCarParkField(track: Track): CarParkField {
         if (s > roadHalf + P.road.clear && ctx.builtClearance(x, z) < P.road.clear) return null;
       }
     }
-    // The pad's level has to be one the lane's last stretch can make up.
-    const reach = P.road.maxGrade * (radius + P.pad.blend);
     const end = samples[samples.length - 1];
-    const padY = Math.max(end.elevation - reach, Math.min(end.elevation + reach, fit.y));
-    const pad: CarParkPad = { ...fit, y: padY };
-    // The centre is the lane's end exactly, on the pad's level.
+    if (!pad) {
+      // A lane too short to have reached the blend past the lip: the pad
+      // takes the level its last stretch can make up.
+      const reach = P.road.maxGrade * P.pad.blend;
+      pad = { ...fit, y: Math.max(end.elevation - reach, Math.min(end.elevation + reach, fit.y)) };
+    }
+    // The centre is the lane's end exactly, on the pad's level — and its
+    // arc position is where it now stands, or the last step reads as a
+    // grade it is not.
     end.x = cx;
     end.z = cz;
+    end.s = approach;
     easeOntoPad(samples, pad);
+    if (!gradesHold(samples)) {
+      ctx.note?.("road:ramp");
+      return null;
+    }
     const park: CarPark = {
       atS: stand.s,
       pad,
@@ -828,6 +921,7 @@ export function createCarParkField(track: Track): CarParkField {
     let x = pad.x;
     let z = pad.z;
     let y = pad.y;
+    let slope = planeSlope(pad, heading0);
     let next = 1;
     const b = map.bounds;
     const at = join?.sample ?? null;
@@ -839,12 +933,28 @@ export function createCarParkField(track: Track): CarParkField {
         // road's own centerline at that road's own height.
         const d = Math.hypot(at.x - x, at.z - z);
         if (d <= SPUR.step * 1.2) {
+          // A join under half a step away REPLACES the sample just laid
+          // rather than following it: a metre of lane between the two is a
+          // metre that whatever height is left between them is taken over.
+          if (d < SPUR.step / 2 && samples.length > 1) samples.pop();
+          const last = samples[samples.length - 1];
+          const run = Math.hypot(at.x - last.x, at.z - last.z);
+          // ...and the lane has to have got to the road's height. The
+          // closing starts far enough out for a road's grade to make it
+          // up, but the country between can refuse it — a band clamp, a
+          // shelf — and a lane that arrives standing over the road it joins
+          // would meet it as a wall. Refused instead, and the search tries
+          // another cell.
+          if (Math.abs(at.elevation - last.elevation) > (P.road.maxGrade + 0.02) * run) {
+            ctx.note?.("road:join-height");
+            return null;
+          }
           samples.push({
             x: at.x,
             z: at.z,
             heading,
             elevation: at.elevation,
-            s: s + d,
+            s: last.s + run,
             surface: ctx.loose,
             lift: 0,
             flat: 0,
@@ -879,19 +989,38 @@ export function createCarParkField(track: Track): CarParkField {
         ctx.note?.("road:built");
         return null;
       }
-      // R34 — following the country at a minor road's grade, off the pad's
-      // own level; R31 — inside the stage's cone while it is in it. On the
-      // way into a join the height closes on the joined road's instead, so
-      // the two meet on one plane.
-      const target =
-        at && toJoin < JOIN_EASE
-          ? y + (at.elevation - y) * Math.min(1, SPUR.step / Math.max(SPUR.step, toJoin))
+      // On the pad, and for a short run past its rim, the lane IS the pad's
+      // plane: it leaves the car park at the car park's own grade. Then
+      // R34 — following the country at a minor road's grade and the
+      // minor road's crest rule, off that plane; R31 — inside the stage's cone
+      // while it is in it. On the way into a join the height closes on
+      // the joined road's instead, so the two meet on one plane — from
+      // however far out the gap between the two needs at a road's grade.
+      if (Math.hypot(x - pad.x, z - pad.z) <= pad.radius + PLANE_RUN) {
+        y = padHeight(pad, x, z);
+        slope = planeSlope(pad, heading);
+        continue;
+      }
+      const gap = at ? at.elevation - y : 0;
+      const ease = Math.max(JOIN_EASE, Math.abs(gap) / P.road.maxGrade + JOIN_EASE / 2);
+      const wantY =
+        at && toJoin < ease
+          ? y + gap * Math.min(1, SPUR.step / Math.max(SPUR.step, toJoin))
           : y + (ctx.land.heightAt(x, z) - y) * follow;
-      const cap = P.road.maxGrade * SPUR.step;
-      y = Math.max(y - cap, Math.min(y + cap, target));
+      // Aimed at the band and then clamped to it (`buildSpur` says why).
       const band = shelfBand(x, z);
+      ({ y, slope } = profileStep(y, slope, Math.min(band.ceiling, Math.max(band.floor, wantY))));
+      const bent = y;
       if (y > band.ceiling) y = band.ceiling;
       if (y < band.floor) y = Math.min(band.floor, band.ceiling);
+      // R31's band is a hard clamp, and a clamp that moves the road by more
+      // than a step's grade IS a step — the cone's floor standing metres
+      // over the pad's rim can throw a lane thirty metres up in four. A
+      // road is not laid there.
+      if (Math.abs(y - bent) > P.road.maxGrade * SPUR.step * 1.5) {
+        ctx.note?.("road:band");
+        return null;
+      }
       if (!shelfHolds(x, z, y)) {
         ctx.note?.("road:shelf");
         return null;
@@ -1004,6 +1133,11 @@ export function createCarParkField(track: Track): CarParkField {
           flat: 0,
         }));
       easeOntoPad(samples, pad);
+      if (!gradesHold(samples)) {
+        ctx.note?.("road:ramp");
+        if (++roads >= 3) break;
+        continue;
+      }
       const park: CarPark = {
         atS: stand.s,
         pad,

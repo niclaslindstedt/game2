@@ -33,6 +33,7 @@ import { analyzeEnds } from "./ends.ts";
 import { analyzeGround } from "./ground.ts";
 import { analyzeJumps } from "./jumps.ts";
 import { analyzeJunctions } from "./junctions.ts";
+import { analyzeLanes } from "./lanes.ts";
 import { analyzePerf } from "./perf.ts";
 import { analyzeRoads } from "./roads.ts";
 import { analyzeRollers } from "./rollers.ts";
@@ -76,6 +77,7 @@ export function analyzeTrack(
     analyzeJumps(track, terrain, speeds),
     analyzeEnds(track, terrain),
     analyzeGround(track, terrain),
+    analyzeLanes(track, terrain),
   ];
   if (options.perf !== false && options.length) {
     metrics.push(analyzePerf(track, track.seed, options.length, options.knobs ?? {}));
