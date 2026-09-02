@@ -72,6 +72,7 @@ const MARK = {
   crossing: [150, 70, 200],
   railcrossing: [60, 40, 30],
   homestead: [178, 52, 40],
+  carpark: [40, 80, 170],
   ford: WATER,
   bridge: [110, 110, 120],
   guardMound: [150, 108, 60],
@@ -324,6 +325,35 @@ export function renderLevelMap({
         [-plan.width / 2, plan.depth / 2],
       ].map(([w, d]) => [px(building.x + hz * w + hx * d), pz(building.z - hx * w + hz * d)]);
       if (corners.some(([x, y]) => inMap(x, y))) canvas.poly(corners, SOLID.building);
+    }
+  }
+
+  // ── The car parks (R42): the pad, the road in, the trails out to the
+  // stands and the boards along them ────────────────────────────────────
+  for (const park of terrain.carParks ?? []) {
+    const cx = px(park.pad.x);
+    const cz = pz(park.pad.z);
+    if (inMap(cx, cz)) {
+      canvas.disk(cx, cz, Math.max(2, park.pad.radius * scale), mix(ROAD.gravel, PAPER, 0.35));
+    }
+    strokeRoad(park.road.samples, park.road.width, ROAD.spur);
+    for (const car of park.cars) {
+      const sx = px(car.x);
+      const sy = pz(car.z);
+      if (inMap(sx, sy)) canvas.disk(sx, sy, Math.max(1, 1.1 * scale), INK);
+    }
+    for (const trail of park.trails) {
+      for (let i = 0; i < trail.samples.length; i += 2) {
+        const p = trail.samples[i];
+        const sx = px(p.x);
+        const sy = pz(p.z);
+        if (inMap(sx, sy)) canvas.disk(sx, sy, Math.max(0.8, 0.9 * scale), MARK.carpark);
+      }
+      for (const sign of trail.signs) {
+        const sx = px(sign.x);
+        const sy = pz(sign.z);
+        if (inMap(sx, sy)) canvas.disk(sx, sy, Math.max(1.5, 1.4 * scale), WHITE);
+      }
     }
   }
 
@@ -582,6 +612,24 @@ export function renderLevelMap({
         canvas.disk(sx, sy, roadR + 2.5, WHITE);
         canvas.disk(sx, sy, roadR, INK);
         break;
+      case "carpark": {
+        // R42 — the car park's own sign: the blue square with the white
+        // disc in it, stood on the pad itself rather than on the road.
+        const r = roadR + 3;
+        const cx = px(f.x);
+        const cy = pz(f.z);
+        canvas.poly(
+          [
+            [cx - r, cy - r],
+            [cx + r, cy - r],
+            [cx + r, cy + r],
+            [cx - r, cy + r],
+          ],
+          MARK.carpark,
+        );
+        canvas.disk(cx, cy, r * 0.5, WHITE);
+        break;
+      }
       case "railcrossing": {
         // R41 — a level crossing's own sign: the cross, in the railway's
         // ink, over a white disc.

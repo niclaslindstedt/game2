@@ -230,6 +230,66 @@ export const chevronTexture = once((): THREE.CanvasTexture => {
   return tex;
 });
 
+/** R42 — the board along a spectator trail: a white board, a black arrow
+ * pointing the way on, and the three heads that say what it points at. */
+export const trailSignTexture = once((): THREE.CanvasTexture => {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("2d context unavailable");
+  ctx.fillStyle = "#f4f1e6";
+  ctx.fillRect(0, 0, 128, 64);
+  ctx.fillStyle = "#1c1e22";
+  // The arrow: a shaft and a head, pointing UP — straight on, to somebody
+  // walking toward the board.
+  ctx.fillRect(36, 26, 10, 30);
+  ctx.beginPath();
+  ctx.moveTo(22, 30);
+  ctx.lineTo(41, 8);
+  ctx.lineTo(60, 30);
+  ctx.closePath();
+  ctx.fill();
+  // The crowd: three heads and shoulders.
+  for (const x of [84, 100, 116]) {
+    ctx.beginPath();
+    ctx.arc(x - 4, 22, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(x - 10, 30, 12, 20);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+});
+
+/** R42 — the sign at a car park's gate: the blue square with the white P. */
+export const parkingSignTexture = once((): THREE.CanvasTexture => {
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("2d context unavailable");
+  ctx.fillStyle = "#1f4fa0";
+  ctx.fillRect(0, 0, 64, 64);
+  ctx.fillStyle = "#f4f1e6";
+  ctx.fillRect(4, 4, 56, 56);
+  ctx.fillStyle = "#1f4fa0";
+  ctx.fillRect(8, 8, 48, 48);
+  ctx.fillStyle = "#f4f1e6";
+  // The P: a stem and a bowl.
+  ctx.fillRect(20, 14, 9, 36);
+  ctx.fillRect(20, 14, 20, 8);
+  ctx.fillRect(20, 28, 20, 8);
+  ctx.fillRect(34, 14, 9, 22);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+});
+
 /** A soft radial glow (white core fading to transparent) — the sun's halo,
  * the moon's veil, a lightning bloom. Tint via the material's color. */
 export const glowTexture = once((): THREE.CanvasTexture => {

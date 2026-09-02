@@ -19,6 +19,7 @@ import { smooth, valueNoise } from "../lib/noise.ts";
 import type { Surface, Track, TrackSample } from "./compile.ts";
 import { createGuardField, type CornerGuard, type GuardField } from "./guards.ts";
 import { createStandField, type Stand, type StandField } from "./stands.ts";
+import { carParkSolids, createCarParkField, type CarPark, type CarParkField } from "./carparks.ts";
 import {
   BANK,
   traceRivers,
@@ -419,6 +420,13 @@ export type TerrainField = {
    * soil; the analysis reads it to count how much of a stage runs through
    * rock rather than over it. */
   cutAt: (x: number, z: number) => number;
+  /** R31 — the highest the ground may stand at a point for the route's
+   * sake: the lowest nearby corridor's own underside, opening upward past
+   * the bench at the grade it was cut at. Infinity where no road reaches.
+   * What a pad placed beside the road checks its plane against, because a
+   * pad is the floor on this cone and a pad over it is the wall the cone
+   * exists to take down. */
+  ceilingAt: (x: number, z: number) => number;
   /** The surface of any road OTHER than the stage at a point: the mat of
    * an abandoned asphalt branch (R17), or null on open ground. The stage's
    * own surface comes from the track samples — this is what tells the
@@ -445,6 +453,11 @@ export type TerrainField = {
    * renderer builds the people; the run reads the order to know which
    * crowd the car has just gone past. */
   stands: Stand[];
+  /** R42 — the car parks placed so far, in stage order: where the crowd
+   * left its cars, the road each is reached by and the trails in from it.
+   * The renderer draws them; the pad is a pad and the road a road to this
+   * field, and the cars on it are solids. */
+  carParks: CarPark[];
   /** Solid wild props near a point (within `r` of it), collision-checked
    * by the physics and drawn by the renderer. */
   obstaclesNear: (x: number, z: number, r: number) => WildObstacle[];
@@ -1014,6 +1027,10 @@ export function createTerrain(track: Track): TerrainField {
    * and the trunks they stand are both this field's to report. */
   const guards: GuardField = createGuardField(track);
   const stands: StandField = createStandField(track);
+  /** R42 — where the crowd parked, and the trails in: placed from the
+   * stands once they stand, for the same reason the stands are placed
+   * here rather than in the compiler. */
+  const carParks: CarParkField = createCarParkField(track);
 
   /** How far under the drawn ribbon the ground TILES are pinned, m. The
    * road mesh draws the whole corridor — mat, shoulder, ditch, lip (R16) —
@@ -1635,12 +1652,19 @@ export function createTerrain(track: Track): TerrainField {
   /** Distance from a point to the nearest ABANDONED BRANCH's mat edge, or
    * Infinity when there is none near — nothing is planted on a road, and a
    * spur is as much a road as the stage is (R17). */
-  const spurClearance = (x: number, z: number): number => {
+  const builtClearance = (x: number, z: number): number => {
     let yard = pads.length > 0 ? padClearance(x, z) : Infinity;
     if (clearings.length > 0) yard = Math.min(yard, clearingAt(x, z).d);
     if (spurs.spurs.length === 0) return yard;
     const spur = spurs.nearest(x, z);
     return Math.min(yard, spur ? spur.d - spur.spur.width / 2 : Infinity);
+  };
+  // R42 — a trodden path is not a road (a road may cross one), but nothing
+  // grows on one either: the forest reads the paths, the placers do not.
+  const spurClearance = (x: number, z: number): number => {
+    const built = builtClearance(x, z);
+    if (carParks.carParks.length === 0) return built;
+    return Math.min(built, carParks.trailClearance(x, z));
   };
 
   /** Distance from a point to the nearest road's outer EDGE — stage or
@@ -1851,6 +1875,28 @@ export function createTerrain(track: Track): TerrainField {
           spurClearance(x, z) < R.guard.groveClear ||
           guards.riseAt(x, z) > 0.5,
       );
+      // R42 — and where that crowd parked, last of all: a car park is
+      // planned from the stands, and its pad, its road and its cars go
+      // into the field the moment it is placed so the next one keeps off.
+      carParks.extend(committedS, stands.stands, {
+        loose: biome.loose,
+        land,
+        // Clamped to the road grid's own reach — three rings of cells, the
+        // `BLOCK` above: past it the answer is "nothing this near", which a
+        // road being driven out reads as a promise about its next steps,
+        // and a promise has to be one the grid can keep.
+        routeDistance: (x, z) => Math.min(nearestRoad(x, z)?.d ?? Infinity, 3 * GRID),
+        builtClearance,
+        ceilingAt: (x, z) => nearestSample(x, z)?.ceiling ?? Infinity,
+        blocked: (x, z) =>
+          waterAt(x, z) !== null || inStream(streams, x, z, 3) || guards.riseAt(x, z) > 0.5,
+        heightAt,
+        commit: (park) => {
+          spurs.add(park.road);
+          pads.push({ ...park.pad, blend: R.carPark.pad.blend, atS: park.atS });
+          for (const solid of carParkSolids(park, heightAt)) fix(solid);
+        },
+      });
       // New road may have arrived where a prop stood — revalidate; fresh
       // stream valleys reshape the ground, so the lattice re-samples too.
       props.invalidate();
@@ -1869,6 +1915,7 @@ export function createTerrain(track: Track): TerrainField {
       while (streams.length > 0 && streams[0].centerS < floorS) streams.shift();
       guards.pruneBefore(floorS);
       stands.pruneBefore(floorS);
+      carParks.pruneBefore(floorS);
       spurs.pruneBefore(floorS);
       // Not in stage order: a town's lots and a homestead's yard are
       // ingested list by list, so the whole set is sifted.
@@ -1884,6 +1931,7 @@ export function createTerrain(track: Track): TerrainField {
   sync(0);
 
   const roadDistanceAt = (x: number, z: number): number => nearestRoad(x, z)?.d ?? Infinity;
+  const ceilingAt = (x: number, z: number): number => nearestSample(x, z)?.ceiling ?? Infinity;
 
   const field: TerrainField = {
     heightAt,
@@ -1895,11 +1943,13 @@ export function createTerrain(track: Track): TerrainField {
     water: land.water,
     roadDistanceAt,
     cutAt,
+    ceilingAt,
     spurSurfaceAt,
     streams,
     rivers,
     guards: guards.guards,
     stands: stands.stands,
+    carParks: carParks.carParks,
     obstaclesNear: props.obstaclesNear,
     fixturesNear,
     spurClearance,

@@ -53,6 +53,7 @@ import { buildTerrain, LAKE_Y, type Terrain } from "./terrain.ts";
 import { buildStreamMeshes } from "./streams.ts";
 import { buildCulverts } from "./culvert.ts";
 import { buildFinishGate, buildStartGate, type FinishGate, type Muzzle } from "./finish-gate.ts";
+import { buildCarPark } from "./carpark.ts";
 import { buildHomestead } from "./homestead.ts";
 import { buildTown } from "./town.ts";
 import { buildRailArm, buildRailCrossing } from "./railway.ts";
@@ -826,6 +827,11 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
    * rebuild it than to grow one. */
   let crowd: Crowd | null = null;
   let standCount = 0;
+  /** R42 — the car parks, built as the terrain field places them: each is
+   * its own group, kept with the arc position it belongs to so an endless
+   * run can drop it with the road behind. */
+  const parkGroups: { atS: number; group: THREE.Group }[] = [];
+  let parkCount = 0;
 
   const buildChunk = (from: number, to: number): void => {
     const chunkGroup = new THREE.Group();
@@ -954,6 +960,19 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
     group.add(crowd.group);
   };
 
+  /** R42 — (re)build where the crowd parked, for the same reason and at
+   * the same moment: the car parks come off the terrain field with the
+   * stands they serve. */
+  const buildParks = (): void => {
+    const parks = terrain.field.carParks;
+    for (; parkCount < parks.length; parkCount++) {
+      const park = parks[parkCount];
+      const built = buildCarPark(track, park, cones, beside);
+      group.add(built);
+      parkGroups.push({ atS: park.atS, group: built });
+    }
+  };
+
   /** Raise the next slice of road, if any is owed. The start line comes up
    * with the world so there is something to stand on; the rest arrives over
    * the frames after it. */
@@ -976,6 +995,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
 
   raiseSlice();
   buildPeople();
+  buildParks();
 
   const sync = (state: GameState, dt: number): void => {
     const rate = pace(dt);
@@ -996,6 +1016,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
     // The stands come with the road that carries them (R26), so the people
     // arrive with each slice rather than all at the start.
     buildPeople();
+    buildParks();
     if (!track.endless) return;
     while (chunks.length > 1 && chunks[0].toS < state.progressS - PRUNE_BEHIND) {
       const old = chunks.shift() as Chunk;
@@ -1005,6 +1026,15 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
       cones.retireBefore(old.toS);
       posts.retireBefore(old.toS);
       kerbs.pruneBefore(old.toS);
+      // R42 — the car parks behind go with the road they served. The
+      // field's own list is pruned by the same arc, so the counter into it
+      // is re-anchored to what the field still holds.
+      while (parkGroups.length > 0 && parkGroups[0].atS < old.toS) {
+        const gone = parkGroups.shift() as { atS: number; group: THREE.Group };
+        group.remove(gone.group);
+        disposeGroup(gone.group);
+      }
+      parkCount = Math.min(parkCount, terrain.field.carParks.length);
     }
   };
 

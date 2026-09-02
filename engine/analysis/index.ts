@@ -70,7 +70,7 @@ export function analyzeTrack(
   const metrics: MetricReport[] = [
     analyzeRollers(track, terrain),
     analyzeWater(track, terrain),
-    analyzeRoads(track),
+    analyzeRoads(track, terrain),
     analyzeJunctions(track, terrain),
     analyzeDrive(track, speeds),
     analyzeJumps(track, terrain, speeds),

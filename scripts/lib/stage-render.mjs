@@ -646,6 +646,8 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
   for (const homestead of track.homesteads) {
     drawRoad(homestead.drive.samples, homestead.drive.width);
   }
+  // R42 — the roads in to the car parks, for the same reason.
+  for (const park of terrain.carParks ?? []) drawRoad(park.road.samples, park.road.width);
   drawRoad(track.samples, track.width);
   // R41 — the railway's two arms: a band of ballast with the two rails on
   // it, over the route where they cross it, because the rails are laid
@@ -823,6 +825,26 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
       canvas.poly(footprint(building), HOUSE_PAINT[building.plan.walls]);
       for (const car of lot.cars) {
         canvas.disk(px(car.x), pz(car.z), Math.max(1.5, scale * 1.2), [0x2a, 0x2c, 0x30]);
+      }
+    }
+  }
+
+  // ── R42 — the car parks: the pad's gravel, the cars on it as dots, the
+  // trails to the stands as dotted lines and the boards along them. The
+  // picture answers WHERE the crowd parked and which way it walked in.
+  for (const park of terrain.carParks ?? []) {
+    const { pad } = park;
+    canvas.disk(px(pad.x), pz(pad.z), Math.max(2, scale * pad.radius), ROAD.gravel.loose);
+    for (const car of park.cars) {
+      canvas.disk(px(car.x), pz(car.z), Math.max(1.5, scale * 1.2), [0x2a, 0x2c, 0x30]);
+    }
+    for (const trail of park.trails) {
+      for (let i = 0; i < trail.samples.length; i += 2) {
+        const p = trail.samples[i];
+        canvas.disk(px(p.x), pz(p.z), Math.max(1, scale * 1.4), ROAD.shoulder);
+      }
+      for (const sign of trail.signs) {
+        canvas.disk(px(sign.x), pz(sign.z), Math.max(1.5, scale * 1.6), ROAD.marking);
       }
     }
   }

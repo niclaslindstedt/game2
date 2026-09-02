@@ -344,6 +344,25 @@
 //       under it. Both arms of the line are cut to the edge of the map and
 //       neither is shut: nobody drives a railway, and the crossing is
 //       signed rather than taped.
+//   R42 THE CROWD DROVE HERE. Every stand (R27) is reached from a CAR
+//       PARK: a graded pad of gravel with bays marked across it and twenty
+//       or more cars nosed into them, off a road that is NOT the rally
+//       road — an abandoned arm past its barrier (R17, R36), the road out
+//       from an earlier car park, or, where there is no public road within
+//       reach, a gravel lane of its own driven out to the edge of the map
+//       the way a branch is, so that every car park is somewhere a car
+//       could actually have come from. From the pad a TRAIL is trodden
+//       through the grass to the back of each stand the car park serves,
+//       never across the route and never through the water, with arrow
+//       boards along it pointing the crowd the way. It is placed the way a
+//       marshal plans it, BACKWARDS: from the stand to a common car park,
+//       and from the car park out to a road. Nothing about it costs the
+//       route anything — the pad, the road and the trails keep off the
+//       route's corridor, every other road, the water, the guards' mounds
+//       and the buildings — and a stand the country leaves no room to serve
+//       stays unserved, which `roads.served` reports. The pad is a pad the
+//       terrain flattens, the road is a road it shelves, and the cars are
+//       as solid as they look.
 
 import { isBiomeId, type BiomeId } from "./biomes.ts";
 
@@ -2104,6 +2123,65 @@ export const STAGE_RULES = {
       barn: { min: 0, max: 0 },
       pitch: 3.2,
     },
+  },
+
+  /** R42 — THE CAR PARKS: where the crowd left its cars, and how it walked
+   * in from there. Placed against the built world, from the stands (R27)
+   * backwards: a stand needs a trail, the trail needs a car park, and the
+   * car park needs a road to the outside world. */
+  carPark: {
+    /** How far a spectator will walk from the car to the stand, m — the
+     * longest a trail may be, and how far from a stand a car park is
+     * looked for. A rally crowd walks a few hundred metres in; it does not
+     * walk a kilometre. */
+    walk: 340,
+    /** How far past a stand the road has to be committed before the stand's
+     * car park is decided, m: every stand the same car park could also
+     * serve exists by then, so a streamed stage decides the same clusters
+     * however it was chunked. `walk` plus the longest corner a stand waits
+     * on. */
+    hold: 500,
+    /** How far from a stand an existing PUBLIC road is looked for, m — an
+     * abandoned arm past its barrier (R17, R36), or an earlier car park's
+     * own road out. Past this the car park builds a road of its own. */
+    reach: 320,
+    /** THE PAD: the graded gravel the cars stand on, as a disc — how far
+     * past the bay layout its rim reaches, how far past the rim the country
+     * is eased back onto it, the steepest plane it may be graded to (m per
+     * m: a field the cars are parked across, not a table cut into a hill),
+     * how much the ground may differ from that plane across it (the plane
+     * itself never stands over R31's cone — the terrain's own), the bare
+     * country it keeps between its rim and the route's corridor, and how
+     * far apart two pads have to be. */
+    pad: { margin: 2.5, blend: 12, maxGrade: 0.09, level: 6, clear: 8, apart: 100 },
+    /** THE BAYS: two rows nosed in either side of one aisle down the middle.
+     * `count` is how many bays a car park has — at least twenty-two, so
+     * that with a couple standing empty at least twenty cars are on it —
+     * `pitch` the width of one, `depth` how far it reaches back from the
+     * aisle, `aisle` the aisle's width, and `empty` how many bays the dice
+     * leave without a car. */
+    bays: {
+      count: { min: 22, max: 28 },
+      pitch: 3,
+      depth: 5.4,
+      aisle: 6.5,
+      empty: { min: 0, max: 2 },
+    },
+    /** THE ROAD in: a lane's width of the country's loose surface, leaving
+     * a public road SQUARE and running straight to the middle of the pad,
+     * `approach` metres away — or, where there is no public road to leave,
+     * leaving the pad and driven out to the edge of the map the way an
+     * abandoned branch is (`buildSpur`). `maxGrade` is how steep it may
+     * climb, `clear` the least room it keeps from any other road. */
+    road: { width: 5, approach: { min: 38, max: 64 }, maxGrade: 0.08, clear: 26 },
+    /** THE TRAILS: a trodden path from the pad's rim to the back of each
+     * stand it serves, this wide, walked in steps this long, never inside
+     * the route's corridor and never through the water. */
+    trail: { width: 1.3, step: 3, clear: 1.5 },
+    /** THE SIGNS along a trail — an arrow board the crowd follows from the
+     * cars to the stand: the first `first` metres up the trail from the pad,
+     * then one every `pitch` metres. */
+    sign: { first: 5, pitch: 70 },
   },
 
   /** R19 — SUPERELEVATION: how far a turn is banked into itself. A road
