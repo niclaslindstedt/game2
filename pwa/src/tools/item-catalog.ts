@@ -24,10 +24,11 @@ import { biomeFor } from "../game/biome.ts";
 import { buildCarBody, type CarBodySpec } from "../game/car-body.ts";
 import { buildInterior } from "../game/car/interior.ts";
 import { buildWheel } from "../game/car/wheels.ts";
+import { createBreakage } from "../game/breakage.ts";
 import { createConeField } from "../game/cones.ts";
 import { buildCrowd } from "../game/crowd.ts";
 import { buildFinishGate, buildStartGate } from "../game/finish-gate.ts";
-import { FLORA_IDS, buildFlora } from "../game/flora.ts";
+import { FLORA_IDS, buildFlora, TRUNK_COLOR } from "../game/flora.ts";
 import { buildBuilding } from "../game/building.ts";
 import { buildHouse, type HousePlan } from "../game/house.ts";
 import { markerShape } from "../game/kerbs.ts";
@@ -126,6 +127,35 @@ function stoneItem(kind: SolidKind, mossy: boolean, size: number, spin: number):
     },
   };
 }
+
+// ── What the car breaks off ───────────────────────────────────────────────
+
+/** The stand-in a snapped solid leaves behind (breakage.ts), cut from the
+ * engine's own solid at the size given. It stands on the sheet next to the
+ * prop it replaces — `piece-log` and `fallenLog` are the same log, so the
+ * metres printed under the two rows are the check: a piece that reads as a
+ * different tree entirely is invisible in a diff and instant here. */
+function pieceItem(kind: SolidKind, size: number, note: string): ItemDef {
+  return {
+    id: `piece-${kind}${size === 1 ? "" : `-${size}`}`,
+    group: "breakage",
+    note,
+    build: () => {
+      const fx = createBreakage(TRUNK_COLOR, biomeFor().ground.bedrock);
+      fx.spawn(standSolid({ x: 0, y: 0, z: 0, kind, size, spin: 0 }), 0, 0, 0);
+      return { object: fx.group, dispose: () => fx.dispose() };
+    },
+  };
+}
+
+const BREAKAGE_ITEMS: ItemDef[] = [
+  pieceItem("log", 1, "the bole of a fallenLog — the same log, lying down"),
+  pieceItem("rootlog", 1, "a rootLog's trunk, without its plate"),
+  pieceItem("tree", 0.5, "a young trunk: as slim as the tree it came off"),
+  pieceItem("tree", 1.35, "...and an old one, the same shape three times over"),
+  pieceItem("stump", 1, "a cut bole, kicked off its roots"),
+  pieceItem("boulder", 1.2, "stone: a lump, not a bole"),
+];
 
 // ── The car, and what is behind its glass ─────────────────────────────────
 
@@ -510,6 +540,7 @@ export function itemCatalog(): ItemDef[] {
     ...STAGE_ITEMS,
     ...HOMESTEAD_ITEMS,
     ...TOWN_ITEMS,
+    ...BREAKAGE_ITEMS,
     stoneItem("boulder", false, 1.3, 0.37),
     stoneItem("boulder", true, 1.3, 0.37),
     stoneItem("rock", false, 1.1, 0.62),

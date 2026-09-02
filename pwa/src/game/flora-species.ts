@@ -285,12 +285,19 @@ export const VARIANTS: Record<string, VariantDef> = {
       b.blob(MOSS, 0.3, 0.45, 0.25, 0.2, { sy: 0.6 });
     },
   },
+  /** A trunk rotted off its stump and lying where it fell. It is CENTRED on
+   * its own origin, and that is not cosmetic: the engine plants this one as
+   * a solid whose collision circle is the length the trunk covers, centred
+   * on the same point (`solidShape`'s `log`). A model hung off one end
+   * would put half the wood outside its own collider — a log the car drives
+   * through — and the other half of the circle over bare grass. The same
+   * goes for `rootLog` below. */
   fallenLog: {
     build: (b) => {
       const log = new THREE.CylinderGeometry(0.26, 0.34, 4.6, 6);
       log.translate(0, 2.3, 0);
-      b.add(log, DEAD_WOOD, { tiltZ: Math.PI / 2 - 0.06 });
-      b.blob(MOSS, 0.35, -2.2, 0.5, 0.1, { sy: 0.5 });
+      b.add(log, DEAD_WOOD, { x: 2.3, tiltZ: Math.PI / 2 - 0.06 });
+      b.blob(MOSS, 0.35, 0.1, 0.5, 0.1, { sy: 0.5 });
     },
   },
   /** The same trunk, but blown over rather than rotted off: the root plate
@@ -301,17 +308,20 @@ export const VARIANTS: Record<string, VariantDef> = {
     build: (b) => {
       const log = new THREE.CylinderGeometry(0.24, 0.4, 5.2, 6);
       log.translate(0, 2.6, 0);
-      b.add(log, DEAD_WOOD, { tiltZ: Math.PI / 2 - 0.1 });
+      // Centred on the trunk, so the bole fills the collision circle it was
+      // planted with (see fallenLog) and the plate stands at the butt end of
+      // it rather than in the middle of the road.
+      b.add(log, DEAD_WOOD, { x: 2.6, tiltZ: Math.PI / 2 - 0.1 });
       // The plate's top has to stay under the engine's collision height for
       // a rooted trunk (1.9 × size), or a car clears the prop and drives
       // through the disc it can see.
       const plate = new THREE.CylinderGeometry(0.95, 1.05, 0.34, 7);
       plate.rotateZ(Math.PI / 2);
       plate.translate(0, 0.8, 0);
-      b.add(plate, TRUNK_DARK, { x: 0.1, tiltZ: 0.2 });
-      b.cyl(TRUNK_DARK, 0.07, 0.11, 0.8, 0.7, { x: 0.3, tiltZ: -0.9 });
-      b.cyl(TRUNK_DARK, 0.06, 0.1, 0.7, 1.2, { x: 0.2, tiltZ: 1.1 });
-      b.blob(MOSS, 0.3, -2.4, 0.45, 0.15, { sy: 0.5 });
+      b.add(plate, TRUNK_DARK, { x: 2.7, tiltZ: 0.2 });
+      b.cyl(TRUNK_DARK, 0.07, 0.11, 0.8, 0.7, { x: 2.9, tiltZ: -0.9 });
+      b.cyl(TRUNK_DARK, 0.06, 0.1, 0.7, 1.2, { x: 2.8, tiltZ: 1.1 });
+      b.blob(MOSS, 0.3, 0.2, 0.45, 0.15, { sy: 0.5 });
     },
   },
   /** Snapped off in a gale at chest height, splinters still standing. */
