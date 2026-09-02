@@ -85,6 +85,16 @@ TUNING.drift.minSpeed)` before flicking — so a tuning change that slows the
   becomes the regression test; keep it in the topic's `tests/<topic>_test.ts`.
 - **Whole-run scenarios** (does a bot survive this geometry?) go through
   `simulateStage` with a real seed instead — see the `simulate-run` skill.
+- **A moment of the RUN rather than a piece of road** — the finish, a
+  retirement, the last lap, a car 1200 m in with the boards behind it booked
+  — is `placeRun(state, { at: "finish" })` (`engine/game/place.ts`), never a
+  bot driven the length of a stage to get there. It stands the car on the
+  road with the clock, the splits and the lap book reading as though it had
+  driven, and leaves the moment itself to the engine: a placed finish is a
+  step short of the line and the next `step` fires `finish`; a placed
+  retirement is at rest with a dead engine and the next `step` retires it.
+  Assert on the events that step emits, exactly as for a driven one. A field
+  stood beside it is `placeField(field, state, jumped)`.
 
 ## Staging in the real renderer
 
@@ -95,6 +105,14 @@ hold throttle N seconds, flick the handbrake, screenshot. Add a scene for the
 moment you need (`--scene <name>` selects one) and run it via
 `make screenshots` (the `playtest` skill has the loop and the environment
 notes). The screenshot script drives `pwa/dist`, so `make build` first.
+
+A scene that wants a SURFACE rather than a drive — the results card, the
+retirement card, the spectator's feed, the pause card, or simply the car a
+long way down the stage — does not drive there: `?at=finish` (`?at=retire`,
+`?at=racing&s=1200`) stands the run at the moment on page load, `?level=` and
+`?mode=` enter it on a campaign stage in a discipline so the card has a field
+and a book to read, and `?paused=1` raises the pause card over the first
+frame. The `debug-tools` skill has the whole parameter table.
 
 ## Skill self-improvement
 

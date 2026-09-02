@@ -22,14 +22,15 @@ lights. Anything recording the run has to be told about that jump — it moves
 the field's clock — so the recorder is armed BEFORE the skip and the skip is
 written down as the driver's own cut at step 0.
 
-It also never calls `setRun`, so a tooling run carries no `levelId` — and
-everything hanging off one is therefore unreachable from `?start=1`: the
-field's run-out, the campaign block on the results card, FULL RESULTS, and
-the spectator mode over them all. A screenshot scene for any of those has to
-click through the MENU (`?menu=1`, then each card's `[data-nav-next]`), which
-on this software rasterizer is a twelve-minute drive against the forty
-seconds a scene is worth. That is why `scripts/screenshot.mjs` has no scene
-for the results card's own surfaces.
+A tooling run's discipline and level are settled from the URL before the
+block runs (`modeFromUrl`, off `place-url.ts`): `?level=` and `?mode=` are
+what give it a `levelId`, and without them everything hanging off one — the
+field's run-out, the campaign block on the results card, FULL RESULTS, the
+spectator mode — is absent from the link. The same block stands the run at
+a moment when `?at=` asks (`placeRun`, then `placeField` for the crews), so
+none of those surfaces needs a driven stage to photograph; a scene that
+clicks through the MENU instead is paying a twelve-minute drive for what one
+page load gives.
 
 When adding anything per-run to App.tsx, grep for `applyStageRef.current`:
 every call site is a run starting.

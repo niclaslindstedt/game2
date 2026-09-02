@@ -351,6 +351,9 @@ Everything the overlay prints, the app reads back (`App.tsx`):
 | `elevation= water= trees= asphalt= width=` | The generator's dials                                         |
 | `tod= weather= car=`                       | Conditions and machine                                        |
 | `start=1`, `bot=1`                         | Skip the menu; let the bot drive there                        |
+| `at= s= time= speed= reason=`              | Stand the run AT a moment: `racing`, `finish` or `retire`     |
+| `level= mode=`                             | Enter it on a campaign stage, in a discipline                 |
+| `paused=1`                                 | The pause card up over the first frame                        |
 | `roam=1`, `layer=`, `mapfull=1`            | Open the map instead, with a layer painted, full screen       |
 | `maz= mpitch= mzoom= mpanx= mpanz=`        | Park the map's framing exactly (radians, ×, metres of pan)    |
 
@@ -360,6 +363,23 @@ drive to it and read `stage-s` off the overlay to know when it has arrived.
 It is also the one thing that lifts god mode's hold on the run — without it
 the world under the camera stands still, which is what a flight to LOOK at
 something wants and what a flight to FOLLOW something cannot use.
+
+`at=` is the companion to BOTH when the problem is a SURFACE that only exists
+at a moment of the run — the results card, the retirement card, the
+spectator's feed, the pause card — or a place a long way down the stage
+(`pwa/src/game/place-url.ts` reads it, `engine/game/place.ts` does the
+standing). `at=racing&s=1200` stands the car on the road 1200 m in, at pace,
+with the clock and the split boards reading as though it had driven there;
+`at=finish` stands it a step short of the line so the loop's first step fires
+the finish the way every finish fires; `at=retire` stands it at rest with a
+dead engine (`reason=wheels` for the other way out). `level=taiga-1` enters
+the run on that campaign stage with the whole field placed at the same moment
+— which is what puts the sheet, the points and SPECTATE on the card — and
+`mode=headsup|timetrial` picks the discipline. The placed clock is written
+from a middling pace unless `time=` says otherwise, and a placed finish is
+BOOKED like any other: the campaign record and the time trial's board in that
+browser's storage take it, so use a scratch profile or the harness's own
+fresh context rather than a save you care about.
 
 ## When you change these tools
 

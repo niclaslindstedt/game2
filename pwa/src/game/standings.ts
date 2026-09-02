@@ -30,6 +30,7 @@ export {
   onRoad,
   placeAtFinish,
   placeAtSplit,
+  placeField,
   playerSlot,
   rubRivals,
   settleField,
