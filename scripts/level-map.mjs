@@ -139,6 +139,7 @@ const statLine =
   `${summary.checkpoints} split${summary.checkpoints === 1 ? "" : "s"}, ${summary.junctions} junction${summary.junctions === 1 ? "" : "s"}, ` +
   `${summary.homesteads} homestead${summary.homesteads === 1 ? "" : "s"}, ` +
   `${summary.towns} town${summary.towns === 1 ? "" : "s"}, ` +
+  `${summary.carParks} car park${summary.carParks === 1 ? "" : "s"}, ` +
   `${(summary.tarmacShare * 100).toFixed(0)}% tarmac${tarmac ? ` (${tarmac})` : ""}, ` +
   `climb ${summary.climb.toFixed(0)} m, road ${summary.widthM.toFixed(1)} m wide`;
 const rows = features.map((f) => {

@@ -35,6 +35,8 @@ import { createHighwayNetwork } from "../mapgen/highway.ts";
 import { crossingParting } from "../mapgen/crossing.ts";
 import { STAGE_RULES } from "../mapgen/rules.ts";
 import { isLoose, type Track } from "../mapgen/compile.ts";
+import { padHeight } from "../mapgen/carparks.ts";
+import type { TerrainField } from "../mapgen/terrain.ts";
 import { ANALYSIS } from "./budgets.ts";
 import {
   metricScore,
@@ -114,7 +116,7 @@ function offParallel(a: number, b: number): number {
   return d > Math.PI / 2 ? Math.PI - d : d;
 }
 
-export function analyzeRoads(track: Track): MetricReport {
+export function analyzeRoads(track: Track, terrain: TerrainField): MetricReport {
   const started = Date.now();
   const findings: Finding[] = [];
   const R = ANALYSIS.roads;
@@ -691,6 +693,112 @@ export function analyzeRoads(track: Track): MetricReport {
     }
   }
 
+  // ── R42 — DID THE CROWD DRIVE HERE? ────────────────────────────────────
+  //
+  // Every stand is reached from a car park a walk away, and every car park
+  // holds its cars, stands off the route, and is reached by a road that
+  // goes somewhere: into a public road already there, or out to the edge of
+  // the map. The trails between never touch the route's mat.
+  const stands = terrain.stands;
+  const parks = terrain.carParks;
+  /** Trails per stand arc position — the two finish banks share one. */
+  const trailsAt = new Map<number, number>();
+  for (const park of parks) {
+    for (const trail of park.trails)
+      trailsAt.set(trail.standS, (trailsAt.get(trail.standS) ?? 0) + 1);
+  }
+  let unserved = 0;
+  for (const stand of stands) {
+    const left = trailsAt.get(stand.s) ?? 0;
+    if (left > 0) {
+      trailsAt.set(stand.s, left - 1);
+      continue;
+    }
+    unserved++;
+    findings.push({
+      code: "roads.served",
+      severity: "warn",
+      message: `a stand @${stand.s.toFixed(0)} m has no car park within a walk (R42)`,
+      at: { x: stand.x, z: stand.z },
+      s: stand.s,
+      value: 1,
+    });
+  }
+  let badParks = 0;
+  const half = track.width / 2;
+  const C = STAGE_RULES.carPark;
+  for (const park of parks) {
+    const wrong: string[] = [];
+    if (park.cars.length < R.parkCars) wrong.push(`holds ${park.cars.length} cars`);
+    const road = park.road.samples;
+    const first = road[0];
+    const last = road[road.length - 1];
+    if (Math.hypot(last.x - park.pad.x, last.z - park.pad.z) > 1) {
+      wrong.push("its lane does not reach the pad");
+    }
+    if (park.access === "map") {
+      const b = track.bounds;
+      const out = Math.max(b.minX - first.x, first.x - b.maxX, b.minZ - first.z, first.z - b.maxZ);
+      if (out < R.escape) wrong.push(`its lane stops ${out.toFixed(0)} m past the box, in a field`);
+    } else {
+      // Into a road that is there: an arm, or another car park's lane.
+      const lines = [
+        ...track.spurs.filter((s) => !s.rail).map((s) => s.samples),
+        ...parks.filter((p) => p !== park).map((p) => p.road.samples),
+      ];
+      const joined = lines.some((line) =>
+        line.some((s) => Math.hypot(s.x - first.x, s.z - first.z) < 1),
+      );
+      if (!joined) wrong.push("its lane leaves no road the track has");
+    }
+    if (
+      terrain.roadDistanceAt(park.pad.x, park.pad.z) <
+      park.pad.radius + half + ROAD_CROSS.reach
+    ) {
+      wrong.push("its pad stands in the route's corridor");
+    }
+    // R23 — the lane is a road, and the route is the one road it may never
+    // share ground with: not even where it leaves the arm at a junction,
+    // because it leaves the arm past the barrier, well clear of the route.
+    if (
+      road.some(
+        (s) => terrain.roadDistanceAt(s.x, s.z) < half + ROAD_CROSS.reach + C.road.width / 2,
+      )
+    ) {
+      wrong.push("its lane runs onto the route");
+    }
+    if (Math.hypot(park.pad.grade.x, park.pad.grade.z) > C.pad.maxGrade + 1e-6) {
+      wrong.push("its pad is graded steeper than a car park can be");
+    }
+    for (const trail of park.trails) {
+      const length = trail.samples[trail.samples.length - 1].s;
+      if (length > R.parkWalk) {
+        wrong.push(`a trail of ${length.toFixed(0)} m`);
+        break;
+      }
+      if (trail.samples.some((p) => terrain.roadDistanceAt(p.x, p.z) < half)) {
+        wrong.push("a trail crosses the road");
+        break;
+      }
+    }
+    // The cars stand on the pad's own plane — a car floating over a hillside
+    // is the pad the terrain graded and the pad the cars were placed on
+    // disagreeing.
+    if (park.cars.some((car) => Math.abs(car.y - padHeight(park.pad, car.x, car.z)) > 0.05)) {
+      wrong.push("a car stands off the pad's plane");
+    }
+    if (wrong.length === 0) continue;
+    badParks++;
+    findings.push({
+      code: "roads.parking",
+      severity: "error",
+      message: `the car park @${park.atS.toFixed(0)} m ${wrong.join(", ")} (R42)`,
+      at: { x: park.pad.x, z: park.pad.z },
+      s: park.atS,
+      value: wrong.length,
+    });
+  }
+
   const points = roads.reduce((sum, road) => sum + road.points.length, 0);
   const checks: Check[] = [
     {
@@ -797,6 +905,21 @@ export function analyzeRoads(track: Track): MetricReport {
       weight: 1.5,
       value: badLots,
     },
+    {
+      id: "served",
+      label: "every stand has a car park a walk away (R42)",
+      score: rate(unserved, Math.max(1, stands.length), R.unservedShare),
+      weight: 1,
+      value: unserved,
+      budget: R.unservedShare,
+    },
+    {
+      id: "parking",
+      label: "every car park holds its cars and its lane reaches a road (R42)",
+      score: rate(badParks, Math.max(1, parks.length)),
+      weight: 1.5,
+      value: badParks,
+    },
   ];
 
   return {
@@ -825,6 +948,10 @@ export function analyzeRoads(track: Track): MetricReport {
       lots,
       badLots,
       longestRun,
+      stands: stands.length,
+      unserved,
+      carParks: parks.length,
+      badParks,
     },
     ms: Date.now() - started,
   };

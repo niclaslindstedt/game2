@@ -125,6 +125,19 @@ function schematic(track, terrain) {
       canvas.disk(px(s.x), pz(s.z), Math.max(1.5, (spur.width / 2) * scale), COLORS.spur);
     }
   }
+  // R42 — the car parks: the pad, the lane in, and the trails to the stands.
+  for (const park of terrain.carParks ?? []) {
+    for (const s of park.road.samples) {
+      canvas.disk(px(s.x), pz(s.z), Math.max(1.2, (park.road.width / 2) * scale), COLORS.spur);
+    }
+    canvas.disk(px(park.pad.x), pz(park.pad.z), Math.max(2, park.pad.radius * scale), COLORS.spur);
+    for (const trail of park.trails) {
+      for (let i = 0; i < trail.samples.length; i += 3) {
+        const p = trail.samples[i];
+        canvas.disk(px(p.x), pz(p.z), 1, COLORS.spur);
+      }
+    }
+  }
   for (const s of track.samples) canvas.disk(px(s.x), pz(s.z), roadR + 1, COLORS.edge);
   for (const s of track.samples) {
     const color =

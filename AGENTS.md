@@ -215,6 +215,7 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | How the road's EDGE runs out into the grass (R16)           | `handoverAt` in `engine/mapgen/road.ts` (the shape), `road-mesh.ts` (the paint), `pwa/src/game/road-spill.ts` (the stones)         |
 | WHERE an abandoned branch is shut, and WHAT with            | `placeBlock` in `engine/mapgen/spurs.ts` picks the place; `pwa/src/game/blockade.ts` builds the barrier                            |
 | WHERE a house stands off the stage, and its drive and yard  | `engine/mapgen/homesteads.ts` (R37) places it all; `pwa/src/game/homestead.ts` draws it — the `mapgen-improvement` skill           |
+| WHERE the crowd PARKED, the lane in, and the trails to it   | `engine/mapgen/carparks.ts` (R42) over `carpark-map.ts`, placed on the terrain field from the stands; `pwa/src/game/carpark.ts`    |
 | What makes a homestead a FARM: barn, paddock, field, gear   | `engine/mapgen/farms.ts` (R37) lays it out; drawn by `barn.ts`, `paddock.ts`, `farm-gear.ts` in `pwa/src/game/`                    |
 | The COWS and the sheep grazing a paddock                    | `pwa/src/game/livestock.ts` — the crowd's pattern: where they MAY be is the engine's paddock, where each stands is the renderer's  |
 | The RAILWAY, the crossing's ramp, and the train's timetable | `engine/mapgen/railway.ts` (R41) over `highway.ts`'s `rail` line and `crossing.ts`'s solve; the numbers in `STAGE_RULES.rail`      |

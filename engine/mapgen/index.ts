@@ -132,6 +132,22 @@ export {
 } from "./kerbs.ts";
 export { createStandField, type Stand, type StandField } from "./stands.ts";
 export {
+  bayLayout,
+  carParkSolids,
+  carParkTally,
+  createCarParkField,
+  padHeight,
+  parkBays,
+  type CarPark,
+  type CarParkAccess,
+  type CarParkPad,
+  type CarParkContext,
+  type CarParkField,
+  type Trail,
+  type TrailSample,
+  type TrailSign,
+} from "./carparks.ts";
+export {
   createTerrain,
   builtTerrain,
   computeStreams,

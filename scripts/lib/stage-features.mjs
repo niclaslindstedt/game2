@@ -462,6 +462,42 @@ export function stageFeatures(track, terrain) {
     });
   });
 
+  // ── The car parks (R42): where the crowd parked, and how it walked in ──
+  (terrain.carParks ?? []).forEach((park, k) => {
+    const index = indexAtS(samples, park.atS);
+    const at = samples[index];
+    const roadM = park.road.samples[park.road.samples.length - 1].s;
+    const from =
+      park.access === "map"
+        ? `its own ${roadM.toFixed(0)} m lane out to the edge of the map`
+        : park.access === "arm"
+          ? `a ${roadM.toFixed(0)} m lane off the abandoned arm`
+          : `a ${roadM.toFixed(0)} m lane off another car park's road`;
+    const trails = park.trails
+      .map(
+        (t) =>
+          `${t.samples[t.samples.length - 1].s.toFixed(0)} m to the stand at ${t.standS.toFixed(0)} m`,
+      )
+      .join(", ");
+    const signs = park.trails.reduce((n, t) => n + t.signs.length, 0);
+    features.push({
+      id: `P${k + 1}`,
+      kind: "carpark",
+      s: park.atS,
+      index,
+      x: park.pad.x,
+      z: park.pad.z,
+      heading: at.heading,
+      elevation: park.pad.y,
+      label: `P${k + 1}`,
+      detail:
+        `car park ${Math.hypot(park.pad.x - at.x, park.pad.z - at.z).toFixed(0)} m off the centreline: ` +
+        `${park.bays} bays, ${park.cars.length} cars, reached by ${from}; ` +
+        `${park.trails.length} trail${park.trails.length === 1 ? "" : "s"} (${trails}), ${signs} sign${signs === 1 ? "" : "s"}`,
+      solids: [],
+    });
+  });
+
   // ── The splits, the start and the finish ──────────────────────────────
   track.checkpoints.forEach((board, k) => {
     const sample = samples[board.index];
@@ -524,6 +560,7 @@ function rank(feature) {
     "railcrossing",
     "homestead",
     "town",
+    "carpark",
     "turn",
     "crest",
     "ford",
@@ -557,6 +594,7 @@ export function stageSummary(track, features) {
     railCrossings: by("railcrossing"),
     homesteads: by("homestead"),
     towns: by("town"),
+    carParks: by("carpark"),
     tarmacShare: paved / track.samples.length,
     tarmac: surfaceRuns(track, "asphalt"),
     climb: Math.max(...elevations) - Math.min(...elevations),

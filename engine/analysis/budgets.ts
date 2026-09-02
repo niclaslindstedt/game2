@@ -325,6 +325,24 @@ export const ANALYSIS = {
      * than a house. Past this the building is not ON the street. */
     townFront: 12,
 
+    /** R42 — how many cars a car park has to hold. Twenty is the brief: a
+     * rally crowd's car park is a field with a few dozen cars in it, and a
+     * pad with six is a lay-by. */
+    parkCars: 20,
+    /** ...how long a trail from a car park to a stand may be, m — the
+     * placer's own walk (`STAGE_RULES.carPark.walk`), plus the pad the
+     * trail starts at the rim of. */
+    parkWalk: 370,
+    /** ...and the share of a stage's stands that may go without a car park
+     * before the check starts scoring. Not zero, and honestly so: a stand
+     * in a pocket the stage has folded shut has no country a road could
+     * leave from without crossing the route (R23), and a stand on a
+     * hillside no pad can be graded on has nowhere to park. Measured over
+     * seeds 1-852 (24 stages) at medium the placer serves 54% of the
+     * stands; the budget is the half the country refuses, and the number
+     * to move DOWN as the placer gets better at reading the country. */
+    unservedShare: 0.5,
+
     /** R31 — how much HEIGHT two roads passing each other may have between
      * them, over and above what R31's own verge cone allows for the ground
      * they are apart on. Under `stepFloor` nothing is reported at all: the
