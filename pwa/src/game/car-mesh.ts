@@ -30,6 +30,7 @@ import { createCarDamage } from "./car-damage.ts";
 import { createCarDirt, groundTravel, wheelSpray } from "./car-dirt.ts";
 import type { Livery } from "./car-livery.ts";
 import { revTremble, trembleAt } from "./car-shake.ts";
+import type { ScreenRain } from "./car/screen-rain.ts";
 import { bodySpecFor } from "./car-styles.ts";
 import { drivenAxles, wheelSurfaceSpeed } from "./car-wheels.ts";
 import { glowTexture } from "./textures.ts";
@@ -134,6 +135,13 @@ export type CarVisual = {
    * through the inside of the rear screen instead of the road
    * (renderer.ts). */
   cabin: THREE.Object3D;
+  /** THE WATER ON THE WINDSCREEN (car/screen-rain.ts). Handed out because
+   * it is the one thing on a car the renderer has to DRAW itself: the drops
+   * refract the frame, so they go on after the frame is made, in a pass of
+   * their own. The car drives everything else about it from `update`. Null
+   * on every car but the player's, and on that one when the video options
+   * have asked for clean screens. */
+  screenRain: ScreenRain | null;
   /** The blob shadow, in its own group so it can lie on the ground's slope
    * while the car above it pitches, rolls and flies. */
   shadow: THREE.Group;
@@ -506,6 +514,16 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     // by the wheels rather than settling out of the air — how far the car
     // actually drove while it was being thrown.
     body.wipers.update(wet, dirt.level(), groundTravel(car, dt), dt);
+    // …and the WATER on the windscreen, which answers to the same weather
+    // and to the arm that has just been moved. It also needs what the car
+    // is doing, and only the car is in a position to say: how fast the air
+    // is dragging the runs up the glass, and how hard the corner is pushing
+    // them sideways. Speed times yaw rate is the honest centripetal figure
+    // — positive is a left turn, which throws the water to the right.
+    body.screenRain?.update(
+      { wet, speed: Math.abs(car.u), lateral: car.u * car.yawRate, wipe: body.wipers.front },
+      dt,
+    );
     shineGlass(state, eye);
     shineLamps();
     damage.update(state, dt);
@@ -541,6 +559,7 @@ export function buildCar(spec: CarSpec, options: CarOptions = {}): CarVisual {
     group,
     cabin: body.cabin,
     cockpit: body.cockpit?.group ?? null,
+    screenRain: body.screenRain,
     shadow,
     debris: damage.debris,
     update,

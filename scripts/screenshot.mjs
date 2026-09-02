@@ -897,6 +897,51 @@ await capture(
   { camera: "cockpit", tod: "night" },
 );
 
+// THE COCKPIT IN THE RAIN, which is the one place in the game where the
+// glass itself is the thing being looked at (car/screen-rain.ts). Three
+// shots, because the effect is a cycle and one frame of a cycle proves
+// nothing:
+//
+//   `wet` is the screen a few seconds in, driven by the bot so the car is
+//   at a pace where the airflow is carrying the water UP the glass. The
+//   acceptance test is beading with the world visibly BENT through it — a
+//   drop that is only a pale spot is a drop that is not refracting.
+//
+//   `storm` is the same at the top of the weather, where the screen is
+//   beading again before the arm has finished its stroke. What has to read
+//   there is the arc: a clean fan cut out of a streaming screen, with the
+//   corners the blade cannot reach still running.
+//
+//   `parked` is the car standing still on the grid before the flag, which
+//   is the opposite half of the same model: no air over the scuttle, so the
+//   water creeps DOWN the screen instead of up it, and the drops are round
+//   rather than drawn out into tears.
+for (const scene of [
+  { name: "wet", at: 8, params: { weather: "rain", bot: "1" } },
+  { name: "storm", at: 12, params: { weather: "storm", bot: "1" } },
+]) {
+  await capture(
+    `shot-cockpit-rain-${scene.name}`,
+    { width: 1280, height: 720 },
+    async (page) => {
+      await racing(page);
+      await atStageTime(page, scene.at);
+    },
+    { camera: "cockpit", ...scene.params },
+  );
+}
+await capture(
+  "shot-cockpit-rain-parked",
+  { width: 1280, height: 720 },
+  async (page) => {
+    // Before the clock starts there is no clock to wait on, so this one is
+    // the exception that waits on the wall: long enough for the world to
+    // build and for the screen to have gone over.
+    await page.waitForTimeout(25000);
+  },
+  { camera: "cockpit", weather: "storm" },
+);
+
 // The cockpit in a corner, which is where three of its four moving parts
 // are: the wheel on lock, the needles up, and the driver's head leaned into
 // the turn against a horizon that is not levelling with the car.
