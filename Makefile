@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift heat record replay track level analyze cars liveries field crew items items-list sky glyphs audition screenshots profile debug-shot shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift heat record replay track level analyze cars liveries field crew items items-list sky glyphs audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-android shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
 
 build:
 	npm run build
@@ -32,10 +32,31 @@ clean:
 install:
 	npm install
 
-# Regenerate the PWA install icons, favicon, and the Open Graph image from
-# the app mark (keep pwa/public/icons/icon.svg in lockstep).
+# Regenerate the PWA install icons, favicon, the Open Graph image and the
+# native app's icon set from the app mark (keep pwa/public/icons/icon.svg in
+# lockstep).
 icons:
 	npm run icons
+
+# THE NATIVE APP (native/): the App Store / Play Store shell — an Expo
+# WebView over a copy of the site bundled inside the app. Outside the npm
+# workspace, with a dependency tree of its own, so it is installed on its
+# own. `native-bundle` builds the website and packs it into the zip the app
+# serves; every device build and every EAS build wants a fresh one first.
+native-install:
+	npm run native:install
+
+native-bundle:
+	npm run native:bundle
+
+native-typecheck:
+	npm run native:typecheck
+
+native-ios:
+	npm run native:ios
+
+native-android:
+	npm run native:android
 
 check-seo:
 	npm run build && npm run check:seo

@@ -1,6 +1,6 @@
 # Platforms
 
-The repository is structured after its sibling game repo, which ships one product through many shells: web/PWA, desktop, and native mobile (App Store / Play Store). Scandinavian Flick adopts the same shape deliberately — the engine is headless and shell-agnostic, and every shell wraps the identical built site — and ships **two shells**: the web, and a desktop app around it.
+The repository is structured after its sibling game repo, which ships one product through many shells: web/PWA, desktop, and native mobile (App Store / Play Store). Scandinavian Flick adopts the same shape deliberately — the engine is headless and shell-agnostic, and every shell wraps the identical built site — and ships **three shells**: the web, a desktop app around it, and a store app for phones around it.
 
 ## Web / PWA (`pwa/`)
 
@@ -29,9 +29,13 @@ What it deliberately does NOT do: no platform seams (no store, no achievements, 
 
 The tree is two Rust crates, and the split is the design: `tauri/shell/` is every DECISION (no Tauri, no GUI — its whole suite runs on a runner with a Rust toolchain and nothing else), `tauri/src-tauri/` is every EFFECT. `make tauri-test` and `make tauri-lint` check it; `.github/workflows/desktop-tauri.yml` runs both on every push that touches it, and `release.yml` packages a download per platform onto every release — created as a draft, made public only once all three are attached.
 
-## Later: native mobile (App Store / Play Store)
+## Native mobile (`native/`) — App Store / Play Store
 
-A `native/` capacitor-style wrapper around the same site, as in the sibling repo: store metadata generation, achievements/leaderboards mapping (the engine's `RunStats` and event stream are the data source), and the store screenshot pipeline. The PWA already covers the phone experience; the native shell exists for distribution and platform services, not for a different game.
+A **thin [Expo](https://expo.dev) / React Native wrapper** around the same built website, as in the sibling repo: one full-screen WebView, and nothing else on screen. The whole site is packed into the app (`native/assets/webroot.zip`, by `make native-bundle`) and served on launch from a local HTTP server on a fixed port, so the game plays offline and `localStorage` — campaign progress, the score boards, the ghost — keeps one origin across launches. [`native/README.md`](../native/README.md) is the tree.
+
+What the shell adds around the page, and all of it: an audio session that plays through the iOS ringer switch, links out handed to the system browser, the Android back button kept inside the WebView's history, and the same frozen global the desktop app writes — `__SF_SHELL__`, here the word `"native"` (`pwa/src/shell-host.ts`) — so the PWA update lifecycle stays off, because an app bundled that way updates through the store rather than through a reload.
+
+That is the whole of it for now. What the sibling's shell grew on top — haptics on the Taptic Engine, cloud save, Game Center achievements and leaderboards (the engine's `RunStats` and event stream are the data source), the share sheet for the gallery's pictures, the store listing pipeline — each arrives as its own bridge module under `native/src/` with a flag on the WebView message channel, and the page's half behind a probe a browser answers too. Builds are manual (`.github/workflows/native.yml`, dispatch-only — EAS minutes are paid for) and never on push, and a store build is submitted by hand from that workflow rather than cut alongside a tag.
 
 ## Deliberate differences from the sibling repo
 
@@ -39,4 +43,4 @@ A `native/` capacitor-style wrapper around the same site, as in the sibling repo
 - **No modding seam.** The sibling ships a data-authored mod SDK; Scandinavian Flick keeps content as typed data in `engine/game/defs/` for now. If content authoring outgrows TypeScript rows, the path is the sibling's: YAML catalogs in `content/` compiled by a script — the defs modules are already the seam.
 - **No multiplayer/server.** Stages are deterministic by seed, so the natural first social feature is asynchronous: shared daily seed (already in), then ghost times — no server shell until then.
 
-When a further shell lands, it gets its own top-level directory, its packaging job slots into `release.yml`'s `desktop` matrix (or beside it), and this document stops calling it "later".
+When a further shell lands, it gets its own top-level directory, its packaging job slots into `release.yml`'s `desktop` matrix (or beside it), and this document describes it as it is.

@@ -1,0 +1,92 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// Builds the website and packs its `dist/` output into a single asset —
+// `native/assets/webroot.zip` — that the native shell bundles, unzips on first
+// launch, and serves over a local HTTP server (see src/local-server.ts). This
+// is what makes the app self-contained: the game runs entirely on-device,
+// offline, and updates only when a new build ships to the store.
+//
+// The website build is a plain `vite build` at base `/` (the default), which
+// is exactly what a localhost origin wants; only its output is zipped, and no
+// website source is changed for the app.
+//
+// Usage:
+//   node scripts/bundle-web.mjs                # build the site, then zip dist/
+//   node scripts/bundle-web.mjs --skip-build   # re-zip an existing dist/
+//
+// The zip is a build artifact (gitignored). Generate it before `eas build`
+// (the native workflow and the `bundle` npm script do this for you); a
+// `.easignore` keeps it in the EAS upload despite the .gitignore entry.
+
+import { execFileSync } from "node:child_process";
+import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { zipSync } from "fflate";
+
+const APP_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const REPO_DIR = resolve(APP_DIR, "..");
+const WEBSITE_DIR = join(REPO_DIR, "pwa");
+const DIST_DIR = join(WEBSITE_DIR, "dist");
+const OUT_ZIP = join(APP_DIR, "assets", "webroot.zip");
+const WINDOWS = process.platform === "win32";
+const NPM_COMMAND = WINDOWS ? "npm.cmd" : "npm";
+
+const skipBuild = process.argv.includes("--skip-build");
+
+if (!skipBuild) {
+  console.log("• building website (npm run build --workspace pwa)…");
+  // Run from the repo root so the workspace + engine alias resolve. Inherits
+  // stdio so the vite output streams through.
+  execFileSync(NPM_COMMAND, ["run", "build", "--workspace", "pwa"], {
+    cwd: REPO_DIR,
+    stdio: "inherit",
+    // Windows command shims are batch files, which Node cannot execute
+    // directly (EINVAL); cmd.exe must interpret them.
+    shell: WINDOWS,
+    // The shell serves the site at the origin root; a deploy-slot base left
+    // in the environment would emit URLs the local server has nothing at.
+    env: { ...process.env, VITE_BASE: "/", VITE_PWA_IGNORE_PATHS: "" },
+  });
+}
+
+// Recursively collect dist/ into the flat { "index.html": bytes, ... } shape
+// fflate wants, with forward-slash paths relative to dist root.
+function collect(dir, files = {}) {
+  for (const entry of readdirSync(dir)) {
+    const abs = join(dir, entry);
+    if (statSync(abs).isDirectory()) {
+      collect(abs, files);
+    } else {
+      const rel = relative(DIST_DIR, abs).split("\\").join("/");
+      files[rel] = new Uint8Array(readFileSync(abs));
+    }
+  }
+  return files;
+}
+
+let files;
+try {
+  files = collect(DIST_DIR);
+} catch (err) {
+  console.error(
+    `\n✗ could not read ${DIST_DIR} — build the website first ` +
+      `(drop --skip-build), or run 'npm run build --workspace pwa'.\n`,
+  );
+  throw err;
+}
+
+const count = Object.keys(files).length;
+if (count === 0 || !files["index.html"]) {
+  throw new Error(`dist/ has no index.html (${count} files) — the website build looks empty.`);
+}
+
+// Deterministic zip: pin every entry to the ZIP epoch (1980-01-01) so the
+// artifact is reproducible and doesn't drift by build time.
+const EPOCH = new Date("1980-01-01T00:00:00Z");
+const zipped = zipSync(files, { mtime: EPOCH });
+mkdirSync(dirname(OUT_ZIP), { recursive: true });
+writeFileSync(OUT_ZIP, zipped);
+
+const kb = (zipped.length / 1024).toFixed(0);
+console.log(`✓ wrote ${OUT_ZIP} — ${count} files, ${kb} KB`);

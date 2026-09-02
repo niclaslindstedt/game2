@@ -1,0 +1,45 @@
+{
+  "name": "scandinavian-flick-app",
+  "version": "0.1.0",
+  "description": "Native (Expo/React Native) App Store / Play Store wrapper around the Scandinavian Flick PWA — bundles the game on-device and serves it locally, plus an audio session that plays through the ringer switch.",
+  "main": "index.ts",
+  "private": true,
+  "scripts": {
+    "start": "expo start",
+    "prebuild:ios": "expo prebuild --platform ios",
+    "android": "expo run:android",
+    "ios": "npm run prebuild:ios && expo run:ios",
+    "ios:device": "npm run prebuild:ios && expo run:ios --device --configuration Release",
+    "ios:device:debug": "npm run prebuild:ios && expo run:ios --device --configuration Debug",
+    "bundle": "node scripts/bundle-web.mjs",
+    "bundle:zip": "node scripts/bundle-web.mjs --skip-build",
+    "typecheck": "tsc --noEmit",
+    "doctor": "npx --yes expo-doctor",
+    "build:preview": "npm run bundle && eas build --profile preview",
+    "build:testflight": "npm run bundle && eas build --profile testflight --platform all",
+    "build:production": "npm run bundle && eas build --profile production --platform all",
+    "submit": "eas submit --profile production"
+  },
+  "dependencies": {
+    "@dr.pogodin/react-native-static-server": "^0.27.0",
+    "expo": "~57.0.6",
+    "expo-asset": "~57.0.5",
+    "expo-audio": "~57.0.2",
+    "expo-build-properties": "~57.0.6",
+    "expo-constants": "~57.0.5",
+    "expo-file-system": "~57.0.1",
+    "expo-splash-screen": "~57.0.4",
+    "expo-status-bar": "~57.0.1",
+    "fflate": "^0.8.3",
+    "react": "19.2.3",
+    "react-native": "0.86.0",
+    "react-native-webview": "13.16.1"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
+  }
+}

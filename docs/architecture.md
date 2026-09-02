@@ -84,6 +84,10 @@ stone, a plant, a kerb post, the cabin behind a car's glass — on a fitted
 turntable over a metre grid, which is the only place most of the world's
 vocabulary is ever legible.
 
+## `native/` — the store shell
+
+The App Store / Play Store wrapper: a thin Expo / React Native app whose entire content is a full-screen WebView. It is **not** a second client — the built site is packed into the app (`assets/webroot.zip`, by `scripts/bundle-web.mjs`) and served on launch by a local HTTP server on a fixed port (`src/local-server.ts`), so the same bundle the web serves plays offline on the phone with one `localStorage` origin across launches. Two things cross the seam and nothing else: the shell writes `"native"` into the frozen `__SF_SHELL__` global before the page boots (`src/injected.ts` — the same global the desktop app writes `"tauri"` into, read by `pwa/src/shell-host.ts`) so the PWA update lifecycle stays off; and an off-site link is handed to the system browser instead of replacing the game (`src/navigation.ts`). Those two modules are pure, and the root suite tests both. It has its own dependency tree outside the npm workspace, so `make lint` and `make test` stop at its edge; `make native-typecheck` covers it. **The app depends on the site; nothing in `engine/` or `pwa/` may learn the shell exists** beyond that one word in the shared global. Adding a platform service later is a bridge module under `native/src/` and a flag on the WebView message channel — the sibling repo's shell is the template. → [`native/README.md`](../native/README.md), [platforms.md](platforms.md).
+
 ## Deployment
 
 The app deploys to GitHub Pages at [game2.niclaslindstedt.se](https://game2.niclaslindstedt.se/) in three slots — `/` (latest release tag), `/preview/` (main), `/branch/` (parked feature branch) — via `pages.yml`; `release.yml` cuts versions from changeset fragments, packages the desktop downloads and chains the deploy. Details in [configuration.md](configuration.md); platform shells beyond the web in [platforms.md](platforms.md).

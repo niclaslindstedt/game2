@@ -1,0 +1,78 @@
+# Manual native app builds via EAS. Deliberately dispatch-only (never on push)
+# so builds — which consume paid EAS build minutes and store credentials — only
+# run when a human asks. Requires an EXPO_TOKEN repo secret (an Expo access
+# token from https://expo.dev/settings/access-tokens) and, until the project
+# id is pinned in native/app.config.js, an EAS_PROJECT_ID repo variable; store
+# submission also needs the App Store Connect / Play credentials configured on
+# the EAS project.
+name: native
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        type: choice
+        default: all
+        options: [all, ios, android]
+      profile:
+        description: EAS build profile (see native/eas.json)
+        type: choice
+        default: preview
+        options: [preview, testflight, production]
+      submit:
+        description: Submit the build to the store after it finishes
+        type: boolean
+        default: false
+
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  # The website build's npm ci resolves @niclaslindstedt/oss-framework from
+  # GitHub Packages.
+  packages: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # The app bundles the website on-device (assets/webroot.zip), so the
+      # ROOT tree is installed first — Node from .nvmrc and the workspace's
+      # dependencies, authenticated against GitHub Packages exactly as ci.yml
+      # does it.
+      - uses: ./.github/actions/setup
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up EAS
+        uses: expo/expo-github-action@v9
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # The shell is outside the npm workspace with a lockfile of its own.
+      - name: Install app dependencies
+        working-directory: native
+        run: npm ci
+
+      # vite build + zip. The .easignore keeps the generated zip in the upload
+      # despite .gitignore.
+      - name: Bundle the website into the app
+        working-directory: native
+        run: npm run bundle
+
+      - name: EAS build
+        working-directory: native
+        env:
+          EAS_PROJECT_ID: ${{ vars.EAS_PROJECT_ID }}
+        run: |
+          eas build \
+            --non-interactive \
+            --profile "${{ inputs.profile }}" \
+            --platform "${{ inputs.platform }}" \
+            ${{ inputs.submit && '--auto-submit' || '' }}
