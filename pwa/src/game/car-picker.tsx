@@ -129,14 +129,21 @@ export function CarPicker({
           ›
         </button>
       </div>
-      <span className="car-pick-name">{spec.name.toUpperCase()}</span>
-      {/* Which wheels are driven is REAL physics here (TUNING.drivetrain),
-          and it is the first thing about a rally car a player wants told.
-          Three letters on the card, the words behind them on hover, for
-          everyone who has never had to know them. */}
-      <span className="car-pick-drive" title={DRIVE_LABELS[spec.drive].long}>
-        {DRIVE_LABELS[spec.drive].short}
-      </span>
+      {/* The name and the layout are ONE line of billing in their own box,
+          so a surface with room can stand them side by side under the car
+          (the pre-race card does) without either of them having to move in
+          the markup. Stacked is the default, which is what the narrow
+          column on Roam wants. */}
+      <div className="car-pick-id">
+        <span className="car-pick-name">{spec.name.toUpperCase()}</span>
+        {/* Which wheels are driven is REAL physics here (TUNING.drivetrain),
+            and it is the first thing about a rally car a player wants told.
+            Three letters on the card, the words behind them on hover, for
+            everyone who has never had to know them. */}
+        <span className="car-pick-drive" title={DRIVE_LABELS[spec.drive].long}>
+          {DRIVE_LABELS[spec.drive].short}
+        </span>
+      </div>
     </div>
   );
 }

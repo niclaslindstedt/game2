@@ -204,6 +204,8 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | Main menu pages / routing                                    | `pwa/src/game/main-menu.tsx` (+ `menu-roam`, `menu-options`, `menu-car`)                                                           |
 | The GLYPH a menu row leads with instead of a sentence        | `pwa/src/game/menu-glyphs.tsx` — one 24x24 mark per idea; `make glyphs` contact-sheets them                                        |
 | The pre-race card: car, spec sheet, gearbox                  | `pwa/src/game/menu-car.tsx`; the numbers on it in `car-stats.ts` (derived from the catalog)                                        |
+| How the car is FRAMED on its stand, in any shape of pane     | `frameCar` in `pwa/src/game/car-turntable.ts` — measured off the built body, so the shot is full of car on a phone and a laptop    |
+| A figure that COUNTS to its new value instead of jumping     | `pwa/src/lib/count.ts` — the easing only; the caller owns the clock, which is what keeps it DOM-free and testable                  |
 | Campaign stages, locations, points, unlocks                  | `pwa/src/game/campaign.ts` — one board: the points a stage pays ARE what opens the next stage and the next location                |
 | The mass-start GRID, and the only catch-up in the game       | `engine/sim/grid.ts` + `TUNING.massStart` — the zig-zag on the apron, and the drive a row back is owed                             |
 | The HEADS UP page and its three settings                     | `pwa/src/game/menu-headsup.tsx`; the stage boxes all three grids share are `pwa/src/game/menu-levels.tsx`                          |

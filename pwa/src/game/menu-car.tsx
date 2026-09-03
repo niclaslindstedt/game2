@@ -4,60 +4,165 @@
 // The stage grid used to carry the car picker under it, which made the car
 // a setting on the level select rather than a decision: a player scanning
 // six stage boxes is choosing a ROAD, and a control sitting below the fold
-// is one nobody reads. Splitting it out gives the choice its own screen and
-// room for the thing that makes it a choice at all — the spec sheet
-// (car-stats.ts), which is what says why anyone would take the slow one.
+// is one nobody reads. Splitting it out gives the choice its own screen.
 //
-// Everything on this card is the player's, not the stage's: the campaign
-// authors the conditions and the rivals, and the player brings a car and a
-// gearbox to them.
+// TWO THINGS ARE ON IT, and the layout says so: THE CAR, which is the
+// decision, and THE TRANSMISSION, which is the only other thing the player
+// brings to a stage the campaign has already authored. Everything else is
+// four short readings beside the car — two figures and two bars — and the
+// card is laid out around what they gave back: an eight-axis spec sheet
+// filled the half of the screen the car should have been standing in, and
+// nobody read past the third bar of it.
+//
+// Built the way the options page and the results card are: the way back and
+// the page's title on one head row, the content under it in a column — or
+// two, on a screen wide enough — and ONE caption bar at the foot that reads
+// whatever is being looked at. That is why nothing here carries a footnote
+// of its own: a sentence under every control is height on a phone, and
+// height on a phone is the car getting smaller.
 
+import { useEffect, useRef, useState } from "react";
 import { carById, type CarSpec, type GearboxMode } from "@engine";
 
+import { playToggle } from "./audio/ui.ts";
+import { COUNT_SECONDS, countAt } from "../lib/count.ts";
 import { formatTime } from "../lib/util.ts";
 import type { CampaignLevel, CampaignLocation, CampaignProgress } from "./campaign.ts";
 import { CarPicker } from "./car-picker.tsx";
-import { carBars, carFacts } from "./car-stats.ts";
-import { GearboxRow, MenuHead, type PlayMode, type RaceSettings } from "./menu.tsx";
+import { carBars, carFacts, type CarFact } from "./car-stats.ts";
+import { Caption } from "./menu-knobs.tsx";
+import { GEARBOX_OPTIONS, MenuHead, type PlayMode, type RaceSettings } from "./menu.tsx";
 import type { Settings } from "./settings.ts";
 
-/** The spec sheet. The bars compare the car to the REST OF THE ROSTER
- * rather than to zero (see car-stats.ts) — three cars within a few percent
- * of each other on an absolute scale are three identical full bars, which
- * is a picture of nothing.
+/** THE TRANSMISSION, as the second-biggest thing on the card. It used to be
+ * a segmented row of two chips with a footnote under it — the same control
+ * the volume and the camera get — which billed the one mechanical choice a
+ * player makes as a setting they had already scrolled past.
  *
- * Everything on it — the figures AND the bars — is quoted through the box
- * the transmission row below is set to, so choosing the manual visibly
- * lengthens the top speed on the same card the choice is made on. */
-function CarSpecPanel({ spec, gearbox }: { spec: CarSpec; gearbox: GearboxMode }) {
+ * Two boxes instead, each big enough to be pressed with a thumb, each
+ * wearing what taking it buys. The full sentence goes to the card's caption
+ * bar, which reads whichever box is being looked at.
+ *
+ * `data-nav-steps` makes the pair ONE stop on a controller's walk, with the
+ * two boxes as its left and its right: sideways over the transmission is
+ * the transmission changing, the same way sideways over the car is the next
+ * car (menu-nav.ts). */
+function GearboxPick({
+  gearbox,
+  onGearbox,
+  onHint,
+}: {
+  gearbox: GearboxMode;
+  onGearbox: (gearbox: GearboxMode) => void;
+  onHint: (hint: string | null) => void;
+}) {
   return (
-    <div className="car-spec">
-      <div className="car-spec-blurb">{spec.blurb}</div>
-      <div className="car-spec-facts">
-        {carFacts(spec, gearbox).map((fact) => (
-          <div key={fact.key} className="car-spec-fact">
-            <span className="car-spec-fact-label">{fact.label}</span>
-            <span className="car-spec-fact-value">{fact.value}</span>
-          </div>
+    <section className="garage-box">
+      <h3 className="knob-group-title">TRANSMISSION</h3>
+      <div className="garage-boxes" data-nav-steps>
+        {GEARBOX_OPTIONS.map((opt, i) => (
+          <button
+            key={opt.id}
+            type="button"
+            className={`garage-opt ${opt.id === gearbox ? "garage-opt-on" : ""}`}
+            data-nav-step={i === 0 ? "left" : "right"}
+            aria-pressed={opt.id === gearbox}
+            onPointerEnter={() => onHint(opt.hint ?? null)}
+            onFocus={() => onHint(opt.hint ?? null)}
+            onClick={() => {
+              // Up the ladder is up in pitch, the way every other switch in
+              // the menus sounds (menu-knobs.tsx).
+              playToggle(i > 0);
+              onGearbox(opt.id);
+              onHint(opt.hint ?? null);
+            }}
+          >
+            <span className="garage-opt-name">{opt.label}</span>
+            <span className="garage-opt-note">{opt.blurb}</span>
+          </button>
         ))}
       </div>
-      <div className="car-spec-bars">
+    </section>
+  );
+}
+
+/** ONE FIGURE, WHICH COUNTS. A number that swaps between two frames is a
+ * number the player has to notice changed; one that rolls to its new value
+ * is one they watch change — and that is the whole difference between the
+ * transmission reading as a label and reading as a choice with a
+ * consequence. The car's own arrows get it too: rowing through the roster
+ * winds the top speed up and down rather than cutting between three
+ * unrelated numbers.
+ *
+ * It is its own component so the frames it asks for repaint a number and
+ * not the card: a rerender of the page walks the whole picker, and this one
+ * runs sixty times in the half-second after every press.
+ *
+ * The maths is `lib/count.ts`; the clock is here, because the clock is the
+ * only part of it that needs a browser. */
+function Figure({ fact }: { fact: CarFact }) {
+  // The value on screen, and the run currently carrying it somewhere. Refs,
+  // because the frame loop owns them — `tick` exists only to ask for the
+  // repaint, and reading state inside the loop would read the value the
+  // effect closed over rather than the one being drawn.
+  const shown = useRef(fact.value);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const from = shown.current;
+    if (from === fact.value) return;
+    const start = performance.now();
+    let raf = 0;
+    const step = (now: number): void => {
+      const at = (now - start) / 1000;
+      shown.current = countAt(from, fact.value, at);
+      tick((n) => n + 1);
+      if (at < COUNT_SECONDS) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [fact.value]);
+  return (
+    <div className="garage-figure">
+      <span className="garage-figure-label">{fact.label}</span>
+      <span className="garage-figure-value">
+        {shown.current.toFixed(fact.places)}
+        <span className="garage-figure-unit">{fact.unit}</span>
+      </span>
+    </div>
+  );
+}
+
+/** The readings, beside the car: two FIGURES saying what this car IS, and
+ * four BARS saying what it is against the other two.
+ *
+ * Both halves are quoted through the box chosen above them, so pressing
+ * MANUAL counts the numbers up and slides the bars under them in the same
+ * beat, where the player is already looking. The bars compare with the rest
+ * of the roster (car-stats.ts) rather than with zero, because three cars
+ * within a few percent of each other on an absolute scale are three
+ * identical full bars, which is a picture of nothing. */
+function CarReadings({ spec, gearbox }: { spec: CarSpec; gearbox: GearboxMode }) {
+  return (
+    <>
+      <div className="garage-figures">
+        {carFacts(spec, gearbox).map((fact) => (
+          <Figure key={fact.key} fact={fact} />
+        ))}
+      </div>
+      <div className="garage-bars">
         {carBars(spec, gearbox).map((bar) => (
-          <div key={bar.key} className="car-spec-bar">
-            <span className="car-spec-bar-label">{bar.label}</span>
-            <span className="car-spec-bar-track">
+          <div key={bar.key} className="garage-bar">
+            <span className="garage-bar-label">{bar.label}</span>
+            <span className="garage-bar-track">
               <span
-                className="car-spec-bar-fill"
+                className="garage-bar-fill"
                 style={{ width: `${(bar.value * 100).toFixed(1)}%` }}
               />
             </span>
           </div>
         ))}
       </div>
-      <div className="car-spec-note">
-        Bars compare this car with the rest of the roster, in either gearbox.
-      </div>
-    </div>
+    </>
   );
 }
 
@@ -74,8 +179,6 @@ export type CarSetupPageProps = {
   /** What the stage is being entered AS — it decides where BACK goes and
    * what the button under the card promises. */
   mode: PlayMode;
-  /** The stage's billing, built by the level grid so the two rows agree. */
-  billing: string;
   progress: CampaignProgress;
   race: RaceSettings;
   onRace: (race: RaceSettings) => void;
@@ -90,7 +193,6 @@ export function CarSetupPage({
   location,
   level,
   mode,
-  billing,
   progress,
   race,
   onRace,
@@ -102,42 +204,61 @@ export function CarSetupPage({
 }: CarSetupPageProps) {
   const spec = carById(race.carId);
   const best = progress.best[level.id];
+  // Whatever the pointer or the cursor is on, or the car's own line of
+  // billing while it is on neither. The blurb is the right thing to fall
+  // back to: it is what the card would say if it could only say one thing.
+  const [hint, setHint] = useState<string | null>(null);
   return (
-    <div className="menu-card menu-card-wide">
-      {/* The stage's own line lives HERE rather than on the grid it was
-          picked from. Six of them stacked in six boxes is six sentences to
-          read past while choosing a road; one of them, on the card where the
-          road is already chosen and the car is not, is the last thing worth
-          knowing before driving it. The location is not repeated — the way
-          back names it. */}
+    <div className="menu-card menu-card-wide menu-card-garage">
+      {/* THE STAGE IS ALREADY CHOSEN by the time this card is up, and its
+          name is all that is left to say about it: what the road is like and
+          how long it runs are what the grid's boxes are FOR, and repeating
+          them here is a line of the card spent re-answering the question the
+          player has just finished answering. What survives is the one fact
+          the grid could not carry into the decision being made now — the
+          time to beat. The location is not repeated either; the way back
+          names it. */}
       <MenuHead
         back={onBack}
         backLabel={BACK_TO[mode] ?? location.name.toUpperCase()}
         title={level.name.toUpperCase()}
-        sub={`${level.blurb} · ${billing}${best === undefined ? "" : ` · BEST ${formatTime(best)}`}`}
+        sub={best === undefined ? undefined : `BEST ${formatTime(best)}`}
       />
-      <div className="car-setup">
-        {/* TRANSMISSION rides in the CAR's column, under the stand. The
-            stand is narrower than the sheet beside it and leaves a hole
-            below the car; the row used to stand full-width under both
-            columns, which spent a whole line of a phone held sideways on a
-            choice two words wide and pushed START off the bottom. It also
-            belongs here: the box is part of what you are taking to the
-            stage, and the sheet above quotes its figures through it. */}
-        <div className="car-setup-pick">
+      <div className="garage">
+        {/* THE CAR takes the room. It is the only thing on this card that
+            cannot be said in words, and the one the whole screen exists to
+            choose — so it is the column that grows when there is more
+            screen, and the readings beside it stay the size they need to
+            be read at. */}
+        <div className="garage-car">
           <CarPicker
             carId={race.carId}
             onPick={(carId) => onRace({ ...race, carId })}
             cursor
             onDeveloper={onDeveloper}
           />
-          <GearboxRow
-            label="TRANSMISSION"
+          {/* The card's ONE sentence, standing in the picture under the car
+              the way the name stands over it. It reads the car's own billing
+              until the pointer or the cursor finds something with more to
+              say — which on this card is the transmission. Inside the frame
+              rather than under it because a line of prose on a row of its
+              own is a row of the card's height, and the space below a car on
+              its stand is space the shot is not using. */}
+          <Caption text={hint} fallback={spec.blurb} />
+        </div>
+        {/* THE TRANSMISSION LEADS the column beside the car, and the two
+            figures sit directly under it: the choice is above the numbers
+            it moves, so pressing MANUAL changes something the eye is
+            already on. Under them, the two bars — the only things on the
+            card no choice on it can change. */}
+        <div className="garage-spec">
+          <GearboxPick
             gearbox={settings.gearbox}
             onGearbox={(gearbox) => onSettings({ ...settings, gearbox })}
+            onHint={setHint}
           />
+          <CarReadings spec={spec} gearbox={settings.gearbox} />
         </div>
-        <CarSpecPanel spec={spec} gearbox={settings.gearbox} />
       </div>
       {/* The controller's two marks (menu-nav.ts): the cursor lands on the
           CAR — sideways over the stand is the next car and the previous

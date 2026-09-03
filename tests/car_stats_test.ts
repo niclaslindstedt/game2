@@ -3,15 +3,21 @@
 // is worth asserting is not the numbers themselves — those move whenever a
 // car is retuned — but that the sheet keeps telling the truth about the
 // roster it is drawn from: every bar filled, the best car on each axis on
-// top, and the roster's own character (the grippy hatch on tarmac, the
-// rear-driver that wants to be sideways) coming out of the maths rather
-// than out of prose nobody checks.
+// top, and the roster's own character (the rear-driver that wants to be
+// sideways, the four-wheel-drive that puts its power down anywhere) coming
+// out of the maths rather than out of prose nobody checks.
 
 import { describe, expect, it } from "vitest";
 
-import { CARS, TUNING, carById, type GearboxMode } from "@engine";
+import { CARS, TUNING, carById, gearedSpec, type GearboxMode } from "@engine";
 
-import { carBars, carFacts, sprintTime, topSpeedKph } from "../pwa/src/game/car-stats.ts";
+import {
+  carBars,
+  carFacts,
+  manualGain,
+  sprintTime,
+  topSpeedKph,
+} from "../pwa/src/game/car-stats.ts";
 
 /** Where one car sits on one axis, through one box. */
 function bar(carId: string, key: string, gearbox: GearboxMode = "auto"): number {
@@ -40,8 +46,24 @@ describe("car spec sheet", () => {
       // Every axis is drawn once: two bars keyed the same would silently
       // overwrite each other in the rendered list.
       expect(new Set(bars.map((b) => b.key)).size).toBe(bars.length);
-      expect(carFacts(spec, "auto").every((fact) => fact.value.length > 0)).toBe(true);
+      // The figures are NUMBERS, not rendered strings — the card counts to
+      // them when the transmission moves, and a counter cannot interpolate
+      // "223 KM/H".
+      for (const fact of carFacts(spec, "auto")) {
+        expect(Number.isFinite(fact.value), fact.key).toBe(true);
+        expect(fact.value).toBeGreaterThan(0);
+        expect(fact.unit.length).toBeGreaterThan(0);
+      }
     }
+  });
+
+  it("keeps the card short enough to leave the car the room", () => {
+    // The whole redesign, as a list. A sheet that grows an axis at a time is
+    // how the last one reached eight, and every one of them was spent out of
+    // the space the car stands in — so the shape is asserted rather than
+    // remembered. Down the road first, then round the corner.
+    expect(carBars(CARS[0], "auto").map((b) => b.key)).toEqual(["accel", "top", "grip", "drift"]);
+    expect(carFacts(CARS[0], "auto").map((f) => f.key)).toEqual(["top", "sprint"]);
   });
 
   it("fills the roster's best car on an axis, and never empties its worst", () => {
@@ -57,15 +79,25 @@ describe("car spec sheet", () => {
   });
 
   it("reads the roster's character off the catalog", () => {
-    // The hatch is the tarmac car and the pointiest; the rear-driver is the
-    // one that lives sideways and the one that hooks up on gravel; the
-    // four-wheel-drive is the fast one that puts its power down anywhere.
-    expect(best("sealed")).toBe("compact");
-    expect(best("turn")).toBe("compact");
-    expect(best("loose")).toBe("classic");
-    expect(best("slide")).toBe("classic");
+    // THE REAR-DRIVER IS THE DRIFT CAR. It is the one layout whose slide
+    // develops fully on the wheel alone (TUNING.drivetrain.rwd.depth is the
+    // 1 every other knob in the drift is calibrated against), and the card
+    // has to say so — a DRIFTING bar that put the hatch or the coupe on top
+    // would be billing the roster backwards.
+    expect(best("drift")).toBe("classic");
+    expect(bar("classic", "drift")).toBeCloseTo(1, 6);
+    for (const spec of CARS) {
+      if (spec.drive === "rwd") continue;
+      expect(bar(spec.id, "drift"), spec.id).toBeLessThan(bar("classic", "drift"));
+    }
+    // ...and the front-driver, which washes wide instead of coming round,
+    // is the one at the floor.
+    expect(bar("compact", "drift")).toBeCloseTo(0.3, 6);
+    // The four-wheel-drive holds on best — balanced rubber, and the
+    // traction to put what it has down on any of it — and it is the fast
+    // one, which is the trade the roster is built around.
+    expect(best("grip")).toBe("coupe");
     expect(best("top")).toBe("coupe");
-    expect(best("traction")).toBe("coupe");
   });
 
   it("quotes a top speed and a sprint that match the gearbox", () => {
@@ -89,32 +121,18 @@ describe("car spec sheet", () => {
     }
   });
 
-  it("lengthens the top speed bar when the driver takes the racing set", () => {
-    for (const spec of CARS) {
-      // The box the player is choosing under the sheet has to be visible IN
-      // the sheet, not only in the figures above it.
-      expect(bar(spec.id, "top", "manual")).toBeGreaterThan(bar(spec.id, "top", "auto"));
-      // And it is a trade, drawn as one — the shifts the driver now has to
-      // take are charged to the sprint.
-      expect(bar(spec.id, "accel", "manual")).toBeLessThan(bar(spec.id, "accel", "auto"));
-      // A box cannot fit different tires or a bigger brake to a car.
-      for (const key of ["traction", "brake", "sealed", "loose", "turn", "slide"]) {
-        expect(bar(spec.id, key, "manual"), key).toBe(bar(spec.id, key, "auto"));
-      }
-    }
-  });
-
   it("moves the card's figures when the transmission moves", () => {
     for (const spec of CARS) {
       const auto = Object.fromEntries(carFacts(spec, "auto").map((f) => [f.key, f.value]));
       const manual = Object.fromEntries(carFacts(spec, "manual").map((f) => [f.key, f.value]));
-      // The whole point of the choice: the taller set is billed as speed.
+      // The whole point of the choice, and the reason the two figures on
+      // the card are printed as big as they are: the taller set is billed
+      // as speed, where the player is looking when they press MANUAL.
       expect(topSpeedKph(spec, "manual")).toBeGreaterThan(topSpeedKph(spec, "auto") * 1.05);
-      expect(manual.top).not.toBe(auto.top);
-      // What the box does not change stays put — a card that moved the
-      // kerb weight when the driver picked a gearbox would be lying.
-      expect(manual.mass).toBe(auto.mass);
-      expect(manual.gears).toBe(auto.gears);
+      expect(manual.top).toBeGreaterThan(auto.top);
+      // Far enough apart to be worth counting to: a figure that rolls
+      // through a value nobody can see move is an animation, not a readout.
+      expect(Math.round(manual.top) - Math.round(auto.top)).toBeGreaterThan(1);
       // The sprint is charged for every shift the driver has to take, so
       // the manual's paper 0-100 is never the free lunch the ratios alone
       // would make it.
@@ -125,6 +143,37 @@ describe("car spec sheet", () => {
       const free = sprintTime(spec, "manual") - shifts * TUNING.gearbox.shiftCut;
       expect(free).toBeLessThan(sprintTime(spec, "manual"));
     }
+  });
+
+  it("moves the bars the racing set is worth something in, and only those", () => {
+    for (const spec of CARS) {
+      // The box the player is choosing above the sheet has to be visible IN
+      // the sheet, not only in the figures: the two move together, over the
+      // same beat, which is what makes the press read as one change.
+      expect(bar(spec.id, "top", "manual")).toBeGreaterThan(bar(spec.id, "top", "auto"));
+      // And it is a trade, drawn as one — the shifts the driver now has to
+      // take are charged to the sprint.
+      expect(bar(spec.id, "accel", "manual")).toBeLessThan(bar(spec.id, "accel", "auto"));
+      // A box is ratios and losses. It cannot fit a car different tires or
+      // drive a different axle, so grip and drift have to come out of fields
+      // `gearedSpec` never touches — a bar that moved with the gearbox there
+      // would be the card inventing a consequence the physics does not have.
+      for (const key of ["grip", "drift"]) {
+        expect(bar(spec.id, key, "manual"), key).toBe(bar(spec.id, key, "auto"));
+        const geared = carBars(gearedSpec(spec, "manual"), "auto").find((b) => b.key === key);
+        expect(geared?.value, key).toBe(bar(spec.id, key, "auto"));
+      }
+    }
+  });
+
+  it("quotes the racing set's headline off the tuning", () => {
+    // The transmission's two boxes print what taking one buys. The figure
+    // comes out of TUNING rather than out of a sentence, so a retune of the
+    // ratios cannot leave the card claiming a percentage nobody gets.
+    expect(manualGain()).toBe(
+      Math.round((TUNING.gearbox.set.manual.gearing / TUNING.gearbox.set.auto.gearing - 1) * 100),
+    );
+    expect(manualGain()).toBeGreaterThan(0);
   });
 
   it("gives every car a line of billing", () => {

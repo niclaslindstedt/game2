@@ -37,6 +37,7 @@ import {
 } from "@engine";
 
 import { playToggle, playUi } from "./audio/ui.ts";
+import { manualGain } from "./car-stats.ts";
 import { FadeRow, StepRow, type Stop } from "./menu-knobs.tsx";
 import { PLAY_CAMERAS, type DevSettings, type Settings } from "./settings.ts";
 
@@ -282,7 +283,12 @@ export function MenuHead({
   sub?: string;
 }) {
   return (
-    <div className="menu-head">
+    // A head carrying a subtitle is two rows tall and the way out stands
+    // level with the TITLE, not floating between the two; a head that is
+    // only a title is one row, and the button centres on it. The difference
+    // is marked here rather than guessed at in the stylesheet, because it is
+    // a fact about the content and there is exactly one place that knows it.
+    <div className={`menu-head ${sub === undefined ? "menu-head-solo" : ""}`}>
       {/* `data-nav-back` is what a controller's B button presses — see
           menu-nav.ts. Marked rather than guessed at: every surface has a way
           out, and no two of them look alike in the markup. */}
@@ -297,34 +303,30 @@ export function MenuHead({
   );
 }
 
-/** The two boxes, and the one sentence that says what choosing the second
- * one costs. Shared by OPTIONS and the pre-race card, which offer the same
- * setting: two surfaces wording the same choice differently is two
- * settings as far as the player is concerned. */
-export const GEARBOX_OPTIONS: { id: GearboxMode; label: string }[] = [
-  { id: "auto", label: "AUTO" },
-  { id: "manual", label: "MANUAL" },
+/** The two boxes, each with the sentence that says what taking it buys.
+ * Shared by OPTIONS and the pre-race card, which offer the same setting:
+ * two surfaces wording the same choice differently is two settings as far
+ * as the player is concerned.
+ *
+ * The manual's headline figure comes off the tuning (`manualGain`), not out
+ * of the sentence — a retune of the ratios that left the card still
+ * claiming six percent would be a card lying about the only choice on it.
+ * The short line under it is what the pre-race card's two big boxes wear;
+ * the long one is what either surface's caption bar reads. */
+export const GEARBOX_OPTIONS: (Stop<GearboxMode> & { blurb: string })[] = [
+  {
+    id: "auto",
+    label: "AUTO",
+    blurb: "SHIFTS FOR YOU",
+    hint: "The road box — it takes every gear for you, and never fluffs one",
+  },
+  {
+    id: "manual",
+    label: "MANUAL",
+    blurb: `+${manualGain()}% TOP SPEED`,
+    hint: `The racing set — ${manualGain()}% taller gearing, paid for with a beat of throttle at every shift you now take yourself`,
+  },
 ];
-
-export function GearboxRow({
-  label,
-  gearbox,
-  onGearbox,
-}: {
-  label: string;
-  gearbox: GearboxMode;
-  onGearbox: (gearbox: GearboxMode) => void;
-}) {
-  return (
-    <div className="menu-gearbox">
-      <OptionRow label={label} options={GEARBOX_OPTIONS} value={gearbox} onPick={onGearbox} />
-      <div className="opt-note">
-        The manual is the racing set — about 6% more top speed, paid for with a beat of throttle at
-        every shift.
-      </div>
-    </div>
-  );
-}
 
 export function OptionRow<T extends string>({
   label,

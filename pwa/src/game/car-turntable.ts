@@ -15,13 +15,26 @@ import type { CarSpec } from "@engine";
 import { buildCarBody } from "./car-body.ts";
 import { bodySpecFor } from "./car-styles.ts";
 
-/** Where the viewer stands, meters: eye height and how far back. The
- * downward angle between them (~20°) is the whole point of the shot. */
-const EYE_HEIGHT = 3;
-const EYE_BACK = 6.2;
-/** What the eye is on — a little above the sills, so the car sits in the
- * lower half of the frame with air over the roof rather than centered. */
-const AIM_HEIGHT = 0.55;
+/** WHERE THE VIEWER STANDS, as a direction rather than a place: the eye is
+ * this high for every meter it is back, which is the ~15° looking-down that
+ * shows the roofline and the shoulder at the same time. How FAR back it
+ * ends up is not authored — `frameCar` works it out from the car and the shape
+ * of the canvas, so the same stand fills a phone's tall pane and a laptop's
+ * wide one with the same car rather than with the same empty scrim. */
+const EYE_RISE = 0.27;
+/** How much of the frame is left as air around the car, as a multiple of
+ * the distance the car alone would need. Barely over one: this stand is the
+ * whole reason the pre-race card exists, and a picture framed like a
+ * catalog photograph is a picture with the car in it. */
+const FRAME_MARGIN = 1.22;
+/** HOW HIGH THE CAR SITS, as a share of the frame's height above the
+ * middle. The pre-race card writes the car's name across the head of the
+ * stage and its line of billing across the foot, and neither wants bodywork
+ * behind it — so the air the margin buys is spent UNDER the car rather than
+ * split evenly around it. Bounded by the air there actually is: on a frame
+ * the car only just fits into, this quietly comes to nothing rather than
+ * lifting the roof out of the picture. */
+const FRAME_LIFT = 0.09;
 /** One revolution every this many seconds. Slow enough to read a panel. */
 const SPIN_PERIOD = 16;
 /** The celebration: three full turns, spent over this many seconds on an
@@ -47,13 +60,13 @@ export function createCarTurntable(canvas: HTMLCanvasElement): CarTurntable {
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 60);
-  camera.position.set(0, EYE_HEIGHT, -EYE_BACK);
-  camera.lookAt(0, AIM_HEIGHT, 0);
 
   // The stand: a soft disc under the car so it reads as standing on
-  // something rather than floating in the menu's scrim.
+  // something rather than floating in the menu's scrim. Sized to the car it
+  // carries (see `frameCar`) — a fixed disc is a saucer around a hatchback and
+  // a coaster under anything longer.
   const stand = new THREE.Mesh(
-    new THREE.CircleGeometry(3.4, 40),
+    new THREE.CircleGeometry(1, 40),
     new THREE.MeshBasicMaterial({ color: 0x0d2450, transparent: true, opacity: 0.45 }),
   );
   stand.rotation.x = -Math.PI / 2;
@@ -91,11 +104,70 @@ export function createCarTurntable(canvas: HTMLCanvasElement): CarTurntable {
     pending = carId === spec.id ? null : spec;
   };
 
+  /** WHAT THE STAND HAS TO FRAME: how far the car reaches from the spin
+   * axis, and how high it stands. Measured off the body that was actually
+   * built rather than authored beside the catalog, so a longer car is
+   * simply framed from further back and nobody has to remember a second
+   * table exists. The defaults are a mid-sized rally car, for the frames
+   * before the first body has arrived. */
+  let carRadius = 2.3;
+  let carTop = 1.5;
+
+  const box = new THREE.Box3();
+
   const fitCar = (spec: CarSpec): void => {
     carId = spec.id;
     clearBody();
     body = buildCarBody(bodySpecFor(spec));
     pivot.add(body.group);
+    box.setFromObject(body.group);
+    // The car TURNS, so what has to fit is the circle its plan sweeps out
+    // about the axis, not the box: the far corner of the box is the whole
+    // constraint, and it is the same one at every angle.
+    carRadius = Math.max(
+      Math.hypot(box.min.x, box.min.z),
+      Math.hypot(box.min.x, box.max.z),
+      Math.hypot(box.max.x, box.min.z),
+      Math.hypot(box.max.x, box.max.z),
+    );
+    carTop = box.max.y;
+    // The disc is the car's own footprint with a little apron, so it reads
+    // as a stand under this car rather than as a saucer around it.
+    stand.scale.setScalar(carRadius * 1.15);
+    frameCar();
+  };
+
+  /** Stand the eye where the whole car fills the canvas, whatever shape the
+   * canvas is. The pane is a tall slot on a phone and a wide one on a
+   * laptop, and a camera parked at an authored distance fills one of them
+   * and leaves the other mostly scrim — which on the card whose whole job
+   * is showing the car is the one thing it must not do.
+   *
+   * Two constraints, and the distance is whichever wants more room. SIDEWAYS
+   * it is the plan circle above. VERTICALLY it is the roofline plus what
+   * that same circle projects into the frame's height once the eye is
+   * looking down at it — at this angle a long car takes up screen height by
+   * being long as well as by being tall, and a fit that only measured the
+   * roof would crop the nose off every wide pane. */
+  const frameCar = (): void => {
+    const vHalf = (camera.fov * Math.PI) / 360;
+    const hHalf = Math.atan(Math.tan(vHalf) * camera.aspect);
+    const pitch = Math.atan(EYE_RISE);
+    // Fit about the car's OWN middle, which is the closest the eye can
+    // stand: fitting about an authored eye line instead makes the taller
+    // half of the car pay for the shorter one and pushes the shot back.
+    const middle = carTop / 2;
+    const vNeed = middle * Math.cos(pitch) + carRadius * Math.sin(pitch);
+    const dist = FRAME_MARGIN * Math.max(vNeed / Math.tan(vHalf), carRadius / Math.tan(hHalf));
+    // Then spend the air below the car rather than around it, by aiming
+    // under its middle — never further than the air there is, so the lift
+    // gives way before the roofline does.
+    const half = dist * Math.tan(vHalf);
+    const drop = Math.max(0, Math.min(2 * half * FRAME_LIFT, half - vNeed)) / Math.cos(pitch);
+    const aim = middle - drop;
+    const back = dist / Math.hypot(1, EYE_RISE);
+    camera.position.set(0, aim + back * EYE_RISE, -back);
+    camera.lookAt(0, aim, 0);
   };
 
   /** The box the buffer was last cut to, in CSS pixels. */
@@ -120,6 +192,11 @@ export function createCarTurntable(canvas: HTMLCanvasElement): CarTurntable {
     }
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
+    // The eye stands where the new SHAPE wants it, not merely where the old
+    // one did with a stretched frustum: a pane that goes from wide to tall
+    // is a different photograph of the same car, and the distance is part
+    // of taking it.
+    frameCar();
     camera.updateProjectionMatrix();
   };
 

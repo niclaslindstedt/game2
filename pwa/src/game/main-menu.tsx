@@ -45,7 +45,7 @@ import {
   type CampaignProgress,
 } from "./campaign.ts";
 import { Glyph, type GlyphName } from "./menu-glyphs.tsx";
-import { LevelGrid, lengthLabel } from "./menu-levels.tsx";
+import { LevelGrid } from "./menu-levels.tsx";
 import { ResultsModal } from "./results-table.tsx";
 import { CarSetupPage } from "./menu-car.tsx";
 import { GalleryPage } from "./menu-gallery.tsx";
@@ -752,7 +752,6 @@ export function MainMenu(props: MainMenuProps) {
             location={found.location}
             level={found.level}
             mode={page.mode}
-            billing={lengthLabel(found.level)}
             progress={props.progress}
             race={props.race}
             onRace={props.onRace}
