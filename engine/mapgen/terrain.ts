@@ -38,6 +38,7 @@ import {
   type RoadShape,
 } from "./road.ts";
 import { createLandField } from "./land.ts";
+import { arenaTerrain } from "./arena-field.ts";
 import { GROUND_CELL, TILE_SINK } from "./lattice.ts";
 import type { WaterField } from "./water.ts";
 import type { GeologyField } from "./geology.ts";
@@ -2425,5 +2426,14 @@ export function createTerrain(track: Track): TerrainField {
     sync,
   };
   BUILT.add(field);
-  return field;
+  // The training ground is the one place in this game that was not
+  // generated: where a track carries one, it owns the ground inside its own
+  // berm and the country the seed built keeps everything outside it. Done
+  // HERE, on the way out of the only constructor there is, so the engine,
+  // the renderer, the tests and the tooling all get the same field off the
+  // same track without any of them being told to ask for it.
+  if (track.arena === null) return field;
+  const ground = arenaTerrain(field, track.arena);
+  BUILT.add(ground);
+  return ground;
 }

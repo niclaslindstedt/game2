@@ -198,6 +198,22 @@ export {
   type TrailSign,
 } from "./carpark-trail.ts";
 export {
+  ARENA_CELL,
+  ARENA_KNOBS,
+  ARENA_PAD,
+  ARENA_REACH,
+  buildArena,
+  arenaGroundAt,
+  type ArenaCone,
+  type ArenaFrame,
+  type ArenaMarking,
+  type ArenaPlan,
+  type ArenaStructure,
+  type ArenaStructureKind,
+  type MarkingTone,
+} from "./arena.ts";
+export { ARENA_SEED, compileArena } from "./arena-stage.ts";
+export {
   createTerrain,
   builtTerrain,
   computeStreams,

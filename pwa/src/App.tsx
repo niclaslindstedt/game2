@@ -26,6 +26,9 @@ import {
   TUNING,
   botInput,
   carById,
+  ARENA_KNOBS,
+  DEFAULT_KNOBS,
+  compileArena,
   compileStage,
   createGame,
   damageScaleFor,
@@ -175,6 +178,7 @@ import {
   type CampaignProgress,
   campaignKnobs,
 } from "./game/campaign.ts";
+import { TRAINING_LEVEL, TRAINING_LOCATION } from "./game/training.ts";
 import {
   createGhostRecorder,
   ghostMatches,
@@ -576,11 +580,44 @@ type StageSpec = {
    * time trial, Roam — where the player is on the line on their own and owes
    * nobody anything. */
   grid: GridSlot | null;
+  /** THE TRAINING GROUND instead of a generated stage: the hand-built
+   * arena (`mapgen/arena.ts`) and the approach road it stands on. It is a
+   * flag rather than a length or a shape because it is neither — nothing
+   * about the seed, the band, the dials or the laps describes it, and a
+   * stage spec that pretended otherwise would send the generator looking
+   * for a road that was never generated. */
+  arena?: boolean;
 };
+
+/** THE TRAINING GROUND as a stage spec. There is only one of it — the
+ * place is authored (`mapgen/arena.ts`), the conditions are fixed, and the
+ * only thing a player chooses is the car — so it is stated once here and
+ * read by the menu's way in and by a `?mode=training` link alike. */
+function trainingSpec(carId: string): StageSpec {
+  return {
+    arena: true,
+    seed: TRAINING_LEVEL.seed,
+    length: TRAINING_LEVEL.length,
+    shape: "sprint",
+    laps: 1,
+    // The dials the arena's own country was built with, so the debug
+    // overlay states the ground that is actually there.
+    knobs: { ...DEFAULT_KNOBS, ...ARENA_KNOBS, biome: TRAINING_LOCATION.biome },
+    carId,
+    timeOfDay: TRAINING_LEVEL.timeOfDay,
+    weather: TRAINING_LEVEL.weather,
+    season: TRAINING_LEVEL.season,
+    // Nobody is waiting on the line: the training ground is a place you
+    // arrive at, not a stage you are sent down.
+    skipCountdown: true,
+    grid: null,
+  };
+}
 
 function sameStage(a: StageSpec | null, b: StageSpec): boolean {
   return (
     a !== null &&
+    (a.arena ?? false) === (b.arena ?? false) &&
     a.seed === b.seed &&
     a.length === b.length &&
     a.shape === b.shape &&
@@ -647,6 +684,7 @@ const MODE_NAME: Record<PlayMode, string> = {
   timetrial: "Time trial",
   headsup: "Heads up",
   roam: "Roam",
+  training: "Training",
 };
 
 /** HOW THE FIELD IS ENTERED for a run: the campaign runs the whole roster
@@ -1222,11 +1260,15 @@ export function App() {
     // An endless track is never reused: a restart must begin from a fresh
     // opening window, not from however far the last run streamed (the
     // renderer has long since dropped the world around the start).
-    const key = `${spec.seed}/${spec.length}/${spec.shape}/${spec.knobs.biome}/${STAGE_DIALS.map((d) => spec.knobs[d.key]).join(",")}`;
+    const key = spec.arena
+      ? `arena/${spec.seed}`
+      : `${spec.seed}/${spec.length}/${spec.shape}/${spec.knobs.biome}/${STAGE_DIALS.map((d) => spec.knobs[d.key]).join(",")}`;
     if (trackRef.current?.key !== key || spec.length === "endless") {
       trackRef.current = {
         key,
-        track: compileStage(spec.seed, spec.length, spec.knobs, spec.shape),
+        track: spec.arena
+          ? compileArena(spec.seed)
+          : compileStage(spec.seed, spec.length, spec.knobs, spec.shape),
       };
     }
     finishTimeRef.current = null;
@@ -1514,6 +1556,10 @@ export function App() {
 
   const playLevel = (level: CampaignLevel, mode: PlayMode): void => {
     const race = raceRef.current;
+    if (mode === "training") {
+      playTraining();
+      return;
+    }
     status(`${MODE_NAME[mode]} — ${level.name}`);
     startStage(
       {
@@ -1537,6 +1583,16 @@ export function App() {
       mode,
       level.id,
     );
+  };
+
+  /** THE TRAINING GROUND. Not a stage: no clock to stop, no field to enter,
+   * nobody's ghost to chase and no book to write into — which is why it
+   * goes in through `startStage` with no level id. Everything the run does
+   * keep (the car, the box, the camera) is the player's own setting, read
+   * the way every other run reads it. */
+  const playTraining = (): void => {
+    status(`Training — ${carById(raceRef.current.carId).name}`);
+    startStage(trainingSpec(raceRef.current.carId), "training");
   };
 
   const playRoam = (): void => {
@@ -2030,35 +2086,38 @@ export function App() {
         // its country, its conditions — exactly as `playLevel` would, so the
         // card at the end of it has a book, a field and a ladder to read.
         const level = levelId ? findLevel(levelId)?.level : undefined;
-        const spec: StageSpec = level
-          ? {
-              seed: level.seed,
-              length: level.length,
-              shape: level.shape ?? "sprint",
-              laps: lapsOverride() ?? levelLaps(level),
-              knobs: campaignKnobs(level),
-              carId: r.carId,
-              timeOfDay: level.timeOfDay,
-              weather: level.weather,
-              season: level.season,
-              skipCountdown: false,
-              grid: mode === "headsup" ? playerSlot(r.headsUp.cars) : null,
-            }
-          : {
-              seed: seedRef.current,
-              length: r.length,
-              shape: r.shape,
-              laps: lapsOverride() ?? raceLaps(r),
-              knobs: r.knobs,
-              carId: r.carId,
-              timeOfDay: r.timeOfDay,
-              weather: r.weather,
-              season: r.season,
-              skipCountdown: false,
-              // The back row, on a `?mode=headsup` grid; alone on the line
-              // otherwise, which is every other way into here.
-              grid: mode === "headsup" ? playerSlot(r.headsUp.cars) : null,
-            };
+        const spec: StageSpec =
+          mode === "training"
+            ? trainingSpec(r.carId)
+            : level
+              ? {
+                  seed: level.seed,
+                  length: level.length,
+                  shape: level.shape ?? "sprint",
+                  laps: lapsOverride() ?? levelLaps(level),
+                  knobs: campaignKnobs(level),
+                  carId: r.carId,
+                  timeOfDay: level.timeOfDay,
+                  weather: level.weather,
+                  season: level.season,
+                  skipCountdown: false,
+                  grid: mode === "headsup" ? playerSlot(r.headsUp.cars) : null,
+                }
+              : {
+                  seed: seedRef.current,
+                  length: r.length,
+                  shape: r.shape,
+                  laps: lapsOverride() ?? raceLaps(r),
+                  knobs: r.knobs,
+                  carId: r.carId,
+                  timeOfDay: r.timeOfDay,
+                  weather: r.weather,
+                  season: r.season,
+                  skipCountdown: false,
+                  // The back row, on a `?mode=headsup` grid; alone on the line
+                  // otherwise, which is every other way into here.
+                  grid: mode === "headsup" ? playerSlot(r.headsUp.cars) : null,
+                };
         // The time to beat, on a stage that keeps one — read before the run
         // starts, as `startStage` reads it, or a placed finish could never
         // say NEW RECORD.

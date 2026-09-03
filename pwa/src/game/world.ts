@@ -50,6 +50,7 @@ import {
 } from "./planting.ts";
 import { buildRoadSpill } from "./road-spill.ts";
 import { buildWild } from "./wild.ts";
+import { createArena } from "./arena.ts";
 import { buildTerrain, LAKE_Y, type Terrain } from "./terrain.ts";
 import { buildStreamMeshes } from "./streams.ts";
 import { buildCulverts } from "./culvert.ts";
@@ -864,6 +865,15 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
   const trafficRng = createRng((track.seed ^ 0x7a4f1c2b) >>> 0);
   const traffic = createTraffic(() => trafficRng.next(), terrain.latticeAt);
   group.add(traffic.group);
+  // THE TRAINING GROUND's paint and furniture, on the tracks that are one.
+  // Its own manager outside the road chunks, for the wind farms' reason and
+  // more so: the arena is two hundred metres across and the road it hangs
+  // off is a hundred metres long, so it belongs to no slice of it. The
+  // ground it all stands on is drawn by the terrain (at the arena's own
+  // finer lattice) and is not this module's business; the cones go into the
+  // same field a stage's do, so the car scatters them the same way.
+  const arena = track.arena === null ? null : createArena(track.arena, terrain.standOn, cones);
+  if (arena) group.add(arena.group);
   let finish: FinishGate | null = null;
   /** R26 — the crowd, rebuilt whenever the stage grows a new stand. The
    * whole crowd is a handful of instanced meshes, so it is cheaper to
@@ -1009,12 +1019,16 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
       plantSplitBoard(cones, track, board);
     }
     // A circuit's start line IS its finish line (R22), so it gets one gate
-    // saying so rather than two ten metres apart.
-    if (from === 0 && !track.circuit) chunkGroup.add(buildStartGate(track, 2));
+    // saying so rather than two ten metres apart. THE TRAINING GROUND gets
+    // neither, and neither a finish: its ribbon is the approach road to a
+    // place, and a gantry over it saying START would be the game claiming a
+    // race is on when the whole point of the level is that none is.
+    const raced = track.arena === null;
+    if (from === 0 && !track.circuit && raced) chunkGroup.add(buildStartGate(track, 2));
     // R25 — the finish GATE, which on a sprint is no longer the last thing
     // on the road: the run-out carries on past it, and this chunk draws
     // both. The cannons stand beside it either way.
-    if (!track.endless && to === track.samples.length) {
+    if (!track.endless && raced && to === track.samples.length) {
       finish = buildFinishGate(track, track.circuit ? "START/FINISH" : "FINISH");
       chunkGroup.add(finish.group);
     }
@@ -1185,6 +1199,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
     traffic.dispose();
     livestock.dispose();
     windFarms.dispose();
+    arena?.dispose();
     wild.dispose();
     cones.dispose();
     posts.dispose();

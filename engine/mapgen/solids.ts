@@ -91,7 +91,27 @@ export type SolidKind =
   /** R41 — one bay of a TRAIN: a couple of metres of wagon, standing on the
    * rails and moving at the train's speed. A run of them is the train, to
    * the physics, exactly as a run of bays is a wall. */
-  | "railcar";
+  | "railcar"
+  /** The training ground's course furniture (`arena.ts`) — the four things
+   * a practice yard is built out of. None of them is ever placed on a
+   * generated stage: the wild's prop field does not know they exist, and
+   * the only list they appear in is the arena's own.
+   *
+   * A bay of steel SHIPPING CONTAINER: the yard's buildings, and the one
+   * thing on the ground that simply stops a car. */
+  | "container"
+  /** A bay of concrete BARRIER — waist high, immovable, laid in runs to
+   * shut something off. */
+  | "barrier"
+  /** A stack of TYRES. Heavy enough to stop a car that arrives slowly and
+   * light enough to burst apart when one arrives fast (`snap`), which is
+   * what makes it the right thing to put on the outside of a hairpin. */
+  | "tyres"
+  /** A KERB block: a raised edge to clip. Deliberately shorter than the
+   * ride-over bar (`TUNING.collision.rideOver`), so the wheels take it as a
+   * thump and a lurch rather than the body folding against it — which is
+   * what a kerb does to a car, and the whole reason to aim at one. */
+  | "kerb";
 
 /** R41 — a train, to the contact model: half the width of a vehicle's body
  * (its collision circle, fatter than the body so a run of them has no gap
@@ -152,7 +172,7 @@ export const PARAPET_INSET = PARAPET_RADIUS - PARAPET_THICK / 2;
  * shy of the textbook figure for the SHAPE: a wild boulder is fissured and
  * a trunk is not a solid cylinder of heartwood, and the volumes below are
  * measured off the drawn silhouette, which is generous to both. */
-const DENSITY = { stone: 1500, wood: 500, steel: 7800 };
+const DENSITY = { stone: 1500, wood: 500, steel: 7800, rubber: 1100 };
 
 /** The impulse a material's structure survives per kilogram of itself,
  * N·s/kg. Wood at 30 puts the smallest trunk on a stage inside a rally
@@ -160,7 +180,7 @@ const DENSITY = { stone: 1500, wood: 500, steel: 7800 };
  * the whole point of the number: a sapling goes down under an ordinary
  * excursion, an old spruce is a wall until you are properly committed —
  * and going through one costs very nearly everything you arrived with. */
-const SNAP_PER_MASS = { stone: Infinity, wood: 30, steel: Infinity };
+const SNAP_PER_MASS = { stone: Infinity, wood: 30, steel: Infinity, rubber: 14 };
 
 /** How much of a tree's collision circle is actually WOOD — the rest of it
  * is the lowest boughs, which stop nothing and weigh little — and what the
@@ -197,6 +217,19 @@ const MATERIAL: Record<SolidKind, { of: keyof typeof DENSITY; rooted: number }> 
   post: { of: "wood", rooted: 0.5 },
   // Forty tonnes on steel rails: nothing a car does moves it or marks it.
   railcar: { of: "steel", rooted: 1 },
+  // A steel box on the ground with nothing in it that moves: a car stops
+  // against a shipping container and the container does not notice.
+  container: { of: "steel", rooted: 0.9 },
+  // Cast concrete, standing on its own weight — shoved rather than held,
+  // and never broken.
+  barrier: { of: "stone", rooted: 0.85 },
+  // A stack of tyres: barely held down and barely held TOGETHER, which is
+  // the whole reason it is what goes on the outside of a corner. It stops
+  // a car that arrives slowly and bursts apart under one that does not.
+  tyres: { of: "rubber", rooted: 0.2 },
+  // Laid concrete, bedded in the surface it edges: immovable, and low
+  // enough that the wheels clip it rather than the body meeting it.
+  kerb: { of: "stone", rooted: 1 },
 };
 
 /** Is this thing made of WOOD? What breaks off it, what colour the

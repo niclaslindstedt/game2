@@ -28,9 +28,15 @@ import { drivingThrough, outOfBody, stepTumble, tumbleFrom, type TumbleBody } fr
 /** Cone dimensions, m — base radius and height. */
 const CONE_R = 0.45;
 const CONE_H = 1.1;
-/** Where a cone's own origin sits over the ground: standing, its middle. */
-const STAND = CONE_H / 2;
-/** …and lying on its side, half a base radius up. */
+/** ...and the TALL marker's, the metre-and-a-half channelizer a course is
+ * actually laid out with. The ordinary cone marks a lip you are already
+ * committed to; this one marks a line you are still choosing, which is why
+ * it has to be visible over the bonnet from a hundred metres out. */
+const TALL_R = 0.34;
+const TALL_H = 1.6;
+/** Where a marker's own origin sits over the ground while it is standing is
+ * simply its middle, whichever of the two it is. Lying on its side it is
+ * half its own base radius up. */
 const LYING = CONE_R * 0.5;
 
 /** How far out the contact test grows the car's body box, m — a cone is a
@@ -71,8 +77,10 @@ export type ConeField = {
   /** The group every cone is drawn in — a sibling of the road chunks, so a
    * chunk being dropped never takes a cone that is mid-flight with it. */
   group: THREE.Group;
-  /** Stand a cone up at a world point, `s` metres into the stage. */
-  plant: (x: number, y: number, z: number, s: number) => void;
+  /** Stand a cone up at a world point, `s` metres into the stage. `tall`
+   * picks the channelizer over the ordinary cone — same weight, same
+   * scatter, more of it above the bonnet line. */
+  plant: (x: number, y: number, z: number, s: number, tall?: boolean) => void;
   /** ...and stand something that is NOT a cone: a stack of tyres, a round
    * bale, an oil drum (blockade.ts). The object is taken over whole — the
    * caller has already built and placed it — and from here it is knocked,
@@ -96,20 +104,22 @@ export type PropShape = { reach: number; height: number; rest: number };
 export function createConeField(): ConeField {
   const group = new THREE.Group();
   const geometry = new THREE.ConeGeometry(CONE_R, CONE_H, 6);
+  const tallGeometry = new THREE.CylinderGeometry(TALL_R * 0.55, TALL_R, TALL_H, 7);
   const material = new THREE.MeshLambertMaterial({ color: "#ff7d1f" });
   let cones: Cone[] = [];
 
-  const plant = (x: number, y: number, z: number, s: number): void => {
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(x, y + STAND, z);
+  const plant = (x: number, y: number, z: number, s: number, tall = false): void => {
+    const mesh = new THREE.Mesh(tall ? tallGeometry : geometry, material);
+    const height = tall ? TALL_H : CONE_H;
+    mesh.position.set(x, y + height / 2, z);
     mesh.rotation.y = Math.random() * Math.PI;
     group.add(mesh);
     cones.push({
-      body: tumbleFrom(mesh, new THREE.Vector3(), new THREE.Vector3(), LYING),
+      body: tumbleFrom(mesh, new THREE.Vector3(), new THREE.Vector3(), tall ? TALL_R : LYING),
       s,
       live: false,
-      reach: REACH,
-      height: CONE_H,
+      reach: tall ? TALL_R : REACH,
+      height,
     });
   };
 
@@ -191,6 +201,7 @@ export function createConeField(): ConeField {
     group.clear();
     cones = [];
     geometry.dispose();
+    tallGeometry.dispose();
     material.dispose();
   };
 

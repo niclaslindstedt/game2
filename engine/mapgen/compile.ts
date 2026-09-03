@@ -20,6 +20,7 @@ import { SAMPLE_STEP, STAGE_RULES as R, knobScale, resolveKnobs } from "./rules.
 import { generateStage, layStageHighways } from "./generate.ts";
 import { createStageStream, type StageStream } from "./endless.ts";
 import { straightPart } from "./search.ts";
+import type { ArenaPlan } from "./arena.ts";
 import { createRng } from "../lib/prng.ts";
 import { cellKey } from "../lib/math.ts";
 import { hash2 } from "../lib/noise.ts";
@@ -253,6 +254,15 @@ export type Track = {
   /** R28 — the split boards, in stage order. Every one stands just past a
    * corner's exit, roughly `checkpoint.spacing` seconds of driving apart. */
   checkpoints: Checkpoint[];
+  /** THE TRAINING GROUND, on the tracks that are one (`arena.ts`) — and
+   * null on every generated stage, which is all of them.
+   *
+   * It rides on the track rather than beside it for the reason the highways
+   * do: `createTerrain` takes a track and nothing else, and the engine, the
+   * renderer, the tests and the tooling each build their own field from the
+   * same one. A training ground that were passed in separately would be a
+   * training ground half the readers could not see. */
+  arena: ArenaPlan | null;
   /** True when the stage streams forever instead of finishing. */
   endless: boolean;
   /** R22 — true when the stage is a CIRCUIT: the last sample lands back on
@@ -3277,6 +3287,7 @@ function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs, circuit =
     bounds: { minX: 0, maxX: 0, minZ: 0, maxZ: 0 },
     pacenotes: [],
     checkpoints: [],
+    arena: null,
     endless,
     circuit,
     finishS: null,

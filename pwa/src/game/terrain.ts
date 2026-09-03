@@ -173,6 +173,14 @@ export type Terrain = {
 
 export function buildTerrain(track: Track, biome: Biome, season: Season): Terrain {
   const field = createTerrain(track);
+  // THE TRAINING GROUND draws itself at its own resolution. Its ramp, its
+  // graded roads and the bank round it are all shapes a 14 m lattice would
+  // smooth away before anyone saw them — and the physics rides exactly the
+  // triangles drawn here, so smoothing them away would take them out of the
+  // driving too, not merely out of the picture. Where a tile reaches the
+  // arena it is cut four times finer (`ARENA_CELL`), which nests inside the
+  // country's own lattice so the two meet without a crack.
+  const arena = track.arena;
   // The analytic field, and the one place in the app that may read it: the
   // tile CORNERS are where the mesh and the field agree by construction, so
   // sampling it here is what DEFINES the drawn lattice. Anything asking
@@ -225,6 +233,13 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
   // none. A sand road's shoulder is sand, so its wash is the packed sand
   // of its own wheel tracks rather than a gravel road's earth.
   const dust = new THREE.Color(rules.loose === "sand" ? ROAD_PAINT.sand.worn : ROAD_PAINT.shoulder);
+  // The training ground's own two surfaces, in the road's palette — one
+  // pair, built once, because the pad is tens of thousands of vertices and
+  // a colour per vertex is a colour per vertex.
+  const padSeal = new THREE.Color(ROAD_PAINT.asphalt.loose);
+  const padSealWorn = new THREE.Color(ROAD_PAINT.asphalt.worn);
+  const padStone = new THREE.Color(ROAD_PAINT.gravel.loose);
+  const padStoneWorn = new THREE.Color(ROAD_PAINT.gravel.worn);
   const c = new THREE.Color();
 
   /** Each sub-region's ground, resolved once against the engine's region
@@ -310,6 +325,30 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     out: THREE.Color,
   ): void => {
     const speck = 0.88 + hash2(Math.round(x * 2), Math.round(z * 2), noiseSeed + 29) * 0.24;
+    // THE TRAINING GROUND is not country. Its pad was graded and then
+    // either sealed or bladed, so it takes the ROAD's own palette — the
+    // same two colours a stage's tarmac and gravel are drawn in, so a
+    // surface change on the arena reads as the surface change it is.
+    // Everything below (the meadow bands, the bedrock, the road dust) is
+    // about ground that grew rather than ground that was laid.
+    const laid = arena?.surfaceAt(x, z);
+    if (laid !== null && laid !== undefined) {
+      const sealed = laid === "asphalt";
+      const worn = sealed ? padSealWorn : padStoneWorn;
+      // Bladed stone and worn seal both mottle: the wear is where the cars
+      // have been, and on a practice ground the cars have been everywhere.
+      out.copy(sealed ? padSeal : padStone).lerp(worn, valueNoise(x, z, 21, noiseSeed + 61));
+      // ...and every FACE on the pad is darker than the flat it stands on.
+      // The pad is level and the sun over a training ground at noon is
+      // nearly overhead, so Lambert alone gives a three-metre ramp almost
+      // no shading at all and the one shape a driver most needs to see
+      // coming reads as a stain. This is what makes the ramp, the
+      // table-top, the banked corner and the bank round the lot legible as
+      // SHAPES from the far side of the ground.
+      out.lerp(worn, clamp01((1 - normalY) * 2.4));
+      out.multiplyScalar(speck);
+      return;
+    }
     // R35 — bed and beach are painted against the level of the water
     // STANDING HERE, not against the sea. A tarn on a shoulder has a
     // lakebed and a shore of its own, and keying the two bands to one
@@ -424,26 +463,47 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     lakes.visible = true;
   };
 
+  /** Does this tile reach the training ground? Measured against the arena's
+   * whole reach — the pad, its bank, and the band the bank is letting the
+   * country back over — because the boundary of the fine region has to sit
+   * where the arena is asserting nothing, or the coarse tile beside it
+   * would draw a different surface from the fine one. */
+  const tileIsFine = (originX: number, originZ: number): boolean => {
+    if (arena === null) return false;
+    const nx = Math.max(originX, Math.min(arena.frame.x, originX + TILE));
+    const nz = Math.max(originZ, Math.min(arena.frame.z, originZ + TILE));
+    return Math.hypot(nx - arena.frame.x, nz - arena.frame.z) <= arena.reach;
+  };
+
   const buildTile = (tx: number, tz: number): Tile => {
     const originX = tx * TILE;
     const originZ = tz * TILE;
-    // Heights on a (CELLS+3)² lattice — one ring beyond the tile — so the
+    // On the arena, the SAMPLED surface is the ridden lattice rather than
+    // the analytic field: sampling the country's own lattice four times
+    // finer reproduces it exactly (a nested grid re-interpolates a
+    // piecewise-linear surface into itself), while sampling the analytic
+    // field would draw a curve the physics is not standing on.
+    const fine = tileIsFine(originX, originZ);
+    const cells = fine ? CELLS * 4 : CELLS;
+    const cell = fine ? CELL / 4 : CELL;
+    const sample = fine ? field.latticeAt : heightAt;
+    // Heights on a (cells+3)² lattice — one ring beyond the tile — so the
     // normals at tile edges are finite differences of the SAME function on
     // both sides of the seam, and the lighting never shows the grid.
-    const n = CELLS + 3;
+    const n = cells + 3;
     const H = new Float32Array(n * n);
     const carved = new Uint8Array(n * n);
     for (let j = 0; j < n; j++) {
       for (let i = 0; i < n; i++) {
-        const x = originX + (i - 1) * CELL;
-        const z = originZ + (j - 1) * CELL;
-        const y = heightAt(x, z);
+        const x = originX + (i - 1) * cell;
+        const z = originZ + (j - 1) * cell;
+        const y = sample(x, z);
         H[j * n + i] = y;
         if (inStream(field.streams, x, z, 0)) carved[j * n + i] = 1;
       }
     }
 
-    const verts = CELLS + 1;
+    const verts = cells + 1;
     const positions = new Float32Array(verts * verts * 3);
     const normals = new Float32Array(verts * verts * 3);
     const uvs = new Float32Array(verts * verts * 2);
@@ -453,8 +513,8 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
       for (let i = 0; i < verts; i++) {
         const v = j * verts + i;
         const hi = (j + 1) * n + (i + 1);
-        const x = originX + i * CELL;
-        const z = originZ + j * CELL;
+        const x = originX + i * cell;
+        const z = originZ + j * cell;
         const y = H[hi];
         positions[v * 3] = x;
         positions[v * 3 + 1] = y;
@@ -463,8 +523,8 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
         uvs[v * 2 + 1] = z / 16;
         // Normal from the height lattice (central difference). Normals
         // before colors: the paint below reads slope off them.
-        const dx = (H[hi - 1] - H[hi + 1]) / (2 * CELL);
-        const dz = (H[hi - n] - H[hi + n]) / (2 * CELL);
+        const dx = (H[hi - 1] - H[hi + 1]) / (2 * cell);
+        const dz = (H[hi - n] - H[hi + n]) / (2 * cell);
         const inv = 1 / Math.hypot(dx, 1, dz);
         normals[v * 3] = dx * inv;
         normals[v * 3 + 1] = inv;
@@ -475,7 +535,7 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
         colors[v * 3] = c.r;
         colors[v * 3 + 1] = c.g;
         colors[v * 3 + 2] = c.b;
-        if (i < CELLS && j < CELLS) {
+        if (i < cells && j < cells) {
           indices.push(v, v + verts, v + 1, v + 1, v + verts, v + verts + 1);
         }
       }
@@ -492,7 +552,7 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     ground.receiveShadow = true;
     group.add(ground);
 
-    return { ground, water: cutWater(originX, originZ, H, n) };
+    return { ground, water: cutWater(originX, originZ, H, n, cell, cells) };
   };
 
   /** Cut this tile's standing water against the ground it just drew.
@@ -514,6 +574,8 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     originZ: number,
     H: Float32Array,
     n: number,
+    cell: number,
+    cells: number,
   ): TileWater | null => {
     // Walked in +z-then-+x order rather than the other way round, because
     // THAT is the winding that faces UP. Get it backwards and every triangle
@@ -529,14 +591,14 @@ export function buildTerrain(track: Track, biome: Biome, season: Season): Terrai
     const cz = [0, 0, 0, 0];
     const cd = [0, 0, 0, 0];
     const poly: number[] = [];
-    for (let j = 0; j < CELLS; j++) {
-      for (let i = 0; i < CELLS; i++) {
+    for (let j = 0; j < cells; j++) {
+      for (let i = 0; i < cells; i++) {
         let level = -Infinity;
         let wet = 0;
         for (let c = 0; c < 4; c++) {
           const [di, dj] = CORNERS[c];
-          const x = originX + (i + di) * CELL;
-          const z = originZ + (j + dj) * CELL;
+          const x = originX + (i + di) * cell;
+          const z = originZ + (j + dj) * cell;
           const ground = H[(j + dj + 1) * n + (i + di + 1)];
           const here = lakeLevelAt(x, z);
           cx[c] = x;
