@@ -487,6 +487,25 @@ function initialSettings(): Settings {
   // local storage.
   const gearbox = new URLSearchParams(location.search).get("gearbox");
   if (gearbox === "auto" || gearbox === "manual") settings.gearbox = gearbox;
+  // ?hud=0 — a CLEAN FRAME: the instrument panel and the rear-view glass
+  // both off, so a tool photographing the WORLD gets the world and nothing
+  // laid over it. Both switches together rather than only the panel, since
+  // half a HUD in shot is the same problem as all of it; pinned from the URL
+  // for the reason the gearbox is, so a picture does not depend on what the
+  // machine taking it happens to have stored.
+  const hud = new URLSearchParams(location.search).get("hud");
+  if (hud === "0" || hud === "1") settings.hud = { on: hud === "1", mirror: hud === "1" };
+  // ?drawdistance= — how far the air lets the camera see (OPTIONS ▸ VIDEO's
+  // own switch, `DRAW_DISTANCE_SCALE` on the sky preset's fog). The fog is
+  // tuned for a driver's eye a metre and a half off the road, where 520 m is
+  // a long way; a camera lifted a hundred metres up is looking through four
+  // times that at the ground in front of it, and on the stored default the
+  // whole middle distance washes out to fog colour. A preview of the COUNTRY
+  // asks for the setting a player with a good machine already has.
+  const range = new URLSearchParams(location.search).get("drawdistance");
+  if (range === "near" || range === "normal" || range === "far") {
+    settings.video = { ...settings.video, drawDistance: range };
+  }
   return settings;
 }
 

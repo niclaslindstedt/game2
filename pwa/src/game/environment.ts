@@ -349,6 +349,22 @@ export function createEnvironment(scene: THREE.Scene): Environment {
     fog: false,
     side: THREE.DoubleSide,
     vertexColors: true,
+    // BACKDROP, like every other thing in this group: painted before the
+    // world and never depth-tested against it, so the country is always in
+    // front of its own horizon.
+    //
+    // The rings stand at ~500 m, which is a good deal NEARER than the
+    // ground the camera can see — a stage draws its world for a kilometre
+    // and more. Left to write depth, a ring therefore occludes real terrain
+    // that is further away than it is, and the horizon comes out lying
+    // ACROSS the landscape instead of behind it. It is worst where the
+    // rings are short and the ground is high, which is the desert exactly
+    // (`RIDGE_HEIGHT` scales them to 0.38 and R40 stands the whole country
+    // on a floor 14 m over the water table): there the chain cut through
+    // the dunes halfway out. The taiga only ever looked right because its
+    // rings are tall enough to clear its own ground.
+    depthWrite: false,
+    depthTest: false,
   });
   const ridges = new THREE.Mesh(ridgeGeo, ridgeMat);
   ridges.renderOrder = -1;

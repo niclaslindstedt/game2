@@ -18,6 +18,9 @@ make analyze      # SCORE generated stages (water, roads, surface, jumps, ends, 
 make record       # record a bot run to a run tape (runs/*.jsonl)
 make replay       # RUN='runs/<file>.jsonl' — replay a tape and place its time against each field
 make heat         # the whole grid on one road — REQUIRED before/after any bot-traffic or temper change
+make previews     # the campaign menu's previews (routes + biomes) — REQUIRED after any generator change
+make routes       # every campaign stage's road into pwa/src/game/stage-routes.ts (pure Node, ~13 s)
+make biomes       # each country RENDERED BY THE GAME, 200 m over its first stage's start (needs a build + Chromium)
 make track        # render stages to previews/track-<seed>.png
 make level        # LEVEL=1 (or SEED= LENGTH=) — ONE stage, top down and DESCRIBED: every call, jump, split, surface and roadside solid labelled; FOCUS=J1 for a close-up
 make cars         # render the car models to previews/cars.png (chase-cam + turntable sheet)
@@ -205,7 +208,9 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | The pre-race card: car, spec sheet, gearbox                  | `pwa/src/game/menu-car.tsx`; the numbers on it in `car-stats.ts` (derived from the catalog)                                        |
 | How the car is FRAMED on its stand, in any shape of pane     | `frameCar` in `pwa/src/game/car-turntable.ts` — measured off the built body, so the shot is full of car on a phone and a laptop    |
 | A figure that COUNTS to its new value instead of jumping     | `pwa/src/lib/count.ts` — the easing only; the caller owns the clock, which is what keeps it DOM-free and testable                  |
-| Campaign stages, locations, points, unlocks                  | `pwa/src/game/campaign.ts` — one board: the points a stage pays ARE what opens the next stage and the next location                |
+| Campaign stages, locations, points, unlocks                  | `pwa/src/game/campaign.ts` — one board: the points a stage pays ARE what opens the next stage and the next location; a stage or a country edited here owes a `make previews` |
+| What a stage box and a location row SHOW of the place        | `pwa/src/game/stage-preview.ts` — the road as an SVG path, the country as a file name; both BUILT AHEAD by `make previews`         |
+| The committed previews themselves                            | `scripts/stage-routes.mjs` → `pwa/src/game/stage-routes.ts`; `scripts/biome-preview.mjs` → `pwa/public/previews/biome-<id>.jpg`    |
 | The mass-start GRID, and the only catch-up in the game       | `engine/sim/grid.ts` + `TUNING.massStart` — the zig-zag on the apron, and the drive a row back is owed                             |
 | The HEADS UP page and its three settings                     | `pwa/src/game/menu-headsup.tsx`; the stage boxes all three grids share are `pwa/src/game/menu-levels.tsx`                          |
 | The standings sheet, drawn                                   | `pwa/src/game/results-table.tsx` (the results card's modal and the menu's own table)                                               |
@@ -278,7 +283,7 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | When this changes                          | Update this                                                                                  |
 | ------------------------------------------ | -------------------------------------------------------------------------------------------- |
 | Handling model / tuning                    | `docs/driving.md`                                                                            |
-| Generator rules (`engine/mapgen/rules.ts`) | `docs/track-generator.md` (rules are listed verbatim)                                        |
+| Generator rules (`engine/mapgen/rules.ts`) | `docs/track-generator.md` (rules are listed verbatim), then `make previews` — the campaign menu's committed routes and biome banners are generator OUTPUT, and every rule change re-rolls them |
 | Bot, sim harness, rival skill model        | `docs/simulation.md`                                                                         |
 | The sound bank, the beds, or a score       | `docs/audio.md`                                                                              |
 | The sky, the weather, or the storm         | `docs/architecture.md` (the atmosphere bullet), then `make sky` and read the sheet           |

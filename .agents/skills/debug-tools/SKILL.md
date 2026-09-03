@@ -356,6 +356,16 @@ Everything the overlay prints, the app reads back (`App.tsx`):
 | `paused=1`                                 | The pause card up over the first frame                        |
 | `roam=1`, `layer=`, `mapfull=1`            | Open the map instead, with a layer painted, full screen       |
 | `maz= mpitch= mzoom= mpanx= mpanz=`        | Park the map's framing exactly (radians, ×, metres of pan)    |
+| `hud=0`                                    | A CLEAN FRAME: instruments and rear-view glass both off       |
+| `drawdistance=near\|normal\|far`           | How far the air lets the camera see (OPTIONS ▸ VIDEO's own)   |
+
+`hud=0` and `drawdistance=` are for photographing the WORLD. The fog is tuned
+for a driver's eye a metre off the road, so a camera lifted well above it
+looks through several times that and the middle distance washes out to fog
+colour on the stored default — `drawdistance=far` is what a vista wants.
+`hud=0` still leaves the pause chip on screen (a phone's only way out of a
+run); a tool that needs it gone hides `.debug-copy, .hud-actions, .hud-mini`
+with an injected stylesheet, as `scripts/biome-preview.mjs` does.
 
 `bot=1` is the companion to `god=1`: when the problem is something the CAR
 does at a place rather than something the WORLD looks like there, let the bot
