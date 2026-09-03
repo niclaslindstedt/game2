@@ -2594,6 +2594,17 @@ function createCompiler(
     bankRunoff(firstNew);
     widthRunoff(firstNew);
     shapeJunctions(firstNew);
+    // R22 — and the lap is CLOSED IN HEIGHT here, after the last pass that
+    // writes the route's own profile and before the first thing is hung off
+    // it. Everything below anchors to the road it leaves: an arm starts at
+    // its junction's height, a drive at the stage's bench, and every one of
+    // them is held inside the verge cone (R31), which is read off these
+    // samples. Close the lap after they are built and the ramp moves the
+    // road out from under all of it — half a lap along, that is a metre or
+    // more of tarmac hanging over the country beside it, with the arm's own
+    // walk back down to the land turning into the cliff it never had room
+    // to be.
+    if (track.circuit && !track.endless) closeCircuitHeight(track, junctions);
     // The mouth is measured from the flared road, so it waits for the pass
     // that flares it — and for the minor arm on BOTH sides of the meeting
     // point to have been walked.
@@ -3302,14 +3313,40 @@ function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs, circuit =
  *
  * Fords and decks ride it too, and have to: the water in a ford is at the
  * road's own height by construction, so moving one without the other is
- * how a crossing ends up perched. */
-function closeCircuitHeight(track: Track): void {
+ * how a crossing ends up perched.
+ *
+ * WHEN it runs is the other half of the rule, and the reason it is called
+ * from inside the compiler rather than after it: BEFORE anything is hung
+ * off the road. The samples and the junctions are the only things a ramp
+ * can move by arithmetic — every other road on the map is anchored to this
+ * one at one end and to the COUNTRY at the other, and there is no offset
+ * that is right for both ends of it. What those have instead is their own
+ * walk, which starts at the junction's height and follows the land back
+ * down at a road's grade; run that walk against a road this has not moved
+ * yet and it starts from the wrong height, ending in a step the walk had
+ * no room to spend. So the ramp goes in first and the branches are laid
+ * against the closed profile, which is also the profile the verge cone
+ * (R31) is read off.
+ *
+ * A junction is written down TWICE and both copies ride — `track.junctions`,
+ * which the compiler warps the two mats onto, and the pending note the
+ * branch is actually WALKED from. Moving one without the other is worse
+ * than moving neither: the mat comes up onto the closed road and the walk
+ * under it does not, so the branch is pulled onto the platform over the
+ * warp's own falloff and dropped off its rim as a brow a few metres later. */
+function closeCircuitHeight(track: Track, pending: { elevation: number; s: number }[]): void {
   const samples = track.samples;
   if (samples.length < 2 || track.length <= 0) return;
   const step = samples[samples.length - 1].elevation - samples[0].elevation;
   if (Math.abs(step) < 1e-6) return;
   for (const s of samples) s.elevation -= step * (s.s / track.length);
   for (const j of track.junctions) j.y -= step * (j.s / track.length);
+  for (const j of pending) j.elevation -= step * (j.s / track.length);
+  // R41 — a level crossing's rails are laid FLUSH with the road across
+  // them, so its height is the route's and rides with it; the arms cut off
+  // it (`buildRailArms`) leave from that same height. A culvert's water is
+  // not: that is the valley's own level, and the country does not move.
+  for (const rail of track.rails) rail.y -= step * (rail.s / track.length);
 }
 
 /** Compile the GENERATED stage for a seed at a menu length. Finite lengths
@@ -3353,7 +3390,6 @@ export function compileStage(
       // R17 — a sprint is routed onto the tarmac; a circuit is not, yet.
       !circuit,
     ).append(plans);
-    if (circuit) closeCircuitHeight(track);
     return track;
   }
   const track = emptyTrack(seed, true, dials);
