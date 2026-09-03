@@ -59,6 +59,7 @@ import { buildHomestead } from "./homestead.ts";
 import { buildSolarFarm } from "./solar-farm.ts";
 import { buildTown } from "./town.ts";
 import { createWindFarms } from "./wind-farm.ts";
+import { buildPowerLine } from "./powerline.ts";
 import { createTraffic } from "./traffic.ts";
 import { buildRailArm, buildRailCrossing } from "./railway.ts";
 import { createTrains } from "./train.ts";
@@ -847,6 +848,13 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
    * chunk the road placed it from, and because its rotors turn every frame. */
   const windFarms = createWindFarms();
   group.add(windFarms.group);
+  /** R45 — the transmission line, if the country carries one. Outside the
+   * chunks and never pruned, for the wind farms' reason and more so: it
+   * crosses the whole map, so the tower on the skyline belongs to no chunk
+   * and the wayleave belongs to all of them. Built on the first chunk,
+   * once — an endless stage carries no grid, and a finite one's line is
+   * the same line from the start line to the finish. */
+  let powerLineCount = 0;
   /** R44 — the traffic on the public roads: every vehicle posed off the
    * engine's fleet each frame, and the speed limit signs it stood. Outside
    * the chunks for the wind farms' reason — a lorry two kilometres up an
@@ -954,6 +962,11 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
       const farm = track.windFarms[windScan];
       if (farm.atS > track.samples[to - 1].s) break;
       windFarms.add(track, farm, beside);
+    }
+    // R45 — the grid. Into the scene's own group rather than the chunk's,
+    // because a chunk is disposed with the road it was built for.
+    for (; powerLineCount < track.powerLines.length; powerLineCount++) {
+      group.add(buildPowerLine(track, track.powerLines[powerLineCount], beside));
     }
     const fords = buildFords(track, fordScan, to);
     fordScan = fords.next;

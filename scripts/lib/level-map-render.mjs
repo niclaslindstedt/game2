@@ -62,6 +62,19 @@ export const SEVERITY_COLOR = {
   hard: [226, 40, 40],
 };
 
+/** R45 — the grid's own two numbers, in metres: how far either side of the
+ * line the wayleave is cut, and how long a tower's crossarm is.
+ *
+ * RESTATED rather than imported, because this module is loaded statically
+ * by `level-map.mjs` — before that file registers the `@engine` alias, so
+ * a static import of the engine here would resolve against nothing. They
+ * are EXPORTED so the restatement is testable: `tests/powerline_test.ts`
+ * holds both against `STAGE_RULES.powerline`, which is what makes a map
+ * drawing a corridor the forest is not actually kept off a failure rather
+ * than a thing somebody notices in a picture a year later. */
+export const WAYLEAVE = 24;
+export const ARM = 20;
+
 const MARK = {
   jump: [232, 28, 28],
   crest: [250, 200, 40],
@@ -74,6 +87,7 @@ const MARK = {
   homestead: [178, 52, 40],
   carpark: [40, 80, 170],
   windfarm: [70, 74, 80],
+  powerline: [116, 78, 152],
   solarfarm: [28, 45, 79],
   ford: WATER,
   bridge: [110, 110, 120],
@@ -390,6 +404,37 @@ export function renderLevelMap({
     if (farm.cabin) quadOf(farm.cabin, mix(MARK.windfarm, PAPER, 0.5));
   }
 
+  // ── The grid (R45): the wayleave as the band the forest is cut back to,
+  // the line down its middle, and every tower a mark across it ─────────
+  for (const line of track.powerLines ?? []) {
+    const band = MARK.powerline;
+    for (let i = 0; i + 1 < line.pylons.length; i++) {
+      const a = line.pylons[i];
+      const b = line.pylons[i + 1];
+      const nx = (-(b.z - a.z) / b.span) * WAYLEAVE;
+      const nz = ((b.x - a.x) / b.span) * WAYLEAVE;
+      const corners = [
+        [px(a.x - nx), pz(a.z - nz)],
+        [px(b.x - nx), pz(b.z - nz)],
+        [px(b.x + nx), pz(b.z + nz)],
+        [px(a.x + nx), pz(a.z + nz)],
+      ];
+      if (corners.some(([x, y]) => inMap(x, y))) canvas.poly(corners, mix(band, PAPER, 0.82));
+      canvas.line(px(a.x), pz(a.z), px(b.x), pz(b.z), mix(band, PAPER, 0.15));
+    }
+    // The towers: the crossarm's own line, so an angle tower's bisector is
+    // visible as the kink it is.
+    for (const pylon of line.pylons) {
+      const cx = px(pylon.x);
+      const cy = pz(pylon.z);
+      if (!inMap(cx, cy)) continue;
+      const ax = Math.cos(pylon.heading) * (ARM / 2) * scale;
+      const ay = -Math.sin(pylon.heading) * (ARM / 2) * scale;
+      canvas.line(cx - ax, cy - ay, cx + ax, cy + ay, band);
+      canvas.disk(cx, cy, Math.max(1.5, 2 * scale), pylon.kind === "suspension" ? WHITE : band);
+    }
+  }
+
   // ── The road, at its width, by surface ────────────────────────────────
   const finishS = track.finishS ?? Infinity;
   const quad = (a, b, halfA, halfB) => {
@@ -677,6 +722,19 @@ export function renderLevelMap({
         }
         break;
       }
+      case "powerline": {
+        // R45 — the grid's own sign: a tower's two legs under a crossarm,
+        // stood where the line comes nearest the road.
+        const r = roadR + 3;
+        const cx = px(f.x);
+        const cy = pz(f.z);
+        canvas.disk(cx, cy, r, WHITE);
+        canvas.disk(cx, cy, r - 1.2, MARK.powerline);
+        canvas.line(cx - r + 2, cy - 2, cx + r - 2, cy - 2, WHITE);
+        canvas.line(cx - 2, cy - 2, cx - 3, cy + r - 2, WHITE);
+        canvas.line(cx + 2, cy - 2, cx + 3, cy + r - 2, WHITE);
+        break;
+      }
       case "solarfarm": {
         // R43 — a panel: the blue square with a white bar across it,
         // stood on the fence's middle.
@@ -838,6 +896,8 @@ function drawLegend(canvas, x, y, { lines, lo, hi, interval }) {
   row("PVN SOLAR FARM", MARK.solarfarm);
   row("CORNER GUARD MOUND", mix(MARK.guardMound, PAPER, 0.25));
   row("CORNER GUARD GROVE", mix(MARK.guardGrove, PAPER, 0.25));
+  row("PLN POWER LINE - WAYLEAVE", mix(MARK.powerline, PAPER, 0.82));
+  row("     ...ITS TOWERS AND SPANS", mix(MARK.powerline, PAPER, 0.15));
   gap();
   row(`SOLIDS WITHIN ${NEAR_EDGE} M OF EDGE`, null);
   row("TREE TRUNK", SOLID.tree);

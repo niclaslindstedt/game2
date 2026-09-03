@@ -226,6 +226,8 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | What makes a homestead a FARM: barn, paddock, field, gear    | `engine/mapgen/farms.ts` (R37) lays it out; drawn by `barn.ts`, `paddock.ts`, `farm-gear.ts` in `pwa/src/game/`                    |
 | The COWS and the sheep grazing a paddock                     | `pwa/src/game/livestock.ts` — the crowd's pattern: where they MAY be is the engine's paddock, where each stands is the renderer's  |
 | WHERE a WIND FARM or a SOLAR FARM stands, and what it is     | `engine/mapgen/energy.ts` (R43) places both; the numbers are `STAGE_RULES.energy`, the country's say `BiomeRules.energy`           |
+| WHERE THE GRID crosses the country, and its towers stand     | `engine/mapgen/powerline.ts` (R45) surveys the line and spots the towers; the numbers are `STAGE_RULES.powerline`                  |
+| What a TRANSMISSION TOWER looks like, and how its wires hang | `pwa/src/game/powerline.ts` — its own manager outside the road chunks; `make items ITEMS=pylon` photographs one                    |
 | WHERE the TRAFFIC drives, and the speed limit signs it reads | `engine/mapgen/traffic.ts` (R44) plans the routes over the arms and the car park lanes; the numbers in `STAGE_RULES.traffic`       |
 | How a MOTORIST drives, and what hitting one costs            | `engine/game/traffic.ts` (the fleet, stepped inside `step()`); the twenty vehicles and the knobs in `engine/game/defs/traffic.ts`  |
 | What a traffic VEHICLE looks like — the twenty silhouettes   | `pwa/src/game/traffic-fleet.ts` (one merged mesh per body kind); `make items GROUP=vehicles` photographs them, and the sign        |

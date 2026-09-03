@@ -391,6 +391,52 @@
 //       inverter cabin as solid as they look. Both keep off the water,
 //       every road, every town and homestead, and each other, and neither
 //       costs the route anything. `roads.energy` measures every one.
+//   R45 THE POWER GOES SOMEWHERE ELSE. The country that makes power
+//       (`BiomeRules.energy`) carries the GRID that takes it away: one
+//       400 kV transmission line, laid rim to rim across the map from
+//       nothing but the seed and the bare country, on a little over half
+//       the seeds and never two. It is not a thing beside the road — it
+//       is a thing the road passes under, and the moment worth having is
+//       the crossing.
+//
+//       IT IS A CHAIN OF TOWERS, AND IT TURNS ONLY AT ONE. There is no
+//       line to place towers on: the towers ARE the line. From each one
+//       the bearing runs at the far rim, swinging off it only to get
+//       round water the line could not span, and turning at all only by
+//       `angle.most` — past `angle.suspension` the tower is an ANGLE
+//       tower, heavier and strung with horizontal tension insulators, and
+//       a line does not put one in every span (`angle.apart`). A TENSION
+//       tower goes in every `section` spans in any case: a line strung
+//       suspension to suspension for kilometres falls over for
+//       kilometres when one goes.
+//
+//       WHERE THE NEXT TOWER STANDS IS A CLEARANCE PROBLEM, not a
+//       spacing one. The conductor hangs in a parabola whose sag goes as
+//       the SQUARE of the span (`sag` at the ruling span), and the next
+//       tower goes at the LONGEST span, `span.max` down to `span.min`,
+//       whose wire still clears the ground under it by `clearance.ground`
+//       — `clearance.road` where it crosses a road. That is the surveyor's
+//       own method with the sag template, and it is why the towers come
+//       out on the brows and the long spans over the hollows. Where the
+//       whole band refuses — a lake, a village, the road and its verges,
+//       ground too steep to foot a tower on, a hollow the wire would dip
+//       into — the span STRETCHES to `span.stretch` and carries over: the
+//       ridge-to-ridge crossing span, sagging thirty metres, which is the
+//       one that looks like something. A window that refuses even
+//       stretched refuses the whole line, and another entry on the rim is
+//       tried: a grid with a hole in it is worse than a country with no
+//       grid.
+//
+//       Every foot stands off the route, every other road, every town,
+//       homestead and energy plant (`clear`), and out of the water. Under
+//       the wires the forest is cut back to a WAYLEAVE `wayleave` metres
+//       either side — a straight ride through the trees, over the hills,
+//       which is the half of this that is visible from a kilometre away —
+//       and only the trees: the stones and the scrub stay, because a
+//       corridor is cut on a cycle of years. The towers' legs are as
+//       solid as they look; nothing else about the line touches the car,
+//       and none of it costs the route anything. `roads.wires` measures
+//       the spans, the clearances and the ground every tower stands on.
 
 import { isBiomeId, type BiomeId } from "./biomes.ts";
 
@@ -2266,6 +2312,172 @@ export const STAGE_RULES = {
       /** The sizes a farm is tried at, as shares of the rolled one. */
       shrink: [1, 0.75, 0.55, 0.42],
     },
+  },
+
+  /** R45 — THE GRID: the transmission line that takes the power away,
+   * laid rim to rim across the map before the rally. Meters unless noted.
+   * Only in a country that makes power (`BiomeRules.energy`) — the same
+   * flag the wind and the solar farms read, because a grid and the things
+   * that feed it are one fact about a country.
+   *
+   * The numbers are a 400 kV line's, which is what the portal tower in
+   * Scandinavia carries: three conductors on one crossarm in bundles of
+   * two, two earth wires on the peaks, towers between fifteen and
+   * fifty-five metres, a ruling span in the low hundreds and a corridor
+   * cut through the forest around fifty metres wide. Nothing here is a
+   * number picked to look right — it is what a line of this class is,
+   * and the placer that reads them is the surveyor's own method. */
+  powerline: {
+    /** How often a seed's country carries one at all. A line is a
+     * LANDMARK: seen once on a stage it is a place, seen on every stage it
+     * is wallpaper, and at a little under half the seeds a driver meets one
+     * often enough to know it and rarely enough to look up. Never two —
+     * two lines across one map cross each other, and a crossing of two
+     * grids is a substation, which is a different thing entirely. */
+    chance: 0.45,
+    /** How many entry points on the rim a line may be tried from before
+     * the country is judged not to carry one. Far fewer than a road's: a
+     * refused line costs a whole walk of towers, and one that will not fit
+     * at ten entries is on a seed that is mostly lake. */
+    tries: 10,
+    /** How far outside the world bound a line starts and ends, m — past
+     * the fog's own reach, so it is never seen beginning, and past
+     * anything a wayleave could betray.
+     *
+     * There is no `step` for the line itself, and there cannot be: a line
+     * is a chain of TOWERS, and it can only change direction at one. What
+     * gets walked is the tower list. */
+    overrun: 650,
+    /** THE SPANS. `ruling` is the span the line's TENSION was designed at
+     * — everything about the sag follows from it — and `min`..`max` is the
+     * band the ground is allowed to move a span inside. `stretch` is the
+     * long crossing span: the ridge-to-ridge reach a surveyor takes when
+     * the ordinary band has nowhere in it to stand a tower, which is where
+     * a line gets over a lake, and where it looks like something.
+     *
+     * A 400 kV line's own numbers. Past `stretch` the line is refused
+     * rather than drawn with a gap in it. */
+    span: { min: 190, ruling: 350, max: 400, stretch: 640 },
+    /** How finely a span is searched, m. A tower moves ALONG the line and
+     * never off it: the bearing is the survey's, and a tower shuffled
+     * sideways to dodge a fence is the one thing that would say plainly
+     * this was generated. */
+    probe: 12,
+    /** How far a span sags at its middle at the RULING span, as a share of
+     * it. Sag goes as the SQUARE of the span at a fixed tension
+     * (`w·L²/8H`), so this one number gives every span its own: the band's
+     * shortest hangs a few metres, and the stretch over a valley hangs
+     * thirty. That is not a licence — it is the whole reason a long span
+     * needs a valley under it, and it is what makes the crossing spans
+     * read as the big ones. The parabola the game draws is within half a
+     * percent of the catenary under a tenth of the span, which every span
+     * here is. */
+    sag: 0.028,
+    /** THE CLEARANCE the lowest conductor keeps over the ground, and over
+     * a public or rally ROAD, m. This — not a spacing rule — is what
+     * actually spots a tower: the surveyor lays the sag curve on the
+     * ground profile and stands a tower where it would otherwise touch,
+     * which is why real towers are on the brows and the long spans are
+     * over the hollows. The ground figure is a 400 kV line's statutory
+     * one; a crossing gets more, the way a railway crossing does. */
+    clearance: { ground: 8.8, road: 12 },
+    /** HOW A LINE TURNS. `most` is the biggest deviation a tower here
+     * carries, rad (a real line's heavy angle towers go further, but past
+     * this the structure is a different machine and the line stops reading
+     * as straight). `suspension` is the most an ORDINARY tower carries:
+     * past it the tower is an ANGLE tower, which is heavier, strung with
+     * horizontal tension insulators instead of hanging ones, and not a
+     * thing a line puts in every span — hence `apart`, the least spans
+     * between two of them. */
+    angle: {
+      most: 0.34,
+      suspension: 0.035,
+      apart: 3,
+      /** How many ANGLE POINTS the survey fixes between the two rims, and
+       * how far off the straight one may be pushed, as a share of the
+       * map's own reach. A line aimed at one point comes out dead straight
+       * on every seed, because nothing in a bare country is a reason to
+       * turn — what turns a real line is land nobody would sell and places
+       * somebody wanted it to pass, and neither of those is on this map.
+       * The dice stand in for the surveyor; `most` still decides what the
+       * structure can carry, so a survey that asks for more than a tower
+       * can take gets a longer, gentler bend rather than a kink. */
+      points: { min: 1, max: 2 },
+      offset: 0.3,
+    },
+    /** ...and the most spans a line runs before it puts a TENSION tower in
+     * anyway. A line strung suspension tower to suspension tower for
+     * kilometres falls over kilometres at a time when one of them goes:
+     * the section breaks are what stop a cascade, and they are the reason
+     * a straight line still has heavy towers on it. */
+    section: 5,
+    /** How far ahead the line looks for water when it is choosing its
+     * bearing at a tower, and how far above the water table the ground has
+     * to stand before a tower could go there. It swings off its aim to get
+     * round water it could not span, and spans the rest. */
+    shoreLook: 520,
+    shoreFreeboard: 1.5,
+    /** What a tower's foot keeps clear of: the route's centerline (the
+     * corridor at its widest, and half as much again of field past it —
+     * far enough that a car has to be a long way wrong to reach one, near
+     * enough that the wires still cross the road in front of you), any
+     * other road's centerline, a town's or a homestead's pad rim, and a
+     * turbine's crane pad or a solar farm's fence. */
+    clear: { route: 34, road: 26, settled: 40, energy: 55 },
+    /** THE TOWER — the Nordic portal (the type Scandinavia, Ireland and
+     * much of North America carry): two splayed lattice legs under one
+     * horizontal crossarm, the conductors on insulator strings under it
+     * and the earth wires up on the crossarm's two peaks. Height to the
+     * crossarm, how far apart the legs stand at the ground, how long the
+     * crossarm is, and how high the peaks stand over it. Inside the 15-55
+     * m band real towers are built in, at the height a 400 kV portal is.
+     * Drawn once per LINE: a grid is one make of tower the whole way
+     * across a country. */
+    tower: {
+      height: { min: 28, max: 36 },
+      base: 17,
+      arm: 20,
+      peak: 3.9,
+      /** How wide one leg stands at its foot, and how far in from the
+       * crossarm's END its top sits. The gap between the two is the whole
+       * silhouette: the legs meet the arm well inboard of its tips and
+       * SPLAY out to nearly the arm's own width at the ground, which is
+       * what makes a portal read as a portal rather than as two masts
+       * somebody laid a beam across. */
+      foot: 2.2,
+      inset: 5.5,
+      /** The most the bare ground may fall across the tower's own base
+       * before the ground is judged not to hold one, m. A real tower
+       * stands on legs cut to length and does climb a hillside; what this
+       * refuses is the bank of a cutting and the lip of a crag. */
+      level: 4.5,
+      /** THE FOOTINGS. A lattice tower is not planted in the dirt: each
+       * leg is bolted to a poured concrete pad with a CHIMNEY on it that
+       * stands proud of the ground, and on a hillside the footings are
+       * poured to one working level so the downhill one stands taller.
+       * How wide the chimney is, how far it stands proud on the level, and
+       * the most it may stand before the difference is taken up by the LEG
+       * instead — which is the other half of how a real tower fits a
+       * slope, and why `level` above may be more than `most` here. */
+      footing: { width: 1.5, proud: 0.5, most: 2.2 },
+    },
+    /** THE WIRES: how many conductors the crossarm carries and how far
+     * under it they hang on their insulator strings, how many sub-wires
+     * each conductor is BUNDLED from and how far apart they are spaced (a
+     * 400 kV phase is two wires on spacers, which is why the wires come in
+     * pairs when you are near enough to see), and how many earth wires
+     * ride the peaks. One circuit, three phases, two earth wires: the line
+     * in the photograph. */
+    wire: { conductors: 3, insulator: 3.2, bundle: 2, bundleGap: 0.45, earth: 2 },
+    /** THE WAYLEAVE: how far either side of the line the forest is cut
+     * back, m — half of a 400 kV corridor, which runs a little under fifty
+     * metres wide. A straight ride through the trees that runs over the
+     * hills and out of sight: the half of a transmission line that is
+     * visible from further away than the towers are. It clears TREES and
+     * nothing else — the stones, the scrub and the ground cover stay,
+     * because a corridor is cut on a cycle of years and what grows back
+     * between cuts is exactly that. */
+    wayleave: 24,
   },
 
   /** R39 — THE TOWNS: where the tarmac leads. */

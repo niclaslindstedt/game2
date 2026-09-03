@@ -906,6 +906,43 @@ export const ANALYSIS = {
    * surface carry the most because they are what a player reads as "this
    * world is fake" fastest; cost carries real weight because a beautiful
    * stage nobody can load is not a stage. */
+  /** R45 — THE GRID. The line is PLANNED against the survey (the bare
+   * country, and the route's samples where a road stands over it) and
+   * MEASURED here against what got built, so every slack below is the gap
+   * between those two allowed to be a blemish rather than a defect. */
+  wires: {
+    /** How far apart a span is sampled along its length, m, and how fat
+     * the wayleave's tree probe is. Finer than the placer's own probe:
+     * this is the measurement, and it is allowed to cost more than the
+     * thing it measures. */
+    step: 8,
+    wayleaveStep: 14,
+    wayleaveProbe: 3,
+    /** How near a road a point has to be before the span over it owes the
+     * road's clearance rather than the country's, m — the widest corridor
+     * plus its verge, with room for the road to have wandered (R33). */
+    roadReach: 24,
+    /** How much nearer a road than R45 allows a tower may stand before it
+     * is a finding, m. The placer measures to the route's CENTERLINE at
+     * the stage's nominal width; the terrain answers from the road's own
+     * edge at the width it came out, and R33's wander moves that. */
+    clearSlack: 4,
+    /** ...and how much more fall across a tower's base the BUILT ground
+     * may show than the survey read, as a multiple of the placer's own
+     * limit. A tower at the top of a cutting stands on ground the road
+     * blasted after the line was surveyed. */
+    levelSlack: 1.6,
+    /** The share of a line's spans that may be STRETCHED ones before the
+     * line stops reading as a designed line and starts reading as a walk
+     * that kept failing. One crossing span in a line is the picture; half
+     * of them stretched means the band is wrong. */
+    stretchShare: 0.25,
+    /** How far from the nearest road a line's END has to be before it is
+     * out of sight, m — past the fog, with room for the draw-distance
+     * option's own reach. */
+    fog: 700,
+  },
+
   weights: {
     rollers: 1.6,
     water: 1.4,
@@ -926,6 +963,11 @@ export const ANALYSIS = {
      * tape, and by nobody else — but a staircase down one is a staircase
      * on every branch of every stage. */
     lanes: 0.8,
+    /** R45 — one line on a little under half the seeds, and nothing on the
+     * rest. Light for that reason and no lighter: the one thing it can get
+     * wrong is a wire hanging over the road at head height, which is the
+     * kind of defect a player photographs. */
+    wires: 0.8,
     perf: 0.8,
   },
 } as const;
