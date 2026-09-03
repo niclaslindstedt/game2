@@ -12,10 +12,11 @@
 // other half of a screenshot: the picture says where, the log says what led
 // there.
 //
-// MAP VIEWER is a door rather than a page: it opens Roam's stage list
-// (menu-levels.tsx), because a campaign stage on the map is a Roam setup
-// with the campaign's numbers in it — and one that can then be DRIVEN,
-// which a viewer of its own never could.
+// MAP VIEWER opens the stage READER (menu-map-viewer.tsx) on the stage list
+// every page that offers the shipped roads shares (menu-levels.tsx). It is
+// the only place the generator's layers are: Roam is a page for choosing a
+// road to drive, and a strip of layer buttons across the country helps
+// nobody do that.
 //
 // And one card that is not a page: the BENCHMARK's, which goes over the race
 // it is timing rather than into the menu, because the thing being measured
@@ -265,8 +266,8 @@ export function DeveloperPage({
       <button type="button" className="menu-item menu-item-dev" onClick={onMapViewer}>
         MAP VIEWER
         <span className="menu-item-sub">
-          Roam&apos;s stage list, straight from here — a campaign stage on the map, with the layers,
-          the zoom, the pan, the shutter, and DRIVE IT
+          Any stage on the map and nothing else — the generator&apos;s own layers over it, the zoom,
+          the pan, COPY DEBUG INFO and the shutter
         </span>
       </button>
       <button type="button" className="menu-item menu-item-dev" onClick={onDebugLog}>

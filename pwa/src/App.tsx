@@ -153,7 +153,8 @@ import {
 } from "./game/menu.tsx";
 import { MainMenu, type MenuPage } from "./game/main-menu.tsx";
 import { BenchmarkCard } from "./game/menu-dev.tsx";
-import type { MapDebug, MapRect, MapView } from "./game/menu-roam.tsx";
+import type { MapDebug } from "./game/menu-map-viewer.tsx";
+import type { MapRect, MapView } from "./game/map-pane.tsx";
 import { mapDebugBoxes, mapReproQuery } from "./game/map-debug.ts";
 import { MAP_LAYERS, type MapLayerId, type MapLayerInfo } from "./game/map-layers.ts";
 import {
@@ -336,9 +337,10 @@ function mapPoseFromUrl(): Partial<MapPose> {
 }
 
 /** ?layer= — which of the generator's layers the map opens painted with,
- * and `?mapfull=1` for the pane blown up to the whole screen. Both are the
- * developer's map (map-layers.ts), so both let the developer menu out for
- * this launch exactly as `?debug=1` does. */
+ * and `?mapfull=1` for the map filling the screen. Both are the DEVELOPER'S
+ * MAP VIEWER (menu-map-viewer.tsx) and nothing a player has, so both open
+ * that page rather than Roam, and both let the developer menu out for this
+ * launch exactly as `?debug=1` does. */
 function mapLayerFromUrl(): MapLayerId | null {
   const raw = new URLSearchParams(location.search).get("layer");
   return MAP_LAYERS.some((l) => l.id === raw) ? (raw as MapLayerId) : null;
@@ -822,7 +824,14 @@ export function App() {
     // repro line points at, and what a screenshot pass of the generator's
     // layers asks for.
     const params = new URLSearchParams(location.search);
-    if (params.get("roam") === "1") return { page: "roam" };
+    // `?roam=1` opens the map page. Which of the two it is is decided by the
+    // developer's own switches: a line carrying a layer or the full-screen
+    // flag is a repro of the VIEWER (see mapReproQuery), and one carrying
+    // neither is a player's link to a seed.
+    if (params.get("roam") === "1") {
+      const viewing = mapFullFromUrl() || mapLayerFromUrl() !== null;
+      return viewing ? { page: "roam", viewing: true } : { page: "roam" };
+    }
     return params.get("start") === "1" && params.get("menu") !== "1" ? null : { page: "root" };
   });
   const [seed, setSeed] = useState(() => {
@@ -1645,11 +1654,9 @@ export function App() {
   );
 
   /** THE DEVELOPER'S MAP (map-layers.ts): which of the generator's layers is
-   * painted over the stage, and whether the pane has been blown up to the
-   * whole screen. Neither is persisted — a debug layer that came back next
-   * launch would be a surprise rather than a tool. */
+   * painted over the stage. Not persisted — a debug layer that came back
+   * next launch would be a surprise rather than a tool. */
   const [mapLayer, setMapLayer] = useState<MapLayerId | null>(mapLayerFromUrl);
-  const [mapFull, setMapFull] = useState(mapFullFromUrl);
   /** What the painted layer measured, kept in a ref as well as in state: the
    * debug panel reads it four times a second off a closure that must not be
    * re-made on every frame, and the legend under the map renders off state. */
@@ -1663,16 +1670,20 @@ export function App() {
   useEffect(() => {
     const renderer = rendererRef.current;
     if (!renderer) return;
-    const onRoam = menu?.page === "roam";
-    setMapInfo(renderer.setMapLayer(onRoam ? mapLayer : null));
-    // The idle turn is the MENU's decoration. Once the map is being read —
-    // blown up to the screen, or with a layer painted on it — it holds
-    // still, because a reading that turns on its own cannot be compared
-    // with the one taken before the change that is under test.
-    renderer.holdMap(onRoam && (mapFull || mapLayer !== null));
-  }, [mapLayer, mapFull, menu, seed, race, booted]);
+    // The layers belong to the VIEWER and to nothing else: Roam is a page
+    // for choosing a road to drive, and a stage painted in soil depths is
+    // not a stage anybody is choosing by looking at. So the switch is read
+    // there and nowhere else, which is what stops a layer left on in the
+    // viewer following the player back onto Roam.
+    const onViewer = menu?.page === "roam" && menu.viewing === true;
+    setMapInfo(renderer.setMapLayer(onViewer ? mapLayer : null));
+    // The idle turn is the MENU's decoration. Once the map is being READ it
+    // holds still, because a reading that turns on its own cannot be
+    // compared with the one taken before the change that is under test.
+    renderer.holdMap(onViewer);
+  }, [mapLayer, menu, seed, race, booted]);
 
-  /** The boxes over a full-screen map, read fresh: the framing moves under
+  /** The boxes over the viewer's map, read fresh: the framing moves under
    * the hand, so this is a function rather than a value. Null before there
    * is a stage to describe. */
   const readMapDebug = (): { boxes: DebugBox[]; repro: string } | null => {
@@ -1730,13 +1741,11 @@ export function App() {
     () => ({
       layer: mapLayer,
       onLayer: setMapLayer,
-      full: mapFull,
-      onFull: setMapFull,
       legend: mapInfo?.legend ?? [],
       read: () => readMapDebugRef.current(),
       onShot: () => takeMapShotRef.current(),
     }),
-    [mapLayer, mapFull, mapInfo],
+    [mapLayer, mapInfo],
   );
 
   /** A CAMPAIGN STAGE, LOADED INTO ROAM. A level is a seed, a band, a shape

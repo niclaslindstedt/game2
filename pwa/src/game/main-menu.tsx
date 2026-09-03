@@ -32,6 +32,7 @@ import {
   latestOpen,
   levelCleared,
   levelCompleted,
+  levelForRoad,
   levelUnlocked,
   locationById,
   locationComplete,
@@ -55,7 +56,9 @@ import { DifficultyPicker, MenuHead, gridSize, type PlayMode, type RaceSettings 
 import { OptionsPage, type OptionsSub } from "./menu-options.tsx";
 import { unlockAudio } from "./audio/bus.ts";
 import { playUi } from "./audio/ui.ts";
-import { RoamPage, type MapDebug, type MapRect, type MapView } from "./menu-roam.tsx";
+import { MapViewerPage, type MapDebug } from "./menu-map-viewer.tsx";
+import { RoamPage } from "./menu-roam.tsx";
+import type { MapRect, MapView } from "./map-pane.tsx";
 import type { Settings } from "./settings.ts";
 
 export type MenuPage =
@@ -74,21 +77,22 @@ export type MenuPage =
    * what decides which grid BACK returns to. */
   | { page: "car"; levelId: string; mode: PlayMode }
   | { page: "gallery" }
-  /** Roam — and, with `viewing` set, the developer's MAP VIEWER, which is
-   * the same page with everything but the map taken off it.
+  /** Roam — and, with `viewing` set, the developer's MAP VIEWER.
    *
-   * One page rather than two because the map, its camera, its layers and
-   * the stage standing under it are the same in both, and a viewer of its
-   * own would be a second copy of all of it drifting out of step. What the
-   * flag changes is what the page is FOR: Roam is a stage you are choosing
-   * in order to drive it, and the viewer is a stage you are looking at.
+   * ONE page state rather than two because the backdrop is the same in
+   * both: the engine is held under the map camera on this state and on no
+   * other, and the pane's rectangle, the map's framing and the stage
+   * standing under it belong to whichever of the two is up. What is DRAWN
+   * is two different components — menu-roam.tsx and menu-map-viewer.tsx —
+   * because they are two different questions: Roam is a stage you are
+   * choosing in order to drive it, and the viewer is a stage you are
+   * reading.
    *
-   * `picking` is set while the STAGE LIST is up, on either. It is a step of
-   * the page rather than a page of its own because what it changes is that
-   * page's settings: leaving it does not leave the map, and the backdrop,
-   * the map camera and the pane's rectangle belong to the page underneath
-   * it either way. */
-  | { page: "roam"; picking?: boolean; viewing?: boolean }
+   * `picking` is set while the STAGE LIST is up, on either; `car` is set
+   * on the pre-race card Roam hands off to. Both are steps of the page
+   * rather than pages of their own, so BACK walks them in the order the
+   * presses came in. */
+  | { page: "roam"; picking?: boolean; viewing?: boolean; car?: boolean }
   /** Options — and, with `sub` set, one of the binding pages behind its
    * CONTROLS rows. A step of the page rather than a page of its own, the
    * way Roam's stage list is: BACK from it lands on the rows. */
@@ -618,7 +622,7 @@ function parentOf(page: MenuPage): MenuPage | null {
   // it was opened from, then the map itself back to whichever door it was
   // reached through — the front one, or the developer menu.
   if (page.page === "roam") {
-    if (page.picking === true) return { page: "roam", viewing: page.viewing };
+    if (page.picking === true || page.car === true) return { page: "roam", viewing: page.viewing };
     return page.viewing === true ? { page: "developer" } : { page: "root" };
   }
   if (page.page === "options" && page.sub) return { page: "options" };
@@ -655,6 +659,13 @@ export function MainMenu(props: MainMenuProps) {
   // substitution rather than a navigation, because a render is not the
   // place to change what page the app thinks it is on.
   const found = props.page.page === "car" ? findLevel(props.page.levelId) : null;
+  // WHICH ROAD ROAM IS STANDING ON, for the pre-race card's title. Derived
+  // from the settings the same way Roam's own LEVEL row is, so the card and
+  // the row can never name different stages.
+  const roamLevel =
+    props.page.page === "roam"
+      ? levelForRoad(props.seed, props.race.length, props.race.shape, props.race.knobs)
+      : null;
   const page =
     props.page.page === "car" && found === null
       ? carParent(props.page.levelId, props.page.mode)
@@ -761,10 +772,9 @@ export function MainMenu(props: MainMenuProps) {
         )}
         {page.page === "car" && found !== null && (
           <CarSetupPage
-            location={found.location}
-            level={found.level}
-            mode={page.mode}
-            progress={props.progress}
+            title={found.level.name.toUpperCase()}
+            backLabel={found.location.name.toUpperCase()}
+            best={props.progress.best[found.level.id]}
             race={props.race}
             onRace={props.onRace}
             settings={props.settings}
@@ -777,22 +787,53 @@ export function MainMenu(props: MainMenuProps) {
         {page.page === "gallery" && (
           <GalleryPage settings={props.settings} onBack={() => navigate({ page: "root" })} />
         )}
-        {page.page === "roam" && (
+        {page.page === "roam" && page.viewing === true && (
+          <MapViewerPage
+            race={props.race}
+            seed={props.seed}
+            onSeed={props.onSeed}
+            progress={props.progress}
+            onLevel={props.onRoamLevel}
+            picking={page.picking === true}
+            onPicking={(picking) => navigate({ page: "roam", picking, viewing: true })}
+            onMapRect={props.onMapRect}
+            mapView={props.mapView}
+            map={props.mapDebug}
+            onBack={() => navigate(parentOf(page) ?? { page: "root" })}
+          />
+        )}
+        {/* ROAM, and the CAR CARD it hands off to. The card is a step of
+            this page rather than a page of its own for the reason the stage
+            list is: what it is setting up is Roam's own settings, and the
+            map goes on standing behind it. */}
+        {page.page === "roam" && page.viewing !== true && page.car !== true && (
           <RoamPage
             race={props.race}
             onRace={props.onRace}
             seed={props.seed}
             onSeed={props.onSeed}
-            onStart={props.onPlayRoam}
+            onNext={() => navigate({ page: "roam", car: true })}
             onBack={() => navigate(parentOf(page) ?? { page: "root" })}
-            onDeveloper={props.onDeveloper}
+            progress={props.progress}
             onLevel={props.onRoamLevel}
-            viewing={page.viewing === true}
             picking={page.picking === true}
-            onPicking={(picking) => navigate({ page: "roam", picking, viewing: page.viewing })}
+            onPicking={(picking) => navigate({ page: "roam", picking })}
             onMapRect={props.onMapRect}
             mapView={props.mapView}
-            map={props.mapDebug}
+          />
+        )}
+        {page.page === "roam" && page.viewing !== true && page.car === true && (
+          <CarSetupPage
+            title={roamLevel?.name.toUpperCase() ?? `SEED ${props.seed}`}
+            backLabel="ROAM"
+            startLabel="DRIVE IT"
+            race={props.race}
+            onRace={props.onRace}
+            settings={props.settings}
+            onSettings={props.onSettings}
+            onBack={() => navigate({ page: "roam" })}
+            onStart={props.onPlayRoam}
+            onDeveloper={props.onDeveloper}
           />
         )}
         {page.page === "developer" && (

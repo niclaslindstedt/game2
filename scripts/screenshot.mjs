@@ -1403,10 +1403,13 @@ await capture(
   { initScript: SEEDED_BEST },
 );
 
-// Roam: the split view, with the stage drawn into its own pane.
+// Roam: the map and the settings beside it, in the three shapes the page
+// has to stand in. The landscape phone is the binding one — the map, a
+// dozen rows and the way on, in 390 px of height.
 for (const [name, viewport] of [
   ["shot-menu-roam", { width: 1280, height: 720 }],
   ["shot-menu-roam-portrait", { width: 390, height: 844 }],
+  ["shot-menu-roam-landscape", { width: 844, height: 390 }],
 ]) {
   await capture(
     name,
@@ -1476,10 +1479,16 @@ await capture(
   "shot-menu-developer",
   { width: 1280, height: 720 },
   async (page) => {
+    // The chassis secret lives on the pre-race card, which is where the car
+    // is — Roam reaches it in one press, and two back out again.
     await menuUp(page);
     await tile(page, "roam");
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(2500);
+    await page.locator(".menu-start").click();
+    await page.waitForTimeout(2500);
     await drumChassis(page);
+    await page.locator("[data-nav-back]").first().click();
+    await page.waitForTimeout(600);
     await page.locator("[data-nav-back]").first().click();
     await page.waitForTimeout(600);
     await page.locator("[data-menu='developer']").click();
@@ -1596,7 +1605,7 @@ await capture(
     await page.waitForTimeout(400);
     await page.locator(".menu-item", { hasText: "MAP VIEWER" }).first().click();
     await page.waitForTimeout(400);
-    await page.locator(".menu-item", { hasText: "TAIGA" }).first().click();
+    await page.locator(".menu-location", { hasText: "TAIGA" }).first().click();
     await page.waitForTimeout(600);
   },
   { menu: "1", debug: "1" },
@@ -1611,20 +1620,40 @@ await capture(
     await page.waitForTimeout(400);
     await page.locator(".menu-item", { hasText: "MAP VIEWER" }).first().click();
     await page.waitForTimeout(400);
-    await page.locator(".menu-item", { hasText: "TAIGA" }).first().click();
+    await page.locator(".menu-location", { hasText: "TAIGA" }).first().click();
     await page.waitForTimeout(400);
     // Granite Ridge — the long one, with the jumps and the water in it.
-    await page.locator(".menu-item", { hasText: "GRANITE RIDGE" }).first().click();
+    await page.locator(".menu-level", { hasText: "GRANITE RIDGE" }).first().click();
     await mapUp(page);
-    // ...and the layer switched on with the BUTTON, not with a URL.
-    await page.locator("[data-map-layer='soil']").click();
+    // ...and the layer switched on with the BUTTON, not with a URL. Painting
+    // a layer samples the generator over the whole stage on the main thread,
+    // which under software rendering is longer than a click's default wait.
+    await page.locator("[data-map-layer='soil']").click({ timeout: 120000 });
     await page.waitForTimeout(6000);
   },
   { menu: "1", debug: "1" },
 );
 
-// ...and the same list where a PLAYER meets it: Roam's own SELECT LEVEL,
-// with the stage loaded, its conditions lit, and DRIVE IT beside the map.
+// ...and the same boxes where a PLAYER meets them: Roam's own SELECT A
+// LEVEL, which is the campaign's country rows and the campaign's stage grid
+// with the padlocks off.
+await capture(
+  "shot-roam-stages",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await menuUp(page);
+    await page.locator("[data-menu='roam']").click();
+    await page.waitForTimeout(600);
+    await page.locator("[data-roam-level]").click();
+    await page.waitForTimeout(400);
+    await page.locator(".menu-location", { hasText: "TAIGA" }).first().click();
+    await page.waitForTimeout(600);
+  },
+  { menu: "1" },
+);
+
+// The stage loaded back onto Roam: the pick button lit with its name, the
+// conditions it is authored in showing on the rows, and the map redrawn.
 await capture(
   "shot-roam-level",
   { width: 1280, height: 720 },
@@ -1632,12 +1661,27 @@ await capture(
     await menuUp(page);
     await page.locator("[data-menu='roam']").click();
     await page.waitForTimeout(600);
-    await page.locator(".roam-level").click();
+    await page.locator("[data-roam-level]").click();
     await page.waitForTimeout(400);
-    await page.locator(".menu-item", { hasText: "TAIGA" }).first().click();
+    await page.locator(".menu-location", { hasText: "TAIGA" }).first().click();
     await page.waitForTimeout(400);
-    await page.locator(".menu-item", { hasText: "COLD WATER" }).first().click();
+    await page.locator(".menu-level", { hasText: "COLD WATER" }).first().click();
     await page.waitForTimeout(6000);
+  },
+  { menu: "1" },
+);
+
+// ...and the CAR, which is the screen after it: the same pre-race card the
+// campaign hands off to, reached from Roam and saying so.
+await capture(
+  "shot-roam-car",
+  { width: 1280, height: 720 },
+  async (page) => {
+    await menuUp(page);
+    await page.locator("[data-menu='roam']").click();
+    await page.waitForTimeout(2000);
+    await page.locator(".menu-start").click();
+    await page.waitForTimeout(2500);
   },
   { menu: "1" },
 );

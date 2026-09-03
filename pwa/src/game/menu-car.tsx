@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// THE PRE-RACE CARD — what stands between picking a stage and driving it.
-//
-// The stage grid used to carry the car picker under it, which made the car
-// a setting on the level select rather than a decision: a player scanning
-// six stage boxes is choosing a ROAD, and a control sitting below the fold
-// is one nobody reads. Splitting it out gives the choice its own screen.
+// THE PRE-RACE CARD — what stands between picking a stage and driving it,
+// on every one of the four ways into a run: the campaign's ladder, the time
+// trial, heads up, and Roam. A player scanning six stage boxes — or turning
+// a map round — is choosing a ROAD; the car is a second decision and gets a
+// screen of its own. Everything specific to the surface it was reached from
+// is passed in (the title, the way back, the time to beat, what the green
+// light says), so there is one card rather than four that drift.
 //
 // TWO THINGS ARE ON IT, and the layout says so: THE CAR, which is the
 // decision, and THE TRANSMISSION, which is the only other thing the player
@@ -27,11 +28,10 @@ import { carById, type CarSpec, type GearboxMode } from "@engine";
 import { playToggle } from "./audio/ui.ts";
 import { COUNT_SECONDS, countAt } from "../lib/count.ts";
 import { formatTime } from "../lib/util.ts";
-import type { CampaignLevel, CampaignLocation, CampaignProgress } from "./campaign.ts";
 import { CarPicker } from "./car-picker.tsx";
 import { carBars, carFacts, type CarFact } from "./car-stats.ts";
 import { Caption } from "./menu-knobs.tsx";
-import { GEARBOX_OPTIONS, MenuHead, type PlayMode, type RaceSettings } from "./menu.tsx";
+import { GEARBOX_OPTIONS, MenuHead, type RaceSettings } from "./menu.tsx";
 import type { Settings } from "./settings.ts";
 
 /** THE TRANSMISSION, as the second-biggest thing on the card. It used to be
@@ -166,20 +166,19 @@ function CarReadings({ spec, gearbox }: { spec: CarSpec; gearbox: GearboxMode })
   );
 }
 
-/** Which page the card came from, named. The campaign's is the location
- * itself, so it is the one this table does not hold. */
-const BACK_TO: Partial<Record<PlayMode, string>> = {
-  timetrial: "TIME TRIAL",
-  headsup: "HEADS UP",
-};
-
 export type CarSetupPageProps = {
-  location: CampaignLocation;
-  level: CampaignLevel;
-  /** What the stage is being entered AS — it decides where BACK goes and
-   * what the button under the card promises. */
-  mode: PlayMode;
-  progress: CampaignProgress;
+  /** WHAT IS BEING SET UP FOR, named: the stage's own name off the grid, or
+   * — on Roam, which has no grid — whichever road the map is standing on. */
+  title: string;
+  /** Where BACK goes, in words. The card is reached from four surfaces, and
+   * a way out that names the wrong one is worse than one that names none. */
+  backLabel: string;
+  /** THE TIME TO BEAT, where the stage has one. Absent on Roam: a run built
+   * out of dials is not a run on the same road as anybody's record. */
+  best?: number;
+  /** What the green light says. The campaign starts a stage; Roam has been
+   * choosing a road for a whole screen and is finally driving it. */
+  startLabel?: string;
   race: RaceSettings;
   onRace: (race: RaceSettings) => void;
   settings: Settings;
@@ -190,10 +189,10 @@ export type CarSetupPageProps = {
 };
 
 export function CarSetupPage({
-  location,
-  level,
-  mode,
-  progress,
+  title,
+  backLabel,
+  best,
+  startLabel = "START",
   race,
   onRace,
   settings,
@@ -203,7 +202,6 @@ export function CarSetupPage({
   onDeveloper,
 }: CarSetupPageProps) {
   const spec = carById(race.carId);
-  const best = progress.best[level.id];
   // Whatever the pointer or the cursor is on, or the car's own line of
   // billing while it is on neither. The blurb is the right thing to fall
   // back to: it is what the card would say if it could only say one thing.
@@ -220,8 +218,8 @@ export function CarSetupPage({
           names it. */}
       <MenuHead
         back={onBack}
-        backLabel={BACK_TO[mode] ?? location.name.toUpperCase()}
-        title={level.name.toUpperCase()}
+        backLabel={backLabel}
+        title={title}
         aside={
           best === undefined ? undefined : (
             // THE TIME TO BEAT, read as a figure rather than as billing: it
@@ -278,7 +276,7 @@ export function CarSetupPage({
           START, the pad button, takes the green light from wherever the
           cursor happens to be standing. */}
       <button type="button" className="menu-start" data-nav-next onClick={onStart}>
-        START
+        {startLabel}
       </button>
     </div>
   );

@@ -21,6 +21,7 @@
 import type { ComponentChildren } from "preact";
 
 import { playToggle, playUi } from "./audio/ui.ts";
+import { Glyph, type GlyphName } from "./menu-glyphs.tsx";
 
 /** One place a ladder can stand, and the sentence that says what standing
  * there buys. A stop with no hint of its own says the row's. */
@@ -30,12 +31,32 @@ export type Stop<T extends string> = { id: T; label: string; hint?: string };
  * caption bar passes its setter; the pause card passes nothing. */
 export type OnHint = (hint: string | null) => void;
 
+/** THE MARK A ROW LEADS WITH, where the page has one to give it. A word is
+ * read; a mark is recognised, and a column of a dozen rows is scanned by
+ * recognition rather than read top to bottom — which is what a page of
+ * fourteen settings needs and a page of five does not. Optional for exactly
+ * that reason: OPTIONS' rows name kinds of thing a drawing cannot say
+ * ("RESOLUTION", "HEAD MOTION"), and a mark invented for one of those would
+ * be a mark nobody learns. */
+function KnobLabel({ glyph, label }: { glyph?: GlyphName; label: string }) {
+  return (
+    <span className="knob-label">
+      {glyph && <Glyph name={glyph} className="knob-glyph" />}
+      {/* The word in a box of its own so it can be TRUNCATED rather than
+          run under the arrows: a row is sized by its value and its two
+          targets, and the name is the only part of it that may give. */}
+      <span className="knob-name">{label}</span>
+    </span>
+  );
+}
+
 /** A setting with NAMED answers — a picture, a camera, on or off. The arrows
  * wrap: the camera key wraps the same ladder, and on a pad an arrow that
  * does nothing at the end of a row reads as a row that has stopped
  * working. */
 export function StepRow<T extends string>({
   label,
+  glyph,
   stops,
   value,
   hint,
@@ -43,6 +64,7 @@ export function StepRow<T extends string>({
   onHint,
 }: {
   label: string;
+  glyph?: GlyphName;
   stops: Stop<T>[];
   value: T;
   /** The row's own sentence, for stops that have none. */
@@ -69,7 +91,7 @@ export function StepRow<T extends string>({
   };
   return (
     <div className="knob" data-nav-steps onPointerEnter={describe} onFocusCapture={describe}>
-      <span className="knob-label">{label}</span>
+      <KnobLabel glyph={glyph} label={label} />
       <div className="knob-ctl">
         <button
           type="button"
@@ -185,6 +207,7 @@ export function levelLabel(value: number): string {
  * with what is behind it summarised where a value would stand. */
 export function LinkRow({
   label,
+  glyph,
   value,
   hint,
   disabled,
@@ -192,6 +215,7 @@ export function LinkRow({
   onHint,
 }: {
   label: string;
+  glyph?: GlyphName;
   value: string;
   hint?: string;
   /** Nothing behind the door yet — no pad plugged in. The row still says
@@ -214,7 +238,7 @@ export function LinkRow({
         onOpen();
       }}
     >
-      <span className="knob-label">{label}</span>
+      <KnobLabel glyph={glyph} label={label} />
       <span className="knob-ctl">
         <span className="knob-value">
           <span className="knob-word">{value}</span>
@@ -270,11 +294,105 @@ export function BindRow({
   );
 }
 
+/** A setting with NO named stops — a number that simply goes up and down.
+ * Same silhouette as every other row, so the seed reads as one more setting
+ * rather than as a text field somebody has to type into.
+ *
+ * The VALUE ITSELF is a press where the caller offers one (`onValue`), which
+ * is how Roam's seed gets a roll of the dice without spending a row on it: a
+ * player who wants a number they have never seen wants any of four billion,
+ * not the next one along. Where there is no roll to make it is plain text
+ * and takes no focus. */
+export function ValueRow({
+  label,
+  glyph,
+  value,
+  hint,
+  valueHint,
+  onStep,
+  onValue,
+  onHint,
+}: {
+  label: string;
+  glyph?: GlyphName;
+  /** What the row currently reads. */
+  value: string;
+  hint?: string;
+  /** What pressing the VALUE does, in words — its tooltip and its label. */
+  valueHint?: string;
+  /** One notch, in whichever direction. */
+  onStep: (dir: 1 | -1) => void;
+  onValue?: () => void;
+  onHint?: OnHint;
+}) {
+  const describe = (): void => onHint?.(hint ?? null);
+  const step = (dir: 1 | -1): void => {
+    playToggle(dir > 0);
+    onStep(dir);
+    describe();
+  };
+  return (
+    <div className="knob" data-nav-steps onPointerEnter={describe} onFocusCapture={describe}>
+      <KnobLabel glyph={glyph} label={label} />
+      <div className="knob-ctl">
+        <button
+          type="button"
+          className="knob-arrow"
+          data-nav-step="left"
+          aria-label={`${label}: previous`}
+          onClick={() => step(-1)}
+        >
+          ‹
+        </button>
+        <span className="knob-value">
+          {onValue ? (
+            <button
+              type="button"
+              className="knob-word knob-roll"
+              title={valueHint}
+              aria-label={valueHint}
+              onClick={() => {
+                playUi("select");
+                onValue();
+                describe();
+              }}
+            >
+              {value}
+            </button>
+          ) : (
+            <span className="knob-word">{value}</span>
+          )}
+        </span>
+        <button
+          type="button"
+          className="knob-arrow"
+          data-nav-step="right"
+          aria-label={`${label}: next`}
+          onClick={() => step(1)}
+        >
+          ›
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** A handful of rows under one word. */
-export function KnobGroup({ title, children }: { title: string; children: ComponentChildren }) {
+export function KnobGroup({
+  title,
+  glyph,
+  children,
+}: {
+  title: string;
+  glyph?: GlyphName;
+  children: ComponentChildren;
+}) {
   return (
     <section className="knob-group">
-      <h3 className="knob-group-title">{title}</h3>
+      <h3 className="knob-group-title">
+        {glyph && <Glyph name={glyph} className="knob-group-glyph" />}
+        {title}
+      </h3>
       <div className="knob-rows">{children}</div>
     </section>
   );

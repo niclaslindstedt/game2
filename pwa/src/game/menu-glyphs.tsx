@@ -35,6 +35,19 @@ export const GLYPH_NAMES = [
   "sprint",
   "circuit",
   "clipboard",
+  "car",
+  "dice",
+  "ruler",
+  "globe",
+  "sun",
+  "cloud",
+  "leaf",
+  "mountain",
+  "crag",
+  "water",
+  "tree",
+  "tarmac",
+  "road",
   "easy",
   "medium",
   "hard",
@@ -173,6 +186,101 @@ const GLYPHS: Record<GlyphName, JSX.Element> = {
     <>
       <rect x="8.5" y="3" width="12.5" height="15.5" rx="2.2" />
       <path d="M15.5 21H5.2A2.2 2.2 0 0 1 3 18.8V7.5" />
+    </>
+  ),
+  // THE CAR, as the shape of one seen from the side: the step a stage is
+  // chosen in order to reach, and the button that leads to it.
+  car: (
+    <>
+      <path d="M3 15.2h18v-2.4l-1.9-1.1-2.6-3.4a2 2 0 0 0-1.6-.8H9.1a2 2 0 0 0-1.6.8L4.9 11.7 3 12.8Z" />
+      <circle cx="7.6" cy="17.4" r="1.9" />
+      <circle cx="16.4" cy="17.4" r="1.9" />
+    </>
+  ),
+  // A die: the SEED, which is a number nobody chooses on purpose.
+  dice: (
+    <>
+      <rect x="3.5" y="3.5" width="17" height="17" rx="3.4" />
+      <circle cx="8.4" cy="8.4" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="15.6" cy="15.6" r="1.5" fill="currentColor" stroke="none" />
+    </>
+  ),
+  // A rule with its ticks: how LONG the road is.
+  ruler: (
+    <>
+      <rect x="2.6" y="8.4" width="18.8" height="7.2" rx="1.6" />
+      <path d="M7.2 8.4v3M12 8.4v4.2M16.8 8.4v3" />
+    </>
+  ),
+  // The globe: which COUNTRY the stage is built in (R40).
+  globe: (
+    <>
+      <circle cx="12" cy="12" r="8.6" />
+      <path d="M3.4 12h17.2" />
+      <path d="M12 3.4c3.5 3.6 3.5 13.6 0 17.2-3.5-3.6-3.5-13.6 0-17.2Z" />
+    </>
+  ),
+  // The sun and its rays: what HOUR the stage is driven at.
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4.3" />
+      <path d="M12 2.2v2.4M12 19.4v2.4M2.2 12h2.4M19.4 12h2.4M5.1 5.1l1.7 1.7M17.2 17.2l1.7 1.7M18.9 5.1l-1.7 1.7M6.8 17.2l-1.7 1.7" />
+    </>
+  ),
+  // A cloud with rain under it: the WEATHER. Rain rather than a bare cloud,
+  // because a cloud on its own reads as the sky rather than as a choice
+  // between three of them.
+  cloud: (
+    <>
+      <path d="M7.2 15.6a3.7 3.7 0 0 1 .7-7.35 5 5 0 0 1 9.4 1.15 3.4 3.4 0 0 1 .3 6.2Z" />
+      <path d="M9 18.4l-.7 2.2M12.6 18.4l-.7 2.2M16.2 18.4l-.7 2.2" />
+    </>
+  ),
+  // A leaf with its vein: which SEASON the country is dressed for.
+  leaf: (
+    <>
+      <path d="M20.4 3.6c-9.4 0-15.6 4.2-15.6 11a5.7 5.7 0 0 0 5.7 5.7c6.8 0 9.9-6.8 9.9-16.7Z" />
+      <path d="M15.6 8.4 6.6 18" />
+    </>
+  ),
+  // A range of peaks: how HIGH the country stands (`elevation`).
+  mountain: <path d="M2.4 19.6h19.2L15.2 8.4l-3.5 5.9-2.5-3.7Z" />,
+  // One peak with its strata: how STEEP the same country stands
+  // (`steepness`). A range says how much ground goes up; a face says how
+  // hard it goes up, which is the dial this is.
+  crag: (
+    <>
+      <path d="M2.6 20.4 12 4.6l9.4 15.8Z" />
+      <path d="M7.4 12.6h9.2M9.7 16.6h4.6" />
+    </>
+  ),
+  // Three waves: the lakes, the streams and the fords.
+  water: (
+    <path d="M2.8 7.6c1.9-2 3.9-2 5.8 0s3.9 2 5.8 0 3.9-2 5.8 0M2.8 13c1.9-2 3.9-2 5.8 0s3.9 2 5.8 0 3.9-2 5.8 0M2.8 18.4c1.9-2 3.9-2 5.8 0s3.9 2 5.8 0 3.9-2 5.8 0" />
+  ),
+  // A conifer: how much FOREST the road runs through.
+  tree: (
+    <>
+      <path d="M12 2.6 7 10h3L6 16.4h12L14 10h3Z" />
+      <path d="M12 16.4v4.4" />
+    </>
+  ),
+  // A paved band with its centre line, seen from above: how much TARMAC the
+  // stage borrows (R17). Flat and marked, where the ROAD mark below is the
+  // width between two verges.
+  tarmac: (
+    <>
+      <rect x="2.6" y="7" width="18.8" height="10" rx="1.4" />
+      <path d="M2.6 12h3.4M9.2 12h5.6M18 12h3.4" />
+    </>
+  ),
+  // Two verges with the width measured between them.
+  road: (
+    <>
+      <path d="M5.4 3.4v17.2M18.6 3.4v17.2" />
+      <path d="M8.4 12h7.2" />
+      <path d="M10.6 9.6 8.2 12l2.4 2.4M13.4 9.6 15.8 12l-2.4 2.4" />
     </>
   ),
   // THE THREE RUNGS OF DIFFICULTY, as a meter: three bars rising, with as
