@@ -420,8 +420,8 @@ export const TUNING = {
      * the fade barely engaged, and the tyres went back to swinging a
      * dropped drift most of the way round the corner on the driver's
      * behalf. Sized so the same drift meets the same fade it always did. */
-    tailPeak: 0.11,
-    tailBand: 0.2,
+    tailPeak: 0.22,
+    tailBand: 0.4,
     tailFade: 0.93,
     /** ...and the ROTATION the same lift feeds a slide, rad/s at full slide
      * and pace. Lifting takes the weight off the driven axle and swings the
@@ -627,7 +627,7 @@ export const TUNING = {
        * the front-driver's rubber is the first to give up — `entry` alone
        * leaves the hatch hanging exactly the same tail out as the saloon,
        * only earlier. */
-      depth: 0.4,
+      depth: 0.42,
       /** ...and the DEEPEST it ever goes, however hard it is provoked,
        * 0..1 of the same reference. HIGH, and deliberately so: a
        * front-driver snapped into a hairpin on the lever goes round a long
@@ -734,7 +734,7 @@ export const TUNING = {
       // asked and it is never the one hanging furthest out. Well clear of
       // the hatch, though — with drive to the rear as well it steps out on
       // the wheel where the front-driver would only push.
-      depth: 0.8,
+      depth: 0.75,
       /** ...and the ceiling, a shade under the saloon's and a shade over
        * the hatch's — which is the whole roster in one line. Provoked, all
        * three go round: real layouts differ far less in the angle they can
@@ -804,7 +804,7 @@ export const TUNING = {
      * opposite lock. All three of those live in `drivetrain[].pullStraight`
      * and `powerYaw`, not here — so this group can stay narrow and
      * believable while the cars still feel nothing like each other. */
-    angleSpan: 0.13,
+    angleSpan: 0.36,
     /** How far past the asked angle the deepening forces take to fade to
      * nothing, rad. Wide enough that the drift is a slope to lean on rather
      * than a wall the car hits: it is the room the throttle, the lift and
@@ -833,7 +833,7 @@ export const TUNING = {
      * barely two to one over a roster whose setpoints differ by five. Sized
      * on the span, the wheel's own ask is what a held slide is worth again:
      * 9° / 11° / 18°. */
-    angleBand: 0.2,
+    angleBand: 0.42,
     /** How fast a slide the wheel has stopped asking for lets go, 1/s. The
      * only thing holding a slide up once the lock comes off, so it is what
      * carries one corner's angle into the next instead of snapping back to
@@ -1001,28 +1001,19 @@ export const TUNING = {
      * surface, tarmac drifts at tarmac angles: less of them than gravel, and
      * really happening.
      *
-     * It came DOWN with `angleSpan`, but deliberately nowhere near as far:
-     * the whole slip vocabulary halved and this fell by a sixth. What holds
-     * it up is the BOT, which reads `car.drifting` to decide whether the
-     * trailed brake it is carrying has done its job — so the threshold has
-     * to sit above the angle a trail-braked front-driver carries through an
-     * ordinary corner (7.8° on gravel) or the pedal comes off, the slide
-     * shuts, the pedal goes back down, and one corner is driven as a dozen
-     * quarter-second drifts. At 0.12 that cost the sim three finishers,
-     * four spins and half a minute a stage in the trees.
-     *
-     * So: 8.6°, which is over what a trail-braked front-driver carries
-     * through an ordinary corner (7.8°) and just under what one holds at
-     * full lock at the limit (10°). Every layout can still be SEEN to
-     * drift — a car that cannot light a plume of dust is not in a game
-     * about sliding — but the hatch has to be at the limit or provoked to
-     * do it, where the saloon clears it on the throttle and always did. */
-    enterSlip: 0.15,
+     * The BOT reads `car.drifting` to decide whether the trailed brake it is
+     * carrying has done its job, so this threshold has to sit above the angle
+     * a trail-braked front-driver carries through an ordinary corner — under
+     * it the pedal comes off, the slide shuts, the pedal goes back down, and
+     * one corner is driven as a dozen quarter-second drifts. Tried at 0.12
+     * once, it cost the sim three finishers, four spins and half a minute a
+     * stage in the trees. */
+    enterSlip: 0.18,
     /** ...and the angle it has to settle back under before that drift is
      * over. One corner is one drift, not thirty. Scaled with the surface for
      * the same reason, so the hysteresis keeps its ratio everywhere — half
      * the entry angle, wherever the entry angle goes. */
-    exitSlip: 0.075,
+    exitSlip: 0.09,
 
     /** THE LINKED DRIFT — how much a drift takes out of the tires for the
      * NEXT one, 0..1 per drift, capped at a full chain. Rubber that has just

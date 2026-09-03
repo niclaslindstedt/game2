@@ -53,13 +53,16 @@ make desktop      # package this machine's desktop downloads into tauri/release/
 
 `@niclaslindstedt/oss-framework` resolves from GitHub Packages, which requires auth even for public reads. Web sessions: `.claude/hooks/session-start.sh` writes the token from the environment (`GITHUB_PAT` et al.) into `~/.npmrc` and installs dependencies automatically. Locally: add `//npm.pkg.github.com/:_authToken=<token>` to your own `~/.npmrc`.
 
-**Verify with `make test` / `make lint` — never a bare `npx vitest run` habit**: the Make targets are the definition of green that CI enforces.
+**Scope the linter, never the typechecker, and leave the suite to CI.** `npx eslint <changed files>` is 2 s where the whole repo is 24; `npx tsc --noEmit` is 3 s and must stay whole-program, because it checks a PROGRAM (naming files makes it ignore `tsconfig.json`) and because a changed signature breaks its CALLERS — the files you did not touch.
+
+**`make fmt` is the Make target to run; `make test` is CI's.** The whole suite is a thousand cases and ten minutes serially, and the PR runs it sharded across three runners on every push — so locally, run the FILES that cover the change (`npx vitest run tests/<topic>_test.ts`) and let the PR find the rest. The Make target is still the definition of green; it is just not worth running here to learn what three parallel runners are about to say.
 
 ## How work is done here
 
 Rules that apply to every task in this repo, before any subject skill has a say. They are restated here from the skills that own them because a session that gets them wrong gets them wrong from its first tool call:
 
-- **Lint, typecheck and format ONCE, at the gate — not after every edit.** `make fmt` / `make lint` / `make test` are the commit's gate (the `commit` skill owns the split). Re-running them between one edit and the next re-checks code nobody touched and tells you nothing; batch the whole coherent change, then check it. Mid-loop, if a specific answer is genuinely needed, check only the files you touched (`npx eslint <paths>`, `npx tsc --noEmit -p pwa/tsconfig.json`) — never a whole-repo pass, and never `prettier`, whose every finding `make fmt` fixes at the end for free.
+- **Lint, typecheck and format ONCE, at the gate — not after every edit.** `make fmt` and `make lint` are the commit's gate (the `commit` skill owns the split). Re-running them between one edit and the next re-checks code nobody touched and tells you nothing; batch the whole coherent change, then check it. Mid-loop, if a specific answer is genuinely needed, check only the files you touched (`npx eslint <paths>`, `npx tsc --noEmit -p pwa/tsconfig.json`) — never a whole-repo pass, and never `prettier`, whose every finding `make fmt` fixes at the end for free.
+- **TEST WHAT YOU WROTE; THE PR TESTS THE REST.** Run the suites that cover the change and the ones it plausibly reaches, by file, and push — a red PR is a normal state and a follow-up commit costs nothing, where ten minutes of local suite before every push costs ten minutes every time. Two things to be honest about: a change to `TUNING`, `car.ts`, `sim/` or the generator reaches tests three directories away (a drift retune has gone red in `tape_test`, `water_test` and `analysis_test` at once), so name the topics generously for those; and a red PR is work NOW, not something to leave sitting.
 - **Every work session ends by committing its work with the `commit` skill.** Once the requested change and its gates are complete, load and follow that skill to make a conventional commit; when working in a worktree, follow its required sync step afterward.
 
 ## The iteration workflow: simulate, screenshot, look
@@ -319,7 +322,7 @@ Skills live in `.agents/skills/` (`.claude/skills` symlinks there) — each a `S
 - **`start-work`** — the preflight: clean tree, sync with `origin/main`, the deliver-by-default contract.
 - **`write-code`** — how code is written here: comments, the edit loop, file caps, test conventions, aliases. Load beside the subject skill on any code change.
 - **`skill-reflection`** — read each loaded skill's lessons at the start (`node scripts/skill-lessons.mjs <skill>`), record/prune/promote at the end.
-- **`changelog`** → **`commit`** — the fragment-or-label call, then gates, push, PR. **`conflict`** whenever a branch moves onto another.
+- **`changelog`** → **`commit`** — the fragment-or-label call, then gates, push, PR; it owns which checks run here and which are left to the PR's CI. **`conflict`** whenever a branch moves onto another.
 
 **Craft** (the subject owners):
 

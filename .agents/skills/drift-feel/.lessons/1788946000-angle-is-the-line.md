@@ -30,3 +30,12 @@ which needs the ceiling AND the bot's share of it moved together, in
 opposite directions — or "less sideways, and slower corners follow", which
 is one change and is usually what is meant. Say which, with the sim's pace
 column, before tuning anything else.
+
+**Postscript: the answer was "slower corners follow", and it was rejected.**
+Halved, the cars measured right and drove sluggish — a sixth off the pace and
+a front-driver that stopped being fun. The scale went back. What survived is
+the part that was never about the SIZE of the angle: `drivetrain[].cap` (a
+provoked layout tops out at its own ceiling, not the rear-driver's) and
+`drift.powerSpan` (the throttle is what holds a rear-driven slide). Those two
+separate the layouts at full scale, which is what "the front-driver has the
+best drift" actually needed. Reach for them before reaching for `angleSpan`.
