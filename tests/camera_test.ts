@@ -294,9 +294,9 @@ describe("the chase camera over a crease in the ground", () => {
     });
     // The height is carried on a MASS: its velocity is built up by the
     // spring, so no frame turns it by more than a whisker. A first-order
-    // ease at the old 9/s turns a kink in the ground into a kink in the
-    // camera's path — 0.006 m per frame² over this crease — where the
-    // spring, led by the climb, stays under 0.003.
+    // ease at 9/s turns a kink in the ground into a kink in the camera's
+    // path — 0.006 m per frame² over this crease — where the spring, led by
+    // the climb, stays under 0.0035.
     let worstTurn = 0;
     for (let i = 2; i < heights.length; i++) {
       worstTurn = Math.max(worstTurn, Math.abs(heights[i] - 2 * heights[i - 1] + heights[i - 2]));
