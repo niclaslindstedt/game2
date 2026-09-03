@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift roll heat record replay track level analyze previews routes biomes cars liveries field crew items items-list sky traffic glyphs transit views audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-android shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift roll heat record replay track level analyze previews routes biomes cars liveries field crew items items-list sky traffic glyphs transit views rollcam audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-android shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
 
 build:
 	npm run build
@@ -233,6 +233,16 @@ glyphs:
 # Chromium requirements as `screenshots`.
 transit:
 	npm run transit
+
+# Photograph THE CAMERA WHILE THE CAR GOES OVER (previews/rollcam.png) —
+# consecutive frames of one roll from each end of the ladder, with how far
+# the lens moved, how far away the car is and how far off centre it drifted
+# under each. REQUIRED before/after any change to the roll shot. `make roll`
+# is the other half of the same event: that one draws the CAR going over,
+# this one shows the CAMERA watching it. Same Chromium requirements as
+# `screenshots`.
+rollcam:
+	npm run rollcam
 
 # Photograph the CAMERA KEY being pressed, at every step of the ladder
 # (previews/views.png) — six consecutive frames per step, with the lens's own

@@ -72,7 +72,7 @@
 // the neck, the grain, the jolt and the wobble down together, to nothing.
 
 import * as THREE from "three";
-import { TUNING, type GameState } from "@engine";
+import { TUNING, rollTilt, type GameState } from "@engine";
 
 import { angleLerp, clamp } from "../lib/angles.ts";
 import { MAX_VFOV, verticalFovFor } from "../lib/fov.ts";
@@ -518,6 +518,12 @@ const GRAIN = {
  * rather than as a point being circled. */
 const AIM_REACH = 20;
 
+/** How fast the head hands over between a neck and a bolt, 1/s — the blend
+ * at each end of a roll (`bolted` in `update`). About a fifth of a second:
+ * long enough not to be a frame of the horizon jumping, short enough that the
+ * first turn of a roll is already being taken properly. */
+const BOLT = 5.5;
+
 /** A mount jump this big means a respawn or a fresh stage, m — the head is
  * put back on the seat rather than flung across the map. */
 const SNAP = 4;
@@ -608,7 +614,18 @@ export function createEyeCamera(): EyeCamera {
   const wob = { yaw: 0, pitch: 0, roll: 0 };
   const wobVel = { yaw: 0, pitch: 0, roll: 0 };
   let rollSlack = createSlack(EYE_RIGS.hood.rollPlay);
+  /** How much of the head belongs to the CAR rather than to a neck, 0..1 —
+   * 1 while the body is going over. Eased rather than switched, so the
+   * hand-over at each end of a roll is a fraction of a second of the horizon
+   * letting go rather than a frame of it jumping. */
+  let bolted = 0;
   const aim = new THREE.Vector3();
+  /** Scratch for the bolted attitude: the car's own basis, as a rotation. */
+  const bodyEuler = new THREE.Euler();
+  const bodyQuat = new THREE.Quaternion();
+  const localTurn = new THREE.Quaternion();
+  const RIGHT = new THREE.Vector3(1, 0, 0);
+  const UP = new THREE.Vector3(0, 1, 0);
 
   /** Where the mount is in the world. The eye is bolted to the BODY, so it
    * takes the load pitch the brakes and the power put in, then the springs'
@@ -895,12 +912,40 @@ export function createEyeCamera(): EyeCamera {
     // through the wheel track the car drops into and leans with the bank it
     // is held on, and without that separation a straight road rocks the
     // horizon every time the car wanders across the crown.
+    //
+    // Read as a TILT off upright rather than as the raw angle: `car.roll`
+    // accumulates and is never wrapped (`rollTilt`), so a car that has been
+    // over once carries a whole turn in it — and a fraction of a whole turn
+    // is not zero, which left the horizon permanently canted for the rest of
+    // the run.
     camera.rotateZ(
-      rollSlack(car.roll, dt) * rig.rollFollow -
+      rollSlack(rollTilt(car.roll), dt) * rig.rollFollow -
         rig.tilt * leanSide +
         wob.roll +
         (g1 * 0.5 + g3 * 0.5) * GRAIN.tilt * drive,
     );
+
+    // ...AND WHILE THE CAR IS GOING OVER, THERE IS NO NECK. Everything above
+    // is a head levelling itself against a car that is the right way up: it
+    // takes a SHARE of the body's roll (`rollFollow`) through a bit of play,
+    // which is exactly right for a camber and exactly wrong for a roll —
+    // taking two thirds of a turn while the car takes a whole one slides the
+    // interior round the lens, and the eye ends up looking out through the
+    // floor. A driver going over goes over WITH the car, so the gaze is the
+    // body's own basis: heading, roll and pitch composed the way `seatAt`
+    // hangs the mount and the way car-mesh.ts hangs the shell, with the seat's
+    // own aim left on top as a local tilt so the bonnet stays where it was in
+    // the frame. Slerped in over `BOLT`, and slerped back out when the car is
+    // down: the two ends of a roll are the only frames either model is wrong
+    // for, and a blend is cheaper than deciding which.
+    bolted += clamp((car.rolling ? 1 : 0) - bolted, -BOLT * dt, BOLT * dt);
+    if (bolted > 0) {
+      bodyQuat.setFromEuler(bodyEuler.set(-car.pitch, car.heading, car.roll, "YZX"));
+      // The car's nose is +z and a camera looks down its own -z.
+      bodyQuat.multiply(localTurn.setFromAxisAngle(UP, Math.PI));
+      bodyQuat.multiply(localTurn.setFromAxisAngle(RIGHT, widen - rig.aimDown + wob.pitch));
+      camera.quaternion.slerp(bodyQuat, bolted);
+    }
     return fov;
   };
 

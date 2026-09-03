@@ -35,6 +35,7 @@ make traffic      # the HIGH TRAFFIC over a stage: five skies x four moments of 
 make glyphs       # render the menu's marks at the three sizes they are read at
 make transit      # photograph the camera going from the finish line to a crew still out, frame by frame
 make views        # photograph the CAMERA KEY: every step of the ladder, six consecutive frames each
+make rollcam      # photograph the CAMERA WHILE THE CAR GOES OVER — one roll, frame by frame, from two seats
 make audition     # build previews/audition.html — every sound, every score, the beds under sliders, playable
 make screenshots  # drive the built app headlessly, screenshot key moments
 make profile      # meter a frame's draw calls / triangles / binds — REQUIRED before/after any rendering change
@@ -144,6 +145,7 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | What the DRIVER sees: fascia, dials, wheel, pedals, mirror   | `pwa/src/game/car/cockpit.ts` — the player's car only; the deck it needs cut out is a `DeckOpening` in `car/shell.ts`                                                        |
 | What is UNDER THE BONNET, once an impact takes it off        | `pwa/src/game/car/engine-bay.ts` — the well, and the engine standing in it; its own `DeckOpening` — the `car-design` skill                                                   |
 | How an IN-CAR camera sits, moves and takes a hit             | `pwa/src/game/camera-eye.ts` (`EYE_RIGS`) — the `game-feel` skill                                                                                                            |
+| What the DRIVER'S head does while the car is going over      | `bolted` in `pwa/src/game/camera-eye.ts` — the neck hands over to a bolt and the gaze takes the body's own basis one for one                                                 |
 | WHO is behind the wheel (build, hair, helmet, gear colours)  | `pwa/src/game/car-crew.ts` (the sixteen, as data); the models are built in `pwa/src/game/car/crew.ts` — the `car-design` skill                                               |
 | What a MAP READER is, and what the pair are wearing          | `MAP_READER` + the crew's `CrewColors` in `pwa/src/game/car-crew.ts` — one model, in the driver's own colours                                                                |
 | How see-through a window is, and what it reflects            | `car/greenhouse.ts` bakes the gradient; `car-mesh.ts` adds the per-frame glint                                                                                               |
@@ -175,6 +177,7 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 | The field on the road, and what place a run is in            | `engine/sim/field.ts`; `pwa/src/game/standings.ts` is the frame's half (+ `campaign.ts` for the podium rule)                                                                 |
 | WATCHING the run-out once your own run is over               | `pwa/src/game/spectate.ts` (the feed) + `hud-spectate.tsx`; the run-out at race speed is `watchField` in `engine/sim/field.ts`                                               |
 | The camera GOING from one car to another                     | `pwa/src/game/camera-sweep.ts` (`make transit` photographs it); the shot a stage closes on is `camera-finish.ts`                                                             |
+| What the OUTSIDE camera does while the car rolls             | `pwa/src/game/camera-roll.ts` — the lens planted at the verge, zooming and climbing to keep the car in sight; the in-car rigs go over WITH it (`make rollcam`)               |
 | RECORDING a run, and driving it again to calibrate a field   | `engine/sim/tape.ts` + `race.ts`, over `pwa/src/game/run-tape.ts` — the `bot-improvement` skill                                                                              |
 | The rival cars you can see and hit                           | `pwa/src/game/field-cars.ts`; the plate over each one is `name-tag.ts`                                                                                                       |
 | The name over a car that is not the player's                 | `pwa/src/game/name-tag.ts` — a label, a colour and a point; it must never learn what a bot is                                                                                |
