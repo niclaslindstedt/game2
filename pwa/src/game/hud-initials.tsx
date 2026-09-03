@@ -136,40 +136,46 @@ export function useInitials(initial: string, onDone: (who: string) => void): Ini
   const steerRef = useRef(steer);
   steerRef.current = steer;
 
-  // THE KEYBOARD, off the window — the card is up over a canvas and nothing
-  // is focused until somebody taps a letter. Presses that arrive while the
-  // field IS focused belong to it and are skipped here, or every one of them
-  // would be taken twice.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.target === fieldRef.current) return;
-      const now = entryRef.current;
-      if (e.key === "Enter") {
-        e.preventDefault();
-        post();
-        return;
-      }
-      if (e.key === "Backspace") {
-        e.preventDefault();
-        apply(erase(now));
-        return;
-      }
-      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-        e.preventDefault();
-        steerRef.current(e.key === "ArrowUp" ? "up" : "down");
-        return;
-      }
-      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-        e.preventDefault();
-        steerRef.current(e.key === "ArrowLeft" ? "left" : "right");
-        return;
-      }
-      if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return;
-      const next = typeChar(now, e.key);
-      if (next === now) return; // a key no slot can hold, ignored outright
+  /** THE KEYBOARD, off the window — the card is up over a canvas and nothing
+   * is focused until somebody taps a letter. Presses that arrive while the
+   * field IS focused belong to it and are skipped here, or every one of them
+   * would be taken twice. */
+  const onWindowKey = (e: KeyboardEvent): void => {
+    if (e.target === fieldRef.current) return;
+    const now = entryRef.current;
+    if (e.key === "Enter") {
       e.preventDefault();
-      apply(next);
-    };
+      post();
+      return;
+    }
+    if (e.key === "Backspace") {
+      e.preventDefault();
+      apply(erase(now));
+      return;
+    }
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      e.preventDefault();
+      steer(e.key === "ArrowUp" ? "up" : "down");
+      return;
+    }
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      e.preventDefault();
+      steer(e.key === "ArrowLeft" ? "left" : "right");
+      return;
+    }
+    if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return;
+    const next = typeChar(now, e.key);
+    if (next === now) return; // a key no slot can hold, ignored outright
+    e.preventDefault();
+    apply(next);
+  };
+  const windowKeyRef = useRef(onWindowKey);
+  windowKeyRef.current = onWindowKey;
+
+  useEffect(() => {
+    // Bound once, through the ref: re-binding per keystroke would drop the
+    // key that arrived during the swap.
+    const onKey = (e: KeyboardEvent): void => windowKeyRef.current(e);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
