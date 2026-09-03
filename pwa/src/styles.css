@@ -4379,8 +4379,41 @@ a.menu-version:focus-visible {
   border-left-color: var(--hud-good);
 }
 
+/* A phone held UPRIGHT: one column, and every row in the menu stacked in
+   it. Splitting the picture into RESOLUTION, DETAIL and DISTANCE put two
+   more rows on that stack, and 844 points of phone has no two rows spare —
+   so the chrome comes off, exactly as it does on the sideways card below:
+   the gaps between groups, between rows, and around the card. The ROWS
+   keep their height. The arrows in them are the thumb targets and 40px is
+   the floor for one, so a settings page that fits by making itself harder
+   to press has not fixed anything. */
+@media (max-width: 30rem) {
+  .menu-card-options {
+    gap: 0.4rem;
+    padding: clamp(0.7rem, 2.4vmin, 1.5rem);
+  }
+
+  .knob-groups,
+  .knob-col {
+    gap: 0.4rem;
+  }
+
+  .knob-group {
+    gap: 0.2rem;
+  }
+
+  .knob-rows {
+    gap: 0.15rem;
+  }
+
+  .knob-caption {
+    min-height: 0;
+    padding: 0.3rem 0.6rem;
+  }
+}
+
 /* Wide enough for two columns — a laptop, a tablet, a phone held sideways
-   — the page's two column blocks stand side by side, five rows each, and a
+   — the page's two column blocks stand side by side, six rows each, and a
    1280x720 screen holds the whole card. The value column narrows with it:
    a row now shares half a card, and HEAD MOTION must not wrap. */
 @media (min-width: 48rem) {
@@ -4405,9 +4438,13 @@ a.menu-version:focus-visible {
 }
 
 /* A phone held sideways: the pause card's strip pairs up too, and every
-   piece of chrome that buys nothing comes off, so neither card has to
-   scroll for a dozen rows. Sized off the width, never `vmin` — on this
-   shape that is the height. */
+   piece of chrome that buys nothing comes off. It is the one shape the
+   options page does not fit on — twelve rows six-and-six is more than 390
+   points of height holds, and three columns is narrower than REAR VIEW and
+   its arrows — so the card scrolls there, which is what `overflow-y` on
+   `.menu-card` is for. Everything this block saves is a row of that scroll
+   the player does not have to make. Sized off the width, never `vmin` — on
+   this shape that is the height. */
 @media (orientation: landscape) and (max-height: 34rem) {
   .menu-card-options {
     gap: 0.4rem;

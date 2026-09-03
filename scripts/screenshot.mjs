@@ -1330,10 +1330,12 @@ for (const [name, viewport] of [
   );
 }
 
-// OPTIONS: one page of knobs, in the three shapes it has to stand on
-// without scrolling. The pointer is parked on the CAMERA row so the caption
-// bar under the rows is photographed lit — it is the page's only sentence,
-// and a shot with it resting says nothing about whether it reads.
+// OPTIONS: one page of knobs, in the three shapes it has to stand on — the
+// first two without scrolling, and a phone held sideways with as little of
+// it as the chrome can be talked out of. The pointer is parked on the
+// DETAIL row so the caption bar under the rows is photographed lit — it is
+// the page's only sentence, and a shot with it resting says nothing about
+// whether it reads.
 for (const [suffix, viewport] of [
   ["", { width: 1280, height: 720 }],
   ["-landscape", { width: 844, height: 390 }],
@@ -1345,7 +1347,7 @@ for (const [suffix, viewport] of [
     async (page) => {
       await menuUp(page);
       await tile(page, "options");
-      await page.locator(".knob", { hasText: "CAMERA" }).hover();
+      await page.locator(".knob", { hasText: "DETAIL" }).hover();
       await page.waitForTimeout(500);
     },
     { menu: "1" },

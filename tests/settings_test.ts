@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The player's options as the menu offers them: two HUD switches spread
-// over the whole panel, one picture preset standing in for six video levers,
+// over the whole panel, six video levers on three independent picture rows,
 // and a stored blob from an older build landing on something the page can
 // still show.
 
@@ -8,11 +8,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_SETTINGS,
-  QUALITY_PRESETS,
+  DEFAULT_VIDEO,
+  DETAIL_PRESETS,
   freshSettings,
+  detailOf,
   hudShow,
   loadSettings,
-  qualityOf,
   type HudShow,
 } from "../pwa/src/game/settings.ts";
 
@@ -77,28 +78,80 @@ describe("the HUD's two switches", () => {
   });
 });
 
-describe("the picture presets", () => {
-  it("name every set of levers they define", () => {
+describe("the three picture rows", () => {
+  it("name every set of levers DETAIL defines", () => {
     for (const id of ["low", "medium", "high"] as const) {
-      expect(qualityOf(QUALITY_PRESETS[id])).toBe(id);
+      expect(detailOf(DETAIL_PRESETS[id])).toBe(id);
     }
   });
 
-  it("ship MEDIUM, which is the design point", () => {
-    expect(DEFAULT_SETTINGS.video).toEqual(QUALITY_PRESETS.medium);
+  it("ship the design point on all three rows", () => {
+    expect(DEFAULT_SETTINGS.video).toEqual(DEFAULT_VIDEO);
+    expect(detailOf(DEFAULT_SETTINGS.video)).toBe("medium");
+    expect(DEFAULT_SETTINGS.video.resolution).toBe("medium");
+    expect(DEFAULT_SETTINGS.video.drawDistance).toBe("normal");
   });
 
-  // A blob written when the six were six rows can stand anywhere; what it
-  // most feels like is decided by the lever that decides most of the frame.
-  it("land a custom set of levers on the preset its resolution belongs to", () => {
-    expect(qualityOf({ ...QUALITY_PRESETS.medium, resolution: "high" })).toBe("high");
-    expect(qualityOf({ resolution: "low" })).toBe("low");
-    expect(qualityOf({})).toBe("medium");
+  // The whole point of the split: RESOLUTION and DISTANCE are separate
+  // costs, so neither one may decide what DETAIL reads as.
+  it("read DETAIL off its own four levers and nothing else", () => {
+    const sharp = { ...DEFAULT_VIDEO, resolution: "high", drawDistance: "near" } as const;
+    expect(detailOf(sharp)).toBe("medium");
+    expect(detailOf({ ...DETAIL_PRESETS.low, resolution: "high" })).toBe("low");
   });
 
-  it("snap a stored blob onto a preset, so the page can always show it", () => {
-    stored({ video: { ...QUALITY_PRESETS.high, flora: "sparse" } });
-    expect(loadSettings().video).toEqual(QUALITY_PRESETS.high);
+  // A blob standing between two stops lands on the one it most resembles,
+  // and a tie goes to the cheaper picture rather than the dearer one.
+  it("land a set of levers off the ladder on the picture it most resembles", () => {
+    expect(detailOf({ ...DETAIL_PRESETS.low, effects: "full" })).toBe("low");
+    expect(detailOf({ ...DETAIL_PRESETS.high, effects: "off" })).toBe("high");
+    // MEDIUM and HIGH each agree with three of these four; the tie goes to
+    // the picture that costs less to draw.
+    expect(detailOf({ ...DETAIL_PRESETS.high, ground: "normal" })).toBe("medium");
+    expect(detailOf({})).toBe("medium");
+  });
+
+  it("snap a stored blob onto a DETAIL stop, so the page can always show it", () => {
+    stored({ video: { ...DEFAULT_VIDEO, ...DETAIL_PRESETS.high, flora: "sparse" } });
+    expect(loadSettings().video).toEqual({ ...DEFAULT_VIDEO, ...DETAIL_PRESETS.high });
+    localStorage.clear();
+  });
+
+  // The regression this whole change exists to prevent: the loader used to
+  // put the six levers back on ONE preset, so a sharp-but-cheap picture was
+  // a picture the player could set and never load again.
+  it("keep a mixed picture across a save and a load", () => {
+    const mixed = { ...DETAIL_PRESETS.low, resolution: "high", drawDistance: "near" } as const;
+    stored({ video: mixed });
+    expect(loadSettings().video).toEqual(mixed);
+    localStorage.clear();
+  });
+
+  // A blob from the single-QUALITY build has all six on one preset, so every
+  // row reads back the name the player chose.
+  it("read a blob from the one-knob build as that knob on all three rows", () => {
+    stored({
+      video: {
+        resolution: "low",
+        drawDistance: "near",
+        effects: "low",
+        interior: "off",
+        flora: "sparse",
+        ground: "plain",
+      },
+    });
+    const video = loadSettings().video;
+    expect(video.resolution).toBe("low");
+    expect(video.drawDistance).toBe("near");
+    expect(detailOf(video)).toBe("low");
+    localStorage.clear();
+  });
+
+  it("drop a lever that is off its ladder back onto the default", () => {
+    stored({ video: { resolution: "ultra", drawDistance: "miles" } });
+    const video = loadSettings().video;
+    expect(video.resolution).toBe(DEFAULT_VIDEO.resolution);
+    expect(video.drawDistance).toBe(DEFAULT_VIDEO.drawDistance);
     localStorage.clear();
   });
 });

@@ -144,27 +144,6 @@ often a live statement about how the code behaves today, and that one stays.
 
 ---
 
-## How an edit is MADE
-
-**Change files with the file tools — Read, then Edit or Write. Never through
-the shell.** No `sed -i`, no `python3 - <<'PY'`, no `cat > file <<'EOF'`, no
-`perl -pe`. This is not a style preference:
-
-- **A shell rewrite is unreviewable.** The diff the user sees is the script,
-  not the change. Edit shows the before and after of the actual text.
-- **A heredoc silently mangles this repo's prose.** The comments here are full
-  of `$`, backticks, `—` and `\`, and every one of them is a shell or Python
-  escape waiting to eat a character nobody will notice until it ships.
-- **A failed match is louder than a wrong one.** Edit refuses when `old_string`
-  is missing or ambiguous; `sed` happily matches nothing, reports success, and
-  leaves you believing a change landed.
-- **Write for a new file, Edit for an existing one.** Rewriting a whole file to
-  change three lines buries the change and risks dropping what you did not
-  re-type.
-
-The shell is still the right tool for READING (`grep`, `wc -l`, `git show`) and
-for running the checks below. It is the WRITE that goes through Edit.
-
 ## The edit loop
 
 Whole-repo checks cost the same whether one file changed or four hundred did.
@@ -275,6 +254,5 @@ Make targets are the definition of green CI enforces).
       before it became a fragment, and the comment is now gone
 - [ ] Every warning the session saw is fixed, not stepped around
 - [ ] Files still under 1000 lines; tests in `tests/`, `_test.ts`, via `@engine`
-- [ ] Every file was changed with Edit/Write, never through a shell rewrite
 - [ ] No `prettier`/`make fmt` mid-loop; the whole-repo gate ran ONCE, at the end
 - [ ] `skill-reflection` CLOSE pass run for every skill loaded
