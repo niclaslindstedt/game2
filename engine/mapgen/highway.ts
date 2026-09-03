@@ -526,6 +526,24 @@ function layOne(
       }
     }
   }
+  // ...nor into ITSELF. The walk is a wander with a floor on its radius and
+  // a pull toward the far rim, and a shore can turn it round: skirting a
+  // lake the dodge steers it off the aim for as long as the water is in
+  // front of it, and a road that went round a headland came back up the
+  // far side of its own line three metres from it (seeds 18, 20 and 23 at
+  // medium, and a railway on 7). The two arms cut from such a road at a
+  // borrowed junction then ran along each other for six hundred metres at
+  // two heights. The window is the road's own radius of arc: inside it
+  // two points of one road are near each other because that is what a
+  // road is, and past it they cannot be unless it has folded.
+  const window = Math.ceil(HIGHWAY.minRadius / HIGHWAY.step);
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    for (let j = i + window; j < points.length; j++) {
+      const q = points[j];
+      if (Math.hypot(p.x - q.x, p.z - q.z) < keep) return null;
+    }
+  }
   return { points, width: kind === "rail" ? R.rail.line.width : width, kind };
 }
 

@@ -19,6 +19,7 @@ import type {
 import { SAMPLE_STEP, STAGE_RULES as R, knobScale, resolveKnobs } from "./rules.ts";
 import { generateStage, layStageHighways } from "./generate.ts";
 import { createStageStream, type StageStream } from "./endless.ts";
+import { straightPart } from "./search.ts";
 import { createRng } from "../lib/prng.ts";
 import { cellKey } from "../lib/math.ts";
 import { hash2 } from "../lib/noise.ts";
@@ -33,6 +34,7 @@ import {
 import { valleyUnder } from "./terrain.ts";
 import {
   junctionFlat,
+  junctionOverlap,
   junctionMainEdge,
   junctionPlatformY,
   ROAD_CROSS,
@@ -364,6 +366,27 @@ function inCrossing(plan: SegmentPlan, u: number): boolean {
     u >= plan.featureStart &&
     u <= plan.featureEnd
   );
+}
+
+/** Where a straight leaving `from` along its heading meets the line from
+ * `a` to `b`: the distance along the straight, or null where the two do
+ * not cross inside that segment. */
+function meetLine(
+  from: { x: number; z: number; heading: number },
+  a: { x: number; z: number },
+  b: { x: number; z: number },
+): number | null {
+  const dx = Math.sin(from.heading);
+  const dz = Math.cos(from.heading);
+  const ex = b.x - a.x;
+  const ez = b.z - a.z;
+  const den = dx * ez - dz * ex;
+  if (Math.abs(den) < 1e-9) return null;
+  const fx = a.x - from.x;
+  const fz = a.z - from.z;
+  const t = (fx * dz - fz * dx) / den;
+  if (t < -1e-6 || t > 1 + 1e-6) return null;
+  return (fx * ez - fz * ex) / den;
 }
 
 function isBridge(plan: SegmentPlan): boolean {
@@ -1242,10 +1265,31 @@ function createCompiler(
     if (!road) return;
     const on = road.points[over.index];
     if (!on) return;
+    // The crossing is where the route meets the LINE, not the rail point
+    // it passes nearest: the rails are sampled at the highway's own
+    // spacing, and a route crossing square between two of its points is
+    // nearest to one of them metres before or after it actually crosses —
+    // which records the crossing that far off the lip's own `gap`, and a
+    // lip two metres short of the rails is a car landing on them. So the
+    // distance is to the line's two segments either side of the point.
+    const prev = road.points[over.index - 1] ?? on;
+    const next = road.points[over.index + 1] ?? on;
+    const toSegment = (
+      p: { x: number; z: number },
+      a: { x: number; z: number },
+      b: { x: number; z: number },
+    ): number => {
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const len2 = dx * dx + dz * dz;
+      const t =
+        len2 > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / len2)) : 0;
+      return Math.hypot(p.x - (a.x + dx * t), p.z - (a.z + dz * t));
+    };
     let best = 0;
     let nearest = Infinity;
     for (let i = 0; i < path.length; i++) {
-      const d = Math.hypot(path[i].x - on.x, path[i].z - on.z);
+      const d = Math.min(toSegment(path[i], prev, on), toSegment(path[i], on, next));
       if (d >= nearest) continue;
       nearest = d;
       best = i;
@@ -2055,7 +2099,15 @@ function createCompiler(
       let lift = 0;
       for (const junction of track.junctions) {
         if (Math.abs(junction.s - sample.s) > R.junction.reach.max * 2) continue;
-        const w = junctionFlat(junction, sample.x, sample.z);
+        // R17 — and past the ellipse, for as long as the route's mat is
+        // still lying on the branch's: the branch holds the plane out
+        // there, so the route has to as well, or the two are at two heights
+        // on one piece of ground. A crossing's arms are its own ramp's
+        // business (R36), and nobody turns onto them.
+        const w = Math.max(
+          junctionFlat(junction, sample.x, sample.z),
+          junction.crossing ? 0 : junctionOverlap(junction, sample.x, sample.z, PLATFORM_HOLD),
+        );
         if (w <= flat) continue;
         flat = w;
         if (w > lift) {
@@ -2210,9 +2262,38 @@ function createCompiler(
       // R41 — except the ramp over the railway, which IS built, whatever the
       // paving field was saying here: without it the car meets the train.
       const sealedJump = plan.feature === "jump" && pavedNow && flipAt < 0 && !plan.overRoad;
-      const built: SegmentPlan = sealedJump
+      let built: SegmentPlan = sealedJump
         ? { ...plan, feature: "none", featureStart: undefined, featureEnd: undefined }
         : plan;
+      // R41 — the ramp over a railway stands its lip `rail.gap` short of
+      // the RAILS, and the rails are where this straight actually meets the
+      // line: metres from where the plan solved it, because the plan solves
+      // on ideal arcs and the compiled walk diverges from those by that
+      // much. Read the meeting point off the straight's own geometry and
+      // move the ramp with it, or the lip lands two metres short of the
+      // line and the car on it.
+      if (
+        built.overRoad &&
+        built.feature === "jump" &&
+        built.featureStart !== undefined &&
+        built.featureEnd !== undefined
+      ) {
+        const road = track.highways[built.overRoad.road];
+        const on = road?.points[built.overRoad.index];
+        if (road?.kind === "rail" && on) {
+          const meet =
+            meetLine(cursor, road.points[built.overRoad.index - 1] ?? on, on) ??
+            meetLine(cursor, on, road.points[built.overRoad.index + 1] ?? on);
+          const shift = meet === null ? 0 : meet - R.rail.gap - built.featureEnd;
+          if (meet !== null && meet > 0 && meet < built.length && Math.abs(shift) > 0.01) {
+            built = {
+              ...built,
+              featureStart: built.featureStart + shift,
+              featureEnd: built.featureEnd + shift,
+            };
+          }
+        }
+      }
       track.segments.push(built);
       // R25 — the gate stands where the last segment has its run-out left
       // to give. Recorded here rather than derived from `track.length`,
@@ -2259,8 +2340,10 @@ function createCompiler(
 
       // The co-driver's book: a turn opens a call (or deepens the open one
       // when it continues in the same direction with no straight between);
-      // a straight closes it.
-      if (built.kind === "turn" && built.dir && built.radius) {
+      // a straight closes it. Straight by R38's own test: a borrowed road's
+      // gentle bend is walked as a turn of the road's radius (`borrow.ts`)
+      // and is straight run to the rule, so it is no call either.
+      if (built.kind === "turn" && built.dir && built.radius && straightPart(built) === 0) {
         const angle = built.length / built.radius;
         const severity = built.severity ?? "soft";
         if (openNote && openNote.dir === built.dir) {

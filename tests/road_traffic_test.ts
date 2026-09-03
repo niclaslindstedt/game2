@@ -41,11 +41,15 @@ function planFor(seed: number): TrafficPlan {
   return plan;
 }
 
-/** A seed whose roads carry traffic — searched, never pinned, so a change
- * to where the route meets the tarmac cannot fail this file for a reason
- * that has nothing to do with the traffic. */
+/** A seed whose roads carry traffic ON AN ARM — searched, never pinned, so
+ * a change to where the route meets the tarmac cannot fail this file for a
+ * reason that has nothing to do with the traffic. The lanes into the car
+ * parks carry traffic on nearly every seed; what the claims below need is
+ * a public road's arm, with the tape at one end of it. */
 function busySeed(): number {
-  for (const seed of SEEDS) if (planFor(seed).routes.length > 0) return seed;
+  for (const seed of SEEDS) {
+    if (planFor(seed).routes.some((r) => r.from === "block" || r.to === "block")) return seed;
+  }
   throw new Error("no seed in the sweep has a public road with traffic on it");
 }
 
@@ -220,11 +224,15 @@ function stage(ahead: number): { state: GameState; vehicle: number } {
   state.phase = "racing";
   run(state, 20);
   const fleet = state.traffic;
-  // The motorist with the most road still to drive.
+  // The motorist with the most road still to drive, on an ARM: the lanes
+  // into the car parks are driven at a crawl, and a car driven into one of
+  // those at pace shunts it rather than wrecks it.
   let pick = -1;
   let most = 0;
   fleet.vehicles.forEach((v, i) => {
-    const left = fleet.routes[v.route].length - v.s;
+    const route = fleet.routes[v.route];
+    if (route.from !== "block" && route.to !== "block") return;
+    const left = route.length - v.s;
     if (!v.arrived && !v.wrecked && v.jolt === Infinity && left > most) {
       most = left;
       pick = i;

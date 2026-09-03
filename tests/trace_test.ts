@@ -44,7 +44,7 @@ import {
   type RivalRun,
 } from "@engine";
 
-const SEED = 38;
+const SEED = 44;
 const stage = {
   seed: SEED,
   laps: 1,
@@ -166,7 +166,11 @@ describe("the campaign's field of ghosts", () => {
       expect(Math.abs(shown.u - solo.car.u), `step ${i}`).toBeLessThan(0.5);
     }
     expect(front.state.raceTime).toBeCloseTo(solo.raceTime, 2);
-    expect(front.state.progressS).toBeCloseTo(solo.progressS, 0);
+    // Progress is written on the trace's samples only, so between two the
+    // ghost's trails the solo's by up to a sample's worth of road at the
+    // speed the car is doing.
+    const sampleRun = TRACE_EVERY * TUNING.dt * Math.abs(solo.car.u);
+    expect(Math.abs(front.state.progressS - solo.progressS)).toBeLessThan(sampleRun + 0.5);
     expect(front.state.car.gear).toBe(solo.car.gear);
     // …and the clock is the field's: skipping the shot moves it on.
     advanceField(field, 4);

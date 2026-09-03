@@ -314,6 +314,41 @@ function armStreet(ctx: TownContext, spur: Spur): Street | null {
   };
 }
 
+/** The village's kinds cut down to what a street of `n` buildings can
+ * carry and still be mostly houses: the shops first, then the rest in the
+ * order they were drawn, never more than a house short of half the
+ * street. The kinds were drawn for the count the dry walk promised, and a
+ * street walked again for a smaller count keeps a village's shape by
+ * giving up its villas before its post office. */
+function fitKinds(
+  kinds: { kind: BuildingKind; at: number }[],
+  n: number,
+): { kind: BuildingKind; at: number }[] {
+  const room = Math.max(0, Math.floor(n / 2) - 1);
+  const shops = kinds.filter((k) => k.kind === "grocery" || k.kind === "post");
+  const rest = kinds.filter((k) => k.kind !== "grocery" && k.kind !== "post");
+  return [...shops, ...rest].slice(0, room).sort((a, b) => a.at - b.at);
+}
+
+/** R39 — whether a shop stands in an END QUARTER of the village as built:
+ * a grocery or a post office at either end of the street is what the
+ * placement by share of the count exists to prevent. */
+function shopsOffCentre(lots: Lot[]): boolean {
+  let from = Infinity;
+  let to = -Infinity;
+  for (const lot of lots) {
+    if (lot.atS < from) from = lot.atS;
+    if (lot.atS > to) to = lot.atS;
+  }
+  const span = Math.max(1, to - from);
+  return lots.some((lot) => {
+    const kind = lot.building.plan.kind;
+    if (kind !== "grocery" && kind !== "post") return false;
+    const t = (lot.atS - from) / span;
+    return t < 0.25 || t > 0.75;
+  });
+}
+
 /** The buildings a town gets that are not houses, each with WHERE along
  * the street it belongs as a share of the street's length: the shops in
  * the middle, the flats either side of them, the workshop out toward one
@@ -393,7 +428,37 @@ function tryTown(ctx: TownContext, street: Street, rng: Rng): Town | null {
   });
   const n = Math.min(rng.int(T.size.min, T.size.max), dry.length);
   if (n < T.size.min) return null;
-  const lots = walkStreet(ctx, street, rng, { fromS, toS, n, pending: drawKinds(rng) });
+  const kinds = drawKinds(rng);
+  let lots = walkStreet(ctx, street, rng, { fromS, toS, n, pending: [...kinds] });
+  // ...and again when the shops did not land in the middle. The real walk
+  // stands a block of flats and two villas where the dry one stood houses,
+  // and meets refusals the dry one did not: it falls short of `n`, so a
+  // shop placed by its share of `n` comes due late, and a lot the country
+  // refuses moves the shop further along still, until the post office
+  // stands second from the end of the village. Walked again for what
+  // fitted, on fresh dice, it is usually back in the middle; a street that
+  // will not stand its shops in the middle on three tries stands none, a
+  // village being a row of houses before it is anything else.
+  for (const salt of [0x3d1f9a5b, 0x5e2c7b19]) {
+    if (lots.length < T.size.min || !shopsOffCentre(lots)) break;
+    const again = walkStreet(ctx, street, createRng((ctx.seed ^ salt) >>> 0), {
+      fromS,
+      toS,
+      n: lots.length,
+      pending: fitKinds(kinds, lots.length),
+    });
+    if (again.length >= T.size.min) lots = again;
+  }
+  if (lots.length >= T.size.min && shopsOffCentre(lots)) {
+    const houses = kinds.filter((k) => k.kind !== "grocery" && k.kind !== "post");
+    const again = walkStreet(ctx, street, createRng((ctx.seed ^ 0x71a3e4d7) >>> 0), {
+      fromS,
+      toS,
+      n: lots.length,
+      pending: fitKinds(houses, lots.length),
+    });
+    if (again.length >= T.size.min) lots = again;
+  }
   if (lots.length < T.size.min) return null;
   // ...and on BOTH sides of it. A street whose one side the country
   // refused every lot on — a hillside, a shore, the route's own corridor
@@ -447,7 +512,13 @@ function walkStreet(
     let side: 1 | -1 = cursor[1] <= cursor[-1] ? 1 : -1;
     if (done[side]) side = -side as 1 | -1;
     if (!held) {
-      const progress = lots.length / n;
+      // How far down the street the walk is: by count against `n`, and by
+      // ARC against the street's span, whichever is further. The count is
+      // the dry walk's, drawn on houses alone, and a real walk that stands
+      // a block of flats and two villas fits fewer buildings than it
+      // counted — so by count alone the post office at 0.48 of a village
+      // that ran out of street at twelve lots stood second from its end.
+      const progress = Math.max(lots.length / n, (cursor[side] - fromS) / Math.max(1, toS - fromS));
       const due = pending.length > 0 && progress >= pending[0].at ? pending.shift() : null;
       held = drawTownPlan(rng, due ? due.kind : "house");
     }

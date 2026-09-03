@@ -481,6 +481,33 @@ export function junctionFlat(platform: JunctionPlatform, x: number, z: number): 
   return 1 - t * t * (3 - 2 * t);
 }
 
+/** R17 — how much a point on the ROUTE is still on the branch's mat, 1
+ * where the two carriageways lie on top of each other to 0 where they
+ * have parted: the length of the junction that the platform's ellipse does
+ * not cover. The ellipse is clamped to `junction.reach` so a junction stays
+ * a junction and not a car park, and it falls off over its last quarter;
+ * a shallow corner's mats overlap for longer than that, and past the
+ * ellipse the branch goes on holding the platform's plane (`hold` metres of
+ * it) while the route, no longer lifted, has climbed back onto its own
+ * line — two roads on one piece of ground at two heights, which is a step
+ * across the branch's mat. Measured off the main road's line: full while
+ * the route's centre is inside the branch's mat, gone once it is a mat and
+ * a quarter away, with the same Hermite edge as the ellipse. */
+export function junctionOverlap(
+  platform: JunctionPlatform,
+  x: number,
+  z: number,
+  hold: number,
+): number {
+  const dx = x - platform.x;
+  const dz = z - platform.z;
+  const along = dx * Math.sin(platform.heading) + dz * Math.cos(platform.heading);
+  if (along < 0 || along > hold) return 0;
+  const across = Math.abs(dx * Math.cos(platform.heading) - dz * Math.sin(platform.heading));
+  const t = clamp01((across - platform.width / 2) / (platform.width * 0.75));
+  return 1 - t * t * (3 - 2 * t);
+}
+
 /** R17 — the gravel DRAG-OUT: how much of the dirt road's surfacing has
  * been carried onto the sealed one here, 0..1. Every car that turns out of
  * an unsealed road drops what its tires picked up on the tarmac at the

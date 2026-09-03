@@ -41,7 +41,7 @@ import { createLandField } from "./land.ts";
 import type { WaterField } from "./water.ts";
 import type { GeologyField } from "./geology.ts";
 import { STAGE_RULES as R, knobScale } from "./rules.ts";
-import { createSpurIndex, type SpurIndex } from "./spurs.ts";
+import { createSpurIndex, SPUR_INDEX_REACH, type SpurIndex } from "./spurs.ts";
 import { biomeRules } from "./biomes.ts";
 import { createPropField } from "./props.ts";
 import { bridgeParapets, type WildObstacle } from "./solids.ts";
@@ -428,6 +428,13 @@ export type TerrainField = {
    * pad is the floor on this cone and a pad over it is the wall the cone
    * exists to take down. */
   ceilingAt: (x: number, z: number) => number;
+  /** R31 — the ceiling the ground here was actually held under: every
+   * cone in reach, the route's and the branches', with the floors a road's
+   * own shelf and a pad put on it. Where `heightAt` meets it the ground IS
+   * the cut, and a fold there is a cutting's edge; where it does not the
+   * ground is the country's own. The analysis reads it to tell the two
+   * apart; nothing in the game asks. */
+  coneAt: (x: number, z: number) => number;
   /** The surface of any road OTHER than the stage at a point: the mat of
    * an abandoned asphalt branch (R17), or null on open ground. The stage's
    * own surface comes from the track samples — this is what tells the
@@ -987,6 +994,10 @@ export function createTerrain(track: Track): TerrainField {
 
   const half = track.width / 2;
   const shelfEnd = half + ROAD_CROSS.reach; // the ribbon's own outer edge
+  /** How far past the nominal edge a lip has to stand to be a junction
+   * mouth's FLARE (R17) rather than R33's gravel wander, m — a quarter of
+   * the road: the wander is under a fifth, the flare a whole one. */
+  const FLARE_LIP = track.width * 0.25;
   /** How far out the corridor shapes the ground beside the sample at
    * `index`, m: the widest the mat gets within a few samples of it, plus
    * the verge.
@@ -1074,14 +1085,40 @@ export function createTerrain(track: Track): TerrainField {
    * inside the bench. One function, four callers (the ceiling walk, the
    * two `own` walks and the floor that takes the rise back off), because
    * a cone measured one way and undone another is a lip along the road. */
-  const coneRise = (d: number, climb: number): number =>
+  const coneRise = (d: number, climb: number, reach: number = CORRIDOR_RANGE): number =>
     d <= BENCH
       ? 0
-      : (Math.min(d, CUT_FROM) - BENCH) * VERGE_CLIMB + Math.max(0, d - CUT_FROM) * climb;
+      : (Math.min(d, CUT_FROM) - BENCH) * VERGE_CLIMB +
+        Math.max(0, d - CUT_FROM) * climb +
+        liftOff(d, reach);
+  /** R31 — where a cone LIFTS OFF: how far its ceiling climbs away over the
+   * last `verge.fade` metres of its reach. A cone is a min, and a min that
+   * is simply not asked past its reach ends in a WALL — the country
+   * standing however high it stands one query cell further out, ruled
+   * dead straight along the lattice. Beside a mountain that was fifty
+   * metres of vertical rock, two hundred metres from any road, on ground
+   * no rule had touched. So over the fade the cone's grade climbs from its
+   * own to the steepest face rock is ever held at (R34's `cut.face.max`),
+   * and a cut runs out into the country as a face that steepens into
+   * rock. What still stands over THAT at the reach keeps its wall — the
+   * analysis reports it — and the fade is sized so that is a mountain
+   * standing the best part of a hundred metres over the road at the edge
+   * of its reach, and nothing less. Zero inside the fade's start, so every
+   * caller that undoes the cone undoes this with it. */
+  const liftOff = (d: number, reach: number): number => {
+    const from = Math.max(BENCH, reach - R.verge.fade);
+    if (d <= from) return 0;
+    const over = Math.min(d, reach) - from;
+    return ((R.verge.cut.face.max - VERGE_CLIMB) * over * over) / (2 * (reach - from));
+  };
   /** How far out the cone is still worth asking about, m. By here it stands
    * tens of metres over the road and binds on nothing but a cliff — and
    * where it does not bind, dropping it costs the query nothing. */
   const CONE_REACH2 = CORRIDOR_RANGE * CORRIDOR_RANGE;
+  /** ...and how far a BRANCH's cone reaches, m: the distance its index is
+   * guaranteed to find it within, so the cone has lifted off before the
+   * branch can stop being found. */
+  const SPUR_CONE_REACH = SPUR_INDEX_REACH;
   /** How much further than the nearest road a corridor may be and still
    * count as the road this point is BESIDE, m — see `Near.own`. Comfortably
    * over the sample spacing, so a corner's whole neighbourhood is in; well
@@ -1244,11 +1281,33 @@ export function createTerrain(track: Track): TerrainField {
     return best;
   };
 
-  /** The landscape before any stream is cut through it. */
-  const rawHeight = (x: number, z: number): number => {
+  /** What `shapeAt` answered last: the country as the roads shaped it, and
+   * the ceiling R31 holds it under. One record rewritten per query rather
+   * than one allocated, because this is under every height the field
+   * answers. */
+  const shape = { raised: 0, ceiling: 0 };
+  /** The landscape before any stream is cut through it, in its two halves
+   * — the ground as everything above the cone shaped it, and the cone —
+   * into `shape`. The min of the two is the height; the analysis wants
+   * them apart, because a fold where the cone binds is a cutting's edge
+   * and a fold where it does not is the country's own. */
+  const shapeAt = (x: number, z: number): void => {
     const far = farField(x, z);
     const near = nearestSample(x, z);
     let base: number;
+    /** The route's own shelf under this point, where the point is inside a
+     * FLARED lip — the floor no cone may cut below there. `near.own` is the
+     * corridor's OUTER VERGE, and at a junction's mouth the mat flares a
+     * road's width past the verge line it was measured at, so the verge is
+     * a metre under the mat the car is riding; an arm's cone reaching in
+     * under the flare was cutting the shelf down to it. Only under a flare:
+     * the mouth lies on the platform's one plane, where the ribbon sunk by
+     * the tile clearance is a plane too. Under an ordinary mat the ribbon
+     * is crowned, banked and twisting through the corner, and a lattice
+     * held a tile's sink under THAT pokes through it between the corners —
+     * there the verge's own level, carried on the bank's plane, is the
+     * shelf, as it always was. */
+    let ownShelf = -Infinity;
     // Past CORRIDOR_RANGE the road has no say. It is set to where the
     // sample grid's own search actually reaches: a range beyond the search
     // does not extend the road's influence, it just moves the point where
@@ -1270,6 +1329,9 @@ export function createTerrain(track: Track): TerrainField {
         ribbonY(s, sideOf(near.lateral) * Math.min(near.d, lip), s.width) - TILE_SINK;
       if (near.d < lip) {
         base = corridorY;
+        // A mouth's flare is a road's width; R33's gravel wander is under
+        // a fifth of one, and is not a flare.
+        if (lip > shelfEnd + FLARE_LIP) ownShelf = corridorY;
       } else {
         let grade = sideGrade(s.s, near.lateral >= 0 ? 1 : -1);
         // R34 — a cut is only a cut where there is country to cut INTO. On
@@ -1396,31 +1458,47 @@ export function createTerrain(track: Track): TerrainField {
      * back off — at the grade it was actually opened at (R34), not at the
      * verge's, or a cutting leaves the difference standing as a lip along
      * its own corridor. */
-    const floorOf = (level: number, d: number, edge: number, climb: number): number =>
-      level - coneRise(d, climb) - Math.max(0, d - edge) * VERGE_CLIMB;
-    let hold = near ? holdOf(near.d, shelfEnd) : 0;
-    let floor = near ? floorOf(near.own, near.d, shelfEnd, near.ownClimb) : -Infinity;
-    if (spur) {
-      // A branch is never banked and the index carries no signed lateral,
-      // so its cone is the plain one: its own underside, opening upward
-      // past the bench. Nor is a branch ever CUT (R34): it is the road the
-      // stage did not take, abandoned to the country, and nobody blasts a
-      // cutting for a road nobody is going to drive.
-      const branch = ceilingOf(spur.sample) + coneRise(spur.d, VERGE_CLIMB);
-      if (branch < ceiling) ceiling = branch;
-      // ...and where the point is on the BRANCH's ground, the branch is the
-      // road it is beside and the floor is its own.
-      const edge = spur.spur.width / 2 + ROAD_CROSS.reach;
-      if (!near || spur.d < near.d) {
-        hold = holdOf(spur.d, edge);
-        floor = floorOf(branch, spur.d, edge, VERGE_CLIMB);
-      }
-    }
+    const floorOf = (
+      level: number,
+      d: number,
+      edge: number,
+      climb: number,
+      reach: number = CORRIDOR_RANGE,
+    ): number => level - coneRise(d, climb, reach) - Math.max(0, d - edge) * VERGE_CLIMB;
     // It only ever RAISES the ceiling, so this takes no ground away and
     // fills nothing in: `raised` still bounds the result from above, and a
     // valley, a ford's dip and the ravine under a bridge are all exactly as
     // deep as the landscape made them.
-    if (hold > 0 && floor > ceiling) ceiling += (floor - ceiling) * hold;
+    // A branch is never banked and the index carries no signed lateral, so
+    // its cone is the plain one: its own underside, opening upward past the
+    // bench. Nor is a branch ever CUT (R34): it is the road the stage did
+    // not take, abandoned to the country, and nobody blasts a cutting for a
+    // road nobody is going to drive. Every cone is in before any floor is
+    // put on the result, or a floor a later cone undercuts was no floor.
+    const branch = spur
+      ? ceilingOf(spur.sample) + coneRise(spur.d, VERGE_CLIMB, SPUR_CONE_REACH)
+      : Infinity;
+    if (branch < ceiling) ceiling = branch;
+    if (near) {
+      const hold = holdOf(near.d, shelfEnd);
+      const floor = Math.max(ownShelf, floorOf(near.own, near.d, shelfEnd, near.ownClimb));
+      if (hold > 0 && floor > ceiling) ceiling += (floor - ceiling) * hold;
+    }
+    if (spur) {
+      // ...and where the point is on the BRANCH's ground, the branch's own
+      // shelf is a floor on the ceiling too. BOTH roads' floors hold, each
+      // by its own hand, never whichever is nearer: at a junction's mouth
+      // the arm's mat lies across the stage's shoulder, and an arm that
+      // leaves the mouth downhill has a lower cone than the stage's — pick
+      // the arm's floor because the point is a hair nearer to it and the
+      // stage's own shelf is cut down to the arm's cone, three quarters of
+      // a metre under the mat the car is riding, which is the step at the
+      // verge line across every mouth on the map.
+      const edge = spur.spur.width / 2 + ROAD_CROSS.reach;
+      const hold = holdOf(spur.d, edge);
+      const floor = floorOf(branch, spur.d, edge, VERGE_CLIMB, SPUR_CONE_REACH);
+      if (hold > 0 && floor > ceiling) ceiling += (floor - ceiling) * hold;
+    }
     // R37 — nor may a cone cut a PAD. A yard is graded level with the drive
     // that runs onto it, so it is never the wall beside a road that R31
     // exists to take down — but the drive's own cone, read from its
@@ -1430,8 +1508,12 @@ export function createTerrain(track: Track): TerrainField {
     // trough down the middle. The pad's level is the floor on the ceiling,
     // by the pad's own weight.
     if (padWeight > 0 && padFlat > ceiling) ceiling += (padFlat - ceiling) * padWeight;
-    const raised = base + guards.riseAt(x, z);
-    return raised < ceiling ? raised : ceiling;
+    shape.raised = base + guards.riseAt(x, z);
+    shape.ceiling = ceiling;
+  };
+  const rawHeight = (x: number, z: number): number => {
+    shapeAt(x, z);
+    return shape.raised < shape.ceiling ? shape.raised : shape.ceiling;
   };
 
   /** R18 — a stream's channel keeps off the ground a road STANDS ON. The
@@ -1511,8 +1593,8 @@ export function createTerrain(track: Track): TerrainField {
    * applies. It leaves 1 at the bare shoulder and is spent by the corridor's
    * outer lip, so the ribbon and the ground lattice meet there at a shared
    * height rather than one stopping in the air over the other
-   * (`handoverAt`). The two are not the same question and used to be the
-   * same number, which is why the road had a vertical face down each side. */
+   * (`handoverAt`). The two are not the same question: one number for both
+   * is a vertical face down each side of the road. */
   type Corridor = { y: number; cover: number; hand: number };
   const corridorGround = (x: number, z: number): Corridor | null => {
     let best: Corridor | null = null;
@@ -1547,7 +1629,9 @@ export function createTerrain(track: Track): TerrainField {
       best = { y: blended, cover, hand: chainHand };
     };
     const near = nearestRoad(x, z);
-    if (near && near.d < shelfEnd + 3) {
+    const spur = spurs.spurs.length > 0 ? spurs.nearest(x, z) : null;
+    const considerRoute = (): void => {
+      if (!(near && near.d < shelfEnd + 3)) return;
       // The stage's ribbon BETWEEN its samples, not the nearest one's. The
       // road mesh draws the ribbon interpolated along the stage and the car
       // on the mat rides that same interpolation (track.ts `locate`), so the
@@ -1569,11 +1653,39 @@ export function createTerrain(track: Track): TerrainField {
         next.width,
       );
       consider(near.d, s.width, here + (there - here) * f);
-    }
-    const spur = spurs.spurs.length > 0 ? spurs.nearest(x, z) : null;
-    if (spur) {
+    };
+    const considerSpur = (): void => {
+      if (!spur) return;
       const w = spur.spur.width;
       consider(spur.d, w, ribbonY(spur.sample, Math.min(spur.d, w / 2 + ROAD_CROSS.reach), w));
+    };
+    // Where two ribbons cover one point the ground is the HIGHER of the
+    // two chains — the stage's ribbon leading, and the arm's leading. Off
+    // the stage's mat but on an arm's, the stage's hand-over is still
+    // fading across the arm, and the stage's ribbon there is its shoulder
+    // and verge: half a metre under the arm's mat where the arm climbs
+    // away from the junction on the platform's plane, so led by the stage
+    // the car on the arm rode a dip the arm's own drawn mat never had. Led
+    // by whichever mat the point is ON instead, the ground STEPS at the
+    // stage mat's edge, where the lead changes hands. Each chain is
+    // continuous in position and the higher of two continuous surfaces is
+    // too; and the higher ribbon is the one drawn on top, which is the one
+    // the car should be standing on. Inside the stage's own shoulder its
+    // hand is whole and the arm gets no say, as under a drive (R37).
+    // (Read through a function: the considers assign `best` from inside
+    // closures, which the type narrowing does not see.)
+    const chained = (): Corridor | null => best;
+    considerRoute();
+    considerSpur();
+    if (spur && near) {
+      const led = chained();
+      best = null;
+      chainY = 0;
+      chainHand = 0;
+      considerSpur();
+      considerRoute();
+      const other = chained();
+      if (!other || (led && led.y >= other.y)) best = led;
     }
     // The apron wins over both: at a junction the ground IS the junction —
     // one graded plane, right out to its rim, with no hand-over of its own
@@ -1881,11 +1993,11 @@ export function createTerrain(track: Track): TerrainField {
       // as it runs, ending in the lowest water it can find.
       //
       // The river reads the BARE country, not the ground the road shaped.
-      // It used to read the corridor-shaped field, because a crossing's
-      // water was laid at the ROAD's height and a course traced against
-      // the land the road stood over refused every reach; now a crossing's
-      // water lies in its valley (R12, R13) and the land is the field the
-      // water was always meant to obey. Read the shaped ground instead and
+      // A crossing's water lies in its valley (R12, R13), so the land is
+      // the field the water obeys — reading the corridor-shaped field only
+      // makes sense while a crossing's water is laid at the ROAD's height,
+      // and then a course traced against the land the road stands over
+      // refuses every reach. Read the shaped ground instead and
       // a course leaving a crossing beside an embankment follows the
       // embankment's flank down — real ground, and the analyzer (which
       // measures the water against the bare banks, as the world sees it)
@@ -2003,6 +2115,10 @@ export function createTerrain(track: Track): TerrainField {
 
   const roadDistanceAt = (x: number, z: number): number => nearestRoad(x, z)?.d ?? Infinity;
   const ceilingAt = (x: number, z: number): number => nearestSample(x, z)?.ceiling ?? Infinity;
+  const coneAt = (x: number, z: number): number => {
+    shapeAt(x, z);
+    return shape.ceiling;
+  };
 
   const field: TerrainField = {
     heightAt,
@@ -2015,6 +2131,7 @@ export function createTerrain(track: Track): TerrainField {
     roadDistanceAt,
     cutAt,
     ceilingAt,
+    coneAt,
     spurSurfaceAt,
     streams,
     rivers,

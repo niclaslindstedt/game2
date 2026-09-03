@@ -354,6 +354,30 @@ undoes it without knowing it was ever a rule.
   samples by the end of a long stage.
 - **`smooth()` is a Hermite fade, not a curve.** Outside `0..1` it turns over
   and runs away. Every call needs `clamp01` around its argument.
+- **A `min` against a field that stops being asked at a range ends in a
+  WALL.** R31's cone is a min over every road within its query reach; where
+  the reach ends and the country is still above the cone, the ground stands
+  up the whole difference in one lattice column. Anything shaped off a
+  distance query has to be finished — lifted off, blended out — INSIDE the
+  reach the index guarantees (`verge.fade`, `SPUR_INDEX_REACH`), and
+  `ground.wall` is the check that says whether it was.
+- **Sharp is measured on the drawn lattice, never on the field.** Every
+  layer is C1; what creases is the 14 m triangulation of it. `ground.crease`
+  folds the lattice and holds the country to a curve, exempting only what a
+  road built and what `geology.sharpAt` says the rock made sharp on purpose
+  — and sharp is the `steepness` dial's, opened past its midpoint, never a
+  side effect of the seed.
+- **Two roads at two heights start in the PLAN, not in the ground.** Before
+  shaping the terrain under a step across a junction arm, measure where the
+  roads are: the borrowed run against the highway's own points, entry to
+  exit (`followRoad` walks every bend of the road as a turn of its own
+  radius, whichever way the road is run — what is straight is
+  `straightPart`'s answer, for R38, R4 and the co-driver alike), and the
+  highway against itself (`layOne` keeps off its own line past its radius
+  of arc). The platform, `PLATFORM_HOLD`, the barrier placer and
+  `junctionOverlap` all assume the arm leaves along the main road's line;
+  with the roads a road width apart from where the plan put them, no
+  ground rule can make them agree.
 
 ---
 

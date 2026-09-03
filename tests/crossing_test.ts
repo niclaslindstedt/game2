@@ -21,15 +21,14 @@ import { STAGE_RULES, compileStage, junctionMainEdge, type Track } from "@engine
  * that hunts for its own subject reports "nothing to test" as a pass. Every
  * generator change re-rolls the routes, so the sweep is re-run when one
  * lands: seeds 1-30, short and medium, keeping the ones with a crossing on
- * a route grade the ramp clause below can live with (seed 12 medium's sits
- * on a ten per cent descent and reads 0.21 through the ramp — on main too). */
+ * a route grade the ramp clause below can live with. */
 const CROSSINGS: { seed: number; length: "short" | "medium" }[] = [
-  { seed: 9, length: "short" },
-  { seed: 11, length: "short" },
-  { seed: 1, length: "medium" },
+  { seed: 12, length: "short" },
+  { seed: 21, length: "short" },
   { seed: 2, length: "medium" },
-  { seed: 20, length: "medium" },
-  { seed: 25, length: "medium" },
+  { seed: 6, length: "medium" },
+  { seed: 8, length: "medium" },
+  { seed: 17, length: "medium" },
 ];
 
 const tracks = new Map<string, Track>();
