@@ -514,6 +514,18 @@ function initialSettings(): Settings {
  * camera came back would make the flight impossible to leave. */
 const URL_POSE = poseFromUrl();
 
+/** ?freefov= — the LENS god mode's camera wears, deg of vertical fov, or 0
+ * for the design one. three's fov is vertical, so a very wide viewport opens
+ * the HORIZONTAL field instead of showing more of the same lens, and past
+ * about 150° across the ground domes and anything near the edge shears. A
+ * tool shooting a wide strip (scripts/biome-preview.mjs) asks for a longer
+ * lens here and gets a panorama instead of a fisheye. */
+const URL_FREE_FOV = (() => {
+  const raw = new URLSearchParams(location.search).get("freefov");
+  const deg = Number(raw);
+  return raw !== null && Number.isFinite(deg) && deg > 0 && deg < 180 ? deg : 0;
+})();
+
 /** ...and where a `?m…=` link wants the ROAM MAP framed. Read once for the
  * same reason: it names the picture the link was cut from, and re-applying
  * it every frame would make the map impossible to move. */
@@ -1954,6 +1966,10 @@ export function App() {
       // so the picture it reproduces is the picture it was cut from rather
       // than the default framing seen for a moment first.
       renderer.placeMap(URL_MAP_POSE);
+      // ...and a link that named a LENS for god mode's camera, for the same
+      // reason: a tool shooting a wide panorama needs the frame it asked for
+      // on the first frame, not the design lens for a beat and then its own.
+      renderer.setFreeFov(URL_FREE_FOV);
       // Thunder arrives seconds after the flash that made it (storm.ts), so
       // the renderer decides WHEN and the bank decides what it sounds like.
       // Muted behind a menu for the same reason every other run sound is:

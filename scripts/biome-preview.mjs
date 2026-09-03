@@ -72,23 +72,53 @@ const flag = (name, fallback) => {
  * of the drawn terrain comes into shot. */
 const LIFT = Number(flag("lift", 200));
 
-/** How far the camera tilts down from level, radians. Down "a bit" — a
- * third of a right angle — so the frame is mostly landscape with the
- * horizon and some sky left along the top. Straight down would be a map
- * again, which is the one thing this picture is not. */
-const TILT = Number(flag("tilt", -0.35));
+/** How far the camera tilts down from level, radians — a quarter of a right
+ * angle, so the frame is landscape with the horizon along the top and no
+ * sky worth speaking of. Straight down would be a map again, which is the
+ * one thing this picture is not; level would be a band of haze, because the
+ * lens below is a long one and everything it sees at eye level is a
+ * kilometre away. */
+const TILT = Number(flag("tilt", -0.45));
 
 /** The banner, px. Low resolution on purpose: it is read as a strip behind
  * a location's name, and the game it is a picture of is low-poly anyway.
  *
  * A PANORAMA rather than a 16:9 frame, because the shape it has to fill is
- * a menu row — four-something to one on every viewport the campaign page
- * has. Shot at 16:9 and cropped to that, three quarters of the picture is
- * thrown away and whatever the camera was pointed at goes with it. Shot at
- * the row's own shape, the camera keeps its vertical slice and simply sees
- * further left and right, which is what a vista wants anyway. */
-const W = Number(flag("width", 1024));
-const H = Math.round(W / Number(flag("aspect", 4)));
+ * a menu row — a location row measures about 426x110, near enough four to
+ * one, on every viewport the campaign page has. Shot at 16:9 and cropped to
+ * that, three quarters of the picture is thrown away and whatever the camera
+ * was pointed at goes with it.
+ *
+ * EIGHT to one rather than the row's own four, and the surplus is the point:
+ * the menu SLIDES the banner across its row, and a picture cut to the shape
+ * of the hole it sits in has nowhere to slide to.
+ *
+ * Eight is not a free choice — it is the row's aspect times the width of the
+ * box the menu pans (`.menu-location-shot`, 170% of the row). That box is
+ * about 6.6:1, and `object-fit: cover` fills it by HEIGHT from anything
+ * wider, so the source has to clear 6.6 or the picture is cropped top and
+ * bottom instead. Wider than 8 buys nothing: the surplus is cropped off the
+ * sides, not turned into travel. Change one of the two and change both. */
+const ASPECT = Number(flag("aspect", 8));
+const W = Number(flag("width", 2048));
+const H = Math.round(W / ASPECT);
+
+/** How wide the shot is ACROSS, deg — the number that actually decides
+ * whether a panorama looks like one.
+ *
+ * three's fov is vertical, so a wider frame on a fixed lens opens the
+ * horizontal field instead of showing more of the same lens: on the design
+ * 58° a 4:1 frame is 131° across, 6:1 is 146°, and 8:1 is 155° — where the
+ * ground domes into a hill that is not there and a turbine at the edge
+ * shears. So the HORIZONTAL field is what is held constant here and the
+ * vertical fov is solved for it (`?freefov=`), which is the whole reason a
+ * ten-to-one strip is available at all. 132° is inside where the 4:1 shot
+ * already sat, so the wide frame is no more distorted than the narrow one
+ * was — it simply contains more country. */
+const ACROSS = Number(flag("across", 132));
+
+/** The vertical fov that gives `ACROSS` at this aspect, deg. */
+const FOV = (Math.atan(Math.tan((ACROSS * Math.PI) / 360) / ASPECT) * 360) / Math.PI;
 
 /** JPEG, and not PNG. A 3D render of a landscape is a photograph as far as
  * a compressor is concerned — sky gradients, dappled ground, thousands of
@@ -215,7 +245,7 @@ for (const location of LOCATIONS) {
   const query =
     `?start=1&biome=${location.biome}&seed=${level.seed}&length=${level.length}` +
     `&shape=${shape}&tod=${level.timeOfDay}&weather=${level.weather}` +
-    `&season=${level.season}&hud=0&drawdistance=far&god=1` +
+    `&season=${level.season}&hud=0&drawdistance=far&god=1&freefov=${FOV.toFixed(2)}` +
     `&gx=${start.x.toFixed(1)}&gy=${LIFT}&gz=${start.z.toFixed(1)}` +
     `&gyaw=${start.heading.toFixed(4)}&gpitch=${TILT}`;
 
@@ -240,7 +270,8 @@ for (const location of LOCATIONS) {
   console.log(
     `${file} — ${(jpeg.length / 1024).toFixed(1)} KB  ${W}x${H} (${(W / H).toFixed(2)}:1)\n` +
       `  ${location.name} over ${level.id} (seed ${level.seed}), ` +
-      `${LIFT} m up, tilt ${TILT}, ${level.timeOfDay} ${level.weather} ${level.season}`,
+      `${LIFT} m up, tilt ${TILT}, ${ACROSS}° across on a ${FOV.toFixed(1)}° lens, ` +
+      `${level.timeOfDay} ${level.weather} ${level.season}`,
   );
 }
 

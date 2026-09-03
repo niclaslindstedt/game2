@@ -2866,23 +2866,73 @@ body {
    its own — and a banner across the top would push the second country off a
    phone held sideways.
 
-   Darkened hard, and that is the whole trick: what the row has to do first
-   is read as a NAME, and a full-strength landscape under white text reads as
-   neither. Half brightness leaves the lake blue, the sand warm and the
-   turbines legible while the words stay the loudest thing in the row. */
+   Darkened, and that is the whole trick: what the row has to do first is
+   read as a NAME, and a full-strength landscape under white text reads as
+   neither. The dimming plus the scrim below leave the lake blue, the sand
+   warm and the turbines legible while the words stay the loudest thing.
+
+   IT IS WIDER THAN THE ROW ON PURPOSE, and the number is paired with the
+   banner's own shape. The row is about 3.9:1; a box 170% of its width is
+   6.6:1; the banner is shot at 8:1, so `object-fit: cover` still fills that
+   box by HEIGHT and trims the sides rather than the top. The 70% of a row
+   that hangs off the edge IS the travel — a picture cut to the shape of the
+   hole it sits in has nowhere to slide to. Widening this without widening
+   the shot (scripts/biome-preview.mjs) starts cropping the picture's top and
+   bottom away instead. */
 .menu-location-shot {
   position: absolute;
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  left: 0;
   z-index: 0;
-  width: 100%;
+  width: 170%;
+  /* Tailwind's preflight sets `img { max-width: 100% }`, which silently
+     clamps the width above back to the row and leaves the pan sliding the
+     picture off its own right edge — the row's background comes through as a
+     grey wedge, and nothing in the rule that looks wrong is wrong. */
+  max-width: none;
   height: 100%;
   object-fit: cover;
-  /* The banner is shot at the row's own proportions, so `cover` trims only
-     a sliver. Taking it off the TOP: the sky is the same blue in both
-     countries and the ground is what tells them apart. */
+  /* Cropped off the TOP: the sky is the same blue in both countries and the
+     ground is what tells them apart. */
   object-position: 50% 64%;
   filter: brightness(0.72) saturate(1.05);
   pointer-events: none;
+  /* Slow enough to be scenery rather than an animation — a menu row that
+     visibly moves while you read it is a menu row you cannot read. A full
+     sweep takes most of a minute, and `alternate` walks it back instead of
+     snapping to the start, which would be the one frame the eye does catch. */
+  animation: biome-pan 54s ease-in-out infinite alternate;
+}
+
+/* The two countries drift out of step, because two strips sliding in lockstep
+   read as one sheet moving behind a window with a bar across it. */
+.menu-location:nth-of-type(even) .menu-location-shot {
+  animation-delay: -27s;
+}
+
+/* The travel: the whole overhang, 70% of the ROW's width. Stated against the
+   IMAGE's own width, because that is what a percentage in `translate`
+   resolves against — 70/170 of it. */
+@keyframes biome-pan {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-41.18%);
+  }
+}
+
+/* Motion is decoration here: the banner says which country this is whether
+   or not it moves, so a reader who has asked for less of it loses nothing. */
+@media (prefers-reduced-motion: reduce) {
+  .menu-location-shot {
+    animation: none;
+    /* Parked halfway, so the still frame is the middle of the pan rather
+       than the edge nobody composed for. */
+    transform: translateX(-20.59%);
+  }
 }
 
 /* THE SCRIM. The row's words all sit down its left-hand side, and that is

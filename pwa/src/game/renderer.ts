@@ -161,6 +161,10 @@ export type GameRenderer = {
   holdMap: (held: boolean) => void;
   /** Park the map view where a link says it was — the map's own repro. */
   placeMap: (pose: Partial<MapPose>) => void;
+  /** Put a different lens on god mode's camera, deg of vertical fov — what
+   * `?freefov=` asks for, so a tool can shoot a wide panorama without the
+   * horizontal field opening up into a fisheye. 0 restores the design lens. */
+  setFreeFov: (deg: number) => void;
   /** Where the map view is standing, for the debug box and its repro line. */
   mapPose: () => MapPose;
   /** Re-light an already-built stage (the pre-race menu flipping time of
@@ -1421,6 +1425,7 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     },
     holdMap: (held) => chase.holdMap(held),
     placeMap: (pose) => chase.placeMap(pose),
+    setFreeFov: (deg) => chase.setFreeFov(deg),
     mapPose: () => chase.mapPose(),
     setConditions,
     onThunder: environment.onThunder,

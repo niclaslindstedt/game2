@@ -147,6 +147,18 @@ const DRIVING_NEAR = 0.25;
  * screenshots of one spot disagree about how far away things are. */
 const FREE_FOV = 58;
 
+/** The lens the free camera is actually wearing, deg. `FREE_FOV` unless a
+ * tool has asked for another one (`?freefov=`, `setFreeFov`).
+ *
+ * It exists for PANORAMAS. three's fov is vertical, and `verticalFovFor`
+ * leaves a design number alone at or above 16:9 — so widening the viewport
+ * past that widens the HORIZONTAL field instead of showing more of the same
+ * lens. At 58° a 4:1 frame is about 131° across, 6:1 is 146°, and by 8:1 it
+ * is 155° and the ground visibly domes. A wide strip therefore has to be
+ * shot on a LONGER lens: drop the vertical fov and the horizontal field
+ * stays where it looks right however wide the frame gets. */
+let freeFov = FREE_FOV;
+
 /** A camera behind the car, as a set of numbers. The distance and height
  * decide how big the car is in frame; the aim point decides the PITCH, and
  * the pitch is what a shot is really made of — where the car sits
@@ -433,6 +445,10 @@ export type GameCamera = {
   /** Where the camera is standing and what it is looking at, whatever mode
    * is up — what the debug overlay prints and the repro line carries. */
   pose: () => FreeFlyPose;
+  /** Put a different LENS on god mode's camera, deg of vertical fov; 0 or
+   * less puts the design lens back. For tools shooting a frame the design
+   * number was not authored for — see `freeFov`. */
+  setFreeFov: (deg: number) => void;
   /** Where the three in-car views mount on the car now on the stage,
    * body-local m — pushed when the car's meshes are built, because every one
    * of them is read off that car's own silhouette. */
@@ -720,7 +736,7 @@ export function createGameCamera(width: number, height: number): GameCamera {
     freeMove.yawDelta = 0;
     freeMove.pitchDelta = 0;
     freeMove.speedSteps = 0;
-    camera.fov = verticalFovFor(FREE_FOV, camera.aspect);
+    camera.fov = verticalFovFor(freeFov, camera.aspect);
     camera.updateProjectionMatrix();
   };
 
@@ -872,6 +888,9 @@ export function createGameCamera(width: number, height: number): GameCamera {
     free,
     freeMove,
     pose: () => poseOf(camera),
+    setFreeFov: (deg) => {
+      freeFov = deg > 0 ? deg : FREE_FOV;
+    },
     setMode: (next) => {
       // Entering god mode is a HAND-OVER, not a cut: the flight starts from
       // the frame that was already on screen, so the first thing the pilot
