@@ -38,24 +38,29 @@ import {
   type RoadShape,
 } from "./road.ts";
 import { createLandField } from "./land.ts";
+import { GROUND_CELL, TILE_SINK } from "./lattice.ts";
 import type { WaterField } from "./water.ts";
 import type { GeologyField } from "./geology.ts";
 import { STAGE_RULES as R, knobScale } from "./rules.ts";
-import { createSpurIndex, SPUR_INDEX_REACH, type SpurIndex } from "./spurs.ts";
+import {
+  createSpurIndex,
+  SPUR_INDEX_REACH,
+  spurReach,
+  type SpurIndex,
+  type SpurLine,
+} from "./spurs.ts";
 import { biomeRules } from "./biomes.ts";
 import { createPropField } from "./props.ts";
 import { bridgeParapets, type WildObstacle } from "./solids.ts";
 import { farmClearings, rectDistance, type FarmRect } from "./farms.ts";
 import { homesteadSolids } from "./homesteads.ts";
-import { townSolids } from "./towns.ts";
+import { townSolids, type TownPlatform } from "./towns.ts";
 import { solarFarmClearings, solarFarmSolids, windFarmPads, windFarmSolids } from "./energy.ts";
 import { powerLineFootprints, powerLineSolids, underWayleave } from "./powerline.ts";
 
 export { LAKE_Y } from "./land.ts";
 export { GROVE_SCALE, REGION_SCALE, type GroveCommunity, type Region } from "./biomes.ts";
-/** Edge length of the ground lattice the physics rides and the renderer
- * triangulates its ground tiles on, m. The two must agree — see groundAt. */
-export const GROUND_CELL = 14;
+export { GROUND_CELL, TILE_SINK } from "./lattice.ts";
 /** Plain dirt road extrapolated straight past each stage end, m — the
  * rally start's run-up before the gate, and run-off past the flying
  * finish. The terrain keeps its shelf flat under the same corridor so the
@@ -1050,13 +1055,6 @@ export function createTerrain(track: Track): TerrainField {
    * here rather than in the compiler. */
   const carParks: CarParkField = createCarParkField(track);
 
-  /** How far under the drawn ribbon the ground TILES are pinned, m. The
-   * road mesh draws the whole corridor — mat, shoulder, ditch, lip (R16) —
-   * on a 2 m sample spacing the 14 m ground lattice could never hold, so
-   * the lattice ducks below all of it and lets the ribbon be the surface
-   * anyone sees there. `groundAt` puts the physics back on the ribbon. */
-  const TILE_SINK = 0.35;
-
   /** How far past a branch's own corridor its shelf blends back into the
    * landscape, m — inside the branch index's search reach, or the blend
    * would end at a cell boundary instead of where it means to. */
@@ -1170,6 +1168,13 @@ export function createTerrain(track: Track): TerrainField {
     /** The plane the pad is graded to, m per m: level for a yard, the
      * street's own fall for a lot on one. */
     grade: { x: number; z: number };
+    /** How far the TILES duck under `y` here, m. A yard, a car park and a
+     * crane pad are drawn as their own disc over the tiles the way a road
+     * is drawn over them, and duck by the tile clearance; a town's lot is
+     * a patch of gravel PAINTED on ground its whole village is graded
+     * level with (R39's platform), so its tiles are the surface and there
+     * is nothing to duck under. */
+    sink: number;
     /** Where on the stage it belongs, for the endless prune. */
     atS: number;
   }[] = [];
@@ -1200,7 +1205,7 @@ export function createTerrain(track: Track): TerrainField {
       const d = Math.sqrt(dx * dx + dz * dz);
       const w = 1 - smooth(clamp01((d - pad.radius) / pad.blend));
       if (w <= 0) continue;
-      const here = pad.y + pad.grade.x * dx + pad.grade.z * dz;
+      const here = pad.y - pad.sink + pad.grade.x * dx + pad.grade.z * dz;
       if (w > weight) {
         if (weight > 0) {
           othersSum += level * weight;
@@ -1217,6 +1222,159 @@ export function createTerrain(track: Track): TerrainField {
     if (othersWeight <= 0) return { y: level, weight };
     return { y: level * weight + (othersSum / othersWeight) * (1 - weight), weight };
   };
+  /** R39 — THE VILLAGE PLATFORMS: one band of graded ground per town, laid
+   * along its street and reaching past the back of its deepest lot on each
+   * side (`towns.ts` sizes it). Not a pad, and not a wider pad either: a
+   * pad is a disc narrower than the ground lattice, and the whole point of
+   * a band hundreds of metres long is that the lattice's corners actually
+   * fall inside it, so the flattening reaches the surface the houses stand
+   * on instead of falling between the corners. */
+  type Platform = TownPlatform & {
+    /** The band's bounding box with its rim, for a cheap rejection. */
+    minX: number;
+    maxX: number;
+    minZ: number;
+    maxZ: number;
+    /** WHICH ROAD the street is — the route's own arc where the town stands
+     * on the run the rally borrows, the branch where it stands along an
+     * abandoned arm. The band owns the ground under its own street (that is
+     * what stops the lattice under the mat pulling the ground beside a
+     * front wall about) and yields it under every other road. */
+    routeSpan: { fromS: number; toS: number } | null;
+    streetSpur: SpurLine | null;
+    /** Where on the stage it belongs, for the endless prune. */
+    atS: number;
+  };
+  const platforms: Platform[] = [];
+  /** The nearest piece of any village's band to a point: the two spine
+   * points it lies between and how far along, how far out it is, on which
+   * side, and how far the band reaches THERE. Null where no band is near.
+   *
+   * The nearest by DISTANCE, and that matters: a band forty metres wide is
+   * at full weight against a hundred metres of its own spine at once, so
+   * picking the strongest claim instead picks whichever piece of street the
+   * walk reached first — and grades the ground behind one house to the level
+   * of the street three hundred metres back, which is a metre of the
+   * street's own fall taken as a step in the middle of the village. */
+  const nearestBand = (
+    x: number,
+    z: number,
+  ): {
+    band: Platform;
+    a: Platform["spine"][number];
+    b: Platform["spine"][number];
+    /** How far along the segment, 0..1. */
+    t: number;
+    /** Distance to the segment, m — to the SEGMENT and not across it, so a
+     * band ends in a rounded cap past its last point instead of running on
+     * down the street's own bearing for ever. */
+    d: number;
+    /** Signed offset across the street, m: positive on its own right. */
+    lat: number;
+    /** How far the band reaches on that side here, m. */
+    out: number;
+  } | null => {
+    let best = Infinity;
+    let hit = null as {
+      band: Platform;
+      a: Platform["spine"][number];
+      b: Platform["spine"][number];
+      t: number;
+      d: number;
+      lat: number;
+      out: number;
+    } | null;
+    for (let i = 0; i < platforms.length; i++) {
+      const band = platforms[i];
+      if (x < band.minX || x > band.maxX || z < band.minZ || z > band.maxZ) continue;
+      for (let k = 0; k + 1 < band.spine.length; k++) {
+        const a = band.spine[k];
+        const b = band.spine[k + 1];
+        const ex = b.x - a.x;
+        const ez = b.z - a.z;
+        const len2 = ex * ex + ez * ez;
+        if (len2 <= 0) continue;
+        let t = ((x - a.x) * ex + (z - a.z) * ez) / len2;
+        if (t < 0) t = 0;
+        else if (t > 1) t = 1;
+        const dx = x - (a.x + ex * t);
+        const dz = z - (a.z + ez * t);
+        const d = Math.hypot(dx, dz);
+        if (d >= best) continue;
+        best = d;
+        // Which side of the street: the street's own right is (ez, -ex) —
+        // the same turn `towns.ts` takes to put a lot on a side, so `right`
+        // here is the side the record calls right.
+        const lat = (dx * ez - dz * ex) / Math.sqrt(len2);
+        const out =
+          lat >= 0
+            ? a.outRight + (b.outRight - a.outRight) * t
+            : a.outLeft + (b.outLeft - a.outLeft) * t;
+        hit = { band, a, b, t, d, lat, out };
+      }
+    }
+    return hit;
+  };
+
+  /** The level a town's band grades the ground to at a point and how much
+   * of it applies there — 1 inside the band, fading to 0 over its rim, and
+   * null where no band reaches. */
+  const platformAt = (
+    x: number,
+    z: number,
+  ): { y: number; weight: number; band: Platform } | null => {
+    const hit = nearestBand(x, z);
+    if (hit === null) return null;
+    const { band, a, b, t, d, lat, out } = hit;
+    const weight = 1 - smooth(clamp01((d - out) / band.blend));
+    if (weight <= 0) return null;
+    // The two verges' levels, crossed over between them, so the band is one
+    // continuous plane from one side of the street to the other.
+    const toRight = smooth(clamp01((lat + band.lip) / (2 * band.lip)));
+    const right = a.right + (b.right - a.right) * t;
+    const left = a.left + (b.left - a.left) * t;
+    return { y: left + (right - left) * toRight, weight, band };
+  };
+
+  /** R23 + R31 — how much of a point inside a village's band the band is
+   * still allowed to shape: all of it out in the country and on its own
+   * street, none of it inside any OTHER road's drawn corridor, handed back
+   * over the same lattice cell the corridor hands over across.
+   *
+   * A road stands on its own shelf, and a village's level laid across one
+   * walls its edge in at over a metre per metre — which is exactly what
+   * R31's cone exists to take down. The placer keeps the band off the roads
+   * it can see (`bandOut`), and this is what covers the ones it cannot: a
+   * town is stood the moment its piece of tarmac closes, and the route it
+   * is graded beside may not be built for another three hundred metres. */
+  const bandHold = (
+    band: Platform,
+    near: { d: number; index: number } | null,
+    spur: { d: number; spur: SpurLine } | null,
+  ): number => {
+    let hold = 1;
+    if (near !== null) {
+      const s = samples[near.index].s;
+      const own = band.routeSpan !== null && s >= band.routeSpan.fromS && s <= band.routeSpan.toS;
+      if (!own) hold *= 1 - holdOf(near.d, lipAt(near.index));
+    }
+    if (spur !== null && spur.spur !== band.streetSpur) {
+      hold *= 1 - holdOf(spur.d, spurReach(spur.spur));
+    }
+    return hold;
+  };
+
+  /** R39 — distance from a point to the nearest village's graded ground, m,
+   * negative inside it; Infinity when there is no town near. What the
+   * watercourses steer by, for the reason they steer round a road: a stream
+   * through a village street is a village street standing in a stream, and
+   * a channel cut through the band leaves the houses beside it hanging over
+   * a gully. */
+  const platformClearance = (x: number, z: number): number => {
+    const hit = nearestBand(x, z);
+    return hit === null ? Infinity : hit.d - hit.out;
+  };
+
   /** Distance from a point to the nearest yard's rim, m — negative on the
    * pad, Infinity when there is none near. */
   const padClearance = (x: number, z: number): number => {
@@ -1292,6 +1450,14 @@ export function createTerrain(track: Track): TerrainField {
     }
     return best;
   };
+
+  /** How much of a point is a ROAD's ground rather than the country's: 1
+   * inside a corridor, spent one ground cell past its lip. That reach is
+   * the same argument R31's bench is built on — a lattice triangle spans a
+   * cell, so a corner within a cell of the corridor is one a triangle can
+   * carry straight across the road, and a corner the far cone hollowed out
+   * takes the road's own edge down with it. */
+  const holdOf = (d: number, edge: number): number => 1 - smooth(clamp01((d - edge) / GROUND_CELL));
 
   /** What `shapeAt` answered last: the country as the roads shaped it, and
    * the ceiling R31 holds it under. One record rewritten per query rather
@@ -1408,6 +1574,21 @@ export function createTerrain(track: Track): TerrainField {
         base = shelf * t + base * (1 - t);
       }
     }
+    // R39 — and a whole VILLAGE is graded level with its street, from under
+    // the street's own mat out past the back gardens. Ahead of the lots'
+    // own pads because it is the ground they are painted on: the band
+    // decides the level, and a pad graded to the same street only agrees
+    // with it.
+    const platform = platforms.length > 0 ? platformAt(x, z) : null;
+    /** The band's level here, weighted — a floor on the cone below, for the
+     * reason a pad's is. */
+    let platformFlat = -Infinity;
+    let platformWeight = 0;
+    if (platform) {
+      platformFlat = platform.y;
+      platformWeight = platform.weight * bandHold(platform.band, near, spur);
+      base = platformFlat * platformWeight + base * (1 - platformWeight);
+    }
     // R37 — a yard is graded flat, and the drive that runs onto it was
     // already eased onto its level, so the two agree where they overlap.
     const pad = pads.length > 0 ? padAt(x, z) : null;
@@ -1415,7 +1596,7 @@ export function createTerrain(track: Track): TerrainField {
     let padFlat = -Infinity;
     let padWeight = 0;
     if (pad) {
-      padFlat = pad.y - TILE_SINK;
+      padFlat = pad.y;
       padWeight = pad.weight;
       base = padFlat * pad.weight + base * (1 - pad.weight);
     }
@@ -1453,14 +1634,6 @@ export function createTerrain(track: Track): TerrainField {
     // `roadClear` apart (R23), which is more than two corridors' width, so
     // nothing else can be nearer to a point on this one's shelf.
     let ceiling = near ? near.ceiling : Infinity;
-    /** How much of this point is a ROAD's ground rather than the country's:
-     * 1 inside a corridor, spent one ground cell past its lip. That reach is
-     * the same argument R31's bench is built on — a lattice triangle spans a
-     * cell, so a corner within a cell of the corridor is one a triangle can
-     * carry straight across the road, and a corner the far cone hollowed out
-     * takes the road's own edge down with it. */
-    const holdOf = (d: number, edge: number): number =>
-      1 - smooth(clamp01((d - edge) / GROUND_CELL));
     /** ...and the level it is held at: the road's own underside, FALLING
      * away past its lip at the grade the verge is allowed to climb. Falling,
      * not rising with the cone, because past its own edge a road stands on
@@ -1518,7 +1691,11 @@ export function createTerrain(track: Track): TerrainField {
     // out at the rim, and a farm's yard is wide enough for the difference
     // to show: cut along the drive and flat at the rim is a yard with a
     // trough down the middle. The pad's level is the floor on the ceiling,
-    // by the pad's own weight.
+    // by the pad's own weight — and R39's band is a floor on it the same
+    // way, over the whole village at once.
+    if (platformWeight > 0 && platformFlat > ceiling) {
+      ceiling += (platformFlat - ceiling) * platformWeight;
+    }
     if (padWeight > 0 && padFlat > ceiling) ceiling += (padFlat - ceiling) * padWeight;
     shape.raised = base + guards.riseAt(x, z);
     shape.ceiling = ceiling;
@@ -1550,8 +1727,19 @@ export function createTerrain(track: Track): TerrainField {
    * purpose and pins nothing (R13). */
   const heightAt = (x: number, z: number): number => {
     const raw = rawHeight(x, z);
-    const carved = carveGround(streams, x, z, raw);
+    let carved = carveGround(streams, x, z, raw);
     if (carved >= raw) return raw;
+    // R39 — and a channel keeps off the ground a VILLAGE stands on, for the
+    // reason it keeps off the ground a road stands on. The courses are
+    // traced round a town already (`waterClear`), so this only ever catches
+    // a channel's BANK reaching in over the band's rim — but a bank is a
+    // metre of hillside under a front wall, and the band is what the houses
+    // are standing on.
+    if (platforms.length > 0) {
+      const platform = platformAt(x, z);
+      if (platform) carved = raw + (carved - raw) * (1 - platform.weight);
+      if (carved >= raw) return raw;
+    }
     const near = nearestRoad(x, z);
     if (!near) return carved;
     const s = samples[near.index];
@@ -1858,7 +2046,12 @@ export function createTerrain(track: Track): TerrainField {
     }
     return best;
   };
-  const waterClear: RoadClear = (x, z) => Math.min(roadClear(x, z), energyClear(x, z));
+  const waterClear: RoadClear = (x, z) =>
+    Math.min(
+      roadClear(x, z),
+      energyClear(x, z),
+      platforms.length > 0 ? platformClearance(x, z) : Infinity,
+    );
 
   const spurSurfaceAt = (x: number, z: number): Surface | null => {
     if (pads.length > 0 && padClearance(x, z) <= 0) return biome.loose;
@@ -1971,7 +2164,13 @@ export function createTerrain(track: Track): TerrainField {
       for (; homesteadCount < track.homesteads.length; homesteadCount++) {
         const h = track.homesteads[homesteadCount];
         spurs.add(h.drive);
-        pads.push({ ...h.yard, blend: R.homestead.yard.blend, grade: { x: 0, z: 0 }, atS: h.atS });
+        pads.push({
+          ...h.yard,
+          blend: R.homestead.yard.blend,
+          grade: { x: 0, z: 0 },
+          sink: TILE_SINK,
+          atS: h.atS,
+        });
         // R37 — a farm's paddock and field keep the forest off and, when
         // ploughed, give the wheels turned soil.
         if (h.farm) {
@@ -1979,13 +2178,36 @@ export function createTerrain(track: Track): TerrainField {
         }
         for (const solid of homesteadSolids(h, heightAt)) fix(solid);
       }
-      // R39 — the towns: every lot is a pad, and the walls and the cars on
-      // it are solids footed on the pad. The street itself is road the
-      // field already has — the route, or a branch.
+      // R39 — the towns: the whole village is one graded band, every lot a
+      // patch of gravel painted on it, and the walls and the cars on a lot
+      // are solids footed on the ground the band has just made. The street
+      // itself is road the field already has — the route, or a branch.
       for (; townCount < track.towns.length; townCount++) {
         const town = track.towns[townCount];
+        const reach = Math.max(town.platform.right, town.platform.left) + town.platform.blend;
+        let minX = Infinity;
+        let maxX = -Infinity;
+        let minZ = Infinity;
+        let maxZ = -Infinity;
+        for (const point of town.platform.spine) {
+          if (point.x < minX) minX = point.x;
+          if (point.x > maxX) maxX = point.x;
+          if (point.z < minZ) minZ = point.z;
+          if (point.z > maxZ) maxZ = point.z;
+        }
+        platforms.push({
+          ...town.platform,
+          minX: minX - reach,
+          maxX: maxX + reach,
+          minZ: minZ - reach,
+          maxZ: maxZ + reach,
+          routeSpan: town.street.kind === "route" ? town.street : null,
+          streetSpur:
+            track.spurs.find((s) => s.atS === town.atS && s.end === town.street.end) ?? null,
+          atS: town.atS,
+        });
         for (const lot of town.lots) {
-          pads.push({ ...lot.pad, blend: R.town.lot.blend, atS: town.atS });
+          pads.push({ ...lot.pad, blend: R.town.lot.blend, sink: 0, atS: town.atS });
         }
         for (const solid of townSolids(town, heightAt)) fix(solid);
       }
@@ -1998,6 +2220,7 @@ export function createTerrain(track: Track): TerrainField {
           pads.push({
             ...pad,
             blend: R.energy.wind.pad.blend,
+            sink: TILE_SINK,
             grade: { x: 0, z: 0 },
             atS: farm.atS,
           });
@@ -2120,7 +2343,7 @@ export function createTerrain(track: Track): TerrainField {
         heightAt,
         commit: (park) => {
           spurs.add(park.road);
-          pads.push({ ...park.pad, blend: R.carPark.pad.blend, atS: park.atS });
+          pads.push({ ...park.pad, blend: R.carPark.pad.blend, sink: TILE_SINK, atS: park.atS });
           for (const solid of carParkSolids(park, heightAt)) fix(solid);
         },
       });
@@ -2148,6 +2371,9 @@ export function createTerrain(track: Track): TerrainField {
       // Not in stage order: a town's lots and a homestead's yard are
       // ingested list by list, so the whole set is sifted.
       for (let i = pads.length - 1; i >= 0; i--) if (pads[i].atS < floorS) pads.splice(i, 1);
+      for (let i = platforms.length - 1; i >= 0; i--) {
+        if (platforms[i].atS < floorS) platforms.splice(i, 1);
+      }
       for (let i = clearings.length - 1; i >= 0; i--) {
         if (clearings[i].atS < floorS) clearings.splice(i, 1);
       }

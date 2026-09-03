@@ -277,6 +277,7 @@ export {
   townSolids,
   type Lot,
   type Town,
+  type TownPlatform,
   type TownContext,
   type TownStreet,
   type CornerGuard,
