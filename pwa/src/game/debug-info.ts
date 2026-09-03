@@ -13,12 +13,11 @@
 // Rendering lives next door in debug-hud.tsx; nothing here touches the DOM,
 // so the debug log can write the same rows into text.
 
-import type { GameState, StageKnobs, Track } from "@engine";
+import { NUMERIC_KNOBS, type GameState, type StageKnobs, type Track } from "@engine";
 
 import type { FreeFlyPose } from "./camera-free.ts";
 import type { CameraMode } from "./camera.ts";
 import type { MirrorTier } from "./mirror-pace.ts";
-import { STAGE_DIALS } from "./menu.tsx";
 import type { PlayCamera } from "./settings.ts";
 
 /** Everything about WHICH stage is standing — the App's own stage spec, in
@@ -101,7 +100,7 @@ function stageBox(ctx: DebugContext, state: GameState): DebugBox {
   // guessing which `w` is the water and which is the width.
   const dials = [
     ctx.stage.knobs.biome,
-    ...STAGE_DIALS.map((d) => `${d.key} ${ctx.stage.knobs[d.key].toFixed(2)}`),
+    ...NUMERIC_KNOBS.map((key) => `${key} ${ctx.stage.knobs[key].toFixed(2)}`),
   ].join(" · ");
   return {
     title: "STAGE",
@@ -249,7 +248,7 @@ export function stageParams(stage: DebugStage): URLSearchParams {
     weather: stage.weather,
     car: stage.carId,
   });
-  for (const dial of STAGE_DIALS) params.set(dial.key, stage.knobs[dial.key].toFixed(3));
+  for (const key of NUMERIC_KNOBS) params.set(key, stage.knobs[key].toFixed(3));
   params.set("biome", stage.knobs.biome);
   params.set("start", "1");
   params.set("debug", "1");

@@ -23,6 +23,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePwaUpdate } from "@niclaslindstedt/oss-framework/pwa";
 import {
   CARS,
+  NUMERIC_KNOBS,
   TUNING,
   botInput,
   carById,
@@ -143,7 +144,6 @@ import {
   DEFAULT_STAGE_KNOBS,
   DIFFICULTY_OPTIONS,
   PauseMenu,
-  STAGE_DIALS,
   STAGE_LENGTH_OPTIONS,
   STAGE_SHAPES,
   SEASONS,
@@ -431,11 +431,14 @@ function initialRace(): RaceSettings {
     race.difficulty = difficulty as Difficulty;
   }
   // The generator's dials, each 0..1 — the tooling pins a stage's character
-  // the same way it pins its seed.
+  // the same way it pins its seed. Read off the ENGINE's list rather than
+  // off the menu's rows: a knob the menu does not draw a row for (R21's
+  // `width`, now that R46's slider owns it) is still a knob a screenshot
+  // has to be able to pin, and the repro line writes every one of them.
   race.knobs = resolveKnobs(race.knobs);
-  for (const dial of STAGE_DIALS) {
-    const raw = params.get(dial.key);
-    if (raw !== null && Number.isFinite(Number(raw))) race.knobs[dial.key] = Number(raw);
+  for (const key of NUMERIC_KNOBS) {
+    const raw = params.get(key);
+    if (raw !== null && Number.isFinite(Number(raw))) race.knobs[key] = Number(raw);
   }
   // ...and the country (R40), the one dial that is a name. A stored race
   // from a build with no countries in it resolves to the taiga.
@@ -623,7 +626,7 @@ function sameStage(a: StageSpec | null, b: StageSpec): boolean {
     a.shape === b.shape &&
     a.laps === b.laps &&
     a.knobs.biome === b.knobs.biome &&
-    STAGE_DIALS.every((dial) => a.knobs[dial.key] === b.knobs[dial.key]) &&
+    NUMERIC_KNOBS.every((key) => a.knobs[key] === b.knobs[key]) &&
     a.carId === b.carId &&
     a.gearbox === b.gearbox &&
     a.timeOfDay === b.timeOfDay &&
@@ -1262,7 +1265,7 @@ export function App() {
     // renderer has long since dropped the world around the start).
     const key = spec.arena
       ? `arena/${spec.seed}`
-      : `${spec.seed}/${spec.length}/${spec.shape}/${spec.knobs.biome}/${STAGE_DIALS.map((d) => spec.knobs[d.key]).join(",")}`;
+      : `${spec.seed}/${spec.length}/${spec.shape}/${spec.knobs.biome}/${NUMERIC_KNOBS.map((knob) => spec.knobs[knob]).join(",")}`;
     if (trackRef.current?.key !== key || spec.length === "endless") {
       trackRef.current = {
         key,

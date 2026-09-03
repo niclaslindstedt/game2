@@ -19,6 +19,7 @@
 // sideways over it presses the arrows.
 
 import type { ComponentChildren } from "preact";
+import { useState } from "preact/hooks";
 
 import { playToggle, playUi } from "./audio/ui.ts";
 import { Glyph, type GlyphName } from "./menu-glyphs.tsx";
@@ -124,21 +125,34 @@ export function StepRow<T extends string>({
   );
 }
 
-/** A CONTINUOUS setting — a volume — drawn as the thing it is: a track with
- * the level filled along it and the number beside it. The arrows step it a
- * tenth at a time, which is what a pad presses; the track itself is a real
- * range input, so a thumb or a mouse drags it. The bottom of the travel is
- * a WORD, not a number: silence is a thing people choose. */
+/** A CONTINUOUS setting — a volume, or how hard a stage is built — drawn as
+ * the thing it is: a track with the level filled along it and its reading
+ * beside it. The arrows step it a tenth at a time, which is what a pad
+ * presses; the track itself is a real range input, so a thumb or a mouse
+ * drags it. The reading is a WORD wherever the value has one — silence is
+ * a thing people choose, and so is a savage road — which is why `read` is
+ * a parameter and the volume's OFF/percent is only its default. */
 export function FadeRow({
   label,
+  glyph,
   value,
+  read = levelLabel,
+  less = "quieter",
+  more = "louder",
   hint,
   onChange,
   onHint,
 }: {
   label: string;
+  glyph?: GlyphName;
   /** 0–1. */
   value: number;
+  /** What the value READS as beside the track. */
+  read?: (value: number) => string;
+  /** What the two arrows do, for the screen reader: a volume goes quieter
+   * and louder, a difficulty easier and harder. */
+  less?: string;
+  more?: string;
   hint?: string;
   onChange: (value: number) => void;
   onHint?: OnHint;
@@ -155,13 +169,13 @@ export function FadeRow({
   };
   return (
     <div className="knob" data-nav-steps onPointerEnter={describe} onFocusCapture={describe}>
-      <span className="knob-label">{label}</span>
+      <KnobLabel glyph={glyph} label={label} />
       <div className="knob-ctl">
         <button
           type="button"
           className="knob-arrow"
           data-nav-step="left"
-          aria-label={`${label}: quieter`}
+          aria-label={`${label}: ${less}`}
           onClick={() => nudge(-0.1)}
         >
           ‹
@@ -181,13 +195,13 @@ export function FadeRow({
               set(Number((e.target as HTMLInputElement).value));
             }}
           />
-          <span className="knob-word knob-read">{levelLabel(value)}</span>
+          <span className="knob-word knob-read">{read(value)}</span>
         </span>
         <button
           type="button"
           className="knob-arrow"
           data-nav-step="right"
-          aria-label={`${label}: louder`}
+          aria-label={`${label}: ${more}`}
           onClick={() => nudge(0.1)}
         >
           ›
@@ -294,47 +308,93 @@ export function BindRow({
   );
 }
 
-/** A setting with NO named stops — a number that simply goes up and down.
- * Same silhouette as every other row, so the seed reads as one more setting
- * rather than as a text field somebody has to type into.
+/** A setting that is A NUMBER and nothing else — the stage seed. Same
+ * silhouette as every other row, so the seed reads as one more setting
+ * rather than as a text field somebody has to type into, and it answers to
+ * all four things a person wants to do with a number:
  *
- * The VALUE ITSELF is a press where the caller offers one (`onValue`), which
- * is how Roam's seed gets a roll of the dice without spending a row on it: a
- * player who wants a number they have never seen wants any of four billion,
- * not the next one along. Where there is no roll to make it is plain text
- * and takes no focus. */
-export function ValueRow({
+ *   * the ARROWS walk it, one at a time, which is how you look at the road
+ *     next door — and they wrap, because an arrow that does nothing at the
+ *     end of a row reads as a row that has stopped working;
+ *   * the FIELD is typed into, because a seed is passed between people and
+ *     stepping to 481,205 one press at a time is not a control;
+ *   * the DIE rolls a new one, because a player who wants a road they have
+ *     never seen wants any of a million, not the next one along. It stands
+ *     BEFORE the two arrows rather than past them: the pair of arrows is
+ *     one control and reads as one, and a third press dropped on the end
+ *     of them reads as a third arrow.
+ *
+ * The field keeps a DRAFT while it is being typed into and commits on blur
+ * or on Enter. Rewriting the seed on every keystroke would rebuild the map
+ * for "4", "42", "421" on the way to 4218 — three stages nobody asked for,
+ * each of them a search — and would fight the caret while it did it. */
+export function NumberRow({
   label,
   glyph,
   value,
+  min,
+  max,
   hint,
-  valueHint,
-  onStep,
+  rollHint,
   onValue,
+  onRoll,
   onHint,
 }: {
   label: string;
   glyph?: GlyphName;
-  /** What the row currently reads. */
-  value: string;
+  value: number;
+  /** The travel, inclusive. The arrows wrap round it and a typed number is
+   * clamped into it. */
+  min: number;
+  max: number;
   hint?: string;
-  /** What pressing the VALUE does, in words — its tooltip and its label. */
-  valueHint?: string;
-  /** One notch, in whichever direction. */
-  onStep: (dir: 1 | -1) => void;
-  onValue?: () => void;
+  /** What the die does, in words — its tooltip and its label. */
+  rollHint?: string;
+  onValue: (value: number) => void;
+  /** Offered only where there is something to roll. */
+  onRoll?: () => void;
   onHint?: OnHint;
 }) {
+  const [draft, setDraft] = useState<string | null>(null);
   const describe = (): void => onHint?.(hint ?? null);
   const step = (dir: 1 | -1): void => {
     playToggle(dir > 0);
-    onStep(dir);
+    setDraft(null);
+    const span = max - min + 1;
+    onValue(min + ((((value - min + dir) % span) + span) % span));
     describe();
+  };
+  /** What is in the field: what is being typed, or what the setting is. */
+  const commit = (text: string): void => {
+    setDraft(null);
+    const digits = text.replace(/[^0-9]/g, "");
+    // An emptied field is a CANCEL, not a zero: somebody clearing it to
+    // type a new number and then thinking better of it gets their road
+    // back rather than seed 1.
+    if (digits === "") return;
+    const next = Math.min(max, Math.max(min, Number(digits)));
+    if (next !== value) onValue(next);
   };
   return (
     <div className="knob" data-nav-steps onPointerEnter={describe} onFocusCapture={describe}>
       <KnobLabel glyph={glyph} label={label} />
       <div className="knob-ctl">
+        {onRoll && (
+          <button
+            type="button"
+            className="knob-arrow knob-die"
+            title={rollHint}
+            aria-label={rollHint}
+            onClick={() => {
+              playUi("select");
+              setDraft(null);
+              onRoll();
+              describe();
+            }}
+          >
+            <Glyph name="dice" />
+          </button>
+        )}
         <button
           type="button"
           className="knob-arrow"
@@ -345,23 +405,28 @@ export function ValueRow({
           ‹
         </button>
         <span className="knob-value">
-          {onValue ? (
-            <button
-              type="button"
-              className="knob-word knob-roll"
-              title={valueHint}
-              aria-label={valueHint}
-              onClick={() => {
-                playUi("select");
-                onValue();
-                describe();
-              }}
-            >
-              {value}
-            </button>
-          ) : (
-            <span className="knob-word">{value}</span>
-          )}
+          <input
+            className="knob-word knob-field"
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            spellcheck={false}
+            aria-label={label}
+            value={draft ?? String(value)}
+            onInput={(e) => setDraft((e.target as HTMLInputElement).value)}
+            onBlur={(e) => commit((e.target as HTMLInputElement).value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              // The way OUT of a field is the way out of everything else on
+              // the page, so escape hands the keyboard back to the menu
+              // rather than walking off the page mid-number.
+              if (e.key === "Escape") {
+                setDraft(null);
+                (e.target as HTMLInputElement).blur();
+                e.stopPropagation();
+              }
+            }}
+          />
         </span>
         <button
           type="button"

@@ -36,7 +36,7 @@ import { describeSolids, indexAtS, stageFeatures, stageSummary } from "./lib/sta
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 aliasEngine(root);
 const engine = await import(join(root, "engine/index.ts"));
-const { compileStage, createTerrain, resolveKnobs } = engine;
+const { compileStage, createTerrain, resolveKnobs, NUMERIC_KNOBS } = engine;
 const { LOCATIONS, campaignKnobs } = await import(join(root, "pwa/src/game/campaign.ts"));
 
 const args = process.argv.slice(2);
@@ -82,7 +82,7 @@ if (length === "endless") {
   process.exit(2);
 }
 const knobs = {};
-for (const dial of ["elevation", "water", "trees", "asphalt", "width", "steepness"]) {
+for (const dial of NUMERIC_KNOBS) {
   const value = flag(dial);
   if (value !== undefined) knobs[dial] = Number(value);
 }

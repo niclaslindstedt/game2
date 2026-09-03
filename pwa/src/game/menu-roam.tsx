@@ -15,11 +15,17 @@
 // The settings beside it are the OPTIONS page's rows and nothing new
 // (menu-knobs.tsx): the name on the left behind its mark, the value on the
 // right between two arrows, and the pips saying where on its ladder it
-// stands. Fourteen settings in one silhouette is a column a player scans;
-// fourteen bespoke controls is a wall. The marks are what make it scannable
-// at that length — a column of words is read, a column of drawings is
+// stands. A dozen settings in one silhouette is a column a player scans; a
+// dozen bespoke controls is a wall. The marks are what make it scannable at
+// that length — a column of words is read, a column of drawings is
 // recognised, and they are why no row here carries a sentence: the map
 // answers what a dial does, the moment it is moved.
+//
+// Two rows are deliberately NOT that silhouette, because what they hold is
+// not a place on a three-stop ladder: DIFFICULTY (R46) is a scale, so it is
+// a slider, and the SEED is a number, so it can be walked, typed or rolled.
+// Both are still the same row — a name, a mark, and a value between two
+// arrows — which is the whole point of the shape.
 //
 // The stage does not have to be a bare seed: the LEVEL row loads one of the
 // CAMPAIGN's own roads through the campaign's OWN stage boxes
@@ -36,7 +42,7 @@ import { levelForRoad, type CampaignLevel, type CampaignProgress } from "./campa
 import { MapPane, type MapRect, type MapView } from "./map-pane.tsx";
 import { StagePicker } from "./menu-levels.tsx";
 import { Glyph, type GlyphName } from "./menu-glyphs.tsx";
-import { KnobGroup, StepRow, ValueRow } from "./menu-knobs.tsx";
+import { FadeRow, KnobGroup, NumberRow, StepRow } from "./menu-knobs.tsx";
 import {
   BIOME_OPTIONS,
   STAGE_DIALS,
@@ -44,6 +50,8 @@ import {
   STAGE_SHAPES,
   SEASONS,
   TIMES_OF_DAY,
+  challengeGlyph,
+  challengeWord,
   dialStop,
   weathersOf,
   type RaceSettings,
@@ -82,14 +90,13 @@ type RoamProps = {
 /** WHICH MARK EACH GENERATOR DIAL LEADS WITH, keyed by the knob it moves.
  * The dial's three stops name themselves (FLAT, ROLLING, ALPINE); the mark
  * is what says which part of the country they are naming, at a glance
- * across six of them. */
+ * across five of them. */
 const DIAL_GLYPHS: Record<string, GlyphName> = {
   elevation: "mountain",
   steepness: "crag",
   water: "water",
   trees: "tree",
   asphalt: "tarmac",
-  width: "road",
 };
 
 /** THE PAGE. */
@@ -177,18 +184,45 @@ export function RoamPage({
             </span>
           </button>
 
+          {/* R46 — HOW HARD THE ROAD IS: the one SLIDER on the page, and
+              the one row that gets the whole width of the column.
+              Difficulty is not three named places the way HILLS is — it is
+              a scale, the map redraws as it is dragged, and what a player
+              does with it is hunt the position where the stage is still
+              just drivable, which is a thumb on a track and wants travel
+              under it. It stands over the two columns rather than in one
+              of them because it reaches into BOTH: it moves the corner
+              vocabulary and the jumps of the left-hand column and the
+              country's relief of the right — and the road's width, which
+              is why there is no ROAD row under LAND any more. Two controls
+              over one number is a fight nobody wins. */}
+          <div className="roam-diff">
+            <FadeRow
+              label="DIFFICULTY"
+              glyph={challengeGlyph(race.knobs.challenge)}
+              value={race.knobs.challenge}
+              read={challengeWord}
+              less="easier"
+              more="harder"
+              onChange={(challenge) => onRace({ ...race, knobs: { ...race.knobs, challenge } })}
+            />
+          </div>
+
           <div className="roam-knobs">
             {/* Two columns of groups on any screen with the width, packed by
-                ROW COUNT rather than by subject order — seven a side — so
+                ROW COUNT rather than by subject order — six a side — so
                 neither column ends short and the map keeps the rest. */}
             <div className="roam-knob-col">
               <KnobGroup title="STAGE" glyph="roam">
-                <ValueRow
+                <NumberRow
                   label="SEED"
                   glyph="dice"
-                  value={String(seed)}
-                  onStep={(dir) => onSeed(Math.max(1, seed + dir))}
-                  onValue={() => onSeed(1 + Math.floor(Math.random() * SEED_CEILING))}
+                  value={seed}
+                  min={1}
+                  max={SEED_CEILING}
+                  rollHint="Roll a seed nobody has driven"
+                  onValue={onSeed}
+                  onRoll={() => onSeed(1 + Math.floor(Math.random() * SEED_CEILING))}
                 />
                 <StepRow
                   label="LENGTH"

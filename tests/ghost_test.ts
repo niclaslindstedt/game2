@@ -37,6 +37,7 @@ const STAGE: GhostStage = {
     trees: 0.5,
     asphalt: 0.5,
     width: 0.5,
+    challenge: 0.5,
   },
   timeOfDay: "day",
   weather: "clear",

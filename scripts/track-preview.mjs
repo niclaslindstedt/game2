@@ -48,7 +48,7 @@ import { paletteFor, renderStage } from "./lib/stage-render.mjs";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 aliasEngine(root);
 const engine = await import(join(root, "engine/index.ts"));
-const { compileStage, createTerrain } = engine;
+const { compileStage, createTerrain, NUMERIC_KNOBS } = engine;
 // The game's own ground colours, so a desert previews as sand (R40).
 const { biomeFor } = await import(join(root, "pwa/src/game/biome.ts"));
 
@@ -67,7 +67,7 @@ const only = flag("only");
 const zoom = flag("zoom");
 const zoomSpan = Number(flag("span") ?? 80);
 const knobs = {};
-for (const dial of ["elevation", "water", "trees", "asphalt", "width", "steepness"]) {
+for (const dial of NUMERIC_KNOBS) {
   const value = flag(dial);
   if (value !== undefined) knobs[dial] = Number(value);
 }

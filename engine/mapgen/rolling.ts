@@ -11,7 +11,7 @@
 
 import { createRng } from "../lib/prng.ts";
 import { biomeRules } from "./biomes.ts";
-import { STAGE_RULES as R, knobScale, type StageKnobs } from "./rules.ts";
+import { STAGE_RULES as R, reliefOf, type StageKnobs } from "./rules.ts";
 
 /** Lattice size for the elevation noise. The shortest octave's lattice is
  * tens of meters apart, so even a long stage never gets far enough along
@@ -41,7 +41,7 @@ export function buildRolling(seed: number, knobs: StageKnobs): (s: number) => nu
   // stands its hills lower (`BiomeLand.relief`): the desert's roll rides on
   // dunes and pans, and a taiga's roll laid over a pan is a road that dips
   // under the lake table on flat ground.
-  const relief = knobScale(knobs.elevation, R.elevation.knob) * biomeRules(knobs.biome).land.relief;
+  const relief = reliefOf(knobs) * biomeRules(knobs.biome).land.relief;
   const amplitude = rng.range(R.elevation.amplitude.min, R.elevation.amplitude.max) * relief;
   const wavelength = rng.range(R.elevation.wavelength.min, R.elevation.wavelength.max);
   const roughness = rng.range(R.elevation.roughness.min, R.elevation.roughness.max);

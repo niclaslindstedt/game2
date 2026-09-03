@@ -21,6 +21,7 @@
 //   npm run analyze -- --water 1 --elevation 1   # the generator's dials
 //   npm run analyze -- --biome desert            # ...and the country (R40)
 //   npm run analyze -- --steepness 1 --asphalt 1 # R34: rock, and roads cut through it
+//   npm run analyze -- --challenge 1            # R46: the difficulty dial
 //   npm run analyze -- --checks           # every check, not just the metrics
 //   npm run analyze -- --findings 40      # how many findings to print a seed
 //   npm run analyze -- --no-perf          # skip the cold-build timing
@@ -34,7 +35,7 @@ import { fileURLToPath } from "node:url";
 import process from "node:process";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const { analyzeSeed, STAGE_RULES } = await import(join(root, "engine/index.ts"));
+const { analyzeSeed, NUMERIC_KNOBS, STAGE_RULES } = await import(join(root, "engine/index.ts"));
 
 const args = process.argv.slice(2);
 function flag(name) {
@@ -53,7 +54,7 @@ const maxFindings = Number(flag("findings") ?? 8);
 const showChecks = has("checks");
 const perf = !has("no-perf");
 const knobs = {};
-for (const dial of ["elevation", "water", "trees", "asphalt", "width", "steepness"]) {
+for (const dial of NUMERIC_KNOBS) {
   const value = flag(dial);
   if (value !== undefined) knobs[dial] = Number(value);
 }

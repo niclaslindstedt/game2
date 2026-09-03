@@ -15,6 +15,8 @@ import { straightness } from "./rolling.ts";
 import {
   SAMPLE_STEP,
   STAGE_RULES as R,
+  challengeMul,
+  challengeSkew,
   knobScale,
   type SegmentPlan,
   type StageKnobs,
@@ -585,16 +587,25 @@ export function assignFeature(
     // draws where the ramp comes out long.
     length >= R.jump.runUp + R.jump.rampLength.max + R.jump.landing &&
     sStart + R.jump.runUp - sLastLipEnd >= R.jump.minSpacing &&
-    rng.chance(R.featureChance.jump)
+    rng.chance(R.featureChance.jump * challengeMul(knobs.challenge, R.challenge.jumpChance))
   ) {
-    const ramp = rng.range(R.jump.rampLength.min, R.jump.rampLength.max);
+    const ramp =
+      R.jump.rampLength.min +
+      (R.jump.rampLength.max - R.jump.rampLength.min) *
+        challengeSkew(rng.next(), knobs.challenge, R.challenge.rampLength);
     const lipAt = rng.range(R.jump.runUp, length - R.jump.landing - ramp);
     // R6 — the ramp's GRADE is drawn and the lip follows from it, because
     // the grade is what throws the car and a height drawn on its own says
     // nothing about it over a ramp of unknown length. The cap keeps the
     // biggest lips sane; `rules_test` holds it clear of the grade floor, so
     // capping can never hand back a ramp gentler than a hill.
-    const ratio = rng.range(R.jump.ratio.min, R.jump.ratio.max);
+    // R46 — and WHERE IN that band it is drawn is the difficulty dial's:
+    // a savage stage keeps rolling the steep end of it, which is the same
+    // ramp the rule already allowed and a great deal more air.
+    const ratio =
+      R.jump.ratio.min +
+      (R.jump.ratio.max - R.jump.ratio.min) *
+        challengeSkew(rng.next(), knobs.challenge, R.challenge.jump);
     return {
       feature: "jump",
       featureStart: lipAt,
@@ -629,6 +640,8 @@ const SEVERITY_ORDER: TurnSeverity[] = ["soft", "medium", "hard"];
 
 export function drawTurn(
   rng: Rng,
+  /** R46 — the dials, for the difficulty the corner is drawn at. */
+  knobs: StageKnobs,
   prevWasStraight: boolean,
   forcedDir: 1 | -1 | 0,
   sameDirRun: SameDirRun,
@@ -641,14 +654,26 @@ export function drawTurn(
   // preceding straight provides; drawn mid-combination the hard share
   // becomes a medium instead, so corner density survives without ambushes.
   const roll = rng.next();
+  // R46 — how big the hard bucket is, is the difficulty dial's. The medium
+  // share does not move, so what a harder stage spends is its soft turns.
+  const hardShare = R.severityChance.hard * challengeMul(knobs.challenge, R.challenge.hardShare);
   let severity: TurnSeverity;
-  if (roll < R.severityChance.hard) severity = prevWasStraight ? "hard" : "medium";
-  else if (roll < R.severityChance.hard + R.severityChance.medium) severity = "medium";
+  if (roll < hardShare) severity = prevWasStraight ? "hard" : "medium";
+  else if (roll < hardShare + R.severityChance.medium) severity = "medium";
   else severity = "soft";
   if (cap && SEVERITY_ORDER.indexOf(severity) > SEVERITY_ORDER.indexOf(cap)) severity = cap;
   const vocab = R.turn[severity];
-  const radius = rng.range(vocab.radius.min, vocab.radius.max);
-  const angle = rng.range(vocab.angle.min, vocab.angle.max);
+  // R3/R46 — the vocabulary says what this corner may be; the dial says
+  // where in it the dice keep landing. Tighter and further round as it
+  // rises, and never outside the severity's own band at any position.
+  const radius =
+    vocab.radius.min +
+    (vocab.radius.max - vocab.radius.min) *
+      challengeSkew(rng.next(), knobs.challenge, R.challenge.radius);
+  const angle =
+    vocab.angle.min +
+    (vocab.angle.max - vocab.angle.min) *
+      challengeSkew(rng.next(), knobs.challenge, R.challenge.angle);
   let dir: 1 | -1 = forcedDir !== 0 ? forcedDir : rng.chance(0.5) ? 1 : -1;
   // R5 — break up a same-direction run before it becomes a spiral: flip
   // when the run is at the count cap OR would curl past the angle cap (a

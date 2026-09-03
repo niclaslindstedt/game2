@@ -454,6 +454,20 @@
 //       solid as they look; nothing else about the line touches the car,
 //       and none of it costs the route anything. `roads.wires` measures
 //       the spans, the clearances and the ground every tower stands on.
+//   R46 HOW HARD A STAGE IS, is a DIAL — `knobs.challenge` — and it is a
+//       dial across the rules above rather than a rule of its own. Turned
+//       up: more of the stage is corner and more of those corners are
+//       drawn from R3's hard bucket, each one is taken from the tight end
+//       of its own severity's radius band and swept further round it, the
+//       lips are drawn from the steep end of R6's ramp band, the road is
+//       narrower than R21's dial alone would have made it, and the country
+//       either side stands its relief higher, so a car that slides off the
+//       outside of a corner has somewhere to fall. It never draws anything
+//       the vocabulary does not already contain: a hard turn on a savage
+//       stage is still a hard turn, it is just the tightest one R3 has.
+//       AT REST — the middle of the dial — every one of those is exactly
+//       the number the rule states, so the stage a seed has always built
+//       is the stage it still builds.
 
 import { isBiomeId, type BiomeId } from "./biomes.ts";
 
@@ -504,6 +518,16 @@ export type StageKnobs = {
    * a CUT: a blasted face standing over the verge instead of a bank
    * battered back to something a car could climb. */
   steepness: number;
+  /** R46 — HOW HARD THE ROAD IS, 0..1. The one dial that is not about a
+   * single thing the stage has in it: it leans on the corner vocabulary,
+   * the jumps, the road's width and the country's relief at once, always
+   * inside what the rules already allow. 0.5 is the game as it is tuned,
+   * and is exactly that — the middle of this dial changes nothing.
+   *
+   * It is not R29's `difficulty`, which is how good the RIVALS are. This
+   * is the ROAD, and it is the only one of the two Roam has any use for:
+   * a seed driven on your own has nobody to be faster than. */
+  challenge: number;
   /** R40 — which COUNTRY the stage is built in (`biomes.ts`). The one dial
    * that is a name rather than a number: it does not move a range, it says
    * which set of ranges — the taiga's lakes and spruce, or the desert's
@@ -523,6 +547,7 @@ export const NUMERIC_KNOBS: readonly NumericKnob[] = [
   "asphalt",
   "width",
   "steepness",
+  "challenge",
 ];
 
 /** The default dial positions — the stage the rules built before the knobs
@@ -542,6 +567,9 @@ export const DEFAULT_KNOBS: StageKnobs = {
   // Middling country: rock faces where the road has to force a shoulder,
   // worn slopes everywhere it does not.
   steepness: 0.5,
+  // R46 — the middle of the difficulty dial, which is the vocabulary every
+  // rule above states and every stage in the campaign is built on.
+  challenge: 0.5,
 };
 
 function clamp01(v: number): number {
@@ -563,6 +591,7 @@ export function resolveKnobs(knobs?: Partial<StageKnobs>): StageKnobs {
     asphalt: clamp01(knobs?.asphalt ?? DEFAULT_KNOBS.asphalt),
     width: clamp01(knobs?.width ?? DEFAULT_KNOBS.width),
     steepness: clamp01(knobs?.steepness ?? DEFAULT_KNOBS.steepness),
+    challenge: clamp01(knobs?.challenge ?? DEFAULT_KNOBS.challenge),
   };
 }
 
@@ -2955,7 +2984,132 @@ export const STAGE_RULES = {
 
   /** Chance the next segment is a turn rather than a straight. */
   turnChance: 0.72,
+
+  /** R46 — THE DIFFICULTY DIAL, and every rule above that it leans on.
+   *
+   * Each entry is read at the dial's two ENDS. A `{ easy, hard }` pair is a
+   * MULTIPLIER on the rule's own number — `easy` at the bottom of the dial,
+   * `hard` at the top, and exactly 1 in the middle (`challengeMul`), which
+   * is what makes the middle of this dial the game as it was measured. A
+   * bare number is a SKEW (`challengeSkew`) on the roll that is about to be
+   * read onto a band: positive leans the draw toward the top of that band,
+   * negative toward the bottom, and neither ever leaves it — the vocabulary
+   * still says what a corner or a lip may BE, and this only says which of
+   * them the dice keep landing on.
+   *
+   * The numbers are deliberately modest either side of the middle. A dial
+   * that doubles a rule does not make a harder stage, it makes a different
+   * generator: the corners stop being corners the car can take, and the
+   * search spends its attempts refusing its own geometry. */
+  challenge: {
+    /** How much of the stage is corner at all (`turnChance`). At the top
+     * of the dial five segments in six bend. */
+    turns: { easy: 0.82, hard: 1.16 },
+    /** ...and how many of those corners come out of R3's HARD bucket
+     * (`severityChance.hard`). The medium share is left where it is, so
+     * what a harder dial spends is the SOFT turns — the ones taken flat.
+     *
+     * It does NOT buy many more hairpins, and cannot: R4 says a hard turn
+     * only follows a straight, and a harder stage has fewer straights, so
+     * most of the extra hard rolls come back down as mediums (measured
+     * over seeds 1-8: the hairpin share sits at 8% of the corners at every
+     * dial position). What the dial actually spends this on is the FAST
+     * corners — half the turns are soft at the bottom of the dial and a
+     * sixth at the top. */
+    hardShare: { easy: 0.55, hard: 1.3 },
+    /** Where in its own severity's radius band a corner is drawn (R3).
+     * Down: a hard dial's mediums are the tight mediums. */
+    radius: -0.9,
+    /** ...and how far round that radius it is swept (R3's angle band). Up,
+     * because a corner is hard for how long it holds the car as much as
+     * for how tight it is. */
+    angle: 0.6,
+    /** Where in R6's ramp band a lip is drawn. Up is a steeper ramp, which
+     * is a longer flight and more air under the car — the search still has
+     * to find somewhere for it to land. */
+    jump: 0.9,
+    /** ...and how LONG the ramp that grade is raised over is, drawn down as
+     * the dial rises. A grade alone does not make a bigger jump: the lip it
+     * multiplies out to is capped (`jump.lipHeight`), and on the longest
+     * ramps that cap is what the car actually leaves at — 2.2 m over 22 m
+     * is the gentlest launch in the band whatever the roll said. Shorter,
+     * and the ramp is built at the grade that was drawn. */
+    rampLength: -0.7,
+    /** ...and how often an eligible straight carries a lip at all
+     * (`featureChance.jump`). It has to RISE with the dial to stand still:
+     * a harder stage is more corner, so there are fewer straights long
+     * enough to hold a jump, and the steeper ramps are refused more often
+     * by R6's landing zone. Measured over seeds 1-8 at medium, a flat
+     * chance took the stage from fourteen jumps to four. */
+    jumpChance: { easy: 0.8, hard: 1.9 },
+    /** R21 — a multiplier on the road's own width. Clamped back inside
+     * `roadWidth` afterwards (`roadWidthOf`), so nothing downstream ever
+     * meets a road outside the band it was built for. */
+    width: { easy: 1.12, hard: 0.82 },
+    /** R34 — how high the country beside the road stands its relief, road
+     * roll and all. This is the half of the dial you meet by LEAVING the
+     * road: a hillside to fall down rather than a field to spin on. */
+    relief: { easy: 0.85, hard: 1.3 },
+  },
 } as const;
+
+/** R46 — the difficulty dial as a MULTIPLIER on a rule's own number, read
+ * off a `{ easy, hard }` pair: `easy` is the factor at the bottom of the
+ * dial, `hard` the factor at the top, and the dial's REST POSITION is
+ * exactly 1 — returned as the literal, not arrived at by arithmetic, so
+ * every stage the generator has ever built is bit for bit the stage it
+ * was. */
+export function challengeMul(challenge: number, band: { easy: number; hard: number }): number {
+  const mid = DEFAULT_KNOBS.challenge;
+  if (challenge === mid) return 1;
+  return challenge > mid
+    ? 1 + ((challenge - mid) / (1 - mid)) * (band.hard - 1)
+    : 1 + ((mid - challenge) / mid) * (band.easy - 1);
+}
+
+/** R46 — the difficulty dial as a SKEW on a 0..1 roll that is about to be
+ * read onto a band. `pull` says which end of that band a hard dial leans
+ * the draw toward (positive the top, negative the bottom) and how hard it
+ * leans; at rest the roll is handed straight back, so the dice decide the
+ * stage exactly as they always have.
+ *
+ * A skew rather than a narrowed band on purpose: the band is the RULE, and
+ * a savage stage is one that keeps rolling the corners the rule already
+ * allowed, not one built out of a vocabulary nothing else has been
+ * measured against. */
+export function challengeSkew(u: number, challenge: number, pull: number): number {
+  const mid = DEFAULT_KNOBS.challenge;
+  if (challenge === mid || pull === 0) return u;
+  const lean = ((challenge - mid) / (challenge > mid ? 1 - mid : mid)) * pull;
+  return lean > 0 ? u ** (1 / (1 + lean)) : u ** (1 - lean);
+}
+
+/** R21/R46 — HOW WIDE THE ROAD IS, once both dials that decide it have had
+ * their say. Stated once and read by the search, the compiler and the
+ * streams alike: a road the search keeps its clearances off and a road the
+ * compiler builds have to be the same road, and the only way to be sure of
+ * that is for neither of them to work it out.
+ *
+ * Clamped back into `roadWidth`, because that band is not a preference —
+ * the kerbs, the verge and the clearances are all sized off its ends. */
+export function roadWidthOf(knobs: StageKnobs): number {
+  const R = STAGE_RULES;
+  const width =
+    knobScale(knobs.width, R.roadWidth) * challengeMul(knobs.challenge, R.challenge.width);
+  return Math.min(R.roadWidth.max, Math.max(R.roadWidth.min, width));
+}
+
+/** R34/R46 — how high the country stands its relief, as the DIALS decide
+ * it: the `elevation` knob over its band, and what the difficulty dial
+ * makes of that. The country's own share (`BiomeLand.relief`) is the
+ * caller's to multiply in — a desert is a worn place whatever either dial
+ * says. */
+export function reliefOf(knobs: StageKnobs): number {
+  return (
+    knobScale(knobs.elevation, STAGE_RULES.elevation.knob) *
+    challengeMul(knobs.challenge, STAGE_RULES.challenge.relief)
+  );
+}
 
 /** R22 — the band ONE LAP of a circuit is searched inside: the sprint band
  * for the same stage length divided by the laps it is raced over, so a

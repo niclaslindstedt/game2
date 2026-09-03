@@ -35,6 +35,7 @@ import {
   NUMERIC_KNOBS,
   RIVALS,
   STAGE_RULES,
+  resolveKnobs,
   type BiomeId,
   type Difficulty,
   type FiniteStageLength,
@@ -64,6 +65,18 @@ export type CampaignLevel = {
    * the hour it starts at, and the reason two levels on the same country
    * do not look like the same stage twice. */
   season: Season;
+  /** The generator's dials this stage is built on, for any it does not take
+   * from the rule book (`campaignKnobs`). Almost always absent, and that is
+   * the default it should stay: the campaign is the same road for
+   * everybody, and the rule book's defaults are what every stage on the
+   * ladder was scored, timed and previewed against.
+   *
+   * It exists so that a level is a COMPLETE description of its road — every
+   * lever Roam has, written down — and so a level that wants one of them
+   * moved (R46's difficulty, say, up the ladder) can say so here rather
+   * than by being a seed that happens to come out that way. The COUNTRY is
+   * not among them: a location IS a biome (R40), so it always wins. */
+  knobs?: Partial<StageKnobs>;
   /** One line of billing on the level's box. */
   blurb: string;
 };
@@ -84,23 +97,25 @@ export function levelLaps(level: CampaignLevel): number {
  * Being able to say so is most of the reason Roam can load one at all — the
  * campaign's stages are fixed conditions, and this is where they are not.
  *
- * The dials ARE part of it, and have to be: the campaign builds every stage
- * off the rule book's defaults, so a seed driven on a WIDE road with no
- * water in it is a different road that happens to share a number. So is
- * the COUNTRY (R40): the same seed in the desert is a different road again. */
+ * The dials ARE part of it, and have to be — measured against the LEVEL's
+ * own (`campaignKnobs`), which is the rule book's defaults unless that
+ * level says otherwise: a seed driven on a wider road, or with the
+ * difficulty wound up, is a different road that happens to share a number.
+ * So is the COUNTRY (R40): the same seed in the desert is a different road
+ * again. */
 export function levelForRoad(
   seed: number,
   length: StageLength,
   shape: StageShape,
   knobs: StageKnobs,
 ): CampaignLevel | null {
-  const stock = NUMERIC_KNOBS.every((key) => knobs[key] === DEFAULT_KNOBS[key]);
-  if (!stock) return null;
   for (const location of LOCATIONS) {
     if (location.biome !== knobs.biome) continue;
     for (const level of location.levels) {
       if (level.seed !== seed || level.length !== length) continue;
       if ((level.shape ?? "sprint") !== shape) continue;
+      const built = levelKnobs(location.biome, level);
+      if (!NUMERIC_KNOBS.every((key) => knobs[key] === built[key])) continue;
       return level;
     }
   }
@@ -117,11 +132,19 @@ export type CampaignLocation = {
   levels: CampaignLevel[];
 };
 
-/** The dials a campaign stage is built on: the rule book's defaults, in
- * the location's own country. The same road for everybody — the dials are
- * Roam's to play with, not the campaign's to inherit. */
+/** The dials a campaign stage is built on: the rule book's defaults, in the
+ * location's own country, and whatever that level says for itself. The same
+ * road for everybody — the dials are Roam's to play with, and the
+ * campaign's only where a level has written one down. */
 export function campaignKnobs(level: CampaignLevel): StageKnobs {
-  return { ...DEFAULT_KNOBS, biome: findLevel(level.id)?.location.biome ?? DEFAULT_KNOBS.biome };
+  return levelKnobs(findLevel(level.id)?.location.biome ?? DEFAULT_KNOBS.biome, level);
+}
+
+/** ...with the country handed in, for the callers that already know which
+ * one it is. The biome goes on LAST: a location is a country (R40), and a
+ * level cannot be built somewhere else. */
+function levelKnobs(biome: BiomeId, level: CampaignLevel): StageKnobs {
+  return resolveKnobs({ ...DEFAULT_KNOBS, ...level.knobs, biome });
 }
 
 /** The Taiga ladder. The four seeds were chosen by scoring every seed in
