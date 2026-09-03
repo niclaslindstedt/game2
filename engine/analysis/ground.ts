@@ -39,15 +39,192 @@
 import { LAKE_Y } from "../mapgen/land.ts";
 import { biomeRules } from "../mapgen/biomes.ts";
 import type { Track } from "../mapgen/compile.ts";
-import type { TerrainField } from "../mapgen/terrain.ts";
+import { STAGE_RULES } from "../mapgen/rules.ts";
+import { GROUND_CELL, type TerrainField } from "../mapgen/terrain.ts";
 import { ANALYSIS } from "./budgets.ts";
-import { metricScore, rate, within, type Check, type Finding, type MetricReport } from "./types.ts";
+import {
+  metricScore,
+  rate,
+  under,
+  within,
+  type Check,
+  type Finding,
+  type MetricReport,
+} from "./types.ts";
 
 /** The p-th percentile of a sample set, p in 0..1. */
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
   const i = Math.min(sorted.length - 1, Math.max(0, Math.round(p * (sorted.length - 1))));
   return sorted[i];
+}
+
+/** What the fold sweep found: how many lattice edges the country has past
+ * the road's bench, how many of them fold past `crease.fold`, the worst
+ * such fold in degrees, and how many triangles stand as walls. */
+type Creases = { edges: number; creased: number; worst: number; walls: number };
+
+/** R32 — THE COUNTRY IS CURVES: every fold on the ground lattice, sorted
+ * into the road's, the rock's deliberate ones and the country's own.
+ *
+ * Read off the same 14 m corners the tiles are built from and folded
+ * across the same diagonal, so the angle measured is the one drawn — the
+ * analytic field is a curve by construction and says nothing about what a
+ * lattice makes of it. A fold is BUILT if a road shaped any corner of the
+ * two triangles it lies between (the ground there is not the bare land):
+ * a cutting's brow, an embankment's toe, the cone's edge, and a cutting
+ * has an edge. It is SHARP where R32 says the rock is deliberately so. Only
+ * the rest is the country, and only the country is held to a curve. A
+ * WALL — a triangle steeper than rock is ever held at — is reported
+ * wherever it stands, because nothing builds one on purpose.
+ *
+ * Walked whole rather than sampled: a crease is a line, and a line is what
+ * a sparse grid steps over. The corners are one height query each; the
+ * bare land and the rock's own word are asked only for the few cells whose
+ * fold is worth classifying. */
+function creases(track: Track, terrain: TerrainField, findings: Finding[]): Creases {
+  const B = ANALYSIS.ground.crease;
+  const margin = ANALYSIS.sampling.groundMargin;
+  const cell = GROUND_CELL;
+  const b = track.bounds;
+  const i0 = Math.floor((b.minX - margin) / cell);
+  const j0 = Math.floor((b.minZ - margin) / cell);
+  const w = Math.ceil((b.maxX + margin) / cell) - i0 + 1;
+  const h = Math.ceil((b.maxZ + margin) / cell) - j0 + 1;
+  const H = new Float64Array(w * h);
+  for (let j = 0; j < h; j++) {
+    for (let i = 0; i < w; i++) H[j * w + i] = terrain.heightAt((i0 + i) * cell, (j0 + j) * cell);
+  }
+  /** Whether a road shaped the corner at lattice index `k`, memoized:
+   * unknown, no, yes. */
+  const shaped = new Int8Array(w * h).fill(-1);
+  const isShaped = (k: number): boolean => {
+    if (shaped[k] < 0) {
+      const i = k % w;
+      const j = (k - i) / w;
+      const far = terrain.farHeightAt((i0 + i) * cell, (j0 + j) * cell);
+      shaped[k] = Math.abs(H[k] - far) > 0.02 ? 1 : 0;
+    }
+    return shaped[k] === 1;
+  };
+  // Face normals of a cell's two triangles, split along the same diagonal
+  // the renderer indexes — (i+1, j) to (i, j+1). Written into scratch
+  // vectors: this runs for every cell of the map.
+  const lo = [0, 0, 0];
+  const up = [0, 0, 0];
+  const next = [0, 0, 0];
+  const lower = (k: number, out: number[]): void => {
+    const h00 = H[k];
+    const dx = (H[k + 1] - h00) / cell;
+    const dz = (H[k + w] - h00) / cell;
+    const inv = 1 / Math.hypot(dx, 1, dz);
+    out[0] = -dx * inv;
+    out[1] = inv;
+    out[2] = -dz * inv;
+  };
+  const upper = (k: number, out: number[]): void => {
+    const h11 = H[k + w + 1];
+    const dx = (h11 - H[k + w]) / cell;
+    const dz = (h11 - H[k + 1]) / cell;
+    const inv = 1 / Math.hypot(dx, 1, dz);
+    out[0] = -dx * inv;
+    out[1] = inv;
+    out[2] = -dz * inv;
+  };
+  /** The dihedral angle between two face normals, degrees. */
+  const fold = (a: number[], c: number[]): number =>
+    (Math.acos(Math.max(-1, Math.min(1, a[0] * c[0] + a[1] * c[1] + a[2] * c[2]))) * 180) / Math.PI;
+  /** A triangle's slope, m per m, off its normal. */
+  const slope = (n: number[]): number => Math.hypot(n[0], n[2]) / n[1];
+  // The road's own strip is the rollers' to judge; the country starts past
+  // the bench, a cell out, where R31 promises a hill worth going round.
+  const clear = STAGE_RULES.verge.bench + cell;
+  const out: Creases = { edges: 0, creased: 0, worst: 0, walls: 0 };
+  const worstAt = { x: 0, z: 0 };
+  let worstWall = 0;
+  for (let j = 0; j < h - 2; j++) {
+    for (let i = 0; i < w - 2; i++) {
+      const x = (i0 + i + 0.5) * cell;
+      const z = (j0 + j + 0.5) * cell;
+      if (terrain.roadDistanceAt(x, z) < clear) continue;
+      const k = j * w + i;
+      lower(k, lo);
+      upper(k, up);
+      // The three edges this cell owns: its own diagonal, and the two its
+      // upper triangle shares with the lower triangles of the cells to its
+      // right and below.
+      let widest = fold(lo, up);
+      lower(k + 1, next);
+      widest = Math.max(widest, fold(up, next));
+      lower(k + w, next);
+      widest = Math.max(widest, fold(up, next));
+      out.edges += 3;
+      const steepest = Math.max(slope(lo), slope(up));
+      if (widest <= B.fold && steepest <= B.wall.slope) continue;
+      // Worth classifying. Built ground first — it is the common case
+      // beside a road and costs a land query per corner; the rock's own
+      // word is a geology pass and is asked last.
+      const built =
+        isShaped(k) ||
+        isShaped(k + 1) ||
+        isShaped(k + w) ||
+        isShaped(k + w + 1) ||
+        isShaped(k + 2) ||
+        isShaped(k + 2 * w);
+      const sharp = terrain.geology.sharpAt(x, z) >= B.explicit;
+      if (steepest > B.wall.slope && !sharp) {
+        out.walls++;
+        if (steepest > worstWall) {
+          worstWall = steepest;
+          findings.push({
+            code: "ground.wall",
+            severity: "error",
+            message: `a wall stands at ${(Math.atan(steepest) * (180 / Math.PI)).toFixed(
+              0,
+            )}° ${built ? "at the side of a road's shelf" : "in open country"} — no rule stands ground that steep`,
+            at: { x, z },
+            value: steepest,
+          });
+        }
+      }
+      if (widest <= B.fold || built || sharp) continue;
+      out.creased++;
+      if (widest > out.worst) {
+        out.worst = widest;
+        worstAt.x = x;
+        worstAt.z = z;
+      }
+    }
+  }
+  // One finding, after the sweep, and only for a defect: a country of
+  // forty thousand edges has a handful just over the bar wherever two
+  // layers happen to run steep together, and listing each of them is
+  // noise a session learns to skip. What is worth standing in front of
+  // is a SHARE past the tolerance, or a single fold twice the bar — a
+  // knife-edge, wherever it is.
+  const share = out.creased / Math.max(1, out.edges);
+  if (share > B.share.tolerated) {
+    findings.push({
+      code: "ground.crease",
+      severity: "warn",
+      message: `${(share * 100).toFixed(2)}% of the country's lattice edges fold past ${
+        B.fold
+      }° on ground nothing made sharp (worst ${out.worst.toFixed(0)}°)`,
+      at: { x: worstAt.x, z: worstAt.z },
+      value: share,
+    });
+  } else if (out.worst > B.fold * 2) {
+    findings.push({
+      code: "ground.crease",
+      severity: "warn",
+      message: `the country folds ${out.worst.toFixed(
+        0,
+      )}° across one lattice edge — a crease, on ground nothing made sharp`,
+      at: { x: worstAt.x, z: worstAt.z },
+      value: out.worst,
+    });
+  }
+  return out;
 }
 
 export function analyzeGround(track: Track, terrain: TerrainField): MetricReport {
@@ -210,6 +387,10 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
   }
   flanks.sort((a, c) => a - c);
   const corridorRise = percentile(flanks, 0.75);
+
+  // ── The folds (R32) ─────────────────────────────────────────────────
+  const folds = creases(track, terrain, findings);
+  const creasedShare = folds.creased / Math.max(1, folds.edges);
   const cutShare = sides > 0 ? cutSides / sides : 0;
   const walledShare = track.length > 0 ? walled / track.length : 0;
   if (corridorRise < C.rise.min) {
@@ -389,6 +570,20 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       weight: 1,
       value: cutShare,
     },
+    {
+      // Weighted like `relief`: the same country, asked whether it is drawn
+      // as curves. The walls take their share off it too — a stage whose
+      // country is smooth everywhere but one vertical seam has the one
+      // thing a player photographs.
+      id: "crease",
+      label: "the country is curves, and a sharp edge is one that was asked for (R32)",
+      score:
+        under(creasedShare, G.crease.share.tolerated, G.crease.share.fail) *
+        under(folds.walls, 0, G.crease.wall.fail),
+      weight: 1.5,
+      value: creasedShare,
+      budget: G.crease.share.tolerated,
+    },
   ];
 
   return {
@@ -418,6 +613,9 @@ export function analyzeGround(track: Track, terrain: TerrainField): MetricReport
       cutShare,
       walledShare,
       deepestCut: deepest,
+      creasedShare,
+      worstCrease: folds.worst,
+      walls: folds.walls,
     },
     ms: Date.now() - started,
   };

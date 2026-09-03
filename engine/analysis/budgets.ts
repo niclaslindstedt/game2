@@ -357,12 +357,12 @@ export const ANALYSIS = {
      * roads have camber, bank and a metre of lift between them, so a metre
      * of disagreement is the instrument rather than a defect.
      *
-     * What it catches is the case the cone was blind to. R31 used to bind
-     * only upward — a branch on stilts beside the stage — and a branch
-     * BELOW it builds the same wall from the other side, because the
-     * terrain holds each road's shelf flat to its own corridor lip and then
-     * drops the whole difference between the two lips. Measured on seeds
-     * 1-12 at medium before the cone was made two-sided: four branches lay
+     * What it catches is the case a one-sided cone is blind to. Bound only
+     * upward — a branch on stilts beside the stage — a branch BELOW it
+     * builds the same wall from the other side, because the terrain holds
+     * each road's shelf flat to its own corridor lip and then drops the
+     * whole difference between the two lips. Measured on seeds 1-12 at
+     * medium with the cone bound one way: four branches lay
      * within a metre of the route more than a hundred metres up their own
      * length, the worst 5.9 m below it, and seed 38's short sprint ran 140
      * m at twelve metres from the route and ten below it — a sheer earth
@@ -784,6 +784,52 @@ export const ANALYSIS = {
      * filled the other — so this should stay at zero, and a seed where it
      * does not is a seed where that broke. */
     cut: { share: { min: 0, max: 0.45 }, slack: 0.15, face: 0.35, walled: 260, walledShare: 0.05 },
+
+    /** R32 — THE COUNTRY IS CURVES. The ground is drawn on a 14 m lattice,
+     * and every triangle edge on it is a FOLD the player sees; this holds
+     * the country to folds a curve makes, and a sharp edge to somewhere it
+     * was asked for.
+     *
+     * Three kinds of ground, told apart before anything is scored. BUILT
+     * ground is anything a road shaped — cut, fill, cone, shelf, pad — and
+     * its folds are the road's cuttings and embankments: a cutting has an
+     * edge, and this does not score one. SHARP ground is what R32 says is
+     * deliberately sharp (`geology.sharpAt`): an alpine crest opened by the
+     * steepness dial, an escarpment standing as a cliff. Everything else
+     * is the COUNTRY, and the country is held to `fold`.
+     *
+     * `fold` is the dihedral angle across a lattice edge, degrees, past
+     * which a fold is a crease rather than a curve: a hill with a radius
+     * of curvature of 80 m turns 10° per cell, so 20° is a radius under
+     * 40 m — three cells — which is what a knife-edge crest or a fault
+     * step drawn without its worn slope looks like on this lattice, and
+     * what nothing rounded does. `share` is how much of the country may
+     * fold past it before the check has lost all its points.
+     *
+     * MEASURED over seeds 1-8 at the default dials: with the crests drawn
+     * as whalebacks and the crease left to the dial, between 0.01% and
+     * 0.2% of the country's edges fold past 20°, against 0.3-1.1% with the
+     * old crests — and the worst of those was a 100° knife-edge a hundred
+     * metres long. `share.tolerated` sits over that healthy population and
+     * `share.fail` is where the check has nothing left.
+     *
+     * `wall.slope` is a triangle SLOPE, m per m, past which ground is a
+     * wall wherever it is and whatever built it: the steepest face rock is
+     * ever held at (`verge.cut.face.max`, 1.7) read back across a cell
+     * diagonal (× √2), with a little over. What it catches is the
+     * query-range seam — a cone that stopped being asked one lattice
+     * column before the mountain it was cutting stopped — and it is an
+     * error, because no rule stands ground vertical. `wall.fail` is how
+     * many such triangles empty the check. `explicit` is the `sharpAt`
+     * past which a fold is that feature's rather than the country's —
+     * low, because `sharpAt` carries the feature's own weight, and a small
+     * mountain's crest creases as deliberately as a big one's. */
+    crease: {
+      fold: 20,
+      share: { tolerated: 0.002, fail: 0.005 },
+      wall: { slope: 2.6, fail: 10 },
+      explicit: 0.25,
+    },
   },
 
   /** COST. The generator runs in the game, on a phone, every time a stage

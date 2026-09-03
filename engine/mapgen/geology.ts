@@ -13,9 +13,18 @@
 //      what country the stage is in. Sweden and Norway are made of the same
 //      rock; what separates them is that the ice sat on one and ran off the
 //      other. A smooth country is planed: broad whaleback summits, filled
-//      valleys, escarpments worn back into slopes, and none of the fine
-//      grain left — the ice took it. A rough one keeps its sharp crests,
-//      its cliffs and its texture.
+//      valleys, and none of the fine grain left — the ice took it. A rough
+//      one stands its mountains higher and keeps its texture.
+//
+//      Whatever the smoothness, the rock is CURVES. The ground is drawn on
+//      a 14 m lattice, and a crease in the field is a fold on it that reads
+//      from a kilometre up; so a crest is a whaleback and a fault step is a
+//      worn slope unless somebody asked otherwise. The two sharp things the
+//      country can have — the alpine knife-edge along a crest, the fault
+//      step standing as a cliff — are opened by the `steepness` dial past
+//      its midpoint (`steep.crease`) and by nothing else, and `sharpAt`
+//      says where they are so the analysis can hold everything else to a
+//      curve.
 //
 //   2. GROUNDWATER. The water table is a smoothed copy of the land, sitting
 //      a few metres under it: it follows the topography without following
@@ -114,6 +123,14 @@ export type GeologyField = {
   /** How glacially planed this country is, 0 (alpine, sharp) to 1 (shield,
    * rounded) — drawn from the seed, so every stage is somewhere. */
   smoothness: number;
+  /** How much of the ground here is a DELIBERATELY sharp feature, 0..1: an
+   * alpine crest's crease, an escarpment standing as a cliff — both opened
+   * by the `steepness` dial and nothing else — and the bank of a pit whose
+   * rim is narrower than the ground lattice can curve (`pits.sharpRim`).
+   * The rock is curves everywhere else, and the analysis holds it to that:
+   * a fold on the lattice where this is low is a defect, and where it is
+   * high is the feature. */
+  sharpAt: (x: number, z: number) => number;
 };
 
 /** Build the layers for a seed at its dial positions. Deterministic in
@@ -143,6 +160,18 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     knobScale(knobs.steepness, { min: G.smoothness.min, max: G.steep.sharp.min }),
     knobScale(knobs.steepness, { min: G.smoothness.max, max: G.steep.sharp.max }),
   );
+  // ...and how SHARP that country may be. Everything the rock does is a
+  // curve, with two deliberate exceptions: the alpine crest — the fold of
+  // the ridge noise, cubed, which is a knife-edge on the ground lattice —
+  // and the escarpment drawn as a cliff rather than a worn step. Both are
+  // the dial's (`steep.crease`): nothing until the dial is past it, and
+  // above it the dial's own excess times how far down the sharp band the
+  // seed fell, so a seed that came out worn keeps its whalebacks and its
+  // hillsides at any dial position, and one that came out sharp is creased
+  // along every crest and cliffed along every fault at the top.
+  const sharpShare =
+    clamp01((knobs.steepness - G.steep.crease) / (1 - G.steep.crease)) *
+    clamp01((G.steep.sharp.max - smoothness) / (G.steep.sharp.max - G.steep.sharp.min));
   // ...and how big the relief that country holds is. Sharp country stands
   // its steps and its crests higher as well as steeper — the same fault the
   // ice would have worn into a hillside is a cliff where it did not.
@@ -157,8 +186,8 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     (G.mountain.tall - G.mountain.planed * smoothness);
   const escRise = G.bedrock.escarpment.rise * rise;
   const escSpan =
-    G.bedrock.escarpment.span.min +
-    (G.bedrock.escarpment.span.max - G.bedrock.escarpment.span.min) * smoothness;
+    G.bedrock.escarpment.span.max -
+    (G.bedrock.escarpment.span.max - G.bedrock.escarpment.span.min) * sharpShare;
 
   /** R40 — THE DUNES, where the country has them: wind-blown sand lying on
    * the rock as a ridged field. One bearing for the whole stage — one
@@ -211,7 +240,14 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
   const layers = (
     x: number,
     z: number,
-  ): { rock: number; broad: number; face: number; sheer: number; sunk: number } => {
+  ): {
+    rock: number;
+    broad: number;
+    face: number;
+    sheer: number;
+    sunk: number;
+    sharp: number;
+  } => {
     const swell = (valueNoise(x, z, G.bedrock.swell.scale, noiseSeed) - 0.5) * G.bedrock.swell.amp;
     const H = G.bedrock.hills;
     const hillRaw = valueNoise(x, z, H.scale, noiseSeed + 7);
@@ -226,31 +262,39 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     const grain = (valueNoise(x, z, G.bedrock.grain.scale, noiseSeed + 13) - 0.5) * grainAmp;
 
     // The mountain chains: a slow mask says where one stands, a ridged
-    // field says where its crest runs, and the smoothness says whether the
-    // crest is a peak or a whaleback. Both shapes top out at 1, so the
-    // height band is the whole of the difference in scale between them.
+    // field says where its crest runs, and the dial says whether the crest
+    // is a peak or a whaleback. Both shapes top out at 1, so the height
+    // band is the whole of the difference in scale between them.
+    //
+    // The whaleback is a PARABOLA over the ridge noise: the same crest
+    // line as the fold, a third of the curvature at the crest that a
+    // smoothstep over the fold has, and no crease anywhere — a curve on
+    // the lattice however steeply the noise under it happens to run. A
+    // smoothstep over the fold looks rounded and is not: its curvature is
+    // all at the crest, where a steep run of the noise turns it over inside
+    // one ground cell. The alpine crest is the fold itself, cubed, and a
+    // crease by design.
     const mask = smooth(
       clamp01(
         (valueNoise(x, z, G.bedrock.mountain.scale, noiseSeed + 17) - G.bedrock.mountain.from) /
           (1 - G.bedrock.mountain.from),
       ),
     );
-    const ridge = 1 - Math.abs(2 * valueNoise(x, z, G.bedrock.ridge.scale, noiseSeed + 19) - 1);
+    const ridgeRaw = valueNoise(x, z, G.bedrock.ridge.scale, noiseSeed + 19);
+    const ridge = 1 - Math.abs(2 * ridgeRaw - 1);
     const alpine = ridge * ridge * ridge;
-    const rounded = smooth(ridge);
-    const crest = alpine + (rounded - alpine) * smoothness;
+    const rounded = 4 * ridgeRaw * (1 - ridgeRaw);
+    const crest = rounded + (alpine - rounded) * sharpShare;
     const mountain = mask * crest * peak;
 
     // The escarpments: a wandering fault line where the ground steps down.
     // A cliff where the country is sharp, a hillside where the ice has been
     // over it. `esc * (1 - esc)` peaks exactly on the face of the step —
     // the smoothstep's own slope, without differencing anything.
-    const esc = smooth(
-      clamp01(
-        (valueNoise(x, z, G.bedrock.escarpment.scale, noiseSeed + 29) - G.bedrock.escarpment.from) /
-          escSpan,
-      ),
-    );
+    const escT =
+      (valueNoise(x, z, G.bedrock.escarpment.scale, noiseSeed + 29) - G.bedrock.escarpment.from) /
+      escSpan;
+    const esc = smooth(clamp01(escT));
 
     // The basins: the sea, and the ponds a wetter dial sinks into the
     // country. They are cut into the ROCK — the ice gouged them — and they
@@ -305,7 +349,21 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     const step = 4 * esc * (1 - esc);
     const sheer = clamp01(Math.max(flank, step));
     const face = clamp01(Math.max(sheer, roll));
-    return { rock, broad, face, sheer, sunk };
+    // How much of the ground here is a DELIBERATELY sharp feature: a crest,
+    // or the escarpment's face, in a country the dial has opened. WHERE a
+    // feature is, not how hard it creases — a quarter of the dial's excess
+    // is already a crease along every crest, so the word saturates there.
+    // A crest counts from a quarter of the mask up, because a small
+    // mountain's knife-edge is as deliberate as a big one's; a face counts
+    // for a span and a half beyond both its edges, because it is the FOOT
+    // and the BROW of a cliff that fold on the lattice, both lie a cell
+    // outside the face itself, and where the noise runs steep the face is
+    // barely a cell wide. Everything else the rock does is a curve, and the
+    // analysis holds it to one.
+    const crestMark = smooth(clamp01(2 * mask)) * ridge * ridge;
+    const faceMark = 1 - smooth(clamp01((Math.abs(escT - 0.5) - 0.5) / 1.5));
+    const sharp = clamp01(sharpShare * 4) * Math.max(crestMark, faceMark);
+    return { rock, broad, face, sheer, sunk, sharp };
   };
 
   /** THE PITS — how far the ground is cut BELOW THE WATER TABLE here, m, and
@@ -327,9 +385,9 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     z: number,
     rock: number,
     face: number,
-  ): { t: number; full: number; rim: number } => {
+  ): { t: number; full: number; rim: number; sharp: number } => {
     const P = G.pits;
-    const none = { t: 0, full: 0, rim: 0 };
+    const none = { t: 0, full: 0, rim: 0, sharp: 0 };
     // R40 — no groundwater, no pit: a hollow in a dry country is a pan.
     if (!B.water) return none;
     // Flat, and low. Above `lowland` metres over the lake table there is no
@@ -346,13 +404,22 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     let strength = 0;
     let full = 0;
     let rim = 0;
+    let sharp = 0;
     const cut = (
       pit: { scale: number; from: number; span: number; depth: number },
       salt: number,
     ): void => {
-      const t = smooth(
-        clamp01((valueNoise(x, z, pit.scale, noiseSeed + salt) - (pit.from - open)) / pit.span),
-      );
+      const tRaw = (valueNoise(x, z, pit.scale, noiseSeed + salt) - (pit.from - open)) / pit.span;
+      // A rim narrower than the ground lattice can curve is a CUT edge by
+      // construction — a kettle hole's bank — and says so, for a lattice
+      // cell's worth of ground beyond both its edges, because it is the top
+      // and the toe of the bank that fold and each lies a cell out.
+      const rimWidth = pit.span * pit.scale * (2 / 3);
+      if (rimWidth < P.sharpRim) {
+        const beyond = Math.max(0, Math.abs(tRaw - 0.5) - 0.5) * rimWidth;
+        sharp = Math.max(sharp, 1 - smooth(clamp01(beyond / P.sharpRim)));
+      }
+      const t = smooth(clamp01(tRaw));
       if (t <= 0) return;
       // The three take the DEEPEST rather than the sum: a tarn inside a mere
       // is a tarn, not a tarn plus half a metre. Summing them also makes
@@ -370,7 +437,7 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     cut(P.mere, 41);
     cut(P.tarn, 43);
     cut(P.pool, 47);
-    return { t: strength * holds, full, rim: rim * holds };
+    return { t: strength * holds, full, rim: rim * holds, sharp: sharp * clamp01(holds * 2) };
   };
 
   /** Soil depth over the rock, m. Till collects where water slows down and
@@ -400,8 +467,15 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
   const finish = (
     x: number,
     z: number,
-  ): { rock: number; soil: number; surface: number; broad: number; face: number } => {
-    const { rock, broad, face, sheer } = layers(x, z);
+  ): {
+    rock: number;
+    soil: number;
+    surface: number;
+    broad: number;
+    face: number;
+    sharp: number;
+  } => {
+    const { rock, broad, face, sheer, sharp } = layers(x, z);
     // `sheer` and not `face`: what stops a hollow holding water is a
     // mountainside, not a hill (see `layers`).
     const pit = pitAt(x, z, rock, sheer);
@@ -421,7 +495,7 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
     // ground exactly where `rim` says it is.
     const floor = LAKE_Y - pit.full;
     const surface = pit.t > 0 ? dry - Math.max(0, dry - floor) * pit.t : dry;
-    return { rock, soil, surface, broad, face: steep };
+    return { rock, soil, surface, broad, face: steep, sharp: Math.max(sharp, pit.sharp) };
   };
 
   /** Everything above works in COUNTRY space — the seed's landscape, at
@@ -516,5 +590,6 @@ export function createGeology(seed: number, knobs: StageKnobs): GeologyField {
       return { kind: depth < G.pits.swamp ? "swamp" : "lake", depth };
     },
     smoothness,
+    sharpAt: (x, z) => finish(x + site.x, z + site.z).sharp,
   };
 }

@@ -79,10 +79,10 @@ export type ShelfBand = { floor: number; ceiling: number };
  * how wide the line is, and what it is built of. Placed by the generator
  * rather than by the renderer, for the one reason that matters — the thing
  * standing in front of a driver is part of the stage, so it has to be
- * placed where both the analysis and the drawing can see it. Half the
- * blocks on a sweep of seeds used to stand across the road the stage
- * actually takes, and nothing was measuring it because nothing but the
- * renderer knew where they were. */
+ * placed where both the analysis and the drawing can see it. Left to the
+ * renderer alone, half the blocks on a sweep of seeds stand across the
+ * road the stage actually takes, and nothing measures it because nothing
+ * but the renderer knows where they are. */
 export type RoadBlock = {
   /** Centre of the barrier line, on the branch's own centerline. */
   x: number;
@@ -344,8 +344,8 @@ export function buildSpur(
    * walk below. */
   let stageSkip = 0;
   /** The room straight ahead, measured once per step and then read by the
-   * swing that follows it — three grid probes, and the swing used to take
-   * them all over again before its first comparison. */
+   * swing that follows it — three grid probes the swing would otherwise
+   * take all over again before its first comparison. */
   let straightRoom = Infinity;
 
   for (let s = 0; s <= length; s += SPUR.step) {
@@ -516,7 +516,7 @@ export function buildSpur(
     const clear = roadDistance(at.x, at.z, false);
     if (clear >= keepOut) departed = true;
     // R31 — the HEIGHT rule binds the whole way, the junction window
-    // included, and that is the half of R23 this used to let through.
+    // included: that is the half of R23 a distance rule alone lets through.
     //
     // At the mouth the two roads are one graded plane, so the two heights
     // agree and this passes by construction; what it catches is the branch
@@ -901,6 +901,14 @@ export type SpurIndex = {
 
 /** Cell edge of the branch lookup, m — a couple of samples per cell. */
 const INDEX_CELL = 24;
+
+/** How far from a point `nearest` is GUARANTEED to find a branch, m: the
+ * three rings of the block below. Anything shaped off a branch's distance
+ * — its verge cone above all — has to be finished by here, because past
+ * it the branch is found or not depending on which index cell the point
+ * fell in, and a cone that is still cutting when its road stops being
+ * found ends in a wall ruled along the cell boundary. */
+export const SPUR_INDEX_REACH = INDEX_CELL * 3;
 
 /** One cell of the branch index: the samples in it, and the box they
  * occupy. A branch crosses a cell as a ribbon, so its box is a fraction of

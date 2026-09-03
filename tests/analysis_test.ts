@@ -18,6 +18,7 @@ import { describe, expect, it } from "vitest";
 import {
   ANALYSIS,
   APRON_HOLDS,
+  LAKE_Y,
   STAGE_RULES,
   analyzeSeed,
   compileStage,
@@ -530,4 +531,49 @@ describe("the jumps", () => {
       expect(jumps?.stats.maxHeight, `seed ${seed}`).toBeGreaterThan(0);
     }
   }, 20_000);
+});
+
+describe("the country is curves (R32)", () => {
+  it("folds the country like a curve and stands no wall, at the default dials", () => {
+    // Every fold on the drawn lattice past the road's bench, on ground no
+    // road shaped and no rule made sharp, inside the tolerated share — and
+    // not one triangle standing steeper than rock is ever held at. The
+    // second is the one that catches a cone stopping at its query range.
+    for (const seed of SEEDS) {
+      const ground = report(seed).metrics.find((m) => m.id === "ground");
+      const share = (ground?.stats.creasedShare ?? 1) as number;
+      expect(share, `seed ${seed}`).toBeLessThanOrEqual(ANALYSIS.ground.crease.share.tolerated);
+      expect(ground?.stats.walls, `seed ${seed}`).toBe(0);
+    }
+  }, 30_000);
+
+  it("opens a sharp edge only past the steepness dial's midpoint", () => {
+    // The rock's own word on where it is deliberately sharp, sampled over
+    // the map on ground well above the water table — a kettle hole's bank
+    // is sharp at any dial, and only forms within a few metres of it.
+    const sharpest = (seed: number, steepness: number): number => {
+      const track = compileStage(seed, "medium", { steepness });
+      const terrain = createTerrain(track);
+      terrain.sync(0);
+      const b = track.bounds;
+      let worst = 0;
+      for (let i = 0; i < 40; i++) {
+        for (let j = 0; j < 40; j++) {
+          const x = b.minX + ((i + 0.5) / 40) * (b.maxX - b.minX);
+          const z = b.minZ + ((j + 0.5) / 40) * (b.maxZ - b.minZ);
+          if (terrain.geology.surfaceAt(x, z) < LAKE_Y + 20) continue;
+          worst = Math.max(worst, terrain.geology.sharpAt(x, z));
+        }
+      }
+      return worst;
+    };
+    let opened = 0;
+    for (const seed of [1, 2, 3, 4]) {
+      expect(sharpest(seed, 0), `seed ${seed} at the worn end`).toBeLessThan(
+        ANALYSIS.ground.crease.explicit,
+      );
+      if (sharpest(seed, 1) >= ANALYSIS.ground.crease.explicit) opened++;
+    }
+    expect(opened, "no seed grew a crest or a cliff at the top of the dial").toBeGreaterThan(0);
+  }, 40_000);
 });

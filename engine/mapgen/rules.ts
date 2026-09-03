@@ -586,7 +586,7 @@ export const STAGE_RULES = {
      * far from the grid a closure can be solved at all, so it is also the
      * one number that says how often a lap manages to shut.
      *
-     * It is R38's cap (`straightRun.max`), and it used to be 380. A lap
+     * It is R38's cap (`straightRun.max`), and no longer than that. A lap
      * does want a main straight — somewhere to pull top gear down before
      * the line — but the closure is not where it comes from: a straight
      * that long is a runway bolted onto the end of the lap, and it is the
@@ -877,9 +877,12 @@ export const STAGE_RULES = {
    * The single most important number here is `smoothness`. It is drawn per
    * seed rather than read off a dial, because it says which COUNTRY a stage
    * is in — how long the ice sat on it — and that is not a slider anybody
-   * was asked about. At the low end the rock keeps its sharp crests, its
-   * cliffs and its fine grain; at the high end it is planed into whaleback
-   * summits, filled valleys and worn-back slopes. */
+   * was asked about. At the low end the rock stands its mountains high and
+   * keeps its fine grain; at the high end it is planed into filled valleys
+   * with the grain gone. Whichever end, the rock is CURVES — a crest is a
+   * whaleback and a fault step a worn slope — until the `steepness` dial
+   * is turned past `steep.crease`, which is the one thing that opens a
+   * knife-edge or a cliff. */
   geology: {
     /** How glacially planed a country may be, 0 (alpine) to 1 (shield).
      * Neither end is reached: a stage with no texture at all reads as a
@@ -907,6 +910,23 @@ export const STAGE_RULES = {
     steep: {
       sharp: { min: 0.08, max: 0.5 },
       rise: { min: 0.85, max: 1.45 },
+      /** ...and the dial position past which the rock may be SHARP at all.
+       * Everything the rock does is a curve — a whaleback crest, a fault
+       * step worn back into a hillside — with two exceptions: the alpine
+       * crest, the fold of the ridge noise cubed, which is a knife-edge on
+       * the 14 m ground lattice; and the escarpment drawn at the narrow
+       * end of its span, which is a cliff. They are the sharp things the
+       * country has, and they are opened by this dial and nothing else:
+       * below `crease` no seed draws either, and above it both grow with
+       * the dial AND with how far down the sharp band the seed's
+       * smoothness fell, so the top of the dial draws a knife-edge along
+       * every crest and a cliff along every fault on the seeds that came
+       * out sharpest. Keyed to the dial rather than to the smoothness
+       * alone because the midpoint of the dial reads into the sharp band,
+       * and a sharp edge is a thing somebody has to have asked for. The
+       * analysis's `ground.crease` holds the rest of the country to a
+       * curve, and exempts only what this opened. */
+      crease: 0.5,
       /** ...and how much steeper the ground BESIDE THE ROAD is allowed to
        * lean at the top of the dial — the per-side embankment grade in
        * `terrain.ts`, which is what actually stands a hillside up next to
@@ -923,7 +943,8 @@ export const STAGE_RULES = {
 
     /** The mountain's height band across the smoothness range: sharp
      * country stands its crests higher than the shield does, and the two
-     * crest SHAPES (a cube against a smoothstep) do the rest. */
+     * crest SHAPES (the fold cubed, against a parabola over the raw noise)
+     * do the rest once `steep.crease` lets the first one in. */
     mountain: { tall: 1.3, planed: 0.5 },
 
     bedrock: {
@@ -962,7 +983,9 @@ export const STAGE_RULES = {
       ridge: { scale: 300 },
       /** The fault steps: a wandering line the ground drops over. `span`
        * is how much of the noise the step is spread across — narrow is a
-       * cliff, wide is a hillside, and the smoothness reads between them. */
+       * cliff, wide is a hillside, and the `steepness` dial reads between
+       * them (`steep.crease`): the worn end everywhere the dial has not
+       * opened, because a cliff is a sharp edge somebody has to ask for. */
       escarpment: { scale: 520, from: 0.52, span: { min: 0.042, max: 0.22 }, rise: 15 },
       /** The sea basins: broad hollows sunk under the lake table. `wetter`
        * and `deeper` are what the `water` dial adds to each. */
@@ -972,8 +995,13 @@ export const STAGE_RULES = {
        * the land has to still be land. */
       basin: { scale: 1600, from: 0.86, span: 0.34, depth: 30, wetter: 0.18, deeper: 20 },
       /** ...and the ponds, on a tighter scale — the tarns and lakes the
-       * road runs past rather than over. */
-      pond: { scale: 340, from: 0.9, span: 0.1, depth: 10, wetter: 0.05, deeper: 8 },
+       * road runs past rather than over. Their rim is a SHORE the ground
+       * lattice can curve: forty-five metres across, three cells. At half
+       * that span the bank turned over inside two cells and folded 27° at
+       * its top. Widened INWARD, like the tarn's — `from` holds, so no more
+       * of the map is pond — with `depth` raised to keep what the noise
+       * reaches of the band as deep as it was. */
+      pond: { scale: 340, from: 0.9, span: 0.2, depth: 22, wetter: 0.05, deeper: 8 },
       /** Where sea level sits relative to the rock's own zero. */
       datum: -6,
     },
@@ -1012,7 +1040,14 @@ export const STAGE_RULES = {
      * ground may stand before pits fade out entirely, m. */
     pits: {
       mere: { scale: 620, from: 0.76, span: 0.22, depth: 0.55 },
-      tarn: { scale: 300, from: 0.8, span: 0.12, depth: 7 },
+      /** A tarn's rim is a SHORE, not a bank: forty metres across, which
+       * is three ground cells and a curve the lattice can draw. At half
+       * that span the shore turned over inside two cells and folded 27° at
+       * its top on every tarn in the country. The span is widened INWARD —
+       * `from` holds, so the footprint of water on the map is unchanged —
+       * which puts the floor past where the noise reaches; `depth` is
+       * raised to keep the middle of a tarn a lake. */
+      tarn: { scale: 300, from: 0.8, span: 0.2, depth: 10 },
       pool: { scale: 110, from: 0.86, span: 0.09, depth: 4.5 },
       flat: 0.3,
       /** How far above the lake table the ground may stand before pits stop
@@ -1030,6 +1065,13 @@ export const STAGE_RULES = {
        * rather than a lake, m: shallow enough to see the bottom of, to
        * grow reeds in, and to drive through. */
       swamp: 1.2,
+      /** A rim narrower than this, m — its span across the noise times the
+       * noise's own scale, over the smoothstep's peak slope — is a CUT
+       * edge rather than a curve: a kettle hole's bank, which a 14 m ground
+       * lattice can only ever draw as a fold. Such a pit says so
+       * (`sharpAt`), and the analysis lets its bank fold. A pool's rim is
+       * seven metres; a tarn's twenty-four; a mere's ninety. */
+      sharpRim: 20,
     },
 
     /** R35 — SITING. Where in the country the stage's own origin lands.
@@ -2421,6 +2463,20 @@ export const STAGE_RULES = {
      * which slumps. Where the road has been cut through rock instead, R34's
      * `cut` band says what the face is held at. */
     climb: 0.45,
+    /** ...and where the cone LIFTS OFF: how much of the END of its reach it
+     * climbs away over, m. A cone is a min, and a min that simply stops
+     * being asked past its reach ends in a WALL — the country standing
+     * however high it stands one query cell further out, ruled dead
+     * straight along the lattice. Beside a mountain that was fifty metres
+     * of vertical rock two hundred metres from any road, on ground no rule
+     * had touched. So over the last `fade` metres the cone's grade climbs
+     * from `climb` to the steepest face rock is ever held at
+     * (`cut.face.max`), and a cut runs out into the country as a face that
+     * steepens into rock rather than one that stops. At sixty metres that
+     * lifts the route's cone a further 37 m by the edge of its reach — over
+     * ninety metres above the road all told — and only a mountain standing
+     * over that keeps a wall, which the analysis reports as one. */
+    fade: 60,
 
     /** R34 — THE CUT. What the road does with ground it cannot go round.
      *
