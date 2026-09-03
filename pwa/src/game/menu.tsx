@@ -123,42 +123,58 @@ export const DIFFICULTY_OPTIONS: { id: Difficulty; label: string }[] = DIFFICULT
 }));
 
 /** What a rung costs the player's OWN car, read off the same table the field
- * is entered from (`damageScaleFor`). It is the one half of a difficulty
- * that is a fact rather than a promise — how good fourteen crews are is
- * something you find out by racing them, and how much of a hit lands on your
- * bodywork is a number — so it is the half worth printing. Derived rather
- * than written out, so a retune of `DIFFICULTIES` can never leave the menu
- * quoting a scale the game no longer runs. */
+ * is entered from (`damageScaleFor`). Derived rather than written out, so a
+ * retune of `DIFFICULTIES` can never leave the menu quoting a scale the game
+ * no longer runs. */
 function damageWord(damage: number): string {
   if (damage <= 0) return "NO DAMAGE";
   if (damage >= 1) return "FULL DAMAGE";
+  if (Math.abs(damage - 0.5) < 0.01) return "HALF DAMAGE";
   return `${Math.round(damage * 100)}% DAMAGE`;
 }
 
-/** The three rungs as CARDS rather than chips: the meter that says how far
- * up the ladder each one stands, the word, and what a crash costs there. */
+/** ...and what it does to the FOURTEEN CREWS, which is the other half of the
+ * word and the half a player meets first: a difficulty is a points budget
+ * every rival spends on their own driving, plus how much of their temper
+ * they are allowed off the leash (`budgetFor`, `DIFFICULTIES[].aggression`).
+ * A skill budget is not a figure anybody can read — 27 against 42 says
+ * nothing — so this half is WORDED rather than derived, and the meter beside
+ * it is what says how far up the ladder the rung stands. Keyed by id so a
+ * rung the engine grows arrives wordless rather than mislabelled. */
+const CREW_WORD: Partial<Record<Difficulty, string>> = {
+  easy: "CALM CREWS",
+  medium: "QUICK CREWS",
+  hard: "BEST CREWS",
+};
+
+/** The three rungs as CARDS rather than chips: the meter that says how far up
+ * the ladder each one stands, the word, and the two things the word decides
+ * — how good the crews are, and what a crash costs. */
 export const DIFFICULTY_CARDS: {
   id: Difficulty;
   label: string;
   glyph: GlyphName;
-  blurb: string;
+  crews: string;
+  damage: string;
 }[] = DIFFICULTY_IDS.map((id) => ({
   id,
   label: DIFFICULTIES[id].label,
   // The meter is named for the rung it draws — one mark per idea, and the
   // idea here IS easy, medium, hard.
   glyph: id as GlyphName,
-  blurb: damageWord(DIFFICULTIES[id].damage),
+  crews: CREW_WORD[id] ?? "",
+  damage: damageWord(DIFFICULTIES[id].damage),
 }));
 
 /** R29 — HOW HARD THE GAME IS, as the decision it actually is.
  *
- * It is not a knob among knobs: it sets how good the fourteen crews you are
- * racing are AND how much of every impact lands on your own car, and every
- * result already on the ladder was scored against one particular answer. A
- * row of three chips the size of the HILLS dial says none of that. Three
- * cards do, with room for a meter that reads before the word does and the
- * green-amber-red every other scale in the world is painted in.
+ * It is not a knob among knobs. It buys every rival crew a bigger budget to
+ * spend on their own driving AND lets more of every impact through to the
+ * player's car, and every result already on the ladder was scored against
+ * one particular answer. A row of three chips the size of the HILLS dial
+ * says none of that. Three cards do, with room to say both halves and for a
+ * meter that reads before the word does, in the green-amber-red every other
+ * scale in the world is painted in.
  *
  * `label` is a parameter because HEADS UP asks the same question about its
  * own field, which is deliberately not the campaign's (see
@@ -192,7 +208,10 @@ export function DifficultyPicker({
           >
             <Glyph name={opt.glyph} className="menu-diff-meter" />
             <span className="menu-diff-name">{opt.label}</span>
-            <span className="menu-diff-blurb">{opt.blurb}</span>
+            <span className="menu-diff-blurb">
+              <span>{opt.crews}</span>
+              <span>{opt.damage}</span>
+            </span>
           </button>
         ))}
       </div>

@@ -1329,21 +1329,30 @@ for (const [name, viewport] of [
 }
 
 // ...and the table behind the head's STANDINGS press, which is where
-// everything the old panel printed under the boxes now lives.
-await capture(
-  "shot-menu-standings",
-  { width: 390, height: 844 },
-  async (page) => {
-    await menuUp(page);
-    await stageGrid(page);
-    await page.locator(".menu-head-act").click();
-    await page.waitForTimeout(400);
-  },
-  { menu: "1" },
-  "load",
-  {},
-  PLAYED_IN,
-);
+// everything the old panel printed under the boxes now lives. Both shapes:
+// the page it cuts its rows to is measured off the room the modal has, and a
+// phone held sideways is the shape with none.
+for (const [name, viewport] of [
+  ["shot-menu-standings", { width: 390, height: 844 }],
+  ["shot-menu-standings-landscape", { width: 844, height: 390 }],
+]) {
+  await capture(
+    name,
+    viewport,
+    async (page) => {
+      await menuUp(page);
+      await stageGrid(page);
+      await page.locator(".menu-head-act").click();
+      // The pictures are real bodies on a stand, one per idle slot
+      // (car-portraits.ts) — the board is worth photographing with them on.
+      await page.waitForTimeout(9000);
+    },
+    { menu: "1" },
+    "load",
+    {},
+    PLAYED_IN,
+  );
+}
 
 // The pre-race card: the stage picked, the car being chosen against its
 // spec sheet. Three shapes, because the sheet's two columns collapse to one

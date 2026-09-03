@@ -3435,11 +3435,19 @@ body {
 /* What a crash costs at this rung, off the engine's own table. Small: it is
    the footnote on the choice, not the choice. */
 .menu-diff-blurb {
+  display: flex;
+  flex-direction: column;
   font-size: clamp(0.5rem, 1.7vmin, 0.64rem);
   letter-spacing: 0.1em;
   opacity: 0.7;
-  line-height: 1.1;
+  line-height: 1.25;
   text-align: center;
+}
+
+/* Each half is a phrase, never half of one: "CALM" over "CREWS" reads as
+   two settings. */
+.menu-diff-blurb > span {
+  white-space: nowrap;
 }
 
 /* Landscape on a phone: three cards laid on their sides. The meter and the
@@ -3467,8 +3475,10 @@ body {
     padding: 0.35rem 0.5rem;
   }
 
+  /* ...with the two halves stacked in the width the card just gained,
+     beside the word rather than under it. */
   .menu-diff-blurb {
-    display: none;
+    text-align: left;
   }
 
   .menu-diff-meter {
@@ -5835,104 +5845,10 @@ a.menu-version:focus-visible {
   font-style: italic;
 }
 
-/* ── R30: the result sheet ────────────────────────────────────────────────
-   Fifteen rows of place, crew, time and points — the stage's classification
-   on the results card, and the location's standings table in the menu.
-   One layout for both, because they are the same table asked at two
-   different moments, and a player who has learned to read one has learned
-   to read the other.
-
-   Monospaced numerals and fixed columns: a table whose figures wander is a
-   list, and nobody scans a list for their own row. */
-
-.results-table {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  width: 100%;
-  margin: 0.6rem 0 0;
-  padding: 0;
-  list-style: none;
-  font-size: clamp(0.62rem, 2.1vmin, 0.9rem);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.06em;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-.results-row {
-  display: grid;
-  grid-template-columns: 1.8em 1fr 4.4em 2.4em 3.6em;
-  gap: 0.5em;
-  align-items: baseline;
-  padding: 0.12rem 0.35rem;
-  border-radius: 0.3rem;
-}
-
-/* Without a stage in view there are no times and no stage points — only what
-   everybody has. */
-.results-table.is-standings .results-row {
-  grid-template-columns: 1.8em 1fr 3.6em;
-}
-
-/* …and a HEADS-UP race is the other way round: a stage, a time, and no board
-   behind either of them. */
-.results-table.is-race .results-row {
-  grid-template-columns: 1.8em 1fr 4.4em;
-}
-
-.results-pos {
-  text-align: right;
-  opacity: 0.75;
-}
-
-.results-who {
-  letter-spacing: 0.16em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.results-time,
-.results-points,
-.results-total {
-  text-align: right;
-}
-
-.results-points {
-  color: var(--hud-good);
-}
-
-/* The heading is a label, not a row: it never lights up and it never scores. */
-.results-head {
-  font-size: 0.8em;
-  letter-spacing: 0.04em;
-  opacity: 0.6;
-  position: sticky;
-  top: 0;
-  background: rgb(18 48 105 / 92%);
-}
-
-.results-head .results-points {
-  color: inherit;
-}
-
-/* Your own row. Loud on purpose: finding it is the only thing anybody does
-   with a table they are already looking at. */
-.results-row.is-you {
-  background: rgb(255 210 62 / 88%);
-  color: var(--hud-shadow);
-  text-shadow: none;
-}
-
-.results-row.is-you .results-points {
-  color: inherit;
-}
-
-/* ── …and the modal it is shown in ──────────────────────────────────────
+/* ── THE MODAL a board is shown in ─────────────────────────────────────
    Over the top of whatever opened it, with one way out. Fifteen rows is
-   more than a results card can hold, which is exactly why this is a
-   deliberate look rather than another block on the card. */
+   more than a page of stage boxes can hold, which is exactly why this is a
+   deliberate look rather than another row on the page. */
 
 .hud-modal {
   position: fixed;
@@ -6137,6 +6053,79 @@ a.menu-version:focus-visible {
 
 .rsheet-row.is-dnf .rsheet-time {
   opacity: 0.6;
+}
+
+/* ── …and the same board as a LOCATION'S TABLE (results-table.tsx) ──────
+   The campaign's fifteen crews after the stages driven so far, behind the
+   STANDINGS press on a location page. Same rows, same pictures, same pager:
+   what changes is that a stage's TIME becomes the WINS that break a tie, and
+   TOTAL is the figure the whole board is about. */
+
+.rsheet.is-table .rsheet-row {
+  grid-template-columns: 2em 3.6rem minmax(0, 1fr) 4.2em 2.6em;
+}
+
+/* The board fills the modal and reads left to right. The modal itself
+   centres its title, its sub and its ways out — a card of announcements —
+   and a TABLE centred inside one is a table whose columns wander. */
+.hud-modal-board .rsheet {
+  width: 100%;
+  text-align: left;
+}
+
+/* The board's head: what the rows ARE on the left, the pager on the right.
+   It never wraps — the count is three words and the arrows have to stay on
+   its line — and where the player stands is the modal's own centred line
+   above it. */
+.hud-modal-board .rsheet-head {
+  justify-content: space-between;
+}
+
+.hud-modal-board .rsheet-count {
+  white-space: nowrap;
+}
+
+/* Where the player stands, in caps like the rest of the menu's voice. */
+.hud-modal-board .hud-modal-sub {
+  color: var(--hud-good);
+  opacity: 0.9;
+}
+
+/* A crew who has not scored: the row is still theirs, but the board is
+   about the ones who have. */
+.rsheet-row.is-nought .rsheet-total {
+  opacity: 0.5;
+}
+
+.rsheet-wins {
+  text-align: right;
+  font-size: 0.82em;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+}
+
+.rsheet-total {
+  color: var(--hud-good);
+}
+
+.rsheet-row.is-you .rsheet-total,
+.rsheet-row.is-you .rsheet-wins {
+  color: inherit;
+  opacity: 0.85;
+}
+
+/* The board's modal is wider than a plain one — five columns and a picture
+   in every row — and it SCROLLS as a last resort: the page is measured to
+   fit, but a browser zoomed in far enough to beat the row floor must still
+   be able to reach CLOSE. */
+.hud-modal-board {
+  width: min(34rem, 100%);
+  /* Solid, where the announcement modals are 96%: a table is a document, and
+     the stage boxes reading faintly through its rows are a column of figures
+     with somebody else's words in it. */
+  background: #123069;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* A phone held sideways: shorter rows, and the pictures with them. */
