@@ -105,22 +105,34 @@ type TunedKnob =
  * five together. What the rest buy is the difference between crews on the
  * same budget — which is the half of the model the player actually meets. */
 const AXIS_KNOBS: { axis: SkillAxis; knob: TunedKnob; novice: number; ace: number }[] = [
-  // The corner-speed plan is sqrt(latCeiling · latFraction / κ), so this is
-  // most of the difference between a crew that arrives and one that has
-  // already gone. Quoted against the TRACTION CEILING (`game/limits.ts`) —
-  // what the tires deliver — rather than against `gripAccel`, which is where
-  // the slide starts easing in and is `1 / latCeiling` of it.
+  // The corner-speed plan is solved out of `limits.ts`'s `latHold` at this
+  // share of it, so this is most of the difference between a crew that
+  // arrives and one that has already gone. Quoted against what the car
+  // HOLDS — the traction ceiling read at the slip angle this layout really
+  // carries — rather than against `gripAccel`, which is where the slide
+  // starts easing in, or against `latCeiling`, which is the SCALE of the
+  // saturation curve and not a number any car reaches.
   //
-  // The ace end is the ceiling ITSELF, and that is the whole difference
-  // between a fast field and a polite one. A crew that plans under it drives
-  // a grip line and arrives with something in hand; the best crew in the
-  // game plans AT it and spends what is left on the slide, which is what a
-  // rally driver is doing. It only measures faster than planning under it
-  // now that the pedals are pedals (`bot.ts`): with a throttle that snapped
-  // between the floor and nothing, a car planned at the limit spent every
-  // corner answering the pedal instead of the road, and the extra commitment
-  // went off the outside of the road rather than onto the clock.
-  { axis: "commitment", knob: "latFraction", novice: 0.24, ace: 1.0 },
+  // Two thirds of it at the ace end, and the shape of that is the whole
+  // difference between a fast field and a polite one: a crew that plans
+  // well under it drives a grip line and arrives with something in hand,
+  // and the best crew in the game plans close to everything the tyres will
+  // hand over and spends what is left on the slide. It only measures faster
+  // than planning further under it now that the pedals are pedals
+  // (`bot.ts`): with a throttle that snapped between the floor and nothing,
+  // a car planned at the limit spent every corner answering the pedal
+  // instead of the road, and the extra commitment went off the outside of
+  // the road rather than onto the clock.
+  //
+  // It came down from 1 when the roster's drift angles were halved, and the
+  // two are one fact. `latHold` reads the tyre's curve at the angle the car
+  // actually carries, so it RISES with speed and at rally pace it is well
+  // over `latCeiling`, which is what this used to be quoted against. Asking
+  // for all of it is asking for a number the car touches only at full lock
+  // and full angle, with nothing in hand for the corner to go wrong in: at
+  // 1 the rival field lost ten crews in seventy-two stages, almost all of
+  // them off the outside of a fast sweeper.
+  { axis: "commitment", knob: "latFraction", novice: 0.156, ace: 0.65 },
   // ±5%: a novice brakes down to the geometric cap and drives round it, an
   // ace arrives over it and lets the slide scrub the rest…
   { axis: "attack", knob: "hotEntry", novice: 0, ace: 5 },

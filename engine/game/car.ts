@@ -821,8 +821,22 @@ export function stepGrounded(
   // ...and the chain deepens the same setpoint, for the same reason it
   // brought the breakaway forward above: the corner is being taken on tires
   // the last corner already used, and less grip is a bigger angle.
+  // ...and the OTHER pedal deepens it on a DRIVEN REAR, which is the
+  // steady-state drift a rear-driver has and a front-driver does not: the
+  // rear tyre's longitudinal force is what holds the car out there, so the
+  // angle stays for as long as the throttle is down. On the layout whose
+  // `powerYaw` is zero this term is exactly 1 and the throttle is still the
+  // way OUT of a slide (`pullStraight`) — the two pedals swap jobs between
+  // the layouts, which is the single thing a player relearns moving from
+  // one to the other.
+  const onPower = 1 + D.powerSpan * DR.powerYaw * (1 - car.lift);
   const askedSlip =
-    D.angleSpan * breakaway * asked * (1 + D.liftSpan * car.lift) * (1 + D.linkDepth * chain);
+    D.angleSpan *
+    breakaway *
+    asked *
+    onPower *
+    (1 + D.liftSpan * car.lift) *
+    (1 + D.linkDepth * chain);
   const sat = clamp(1 - (Math.abs(car.slip) - askedSlip) / (D.angleBand * breakaway), 0, 1);
   // THE SPIN. Past this much slip the fronts are pointed so far from where
   // the car is going that neither the held lock nor the catch has anything
@@ -1034,7 +1048,7 @@ export function stepGrounded(
   // has somewhere to go.
   const yawTarget =
     (deepening ? steerTerm * sat : steerTerm) +
-    handbrakeYaw +
+    handbrakeYaw * sat +
     flickYaw +
     pullIn +
     powerYaw +
@@ -1104,8 +1118,21 @@ export function stepGrounded(
         ? Math.max(-T.reverse.top, car.u - T.reverse.accel * input.brake * dt)
         : Math.min(0, car.u + T.reverse.coastStop * dt);
   } else {
+    // THE LEVER IS A BRAKE. Two wheels dragged down the road is about a
+    // third of what four of them do (`grip.handbrakeBrake`), and the model
+    // used to charge nothing for it at all: the lever unstuck the rear, span
+    // the car and cost it no speed, so the last resort was the cheapest move
+    // in the game and there was never a reason not to hold it.
+    //
+    // The DEEPER of the two demands rather than their sum: with the pedal
+    // already down the rears are locked whichever handle did it, and a
+    // driver standing on both is owed one axle's worth of braking, not
+    // three. The pedal's own damage (`hurt.brake` — a boiled circuit, a
+    // hose) is on both, because a lever that has lost its cable has already
+    // been taken away up at `lever` itself.
+    const pedal = Math.max(input.brake, lever * T.grip.handbrakeBrake);
     // A spent chassis cannot hold its hubs square, so the car pulls up long.
-    car.u -= spec.brake * hurt.brake * input.brake * Math.sign(car.u) * dt;
+    car.u -= spec.brake * hurt.brake * pedal * Math.sign(car.u) * dt;
   }
   // Torn bodywork, a ploughing floorpan and a shell that is no longer the
   // shape it was drawn as, all on top of what the surface itself costs.
@@ -1247,7 +1274,13 @@ export function stepGrounded(
     // tire sideways, and four of them dragged fully sideways is the most
     // effective brake in the game. It is why a spin costs a run so much more
     // than the corner it happened in.
-    const scrub = T.grip.scrub * (spun ? D.spinScrub : 1);
+    // ...and a car sideways with its rear wheels DRAGGED scrubs harder than
+    // one sideways on rolling tyres. It is the other half of what the lever
+    // costs — the half that is paid in the corner rather than on the way in
+    // — and it is what makes a hairpin taken on the handbrake a corner the
+    // driver has to get back on the throttle out of.
+    const dragged = 1 + (T.grip.handbrakeScrub - 1) * lever;
+    const scrub = T.grip.scrub * (spun ? D.spinScrub : dragged);
     const kept = travel * Math.exp(-scrub * Math.sin(car.slip) ** 2 * dt);
     car.u = kept * Math.cos(swung);
     car.w = kept * Math.sin(swung);

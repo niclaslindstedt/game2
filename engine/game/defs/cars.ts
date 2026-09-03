@@ -50,9 +50,17 @@ export type CarSpec = {
   id: string;
   name: string;
   /** One line of billing, for the menu that asks the player to choose one.
-   * It says what the car IS to drive — the block comment above each row
-   * says why the numbers under it are what they are, which is a different
-   * question and far too long to put on a card. */
+   * It says HOW THE CAR IS DRIVEN — which pedal rotates it and which one
+   * straightens it — because that is the thing a player cannot see from the
+   * shape on the stand and the thing that actually changes between the
+   * three. The block comment above each row says why the numbers under it
+   * are what they are, which is a different question and far too long to
+   * put on a card.
+   *
+   * The roster is ordered EASIEST FIRST, and the blurbs read as a ladder
+   * with it: the hatch straightens itself out of trouble, the
+   * four-wheel-drive goes where it is pointed, and the rear-driver holds a
+   * slide on the throttle and has to be caught. */
   blurb: string;
   drive: DriveLayout;
   /** Kerb mass, kg — what the car WEIGHS. Read against
@@ -103,7 +111,15 @@ export type CarSpec = {
   gripLat: number;
   /** Lateral grip once fully sliding — low keeps the car sideways, 1/s. */
   driftLat: number;
-  /** Extra yaw authority while sliding (the car rotates under you), rad/s. */
+  /** Extra yaw authority while sliding (the car rotates under you), rad/s.
+   * Multiplied by HOW FAR the slide has developed (`limits.ts`'s
+   * `askedSlide`), so it and the layout's `depth` are one number in the
+   * car: this is how briskly the car rotates when it is loose, that is how
+   * loose it gets, and the product is the line it holds. They are worth
+   * keeping apart — a car can be pointy without hanging its tail out, and
+   * that is exactly the difference between the hatch and the saloon. When
+   * a layout's `depth` moves, this moves the other way to keep the line,
+   * or the car simply stops getting round the corner. */
   driftYaw: number;
   /** Body color for the renderer (hex) — palette lives with the car. */
   color: number;
@@ -123,7 +139,8 @@ export const CARS: CarSpec[] = [
     // tarmac stage is its day out; a loose, open, fast one is not.
     id: "compact",
     name: "Vireo GT",
-    blurb: "Pointy and grippy on tarmac — rotate it on the lift, never the throttle",
+    blurb:
+      "EASIEST — washes wide if you only steer. Turn in on the brake or the handbrake; the throttle then pulls it straight",
     drive: "fwd",
     mass: 1020,
     gearTop: [12, 20, 28, 38, 49, 62],
@@ -139,9 +156,40 @@ export const CARS: CarSpec[] = [
     tyres: { sealed: 1.16, loose: 0.9 },
     gripLat: 8.6,
     driftLat: 2.6,
-    driftYaw: 2.2,
+    driftYaw: 2.31,
     color: 0x1f6fde,
     accent: 0xffffff,
+  },
+  {
+    // THE HOMOLOGATION SPECIAL — a flared two-door with a turbocharged four
+    // and drive to all of it. Heaviest, most powerful, tallest-geared and
+    // the only car that puts its torque down whatever it is standing on, so
+    // the long open stage, the climb and the wet one are all its. What it
+    // pays is agility: the mass and the composure that keep it calm at
+    // 230 km/h make it lazy to turn in, and a stage of hairpins belongs to
+    // the two lighter cars. It slides neutrally when asked and gathers
+    // itself up on its own — never as playful as the rear-driver, never as
+    // pointy as the hatch, and quicker than both wherever the road opens.
+    id: "coupe",
+    name: "Kestrel RS",
+    blurb:
+      "IN BETWEEN — four driven wheels, so point it and go. Slides a little on the power and gathers itself up",
+    drive: "awd",
+    mass: 1300,
+    gearTop: [13, 22, 31, 42, 55, 72],
+    gearAccel: [10.8, 9.4, 9.4, 9.6, 8.2, 5.6],
+    torque: 0.9,
+    traction: 1.12,
+    brake: 20,
+    steerRate: 2.45,
+    stability: 1.08,
+    gripAccel: 15.6,
+    tyres: { sealed: 1.03, loose: 1.02 },
+    gripLat: 8.0,
+    driftLat: 2.15,
+    driftYaw: 2.3,
+    color: 0xc8352b,
+    accent: 0xf2efe6,
   },
   {
     // THE SALOON — a light three-box 1600 from the end of the sixties,
@@ -155,7 +203,8 @@ export const CARS: CarSpec[] = [
     // that.
     id: "classic",
     name: "Sable 1600",
-    blurb: "Short gears and a tail that steps out at walking pace",
+    blurb:
+      "HARDEST — the tail steps out on the throttle at any speed. Hold the slide on the power, catch it on opposite lock",
     drive: "rwd",
     mass: 1080,
     gearTop: [11, 18, 26, 35, 45, 57],
@@ -172,36 +221,6 @@ export const CARS: CarSpec[] = [
     driftYaw: 2.85,
     color: 0xd8342c,
     accent: 0xf4e9d0,
-  },
-  {
-    // THE HOMOLOGATION SPECIAL — a flared two-door with a turbocharged four
-    // and drive to all of it. Heaviest, most powerful, tallest-geared and
-    // the only car that puts its torque down whatever it is standing on, so
-    // the long open stage, the climb and the wet one are all its. What it
-    // pays is agility: the mass and the composure that keep it calm at
-    // 230 km/h make it lazy to turn in, and a stage of hairpins belongs to
-    // the two lighter cars. It slides neutrally when asked and gathers
-    // itself up on its own — never as playful as the rear-driver, never as
-    // pointy as the hatch, and quicker than both wherever the road opens.
-    id: "coupe",
-    name: "Kestrel RS",
-    blurb: "Heavy, tall-geared, and puts its power down on anything",
-    drive: "awd",
-    mass: 1300,
-    gearTop: [13, 22, 31, 42, 55, 72],
-    gearAccel: [10.8, 9.4, 9.4, 9.6, 8.2, 5.6],
-    torque: 0.9,
-    traction: 1.12,
-    brake: 20,
-    steerRate: 2.45,
-    stability: 1.08,
-    gripAccel: 15.6,
-    tyres: { sealed: 1.03, loose: 1.02 },
-    gripLat: 8.0,
-    driftLat: 2.15,
-    driftYaw: 2.45,
-    color: 0xc8352b,
-    accent: 0xf2efe6,
   },
 ];
 

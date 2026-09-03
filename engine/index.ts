@@ -85,7 +85,17 @@ export {
 export { TUNING } from "./game/defs/tuning.ts";
 // What a car CAN do, as the handling model itself defines it — the limits
 // the physics enforces and the bot plans around, stated once (limits.ts).
-export { askedSlide, cornerSpeed, latCeiling, slideFloor, wheelSlide } from "./game/limits.ts";
+export {
+  askedSlide,
+  cornerSpeed,
+  heldSlip,
+  latCeiling,
+  latHold,
+  slideCap,
+  slideFloor,
+  surfaceGripFor,
+  wheelSlide,
+} from "./game/limits.ts";
 // ...and how much of the car is standing on the road at this instant, which
 // every one of those limits is spent through (car.ts).
 export { tyreLoad } from "./game/car.ts";

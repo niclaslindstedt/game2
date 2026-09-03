@@ -149,15 +149,18 @@ describe("turning at pace", () => {
     });
     for (let i = 1; i < angles.length; i++) {
       expect(angles[i]).toBeGreaterThan(angles[i - 1]);
-      // A tenth of the throw is worth at most ~9° more angle. The model this
+      // A tenth of the throw is worth at most ~5° more angle. The model this
       // replaced put 30° into one such step, which is what made a drift feel
       // like a mode the car switched into rather than something asked for.
-      expect(angles[i] - angles[i - 1]).toBeLessThan(0.16);
+      // The cap came down with `drift.angleSpan`: a step allowance sized for
+      // the old span would let half this scale's whole sweep land in one
+      // notch of wheel and still pass.
+      expect(angles[i] - angles[i - 1]).toBeLessThan(0.09);
     }
     // ...and the whole throw is worth a real spread, not a hair either side
     // of one angle: half lock is a shallower drift than full lock.
-    expect(angles[0]).toBeLessThan(0.1);
-    expect(angles[angles.length - 1]).toBeGreaterThan(0.4);
+    expect(angles[0]).toBeLessThan(0.06);
+    expect(angles[angles.length - 1]).toBeGreaterThan(0.28);
   });
 
   it("the exit overshoots a tad from a deep drift and gathers clean from a shallow one", () => {
@@ -351,8 +354,11 @@ describe("rear-wheel drive", () => {
     // slidier than another — and still catches tires that finish a corner on
     // the driver's behalf. The floor under each keeps it from passing by
     // having both go nowhere.
+    // The absolute floor moves with `drift.angleSpan` — the same held lock
+    // carries the car round a rescaled slide's worth of corner, and the
+    // point of the number is only that neither side went nowhere.
     expect(dropped).toBeLessThan(0.3);
-    expect(steered).toBeGreaterThan(0.9);
+    expect(steered).toBeGreaterThan(0.6);
     expect(steered).toBeGreaterThan(dropped * 3.5);
   });
 
@@ -369,16 +375,25 @@ describe("rear-wheel drive", () => {
     // power down as well, has less grip left to corner with — and on a driven
     // REAR axle that is the tail stepping out. A stab, not a state: what
     // rotates the car is the torque arriving faster than the tires can shed
-    // it, so the angle spikes and then settles back to whatever the wheel is
-    // asking for.
+    // it, so the angle SPIKES and then comes back down to whatever the pedal
+    // is asking for once it is held.
     const state = rwd();
     enterDrift(state);
     run(state, { steer: 1 }, 0.6);
     const lifted = Math.abs(state.car.slip);
     run(state, { throttle: 1, steer: 1 }, 0.25);
-    expect(Math.abs(state.car.slip)).toBeGreaterThan(lifted * 1.15);
+    const booted = Math.abs(state.car.slip);
+    expect(booted).toBeGreaterThan(lifted * 1.1);
+    // ...and the settle is measured against the SPIKE, not against the
+    // lifted angle. A held throttle deepens a rear-driven slide on purpose
+    // now (`drift.powerSpan` — it is the steady-state drift a rear-driver
+    // has and a front-driver does not), so the angle a boot settles to is
+    // no longer under the one a lift was holding: the two are within a
+    // percent of each other, which is `liftSpan` and `powerSpan × the
+    // layout's powerYaw` being deliberately close. What must still be true
+    // is that the STAB is worth more than either of them.
     run(state, { throttle: 1, steer: 1 }, 1.2);
-    expect(Math.abs(state.car.slip)).toBeLessThan(lifted);
+    expect(Math.abs(state.car.slip)).toBeLessThan(booted);
   });
 
   it("over-holding the counter swings the pendulum into an opposite drift", () => {
@@ -648,12 +663,18 @@ describe("the floor under the slide", () => {
     // The one exception, and the reason the floor can be as high as it is:
     // the corners that need a move are the slow ones, so a rule that shut
     // the lever off under 70 would shut it off exactly where it is for.
+    //
+    // A YANK, half a second of it — which is the whole move, and now has to
+    // be, because the lever is also a brake (`grip.handbrakeBrake`). Held
+    // on from 60 km/h it puts the car under even the lowered floor inside
+    // a second and a half and lets the slide go again, which is the lever
+    // being a last resort rather than a way of driving.
     const plain = at(60);
     const yanked = at(60);
-    run(plain, { steer: 1 }, 1.2);
-    run(yanked, { steer: 1, handbrake: true }, 1.2);
+    run(plain, { steer: 1 }, 0.5);
+    run(yanked, { steer: 1, handbrake: true }, 0.5);
     expect(plain.car.slide).toBe(0);
-    expect(yanked.car.slide).toBeGreaterThan(0.5);
+    expect(yanked.car.slide).toBeGreaterThan(0.4);
     expect(Math.abs(yanked.car.slip)).toBeGreaterThan(Math.abs(plain.car.slip) * 2);
   });
 
@@ -669,16 +690,20 @@ describe("the floor under the slide", () => {
   });
 
   it("but the same lock at pace is a drift", () => {
+    // Against the FOUR-WHEEL-DRIVE's own ceiling on the wheel alone
+    // (`drivetrain.awd.depth`), not against the reference slide: what this
+    // asks is that the same lock that did nothing at 60 km/h opens the
+    // layout's slide most of the way at 110.
     const state = at(110);
     run(state, { throttle: 1, steer: 1 }, 1);
-    expect(state.car.slide).toBeGreaterThan(0.5);
+    expect(state.car.slide).toBeGreaterThan(0.3);
     expect(state.car.drifting).toBe(true);
   });
 
   it("lets a slide go as the car slows into the floor", () => {
     const state = at(110);
     run(state, { throttle: 1, steer: 1 }, 1);
-    expect(state.car.slide).toBeGreaterThan(0.5);
+    expect(state.car.slide).toBeGreaterThan(0.3);
     // Off the power and hard on the brakes, still on full lock: the angle
     // has to be gone by the time the car is under the floor, not carried
     // down to a standstill. A trailed brake lowers the floor (it is one of

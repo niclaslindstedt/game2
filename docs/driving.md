@@ -41,8 +41,19 @@ one continuous response rather than two modes.
   — the mass thrown by a flick (`drift.flickDepth`), the nose pitched down
   on a trailed brake (`brakeDepth` × the layout's own `brake`), and the rear
   wheels locked outright (`leverDepth`). The largest wins rather than the
-  sum; the lift it is worth is the layout's own shortfall, so a move is
-  worth most to the car with the least of its own. And it is HELD once made
+  sum; the lift it is worth is the layout's own shortfall against its own
+  CEILING (`drivetrain[].cap`), so a move is worth most to the car with the
+  least of its own and still never takes that car past what the layout can
+  do. The ceiling is the roster's whole spread: the saloon's is the
+  reference slide, the four-wheel-drive reaches 0.96 of it and the hatch
+  0.92 — nearly level, on purpose. Real layouts differ far less in the
+  angle they can be GOT to than in what holds them there: provoked, all
+  three go round (25° / 29° / 36° off the lever on gravel), and what
+  separates them is the throttle — `drift.powerSpan` and `pullStraight`
+  below. Lifted toward 1 instead — which is what this used to do — a
+  provocation handed every layout the reference angle, and the hatch, having
+  the furthest to be lifted, came out of a hairpin on the lever as sideways
+  as the saloon that had it all along. And it is HELD once made
   (`provokeSettle`): the lever comes up in a tick and the weight it moved
   does not. None of them rotates anything by itself — they open the slide,
   and `grip.flickYaw`, `brakeYaw`, `liftYaw` and `handbrakeYaw` are what
@@ -53,6 +64,20 @@ one continuous response rather than two modes.
   equilibrium in the middle — the car would have exactly two states,
   gripped or fully sideways, a notch of wheel apart. Commanded demand is
   what makes the angle a continuous function of lock and speed.
+- **THE THROTTLE IS THE DIFFERENCE BETWEEN THE LAYOUTS.** A rear-driver on
+  the power has a real steady-state drift — the rear tyre's longitudinal
+  force is what holds it out there, so the angle stays for as long as the
+  pedal is down. A front-driver has no such equilibrium at all: the driven
+  wheels pull the velocity back under the nose, so its big angles are entry
+  transients off the lever, the brake or a lift and they die the moment the
+  power goes on. That is `drift.powerSpan` (the throttle deepening the ANGLE
+  ASKED FOR, ×the layout's `powerYaw`) and `grip.pullStraight` (the throttle
+  pulling a front-driver out of one), and it is why the three cars want
+  opposite pedals mid-corner. Asked to hold twenty degrees on gravel the
+  saloon settles at 15.8° on the power and 12.1° off it; the hatch settles
+  at 9.9° on and 10.4° OFF — the pedal takes its angle away. It is a far
+  bigger difference than the angles the three can reach, which is exactly
+  the shape real layouts have.
 - **The rotation** — as the slide opens, the car gains yaw authority
   (`driftYaw`) and the slip starts turning the nose itself — sustained by
   steering INTO the slide, so releasing the wheel stops feeding it and
@@ -73,20 +98,29 @@ one continuous response rather than two modes.
   so the deepest slide on the roster — answers a lock sweep like this, with
   no step in it anywhere:
 
-  | lock     | 0.2 | 0.3 | 0.4 | 0.5  | 0.6  | 0.7  | 0.8  | 0.9  | 1.0  |
-  | -------- | --- | --- | --- | ---- | ---- | ---- | ---- | ---- | ---- |
-  | slip°    | 1.3 | 2.7 | 6.2 | 12.0 | 18.6 | 24.1 | 28.1 | 31.2 | 33.6 |
-  | radius m | 212 | 115 | 70  | 52   | 44   | 40   | 37   | 34   | 31   |
+  | lock     | 0.2 | 0.3 | 0.4 | 0.5 | 0.6  | 0.7  | 0.8  | 0.9  | 1.0  |
+  | -------- | --- | --- | --- | --- | ---- | ---- | ---- | ---- | ---- |
+  | slip°    | 1.2 | 2.4 | 4.7 | 7.8 | 11.4 | 14.0 | 16.0 | 17.6 | 18.8 |
+  | radius m | 224 | 128 | 83  | 67  | 64   | 64   | 63   | 63   | 63   |
 
-  ...and the compact, the FRONT-driver, answers the same sweep with about
-  half the angle and a line a third wider, because on the wheel alone it
-  WASHES WIDE — which is the point of it, and what the moves below exist to
-  give it a way out of:
+  ...and the compact, the FRONT-driver, answers the same sweep with half the
+  angle, because on the wheel alone it WASHES WIDE — which is the point of
+  it, and what the moves below exist to give it a way out of:
 
-  | lock     | 0.2 | 0.3 | 0.4 | 0.5 | 0.6 | 0.7  | 0.8  | 0.9  | 1.0  |
-  | -------- | --- | --- | --- | --- | --- | ---- | ---- | ---- | ---- |
-  | slip°    | 1.4 | 2.3 | 3.5 | 5.6 | 8.3 | 11.2 | 13.5 | 16.2 | 18.5 |
-  | radius m | 223 | 146 | 104 | 78  | 63  | 51   | 46   | 43   | 41   |
+  | lock     | 0.2 | 0.3 | 0.4 | 0.5 | 0.6 | 0.7 | 0.8 | 0.9 | 1.0  |
+  | -------- | --- | --- | --- | --- | --- | --- | --- | --- | ---- |
+  | slip°    | 1.3 | 2.0 | 2.9 | 4.1 | 5.5 | 6.9 | 8.1 | 9.3 | 10.2 |
+  | radius m | 236 | 161 | 120 | 96  | 82  | 73  | 68  | 65  | 62   |
+
+  The radii converge at the top of the throw and the angles do not, and
+  that is the model saying where a tight line at PACE comes from: past the
+  traction ceiling it is bought with slip angle through `grip.latGive`'s
+  residual slope, so at 119 km/h neither car will turn inside about 60 m
+  however much lock is wound on. In a real corner — braked for, at corner
+  speed — the saloon still holds the tightest line of the three, averaged
+  over the drift lab's whole sheet. Corners cost more braking than they used to, which is the
+  price of the angles coming down: the old model let a 35° drift buy half
+  again the lateral acceleration the tyres were supposed to have.
 
 - **The exit overshoots a tad.** Unwinding the lock does not stop the car
   rotating: while the slide lets go, the yaw answers its target more slowly
@@ -203,7 +237,7 @@ one continuous response rather than two modes.
   car there, while lift-to-tighten above pulls the line in underneath it —
   one pedal, both halves of a rally turn-in. It also lifts the DEPTH
   (`drift.liftDepth`, ×the layout's `liftYaw`), because on a layout whose
-  own depth is 0.42 there is nothing under the setpoint for the pedal to
+  own depth is 0.4 there is nothing under the setpoint for the pedal to
   move — which is why a lift used to do nothing at all to a front-driver on
   a surface with a small slip vocabulary. That lift is squared, so a
   maintenance throttle is almost nothing and a driver who genuinely came off
@@ -237,13 +271,30 @@ one continuous response rather than two modes.
 (slip)` is actually burned off — ordinary cornering costs nothing, and even
   a big drift bleeds a few percent per second. A drift is never _felt_ as a
   brake; that is the whole point.
-- **The handbrake** — cuts rear grip and adds yaw while it is held. It
-  unsticks the car; it does not teleport it sideways, and it does not slow it
-  down. It works by lowering the grip ceiling, so the same lock asks far
-  more of what is left. It is a flick, not a hold: with the power down and full lock, a held
-  handbrake takes the rear past any catch and spins the car around. Below the
-  speed floor both halves of it — the yaw and the grip cut — are gone, and
-  the lever is a pair of locked wheels: it is not a way round the floor.
+- **The handbrake** — cuts rear grip, adds yaw, and STOPS THE CAR. Two
+  wheels dragged down the road is about a third of what four of them do, so
+  the lever brakes at `grip.handbrakeBrake` of the car's own braking
+  (the deeper of it and the pedal, never their sum — with the brake already
+  on the floor the rears are locked whichever handle did it), and a car
+  sideways on it scrubs `handbrakeScrub` times as hard as one sideways on
+  rolling tyres. That is what makes it a last resort rather than the
+  cheapest move in the game: for a long time it unstuck the rear, span the
+  car and cost it nothing at all, and there was never a reason not to hold
+  it. Now a full-lock yank from 60 km/h has the car under even the LOWERED
+  floor inside a second and a half.
+
+  The rotation it adds fades against the angle already asked for
+  (`sat`, like the lift's and the brake's), which is what keeps it a move
+  rather than a mode: ungated, a held lever walked every car in the roster
+  to 87° and a spin, whatever the layout was supposed to be able to do. It
+  is a flick, not a hold — and on gravel from 30 m/s, full lock, it peaks
+  the hatch at 22°, the four-wheel-drive at 27° and the saloon at 38°. That
+  is how it is used in the real thing too: on the tightest hairpins only,
+  TAPPED rather than held, and carefully, because holding it bogs the car
+  down.
+  Below the speed floor both halves of it — the yaw and the grip cut — are
+  gone, and the lever is a pair of locked wheels: it is not a way round the
+  floor.
   What the lever cuts is the REAR: `handbrakeGrip` is the rear letting go, up
   at the slide threshold, and `handbrakeLat` — much higher — is what the
   lateral redirect keeps, because the fronts go on rolling and go on
@@ -253,13 +304,15 @@ one continuous response rather than two modes.
   useless for the hairpin the lever exists to get round.
 
   The three tools are a ladder, each going both deeper and tighter than the
-  last — full lock on gravel, held to a settled angle and radius:
+  last — full lock on gravel from 30 m/s, the first two held to a settled
+  angle and radius, the lever read at its PEAK because it is a yank and
+  because it is now braking the car the whole time it is pulled:
 
-  |               | on the power | lift       | handbrake  |
-  | ------------- | ------------ | ---------- | ---------- |
-  | compact (fwd) | 32° / 39 m   | 40° / 21 m | 63° / 16 m |
-  | classic (rwd) | 44° / 23 m   | 46° / 13 m | 73° / 10 m |
-  | coupe (awd)   | 37° / 37 m   | 41° / 22 m | 73° / 16 m |
+  |               | on the power | lift       | handbrake       |
+  | ------------- | ------------ | ---------- | --------------- |
+  | compact (fwd) | 10° / 58 m   | 11° / 28 m | 22° peak / 16 m |
+  | classic (rwd) | 18° / 50 m   | 16° / 23 m | 38° peak / 10 m |
+  | coupe (awd)   | 14° / 64 m   | 12° / 27 m | 27° peak / 11 m |
 
 `car.slide` and `car.drifting` are readouts for the dust, the smoke, the HUD
 and the balance table — nothing in the model branches on them. `drifting` is
@@ -1172,14 +1225,17 @@ What the layout decides:
   a front-driver understeers up to the limit and gathers itself up quickly;
   a rear-driver has gone before it gets there and hangs on afterwards.
 - **How far the slide DEVELOPS once it has started** (`depth`, 0..1 against
-  the rear-driver's fully developed one, which is the 1). Where it begins
-  and how deep it goes are different questions: a front axle that runs out
-  of grip WASHES WIDE, so the hatch crosses the same threshold and then
-  holds well under half the angle the saloon does at the same lock, on a
-  line a third wider. Reaching a real angle in it costs a MOVE — a flick, a
-  trailed brake or the lever — and what each of those is worth is the
-  `flickDepth` / `brakeDepth` / `leverDepth` group above: they lift this
-  ceiling toward 1 for as long as the weight is off the rear. Never set over
+  the rear-driver's fully developed one, which is the 1) **and how far it
+  ever develops, however hard it is asked** (`cap`). Where it begins, how
+  deep it goes on the wheel and how deep it goes at all are three
+  questions: a front axle that runs out of grip WASHES WIDE, so the hatch
+  crosses the same threshold and then holds about half the angle the saloon
+  does at the same lock, on a line a fifth wider. Reaching a real angle in
+  it costs a MOVE — a flick, a trailed brake or the lever — and what each
+  of those is worth is the `flickDepth` / `brakeDepth` / `leverDepth` group
+  above: they lift this toward the layout's `cap` for as long as the weight
+  is off the rear, and no further, which is what stops a provoked hatch
+  from being a saloon. Never set over
   1: an asked slide above the carried one pins `releasing` at zero and the
   exit stops existing.
 - **How much a TRAILED BRAKE is worth to it** (`brake`, × `drift.brakeDepth`
@@ -1245,10 +1301,12 @@ is held on `car.flick` and settles over the better part of half a second
 fifty milliseconds, and a torque that lived only that long would do nothing.
 It also lifts the layout's slide ceiling while the load is across the car
 (`drift.flickDepth`), which is what lets a front-driver reach an angle its
-own `depth` would never allow. On gravel at 30 m/s the hatch holds about 15°
-on 0.85 of lock driven straight in, and peaks near 26° on the same lock
-flicked — the wheel alone cannot get anywhere near that, which is the whole
-reason the move exists and the game is named after it.
+own `depth` would never allow. On gravel at 30 m/s the hatch holds about 9°
+on 0.85 of lock driven straight in, and peaks near 24° on the same lock
+flicked — nearly three times the angle, and the wheel alone cannot get
+anywhere near it, which is the whole reason the move exists and the game is
+named after it. The gap widened when the wheel's own depths came down: the
+less a layout finds by turning, the more the move is worth to it.
 
 ### The trailed brake
 

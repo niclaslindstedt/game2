@@ -12,7 +12,7 @@
 // CARS at the bottom of the file.
 
 import { angleDiff, clamp } from "../lib/math.ts";
-import { latCeiling, slideFloor, surfaceGripFor, wheelSlide } from "../game/limits.ts";
+import { cornerSpeed, heldSlip, slideFloor, surfaceGripFor, wheelSlide } from "../game/limits.ts";
 import { TUNING } from "../game/defs/tuning.ts";
 import type { CarSpec } from "../game/defs/cars.ts";
 import {
@@ -39,15 +39,16 @@ function aheadOf(track: Track, index: number, ahead: number): number {
 }
 
 export type BotProfile = {
-  /** How much of the car's TRACTION CEILING the bot plans corners around —
-   * a fraction of `limits.ts`'s `latCeiling`, which is the same number the
-   * tires will actually deliver when the car gets there. Read against that
-   * and not against `gripAccel`: planning off the spec sheet's grip while
-   * the rubber delivers `latCeiling` times it is not a driver misjudging a
-   * corner, it is a driver in a different car. Well under 1, because the
-   * ceiling is where the tires are OUT: a driver who planned at 1 would
-   * arrive at every corner with nothing left, and the margin between this
-   * and the ceiling is what a rally driver spends on the slide. */
+  /** How much of what the car actually HOLDS the bot plans corners around —
+   * a fraction of `limits.ts`'s `latHold`, which is the traction ceiling
+   * read at the slip angle this layout really carries and so the lateral
+   * acceleration the tyres will hand over when the car gets there. Read
+   * against that and not against `gripAccel`, and not against `latCeiling`
+   * either: the ceiling is the SCALE of the saturation curve, and how much
+   * of it a car gets is a question about how far sideways the car goes.
+   * Planning off a number the car cannot reach is not a driver misjudging a
+   * corner, it is a driver in a different car — and the difference is a
+   * crew that arrives and a crew that is already in the trees. */
   latFraction: number;
   /** Steering proportional gain on the lookahead angle error. */
   steerGain: number;
@@ -58,13 +59,26 @@ export type BotProfile = {
   /** Curvature (1/m) above which an approach earns a handbrake flick. */
   hardCurvature: number;
   /** How much over the geometric corner speed a hard corner is entered at,
-   * m/s — scaled by how freely the car rotates (see `rotationRef`). */
+   * m/s — scaled by how much of it this car's slide will SCRUB (see
+   * `rotationRef`). */
   hotEntry: number;
-  /** The rotational authority (`spec.driftYaw`) that `hotEntry` is quoted
-   * at, in a car whose wheel finds a full slide (`limits.ts`'s `wheelSlide`
-   * of 1 — the rear-driver). A car that rotates more freely than that is
-   * trusted with proportionally more of it, one that rotates less — or one
-   * that has to be ASKED before it rotates at all — with less. */
+  /** The SLIP ANGLE `hotEntry` is quoted at, rad — the drift that will
+   * scrub a whole reference overspeed off. A car that hangs further out
+   * than that is trusted with proportionally more of it, one that hangs out
+   * less — or one that has to be ASKED before it hangs out at all — with
+   * less.
+   *
+   * An angle, and read through a SQUARED SINE, because that is what a hot
+   * entry actually is: the plan carries speed into a corner the geometry
+   * will not take and the slide burns it off, and what a slide burns off is
+   * `grip.scrub × sin²(slip)` (`car.ts`). Quoted against `spec.driftYaw`
+   * instead — which is what this used to be — it read a car's rotational
+   * AUTHORITY and not the angle that authority reaches, and those came
+   * apart the moment the roster's slip angles were rescaled: every layout
+   * kept its old licence to arrive hot while the drift that was supposed to
+   * pay for it had halved. The bill for that was ten crews in seventy-two
+   * stages arriving at a corner with more speed than any amount of sideways
+   * was going to take out of them. */
   rotationRef: number;
   /** How much a corner with NOWHERE TO GO takes off the plan, 0..1 — the
    * share of the geometric corner speed a driver gives up where running
@@ -184,15 +198,24 @@ const LIP_GLIDE = 1.5;
 const BROW_FROM = 0.8;
 const BROW_BAND = 0.4;
 
-/** The default rally brain: quick hands, plans ~3 s ahead, drifts hairpins. */
+/** The default rally brain: quick hands, plans ~3 s ahead, drifts hairpins.
+ *
+ * `latFraction` is a share of what the car HOLDS (`limits.ts`'s `latHold`),
+ * which at rally pace is rather more than the car's stated traction
+ * ceiling — so it came down when the plan stopped being quoted off the flat
+ * ceiling, to land on about the same planned lateral acceleration as before
+ * (0.45 of the hold at corner speeds is 10.4 m/s² in the hatch, against
+ * 10.35 for the old half-of-the-ceiling). Left at 0.5 the default brain
+ * asked for eleven percent more than it used to and wrecked the
+ * four-wheel-drive on seed 3. */
 export const RALLY_BOT: BotProfile = {
-  latFraction: 0.5,
+  latFraction: 0.45,
   steerGain: 2.2,
   lookahead: 0.65,
   planHorizon: 3.0,
   hardCurvature: 1 / 30,
   hotEntry: 2.5,
-  rotationRef: 2.5,
+  rotationRef: 0.27,
   exposure: 0.45,
   brakeMargin: 2.5,
   brakeUse: 0.7,
@@ -293,6 +316,15 @@ function gripBySurface(spec: CarSpec): readonly number[] {
   return grip;
 }
 
+/** ...and how far sideways each of them lets the car go, by the same index.
+ * A corner's speed needs BOTH halves of what a surface is: how hard it
+ * holds decides the ceiling, how far it breaks away decides the slip the
+ * car carries into it, and the slip is what says how much of that ceiling
+ * the tyres actually hand over (`limits.ts`'s `latHold`). */
+const BREAKAWAY_BY_SURFACE: readonly number[] = SURFACES.map(
+  (kind) => TUNING.surfaces.breakaway[kind],
+);
+
 /** WHAT THE HANDS ARE STILL DOING, per run.
  *
  * Keyed on the state because that is what a run IS here, and the field
@@ -351,15 +383,18 @@ function decide(state: GameState, profile: BotProfile, traffic: readonly Traffic
   if (state.phase === "intro" || state.phase === "countdown") {
     return gridInput(gridRev(startsIn(state), profile.aggression, profile.gridPhase));
   }
-  // How freely this car rotates, against the profile's reference — and it
-  // is TWO things, because a car arrives at a hot corner on both of them:
-  // how much authority a developed slide hands the wheel (`driftYaw`) and
-  // how much slide the wheel finds there in the first place (`wheelSlide`,
-  // 0..1 against the rear-driver, which is the layout the reference is
-  // quoted at). A front-driver has most of the first and little of the
-  // second, and a driver who read only the first would carry a rear-driver's
-  // entry speed into a car that answers by washing straight on.
-  const rotation = (state.spec.driftYaw / profile.rotationRef) * wheelSlide(state.spec);
+  // How much overspeed this car's slide will actually SCRUB, against the
+  // profile's reference — which is the only thing a hot entry is spending.
+  // The angle the car really parks a held slide at is `limits.ts`'s
+  // `heldSlip` (the wheel's own ask plus the room past it where the
+  // deepening forces balance the redirect), and the tyres burn speed off it
+  // as sin², so this is that angle read through the same square.
+  // A front-driver has plenty of rotational authority and almost no angle
+  // to spend it at, and a driver who read the authority instead would carry
+  // a rear-driver's entry speed into a car that answers by washing straight
+  // on.
+  const scrubbed = Math.sin(heldSlip(state.spec, wheelSlide(state.spec), 1)) ** 2;
+  const rotation = scrubbed / Math.sin(profile.rotationRef) ** 2;
   const samples = track.samples;
   const step = track.step;
 
@@ -405,11 +440,14 @@ function decide(state: GameState, profile: BotProfile, traffic: readonly Traffic
     Math.round(horizonMeters / step),
     track.circuit ? samples.length - 1 : samples.length - 1 - state.nearIndex,
   );
-  // What the tires will actually give at a corner, off the handling model's
-  // own ceiling rather than a second guess at it (`game/limits.ts`), taken
-  // at the driver's own fraction of it. `gripBySurface` below scales it for
-  // what the corner is paved with.
-  const latAccel = latCeiling(state.spec, 1) * profile.latFraction;
+  // Every corner's cap below comes off the handling model's own numbers
+  // rather than a second guess at them (`limits.ts`'s `cornerSpeed`), at
+  // the driver's own fraction of them. Not the traction CEILING, which is
+  // the scale of the tyre's saturation curve and not a number the car
+  // reaches: what it holds is that curve read at the slip this car carries,
+  // and the difference between the two is the whole of the drift model
+  // showing up in the plan. `gripBySurface` and `BREAKAWAY_BY_SURFACE` are
+  // the two halves of what a corner is paved with.
   let targetSpeed = state.spec.gearTop[state.spec.gearTop.length - 1];
   let hardDistance = Infinity;
   let hardCap = 0;
@@ -474,7 +512,13 @@ function decide(state: GameState, profile: BotProfile, traffic: readonly Traffic
     // the plan is blind to the whole surface half of a car's character — a
     // road-tired car would brake for a sealed corner as if it were gravel,
     // and no amount of tire in the catalog would ever show up as pace.
-    const cap = Math.sqrt((latAccel * gripOf[surface[i]]) / k);
+    const cap = cornerSpeed(
+      state.spec,
+      k,
+      gripOf[surface[i]],
+      BREAKAWAY_BY_SURFACE[surface[i]],
+      profile.latFraction,
+    );
     // ...and then what is BESIDE that corner. A driver plans a corner off
     // the grip he expects to have AND off what happens if he does not get
     // it, and those are different questions: the same bend is taken one way
