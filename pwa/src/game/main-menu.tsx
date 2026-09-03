@@ -45,7 +45,7 @@ import {
   type CampaignProgress,
 } from "./campaign.ts";
 import { Glyph, type GlyphName } from "./menu-glyphs.tsx";
-import { LevelGrid } from "./menu-levels.tsx";
+import { LevelGrid, LocationList } from "./menu-levels.tsx";
 import { StandingsModal, warmStandings, type StandingsRow } from "./results-table.tsx";
 import { CarSetupPage } from "./menu-car.tsx";
 import { GalleryPage } from "./menu-gallery.tsx";
@@ -56,22 +56,23 @@ import { OptionsPage, type OptionsSub } from "./menu-options.tsx";
 import { unlockAudio } from "./audio/bus.ts";
 import { playUi } from "./audio/ui.ts";
 import { RoamPage, type MapDebug, type MapRect, type MapView } from "./menu-roam.tsx";
-import { ScoreBoard } from "./score-board.tsx";
-import { biomeShot } from "./stage-preview.ts";
-import { loadBoard } from "./scores.ts";
 import type { Settings } from "./settings.ts";
 
 export type MenuPage =
   | { page: "root" }
   | { page: "campaign" }
   | { page: "location"; locationId: string }
-  | { page: "timetrial" }
-  | { page: "headsup" }
+  /** The time trial and heads up — and, with `locationId` set, the country's
+   * own six stages. A step of the page rather than a page of its own, the
+   * way the campaign's location is: the country is chosen first on all
+   * three, because a page carrying every country's grid at once is a page
+   * where the stage you want is below the fold. */
+  | { page: "timetrial"; locationId?: string }
+  | { page: "headsup"; locationId?: string }
   /** The pre-race card for one stage — the car, its spec sheet, the
    * gearbox and START. `mode` is how the stage will be entered, and it is
    * what decides which grid BACK returns to. */
   | { page: "car"; levelId: string; mode: PlayMode }
-  | { page: "scores" }
   | { page: "gallery" }
   /** Roam — and, with `viewing` set, the developer's MAP VIEWER, which is
    * the same page with everything but the map taken off it.
@@ -239,35 +240,6 @@ function RootPage({
   );
 }
 
-/** THE COUNTRY, behind the row that opens it — a real render taken by the
- * game from two hundred metres over the country's first start line
- * (`make biomes`), not a map of any one stage: a location is six roads, and
- * a picture of one of them would be advertising the wrong thing.
- *
- * It fills the row and the text sits on it, which is the only layout that
- * does not cost the campaign page height it has not got. Decorative, so it
- * is hidden from a reader — the row already says the country's name and
- * what it is like in words.
- *
- * A missing file takes itself off the page rather than leaving a broken
- * image in the menu: the banners are generated, and a country added to
- * `campaign.ts` before `make biomes` is next run has none. */
-function BiomeShot({ location }: { location: CampaignLocation }) {
-  const [gone, setGone] = useState(false);
-  if (gone) return null;
-  return (
-    <img
-      className="menu-location-shot"
-      src={biomeShot(location.biome, import.meta.env.BASE_URL)}
-      alt=""
-      aria-hidden="true"
-      loading="lazy"
-      decoding="async"
-      onError={() => setGone(true)}
-    />
-  );
-}
-
 function CampaignPage({
   progress,
   onNavigate,
@@ -281,58 +253,33 @@ function CampaignPage({
   return (
     <div className="menu-card">
       <MenuHead back={() => onNavigate({ page: "root" })} backLabel="MENU" title="CAMPAIGN" />
-      <div className="menu-locations">
-        {LOCATIONS.map((location, index) => {
+      <LocationList
+        open={(location) => locationUnlocked(location, progress)}
+        // R30 — a country is opened by the PREVIOUS country's TABLE, not by
+        // its stages: a player who podiumed their way through Taiga has seen
+        // all of it and still has a table to top. That rule is the one thing
+        // here a padlock cannot say on its own, so it stays written.
+        hint={(_location, index) => `Top the ${LOCATIONS[index - 1].name} table`}
+        line={(location) => {
           const cleared = location.levels.filter((l) => levelCleared(progress, l.id)).length;
           const mine = playerStanding(location, progress);
-          // R30 — a country is opened by the PREVIOUS country's TABLE, not by
-          // its stages: a player who podiumed their way through Taiga has seen
-          // all of it and still has a table to top. That rule is the one thing
-          // here a padlock cannot say on its own, so it stays written.
-          if (!locationUnlocked(location, progress)) {
-            const before = LOCATIONS[index - 1];
-            return (
-              <div
-                key={location.id}
-                className="menu-location menu-location-locked menu-level-locked"
-                aria-label={`${location.name}, locked`}
-              >
-                {/* The country IS shown behind a locked row, dimmed: what is
-                    on the other side of the padlock is the reason to go
-                    through it, and a grey box is a reason to stop looking. */}
-                <BiomeShot location={location} />
-                <Glyph name="lock" className="menu-lock" />
-                <span className="menu-location-name">{location.name.toUpperCase()}</span>
-                <span className="menu-location-blurb">Top the {before.name} table</span>
-              </div>
-            );
-          }
           return (
-            <button
-              key={location.id}
-              type="button"
-              className="menu-location"
-              data-nav-next={location === resume ? "" : undefined}
-              onClick={() => onNavigate({ page: "location", locationId: location.id })}
+            <span
+              className="menu-location-progress"
+              title={`${cleared} of ${location.levels.length} stages cleared`}
             >
-              <BiomeShot location={location} />
-              <span className="menu-location-name">{location.name.toUpperCase()}</span>
-              <span className="menu-location-blurb">{location.blurb}</span>
-              <span
-                className="menu-location-progress"
-                title={`${cleared} of ${location.levels.length} stages cleared`}
-              >
-                {cleared} / {location.levels.length}
-                {locationWon(location, progress)
-                  ? " · WON"
-                  : mine.points > 0
-                    ? ` · ${mine.points} PTS · ${mine.tied ? "=" : ""}${ordinal(mine.place)}`
-                    : ""}
-              </span>
-            </button>
+              {cleared} / {location.levels.length}
+              {locationWon(location, progress)
+                ? " · WON"
+                : mine.points > 0
+                  ? ` · ${mine.points} PTS · ${mine.tied ? "=" : ""}${ordinal(mine.place)}`
+                  : ""}
+            </span>
           );
-        })}
-      </div>
+        }}
+        next={resume}
+        onPick={(location) => onNavigate({ page: "location", locationId: location.id })}
+      />
     </div>
   );
 }
@@ -561,90 +508,71 @@ function LocationPage({
   );
 }
 
+/** THE TIME TRIAL — the campaign's roads with the field taken off, driven
+ * for the clock alone. Two steps, the campaign's own: which country, then
+ * which of its six.
+ *
+ * The gate is the stricter one, and it is the same on both steps: a stage
+ * opens here once it has been FINISHED, and a country opens once one of its
+ * stages has. A time is something you chase on a road you have already
+ * driven to the end.
+ *
+ * There is no board on this page. The ten best times for a stage are the
+ * arcade's invitation, and an invitation is worth something at the moment a
+ * run has just landed on it — the results card — and nothing at all as a
+ * list read cold from a menu. */
 function TimeTrialPage({
+  locationId,
   progress,
   onNavigate,
 }: {
+  /** The country being looked at, or null on the step that chooses one. */
+  locationId: string | null;
   progress: CampaignProgress;
   onNavigate: (page: MenuPage) => void;
 }) {
   const open = (level: CampaignLevel): boolean => levelCompleted(level, progress);
-  // The furthest stage anyone has driven to the end of, wherever it is: the
-  // last road a player saw the finish of is the one they came here to put a
-  // clock on. Every grid is handed it and only the one holding it marks a
-  // box, because a level id belongs to exactly one location.
-  let resume: CampaignLevel | null = null;
-  for (const location of LOCATIONS) resume = latestOpen(location, open) ?? resume;
-  return (
-    <div className="menu-card menu-card-wide">
-      <MenuHead back={() => onNavigate({ page: "root" })} backLabel="MENU" title="TIME TRIAL" />
-      {LOCATIONS.map((location) => (
-        <div key={location.id} className="menu-section">
-          <div className="menu-section-title">{location.name.toUpperCase()}</div>
-          <LevelGrid
-            location={location}
-            progress={progress}
-            open={open}
-            hint="Finish this stage in the campaign"
-            next={resume}
-            onPlay={(level) => onNavigate({ page: "car", levelId: level.id, mode: "timetrial" })}
-          />
-        </div>
-      ))}
-      <button
-        type="button"
-        className="menu-line"
-        data-menu="scores"
-        onClick={() => onNavigate({ page: "scores" })}
-      >
-        <Glyph name="standings" />
-        HIGH SCORES
-      </button>
-    </div>
-  );
-}
-
-/** THE HIGH SCORES — every stage the player has driven to the end, with its
- * ten best times. A stage nobody has finished has no board to read yet and is
- * left off entirely: ten dotted rows under a name you have never seen is a
- * wall, where the same ten rows under a stage you know is an invitation. */
-function ScoresPage({
-  progress,
-  onNavigate,
-}: {
-  progress: CampaignProgress;
-  onNavigate: (page: MenuPage) => void;
-}) {
-  const open = LOCATIONS.flatMap((location) =>
-    location.levels
-      .filter((level) => levelCompleted(level, progress))
-      .map((level) => ({ location, level })),
-  );
+  const driven = (location: CampaignLocation): boolean => location.levels.some(open);
+  if (locationId === null) {
+    // The furthest country with a finished stage in it: where the cursor
+    // stands, and what START takes.
+    const resume = LOCATIONS.filter(driven).at(-1);
+    return (
+      <div className="menu-card">
+        <MenuHead back={() => onNavigate({ page: "root" })} backLabel="MENU" title="TIME TRIAL" />
+        {resume === undefined && (
+          <div className="menu-empty">Drive a stage to the end in the campaign first.</div>
+        )}
+        <LocationList
+          open={driven}
+          hint={() => "Finish a stage here in the campaign"}
+          line={(location) => (
+            <span className="menu-location-progress">
+              {location.levels.filter(open).length} / {location.levels.length} OPEN
+            </span>
+          )}
+          next={resume}
+          onPick={(location) => onNavigate({ page: "timetrial", locationId: location.id })}
+        />
+      </div>
+    );
+  }
+  const location = locationById(locationId);
   return (
     <div className="menu-card menu-card-wide">
       <MenuHead
         back={() => onNavigate({ page: "timetrial" })}
         backLabel="TIME TRIAL"
-        title="HIGH SCORES"
+        title={location.name.toUpperCase()}
       />
-      {open.length === 0 ? (
-        <div className="menu-empty">Drive a stage to the end in the campaign first.</div>
-      ) : (
-        <div className="score-stages">
-          {open.map(({ location, level }) => (
-            <div key={level.id} className="score-stage">
-              <div className="score-stage-name">{level.name.toUpperCase()}</div>
-              <div className="score-stage-where">{location.name}</div>
-              {/* Five rows here, ten on the results card. The full board is
-                  the arcade's invitation — ten places, nine of them free —
-                  and it is worth a screen when a run has just landed on it.
-                  On a page listing every stage at once, ten dotted rows per
-                  stage is the same invitation printed six times. */}
-              <ScoreBoard entries={loadBoard(level.id)} rows={5} />
-            </div>
-          ))}
-        </div>
-      )}
+      <LevelGrid
+        location={location}
+        progress={progress}
+        open={open}
+        hint="Finish this stage in the campaign"
+        next={latestOpen(location, open)}
+        onPlay={(level) => onNavigate({ page: "car", levelId: level.id, mode: "timetrial" })}
+      />
     </div>
   );
 }
@@ -663,7 +591,6 @@ const DEPTH: Record<MenuPage["page"], number> = {
   developer: 1,
   location: 2,
   debuglog: 2,
-  scores: 2,
   // Deeper than either grid that reaches it, so arriving at the pre-race
   // card sounds like going IN from both of them.
   car: 3,
@@ -675,6 +602,9 @@ const DEPTH: Record<MenuPage["page"], number> = {
  * opening the list and shutting it would make the same noise as each other. */
 function depthOf(page: MenuPage): number {
   if (page.page === "options") return DEPTH.options + (page.sub ? 1 : 0);
+  if (page.page === "timetrial" || page.page === "headsup") {
+    return DEPTH[page.page] + (page.locationId === undefined ? 0 : 1);
+  }
   if (page.page !== "roam") return DEPTH[page.page];
   return DEPTH.roam + (page.viewing === true ? 1 : 0) + (page.picking === true ? 1 : 0);
 }
@@ -692,8 +622,9 @@ function parentOf(page: MenuPage): MenuPage | null {
     return page.viewing === true ? { page: "developer" } : { page: "root" };
   }
   if (page.page === "options" && page.sub) return { page: "options" };
+  if (page.page === "timetrial" && page.locationId !== undefined) return { page: "timetrial" };
+  if (page.page === "headsup" && page.locationId !== undefined) return { page: "headsup" };
   if (page.page === "location") return locationParent();
-  if (page.page === "scores") return { page: "timetrial" };
   if (page.page === "car") return carParent(page.levelId, page.mode);
   return { page: "root" };
 }
@@ -704,15 +635,15 @@ function locationParent(): MenuPage {
   return LOCATIONS.length === 1 ? { page: "root" } : { page: "campaign" };
 }
 
-/** The grid the pre-race card was reached from. A campaign stage goes back
- * to its own location's ladder; a time trial goes back to the one page that
- * lists every stage. A level id with no location behind it cannot happen
- * from the grids, but a stale one out of a reload should land somewhere
- * real rather than on a blank card. */
+/** The grid the pre-race card was reached from — the stage's OWN country on
+ * all three modes, since all three now choose one before they show a grid.
+ * A level id with no location behind it cannot happen from the grids, but a
+ * stale one out of a reload should land somewhere real rather than on a
+ * blank card: without a country, each mode falls back to its list of them. */
 function carParent(levelId: string, mode: PlayMode): MenuPage {
-  if (mode === "timetrial") return { page: "timetrial" };
-  if (mode === "headsup") return { page: "headsup" };
   const found = findLevel(levelId);
+  if (mode === "timetrial") return { page: "timetrial", locationId: found?.location.id };
+  if (mode === "headsup") return { page: "headsup", locationId: found?.location.id };
   return found ? { page: "location", locationId: found.location.id } : campaignEntry();
 }
 
@@ -809,15 +740,21 @@ export function MainMenu(props: MainMenuProps) {
           />
         )}
         {page.page === "timetrial" && (
-          <TimeTrialPage progress={props.progress} onNavigate={navigate} />
+          <TimeTrialPage
+            locationId={page.locationId ?? null}
+            progress={props.progress}
+            onNavigate={navigate}
+          />
         )}
         {page.page === "headsup" && (
           <HeadsUpPage
+            locationId={page.locationId ?? null}
             progress={props.progress}
             headsUp={props.race.headsUp}
             onHeadsUp={(headsUp) =>
               props.onRace({ ...props.race, headsUp: { ...headsUp, cars: gridSize(headsUp.cars) } })
             }
+            onLocation={(location) => navigate({ page: "headsup", locationId: location?.id })}
             onBack={() => navigate({ page: "root" })}
             onPlay={(level) => navigate({ page: "car", levelId: level.id, mode: "headsup" })}
           />
@@ -837,7 +774,6 @@ export function MainMenu(props: MainMenuProps) {
             onDeveloper={props.onDeveloper}
           />
         )}
-        {page.page === "scores" && <ScoresPage progress={props.progress} onNavigate={navigate} />}
         {page.page === "gallery" && (
           <GalleryPage settings={props.settings} onBack={() => navigate({ page: "root" })} />
         )}

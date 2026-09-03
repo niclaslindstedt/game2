@@ -118,8 +118,6 @@ export type FinishRace = {
   settled: boolean;
   /** Cars that started, the player included. */
   cars: number;
-  /** How they started, for the one line that says what kind of race it was. */
-  massStart: boolean;
 };
 
 export type FinishCardProps = {
@@ -332,7 +330,7 @@ export function FinishCard({
   const sub = campaign
     ? campaign.location.toUpperCase()
     : race
-      ? `${race.cars} CARS — ${race.massStart ? "MASS START" : "RALLY START"}`
+      ? `${race.cars} CARS — MASS START`
       : scores
         ? `TIME TRIAL — ${scores.drove}`
         : null;

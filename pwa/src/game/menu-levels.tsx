@@ -12,8 +12,14 @@
 // The same stages come round a fourth time as a LIST rather than a grid —
 // `StagePicker`, at the foot of this file — for Roam, which offers them
 // behind no gate at all.
+//
+// And ABOVE the grid, on the same three pages, sits the step that chooses
+// which country's six are being looked at: `LocationList`. It is the same
+// row of banners on all three because the question is the same one — where
+// am I driving — and only the gate behind it differs.
 
 import { FIELD_SIZE, STAGE_RULES, type Difficulty } from "@engine";
+import type { ComponentChildren } from "preact";
 import { useState } from "react";
 
 import { formatTime, ordinal } from "../lib/util.ts";
@@ -29,7 +35,7 @@ import {
   type CampaignLocation,
   type CampaignProgress,
 } from "./campaign.ts";
-import { ROUTE_STROKE, routeShape } from "./stage-preview.ts";
+import { ROUTE_STROKE, biomeShot, routeShape } from "./stage-preview.ts";
 import { PLAYER_ID } from "./standings.ts";
 
 /** The padlock on anything not open yet. The drawing lives with the rest of
@@ -243,6 +249,106 @@ export function LevelGrid({
           onPlay={() => onPlay(level, index)}
         />
       ))}
+    </div>
+  );
+}
+
+/** THE COUNTRY, behind the row that opens it — a real render taken by the
+ * game from two hundred metres over the country's first start line
+ * (`make biomes`), not a map of any one stage: a location is six roads, and
+ * a picture of one of them would be advertising the wrong thing.
+ *
+ * It fills the row and the text sits on it, which is the only layout that
+ * does not cost the page height it has not got. Decorative, so it is hidden
+ * from a reader — the row already says the country's name and what it is
+ * like in words.
+ *
+ * A missing file takes itself off the page rather than leaving a broken
+ * image in the menu: the banners are generated, and a country added to
+ * `campaign.ts` before `make biomes` is next run has none. */
+function BiomeShot({ location }: { location: CampaignLocation }) {
+  const [gone, setGone] = useState(false);
+  if (gone) return null;
+  return (
+    <img
+      className="menu-location-shot"
+      src={biomeShot(location.biome, import.meta.env.BASE_URL)}
+      alt=""
+      aria-hidden="true"
+      loading="lazy"
+      decoding="async"
+      onError={() => setGone(true)}
+    />
+  );
+}
+
+/** THE COUNTRIES, as the step before the stages — the campaign's board, and
+ * the same board in front of the time trial's grid and heads up's.
+ *
+ * All three used to differ here: the campaign asked which country, and the
+ * other two printed every country's six boxes down one page. Six became
+ * twelve the moment a second country landed, and a page that is two grids
+ * deep is a page where the stage you want is below the fold. So the question
+ * is asked once, the same way, on all three — and what changes between them
+ * is only the gate: a country the campaign has not opened, against one you
+ * have never driven a stage of.
+ *
+ * A locked country is still SHOWN, dimmed: what is on the other side of the
+ * padlock is the reason to go through it, and a grey box is a reason to stop
+ * looking. */
+export function LocationList({
+  open,
+  hint,
+  line,
+  next,
+  onPick,
+}: {
+  /** Whether this country's stages can be reached from the page asking. */
+  open: (location: CampaignLocation, index: number) => boolean;
+  /** What a locked row asks for. A padlock with no reason on it is a wall. */
+  hint: (location: CampaignLocation, index: number) => string;
+  /** The row's third line — what has been got out of the country so far.
+   * Omitted where a page has nothing to say about it. */
+  line?: (location: CampaignLocation) => ComponentChildren;
+  /** The country the page would pick for you: where the controller's cursor
+   * lands and what START takes. */
+  next?: CampaignLocation | null;
+  onPick: (location: CampaignLocation) => void;
+}) {
+  return (
+    <div className="menu-locations">
+      {LOCATIONS.map((location, index) => {
+        if (!open(location, index)) {
+          const why = hint(location, index);
+          return (
+            <div
+              key={location.id}
+              className="menu-location menu-location-locked menu-level-locked"
+              title={why}
+              aria-label={`${location.name}, locked — ${why}`}
+            >
+              <BiomeShot location={location} />
+              <LockGlyph />
+              <span className="menu-location-name">{location.name.toUpperCase()}</span>
+              <span className="menu-location-blurb">{why}</span>
+            </div>
+          );
+        }
+        return (
+          <button
+            key={location.id}
+            type="button"
+            className="menu-location"
+            data-nav-next={location === next ? "" : undefined}
+            onClick={() => onPick(location)}
+          >
+            <BiomeShot location={location} />
+            <span className="menu-location-name">{location.name.toUpperCase()}</span>
+            <span className="menu-location-blurb">{location.blurb}</span>
+            {line?.(location)}
+          </button>
+        );
+      })}
     </div>
   );
 }

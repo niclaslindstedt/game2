@@ -70,13 +70,13 @@ export type RaceSettings = {
   headsUp: HeadsUpSettings;
 };
 
-/** What a heads-up race is set up with: how good the field is, how many cars
- * are on it, and whether they all leave on the same green. */
+/** What a heads-up race is set up with: how good the field is, and how many
+ * cars are on it. There is no start-type setting — a heads-up race is a mass
+ * start, one grid and one green, and that is what the mode IS. */
 export type HeadsUpSettings = {
   difficulty: Difficulty;
   /** Cars on the entry list, the player included. */
   cars: number;
-  massStart: boolean;
 };
 
 export { gridSize };
@@ -84,21 +84,26 @@ export { gridSize };
 export const DEFAULT_HEADS_UP: HeadsUpSettings = {
   difficulty: "medium",
   cars: GRID_DEFAULT,
-  massStart: true,
 };
 
-/** The grids a mass start is offered in — every even size the apron behind
- * the start gate will hold, ending at the deepest one (`GRID_MAX`, which is
- * also the default). The ceiling is the generator's rather than a choice: a
- * grid stands on the run-up, and past the end of it a car is off the stage.
- * A rally start is not offered the row, because nobody there needs room on
- * the line and a short entry list would only take rivals off the sheet. */
+/** THE GRIDS ON OFFER — a ladder rather than every size the apron will
+ * hold: two is a duel, and each rung after it roughly doubles the traffic,
+ * which is the thing about a grid a player can actually feel. Adjacent even
+ * numbers are chips that read alike and race alike, and a row of them is a
+ * decision nobody can make.
+ *
+ * The top rung is the ceiling rather than the ladder's own last step: the
+ * roster and the apron decide how deep a grid can be (`GRID_MAX`), so a
+ * fifteenth rival added to `rivals.ts` moves this without it being edited,
+ * and a rung past the ceiling is dropped instead of quietly clamping onto
+ * the one below it. */
+const GRID_LADDER = [2, 4, 8, 12, 16];
+
 export const GRID_OPTIONS: { id: string; label: string; cars: number }[] = (() => {
-  const sizes = new Set<number>();
-  for (let cars = 4; cars < GRID_MAX; cars += 2) sizes.add(cars);
+  const sizes = new Set(GRID_LADDER.filter((cars) => cars >= GRID_MIN && cars < GRID_MAX));
   sizes.add(GRID_MAX);
   return [...sizes]
-    .filter((cars) => cars >= GRID_MIN)
+    .sort((a, b) => a - b)
     .map((cars) => ({ id: String(cars), label: String(cars), cars }));
 })();
 
@@ -455,17 +460,23 @@ export function OptionRow<T extends string>({
   label,
   options,
   value,
+  wide = false,
   onPick,
 }: {
   label: string;
   options: { id: T; label: string }[];
   value: T;
+  /** Chips sized to be AIMED AT rather than to fit: a row whose answers are
+   * one or two characters (a grid size, a lap count) is a row of targets the
+   * width of the glyph on them, which on a phone is a row of misses. The
+   * chips then share the row's width evenly instead of hugging their text. */
+  wide?: boolean;
   onPick: (id: T) => void;
 }) {
   return (
     <div className="menu-row">
       <span className="menu-label">{label}</span>
-      <div className="menu-opts">
+      <div className={`menu-opts ${wide ? "menu-opts-wide" : ""}`}>
         {options.map((opt) => (
           <button
             key={opt.id}
