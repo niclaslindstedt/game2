@@ -264,3 +264,132 @@ describe("a hill is a hill whichever way the car is pointed", () => {
     expect(coast(0, false)).toBeCloseTo(coast(0, true), 1);
   });
 });
+
+// A FLIGHT OVER A HILLSIDE. Out in the wild the ground under one end of a
+// four-metre car is nothing like the ground under its middle, and a body in
+// the air is at the flight's own attitude rather than the hill's — so this
+// is where a car ends up drawn INSIDE the ground it is flying over. Two
+// things put it there and both are fixed here: a pitch read against the
+// unsigned speed, which pointed the nose down whichever way the car was
+// actually travelling, and a landing measured at the point under the middle
+// alone, which let an end of the body sink a metre into a hill before the
+// middle got there.
+describe("a car flying over a hillside", () => {
+  /** A hillside that falls away toward +z at `grade`, with one boulder
+   * standing on it `ahead` metres in front of the car and `right` metres to
+   * its right. Nothing else: no water, no trees. */
+  function hillside(state: GameState, grade: number, ahead: number, right: number) {
+    const height = (_x: number, z: number): number => 40 - z * grade;
+    const rock = {
+      x: state.car.x + ahead,
+      z: -right,
+      y: 0,
+      kind: "boulder" as const,
+      size: 1,
+      spin: 0,
+      radius: 0.7,
+      height: 1,
+      mass: 1400,
+      rooted: 1,
+      snap: Infinity,
+    };
+    rock.y = height(rock.x, rock.z);
+    state.terrain = {
+      ...state.terrain,
+      heightAt: height,
+      groundAt: height,
+      waterAt: () => null,
+      obstaclesNear: (x: number, z: number, reach: number) =>
+        Math.hypot(rock.x - x, rock.z - z) < reach + 4 ? [rock] : [],
+      treesNear: () => [],
+    };
+    return height;
+  }
+
+  /** Put a car well off the stage, pointed along +x, on that hillside. */
+  function outThere(grade: number, ahead: number, right: number) {
+    const state = createGame({
+      seed: 3,
+      carId: "compact",
+      skipCountdown: true,
+      track: compileTrack(3, STRAIGHT),
+    });
+    state.car.x += 200;
+    state.car.z = 0;
+    state.car.heading = Math.PI / 2;
+    const height = hillside(state, grade, ahead, right);
+    state.car.y = height(state.car.x, state.car.z);
+    return { state, height };
+  }
+
+  /** How deep the deepest corner of the drawn body is under the ground, m —
+   * the box the renderer hangs off `car.y` at the attitude the engine hands
+   * it, which is what a player sees clipping. */
+  function buried(car: GameState["car"], height: (x: number, z: number) => number): number {
+    const B = TUNING.collision;
+    const sinH = Math.sin(car.heading);
+    const cosH = Math.cos(car.heading);
+    const cr = Math.cos(car.roll);
+    const sr = Math.sin(car.roll);
+    const cp = Math.cos(car.pitch);
+    const sp = Math.sin(car.pitch);
+    let worst = 0;
+    for (const lx of [B.halfWidth, -B.halfWidth]) {
+      for (const ly of [0, B.roofY]) {
+        for (const lz of [B.halfLength, -B.halfLength]) {
+          // Rolled about the nose, then pitched about the right axis.
+          const across = lx * cr - ly * sr;
+          const up = lx * sr + ly * cr;
+          const fwd = lz * cp - up * sp;
+          const x = car.x + sinH * fwd + cosH * across;
+          const z = car.z + cosH * fwd - sinH * across;
+          worst = Math.max(worst, height(x, z) - (car.y + up * cp + lz * sp));
+        }
+      }
+    }
+    return worst;
+  }
+
+  it("pitches the nose UP when it is the tail that is leading", () => {
+    // Two cars falling at the same rate over the same flat ground, one
+    // travelling forwards and one backwards. The body lies along its arc
+    // whichever end is leading, so the two pitches are mirror images — and
+    // for as long as the descent was read against `hypot(u, w)`, they were
+    // the same number, nose-down, and the backwards one drove its nose into
+    // whatever it was falling toward.
+    const fly = (u: number): number => {
+      const { state } = outThere(0, 400, 0);
+      state.car.u = u;
+      state.car.y += 6;
+      state.car.airborne = true;
+      state.car.vy = -6;
+      for (let i = 0; i < Math.round(0.4 / TUNING.dt); i++) {
+        step(state, NEUTRAL_INPUT);
+      }
+      return state.car.pitch;
+    };
+    const ahead = fly(18);
+    const astern = fly(-18);
+    expect(ahead).toBeLessThan(-0.2);
+    expect(astern).toBeGreaterThan(0.2);
+    expect(astern).toBeCloseTo(-ahead, 2);
+  });
+
+  it("keeps the body out of the hill it is flying over", () => {
+    // The report this is written from: a car meets a boulder on a hillside,
+    // is knocked into a flight, and is drawn with an end of itself inside
+    // the hill for the length of it.
+    for (const grade of [0.3, 0.6]) {
+      const { state, height } = outThere(grade, 14, 0.9);
+      state.car.u = 22;
+      let worst = 0;
+      for (let i = 0; i < 600; i++) {
+        step(state, NEUTRAL_INPUT);
+        worst = Math.max(worst, buried(state.car, height));
+      }
+      // A hand's breadth: the body may touch the ground it is landing on,
+      // and the step it lands in has moved before the seat is read again.
+      expect(worst).toBeLessThan(0.3);
+    }
+  });
+});

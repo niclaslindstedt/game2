@@ -27,7 +27,15 @@ import {
   type RunStats,
 } from "./state.ts";
 import { landingDamage } from "./collision.ts";
-import { footOn, groundJolt, readSeat, standOn, wheelSpeed, type GroundUnder } from "./ground.ts";
+import {
+  footOn,
+  groundJolt,
+  readSeat,
+  seatOn,
+  standOn,
+  wheelSpeed,
+  type GroundUnder,
+} from "./ground.ts";
 import { beginRoll, goesOver, landRolled, onItsWheels, rollStand } from "./roll.ts";
 import type { Rng } from "../lib/prng.ts";
 import type { Surface } from "../mapgen/index.ts";
@@ -1648,10 +1656,23 @@ export function stepAirborne(
   car.z += (cosH * car.u - sinH * car.w + ctx.windZ * carry) * dt;
   car.vy -= T.air.gravity * dt;
   car.y += car.vy * dt;
-  // In the air the nose follows the arc: up over the launch, down into the
-  // landing. The speed floor keeps a near-vertical plunge from reading as a
-  // right angle when the forward speed has all but gone.
-  settlePitch(car, Math.atan2(car.vy, Math.max(6, Math.hypot(car.u, car.w))));
+  // In the air the body's LONG AXIS lies along the arc: up over the launch,
+  // down into the landing. Which END of it leads decides the sign, and the
+  // speed the arc is read against is the whole travel, sideways included —
+  // the speed floor keeps a near-vertical plunge from reading as a right
+  // angle when there is barely any of it left.
+  //
+  // `lead` is how much of that travel comes out of the NOSE: +1 dead ahead,
+  // 0 dead sideways — where the arc says nothing about the pitch, because
+  // the car is falling across itself — and -1 dead astern, where a
+  // descending car has its nose UP, not down. Read against the unsigned
+  // speed the nose went down whichever way the car was travelling, which
+  // on a hillside is a car diving into the hill: a spun car sliding
+  // backwards down a slope buried its nose metres into the ground it was
+  // flying over.
+  const path = Math.max(6, Math.hypot(car.u, car.w));
+  const lead = car.u / path;
+  settlePitch(car, Math.atan2(car.vy * lead, path));
 
   // The ground under where the car has just moved TO — the road's profile
   // or the terrain, whichever the step is over, read there and not carried
@@ -1671,7 +1692,17 @@ export function stepAirborne(
   // corner of the shell on one that is going over (roll.ts, `rollStand` —
   // exactly zero for any car that is not rolling, so a jump is unchanged
   // by its being here).
-  const meets = groundNow + rollStand(car);
+  //
+  // A car is four metres long, and out in the wild the ground under one
+  // end of it is nothing like the ground under its middle: reading the
+  // point under the middle alone flew a car pitched into a hillside on
+  // through it, an end of the body a metre inside the hill, until the
+  // MIDDLE finally reached the ground. So the flight lands on the plane
+  // the body meets — `seatOn`, the same footprint the grounded step
+  // stands the car on (ground.ts), read at the attitude the flight is
+  // holding. Flat ground and the road's own smooth profile give the
+  // centre back exactly, so an ordinary jump lands where it always did.
+  const meets = (ctx.wild ? seatOn(car, groundNow, ctx.groundAt) : groundNow) + rollStand(car);
   if (car.y <= meets && (car.rolling || !onItsWheels(car.roll))) {
     // Nothing for the tyres to do: it is a corner of the body arriving,
     // and the roll that put it there carries on from the contact.
