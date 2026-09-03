@@ -13,7 +13,7 @@
 // seed, and the pass/fail gates at the two ends of a stage actually fail
 // when the thing they gate on is missing.
 
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import {
   ANALYSIS,
@@ -39,11 +39,15 @@ const SEEDS = [1, 2, 3, 5, 8];
  * that is a pure function of its seed. Which is not an assumption here: it is
  * the claim `freshReport` exists to check. Nothing below mutates a report.
  *
- * The tests that sweep seeds carry an explicit 20 s timeout for the same
- * reason `circuit_test` does. Building a stage and rolling a rank of balls
- * down it is a second of real work on a quiet machine and rather more on a
- * shared runner, so vitest's 5 s default is not a timeout on this file — it is
- * a coin toss, and it came up tails on CI. */
+ * Building a stage and rolling a rank of balls down it is a second of real
+ * work on a quiet machine and rather more on a shared runner, which is why
+ * this file used to carry an explicit 20 s timeout per sweeping case: against
+ * vitest's old 5 s default that was not a timeout but a coin toss, and it came
+ * up tails on CI. Those overrides are gone, because the suite default is now
+ * 30 s — raised in `vitest.config.ts` on the strength of this very file — and
+ * a 20 s override under a 30 s default is no longer a raised bar but a lowered
+ * one. What is left is the hook below, which is the actual fix: it fills the
+ * cache once for the whole file, so the sweep is nobody's case to pay for. */
 const kept = new Map<string, StageReport>();
 
 function freshReport(seed: number, knobs?: Record<string, number>): StageReport {
@@ -59,6 +63,20 @@ function report(seed: number, knobs?: Record<string, number>): StageReport {
   }
   return held;
 }
+
+/** Fill the cache before any case reads it. Whichever case touched a given
+ * seed first used to build it, so a dozen cheap assertions hid three or four
+ * fifteen-second stage builds — measured against a per-test allowance, and
+ * one of them at 96% of it. The work is the same either way; this only stops
+ * it being charged to an assertion. */
+beforeAll(() => {
+  for (const seed of SEEDS) {
+    report(seed);
+    for (const water of [0.6, 0.9, 1]) report(seed, { water });
+  }
+  report(4, { water: 0 });
+  report(4, { water: 1 });
+}, 300_000);
 
 describe("the stage report", () => {
   it("scores every metric in range and rolls them into one number", () => {
@@ -79,7 +97,7 @@ describe("the stage report", () => {
       expect(r.score, `seed ${seed}`).toBeGreaterThanOrEqual(0);
       expect(r.score, `seed ${seed}`).toBeLessThanOrEqual(100);
     }
-  }, 20_000);
+  });
 
   it("counts its own findings, worst first", () => {
     for (const seed of SEEDS) {
@@ -102,7 +120,7 @@ describe("the stage report", () => {
         expect(finding.message.length, `seed ${seed} ${finding.code}`).toBeGreaterThan(0);
       }
     }
-  }, 20_000);
+  });
 
   it("is deterministic: the same seed scores the same twice", () => {
     // The one test that must not take the cache — handing back the same
@@ -115,7 +133,7 @@ describe("the stage report", () => {
         b.findings.map((f) => f.code).join(),
       );
     }
-  }, 20_000);
+  });
 
   it("reads the dials: a wet stage measures as wetter than a dry one", () => {
     const dry = report(4, { water: 0 });
@@ -123,7 +141,7 @@ describe("the stage report", () => {
     const share = (r: StageReport): number =>
       (r.metrics.find((m) => m.id === "ground")?.stats.waterShare ?? 0) as number;
     expect(share(wet)).toBeGreaterThan(share(dry));
-  }, 20_000);
+  });
 });
 
 describe("the two ends (pass or fail)", () => {
@@ -140,7 +158,7 @@ describe("the two ends (pass or fail)", () => {
         ?.checks.find((c) => c.id === "grid");
       expect(grid?.score, `seed ${seed}`).toBe(1);
     }
-  }, 20_000);
+  });
 
   it("passes the finish only when there is run-out past the line (R25)", () => {
     for (const seed of SEEDS) {
@@ -156,7 +174,7 @@ describe("the two ends (pass or fail)", () => {
         STAGE_RULES.runOut * ANALYSIS.ends.runOutShare,
       );
     }
-  }, 20_000);
+  });
 
   it("fails a stage whose finish gate has no road past it", () => {
     // Cut the run-out off and the check has to notice. A gate the analyzer
@@ -225,7 +243,7 @@ describe("the rollers", () => {
     expect(hit.length).toBeGreaterThan(0);
     expect(hit[0].severity).toBe("error");
     expect(hit[0].message).toContain("barrier");
-  }, 20_000);
+  });
 
   // R16 — the road's EDGE, as its own scored property. What it measures is
   // the grade the ground takes across the corridor's outer band, and the
@@ -244,7 +262,7 @@ describe("the rollers", () => {
       // check that never leaves the floor is measuring nothing.
       expect(edge?.score, `seed ${seed}`).toBeGreaterThan(0.9);
     }
-  }, 20_000);
+  });
 
   // R16 — and the SEAM, which is the other half of the same promise and a
   // different measurement: the edge check asks how steeply the ground falls
@@ -268,7 +286,7 @@ describe("the rollers", () => {
         `seed ${seed}`,
       ).toHaveLength(0);
     }
-  }, 20_000);
+  });
 });
 
 describe("the water", () => {
@@ -280,14 +298,14 @@ describe("the water", () => {
       const water = report(seed, { water: 0.9 }).metrics.find((m) => m.id === "water");
       expect(water?.stats.climbs, `seed ${seed}`).toBe(0);
     }
-  }, 20_000);
+  });
 
   it("finds every crossing with water under it", () => {
     for (const seed of SEEDS) {
       const water = report(seed, { water: 0.9 }).metrics.find((m) => m.id === "water");
       expect(water?.stats.dryCrossings, `seed ${seed}`).toBe(0);
     }
-  }, 20_000);
+  });
 });
 
 describe("the ground's water (R32)", () => {
@@ -305,7 +323,7 @@ describe("the ground's water (R32)", () => {
       expect(mean, `seed ${seed}`).toBeGreaterThan(0);
       expect(mean, `seed ${seed}`).toBeLessThan(ANALYSIS.ground.swamp.deep);
     }
-  }, 20_000);
+  });
 
   it("does not drown the country at the top of the water dial", () => {
     // The dial has to stay a dial. A position that turns the map into a sea
@@ -315,7 +333,7 @@ describe("the ground's water (R32)", () => {
       const ground = report(seed, { water: 1 }).metrics.find((m) => m.id === "ground");
       expect(ground?.stats.waterShare, `seed ${seed}`).toBeLessThan(ANALYSIS.ground.drowned);
     }
-  }, 20_000);
+  });
 });
 
 describe("the road's surface (R33)", () => {
@@ -331,7 +349,7 @@ describe("the road's surface (R33)", () => {
       expect(bumpy?.value, `seed ${seed}`).toBeGreaterThan(ANALYSIS.rollers.bumpy.min);
       expect(bumpy?.value, `seed ${seed}`).toBeLessThan(ANALYSIS.rollers.bumpy.max);
     }
-  }, 20_000);
+  });
 
   it("cuts the gravel narrow, wanders it, and holds the tarmac's width exactly", () => {
     // R33 — a blade cuts a dirt road as tight as its traffic can live with,
@@ -516,7 +534,7 @@ describe("the other roads", () => {
       expect(lanes?.stats.worstStep, `seed ${seed}`).toBeLessThan(ANALYSIS.lanes.step.fail);
       expect(lanes?.stats.worstOff, `seed ${seed}`).toBeLessThan(ANALYSIS.lanes.agree.fail);
     }
-  }, 20_000);
+  });
 });
 
 describe("the jumps", () => {
@@ -530,7 +548,7 @@ describe("the jumps", () => {
       expect(jumps?.stats.maxLength, `seed ${seed}`).toBeGreaterThan(0);
       expect(jumps?.stats.maxHeight, `seed ${seed}`).toBeGreaterThan(0);
     }
-  }, 20_000);
+  });
 });
 
 describe("the country is curves (R32)", () => {

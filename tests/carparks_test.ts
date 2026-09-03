@@ -3,7 +3,7 @@
 // reached by, and the trails in to the stands. These are the rules that
 // decide whether a crowd on a stage reads as a crowd that drove there, and
 // whether what it drove is as solid as it looks.
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import {
   ANALYSIS,
@@ -56,6 +56,17 @@ function routeDistance(track: Track, x: number, z: number): number {
 }
 
 describe("car parks (R42)", () => {
+  /** The sweep is built in a hook, not inside whichever case runs first.
+   * Compiling 24 medium stages and their terrain is ~25 s of this file's
+   * ~35 s, and charged to an `it` all of it lands against the suite's 30 s
+   * per-test allowance — a bar that close is decided by how busy the runner
+   * was rather than by the rules under test, and it came up tails. Every
+   * case below reads the same memo, so the work is the file's, not any one
+   * case's. */
+  beforeAll(() => {
+    sweep();
+  }, 120_000);
+
   it("serves EVERY stand from a car park, and takes off the stage the ones it cannot", () => {
     const all = sweep();
     expect(all.length).toBeGreaterThan(SEEDS.length);

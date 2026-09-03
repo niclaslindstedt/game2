@@ -4,7 +4,7 @@
 // generated world is the thing players read as "real" or "fake" fastest: a
 // river that runs uphill, or three parallel rivers where a valley would
 // hold one, gives the whole landscape away.
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import {
   LAKE_Y,
@@ -30,6 +30,17 @@ import {
 } from "@engine";
 
 const SEEDS = [1, 2, 3, 5, 8, 13, 21, 34];
+
+/** What the two seed searches below are allowed to spend finding their
+ * scenario. They scan a list of seeds for water that does a particular
+ * thing to a car, and each candidate costs a minute of simulated driving —
+ * so a scan that has to reach the tail is a couple of minutes of work.
+ * Inside an `it` those minutes land against the suite's 30 s per-test
+ * allowance, which turns a generator change that moves the leading seeds
+ * into a RED test rather than a slow one: exactly what the wide tail is
+ * there to prevent. In a hook, sized to the whole tail, it stays the few
+ * seconds of scanning those lists promise. */
+const SEARCH_ALLOWANCE = 300_000;
 
 describe("crossings (R13)", () => {
   it("wades the narrow ones and decks the wide ones", () => {
@@ -512,8 +523,11 @@ describe("going under (TUNING.crash.drown)", () => {
   /** Found once and reused — the answer cannot change within a run. */
   let deepSeed: number | undefined;
 
+  beforeAll(() => {
+    deepSeed = DROWNING_SEEDS.find(swallows);
+  }, SEARCH_ALLOWANCE);
+
   function driveIntoDeepWater(): { state: GameState; entry: GameEvent[] } {
-    deepSeed ??= DROWNING_SEEDS.find(swallows);
     if (deepSeed === undefined) throw new Error("no seed put deep enough water beside the road");
     const attempt = plunge(deepSeed, 1);
     if (!attempt) throw new Error(`seed ${deepSeed} no longer drowns the car`);
@@ -621,11 +635,19 @@ describe("driving out again (TUNING.crash.drown.shallows)", () => {
   // search SPACE, and it is wide on purpose so that a generator change
   // costs the suite a few seconds of scanning rather than a red test.
   const SHORE_SEEDS = [
-    // 120 leads because it is the first of a whole handful that scramble
+    // 73 leads because it is the first of a whole handful that scramble
     // out — the drive that finds the water is a minute of full lock over
     // open country, so a car that reaches a given shore is a car that has
     // not rolled, wedged or drowned on the way, and which seeds those are
-    // moves with the handling as readily as with the roads.
+    // moves with the handling as readily as with the roads. The names
+    // behind it are the rest of that handful, so a road that moves under
+    // the leader costs one more plunge rather than a scan of the tail.
+    73,
+    5,
+    78,
+    97,
+    101,
+    104,
     120,
     128,
     158,
@@ -638,7 +660,6 @@ describe("driving out again (TUNING.crash.drown.shallows)", () => {
     109,
     69,
     87,
-    73,
     39,
     49,
     59,
@@ -690,8 +711,11 @@ describe("driving out again (TUNING.crash.drown.shallows)", () => {
 
   let shoreSeed: number | undefined;
 
+  beforeAll(() => {
+    shoreSeed = SHORE_SEEDS.find(scrambles);
+  }, SEARCH_ALLOWANCE);
+
   function driveIntoTheShallows(): GameState {
-    shoreSeed ??= SHORE_SEEDS.find(scrambles);
     if (shoreSeed === undefined)
       throw new Error("no seed put a shore the car could drive back out of");
     const attempt = plunge(shoreSeed, -1);
