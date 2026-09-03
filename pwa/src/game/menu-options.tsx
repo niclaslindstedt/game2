@@ -221,7 +221,6 @@ function MainPage({
               label="GEARBOX"
               stops={GEARBOX_OPTIONS}
               value={settings.gearbox}
-              hint="For every car. The manual is the racing set — about 6% more top speed, paid for with a beat of throttle at every shift"
               onPick={(gearbox) => set({ gearbox })}
               onHint={setHint}
             />

@@ -2799,6 +2799,13 @@ body {
   flex: none;
 }
 
+/* ...but a head with no subtitle under it is ONE line, and a button pinned
+   to the top of one line is a button sitting a few pixels above the words
+   beside it. */
+.menu-head-solo .menu-back {
+  align-self: center;
+}
+
 .menu-head-text {
   display: flex;
   flex-direction: column;
@@ -3253,166 +3260,397 @@ a.menu-version:focus-visible {
   background: rgb(255 210 62 / 25%);
 }
 
+/* The car's own line of billing: its name and which wheels are driven.
+   Stacked by default, which is what a narrow column (Roam) wants; the
+   pre-race card lays the two side by side, since it has the width. */
+.car-pick-id {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+
 .car-pick-name {
-  align-self: center;
   font-size: clamp(0.72rem, 2.5vmin, 0.95rem);
   letter-spacing: 0.16em;
   color: var(--hud-good);
 }
 
 .car-pick-drive {
-  align-self: center;
-  margin-top: 0.15em;
   font-size: clamp(0.55rem, 1.8vmin, 0.7rem);
   letter-spacing: 0.22em;
   opacity: 0.65;
 }
 
-/* ── The pre-race card ───────────────────────────────────────────────────
-   The car on its stand beside its spec sheet. Two columns while the card is
-   wide enough for both to be read, one when it is not — `auto-fit` does that
-   off the CARD's width rather than the viewport's, which is what actually
-   decides whether the sheet fits (the card is capped at 52rem however wide
-   the screen gets). */
+/* ── The pre-race card: THE GARAGE ───────────────────────────────────────
+   THE CAR IS THE PAGE. It is the only thing on this card that cannot be
+   said in words, and the one the whole screen exists to choose — so it
+   takes the room, and everything else is sized to be read rather than to
+   fill. What is left beside it is four short readings and the one other
+   choice the player brings to the stage: two figures, two bars, and the
+   TRANSMISSION as two boxes big enough to be pressed with a thumb.
 
-.car-setup {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-  gap: clamp(0.6rem, 2.5vmin, 1.2rem);
-  align-items: start;
+   The card is built the way the options page and the results card are: a
+   head row, a body that is one column or two, and ONE caption bar at the
+   foot reading whatever is being looked at (`.knob-caption`). Nothing here
+   carries a footnote of its own — a sentence under every control is height,
+   and height is the car getting smaller. */
+
+.menu-card-garage {
+  width: min(56rem, 100%);
 }
 
-/* The CAR's column: the stand, and the gearbox in the space under it. The
-   stand is a fixed height and the sheet beside it is as tall as it needs to
-   be, so that space exists on every screen the two columns fit on — and a
-   TRANSMISSION row laid across both of them underneath was a whole line of
-   a phone held sideways spent on two words. */
-.car-setup-pick {
+.garage {
+  display: grid;
+  gap: clamp(0.7rem, 2.5vmin, 1.3rem);
+}
+
+.garage-car {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: clamp(0.4rem, 1.8vmin, 0.7rem);
   min-width: 0;
 }
 
 /* The stand carries this card rather than sitting under a stage grid as a
-   row, so it gets the height to be a car and not a thumbnail. Specificity
+   row, so it gets the height to be a CAR and not a thumbnail. Specificity
    over the shared `.car-pick-stage` rule, which is sized for the row. */
-.car-setup .car-pick-stage {
-  height: clamp(8rem, 26vmin, 13rem);
+/* One column — a phone held upright. Held to a shape rather than to all the
+   height going: the stand frames the car to whichever of the pane's two
+   dimensions runs out first (car-turntable.ts), and on a pane much taller
+   than it is wide that is the WIDTH — so every further pixel of height is
+   scrim under the car rather than more car. Roughly four by three is where
+   the two constraints meet. */
+.garage .car-pick-stage {
+  height: clamp(9rem, 30vh, 16rem);
 }
 
-.car-spec {
+/* The arrows come OFF the row and stand over the stage. Flanking it they
+   were two thumb-widths of the card's width spent on chrome, at exactly
+   the moment the card is trying to hand the car everything it has; over
+   the corners of the picture they cost nothing and read the way the arrows
+   either side of a showroom photo do. */
+.garage .car-pick {
+  position: relative;
+  gap: 0;
+}
+
+.garage .car-pick-step {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  transform: translateY(-50%);
+  min-width: 2.4rem;
+  padding: 0.5rem 0.5rem;
+  background: rgb(9 24 56 / 55%);
+}
+
+.garage .car-pick-step[data-nav-step="left"] {
+  left: 0.4rem;
+}
+
+.garage .car-pick-step[data-nav-step="right"] {
+  right: 0.4rem;
+}
+
+/* THE NAME STANDS IN THE PICTURE, on one line across the head of the stage:
+   the car and what it is called are one thing, and a caption on a line of
+   its own below the frame is a line of the card's height spent saying so.
+   At the TOP because that is where the car is not — the shot sits the body
+   low with air over the roof (car-turntable.ts), so the plate goes in the
+   air rather than across the bonnet. The whole row becomes the stage with
+   it out of the flow. */
+.garage .car-pick-row {
+  position: relative;
+  gap: 0;
+}
+
+.garage .car-pick-id {
+  position: absolute;
+  top: 0.55rem;
+  left: 50%;
+  z-index: 1;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 0.2rem 0.85rem 0.25rem;
+  border-radius: 0.5rem;
+  background: rgb(9 24 56 / 55%);
+  transform: translateX(-50%);
+}
+
+.garage .car-pick-name {
+  font-size: clamp(0.9rem, 3.2vmin, 1.35rem);
+}
+
+.garage .car-pick-drive {
+  font-size: clamp(0.58rem, 2vmin, 0.78rem);
+  opacity: 0.75;
+}
+
+/* Beside the car, three blocks with the leftover height shared EVENLY
+   between them rather than pooled under the last one. The column is as tall
+   as the car is, and it will always have height to spare — the readings are
+   four short lines by design. Spent as air between three blocks that is
+   breathing room; pooled into one gap (which is what pinning the
+   transmission to the foot did) it is a hole in the middle of the card. */
+.garage-spec {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  justify-content: space-between;
+  gap: clamp(0.5rem, 2vmin, 0.9rem);
+  min-width: 0;
 }
 
-.car-spec-blurb {
-  font-size: clamp(0.62rem, 2.1vmin, 0.82rem);
-  font-style: normal;
-  font-weight: 500;
-  line-height: 1.3;
-  opacity: 0.85;
-}
-
-/* The hard numbers. They flow into as many columns as the panel is wide
-   enough for rather than sitting on a fixed grid: at one column per fact on
-   a phone this is four short lines, and four short lines is fine. */
-.car-spec-facts {
+/* THE TWO FIGURES, big — they are the numbers the transmission under them
+   moves, and a choice whose consequence is printed in six-point type is a
+   choice nobody notices they have made. */
+.garage-figures {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr));
-  gap: 0.35rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
 }
 
-.car-spec-fact {
+.garage-figure {
   display: flex;
   flex-direction: column;
-  gap: 0.05rem;
+  gap: 0.15rem;
+  background: rgb(255 255 255 / 7%);
+  border-radius: 0.6rem;
+  padding: 0.5rem 0.7rem 0.6rem;
 }
 
-.car-spec-fact-label {
-  font-size: clamp(0.5rem, 1.6vmin, 0.62rem);
-  letter-spacing: 0.14em;
-  opacity: 0.65;
-}
-
-.car-spec-fact-value {
-  font-size: clamp(0.72rem, 2.4vmin, 0.95rem);
-  letter-spacing: 0.04em;
-  color: var(--hud-good);
-}
-
-.car-spec-bars {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
-  gap: 0.3rem 0.6rem;
-}
-
-.car-spec-bar {
-  display: flex;
-  flex-direction: column;
-  gap: 0.12rem;
-}
-
-.car-spec-bar-label {
-  font-size: clamp(0.48rem, 1.55vmin, 0.6rem);
-  letter-spacing: 0.14em;
+.garage-figure-label {
+  font-size: clamp(0.5rem, 1.7vmin, 0.66rem);
+  letter-spacing: 0.16em;
   opacity: 0.7;
 }
 
-.car-spec-bar-track {
-  display: block;
-  height: 0.4rem;
-  border-radius: 0.2rem;
+/* Tabular figures are not a nicety here: the number COUNTS to its new
+   value (menu-car.tsx), and proportional digits would have the whole
+   readout shuffling sideways all the way there. */
+.garage-figure-value {
+  font-size: clamp(1.05rem, 3.8vmin, 1.7rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+  color: var(--hud-good);
+}
+
+.garage-figure-unit {
+  margin-left: 0.35em;
+  font-size: 0.6em;
+  letter-spacing: 0.1em;
+  opacity: 0.8;
+}
+
+/* THE TWO BARS, drawn as the knob rows are: the name on the left, the
+   value on the right, on the same two x's down the block. */
+/* FOUR BARS IN ONE BOX, kept small. They are a comparison, not a readout —
+   what is worth reading off them is which of three cars is longest, and
+   that is legible at any height. One panel rather than four: they are read
+   TOGETHER, and four boxes is four things to look at where there is one. */
+.garage-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  background: rgb(255 255 255 / 7%);
+  border-radius: 0.6rem;
+  padding: 0.55rem 0.7rem;
+}
+
+.garage-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+/* Fixed, so the tracks start on the same x down the block — which is what
+   makes four bars read as one comparison instead of four. */
+.garage-bar-label {
+  flex: none;
+  width: 6.1rem;
+  font-size: clamp(0.44rem, 1.5vmin, 0.56rem);
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+  opacity: 0.8;
+}
+
+.garage-bar-track {
+  flex: 1;
+  min-width: 0;
+  height: 0.45rem;
+  border-radius: 0.23rem;
   background: rgb(255 255 255 / 14%);
   overflow: hidden;
 }
 
-.car-spec-bar-fill {
+/* The bar TRAVELS to its new length, over the same 420ms and the same cubic
+   ease-out the figures count over (`lib/count.ts`): press MANUAL and the
+   whole sheet moves as one thing, instead of two numbers rolling while four
+   bars jump. */
+.garage-bar-fill {
   display: block;
   height: 100%;
   border-radius: inherit;
   background: var(--hud-good);
+  transition: width 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
-.car-spec-note {
-  font-size: clamp(0.5rem, 1.65vmin, 0.64rem);
-  font-style: normal;
-  font-weight: 500;
-  opacity: 0.55;
-}
-
-.menu-gearbox {
+/* THE TRANSMISSION — the second-biggest thing on the card, and the only
+   other choice the player brings to a stage. It wears the options page's
+   group title (a word over a rule) so it reads as a setting with a name,
+   and two boxes under it rather than the row of chips every other setting
+   in the game gets. */
+.garage-box {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.4rem;
 }
 
-/* A phone held sideways. START has to be on screen without a drag, so the
-   two footnotes go: the bars and the two boxes say what they say, and a
-   sentence nobody can see is not an explanation. The stand goes back to the
-   row's height — the shared rule is out-specified above, so the override
-   has to name the same two classes. */
+.garage-boxes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.garage-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  min-height: 3.6rem;
+  font: inherit;
+  color: var(--hud-ink);
+  background: rgb(255 255 255 / 8%);
+  border: 2px solid rgb(255 255 255 / 30%);
+  border-radius: 0.7rem;
+  padding: 0.55rem 0.4rem;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.garage-opt:hover,
+.garage-opt:focus-visible {
+  background: rgb(255 210 62 / 18%);
+  border-color: rgb(255 210 62 / 55%);
+}
+
+/* The box the car is going to the stage in. Lit rather than merely
+   outlined: two boxes that differ by a border weight is a state a player
+   has to look for. */
+.garage-opt-on {
+  background: rgb(255 210 62 / 22%);
+  border-color: var(--hud-good);
+  box-shadow: 0 0 0.9rem rgb(255 210 62 / 22%);
+}
+
+.garage-opt-name {
+  font-size: clamp(0.8rem, 3vmin, 1.15rem);
+  letter-spacing: 0.14em;
+}
+
+.garage-opt-on .garage-opt-name {
+  color: var(--hud-good);
+}
+
+.garage-opt-note {
+  font-size: clamp(0.46rem, 1.6vmin, 0.6rem);
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-align: center;
+  opacity: 0.7;
+}
+
+/* The card's one sentence, IN the picture: across the foot of the stage,
+   inside its border, over the scrim the car is standing on. Centred and
+   with no rule down its edge — on the options page that rule ties the bar
+   to the row being read, and here there is nothing to tie it to but the car
+   it is sitting under. */
+.menu-card-garage .knob-caption {
+  position: absolute;
+  bottom: 0.5rem;
+  left: 0.55rem;
+  right: 0.55rem;
+  z-index: 1;
+  min-height: 0;
+  padding: 0.25rem 0.7rem;
+  border-left: 0;
+  border-radius: 0.45rem;
+  background: rgb(9 24 56 / 50%);
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* Two columns, the moment the card is wide enough to read the sheet beside
+   the car — which on a phone held sideways is every time.
+
+   THE STAGE ABSORBS THE SLACK. The row is as tall as its taller column, and
+   with the stand stretched to fill what it is given, that slack becomes CAR
+   rather than a rectangle of empty scrim under one column or the other. The
+   clamp above stops being a height and becomes the floor under it. */
+@media (min-width: 40rem) {
+  .garage {
+    grid-template-columns: minmax(0, 1.4fr) minmax(15rem, 1fr);
+    align-items: stretch;
+  }
+
+  .garage .car-pick-row,
+  .garage .car-pick {
+    flex: 1;
+  }
+
+  .garage .car-pick {
+    align-items: stretch;
+  }
+
+  .garage .car-pick-stage {
+    height: auto;
+    min-height: clamp(9rem, 30vh, 15rem);
+  }
+}
+
+/* A desktop. The extra width goes to the CAR — a wider card, a bigger
+   share of it for the stand, and a stand tall enough to use it: a picture
+   of a car in a 3:1 letterbox is a smaller car than the same one in a
+   window half the width. */
+@media (min-width: 64rem) {
+  .menu-card-garage {
+    width: min(64rem, 100%);
+  }
+
+  .garage {
+    grid-template-columns: minmax(0, 1.75fr) minmax(16rem, 1fr);
+  }
+
+  .garage .car-pick-stage {
+    min-height: clamp(12rem, 42vh, 24rem);
+  }
+}
+
+/* A phone held sideways — the shape with the least height and the most of
+   it already spoken for. The columns even up (the sheet has no more to say
+   than it does on a laptop, and the car has everything left over), and the
+   stand takes nearly half the screen's height: the budget is the head, the
+   caption and START, and the rest of the card is the car. */
 @media (orientation: landscape) and (max-height: 34rem) {
-  .car-setup {
+  .garage {
     gap: 0.6rem;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
   }
 
-  .car-setup .car-pick-stage {
-    height: clamp(4.5rem, 20vh, 6rem);
+  .garage-spec {
+    gap: 0.4rem;
   }
 
-  .car-spec {
-    gap: 0.35rem;
+  .garage .car-pick-stage {
+    min-height: clamp(4.5rem, 48vh, 12rem);
   }
 
-  .car-spec-bars {
-    gap: 0.2rem 0.5rem;
-  }
-
-  .car-spec-note,
-  .menu-gearbox .opt-note {
-    display: none;
+  .garage-opt {
+    min-height: 2.6rem;
   }
 }
 
