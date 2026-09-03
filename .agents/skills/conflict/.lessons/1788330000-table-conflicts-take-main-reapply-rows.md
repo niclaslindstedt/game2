@@ -1,16 +1,23 @@
 ---
-title: A prettier-aligned markdown table conflicts as ONE hunk when both sides added a row — take main's file and re-apply your rows, and look for the seam main already built
+title: A prose paragraph or an aligned table conflicts as ONE enormous hunk however small both edits were — take main's file and re-apply your edits, and look for the seam main already built
 date: 2026-09-02
 scope: AGENTS.md, docs/, README.md
 concepts: [merge, rebase, markdown, tables, prettier, shells]
 ---
 
-Two branches each adding a row to the same aligned table (`AGENTS.md`'s
-"Where new code goes", the README's Usage table) do not conflict on two
-lines: the longer new row widens a column, prettier re-pads EVERY row, and
-git hands back the whole table as a single `<<<<<<<`/`>>>>>>>` block — a
-hundred lines where the real difference is a row on each side. Diffing the
-two sides' first columns (`cut -d'|' -f2`) shows the real delta in seconds.
+The repo's markdown is written in long unwrapped lines, so a conflict here is
+never line-sized. Two branches each adding a row to the same aligned table
+(`AGENTS.md`'s "Where new code goes", the README's Usage table) do not
+conflict on two lines: the longer new row widens a column, prettier re-pads
+EVERY row, and git hands back the whole table as one `<<<<<<<`/`>>>>>>>`
+block. The README's Quick-start paragraph is the same trap at its worst —
+one line of a thousand words, so two sentences edited a paragraph apart
+collide as a single hunk with no visible difference at all.
+
+Diff the two sides before touching either. For a table, `cut -d'|' -f2` over
+each side shows the real delta; for a paragraph, write each side to its own
+file and `git diff --no-index --word-diff=plain` them — the change main made
+is then a handful of words instead of a wall.
 
 Resolve it by taking main's copy of the FILE (`git checkout --ours -- <path>`
 during a rebase is main's side) and re-applying this branch's rows with Edit,

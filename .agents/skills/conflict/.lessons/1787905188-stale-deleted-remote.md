@@ -1,12 +1,15 @@
 ---
-title: `--force-with-lease` fails with "stale info" when the remote branch was deleted after ITS pr merged — prune, then push plain
+title: `--force-with-lease` fails with "stale info" whenever the branch has NO remote counterpart — deleted after its PR merged, or never pushed at all; prune, then push plain
 date: 2026-08-28
 concepts: [rebase, push, remote-branch, pr]
 ---
 
-A designated branch whose earlier PR has been merged and deleted upstream still
-has a remote-tracking ref in the clone, pointing at a commit that is now on
-`main`. Restarting the branch from `origin/main` and pushing then fails:
+Two ways to get here, one symptom. A designated branch whose earlier PR has
+been merged and deleted upstream still has a remote-tracking ref in the clone,
+pointing at a commit that is now on `main`. Or the branch was rebased before
+its FIRST push, which is the normal shape of a task that took long enough for
+`main` to move — the rebase makes the push a forced one by habit, and there is
+no remote branch for the lease to compare against. Either way:
 
 ```
 ! [rejected] <branch> -> <branch> (stale info)
