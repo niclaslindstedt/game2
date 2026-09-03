@@ -1199,6 +1199,82 @@ describe("what gives way", () => {
   });
 });
 
+describe("the spin a contact puts in", () => {
+  /** The worst case the geometry allows: a car carrying its whole pace
+   * sideways, catching a rooted trunk on the NOSE CORNER — the longest
+   * lever the body has, against a velocity change that reverses the whole
+   * of the sideways speed in one step. Uncapped this asked for 27 rad/s,
+   * four and a third turns a second, off one tree. */
+  function clipNoseCorner(across: number): number {
+    const state = freshState();
+    const car = state.car;
+    car.u = 50;
+    car.w = across;
+    updateSlip(car);
+    const tree = solid({
+      kind: "tree",
+      size: OLD_TREE,
+      x: car.x + TUNING.collision.halfWidth + 0.2,
+      z: car.z + TUNING.collision.halfLength - 0.05,
+      y: car.y,
+    });
+    collideCar(state.spec, car, [tree], [], state.stats);
+    return car.yawRate;
+  }
+
+  it("saturates instead of scaling, however hard the car arrives", () => {
+    const max = TUNING.collision.yawKickMax;
+    for (const across of [14, 20, 28, 60]) {
+      expect(Math.abs(clipNoseCorner(across))).toBeLessThanOrEqual(max);
+    }
+    // ...and the ceiling is a ceiling, not a shrug: the worst arrival still
+    // spins the car most of the way to it.
+    expect(Math.abs(clipNoseCorner(60))).toBeGreaterThan(max * 0.9);
+  });
+
+  it("leaves the contacts a car actually has alone", () => {
+    // A few m/s of slide into a trunk is a believable spin and must come
+    // through the ceiling unchanged — within a few percent of linear.
+    const gentle = Math.abs(clipNoseCorner(4));
+    expect(gentle).toBeGreaterThan(0.5);
+    expect(gentle).toBeLessThan(1.5);
+    const twice = Math.abs(clipNoseCorner(8));
+    expect(twice / gentle).toBeGreaterThan(1.8);
+  });
+
+  it("rolls off smoothly rather than stepping at the limit", () => {
+    // A hard `min` would put a cliff one notch either side of the ceiling:
+    // two arrivals a fraction apart in severity coming out identical. Every
+    // step up the entry speed must still buy some spin.
+    let last = 0;
+    for (const across of [10, 14, 18, 22, 26, 30, 34]) {
+      const spun = Math.abs(clipNoseCorner(across));
+      expect(spun).toBeGreaterThan(last);
+      last = spun;
+    }
+  });
+
+  it("does not straighten a car that is already going round", () => {
+    // The ceiling is on the KICK, not on the car: a scrape down a rock face
+    // must not quietly take a spin out of a car that had one of its own.
+    const state = freshState();
+    const car = state.car;
+    car.u = 20;
+    car.w = 2;
+    car.yawRate = 5;
+    updateSlip(car);
+    const rock = solid({
+      kind: "rock",
+      size: 0.4,
+      x: car.x + TUNING.collision.halfWidth + 0.1,
+      z: car.z,
+      y: car.y,
+    });
+    collideCar(state.spec, car, [rock], [], state.stats);
+    expect(car.yawRate).toBeGreaterThan(4);
+  });
+});
+
 describe("the trip", () => {
   it("a rock caught sideways at speed rolls the car and lifts it off the ground", () => {
     const state = freshState();

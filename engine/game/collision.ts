@@ -507,7 +507,7 @@ export function collideCar(
     // right swings the nose right — heading grows, like positive steer.
     // ...divided by the car's inertia: the same clip that spins a light
     // hatch barely disturbs something that weighs a third more.
-    car.yawRate += (T.collision.yawKick / mass) * ((newW - car.w) * pz - (newU - car.u) * px);
+    spinBody(car, (T.collision.yawKick / mass) * ((newW - car.w) * pz - (newU - car.u) * px));
     const dW = newW - car.w;
     car.u = newU;
     car.w = newW;
@@ -766,6 +766,23 @@ function mount(
   loadSprings(car, bite * K.heave, nz);
   events.push({ type: "kerbHit", speed: closing });
   return closing;
+}
+
+/** THE SPIN A CONTACT PUTS IN, saturating. Both kicks — a solid's and the
+ * other car's — are linear in the velocity change AND in the lever arm, so
+ * the worst case multiplies two large numbers: a car that arrives sideways
+ * at pace and catches a trunk on its nose corner has its whole lateral
+ * speed reversed at the full half-length of the body, and asked for four
+ * turns a second off one tree. Past `yawKickMax` the sideways speed is
+ * spent folding the nose rather than turning the car, which is exactly what
+ * `dealCrush` books against that zone a few lines later; the yaw axis
+ * simply never had the ceiling its sibling `air.tripMax` has always had.
+ *
+ * On the KICK and not on `car.yawRate`, so a car already going round for
+ * reasons of its own is not quietly straightened by a scrape down a rock. */
+function spinBody(car: CarState, kick: number): void {
+  const max = T.collision.yawKickMax;
+  car.yawRate += max * Math.tanh(kick / max);
 }
 
 /** What a contact does to the SPRINGS: the wheels stop, the body does not.
@@ -1084,7 +1101,7 @@ function applyContact(
   // The contact sits on the spine, so its only lever is along the nose —
   // sideways velocity change at a point ahead of centre swings the nose
   // that way, which is the tap that puts a car round.
-  car.yawRate += (T.collision.cars.yawKick / massRatio(side.spec)) * dW * rF;
+  spinBody(car, (T.collision.cars.yawKick / massRatio(side.spec)) * dW * rF);
   const ez = nx * sinH + nz * cosH;
   loadSprings(car, Math.hypot(dU, dW), ez);
 }

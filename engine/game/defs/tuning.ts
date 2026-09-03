@@ -2017,6 +2017,23 @@ export const TUNING = {
      * velocity change × m of lever arm) — what makes a clipped tree spin
      * the car instead of politely stopping it. */
     yawKick: 0.35,
+    /** ...and the most any ONE contact may put in, rad/s. The kick above is
+     * linear in both of its terms, and a car that arrives at a trunk
+     * sideways at pace has its whole lateral speed reversed on the lever of
+     * its own nose: thirty m/s across the car at the nose corner asked for
+     * twenty-seven rad/s — four and a third turns a second, off one clipped
+     * tree. Past a point the sideways speed goes into FOLDING the nose
+     * rather than turning the car, which is what the zone's crush already
+     * books, so the kick saturates here instead of scaling. The same
+     * argument the roll's `air.tripMax` makes on the other axis, and the
+     * same ceiling the roll's own kicks wind up to (`air.roll.yawMax`): a
+     * turn a second is as fast as a car is spun by being hit.
+     *
+     * Approached through a `tanh`, not clamped: a hard `min` would put a
+     * cliff one notch either side of the limit, where two contacts a
+     * fraction apart in severity come out identical. Small kicks — which is
+     * every contact a car actually has — pass through unchanged. */
+    yawKickMax: 6,
     /** Closing speed under which a contact is a scuff: no crush, no wear,
      * no event — parking against a rock is not an accident, m/s. Nothing
      * is knocked loose or broken under it either, for the same reason. */
@@ -2099,7 +2116,9 @@ export const TUNING = {
       /** Yaw kicked into each body per (m/s of its own velocity change ×
        * m of lever arm). Above the tree's kick: a tap on the corner of a
        * car that is already travelling is the classic way to put one
-       * round, and it is the whole point of being allowed to touch. */
+       * round, and it is the whole point of being allowed to touch. Under
+       * the same `yawKickMax` ceiling — what a body can be spun to by
+       * being hit is a property of the body, not of what hit it. */
       yawKick: 0.5,
       /** How far apart in height two cars can be and still touch, m. Past
        * it one of them is over the other — a landing on somebody's roof is
