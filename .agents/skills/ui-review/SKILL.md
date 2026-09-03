@@ -82,6 +82,28 @@ settles (that is the `skill-reflection` promotion path).
    _broken_ (clips, overlaps, unreadable) and _drift_ (off-palette,
    undersized, inconsistent). Note the surfaces that are already strong —
    they define the bar, and the list proves the sweep was total.
+
+   **When the edit is already written, take the baseline from `origin/main`
+   rather than skipping it** — a card that overflows by 89px says nothing
+   about whose fault that is, and a session that assumes it is theirs will
+   redesign a layout that was already over. A worktree builds one in seconds
+   with no `npm install`, because the build only ever reads the tree:
+
+   ```sh
+   git worktree add ../base-main origin/main
+   ln -s "$PWD/node_modules" ../base-main/node_modules
+   ln -s "$PWD/pwa/node_modules" ../base-main/pwa/node_modules
+   (cd ../base-main && npm run build --workspace pwa)
+   ```
+
+   Point the probe's static server at either `pwa/dist` and run it twice;
+   `git worktree remove --force` before committing. This is also the only
+   safe way to take a late BEFORE — `git stash && make … && git stash pop`
+   leaves the work stashed when the long target times out. Report a
+   pre-existing overflow instead of quietly fixing or quietly inheriting
+   it: a comment in the CSS naming the shape that does not fit, and why the
+   obvious fix does not work, beats another round of shaving gaps.
+
 2. **Fix structurally, not per-symptom.** Prefer the shared fix (a token, a
    shared text-shadow rule, a layout container) over per-element nudges; most
    drift exists because a surface predates a shared pattern. New CSS goes

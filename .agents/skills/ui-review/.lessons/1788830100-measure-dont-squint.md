@@ -33,10 +33,10 @@ menu**, so photographing the sheet means the bot driving a campaign stage:
 12–15 minutes per viewport on a 4-core web session, and only when it runs
 ALONE — three in parallel put the load near ten and every one timed out.
 Seed LOW picture the same way (`scandi-flick-options` with
-`{ video: QUALITY_PRESETS.low }`; the loader takes partial blobs), detach with
-`nohup … &` past the 10-minute background cap, and print a probe line per
-viewport beside the PNG (rows on the page, card top/bottom against
-`innerHeight`, portraits landed).
+`{ video: DETAIL_PRESETS.low }`; the loader takes partial blobs, each
+picture row read against its own ladder), detach with `nohup … &` past the
+10-minute background cap, and print a probe line per viewport beside the
+PNG (rows, card top/bottom against `innerHeight`, portraits landed).
 
 The corollary for layout: a row that GROWS with the situation cannot also be
 a row sized to fit. Keep conditional readouts out of the fixed instrument row.
