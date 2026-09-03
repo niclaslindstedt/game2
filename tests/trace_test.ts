@@ -44,7 +44,7 @@ import {
   type RivalRun,
 } from "@engine";
 
-const SEED = 36;
+const SEED = 44;
 const stage = {
   seed: SEED,
   laps: 1,
