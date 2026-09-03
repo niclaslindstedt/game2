@@ -995,6 +995,43 @@ describe("the road bed", () => {
     expect(rec.layers.filter((l) => !l.stopped).length).toBe(6 + 14 + 3);
   });
 
+  it("goes quiet the moment nothing is hearing the run, and comes back", () => {
+    // THE PAUSE CARD. Nothing is booked ahead, so a bed that is merely no
+    // longer fed holds its last level: the engine note and the wind would
+    // carry on behind a card that stopped the car. Silence has to be said.
+    const rec = recorder();
+    const bed = createDriveBed(rec, () => 0.5);
+    const state = rolling();
+    bed.update(state, 1 / 60);
+    bed.silence();
+    expect(rec.layers.every((l) => l.stopped)).toBe(true);
+    // …and said on every frame the card is up, which must cost nothing and
+    // build nothing.
+    const built = rec.layers.length;
+    for (let frame = 0; frame < 30; frame++) bed.silence();
+    expect(rec.layers.length).toBe(built);
+    bed.update(state, 1 / 60);
+    expect(rec.layers.filter((l) => !l.stopped).length).toBe(6 + 14 + 3);
+  });
+
+  it("keeps what a hushed run has already spent, where a reset hands it back", () => {
+    const rec = recorder();
+    const bed = createDriveBed(rec, () => 0.5);
+    const state = createGame({ seed: 4242, length: "short" });
+    while (state.t < 2) step(state, NEUTRAL);
+    bed.update(state, 1 / 60);
+    // The marshal's whistle and the countdown's lights: cues raised off the
+    // clock, each owed once per run.
+    const spent = rec.tones.length + rec.noises.length;
+    expect(spent).toBeGreaterThan(0);
+    bed.silence();
+    bed.update(state, 1 / 60);
+    expect(rec.tones.length + rec.noises.length).toBe(spent);
+    bed.reset();
+    bed.update(state, 1 / 60);
+    expect(rec.tones.length + rec.noises.length).toBeGreaterThan(spent);
+  });
+
   it("follows the engine's revs, and hears more of it from the cockpit", () => {
     const rec = recorder();
     const bed = createDriveBed(rec, () => 0.5);

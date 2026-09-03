@@ -150,6 +150,18 @@ export type DriveBed = {
   /** How hard the engine is on boost right now, 0..1 — what the router
    * asks before it lets a shift dump the wastegate. */
   boost: () => number;
+  /**
+   * THE RUN IS STILL THERE BUT NOBODY IS HEARING IT — a pause card, god
+   * mode's hold, a menu over the top. Tear the layers down without forgetting
+   * a thing the run is still owed: the next `update` builds them again and
+   * the stage picks up where the player left it, with the countdown light it
+   * had already called and the whistle it had already blown still spent.
+   *
+   * Silencing has to be SAID. Nothing here is booked ahead, so a bed that is
+   * merely stopped being fed holds its last target forever — which is an
+   * engine note and a wind that carry on behind a card that stopped the car.
+   */
+  silence: () => void;
   /** The run is over or the player left it: silence the beds and forget
    * everything the next run should not inherit. */
   reset: () => void;
@@ -172,6 +184,17 @@ export function createDriveBed(synth: Synth, random: () => number = Math.random)
   const engine: Rack<EngineLayer> = createRack(synth, ENGINE_LAYERS, ENGINE_GLIDE);
   const road: Rack<RoadLayer> = createRack(synth, ROAD_LAYERS, ROAD_GLIDE);
   const world: World = createWorld(synth, random);
+
+  /** Every layer down, and the world's roster rolled fresh. The roster's
+   * clocks are absolute audio times and that clock runs through a pause, so a
+   * world that kept them would come back owing every bird, cow and cicada at
+   * once. What the RUN has spent is not touched — that is `reset`'s. */
+  const hush = (): void => {
+    engine.stop();
+    road.stop();
+    world.stop();
+    world.reset();
+  };
 
   /** The car's own axes, for placing something beside it. */
   const sideOf = (state: GameState, x: number, z: number): { d: number; pan: number } => {
@@ -375,11 +398,10 @@ export function createDriveBed(synth: Synth, random: () => number = Math.random)
 
     boost: () => bed.load * lastRev,
 
+    silence: hush,
+
     reset() {
-      engine.stop();
-      road.stop();
-      world.stop();
-      world.reset();
+      hush();
       bed.load = 0.2;
       bed.corner = 0;
       bed.lastLight = -1;
