@@ -37,3 +37,13 @@ takes the min again is no floor (every cone first, then every floor), and
 mat; inside the lip the route's own shelf is the floor. `verge-probe`-style:
 walk `locate().elevation` against `groundAt` at the verge line and sort by
 the gap — the worst were all within a junction's reach.
+
+And the floor that fixed it must not be the ribbon's own profile: a lattice
+held one tile's sink under a crowned, banked, twisting mat pokes through it
+between the corners (`explore_test`'s "never drags", 4–12 cm on three
+seeds; `slope_test`'s sealed edge lost its drop). The shelf under an
+ordinary mat is the verge's LEVEL on the bank's plane, as it was; the
+profile-sunk floor is only right under a mouth's FLARE, which lies on the
+platform's one plane (`FLARE_LIP`). Run `explore_test` and `slope_test` on
+any change to what holds the ground up beside a road — they are not on the
+generator list, and they are the ones that read the lattice.

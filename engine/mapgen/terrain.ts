@@ -994,6 +994,10 @@ export function createTerrain(track: Track): TerrainField {
 
   const half = track.width / 2;
   const shelfEnd = half + ROAD_CROSS.reach; // the ribbon's own outer edge
+  /** How far past the nominal edge a lip has to stand to be a junction
+   * mouth's FLARE (R17) rather than R33's gravel wander, m — a quarter of
+   * the road: the wander is under a fifth, the flare a whole one. */
+  const FLARE_LIP = track.width * 0.25;
   /** How far out the corridor shapes the ground beside the sample at
    * `index`, m: the widest the mat gets within a few samples of it, plus
    * the verge.
@@ -1291,12 +1295,18 @@ export function createTerrain(track: Track): TerrainField {
     const far = farField(x, z);
     const near = nearestSample(x, z);
     let base: number;
-    /** The route's own shelf under this point, where the point is inside
-     * its lip — the floor no cone may cut below there. `near.own` is the
+    /** The route's own shelf under this point, where the point is inside a
+     * FLARED lip — the floor no cone may cut below there. `near.own` is the
      * corridor's OUTER VERGE, and at a junction's mouth the mat flares a
      * road's width past the verge line it was measured at, so the verge is
      * a metre under the mat the car is riding; an arm's cone reaching in
-     * under the flare was cutting the shelf down to it. */
+     * under the flare was cutting the shelf down to it. Only under a flare:
+     * the mouth lies on the platform's one plane, where the ribbon sunk by
+     * the tile clearance is a plane too. Under an ordinary mat the ribbon
+     * is crowned, banked and twisting through the corner, and a lattice
+     * held a tile's sink under THAT pokes through it between the corners —
+     * there the verge's own level, carried on the bank's plane, is the
+     * shelf, as it always was. */
     let ownShelf = -Infinity;
     // Past CORRIDOR_RANGE the road has no say. It is set to where the
     // sample grid's own search actually reaches: a range beyond the search
@@ -1319,7 +1329,9 @@ export function createTerrain(track: Track): TerrainField {
         ribbonY(s, sideOf(near.lateral) * Math.min(near.d, lip), s.width) - TILE_SINK;
       if (near.d < lip) {
         base = corridorY;
-        ownShelf = corridorY;
+        // A mouth's flare is a road's width; R33's gravel wander is under
+        // a fifth of one, and is not a flare.
+        if (lip > shelfEnd + FLARE_LIP) ownShelf = corridorY;
       } else {
         let grade = sideGrade(s.s, near.lateral >= 0 ? 1 : -1);
         // R34 — a cut is only a cut where there is country to cut INTO. On
