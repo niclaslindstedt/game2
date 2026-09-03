@@ -48,7 +48,10 @@ function recordBotRun(field: { difficulty: "easy" | "medium" | "hard"; cars: num
   return race({
     stage: STAGE,
     car: CAR,
-    field: field ? { ...field, massStart: false } : null,
+    // A rally start with the cars SOLID: the campaign's stagger, but a
+    // field the recorded driver can actually meet, which is what the
+    // replay assertions below are about.
+    field: field ? { ...field, massStart: false, contact: true } : null,
     start: START,
     driver: { kind: "bot" },
     record: { source: "bot", mode: "sim" },
@@ -170,7 +173,7 @@ describe("the run tape", () => {
     const recorded = recordBotRun({ difficulty: "hard", cars: 15 });
     const placed = placeAmongField({
       stage: STAGE,
-      field: { difficulty: "hard", cars: 15, massStart: false },
+      field: { difficulty: "hard", cars: 15, massStart: false, contact: true },
       time: recorded.time,
       carId: CAR.id,
     });
@@ -205,14 +208,14 @@ describe("the run tape", () => {
       const recorded = race({
         stage,
         car: CAR,
-        field: { difficulty: "medium" as const, cars: 15, massStart: false },
+        field: { difficulty: "medium" as const, cars: 15, massStart: false, contact: true },
         start: START,
         driver: { kind: "bot" as const },
       });
       (["easy", "medium", "hard"] as const).forEach((difficulty, i) => {
         const { rows } = placeAmongField({
           stage,
-          field: { difficulty, cars: 15, massStart: false },
+          field: { difficulty, cars: 15, massStart: false, contact: true },
           time: recorded.time,
           carId: CAR.id,
         });

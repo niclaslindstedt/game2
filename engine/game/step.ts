@@ -238,9 +238,10 @@ function buildEnv(seed: number, timeOfDay: TimeOfDay, weather: Weather, season: 
 /** Blow the wind at sim time `t` into `into`: the mean vector breathing
  * through two slow sine gusts and veering a little around its bearing —
  * deterministic, so replays and sim digests hold. Writes rather than
- * returns, because the only caller is the step that runs 120 times a
- * second and already owns the vector it wants filled. */
-function blowWind(env: RaceEnv, t: number, into: { x: number; z: number }): void {
+ * returns, because its callers run 120 times a second and already own the
+ * vector they want filled: the step itself, and a traced rival's playback
+ * (sim/trace.ts), whose car is placed by the clock rather than stepped. */
+export function blowWind(env: RaceEnv, t: number, into: { x: number; z: number }): void {
   const gust =
     1 +
     T.wind.gust *

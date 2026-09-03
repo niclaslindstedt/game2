@@ -196,9 +196,16 @@ in instead. Do not "fix" that by re-racing it.
   drive the stage it always drove, so a byte-identical sweep is the proof the
   change is contained; `make heat` is the only table where the behaviour
   actually fires.
-- Bot changes are usually `no-changelog` (players never see the bot today —
-  it exists headless); the moment a bot drives something player-facing (a
-  demo mode, a ghost car), that changes.
+- A bot change is a changelog call, not a `no-changelog` reflex: the bot
+  drives every rival the player races (`field.ts`) and the menu's backdrop.
+  A decision change a player would notice on the road in front of them
+  gets a fragment; a probe, a harness column or a knob nobody ships does
+  not.
+- The campaign's field is GHOSTS (`FieldPlan.contact: false`): its crews
+  are handed no traffic, cannot be touched, and are written down before
+  the green (`trace.ts`). The traffic eyes and the tempers fire only on a
+  solid field — heads-up and `make heat` — so a campaign complaint about
+  a rival's driving is never about `overtake` or `aggression`.
 - Load **`skill-reflection`** before committing: record what this pass
   learned, prune the stale, promote the always-true into the model
   description above.

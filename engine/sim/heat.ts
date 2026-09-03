@@ -115,7 +115,7 @@ export function simulateHeat(options: HeatOptions): HeatResult {
   // Nobody is in it here, so the crews race the grid they would have raced.
   const field: RivalField = createField(
     track,
-    { difficulty: options.difficulty, cars, massStart: true },
+    { difficulty: options.difficulty, cars, massStart: true, contact: true },
     {
       seed: options.seed,
       laps: 1,

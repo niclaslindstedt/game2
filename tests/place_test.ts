@@ -190,7 +190,7 @@ describe("placing the field with the run", () => {
     const state = createGame({ seed: SEED, track: SPRINT });
     const field = createField(
       SPRINT,
-      { difficulty: "medium", cars: 15, massStart: false },
+      { difficulty: "medium", cars: 15, massStart: false, contact: true },
       {
         seed: SEED,
         laps: 1,
@@ -222,7 +222,7 @@ describe("placing the field with the run", () => {
     const state = createGame({ seed: SEED, track: SPRINT, gridBack: 12 });
     const field = createField(
       SPRINT,
-      { difficulty: "medium", cars: 6, massStart: true },
+      { difficulty: "medium", cars: 6, massStart: true, contact: true },
       {
         seed: SEED,
         laps: 1,

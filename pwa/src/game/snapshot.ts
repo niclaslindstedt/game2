@@ -43,19 +43,29 @@ export type LiveRun = {
   /** Total race time and the current lap's, seconds. */
   time: number;
   lapTime: number;
+  /** The lights are WAITING: the field's runs are still being written down
+   * (App.tsx's loading beat), and the gantry says so instead of counting. */
+  hold: boolean;
 };
 
 export function createLive(): LiveRun {
-  return { phase: "intro", countdown: TUNING.intro + TUNING.countdown, time: 0, lapTime: 0 };
+  return {
+    phase: "intro",
+    countdown: TUNING.intro + TUNING.countdown,
+    time: 0,
+    lapTime: 0,
+    hold: false,
+  };
 }
 
 /** Re-read the live face from the run. In place, every frame: the object's
  * identity is what the HUD holds on to. */
-export function readLive(live: LiveRun, state: GameState): void {
+export function readLive(live: LiveRun, state: GameState, hold = false): void {
   live.phase = state.phase;
   live.countdown = startsIn(state);
   live.time = state.raceTime;
   live.lapTime = state.raceTime - state.lapStart;
+  live.hold = hold;
 }
 
 /** How long before a corner the co-driver calls it, seconds. Short on
