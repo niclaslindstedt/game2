@@ -1,7 +1,7 @@
 ---
 title: Measure fit with a DOM probe across viewports, seed the WORST case, reuse one page per viewport — and drive to a campaign card one browser at a time
 date: 2026-08-27
-scope: pwa/src/game/, pwa/src/styles.css, scripts/screenshot.mjs, previews/
+scope: pwa/src/game/, pwa/src/styles.css, scripts/screenshot.mjs
 concepts: [hud, menus, responsive, portrait, landscape, tooling, harness, campaign, results-card]
 ---
 
