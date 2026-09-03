@@ -18,5 +18,11 @@ eventually a pair of wheels. A car that comes down on its ROOF now folds
 the greenhouse — its own ledger, its own caved-in bodywork — instead of
 scuffing a flank.
 
+Rivals cope with it, too: a crew now plans its corners for the car it is
+actually sitting in rather than the one it started the stage in, so a bot
+that has rolled slows down for what is left of its grip and brakes instead
+of arriving at the corner that just caught it out at the speed a sound car
+holds, going off at the same metre, and doing it again.
+
 `make roll` is the new way to look at any of it: the car drawn from
 behind, every sixth of a second, along the ground it crossed.
