@@ -119,6 +119,12 @@ export type CarDamage = {
    * hit the suspension could not. The renderer sags and wrinkles the body
    * from it rather than folding a flank. */
   belly: number;
+  /** ROOF crush, m — the greenhouse folding under a car that came down on
+   * top of itself. Its own ledger rather than a ring zone because the ring
+   * is a plan view and has no room for the one face a roll spends most of
+   * its time on: the pillars go, the glass goes with them, and the shell
+   * is a different shape from above than a flank ever makes it. */
+  roof: number;
   /** Structural wear, 0..1 — reaching 1 is the wreck: a car with nothing
    * left to give, still driveable, patched back to a fraction of its life
    * the next time it is put back on the road. */
@@ -180,6 +186,14 @@ export type CarState = {
    * airborne it is the angle of the flight itself. Renderer readout: the
    * physics never reads it back. */
   pitch: number;
+  /** ...and how fast it is CHANGING, rad/s — nonzero only while the body is
+   * going over (roll.ts), where it is what stops a roll from being a level
+   * barrel roll about one axis. A car that has been tripped is already
+   * yawing and sliding, and every corner of it that reaches the ground does
+   * so before the rest of that face: the pitch is what those arrivals throw
+   * into the body. Zero the moment the wheels are back down, where the
+   * ground's own grade owns `pitch` again. */
+  pitchRate: number;
   /** Suspension heave: how far the BODY sits from where the wheels put it,
    * m — negative is compressed, positive is the springs topped out on the
    * rebound. The wheels are always ON the ground (`y`); this is the sprung
@@ -422,6 +436,7 @@ export function stillCar(car: CarState): void {
   car.roll = 0;
   car.rollRate = 0;
   car.pitch = 0;
+  car.pitchRate = 0;
   car.ride = 0;
   car.rideRate = 0;
   car.settle = 0;
@@ -533,7 +548,9 @@ export type GameEvent =
   /** A contact hard enough to matter. `speed` is the closing speed into
    * the surface, m/s; `angle` is where on the body it landed, radians in
    * the car frame (0 = nose, positive toward the right side); `belly` marks
-   * a slammed landing taken on the underside, where no ring angle applies. */
+   * a FLAT-ON arrival — the underside slammed down, or the roof of a car
+   * that came over onto it — where the ground met a whole face at once and
+   * no ring angle applies. */
   | { type: "impact"; speed: number; angle: number; belly: boolean }
   /** A piece of the body tearing off — the renderer sends it flying. */
   | { type: "partBreak"; part: DamagePart }

@@ -156,6 +156,7 @@ export function cloneDamage(damage: CarDamage): CarDamage {
   return {
     zones: [...damage.zones],
     belly: damage.belly,
+    roof: damage.roof,
     wear: damage.wear,
     systems: { ...damage.systems },
     wheels: [...damage.wheels],

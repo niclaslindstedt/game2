@@ -70,10 +70,10 @@ export function beyondDriving(car: CarState): RetireReason | null {
   return off >= 2 ? "wheels" : null;
 }
 
-/** The whole crush ledger as one depth, m — every zone plus the floorpan.
- * What the panels have taken, regardless of where. */
+/** The whole crush ledger as one depth, m — every zone, the floorpan and
+ * the roof. What the panels have taken, regardless of where. */
 function totalCrush(car: CarState): number {
-  let sum = car.damage.belly;
+  let sum = car.damage.belly + car.damage.roof;
   for (const zone of car.damage.zones) sum += zone;
   return sum;
 }

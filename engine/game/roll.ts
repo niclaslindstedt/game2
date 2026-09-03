@@ -31,6 +31,7 @@
 // nobody's decision either: step.ts asks `onItsWheels` afterwards, and a
 // run whose car is lying on its roof goes back to the last split board.
 
+import { clamp } from "../lib/math.ts";
 import { TUNING } from "./defs/tuning.ts";
 import type { CarSpec } from "./defs/cars.ts";
 import type { Rng } from "../lib/prng.ts";
@@ -312,6 +313,7 @@ function contact(
   spec: CarSpec,
   car: CarState,
   descent: number,
+  rng: Rng,
   events: GameEvent[],
   stats: RunStats,
 ): void {
@@ -332,14 +334,20 @@ function contact(
   car.w -= Math.sign(car.w) * Math.min(Math.abs(car.w), rub);
   updateSlip(car);
   if (Math.abs(before) < R.slamAt && descent <= 0) return;
-  // How hard it hit, for what it FOLDS: the roll the ground actually TOOK,
-  // which is the impulse it had to deliver to take it. Not the roll the
-  // body was carrying — a car going over fast taps its way round on corners
-  // it is already turning about, and charging each of those taps for the
-  // whole rotation wrecks a car in one roll. This way the sprung arrivals
-  // cost nothing, the grinding ones cost nothing, and what folds a panel is
-  // a corner of the shell arriving with a pivot to swap.
-  const slam = Math.max(descent, Math.abs(before - car.rollRate) * R.slam);
+  // How hard it hit, for what it FOLDS: how fast the arriving corner was
+  // travelling when it met the ground — the roll the body was CARRYING on
+  // the arm it swings that corner round on (`R.slam`), or the descent out
+  // of a flight, whichever is the faster arrival.
+  //
+  // Not the roll the ground took out of it. A body going over fast takes
+  // almost nothing out of each tap, because it is already turning about a
+  // corner beside the one arriving — so pricing the fold by the exchange
+  // made the three-turn rolls, the ones in the air for most of every turn,
+  // the CHEAPEST thing a car could do, while a slow flop settling onto its
+  // roof paid for every rock. Sheet metal folds at the speed the ground
+  // arrives at it; what the exchange decides is how far the car goes on.
+  const slam = Math.max(descent, Math.abs(before) * R.slam);
+  throwOffAxis(car, slam, rng);
   landingDamage(spec, car, slam, events, stats);
   car.settle = Math.max(car.settle, Math.min(1, slam / T.suspension.settleSlam));
   // A roll grinding itself out taps the ground a dozen times on the way,
@@ -352,6 +360,35 @@ function contact(
   car.airTime = 0;
 }
 
+/** WHAT THE ARRIVAL DOES TO THE OTHER TWO AXES.
+ *
+ * The hull the roll turns on is an outline ACROSS the car — a width and a
+ * height, no length — so it can say how far the body goes over and nothing
+ * about which end of a face gets to the ground first. One end always does,
+ * and the body is thrown about its nose-up and its nose-round axes for it.
+ * That is the difference between a barrel roll and the thing a car actually
+ * does: it corkscrews, it swaps ends, and it comes to rest pointing
+ * somewhere nobody chose.
+ *
+ * The throw is seeded rather than derived, and it has to be: which end
+ * arrives first is decided by the ground under the car, a ridge or a rut a
+ * hand's breadth across, which is exactly what the terrain field is too
+ * coarse to know. Drawn from the run's own RNG, so a stage driven twice
+ * rolls twice the same way.
+ *
+ * The YAW is signed by what the car is already doing. A car does not trip
+ * out of a straight line — it is sliding and rotating when its weight goes
+ * past its leading wheels — and the arrivals wind that up rather than
+ * starting an argument with it. */
+function throwOffAxis(car: CarState, slam: number, rng: Rng): void {
+  const kick = Math.min(1, slam / R.kickAt);
+  if (kick <= 0) return;
+  car.pitchRate += (rng.next() - 0.5) * 2 * R.pitchKick * kick;
+  const spinning = car.yawRate === 0 ? (rng.next() < 0.5 ? -1 : 1) : Math.sign(car.yawRate);
+  const room = Math.max(0, 1 - Math.abs(car.yawRate) / R.yawMax);
+  car.yawRate += spinning * rng.next() * R.yawKick * kick * room;
+}
+
 /** A FLIGHT that comes down with the car off its wheels. There is nothing
  * for the tyres to do — the flank arrives instead — so the landing is the
  * roll's own contact and the car carries straight on turning over. */
@@ -359,6 +396,7 @@ export function landRolled(
   spec: CarSpec,
   car: CarState,
   groundY: number,
+  rng: Rng,
   events: GameEvent[],
   stats: RunStats,
 ): void {
@@ -375,7 +413,7 @@ export function landRolled(
   // gets, because it is in the air for the rest of every turn.
   const descent = Math.max(0, -car.vy);
   car.vy = 0;
-  contact(spec, car, descent, events, stats);
+  contact(spec, car, descent, rng, events, stats);
 }
 
 /** ONE STEP OF A CAR GOING OVER.
@@ -452,16 +490,54 @@ export function stepRolling(
   const before = car.roll;
   car.roll += car.rollRate * dt;
   const now = rollTilt(car.roll);
+  // WHERE THE AXLE IS. A body going over turns about the CORNER of itself
+  // that is on the ground, and that corner is a metre out from the middle
+  // of the car — so the whole car is carried sideways as it goes over,
+  // about two metres per half turn. `car.y` and the rotation alone put the
+  // right corner on the ground at every attitude but leave the body
+  // turning about a fixed point under its own middle, which is a car
+  // holding on to a bar at ground level and spinning round it: the one
+  // thing a rolling car never does.
+  //
+  // How far it walks per radian is exactly how tall the body is standing
+  // on that corner — `hullStand`, the same curve the whole module runs on,
+  // which is why it is zero for a car sitting flat on its wheels and
+  // widest with the car up on a corner. It goes the way the roll takes it:
+  // positive roll lifts the right side, so the car is pivoting over its
+  // left corner and walking that way. In the air there is no corner and no
+  // walk — the body turns about its own centre of mass and nothing else.
+  const walk = down ? -hullStand(now) * (car.roll - before) : 0;
 
   // A FACE ARRIVING while the body is still on the ground: the hull lies
   // flat at every quarter turn, so a roll that has crossed one has just put
   // a side down and the far end of it has met the ground.
   if (down && Math.floor(before / QUARTER) !== Math.floor(car.roll / QUARTER)) {
-    contact(spec, car, 0, events, stats);
+    contact(spec, car, 0, ctx.rng, events, stats);
   }
 
+  // THE OTHER TWO AXES, which is most of what makes a roll look like an
+  // accident. Neither turns the car over — the outline the roll runs on
+  // has no length in it, so it cannot — but both are real motion the
+  // contacts keep handing the body, and the ground only takes them back
+  // while the car is lying ON something.
+  car.pitch = clamp(car.pitch + car.pitchRate * dt, -R.pitchMax, R.pitchMax);
+  if (down) {
+    car.pitchRate *= Math.exp(-R.pitchDamp * dt);
+    // ...and the ground pulls the nose level under a body that is lying on
+    // a face of itself: a car comes to rest flat on its roof, not tipped up
+    // on a corner of it.
+    car.pitch -= car.pitch * Math.min(1, R.pitchLevel * dt);
+  }
   // The hill still pulls: a car on its roof on a slope goes down the slope.
   car.yawRate *= Math.exp(-R.yawDamp * dt);
+  // ...and the ground will not let a body lying on it spin faster than
+  // this, whatever it arrived carrying. The ceiling is the same one the
+  // arrivals wind up TO: a car dropped into a roll out of a wild spin is
+  // still a car grinding round on its panels, and a rate the friction
+  // under it cannot hold is a rate the friction takes back.
+  if (down && Math.abs(car.yawRate) > R.yawMax) {
+    car.yawRate = Math.sign(car.yawRate) * R.yawMax;
+  }
   if (down) {
     car.u -= T.air.gravity * ctx.slope * dt;
     if (ctx.slopeLat) car.w -= T.air.gravity * ctx.slopeLat * dt;
@@ -472,12 +548,13 @@ export function stepRolling(
   rotateFrame(car, delta);
   const sinH = Math.sin(car.heading);
   const cosH = Math.cos(car.heading);
-  car.x += (sinH * car.u + cosH * car.w) * dt;
-  car.z += (cosH * car.u - sinH * car.w) * dt;
+  car.x += (sinH * car.u + cosH * car.w) * dt + cosH * walk;
+  car.z += (cosH * car.u - sinH * car.w) * dt - sinH * walk;
 
   // Nothing is standing on the springs, and there is no drift, no spin and
-  // no wheelspin to read off a car that has no wheels on the ground.
-  car.pitch = 0;
+  // no wheelspin to read off a car that has no wheels on the ground. The
+  // PITCH is not in this list: it is motion the body has, not a readout of
+  // a contact patch, and it is stepped above.
   car.pitchLoad = 0;
   car.ride = 0;
   car.rideRate = 0;
@@ -517,6 +594,7 @@ export function stepRolling(
     // takeoff.
     car.rollRate += (ctx.rng.next() - 0.5) * 2 * T.air.rollTurbulence * dt;
     car.yawRate += (ctx.rng.next() - 0.5) * 2 * T.air.turbulence * dt;
+    car.pitchRate += (ctx.rng.next() - 0.5) * 2 * T.air.pitchTurbulence * dt;
     if (centre <= seat) {
       // ...and comes back to it. ONE contact, at whatever attitude it
       // actually arrived at, which is what `contact` is written to take.
@@ -525,7 +603,7 @@ export function stepRolling(
       car.vy = slope * car.rollRate;
       car.airborne = false;
       car.airTime = 0;
-      contact(spec, car, descent, events, stats);
+      contact(spec, car, descent, ctx.rng, events, stats);
     }
   }
   // Back into the origin the rest of the game reads the car's height from.
@@ -538,8 +616,15 @@ export function stepRolling(
   if (car.airborne) return;
   const face = Math.round(now / QUARTER) * QUARTER;
   if (Math.abs(car.rollRate) >= R.rest || Math.abs(now - face) > R.settled) return;
+  // ...and not while the nose is still swinging either: a body that has run
+  // out of roll on a face can still be pitching hard enough to take itself
+  // off it, and handing that car back to the handling model mid-swing is
+  // where a roll stops looking like one.
+  if (Math.abs(car.pitchRate) >= R.rest) return;
   car.rolling = false;
   car.rollRate = 0;
+  car.pitchRate = 0;
+  car.pitch = 0;
   // Snapped onto the face, keeping the whole turns the roll accumulated so
   // the ground settles the car to the nearest upright rather than rewinding
   // a rotation it has actually done. What TRAVEL is left is left: a car

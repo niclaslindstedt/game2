@@ -73,7 +73,7 @@ export type SimResult = {
  * floorpan taking what the springs could not. */
 function crushOf(state: GameState): number {
   const damage = state.car.damage;
-  let total = damage.belly;
+  let total = damage.belly + damage.roof;
   for (const zone of damage.zones) total += zone;
   return total;
 }

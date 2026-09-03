@@ -54,6 +54,40 @@ const PART_BOLTS: { part: DamagePart; zones: number[]; crushAt: number }[] = [
   { part: "doorL", zones: [6], crushAt: T.collision.partAt.door },
 ];
 
+/** ...and what the ROOF folding shears, against `CarDamage.roof`. The
+ * greenhouse is not a ring zone, so it carries its own list: every pane at
+ * once (a shell that has lost its shape cannot hold laminated glass in it),
+ * the mirrors hung off the pillars that just went, and finally the lids,
+ * whose hinges the fold reaches only once it has pulled the whole deck. */
+const ROOF_BOLTS: { part: DamagePart; crushAt: number }[] = [
+  { part: "glassF", crushAt: T.collision.partAt.roofGlass },
+  { part: "glassB", crushAt: T.collision.partAt.roofGlass },
+  { part: "glassR", crushAt: T.collision.partAt.roofGlass },
+  { part: "glassL", crushAt: T.collision.partAt.roofGlass },
+  { part: "mirrorR", crushAt: T.collision.partAt.roofMirror },
+  { part: "mirrorL", crushAt: T.collision.partAt.roofMirror },
+  { part: "hood", crushAt: T.collision.partAt.roofLid },
+  { part: "hatch", crushAt: T.collision.partAt.roofLid },
+];
+
+/** WHICH FACE OF THE CAR THE GROUND ARRIVED AT, from the attitude alone —
+ * a ring zone for a flank, or one of the two faces the ring has no room
+ * for. Positive roll lifts the right side, so a car tilted positive is one
+ * lying on its LEFT flank (zone 6).
+ *
+ * The boundaries are the two the hull's own geometry sets: `rollLandLimit`
+ * is as far as a car can lean and still land on its tyres, and three
+ * quarters of a turn is the corner between a flank and the roof. */
+export type CrushFace = number | "belly" | "roof";
+const ROOF_FROM = (Math.PI * 3) / 4;
+
+function landingFace(tilt: number): CrushFace {
+  const lean = Math.abs(tilt);
+  if (lean <= T.air.rollLandLimit) return "belly";
+  if (lean >= ROOF_FROM) return "roof";
+  return tilt > 0 ? 6 : 2;
+}
+
 /** Which wheels each ring zone folds onto, as (wheel index, share) pairs —
  * `WHEEL_PARTS` order: FL, FR, RL, RR. A corner is one wheel's; a flank is
  * both wheels on that side, half each; the nose and the tail reach none. */
@@ -99,7 +133,7 @@ function callDamage(system: DamageCall, was: number, now: number, events: GameEv
 
 /** Crush reaching past the panels: which system lives nearest each zone,
  * as (system, share-of-transfer) pairs. */
-function dealSystems(car: CarState, zone: number | null, crush: number, events: GameEvent[]): void {
+function dealSystems(car: CarState, face: CrushFace, crush: number, events: GameEvent[]): void {
   const S = T.collision.systems;
   const sys = car.damage.systems;
   const deal = (key: keyof typeof sys, amount: number): void => {
@@ -107,11 +141,19 @@ function dealSystems(car: CarState, zone: number | null, crush: number, events: 
     sys[key] = Math.min(1, sys[key] + amount);
     callDamage(key, was, sys[key], events);
   };
-  if (zone === null) {
+  if (face === "belly") {
     deal("suspension", crush * S.suspensionFromBelly);
     deal("gearbox", crush * S.gearboxFromBelly);
     deal("brakes", crush * S.brakesFromBelly);
-  } else if (zone === 0) {
+    return;
+  }
+  if (face === "roof") {
+    deal("suspension", crush * S.suspensionFromRoof);
+    deal("steering", crush * S.steeringFromRoof);
+    return;
+  }
+  const zone = face;
+  if (zone === 0) {
     deal("engine", crush * S.engineFromNose);
   } else if (zone === 1 || zone === 7) {
     deal("engine", crush * S.engineFromNose * 0.5);
@@ -152,14 +194,28 @@ function dealWheel(car: CarState, wheel: number, amount: number, events: GameEve
 }
 
 /** The crush reaching the wheels: the corner's own, the flank's shared,
- * and — from underneath — a little to all four. */
-function dealWheels(car: CarState, zone: number | null, crush: number, events: GameEvent[]): void {
+ * and — from underneath or above — a little to all four. */
+function dealWheels(
+  car: CarState,
+  face: CrushFace,
+  crush: number,
+  flat: boolean,
+  events: GameEvent[],
+): void {
   const S = T.collision.systems;
-  if (zone === null) {
-    for (let i = 0; i < WHEEL_PARTS.length; i++)
-      dealWheel(car, i, crush * S.wheelFromBelly, events);
+  if (face === "belly" || face === "roof") {
+    const per = face === "belly" ? S.wheelFromBelly : S.wheelFromRoof;
+    for (let i = 0; i < WHEEL_PARTS.length; i++) dealWheel(car, i, crush * per, events);
     return;
   }
+  // A GROUND arrival across the whole of a flank is not a trunk driven into
+  // one corner of it. The ring's rates are a point impact's — the solid
+  // reaches past the panel and into the upright behind it — and the ground
+  // does no such thing. What a car lying on its side does to its wheels is
+  // `landingDamage`'s own `wheelFromSideLand`; this would be a second
+  // helping of the same arrival.
+  if (flat) return;
+  const zone = face;
   const corner = zone === 1 || zone === 3 || zone === 5 || zone === 7;
   const per = corner ? S.wheelFromCorner : S.wheelFromFlank;
   for (const [wheel, share] of WHEELS_AT[zone]) dealWheel(car, wheel, crush * per * share, events);
@@ -177,43 +233,83 @@ function dealWheels(car: CarState, zone: number | null, crush: number, events: G
  * of it. */
 function dealCrush(
   car: CarState,
-  zone: number | null,
+  face: CrushFace,
   dealt: number,
   angle: number,
   speed: number,
   events: GameEvent[],
   stats: RunStats,
+  flat = false,
 ): void {
   const damage = car.damage;
   stats.impacts += 1;
-  events.push({ type: "impact", speed, angle, belly: zone === null });
-  const crush = dealt * car.damageScale;
-  if (crush <= 0) return;
+  // A flat-on arrival — the floor or the roof — has no bearing to it: the
+  // ground came at a whole face at once.
+  events.push({ type: "impact", speed, angle, belly: typeof face !== "number" });
+  const asked = dealt * car.damageScale;
+  if (asked <= 0) return;
+  // WHAT THE FACE ACTUALLY TOOK. Past `zoneMax` the cage is holding and the
+  // panel has nowhere left to fold, so the machinery behind it stops taking
+  // the fold too — only the wear goes on. Without this a car pinned against
+  // one face goes on losing its engine, its wheels and its arms to a panel
+  // that is not moving any more, which is exactly what a roll grinding
+  // along on one flank does for a second and a half.
+  const before = folded(damage, face);
+  const crush = Math.min(asked, T.collision.zoneMax - before);
   const wasWear = damage.wear;
-  damage.wear = Math.min(1, damage.wear + crush * T.collision.wearPerCrush);
+  const spent = crush + (asked - crush) * T.collision.wearPastCap;
+  damage.wear = Math.min(1, damage.wear + spent * T.collision.wearPerCrush);
   callDamage("chassis", wasWear, damage.wear, events);
   damage.version += 1;
-  dealSystems(car, zone, crush, events);
-  dealWheels(car, zone, crush, events);
-  if (zone === null) {
-    damage.belly = Math.min(T.collision.zoneMax, damage.belly + crush);
+  if (crush <= 0) return;
+  dealSystems(car, face, crush, events);
+  dealWheels(car, face, crush, flat, events);
+  if (face === "belly") {
+    damage.belly = before + crush;
     return;
   }
-  damage.zones[zone] = Math.min(T.collision.zoneMax, damage.zones[zone] + crush);
+  if (face === "roof") {
+    damage.roof = before + crush;
+    for (const bolt of ROOF_BOLTS) {
+      if (damage.roof < bolt.crushAt) continue;
+      shear(damage, bolt.part, events);
+    }
+    return;
+  }
+  const zone = face;
+  damage.zones[zone] = before + crush;
   for (const bolt of PART_BOLTS) {
     if (!bolt.zones.includes(zone)) continue;
     if (damage.zones[zone] < bolt.crushAt) continue;
-    if (damage.broken.includes(bolt.part)) continue;
-    damage.broken.push(bolt.part);
-    events.push({ type: "partBreak", part: bolt.part });
+    shear(damage, bolt.part, events);
   }
 }
 
+/** How far this face has already folded, m. */
+function folded(damage: CarState["damage"], face: CrushFace): number {
+  if (face === "belly") return damage.belly;
+  if (face === "roof") return damage.roof;
+  return damage.zones[face];
+}
+
+/** One part off its bolts, once — a piece already on the road behind the
+ * car cannot come off a second time. */
+function shear(damage: CarState["damage"], part: DamagePart, events: GameEvent[]): void {
+  if (damage.broken.includes(part)) return;
+  damage.broken.push(part);
+  events.push({ type: "partBreak", part });
+}
+
 /** The ground hitting back at touchdown. `slam` is the descent speed
- * relative to the ground, m/s; what the suspension cannot absorb crushes
- * the underside — or the flank, on a car that came down on its side (the
- * roll decides, and positive roll lifts the RIGHT side, so it is the left
- * flank that meets the ground). */
+ * relative to the ground, m/s; what the car cannot absorb folds whichever
+ * face of it arrived (`landingFace`) — the underside on its wheels, a
+ * flank on its side, the greenhouse on its roof.
+ *
+ * WHAT IS FREE depends on that face, and it is the difference between a
+ * jump and a roll. A car on its tyres has the whole of its suspension
+ * travel to swallow the arrival with, and `hardLandSpeed` is what that is
+ * worth; a car on its shell has nothing under it at all, so almost every
+ * contact of a roll folds something (`air.roll.shellFree`). */
 export function landingDamage(
   spec: CarSpec,
   car: CarState,
@@ -221,25 +317,27 @@ export function landingDamage(
   events: GameEvent[],
   stats: RunStats,
 ): void {
+  const face = landingFace(rollTilt(car.roll));
   // Shot dampers absorb less: suspension damage narrows what lands free.
   const tolerance =
-    T.collision.hardLandSpeed *
-    (1 - T.collision.systems.landTolerance * car.damage.systems.suspension);
+    face === "belly"
+      ? T.collision.hardLandSpeed *
+        (1 - T.collision.systems.landTolerance * car.damage.systems.suspension)
+      : T.air.roll.shellFree;
   const over = slam - tolerance;
   if (over <= 0) return;
   const crush = T.collision.crushPerSpeed * over * massRatio(spec);
-  const tilt = rollTilt(car.roll);
-  if (Math.abs(tilt) > T.air.rollLandLimit) {
-    const zone = tilt > 0 ? 6 : 2;
-    dealCrush(car, zone, crush, zone === 2 ? Math.PI / 2 : -Math.PI / 2, slam, events, stats);
-    // ...and the wheels on that side are what it came down on, over and
-    // above what the flank's fold already reached them with.
-    const extra = crush * car.damageScale * T.collision.systems.wheelFromSideLand;
-    for (const [wheel, share] of WHEELS_AT[zone]) dealWheel(car, wheel, extra * share, events);
-    if (extra > 0) car.damage.version += 1;
-  } else {
-    dealCrush(car, null, crush, 0, slam, events, stats);
+  if (typeof face !== "number") {
+    dealCrush(car, face, crush, 0, slam, events, stats, true);
+    return;
   }
+  dealCrush(car, face, crush, face === 2 ? Math.PI / 2 : -Math.PI / 2, slam, events, stats, true);
+  // ...and the wheels on that side are what it came down on — the whole of
+  // what the arrival reaches them with, since the ground folding a flank
+  // does not reach the uprights the way a solid driven into one does.
+  const extra = crush * car.damageScale * T.collision.systems.wheelFromSideLand;
+  for (const [wheel, share] of WHEELS_AT[face]) dealWheel(car, wheel, extra * share, events);
+  if (extra > 0) car.damage.version += 1;
 }
 
 /** WHAT THE THING ON THE OTHER SIDE DOES ABOUT IT. Returns `bite`: the

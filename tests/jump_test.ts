@@ -277,6 +277,38 @@ describe("the jump", () => {
     expect(Math.max(zones[2], zones[6])).toBeGreaterThan(0);
   });
 
+  it("a roll STRIPS the car — the glass, the mirrors, the panels it lands on", () => {
+    // A rolled car is not a car with a dented flank. Every contact of the
+    // roll is the ground meeting sheet metal with nothing sprung under it,
+    // and the car that stops rolling has lost its glass and is folded on
+    // whichever faces it came down on.
+    const { state } = landSideways(28, -16);
+    const damage = state.car.damage;
+    for (const pane of ["glassF", "glassB", "glassR", "glassL"]) {
+      expect(damage.broken, pane).toContain(pane);
+    }
+    expect(damage.broken).toContain("mirrorL");
+    // The shell is folded from ABOVE as well as from the side — the one
+    // fold a car cannot get without having been upside down.
+    expect(damage.roof).toBeGreaterThan(0);
+    expect(Math.max(damage.zones[2], damage.zones[6])).toBeGreaterThan(0);
+    // ...and it is a beaten car afterwards, not a scratched one.
+    expect(damage.wear).toBeGreaterThan(0.3);
+  });
+
+  it("...but a hard landing on the WHEELS is still a landing, not a roll", () => {
+    // The shell's tolerance must not reach a car that came down on its
+    // tyres: a jump landed straight off a two-metre lip keeps its glass and
+    // its mirrors, whatever the springs had to swallow.
+    const state = game();
+    driveToLip(state);
+    const events = run(state, {}, 3);
+    expect(events.some((e) => e.type === "landing")).toBe(true);
+    expect(state.car.damage.broken).toEqual([]);
+    expect(state.car.damage.roof).toBe(0);
+    expect(state.stats.rolls).toBe(0);
+  });
+
   it("...and a car the roll leaves off its wheels goes back to the last board", () => {
     // Nobody drives away from a car lying on its roof, so the run does not
     // wait to find out: it lies there for `roll.lieFor` and the crew are put

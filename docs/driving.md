@@ -301,6 +301,9 @@ rewards it, and no drift seconds are counted at the player.
 - **The roll** — a car that leaves the ground crossed up trips over its outside wheels: a SUDDEN launch — a ledge, a lip, an edge — puts roll in the body from the slide it was holding plus the rotation already in it, and nothing in the air takes it out. The same trip about the vertical axis puts SPIN in it (`air.yawFromSlide`): the tires that were holding the slide let go all at once, so a car that goes over a ledge sideways keeps turning the way the slide was turning it, all the way down. A body that came off its wheels over a brow left tyres that had unloaded across the whole of the loft, and they let go of nothing. Straight and level flies flat; properly sideways goes a long way over; the unluckiest launches go all the way round. Landing on your side is never a clean landing. A lean the springs can still take is unwound toward the nearest upright and then onto the CAMBER under the wheels — level on the road, tipped with the hillside out in the wild. A lean past what they can take is not unwound at all: it is a roll, and the roll owns the car from there.
 - **...and the LANDING trips it too.** A car that comes down crossed up is a car whose tyres bite while the body is still going sideways: the bottom stops, the top does not, and it goes over its outside wheels. The first `air.tripSlide` m/s of sideways speed at touchdown is spent skipping and scrubbing on the wheels; every m/s past it is `tripRoll` of roll rate in the body (capped at `tripMax`), scaled by what the tyres are STANDING on — the trip is the tyre biting, so tarmac sends a car over where the same landing in sand is a long ugly slide that stays on its wheels. Whether it goes over is then not a threshold anywhere: `goesOver` weighs that roll against the lift up to the body's own sill corner. About twelve m/s across the car does it on gravel — 26° of yaw at 100 km/h, 20° at 130, 15° at 170 — so the faster the jump, the straighter it has to be landed, and a flick thrown before a lip is a car on its roof. A hop's soft touchdown trips nothing.
 - **THE ROLL ITSELF** (`engine/game/roll.ts`) is a body with a shape and a weight in it, and it counts nothing. The car is the box in `TUNING.collision` standing on the ground — two wheel contacts and the four corners of the shell — and rotating that outline traces a curve of centre-of-mass height with valleys where a face is down (wheels, either flank, the roof) and peaks on the corners between. Gravity pulls the centre along that curve; the ground DRIVES the roll on while the car is still travelling sideways (`roll.grip`, paid for out of that sideways speed, which is why a roll ends when the travel does); each contact swaps which corner the body pivots about, keeping a share of the roll that falls out of the geometry alone — about half on a flank, which carries the car on over, and under a fifth square on the roof, which is where one stops. A wheel arriving is swallowed by its spring (`roll.sprung`) rather than taken out of the body. Past about three rad/s the outline falls away faster than gravity can follow and the body is genuinely flying between its contacts, which the roll flies itself: a turning body arcs about its own centre while the wheel plane goes round with it. So a car goes over as many times as it has the energy for and comes to rest on whichever face it ran out on — and the wheels-down valley is the deepest, which is why most rolls end there without anybody deciding they should.
+- **The body WALKS over its corners.** A rolling car turns about the corner of itself that is on the ground, and that corner is a metre out from its middle — so going over carries the whole car sideways, about two metres per half turn. Placing the body by its height alone puts the right corner on the ground at every attitude but leaves it turning about a fixed point under its own middle, which reads as a car holding on to a bar at ground level and spinning round it. The walk per radian is exactly how tall the body is standing on that corner (`hullStand`): zero flat on its wheels, widest up on a corner.
+- **NO FACE ARRIVES FLAT** (`air.roll.pitchKick` / `yawKick` / `yawMax`). The outline the roll turns on is a cross-section — a width and a height, no length — so it can say how far the body goes over and nothing about the fact that the corner reaching the ground reaches it before the rest of that face does. Every contact therefore throws the body about its other two axes: `CarState.pitchRate` is a real degree of freedom for the length of a roll (free in the air, damped on the ground, levelled out under a body lying flat on a face), and the yaw is wound up toward `yawMax` — about a turn a second — rather than damped away. That is the corkscrew, and it is why two rolls off the same lip end up facing different ways. The kicks are drawn from the run's own seeded RNG, because which end arrives first is decided by a rut a hand's breadth across that the terrain field is far too coarse to know; a stage driven twice still rolls twice the same way.
+- **A roll STRIPS the car.** Every contact of a roll is the ground meeting sheet metal with nothing sprung under it, so the landing's own tolerance does not apply: `air.roll.shellFree` is what a shell arrival gets for free, and it is a fraction of `collision.hardLandSpeed`. A car that has been over loses its glass and its mirrors, folds the faces it came down on, and past a certain roll loses the doors, the lids and eventually a pair of wheels. See "Collision and damage" below for the faces that fold.
 - **A car the roll leaves off its wheels is a run that is over where it lies.** There is no tyre on the ground, so nothing the driver asks for reaches the car; `state.overturned` holds it there for `roll.lieFor` and then puts the crew back at the last split board (R28), exactly as a drowning does. It is the same rule for the FIELD, without a line of its own — every rival is stepped through the same code.
 - **Airborne** — the velocity vector is committed. Gravity is arcade-heavy (floatier hangs read as slow motion), the nose answers only faintly, and a small seeded turbulence rolls the car — flying, slightly out of control, exactly as intended. No lateral grip: whatever attitude you took off with survives to the ground.
 - **Landing** — straight (slip inside the clean limit) keeps all your speed: `CLEAN AIR`. Landing sideways scrubs speed and wobbles the car, and past the trip above it rolls. Line up before the lip. Whatever the descent was, the springs take it (below), and a slam past what they can travel through bounces the whole chassis back off the ground for a beat — one landing still happening, not a second flight, so it draws no turbulence and never counts as a jump.
@@ -989,9 +992,27 @@ every solid is a circle, and a hit does several things at once:
   (`pwa/src/game/car-damage.ts`): pulled inward, crumpled, scuffed darker.
   Zone crush past a part's bolt strength (`partAt`) tears it off —
   mirrors, bumpers, the wing — as a `partBreak` event the renderer turns
-  into tumbling debris. **Hard landings are impacts too**: descent the
-  suspension cannot absorb (`hardLandSpeed`) crushes the underside (the
-  `belly`), or the flank the car came down on. **So is the ground itself**:
+  into tumbling debris. Past `zoneMax` the panel has nowhere left to fold
+  and the cage is taking the blow instead: the machinery behind that face
+  stops taking the crush, and only the wear goes on (at `wearPastCap` of
+  its rate) — or a car pinned against one face grinds its engine and its
+  wheels away through metal that is no longer moving.
+- **Hard landings are impacts too**, and WHICH FACE arrives decides both
+  what folds and what it costs. On its wheels it is the underside (the
+  `belly`), and the suspension travels through `hardLandSpeed` of descent
+  for free. Past `air.rollLandLimit` of lean it is a flank; past three
+  quarters of a turn it is the ROOF — its own ledger (`damage.roof`)
+  rather than a ring zone, because the ring is a plan view and has no room
+  for the one face a roll spends most of its time on. A shell arrival has
+  no suspension under it and gets only `air.roll.shellFree` for nothing,
+  which is why a roll strips a car and a jump does not. Roof crush shears
+  every pane of glass first (a shell that has lost its shape cannot hold
+  laminated glass in it), then the mirrors, then the lids; the renderer
+  caves the greenhouse down and over from the same ledger. A ground
+  arrival across a whole face feeds the wheels through `wheelFromSideLand`
+  / `wheelFromRoof` only — the ring's own rates are a point impact's,
+  where a solid reaches past the panel into the upright behind it, and the
+  ground does no such thing. **So is the ground itself**:
   a face rising faster than `climbLimit` under the wheels — the terrain, or
   a road profile where it stands up — stops being a hill and starts refusing
   the car, at `wallSlope` completely. The ground's gradient at the bumper IS
@@ -1288,6 +1309,16 @@ is the LINE, which is why a car that will not rotate can still be quick.
 and prints what each one bought — plus `previews/drift-<car>.png`, where the
 car is drawn every sixth of a second with its travel arrow, so the slip angle
 is the visible gap between where the nose points and where the car is going.
+
+`make roll` is the same idea for the thing that happens when a drift has gone
+too far. It trips a car at a range of speeds and draws each roll FROM BEHIND —
+the hull's outline every sixth of a second, standing on the ground its own
+contacts traced, with the corner it is pivoting about marked on each frame —
+and prints what the roll cost: turns, how far it walked the car sideways,
+parts gone, roof caved, wear. Required before and after any change to the roll
+model, because the failure it catches is one no table shows: a body turning
+about a fixed point under its middle draws a stack of outlines in one place,
+where a body going over its corners walks across the picture.
 
 ## Cars and gearboxes
 

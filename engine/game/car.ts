@@ -1675,7 +1675,7 @@ export function stepAirborne(
   if (car.y <= meets && (car.rolling || !onItsWheels(car.roll))) {
     // Nothing for the tyres to do: it is a corner of the body arriving,
     // and the roll that put it there carries on from the contact.
-    landRolled(spec, car, groundNow, events, stats);
+    landRolled(spec, car, groundNow, ctx.rng, events, stats);
     return;
   }
   if (car.y <= meets) {

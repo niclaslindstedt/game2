@@ -5,7 +5,8 @@
 // copy of its vertices; whenever the ledger's version moves, every vertex
 // is re-derived from that copy — pulled inward by the crush of the zone it
 // faces, torn about by a deterministic per-vertex crumple, sagged by the
-// underside's belly crush, and scuffed darker where the metal folded. The
+// underside's belly crush, caved from above by the roof's, and scuffed
+// darker where the metal folded. The
 // engine owns every number here; this module only draws what it says.
 //
 // The LENSES bend on the same terms, out of the same routine. They are a
@@ -67,6 +68,20 @@ const SCUFF = 0.45;
 const SCUFF_OVER = 0.2;
 /** The body sits this much lower per meter of belly crush (shot springs). */
 const BELLY_SAG = 0.6;
+/** THE CAVED ROOF. Where the greenhouse starts, m above the wheel plane —
+ * the waist line, under which nothing a roll folds from above reaches... */
+const ROOF_FROM = 0.7;
+/** ...and how far above it the fold is at its full depth, m: the roof
+ * panel itself. Between the two the pillars take a share of it, which is
+ * what makes the cabin lean rather than telescope. */
+const ROOF_SPAN = 0.65;
+/** How far the deck comes down per meter of roof crush — more than one, as
+ * the belly's sag is less: the ledger measures the fold, and a roof folding
+ * takes the pillars under it with it. */
+const ROOF_FOLD = 1.3;
+/** ...and how far in, as a share of that: a roof does not come straight
+ * down, it goes over to the side the car was turning onto. */
+const ROOF_LEAN = 0.45;
 /** What the cabin behind a missing door is painted: the dark of a room
  * seen from outside. */
 const HOLE = new THREE.Color(0x0d1013);
@@ -202,15 +217,23 @@ export function createCarDamage(body: CarBodyParts): CarDamageVisual {
       const sag = damage.belly * BELLY_SAG * low;
       const wrinkle = damage.belly * low * (jitter(i * 7 + 3) - 0.5) * 0.5;
 
+      // Roof: the mirror of it, and the one fold a car cannot get without
+      // having been upside down. Only the greenhouse moves — the deck comes
+      // down and goes over, the pillars under it take a share, and the
+      // waist and everything below it stay where they were.
+      const high = Math.min(1, Math.max(0, (y0 - ROOF_FROM) / ROOF_SPAN));
+      const cave = damage.roof * ROOF_FOLD * high * (1 - CRUMPLE / 2 + CRUMPLE * jitter(i * 11));
+      const lean = cave * ROOF_LEAN;
+
       pos.setXYZ(
         i,
-        x0 * scale + wrinkle + tx * across,
-        Math.max(0.05, y0 - sag + up),
+        x0 * scale + wrinkle + tx * across + lean,
+        Math.max(0.05, y0 - sag - cave + up),
         z0 * scale + wrinkle + tz * across,
       );
 
       // Scuff: folded metal loses its paint toward primer-dark.
-      const mark = Math.min(1, (crush + damage.belly * low) / SCUFF_OVER);
+      const mark = Math.min(1, (crush + damage.belly * low + damage.roof * high) / SCUFF_OVER);
       const keep = 1 - (1 - SCUFF) * mark;
       let cr = restCol[i * 3] * keep;
       let cg = restCol[i * 3 + 1] * keep;
