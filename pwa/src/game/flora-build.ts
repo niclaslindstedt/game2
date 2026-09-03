@@ -31,6 +31,7 @@ export const SPRUCE_DARK = new THREE.Color(0x1f4d2a);
 export const SPRUCE_LIGHT = new THREE.Color(0x3f8347);
 export const PINE_CROWN = new THREE.Color(0x4c9a52);
 export const FIR = new THREE.Color(0x2f6b4f); // the bluish cast firs carry
+export const FIR_DARK = new THREE.Color(0x24553e); // ...and its lower tiers, in their own shade
 export const BIRCH_LEAF = new THREE.Color(0x8cc257);
 export const ASPEN_LEAF = new THREE.Color(0x9cc44e);
 export const LARCH = new THREE.Color(0x93ac3e); // deciduous needles, yellow-green
@@ -229,18 +230,74 @@ export function floraPalette(season: Season): FloraPalette {
   return map;
 }
 
+/** A single tint, or a bottom→top pair blended along the part's own height
+ * — a pine's trunk going from grey at the foot to orange up in the light is
+ * one cylinder, not two that have to be lined up. */
+export type PartColor = THREE.Color | [THREE.Color, THREE.Color];
+
 export type PartOpts = {
   x?: number;
+  /** The part's LIFT, applied after its rotation: where its own origin — a
+   * cone's or cylinder's base, a blob's centre — ends up. A tilted part
+   * therefore hinges on the point it grows from, which is what keeps a
+   * bough on its trunk: swung about the model's foot instead, a limb ten
+   * metres up moves metres sideways for a few degrees of lean and hangs in
+   * the air beside the tree. */
+  y?: number;
   z?: number;
   /** Spin around the part's own base, radians. */
   ry?: number;
-  /** Lean from the base, radians — how trunks crook and blades splay. */
+  /** Lean from the base, radians — how trunks crook and blades splay.
+   * Positive `tiltZ` leans the top toward −x. */
   tiltX?: number;
   tiltZ?: number;
   sx?: number;
   sy?: number;
   sz?: number;
 };
+
+export type Point = { x: number; y: number; z: number };
+
+/** Where a point at (x, y, 0) lands once its part has been swung round the
+ * model's up axis by `angle` — the builder's `ry`, applied by hand for the
+ * parts whose ends other parts have to find. */
+export function swung(x: number, y: number, angle: number): Point {
+  return { x: x * Math.cos(angle), y, z: -x * Math.sin(angle) };
+}
+
+/** Where a trunk leaning `lean` radians (the builder's `tiltZ`) actually IS
+ * at `at` metres up it: the hinge for anything that grows out of it. */
+export function onTrunk(lean: number, at: number): Point {
+  return { x: -Math.sin(lean) * at, y: Math.cos(lean) * at, z: 0 };
+}
+
+/** A LIMB: a cylinder leaning `tilt` radians off vertical toward +x, hinged
+ * at `at` — a height on the model's own axis, or a point off it (where a
+ * leaning trunk's axis is at that height, `onTrunk`) — and then swung round
+ * the up axis by `angle`. Rotated about its own hinge BEFORE it is placed,
+ * so it stays on the trunk whatever the angle. Returns where its far end
+ * is, for the foliage or the fork that goes there. */
+export function limb(
+  b: GeoBuilder,
+  color: PartColor,
+  rTop: number,
+  rBot: number,
+  len: number,
+  at: number | Point,
+  tilt: number,
+  angle: number,
+  seg = 6,
+): Point {
+  const hinge = typeof at === "number" ? { x: 0, y: at, z: 0 } : at;
+  const geo = new THREE.CylinderGeometry(rTop, rBot, len, seg);
+  geo.translate(0, len / 2, 0);
+  geo.rotateZ(-tilt);
+  geo.rotateY(angle);
+  geo.translate(hinge.x, hinge.y, hinge.z);
+  b.add(geo, color);
+  const end = swung(Math.sin(tilt) * len, Math.cos(tilt) * len, angle);
+  return { x: hinge.x + end.x, y: hinge.y + end.y, z: hinge.z + end.z };
+}
 
 /** Accumulates transformed primitives into one non-indexed vertex-colored
  * geometry. Every part gets a per-facet brightness jitter so big single
@@ -262,18 +319,24 @@ export class GeoBuilder {
     private readonly palette: FloraPalette = new Map(),
   ) {}
 
+  /** A seeded roll, 0–1, for a recipe that varies its SHAPE between builds
+   * — which tier leans which way, where a bough grows. The same stream
+   * the facet jitter draws from, so a variant's handful of cached builds
+   * (flora.ts) are a handful of different trees rather than one tree in
+   * three lightings. */
+  random(): number {
+    return this.rand();
+  }
+
   /** This season's shade of an authored colour. */
   private inSeason(c: THREE.Color): THREE.Color {
     return this.palette.get(c) ?? c;
   }
 
-  /** Merge `geo` in (and dispose it). `color` is a single tint, or a
-   * bottom→top pair blended along the part's local height. */
-  add(
-    geo: THREE.BufferGeometry,
-    color: THREE.Color | [THREE.Color, THREE.Color],
-    o: PartOpts = {},
-  ): void {
+  /** Merge `geo` in (and dispose it). The part is scaled, then turned
+   * about the model origin, then lifted by `o.x/y/z` — so a primitive
+   * built standing on the origin pivots on its own base. */
+  add(geo: THREE.BufferGeometry, color: PartColor, o: PartOpts = {}): void {
     const tint = Array.isArray(color)
       ? ([this.inSeason(color[0]), this.inSeason(color[1])] as [THREE.Color, THREE.Color])
       : this.inSeason(color);
@@ -287,7 +350,7 @@ export class GeoBuilder {
     this.e.set(o.tiltX ?? 0, o.ry ?? 0, o.tiltZ ?? 0);
     this.q.setFromEuler(this.e);
     this.m.compose(
-      new THREE.Vector3(o.x ?? 0, 0, o.z ?? 0),
+      new THREE.Vector3(o.x ?? 0, o.y ?? 0, o.z ?? 0),
       this.q,
       new THREE.Vector3(o.sx ?? 1, o.sy ?? 1, o.sz ?? 1),
     );
@@ -317,16 +380,18 @@ export class GeoBuilder {
     geo.dispose();
   }
 
-  /** A cone standing on its base at local y = `baseY`. */
-  cone(color: THREE.Color, r: number, h: number, baseY: number, o: PartOpts = {}, seg = 6): void {
+  /** A cone standing on its base at local y = `baseY`, and tilting ABOUT
+   * that base: a tier of a spruce leans with the trunk it sits on. */
+  cone(color: PartColor, r: number, h: number, baseY: number, o: PartOpts = {}, seg = 6): void {
     const geo = new THREE.ConeGeometry(r, h, seg);
-    geo.translate(0, baseY + h / 2, 0);
-    this.add(geo, color, o);
+    geo.translate(0, h / 2, 0);
+    this.add(geo, color, { ...o, y: baseY });
   }
 
-  /** A cylinder standing on its base at local y = `baseY`. */
+  /** A cylinder standing on its base at local y = `baseY`, tilting about
+   * that base — a bough hinged where it leaves the trunk. */
   cyl(
-    color: THREE.Color,
+    color: PartColor,
     rTop: number,
     rBot: number,
     h: number,
@@ -335,8 +400,8 @@ export class GeoBuilder {
     seg = 5,
   ): void {
     const geo = new THREE.CylinderGeometry(rTop, rBot, h, seg);
-    geo.translate(0, baseY + h / 2, 0);
-    this.add(geo, color, o);
+    geo.translate(0, h / 2, 0);
+    this.add(geo, color, { ...o, y: baseY });
   }
 
   /** A faceted foliage blob centered at (x, y, z). Squash is baked into
@@ -344,8 +409,7 @@ export class GeoBuilder {
   blob(color: THREE.Color, r: number, x: number, y: number, z: number, o: PartOpts = {}): void {
     const geo = new THREE.IcosahedronGeometry(r, 0);
     geo.scale(o.sx ?? 1, o.sy ?? 1, o.sz ?? 1);
-    geo.translate(0, y, 0);
-    this.add(geo, color, { ...o, x, z, sx: 1, sy: 1, sz: 1 });
+    this.add(geo, color, { ...o, x, y, z, sx: 1, sy: 1, sz: 1 });
   }
 
   /** A grass/fern blade: a thin quad hinged at the ground. */
