@@ -183,6 +183,17 @@ judged.
 An endless stage places them the same way as it streams; a circuit's boards
 belong to the LAP and are driven through again on each one.
 
+A board is also a THING ON THE STAGE. `pwa/src/game/split-board.ts` stands a
+pair of flags on the checkpoint's own sample, one each side just off the road
+edge, flying in over the verge in the HUD's signal yellow — the colour the
+minimap already rings the next board in, so the mark that sends a lost driver
+here and the mark they arrive at are the same mark. They stand at the edge and
+not at the ends of the gate the engine watches (`gate`, twelve metres past the
+road on each side), because that gate is deliberately far wider than anyone
+actually driving the stage: flags planted at its ends would be poles in the
+trees. Nothing about them is solid — they go into the same field as the cones
+and the closures (`pwa/src/game/cones.ts`), so a clipped one goes over.
+
 ## Kerb placement (R26)
 
 Kerbing is placed for a reason, and there are only four of them. A stage edged in stripes from end to end is a bobsleigh run with trees

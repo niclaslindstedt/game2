@@ -65,6 +65,7 @@ import { buildRailArm, buildRailCrossing } from "./railway.ts";
 import { createTrains } from "./train.ts";
 import { createLivestock } from "./livestock.ts";
 import { buildKerbing, createPostField } from "./kerbs.ts";
+import { plantSplitBoard } from "./split-board.ts";
 import { buildCrowd, type Crowd } from "./crowd.ts";
 import { rightOf } from "./ribbon.ts";
 import {
@@ -843,6 +844,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
   let townScan = 0;
   let solarScan = 0;
   let windScan = 0;
+  let boardScan = 0;
   /** R43 — the wind farms: their own manager outside the chunks, because a
    * string of two-hundred-metre machines is in view from far outside the
    * chunk the road placed it from, and because its rotors turn every frame. */
@@ -997,6 +999,15 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
     );
     chunkGroup.add(scenery.group);
     plantJumpCones(cones, track, from, to);
+    // R28 — the flags at the split boards this stretch of road carries, so
+    // the line the clock is watching is a thing on the stage and not only a
+    // ring on the map. They go into the cone field, which is what owns every
+    // loose thing beside this road.
+    for (; boardScan < track.checkpoints.length; boardScan++) {
+      const board = track.checkpoints[boardScan];
+      if (board.s > track.samples[to - 1].s) break;
+      plantSplitBoard(cones, track, board);
+    }
     // A circuit's start line IS its finish line (R22), so it gets one gate
     // saying so rather than two ten metres apart.
     if (from === 0 && !track.circuit) chunkGroup.add(buildStartGate(track, 2));
