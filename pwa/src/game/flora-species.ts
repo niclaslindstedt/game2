@@ -8,14 +8,22 @@
 // The layers a taiga reads as, tallest first: the canopy conifers, the
 // broadleaf accents, a middle storey of saplings and young stems, the shrub
 // layer, the dead wood that keeps a forest honest, and the ground cover.
-// Nothing here is bigger than it needs to be — the silhouette does the
-// work, and everything is seen at eighty miles an hour.
+// Everything is authored in real metres at the size a MATURE one stands —
+// a boreal canopy is twenty to thirty metres up, and a wood drawn at half
+// that reads as a plantation from a car — with the engine's per-trunk scale
+// spreading a stand from pole-stage to old, and one variant in each family
+// that is the rare old-growth giant the rest of the wood grew up under.
+// The silhouette does the work: everything is seen at eighty miles an hour.
 
 import * as THREE from "three";
 
 import { DESERT_VARIANTS } from "./flora-desert.ts";
 import {
   GeoBuilder,
+  limb,
+  onTrunk,
+  swung,
+  type PartColor,
   ASPEN_BARK,
   BERRY,
   BERRY_LEAF,
@@ -46,6 +54,7 @@ import {
   FERN,
   FERN_TIP,
   FIR,
+  FIR_DARK,
   GRASS_BASE,
   GRASS_TIP,
   HEATH,
@@ -68,77 +77,270 @@ import {
 } from "./flora-build.ts";
 
 // ── Shared silhouettes ─────────────────────────────────────────────────────
+// Three rules every tree here stands on. Its parts hinge where they grow
+// from — the builder's lift for a tier or a bough, `onTrunk` for anything
+// leaving a trunk that leans — so nothing hangs in the air beside the tree
+// that grew it. Its shape takes a few rolls off the builder, so the handful
+// of builds the world caches of one variant (flora.ts) are a handful of
+// trees. And its trunk is as thick as a tree that tall would be, because
+// the breakage effects cut their splinters to the drawn girth.
 
-/** The spruce/larch family: a trunk with stacked cone skirts that shrink
- * toward the tip. `bare` is the leafless trunk fraction at the bottom. */
-function conifer(
+/** A crown's two greens: the tiers down in its own shade, and the ones up
+ * in the light. */
+type Shade = [low: THREE.Color, high: THREE.Color];
+
+/** How thick a conifer's trunk is at the foot for a tree `h` metres tall. */
+const boleRadius = (h: number): number => 0.14 + h * 0.012;
+
+/** The WHORLS a conifer crown is drawn as, from `from` to `to` metres up a
+ * trunk leaning `lean`: `count` cones, each taller than the gap to the
+ * next so its skirt hangs below the whorl above it — which is what a
+ * spruce's drooping branches read as from the road — every one set a touch
+ * off the axis and turned half a facet from its neighbours, so the
+ * silhouette is a ragged spire rather than one polygon stacked up. `w` is
+ * the lowest tier's radius, `taper` how wide the top one still is as a
+ * share of that (0 narrows to a point), `inner` the trunk's own radius
+ * added to every tier so no whorl is thinner than the wood it grows on. */
+function whorls(
+  b: GeoBuilder,
+  from: number,
+  to: number,
+  count: number,
+  w: number,
+  taper: number,
+  shade: Shade,
+  lean: number,
+  ragged: number,
+  inner: number,
+): void {
+  const gap = (to - from) / count;
+  for (let i = 0; i < count; i++) {
+    const t = i / count;
+    const y = from + gap * i;
+    // Full at the bottom and narrowing faster toward the top: a spire.
+    const r = w * (taper + (1 - taper) * (1 - t) ** 0.85) * (0.9 + b.random() * 0.2) + inner;
+    const axis = onTrunk(lean, y);
+    b.cone(
+      t < 0.4 ? shade[0] : shade[1],
+      r,
+      gap * 2.3,
+      axis.y,
+      {
+        x: axis.x + (b.random() - 0.5) * w * ragged,
+        z: (b.random() - 0.5) * w * ragged,
+        ry: (i % 2) * (Math.PI / 7) + b.random() * 0.3,
+        tiltZ: lean,
+      },
+      7,
+    );
+  }
+}
+
+/** The spruce and fir family: a trunk bare for `bare` of its height, a
+ * stack of `tiers` hanging whorls over it, and a fine spire on top. `w` is
+ * the widest tier's radius — a Norway spruce is a fifth as wide as it is
+ * tall, and drawing one any fatter turns a wood into a row of tents. */
+function spruce(
   b: GeoBuilder,
   h: number,
   w: number,
-  layers: number,
-  leaf: THREE.Color,
-  trunk: THREE.Color,
+  tiers: number,
   bare: number,
+  shade: Shade,
+  trunk: THREE.Color,
+  lean = 0,
+  ragged = 0.1,
 ): void {
-  b.cyl(trunk, 0.16, 0.05 + h * 0.022, h * (bare + 0.25), 0);
+  const rBase = boleRadius(h);
+  b.cyl(trunk, rBase * 0.45, rBase, h * (bare + 0.3), 0, { tiltZ: lean });
   const crownBase = h * bare;
-  const crownH = h - crownBase;
-  for (let i = 0; i < layers; i++) {
-    const t = i / layers;
-    const r = w * (1 - t * 0.72);
-    const coneH = (crownH / layers) * 1.9;
-    b.cone(leaf, r, coneH, crownBase + crownH * t, {}, 6);
+  const gap = (h - crownBase) / (tiers + 1.5);
+  const spireH = gap * 1.5;
+  whorls(b, crownBase, h - spireH, tiers, w, 0.08, shade, lean, ragged, rBase * 0.5);
+  const top = onTrunk(lean, h - spireH);
+  b.cone(shade[1], w * 0.1 + rBase * 0.6, spireH, top.y, { x: top.x, tiltZ: lean }, 5);
+}
+
+/** A spruce that lost its top to a gale: the whorls stop two thirds of the
+ * way up at a splintered break, and a side branch has turned upward to be
+ * the new leader. One of these in a stand is what says the stand has been
+ * standing for a while. */
+function snappedSpruce(b: GeoBuilder, h: number, w: number, shade: Shade): void {
+  const lean = 0.03;
+  const rBase = boleRadius(h * 1.3);
+  const breakAt = h * 0.7;
+  b.cyl(TRUNK_DARK, rBase * 0.5, rBase, breakAt, 0, { tiltZ: lean });
+  whorls(b, h * 0.14, h * 0.64, 5, w, 0.55, shade, lean, 0.14, rBase * 0.5);
+  const top = onTrunk(lean, breakAt);
+  b.cone(CUT_WOOD, rBase * 0.5, h * 0.06, top.y - 0.1, { x: top.x + rBase * 0.1, tiltZ: 0.2 }, 4);
+  b.cone(CUT_WOOD, rBase * 0.3, h * 0.04, top.y, { x: top.x - rBase * 0.3, tiltZ: -0.35 }, 4);
+  // The new leader: a branch that has been growing straight up since.
+  const leader = onTrunk(lean, h * 0.58);
+  b.cone(shade[1], w * 0.3, h * 0.26, leader.y, { x: leader.x + w * 0.22, tiltZ: -0.28 }, 6);
+}
+
+/** A Scots pine: a tall trunk bare for most of its height — grey at the
+ * foot and orange up in the light, which is ONE cylinder with the colour
+ * running up it rather than two that have to meet — a few heavy boughs
+ * hinged on it, and a flat, broken crown of tufts on their ends. `crook`
+ * is the trunk's lean, `spread` how wide the crown stands, `flat` how
+ * squashed its tufts are: an old pine's crown is a table. */
+function pine(
+  b: GeoBuilder,
+  h: number,
+  crook: number,
+  boughs: number,
+  spread: number,
+  flat = 0.55,
+): void {
+  const rBase = boleRadius(h) * 0.95;
+  const trunkH = h * 0.82;
+  const bark: PartColor = [TRUNK_DARK, PINE_BARK];
+  b.cyl(bark, rBase * 0.4, rBase, trunkH, 0, { tiltZ: crook }, 6);
+  const tuft = spread * 0.55;
+  for (let i = 0; i < boughs; i++) {
+    const at = h * (0.52 + (i / boughs) * 0.26 + b.random() * 0.04);
+    const angle = (i / boughs) * Math.PI * 2 + b.random() * 0.8;
+    const tilt = 0.85 + b.random() * 0.4;
+    const len = spread * (0.5 + b.random() * 0.35);
+    const end = limb(
+      b,
+      PINE_BARK,
+      rBase * 0.16,
+      rBase * 0.34,
+      len,
+      onTrunk(crook, at),
+      tilt,
+      angle,
+      5,
+    );
+    const r = tuft * (0.8 + b.random() * 0.4);
+    b.blob(PINE_CROWN, r, end.x, end.y + r * 0.3, end.z, { sy: flat });
+  }
+  // The head: three tufts over the top of the trunk, the biggest on the
+  // leader, the other two a step down and out.
+  const top = onTrunk(crook, trunkH);
+  b.blob(PINE_CROWN, spread * 0.5, top.x, top.y + spread * 0.22, 0, { sy: flat + 0.1 });
+  b.blob(PINE_CROWN, spread * 0.36, top.x + spread * 0.35, top.y + spread * 0.02, spread * 0.22, {
+    sy: flat,
+  });
+  b.blob(PINE_CROWN, spread * 0.32, top.x - spread * 0.3, top.y - spread * 0.06, -spread * 0.26, {
+    sy: flat,
+  });
+}
+
+/** A pine forked low into two leaders — a tree that lost its top young and
+ * grew two. Each leader carries its own tufts, so the crown reads as two
+ * heads side by side. */
+function twinPine(b: GeoBuilder, h: number): void {
+  const rBase = boleRadius(h);
+  const bark: PartColor = [TRUNK_DARK, PINE_BARK];
+  const forkAt = h * 0.34;
+  b.cyl(bark, rBase * 0.8, rBase, forkAt, 0, {}, 6);
+  const leaders: [tilt: number, angle: number, len: number][] = [
+    [0.2, 0.4, h * 0.5],
+    [0.3, 3.4, h * 0.42],
+  ];
+  for (const [tilt, angle, len] of leaders) {
+    const end = limb(b, bark, rBase * 0.28, rBase * 0.7, len, forkAt, tilt, angle, 6);
+    const tuft = h * 0.11;
+    b.blob(PINE_CROWN, tuft, end.x, end.y + tuft * 0.3, end.z, { sy: 0.6 });
+    b.blob(PINE_CROWN, tuft * 0.75, end.x + tuft * 0.9, end.y - tuft * 0.3, end.z + tuft * 0.4, {
+      sy: 0.55,
+    });
+    b.blob(PINE_CROWN, tuft * 0.7, end.x - tuft * 0.8, end.y - tuft * 0.5, end.z - tuft * 0.5, {
+      sy: 0.55,
+    });
   }
 }
 
-/** The birch family: one or more pale banded trunks with loose leaf blobs. */
-function birchTree(b: GeoBuilder, h: number, stems: number, lean: number): void {
+/** The birch family: pale banded trunks, thin limbs, and a crown of many
+ * small blobs that HANGS — the outer ones lower than the inner, which is
+ * how a birch weeps. `stems` from one stool for the pair; `lean` the whole
+ * tree's tilt; `weep` how far below the crown's top its fringe hangs, as a
+ * share of the height. */
+function birch(b: GeoBuilder, h: number, stems: number, lean: number, weep = 0.12): void {
   for (let s = 0; s < stems; s++) {
-    const tiltZ = stems === 1 ? lean : (s - (stems - 1) / 2) * 0.22 + lean;
-    const o = { tiltZ, ry: s * 2.4 };
-    const r = 0.14 + h * 0.008;
-    b.cyl(BIRCH_BARK, r * 0.7, r, h * 0.72, 0, o);
-    for (let k = 0; k < 3; k++) {
-      const bandGeo = new THREE.CylinderGeometry(r * 1.04, r * 1.04, 0.14, 5);
-      bandGeo.translate(0, h * (0.16 + k * 0.2), 0);
-      b.add(bandGeo, BIRCH_BAND, o);
+    const tiltZ = stems === 1 ? lean : (s - (stems - 1) / 2) * 0.2 + lean;
+    const ry = s * 2.4;
+    const o = { tiltZ, ry };
+    const r = 0.1 + h * 0.011;
+    const trunkH = h * 0.74;
+    b.cyl(BIRCH_BARK, r * 0.4, r, trunkH, 0, o);
+    for (let k = 0; k < 4; k++) {
+      const band = new THREE.CylinderGeometry(r * 1.03, r * 1.03, 0.12, 5);
+      band.translate(0, h * (0.1 + k * 0.16), 0);
+      b.add(band, BIRCH_BAND, o);
     }
-    const top = Math.sin(tiltZ) * -h * 0.6;
-    b.blob(BIRCH_LEAF, h * 0.22, top, h * 0.78, 0, { sy: 1.15 });
-    b.blob(BIRCH_LEAF, h * 0.15, top + h * 0.12, h * 0.62, h * 0.08);
-    b.blob(BIRCH_LEAF, h * 0.14, top - h * 0.1, h * 0.66, -h * 0.07);
+    /** Where this stem's axis is at a height, after its lean and its spin. */
+    const axis = (at: number): { x: number; y: number; z: number } =>
+      swung(-Math.sin(tiltZ) * at, Math.cos(tiltZ) * at, ry);
+    const top = axis(trunkH);
+    const c = h * 0.13;
+    b.blob(BIRCH_LEAF, c, top.x, h * 0.8, top.z, { sy: 1.25 });
+    b.blob(BIRCH_LEAF, c * 0.5, top.x + c * 0.3, h * 0.92, top.z - c * 0.3, { sy: 1.1 });
+    // Two limbs off the upper trunk, each ending in its own hanging blob.
+    for (const [at, angle] of [
+      [0.58, ry + 0.9],
+      [0.66, ry + 3.6],
+    ]) {
+      const end = limb(b, BIRCH_BARK, r * 0.25, r * 0.45, h * 0.22, axis(h * at), 0.55, angle, 4);
+      b.blob(BIRCH_LEAF, c * 0.75, end.x, end.y - h * weep * 0.4, end.z, { sy: 1.1 });
+    }
+    // The weeping fringe: the lowest leaves hang well under the crown.
+    const drop = h * (0.68 - weep);
+    b.blob(BIRCH_LEAF, c * 0.6, top.x + c * 0.9, drop, top.z + c * 0.5, { sy: 1.2 });
+    b.blob(BIRCH_LEAF, c * 0.55, top.x - c * 0.8, drop + h * 0.03, top.z - c * 0.7, { sy: 1.2 });
   }
 }
 
-/** A Scots pine: tall bare trunk turning orange up high, umbrella crown. */
-function pineTree(b: GeoBuilder, h: number, crook: number, crownX: number): void {
-  const lowH = h * 0.42;
-  b.cyl(TRUNK_DARK, 0.24, 0.34, lowH, 0, { tiltZ: crook });
-  const jointX = Math.sin(crook) * -lowH;
-  const upGeo = new THREE.CylinderGeometry(0.15, 0.24, h * 0.38, 5);
-  upGeo.translate(0, lowH * 0.98 + (h * 0.38) / 2, 0);
-  b.add(upGeo, PINE_BARK, { x: jointX, tiltZ: -crook * 1.6 });
-  const cx = jointX + crownX;
-  const cy = h * 0.74;
-  b.cone(PINE_CROWN, h * 0.2, h * 0.16, cy, { x: cx }, 6);
-  b.cone(PINE_CROWN, h * 0.15, h * 0.14, cy + h * 0.1, { x: cx + h * 0.05 }, 6);
-  b.blob(PINE_CROWN, h * 0.11, cx - h * 0.09, cy + h * 0.06, h * 0.06);
+/** An aspen: a straight pale trunk and a narrow rounded crown held high —
+ * the tree that stands over a birch grove. */
+function aspen(b: GeoBuilder, h: number): void {
+  const r = 0.12 + h * 0.012;
+  const lean = 0.03;
+  const trunkH = h * 0.68;
+  b.cyl(ASPEN_BARK, r * 0.4, r, trunkH, 0, { tiltZ: lean }, 6);
+  const top = onTrunk(lean, trunkH);
+  const c = h * 0.13;
+  b.blob(ASPEN_LEAF, c * 1.15, top.x, h * 0.8, 0, { sy: 1.3 });
+  b.blob(ASPEN_LEAF, c * 0.85, top.x + c * 0.8, h * 0.72, c * 0.3, { sy: 1.1 });
+  b.blob(ASPEN_LEAF, c * 0.8, top.x - c * 0.7, h * 0.7, -c * 0.5, { sy: 1.1 });
+  b.blob(ASPEN_LEAF, c * 0.7, top.x + c * 0.2, h * 0.6, -c * 0.7);
+  b.blob(ASPEN_LEAF, c * 0.55, top.x, h * 0.94, 0);
 }
 
-/** A branch broken back to a stub, HINGED ON THE TRUNK.
- *
- * `GeoBuilder.add` turns a part about the model's origin, not about itself,
- * so a stub translated out to where it joins the trunk and then tilted
- * swings clean off it: at five metres up, a third of a radian throws the
- * stub two metres sideways, and what the player sees is a stick hanging in
- * the air beside the tree. (`pineTree` has always corrected for the same
- * rotation with its `jointX`; the snags did not.) Rotating the box about
- * its own inner end FIRST and translating afterwards puts the joint where
- * the joint is, whatever the angle.
- *
+/** The broadleaves with a spreading crown — oak and maple: a short thick
+ * bole forking into three limbs, and a wide dome of foliage over them, one
+ * blob on each limb's end so the crown is lumpy the way a real one is. */
+function broadleaf(
+  b: GeoBuilder,
+  h: number,
+  spread: number,
+  leaf: THREE.Color,
+  bark: THREE.Color,
+  lean: number,
+): void {
+  const r = 0.14 + h * 0.02;
+  const boleH = h * 0.32;
+  b.cyl(bark, r * 0.6, r, boleH, 0, { tiltZ: lean }, 6);
+  const fork = onTrunk(lean, boleH * 0.95);
+  for (let i = 0; i < 3; i++) {
+    const angle = (i / 3) * Math.PI * 2 + b.random() * 0.7;
+    const tilt = 0.45 + b.random() * 0.35;
+    const len = h * (0.3 + b.random() * 0.12);
+    const end = limb(b, bark, r * 0.22, r * 0.45, len, fork, tilt, angle, 5);
+    b.blob(leaf, spread * 0.4, end.x, end.y + spread * 0.1, end.z, { sy: 0.8 });
+  }
+  b.blob(leaf, spread * 0.55, fork.x, h * 0.68, 0, { sy: 0.8 });
+  b.blob(leaf, spread * 0.3, fork.x + spread * 0.15, h * 0.88, -spread * 0.1, { sy: 0.85 });
+}
+
+/** A branch broken back to a stub, hinged on the trunk: the box is turned
+ * about its own inner end first and carried out to where the trunk's axis
+ * actually is at that height (`onTrunk`), whatever the trunk's `lean`.
  * `length` is signed — negative points the stub the other way round the
- * trunk. `at` is the height it grows from and `lean` the trunk's own tilt,
- * so the stub follows a trunk that is not upright. */
+ * trunk — and `swing` turns it round the trunk. */
 function branchStub(
   b: GeoBuilder,
   color: THREE.Color,
@@ -147,15 +349,31 @@ function branchStub(
   at: number,
   angle: number,
   lean = 0,
-  z = 0,
+  swing = 0,
 ): void {
   const geo = new THREE.BoxGeometry(Math.abs(length), thick, thick);
   geo.translate(length / 2, 0, 0);
   geo.rotateZ(angle);
-  // Where the trunk's axis actually is at that height: `add` swings the
-  // trunk about the origin too, so a leaning one is no longer at x = 0.
-  geo.translate(-Math.tan(lean) * at, at, z);
+  geo.rotateY(swing);
+  const hinge = onTrunk(lean, at);
+  geo.translate(hinge.x, hinge.y, hinge.z);
   b.add(geo, color);
+}
+
+/** A dead tree still standing: bark gone, tapering to a spike, the branches
+ * broken back to stubs. `stubs` is what is left of them — how far up, how
+ * long (signed), how steeply, and which way round the trunk. */
+function snag(
+  b: GeoBuilder,
+  h: number,
+  r: number,
+  lean: number,
+  stubs: readonly [at: number, length: number, angle: number, swing: number][],
+): void {
+  b.cyl(DEAD_WOOD, r * 0.12, r, h, 0, { tiltZ: lean }, 6);
+  for (const [at, length, angle, swing] of stubs) {
+    branchStub(b, DEAD_WOOD, length, r * 0.3, at, angle, lean, swing);
+  }
 }
 
 // ── The variant roster ─────────────────────────────────────────────────────
@@ -163,21 +381,54 @@ function branchStub(
 export type VariantDef = { build: (b: GeoBuilder) => void; twoSided?: boolean };
 
 const TAIGA_VARIANTS: Record<string, VariantDef> = {
-  // Spruces — the taiga's backbone, dark spires at every height.
-  spruceTall: { build: (b) => conifer(b, 12, 2.3, 4, SPRUCE, TRUNK, 0.16) },
-  spruceOld: { build: (b) => conifer(b, 16, 2.5, 5, SPRUCE_DARK, TRUNK_DARK, 0.24) },
-  spruceYoung: { build: (b) => conifer(b, 4.5, 1.5, 3, SPRUCE_LIGHT, TRUNK, 0.08) },
-  spruceSquat: { build: (b) => conifer(b, 6.5, 3.1, 4, SPRUCE, TRUNK_DARK, 0.1) },
-  spruceDark: { build: (b) => conifer(b, 10, 2.1, 4, SPRUCE_DARK, TRUNK_DARK, 0.18) },
+  // Spruces — the taiga's backbone: dark spires twenty metres and more,
+  // and most of what closes the road in on both sides. The mature ones are
+  // authored at 19–26 m, so the engine's per-trunk scale (0.5–1.35) stands
+  // a wood from ten-metre poles to thirty-metre canopy.
+  spruceTall: { build: (b) => spruce(b, 22, 2.8, 7, 0.14, [SPRUCE_DARK, SPRUCE], TRUNK) },
+  spruceOld: {
+    build: (b) => spruce(b, 26, 3.4, 8, 0.24, [SPRUCE_DARK, SPRUCE], TRUNK_DARK, 0.02, 0.16),
+  },
+  spruceDark: {
+    build: (b) => spruce(b, 20, 2.6, 7, 0.1, [SPRUCE_DARK, SPRUCE_DARK], TRUNK_DARK),
+  },
+  /** One that grew on the edge of a gap and leaned into the light. */
+  spruceLean: {
+    build: (b) => spruce(b, 19, 2.5, 6, 0.12, [SPRUCE_DARK, SPRUCE], TRUNK, 0.09, 0.14),
+  },
+  spruceSnapped: { build: (b) => snappedSpruce(b, 17, 2.6, [SPRUCE_DARK, SPRUCE]) },
+  spruceYoung: { build: (b) => spruce(b, 9, 1.9, 5, 0.04, [SPRUCE, SPRUCE_LIGHT], TRUNK) },
+  /** The highland spruce: wind-cut, half the height and nearly as wide. */
+  spruceSquat: {
+    build: (b) => spruce(b, 8.5, 3.2, 5, 0.06, [SPRUCE_DARK, SPRUCE], TRUNK_DARK, 0.05, 0.2),
+  },
+  /** THE OLD ONE. A spruce nobody ever cut, twice the height of the wood
+   * that grew up under it — near forty metres, and up to fifty at the
+   * engine's biggest scale. Rare on purpose: every community that carries
+   * it does so at a weight of one in a hundred, because a wood that is all
+   * giants is just a tall wood, and it is the ONE that makes the rest read
+   * as the size they are. */
+  spruceGiant: {
+    build: (b) => spruce(b, 38, 4.2, 9, 0.3, [SPRUCE_DARK, SPRUCE], TRUNK_DARK, 0.015, 0.14),
+  },
 
-  // Pines — bare orange trunks holding their green up in the light.
-  pineTall: { build: (b) => pineTree(b, 13, 0.03, 0) },
-  pineCrooked: { build: (b) => pineTree(b, 10, 0.2, 0.7) },
+  // Pines — bare trunks going orange up high, holding a flat crown up in
+  // the light. A mature Scots pine is as tall as the spruces beside it and
+  // twice as open.
+  pineTall: { build: (b) => pine(b, 24, 0.03, 4, 4.5) },
+  pineCrooked: { build: (b) => pine(b, 17, 0.16, 3, 4) },
+  /** The old pine of a heath: a table of a crown on six heavy boughs. */
+  pineOld: { build: (b) => pine(b, 26, 0.05, 6, 6, 0.45) },
+  pineTwin: { build: (b) => twinPine(b, 20) },
+  /** The pine that was old when the heath around it was cut for the first
+   * time — the spruce giant's counterpart, and as rare. */
+  pineGiant: { build: (b) => pine(b, 40, 0.02, 7, 7.5, 0.5) },
   pineYoung: {
     build: (b) => {
-      b.cyl(TRUNK_DARK, 0.14, 0.2, 2.6, 0);
-      b.cone(PINE_CROWN, 1.3, 1.8, 2.2, {}, 6);
-      b.blob(PINE_CROWN, 0.7, 0.3, 4.2, 0.2);
+      b.cyl(TRUNK_DARK, 0.14, 0.22, 3.6, 0);
+      b.cone(PINE_CROWN, 1.7, 2.6, 2.8, {}, 6);
+      b.cone(PINE_CROWN, 1.1, 2, 4.4, { ry: 0.4 }, 6);
+      b.blob(PINE_CROWN, 0.7, 0.3, 6.2, 0.2);
     },
   },
 
@@ -203,56 +454,53 @@ const TAIGA_VARIANTS: Record<string, VariantDef> = {
    * nothing grows fast standing in peat. Thin, crooked, mostly bare. */
   bogPine: {
     build: (b) => {
-      b.cyl(TRUNK_DARK, 0.1, 0.19, 3.1, 0, { tiltZ: 0.11 });
-      b.cyl(TRUNK_DARK, 0.07, 0.1, 0.9, 2.9, { x: -0.34, tiltZ: -0.22 });
-      b.blob(SPRUCE_DARK, 0.75, -0.5, 3.5, 0.1, { sy: 0.6 });
-      b.blob(SPRUCE_DARK, 0.5, 0.35, 3, -0.3, { sy: 0.6 });
-      b.blob(SPRUCE_DARK, 0.42, -0.2, 4, 0.4, { sy: 0.55 });
+      const LEAN = 0.11;
+      b.cyl(TRUNK_DARK, 0.1, 0.19, 3.4, 0, { tiltZ: LEAN });
+      const top = onTrunk(LEAN, 3.4);
+      const end = limb(b, TRUNK_DARK, 0.06, 0.1, 1.1, onTrunk(LEAN, 2.7), 0.5, Math.PI, 5);
+      b.blob(SPRUCE_DARK, 0.75, top.x - 0.15, top.y + 0.3, 0.1, { sy: 0.6 });
+      b.blob(SPRUCE_DARK, 0.5, end.x, end.y, end.z, { sy: 0.6 });
+      b.blob(SPRUCE_DARK, 0.42, top.x + 0.4, top.y - 0.2, -0.4, { sy: 0.55 });
     },
   },
 
-  // Firs — tighter, bluer spires than the spruces.
-  firSlim: { build: (b) => conifer(b, 11, 1.6, 6, FIR, TRUNK_DARK, 0.12) },
-  firDense: { build: (b) => conifer(b, 8, 2.6, 5, FIR, TRUNK, 0.06) },
+  // Firs — tighter, bluer spires than the spruces, skirted to the ground.
+  firSlim: { build: (b) => spruce(b, 21, 2.6, 9, 0.06, [FIR_DARK, FIR], TRUNK_DARK) },
+  firDense: { build: (b) => spruce(b, 16, 2.8, 8, 0.03, [FIR_DARK, FIR], TRUNK, 0, 0.08) },
+  firOld: {
+    build: (b) => spruce(b, 27, 3.4, 10, 0.2, [FIR_DARK, FIR], TRUNK_DARK, 0.02, 0.12),
+  },
 
   // Broadleaves — the bright accents along water and clearings.
-  birch: { build: (b) => birchTree(b, 7, 1, 0.05) },
-  birchPair: { build: (b) => birchTree(b, 6, 2, 0) },
-  birchYoung: { build: (b) => birchTree(b, 3.8, 1, 0.12) },
-  aspen: {
-    build: (b) => {
-      b.cyl(ASPEN_BARK, 0.16, 0.26, 5.2, 0);
-      b.blob(ASPEN_LEAF, 2.1, 0, 6.1, 0, { sy: 1.2 });
-      b.blob(ASPEN_LEAF, 1.2, 0.9, 7.6, 0.5);
-    },
+  birch: { build: (b) => birch(b, 16, 1, 0.04) },
+  birchPair: { build: (b) => birch(b, 14, 2, 0) },
+  birchYoung: { build: (b) => birch(b, 7, 1, 0.1) },
+  /** An old birch: taller, and weeping far lower than a young one. */
+  birchOld: { build: (b) => birch(b, 20, 1, 0.03, 0.2) },
+  /** A birch bent over by a winter's snow load and never straightened —
+   * the tree that leans out over every lake and every bank in the north. */
+  birchLean: { build: (b) => birch(b, 13, 1, 0.3, 0.1) },
+  aspen: { build: (b) => aspen(b, 18) },
+  aspenTall: { build: (b) => aspen(b, 24) },
+  // Larches — the sparse, pale conifer, its whorls open enough to see the
+  // trunk through.
+  larch: { build: (b) => spruce(b, 20, 2.6, 5, 0.14, [LARCH, LARCH], TRUNK, 0.02, 0.22) },
+  larchOld: {
+    build: (b) => spruce(b, 27, 3.6, 6, 0.28, [LARCH, LARCH], TRUNK_DARK, 0.04, 0.24),
   },
-  larch: { build: (b) => conifer(b, 9, 2, 4, LARCH, TRUNK, 0.14) },
-  larchOld: { build: (b) => conifer(b, 13, 2.4, 5, LARCH, TRUNK_DARK, 0.22) },
-  oak: {
-    build: (b) => {
-      b.cyl(TRUNK_DARK, 0.3, 0.46, 3.4, 0);
-      b.cyl(TRUNK_DARK, 0.14, 0.22, 2.2, 2.8, { x: 0.2, tiltZ: 0.55 });
-      b.cyl(TRUNK_DARK, 0.14, 0.22, 2, 3, { x: -0.2, tiltZ: -0.5 });
-      b.blob(OAK_LEAF, 2.4, 0, 5.6, 0, { sy: 0.8 });
-      b.blob(OAK_LEAF, 1.7, 2, 4.8, 0.6, { sy: 0.8 });
-      b.blob(OAK_LEAF, 1.7, -1.9, 5, -0.5, { sy: 0.8 });
-      b.blob(OAK_LEAF, 1.3, 0.4, 6.8, -0.9);
-    },
-  },
-  maple: {
-    build: (b) => {
-      b.cyl(TRUNK, 0.18, 0.3, 3.2, 0, { tiltZ: 0.04 });
-      b.blob(MAPLE_LEAF, 2, 0, 5, 0, { sy: 1.05 });
-      b.blob(MAPLE_LEAF, 1.4, 1.3, 4.2, 0.5);
-      b.blob(MAPLE_LEAF, 1.3, -1.2, 4.4, -0.6);
-    },
-  },
+  oak: { build: (b) => broadleaf(b, 15, 7, OAK_LEAF, TRUNK_DARK, 0.03) },
+  maple: { build: (b) => broadleaf(b, 13, 6, MAPLE_LEAF, TRUNK, 0.04) },
   rowan: {
     build: (b) => {
-      b.cyl(TRUNK, 0.12, 0.18, 2.8, 0, { tiltZ: 0.08 });
-      b.blob(ROWAN_LEAF, 1.5, -0.2, 3.6, 0, { sy: 0.9 });
-      b.blob(ROWAN_BERRY, 0.28, 0.7, 3.9, 0.5);
-      b.blob(ROWAN_BERRY, 0.22, -0.9, 3.4, -0.4);
+      const LEAN = 0.08;
+      b.cyl(TRUNK, 0.1, 0.17, 4.2, 0, { tiltZ: LEAN });
+      const top = onTrunk(LEAN, 4.2);
+      b.blob(ROWAN_LEAF, 2, top.x, 5.6, 0, { sy: 0.95 });
+      b.blob(ROWAN_LEAF, 1.3, top.x + 1.2, 4.9, 0.6);
+      b.blob(ROWAN_LEAF, 1.2, top.x - 1.1, 5.1, -0.7);
+      b.blob(ROWAN_BERRY, 0.32, top.x + 0.9, 6.2, 0.6);
+      b.blob(ROWAN_BERRY, 0.26, top.x - 1.2, 5.6, -0.5);
+      b.blob(ROWAN_BERRY, 0.22, top.x + 0.2, 4.6, 1.3);
     },
   },
 
@@ -273,10 +521,32 @@ const TAIGA_VARIANTS: Record<string, VariantDef> = {
     },
   },
   deadSnag: {
+    build: (b) =>
+      snag(b, 16, 0.42, 0.04, [
+        [8.2, 1.9, -0.3, 0.3],
+        [10.5, -1.5, 0.35, 2.4],
+        [12.4, 1.2, 0.1, 4.2],
+      ]),
+  },
+  /** A giant that died standing: the bark still clinging to its lower
+   * third, the top broken out, stubs of boughs as thick as a young tree.
+   * The old-growth stands carry one for the same reason they carry the
+   * living giant — it is what says how long this wood has been here. */
+  deadGiant: {
     build: (b) => {
-      b.cyl(DEAD_WOOD, 0.05, 0.38, 8, 0, { tiltZ: 0.04 });
-      branchStub(b, DEAD_WOOD, 1.6, 0.14, 4.6, -0.3, 0.04);
-      branchStub(b, DEAD_WOOD, -1.2, 0.12, 5.8, 0.4, 0.04, 0.1);
+      const LEAN = 0.02;
+      const R = 0.66;
+      snag(b, 24, R, LEAN, [
+        [9, 2.8, -0.2, 0.6],
+        [12.5, -2.2, 0.3, 2.1],
+        [15, 2.4, 0.15, 3.9],
+        [18, -1.6, 0.5, 5.2],
+        [20.5, 1.3, -0.1, 1.4],
+      ]);
+      b.cyl(TRUNK_DARK, R * 0.86, R * 1.03, 8, 0, { tiltZ: LEAN }, 6);
+      const top = onTrunk(LEAN, 23.8);
+      b.cone(CUT_WOOD, R * 0.24, 1.4, top.y, { x: top.x + R * 0.1, tiltZ: 0.25 }, 4);
+      b.cone(CUT_WOOD, R * 0.16, 0.9, top.y + 0.1, { x: top.x - R * 0.1, tiltZ: -0.3 }, 4);
     },
   },
   stump: {
@@ -328,19 +598,22 @@ const TAIGA_VARIANTS: Record<string, VariantDef> = {
   /** Snapped off in a gale at chest height, splinters still standing. */
   brokenTrunk: {
     build: (b) => {
-      b.cyl(DEAD_WOOD, 0.3, 0.44, 2.9, 0, { tiltZ: 0.03 });
-      b.cone(CUT_WOOD, 0.28, 0.8, 2.8, { x: 0.06, tiltZ: 0.16 }, 4);
-      b.cone(CUT_WOOD, 0.16, 0.5, 2.85, { x: -0.16, tiltZ: -0.3 }, 4);
+      const LEAN = 0.03;
+      b.cyl(DEAD_WOOD, 0.34, 0.5, 4.6, 0, { tiltZ: LEAN });
+      const top = onTrunk(LEAN, 4.5);
+      b.cone(CUT_WOOD, 0.3, 1.1, top.y, { x: top.x + 0.06, tiltZ: 0.16 }, 4);
+      b.cone(CUT_WOOD, 0.18, 0.7, top.y + 0.05, { x: top.x - 0.16, tiltZ: -0.3 }, 4);
     },
   },
   /** A dead stem that came down and never reached the ground — it is
    * leaning on whatever caught it. Reads as depth: one diagonal through a
    * wood of verticals. */
   leaningSnag: {
-    build: (b) => {
-      b.cyl(DEAD_WOOD, 0.11, 0.3, 9, 0, { tiltZ: 0.42 });
-      branchStub(b, DEAD_WOOD, 1.3, 0.13, 3.6, -0.1, 0.42);
-    },
+    build: (b) =>
+      snag(b, 13, 0.34, 0.42, [
+        [5.5, 1.5, -0.1, 0.8],
+        [8, -1.1, 0.3, 3.9],
+      ]),
   },
   /** A branch down in the moss — the litter a real forest floor is made
    * of, and the one piece of dead wood small enough to plant in numbers. */
@@ -556,14 +829,18 @@ const TAIGA_VARIANTS: Record<string, VariantDef> = {
    * and wide and the outer ones hang below the ones inboard of them. */
   willow: {
     build: (b) => {
-      b.cyl(WILLOW_BARK, 0.34, 0.55, 3.4, 0, { tiltZ: 0.22 });
-      b.cyl(WILLOW_BARK, 0.16, 0.26, 1.8, 2.6, { x: -0.8, tiltZ: 0.5 });
-      b.blob(WILLOW, 2.5, -0.5, 4.1, 0, { sy: 0.62 });
-      b.blob(WILLOW_PALE, 1.7, 1.5, 3.5, 0.6, { sy: 0.7 });
-      b.blob(WILLOW, 1.5, -2.1, 3.2, -0.5, { sy: 0.75 });
+      const LEAN = 0.22;
+      b.cyl(WILLOW_BARK, 0.3, 0.55, 4.4, 0, { tiltZ: LEAN });
+      const top = onTrunk(LEAN, 4.4);
+      // The second stem forks off the leaning trunk and leans further
+      // still, the way a willow follows the light over the water.
+      const fork = limb(b, WILLOW_BARK, 0.14, 0.26, 2.4, onTrunk(LEAN, 3.2), 0.5, Math.PI, 5);
+      b.blob(WILLOW, 2.8, top.x - 0.4, top.y + 0.6, 0, { sy: 0.62 });
+      b.blob(WILLOW_PALE, 1.9, top.x + 2, top.y - 0.2, 0.6, { sy: 0.7 });
+      b.blob(WILLOW, 1.7, fork.x, fork.y + 0.2, fork.z - 0.5, { sy: 0.75 });
       // The hanging fringe: the lowest leaves are nearly at head height.
-      b.blob(WILLOW, 1.1, 2.4, 2.4, 0, { sy: 0.95 });
-      b.blob(WILLOW_PALE, 0.9, -2.6, 2.2, 0.8, { sy: 1 });
+      b.blob(WILLOW, 1.2, top.x + 2.8, 2.6, 0, { sy: 0.95 });
+      b.blob(WILLOW_PALE, 1, fork.x - 0.8, 2.4, 0.8, { sy: 1 });
     },
   },
   /** A young willow, or one cut back: multi-stemmed from the base, which is
@@ -588,11 +865,21 @@ const TAIGA_VARIANTS: Record<string, VariantDef> = {
    * one stool — a black alder carr is a wall of them along a shore. */
   alder: {
     build: (b) => {
-      b.cyl(ALDER_BARK, 0.16, 0.24, 5.5, 0, { tiltZ: 0.05 });
-      b.cyl(ALDER_BARK, 0.12, 0.19, 4.6, 0, { x: 0.5, tiltZ: -0.16 });
-      b.blob(ALDER_LEAF, 1.7, 0.1, 5.6, 0, { sy: 0.72 });
-      b.blob(ALDER_LEAF, 1.3, 1.1, 4.9, 0.5, { sy: 0.7 });
-      b.blob(ALDER_LEAF, 1.1, -0.9, 5.1, -0.4, { sy: 0.7 });
+      // Two stems from one stool, each with its own flat-topped crown.
+      const stems: [lean: number, ry: number, h: number][] = [
+        [0.05, 0, 12],
+        [-0.16, 1.2, 9.5],
+      ];
+      for (const [lean, ry, h] of stems) {
+        const r = 0.08 + h * 0.014;
+        const trunkH = h * 0.7;
+        b.cyl(ALDER_BARK, r * 0.45, r, trunkH, 0, { tiltZ: lean, ry });
+        const top = swung(-Math.sin(lean) * trunkH, Math.cos(lean) * trunkH, ry);
+        const c = h * 0.16;
+        b.blob(ALDER_LEAF, c, top.x, h * 0.78, top.z, { sy: 0.72 });
+        b.blob(ALDER_LEAF, c * 0.75, top.x + c * 0.7, h * 0.68, top.z + c * 0.3, { sy: 0.7 });
+        b.blob(ALDER_LEAF, c * 0.7, top.x - c * 0.6, h * 0.7, top.z - c * 0.4, { sy: 0.7 });
+      }
     },
   },
   /** A DROWNED TRUNK: a tree the water rose around and killed, still

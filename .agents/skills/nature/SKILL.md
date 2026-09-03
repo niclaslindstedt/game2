@@ -23,7 +23,7 @@ its generation, `mapgen-improvement`.
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pwa/src/game/biome.ts`         | Biomes AS DATA: the ground palette, the plant communities (weighted species mixes + density + ground cover), the contextual overrides (lakeshore, highland), grove scale                                                                                                               |
 | `pwa/src/game/flora-build.ts`   | The primitives and the paint box: the `GeoBuilder` merge helper, every authored colour, and what the seasons do to them                                                                                                                                                                |
-| `pwa/src/game/flora-species.ts` | HOW each plant is shaped: the ~40 parametric variants, as recipes over the builder                                                                                                                                                                                                     |
+| `pwa/src/game/flora-species.ts` | HOW each plant is shaped: the taiga's ~60 parametric variants, as recipes over the builder                                                                                                                                                                                             |
 | `pwa/src/game/flora.ts`         | The shape cache, the two shared materials, the ground-cover sway shader, and the two ways a population is instanced                                                                                                                                                                    |
 | `pwa/src/game/planting.ts`      | Which species dresses a given patch of ground, which of them read as solid trunks and which as brush, how one engine prop is dressed, and the understory skirt around a mature trunk                                                                                                   |
 | `pwa/src/game/wild.ts`          | The open country beyond the road bands: pooled flora and the wild's stone, streamed in cells around the CAR                                                                                                                                                                            |
@@ -83,18 +83,40 @@ drawing from the same helpers or their patches stop lining up.
   rather than making them regions — a noise field will happily put a
   lakeside where there is no lake.
 
-## The taiga roster (~40 variants)
+## The taiga roster (~60 variants)
 
-Canopy conifers `spruceTall/Old/Young/Squat/Dark`, `pineTall/Crooked/Young`,
-`firSlim/Dense`, larches `larch/larchOld`; broadleaves
-`birch/birchPair/birchYoung`, `aspen`, `oak`, `maple`, `rowan`; a middle
-storey of `spruceSapling`, `pineSapling` and the bog's stunted `bogPine`;
-shrubs `willowShrub/juniper/bogShrub/berryBush`; dead and cut wood
-`deadSnag/brokenTrunk/leaningSnag/stump/fallenLog/rootLog/driftwood/fallenBranch`
+Canopy conifers `spruceTall/Old/Dark/Lean/Snapped/Young/Squat`,
+`pineTall/Crooked/Old/Twin/Young`, `firSlim/Dense/Old`, larches
+`larch/larchOld`; broadleaves `birch/birchPair/birchYoung/birchOld/birchLean`,
+`aspen/aspenTall`, `oak`, `maple`, `rowan`, and the wet ground's
+`willow/willowYoung/alder`; a middle storey of `spruceSapling`,
+`pineSapling` and the bog's stunted `bogPine`; shrubs
+`willowShrub/juniper/bogShrub/berryBush`; dead and cut wood
+`deadSnag/deadGiant/brokenTrunk/leaningSnag/drownedTrunk/stump/fallenLog/rootLog/driftwood/fallenBranch`
 and the logging block's `logPile`; ground cover
 `tallGrass/fern/largeFern/heathShrub/mossPatch` and the wet ground's
-`reeds/sedgeTuft/cottonGrass` (the grass, fern, reed and sedge families are
-the two-sided, wind-swayed set).
+`reeds/sedgeTuft/cottonGrass/bulrush/tussock/bogMoss/waterLily` (the grass,
+fern, reed and sedge families are the two-sided, wind-swayed set).
+
+**The trees are authored at the height a MATURE one stands** — a boreal
+canopy is 20–30 m up, and the engine's per-trunk scale (0.5–1.35) spreads a
+stand from pole-stage to old around that. Beside each conifer family stands
+its GIANT (`spruceGiant`, `pineGiant`, and the dead one, `deadGiant`): the
+old-growth tree near forty metres, up to fifty at the biggest scale, weighted
+at about one trunk in a hundred in the woods that carry it. It is rare on
+purpose — a wood that is all giants is just a tall wood, and the one giant is
+what makes the rest read as the size they are.
+
+**Every part of a tree hinges where it grows from.** The builder's `cone`,
+`cyl` and `blob` lift a part AFTER turning it, so a tilted tier or bough
+pivots on its own base; anything leaving a trunk that leans hangs off
+`onTrunk(lean, at)`; a limb is `limb(...)` and returns its far end for the
+foliage that goes there. A part that is turned about the model's foot
+instead swings metres sideways for a few degrees of lean — the crooked
+pine's upper trunk beside its lower half, a bough hanging in the air — and
+that was the single most visible flaw in the old roster. Recipes may take
+`b.random()` rolls for their shape, so a variant's cached builds are
+different trees.
 
 ## The desert roster (~22 variants, `flora-desert.ts`)
 

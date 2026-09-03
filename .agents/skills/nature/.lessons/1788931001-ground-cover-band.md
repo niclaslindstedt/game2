@@ -15,5 +15,7 @@ ground and a clump there is a few pixels), and `wild.ts` raised its own
 per-cell attempts by the same argument.
 
 The review lesson underneath it: judge nature from a shot taken DEEP into
-a stage and OFF the road, never from the grid. Drive `?start=1` with
-ArrowUp held and screenshot on the run's own clock at 15–30 s.
+a stage, never from the grid. Load `?seed=N&start=1&bot=1` so the bot
+drives, and screenshot on the run's own HUD clock at 20–40 s. Holding
+ArrowUp blind instead puts the car in a meadow inside ten seconds, and the
+picture that comes back is of the wrong place.

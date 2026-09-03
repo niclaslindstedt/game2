@@ -31,6 +31,9 @@ import {
   CREOSOTE_STEM,
   DEAD_BRUSH,
   GeoBuilder,
+  limb,
+  onTrunk,
+  swung,
   JOSHUA_BARK,
   JOSHUA_LEAF,
   MESQUITE_BARK,
@@ -55,38 +58,9 @@ import {
 import type { VariantDef } from "./flora-species.ts";
 
 // ── Shared silhouettes ─────────────────────────────────────────────────────
-
-/** Where a point at (x, y, 0) lands once its part has been swung round the
- * model's up axis by `angle` — the builder's `ry`, applied by hand for the
- * parts whose ends other parts have to find. */
-function swung(x: number, y: number, angle: number): { x: number; y: number; z: number } {
-  return { x: x * Math.cos(angle), y, z: -x * Math.sin(angle) };
-}
-
-/** A LIMB: a cylinder leaning `tilt` radians off vertical toward +x, hinged
- * at (0, `at`, 0) and then swung round by `angle`. Rotated about its own
- * hinge BEFORE it is placed, so it stays on the trunk whatever the angle
- * (the same trap `branchStub` in flora-species.ts explains). Returns where
- * its far end is, for the rosette or the tip that goes there. */
-function limb(
-  b: GeoBuilder,
-  color: THREE.Color,
-  rTop: number,
-  rBot: number,
-  len: number,
-  at: number,
-  tilt: number,
-  angle: number,
-  seg = 6,
-): { x: number; y: number; z: number } {
-  const geo = new THREE.CylinderGeometry(rTop, rBot, len, seg);
-  geo.translate(0, len / 2, 0);
-  geo.rotateZ(-tilt);
-  geo.translate(0, at, 0);
-  geo.rotateY(angle);
-  b.add(geo, color);
-  return swung(Math.sin(tilt) * len, at + Math.cos(tilt) * len, angle);
-}
+// The limbs are the builder's own (`limb`, hinged where they leave the
+// trunk, `swung` for where their ends go): the same rule that keeps a
+// bough on a spruce keeps an arm on a Joshua tree.
 
 /** A saguaro's ARM: out from the trunk, then up. The horizontal stub is
  * what makes the silhouette — an arm that curves smoothly out of the trunk
@@ -160,7 +134,10 @@ function joshua(b: GeoBuilder, h: number, forks: [number, number, number, boolea
 
 /** The wash trees — mesquite and palo verde — share a shape: a short
  * leaning trunk, a few limbs, and a wide flat crown of small blobs, so the
- * tree is a broad umbrella you can see under. */
+ * tree is a broad umbrella you can see under. The limbs and the crown hang
+ * off where the LEANING trunk actually is at their height, not off the
+ * model's axis — a lean of a quarter radian puts the top of the trunk
+ * half a metre from where the crown would otherwise be centred. */
 function washTree(
   b: GeoBuilder,
   bark: THREE.Color,
@@ -169,21 +146,25 @@ function washTree(
   spread: number,
   blobs: number,
 ): void {
-  b.cyl(bark, 0.14, 0.26, h * 0.4, 0, { tiltZ: 0.22 });
+  const LEAN = 0.22;
+  b.cyl(bark, 0.14, 0.26, h * 0.4, 0, { tiltZ: LEAN });
   const limbs: [number, number][] = [
     [0.55, 0.3],
     [0.5, 2.4],
     [0.65, 4.3],
   ];
+  const fork = onTrunk(LEAN, h * 0.36);
   const ends: { x: number; y: number; z: number }[] = [];
   for (const [tilt, angle] of limbs) {
-    ends.push(limb(b, bark, 0.07, 0.12, h * 0.45, h * 0.36, tilt, angle));
+    ends.push(limb(b, bark, 0.07, 0.12, h * 0.45, fork, tilt, angle));
   }
   for (let i = 0; i < blobs; i++) {
     const a = (i / blobs) * Math.PI * 2 + 0.4;
     const d = spread * (0.35 + (i % 3) * 0.28);
     const r = spread * (0.36 + (i % 2) * 0.1);
-    b.blob(leaf, r, Math.cos(a) * d, h * (0.72 + (i % 3) * 0.08), Math.sin(a) * d, { sy: 0.5 });
+    b.blob(leaf, r, fork.x + Math.cos(a) * d, h * (0.72 + (i % 3) * 0.08), Math.sin(a) * d, {
+      sy: 0.5,
+    });
   }
   for (const end of ends) b.blob(leaf, spread * 0.3, end.x, end.y + 0.1, end.z, { sy: 0.55 });
 }

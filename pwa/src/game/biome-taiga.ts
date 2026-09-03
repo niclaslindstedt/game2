@@ -67,19 +67,25 @@ export const TAIGA: Biome = {
   },
   communities: [
     {
+      // The giants are weighted at about one trunk in a hundred, here and
+      // in every wood that carries them: rare enough to be the odd one the
+      // eye is drawn to, common enough that a stage has a few.
       id: "spruceWood",
       weight: 3,
       density: 1,
       trees: {
         spruceTall: 12,
         spruceDark: 6,
-        spruceOld: 4,
-        spruceYoung: 5,
+        spruceOld: 5,
+        spruceLean: 3,
+        spruceYoung: 4,
         spruceSapling: 4,
         firDense: 2,
+        spruceSnapped: 1.5,
         deadSnag: 2,
         brokenTrunk: 1,
         leaningSnag: 1,
+        spruceGiant: 0.4,
       },
       undergrowth: {
         fern: 8,
@@ -100,12 +106,15 @@ export const TAIGA: Biome = {
       trees: {
         spruceTall: 14,
         spruceDark: 10,
-        spruceOld: 5,
+        spruceOld: 6,
         firSlim: 5,
         firDense: 4,
+        firOld: 2,
+        spruceLean: 2,
         spruceSapling: 3,
         leaningSnag: 2,
         deadSnag: 1,
+        spruceGiant: 0.5,
       },
       undergrowth: { mossPatch: 10, fern: 5, largeFern: 3, fallenBranch: 2 },
       groundCover: 0.75,
@@ -116,12 +125,15 @@ export const TAIGA: Biome = {
       density: 0.8,
       trees: {
         pineTall: 12,
+        pineOld: 4,
         pineYoung: 5,
         pineSapling: 4,
         pineCrooked: 3,
+        pineTwin: 2,
         juniper: 3,
         deadSnag: 1,
         brokenTrunk: 1,
+        pineGiant: 0.3,
       },
       undergrowth: { heathShrub: 8, tallGrass: 5, berryBush: 3, fern: 2 },
     },
@@ -133,6 +145,8 @@ export const TAIGA: Biome = {
         birch: 10,
         birchPair: 5,
         birchYoung: 6,
+        birchOld: 3,
+        birchLean: 2,
         rowan: 2,
         aspen: 2,
         spruceSapling: 2,
@@ -141,18 +155,26 @@ export const TAIGA: Biome = {
       undergrowth: { tallGrass: 8, fern: 4, largeFern: 2, mossPatch: 2 },
     },
     {
+      // Where the giants actually are: a wood nobody cut, so the odd
+      // trunk is three times the age of the rest — and the dead giant
+      // beside it is the one that got there first.
       id: "oldGrowth",
       weight: 2,
       density: 1,
       trees: {
         spruceOld: 6,
-        firSlim: 5,
-        firDense: 4,
+        firSlim: 4,
+        firOld: 3,
+        firDense: 3,
+        pineOld: 2,
         larch: 3,
         larchOld: 2,
         deadSnag: 3,
         leaningSnag: 2,
         brokenTrunk: 2,
+        deadGiant: 1.5,
+        spruceGiant: 1.2,
+        pineGiant: 0.6,
       },
       undergrowth: { largeFern: 6, fern: 6, mossPatch: 5, fallenBranch: 3, heathShrub: 2 },
     },
@@ -160,7 +182,16 @@ export const TAIGA: Biome = {
       id: "broadleafGrove",
       weight: 1.5,
       density: 0.85,
-      trees: { oak: 6, maple: 6, birch: 4, aspen: 4, rowan: 3, brokenTrunk: 1 },
+      trees: {
+        oak: 6,
+        maple: 6,
+        birch: 4,
+        aspen: 3,
+        aspenTall: 2,
+        rowan: 3,
+        birchOld: 1,
+        brokenTrunk: 1,
+      },
       undergrowth: { tallGrass: 7, fern: 4, mossPatch: 2 },
     },
     {
@@ -196,6 +227,7 @@ export const TAIGA: Biome = {
         deadSnag: 10,
         brokenTrunk: 7,
         leaningSnag: 5,
+        deadGiant: 1,
         birchYoung: 3,
         spruceSapling: 2,
       },
@@ -265,6 +297,9 @@ export const TAIGA: Biome = {
     birch: 10,
     birchPair: 5,
     birchYoung: 6,
+    // The birch bent out over the water — every northern lake has them.
+    birchLean: 4,
+    birchOld: 2,
     willowShrub: 12,
     // The two trees that actually stand at a waterline rather than near
     // one: a willow leaning out over it and an alder with its feet in it.
@@ -290,6 +325,7 @@ export const TAIGA: Biome = {
     willowShrub: 10,
     birchYoung: 6,
     birch: 5,
+    birchLean: 3,
     aspen: 4,
     spruceYoung: 4,
     rowan: 3,
