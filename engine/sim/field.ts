@@ -430,7 +430,7 @@ function seenAs(state: GameState): TrafficCar {
  * contact cost it. */
 function folded(state: GameState): number {
   const damage = state.car.damage;
-  let total = damage.belly;
+  let total = damage.belly + damage.roof;
   for (let i = 0; i < damage.zones.length; i++) total += damage.zones[i];
   return total;
 }

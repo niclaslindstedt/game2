@@ -12,6 +12,7 @@
 // CARS at the bottom of the file.
 
 import { angleDiff, clamp } from "../lib/math.ts";
+import { damageEffects } from "../game/damage.ts";
 import { latCeiling, slideFloor, surfaceGripFor, wheelSlide } from "../game/limits.ts";
 import { TUNING } from "../game/defs/tuning.ts";
 import type { CarSpec } from "../game/defs/cars.ts";
@@ -405,16 +406,25 @@ function decide(state: GameState, profile: BotProfile, traffic: readonly Traffic
     Math.round(horizonMeters / step),
     track.circuit ? samples.length - 1 : samples.length - 1 - state.nearIndex,
   );
+  // ...AND WHAT IS LEFT OF THE CAR. `damageEffects` is the same reading
+  // `car.ts` takes every step, and the two numbers below are the two it
+  // multiplies straight into the grip and the brake pedal — so a driver who
+  // plans without them is planning for a car they are no longer sitting in.
+  // That is exactly the failure `game/limits.ts` was written to end, and a
+  // rolled car is where it bites: it arrives at the corner that caught it
+  // out at the speed a SOUND car could hold, goes off at the same metre, is
+  // put back at the same board, and does it again.
+  const hurt = damageEffects(car, Math.abs(car.u), state.t);
   // What the tires will actually give at a corner, off the handling model's
   // own ceiling rather than a second guess at it (`game/limits.ts`), taken
   // at the driver's own fraction of it. `gripBySurface` below scales it for
   // what the corner is paved with.
-  const latAccel = latCeiling(state.spec, 1) * profile.latFraction;
+  const latAccel = latCeiling(state.spec, 1) * profile.latFraction * hurt.grip;
   let targetSpeed = state.spec.gearTop[state.spec.gearTop.length - 1];
   let hardDistance = Infinity;
   let hardCap = 0;
   const gripOf = gripBySurface(state.spec);
-  const braking = 2 * state.spec.brake * profile.brakeUse;
+  const braking = 2 * state.spec.brake * profile.brakeUse * hurt.brake;
   const hotEntry = profile.hotEntry * rotation;
   const progressS = state.progressS;
   const trackLength = track.length;

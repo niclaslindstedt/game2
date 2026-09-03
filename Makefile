@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift heat record replay track level analyze previews routes biomes cars liveries field crew items items-list sky traffic glyphs transit views audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-android shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
+.PHONY: build test lint fmt fmt-check release clean install icons check-seo sim drift roll heat record replay track level analyze previews routes biomes cars liveries field crew items items-list sky traffic glyphs transit views audition screenshots profile debug-shot native-install native-bundle native-typecheck native-ios native-android shellcheck actionlint changelog bump hooks docs tauri tauri-test tauri-lint tauri-fmt desktop
 
 build:
 	npm run build
@@ -75,6 +75,17 @@ sim:
 # `make drift CAR=compact` · `make drift ARGS="--surface asphalt --table"`
 drift:
 	npm run drift -- $(if $(CAR),--car $(CAR),) $(if $(CORNERS),--corners $(CORNERS),) $(ARGS)
+
+# THE ROLL LAB — a car going OVER, drawn from behind: the hull's own
+# outline every sixth of a second along the ground it crossed, with the
+# corner it is pivoting about marked on each one, plus what each roll cost
+# the car. `make drift` shows what a car does before it goes over; this is
+# the roll itself. Required before/after any change to the roll model — a
+# body spinning about a fixed point under its middle draws a stack of
+# outlines in one place, and only a picture shows that.
+# `make roll CAR=coupe` · `make roll ARGS="--seeds=4,5"`
+roll:
+	npm run roll -- $(if $(CAR),--car=$(CAR),) $(ARGS)
 
 # Record a bot run to a run tape (runs/*.jsonl): a whole drive written down
 # as the controls that drove it. `make record SEED=42 CAR=compact

@@ -58,6 +58,19 @@ function recordBotRun(field: { difficulty: "easy" | "medium" | "hard"; cars: num
   });
 }
 
+/** ...and the same run against a field of GHOSTS — the campaign's own
+ * discipline, where nothing on the road can touch anything else. */
+function recordGhostRun(field: { difficulty: "easy" | "medium" | "hard"; cars: number }) {
+  return race({
+    stage: STAGE,
+    car: CAR,
+    field: { ...field, massStart: false, contact: false },
+    start: START,
+    driver: { kind: "bot" },
+    record: { source: "bot", mode: "sim" },
+  });
+}
+
 describe("the run tape", () => {
   it("round-trips every control through the file", () => {
     const recorder = createTapeRecorder({
@@ -163,23 +176,31 @@ describe("the run tape", () => {
   });
 
   it("places a time against a field without putting a car on the road", () => {
-    // A HARD field, and the difficulty is the fixture rather than a detail:
-    // it is the one where the bot's own run is quick enough that no crew
-    // ever shares road with it. That is the precondition the claim below
-    // needs — a crew that CATCHES the player sees it in its traffic and
-    // drives around it, so the crew that raced is not the crew the
-    // standalone placing simulates, and on this stage a medium run is slow
-    // enough for exactly that to happen (place 13 raced against 12 placed).
-    const recorded = recordBotRun({ difficulty: "hard", cars: 15 });
-    const placed = placeAmongField({
-      stage: STAGE,
-      field: { difficulty: "hard", cars: 15, massStart: false, contact: true },
-      time: recorded.time,
-      carId: CAR.id,
-    });
-    // The same time, against the same field, placed the same way — nobody
-    // met anybody, so racing them alone and racing them with somebody out
-    // there gives one answer.
+    // A FIELD OF GHOSTS, which is the campaign's own discipline
+    // (`RALLY_FIELD`) and the reason the claim below is an invariant rather
+    // than a fixture's luck. Nobody is solid: every crew drives its stage
+    // alone, blind to the player and to each other, so the crews that raced
+    // ARE the crews the standalone placing simulates.
+    //
+    // With the cars SOLID — the heads-up discipline — none of this holds. A
+    // crew that catches the player sees it in its traffic and drives round
+    // it, and measured across four seeds every crew's time moves between
+    // the two runs; the places then agree on some seeds and differ by one
+    // on others, with no relation to how near the player's time is to the
+    // crew either side. Pinning the two equal on a solid field is pinning
+    // one seed's coincidence, and any change to how a crew drives moves it.
+    const field = { difficulty: "hard" as const, cars: 15, massStart: false, contact: false };
+    const recorded = recordGhostRun(field);
+    const placed = placeAmongField({ stage: STAGE, field, time: recorded.time, carId: CAR.id });
+    // The precondition, asserted rather than assumed: not one crew's time
+    // moved for the player having been out there.
+    const timesOf = (rows: { you: boolean; time: number | null }[]): string =>
+      rows
+        .filter((row) => !row.you)
+        .map((row) => String(row.time))
+        .join(",");
+    expect(timesOf(placed.rows)).toBe(timesOf(recorded.rows));
+    // ...so the same time, against the same field, is placed the same way.
     expect(placed.place).toBe(recorded.place);
     expect(placed.of).toBe(recorded.of);
     expect(placed.rows.filter((row) => row.you).length).toBe(1);
@@ -238,7 +259,17 @@ describe("the run tape", () => {
     // Three roads and three fields of fourteen is a hundred and twenty-six
     // stages driven for one assertion — worth it for the one the whole
     // calibration rests on, but not inside the default budget.
-  }, 60_000);
+    //
+    // The budget is generous on purpose. A hundred and twenty-six stages is
+    // the SLOWEST thing in the suite by a distance, and what it costs moves
+    // with every handling change and with whatever runner CI happens to
+    // give the shard: it has been measured at 52 s on one and timed out
+    // against a 60 s budget on the next, which is a test failing for its
+    // own size rather than for its claim. Sized here at about three times
+    // what it takes rather than a shade over, because the number that
+    // matters is the assertion below, and a budget set close enough to trip
+    // on runner variance reports something that is not true.
+  }, 180_000);
 
   it("writes down the cut establishing shot, because it moves the field", () => {
     const recorder = createTapeRecorder({

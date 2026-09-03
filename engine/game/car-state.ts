@@ -46,6 +46,7 @@ export function freshCar(): CarState {
     roll: 0,
     rollRate: 0,
     pitch: 0,
+    pitchRate: 0,
     ride: 0,
     rideRate: 0,
     settle: 0,
@@ -82,6 +83,7 @@ export function freshCar(): CarState {
     damage: {
       zones: new Array(DAMAGE_ZONES).fill(0),
       belly: 0,
+      roof: 0,
       wear: 0,
       systems: { engine: 0, suspension: 0, gearbox: 0, steering: 0, brakes: 0 },
       wheels: [0, 0, 0, 0],

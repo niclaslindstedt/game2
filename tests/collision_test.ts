@@ -813,10 +813,66 @@ describe("the end of the run", () => {
     expect(car.damage.wheels[2]).toBeGreaterThan(0);
     expect(car.damage.wheels[1]).toBe(0);
     expect(car.damage.wheels[3]).toBe(0);
-    // Harder than the flank's own fold alone would have made it.
-    expect(car.damage.wheels[0]).toBeGreaterThan(
-      car.damage.zones[6] * TUNING.collision.systems.wheelFromFlank * 0.5,
+    // And that arrival is the WHOLE of what reaches them: the ground folding
+    // a flank is not a trunk driven into one corner of it, so the ring's own
+    // point-impact rate is not charged a second time on top.
+    expect(car.damage.wheels[0]).toBeCloseTo(
+      car.damage.zones[6] * TUNING.collision.systems.wheelFromSideLand * 0.5,
+      6,
     );
+  });
+
+  it("a car that comes down on its ROOF folds the greenhouse, not a flank", () => {
+    const state = freshState();
+    const car = state.car;
+    car.roll = Math.PI; // upside down
+    const events: GameEvent[] = [];
+    landingDamage(state.spec, car, 14, events, state.stats);
+    expect(car.damage.roof).toBeGreaterThan(0);
+    expect(Math.max(...car.damage.zones)).toBe(0);
+    expect(car.damage.belly).toBe(0);
+    // The one arrival the ring has no room for, and the one that takes ALL
+    // the glass: a shell that has lost its shape cannot hold a screen in it.
+    const gone = events.filter((e) => e.type === "partBreak").map((e) => e.part);
+    for (const pane of ["glassF", "glassB", "glassR", "glassL"]) expect(gone).toContain(pane);
+    // The impact reads as flat-on — the ground met a whole face at once, so
+    // there is no bearing on it for the dust or the pan to point at.
+    const impact = events.find((e) => e.type === "impact");
+    expect(impact?.type === "impact" && impact.belly).toBe(true);
+  });
+
+  it("a shell arrival pays where a sprung one lands free", () => {
+    // The whole difference between a jump and a roll. `hardLandSpeed` is what
+    // a SUSPENSION travels through for nothing; a flank has nothing under it,
+    // so the same descent that a car on its wheels shrugs off folds a door.
+    const free = freshState();
+    landingDamage(free.spec, free.car, TUNING.collision.hardLandSpeed - 0.5, [], free.stats);
+    expect(free.car.damage.belly).toBe(0);
+
+    const shell = freshState();
+    shell.car.roll = TUNING.air.rollLandLimit + 0.2;
+    landingDamage(shell.spec, shell.car, TUNING.collision.hardLandSpeed - 0.5, [], shell.stats);
+    expect(shell.car.damage.zones[6]).toBeGreaterThan(0);
+  });
+
+  it("a face folded to the cage stops feeding the machinery behind it", () => {
+    // Past `zoneMax` the panel has nowhere left to go, and what is holding
+    // the blow is the cage. The engine, the arms and the wheels behind that
+    // panel stop taking the fold — only the wear goes on — or a car pinned
+    // against one face grinds itself to pieces through metal that is no
+    // longer moving.
+    const state = freshState();
+    const car = state.car;
+    car.damage.zones[0] = TUNING.collision.zoneMax;
+    car.damage.systems.engine = 0.2;
+    const wasWear = car.damage.wear;
+    const rock = solid({ kind: "boulder", size: 2.4, x: car.x, z: car.z + 4 });
+    car.u = 26;
+    collideCar(state.spec, car, [rock], [], state.stats);
+    expect(car.damage.zones[0]).toBe(TUNING.collision.zoneMax);
+    expect(car.damage.systems.engine).toBe(0.2);
+    // The chassis still pays: a cage taking a blow is a cage being spent.
+    expect(car.damage.wear).toBeGreaterThan(wasWear);
   });
 
   it("a flank driven hard into a rock shatters the glass and, harder, takes the door", () => {

@@ -1482,6 +1482,10 @@ export const TUNING = {
      * car that leaves a ledge sideways SPINS, which is the whole difference
      * between a jump and going over the edge in a drift. */
     yawFromSlide: 0.05,
+    /** ...and the PITCH's, rad/s². Only a body that is going over ever has
+     * a pitch rate of its own to be knocked about (`CarState.pitchRate`);
+     * an ordinary flight's nose follows its arc and this never touches it. */
+    pitchTurbulence: 1.1,
     /** Random roll torque in flight, rad/s² — the same seeded turbulence
      * that unsettles the nose. */
     rollTurbulence: 0.5,
@@ -1610,9 +1614,59 @@ export const TUNING = {
        * on top of what the landing already took. A roll is the most
        * expensive thing a car can do short of a tree. */
       scrub: 2.6,
-      /** ...and of its yaw, 1/s: a car on its roof is not turning in to
-       * anything. */
-      yawDamp: 2.2,
+      /** ...and of its yaw, 1/s. Low, and deliberately: a car does not
+       * trip from a straight line. It is already sliding and already
+       * ROTATING when its centre of gravity goes past its leading tyres,
+       * and that yaw is still in it all the way over — a rolled car ends
+       * up pointing wherever the roll left it, which is very rarely where
+       * it was going. Damping it out is what turned a roll into a tidy
+       * barrel roll down the road. */
+      yawDamp: 0.55,
+
+      /** NO FACE ARRIVES FLAT — and this group is the whole of why a roll
+       * looks like an accident rather than a rotation.
+       *
+       * The hull the roll turns on is an outline across the car: it has a
+       * width and a height and no length at all, so it can only ever say
+       * how far the body goes OVER. What it cannot say is that the corner
+       * reaching the ground reaches it before the rest of that face does,
+       * and that the body is thrown about its other two axes every time
+       * one does. That is the corkscrew — one of the standard rollover
+       * tests is named for it — and it is what makes two rolls off the
+       * same lip end up facing different ways.
+       *
+       * How hard a contact throws, rad/s at `kickAt`: the pitch is the
+       * bigger of the two because it is the axis with nothing else acting
+       * on it, and the yaw arrives on top of what the car was already
+       * carrying when it tripped. */
+      pitchKick: 1.6,
+      yawKick: 1.9,
+      /** ...and the ceiling the yaw kicks wind UP TO, rad/s — about a turn
+       * a second. Each arrival takes a share of the room left under it
+       * rather than adding to what is there, because the arrivals agree
+       * with each other about which way the car is going round: a plain
+       * addition compounds over the fifteen-odd contacts of a roll and
+       * comes out at four turns a second, and a car spinning that fast has
+       * no coherent sideways travel left for the ground to roll it on. The
+       * roll stops, which is the opposite of what the kick is for. */
+      yawMax: 6,
+      /** The arrival, m/s of slam, at which a kick is at its full size —
+       * above it the throw saturates rather than growing without bound,
+       * because past a point the corner folds instead of levering. */
+      kickAt: 9,
+      /** How fast a pitch rate dies while the body is grinding round on
+       * the ground, 1/s — faster than the roll's own, because the length
+       * of the car is lying on the ground and the roll's axis is not. */
+      pitchDamp: 2.4,
+      /** ...and how fast the ground pulls the body's NOSE back level once
+       * it is lying on a face, 1/s. A car on its roof lies flat on it; it
+       * does not come to rest nose-down in the air. */
+      pitchLevel: 3.5,
+      /** How far off level the pitch is allowed to get, rad. The hull's
+       * outline knows nothing about the length of the car, so a body
+       * pitched past about a third of a turn is drawing a shape the roll
+       * is not modelling — and an end-over-end is a different accident. */
+      pitchMax: 1.1,
       /** The roll is over when the body is lying within this of a face of
        * it (rad) and turning slower than `rest` (rad/s) — the rock has
        * died out and the car is where it is going to stay. */
@@ -1628,21 +1682,30 @@ export const TUNING = {
       reach: 0.3,
       /** Roll rate under which a face arriving at the ground is a settle
        * rather than a slam, rad/s: nothing folds and nothing is heard. */
-      slamAt: 0.9,
+      slamAt: 1.5,
       /** How hard a contact HITS, m/s of landing slam per rad/s of the roll
        * the ground took out of the body — the arriving corner meeting the
        * ground, stated on the LANDING's scale so `landingDamage` can price
-       * it (it reads the roll to pick which flank folds).
+       * it (it reads the attitude to pick which face folds).
        *
-       * Well over the metre-odd of arm the corner actually swings on,
-       * because that scale is a scale for a SPRUNG arrival:
-       * `collision.hardLandSpeed` is what a suspension travels through for
-       * free, and a corner of the shell has nothing under it at all. The
-       * rest of the model keeps this honest — a grinding contact takes no
-       * roll and so pays nothing, a wheel arriving is swallowed by its
-       * spring, and what is left to price here is sheet metal meeting the
-       * ground. */
-      slam: 6.5,
+       * The arm the corner actually swings on, a little over a metre for
+       * this hull, and no more: what a shell arrival costs is priced by
+       * `shellFree` below rather than by inflating the speed it arrives at.
+       * The rest of the model keeps this honest — a grinding contact takes
+       * no roll and so pays nothing, and a wheel arriving is swallowed by
+       * its spring. */
+      slam: 1.7,
+      /** What a SHELL arrival gets for free, m/s. The landing's own
+       * tolerance (`collision.hardLandSpeed`) is a SPRUNG car's: 10 m/s of
+       * descent a suspension travels through without marking the car. A
+       * flank or a roof has nothing under it, so almost nothing is free —
+       * a body dropped a hand's breadth onto a door skin dents the door.
+       *
+       * This is the number that makes a roll read as a roll. Charging shell
+       * arrivals a sprung car's tolerance meant a car could turn over three
+       * times and pay for two of the dozen contacts it made, and walk away
+       * with a folded flank and a mirror gone. */
+      shellFree: 4.6,
       /** How long a car lies there once the roll has stopped with it OFF
        * ITS WHEELS, s, before the crew are sent back to the last split
        * board. A car on its roof is not a car anybody is driving away, so
@@ -2124,6 +2187,13 @@ export const TUNING = {
     /** Structural wear per meter of crush dealt (wear reaching 1 is the
      * wreck). ~1.1 lets a car survive several hard hits, not a dozen. */
     wearPerCrush: 2.4,
+    /** ...and the share of it a fold the panel had no room for still costs,
+     * 0..1. Past `zoneMax` the cage is taking the blow instead of the sheet
+     * metal, and a cage taking a blow is a cage doing its job: it is spent
+     * by it, but slower than the panel in front of it was. The number only
+     * shows on a face hit over and over — a nose already flat, or the flank
+     * a roll grinds along on for a second and a half. */
+    wearPastCap: 0.3,
     /** Wear a wrecked car is patched back to when it is next put on the
      * road — rally service on the spot: drivable, but half the car's life
      * is spent. A wreck is never teleported home on its own. */
@@ -2148,6 +2218,16 @@ export const TUNING = {
       glass: 0.15,
       lid: 0.2,
       door: 0.3,
+      /** ...and what the ROOF folding shears, m of `CarDamage.roof`. The
+       * glass is the whole point: a car on its roof loses the screen and
+       * the side windows on the first proper slap, because laminated glass
+       * bonded into a shell survives exactly as long as the shell keeps its
+       * shape. The mirrors go with the pillars they are hung off, and the
+       * lids let go last, when the folding has pulled far enough forward
+       * and back to reach their hinges. */
+      roofGlass: 0.04,
+      roofMirror: 0.06,
+      roofLid: 0.22,
     },
     /** THE END OF THE RUN, short of the line. A car whose engine has died
      * (`systems.engine` at 1) or that has fewer than three wheels left is
@@ -2385,7 +2465,15 @@ export const TUNING = {
       /** ...and a landing taken ON THE SIDE, where the flank crush already
        * dealt to that side's wheels is not the whole of it: the wheels are
        * what the car came down on. Per m of the landing's crush, on top. */
-      wheelFromSideLand: 5.0,
+      wheelFromSideLand: 1.4,
+      /** ...and a car that came down ON ITS ROOF. Nothing mechanical lives
+       * up there, but the load goes down the pillars into the floor and out
+       * to every mount hanging off it: all four corners are flailing on
+       * their springs with the car's weight on top of them, and the column
+       * is in the cabin that just folded. Per m of roof crush. */
+      wheelFromRoof: 0.7,
+      suspensionFromRoof: 1.6,
+      steeringFromRoof: 1.2,
 
       /** Fraction of engine power gone at engine damage 1 — half the
        * motor, on top of the misfire that comes with it (chassis below).
