@@ -238,6 +238,9 @@ export function createField(track: Track, plan: FieldPlan, stage: FieldStage): R
       // lights the player does and every clock starts together.
       skipCountdown: !plan.massStart,
       quiet: true,
+      // R44 — a crew on the stage never meets the public roads' traffic,
+      // and the player's own run already carries the one fleet there is.
+      traffic: false,
       // Off to one side of the line, because the player is on it. Only the
       // crew immediately in front is ever visible from a rally control, and
       // this is the metre and a bit of road that has them pulling away

@@ -21,14 +21,7 @@ export {
 } from "./output.ts";
 
 // The simulation.
-export {
-  createGame,
-  freshCar,
-  skipIntro,
-  startsIn,
-  step,
-  type CreateGameOptions,
-} from "./game/step.ts";
+export { createGame, skipIntro, startsIn, step, type CreateGameOptions } from "./game/step.ts";
 // A run stood at a moment instead of driven to it (place.ts).
 export { placeRun, type RunMoment } from "./game/place.ts";
 export {
@@ -294,7 +287,29 @@ export {
   type Culvert,
   type Pacenote,
   type Checkpoint,
+  planTraffic,
+  TRAFFIC_LIMITS,
+  type RoutePoint,
+  type SpeedSign,
+  type TrafficPlace,
+  type TrafficPlan,
+  type TrafficRoute,
 } from "./mapgen/index.ts";
+
+// R44 — the traffic on the public roads.
+export { freshCar, freshStats } from "./game/car-state.ts";
+export {
+  TRAFFIC,
+  TRAFFIC_MODELS,
+  type TrafficBody,
+  type TrafficModel,
+} from "./game/defs/traffic.ts";
+export {
+  createTraffic,
+  stepTraffic,
+  type TrafficFleet,
+  type TrafficVehicle,
+} from "./game/traffic.ts";
 
 // The headless simulator and its bot driver.
 export { simulateStage, type SimOptions, type SimResult } from "./sim/simulate.ts";

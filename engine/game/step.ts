@@ -41,112 +41,23 @@ import {
   type WayHome,
 } from "./track.ts";
 import {
-  DAMAGE_ZONES,
   NEUTRAL_INPUT,
   stillCar,
   updateSlip,
   type CarInput,
-  type CarState,
   type CatchUp,
   type GameEvent,
   type GameState,
   type RaceEnv,
-  type RunStats,
   type Season,
   type TimeOfDay,
   type Weather,
 } from "./state.ts";
+import { freshCar, freshStats } from "./car-state.ts";
+import { createTraffic, stepTraffic } from "./traffic.ts";
 import { status } from "../output.ts";
 
 const T = TUNING;
-
-function freshStats(): RunStats {
-  return {
-    driftCount: 0,
-    driftTime: 0,
-    driftScore: 0,
-    spins: 0,
-    rolls: 0,
-    jumps: 0,
-    airTime: 0,
-    cleanLandings: 0,
-    splashes: 0,
-    offRoadTime: 0,
-    impacts: 0,
-    crashes: 0,
-    respawns: 0,
-    topSpeed: 0,
-  };
-}
-
-/** A car at rest at the origin, every field at the value a run starts it
- * at. Exported because anything that has to put a car somewhere WITHOUT
- * starting a run — the analysis driving the reference car over an apex, a
- * test staging one contact — needs the same zero state a real run gets, and
- * a hand-rolled partial is a field somebody forgot. */
-export function freshCar(): CarState {
-  return {
-    x: 0,
-    z: 0,
-    y: 0,
-    heading: 0,
-    u: 0,
-    w: 0,
-    vy: 0,
-    wheelVy: 0,
-    yawRate: 0,
-    slip: 0,
-    airborne: false,
-    airTime: 0,
-    settling: false,
-    roll: 0,
-    rollRate: 0,
-    pitch: 0,
-    ride: 0,
-    rideRate: 0,
-    settle: 0,
-    weight: 1,
-    loft: 0,
-    loftRate: 0,
-    foot: 0,
-    footVy: 0,
-    footMean: 0,
-    pitchLoad: 0,
-    kerbFrom: 0,
-    slide: 0,
-    drifting: false,
-    chain: 0,
-    spun: false,
-    spinDir: 0,
-    rolling: false,
-    wheelspin: 0,
-    launchSpin: 0,
-    flick: 0,
-    flickDir: 1,
-    lift: 0,
-    brakeLoad: 0,
-    provoked: 0,
-    thrown: 0,
-    gear: 0,
-    rev: 0,
-    gearbox: "auto",
-    shiftCutUntil: 0,
-    steer: 0,
-    braking: false,
-    locked: false,
-    reversing: false,
-    damage: {
-      zones: new Array(DAMAGE_ZONES).fill(0),
-      belly: 0,
-      wear: 0,
-      systems: { engine: 0, suspension: 0, gearbox: 0, steering: 0, brakes: 0 },
-      wheels: [0, 0, 0, 0],
-      broken: [],
-      version: 0,
-    },
-    damageScale: 1,
-  };
-}
 
 export type CreateGameOptions = {
   seed: number;
@@ -217,6 +128,10 @@ export type CreateGameOptions = {
    * the run a player is sat in, and nothing else — the sim, the field and
    * the tests all drive cars that are marked exactly as they are hit. */
   damageScale?: number;
+  /** R44 — whether the public roads carry traffic. On by default; the
+   * rival field turns it off, since a crew on the stage never meets it and
+   * fourteen fleets would be fourteen times the cost of one. */
+  traffic?: boolean;
 };
 
 /** Wind direction, mean speed, and gust phase are seeded on their own
@@ -310,6 +225,7 @@ export function createGame(options: CreateGameOptions): GameState {
   plant(car, terrain.groundAt);
   return {
     seed: options.seed,
+    traffic: createTraffic(track, terrain.carParks, options.seed, options.traffic ?? true),
     spec,
     track,
     terrain,
@@ -783,6 +699,11 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // The wind blows through every phase — the grid's flags and fumes drift
   // before the lights go green.
   blowWind(state.env, state.t, state.wind);
+  // R44 — and the traffic drives through every phase too: the public roads
+  // do not wait for the lights. It is resolved against the car HERE, off
+  // the pose the last step left, exactly as the rival field is on its own
+  // tick — and the car's own step below starts from whatever it was dealt.
+  stepTraffic(state, events);
 
   // THE START CONTROL. Two beats, one held car: the establishing shot while
   // the crew in front leaves, and then the lights. Both are the same thing

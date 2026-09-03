@@ -23,7 +23,7 @@
 
 import { CARS } from "../game/defs/cars.ts";
 import { clipKerbs } from "../game/collision.ts";
-import { freshCar } from "../game/step.ts";
+import { freshCar } from "../game/car-state.ts";
 import type { GameEvent } from "../game/state.ts";
 import { createKerbField, type KerbMarker } from "../mapgen/kerbs.ts";
 import { STAGE_RULES } from "../mapgen/rules.ts";

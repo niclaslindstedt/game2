@@ -76,7 +76,7 @@ const WHEELS_AT: readonly (readonly [number, number])[][] = [
 
 /** The car's mass against the mass every collision number is written for.
  * Above 1 is a heavy car. */
-function massRatio(spec: CarSpec): number {
+function massRatio(spec: { mass: number }): number {
   return spec.mass / T.collision.refMass;
 }
 
@@ -750,40 +750,49 @@ export function collideSlope(
 // Two capsules give one continuous normal and round the corners off, which
 // is what a bumper actually is.
 
-/** One side of a car-to-car contact: the car, and where its half of the
- * damage is booked. */
+/** One side of a car-to-car contact: the car, what it weighs, and where
+ * its half of the damage is booked. `box` is the footprint the capsule is
+ * cut to — the catalog car's (`TUNING.collision`) when it is left out,
+ * which every rally car is; the traffic's lorries hand in their own. */
 export type ContactSide = {
-  spec: CarSpec;
+  spec: { mass: number };
   car: CarState;
   events: GameEvent[];
   stats: RunStats;
+  box?: { halfLength: number; halfWidth: number };
 };
 
-/** Half the length of the capsule's spine, m — the box's half-length with
- * the cap radius taken off, so the capsule ends where the box does. */
-const SPINE = T.collision.halfLength - T.collision.halfWidth;
+const CAR_BOX = { halfLength: T.collision.halfLength, halfWidth: T.collision.halfWidth };
+
+/** Half the length of a capsule's spine, m — the box's half-length with the
+ * cap radius taken off, so the capsule ends where the box does. */
+function spineOf(box: { halfLength: number; halfWidth: number }): number {
+  return Math.max(0.05, box.halfLength - box.halfWidth);
+}
 
 /** Where two spines come closest, as the parameters along each (0..1 from
- * `-SPINE` to `+SPINE`). Ericson's segment-to-segment solve, flattened to
- * the ground plane and to two segments of equal, non-zero length — which is
- * every pair of cars, so the degenerate branches are not needed. */
+ * `-spine` to `+spine`). Ericson's segment-to-segment solve, flattened to
+ * the ground plane and to two segments of non-zero length — which is every
+ * pair of cars, so the degenerate branches are not needed. */
 function nearestOnSpines(
   ax: number,
   az: number,
   adx: number,
   adz: number,
+  spineA: number,
   bx: number,
   bz: number,
   bdx: number,
   bdz: number,
+  spineB: number,
 ): { s: number; t: number } {
   // The spines as (start, direction × full length).
-  const ux = adx * 2 * SPINE;
-  const uz = adz * 2 * SPINE;
-  const vx = bdx * 2 * SPINE;
-  const vz = bdz * 2 * SPINE;
-  const wx = ax - adx * SPINE - (bx - bdx * SPINE);
-  const wz = az - adz * SPINE - (bz - bdz * SPINE);
+  const ux = adx * 2 * spineA;
+  const uz = adz * 2 * spineA;
+  const vx = bdx * 2 * spineB;
+  const vz = bdz * 2 * spineB;
+  const wx = ax - adx * spineA - (bx - bdx * spineB);
+  const wz = az - adz * spineA - (bz - bdz * spineB);
   const a = ux * ux + uz * uz;
   const b = ux * vx + uz * vz;
   const c = vx * vx + vz * vz;
@@ -820,11 +829,26 @@ export function collideCars(a: ContactSide, b: ContactSide): boolean {
   const cosA = Math.cos(carA.heading);
   const sinB = Math.sin(carB.heading);
   const cosB = Math.cos(carB.heading);
-  const { s, t } = nearestOnSpines(carA.x, carA.z, sinA, cosA, carB.x, carB.z, sinB, cosB);
+  const boxA = a.box ?? CAR_BOX;
+  const boxB = b.box ?? CAR_BOX;
+  const spineA = spineOf(boxA);
+  const spineB = spineOf(boxB);
+  const { s, t } = nearestOnSpines(
+    carA.x,
+    carA.z,
+    sinA,
+    cosA,
+    spineA,
+    carB.x,
+    carB.z,
+    sinB,
+    cosB,
+    spineB,
+  );
   // Back from the parameters to the world points, as offsets from each
   // car's own centre: the lever arms the yaw kick needs.
-  const raF = (s * 2 - 1) * SPINE;
-  const rbF = (t * 2 - 1) * SPINE;
+  const raF = (s * 2 - 1) * spineA;
+  const rbF = (t * 2 - 1) * spineB;
   const pax = carA.x + sinA * raF;
   const paz = carA.z + cosA * raF;
   const pbx = carB.x + sinB * rbF;
@@ -833,7 +857,7 @@ export function collideCars(a: ContactSide, b: ContactSide): boolean {
   let nx = pbx - pax;
   let nz = pbz - paz;
   let d = Math.hypot(nx, nz);
-  const reach = T.collision.halfWidth * 2;
+  const reach = boxA.halfWidth + boxB.halfWidth;
   if (d >= reach) return false;
   // How far inside each other they are, read off the spines BEFORE any
   // fallback normal replaces the measurement — a car that has been put
