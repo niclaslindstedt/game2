@@ -42,6 +42,7 @@ import { createBreakage } from "../game/breakage.ts";
 import { createConeField } from "../game/cones.ts";
 import { buildCrowd } from "../game/crowd.ts";
 import { buildFinishGate, buildStartGate } from "../game/finish-gate.ts";
+import { plantSplitBoard } from "../game/split-board.ts";
 import { FLORA_IDS, buildFlora, TRUNK_COLOR } from "../game/flora.ts";
 import { buildBuilding } from "../game/building.ts";
 import { buildHouse, type HousePlan } from "../game/house.ts";
@@ -386,6 +387,17 @@ const STAGE_ITEMS: ItemDef[] = [
     group: "stage",
     note: "the gate, its banner and the guns beside it",
     build: () => ({ object: buildFinishGate(straightTrack()).group }),
+  },
+  {
+    id: "split-board",
+    group: "stage",
+    note: "R28 — the pair of flags that mark a timing split",
+    build: () => {
+      const track = straightTrack();
+      const field = createConeField();
+      plantSplitBoard(field, track, { s: track.samples[8].s, index: 8 });
+      return { object: field.group, dispose: field.dispose };
+    },
   },
   {
     id: "spectators",
