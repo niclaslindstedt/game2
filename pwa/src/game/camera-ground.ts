@@ -137,8 +137,13 @@ export const SLACK = {
  * arrives as a curve, and a bump over before the spring has answered it is
  * mostly not answered at all — the car rides it, in the frame, and the
  * frame holds. `ground` is the spring's natural frequency on the ground,
- * Hz: about a second to answer a real change of level, which is the
- * weight of something flown rather than bolted on. `flying` is the same
+ * Hz: a real change of level is most of the way answered inside a fifth of
+ * a second and settled inside half of one. That is the balance the number
+ * is for — soft enough that a crease, a kerb or a rut is ridden in the
+ * frame instead of followed, stiff enough that the shot is not a beat
+ * behind the car everywhere the ground actually goes somewhere. A softer
+ * spring than this buys its steadiness by lagging the hill, and a camera
+ * lagging the hill is a camera looking at a roof. `flying` is the same
  * spring in the AIR, where the car's height is a smooth arc with nothing in
  * it to reject and the frame must not change for a designed jump
  * (CHASE_RIGS): stiff enough to sit on the arc within a couple of
@@ -154,7 +159,7 @@ export const SLACK = {
  * road even the smoothed grade jitters — and snapped, not eased, at
  * takeoff and landing, which are real changes of movement rather than
  * bumps in it. */
-export const HEIGHT_SPRING = { ground: 1.1, flying: 4, damping: 1, lead: 2.5, snap: 6 };
+export const HEIGHT_SPRING = { ground: 1.6, flying: 4, damping: 1, lead: 2.5, snap: 6 };
 
 /** THE CLIFF. Driving off a cliff top is the one place the chase rig has
  * nothing sensible to follow. Riding the car down keeps it exactly two

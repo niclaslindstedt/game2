@@ -230,15 +230,26 @@ type ChaseRig = {
  *
  * What makes those three ONE shot at three lengths is not the height — it is
  * the LOOK-OVER ANGLE, the depression from the lens to the top of the car's
- * own roof, which every one of them holds at about 13°. That angle is the
- * whole of whether a player can see where they are going, because it is what
- * decides how far up the frame the roofline reaches and how much road is
- * left above it: at 13° the roof sits around three fifths of the way down
- * the frame and the sight line grazing it lands on the road a couple of
- * metres past the bumper. Height is therefore a CONSEQUENCE of the standoff,
- * not a free number — a boom half as long needs half as much height over the
- * roof for the same shot, and a camera set at roof height, whatever its
- * length, is a camera looking at a roof.
+ * own roof. That angle is the whole of whether a player can see where they
+ * are going, because it is what decides how far up the frame the roofline
+ * reaches and how much road is left above it: `chase` and `far` hold about
+ * 13°, which puts the roof around three fifths of the way down the frame
+ * and lands the sight line grazing it on the road a couple of metres past
+ * the bumper. Height is therefore a CONSEQUENCE of the standoff, not a free
+ * number — a boom half as long needs half as much height over the roof for
+ * the same shot, and a camera set at roof height, whatever its length, is a
+ * camera looking at a roof.
+ *
+ * The angle is the means, though, and WHERE THE ROOFLINE LANDS is the end —
+ * and the two only agree while the car fills the same amount of frame. At
+ * four metres it does not: the same car subtends half again as much of the
+ * picture as it does from `chase`, so the shared 13° hangs its roofline
+ * higher up the frame and leaves proportionally less road over it, which
+ * is the shortest shot on the ladder reading as sitting in the dirt behind
+ * the car. So `close` takes about 18° instead — enough extra look-over to
+ * put its roofline back where the rest of the ladder puts one, around
+ * three fifths down. It costs it nothing else: what makes `close` the
+ * tight shot is the length of the boom, not the height of it.
  *
  * `close` and `chase` carry IDENTICAL steadying numbers — the follow rate,
  * the swing spring, the hill lift and duck, the aim's climb. A boom is a
@@ -256,7 +267,7 @@ const CHASE_RIGS: Record<Exclude<PlayCamera, InCarCamera>, ChaseRig> = {
   close: {
     dist: 4.4,
     distPerSpeed: 0.014,
-    height: 2.15,
+    height: 2.55,
     driftWeight: 0.85,
     followRate: 5,
     fov: 60,
