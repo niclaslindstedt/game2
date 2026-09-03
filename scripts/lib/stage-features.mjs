@@ -458,6 +458,62 @@ export function stageFeatures(track, terrain) {
       solids: [],
     });
   });
+  // ── The grid (R45): the line is not placed FROM the stage, so its own
+  // feature is where it CROSSES one — the moment a driver meets it — and
+  // the nearest approach on a stage it merely passes.
+  (track.powerLines ?? []).forEach((line, k) => {
+    let bestD = Infinity;
+    let bestAt = samples[0];
+    let bestSpan = null;
+    let crossings = 0;
+    const spans = [];
+    for (let i = 0; i + 1 < line.pylons.length; i++) {
+      const a = line.pylons[i];
+      const b = line.pylons[i + 1];
+      spans.push(b.span);
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const l2 = dx * dx + dz * dz;
+      let near = Infinity;
+      let nearAt = samples[0];
+      for (const sample of samples) {
+        const u = Math.max(0, Math.min(1, ((sample.x - a.x) * dx + (sample.z - a.z) * dz) / l2));
+        const d = Math.hypot(a.x + dx * u - sample.x, a.z + dz * u - sample.z);
+        if (d < near) {
+          near = d;
+          nearAt = sample;
+        }
+      }
+      if (near < nearAt.width / 2) crossings++;
+      if (near >= bestD) continue;
+      bestD = near;
+      bestAt = nearAt;
+      bestSpan = { a, b, length: b.span };
+    }
+    const kinds = line.pylons.reduce((tally, p) => ({ ...tally, [p.kind]: (tally[p.kind] ?? 0) + 1 }), {}); // prettier-ignore
+    const over =
+      bestSpan === null
+        ? ""
+        : `, the nearest span ${bestSpan.length.toFixed(0)} m long ${bestD.toFixed(0)} m from the centreline`;
+    features.push({
+      id: `PL${k + 1}`,
+      kind: "powerline",
+      s: bestAt.s,
+      index: indexAtS(samples, bestAt.s),
+      x: bestAt.x,
+      z: bestAt.z,
+      heading: bestAt.heading,
+      elevation: bestAt.elevation,
+      side: "both",
+      label: `PL${k + 1}`,
+      detail:
+        `transmission line: ${line.pylons.length} towers ${line.height.toFixed(0)} m to the crossarm ` +
+        `(${kinds.suspension ?? 0} suspension, ${kinds.angle ?? 0} angle, ${kinds.tension ?? 0} tension), ` +
+        `spans ${Math.min(...spans).toFixed(0)}-${Math.max(...spans).toFixed(0)} m, ` +
+        `${crossings} crossing${crossings === 1 ? "" : "s"} of the route${over}`,
+      solids: [],
+    });
+  });
   (track.solarFarms ?? []).forEach((farm, k) => {
     const at = samples[indexAtS(samples, farm.atS)];
     const side = farm.side > 0 ? "right" : "left";
@@ -654,6 +710,7 @@ export function stageSummary(track, features) {
     towns: by("town"),
     carParks: by("carpark"),
     windFarms: by("windfarm"),
+    powerLines: by("powerline"),
     solarFarms: by("solarfarm"),
     tarmacShare: paved / track.samples.length,
     tarmac: surfaceRuns(track, "asphalt"),

@@ -31,6 +31,7 @@ import { cabinGeometry, tableGeometry } from "../game/solar-farm.ts";
 import { buildTrainCar } from "../game/train.ts";
 import { buildTrafficVehicle, trafficPaint } from "../game/traffic-fleet.ts";
 import { speedSignTexture } from "../game/textures.ts";
+import { buildPylon } from "../game/powerline.ts";
 import { buildTurbine } from "../game/wind-farm.ts";
 
 import { biomeFor } from "../game/biome.ts";
@@ -794,6 +795,18 @@ const ENERGY_ITEMS: ItemDef[] = [
     group: "energy",
     note: "a wind turbine at the band's middle — two hundred metres to the tip, the beacon on the nacelle",
     build: ({ rng }) => ({ object: buildTurbine(rng) }),
+  },
+  {
+    id: "pylon",
+    group: "energy",
+    note: "R45 — a transmission tower at the band's middle: the Nordic portal, two lattice legs under one crossarm, on its concrete footings",
+    build: ({ rng }) => ({ object: buildPylon(rng) }),
+  },
+  {
+    id: "pylon-angle",
+    group: "energy",
+    note: "the same tower where the line TURNS: the insulator strings pulled out along the line either way instead of hanging, because the wire is anchored into it",
+    build: ({ rng }) => ({ object: buildPylon(rng, "angle") }),
   },
   {
     id: "solar-table",

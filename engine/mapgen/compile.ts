@@ -53,6 +53,8 @@ import { buildPublicRoads, type PublicRoad } from "./publicroad.ts";
 import { placeHomesteads, type Homestead } from "./homesteads.ts";
 import { placeTowns, type Town } from "./towns.ts";
 import { placeSolarFarms, placeWindFarms, type SolarFarm, type WindFarm } from "./energy.ts";
+import { placePowerLines, type PowerLine } from "./powerline.ts";
+import { rectDistance } from "./farms.ts";
 import { createHighwayNetwork, type Highway } from "./highway.ts";
 import { drawSchedule, joinRailLine, type RailCrossing } from "./railway.ts";
 
@@ -309,6 +311,12 @@ export type Track = {
   /** R43 — the solar farms: each a fenced rectangle of panel tables on
    * level ground beside the stage, a clearing the forest keeps off. */
   solarFarms: SolarFarm[];
+  /** R45 — THE GRID: the transmission line the country carries, laid rim
+   * to rim across the map and passing over the stage wherever it happens
+   * to. At most one, and none on a little under half the seeds. Empty on
+   * an endless stage, which carries no grid for the tarmac's reason, and
+   * on a synthetic rig. */
+  powerLines: PowerLine[];
   /** R17 — the junctions themselves: where two roads MEET, and the paved
    * apron that makes them one surface there instead of two ribbons that
    * happen to touch. The terrain flattens it and the renderer paves it. */
@@ -2605,6 +2613,11 @@ function createCompiler(
     // R43 — and the energy after the settled places, because a turbine and
     // a fence both keep off a yard, and never the other way round.
     buildEnergy();
+    // R45 — and the grid last of everything the compiler places: a tower
+    // keeps off all of it, and nothing keeps off a tower. The car parks
+    // come later still, in the terrain field, and they keep off it through
+    // the footprint each tower leaves behind.
+    buildPowerLines();
   };
 
   /** R17 — build the public roads the route never met (`publicroad.ts`).
@@ -2814,7 +2827,174 @@ function createCompiler(
     energyFrom = to;
   };
 
+  /** R45 — the transmission line this country carries, laid once per stage
+   * across the whole map. Once, and not on the placers' streaming window,
+   * because a line is not decided from the stage at all: it is a fact
+   * about the country from rim to rim, and there is no rim on an endless
+   * one — which is the same reason an endless stage carries no tarmac. */
+  const buildPowerLines = (): void => {
+    if (track.endless || !followsLand || !biome.energy) return;
+    if (track.powerLines.length > 0 || track.samples.length === 0) return;
+    const whole = roadDistanceField()({ x: 0, z: 0 });
+    const branches = branchClearance([...track.spurs, ...track.publicRoads]);
+    const roadTop = roadTopField(track, land);
+    const b = track.bounds;
+    track.powerLines.push(
+      ...placePowerLines({
+        seed: track.seed,
+        // The country the STAGE occupies, not the length's nominal box:
+        // the line has to cross what a player can see, and what a player
+        // can see is the road and the fog's reach either side of it. The
+        // module's own `overrun` puts both ends well outside that.
+        worldBound: Math.max(
+          Math.abs(b.minX),
+          Math.abs(b.maxX),
+          Math.abs(b.minZ),
+          Math.abs(b.maxZ),
+        ),
+        land,
+        routeDistance: (x, z) => whole(x, z, false),
+        branchDistance: branches,
+        highwayDistance: (x, z) => highways.nearest(x, z, undefined, HIGHWAY_LOOK)?.d ?? Infinity,
+        settledDistance: (x, z) => {
+          let best = Infinity;
+          for (const h of track.homesteads) {
+            const d = Math.hypot(h.yard.x - x, h.yard.z - z) - h.yard.radius;
+            if (d < best) best = d;
+          }
+          for (const town of track.towns) {
+            for (const lot of town.lots) {
+              const d = Math.hypot(lot.pad.x - x, lot.pad.z - z) - lot.pad.radius;
+              if (d < best) best = d;
+            }
+          }
+          return best;
+        },
+        // The wire clears every ROAD, not the country under them: a road
+        // rides its embankments and shelves metres over the ground the
+        // survey read, and the terrain blends the country up onto them.
+        clearanceAt: roadTop,
+        shelfBand,
+        energyDistance: (x, z) => {
+          let best = Infinity;
+          for (const farm of track.windFarms) {
+            for (const t of farm.turbines) {
+              const d = Math.hypot(t.x - x, t.z - z) - R.energy.wind.pad.radius;
+              if (d < best) best = d;
+            }
+          }
+          for (const farm of track.solarFarms) {
+            const d = rectDistance(farm.rect, x, z);
+            if (d < best) best = d;
+          }
+          return best;
+        },
+      }),
+    );
+  };
+
   return { append };
+}
+
+/** R45 — the highest surface a WIRE has to clear at a point: the bare
+ * country, or a ROAD standing over it — the route, an abandoned branch, a
+ * homestead's drive, a public road the rally never met.
+ *
+ * Not `land.heightAt`, and the difference is a defect rather than a
+ * refinement. A road is laid ALONG the country but not ON it: it rides
+ * embankments and shelves, and the terrain blends the country up onto them
+ * over its corridor range. A span planned against the bare land came out
+ * clearing the BUILT road by seven metres where it had promised twelve,
+ * and another was drawn through a branch's embankment seventy metres up.
+ * The road is exactly where this matters, because it is the one place
+ * anybody is standing under the wire.
+ *
+ * The shelf is modelled the way the terrain builds one: the road's own
+ * level on its centerline, easing back to the country over `REACH`. It has
+ * to EASE rather than hold — held flat across its whole reach it demanded
+ * twelve metres of air over the highest road within a hundred and fifty
+ * metres, which refused a third of the lines that had been fitting and
+ * bought nothing, since no wire is ever measured against a road that far to
+ * one side. A cell grid over every road's samples, so away from all of them
+ * the answer is the country and one failed set lookup. */
+/** R45 — what a WIRE has to clear at a point, and by how much: the bare
+ * country, or a ROAD standing over it — the route, an abandoned branch, a
+ * homestead's drive, a public road the rally never met — with the road's
+ * own clearance owed wherever one is under it.
+ *
+ * Not `land.heightAt`, and the difference is a defect rather than a
+ * refinement. A road is laid ALONG the country but not ON it: it rides
+ * embankments and shelves, and the terrain blends the country up onto them
+ * over its corridor range. A span planned against the bare land came out
+ * clearing the BUILT road by seven metres where it had promised twelve, and
+ * another was drawn through a branch's embankment seventy metres up.
+ *
+ * The shelf is modelled the way the terrain builds one: the road's own
+ * level on its centerline, easing back to the country over `REACH`. It has
+ * to EASE rather than hold — held flat across its whole reach it demanded a
+ * road's clearance over the highest road within a hundred and fifty metres,
+ * which refused a third of the lines that had been fitting and bought
+ * nothing, since no wire is measured against a road that far to one side.
+ *
+ * A cell grid over every road's samples, so away from all of them the
+ * answer is the country and one failed set lookup. */
+function roadTopField(
+  track: Track,
+  land: { heightAt: (x: number, z: number) => number },
+): (x: number, z: number) => { ground: number; need: number } {
+  const CELL = 48;
+  /** How far a road's shelf reaches into the country, m — the terrain's own
+   * `CORRIDOR_RANGE`, restated here because the terrain does not exist yet
+   * when a line is surveyed. Over-reaching costs a longer span; under it
+   * buries a conductor in an embankment. */
+  const REACH = 150;
+  /** ...and how near one has to be before the wire owes it a road's own
+   * clearance rather than a field's, m: the widest corridor and its verge. */
+  const OVER = 30;
+  const STRIDE = 6;
+  type Top = { x: number; z: number; y: number };
+  const grid = new Map<number, Top[]>();
+  const add = (point: Top): void => {
+    const at = cellKey(Math.floor(point.x / CELL), Math.floor(point.z / CELL));
+    const bucket = grid.get(at);
+    if (bucket) bucket.push(point);
+    else grid.set(at, [point]);
+  };
+  for (let i = 0; i < track.samples.length; i += STRIDE) {
+    const s = track.samples[i];
+    add({ x: s.x, z: s.z, y: s.elevation });
+  }
+  for (const road of [...track.spurs, ...track.publicRoads]) {
+    for (let i = 0; i < road.samples.length; i += STRIDE) {
+      const s = road.samples[i];
+      add({ x: s.x, z: s.z, y: s.elevation });
+    }
+  }
+  const rings = Math.ceil(REACH / CELL);
+  return (x, z) => {
+    const country = land.heightAt(x, z);
+    const ix = Math.floor(x / CELL);
+    const iz = Math.floor(z / CELL);
+    let top = -Infinity;
+    let nearest = REACH;
+    for (let dx = -rings; dx <= rings; dx++) {
+      for (let dz = -rings; dz <= rings; dz++) {
+        const bucket = grid.get(cellKey(ix + dx, iz + dz));
+        if (!bucket) continue;
+        for (const p of bucket) {
+          const d = Math.hypot(p.x - x, p.z - z);
+          if (d > REACH) continue;
+          if (p.y > top) top = p.y;
+          if (d < nearest) nearest = d;
+        }
+      }
+    }
+    if (top === -Infinity) return { ground: country, need: R.powerline.clearance.ground };
+    return {
+      ground: Math.max(country, country + (top - country) * (1 - nearest / REACH)),
+      need: nearest < OVER ? R.powerline.clearance.road : R.powerline.clearance.ground,
+    };
+  };
 }
 
 /** How far behind an endless stage's frontier the road is settled enough
@@ -3097,6 +3277,7 @@ function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs, circuit =
     towns: [],
     windFarms: [],
     solarFarms: [],
+    powerLines: [],
     junctions: [],
     rails: [],
     culverts: [],

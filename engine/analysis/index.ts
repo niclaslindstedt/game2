@@ -39,6 +39,7 @@ import { analyzeRoads } from "./roads.ts";
 import { analyzeRollers } from "./rollers.ts";
 import { speedProfile } from "./speed.ts";
 import { analyzeWater } from "./water.ts";
+import { analyzeWires } from "./wires.ts";
 import { rank, type MetricReport, type StageReport } from "./types.ts";
 
 export { ANALYSIS } from "./budgets.ts";
@@ -78,6 +79,7 @@ export function analyzeTrack(
     analyzeEnds(track, terrain),
     analyzeGround(track, terrain),
     analyzeLanes(track, terrain),
+    analyzeWires(track, terrain),
   ];
   if (options.perf !== false && options.length) {
     metrics.push(analyzePerf(track, track.seed, options.length, options.knobs ?? {}));

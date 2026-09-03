@@ -89,6 +89,7 @@ const columns = [
   "ends",
   "ground",
   "lanes",
+  "wires",
   "perf",
 ];
 

@@ -49,6 +49,7 @@ import { farmClearings, rectDistance, type FarmRect } from "./farms.ts";
 import { homesteadSolids } from "./homesteads.ts";
 import { townSolids } from "./towns.ts";
 import { solarFarmClearings, solarFarmSolids, windFarmPads, windFarmSolids } from "./energy.ts";
+import { powerLineFootprints, powerLineSolids, underWayleave } from "./powerline.ts";
 
 export { LAKE_Y } from "./land.ts";
 export { GROVE_SCALE, REGION_SCALE, type GroveCommunity, type Region } from "./biomes.ts";
@@ -1176,6 +1177,7 @@ export function createTerrain(track: Track): TerrainField {
   let townCount = 0;
   let windFarmCount = 0;
   let solarFarmCount = 0;
+  let powerLineCount = 0;
   /** How much of a pad's level applies at a point — 1 on the pad, fading
    * to 0 over its `blend` past the rim — and the level itself. Where two
    * pads reach the same point (a street's lots overlap at their rims) the
@@ -1884,6 +1886,14 @@ export function createTerrain(track: Track): TerrainField {
     roadNear: nearestRoad,
     sampleAt: (index) => samples[index],
     spurClearance,
+    // R45 — the wayleave under the grid, or nothing at all on the seeds
+    // that carry no line, which is most of them.
+    underWire: (x, z) => {
+      for (const line of track.powerLines) {
+        if (underWayleave(line, x, z)) return true;
+      }
+      return false;
+    },
     inAnyStream: (x, z, margin) => inStream(streams, x, z, margin),
     // R34 — the cover, MINUS whatever the road blasted off. The geology's
     // own soil is the bare country's, and the bare country never heard of
@@ -1998,6 +2008,20 @@ export function createTerrain(track: Track): TerrainField {
         const farm = track.solarFarms[solarFarmCount];
         for (const c of solarFarmClearings(farm)) clearings.push({ ...c, atS: farm.atS });
         for (const solid of solarFarmSolids(farm, heightAt)) fix(solid);
+      }
+      // R45 — the grid: each tower's legs are solid to their full height,
+      // and its base is a clearing so nothing grows between the legs and
+      // no car park is graded round them. No PAD: a real tower stands on
+      // the hillside it was cut to fit, and flattening a disc under every
+      // one would put a step in the country every three hundred metres.
+      // `atS: 0` because a line is not decided from the stage arc at all,
+      // and only an endless stage prunes by it — which carries no grid.
+      for (; powerLineCount < track.powerLines.length; powerLineCount++) {
+        const line = track.powerLines[powerLineCount];
+        for (const rect of powerLineFootprints(line)) {
+          clearings.push({ rect, surface: null, atS: 0 });
+        }
+        for (const solid of powerLineSolids(line, heightAt)) fix(solid);
       }
       // The water: every crossing this stretch of road added, traced as
       // one river through them (R18) — born on the high ground, gathering

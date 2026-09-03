@@ -252,6 +252,12 @@ export type PropContext = {
   sampleAt: (index: number) => { x: number; z: number; elevation: number; width: number };
   /** Distance past the mat edge of the nearest abandoned branch (R17). */
   spurClearance: (x: number, z: number) => number;
+  /** R45 — is this point under the transmission line's WAYLEAVE: the ride
+   * cut through the forest along it. Asked here and nowhere else, because
+   * a wayleave clears TREES and only trees — the stones, the deadwood and
+   * the ground cover stay, which is what makes it read as a cut ride
+   * rather than as a mown strip. */
+  underWire: (x: number, z: number) => boolean;
   /** True when a point is inside a stream valley, with margin. */
   inAnyStream: (x: number, z: number, margin: number) => boolean;
   /** R32 — how far the GROUNDWATER stands above the surface here, m: 0 on
@@ -281,7 +287,8 @@ export type PropField = {
 };
 
 export function createPropField(ctx: PropContext): PropField {
-  const { groundAt, roadNear, sampleAt, spurClearance, inAnyStream, half, guards, biome } = ctx;
+  const { groundAt, roadNear, sampleAt, spurClearance, underWire, inAnyStream } = ctx;
+  const { half, guards, biome } = ctx;
   const { regions, groves } = biome;
 
   // ── The quilt ─────────────────────────────────────────────────────────
@@ -786,6 +793,11 @@ export function createPropField(ctx: PropContext): PropField {
     const near = roadNear(x, z);
     if (near && near.d < halfAt(near) + TREE_ROAD_CLEAR) return;
     if (spurClearance(x, z) < TREE_ROAD_CLEAR || inAnyStream(x, z, 1.5)) return;
+    // R45 — and nothing with a trunk stands under the wires. Asked last of
+    // the three because it is the rarest: most stages have no line on them
+    // at all, and the ones that do have a couple of hundred metres of ride
+    // across a map of forest.
+    if (underWire(x, z)) return;
     // Feet on the RIDDEN lattice ground, same as the props: the trunk must
     // stand exactly on the surface the car drives.
     const y = groundAt(x, z);

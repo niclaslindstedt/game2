@@ -85,6 +85,21 @@ export {
   type WindTurbine,
 } from "./energy.ts";
 export {
+  placePowerLines,
+  powerlineTally,
+  powerLineFootprints,
+  powerLineSolids,
+  pylonFootings,
+  pylonLegs,
+  pylonWirePoints,
+  spanSag,
+  underWayleave,
+  type PowerLine,
+  type PowerlineContext,
+  type Pylon,
+  type PylonKind,
+} from "./powerline.ts";
+export {
   farmClearings,
   farmSolids,
   placeFarm,
