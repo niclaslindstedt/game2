@@ -324,6 +324,27 @@ export const ANALYSIS = {
      * the verge — a block of flats lands a couple of metres further out
      * than a house. Past this the building is not ON the street. */
     townFront: 12,
+    /** ...and how far the GROUND under a building may stand from the
+     * building's own floor, m — measured on `groundAt`, which is the
+     * surface the world draws and the car rides, not the analytic field
+     * between its corners.
+     *
+     * This is the check the flying houses got past. A lot is graded level
+     * with its street, but a pad ten metres across is narrower than the
+     * ground lattice (`lattice.ts`): graded one lot at a time the
+     * flattening fell BETWEEN the lattice corners, never reached the drawn
+     * ground at all, and four houses in five stood on the country's own
+     * slope — hanging a couple of metres over it downhill, buried in it
+     * uphill. Read over the whole footprint, wings included, because the
+     * corner that hung in the air was usually a villa's wing.
+     *
+     * The budget is what a level-floored box on a graded street cannot get
+     * under: `town.lot.step` is the fall a front is allowed to span, half
+     * of it stands clear at one end, and the lattice's own interpolation
+     * adds a little. Measured: over seeds 1-40 at medium the worst
+     * building is 0.56 m out and 1% of them are past half a metre; before
+     * the town's platform it was 7.5 m and 79%. */
+    townFooting: 0.7,
 
     /** ...how long a trail from a car park to a stand may be, m — the
      * placer's own walk (`STAGE_RULES.carPark.walk`), plus the pad the

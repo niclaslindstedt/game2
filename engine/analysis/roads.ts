@@ -35,6 +35,7 @@ import { createHighwayNetwork } from "../mapgen/highway.ts";
 import { crossingParting } from "../mapgen/crossing.ts";
 import { STAGE_RULES } from "../mapgen/rules.ts";
 import { isLoose, type Track } from "../mapgen/compile.ts";
+import type { Building } from "../mapgen/buildings.ts";
 import { padHeight } from "../mapgen/carparks.ts";
 import type { TerrainField } from "../mapgen/terrain.ts";
 import { ANALYSIS } from "./budgets.ts";
@@ -105,6 +106,53 @@ function strands(track: Track, spacing: number): Strand[] {
     });
   });
   return out;
+}
+
+/** R39 — how far a building stands from the DRAWN ground under it, m: the
+ * worst of the whole footprint, its wing included, over a metre grid.
+ *
+ * Unsigned on purpose. Hanging in the air and buried to the windows are the
+ * same defect with the same cause — the ground the village was graded onto
+ * is not the ground the world drew — and a check that measured only the
+ * gap under a house would call a street of half-sunk ones clean. */
+function footingOff(building: Building, terrain: TerrainField): number {
+  const { plan } = building;
+  const fwd = { x: Math.sin(building.heading), z: Math.cos(building.heading) };
+  const right = { x: Math.cos(building.heading), z: -Math.sin(building.heading) };
+  const half = plan.width / 2;
+  /** Every block of the building, in its own local frame: `u` across the
+   * front, `v` back from it. The wing hangs off the BACK wall, flush with
+   * one end (`buildings.ts` builds its solids from the same rectangle). */
+  const blocks = [{ u0: -half, u1: half, v0: -plan.depth / 2, v1: plan.depth / 2 }];
+  if (plan.wing) {
+    const u1 = plan.wing.side > 0 ? half : -half + plan.wing.width;
+    blocks.push({
+      u0: u1 - plan.wing.width,
+      u1,
+      v0: -plan.depth / 2 - plan.wing.depth,
+      v1: -plan.depth / 2,
+    });
+  }
+  let worst = 0;
+  for (const block of blocks) {
+    const nu = Math.max(2, Math.ceil(block.u1 - block.u0));
+    const nv = Math.max(2, Math.ceil(block.v1 - block.v0));
+    for (let i = 0; i <= nu; i++) {
+      for (let j = 0; j <= nv; j++) {
+        const u = block.u0 + ((block.u1 - block.u0) * i) / nu;
+        const v = block.v0 + ((block.v1 - block.v0) * j) / nv;
+        const off = Math.abs(
+          building.y -
+            terrain.groundAt(
+              building.x + right.x * u + fwd.x * v,
+              building.z + right.z * u + fwd.z * v,
+            ),
+        );
+        if (off > worst) worst = off;
+      }
+    }
+  }
+  return worst;
 }
 
 /** How far off parallel two headings are, radians, folded so opposite
@@ -646,6 +694,9 @@ export function analyzeRoads(track: Track, terrain: TerrainField): MetricReport 
   }
   let lots = 0;
   let badLots = 0;
+  /** R39 — how far the worst building on the stage stands off the ground
+   * under it, m. */
+  let footing = 0;
   const T = STAGE_RULES.town;
   for (const town of track.towns) {
     const street =
@@ -688,6 +739,27 @@ export function analyzeRoads(track: Track, terrain: TerrainField): MetricReport 
               : front > R.townFront
                 ? `stands ${front.toFixed(1)} m back from the street`
                 : null;
+      // ...and STANDS ON the ground the town was graded onto. Read on
+      // `groundAt`, the surface the world draws and the car rides: the
+      // analytic field agrees with a lot's own pad by construction, and a
+      // pad narrower than the ground lattice never reaches the drawn
+      // ground at all (`lattice.ts`) — which is how a street of houses
+      // came to be hanging over the country while every number about it
+      // read clean.
+      const off = footingOff(b, terrain);
+      if (off > footing) footing = off;
+      if (off > R.townFooting) {
+        findings.push({
+          code: "roads.footing",
+          severity: "error",
+          message:
+            `a ${b.plan.kind} stands ${off.toFixed(2)} m off the ground under it ` +
+            `@${town.atS.toFixed(0)} m — the village's ground is not under its houses`,
+          at: { x: b.x, z: b.z },
+          s: town.atS,
+          value: off,
+        });
+      }
       if (!wrong) continue;
       badLots++;
       findings.push({
@@ -1032,6 +1104,14 @@ export function analyzeRoads(track: Track, terrain: TerrainField): MetricReport 
       score: rate(badLots, Math.max(1, lots)),
       weight: 1.5,
       value: badLots,
+    },
+    {
+      id: "footing",
+      label: "every building stands on the ground under it (R39)",
+      score: under(footing, R.townFooting, R.townFooting),
+      weight: 1.5,
+      value: footing,
+      budget: R.townFooting,
     },
     {
       id: "served",

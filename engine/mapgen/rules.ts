@@ -312,11 +312,28 @@
 //       the shops stand in the middle of it. The lots keep off the road's
 //       own verge (R31's bench is still the bench), off every other road
 //       (R23) and its junctions' platforms, out of the water (R35), and
-//       clear of the homesteads (R37), which keep clear of them; the ground
-//       is graded level with the street's edge under each one, and the
-//       walls and the cars outside them are as solid as they look. One
-//       town on a stage, because a town is a place and two of them in five
-//       kilometres is a suburb.
+//       clear of the homesteads (R37), which keep clear of them, and the
+//       walls and the cars outside them are as solid as they look.
+//       THE GROUND UNDER THE WHOLE VILLAGE IS ONE GRADED BAND, level with
+//       the street's own verge, running from under the street's mat out
+//       past the back gardens for the length of the town and eased back
+//       onto the country past that — never a graded pad per lot, because
+//       the drawn ground is a lattice of corners fourteen metres apart
+//       (`lattice.ts`) and a pad ten metres across falls between them:
+//       flattened a lot at a time nothing reaches the surface anyone
+//       stands on, and four houses in five end up hanging over the
+//       country's own slope or buried in it. Where another road, a
+//       homestead or the water is in the way the band stops short and the
+//       ground goes back to being theirs — a ROAD takes its own corridor
+//       back whatever the band wanted, so a lot only ever stands where
+//       there is a lattice cell of road-free ground behind it. What the band
+//       cannot do is make a hillside level: a building is a box with a
+//       level floor, so a front may only span as much of the street's fall
+//       as it can carry (`lot.step`) — which is what puts the block of
+//       flats on the flat and leaves the steep end of the street to the
+//       houses. A watercourse keeps off the band as it keeps off a road
+//       (R18). One town on a stage, because a town is a place and two of
+//       them in five kilometres is a suburb.
 //   R40 A STAGE IS BUILT IN A COUNTRY, and the country is a DIAL. The
 //       biome (`knobs.biome`, `biomes.ts`) says what the land is made of
 //       and how it stands, whether there is water in it, what grows on it
@@ -2516,7 +2533,31 @@ export const STAGE_RULES = {
       margin: 1.5,
       blend: 6,
       level: 6,
+      /** ...and how far the ground under a building may end up from the
+       * building's own floor, m. A lot is graded level ACROSS the street
+       * and follows the street's fall ALONG it (a level pad against a
+       * graded road is a step at one end of the lot and a trench at the
+       * other) — but a building is not a plane, it is a box with a level
+       * floor, so a front that spans `width` metres of a street falling at
+       * `grade` stands half of `width * grade` clear of the ground at one
+       * end and half of it buried at the other. Bounding the DIFFERENCE
+       * rather than the grade is what makes a village on a hillside
+       * possible: a nine-metre house takes a one-in-twelve street, and the
+       * block of flats that would need eighty metres of it stands
+       * somewhere else. */
+      step: 0.4,
     },
+    /** THE PLATFORM the whole town stands on: the street's own verge
+     * level, held out past the deepest lot on each side and along the
+     * whole frontage. `step` is how often the band's spine samples the
+     * street, `margin` how much ground it keeps past a lattice cell's
+     * worth beyond the last back wall, and `blend` how far past its rim
+     * the country is eased back onto it. The lattice cell is the reason
+     * the band exists at all — a lot's own pad is narrower than one, so
+     * grading a disc per lot never reaches the drawn ground (`lattice.ts`)
+     * — which is why `margin` is a margin ON a cell rather than a width of
+     * its own. */
+    platform: { step: 10, margin: 2, blend: 20 },
     /** How likely a town is to have each kind of building at all, and the
      * most of each it may have (a second one is half as likely as the
      * first, a third half as likely again). Houses fill in whatever is

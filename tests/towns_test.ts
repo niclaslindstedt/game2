@@ -5,13 +5,17 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ANALYSIS,
+  GROUND_CELL,
   ROAD_CROSS,
   STAGE_RULES as R,
   compileStage,
   createLandField,
   createTerrain,
   townSolids,
+  type Building,
   type Spur,
+  type TerrainField,
   type Town,
   type Track,
 } from "@engine";
@@ -67,6 +71,46 @@ function nearest<S extends { x: number; z: number }>(
     }
   }
   return { d, sample: best };
+}
+
+/** How far a building stands from the DRAWN ground under it, m: the worst
+ * of the whole footprint, its wing included. `groundAt` and not `heightAt`
+ * — the field between the ground lattice's corners is not the ground, and
+ * the difference between the two is exactly what left a street of houses
+ * hanging in the air while every other number about them read clean. */
+function footingOff(building: Building, terrain: TerrainField): number {
+  const { plan } = building;
+  const fwd = { x: Math.sin(building.heading), z: Math.cos(building.heading) };
+  const right = { x: Math.cos(building.heading), z: -Math.sin(building.heading) };
+  const half = plan.width / 2;
+  const blocks = [{ u0: -half, u1: half, v0: -plan.depth / 2, v1: plan.depth / 2 }];
+  if (plan.wing) {
+    const u1 = plan.wing.side > 0 ? half : -half + plan.wing.width;
+    blocks.push({
+      u0: u1 - plan.wing.width,
+      u1,
+      v0: -plan.depth / 2 - plan.wing.depth,
+      v1: -plan.depth / 2,
+    });
+  }
+  let worst = 0;
+  for (const block of blocks) {
+    for (let i = 0; i <= 8; i++) {
+      for (let j = 0; j <= 8; j++) {
+        const u = block.u0 + ((block.u1 - block.u0) * i) / 8;
+        const v = block.v0 + ((block.v1 - block.v0) * j) / 8;
+        const off = Math.abs(
+          building.y -
+            terrain.groundAt(
+              building.x + right.x * u + fwd.x * v,
+              building.z + right.z * u + fwd.z * v,
+            ),
+        );
+        if (off > worst) worst = off;
+      }
+    }
+  }
+  return worst;
 }
 
 function wrap(a: number): number {
@@ -228,10 +272,12 @@ describe("towns (R39)", () => {
       for (const lot of town.lots) {
         const { pad } = lot;
         // On the pad's own plane — level across the street, falling along
-        // it with the road; the lattice sits its tile-sink under the level
-        // the gravel is drawn at, as it does under every road.
+        // it with the road. Not sunk under it the way the tiles under a
+        // road's ribbon are: a lot's gravel is PAINTED on the village's own
+        // graded ground (R39), so that ground is the surface, and anything
+        // standing on the pad's level is standing on it.
         const centre = terrain.heightAt(pad.x, pad.z);
-        expect(Math.abs(centre - pad.y)).toBeLessThan(0.5);
+        expect(Math.abs(centre - pad.y)).toBeLessThan(0.12);
         expect(Math.hypot(pad.grade.x, pad.grade.z)).toBeLessThan(0.12);
         for (let k = 0; k < 8; k++) {
           const a = (k / 8) * Math.PI * 2;
@@ -243,6 +289,63 @@ describe("towns (R39)", () => {
         expect(terrain.spurSurfaceAt(pad.x, pad.z)).toBe("gravel");
         for (const tree of terrain.treesNear(pad.x, pad.z, 40)) {
           expect(Math.hypot(tree.x - pad.x, tree.z - pad.z)).toBeGreaterThan(pad.radius + 2);
+        }
+      }
+    }
+  });
+
+  it("grades one band for the whole village, level with its street", () => {
+    for (const { seed, track, town } of sweep()) {
+      const { spine, right, left, blend } = town.platform;
+      expect(spine.length).toBeGreaterThan(2);
+      expect(blend).toBe(T.platform.blend);
+      const street = streetOf(track, town);
+      for (const point of spine) {
+        // Every point of the spine is ON the street, and its two levels are
+        // the street's own verge levels there.
+        const { d } = nearest(street.samples, point.x, point.z);
+        expect(d).toBeLessThan(1.5);
+        expect(Math.abs(point.right - point.left)).toBeLessThan(1);
+        expect(point.outRight).toBeLessThanOrEqual(right + 1e-6);
+        expect(point.outLeft).toBeLessThanOrEqual(left + 1e-6);
+        // A side may be cut back to nothing where a road it must keep off
+        // runs alongside, but never past nothing.
+        expect(Math.min(point.outRight, point.outLeft)).toBeGreaterThanOrEqual(0);
+      }
+      // ...and it reaches a lattice cell past the back of every lot on it,
+      // which is the whole mechanism: anything narrower than a cell never
+      // reaches the ground the world draws.
+      for (const lot of town.lots) {
+        const back =
+          lot.lateral + lot.building.plan.depth / 2 + (lot.building.plan.wing?.depth ?? 0);
+        let out = 0;
+        for (const point of spine) {
+          const along = Math.hypot(point.x - lot.building.x, point.z - lot.building.z);
+          if (along > lot.lateral + lot.building.plan.width) continue;
+          out = Math.max(out, lot.side > 0 ? point.outRight : point.outLeft);
+        }
+        expect(out, `seed ${seed}: the band behind a ${lot.building.plan.kind}`).toBeGreaterThan(
+          back + GROUND_CELL,
+        );
+      }
+    }
+  });
+
+  it("stands every building on the ground the world DRAWS, not the field between its corners", () => {
+    for (const { seed, track, town } of sweep().slice(0, 6)) {
+      const terrain = createTerrain(track);
+      terrain.sync(0);
+      for (const lot of town.lots) {
+        const off = footingOff(lot.building, terrain);
+        expect(
+          off,
+          `seed ${seed}: a ${lot.building.plan.kind} @${lot.atS.toFixed(0)} m stands ` +
+            `${off.toFixed(2)} m off the ground under it`,
+        ).toBeLessThan(ANALYSIS.roads.townFooting);
+        for (const car of lot.cars) {
+          expect(Math.abs(terrain.groundAt(car.x, car.z) - car.y)).toBeLessThan(
+            ANALYSIS.roads.townFooting,
+          );
         }
       }
     }

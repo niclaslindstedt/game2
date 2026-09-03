@@ -35,3 +35,8 @@ Three things follow, and they are the fix:
 The analysis is where this gets caught, because it reads the terrain: a
 metric that measures the BUILT thing against the rule the placer planned to
 is the only instrument that can see this class of defect at all.
+
+And the built surface is `groundAt`, never `heightAt`: the analytic field is
+what the lattice's CORNERS are sampled from, and between two of them it is not
+the ground anyone drives on or sees. A check written on `heightAt` agrees with
+the placer by construction and measures nothing.

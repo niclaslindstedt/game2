@@ -35,6 +35,7 @@ import {
 } from "./buildings.ts";
 import type { HomesteadSample } from "./homesteads.ts";
 import type { Highway } from "./highway.ts";
+import { GROUND_CELL } from "./lattice.ts";
 import type { LandField } from "./land.ts";
 import { corridorOffset, ROAD_CROSS, type RoadShape } from "./road.ts";
 import { STAGE_RULES as R } from "./rules.ts";
@@ -52,6 +53,11 @@ export type Lot = {
   /** The building: where its footprint's centre is, which way its front
    * faces (toward the street), and what it is. */
   building: Building;
+  /** How far the building's centre stands from the STREET's centreline, m
+   * — unsigned; `side` says which way. What the town's platform is sized
+   * from, and the one measurement of a lot that is about the street rather
+   * than about the ground. */
+  lateral: number;
   /** The graded pad it stands on: a disc the terrain grades to the plane
    * through `y` — the level of the street's own verge beside it — falling
    * along the street at the street's own `grade` (m per m, as a vector in
@@ -73,6 +79,62 @@ export type TownStreet = {
   toS: number;
 };
 
+/** R39 — THE GROUND THE VILLAGE STANDS ON: the street's own shelf, held
+ * level out past the back of the deepest lot on each side for the whole
+ * length of the town, and eased back onto the country past that.
+ *
+ * ONE band for the whole town, rather than the pad a lot is drawn on. The
+ * drawn ground's corners are `GROUND_CELL` apart and a lot's pad is about
+ * that across, so graded a disc at a time the flattening falls BETWEEN the
+ * corners: it never reaches the surface anyone stands on, and every house
+ * on the street ends up on the country's own slope instead of on its plot —
+ * half of them hanging in the air over it and half of them buried in it. A
+ * band tens of metres wide and hundreds long is carried by the same corners
+ * exactly, which is also what the place looks like: a village street is
+ * level from the kerb to the back gardens, and the country starts again
+ * behind them. */
+export type TownPlatform = {
+  /** The street's centreline through the town, at `platform.step` metres,
+   * each point carrying the level the ground is graded to on either side of
+   * it — the street's own verge level there, which is exactly what a lot's
+   * pad is graded to. Two levels rather than one because a street with any
+   * cross-fall left in it stands higher on one verge than the other. */
+  spine: {
+    x: number;
+    z: number;
+    /** The level the ground is graded to on either side of the street. */
+    right: number;
+    left: number;
+    /** ...and how far the band reaches on either side here, m: past the
+     * back of the deepest lot on that side and then a lattice cell
+     * further, so the corners the ground under a back wall is
+     * interpolated from are themselves on the level — cut short of
+     * anything the band may not shape. It may not shape the ground
+     * another ROAD stands on (R23: a road is drawn on its own shelf, and
+     * a village's level laid over one walls its edge in), nor a
+     * homestead's yard, nor the water. */
+    outRight: number;
+    outLeft: number;
+  }[];
+  /** The widest the band gets on either side, m — what a bounding box and
+   * a cheap rejection are built from. */
+  right: number;
+  left: number;
+  /** How far out the street's own drawn corridor reaches, m. The band
+   * carries its two verge levels across the street over this, so the
+   * level is one continuous function of where you stand rather than two
+   * that meet at a step down the centreline — and it runs UNDER the mat
+   * for the same reason it runs past the back gardens: the corners the
+   * ground beside a front wall is interpolated from are a lattice cell
+   * away, and some of them are under the road. Nothing is lost under
+   * there — a road's ribbon is drawn over its own tiles and the car rides
+   * the ribbon (R16) — and the tiles no longer sag away from the verge as
+   * a ditch, which along a village street is a kerb instead. */
+  lip: number;
+  /** How far past the band's rim the country is eased back onto it, m. */
+  blend: number;
+};
+
 export type Town = {
   /** Arc position on the STAGE where the town is met: where the route
    * enters the street, or the junction the arm leaves from. */
@@ -80,6 +142,8 @@ export type Town = {
   street: TownStreet;
   /** In street order, each side interleaved as they were placed. */
   lots: Lot[];
+  /** The one piece of graded ground the whole town stands on. */
+  platform: TownPlatform;
   /** A roll for what the plan does not dictate — the town's name, say. */
   roll: number;
 };
@@ -475,8 +539,150 @@ function tryTown(ctx: TownContext, street: Street, rng: Rng): Town | null {
       toS: street.kind === "route" ? (street.routeSpan?.toS ?? street.toS) : street.toS,
     },
     lots,
+    platform: platformFor(ctx, street, lots),
     roll,
   };
+}
+
+/** How far the back of a lot stands from the street's centreline, m: past
+ * the building's own back wall, and past the WING's when it has one — a
+ * villa's L reaches half its depth again behind the block, which is the
+ * corner that used to hang in the air. */
+function lotReach(lot: Lot): number {
+  const plan = lot.building.plan;
+  return lot.lateral + plan.depth / 2 + (plan.wing?.depth ?? 0);
+}
+
+/** R39 — the one graded band the town stands on: the street's own verge
+ * level, held out past the back of the deepest lot on each side and a
+ * lattice cell further still, over the whole frontage and a lattice cell
+ * past either end of it. Both margins are the lattice's, because what the
+ * band exists to beat is the lattice: a corner inside the rim carries a
+ * level part-way back to the country, and the ground under a back wall is
+ * interpolated from corners a cell away. */
+function platformFor(ctx: TownContext, street: Street, lots: Lot[]): TownPlatform {
+  const P = T.platform;
+  /** Past the last house, and past the deepest one: a whole lattice cell,
+   * so no corner the town stands on is in the rim. */
+  const spare = GROUND_CELL + P.margin;
+  let wantRight = 0;
+  let wantLeft = 0;
+  let fromS = Infinity;
+  let toS = -Infinity;
+  for (const lot of lots) {
+    const reach = lotReach(lot) + spare;
+    if (lot.side > 0) wantRight = Math.max(wantRight, reach);
+    else wantLeft = Math.max(wantLeft, reach);
+    const half = lot.building.plan.width / 2 + spare;
+    fromS = Math.min(fromS, lot.atS - half);
+    toS = Math.max(toS, lot.atS + half);
+  }
+  /** ...and how far the band MUST reach at one point of the street whatever
+   * else is in the way: a lattice cell past the back of any lot standing
+   * THERE. Nothing may narrow it there — the margin on the lattice is not a
+   * nicety, it is the whole mechanism — and nothing has to, because a lot is
+   * only ever stood where that much ground behind it was clear (`tryLot`).
+   * Asked of the whole town rather than of the piece of street it is asked
+   * about, this floor would hold the band at its full width along stretches
+   * with no house on them at all, which is exactly where a road it should
+   * have kept off is. */
+  const needAt = (s: number, side: 1 | -1): number => {
+    let need = 0;
+    for (const lot of lots) {
+      if (lot.side !== side) continue;
+      if (Math.abs(lot.atS - s) > lot.building.plan.width / 2 + spare) continue;
+      need = Math.max(need, lotReach(lot) + spare);
+    }
+    return need;
+  };
+  // ...but never off the end of its own street: past the last sample the
+  // walk below clamps, and a spine that carried on would stand a run of
+  // points on top of each other at whatever the road was doing where it
+  // stopped. Where the street runs on, the band simply ends and the road's
+  // own shelf takes the ground back.
+  fromS = Math.max(fromS, street.samples[0].s);
+  toS = Math.min(toS, street.samples[street.samples.length - 1].s);
+  const spine: TownPlatform["spine"] = [];
+  const steps = Math.max(1, Math.ceil((toS - fromS) / P.step));
+  let lip = 0;
+  let right = 0;
+  let left = 0;
+  for (let i = 0; i <= steps; i++) {
+    const at = sampleAtS(street.samples, fromS + ((toS - fromS) * i) / steps);
+    const here = at.width / 2 + ROAD_CROSS.reach;
+    lip = Math.max(lip, here);
+    const outRight = bandOut(ctx, street, at, 1, wantRight, needAt(at.s, 1), here);
+    const outLeft = bandOut(ctx, street, at, -1, wantLeft, needAt(at.s, -1), here);
+    right = Math.max(right, outRight);
+    left = Math.max(left, outLeft);
+    spine.push({
+      x: at.x,
+      z: at.z,
+      right: at.elevation + corridorOffset(at, here, at.width),
+      left: at.elevation + corridorOffset(at, -here, at.width),
+      outRight,
+      outLeft,
+    });
+  }
+  return { spine, right, left, lip, blend: P.blend };
+}
+
+/** How far the band may reach out from one point of the street on one side,
+ * m — `want`, or as far as it gets before it runs into something a
+ * village's level may not be laid over, and never less than `need`.
+ *
+ * What it may not be laid over is everything a LOT may not stand on, for a
+ * reason a lot's own placement cannot cover: the band reaches half as far
+ * again past the back of the deepest house, so a route running sixty metres
+ * behind the village clears every lot on it (R23) and still had the
+ * village's level laid across its own shelf — which walls its edge in, and
+ * is exactly what R31's cone exists to prevent. (The terrain field keeps
+ * the last word on that, and gives the ground inside any other road's
+ * corridor back to the road; this is what keeps the band from wanting it in
+ * the first place.)
+ *
+ * Walked rather than solved, because the answer is a distance to whichever
+ * of four different things is nearest and none of them is a straight line
+ * along the street. `platform.step` again for the stride — the band's own
+ * resolution — so a gap the walk skips is a gap the spine could not carry
+ * anyway. */
+function bandOut(
+  ctx: TownContext,
+  street: Street,
+  at: StreetSample,
+  side: 1 | -1,
+  want: number,
+  need: number,
+  lip: number,
+): number {
+  /** What every piece of the band needs from any road that is not the
+   * street — the ROUTE's corridor and a margin, as a lot needs (R23). */
+  const corridor = ctx.width / 2 + ROAD_CROSS.reach + 1;
+  const right = { x: Math.cos(at.heading), z: -Math.sin(at.heading) };
+  const room = (out: number): boolean => {
+    const px = at.x + right.x * side * out;
+    const pz = at.z + right.z * side * out;
+    return (
+      ctx.routeDistance(px, pz, street.routeSpan) >= corridor &&
+      ctx.branchDistance(px, pz, street.spur) >= corridor &&
+      ctx.highwayDistance(px, pz, street.highway ?? undefined) >= corridor &&
+      ctx.homesteadDistance(px, pz) >= R.homestead.apart &&
+      !ctx.land.flooded(px, pz, SPUR.shoreFreeboard)
+    );
+  };
+  // The RIM counts as part of the reach: a band that only stops INSIDE the
+  // other road's corridor has still shaped it, by however much of its
+  // weight was left there — which is the road's edge walled in at over a
+  // metre per metre, in the analyzer and on the screen.
+  let roomTo = Infinity;
+  for (let d = lip; d <= want + T.platform.blend; d += T.platform.step) {
+    if (!room(d)) {
+      roomTo = d;
+      break;
+    }
+  }
+  const out = roomTo === Infinity ? want : roomTo - T.platform.blend;
+  return Math.min(want, Math.max(need, Math.max(0, out)));
 }
 
 /** Walk the open street from `fromS` toward `toS` standing up to `n`
@@ -609,6 +815,11 @@ function tryLot(
   const behind = sampleAtS(street.samples, at.s - 6);
   const slope =
     ahead.s > behind.s ? (ahead.elevation - behind.elevation) / (ahead.s - behind.s) : 0;
+  // R39 — and a building is a box with a level floor, not a plane: a front
+  // that spans the street's fall stands clear of the graded ground at one
+  // end of itself and buried at the other. What the street may fall is
+  // therefore whatever THIS building can carry.
+  if ((Math.abs(slope) * plan.width) / 2 > T.lot.step) return null;
   const grade = { x: fwd.x * slope, z: fwd.z * slope };
   const pad = { x, z, y, radius, grade };
   /** The pad's plane at a point. */
@@ -630,6 +841,30 @@ function tryLot(
     const a = (k / 8) * Math.PI * 2;
     for (const r of [radius * 0.5, radius]) {
       probes.push({ x: x + Math.cos(a) * r, z: z + Math.sin(a) * r });
+    }
+  }
+  // ...and the BACK GARDEN — the ground the town's PLATFORM has to grade
+  // behind this building, out to a lattice cell past its deepest wall
+  // (`platformFor`), the wing included, since that is what reaches
+  // furthest back. Every ROAD has to be clear of it, because the terrain
+  // gives a road back the ground inside its own corridor whatever the band
+  // wanted (R23), and a band that narrows behind a house leaves the ground
+  // under its back wall interpolated from corners out in the country —
+  // which is the flying house, arrived at by another route. Only the roads:
+  // the band stops at the water and at a yard too, but nothing gives THOSE
+  // the ground back, so the level still reaches the wall.
+  const garden = plan.depth / 2 + (plan.wing?.depth ?? 0) + GROUND_CELL + T.platform.margin;
+  for (const along of [-plan.width / 2, 0, plan.width / 2]) {
+    for (const back of [(plan.depth / 2 + garden) / 2, garden]) {
+      const px = x + fwd.x * along + right.x * side * back;
+      const pz = z + fwd.z * along + right.z * side * back;
+      if (
+        ctx.routeDistance(px, pz, except) < corridor ||
+        ctx.branchDistance(px, pz, street.spur) < corridor ||
+        ctx.highwayDistance(px, pz, street.highway ?? undefined) < corridor
+      ) {
+        return null;
+      }
     }
   }
   /** How far out the stage's verge cone starts to have an opinion (R31):
@@ -686,7 +921,7 @@ function tryLot(
       roll: rng.next(),
     });
   }
-  return { atS: at.s, side, building, pad, cars };
+  return { atS: at.s, side, building, lateral, pad, cars };
 }
 
 /** R39 — everything about a town the car can HIT, as solids: every
