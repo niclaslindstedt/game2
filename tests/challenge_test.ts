@@ -3,7 +3,7 @@
 // the one property the whole design rests on: at REST it changes nothing at
 // all, so every stage the generator has ever built is the stage it still
 // builds and every campaign time still stands.
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import {
   DEFAULT_KNOBS,
@@ -16,23 +16,49 @@ import {
   roadWidthOf,
   type SegmentPlan,
   type StageKnobs,
+  type Track,
   type TurnSeverity,
 } from "@engine";
 
 const SEEDS = Array.from({ length: 12 }, (_, i) => i * 37 + 1);
+const DIALS = [0, 0.35, 0.65, 1];
 const dials = (challenge: number): StageKnobs => resolveKnobs({ challenge });
+
+/** THE STAGES EVERY TEST BELOW READS, generated ONCE.
+ *
+ * Searching a dozen stages is seconds, and every assertion here wants the
+ * same dozen: left in the tests themselves that is the same search run five
+ * times over, and on a CI runner it put the first of them through vitest's
+ * 30 s case timeout while the rest sat re-deriving what it had just built.
+ * A hook with a timeout of its own is where a fixture that costs real time
+ * belongs. */
+const PLANS = new Map<number, SegmentPlan[][]>();
+const TRACKS = new Map<number, Track[]>();
+
+beforeAll(() => {
+  for (const challenge of DIALS) {
+    PLANS.set(
+      challenge,
+      SEEDS.map((seed) => generateStage(seed, "medium", { challenge })),
+    );
+  }
+  for (const challenge of [0, 1]) {
+    TRACKS.set(
+      challenge,
+      SEEDS.slice(0, 6).map((seed) => compileStage(seed, "medium", { challenge })),
+    );
+  }
+}, 300_000);
+
+/** One stage's plans per entry. */
+const stages = (challenge: number): SegmentPlan[][] => PLANS.get(challenge) ?? [];
+/** ...and all of them in one list, for what does not care which stage. */
+const plans = (challenge: number): SegmentPlan[] => stages(challenge).flat();
 
 /** Every corner the RALLY drew, at one dial position. A borrowed public
  * road's bends are the road's own (R17) and belong to no vocabulary. */
-function corners(challenge: number): SegmentPlan[] {
-  const drawn: SegmentPlan[] = [];
-  for (const seed of SEEDS) {
-    for (const plan of generateStage(seed, "medium", { challenge })) {
-      if (plan.kind === "turn" && !plan.paved) drawn.push(plan);
-    }
-  }
-  return drawn;
-}
+const corners = (challenge: number): SegmentPlan[] =>
+  plans(challenge).filter((plan) => plan.kind === "turn" && !plan.paved);
 
 const share = (plans: SegmentPlan[], severity: TurnSeverity): number =>
   plans.filter((p) => p.severity === severity).length / plans.length;
@@ -113,7 +139,7 @@ describe("R46 — the difficulty dial", () => {
   it("R3 — every corner stays inside its severity's vocabulary at every position", () => {
     // The dial leans on WHICH of the corners the rules already allow keep
     // coming up. It may never draw one they do not.
-    for (const challenge of [0, 0.35, 0.65, 1]) {
+    for (const challenge of DIALS) {
       for (const plan of corners(challenge)) {
         const vocab = R.turn[plan.severity ?? "soft"];
         expect(plan.radius).toBeGreaterThanOrEqual(vocab.radius.min);
@@ -146,13 +172,11 @@ describe("R46 — the difficulty dial", () => {
   it("R6/R11 — still lands its jumps, and still lands inside the length band", () => {
     const band = R.stageLengths.medium.band;
     for (const challenge of [0, 1]) {
-      let jumps = 0;
-      for (const seed of SEEDS) {
-        const plans = generateStage(seed, "medium", { challenge });
-        jumps += plans.filter((p) => p.feature === "jump").length;
+      const jumps = plans(challenge).filter((p) => p.feature === "jump").length;
+      for (const stage of stages(challenge)) {
         // The band with the slack R11 is actually enforced at (see
         // `mapgen_test`): a search lands the closing straight where it can.
-        const length = plans.reduce((sum, p) => sum + p.length, 0);
+        const length = stage.reduce((sum, p) => sum + p.length, 0);
         expect(length).toBeGreaterThanOrEqual(band.min - R.closingStraight);
         expect(length).toBeLessThanOrEqual(band.max + R.closingStraight);
       }
@@ -168,12 +192,10 @@ describe("R46 — the difficulty dial", () => {
     // — the lip's own height over the run it is raised across.
     const grade = (challenge: number): number => {
       const ramps: number[] = [];
-      for (const seed of SEEDS) {
-        for (const plan of generateStage(seed, "medium", { challenge })) {
-          if (plan.feature !== "jump") continue;
-          const run = (plan.featureEnd ?? 0) - (plan.featureStart ?? 0);
-          if (run > 0) ramps.push((plan.lipHeight ?? 0) / run);
-        }
+      for (const plan of plans(challenge)) {
+        if (plan.feature !== "jump") continue;
+        const run = (plan.featureEnd ?? 0) - (plan.featureStart ?? 0);
+        if (run > 0) ramps.push((plan.lipHeight ?? 0) / run);
       }
       return ramps.reduce((sum, r) => sum + r, 0) / ramps.length;
     };
@@ -187,8 +209,7 @@ describe("R46 — the difficulty dial", () => {
     const climb = (challenge: number): number => {
       let travel = 0;
       let km = 0;
-      for (const seed of SEEDS.slice(0, 6)) {
-        const track = compileStage(seed, "medium", { challenge });
+      for (const track of TRACKS.get(challenge) ?? []) {
         for (let i = 1; i < track.samples.length; i++) {
           travel += Math.abs(track.samples[i].elevation - track.samples[i - 1].elevation);
         }
