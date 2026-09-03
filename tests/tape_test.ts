@@ -248,7 +248,16 @@ describe("the run tape", () => {
     // Three roads and three fields of fourteen is a hundred and twenty-six
     // stages driven for one assertion — worth it for the one the whole
     // calibration rests on, but not inside the default budget.
-  }, 60_000);
+    //
+    // 120 s, up from 60. Nothing here got slower to RUN; the stages got
+    // slower to DRIVE. Halving the roster's drift angles took the sim's
+    // pace from 87 to 73 km/h, so a stage is about a sixth longer in
+    // simulated seconds and a hundred and twenty-six of them is a sixth
+    // more physics for the same assertion. It came in at 60.4 s against
+    // the old 60 s on a CI runner — a budget that is a fraction over what
+    // the work costs is a red build waiting for the next handling change,
+    // so this one is sized with room rather than trimmed to fit.
+  }, 120_000);
 
   it("writes down the cut establishing shot, because it moves the field", () => {
     const recorder = createTapeRecorder({
