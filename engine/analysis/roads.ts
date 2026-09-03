@@ -722,6 +722,11 @@ export function analyzeRoads(track: Track, terrain: TerrainField): MetricReport 
       trailsAt.set(stand.s, left - 1);
       continue;
     }
+    // R42 — the finish's own banks are the one crowd that does not have to
+    // have found its own way in: the organisers' road and the service area
+    // are there by construction, so a finish the country will not grade a
+    // pad behind keeps its crowd rather than losing it.
+    if (stand.finish) continue;
     unserved++;
     findings.push({
       code: "roads.served",

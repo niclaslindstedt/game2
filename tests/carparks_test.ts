@@ -71,6 +71,10 @@ describe("car parks (R42)", () => {
         ),
       );
       for (const stand of terrain.stands) {
+        // ...except the finish's own banks, which keep their crowd whatever
+        // the country behind them offers: the organisers' road and the
+        // service area are there by construction.
+        if (stand.finish) continue;
         expect(trailed.has(`${stand.s.toFixed(2)}/${stand.facing.toFixed(4)}`)).toBe(true);
       }
       // In stage order, never two pads on top of each other.

@@ -1325,8 +1325,16 @@ export function createCarParkField(track: Track): CarParkField {
       const found = serve(ctx, stand, stands);
       // R42 — nowhere to park within a walk, or no way to drive to it: then
       // nobody stood here. The stand goes.
+      //
+      // EXCEPT AT THE FINISH. The banks either side of the gate are not a
+      // crowd that found its own way to a corner: the finish is where the
+      // organisers put everything — the service area, the trucks, the road
+      // the timing crew drove in on — so access to it is a property of the
+      // event rather than something the country has to offer. A stage whose
+      // finish is unwatched because no pad would grade behind it is a stage
+      // that has lost the one crowd R27 guarantees.
       if (!found) {
-        refused.push(stand);
+        if (!stand.finish) refused.push(stand);
         continue;
       }
       carParks.push(found.park);
@@ -1334,7 +1342,12 @@ export function createCarParkField(track: Track): CarParkField {
       ctx.commit(found.park);
     }
     carParks.sort((a, b) => a.atS - b.atS);
-    return refused;
+    // ...and only the ones still unserved when the pass is over. A stand
+    // whose own turn found it nowhere to park can be picked up afterwards
+    // by a LATER car park's cluster — it is within a walk of that pad even
+    // though no pad could be planned from it — and handing that one back
+    // drops a stand with a trail already running to it.
+    return refused.filter((stand) => !served.has(standKey(stand)));
   };
 
   const trailClearanceAt = (x: number, z: number): number => {
