@@ -222,7 +222,19 @@ export function CarSetupPage({
         back={onBack}
         backLabel={BACK_TO[mode] ?? location.name.toUpperCase()}
         title={level.name.toUpperCase()}
-        sub={best === undefined ? undefined : `BEST ${formatTime(best)}`}
+        aside={
+          best === undefined ? undefined : (
+            // THE TIME TO BEAT, read as a figure rather than as billing: it
+            // is the same kind of thing as the two readings under the car
+            // and it is what the whole card is being set up against, so on
+            // any screen with the width for it, it stands in the head's own
+            // corner where a scoreboard would put it.
+            <div className="garage-best">
+              <span className="garage-best-label">BEST</span>
+              <span className="garage-best-time">{formatTime(best)}</span>
+            </div>
+          )
+        }
       />
       <div className="garage">
         {/* THE CAR takes the room. It is the only thing on this card that

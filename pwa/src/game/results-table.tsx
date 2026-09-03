@@ -14,18 +14,21 @@
 //
 // It PAGES rather than scrolls, for the sheet's own reason: fifteen rows do
 // not fit over a phone held sideways, and a table you have to drag is a
-// table you cannot scan. The page is cut to the room the modal actually has
-// (results-pages.ts) — eight rows where there are eight, fewer where there
-// are not, and a row itself never shrinks below a thumb.
+// table you cannot scan. The page is cut to the room the MODAL has by the
+// same hook the results card's two tables use (card-rows.ts, over the
+// arithmetic in results-pages.ts) — eight rows where there are eight, fewer
+// where there are not, and a row itself never shrinks below a thumb.
 
-import type { JSX } from "preact";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { ComponentChildren } from "preact";
+import { useEffect, useRef, useState } from "react";
 
 import { PLAYER_ID, PLAYER_NUMBER, carById, entryList } from "@engine";
 
 import { playUi } from "./audio/ui.ts";
+import { useCardRows } from "./card-rows.ts";
 import { onPortraits, portraitOf, warmPortraits, type PortraitSubject } from "./car-portraits.ts";
-import { PAGE_MAX, pageCount, pageOf, pageSpan, rowsPerPage, stepPage } from "./results-pages.ts";
+import { PAGE_MAX, PAGE_MIN, pageCount, pageOf, pageSpan, stepPage } from "./results-pages.ts";
+import { ROW } from "./results-sheet.tsx";
 
 /** One line of the table — `locationStandings`' own row, plus nothing. What
  * a picture of the crew's car needs beyond this (which car, which door
@@ -46,9 +49,6 @@ export type StandingsRow = {
   tied: boolean;
   you: boolean;
 };
-
-/** The class every row wears, so the measurement below can find one. */
-const ROW = "rsheet-row";
 
 /** WHICH CAR A CREW DRIVES, AND THE NUMBER ON ITS DOORS. The paint a rival
  * wears is read off the pair (car-livery.ts), and the pair is what keys the
@@ -76,7 +76,10 @@ export type StandingsSheetProps = {
 
 export function StandingsSheet({ rows, yourCarId }: StandingsSheetProps) {
   const listRef = useRef<HTMLOListElement>(null);
-  const [perPage, setPerPage] = useState(PAGE_MAX);
+  // The modal is the card here, and the sheet is its only column. The floor
+  // is the one for a table being READ: nothing on this board has to be on
+  // screen the way a name being typed into the high score board does.
+  const perPage = useCardRows(listRef, ".rsheet", PAGE_MIN, ".hud-modal-card");
   const mine = rows.find((row) => row.you)?.place ?? 0;
   const [page, setPage] = useState(() => pageOf(mine, PAGE_MAX, rows.length));
   const pages = pageCount(rows.length, perPage);
@@ -84,38 +87,6 @@ export function StandingsSheet({ rows, yourCarId }: StandingsSheetProps) {
    * the board keeps opening on their own row as the page is re-cut; once
    * they have, it stays where they put it. */
   const touched = useRef(false);
-
-  // THE MEASUREMENT, the finish sheet's own (results-sheet.tsx): everything
-  // in the modal that is not the rows — the title, the pager, the gate, the
-  // ways out, the padding — is chrome the rows cannot have, and what is left
-  // at a row's own pitch is the page. Re-measured whenever the screen
-  // changes shape: a phone turned on its side is a different page.
-  useLayoutEffect(() => {
-    const list = listRef.current;
-    const card = list?.closest<HTMLElement>(".hud-modal-card");
-    const screen = card?.parentElement;
-    if (!list || !card || !screen) return;
-    const measure = (): void => {
-      const row = list.querySelector<HTMLElement>(`.${ROW}`);
-      if (!row) return;
-      const gap = parseFloat(getComputedStyle(list).rowGap) || 0;
-      // Off the card's full content height rather than its box, so a card
-      // already cut to the cap and scrolling measures the same as one that
-      // fits.
-      const chrome = card.scrollHeight - list.offsetHeight;
-      const pad = getComputedStyle(screen);
-      const room =
-        screen.clientHeight -
-        (parseFloat(pad.paddingTop) || 0) -
-        (parseFloat(pad.paddingBottom) || 0) -
-        chrome;
-      setPerPage(rowsPerPage(room, row.offsetHeight, gap));
-    };
-    measure();
-    const watch = new ResizeObserver(measure);
-    watch.observe(screen);
-    return () => watch.disconnect();
-  }, []);
 
   useEffect(() => {
     if (!touched.current) setPage(pageOf(mine, perPage, rows.length));
@@ -244,7 +215,7 @@ export type StandingsModalProps = StandingsSheetProps & {
    * its points up. They belong to the table rather than to the page that
    * opens it — a board is where you go to read where you stand, and a page
    * of stage boxes has no row to spare for either. */
-  foot?: JSX.Element;
+  foot?: ComponentChildren;
   onClose: () => void;
 };
 

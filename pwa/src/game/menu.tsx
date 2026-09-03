@@ -36,7 +36,7 @@ import {
   type Weather,
 } from "@engine";
 
-import type { JSX } from "preact";
+import type { ComponentChildren } from "preact";
 
 import { playToggle, playUi } from "./audio/ui.ts";
 import { manualGain } from "./car-stats.ts";
@@ -375,6 +375,7 @@ export function MenuHead({
   title,
   sub,
   act,
+  aside,
 }: {
   back: () => void;
   backLabel: string;
@@ -385,16 +386,30 @@ export function MenuHead({
   /** THE PAGE'S ONE OTHER PRESS, at the far end of the head. A page whose
    * content is a grid has nowhere to put a second action that is not a row
    * of the grid's own height — and a row is the one thing a stage grid on a
-   * phone cannot spare. The head already reserves that line. */
-  act?: JSX.Element;
+   * phone cannot spare. The head already reserves that line, so a press put
+   * here costs nothing and STAYS on it: where there is no width for the
+   * word, the mark carries it (`.menu-head-act`).
+   *
+   * A press, not a figure — see `aside` for the other kind. A head carries
+   * one or the other: they want the same corner, and only one of them may
+   * fall to a second row. */
+  act?: ComponentChildren;
+  /** ONE READING the page is about, given the head's far corner where there
+   * is room for it: a figure rather than a sentence, and never something the
+   * title already says. Where there is no width for a third column it comes
+   * back down under the title, which is where a subtitle would have been. */
+  aside?: ComponentChildren;
 }) {
+  const solo = sub === undefined && aside === undefined;
   return (
     // A head carrying a subtitle is two rows tall and the way out stands
     // level with the TITLE, not floating between the two; a head that is
     // only a title is one row, and the button centres on it. The difference
     // is marked here rather than guessed at in the stylesheet, because it is
     // a fact about the content and there is exactly one place that knows it.
-    <div className={`menu-head ${sub === undefined ? "menu-head-solo" : ""}`}>
+    <div
+      className={`menu-head ${solo ? "menu-head-solo" : ""} ${aside === undefined ? "" : "menu-head-aside"}`}
+    >
       {/* `data-nav-back` is what a controller's B button presses — see
           menu-nav.ts. Marked rather than guessed at: every surface has a way
           out, and no two of them look alike in the markup. */}
@@ -406,6 +421,7 @@ export function MenuHead({
         {sub !== undefined && <div className="menu-sub">{sub}</div>}
       </div>
       {act}
+      {aside !== undefined && <div className="menu-head-side">{aside}</div>}
     </div>
   );
 }

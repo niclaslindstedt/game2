@@ -761,22 +761,16 @@ body {
   pointer-events: auto;
 }
 
-/* ── The head: the way out, the word, the ways on ────────────────────────
-   The options page's own head row (`.menu-head`): BACK on the left, the
-   title beside it — and here, the presses that end the card on the right,
-   so RETIRE, SPECTATE and the way on stand together where the first look
-   lands, and none of them is ever under the fold. */
+/* ── The head: the word, and every press that ends the card ──────────────
+   The title on the left and the presses together on the right — SPECTATE,
+   the tape, RETIRE, and then the way on — so the whole decision is one group
+   in one corner and none of it is ever under the fold. */
 .fin-head {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 0.45rem clamp(0.6rem, 2.5vmin, 1rem);
   text-align: left;
-}
-
-.fin-head .menu-back {
-  flex: none;
-  align-self: center;
 }
 
 .fin-head-text {
@@ -787,8 +781,11 @@ body {
   min-width: 0;
 }
 
+/* STAGE CLEAR is the headline of the whole screen and reads as one: it is
+   the first thing the eye lands on and the only word on the card that is
+   pure celebration. */
 .fin-title {
-  font-size: clamp(1.1rem, 4.4vmin, 1.7rem);
+  font-size: clamp(1.5rem, 6vmin, 2.4rem);
   line-height: 1.05;
   color: var(--hud-good);
 }
@@ -809,17 +806,26 @@ body {
 }
 
 /* Both wear a shared button's chrome (`.hud-pause-act`, `.hud-start`) that
-   is declared further down the sheet, so the sizes here carry the head's
-   class to outrank it — a bare `.fin-act` would lose on source order. */
-.fin-head .fin-act {
+   is declared further down the sheet, so the sizes here carry the group's
+   class to outrank it — a bare `.fin-act` would lose on source order. The
+   group is the same wherever it stands: across the head of a result, or
+   along the foot of a retirement. */
+.fin-acts .fin-act {
   font-size: clamp(0.64rem, 2.2vmin, 0.82rem);
   padding: 0.4rem 0.8rem;
 }
 
-.fin-head .fin-next {
+.fin-acts .fin-next {
   font-size: clamp(0.85rem, 3.2vmin, 1.15rem);
   padding: 0.4rem 1rem;
   margin-top: 0;
+}
+
+/* LEAVING, next to going on. It wears the secondary chrome the other acts
+   wear — the decision is between this and the loud one beside it, and two
+   loud buttons is no decision at all. */
+.fin-acts .fin-retire {
+  flex: none;
 }
 
 /* A phone held up has no room for three presses beside a title: the ways
@@ -904,6 +910,48 @@ body {
   opacity: 0.8;
 }
 
+/* A run that missed the board entirely. The dash keeps the place's own line
+   — the card's shape must not change under a slow run — and the words beside
+   it carry the news, in the colour bad news is written in. */
+.fin-place-off .fin-place-no {
+  color: var(--hud-bad);
+}
+
+.fin-place-off .fin-place-of {
+  letter-spacing: 0.14em;
+}
+
+/* WHAT IS STILL TO BEAT: the margin to the row above, in the same figures
+   the times themselves are set in, because the next run is judged in them. */
+.fin-gap {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.35rem;
+  margin-top: 0.2rem;
+  line-height: 1.05;
+}
+
+.fin-gap-no {
+  font-size: clamp(0.85rem, 3vmin, 1.25rem);
+  font-variant-numeric: tabular-nums;
+  color: var(--hud-bad);
+}
+
+.fin-gap-label {
+  font-size: clamp(0.56rem, 1.9vmin, 0.8rem);
+  letter-spacing: 0.14em;
+  opacity: 0.8;
+}
+
+/* Nothing above it to quote. */
+.fin-gap-top {
+  margin-top: 0.2rem;
+  font-size: clamp(0.7rem, 2.4vmin, 1rem);
+  letter-spacing: 0.12em;
+  color: var(--hud-good);
+}
+
 /* R30 — what the place was WORTH, directly under it: the same sentence.
    Third is one point, and fourth is the reason the podium matters at all. */
 .fin-points {
@@ -954,9 +1002,35 @@ body {
 }
 
 /* A retirement: the same card in the same red as a run that missed the
-   podium — the head, and one line under it. */
+   podium, laid out the same way — a headline, and where a result would put
+   its total time, the part that gave out. */
+/* Stacked and centred, and narrower than a result: there is one piece of
+   news on it, and a card the width of a results sheet with three short lines
+   down the middle is mostly empty card. It is also the one card in the game
+   whose whole job is to be READ before anything is pressed, so it is spaced
+   like a notice rather than packed like a readout. */
 .hud-finish-retired {
-  gap: 0.5rem;
+  gap: 0.35rem;
+  width: min(28rem, 94vw);
+  padding: clamp(1.1rem, 4vmin, 1.8rem) clamp(1rem, 3.5vmin, 1.6rem);
+  text-align: center;
+}
+
+/* The ways off it along the foot, centred under what they are an answer to.
+   The gap above them is the card's own beat: a press sitting straight under
+   the sentence that prompted it gets taken before the sentence is read. */
+.fin-foot {
+  justify-content: center;
+  gap: 0.7rem;
+  margin: clamp(1rem, 3.5vmin, 1.6rem) 0 0;
+}
+
+/* The sentence under the headline, in the sentence case a consequence is spoken
+   in rather than the caps a readout is labelled in. */
+.hud-finish-retired .fin-note {
+  text-transform: none;
+  letter-spacing: 0.06em;
+  font-size: clamp(0.7rem, 2.4vmin, 1rem);
 }
 
 .fin-note {
@@ -993,19 +1067,6 @@ body {
   text-align: left;
 }
 
-/* The time trial's board stands where the field's sheet would, and it is
-   what gives when the card is short: `min-height` has to be stated, because
-   a flex item defaults to `auto` and refuses to shrink below its content.
-   Two rows is the floor — below that it is not a table any more, and the
-   card would rather scroll. */
-.hud-finish .score-board {
-  flex: 0 1 auto;
-  min-height: 3.2em;
-  max-height: min(13rem, 32vh);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
 /* A phone held sideways: the card's own chrome comes off first, then the
    big numbers come down a size — never the rows, which are what a thumb
    presses. Sized off the height, never `vmin`, which IS the height here. */
@@ -1021,15 +1082,15 @@ body {
   }
 
   .fin-title {
-    font-size: 1.1rem;
+    font-size: 1.4rem;
   }
 
-  .fin-head .fin-next {
+  .fin-acts .fin-next {
     font-size: 0.95rem;
     padding: 0.3rem 0.8rem;
   }
 
-  .fin-head .fin-act {
+  .fin-acts .fin-act {
     padding: 0.3rem 0.7rem;
   }
 
@@ -1113,33 +1174,42 @@ body {
 }
 
 /* ── Entering your initials ───────────────────────────────────────────────
-   Three big slots: the caret slot is the one the keyboard writes into. */
+   THE LETTERS ARE TYPED ONTO THE BOARD. The entry is not a screen of its own
+   — it is the run's own row, standing in the place the time just won, with
+   the three slots where a stored name would be (score-board.tsx). So there
+   is almost no layout here: the row does that, and what is left is the
+   letters themselves, the hidden field they are typed into, and the hint
+   under the table. */
 
 .hud-initials {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.3rem;
-  margin-top: 0.6rem;
-  position: relative; /* the hidden field hangs off this, inside the card */
+  position: relative; /* the hidden field hangs off this, inside the board */
 }
 
-.hud-initials-title {
-  font-size: clamp(0.85rem, 3vmin, 1.2rem);
-  color: var(--hud-good);
-}
-
-.hud-initials-sub,
 .hud-initials-hint {
+  margin-top: 0.15rem;
   font-size: clamp(0.6rem, 2vmin, 0.85rem);
   letter-spacing: 0.12em;
   opacity: 0.8;
+  text-align: center;
 }
 
+/* The slots are underlined, and the line under the LAST one is the row's own
+   second line — so the two need clearing between them or the underline lands
+   on the words. */
 .hud-initials-slots {
   display: flex;
-  gap: 0.5rem;
-  margin: 0.15rem 0;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin-bottom: 0.45rem;
+}
+
+/* The row being named stands taller than the rest — the slots are thumb
+   targets and a letter is read at twice a name's size — and it is lit like
+   the player's own row, because it is about to be one. */
+.rsheet-row.is-naming {
+  min-height: 3.5rem;
+  background: rgb(255 210 62 / 88%);
+  color: var(--hud-shadow);
 }
 
 /* A letter is the control now that the chevrons are gone: tapping one puts
@@ -1148,20 +1218,23 @@ body {
    it, so three slots still read as three slots. */
 .hud-initial-letter {
   font: inherit;
-  color: var(--hud-ink);
+  color: inherit;
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0.55rem 0.4rem 0.2rem;
-  font-size: clamp(1.8rem, 7vmin, 3rem);
+  padding: 0.25rem 0.2rem 0.05rem;
+  /* Bigger than the names it stands among, and no bigger: the slots have to
+     read as the row's OWN name cell, not as a card that has landed on top of
+     the board. */
+  font-size: clamp(1rem, 3.6vmin, 1.45rem);
   line-height: 1.05;
-  min-width: 1.7em; /* with the padding, a 44px thumb target at phone sizes */
-  border-bottom: 3px solid rgb(255 255 255 / 35%);
+  min-width: 1.5em; /* with the padding, a 44px thumb target at phone sizes */
+  border-bottom: 3px solid rgb(0 0 0 / 30%);
+  text-shadow: none;
 }
 
 .hud-initial-letter.is-caret {
-  color: var(--hud-good);
-  border-bottom-color: var(--hud-good);
+  border-bottom-color: currentcolor;
   animation: hud-pop 0.9s infinite;
 }
 
@@ -1182,35 +1255,19 @@ body {
   white-space: pre;
 }
 
-.hud-initials-done {
-  margin-top: 0.25rem;
-}
-
-/* Landscape phones give the keyboard most of the short dimension. During
-   name entry the only important part of the finish card is the name itself,
-   so move that prompt to the top of the card and keep its whole row above the
-   keyboard. The rest of the result remains available by scrolling the card. */
+/* A name being entered on a phone held sideways. The card keeps its size and
+   its layout — it is the same results card either way, and one that
+   rearranged itself the moment a name was wanted would be two cards — so all
+   that gives is the letters, down to the row's own scale, and the hint, which
+   is a line of prose on a screen with no room for one. */
 @media (orientation: landscape) and (max-height: 34rem) {
-  .hud-finish:has(.hud-initials) {
-    max-height: 48%;
-  }
-
-  .hud-finish:has(.hud-initials) .fin-body {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .hud-finish:has(.hud-initials) .fin-board {
-    order: -1;
-  }
-
-  .hud-finish:has(.hud-initials) .hud-initials {
-    gap: 0.15rem;
-    margin-top: 0;
+  .hud-finish:has(.hud-initials) .rsheet-row.is-naming {
+    min-height: 2.4rem;
   }
 
   .hud-finish:has(.hud-initials) .hud-initial-letter {
-    padding-top: 0.2rem;
+    padding-top: 0.1rem;
+    font-size: 1.05rem;
   }
 
   .hud-finish:has(.hud-initials) .hud-initials-hint {
@@ -2823,7 +2880,12 @@ body {
    standings. It wears the back button's chrome rather than a chip's — the
    two are the same kind of thing, a way off this page rather than a setting
    on it — and it is pushed to the right so the head reads as "out ← what
-   this is → aside". */
+   this is → the press".
+
+   A press, not a reading (`.menu-head-aside` below is the other kind). The
+   difference is what each does when the head runs out of width: a figure
+   drops to a row of its own under the title, and a press cannot, because a
+   row is the one thing a stage grid on a phone has none of. */
 .menu-head-act {
   margin-left: auto;
   align-self: flex-start;
@@ -2889,6 +2951,47 @@ body {
   .menu-head-act .menu-glyph {
     width: 1.5em;
     height: 1.5em;
+  }
+}
+
+/* ── A head with a READING in it ─────────────────────────────────────────
+   A grid rather than the flex row above, because the reading has two homes
+   and they are different CELLS of one layout: under the title where the head
+   is narrow, and out in the far corner where it is not. ONE element, moved —
+   never two with one hidden, which is two places keeping the same number. */
+.menu-head-aside {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "back title"
+    ". side";
+  align-items: center;
+  row-gap: 0.1rem;
+}
+
+.menu-head-aside .menu-back {
+  grid-area: back;
+}
+
+.menu-head-aside .menu-head-text {
+  grid-area: title;
+}
+
+.menu-head-aside .menu-head-side {
+  grid-area: side;
+}
+
+/* Wide enough for a third column — a laptop, or a phone held sideways — and
+   the reading goes to the corner, clear of a title that now has the whole
+   middle to run into. */
+@media (min-width: 48rem) {
+  .menu-head-aside {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "back title side";
+  }
+
+  .menu-head-aside .menu-head-side {
+    justify-self: end;
   }
 }
 
@@ -3799,6 +3902,46 @@ a.menu-version:focus-visible {
   justify-content: space-between;
   gap: clamp(0.5rem, 2vmin, 0.9rem);
   min-width: 0;
+}
+
+/* THE TIME TO BEAT, in the head's own corner (menu.tsx's `aside`). It is
+   read as a figure and not as billing, so it wears the readings' chrome —
+   the label over the number, tabular so it does not shuffle — at the size
+   of a caption rather than of a headline: it is what the card is being set
+   up AGAINST, not what the card is. */
+.garage-best {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.05rem;
+  line-height: 1.05;
+}
+
+.garage-best-label {
+  font-size: clamp(0.5rem, 1.7vmin, 0.66rem);
+  letter-spacing: 0.18em;
+  opacity: 0.7;
+}
+
+.garage-best-time {
+  font-size: clamp(0.95rem, 3.4vmin, 1.4rem);
+  font-variant-numeric: tabular-nums;
+  color: var(--hud-good);
+}
+
+/* Under the title on a narrow head it is a line of billing again, sitting
+   where the subtitle would: a right-aligned plate makes no sense in a column
+   whose every other line starts on the left. */
+@media (max-width: 47.99rem) {
+  .garage-best {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 0.4rem;
+  }
+
+  .garage-best-time {
+    font-size: clamp(0.75rem, 2.6vmin, 1rem);
+  }
 }
 
 /* THE TWO FIGURES, big — they are the numbers the transmission under them
@@ -5965,15 +6108,108 @@ a.menu-version:focus-visible {
   text-shadow: none;
 }
 
-/* A HEADS-UP race is places and times and no board behind either. */
-.rsheet.is-race .rsheet-row {
-  grid-template-columns: 1.6em 3.6rem minmax(0, 1fr) 4.6em;
+/* A HEADS-UP race is places and times and no board behind either — and the
+   time trial's high score board (score-board.tsx) is the same four columns:
+   a place, the car, who set it and what they set.
+   The time column is wider here than on the points sheet, and the row's own
+   right padding with it: these are the only rows whose figures are SCALED UP
+   (the board's podium), and a column cut to the unscaled width puts the
+   hundredths under the border. */
+.rsheet.is-race .rsheet-row,
+.rsheet.is-board .rsheet-row {
+  grid-template-columns: 1.6em 3.6rem minmax(0, 1fr) 5.6em;
+  padding-right: 0.8rem;
+}
+
+/* …and the car stands clear of the name beside it. The picture is a car on
+   a transparent ground, so it fills its box right to the edge and a column
+   gap that reads as generous between two lines of text reads as none at all
+   between a bumper and a letter. */
+.rsheet.is-board .rsheet-row {
+  column-gap: 0.9em;
+}
+
+/* A PLACE GOING SPARE. Drawn rather than left out — ten dotted rows say
+   there are ten places and nine of them are free, which is the invitation
+   every cabinet's board was making. */
+.rsheet-row.is-free {
+  background: rgb(255 255 255 / 3%);
+  opacity: 0.5;
 }
 
 /* The rows a short last page has going spare — drawn, so the card keeps
    its height under the arrows. */
 .rsheet-row.is-blank {
   background: rgb(255 255 255 / 3%);
+}
+
+/* ── The board's podium ─────────────────────────────────────────────────
+   The high score board has no field to stand on a podium, so the top three
+   rows ARE one: a struck medal where the rank numeral would be, and the
+   metal carried onto the row's own leading edge so the three read as a
+   group from across the card. Declared BEFORE the player's own row, which
+   has the same specificity and has to win when a medal is also yours. */
+/* A podium row is BIGGER as well as brighter — the three times worth beating
+   get the height, the picture and the figures, and the seven places still
+   going are a list under them. The border every row already reserves two
+   pixels for is what carries the metal, so nothing below moves when a row
+   wins one. */
+.rsheet-row.is-medalled {
+  min-height: 3.3rem;
+  background: rgb(255 255 255 / 12%);
+}
+
+.rsheet-row.is-medalled .rsheet-car {
+  height: 3rem;
+}
+
+.rsheet-row.is-medalled .rsheet-alias,
+.rsheet-row.is-medalled .rsheet-time {
+  font-size: 1.15em;
+}
+
+.rsheet-row.is-gold {
+  border-color: #ffcf3f;
+}
+
+.rsheet-row.is-silver {
+  border-color: #cdd6e2;
+}
+
+.rsheet-row.is-bronze {
+  border-color: #d08a4e;
+}
+
+/* The medal itself: a disc the size of the rank column, with the place
+   struck into it. Two rings — a white hairline inside and a dark one
+   outside — so it stands off the row's dark ground AND off the yellow the
+   player's own row is lit in. */
+.rsheet-pos.is-medal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6em;
+  height: 1.6em;
+  border-radius: 50%;
+  color: var(--hud-shadow);
+  opacity: 1;
+  text-shadow: none;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 55%),
+    0 0 0 1px rgb(0 0 0 / 30%);
+}
+
+/* Lit from the top left, the way a struck medal is photographed. */
+.rsheet-pos.is-gold {
+  background: linear-gradient(155deg, #ffeda0, #e9a81b);
+}
+
+.rsheet-pos.is-silver {
+  background: linear-gradient(155deg, #fbfdff, #9fabbb);
+}
+
+.rsheet-pos.is-bronze {
+  background: linear-gradient(155deg, #f6c79a, #ac6a33);
 }
 
 /* Your own row. Loud on purpose: finding it is the only thing anybody does
@@ -5989,6 +6225,12 @@ a.menu-version:focus-visible {
   opacity: 0.85;
 }
 
+/* …but a medal is struck metal, not a rank numeral, and it is never faded
+   into the row it is being worn on. */
+.rsheet-row.is-you .rsheet-pos.is-medal {
+  opacity: 1;
+}
+
 .rsheet-pos {
   text-align: right;
   opacity: 0.75;
@@ -5997,6 +6239,7 @@ a.menu-version:focus-visible {
 /* The picture (car-portraits.ts): a fixed box whether or not the shot has
    landed yet, so the rows do not jump as the roll fills in. */
 .rsheet-car {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -6008,6 +6251,25 @@ a.menu-version:focus-visible {
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+/* THE BOX, stamped on the car it was fitted to: AT or MT, bottom right of
+   the picture the way a plate sits on a bumper. Its own dark chip rather
+   than ink on the row, so it reads over a pale car AND over the yellow the
+   player's own row is lit in. */
+.rsheet-box {
+  position: absolute;
+  right: -0.15rem;
+  bottom: -0.1rem;
+  padding: 0 0.22em;
+  border-radius: 0.25rem;
+  background: rgb(10 20 40 / 85%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 25%);
+  color: var(--hud-ink);
+  font-size: 0.72em;
+  letter-spacing: 0.06em;
+  line-height: 1.35;
+  text-shadow: none;
 }
 
 .rsheet-who {
@@ -6059,10 +6321,39 @@ a.menu-version:focus-visible {
    The campaign's fifteen crews after the stages driven so far, behind the
    STANDINGS press on a location page. Same rows, same pictures, same pager:
    what changes is that a stage's TIME becomes the WINS that break a tie, and
-   TOTAL is the figure the whole board is about. */
+   TOTAL is the figure the whole board is about.
 
+   Every rule that changes a COLUMN is scoped to `.is-table`: the rows are
+   shared with the result sheet and the high score board, and an unscoped
+   `.rsheet-total` here would repaint the finish card's own last column. */
 .rsheet.is-table .rsheet-row {
   grid-template-columns: 2em 3.6rem minmax(0, 1fr) 4.2em 2.6em;
+}
+
+/* On this board the TOTAL is the figure the whole page is about, where on a
+   stage's sheet it is the running total beside what the stage just paid. */
+.rsheet.is-table .rsheet-total {
+  color: var(--hud-good);
+}
+
+/* The tie-break, and the line a campaign is remembered by. */
+.rsheet-wins {
+  text-align: right;
+  font-size: 0.82em;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+}
+
+/* A crew who has not scored: the row is still theirs, but the board is
+   about the ones who have. */
+.rsheet-row.is-nought .rsheet-total {
+  opacity: 0.5;
+}
+
+.rsheet.is-table .rsheet-row.is-you .rsheet-total,
+.rsheet-row.is-you .rsheet-wins {
+  color: inherit;
+  opacity: 0.85;
 }
 
 /* The board fills the modal and reads left to right. The modal itself
@@ -6091,29 +6382,6 @@ a.menu-version:focus-visible {
   opacity: 0.9;
 }
 
-/* A crew who has not scored: the row is still theirs, but the board is
-   about the ones who have. */
-.rsheet-row.is-nought .rsheet-total {
-  opacity: 0.5;
-}
-
-.rsheet-wins {
-  text-align: right;
-  font-size: 0.82em;
-  letter-spacing: 0.08em;
-  opacity: 0.7;
-}
-
-.rsheet-total {
-  color: var(--hud-good);
-}
-
-.rsheet-row.is-you .rsheet-total,
-.rsheet-row.is-you .rsheet-wins {
-  color: inherit;
-  opacity: 0.85;
-}
-
 /* The board's modal is wider than a plain one — five columns and a picture
    in every row — and it SCROLLS as a last resort: the page is measured to
    fit, but a browser zoomed in far enough to beat the row floor must still
@@ -6128,16 +6396,29 @@ a.menu-version:focus-visible {
   overscroll-behavior: contain;
 }
 
-/* A phone held sideways: shorter rows, and the pictures with them. */
+/* A phone held sideways, where the whole screen is 390px tall and the card
+   still owes its table five rows (`PAGE_FLOOR`): shorter rows, and the
+   pictures cut to them. The podium keeps its margin over the rest — it comes
+   down by the same share, not to the same height, or the three stop reading
+   as three. */
 @media (orientation: landscape) and (max-height: 34rem) {
   .rsheet-row {
     min-height: 2.1rem;
     padding-top: 0.05rem;
     padding-bottom: 0.05rem;
+    font-size: 0.68rem;
   }
 
   .rsheet-car {
-    height: 1.9rem;
+    height: 1.7rem;
+  }
+
+  .rsheet-row.is-medalled {
+    min-height: 2.4rem;
+  }
+
+  .rsheet-row.is-medalled .rsheet-car {
+    height: 2.1rem;
   }
 
   .rsheet-rows {

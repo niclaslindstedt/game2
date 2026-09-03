@@ -151,27 +151,16 @@ async function atNextCall(page) {
   return await handle.jsonValue();
 }
 
-async function capture(
-  name,
-  viewport,
-  script,
-  params = {},
-  waitUntil = "load",
-  pageOptions = {},
-  // A campaign save to write before the page boots — the menu surfaces that
-  // are worth nothing empty (see PLAYED_IN). Source rather than a function,
-  // like the evaluations above: this file lints as Node, where localStorage
-  // does not exist.
-  progress = null,
-) {
+async function capture(name, viewport, script, params = {}, waitUntil = "load", pageOptions = {}) {
   if (only.length > 0 && !only.some((f) => name.includes(f))) return;
-  const page = await browser.newPage({ viewport, ...pageOptions });
-  if (progress) {
-    await page.addInitScript(
-      `localStorage.setItem("scandi-flick-campaign", ${JSON.stringify(progress)})`,
-    );
-  }
+  // `initScript` is page-side source run BEFORE the app loads — the only way
+  // to photograph a surface that reads stored state on the way up, like the
+  // high score board a results card is built around. It is not a page option,
+  // so it comes off here rather than reaching `newPage`.
+  const { initScript, ...options } = pageOptions;
+  const page = await browser.newPage({ viewport, ...options });
   page.on("pageerror", (err) => console.error(`[pageerror] ${err.message}`));
+  if (initScript) await page.addInitScript(initScript);
   await page.goto(`${url}?${new URLSearchParams({ ...SCENE_DEFAULTS, ...params })}`, {
     waitUntil,
   });
@@ -1294,16 +1283,19 @@ for (const [name, viewport] of [
  * surface worth looking at is the one carrying what the boxes are for —
  * times, places, points, and a table with something on it. Three stages in
  * is where a player spends most of their time on this screen. */
-const PLAYED_IN = JSON.stringify({
-  finished: ["taiga-1", "taiga-2", "taiga-3"],
-  points: {
-    "taiga-1": { you: 3, frostbite: 2, blink: 1 },
-    "taiga-2": { blink: 3, you: 2, frostbite: 1 },
-    "taiga-3": { you: 3, skarv: 2, granite: 1 },
-  },
-  best: { "taiga-1": 29.53, "taiga-2": 136.85, "taiga-3": 271.4 },
-  places: { "taiga-1": { hard: 1 }, "taiga-2": { hard: 2 }, "taiga-3": { hard: 1 } },
-});
+const PLAYED_IN = `localStorage.setItem(
+  "scandi-flick-campaign",
+  JSON.stringify({
+    finished: ["taiga-1", "taiga-2", "taiga-3"],
+    points: {
+      "taiga-1": { you: 3, frostbite: 2, blink: 1 },
+      "taiga-2": { blink: 3, you: 2, frostbite: 1 },
+      "taiga-3": { you: 3, skarv: 2, granite: 1 },
+    },
+    best: { "taiga-1": 29.53, "taiga-2": 136.85, "taiga-3": 271.4 },
+    places: { "taiga-1": { hard: 1 }, "taiga-2": { hard: 2 }, "taiga-3": { hard: 1 } },
+  }),
+)`;
 
 // Campaign: the location and its ladder, at the two shapes a phone holds it
 // in as well as on a laptop. Portrait is its own shot because the grid, the
@@ -1323,8 +1315,7 @@ for (const [name, viewport] of [
     },
     { menu: "1" },
     "load",
-    {},
-    PLAYED_IN,
+    { initScript: PLAYED_IN },
   );
 }
 
@@ -1349,15 +1340,21 @@ for (const [name, viewport] of [
     },
     { menu: "1" },
     "load",
-    {},
-    PLAYED_IN,
+    { initScript: PLAYED_IN },
   );
 }
 
 // The pre-race card: the stage picked, the car being chosen against its
 // spec sheet. Three shapes, because the sheet's two columns collapse to one
 // on a phone and the turntable has to keep its share of a 390px-tall
-// landscape screen.
+// landscape screen — and the head's own reading moves with them, from the
+// corner on a wide card to under the title on a narrow one. A TIME TO BEAT
+// is seeded, since that reading is the thing being checked and a profile
+// that has never driven the stage has none.
+const SEEDED_BEST = `localStorage.setItem(
+  "scandi-flick-campaign",
+  JSON.stringify({ finished: [], points: {}, places: {}, best: { "taiga-1": 89.53 } }),
+)`;
 for (const [name, viewport] of [
   ["shot-menu-car", { width: 1280, height: 720 }],
   ["shot-menu-car-portrait", { width: 390, height: 844 }],
@@ -1375,6 +1372,8 @@ for (const [name, viewport] of [
       await page.waitForTimeout(3000);
     },
     { menu: "1" },
+    "load",
+    { initScript: SEEDED_BEST },
   );
 }
 
@@ -1743,6 +1742,73 @@ await capture(
   },
   { shape: "circuit", length: "short", seed: "3", laps: "3", at: "finish" },
 );
+// THE TIME TRIAL'S RESULTS CARD, which is a different card from the one
+// above: no field, no points — the stage's high score board is the field,
+// and where the run landed on it is the whole verdict. The board is SEEDED
+// (the app reads it out of storage on the way up), because an empty one
+// photographs ten free places and says nothing about what a full board
+// looks like: the podium's medals, the cars, the boxes they were driven
+// with, and the row the run has just taken among them.
+const SEEDED_BOARD = `(() => {
+  const rows = [
+    { who: "NLM", time: 89.53, carId: "coupe", gearbox: "manual", difficulty: "hard" },
+    { who: "AJK", time: 98.33, carId: "classic", gearbox: "manual", difficulty: "medium" },
+    { who: "RTS", time: 99.05, carId: "compact", gearbox: "auto", difficulty: "medium" },
+    { who: "IVO", time: 100.46, carId: "coupe", gearbox: "auto", difficulty: "easy" },
+    { who: "PEK", time: 100.5, carId: "classic", gearbox: "manual", difficulty: "hard" },
+    { who: "S", time: 101.34, carId: "compact", gearbox: "manual", difficulty: "medium" },
+  ];
+  const day = Date.UTC(2026, 7, 29) / 1;
+  localStorage.setItem(
+    "scandi-flick-scores:taiga-1",
+    JSON.stringify(rows.map((r, i) => ({ ...r, at: day + i * 86400000 }))),
+  );
+  localStorage.setItem("scandi-flick-initials", "NLM");
+})()`;
+const TRIAL_CARD = { mode: "timetrial", level: "taiga-1", at: "finish", time: "99.4" };
+for (const [name, viewport] of [
+  ["shot-finish-trial", { width: 1280, height: 720 }],
+  ["shot-finish-trial-portrait", { width: 390, height: 844 }],
+  // A phone held SIDEWAYS is where this card has the least room and the most
+  // to say: the board pages to fit rather than scrolling, and the ways off
+  // the card have to stay above the fold.
+  ["shot-finish-trial-landscape", { width: 844, height: 390 }],
+]) {
+  await capture(
+    name,
+    viewport,
+    async (page) => {
+      await page.waitForSelector(".hud-finish", { timeout: 120000 });
+      // The rows carry a picture of every car, and each one is built and shot
+      // on an idle callback behind the card — so the shot waits for the roll
+      // to land rather than photographing the boxes it leaves for them. How
+      // MANY rows there are is the viewport's business (the board pages to
+      // fit), so the wait is that every row on the page has landed, and that
+      // there is a page at all: an `every` over nothing is true.
+      await page.waitForFunction(
+        `(() => {
+          const rows = [...document.querySelectorAll('.rsheet-row:not(.is-free)')];
+          return rows.length > 0 && rows.every((r) => r.querySelector('.rsheet-car img'));
+        })()`,
+        null,
+        { timeout: 60000 },
+      );
+      await page.waitForTimeout(400);
+      // THE ENTRY FIRST: a run that makes the board is asked for its three
+      // letters, and they are typed into the row the time has just won.
+      await page.screenshot({ path: join(outDir, `${name}-naming.png`) });
+      console.log(`previews/${name}-naming.png`);
+      // The offered name is the one seeded above, so the keyboard's own
+      // return key is the whole entry — and what it settles into is the board
+      // with this run standing on it under its name.
+      await page.keyboard.press("Enter");
+      await page.waitForTimeout(400);
+    },
+    TRIAL_CARD,
+    "load",
+    { initScript: SEEDED_BOARD },
+  );
+}
 // THE RETIREMENT: the run over short of the line, the car sitting where it
 // stopped with a dead engine, and the card saying so with its two ways out.
 await capture(

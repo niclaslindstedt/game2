@@ -11,28 +11,22 @@
 // the other.
 //
 // How many rows a page holds is the one thing here that gives with the
-// screen (results-pages.ts): eight on a laptop, fewer on a phone held
-// sideways, and never so few that the page stops being a table. The sheet
-// measures the room the card leaves it and pages to fit — a row is a thumb's
-// height and stays one, so it is the COUNT that moves, never the row.
+// screen: eight on a laptop, fewer on a phone held sideways, and never so
+// few that the page stops being a table. The sheet measures the room the
+// card leaves it (card-rows.ts, over the arithmetic in results-pages.ts) and
+// pages to fit — a row is a thumb's height and stays one, so it is the COUNT
+// that moves, never the row.
 //
 // The pictures come off the roll (car-portraits.ts), shot ahead of the card
 // while the stage was being driven; a row whose picture has not landed yet
 // draws the space for it and fills in when it does.
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { playUi } from "./audio/ui.ts";
+import { useCardRows } from "./card-rows.ts";
 import { onPortraits, portraitOf } from "./car-portraits.ts";
-import {
-  CARD_SHARE,
-  PAGE_MAX,
-  pageCount,
-  pageOf,
-  pageSpan,
-  rowsPerPage,
-  stepPage,
-} from "./results-pages.ts";
+import { PAGE_MAX, pageCount, pageOf, pageSpan, stepPage } from "./results-pages.ts";
 import { formatTime } from "../lib/util.ts";
 import { carById } from "@engine";
 
@@ -67,12 +61,14 @@ export type ResultsSheetProps = {
   title: string;
 };
 
-/** The class every row wears, so the measurement below can find one. */
-const ROW = "rsheet-row";
+/** The chrome every row on a card's table wears — the sheet's and the high
+ * score board's alike (score-board.tsx), because they are the same table of
+ * the same stage read two ways. */
+export const ROW = "rsheet-row";
 
 export function ResultsSheet({ rows, board, title }: ResultsSheetProps) {
   const listRef = useRef<HTMLOListElement>(null);
-  const [perPage, setPerPage] = useState(PAGE_MAX);
+  const perPage = useCardRows(listRef, ".fin-sheet");
   const mine = rows.find((row) => row.you)?.place ?? 0;
   const [page, setPage] = useState(() => pageOf(mine, PAGE_MAX, rows.length));
   const pages = pageCount(rows.length, perPage);
@@ -81,44 +77,6 @@ export function ResultsSheet({ rows, board, title }: ResultsSheetProps) {
    * the crews still out come home and move it; once they have, it stays
    * where they put it. */
   const touched = useRef(false);
-
-  // THE MEASUREMENT. The card may take a share of the screen (`CARD_SHARE`,
-  // restated as its `max-height`); everything on it that is not the rows —
-  // the head, the ways on, the summary above or beside them, the padding —
-  // is chrome the rows cannot have. What is left, at a row's own pitch, is
-  // the page. Re-measured whenever the screen changes shape: a phone turned
-  // on its side is a different page.
-  useLayoutEffect(() => {
-    const list = listRef.current;
-    const card = list?.closest<HTMLElement>(".hud-finish");
-    const screen = card?.parentElement;
-    if (!list || !card || !screen) return;
-    const measure = (): void => {
-      const row = list.querySelector<HTMLElement>(`.${ROW}`);
-      const column = list.closest<HTMLElement>(".fin-sheet");
-      if (!row || !column) return;
-      const gap = parseFloat(getComputedStyle(list).rowGap) || 0;
-      // Off the card's full content height rather than its box, so a card
-      // already cut to the cap and scrolling measures the same as one that
-      // fits.
-      let chrome = card.scrollHeight - list.offsetHeight;
-      // Beside a TALLER summary the column has room the card is not being
-      // charged for: rows up to the summary's own height cost it nothing.
-      const summary = card.querySelector<HTMLElement>(".fin-summary");
-      if (
-        summary &&
-        Math.abs(summary.getBoundingClientRect().top - column.getBoundingClientRect().top) < 1
-      ) {
-        chrome -= Math.max(0, summary.offsetHeight - column.offsetHeight);
-      }
-      const room = screen.clientHeight * CARD_SHARE - chrome;
-      setPerPage(rowsPerPage(room, row.offsetHeight, gap));
-    };
-    measure();
-    const watch = new ResizeObserver(measure);
-    watch.observe(screen);
-    return () => watch.disconnect();
-  }, []);
 
   useEffect(() => {
     if (!touched.current) setPage(pageOf(mine, perPage, rows.length));

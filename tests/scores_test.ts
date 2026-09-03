@@ -37,6 +37,7 @@ import {
   rememberInitials,
   type ScoreEntry,
 } from "../pwa/src/game/scores.ts";
+import { carById } from "@engine";
 
 /** A localStorage that lives for one test. */
 function stubStorage(): Map<string, string> {
@@ -59,6 +60,8 @@ const entry = (who: string, time: number, at = 0): ScoreEntry => ({
   who,
   time,
   carId: "compact",
+  gearbox: "manual",
+  difficulty: "hard",
   at,
 });
 
@@ -104,6 +107,50 @@ describe("the board", () => {
     expect(loadBoard("taiga-1").map((r) => r.who)).toEqual(["ABC"]);
     expect(loadBoard("taiga-2").map((r) => r.who)).toEqual(["XYZ"]);
     expect(loadBoard("taiga-3")).toEqual([]);
+  });
+
+  // What a time was set WITH is half of what a board row means — the same
+  // stage in a different car, with a different box, at a different setting is
+  // a different achievement. None of it may be GUESSED at, though: an older
+  // build wrote rows without any of it, and a made-up "medium" on a row
+  // somebody drove on hard is a leaderboard telling a lie.
+  it("carries the car, the box and the difficulty a row was set with", () => {
+    recordScore("taiga-1", entry("NLM", 60));
+    const [row] = loadBoard("taiga-1");
+    expect(row.carId).toBe("compact");
+    expect(row.gearbox).toBe("manual");
+    expect(row.difficulty).toBe("hard");
+  });
+
+  it("says it does not KNOW rather than guessing, on a row that never said", () => {
+    const store = stubStorage();
+    // A row as an older build wrote it: a name and a time and nothing else.
+    store.set("scandi-flick-scores:taiga-1", JSON.stringify([{ who: "AAA", time: 60, at: 1 }]));
+    const [row] = loadBoard("taiga-1");
+    expect(row.gearbox).toBeNull();
+    expect(row.difficulty).toBeNull();
+    expect(row.carId).toBe("");
+    // …and neither is a word off the alphabet the two settings actually have.
+    store.set(
+      "scandi-flick-scores:taiga-1",
+      JSON.stringify([{ who: "AAA", time: 60, gearbox: "dsg", difficulty: "elite" }]),
+    );
+    expect(loadBoard("taiga-1")[0].gearbox).toBeNull();
+    expect(loadBoard("taiga-1")[0].difficulty).toBeNull();
+  });
+
+  // The sheet asks the CATALOG for a row's car — for its name, and to
+  // photograph it — and both of those throw on an id nobody can build. A car
+  // that leaves the catalog between two releases must cost the player a
+  // picture, never the whole results card.
+  it("drops a car the catalog no longer has", () => {
+    const store = stubStorage();
+    store.set(
+      "scandi-flick-scores:taiga-1",
+      JSON.stringify([{ who: "AAA", time: 60, carId: "hovercraft" }]),
+    );
+    expect(loadBoard("taiga-1")[0].carId).toBe("");
+    expect(() => carById("compact")).not.toThrow();
   });
 
   it("reads a corrupt or hand-edited key as an empty board rather than throwing", () => {

@@ -25,17 +25,19 @@ import { useState } from "react";
 
 import { playUi } from "./audio/ui.ts";
 import { PODIUM } from "./campaign.ts";
-import { InitialsEntry } from "./hud-initials.tsx";
+import { useInitials } from "./hud-initials.tsx";
 import { ResultsSheet, type SheetRow } from "./results-sheet.tsx";
-import { ScoreBoard } from "./score-board.tsx";
-import type { ScoreEntry } from "./scores.ts";
+import { ScoreSheet } from "./score-board.tsx";
+import { BOARD_SIZE, DEFAULT_INITIALS, type ScoreEntry } from "./scores.ts";
 import { formatTime, ordinal } from "../lib/util.ts";
 import type { RetireReason } from "@engine";
 
-/** What the card says a retirement WAS, under the headline. */
-const RETIRED_BY: Record<RetireReason, string> = {
-  engine: "ENGINE DEAD — THE CAR WILL NOT RUN",
-  wheels: "WHEELS GONE — THE CAR WILL NOT ROLL",
+/** WHAT BROKE, and what that means — the two halves of a retirement, kept
+ * apart because they are read at different sizes. The first is the news and
+ * gets the card's big line; the second is the sentence under it. */
+const RETIRED_BY: Record<RetireReason, { broke: string; means: string }> = {
+  engine: { broke: "ENGINE DEAD", means: "the car will not run" },
+  wheels: { broke: "WHEELS GONE", means: "the car will not roll" },
 };
 
 /** Where the run goes on to, when it has anywhere to go: the ladder's next
@@ -49,10 +51,21 @@ export type FinishScores = {
   board: readonly ScoreEntry[];
   /** Where this run placed on it, 1-based; 0 when it did not make the ten. */
   place: number;
-  /** Set while the three letters are still to be entered. The card holds the
-   * ways ON back until they are: an arcade does not let you walk away from
-   * the board with your initials half typed. */
-  entering: { initial: string; onDone: (who: string) => void } | null;
+  /** What the run was driven WITH, said under the headline — the same three
+   * choices every row of the board carries, because a time only means
+   * something next to them. */
+  drove: string;
+  /** Set while the three letters are still to be entered: the run's own row,
+   * which the board stands in place while it is being named. Nothing is held
+   * back for it — the letters are typed onto the board, and every press that
+   * ends the card posts them on the way past. */
+  entering: {
+    /** The row as it will be stored, bar the name being typed into it. */
+    run: Omit<ScoreEntry, "who">;
+    /** What the slots open on: the name last entered, or the default. */
+    initial: string;
+    onDone: (who: string) => void;
+  } | null;
 };
 
 /** R29 — where the run finished in the field, and whether that is good
@@ -173,40 +186,50 @@ function SaveRunButton({ onSave }: { onSave: () => boolean }) {
   );
 }
 
-/** THE HEAD ROW: the way out, what the card says, and the ways on. The same
- * row the options page opens with — back on the left, the title beside it —
- * with the presses that end the card on the right, so every way off it is
- * in one place and none of them has to be scrolled to. */
+/** THE HEAD ROW: what the card says, and every press that ends it.
+ *
+ * The presses stand TOGETHER on the right, in the order they are weighed:
+ * whatever the run offers, then the way out, then the way on. Leaving is a
+ * decision made against going on, so the two are side by side and neither is
+ * across the card from the other — a back chip in the far corner is read
+ * before the title, which is not the order anybody decides in. */
 function Head({
   title,
   sub,
   onRetire,
   acts,
+  primary,
 }: {
   title: string;
   sub: string | null;
   onRetire: () => void;
+  /** What this run offers besides leaving — spectating, saving the tape. */
   acts: ComponentChildren;
+  /** The way ON: the next stage, or the same one again. Last, and loud. */
+  primary: ComponentChildren;
 }) {
   return (
     <div className="fin-head">
-      {/* `data-nav-back` is what a controller's B button presses (menu-nav.ts). */}
-      <button
-        type="button"
-        className="menu-back"
-        data-nav-back
-        onClick={() => {
-          playUi("select");
-          onRetire();
-        }}
-      >
-        ‹ RETIRE
-      </button>
       <div className="fin-head-text">
         <div className="fin-title">{title}</div>
         {sub && <div className="fin-sub">{sub}</div>}
       </div>
-      <div className="fin-acts pointer-events-auto">{acts}</div>
+      <div className="fin-acts pointer-events-auto">
+        {acts}
+        {/* `data-nav-back` is what a controller's B button presses (menu-nav.ts). */}
+        <button
+          type="button"
+          className="hud-pause-act fin-act fin-retire"
+          data-nav-back
+          onClick={() => {
+            playUi("select");
+            onRetire();
+          }}
+        >
+          RETIRE
+        </button>
+        {primary}
+      </div>
     </div>
   );
 }
@@ -228,6 +251,20 @@ export function FinishCard({
   onSaveRun,
   onSpectate,
 }: FinishCardProps) {
+  // THE THREE LETTERS, held HERE rather than down on the board that draws
+  // them: there is no confirm button any more, so every press that ends this
+  // card is what posts the name, and each of those lives up here. Called
+  // unconditionally, and on a card with nothing to name it is a name nobody
+  // is typing and nowhere to report it to.
+  const naming = scores?.entering ?? null;
+  const initials = useInitials(naming?.initial ?? DEFAULT_INITIALS, (who) => naming?.onDone(who));
+  /** Wrap a way off the card so the letters go with it. */
+  const ending =
+    (go: () => void): (() => void) =>
+    () => {
+      if (naming) initials.commit();
+      go();
+    };
   // A run outside the podium is not a stage clear, and the card must not
   // dress it as one: the confetti is off, the way on is gone, and the
   // headline says the only thing that happened.
@@ -238,31 +275,47 @@ export function FinishCard({
   // over a time that was never set.
   if (retired) {
     return (
+      // NOT THE RESULTS CARD'S HEAD ROW. A result is read across — the word,
+      // then the numbers, then where to go — because there is something to
+      // read. A retirement is one piece of news, so it is stacked and
+      // CENTRED, with the two ways off it along the foot where a player who
+      // has finished reading is looking.
+      //
+      // WHAT BROKE IS THE HEADLINE, and it is the whole card. "RETIRED" over
+      // it, and "the stage cannot be finished" under it, were the same news
+      // three times at three sizes: a car that will not run is a run that is
+      // over, and the presses under it are the proof.
       <div className="hud-finish hud-finish-slow hud-finish-retired">
-        <Head
-          title="RETIRED"
-          sub={RETIRED_BY[retired]}
-          onRetire={onRetire}
-          acts={
-            <>
-              {onRetry && (
-                <button
-                  type="button"
-                  className="hud-start fin-next"
-                  data-nav-next
-                  onClick={() => {
-                    playUi("start");
-                    onRetry();
-                  }}
-                >
-                  RESTART STAGE
-                </button>
-              )}
-              {onSaveRun && <SaveRunButton onSave={onSaveRun} />}
-            </>
-          }
-        />
-        <div className="fin-note">THE STAGE CANNOT BE FINISHED</div>
+        <div className="fin-title">{RETIRED_BY[retired].broke}</div>
+        <div className="fin-note">{RETIRED_BY[retired].means}</div>
+        <div className="fin-acts fin-foot pointer-events-auto">
+          {onSaveRun && <SaveRunButton onSave={onSaveRun} />}
+          {/* `data-nav-back` is what a controller's B button presses. */}
+          <button
+            type="button"
+            className="hud-pause-act fin-act fin-retire"
+            data-nav-back
+            onClick={() => {
+              playUi("select");
+              onRetire();
+            }}
+          >
+            RETIRE
+          </button>
+          {onRetry && (
+            <button
+              type="button"
+              className="hud-start fin-next"
+              data-nav-next
+              onClick={() => {
+                playUi("start");
+                onRetry();
+              }}
+            >
+              RESTART STAGE
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -281,13 +334,30 @@ export function FinishCard({
     : race
       ? `${race.cars} CARS — ${race.massStart ? "MASS START" : "RALLY START"}`
       : scores
-        ? "TIME TRIAL"
+        ? `TIME TRIAL — ${scores.drove}`
         : null;
   const sheet = campaign ?? race;
   const out = sheet ? sheet.rows.filter((row) => row.out).length : 0;
+  // THE TIME TRIAL'S OWN VERDICT. The board is the field here, so where the
+  // run landed on it is this card's place — and the row it has to answer is
+  // the one ABOVE it, or the last row on a full board when it missed. Both
+  // are read off the board by index, which holds while the three letters are
+  // still being typed: the run is not on the board yet, `place` is where it
+  // is about to go, and the row standing at that index is the same row
+  // either way.
+  const chasing =
+    scores &&
+    (scores.place > 1
+      ? { time: scores.board[scores.place - 2]?.time, was: ordinal(scores.place - 1) }
+      : scores.place === 0
+        ? { time: scores.board[BOARD_SIZE - 1]?.time, was: ordinal(BOARD_SIZE) }
+        : null);
+  const gap = chasing?.time !== undefined ? time - chasing.time : null;
 
-  // The foot's one sentence: the table the points went onto, and how far
-  // the sheet above it is from being final.
+  // The foot's one sentence: the table the points went onto, and how far the
+  // sheet above it is from being final. A time trial gets none — the board is
+  // right there, and a caption restating its top row is the card telling the
+  // player something they are already looking at.
   const caption = [
     campaign &&
       `${campaign.location.toUpperCase()} STANDINGS — ${campaign.total} PTS, ${campaign.tied ? "=" : ""}${ordinal(campaign.place)} OF ${campaign.of}`,
@@ -306,60 +376,62 @@ export function FinishCard({
       <Head
         title={title}
         sub={sub}
-        onRetire={onRetire}
+        onRetire={ending(onRetire)}
         acts={
-          scores?.entering ? null : (
-            <>
-              {/* …and the way to spend the wait the sheet is otherwise
+          <>
+            {/* …and the way to spend the wait the sheet is otherwise
                   asking the player to sit through: the cars still out there
                   are a race, and this is the seat to watch it from. */}
-              {onSpectate && (
-                <button
-                  type="button"
-                  className="hud-pause-act fin-act"
-                  onClick={() => {
-                    playUi("select");
-                    onSpectate();
-                  }}
-                >
-                  SPECTATE
-                </button>
-              )}
-              {onSaveRun && <SaveRunButton onSave={onSaveRun} />}
-              {/* The card's way ON, for the pad's START (menu-nav.ts): a run
-                  that has just ended and a player still holding the button
-                  should land on the next start line, not on a card. */}
-              {nextStage && (
-                <button
-                  type="button"
-                  className="hud-start fin-next"
-                  data-nav-next
-                  onClick={() => {
-                    playUi("start");
-                    nextStage.go();
-                  }}
-                >
-                  NEXT: {nextStage.name.toUpperCase()}
-                </button>
-              )}
-              {/* The time trial's own way on, and it is the PRIMARY one: a
-                  trial has no next rung to climb to, so running it again is
-                  what the player came here to do. */}
-              {onRetry && (
-                <button
-                  type="button"
-                  className="hud-start fin-next"
-                  data-nav-next
-                  onClick={() => {
-                    playUi("start");
-                    onRetry();
-                  }}
-                >
-                  RETRY
-                </button>
-              )}
-            </>
-          )
+            {onSpectate && (
+              <button
+                type="button"
+                className="hud-pause-act fin-act"
+                onClick={() => {
+                  playUi("select");
+                  onSpectate();
+                }}
+              >
+                SPECTATE
+              </button>
+            )}
+            {onSaveRun && <SaveRunButton onSave={onSaveRun} />}
+          </>
+        }
+        primary={
+          <>
+            {/* The card's way ON, for the pad's START (menu-nav.ts): a run
+                that has just ended and a player still holding the button
+                should land on the next start line, not on a card. */}
+            {nextStage && (
+              <button
+                type="button"
+                className="hud-start fin-next"
+                data-nav-next
+                onClick={ending(() => {
+                  playUi("start");
+                  nextStage.go();
+                })}
+              >
+                NEXT: {nextStage.name.toUpperCase()}
+              </button>
+            )}
+            {/* The time trial's own way on, and it is the PRIMARY one: a
+                trial has no next rung to climb to, so running it again is
+                what the player came here to do. */}
+            {onRetry && (
+              <button
+                type="button"
+                className="hud-start fin-next"
+                data-nav-next
+                onClick={ending(() => {
+                  playUi("start");
+                  onRetry();
+                })}
+              >
+                RETRY
+              </button>
+            )}
+          </>
         }
       />
       <div className="fin-body">
@@ -379,10 +451,41 @@ export function FinishCard({
               <span className="fin-pts-label">{campaign.points === 1 ? "POINT" : "POINTS"}</span>
             </div>
           )}
+          {/* THE BOARD IS THE TIME TRIAL'S FIELD, so where the run landed on
+              it stands exactly where a race's place does — the same numeral,
+              the same size. A run that missed the ten says so in words: an
+              empty place would read as a place of nothing. */}
+          {scores &&
+            (scores.place > 0 ? (
+              <div className="fin-place">
+                <span className="fin-place-no">{ordinal(scores.place)}</span>
+                <span className="fin-place-of">of {BOARD_SIZE}</span>
+              </div>
+            ) : (
+              <div className="fin-place fin-place-off">
+                <span className="fin-place-no">—</span>
+                <span className="fin-place-of">OFF THE BOARD</span>
+              </div>
+            ))}
           {slow && <div className="fin-note">TOP {PODIUM} TO GO ON — RUN IT AGAIN</div>}
           <div className="fin-label">TOTAL TIME</div>
           <div className="fin-time">{formatTime(time)}</div>
           {record && <div className="fin-record">NEW RECORD</div>}
+          {/* WHAT IS STILL TO BEAT, in the unit the next run will be judged
+              in. Top of the board and there is nothing above it to quote,
+              which is the whole of what that row is worth saying. */}
+          {scores &&
+            (scores.place === 1 ? (
+              <div className="fin-gap fin-gap-top">FASTEST TIME HERE</div>
+            ) : (
+              gap !== null &&
+              chasing && (
+                <div className="fin-gap">
+                  <span className="fin-gap-no">+{formatTime(gap)}</span>
+                  <span className="fin-gap-label">OFF {chasing.was}</span>
+                </div>
+              )
+            ))}
           {laps > 1 && (
             <div className="fin-laps">
               {lapTimes.map((t, i) => (
@@ -405,17 +508,16 @@ export function FinishCard({
         )}
         {/* The time trial's board stands where the field's sheet would: a
             trial is raced against the times already on it. */}
+        {/* The board — and, while a run is still to be named, the entry too:
+            the letters are typed into the row the time has just won, with
+            the times it beat above it and the ones it pushed down below. */}
         {scores && (
           <section className="fin-sheet fin-board">
-            {scores.entering ? (
-              <InitialsEntry
-                place={scores.place}
-                initial={scores.entering.initial}
-                onDone={scores.entering.onDone}
-              />
-            ) : (
-              <ScoreBoard entries={scores.board} highlight={scores.place} />
-            )}
+            <ScoreSheet
+              entries={scores.board}
+              highlight={scores.place}
+              entering={naming && { run: naming.run, initials }}
+            />
           </section>
         )}
       </div>
