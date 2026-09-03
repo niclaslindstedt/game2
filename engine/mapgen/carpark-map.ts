@@ -30,6 +30,18 @@ const EDGE = SPUR.escape + CELL;
  * found the edge after this many has been walking round a closed pocket. */
 const SEARCH_CAP = 6000;
 
+/** What the edge of the map costs a way out, m, against a road it could
+ * have run into instead — the detour a lane is worth to end on tarmac
+ * rather than past the fog (`wayOut`).
+ *
+ * A kilometre, which is a long way for a car park's lane and is meant to
+ * be: the rim is always within a few hundred metres of a pad and the
+ * country's one public road is typically several hundred to a couple of
+ * thousand away, so anything smaller never changes an answer. At this it
+ * changes most of them, and what it buys is a lane a player can drive from
+ * the tarmac to the cars instead of one that vanishes into the fog. */
+const RIM_PENALTY = 1200;
+
 export type Box = { minX: number; maxX: number; minZ: number; maxZ: number };
 
 /** What the map asks the world. The same three questions the placer asks,
@@ -60,14 +72,30 @@ export type CountryMap = {
   out: (cell: number) => boolean;
 };
 
-/** The map over `bounds`. Rebuilt for every car park, because the built
- * things a road keeps off change as each one is committed. */
-export function createCountryMap(bounds: Box, probe: CountryProbe): CountryMap {
+/** The map over `bounds` — the country the stage occupies, which is what a
+ * road LEAVES (`out`) and what the rim of the search is measured from.
+ *
+ * `reach` is how far past that box the LATTICE goes, and the two are not the
+ * same number. The default is just enough to hold the escape; a caller with
+ * a public road standing off the stage passes more, because a lane can only
+ * run to a road the lattice actually covers and the country's one road can
+ * lie the better part of a kilometre outside the box the rally folds into.
+ * Growing the escape box instead would make every lane that runs off the map
+ * run that much further before it had left.
+ *
+ * Rebuilt for every car park, because the built things a road keeps off
+ * change as each one is committed. */
+export function createCountryMap(
+  bounds: Box,
+  probe: CountryProbe,
+  reach: number = EDGE + CELL,
+): CountryMap {
   const keepOut = roadClearance(P.road.width);
-  const minX = bounds.minX - EDGE - CELL;
-  const minZ = bounds.minZ - EDGE - CELL;
-  const cols = Math.ceil((bounds.maxX - bounds.minX + 2 * (EDGE + CELL)) / CELL);
-  const rows = Math.ceil((bounds.maxZ - bounds.minZ + 2 * (EDGE + CELL)) / CELL);
+  const pad = Math.max(EDGE + CELL, reach);
+  const minX = bounds.minX - pad;
+  const minZ = bounds.minZ - pad;
+  const cols = Math.ceil((bounds.maxX - bounds.minX + 2 * pad) / CELL);
+  const rows = Math.ceil((bounds.maxZ - bounds.minZ + 2 * pad) / CELL);
   /** 0 unasked, 1 yes, 2 no — one byte a question. */
   const drive = new Uint8Array(cols * rows);
   const walk = new Uint8Array(cols * rows);
@@ -174,27 +202,36 @@ export function walkFrom(
   return { dist, via };
 }
 
-/** A* over the drivable cells from `from` to any cell off the map — or to
- * any cell `join` accepts, a road already there that the new one may run
- * into, with `joinDistance` (m) steering the search toward the nearest of
- * them. The cells of the way, `from` first, or null where the country is a
- * pocket the stage has closed. */
+/** A* over the drivable cells from `from` to a road already there that the
+ * new one may run into (`join`), or failing that off the map. The cells of
+ * the way, `from` first, or null where the country is a pocket the stage
+ * has closed.
+ *
+ * A JOIN IS PREFERRED, and `RIM_PENALTY` is how the preference is expressed:
+ * a lane exists because cars drove up it, and a lane onto a road is a lane
+ * they plainly drove up. The rim is the honest second answer rather than a
+ * failure — a rally route folded into its own box partitions the country it
+ * occupies, and on most seeds the pocket a corner sits in has no road in it
+ * at all, so a search that insisted on tarmac left two thirds of the stages
+ * measured with no crowd anywhere on them. Charging the rim a few hundred
+ * metres in the heuristic makes the search spend a detour to reach a road
+ * and take the rim only when there is none to reach. */
 export function wayOut(
   map: CountryMap,
   from: number,
-  join?: { at: (cell: number) => boolean; distance: (x: number, z: number) => number },
+  join: { at: (cell: number) => boolean; distance: (x: number, z: number) => number },
 ): number[] | null {
   const b = map.bounds;
   const h = (cell: number): number => {
     const c = map.centre(cell);
-    const edge = Math.min(
-      c.x - (b.minX - SPUR.escape),
-      b.maxX + SPUR.escape - c.x,
-      c.z - (b.minZ - SPUR.escape),
-      b.maxZ + SPUR.escape - c.z,
-    );
-    const near = join ? Math.min(edge, join.distance(c.x, c.z)) : edge;
-    return Math.max(0, near) / CELL;
+    const edge =
+      Math.min(
+        c.x - (b.minX - SPUR.escape),
+        b.maxX + SPUR.escape - c.x,
+        c.z - (b.minZ - SPUR.escape),
+        b.maxZ + SPUR.escape - c.z,
+      ) + RIM_PENALTY;
+    return Math.max(0, Math.min(edge, join.distance(c.x, c.z))) / CELL;
   };
   const g = new Float64Array(map.cols * map.rows).fill(Infinity);
   const via = new Int32Array(map.cols * map.rows).fill(-1);
@@ -219,7 +256,7 @@ export function wayOut(
     open.pop();
     if (closed[cell]) continue;
     closed[cell] = 1;
-    if (map.out(cell) || (join !== undefined && cell !== from && join.at(cell))) {
+    if (map.out(cell) || (cell !== from && join.at(cell))) {
       const path: number[] = [];
       for (let c = cell; c >= 0; c = via[c]) path.push(c);
       return path.reverse();

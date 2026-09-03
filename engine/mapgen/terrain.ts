@@ -461,6 +461,11 @@ export type TerrainField = {
    * renderer builds the people; the run reads the order to know which
    * crowd the car has just gone past. */
   stands: Stand[];
+  /** How many times that list has CHANGED. A stand is not only added — R42
+   * takes one off again where the crowd could never have reached it — so a
+   * reader that rebuilds on the length alone misses a sync that placed two
+   * and dropped two. */
+  standRevision: number;
   /** R42 — the car parks placed so far, in stage order: where the crowd
    * left its cars, the road each is reached by and the trails in from it.
    * The renderer draws them; the pad is a pad and the road a road to this
@@ -1143,6 +1148,11 @@ export function createTerrain(track: Track): TerrainField {
   /** How many of `track.spurs` are in the index — an ingest cursor, so it
    * never rewinds when an endless run prunes the branches behind it. */
   let spurCount = 0;
+  /** ...and the same for the public roads the route never met (R17), which
+   * are road in every sense the terrain cares about: a shelf under them, the
+   * forest off them, gravel grip on them. Never pruned — a finite stage is
+   * the only kind that carries them. */
+  let publicCount = 0;
   /** R37 + R39 — the PADS: discs of graded ground the landscape is
    * flattened to. A homestead's yard (its DRIVE goes into the branch index
    * above — it is a road, and gets a road's shelf) and every lot of a
@@ -1933,6 +1943,7 @@ export function createTerrain(track: Track): TerrainField {
     if (
       samples.length > indexed ||
       spurCount < track.spurs.length ||
+      publicCount < track.publicRoads.length ||
       homesteadCount < track.homesteads.length ||
       townCount < track.towns.length ||
       windFarmCount < track.windFarms.length ||
@@ -2039,6 +2050,12 @@ export function createTerrain(track: Track): TerrainField {
       // (R14) — placed against the road as it stands, so a guard never
       // lands on the stage and never on a stream or a branch.
       for (; spurCount < track.spurs.length; spurCount++) spurs.add(track.spurs[spurCount]);
+      // R17 — and the public roads the route never met, which the compiler
+      // built along their own lines. Nothing distinguishes one from a branch
+      // once it is here: same shelf, same keep-off, same grip.
+      for (; publicCount < track.publicRoads.length; publicCount++) {
+        spurs.add(track.publicRoads[publicCount]);
+      }
       const committedS = samples[samples.length - 1].s - (track.endless ? 250 : 0);
       const roadAt = (x: number, z: number): number => nearestRoad(x, z)?.d ?? Infinity;
       guards.extend(
@@ -2061,7 +2078,10 @@ export function createTerrain(track: Track): TerrainField {
       // R42 — and where that crowd parked, last of all: a car park is
       // planned from the stands, and its pad, its road and its cars go
       // into the field the moment it is placed so the next one keeps off.
-      carParks.extend(committedS, stands.stands, {
+      // ...and the stands it could not serve go with it: a corner with no
+      // country behind it for a car park, or none a lane could reach a road
+      // from, is a corner nobody could have walked to (R42).
+      const refused = carParks.extend(committedS, stands.stands, {
         loose: biome.loose,
         land,
         // Clamped to the road grid's own reach — three rings of cells, the
@@ -2080,6 +2100,7 @@ export function createTerrain(track: Track): TerrainField {
           for (const solid of carParkSolids(park, heightAt)) fix(solid);
         },
       });
+      stands.drop(refused);
       // New road may have arrived where a prop stood — revalidate; fresh
       // stream valleys reshape the ground, so the lattice re-samples too.
       props.invalidate();
@@ -2137,6 +2158,12 @@ export function createTerrain(track: Track): TerrainField {
     rivers,
     guards: guards.guards,
     stands: stands.stands,
+    // A getter: the field's own counter moves as the sync places and drops
+    // stands, and a number copied out here would be the count at the moment
+    // the terrain was built, forever.
+    get standRevision(): number {
+      return stands.revision;
+    },
     carParks: carParks.carParks,
     obstaclesNear: props.obstaclesNear,
     fixturesNear,

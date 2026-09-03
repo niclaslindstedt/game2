@@ -5,26 +5,22 @@
 // stand and where the boards along it stand (`engine/mapgen/carparks.ts`).
 // This module builds what it was told: the lane as a road ribbon (the same
 // skirts and mat as a homestead's drive), the pad as a disc of gravel on
-// the plane the terrain graded, the bays as whitewashed lines across it,
-// the cars as ONE merged mesh of the parked-car boxes (`parked-car.ts`
-// promised a car park of these, and this is it), the trails as trodden
-// strips of earth laid on the ground, the arrow boards beside them, and
-// the P at the gate.
+// the plane the terrain graded, the cars as ONE merged mesh of the
+// parked-car boxes (`parked-car.ts` promised a car park of these, and this
+// is it), the trails as trodden strips of earth laid on the ground, the
+// arrow boards beside them, and the P at the gate.
+//
+// Nothing is PAINTED on the pad. A rally spectator car park is a field a
+// marshal opened and a blade ran over once: what marks it out is the gravel
+// showing through the grass and the half-dozen cars standing on it, not
+// bays whitewashed across a field for one weekend.
 //
 // The cars are solid — the terrain field stands them up from the same
 // record. The boards and the P are not: they go into the cone field, so a
 // car that leaves the road through one knocks it flat.
 
 import * as THREE from "three";
-import {
-  createRng,
-  padHeight,
-  parkBays,
-  STAGE_RULES,
-  type CarPark,
-  type Track,
-  type TrailSign,
-} from "@engine";
+import { createRng, STAGE_RULES, type CarPark, type Track, type TrailSign } from "@engine";
 import type { ConeField } from "./cones.ts";
 import { GeoBuilder } from "./flora-build.ts";
 import { parkedCarGeometry, parkedCarSpec } from "./parked-car.ts";
@@ -60,18 +56,12 @@ const trailMaterial = shareOne(
 );
 
 const TINT = {
-  line: new THREE.Color(0xe6e0d0),
   post: new THREE.Color(0x8b7355),
-  board: new THREE.Color(0xf4f1e6),
 };
 
 /** How far the pad's gravel is drawn above the plane the terrain graded
  * under it: enough to win the depth test, not enough to be a step. */
 const PAD_LIFT = 0.04;
-
-/** The bay lines: how wide the whitewash is, m, and how far it stands
- * proud of the gravel. */
-const LINE = { width: 0.12, lift: 0.015 };
 
 /** The trail's strip: its width is the engine's; this is how far above the
  * ground it lies and how finely it follows the ground between samples. */
@@ -211,40 +201,15 @@ export function buildCarPark(
   ground.position.set(pad.x, pad.y + PAD_LIFT, pad.z);
   group.add(ground);
 
-  // The bays: a whitewashed line down each side of every bay and along the
-  // back of each row, laid on the pad's plane.
-  const lines = new GeoBuilder(rand);
-  const bays = parkBays(park);
-  const fx = Math.sin(park.heading);
-  const fz = Math.cos(park.heading);
-  const rx = Math.cos(park.heading);
-  const rz = -Math.sin(park.heading);
-  const paint = (cx: number, cz: number, along: number, across: number, heading: number): void => {
-    const line = new THREE.BoxGeometry(across, 0.02, along);
-    line.rotateY(heading);
-    line.translate(cx, padHeight(pad, cx, cz) + PAD_LIFT + LINE.lift, cz);
-    lines.add(line, TINT.line);
-  };
-  for (const bay of bays) {
-    // The side lines: half a pitch either side of the bay's centre, the
-    // bay's depth long, running out from the aisle.
-    for (const side of [-1, 1]) {
-      const sx = bay.x + fx * side * (P.bays.pitch / 2);
-      const sz = bay.z + fz * side * (P.bays.pitch / 2);
-      paint(sx, sz, P.bays.depth, LINE.width, bay.heading);
-    }
-  }
-  for (const row of [-1, 1] as const) {
-    const { length } = bayLayoutOf(park.bays);
-    const back = P.bays.aisle / 2 + P.bays.depth;
-    const bx = pad.x + rx * back * row;
-    const bz = pad.z + rz * back * row;
-    paint(bx, bz, length, LINE.width, park.heading);
-  }
-  group.add(new THREE.Mesh(lines.build(), builtMaterial()));
-
-  // The cars: every one its own boxes from its own roll, merged into one
-  // mesh — a car park of twenty-odd is twenty-odd draw calls otherwise.
+  // R42 — the cars: every one its own boxes from its own roll, merged into
+  // one mesh. Nothing is painted on the ground between them. A rally
+  // spectator car park is a field a marshal opened and a blade ran over
+  // once: what marks it out is the gravel showing through the grass, and
+  // the cars standing in rows because that is how people park behind one
+  // another, not because anybody drew the bays. The bays are still where
+  // the engine says (`parkBays`) — they are the pattern the cars stand in
+  // and the footprint the pad is graded to; they are simply not a thing
+  // you can see with nothing parked on them.
   const geos: THREE.BufferGeometry[] = [];
   for (const car of park.cars) {
     const geo = parkedCarGeometry(parkedCarSpec(car.roll), rand);
@@ -298,10 +263,4 @@ function plantSign(
   post.rotation.y = sign.heading;
   cones.plantProp(post, atS, { reach: 0.4, height: SIGN.post.h, rest: 0.4 });
   return post;
-}
-
-/** The bay rows' length for a count — restated from the engine's layout so
- * the back line is exactly as long as the row it closes. */
-function bayLayoutOf(bays: number): { length: number } {
-  return { length: Math.ceil(bays / 2) * P.bays.pitch };
 }

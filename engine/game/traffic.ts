@@ -26,6 +26,7 @@ import {
   type CarPark,
   type SpeedSign,
   type Spur,
+  type SpurLine,
   type Town,
   type TrafficRoute,
 } from "../mapgen/index.ts";
@@ -96,7 +97,7 @@ let THEIR_STATS: RunStats | null = null;
 /** Build the fleet for a stage. `on` false gives an empty fleet that costs
  * nothing per step. */
 export function createTraffic(
-  track: { spurs: readonly Spur[]; towns: readonly Town[] },
+  track: { spurs: readonly Spur[]; publicRoads: readonly SpurLine[]; towns: readonly Town[] },
   carParks: readonly CarPark[],
   seed: number,
   on: boolean,
@@ -124,7 +125,7 @@ export function createTraffic(
  * exists across the rebuild by its route's key. */
 function replan(
   fleet: TrafficFleet,
-  track: { spurs: readonly Spur[]; towns: readonly Town[] },
+  track: { spurs: readonly Spur[]; publicRoads: readonly SpurLine[]; towns: readonly Town[] },
   carParks: readonly CarPark[],
 ): void {
   const plan = planTraffic(track, carParks);

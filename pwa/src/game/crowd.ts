@@ -22,7 +22,7 @@
 // draw calls of a six-box person is a frame.
 
 import * as THREE from "three";
-import { hash2, type Stand } from "@engine";
+import { hash2, standHeads, type Stand } from "@engine";
 
 /** A body, part by part, in meters. A person is built from the ground up:
  * two legs, a torso, a head, and two arms hung off the shoulders. */
@@ -133,7 +133,10 @@ function peopleOf(stand: Stand, index: number, ground: (x: number, z: number) =>
   // Back from the front row, away from the road.
   const bx = Math.sin(stand.facing + Math.PI);
   const bz = Math.cos(stand.facing + Math.PI);
-  const perRow = Math.max(2, Math.round(stand.width * 0.55));
+  // The engine's own head count, not a second opinion on it: R42 sizes the
+  // car park behind the corner from `standHeads`, so drawing a different
+  // number of people is drawing a crowd the cars could not have brought.
+  const perRow = standHeads(stand) / stand.rows;
   for (let row = 0; row < stand.rows; row++) {
     for (let n = 0; n < perRow; n++) {
       const roll = (k: number): number => hash2(index * 131 + row * 17 + n, k, 0x63f1);
