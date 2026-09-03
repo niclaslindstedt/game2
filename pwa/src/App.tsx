@@ -3190,6 +3190,7 @@ export function App() {
           padDriving={padded && options.pad.hideTouch}
           onPause={() => setPaused(true)}
           onCamera={() => actionsRef.current.camera()}
+          onReset={() => input.requestReset()}
           mirrorLive={mirrorLive}
           onMirror={toggleMirror}
           onShot={options.screenshots ? () => takeShotRef.current() : null}

@@ -579,7 +579,13 @@ describe("the field on the road", () => {
       if (run.state.phase === "retired") expect(run.time).toBeNull();
       else expect(run.time).not.toBeNull();
       expect(run.done).toBe(true);
-      expect(run.owed).toBeGreaterThan(0);
+      // The debt is left standing rather than settled — but it is a debt in
+      // SECONDS, and a crew whose own run outlasts it has spent it honestly
+      // on the way round. One easy crew here rolls twice, takes its car back
+      // from the last board twice and comes home in three times the winner's
+      // time; by then the stagger it was owed is long behind it. What the
+      // seam actually owes is below: home, timed, and never on the road.
+      expect(run.owed).toBeGreaterThanOrEqual(0);
       expect(onRoad(run)).toBe(false);
     }
   });

@@ -7,8 +7,11 @@ import { describe, expect, it } from "vitest";
 import {
   NEUTRAL_INPUT,
   TUNING,
+  WHEEL_BASIN,
   compileTrack,
   createGame,
+  goesOver,
+  rollTilt,
   step,
   type CarInput,
   type GameEvent,
@@ -233,8 +236,16 @@ describe("the jump", () => {
       landing = step(state, { ...NEUTRAL_INPUT }).find((e) => e.type === "landing");
       guard += 1;
     }
-    // ...and let the landing finish happening.
-    run(state, {}, 3);
+    // ...and let the landing finish happening. A roll's LENGTH is the whole
+    // thing the model refuses to decide in advance, so this waits for the
+    // body to stop rather than for a clock — and stops there, before the
+    // beat a car left on its roof lies through (`roll.lieFor`), so what a
+    // test reads is where the roll actually put the car.
+    let settling = 0;
+    do {
+      run(state, {}, 1 / TUNING.physicsHz);
+      settling += 1;
+    } while ((state.car.rolling || settling < TUNING.physicsHz) && settling < TUNING.physicsHz * 6);
     return { landing, speedBefore, state };
   }
 
@@ -253,21 +264,59 @@ describe("the jump", () => {
 
   it("a landing taken properly crossed up trips the car over", () => {
     // -16 m/s across the car at touchdown — 30° of yaw at 100 km/h — is
-    // well past `tripSlide`: the tyres bite, the body goes over its outside
-    // wheels, and what comes to rest is a car that has rolled — on its
-    // wheels again, the ground having righted it, at a fraction of the
-    // speed and with the flank it came down on folded.
+    // well past `tripSlide`, and the roll it buys is worth more than the
+    // lift up over the body's own sill corner: the tyres bite, the body
+    // goes over its outside wheels, and it keeps going.
     const { state } = landSideways(28, -16);
     expect(state.stats.rolls).toBe(1);
-    expect(state.car.rolling).toBe(false);
-    expect(state.car.airborne).toBe(false);
-    const roll = state.car.roll;
-    expect(Math.abs(roll)).toBeGreaterThan(Math.PI / 2); // it went right over
-    const tilt = roll - Math.round(roll / (Math.PI * 2)) * Math.PI * 2;
-    expect(Math.abs(tilt)).toBeLessThan(0.2); // ...and back onto its wheels
+    // Past the corner its own weight could have brought it back from, at a
+    // fraction of the speed, with the flank it came down on folded.
+    expect(Math.abs(rollTilt(state.car.roll))).toBeGreaterThan(WHEEL_BASIN);
     expect(Math.hypot(state.car.u, state.car.w)).toBeLessThan(15);
     const zones = state.car.damage.zones;
     expect(Math.max(zones[2], zones[6])).toBeGreaterThan(0);
+  });
+
+  it("...and a car the roll leaves off its wheels goes back to the last board", () => {
+    // Nobody drives away from a car lying on its roof, so the run does not
+    // wait to find out: it lies there for `roll.lieFor` and the crew are put
+    // back at the split board behind them. This is also the whole of the
+    // rule for the FIELD — every rival is stepped through the same code.
+    const { state } = landSideways(28, -16);
+    expect(state.overturned).not.toBeNull();
+    const respawns = state.stats.respawns;
+    // Nothing moves while it lies there...
+    const lying = { ...state.car };
+    run(state, {}, TUNING.air.roll.lieFor * 0.5);
+    expect(state.car.x).toBeCloseTo(lying.x, 5);
+    expect(state.car.roll).toBeCloseTo(lying.roll, 5);
+    expect(state.stats.respawns).toBe(respawns);
+    // ...and then the run picks up again, on its wheels, on the road.
+    run(state, {}, TUNING.air.roll.lieFor);
+    expect(state.stats.respawns).toBe(respawns + 1);
+    expect(state.overturned).toBeNull();
+    expect(state.car.rolling).toBe(false);
+    expect(Math.abs(rollTilt(state.car.roll))).toBeLessThan(WHEEL_BASIN);
+  });
+
+  it("a lean the body cannot carry over its own corner is not a roll", () => {
+    // The trip is not a threshold on the roll rate: it is that roll weighed
+    // against the lift up to the sill corner. Handed a rate under what the
+    // climb costs, the springs take the lurch back and the car drives on —
+    // and handed one over it, the same car goes. Nothing in between is a
+    // decision anybody wrote down.
+    const climb = TUNING.air.gravity * 0.4;
+    const under = Math.sqrt((2 * climb * 0.6) / TUNING.air.roll.inertia);
+    const over = Math.sqrt((2 * climb * 2) / TUNING.air.roll.inertia);
+    expect(goesOver(0, under)).toBe(false);
+    expect(goesOver(0, over)).toBe(true);
+    // ...and a body ALREADY halfway up the climb goes over on far less,
+    // because most of the lift is behind it. That is the whole reason the
+    // same landing is survivable at one attitude and not at another.
+    expect(goesOver(WHEEL_BASIN * 0.9, under)).toBe(true);
+    // A body settling back INTO the face beside it is not going over, at
+    // any rate at all: there is no corner between it and where it is going.
+    expect(goesOver(-0.005, 1e-4)).toBe(false);
   });
 
   it("a hop over a brow is not a landing: no skitter, no speed lost, no jump booked", () => {

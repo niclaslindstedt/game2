@@ -450,9 +450,14 @@ export const DEFAULT_KEYS: KeyBindings = {
   handbrake: ["Space"],
   shiftUp: ["KeyE", "KeyX", "ShiftRight"],
   shiftDown: ["KeyQ", "KeyZ", "ControlRight"],
-  reset: ["KeyB"],
+  // R for the one of these two a driver reaches for MID-STAGE: the car is
+  // in a ditch, or on its roof, and the run wants putting back on the road
+  // at the last board. Restarting the whole stage is the rarer press and
+  // the more expensive one to make by accident, so it takes the key this
+  // one vacated rather than sharing a hand with it.
+  reset: ["KeyR"],
   camera: ["KeyC", "KeyV"],
-  restart: ["KeyR"],
+  restart: ["KeyB"],
   menu: ["KeyM"],
   pause: ["Escape"],
   // ENTER, because it is the one key on a driving keyboard that nothing

@@ -1839,6 +1839,49 @@ body {
   right: 0;
 }
 
+/* R28 — the bezel strip a swipe back to the last board starts on
+   (hud-recover.tsx). It sits OVER the left thumb zone and is only as wide
+   as the bezel, which is the whole guard: a thumb steering the car anchors
+   inboard of this, and edge-swipe.ts then asks a press that does land here
+   for half a screen of level inward drag before it counts. It starts below
+   the top bar so it cannot take a press meant for the buttons up there. */
+.hud-edge {
+  position: absolute;
+  left: 0;
+  top: 22%;
+  bottom: 0;
+  width: 26px;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+/* The mark, hidden until a finger is actually pulling — this is glass the
+   player is meant to be able to ignore. It slides in with the pull and
+   comes up to full ink as the swipe completes, so the gesture is visibly
+   nearly-there rather than either off or done. */
+.hud-edge-pull {
+  --pull: 0;
+  position: absolute;
+  top: 50%;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(2rem, 6vmin, 2.8rem);
+  height: clamp(2rem, 6vmin, 2.8rem);
+  color: var(--hud-ink);
+  background: rgb(18 48 105 / 75%);
+  border: 2px solid rgb(255 255 255 / 65%);
+  border-radius: 0 50% 50% 0;
+  opacity: 0;
+  transform: translate(calc(-100% + var(--pull) * 100%), -50%) scale(calc(0.7 + var(--pull) * 0.3));
+  transition: opacity 120ms ease-out;
+}
+
+.hud-edge-pull[data-on="1"] {
+  opacity: calc(0.35 + var(--pull) * 0.65);
+}
+
 /* The steering wheel, anchored at the touch point. Rotation follows the
    drag via --turn — written by the pointer events, never by React, so it
    answers at pointer rate rather than the HUD's 12 Hz. */

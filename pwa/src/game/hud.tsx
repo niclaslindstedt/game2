@@ -9,13 +9,13 @@
 // input manager at pointer rate), and that is a different job from drawing a
 // readout.
 
-import type { CSSProperties } from "react";
-
 import type { DamageCall, DamagePart, GamePhase, RetireReason, TurnSeverity } from "@engine";
 
 import { deviceControls, type InputManager } from "./input.ts";
 import { FlyControls } from "./hud-fly.tsx";
 import { PedalZone, SteerZone } from "./hud-touch.tsx";
+import { EdgeRecoverZone, RecoverButton } from "./hud-recover.tsx";
+import { Tachometer } from "./hud-dial.tsx";
 import { PODIUM as PODIUM_PLACES } from "./campaign.ts";
 import {
   FinishCard,
@@ -276,6 +276,10 @@ type HudProps = {
   flying: boolean;
   onPause: () => void;
   onCamera: () => void;
+  /** Put the car back on the road at the last split board it took (R28) —
+   * the bound key, the button on the action row and the bezel swipe all
+   * come here (hud-recover.tsx). */
+  onReset: () => void;
   /** Whether the rear-view glass has the road in it. Not the same switch as
    * `show.mirror`: that one is whether the game has a mirror at all, this one
    * is whether the one it has is showing anything for now (hud-mirror.tsx). */
@@ -323,80 +327,6 @@ type HudProps = {
    * presses that change which car it is. Null the rest of the time. */
   spectate: SpectateProps | null;
 };
-
-/** The tach dial, laid out like the arcade cluster it comes from: it reads
- * 0–9 (thousands) counter-clockwise from the bottom, red from 7.5 up, and
- * the bottom of the scale is COMPRESSED — idle sits just off the stop and
- * the band you actually drive in owns the top half of the dial, where the
- * eye already is. Angles are degrees clockwise from twelve o'clock. */
-const DIAL_START = 175;
-/** Degrees from the 0 mark to the 4 mark — the compressed lead-in... */
-const DIAL_LEAD = 50;
-/** ...then 4 to 9 spread over the rest of the sweep. */
-const DIAL_SPAN = 205;
-const DIAL_KNEE = 4;
-const DIAL_MAX = 9;
-/** Where the red band starts, thousands — and the reading at which the whole
- * instrument starts shaking. */
-const DIAL_RED = 7.5;
-
-function dialAngle(value: number): number {
-  if (value <= DIAL_KNEE) return DIAL_START + (value / DIAL_KNEE) * DIAL_LEAD;
-  return DIAL_START + DIAL_LEAD + ((value - DIAL_KNEE) / (DIAL_MAX - DIAL_KNEE)) * DIAL_SPAN;
-}
-
-function dialPoint(radius: number, value: number): [number, number] {
-  const a = (dialAngle(value) * Math.PI) / 180;
-  return [50 + radius * Math.sin(a), 50 - radius * Math.cos(a)];
-}
-
-function dialArc(radius: number, from: number, to: number): string {
-  const [x0, y0] = dialPoint(radius, from);
-  const [x1, y1] = dialPoint(radius, to);
-  const large = dialAngle(to) - dialAngle(from) > 180 ? 1 : 0;
-  return `M ${x0} ${y0} A ${radius} ${radius} 0 ${large} 1 ${x1} ${y1}`;
-}
-
-function Tachometer({ rpm }: { rpm: number }) {
-  const value = clamp(rpm, 0, 1) * DIAL_MAX;
-  // An engine held up against its limiter shakes the car it is bolted to,
-  // and the instrument bolted to that — the buzz IS the reading, which is
-  // why it is on the dial and not on the needle alone. It grows across the
-  // red band rather than switching on at it, so a gear revving out trembles
-  // and a throttle pinned on the start line really buzzes.
-  const heat = clamp((value - DIAL_RED) / (DIAL_MAX - DIAL_RED), 0, 1);
-  return (
-    <svg
-      className={`hud-tach ${heat > 0 ? "hud-tach-hot" : ""}`}
-      style={heat > 0 ? ({ "--shake": heat.toFixed(2) } as CSSProperties) : undefined}
-      viewBox="0 0 100 100"
-      aria-hidden="true"
-    >
-      <circle className="hud-tach-face" cx="50" cy="50" r="46" />
-      <path className="hud-tach-track" d={dialArc(41, 0, DIAL_MAX)} />
-      <path className="hud-tach-red" d={dialArc(41, DIAL_RED, DIAL_MAX)} />
-      {[0, 4, 5, 6, 7, 8, 9].map((tick) => {
-        const [tx, ty] = dialPoint(26, tick);
-        const [ax, ay] = dialPoint(34, tick);
-        const [bx, by] = dialPoint(30, tick);
-        return (
-          <g key={tick}>
-            <path className="hud-tach-tick" d={`M ${ax} ${ay} L ${bx} ${by}`} />
-            <text className="hud-tach-label" x={tx} y={ty}>
-              {tick}
-            </text>
-          </g>
-        );
-      })}
-      {/* The needle is transformed rather than re-pathed so the browser can
-          tween it between HUD snapshots — the dial reads smooth at 12 Hz. */}
-      <g className="hud-tach-needle" style={{ transform: `rotate(${dialAngle(value)}deg)` }}>
-        <path d="M 50 50 L 50 12" />
-        <circle cx="50" cy="50" r="5" />
-      </g>
-    </svg>
-  );
-}
 
 /** The pacenote sign: the corner's own shape, drawn like a rally note board.
  * The line is the road — the approach at the bottom, the bend the way the
@@ -682,6 +612,7 @@ export function Hud({
   padDriving,
   onPause,
   onCamera,
+  onReset,
   mirrorLive,
   onMirror,
   onShot,
@@ -830,6 +761,11 @@ export function Hud({
               <ShutterGlyph />
             </button>
           )}
+          {/* R28 — the way back to the last board. Only while there is a
+              run to put back: on the grid there is no road behind the car,
+              and while a run-out is watched the car on the screen is
+              somebody else's. */}
+          {!spectate && snap.phase === "racing" && <RecoverButton onReset={onReset} />}
           {/* Off while a run-out is watched, because the press is: the
               ladder's in-car views are mounted off the silhouette of the
               player's OWN car, so App refuses to walk it onto somebody
@@ -974,6 +910,12 @@ export function Hud({
           own is parked past the line, so the wheel and the pedal come off
           and the two arrows on the banner are the whole of the mode. */}
       <div className="hud-touch">
+        {/* The bezel swipe, on the same terms as the button above it — and
+            on touch alone, because it is the door for the device that has
+            no keyboard to bind and no room for a row of buttons. */}
+        {thumbs && !flying && !spectate && snap.phase === "racing" && (
+          <EdgeRecoverZone onReset={onReset} />
+        )}
         {thumbs && flying && <FlyControls fly={input.flyTouch} stickSide={touchLayout.steerSide} />}
         {thumbs && !flying && !spectate && <SteerZone touch={touch} side={touchLayout.steerSide} />}
         {thumbs && !flying && !spectate && (
