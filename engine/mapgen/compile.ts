@@ -38,7 +38,15 @@ import {
   ROAD_CROSS,
   roadClearance,
 } from "./road.ts";
-import { buildSpur, cutSpur, placeBlock, SPUR, type ShelfBand, type Spur } from "./spurs.ts";
+import {
+  buildSpur,
+  cutSpur,
+  placeBlock,
+  PLATFORM_HOLD,
+  SPUR,
+  type ShelfBand,
+  type Spur,
+} from "./spurs.ts";
 import { placeHomesteads, type Homestead } from "./homesteads.ts";
 import { placeTowns, type Town } from "./towns.ts";
 import { placeSolarFarms, placeWindFarms, type SolarFarm, type WindFarm } from "./energy.ts";
@@ -1848,7 +1856,7 @@ function createCompiler(
       );
       if (!platform) continue;
       for (const sample of spur.samples) {
-        if (sample.s > R.junction.reach.max * 1.5) break;
+        if (sample.s > PLATFORM_HOLD) break;
         const flat = junctionFlat(platform, sample.x, sample.z);
         if (flat <= 0) continue;
         sample.flat = flat;

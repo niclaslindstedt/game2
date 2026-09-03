@@ -1516,12 +1516,35 @@ export function createTerrain(track: Track): TerrainField {
   type Corridor = { y: number; cover: number; hand: number };
   const corridorGround = (x: number, z: number): Corridor | null => {
     let best: Corridor | null = null;
+    /** Two roads covering one point — a drive's mat across the stage's
+     * verge, a lane's across an arm's — are a CHAIN of hand-overs, in the
+     * order they are considered: the stage's ribbon holds the ground by its
+     * own `hand`, and what it hands over TO is not the bare lattice but the
+     * next road's ribbon by that road's hand, and only then the lattice.
+     * Inside the stage's shoulder the stage owns the ground outright (a
+     * drive lies ON the stage's cross-section there — R37), and where the
+     * stage's hand-over fades past its bare shoulder the drive's mat is what
+     * it fades onto, instead of a ditch under the mat. Decided by a PICK
+     * instead, the ground steps wherever the pick changes hands — the
+     * stage's verge sagging into its ditch under the drive's mat, a
+     * half-metre step across the mouth — and averaged by hand alone, the
+     * drive's own crown is laid over the stage's shoulder. */
+    let chainY = 0;
+    let chainHand = 0;
     const consider = (d: number, width: number, y: number): void => {
       const edge = width / 2 + ROAD_CROSS.reach;
       if (d > edge + 3) return;
       const cover = 1 - smooth(clamp01((d - edge) / 3));
-      if (best && best.cover >= cover) return;
-      best = { y, cover, hand: handoverAt(d - width / 2) };
+      const hand = handoverAt(d - width / 2);
+      chainY += (1 - chainHand) * hand * y;
+      chainHand += (1 - chainHand) * hand;
+      const blended = chainHand > 0 ? chainY / chainHand : y;
+      if (best && best.cover >= cover) {
+        best.y = blended;
+        best.hand = chainHand;
+        return;
+      }
+      best = { y: blended, cover, hand: chainHand };
     };
     const near = nearestRoad(x, z);
     if (near && near.d < shelfEnd + 3) {

@@ -281,6 +281,12 @@ export function buildSpur(
   let x = junction.x;
   let z = junction.z;
   let y = junction.elevation;
+  // The branch leaves on the MAIN road's own grade — it is that road,
+  // continued — and bends off it at the crest rule (`followStep`). Left at
+  // level it parts from the junction's graded platform in height before it
+  // has parted from it on the map, and the platform warp has a metre to
+  // make up over the rim.
+  let slope = junction.slope;
   const samples: SpurSample[] = [];
   const box = { minX: x, maxX: x, minZ: z, maxZ: z };
   // The tarmac runs out before the road does; how much of it is sealed is
@@ -432,20 +438,40 @@ export function buildSpur(
     heading += curvature * SPUR.step;
     x += Math.sin(heading) * SPUR.step;
     z += Math.cos(heading) * SPUR.step;
-    // R34 — and the branch FOLLOWS THE COUNTRY, by the same lag and grade
-    // clamp the route does (`elevation.follow`), off the junction's own
-    // height. It used to random-walk its grade, which put a branch at a
-    // height of its own invention: fifty metres from the road it left, and
-    // twenty above or below the ground either of them was crossing. That is
-    // invisible while the route is at an invented height too — both are
-    // wrong in the same way — and the moment the route is laid on the
-    // country it becomes a wall down the side of every junction.
+    // R34 — and the branch FOLLOWS THE COUNTRY, by the same lag the route
+    // does (`elevation.follow`), off the junction's own height, at a minor
+    // road's grade and crest (`followStep`). The two have to follow the
+    // same ground: a branch at a height of its own invention is a wall down
+    // the side of the junction the moment the route is laid on the country.
     //
     // Its own `maxGrade` and not the route's: a branch is a minor road, and
     // it is allowed to be gentler about what it will climb.
     const want = y + (Math.max(land.heightAt(x, z), LAKE_Y + SPUR.shoreFreeboard) - y) * follow;
-    const cap = SPUR.maxGrade * SPUR.step;
-    y = Math.max(y - cap, Math.min(y + cap, want));
+    // Through the junction's own platform the branch IS the main road's
+    // plane (R17 warps it onto that plane anyway), and the band is not
+    // asked: inside the stage's bench the cone has no swing, so the band is
+    // degenerate — floor over ceiling — and clamping to it snaps the branch
+    // two metres down at its first step, from where it creeps back up to
+    // meet the platform's rim as a brow.
+    //
+    // Past the platform the band is AIMED AT, not only clamped to: a floor
+    // met as a hard clamp is a step the height of the difference, and
+    // beside a route on ten metres of fill the cone's floor stands a metre
+    // over the country the branch is following. Aimed at through
+    // `followStep`, the branch climbs to it at a road's grade; the clamp
+    // after is the last resort for a band the grade could not keep up with.
+    const band = shelfBand(x, z);
+    if (s + SPUR.step <= PLATFORM_HOLD) {
+      y = junction.elevation + junction.slope * (s + SPUR.step);
+      slope = junction.slope;
+      continue;
+    }
+    ({ y, slope } = followStep(
+      y,
+      slope,
+      Math.min(band.ceiling, Math.max(band.floor, want)),
+      SPUR.maxGrade,
+    ));
     // R23 + R31 — and it may not climb out of the STAGE's verge cone while
     // it is still inside it.
     //
@@ -466,7 +492,6 @@ export function buildSpur(
     // only because of which side you are standing on. Where the two halves
     // cross — the stage passing twice at two heights — there is no height a
     // road can stand at, and the cut below reads that off `shelfHolds`.
-    const band = shelfBand(x, z);
     if (y > band.ceiling) y = band.ceiling;
     if (y < band.floor) y = Math.min(band.floor, band.ceiling);
   }
@@ -606,7 +631,9 @@ export function buildSpur(
  * route's lag inside a minor road's grade, and never outside the stage's
  * verge cone (R31). */
 export function cutSpur(
-  junction: { x: number; z: number; heading: number; elevation: number },
+  /** `slope` is the main road's own grade through the meeting point, which
+   * the arm leaves on; a crossing carries none, and its arms leave level. */
+  junction: { x: number; z: number; heading: number; elevation: number; slope?: number },
   atS: number,
   end: "entry" | "exit",
   road: { points: { x: number; z: number; heading: number; s: number }[]; width: number },
@@ -628,6 +655,8 @@ export function cutSpur(
   const samples: SpurSample[] = [];
   const box = { minX: junction.x, maxX: junction.x, minZ: junction.z, maxZ: junction.z };
   let y = junction.elevation;
+  const slope0 = junction.slope ?? 0;
+  let slope = slope0;
   const endsAt: Spur["endsAt"] = "map";
   // Resampled at the BRANCH's own spacing rather than the road's, which is
   // coarser (`HIGHWAY.step`): a `Spur` is read by the terrain, the renderer,
@@ -699,11 +728,24 @@ export function cutSpur(
     if (left > 1e-6) break;
     s += SPUR.step;
     // R34 — and it FOLLOWS THE COUNTRY, at the route's own lag, inside a
-    // minor road's grade, and never outside the stage's verge cone (R31).
+    // minor road's grade and the crest rule, and never outside the stage's
+    // verge cone (R31).
     const want = y + (Math.max(land.heightAt(px, pz), LAKE_Y + SPUR.shoreFreeboard) - y) * follow;
-    const cap = SPUR.maxGrade * SPUR.step;
-    y = Math.max(y - cap, Math.min(y + cap, want));
+    // On the junction's plane through its platform, then aimed at the band
+    // and clamped to it as a last resort — see `buildSpur`: the band is
+    // degenerate beside the junction, and a floor met as a clamp is a step.
+    if (s <= PLATFORM_HOLD) {
+      y = junction.elevation + slope0 * s;
+      slope = slope0;
+      continue;
+    }
     const band = shelfBand(px, pz);
+    ({ y, slope } = followStep(
+      y,
+      slope,
+      Math.min(band.ceiling, Math.max(band.floor, want)),
+      SPUR.maxGrade,
+    ));
     if (y > band.ceiling) y = band.ceiling;
     if (y < band.floor) y = Math.min(band.floor, band.ceiling);
   }
@@ -800,9 +842,53 @@ export function spurReach(spur: SpurLine): number {
   return spur.width / 2 + ROAD_CROSS.reach;
 }
 
+/** R17 — how far out of a junction the branch is the MAIN ROAD'S PLANE,
+ * m of its own arc: the platform's longest reach and a half, which is also
+ * as far as the compiler's warp onto that plane looks. Inside it the
+ * branch holds the junction's height and grade instead of following the
+ * country, and does not ask the stage's shelf band, which is degenerate
+ * beside the junction (`buildSpur` says why). */
+export const PLATFORM_HOLD = R.junction.reach.max * 1.5;
+
+/** R34 — ONE STEP OF A MINOR ROAD'S HEIGHT, stated once for every road
+ * that hangs off the stage: a branch, a drive, a car park's lane. The road
+ * wants `target` — the country it is following, the road it is closing on,
+ * the pad it is running onto — and gets as much of it as a road is built
+ * to: no steeper than `maxGrade`, and bending toward it no faster than a
+ * minor road's crest rule (`elevation.follow.minorCrest`). The second clamp
+ * is the one a first-order follower with a grade cap has not got, and without
+ * it a profile is a chain of ramps with a brow at every change of mind: a
+ * grade that flips from climbing to falling between two samples is a crest
+ * the car flies. Returns the new height and the slope it was reached on,
+ * which is the state the next step bends from. */
+export function followStep(
+  y: number,
+  slope: number,
+  target: number,
+  maxGrade: number,
+): { y: number; slope: number } {
+  let next = (target - y) / SPUR.step;
+  const swing = R.elevation.follow.minorCrest * SPUR.step;
+  if (next > slope + swing) next = slope + swing;
+  else if (next < slope - swing) next = slope - swing;
+  if (next > maxGrade) next = maxGrade;
+  else if (next < -maxGrade) next = -maxGrade;
+  return { y: y + next * SPUR.step, slope: next };
+}
+
 /** Where the branches run, as a lookup: the terrain field asks it for the
  * nearest branch under every height query, so it has to answer in a fixed
- * few cell probes rather than a walk down every spur it has ever built. */
+ * few cell probes rather than a walk down every spur it has ever built.
+ *
+ * `sample` is the branch AT THE FOOT OF THE PERPENDICULAR — interpolated
+ * between the two samples either side of the point, never the nearest
+ * sample as laid — and `d` is the distance to that foot. The distinction is
+ * the whole ride: a branch's samples are `SPUR.step` apart, and on an 8%
+ * grade the nearest one is up to 0.32 m off the road's real height half the
+ * time, so a shelf hung off it is a staircase with a tread every four metres
+ * and a crown that wanders as the nearest vertex changes hands. The
+ * returned sample is a scratch record owned by the index: read it before
+ * the next query, never keep it. */
 export type SpurHit = { spur: SpurLine; sample: SpurSample; d: number };
 
 export type SpurIndex = {
@@ -823,7 +909,7 @@ const INDEX_CELL = 24;
  * holds, so a box left as it was stays a superset and costs work rather
  * than correctness. */
 type SpurCell = {
-  entries: { spur: SpurLine; sample: SpurSample }[];
+  entries: { spur: SpurLine; sample: SpurSample; index: number }[];
   minX: number;
   maxX: number;
   minZ: number;
@@ -851,9 +937,24 @@ export function createSpurIndex(): SpurIndex {
   let nearCz = NaN;
   const nearCells: SpurCell[] = [];
 
+  /** The interpolated sample every hit hands back — one record, rewritten
+   * per query, because this runs under every height reading the terrain
+   * answers and an allocation per call there is the cost of the lattice. */
+  const foot: SpurSample = {
+    x: 0,
+    z: 0,
+    heading: 0,
+    elevation: 0,
+    s: 0,
+    surface: "gravel",
+    lift: 0,
+    flat: 0,
+  };
+
   const add = (spur: SpurLine): void => {
     spurs.push(spur);
-    for (const sample of spur.samples) {
+    for (let index = 0; index < spur.samples.length; index++) {
+      const sample = spur.samples[index];
       const k = key(sample.x, sample.z);
       let cell = grid.get(k);
       if (!cell) {
@@ -868,7 +969,7 @@ export function createSpurIndex(): SpurIndex {
           }),
         );
       }
-      cell.entries.push({ spur, sample });
+      cell.entries.push({ spur, sample, index });
       if (sample.x < cell.minX) cell.minX = sample.x;
       if (sample.x > cell.maxX) cell.maxX = sample.x;
       if (sample.z < cell.minZ) cell.minZ = sample.z;
@@ -891,7 +992,7 @@ export function createSpurIndex(): SpurIndex {
       }
     }
     let bestSpur: SpurLine | null = null;
-    let bestSample: SpurSample | null = null;
+    let bestIndex = -1;
     let bestD2 = Infinity;
     // Squared throughout, and the winner built once at the end: this runs
     // under every height query the terrain answers, and a root per candidate
@@ -914,11 +1015,52 @@ export function createSpurIndex(): SpurIndex {
         if (d2 >= bestD2) continue;
         bestD2 = d2;
         bestSpur = entries[i].spur;
-        bestSample = sample;
+        bestIndex = entries[i].index;
       }
     }
-    if (!bestSpur || !bestSample) return null;
-    return { spur: bestSpur, sample: bestSample, d: Math.sqrt(bestD2) };
+    if (!bestSpur) return null;
+    // The nearest VERTEX is in hand; the nearest point on the road is on
+    // one of the two segments it ends, and the foot of the perpendicular
+    // onto that segment is where the road's height is read. Between two
+    // samples the road is a straight ramp — which is also exactly what the
+    // renderer's ribbon draws between them.
+    const line = bestSpur.samples;
+    const at = line[bestIndex];
+    let from = at;
+    let to = at;
+    let t = 0;
+    let d2 = bestD2;
+    for (const k of [bestIndex - 1, bestIndex + 1]) {
+      if (k < 0 || k >= line.length) continue;
+      const other = line[k];
+      const ex = other.x - at.x;
+      const ez = other.z - at.z;
+      const len2 = ex * ex + ez * ez;
+      if (len2 < 1e-6) continue;
+      const u = Math.max(0, Math.min(1, ((x - at.x) * ex + (z - at.z) * ez) / len2));
+      const px = at.x + ex * u - x;
+      const pz = at.z + ez * u - z;
+      const pd2 = px * px + pz * pz;
+      if (pd2 >= d2) continue;
+      d2 = pd2;
+      from = at;
+      to = other;
+      t = u;
+    }
+    foot.x = from.x + (to.x - from.x) * t;
+    foot.z = from.z + (to.z - from.z) * t;
+    foot.elevation = from.elevation + (to.elevation - from.elevation) * t;
+    foot.s = from.s + (to.s - from.s) * t;
+    foot.lift = from.lift + (to.lift - from.lift) * t;
+    foot.flat = from.flat + (to.flat - from.flat) * t;
+    // Two consecutive headings are a few degrees apart at most, so the
+    // short way round is the difference itself.
+    let turn = to.heading - from.heading;
+    while (turn > Math.PI) turn -= 2 * Math.PI;
+    while (turn < -Math.PI) turn += 2 * Math.PI;
+    foot.heading = from.heading + turn * t;
+    foot.surface = t < 0.5 ? from.surface : to.surface;
+    return { spur: bestSpur, sample: foot, d: Math.sqrt(d2) };
   };
 
   const pruneBefore = (atS: number): void => {

@@ -174,6 +174,10 @@ export function createGuardField(track: Track): GuardField {
         const tx = x + Math.cos(angle) * reach;
         const tz = z + Math.sin(angle) * reach;
         if (roadDistance(tx, tz) < half + R.guard.groveClear) continue;
+        // Each trunk asks for itself, not only the patch's middle: a grove
+        // is up to `maxRadius` across, and a trunk on its far side can stand
+        // on a homestead's yard whose rim the middle cleared.
+        if (blocked(tx, tz)) continue;
         saplings.push({
           x: tx,
           z: tz,

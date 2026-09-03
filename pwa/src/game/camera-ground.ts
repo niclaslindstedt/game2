@@ -123,17 +123,38 @@ export const SLACK = {
 
 /** ...AND WHAT GETS PAST THE PLAY ARRIVES AS A MOVEMENT, NOT A CUT. The
  * slack separates by size, so anything bigger than it — a kerb dropped off
- * at a slant, a lattice crease, the step off a shelf — comes through at full
- * amplitude in the frame it happens. The car should do that; a camera that
- * does it too is the car standing still in the frame while the whole world
- * jumps, the read of a camera welded to the roof. So the height the chase
- * rigs stand and aim from EASES onto the slack's reading (lib/follow.ts) at
- * `rate`, 1/s: fast enough that a hill is followed within a fraction of a
- * metre, slow enough that a step in the ground is sunk or lifted through
- * over a few frames. In the AIR the height is a smooth arc with nothing to
- * ease away and the frame must not change for a designed jump (CHASE_RIGS),
- * so it follows at `flying` there, near enough one for one. */
-export const HEIGHT_FOLLOW = { rate: 9, flying: 80, snap: 6 };
+ * at a slant, a lattice crease, the step off a shelf, the whole rolling
+ * ground of the country off the road — comes through at full amplitude in
+ * the frame it happens. The car should do that; a camera that does it too
+ * is the car standing still in the frame while the whole world jumps, the
+ * read of a camera welded to the roof.
+ *
+ * So the height the chase rigs stand and aim from is carried on a SPRING
+ * (lib/sprung.ts) — a mass, not a lag. An ease answers a kink in the
+ * ground with a kink in the camera's own path, one frame later and only a
+ * little softer, which off the road is the camera bobbing over every crease
+ * the car bobs over. A mass on a spring has to be got moving: a crease
+ * arrives as a curve, and a bump over before the spring has answered it is
+ * mostly not answered at all — the car rides it, in the frame, and the
+ * frame holds. `ground` is the spring's natural frequency on the ground,
+ * Hz: about a second to answer a real change of level, which is the
+ * weight of something flown rather than bolted on. `flying` is the same
+ * spring in the AIR, where the car's height is a smooth arc with nothing in
+ * it to reject and the frame must not change for a designed jump
+ * (CHASE_RIGS): stiff enough to sit on the arc within a couple of
+ * centimetres.
+ *
+ * A spring trails a HILL, though — a mass climbing a steady grade hangs
+ * behind the point it is chasing by `2ζv/ω`, which at a soft spring and
+ * rally pace is most of a metre, and a camera a metre low on every climb
+ * is a camera looking at a roof. So the spring is LED by the car's vertical
+ * speed: the known movement is fed forward and the spring only has to
+ * reject what is left, which is the bumps. That speed is the engine's own
+ * smoothed grade (`car.vy`), eased again at `lead`, 1/s, because off the
+ * road even the smoothed grade jitters — and snapped, not eased, at
+ * takeoff and landing, which are real changes of movement rather than
+ * bumps in it. */
+export const HEIGHT_SPRING = { ground: 1.1, flying: 4, damping: 1, lead: 2.5, snap: 6 };
 
 /** THE CLIFF. Driving off a cliff top is the one place the chase rig has
  * nothing sensible to follow. Riding the car down keeps it exactly two

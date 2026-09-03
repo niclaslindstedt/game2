@@ -829,7 +829,19 @@ export const STAGE_RULES = {
      * table, whichever is higher, and low ground crossed at that height
      * comes out as the embankment it should be. Without it a stage that
      * routes across a tarn drives along the bottom of it. */
-    follow: { lag: 140, grade: 0.075, crest: 0.004, freeboard: 3.5 },
+    follow: {
+      lag: 140,
+      grade: 0.075,
+      crest: 0.004,
+      /** ...and the crest rule for a MINOR road — a branch, a drive, a car
+       * park's lane (`followStep`): three times the route's. A rally road
+       * is crested for a car at pace; a lane into a car park is driven at
+       * a walk, and it has to make a pad's plane or a road's edge over a
+       * few dozen metres, which the route's own rule cannot bend fast
+       * enough to do. */
+      minorCrest: 0.012,
+      freeboard: 3.5,
+    },
     /** R34 — how far the road may stand OFF the country it crosses, m: up
      * on fill, down in cut. The lag and the grade clamp say how fast the
      * road may follow the land; nothing said how far behind it was allowed
@@ -2303,8 +2315,10 @@ export const STAGE_RULES = {
      * `approach` metres away — or, where there is no public road to leave,
      * leaving the pad and driven out to the edge of the map the way an
      * abandoned branch is (`buildSpur`). `maxGrade` is how steep it may
-     * climb, `clear` the least room it keeps from any other road. */
-    road: { width: 5, approach: { min: 38, max: 64 }, maxGrade: 0.08, clear: 26 },
+     * climb, `clear` the least room it keeps from any other road, and
+     * `rim` the least run it has between the road's lip and the pad's rim
+     * — the room it needs to climb onto the pad's plane at its grade. */
+    road: { width: 5, approach: { min: 38, max: 64 }, maxGrade: 0.08, clear: 26, rim: 20 },
     /** THE TRAILS: a trodden path from the pad's rim to the back of each
      * stand it serves, this wide, walked in steps this long, never inside
      * the route's corridor and never through the water. */

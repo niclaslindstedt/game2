@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ANALYSIS,
   ROAD_CROSS,
   SPUR,
   STAGE_RULES as R,
@@ -200,6 +201,28 @@ describe("car parks (R42)", () => {
           expect(nearest).toBeGreaterThan(C.trail.width / 2);
           expect(nearest).toBeLessThan(C.trail.width / 2 + 2.5);
         }
+      }
+    }
+  });
+
+  it("lays every lane at a road's grade, bending no faster than a minor road's crest rule", () => {
+    // The lane is a road: no step on it steeper than a minor road is built
+    // to (the pad's own plane, where the lane crosses onto it), and no brow
+    // in it a car would fly — a grade that flips between two samples is
+    // what a first-order follower with a grade cap leaves at every join,
+    // and it was a 20% ramp into one car park in four.
+    for (const { park } of sweep()) {
+      const S = park.road.samples;
+      let slope = 0;
+      for (let i = 1; i < S.length; i++) {
+        const run = S[i].s - S[i - 1].s;
+        expect(run).toBeGreaterThan(0);
+        const grade = (S[i].elevation - S[i - 1].elevation) / run;
+        expect(Math.abs(grade)).toBeLessThanOrEqual(
+          Math.max(C.road.maxGrade, C.pad.maxGrade) + ANALYSIS.lanes.gradeSlack,
+        );
+        if (i > 1) expect(Math.abs(grade - slope) / run).toBeLessThan(ANALYSIS.lanes.crest.fail);
+        slope = grade;
       }
     }
   });
