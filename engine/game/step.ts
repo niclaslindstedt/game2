@@ -850,7 +850,14 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     ctx.slope = (ahead - behind) / (2 * grade);
     ctx.slopeLat = (right - left) / (2 * grade);
     ctx.roadCurve = (fwd + back - 2 * here) / (span * span);
-    ctx.lip = false;
+    // A brow out in the country is a shape the ground happens to have, and
+    // the car bobs over it or is thrown by it on the strength of its own
+    // momentum alone. The training ground is the one place off a road where
+    // something was BUILT to throw the car (`mapgen/arena.ts`), and its
+    // ramp's lip is entitled to the same launch a stage's jump gets: off
+    // the top, at the speed the ramp was drawn around, rather than glued to
+    // the landing face until the flight starts late and reads as a hop.
+    ctx.lip = track.arena !== null && track.arena.lipAt(car.x, car.z);
     ctx.windX = state.wind.x;
     ctx.windZ = state.wind.z;
     ctx.t = state.t;
@@ -944,7 +951,11 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   // The finish is a LINE across the road, and the move just made is what
   // either crossed it or did not. Asked here rather than at the end of the
   // step, so a respawn cannot teleport the car over the gate and win.
-  const finished = !track.endless && crossedFinish(track, prevX, prevZ, car.x, car.z);
+  // ...and never on the training ground, whose ribbon is an approach road
+  // and not a stage: its far end is a place the car drives out of onto the
+  // pad, not a line the session is over at.
+  const finished =
+    !track.endless && track.arena === null && crossedFinish(track, prevX, prevZ, car.x, car.z);
   // R28 — and the split board it owes, asked here for the same reason.
   const checkedIn = throughBoard(state, prevX, prevZ, car.x, car.z);
   state.nearIndex = fix.index;

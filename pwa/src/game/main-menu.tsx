@@ -50,6 +50,7 @@ import { LevelGrid, LocationList } from "./menu-levels.tsx";
 import { StandingsModal, warmStandings, type StandingsRow } from "./results-table.tsx";
 import { CarSetupPage } from "./menu-car.tsx";
 import { GalleryPage } from "./menu-gallery.tsx";
+import { TRAINING_ID, TRAINING_LEVEL, TRAINING_LOCATION, isTraining } from "./training.ts";
 import { DebugLogPage, DeveloperPage } from "./menu-dev.tsx";
 import { HeadsUpPage } from "./menu-headsup.tsx";
 import { DifficultyPicker, MenuHead, gridSize, type PlayMode, type RaceSettings } from "./menu.tsx";
@@ -191,6 +192,12 @@ const ROOT_ITEMS: {
   { key: "timetrial", glyph: "stopwatch", label: "TIME TRIAL", page: { page: "timetrial" } },
   { key: "headsup", glyph: "headsup", label: "HEADS UP", page: { page: "headsup" } },
   { key: "roam", glyph: "roam", label: "ROAM", page: { page: "roam" } },
+  {
+    key: "training",
+    glyph: "cone",
+    label: "TRAINING",
+    page: { page: "car", levelId: TRAINING_ID, mode: "training" },
+  },
   { key: "gallery", glyph: "camera", label: "GALLERY", page: { page: "gallery" }, quiet: true },
   {
     key: "options",
@@ -645,6 +652,7 @@ function locationParent(): MenuPage {
  * stale one out of a reload should land somewhere real rather than on a
  * blank card: without a country, each mode falls back to its list of them. */
 function carParent(levelId: string, mode: PlayMode): MenuPage {
+  if (mode === "training") return { page: "root" };
   const found = findLevel(levelId);
   if (mode === "timetrial") return { page: "timetrial", locationId: found?.location.id };
   if (mode === "headsup") return { page: "headsup", locationId: found?.location.id };
@@ -658,7 +666,15 @@ export function MainMenu(props: MainMenuProps) {
   // names it) shows the grid it came from rather than an empty card — a
   // substitution rather than a navigation, because a render is not the
   // place to change what page the app thinks it is on.
-  const found = props.page.page === "car" ? findLevel(props.page.levelId) : null;
+  // The training ground is addressed by the same card as a campaign stage
+  // and is deliberately not IN the campaign (`training.ts`), so the lookup
+  // that walks the ladder cannot find it and this is where it is resolved.
+  const found =
+    props.page.page !== "car"
+      ? null
+      : isTraining(props.page.levelId)
+        ? { location: TRAINING_LOCATION, level: TRAINING_LEVEL, index: 0 }
+        : findLevel(props.page.levelId);
   // WHICH ROAD ROAM IS STANDING ON, for the pre-race card's title. Derived
   // from the settings the same way Roam's own LEVEL row is, so the card and
   // the row can never name different stages.
@@ -773,7 +789,11 @@ export function MainMenu(props: MainMenuProps) {
         {page.page === "car" && found !== null && (
           <CarSetupPage
             title={found.level.name.toUpperCase()}
-            backLabel={found.location.name.toUpperCase()}
+            // The training ground has no location behind it to go back to —
+            // it is reached from the root menu and `carParent` sends BACK
+            // there, so the label has to say so rather than naming the card
+            // the player is already standing on.
+            backLabel={page.mode === "training" ? "MENU" : found.location.name.toUpperCase()}
             best={props.progress.best[found.level.id]}
             race={props.race}
             onRace={props.onRace}

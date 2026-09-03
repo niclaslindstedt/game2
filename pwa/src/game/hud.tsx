@@ -102,6 +102,11 @@ export type HudSnapshot = {
   pacenotes: HudPacenote[];
   seed: number;
   carName: string;
+  /** THE TRAINING GROUND is standing rather than a stage (`mapgen/arena.ts`).
+   * The HUD drops the clock for it and names the place instead of the seed:
+   * nothing there is timed, and a running clock over a practice ground is
+   * the game asking a question the level does not answer. */
+  training: boolean;
   /** Two wheels past the verge. Nothing is drawn from it — it goes on the
    * HUD root as `data-off`, which is what lets the screenshot harness wait
    * for turf under the wheels without the debug overlay in the frame. */
@@ -715,7 +720,7 @@ export function Hud({
           minimap, one tap away and out of the sky. */}
       <div className="hud-top">
         <div className="hud-topleft">
-          {show.timer && <RaceClock face={snap} live={live} />}
+          {show.timer && !snap.training && <RaceClock face={snap} live={live} />}
           {/* Under the clock, the gap that corner of the screen is for. While
               a run-out is watched it is the WATCHED crew's gap to the time
               already on the sheet — the player's — which is the one number a
@@ -815,7 +820,7 @@ export function Hud({
           where a label the player reads once a run belongs. */}
       {show.stage && (
         <div className="hud-chip hud-stage">
-          STAGE {snap.seed}
+          {snap.training ? "TRAINING" : `STAGE ${snap.seed}`}
           <span className="hud-chip-sub">{snap.carName}</span>
           {/* The frame rate, under the map with the rest of the run's
               label — developers only. */}

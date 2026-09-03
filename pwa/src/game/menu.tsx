@@ -48,7 +48,11 @@ import { PLAY_CAMERAS, type DevSettings, type Settings } from "./settings.ts";
  * trial is a lap you drive for the clock alone, and a heads-up race is the
  * campaign's field with the championship taken off: nothing about it is
  * written down anywhere. */
-export type PlayMode = "campaign" | "timetrial" | "headsup" | "roam";
+/** The disciplines a run can be started in. TRAINING is the odd one: it
+ * is the only mode that is not a stage — it opens the hand-built training
+ * ground (`mapgen/arena.ts`) instead of a seed, and keeps no time, no
+ * field and no score. */
+export type PlayMode = "campaign" | "timetrial" | "headsup" | "roam" | "training";
 
 export type RaceSettings = {
   timeOfDay: TimeOfDay;

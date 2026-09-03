@@ -241,6 +241,24 @@ await scene("storm", { start: "1", bot: "1", weather: "storm" }, async (page) =>
   await atStageTime(page, 12);
 });
 
+// THE TRAINING GROUND (engine/mapgen/arena.ts). Its own row because it is
+// the one place in the game whose GROUND is not a stage's: the pad is drawn
+// on a lattice four times finer than the country's, because the ramp and
+// the graded roads on it are shapes a 14 m cell would smooth away — and the
+// physics rides exactly the triangles drawn, so smoothing them away would
+// take them out of the driving too. That resolution is what this row is
+// here to keep honest: it is a fixed, hand-built place, so its triangle
+// count is a number that should not move unless somebody moves it.
+await scene("training", { start: "1", mode: "training" }, async (page) => {
+  // It has no clock to wait on — nothing there is timed, which is the whole
+  // level (`hud.tsx` drops the readout) — so readiness is the HUD standing
+  // plus a dwell long enough for the arena's ground to have streamed in.
+  // Everything metered here is static geometry, so the dwell is the only
+  // thing a settle could have bought anyway.
+  await page.waitForSelector(".hud-stage", { timeout: 120000 });
+  await page.waitForTimeout(9000);
+});
+
 // The start grid — every car, the gantry, the crowd and the start gate in
 // one frame, which is the densest the stage ever gets.
 await scene("grid", { start: "1" }, async (page) => {

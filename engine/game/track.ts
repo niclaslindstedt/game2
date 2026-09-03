@@ -105,6 +105,11 @@ function poseAt(state: GameState, index: number): WayHome {
  * pick through, and come back on the first steer that wandered.
  */
 export function trackLost(state: GameState): boolean {
+  // On the training ground there is nothing to be lost from. The whole
+  // session is driven off the ribbon on purpose (`mapgen/arena.ts`), so the
+  // one condition this asks — the car is off the road — is true from the
+  // first metre and RETURN TO TRACK would never go out again.
+  if (state.track.arena !== null) return false;
   if (!state.offRoad) return false;
   if (state.lost) return true;
   const guide = TUNING.offTrack.guide;

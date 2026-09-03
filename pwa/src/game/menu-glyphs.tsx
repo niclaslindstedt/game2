@@ -27,6 +27,7 @@ export const GLYPH_NAMES = [
   "stopwatch",
   "headsup",
   "roam",
+  "cone",
   "camera",
   "sliders",
   "standings",
@@ -122,6 +123,19 @@ const GLYPHS: Record<GlyphName, JSX.Element> = {
     <>
       <path d="M4 20.5 9.4 3.5M20 20.5 14.6 3.5" />
       <path d="M12 5.5v2.6M12 11v2.6M12 16.4V19" />
+    </>
+  ),
+  // A marshal's cone: the training ground, and the only mark in the set
+  // that is a THING rather than an idea. It has to be — a glyph for
+  // "practice" is a glyph for nothing, and everybody already knows what a
+  // cone in a car park means. The base flange is load-bearing: without it
+  // the mark is a triangle at the fourteen pixels it is actually read at,
+  // and a triangle is a warning sign.
+  cone: (
+    <>
+      <path d="M7.6 16.2 12 3.4l4.4 12.8" />
+      <path d="M9.9 9.8h4.2" />
+      <path d="M6.2 16.2h11.6l1.5 3.6H4.7l1.5-3.6Z" />
     </>
   ),
   camera: (

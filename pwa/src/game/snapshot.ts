@@ -307,6 +307,7 @@ export function takeSnapshot(
     pacenotes: state.phase === "racing" && !state.drowning ? upcomingPacenotes(state, pace) : [],
     seed: state.seed,
     carName: state.spec.name,
+    training: state.track.arena !== null,
     // The co-driver's way-home call is a DRIVING aid, so a car the water
     // has already taken is neither off-road nor lost as far as the HUD is
     // concerned: nothing the player asks for over the next few seconds
