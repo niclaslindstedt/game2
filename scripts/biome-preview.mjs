@@ -19,24 +19,24 @@
 // Everything about the frame comes off switches the game already has, so
 // the picture is the game's own and not a special renderer's:
 //
-//   ?hud=0             the instruments and the mirror off — the world alone
-//   ?drawdistance=far  OPTIONS ▸ VIDEO's own longest air. The fog is tuned
-//                      for a driver's eye a metre off the road; a camera two
-//                      hundred metres up is looking through four times that,
-//                      and on the stored default the middle distance washes
-//                      out to fog colour.
-//   ?god=1&g…=         god mode's free camera, parked by the URL
+//   ?hud=0      the instruments and the mirror off — the world alone
+//   ?god=1&g…=  god mode's free camera, parked by the URL
+//   ?freefov=   a longer lens, so a wide frame is a panorama and not a
+//               fisheye — see ACROSS
+//   ?air=       how far the world is BUILT and drawn for this frame, which a
+//               still can afford and a run cannot — see AIR
 //
 // THE ONE THING TO KNOW BEFORE MOVING THE CAMERA: the ground and the
 // scenery are streamed around the CAR (world.ts — "the ground and the wild
 // follow the CAR"), and god mode holds the car on the start line. Fly the
 // camera a few hundred metres away and it looks at the world's edge: bare
 // backdrop, a floating island of terrain, no trees. That is why this stands
-// the camera OVER the start rather than anywhere more scenic, and it is why
-// LIFT is as low as it is.
+// the camera OVER the start rather than anywhere more scenic — `?air=` buys
+// how far it can SEE from there, not somewhere else to see it from.
 //
 //   npm run biomes
-//   npm run biomes -- --lift 260 --tilt -0.5   # try another shot
+//   npm run biomes -- --lift 200 --tilt -0.5   # try another shot
+//   npm run biomes -- --air 4000 --settle 45000  # more country, slower
 //   npm run biomes -- --out previews           # somewhere to compare, not ship
 //
 // Needs `npm i --no-save playwright-core` and a Chromium (CHROMIUM_PATH
@@ -65,20 +65,42 @@ const flag = (name, fallback) => {
   return at >= 0 && at + 1 < args.length ? args[at + 1] : fallback;
 };
 
-/** How high over the start line the camera hangs, m. Two hundred is a
- * helicopter over the grid: high enough to see the country roll away and
- * what is standing in it, low enough that the ground below is well inside
- * the fog and well inside the streamed world. Past about 250 the far edge
- * of the drawn terrain comes into shot. */
-const LIFT = Number(flag("lift", 200));
+/** How high over the start line the camera hangs, m — a low helicopter
+ * rather than a high one.
+ *
+ * The lift trades foreground for distance, and a shot with the horizon in it
+ * has all the distance it can use already. From 200 m the nearest ground in
+ * frame is nearly 400 m away, so the whole picture sits in the hazy half and
+ * reads as weather; from here it starts around 200 m, and the rock, the
+ * trees and the road in the near third give the far ones something to be far
+ * FROM. */
+const LIFT = Number(flag("lift", 110));
 
-/** How far the camera tilts down from level, radians — a quarter of a right
- * angle, so the frame is landscape with the horizon along the top and no
- * sky worth speaking of. Straight down would be a map again, which is the
- * one thing this picture is not; level would be a band of haze, because the
- * lens below is a long one and everything it sees at eye level is a
- * kilometre away. */
-const TILT = Number(flag("tilt", -0.45));
+/** How far the camera tilts down from level, radians. Shallow enough that
+ * THE HORIZON IS IN THE FRAME, which is what makes this a view out across a
+ * country rather than a map of one — an aerial with no horizon in it reads
+ * as the map view with extra steps, whatever lens took it. Sky is the top
+ * few percent; everything below is land going away from you. */
+const TILT = Number(flag("tilt", -0.24));
+
+/** How far the world is DRAWN for the shot, m (`?air=`).
+ *
+ * This is the number that lets the frame keep its horizon. A shot with the
+ * horizon in it is looking at infinity, so it always contains ground past
+ * wherever drawing stops — there is no lift or tilt that avoids it. On the
+ * game's own draw distances that edge lands about 750 m out and is plainly
+ * visible from up here: the desert's tarmac ran out into open sand halfway
+ * to the skyline, which reads as a generator bug and is not one.
+ *
+ * The driving numbers are sized to what a driver could see through the fog,
+ * and drawing kilometres of road and forest is the cost that fog exists to
+ * avoid. A STILL taken once can pay it, and `?air=` buys all three things
+ * that decide how much country is on screen at once: the ground BUILT around
+ * the car, the camera's far plane, and the fog — which is set to go solid
+ * exactly at the drawn edge, so the country ends in haze rather than on a
+ * line. Two and a half kilometres is as far as the eye picks out anything at
+ * this scale, and the tile count goes up with the square of it. */
+const AIR = Number(flag("air", 2600));
 
 /** The banner, px. Low resolution on purpose: it is read as a strip behind
  * a location's name, and the game it is a picture of is low-poly anyway.
@@ -120,6 +142,41 @@ const ACROSS = Number(flag("across", 132));
 /** The vertical fov that gives `ACROSS` at this aspect, deg. */
 const FOV = (Math.atan(Math.tan((ACROSS * Math.PI) / 360) / ASPECT) * 360) / Math.PI;
 
+/** How far below the horizon the frame's furthest-seeing ray points, rad.
+ *
+ * THE TOP CORNERS, not the top edge — and the difference is the whole point
+ * on a frame this wide. A rectilinear projection puts the corner ray further
+ * off the camera's axis than the top-centre ray, so it comes out CLOSER to
+ * the horizon and sees further: at 132° across and 32° of tilt the top-centre
+ * looks 680 m out and the corners look past 1600 m. Constraining the edge
+ * and not the corner is how a shot passes its own check and still has the
+ * world ending inside it. */
+function shallowest(tiltRad, fovDeg, aspect) {
+  const halfV = (fovDeg * Math.PI) / 360;
+  const halfH = Math.atan(Math.tan(halfV) * aspect);
+  // The corner ray in camera space, then pitched down into the world.
+  const y = Math.tan(halfV);
+  const x = Math.tan(halfH);
+  const len = Math.hypot(x, y, 1);
+  const p = Math.abs(tiltRad);
+  return Math.asin((Math.sin(p) - y * Math.cos(p)) / len);
+}
+
+/** How far the shot's furthest corner actually looks, m — Infinity once the
+ * horizon is in the frame, which is the intended shot. Reported rather than
+ * clamped: `AIR` is what has to cover it, and the fog closes over the drawn
+ * edge well before it, so this is here to say what the frame is asking of
+ * the world rather than to refuse it. */
+const SKYWARD = shallowest(TILT, FOV, ASPECT);
+const SEES = SKYWARD <= 0 ? Infinity : LIFT / Math.tan(SKYWARD);
+if (Number.isFinite(SEES) && SEES > AIR) {
+  console.warn(
+    `WARNING: from ${LIFT} m at tilt ${TILT.toFixed(2)} the frame's corners look ` +
+      `${SEES.toFixed(0)} m out, past the ${AIR} m of --air — the ground will END in shot. ` +
+      `Raise --air, drop the lift, or tilt further down.`,
+  );
+}
+
 /** JPEG, and not PNG. A 3D render of a landscape is a photograph as far as
  * a compressor is concerned — sky gradients, dappled ground, thousands of
  * shaded leaves — and PNG spends 200 KB on one. This is what JPEG is for. */
@@ -137,10 +194,12 @@ const outDir = join(root, flag("out", "pwa/public/previews"));
 const HIDE = ".debug-copy, .hud-actions, .hud-mini { display: none !important; }";
 
 /** How long the world is given to build before the shutter, ms. The terrain
- * tiles and the wild scenery arrive over many frames (`BUILD_TILES` a
- * frame), and under software rasterization those frames are slow — a
- * shutter that opens too early photographs half-planted country. */
-const SETTLE_MS = Number(flag("settle", 12000));
+ * tiles and the wild scenery arrive over many frames, and under software
+ * rasterization those frames are slow — a shutter that opens too early
+ * photographs half-planted country. `?air=` makes this the long pole: a
+ * 2.6 km disc of ground is a few hundred tiles, and every one of them has to
+ * be raised before the picture is of anywhere. */
+const SETTLE_MS = Number(flag("settle", 30000));
 
 if (!existsSync(join(dist, "index.html"))) {
   console.error("no pwa/dist — run `make build` first (this serves the built site)");
@@ -245,7 +304,7 @@ for (const location of LOCATIONS) {
   const query =
     `?start=1&biome=${location.biome}&seed=${level.seed}&length=${level.length}` +
     `&shape=${shape}&tod=${level.timeOfDay}&weather=${level.weather}` +
-    `&season=${level.season}&hud=0&drawdistance=far&god=1&freefov=${FOV.toFixed(2)}` +
+    `&season=${level.season}&hud=0&air=${AIR}&god=1&freefov=${FOV.toFixed(2)}` +
     `&gx=${start.x.toFixed(1)}&gy=${LIFT}&gz=${start.z.toFixed(1)}` +
     `&gyaw=${start.heading.toFixed(4)}&gpitch=${TILT}`;
 

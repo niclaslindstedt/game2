@@ -526,6 +526,19 @@ const URL_FREE_FOV = (() => {
   return raw !== null && Number.isFinite(deg) && deg > 0 && deg < 180 ? deg : 0;
 })();
 
+/** ?air= — how far the world is DRAWN for this frame, m, or 0 for the
+ * driving distances. OPTIONS ▸ VIDEO's draw distance only scales the fog
+ * preset, and its longest setting is still sized to a driver's eye a metre
+ * off the road; a camera two hundred metres up with the horizon in frame is
+ * looking at kilometres, and on any of them the ground and the roads on it
+ * stop partway out with open haze past the end. A still can afford to draw
+ * what a run cannot, so the tools ask for it outright. */
+const URL_AIR = (() => {
+  const raw = new URLSearchParams(location.search).get("air");
+  const m = Number(raw);
+  return raw !== null && Number.isFinite(m) && m > 0 && m <= 20000 ? m : 0;
+})();
+
 /** ...and where a `?m…=` link wants the ROAM MAP framed. Read once for the
  * same reason: it names the picture the link was cut from, and re-applying
  * it every frame would make the map impossible to move. */
@@ -1970,6 +1983,8 @@ export function App() {
       // reason: a tool shooting a wide panorama needs the frame it asked for
       // on the first frame, not the design lens for a beat and then its own.
       renderer.setFreeFov(URL_FREE_FOV);
+      // ...and how far it may SEE, for a still that is looking at kilometres.
+      renderer.setAir(URL_AIR);
       // Thunder arrives seconds after the flash that made it (storm.ts), so
       // the renderer decides WHEN and the bank decides what it sounds like.
       // Muted behind a menu for the same reason every other run sound is:

@@ -358,11 +358,27 @@ Everything the overlay prints, the app reads back (`App.tsx`):
 | `maz= mpitch= mzoom= mpanx= mpanz=`        | Park the map's framing exactly (radians, ×, metres of pan)    |
 | `hud=0`                                    | A CLEAN FRAME: instruments and rear-view glass both off       |
 | `drawdistance=near\|normal\|far`           | How far the air lets the camera see (OPTIONS ▸ VIDEO's own)   |
+| `freefov=`                                 | A different lens on god mode's camera, deg of VERTICAL fov    |
+| `air=`                                     | How far the world is BUILT and drawn for this frame, m        |
 
-`hud=0` and `drawdistance=` are for photographing the WORLD. The fog is tuned
-for a driver's eye a metre off the road, so a camera lifted well above it
-looks through several times that and the middle distance washes out to fog
-colour on the stored default — `drawdistance=far` is what a vista wants.
+These four are for photographing the WORLD rather than the run.
+
+**`air=` is the one to reach for from any height.** The game only builds
+ground within 560 m of the car and only draws it to the fog's ceiling, and
+`drawdistance=far` opens the fog PAST that — so a shot from above shows the
+country simply stopping, with the camera-locked ridge backdrop standing where
+the land should be. It reads as a generator bug and is not one. `air=` moves
+the three numbers that matter together (the built ground, the camera's far
+plane, and a fog set to close exactly at the drawn edge), which a still can
+afford and a run cannot. Give the world time to build it — the tiles arrive
+over many frames, and 2.6 km is a few hundred of them.
+
+**`freefov=` is what makes a WIDE frame a panorama.** three's fov is
+vertical, so a wide viewport opens the horizontal field instead of showing
+more of the same lens: on the design 58° a 4:1 frame is 131° across and 8:1
+is 155°, where the ground domes and anything near the edge shears. Hold the
+horizontal field where you want it and solve the vertical fov for the aspect.
+
 `hud=0` still leaves the pause chip on screen (a phone's only way out of a
 run); a tool that needs it gone hides `.debug-copy, .hud-actions, .hud-mini`
 with an injected stylesheet, as `scripts/biome-preview.mjs` does.

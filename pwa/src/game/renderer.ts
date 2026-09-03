@@ -54,6 +54,7 @@ import { createMirrorPace, refillGap, type MirrorTier } from "./mirror-pace.ts";
 import { createNameTag, GHOST_LOOK, TAG_LAYER, type NameTag } from "./name-tag.ts";
 import { buildMapRoute, type MapRoute } from "./map-route.ts";
 import { classify, type RivalRun } from "./standings.ts";
+import { setGroundReach } from "./terrain.ts";
 import { buildWorld, type World } from "./world.ts";
 
 /** How much of the map pane's width the route ribbon may cover before it
@@ -165,6 +166,16 @@ export type GameRenderer = {
    * `?freefov=` asks for, so a tool can shoot a wide panorama without the
    * horizontal field opening up into a fisheye. 0 restores the design lens. */
   setFreeFov: (deg: number) => void;
+  /** OPEN THE AIR to `far` metres — what `?air=` asks for. Moves the three
+   * numbers that decide how much country is on screen together, because
+   * moving one alone does nothing: the fog (or the country fades out), the
+   * camera's far plane (or it is not drawn at all), and with them the road
+   * chunks, which `cull` keeps exactly as far as the fog reaches. 0 puts the
+   * driving values back.
+   *
+   * It is for STILLS. Drawing kilometres of road and forest is the cost the
+   * fog exists to avoid, and a run cannot pay it — a preview taken once can. */
+  setAir: (far: number) => void;
   /** Where the map view is standing, for the debug box and its repro line. */
   mapPose: () => MapPose;
   /** Re-light an already-built stage (the pre-race menu flipping time of
@@ -1426,6 +1437,26 @@ export function createRenderer(canvas: HTMLCanvasElement, video: VideoSettings):
     holdMap: (held) => chase.holdMap(held),
     placeMap: (pose) => chase.placeMap(pose),
     setFreeFov: (deg) => chase.setFreeFov(deg),
+    setAir: (far) => {
+      chase.setReach(far);
+      // The GROUND has to be built before any of the rest matters: opening
+      // the fog and the far plane over unbuilt country only reveals the
+      // ridge backdrop standing where the land should be.
+      setGroundReach(far);
+      // The fog is deliberately THINNER than the driving preset's, not just
+      // longer. Kept at the preset's own 160-of-520 shape it starts hazing a
+      // third of the way out, and since a shot with the horizon in it spends
+      // most of its frame in the far half, the whole country came back white.
+      // Holding it clear to well past halfway leaves the land readable and
+      // still closes the air over the last of it, so the drawn edge arrives
+      // as haze rather than as a line.
+      // …and the fog closes exactly AT the drawn edge rather than short of
+      // it. That is the whole job it has here: the ground stops at `far`
+      // whatever the air does, so the air has to have gone solid by then or
+      // the country ends on a visible line. Clear until nearly there, so the
+      // land the shot is actually about stays land rather than haze.
+      if (far > 0) environment.setFogRange(far * 0.78, far);
+    },
     mapPose: () => chase.mapPose(),
     setConditions,
     onThunder: environment.onThunder,
