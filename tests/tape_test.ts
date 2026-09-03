@@ -259,7 +259,17 @@ describe("the run tape", () => {
     // Three roads and three fields of fourteen is a hundred and twenty-six
     // stages driven for one assertion — worth it for the one the whole
     // calibration rests on, but not inside the default budget.
-  }, 60_000);
+    //
+    // The budget is generous on purpose. A hundred and twenty-six stages is
+    // the SLOWEST thing in the suite by a distance, and what it costs moves
+    // with every handling change and with whatever runner CI happens to
+    // give the shard: it has been measured at 52 s on one and timed out
+    // against a 60 s budget on the next, which is a test failing for its
+    // own size rather than for its claim. Sized here at about three times
+    // what it takes rather than a shade over, because the number that
+    // matters is the assertion below, and a budget set close enough to trip
+    // on runner variance reports something that is not true.
+  }, 180_000);
 
   it("writes down the cut establishing shot, because it moves the field", () => {
     const recorder = createTapeRecorder({
