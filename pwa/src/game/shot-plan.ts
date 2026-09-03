@@ -106,6 +106,70 @@ export function stampFits(width: number, height: number): boolean {
   return width >= layout.mark * 6 && height >= layout.mark * 3;
 }
 
+/** A coarse yes/no map of where the HUD put ink over a picture: `cols` by
+ * `rows` cells, row 0 at the top, 1 where an instrument covers the cell.
+ * Read off the rasterized layer rather than off the DOM (shot-hud.ts),
+ * because what matters is where the pixels LANDED — an instrument is a panel
+ * with a shadow under a shape with a shadow under it, and no bounding box
+ * anybody could walk says where that comes to. */
+export type HudCover = { cols: number; rows: number; on: Uint8Array };
+
+/** A rectangle of the picture, in picture pixels. */
+export type Box = { left: number; right: number; top: number; bottom: number };
+
+/**
+ * HOW FAR THE STAMP HAS TO BE LIFTED to stand clear of the instruments.
+ *
+ * The bottom-right corner is the quietest rectangle a rally FRAME has, and
+ * it stays the right corner now that the HUD is in the picture too — but it
+ * is not always the last pixel of one. A phone held upright puts the whole
+ * instrument cluster along the foot, and a signature dropped on it takes the
+ * speedo with it. So the badge slides UP the corner until it finds room,
+ * which on a window held sideways is no distance at all: the cluster is over
+ * on the left there and the stamp is already standing on grass.
+ *
+ * Returns pixels, and zero when there is nowhere better to be — a picture
+ * covered corner to corner (the results card is one) gets the signature it
+ * would have had anyway, rather than one floating in its middle.
+ */
+export function stampLift(cover: HudCover | null, box: Box, width: number, height: number): number {
+  if (!cover || cover.cols < 1 || cover.rows < 1 || width < 1 || height < 1) return 0;
+  const rowHeight = height / cover.rows;
+  const from = clamp(Math.floor((box.left / width) * cover.cols), cover.cols);
+  const to = clamp(Math.ceil((box.right / width) * cover.cols) - 1, cover.cols);
+  const tall = Math.max(1, Math.ceil((box.bottom - box.top) / rowHeight));
+  // Down from the foot, because the corner the badge wants is the one it
+  // already has: the first band deep enough to hold it wins, and the lift is
+  // how far that band's floor is off the picture's.
+  for (let floor = cover.rows - 1; floor >= tall - 1; floor--) {
+    if (clearBand(cover, from, to, floor - tall + 1, floor)) {
+      return Math.round((cover.rows - 1 - floor) * rowHeight);
+    }
+  }
+  return 0;
+}
+
+/** Whether every cell of a band of rows, over a range of columns, is free of
+ * instruments. */
+function clearBand(
+  cover: HudCover,
+  from: number,
+  to: number,
+  top: number,
+  bottom: number,
+): boolean {
+  for (let row = top; row <= bottom; row++) {
+    for (let col = from; col <= to; col++) {
+      if (cover.on[row * cover.cols + col]) return false;
+    }
+  }
+  return true;
+}
+
+function clamp(value: number, count: number): number {
+  return Math.max(0, Math.min(count - 1, value));
+}
+
 /** The name's typeface, the same condensed stack the HUD is set in
  * (styles.css) so a picture is signed in the game's own hand. Restated
  * rather than read off the document: a canvas font is a string, not a
@@ -221,4 +285,97 @@ export function notesLayout(
 export function notesFit(width: number, height: number): boolean {
   const layout = notesLayout(width, height);
   return width >= layout.width * 2 && height >= layout.line * 12;
+}
+
+// ── The HUD layer ─────────────────────────────────────────────────────────
+//
+// THE HUD IS IN THE PICTURE. It is what the driver was looking at — the
+// clock they were chasing, the call they took the corner on, the place they
+// were running — and a rally screenshot with none of that in it is a photo
+// of some trees. The player who wants the frame on its own already has two
+// ways to it that cost nothing: OPTIONS' HUD switch takes the instruments
+// down for good, and holding ALT takes them off for as long as the key is
+// held. Neither is the shutter's business to guess at.
+//
+// The HUD is DOM over the canvas, so it is not in the drawing buffer a
+// picture is lifted from and has to be RASTERIZED into it: the live subtree
+// and the page's own stylesheet, wrapped in a `<foreignObject>` so the
+// browser lays out and paints its own HUD rather than this file drawing a
+// second one in Canvas2D. A redrawn HUD would be a copy to keep in step with
+// every instrument that ever moves, and it would be wrong the first time
+// somebody changed a stylesheet.
+//
+// Same arithmetic-not-graphics split as the stamp and the notes above: the
+// document is ASSEMBLED here, where a test can read it, and the serializing,
+// decoding and compositing are next door (shot-hud.ts).
+
+/** The class the layer's wrapper wears, and what `:root` is rewritten to on
+ * the way in. Inside an SVG the document's root element is the `<svg>`, so a
+ * `:root` rule — which is where the HUD's ink, its shadow and every other
+ * colour it is drawn in are declared — would match nothing at all and the
+ * whole HUD would come out in the browser's default black. */
+export const HUD_LAYER_ROOT = "shot-hud-root";
+
+/** Everything the HUD layer is built from. `markup` is the HUD subtree
+ * serialized as XML, `css` the page's own stylesheet, and `inherited` the
+ * declarations the HUD gets from the ancestors that are NOT coming with it
+ * (the font off `body`, most of all) — read from the live page rather than
+ * restated, so nothing here has to know what the app is set in. */
+export type HudLayerSource = {
+  markup: string;
+  css: string;
+  /** The app-root's box in CSS pixels — the same rectangle the canvas
+   * fills, which is what lets the layer be drawn over the picture with no
+   * arithmetic beyond a scale. */
+  width: number;
+  height: number;
+  inherited: string;
+};
+
+/**
+ * The HUD as a standalone SVG document, ready to be decoded as an image.
+ *
+ * The viewport is the app-root's CSS box and the viewBox matches it, so
+ * `vw`, `vh` and `vmin` — which the HUD sizes its minimap, its glass and its
+ * pacenote strip in — resolve to exactly what they resolved to on screen.
+ * The picture is usually bigger than that (a drawing buffer is CSS pixels
+ * times the device ratio), and the scaling is left to the draw: an SVG is
+ * rasterized at the size it is painted, so the HUD comes out at the
+ * picture's resolution rather than upscaled from the window's.
+ */
+export function hudLayerSvg(source: HudLayerSource): string {
+  const width = Math.max(1, Math.round(source.width));
+  const height = Math.max(1, Math.round(source.height));
+  // The wrapper stands in for `.app-root`: the HUD's instruments are pinned
+  // with `position: absolute`, and without a positioned box of the window's
+  // own size around them they would pin themselves to the SVG and pile up in
+  // the corner.
+  const style = `position:relative;width:${width}px;height:${height}px;overflow:hidden;${source.inherited}`;
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`,
+    `<foreignObject x="0" y="0" width="${width}" height="${height}">`,
+    `<div xmlns="http://www.w3.org/1999/xhtml" class="${HUD_LAYER_ROOT}" style="${escapeAttr(style)}">`,
+    `<style>${cdata(rootedCss(source.css))}</style>`,
+    source.markup,
+    "</div></foreignObject></svg>",
+  ].join("");
+}
+
+/** The page's stylesheet with every `:root` pointed at the layer's wrapper —
+ * see `HUD_LAYER_ROOT`. A plain replace is enough because `:root` is only
+ * ever a selector: it takes no arguments and cannot appear inside a value. */
+function rootedCss(css: string): string {
+  return css.split(":root").join(`.${HUD_LAYER_ROOT}`);
+}
+
+/** A stylesheet is dropped into the document verbatim rather than escaped,
+ * because CSS is full of `&` and `>` and a nesting selector that came back
+ * as `&amp;` would style nothing. The one sequence CDATA cannot carry is its
+ * own terminator, which is split across two sections instead. */
+function cdata(text: string): string {
+  return `<![CDATA[${text.split("]]>").join("]]]]><![CDATA[>")}]]>`;
+}
+
+function escapeAttr(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
 }
