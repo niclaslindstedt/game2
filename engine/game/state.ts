@@ -9,6 +9,7 @@
 import type { CarSpec, GearboxMode } from "./defs/cars.ts";
 import type { KerbField, Surface, TerrainField, Track, WildObstacle } from "../mapgen/index.ts";
 import type { Rng } from "../lib/prng.ts";
+import type { TrafficFleet } from "./traffic.ts";
 
 export type CarInput = {
   /** -1..1; positive steers clockwise (right in map view). */
@@ -666,6 +667,11 @@ export type GameState = {
    * renderer because one of the two is SOLID, and a block the car is thrown
    * by has to be a block the player can see. */
   kerbs: KerbField;
+  /** R44 — the traffic on the public roads: the routes it drives, the
+   * signs that post their limits, and the vehicles out on them right now.
+   * Stepped inside `step()`, so the player can hit one; the renderer poses
+   * its meshes off `vehicles` by id. */
+  traffic: TrafficFleet;
   car: CarState;
   phase: GamePhase;
   /** Set while the car is going down in deep water; null while it drives.

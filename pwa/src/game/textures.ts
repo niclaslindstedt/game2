@@ -290,6 +290,36 @@ export const parkingSignTexture = once((): THREE.CanvasTexture => {
   return tex;
 });
 
+const speedSigns = new Map<number, THREE.CanvasTexture>();
+
+/** R44 — a speed limit sign's face: the white disc in its red ring with
+ * the limit across it, one texture per limit posted. */
+export function speedSignTexture(limit: number): THREE.CanvasTexture {
+  const had = speedSigns.get(limit);
+  if (had) return had;
+  const { canvas, ctx } = makeCanvas(128);
+  ctx.clearRect(0, 0, 128, 128);
+  ctx.fillStyle = "#c8262a";
+  ctx.beginPath();
+  ctx.arc(64, 64, 62, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#f4f1e6";
+  ctx.beginPath();
+  ctx.arc(64, 64, 46, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#1a1a1c";
+  ctx.font = "bold 58px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(String(limit), 64, 68);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  speedSigns.set(limit, tex);
+  return tex;
+}
+
 /** A soft radial glow (white core fading to transparent) — the sun's halo,
  * the moon's veil, a lightning bloom. Tint via the material's color. */
 export const glowTexture = once((): THREE.CanvasTexture => {

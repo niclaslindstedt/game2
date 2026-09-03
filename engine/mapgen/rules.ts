@@ -2551,6 +2551,31 @@ export const STAGE_RULES = {
     rooting: { depth: 0.4, thin: 0.35, full: 1.6 },
   },
 
+  /** R44 — THE TRAFFIC ROUTES over the public roads (`traffic.ts`). The
+   * rally closes the road it borrows, so the traffic lives on the arms it
+   * abandons (R17, R36) and the lanes into the car parks (R42): every
+   * journey runs between the places those roads reach — the edge of the
+   * map, a town, a car park, the tape across the closed road. */
+  traffic: {
+    /** Where a lane begins past the barrier across an arm, m beyond the
+     * block: a motorist turned back at the tape waits outside it, never
+     * in the junction. */
+    pastBlock: 10,
+    /** How far from a junction a town on the ROUTE still counts as what
+     * is behind the tape, m — the journey then starts "from town". */
+    townReach: 320,
+    /** How far either side of a village street on an arm the town limit
+     * holds, m: the sign stands before the first house, not level with it. */
+    townMargin: 40,
+    /** Spacing of the vehicles' own samples along a route, m — the arms'
+     * and the lanes' own, so a route is walked by index. */
+    step: 4,
+    /** THE SPEED LIMIT SIGNS: how far past the road's edge one stands, m,
+     * how far along a lane the first one stands from where the limit
+     * starts, m, and how often it is repeated down a long road, m. */
+    sign: { out: 1.2, after: 8, every: 600 },
+  },
+
   /** Chance the next segment is a turn rather than a straight. */
   turnChance: 0.72,
 } as const;

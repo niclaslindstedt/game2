@@ -14,6 +14,7 @@ import * as THREE from "three";
 import {
   compileTrack,
   standSolid,
+  TRAFFIC_MODELS,
   type FarmGear,
   type Paddock,
   type Season,
@@ -28,6 +29,8 @@ import { createLivestock } from "../game/livestock.ts";
 import { buildFence } from "../game/paddock.ts";
 import { cabinGeometry, tableGeometry } from "../game/solar-farm.ts";
 import { buildTrainCar } from "../game/train.ts";
+import { buildTrafficVehicle, trafficPaint } from "../game/traffic-fleet.ts";
+import { speedSignTexture } from "../game/textures.ts";
 import { buildTurbine } from "../game/wind-farm.ts";
 
 import { biomeFor } from "../game/biome.ts";
@@ -740,6 +743,48 @@ const RAIL_ITEMS: ItemDef[] = TRAIN_CARS.map((car): ItemDef => ({
   build: ({ rng }) => ({ object: buildTrainCar(car, rng), views: CAR_ORBITS }),
 }));
 
+/** R44 — the traffic: the twenty vehicles on the public roads, each in
+ * its first paint, and the sign that tells them how fast. `vehicles`
+ * rather than `traffic`, since `make traffic` already photographs the
+ * aircraft. */
+const VEHICLE_ITEMS: ItemDef[] = [
+  ...TRAFFIC_MODELS.map((model, index): ItemDef => ({
+    id: `traffic-${model.id}`,
+    group: "vehicles",
+    note: `${model.name.toLowerCase()} — ${model.length} m, ${model.mass} kg`,
+    build: ({ rng }) => ({
+      object: buildTrafficVehicle(model, trafficPaint(model, index + 1), rng),
+      views: CAR_ORBITS,
+    }),
+  })),
+  {
+    id: "speed-sign",
+    group: "vehicles",
+    note: "a speed limit sign, the 70 an open road posts",
+    build: () => {
+      const group = new THREE.Group();
+      const post = new THREE.Mesh(
+        new THREE.BoxGeometry(0.09, 2.6, 0.09),
+        new THREE.MeshLambertMaterial({ color: 0x8a8d90 }),
+      );
+      post.position.y = 1.3;
+      group.add(post);
+      const disc = new THREE.Mesh(
+        new THREE.CircleGeometry(0.45, 20),
+        new THREE.MeshLambertMaterial({
+          map: speedSignTexture(70),
+          transparent: true,
+          alphaTest: 0.5,
+          side: THREE.DoubleSide,
+        }),
+      );
+      disc.position.set(0, 2.6 - 0.45 - 0.05, 0.05);
+      group.add(disc);
+      return { object: group };
+    },
+  },
+];
+
 /** R43 — the energy: the machine on the ridge and the tables in the field.
  * Both use the lit material every other built thing does, so the sheet
  * shows them in the world's own light. */
@@ -786,6 +831,7 @@ export function itemCatalog(): ItemDef[] {
     ...FARM_ITEMS,
     ...TOWN_ITEMS,
     ...RAIL_ITEMS,
+    ...VEHICLE_ITEMS,
     ...ENERGY_ITEMS,
     ...BREAKAGE_ITEMS,
     stoneItem("boulder", false, 1.3, 0.37),

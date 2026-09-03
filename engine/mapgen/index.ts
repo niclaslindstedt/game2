@@ -135,6 +135,15 @@ export {
 } from "./towns.ts";
 export { createGuardField, type CornerGuard, type GuardField } from "./guards.ts";
 export {
+  planTraffic,
+  TRAFFIC_LIMITS,
+  type RoutePoint,
+  type SpeedSign,
+  type TrafficPlace,
+  type TrafficPlan,
+  type TrafficRoute,
+} from "./traffic.ts";
+export {
   buildKerbs,
   createKerbField,
   KERB_MARKER,

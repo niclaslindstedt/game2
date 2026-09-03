@@ -58,6 +58,7 @@ import { buildHomestead } from "./homestead.ts";
 import { buildSolarFarm } from "./solar-farm.ts";
 import { buildTown } from "./town.ts";
 import { createWindFarms } from "./wind-farm.ts";
+import { createTraffic } from "./traffic.ts";
 import { buildRailArm, buildRailCrossing } from "./railway.ts";
 import { createTrains } from "./train.ts";
 import { createLivestock } from "./livestock.ts";
@@ -830,6 +831,13 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
    * chunk the road placed it from, and because its rotors turn every frame. */
   const windFarms = createWindFarms();
   group.add(windFarms.group);
+  /** R44 — the traffic on the public roads: every vehicle posed off the
+   * engine's fleet each frame, and the speed limit signs it stood. Outside
+   * the chunks for the wind farms' reason — a lorry two kilometres up an
+   * arm is near no chunk, and it moves. */
+  const trafficRng = createRng((track.seed ^ 0x7a4f1c2b) >>> 0);
+  const traffic = createTraffic(() => trafficRng.next(), terrain.latticeAt);
+  group.add(traffic.group);
   let finish: FinishGate | null = null;
   /** R26 — the crowd, rebuilt whenever the stage grows a new stand. The
    * whole crowd is a handful of instanced meshes, so it is cheaper to
@@ -1114,11 +1122,14 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
     livestock.update(dt, state.car.x, state.car.z);
     // R43 — the rotors, in the same wind the rain leans in.
     windFarms.update(state, dt);
+    // R44 — the traffic, wherever the engine's step left it.
+    traffic.update(state);
   };
 
   const dispose = (): void => {
     crowd?.dispose();
     trains.dispose();
+    traffic.dispose();
     livestock.dispose();
     windFarms.dispose();
     wild.dispose();
