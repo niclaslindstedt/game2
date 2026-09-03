@@ -36,6 +36,8 @@ import {
   type Weather,
 } from "@engine";
 
+import type { ComponentChildren } from "preact";
+
 import { playToggle, playUi } from "./audio/ui.ts";
 import { manualGain } from "./car-stats.ts";
 import { FadeRow, StepRow, type Stop } from "./menu-knobs.tsx";
@@ -274,6 +276,7 @@ export function MenuHead({
   backLabel,
   title,
   sub,
+  aside,
 }: {
   back: () => void;
   backLabel: string;
@@ -281,14 +284,22 @@ export function MenuHead({
   /** The page's one line of billing. Omitted on pages whose title says it
    * all — the head then holds the title alone, still on one row. */
   sub?: string;
+  /** ONE READING the page is about, given the head's far corner where there
+   * is room for it: a figure rather than a sentence, and never something the
+   * title already says. Where there is no width for a third column it comes
+   * back down under the title, which is where a subtitle would have been. */
+  aside?: ComponentChildren;
 }) {
+  const solo = sub === undefined && aside === undefined;
   return (
     // A head carrying a subtitle is two rows tall and the way out stands
     // level with the TITLE, not floating between the two; a head that is
     // only a title is one row, and the button centres on it. The difference
     // is marked here rather than guessed at in the stylesheet, because it is
     // a fact about the content and there is exactly one place that knows it.
-    <div className={`menu-head ${sub === undefined ? "menu-head-solo" : ""}`}>
+    <div
+      className={`menu-head ${solo ? "menu-head-solo" : ""} ${aside === undefined ? "" : "menu-head-aside"}`}
+    >
       {/* `data-nav-back` is what a controller's B button presses — see
           menu-nav.ts. Marked rather than guessed at: every surface has a way
           out, and no two of them look alike in the markup. */}
@@ -299,6 +310,7 @@ export function MenuHead({
         <div className="menu-title">{title}</div>
         {sub !== undefined && <div className="menu-sub">{sub}</div>}
       </div>
+      {aside !== undefined && <div className="menu-head-side">{aside}</div>}
     </div>
   );
 }

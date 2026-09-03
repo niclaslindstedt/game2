@@ -15,6 +15,23 @@
 // twice is the kind of small friction an arcade never had. Storage can be
 // unavailable (private mode) or full; a board that cannot be kept simply is
 // not kept, and the run still counts for everything else.
+//
+// ONLY THE TIME TRIAL POSTS HERE. A campaign or heads-up time is driven on
+// terms the board cannot state — a field on the road, a mass start's tow —
+// so it would sit beside a trial time looking comparable without being it.
+// What a row DOES state is everything that was still the player's choice in
+// a trial, because each of them is worth seconds: the CAR, the GEARBOX (the
+// manual's taller ratios and lower losses are a different car to drive —
+// `gearboxFor`), and the DIFFICULTY (which is what a hit costs that car —
+// `damageScaleFor`). A board that hides those is a board whose top row
+// cannot be answered.
+//
+// Every one of them comes back out through `loadBoard`, which is the only
+// reader: a key can be hand-edited, and a car can leave the catalog between
+// one release and the next, so a row is trusted for nothing it claims.
+
+import type { Difficulty, GearboxMode } from "@engine";
+import { CARS, DIFFICULTY_IDS } from "@engine";
 
 /** Rows on a stage's board. Ten is the arcade's number and it is the right
  * one: deep enough that a decent run gets on, shallow enough that the tenth
@@ -49,10 +66,15 @@ export type ScoreEntry = {
   who: string;
   /** Stage time, seconds. */
   time: number;
-  /** Which car set it — the board says WHAT beat you as well as who. */
+  /** Which car set it — the board says WHAT beat you as well as who. Empty
+   * for a row whose car the catalog no longer has. */
   carId: string;
-  /** When, as a unix ms stamp. Only ever used to break a tie in favour of
-   * the run that got there first. */
+  /** Which box it was driven with. */
+  gearbox: GearboxMode | null;
+  /** What a hit cost that car while it was being set. */
+  difficulty: Difficulty | null;
+  /** When, as a unix ms stamp. Breaks a tie in favour of the run that got
+   * there first, and dates the row on the board. 0 where it is unknown. */
   at: number;
 };
 
@@ -115,7 +137,14 @@ export function loadBoard(levelId: string): ScoreEntry[] {
         .map((row) => ({
           who: normalizeInitials(row.who),
           time: row.time,
-          carId: typeof row.carId === "string" ? row.carId : "",
+          // A car the catalog does not have is dropped rather than carried:
+          // the sheet asks the catalog for its name and photographs it, and
+          // both of those throw on an id nobody can build.
+          carId: CARS.some((car) => car.id === row.carId) ? (row.carId as string) : "",
+          gearbox: row.gearbox === "auto" || row.gearbox === "manual" ? row.gearbox : null,
+          difficulty: DIFFICULTY_IDS.includes(row.difficulty as Difficulty)
+            ? (row.difficulty as Difficulty)
+            : null,
           at: typeof row.at === "number" ? row.at : 0,
         })),
     ).slice(0, BOARD_SIZE);

@@ -18,6 +18,25 @@ export function formatTime(seconds: number): string {
   return `${m}'${String(s).padStart(2, "0")}"${String(cs).padStart(2, "0")}`;
 }
 
+/** Month names, so a date reads the same on every machine. `toLocaleString`
+ * would hand back whatever the browser's locale says, and a board whose rows
+ * are dated in three different formats is a board nobody scans. */
+const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+
+/** WHEN a stamped thing happened, as short as a table row can carry: `12 SEP`
+ * inside the current year, `12 SEP 24` outside it — a year on every row is a
+ * column of the same four digits, and a row with no year on it at all is a
+ * row that quietly ages into a lie. In the reader's own time zone, because
+ * the only date a player wants is the one they were driving on. Empty for a
+ * stamp nobody wrote (0, or anything that is not a time). */
+export function formatDay(at: number, now = Date.now()): string {
+  if (!Number.isFinite(at) || at <= 0) return "";
+  const day = new Date(at);
+  const stamp = `${day.getDate()} ${MONTHS[day.getMonth()]}`;
+  if (day.getFullYear() === new Date(now).getFullYear()) return stamp;
+  return `${stamp} ${String(day.getFullYear() % 100).padStart(2, "0")}`;
+}
+
 /** A finishing position, the way a results sheet writes one: 1ST, 2ND, 3RD,
  * 4TH — and 11TH through 13TH, which are the three every naive version of
  * this gets wrong. */

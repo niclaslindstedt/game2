@@ -2,6 +2,15 @@
 // ENTER YOUR INITIALS — the three letters an arcade asks for when a run makes
 // the board, and the one screen in the game that is pure 1985.
 //
+// THEY ARE TYPED INTO THE BOARD ITSELF. The run's row is already standing on
+// it, in the place the time just won, with the times it beat above and the
+// ones it pushed down below — and the name cell of that row is the three
+// slots. That is what the cabinet did, and it is the whole point: the letters
+// are worth typing because you can see what they are being written onto. So
+// this module is the ENTRY and not the screen — the board around it is
+// `score-board.tsx`'s `ScoreSheet`, which places these pieces in its pending
+// row and wraps the lot in `useInitials`'s own element.
+//
 // What the letters DO under a press is `initials-entry.ts`, tested without a
 // browser. What is left here is how a press gets in, and there are three
 // ways, because this game is played on all three:
@@ -26,11 +35,11 @@
 // the gesture that asked. It is never focused on its own: a keyboard sliding
 // up over the results card nobody asked for is worse than a tap.
 //
-// The name is not stored here. This component reports the letters and the
+// The name is not stored here. This module reports the letters and the
 // caller decides what they mean (`scores.ts` owns the board and the
 // remembered name).
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
 
 import { playUi } from "./audio/ui.ts";
 import {
@@ -46,13 +55,6 @@ import {
 import { NAV_EVENT, type MenuNavEvent } from "./menu-nav.ts";
 import { BLANK, DEFAULT_INITIALS } from "./scores.ts";
 
-/** "1st", "2nd", "3rd"… the board's own rank, said the way a board says it. */
-function ordinal(place: number): string {
-  const tens = place % 100;
-  if (tens >= 11 && tens <= 13) return `${place}TH`;
-  return `${place}${(["TH", "ST", "ND", "RD"][place % 10] ?? "TH") as string}`;
-}
-
 /**
  * What the hidden field is kept holding: one space, which is not a character
  * any slot can take.
@@ -65,15 +67,34 @@ function ordinal(place: number): string {
  */
 const SENTINEL = " ";
 
-export type InitialsEntryProps = {
-  /** Where the run placed, 1-based — the whole reason the entry is up. */
-  place: number;
-  /** What the slots start on: the name last entered, or the default. */
-  initial: string;
-  onDone: (who: string) => void;
+/** The entry, ready to be placed: the letters as they stand, the presses that
+ * change them, and the element the whole thing has to live inside. */
+export type Initials = {
+  entry: InitialsState;
+  /** Goes on whatever element CONTAINS the slots and the ENTER button — the
+   * board, here. It is what a pad's directions are taken off, so an entry
+   * spread across a table still walks as one control. */
+  cardRef: RefObject<HTMLDivElement>;
+  fieldRef: RefObject<HTMLDivElement>;
+  /** Put the caret on a slot and ask the device for its keyboard. */
+  tap: (slot: number) => void;
+  onFieldInput: (e: FormEvent<HTMLDivElement>) => void;
+  onFieldKey: (e: KeyboardEvent) => void;
+  /** Post the name as it stands, with the click a confirm makes. */
+  post: () => void;
+  /** …and post it SILENTLY, for a press that is making its own noise. Every
+   * way off the results card commits the letters on the way past, so the
+   * entry has no confirm of its own to click about. */
+  commit: () => void;
 };
 
-export function InitialsEntry({ place, initial, onDone }: InitialsEntryProps) {
+/**
+ * THE THREE LETTERS, as state and presses with no layout of their own.
+ *
+ * `initial` is what the slots start on — the name last entered, or the
+ * default. `onDone` is handed the name when the player is finished with it.
+ */
+export function useInitials(initial: string, onDone: (who: string) => void): Initials {
   const [entry, setEntry] = useState<InitialsState>(() => startEntry(initial));
   // The handlers are rebuilt as the entry changes, and the window listener
   // reads it through a ref so the binding is made once. Re-binding per
@@ -95,9 +116,13 @@ export function InitialsEntry({ place, initial, onDone }: InitialsEntryProps) {
     if (nameOf(next) !== nameOf(was) || next.caret !== was.caret) playUi("move");
   };
 
+  const commit = (): void => {
+    doneRef.current(nameOf(entryRef.current));
+  };
+
   const post = (): void => {
     playUi("select");
-    doneRef.current(nameOf(entryRef.current));
+    commit();
   };
 
   /** The directions, wherever they came from: a pad through `menu-nav`, or
@@ -216,27 +241,49 @@ export function InitialsEntry({ place, initial, onDone }: InitialsEntryProps) {
     if (next !== entryRef.current) apply(next);
   };
 
+  /** A REAL keyboard's own keys, taken off the field. The characters it sends
+   * are left to the field itself, so both keyboards take one path in. */
+  const onFieldKey = (e: KeyboardEvent): void => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      post();
+    } else if (e.key === "Backspace") {
+      e.preventDefault();
+      apply(erase(entryRef.current));
+    } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      e.preventDefault();
+      steerRef.current(e.key === "ArrowUp" ? "up" : "down");
+    } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      e.preventDefault();
+      steerRef.current(e.key === "ArrowLeft" ? "left" : "right");
+    }
+  };
+
+  return { entry, cardRef, fieldRef, tap, onFieldInput, onFieldKey, post, commit };
+}
+
+/** THE NAME CELL of the row being entered: three slots, and the device's way
+ * into them. Each letter is a button because on a phone it IS the control —
+ * tapping one puts the caret on it and raises the keyboard. */
+export function InitialsSlots({ initials }: { initials: Initials }) {
+  const { entry, fieldRef, tap, onFieldInput, onFieldKey } = initials;
   return (
-    <div className="hud-initials pointer-events-auto" ref={cardRef} data-nav-own>
-      <div className="hud-initials-title">{ordinal(place)} ON THE BOARD</div>
-      <div className="hud-initials-sub">ENTER YOUR INITIALS</div>
-      <div className="hud-initials-slots">
-        {entry.slots.map((letter, slot) => (
-          <button
-            key={slot}
-            type="button"
-            className={`hud-initial-letter${slot === entry.caret ? " is-caret" : ""}`}
-            aria-label={`Letter ${slot + 1}, ${letter === BLANK ? "blank" : letter}`}
-            onClick={() => tap(slot)}
-          >
-            {letter === BLANK ? " " : letter}
-          </button>
-        ))}
-      </div>
-      {/* The device's keyboard, and the only thing on this card that can ask
-          for one. This is contenteditable rather than an input on purpose:
-          iOS adds its previous/next/done accessory bar to form controls, and
-          none of those actions are useful while entering a high score name. */}
+    <span className="hud-initials-slots">
+      {entry.slots.map((letter, slot) => (
+        <button
+          key={slot}
+          type="button"
+          className={`hud-initial-letter${slot === entry.caret ? " is-caret" : ""}`}
+          aria-label={`Letter ${slot + 1}, ${letter === BLANK ? "blank" : letter}`}
+          onClick={() => tap(slot)}
+        >
+          {letter === BLANK ? " " : letter}
+        </button>
+      ))}
+      {/* The device's keyboard, and the only thing here that can ask for one.
+          Contenteditable rather than an input on purpose: iOS adds its
+          previous/next/done accessory bar to form controls, and none of those
+          actions are useful while entering a high score name. */}
       <div
         ref={fieldRef}
         className="hud-initials-field"
@@ -245,10 +292,9 @@ export function InitialsEntry({ place, initial, onDone }: InitialsEntryProps) {
         // The soft keyboard's own return key, which `onInput` reads as DONE
         // when it arrives as a newline. `enterKeyHint` is a global attribute
         // and works on an editing host as well as on a form control, so the
-        // key says DONE here exactly as it did on the input this replaced.
-        // Spelled lowercase because Preact types it as the plain HTML
-        // attribute on an ordinary element rather than as a form control's
-        // camel-cased property.
+        // key says DONE on this one. Spelled lowercase because Preact types
+        // it as the plain HTML attribute on an ordinary element rather than
+        // as a form control's camel-cased property.
         enterkeyhint="done"
         role="textbox"
         aria-multiline="false"
@@ -257,38 +303,26 @@ export function InitialsEntry({ place, initial, onDone }: InitialsEntryProps) {
         autoCorrect="off"
         spellcheck={false}
         onInput={onFieldInput}
-        onKeyDown={(e) => {
-          // A REAL keyboard's own keys. The characters it sends are left to
-          // the field, so both keyboards take one path into the entry.
-          if (e.key === "Enter") {
-            e.preventDefault();
-            post();
-          } else if (e.key === "Backspace") {
-            e.preventDefault();
-            apply(erase(entryRef.current));
-          } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-            e.preventDefault();
-            steerRef.current(e.key === "ArrowUp" ? "up" : "down");
-          } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-            e.preventDefault();
-            steerRef.current(e.key === "ArrowLeft" ? "left" : "right");
-          }
-        }}
+        onKeyDown={onFieldKey}
       >
         {SENTINEL}
       </div>
-      {/* The card's way ON, for the pad's START (menu-nav.ts) — and the only
-          press this card has that is not a letter. */}
-      <button type="button" className="hud-start hud-initials-done" data-nav-next onClick={post}>
-        ENTER
-      </button>
-      {/* One line, always there — a hint that appears and disappears moves
-          the ENTER button under a thumb already on its way to it. */}
-      <div className="hud-initials-hint">
-        {entry.fresh && nameOf(entry) !== DEFAULT_INITIALS
-          ? "type to replace · ENTER to keep"
-          : "tap a letter to type · ENTER when done"}
-      </div>
+    </span>
+  );
+}
+
+/** One line under the board, saying the two things the entry cannot show:
+ * that the letters can be replaced, and that nothing has to be pressed to
+ * keep them. There is no confirm — every way off the results card posts the
+ * name on the way past, so a button here would be a press that changes
+ * nothing but the fact it has been pressed. */
+export function InitialsHint({ initials }: { initials: Initials }) {
+  const { entry } = initials;
+  return (
+    <div className="hud-initials-hint">
+      {entry.fresh && nameOf(entry) !== DEFAULT_INITIALS
+        ? "type to replace · the name stays with the run"
+        : "tap a letter to type · the name stays with the run"}
     </div>
   );
 }
