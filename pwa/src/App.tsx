@@ -844,7 +844,21 @@ export function App() {
   const [scores, setScores] = useState<{
     board: readonly ScoreEntry[];
     place: number;
-    pending: { levelId: string; time: number; carId: string; offer: string } | null;
+    /** The car, the box and the difficulty the run was driven with, as one
+     * line for the card — the same three the row it becomes will carry. */
+    drove: string;
+    pending: {
+      levelId: string;
+      time: number;
+      carId: string;
+      gearbox: GearboxMode;
+      difficulty: Difficulty;
+      /** When the run ENDED, not when the name was posted: the board shows
+       * the row's date while it is being typed, and a stamp taken at the
+       * press would change under the player mid-entry. */
+      at: number;
+      offer: string;
+    } | null;
   } | null>(null);
   /** The clock and the start lights, at frame rate. One object for the life
    * of the app, rewritten in place — the HUD holds its identity and reads it
@@ -2449,15 +2463,35 @@ export function App() {
               if (active.mode === "timetrial") {
                 const board = loadBoard(active.levelId);
                 const at = placeOn(board, ev.time);
+                const carId = stageRef.current?.carId ?? "";
+                // WHAT THE TIME WAS SET WITH — every choice that was still
+                // the player's when the clock started, because each of them
+                // is worth seconds and a board that hides them cannot be
+                // argued with. The box off the CAR rather than the setting:
+                // that is the one the physics actually shifted (`car.gearbox`),
+                // and a menu changed during the run-out must not rewrite the
+                // run that has just ended.
+                const gearbox = state.car.gearbox;
+                const difficulty = runDifficulty(raceRef.current, active.mode);
                 setScores({
                   board,
                   place: at + 1,
+                  drove: [
+                    carId ? carById(carId).name.toUpperCase() : null,
+                    gearbox.toUpperCase(),
+                    difficulty.toUpperCase(),
+                  ]
+                    .filter((word): word is string => Boolean(word))
+                    .join(" · "),
                   pending:
                     at >= 0
                       ? {
                           levelId: active.levelId,
                           time: ev.time,
-                          carId: stageRef.current?.carId ?? "",
+                          carId,
+                          gearbox,
+                          difficulty,
+                          at: Date.now(),
                           // Read ONCE, here: the card re-renders a dozen times
                           // a second off the HUD snapshot, and the offered name
                           // must not be a storage read on every one of them.
@@ -3190,7 +3224,18 @@ export function App() {
   const finishScores: FinishScores | null = scores && {
     board: scores.board,
     place: scores.place,
+    drove: scores.drove,
     entering: scores.pending && {
+      // The row the board stands in place while it is being named. Its stamp
+      // is taken at the LINE rather than at the press, so the date the player
+      // watches themselves type onto is the date that gets stored.
+      run: {
+        time: scores.pending.time,
+        carId: scores.pending.carId,
+        gearbox: scores.pending.gearbox,
+        difficulty: scores.pending.difficulty,
+        at: scores.pending.at,
+      },
       initial: scores.pending.offer,
       onDone: (who: string): void => {
         const posted = scores.pending;
@@ -3200,9 +3245,11 @@ export function App() {
           who,
           time: posted.time,
           carId: posted.carId,
-          at: Date.now(),
+          gearbox: posted.gearbox,
+          difficulty: posted.difficulty,
+          at: posted.at,
         });
-        setScores({ board, place: scores.place, pending: null });
+        setScores({ board, place: scores.place, drove: scores.drove, pending: null });
       },
     },
   };
