@@ -23,6 +23,7 @@ import { carById, gearedSpec, type GearboxMode } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 import { clutchDump, spinHeadroom, stepAirborne, stepGrounded, type GroundContext } from "./car.ts";
 import { clipKerbs, clipSolids, collideCar } from "./collision.ts";
+import { stepCooling } from "./cooling.ts";
 import { beyondDriving } from "./damage.ts";
 import { plant, seatOn } from "./ground.ts";
 import { onItsWheels, stepRolling } from "./roll.ts";
@@ -305,6 +306,11 @@ function respawn(state: GameState, events: GameEvent[], home: WayHome): void {
   // chassis is patched to a drivable fraction, and the dents, the torn-off
   // parts and the hurt systems all stay.
   if (car.damage.wear >= 1) car.damage.wear = T.collision.repairTo;
+  // ...and the car has been standing while they did it, so the needle is
+  // back off the line. The coolant is still on the road, which is why this
+  // is a reprieve and not a repair: a holed core climbs straight back.
+  car.heat = 0;
+  car.heatCall = 0;
   state.drowning = null;
   state.overturned = null;
   state.progressIndex = home.index;
@@ -938,6 +944,13 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
   } else {
     stepGrounded(state.spec, car, drive, ctx, events, state.stats);
   }
+  // THE TEMPERATURE, stepped after the move that made it: the engine's heat
+  // comes from the pedal that was just asked for, and the air that carries
+  // it away from the pace the car is actually doing. A sound car never
+  // moves the needle; a holed radiator is a clock the driver is racing
+  // (game/cooling.ts), and one that runs out is an engine at 1 — which is
+  // the retire below.
+  stepCooling(car, drive.throttle, car.u, T.dt, events);
   // ...and WHERE that roll stopped is the whole of the question. Asked of
   // a body that has finished moving, so a car mid-roll and a car in the
   // air are both still having their go: only one that is down, still and

@@ -31,6 +31,8 @@ STAND, and **`test-scenario`** for staging exact contacts.
 | Every number: box size, restitution, crush rates, part bolts, system transfer + effects, the springs                               | `engine/game/defs/tuning.ts` → `TUNING.collision`, `TUNING.suspension`                                      |
 | The ledger: `CarState.damage` (zones, belly, wear, systems, broken, version), impact/partBreak/crash events                        | `engine/game/state.ts`                                                                                      |
 | What a damaged car DRIVES like: the whole ledger as multipliers (power, misfire, rack, pull, grip, brake, drag, gears)             | `engine/game/damage.ts` — reads `car.damage`, never writes; spent in `car.ts`                               |
+| What the AIR costs a car with holes in it: CdA per part, the downforce lost, the blast, the one-sided yaw                          | `TUNING.collision.aero` — read in `damage.ts`, spent in `car.ts` as ½ρ·CdA·u²/mass                          |
+| The TEMPERATURE, and the engine a holed radiator cooks                                                                             | `engine/game/cooling.ts` + `TUNING.collision.cooling` — WRITES the ledger, like collision.ts                |
 | When collision runs, the wedge check that is the only way home, deep-water crash                                                   | `engine/game/step.ts`                                                                                       |
 | Solid trunks + grove quilt (`treesNear`); every other solid (`obstaclesNear`) + the `SOLID_PROP_HEIGHT` bar                        | `engine/mapgen/terrain.ts`                                                                                  |
 | Bending the polygons, scuff darkening, debris, the flat/bent/missing wheels and the crooked `pose`, shattered glass, the door hole | `pwa/src/game/car-damage.ts` (+ `car-body.ts` `breakables`/`panes`/`doors`)                                 |
@@ -94,6 +96,13 @@ STAND, and **`test-scenario`** for staging exact contacts.
   `hubBrake`) and retires the phase where it stops (`retire` event). Never
   add a third way to `beyondDriving` without the same coast-to-rest, or the
   stuck rule respawns a car that should be parked.
+- **A damage CALL is a claim about the car the player is driving.** The lines
+  a system crosses (`TUNING.collision.callAt` → `DamageStage`) are sized to
+  the WORDS, not to tidy fractions: `dead` is 1, the exact value
+  `beyondDriving` gates on, so the only thing ever called DEAD is the thing
+  that ends the run. Below the engine nothing reaches literal failure, so
+  those ladders end at SHOT (worn out) and never BROKEN (absent). A call
+  caught overstating the car is a HUD nobody reads again.
 - **Nothing in the ledger is decoration.** `damage.ts` is the one place that
   turns `car.damage` into handling, and every field in the ledger has to come
   out of it somewhere — wear, both kinds of crush, all four systems, every

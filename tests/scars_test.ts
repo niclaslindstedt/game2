@@ -119,7 +119,7 @@ describe("what a driver remembers", () => {
   });
 });
 
-/** How near two respawns have to be to count as the same place, m. */
+/** How near two excursions have to be to count as the same place, m. */
 const SAME_PLACE = 40;
 
 /** The two stages whose fields used to have a crew stuck in a loop: one
@@ -144,16 +144,31 @@ describe("a field on a stage that has caught somebody out", () => {
           season: "summer",
         },
       );
+      // WHERE THE RUN CAME UNDONE, not where it was put back. Those are two
+      // different places and only the first one is the bug: a respawn puts
+      // the car at the last SPLIT BOARD, and boards are hundreds of metres
+      // apart, so a crew having a bad sector is booked at one board over and
+      // over however far up the road each excursion actually happened. The
+      // absorbing state this whole module exists to break is the other
+      // thing — the same two hundred metres driven the same way and left at
+      // the same metre — so that is what is counted.
       const spots = new Map<(typeof field.runs)[number], number[]>();
-      field.runs.forEach((run) => spots.set(run, []));
+      const onRoadAt = new Map<(typeof field.runs)[number], number>();
+      field.runs.forEach((run) => {
+        spots.set(run, []);
+        onRoadAt.set(run, 0);
+      });
       const steps = Math.ceil(400 / TUNING.dt);
       for (let i = 0; i < steps; i++) {
         if (!field.runs.some(onRoad)) break;
         stepField(field, null, (run, events) => {
           for (const event of events) {
-            if (event.type === "respawn") spots.get(run)!.push(run.state.progressS);
+            // Read before this step moved the car: by the time the event is
+            // handed over, `progressS` is already back at the board.
+            if (event.type === "respawn") spots.get(run)!.push(onRoadAt.get(run)!);
           }
         });
+        for (const run of field.runs) if (onRoad(run)) onRoadAt.set(run, run.state.progressS);
       }
       for (const [run, places] of spots) {
         for (const place of places) {

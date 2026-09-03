@@ -14,24 +14,56 @@ import {
   ROAD_CROSS,
   SOLID_PROP_HEIGHT,
   TUNING,
+  WHEEL_PARTS,
+  callDamage,
   clipSolids,
   collideCar,
   collideCars,
   compileTrack,
   createGame,
   createTerrain,
+  damageEffects,
   damageZoneAt,
   landingDamage,
   ridesOver,
   standSolid,
   step,
   updateSlip,
+  type DamagePart,
   type GameEvent,
   type GameState,
   type WildObstacle,
 } from "@engine";
 
-const LONG_STRAIGHT = [{ kind: "straight", length: 9000, feature: "none" } as const];
+const LONG_STRAIGHT = [{ kind: "straight", length: 20000, feature: "none" } as const];
+
+/** EVERY piece a crash can take off the car. Written out rather than
+ * derived, so a new member of `DamagePart` is a line somebody has to add
+ * here — and adding it is what forces the question of what its loss does
+ * to the driving. */
+const EVERY_PART: DamagePart[] = [
+  "bumperF",
+  "bumperR",
+  "lampFL",
+  "lampFR",
+  "lampRL",
+  "lampRR",
+  "mirrorL",
+  "mirrorR",
+  "spoiler",
+  "hood",
+  "hatch",
+  "glassF",
+  "glassB",
+  "glassL",
+  "glassR",
+  "doorL",
+  "doorR",
+  "wheelFL",
+  "wheelFR",
+  "wheelRL",
+  "wheelRR",
+];
 
 function freshState(): GameState {
   return createGame({ seed: 3, skipCountdown: true, track: compileTrack(3, LONG_STRAIGHT) });
@@ -304,7 +336,7 @@ describe("what a broken car says about itself", () => {
   const calls = (events: GameEvent[]): string[] =>
     events
       .filter((e) => e.type === "systemFail")
-      .map((e) => (e.type === "systemFail" ? `${e.system}:${e.spent ? "spent" : "hurt"}` : ""));
+      .map((e) => (e.type === "systemFail" ? `${e.system}:${e.stage}` : ""));
 
   it("calls each system once as it gives, once as it goes", () => {
     const state = freshState();
@@ -548,12 +580,25 @@ describe("a spent chassis and the panels left on the road", () => {
     expect(held(true)).toBeGreaterThan(held(false));
   });
 
-  it("a gearbox past saving will not take its top ratio", () => {
+  it("a hurt gearbox loses its top ratio, and a finished one loses two", () => {
+    const topAfter = (gearbox: number): number => {
+      const state = freshState();
+      state.car.damage.systems.gearbox = gearbox;
+      for (let i = 0; i < TUNING.physicsHz * 40; i++)
+        step(state, { ...NEUTRAL_INPUT, throttle: 1 });
+      return state.car.gear;
+    };
+    const gears = freshState().spec.gearTop.length;
+    // The ladder: a box past `topGearAt` is driven on everything below its
+    // highest ratio, one past `secondGearAt` on everything below the two.
+    expect(topAfter(TUNING.collision.chassis.topGearAt)).toBe(gears - 2);
+    expect(topAfter(1)).toBe(gears - 3);
+    // ...and a car held in a lower gear cannot reach the speed the ratio it
+    // no longer has was for.
     const state = freshState();
-    state.car.damage.systems.gearbox = 1;
+    state.car.damage.systems.gearbox = TUNING.collision.chassis.topGearAt;
     for (let i = 0; i < TUNING.physicsHz * 40; i++) step(state, { ...NEUTRAL_INPUT, throttle: 1 });
-    expect(state.car.gear).toBe(state.spec.gearTop.length - 2);
-    expect(state.car.u).toBeLessThan(state.spec.gearTop[state.spec.gearTop.length - 2]);
+    expect(state.car.u).toBeLessThan(state.spec.gearTop[gears - 2]);
   });
 
   it("an engine past the misfire threshold drops beats — the power comes and goes", () => {
@@ -587,6 +632,13 @@ describe("a spent chassis and the panels left on the road", () => {
     }
     // The two things that END a run are held one step short of it: an
     // engine that is nearly dead, and four tyres that are flat but on.
+    // THE COOLING IS THE THIRD, and it is not a tax like the rest of the
+    // ledger — a dry radiator is a CLOCK, and a clock left running at full
+    // throttle finishes the engine off however sound the rest of the car
+    // is (its own test, below). What is under test here is everything the
+    // driver cannot drive around, so the needle is left where a driver
+    // managing it would have kept it.
+    damage.systems.cooling = 0;
     damage.systems.engine = 0.99;
     for (let i = 0; i < damage.wheels.length; i++) damage.wheels[i] = 0.99;
     damage.broken.push(
@@ -603,6 +655,10 @@ describe("a spent chassis and the panels left on the road", () => {
       "glassR",
       "doorL",
       "doorR",
+      "lampFL",
+      "lampFR",
+      "lampRL",
+      "lampRR",
     );
     for (let i = 0; i < TUNING.physicsHz * 40; i++) step(state, { ...NEUTRAL_INPUT, throttle: 1 });
     // It still goes — no faster than a country road, and nowhere near what
@@ -693,7 +749,7 @@ describe("the end of the run", () => {
     // The glass and the bonnet are gone on the big one, and the nose is
     // folded a quarter of a metre: the car LOOKS like what happened to it.
     expect(hit(100).car.damage.broken).toEqual(
-      expect.arrayContaining(["lampsF", "bumperF", "glassF", "hood"]),
+      expect.arrayContaining(["lampFL", "lampFR", "bumperF", "glassF", "hood"]),
     );
     expect(hit(100).car.damage.zones[0]).toBeGreaterThan(0.2);
   });
@@ -715,13 +771,13 @@ describe("the end of the run", () => {
     };
     // Backing into a wall at 35 km/h takes the tail lamps and nothing else;
     // the nose at the same pace loses its headlamps, and the bumper only at
-    // a real hit.
-    expect(end(-35 / 3.6)).toEqual(["lampsR"]);
-    expect(end(35 / 3.6)).toEqual(["lampsF"]);
+    // a real hit. Squarely on: both lamps at that end, neither at the other.
+    expect(end(-35 / 3.6)).toEqual(["lampRL", "lampRR"]);
+    expect(end(35 / 3.6)).toEqual(["lampFL", "lampFR"]);
     const hard = end(60 / 3.6);
-    expect(hard).toContain("lampsF");
+    expect(hard).toContain("lampFL");
     expect(hard).toContain("bumperF");
-    expect(hard).not.toContain("lampsR");
+    expect(hard).not.toContain("lampRL");
   });
 
   it("a dead engine stops the car for good, and the run is retired where it stops", () => {
@@ -1238,5 +1294,202 @@ describe("the trip", () => {
     collideCar(state.spec, car, [tree], [], state.stats);
     expect(car.rollRate).toBe(0);
     expect(car.airborne).toBe(false);
+  });
+});
+
+describe("the air through the holes a crash leaves", () => {
+  /** Best speed a car reaches on a long straight with `parts` missing,
+   * km/h — steered straight, because a lopsided car PULLS and a probe that
+   * lets it wander into the trees measures the grass and not the air. */
+  const topSpeed = (parts: DamagePart[]): number => {
+    const state = freshState();
+    state.car.damage.broken.push(...parts);
+    let best = 0;
+    for (let i = 0; i < TUNING.physicsHz * 120; i++) {
+      const pull = damageEffects(state.car, Math.abs(state.car.u), state.t).pull;
+      step(state, { ...NEUTRAL_INPUT, throttle: 1, steer: -pull });
+      best = Math.max(best, state.car.u);
+    }
+    return best * 3.6;
+  };
+
+  it("costs the top end and nothing at a crawl — the square of the speed", () => {
+    const car = freshState().car;
+    car.damage.broken.push("hood", "glassF");
+    // The same car, in a village and on a straight: the whole of the loss
+    // is at the top, which is what separates the air from a rubbing hub.
+    const slow = damageEffects(car, 8, 0);
+    const fast = damageEffects(car, TUNING.collision.aero.speed, 0);
+    expect(fast.aero).toBe(slow.aero);
+    expect(1 - fast.grip).toBeGreaterThan(5 * (1 - slow.grip));
+    expect(fast.steering).toBeLessThan(slow.steering * 0.9);
+  });
+
+  it("a stripped shell will not pull top gear at all", () => {
+    const sound = topSpeed([]);
+    // A mirror is a mirror: a couple of tenths of a per cent, felt nowhere.
+    expect(topSpeed(["mirrorL"])).toBeGreaterThan(sound * 0.995);
+    // The whole greenhouse and both lids is a car that tops out a gear
+    // down — the cliff is the gearbox's, and it is the honest shape of it.
+    const stripped = topSpeed(["hood", "hatch", "glassF", "glassB", "doorL", "doorR"]);
+    expect(stripped).toBeLessThan(sound * 0.85);
+    expect(stripped).toBeGreaterThan(sound * 0.7);
+  });
+
+  it("the wing is the one loss the straight likes", () => {
+    const car = freshState().car;
+    car.damage.broken.push("spoiler");
+    const fast = damageEffects(car, TUNING.collision.aero.speed, 0);
+    // Faster in a straight line...
+    expect(fast.aero).toBeLessThan(0);
+    // ...and worse the moment the road turns, which is the whole trade.
+    expect(fast.grip).toBeLessThan(damageEffects(freshState().car, 34, 0).grip);
+  });
+
+  it("a hole down one side pulls the car into it", () => {
+    const left = freshState().car;
+    left.damage.broken.push("doorL");
+    const right = freshState().car;
+    right.damage.broken.push("doorR");
+    const pace = TUNING.collision.aero.speed;
+    // Positive lock is the engine's right, and the car wanders toward the
+    // open flank: a missing left door pulls left.
+    expect(damageEffects(left, pace, 0).pull).toBeLessThan(0);
+    expect(damageEffects(right, pace, 0).pull).toBeGreaterThan(0);
+    // A hole on each side is a car that goes straight again.
+    const both = freshState().car;
+    both.damage.broken.push("doorL", "doorR");
+    expect(damageEffects(both, pace, 0).pull).toBeCloseTo(0, 6);
+  });
+
+  it("every part a crash can take off changes how the car drives", () => {
+    // THE AUDIT. A part the ledger tracks and the handling model never
+    // reads is a hole in the bodywork the player watches appear while the
+    // car drives exactly the same — which is the bug this whole module
+    // exists to answer. Nothing is decoration: run the list.
+    const sound = damageEffects(freshState().car, TUNING.collision.aero.speed, 0);
+    for (const part of EVERY_PART) {
+      const car = freshState().car;
+      car.damage.broken.push(part);
+      if (WHEEL_PARTS.includes(part)) car.damage.wheels[WHEEL_PARTS.indexOf(part)] = 1;
+      const hurt = damageEffects(car, TUNING.collision.aero.speed, 0);
+      const moved = (Object.keys(sound) as (keyof typeof sound)[]).some(
+        (key) => hurt[key] !== sound[key],
+      );
+      expect(moved, `${part} comes off the car and nothing about it changes`).toBe(true);
+    }
+  });
+});
+
+describe("the radiator, and the clock a holed one starts", () => {
+  /** Drive `secs` at a held throttle with the cooling system this far gone,
+   * and say what the run made of it. */
+  const drive = (
+    cooling: number,
+    throttle: number,
+    secs: number,
+  ): { heat: number; engine: number; dead: boolean } => {
+    const state = freshState();
+    state.car.damage.systems.cooling = cooling;
+    state.car.u = 25;
+    let dead = false;
+    for (let i = 0; i < TUNING.physicsHz * secs; i++) {
+      // Held at a stage's own pace: the ram air at 200 km/h cools anything,
+      // and a rally stage is not a long straight.
+      state.car.u = Math.min(state.car.u, 25);
+      if (step(state, { ...NEUTRAL_INPUT, throttle }).some((e) => e.type === "retire")) dead = true;
+    }
+    return { heat: state.car.heat, engine: state.car.damage.systems.engine, dead };
+  };
+
+  it("never moves the needle on a sound car", () => {
+    const sound = drive(0, 1, 120);
+    expect(sound.heat).toBe(0);
+    expect(sound.engine).toBe(0);
+  });
+
+  it("cooks the engine at full throttle, and does not if the driver lifts", () => {
+    // A radiator most of the way gone is a clock, not a verdict: held flat
+    // it finishes the engine inside a couple of minutes...
+    const flat = drive(0.75, 1, 120);
+    expect(flat.dead).toBe(true);
+    // ...and the same car driven with the pedal eased never boils at all.
+    // That choice — a slower stage or no stage — is the whole mechanic.
+    const eased = drive(0.75, 0.3, 120);
+    expect(eased.heat).toBeLessThan(TUNING.collision.cooling.redline);
+    expect(eased.engine).toBe(0);
+  });
+
+  it("says so on the way up and on the way back down", () => {
+    const state = freshState();
+    state.car.damage.systems.cooling = 1;
+    const said: string[] = [];
+    const run = (throttle: number, secs: number): void => {
+      for (let i = 0; i < TUNING.physicsHz * secs; i++) {
+        state.car.u = Math.min(state.car.u, 25);
+        for (const ev of step(state, { ...NEUTRAL_INPUT, throttle })) {
+          if (ev.type === "overheat") said.push(ev.level);
+        }
+      }
+    };
+    run(1, 20);
+    run(0, 30);
+    // The warning arrives before the red line, and the needle coming back
+    // off it is the only good news the damage model ever gives anybody.
+    expect(said.slice(0, 3)).toEqual(["warn", "red", "clear"]);
+  });
+
+  it("a folded nose holes the core before it kills the block", () => {
+    const state = freshState();
+    const car = state.car;
+    car.u = 50 / 3.6;
+    const rock = solid({
+      kind: "boulder",
+      size: 2.2,
+      x: car.x,
+      z: car.z + TUNING.collision.halfLength + 0.5,
+    });
+    collideCar(state.spec, car, [rock], [], state.stats);
+    // A wall at 50 km/h leaves an engine that still runs and a cooling
+    // system that no longer works properly: the run is not over, it is on
+    // a clock. That ordering is the whole point of the radiator standing
+    // in front of the block.
+    expect(car.damage.systems.cooling).toBeGreaterThan(car.damage.systems.engine);
+    expect(car.damage.systems.engine).toBeLessThan(1);
+  });
+});
+
+describe("what the car says about itself, and whether it is true", () => {
+  it("only ever says DEAD at the very top of the ledger", () => {
+    const stages = (from: number, to: number): string[] => {
+      const events: GameEvent[] = [];
+      callDamage("engine", from, to, events);
+      return events.map((e) => (e.type === "systemFail" ? e.stage : ""));
+    };
+    const { hurt, spent, dead } = TUNING.collision.callAt;
+    expect(stages(0, hurt)).toEqual(["hurt"]);
+    expect(stages(hurt, spent)).toEqual(["spent"]);
+    // The line the HUD says ENGINE DEAD on is the line the run ends at,
+    // and nothing short of it: a car told its engine is dead and then
+    // driven away is a HUD nobody has a reason to believe again.
+    expect(stages(spent, dead)).toEqual(["dead"]);
+    expect(stages(0.99, 0.999)).toEqual([]);
+  });
+
+  it("a dead engine cannot drive the car — forwards or backwards", () => {
+    const state = freshState();
+    state.car.damage.systems.engine = 1;
+    state.car.u = 0;
+    for (let i = 0; i < TUNING.physicsHz * 3; i++) {
+      step(state, { ...NEUTRAL_INPUT, throttle: 1 });
+    }
+    expect(state.car.u).toBe(0);
+    // Reverse is the one place the drivetrain is asked for a shove outside
+    // the throttle, and it is the one place a dead motor gets forgotten.
+    for (let i = 0; i < TUNING.physicsHz * 3; i++) {
+      step(state, { ...NEUTRAL_INPUT, brake: 1 });
+    }
+    expect(state.car.u).toBe(0);
+    expect(state.car.reversing).toBe(false);
   });
 });

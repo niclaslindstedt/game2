@@ -51,14 +51,21 @@ export const DAMAGE_ZONES = 8;
  * longer there, and the cabin is seen straight into. A door is bolted
  * deeper than anything on the flank, and a wheel deeper still: the first
  * takes a flank folded most of the way to the cage, the second a corner
- * driven into something at pace, or landed on. The LAMPS are the first
- * thing a cap loses: a headlamp is glass at the very front of the car, and
- * once it is gone nothing at that end lights or glows. */
+ * driven into something at pace, or landed on.
+ *
+ * THE LAMPS ARE FOUR, not two. A lamp is glass at the very corner of a cap,
+ * and which corner met the tree decides which one is gone: a car that
+ * clipped a trunk with its right-hand wing drives the rest of the stage on
+ * one headlamp, which is half the light down the road and a fact about
+ * every night stage after it. Only a square hit on the nose takes the pair.
+ * Left and right are the ENGINE's (positive `w` is the right side). */
 export type DamagePart =
   | "bumperF"
   | "bumperR"
-  | "lampsF"
-  | "lampsR"
+  | "lampFL"
+  | "lampFR"
+  | "lampRL"
+  | "lampRR"
   | "mirrorL"
   | "mirrorR"
   | "spoiler"
@@ -75,6 +82,12 @@ export type DamagePart =
   | "wheelRL"
   | "wheelRR";
 
+/** THE HEADLAMPS and the tail clusters, each end's pair in engine order
+ * (left, right) — read by anything that has to ask how much light is left
+ * at one end of the car. */
+export const FRONT_LAMPS: readonly DamagePart[] = ["lampFL", "lampFR"];
+export const REAR_LAMPS: readonly DamagePart[] = ["lampRL", "lampRR"];
+
 /** The four wheels in the order `CarDamage.wheels` keeps them, and the
  * part each one becomes when it comes off: front-left, front-right,
  * rear-left, rear-right. Left and right are the ENGINE's (positive `w`
@@ -83,13 +96,16 @@ export const WHEEL_PARTS: readonly DamagePart[] = ["wheelFL", "wheelFR", "wheelR
 
 /** The machinery under the panels. Each system takes damage from the crush
  * landing nearest to it and degrades ITS OWN job: the engine loses power
- * and, at the end of it, stops for good; the suspension loses grip and
- * landing tolerance; the gearbox shifts slower and harsher; the steering
- * loses authority; the brakes lose the pedal and the lever. */
-export type InternalSystem = "engine" | "suspension" | "gearbox" | "steering" | "brakes";
+ * and, at the end of it, stops for good; the COOLING loses the coolant that
+ * keeps the engine alive at all; the suspension loses grip and landing
+ * tolerance; the gearbox shifts slower and harsher; the steering loses
+ * authority; the brakes lose the pedal and the lever. */
+export type InternalSystem =
+  "engine" | "cooling" | "suspension" | "gearbox" | "steering" | "brakes";
 
 export const INTERNAL_SYSTEMS: readonly InternalSystem[] = [
   "engine",
+  "cooling",
   "suspension",
   "gearbox",
   "steering",
@@ -108,6 +124,15 @@ export type RetireReason = "engine" | "wheels";
  * bonnet is wearing out, the body is simply losing its shape — but it fails
  * the same way and it is said the same way, so the call carries it. */
 export type DamageCall = InternalSystem | "chassis";
+
+/** HOW FAR GONE a part is, at the moment it says so. `hurt` is the first
+ * line — the part is giving, and there is still something the driver can do
+ * about it. `spent` is the second — it is doing most of what it will ever do
+ * to the car. `dead` is the top of the ledger, and it means exactly what it
+ * says: nothing is left. Only a system that has somewhere past `spent` to go
+ * ever reaches it, and for the ENGINE that is the run over. The lines
+ * themselves are `TUNING.collision.callAt`. */
+export type DamageStage = "hurt" | "spent" | "dead";
 
 /** The car's accumulated damage — the physics writes it, the renderer bends
  * the body's polygons from it. Crashing never resets it: the dents are the
@@ -403,6 +428,20 @@ export type CarState = {
    * it — the car has stopped (or is already rolling back) and the pedal is
    * still down. The HUD reads it for the reverse gear. */
   reversing: boolean;
+  /** ENGINE TEMPERATURE, 0 (its running temperature, where a sound car sits
+   * all day) .. 1 (boiling, and cooking itself). Written by game/cooling.ts
+   * from the load the engine is under against the cooling it has left; a
+   * sound radiator sheds everything a stage can put in, and a holed one
+   * cannot. It is the one number in the whole damage model that comes back
+   * DOWN — the driver lifts, the car cools — which is why it lives here on
+   * the car and not in the ledger, where nothing ever heals. */
+  heat: number;
+  /** WHICH TEMPERATURE CALL IS STANDING: 0 nothing said, 1 the driver has
+   * been warned, 2 the needle is in the red and the engine is cooking. The
+   * latch behind the `overheat` event — a needle sitting exactly on a line
+   * would otherwise announce itself twice a second — and it re-arms LOWER
+   * than it fires, in both directions. */
+  heatCall: number;
   damage: CarDamage;
   /** HOW MUCH OF A HIT THIS CAR ACTUALLY KEEPS, 0..1 — the one thing a
    * difficulty does to the car rather than to the field (`damageScaleFor`
@@ -558,12 +597,21 @@ export type GameEvent =
    * screen and a bonnet leaving on the wind announces itself; an engine
    * that has quietly lost a third of its power does not, and a driver who
    * only finds out on the next hill has been told nothing. So each system
-   * (and the shell) calls out as it crosses the two lines that mean
-   * something — `spent` false is the part giving, true is it gone
-   * (`TUNING.collision.callAt`). Once per line: damage never heals, so a
-   * line crossed stays crossed, and only the wreck's patch-up at a respawn
-   * can put the chassis back under one. */
-  | { type: "systemFail"; system: DamageCall; spent: boolean }
+   * (and the shell) calls out as it crosses each of the lines that mean
+   * something (`DamageStage`, `TUNING.collision.callAt`). Once per line:
+   * damage never heals, so a line crossed stays crossed, and only the
+   * wreck's patch-up at a respawn can put the chassis back under one. */
+  | { type: "systemFail"; system: DamageCall; stage: DamageStage }
+  /** THE TEMPERATURE GAUGE, said instead of drawn. A holed radiator sheds
+   * its coolant and the engine cooks itself from there — but not at once,
+   * and not if the driver lifts: heat climbs under load and falls on the
+   * overrun, so this is the one damage call that can go BOTH ways. `warn`
+   * is the needle climbing and a driver who can still do something about
+   * it; `red` is boiling, and the engine taking damage for every second it
+   * stays there; `clear` is the needle back off the line after a lift.
+   * Fires on each crossing, because a temperature is a thing to be managed
+   * rather than a line that has been crossed for good. */
+  | { type: "overheat"; level: "warn" | "red" | "clear" }
   /** A WHEEL giving, the same two lines a system crosses: `off` false is
    * the tyre gone and the rim bent — the car pulls that way and rides on
    * a flat corner — true is the wheel off the car altogether (and a

@@ -259,9 +259,16 @@ describe("event routing", () => {
     ],
     missed: [{ type: "missed", next: 1, count: 3 }],
     systemFail: [
-      { type: "systemFail", system: "engine", spent: false },
-      { type: "systemFail", system: "engine", spent: true },
-      { type: "systemFail", system: "gearbox", spent: true },
+      { type: "systemFail", system: "engine", stage: "hurt" },
+      { type: "systemFail", system: "engine", stage: "spent" },
+      { type: "systemFail", system: "engine", stage: "dead" },
+      { type: "systemFail", system: "cooling", stage: "spent" },
+      { type: "systemFail", system: "gearbox", stage: "spent" },
+    ],
+    overheat: [
+      { type: "overheat", level: "warn" },
+      { type: "overheat", level: "red" },
+      { type: "overheat", level: "clear" },
     ],
     wheelFail: [
       { type: "wheelFail", wheel: 1, off: false },
@@ -286,13 +293,29 @@ describe("event routing", () => {
   });
 
   it("tells a system giving from a system gone", () => {
-    const give = soundForEvent({ type: "systemFail", system: "engine", spent: false }, 0);
-    const gone = soundForEvent({ type: "systemFail", system: "engine", spent: true }, 0);
+    const give = soundForEvent({ type: "systemFail", system: "engine", stage: "hurt" }, 0);
+    const gone = soundForEvent({ type: "systemFail", system: "engine", stage: "spent" }, 0);
+    const dead = soundForEvent({ type: "systemFail", system: "engine", stage: "dead" }, 0);
     expect(give?.id).toBe("system_give");
     expect(gone?.id).toBe("system_gone");
-    // The engine going is the run ending, and it is the heaviest of them.
-    const box = soundForEvent({ type: "systemFail", system: "gearbox", spent: true }, 0);
+    // The engine going is the run ending, and it is the heaviest of them —
+    // heavier again at the line where it actually stops.
+    const box = soundForEvent({ type: "systemFail", system: "gearbox", stage: "spent" }, 0);
     expect(gone?.shape?.gain ?? 1).toBeGreaterThan(box?.shape?.gain ?? 1);
+    expect(dead?.shape?.gain ?? 1).toBeGreaterThan(gone?.shape?.gain ?? 1);
+  });
+
+  it("pitches the needle up and the good news down again", () => {
+    const warn = soundForEvent({ type: "overheat", level: "warn" }, 0);
+    const red = soundForEvent({ type: "overheat", level: "red" }, 0);
+    const clear = soundForEvent({ type: "overheat", level: "clear" }, 0);
+    expect(warn?.id).toBe("system_give");
+    expect(red?.id).toBe("system_gone");
+    // Coming out of the red is the same chirp as the warning, lifted and
+    // quietened: heard as relief rather than as one more thing breaking.
+    expect(clear?.id).toBe("system_give");
+    expect(clear?.shape?.gain ?? 1).toBeLessThan(1);
+    expect(clear?.shape?.pitch ?? 1).toBeGreaterThan(red?.shape?.pitch ?? 1);
   });
 
   it("lifts the last split board of a lap so the count can be heard ending", () => {
