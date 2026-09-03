@@ -276,6 +276,9 @@ export function renderLevelMap({
     }
   };
   for (const spur of track.spurs) strokeRoad(spur.samples, spur.width, ROAD.spur);
+  // R17 — and the public roads the route never met, built along their own
+  // lines: the tarmac the crowd drove in on, in the same ink as an arm.
+  for (const road of track.publicRoads ?? []) strokeRoad(road.samples, road.width, ROAD.spur);
 
   // ── Corner guards: ground, not road, so under it ──────────────────────
   for (const guard of terrain.guards) {

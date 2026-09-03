@@ -156,9 +156,14 @@
 //       gravel the kerb is a run of marker posts, never a continuous
 //       painted band (see docs/track-generator.md for the placement guide).
 //   R27 A stage is WATCHED. Spectators gather where a rally crowd actually
-//       gathers — at the finish, and at the corners worth standing at — on
-//       ground clear of the road, on the OUTSIDE of the bend where nothing
-//       leaving the road is coming at them.
+//       gathers — at the finish, and at the corners worth the walk in — on
+//       ground clear of the road and on the INSIDE of the bend, which is
+//       the safety rule every rally briefs and a rule about where a car
+//       GOES when it lets go: it leaves at a tangent and finishes on the
+//       OUTSIDE, so the outside is the side a marshal tapes off. They
+//       stand IN corners and never along a straight, and only where R42
+//       finds them somewhere to have parked — a corner with no such
+//       country behind it gets nobody.
 //   R28 A stage is SPLIT INTO CHECKPOINTS, roughly a quarter-minute of
 //       driving apart, and every one of them stands just past the EXIT of a
 //       corner — the tighter the better. A checkpoint is both a split
@@ -345,24 +350,30 @@
 //       neither is shut: nobody drives a railway, and the crossing is
 //       signed rather than taped.
 //   R42 THE CROWD DROVE HERE. Every stand (R27) is reached from a CAR
-//       PARK: a graded pad of gravel with bays marked across it and twenty
-//       or more cars nosed into them, off a road that is NOT the rally
-//       road — an abandoned arm past its barrier (R17, R36), the road out
-//       from an earlier car park, or, where there is no public road within
-//       reach, a gravel lane of its own driven out to the edge of the map
-//       the way a branch is, so that every car park is somewhere a car
-//       could actually have come from. From the pad a TRAIL is trodden
-//       through the grass to the back of each stand the car park serves,
-//       never across the route and never through the water, with arrow
-//       boards along it pointing the crowd the way. It is placed the way a
-//       marshal plans it, BACKWARDS: from the stand to a common car park,
-//       and from the car park out to a road. Nothing about it costs the
-//       route anything — the pad, the road and the trails keep off the
+//       PARK: a patch of bladed gravel in the grass, `standOff` metres
+//       clear of the course at least, with the crowd's own cars nosed onto
+//       it — enough of them to have CARRIED that crowd and no more of them
+//       than there were people to drive them, at a carful apiece
+//       (`occupancy`), so a corner with eight spectators at it has three
+//       cars in the field behind it and never twenty-four. It is reached
+//       by a gravel LANE off a road that is NOT the rally road: an
+//       abandoned arm past its barrier (R17, R36), a public road the route
+//       never met, the lane out of an earlier car park, or — where the
+//       pocket of country the corner sits in carries none of those — out
+//       to the edge of the map the way a branch goes, which is where the
+//       tarmac it would have joined runs too. From the pad a TRAIL is
+//       trodden through the grass to the back of each stand the car park
+//       serves, never across the route and never through the water, with
+//       arrow boards along it pointing the crowd the way. It is placed the
+//       way a marshal plans it, BACKWARDS: from the stand to a common car
+//       park, and from the car park out to a road. Nothing about it costs
+//       the route anything — the pad, the lane and the trails keep off the
 //       route's corridor, every other road, the water, the guards' mounds
-//       and the buildings — and a stand the country leaves no room to serve
-//       stays unserved, which `roads.served` reports. The pad is a pad the
-//       terrain flattens, the road is a road it shelves, and the cars are
-//       as solid as they look.
+//       and the buildings. AND A STAND THE COUNTRY LEAVES NO ROOM TO SERVE
+//       IS NOT A STAND: it is taken off the stage, because a crowd that
+//       could not have got to a corner does not stand at it. The pad is a
+//       pad the terrain flattens, the lane is a road it shelves, and the
+//       cars are as solid as they look.
 //   R43 THE COUNTRY MAKES POWER. A stage in a modern country
 //       (`BiomeRules.energy`) runs past the two things a hillside has on it
 //       now: WIND FARMS and SOLAR FARMS. A wind farm is a string of three
@@ -1559,18 +1570,29 @@ export const STAGE_RULES = {
   },
 
   crowd: {
-    /** A corner earns a stand once it bends this far, radians — the same
-     * corners worth marking are the ones worth watching, a shade looser. */
-    minAngle: 0.9,
-    /** Never two stands closer together than this along the stage, m. */
-    spacing: 320,
+    /** A corner earns a stand once it bends this far, radians. A rally
+     * crowd walks in from a car park and stands at the corners worth the
+     * walk — the hairpins and the tight thirds, not every kink R26 bothers
+     * to mark. Tighter than the marking bar on purpose: a stand is only
+     * placed at all where the country will carry a car park within a walk
+     * of it (R42), and spending that search on a fourth-gear bend is what
+     * put spectators down every straightish sweep of the stage. */
+    minAngle: 1.3,
+    /** Never two stands closer together than this along the stage, m. One
+     * car park serves everything inside its own walk, so stands closer
+     * together than that are one crowd drawn twice. */
+    spacing: 460,
     /** How far back from the road EDGE a stand is planted, m — a band, so
      * a run of them is not a fence ruled parallel to the road. */
     setback: { min: 7, max: 13 },
     /** How wide a stand is along the road, m, and how many rows deep. */
     width: { min: 7, max: 15 },
     rows: { min: 2, max: 4 },
-    /** People per meter of front row — a crowd, not a queue. */
+    /** People per meter of front row — a crowd, not a queue. What turns a
+     * stand's rectangle into a HEAD COUNT (`standHeads`), which is the
+     * engine's number and not the renderer's: R42 sizes a car park from the
+     * crowd it serves, so how many people are standing there has to be
+     * something the generator knows. */
     density: 0.55,
     /** How far back down the road the finish crowd is banked, m: the one
      * place on the stage where the stands are guaranteed and biggest. */
@@ -2319,17 +2341,49 @@ export const STAGE_RULES = {
      * longest a trail may be, and how far from a stand a car park is
      * looked for. A rally crowd walks a few hundred metres in; it does not
      * walk a kilometre. */
-    walk: 340,
+    walk: 460,
     /** How far past a stand the road has to be committed before the stand's
      * car park is decided, m: every stand the same car park could also
      * serve exists by then, so a streamed stage decides the same clusters
      * however it was chunked. `walk` plus the longest corner a stand waits
      * on. */
-    hold: 500,
+    hold: 620,
     /** How far from a stand an existing PUBLIC road is looked for, m — an
-     * abandoned arm past its barrier (R17, R36), or an earlier car park's
-     * own road out. Past this the car park builds a road of its own. */
-    reach: 320,
+     * abandoned arm past its barrier (R17, R36), a public road the route
+     * never met (`publicroad.ts`), or an earlier car park's own lane. Past
+     * this the car park drives a lane of its own out to one of them. */
+    reach: 420,
+    /** R17 + R42 — how many extra public roads are DRAWN FOR across the
+     * country once the route is compiled (`layExtraRoads`), before the ones
+     * the land and R23 refuse are thrown away.
+     *
+     * The search's own tarmac is one road across a medium map, and it
+     * cannot be two: the route may not cross a public road, so a second
+     * line laid before the search partitions the country it has left and
+     * some seeds then generate at no sub-seed at all (`highwayCount` names
+     * the one that proved it). Drawn AFTERWARDS the same lines cost the
+     * search nothing — a candidate that runs into the route is thrown away
+     * instead of routed around — and what they buy is the difference
+     * between a country with a road network and a country with one road:
+     * with a single line, two thirds of the corners on a stage sit in a
+     * pocket no lane could reach a road from, and R42 puts no crowd at a
+     * corner nobody could have driven to. */
+    roads: 5,
+    /** R42 — how far the pad stands from the ROUTE, m — at least, measured
+     * to its centre.
+     *
+     * Nobody parks at the edge of a live rally stage. The cars are left
+     * where the marshals let cars be left, which is a field somewhere off
+     * the course, and the crowd walks the rest — and the walk in is most of
+     * what being at a rally is. A pad sixty metres off the road, which is
+     * what an unconstrained search finds every time (it is looking for the
+     * NEAREST place the country will take), reads as a lay-by beside the
+     * stage and puts twenty cars inside the distance a car leaving the road
+     * covers.
+     *
+     * Under `walk`, with room to spare for a trail that has to wind round a
+     * stream or a mound rather than run straight. */
+    standOff: 200,
     /** THE PAD: the graded gravel the cars stand on, as a disc — how far
      * past the bay layout its rim reaches, how far past the rim the country
      * is eased back onto it, the steepest plane it may be graded to (m per
@@ -2339,18 +2393,32 @@ export const STAGE_RULES = {
      * country it keeps between its rim and the route's corridor, and how
      * far apart two pads have to be. */
     pad: { margin: 2.5, blend: 12, maxGrade: 0.09, level: 6, clear: 8, apart: 100 },
+    /** R42 — HOW MANY PEOPLE ARRIVE IN ONE CAR. A rally crowd comes in
+     * families and carfuls, not one to a seat: eight people at a corner is
+     * three cars in the field behind it, and that is what a car park is
+     * sized from. Both ends of the band are load-bearing, and they are the
+     * two halves of one rule — the cars have to have been able to CARRY the
+     * crowd (no fewer than `heads / max` of them) and the crowd has to have
+     * been able to FILL them (no more than `heads / min`).
+     *
+     * The floor is two rather than one because a car park with a car per
+     * spectator is a commuter station, and it is the shape the placer had
+     * before this: twenty-four cars nosed into a pad behind a corner
+     * eighteen people were standing at. */
+    occupancy: { min: 2, max: 5 },
     /** THE BAYS: two rows nosed in either side of one aisle down the middle.
-     * `count` is how many bays a car park has — at least twenty-two, so
-     * that with a couple standing empty at least twenty cars are on it —
-     * `pitch` the width of one, `depth` how far it reaches back from the
-     * aisle, `aisle` the aisle's width, and `empty` how many bays the dice
-     * leave without a car. */
+     * `pitch` is the width of one, `depth` how far it reaches back from the
+     * aisle, `aisle` the aisle's width, and `spare` how many bays over the
+     * cars actually parked the marshals bladed. How MANY bays there are is
+     * not a dial — it is the crowd's head count divided by `occupancy`
+     * (`carsFor`), because the whole point is that the two agree. `most`
+     * is only a ceiling on the biggest bank of all, the finish. */
     bays: {
-      count: { min: 22, max: 28 },
+      most: 20,
+      spare: { min: 0, max: 2 },
       pitch: 3,
       depth: 5.4,
       aisle: 6.5,
-      empty: { min: 0, max: 2 },
     },
     /** THE ROAD in: a lane's width of the country's loose surface, leaving
      * a public road SQUARE and running straight to the middle of the pad,

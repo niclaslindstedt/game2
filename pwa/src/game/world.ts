@@ -26,6 +26,7 @@ import {
   type GameState,
   type Season,
   type Spur,
+  type SpurLine,
   type Track,
   SOLID_PROP_HEIGHT,
   type WildObstacle,
@@ -661,6 +662,20 @@ function buildSpur(track: Track, spur: Spur, cones: ConeField, beside: GroundBes
   return group;
 }
 
+/** R17 — a public road the route never met (`publicroad.ts`), drawn like an
+ * abandoned branch minus the one thing that makes a branch a branch: there
+ * is no barrier, because nobody shut it. It is tarmac, it runs rim to rim,
+ * and it is the road the crowd drove in on. */
+function buildPublicRoad(track: Track, road: SpurLine, beside: GroundBeside): THREE.Group {
+  const group = new THREE.Group();
+  group.add(buildSkirts(track, road.samples, road.width, 0.012, beside));
+  group.add(buildRoad(track, road.samples, road.width, 0.012, beside));
+  group.add(buildMarkings(track, road.samples, road.width, true));
+  const chippings = buildChippings(track, road.samples, road.width);
+  if (chippings) group.add(chippings);
+  return group;
+}
+
 export type World = {
   group: THREE.Group;
   /** Advance everything that moves on its own, and let the car knock over
@@ -822,6 +837,7 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
   let fordScan = 0;
   let streamScanS = 0;
   let spurScan = 0;
+  let publicScan = 0;
   let homesteadScan = 0;
   let townScan = 0;
   let solarScan = 0;
@@ -902,6 +918,15 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
       }
       chunkGroup.add(buildSpur(track, spur, cones, beside));
     }
+    // R17 — the public roads the route never met, ordered by the arc of the
+    // route they run nearest. Whole roads rather than per-chunk pieces: one
+    // crosses the country the stage folds through, so there is no stretch of
+    // stage it belongs to more than another.
+    for (; publicScan < track.publicRoads.length; publicScan++) {
+      const road = track.publicRoads[publicScan];
+      if (road.atS > track.samples[to - 1].s) break;
+      chunkGroup.add(buildPublicRoad(track, road, beside));
+    }
     // R37 — the homesteads whose drives leave this stretch of road.
     for (; homesteadScan < track.homesteads.length; homesteadScan++) {
       const homestead = track.homesteads[homesteadScan];
@@ -978,8 +1003,12 @@ export function buildWorld(track: Track, density = 1, season: Season = "summer",
    * whenever that list has grown. */
   const buildPeople = (): void => {
     const stands = terrain.field.stands;
-    if (stands.length === standCount) return;
-    standCount = stands.length;
+    // The field's REVISION, not its length: R42 takes stands off the stage
+    // as well as putting them on (a corner nobody could have parked within
+    // a walk of), and a sync that places two and drops two leaves the
+    // length exactly where it was with a different crowd underneath it.
+    if (terrain.field.standRevision === standCount) return;
+    standCount = terrain.field.standRevision;
     if (crowd) {
       group.remove(crowd.group);
       disposeGroup(crowd.group);

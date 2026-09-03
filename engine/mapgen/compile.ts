@@ -49,6 +49,7 @@ import {
   type ShelfBand,
   type Spur,
 } from "./spurs.ts";
+import { buildPublicRoads, type PublicRoad } from "./publicroad.ts";
 import { placeHomesteads, type Homestead } from "./homesteads.ts";
 import { placeTowns, type Town } from "./towns.ts";
 import { placeSolarFarms, placeWindFarms, type SolarFarm, type WindFarm } from "./energy.ts";
@@ -284,6 +285,12 @@ export type Track = {
   /** R17 — the branches the route abandons at every asphalt junction: real
    * road, taped off, there to be explored by anyone who ignores the tape. */
   spurs: Spur[];
+  /** R17 — the public roads the route never met, BUILT (`publicroad.ts`):
+   * the stretch of each `highways` line the country carries, rim to rim,
+   * on nobody's junction and with nothing taped across it. What the crowd
+   * (R42) drove in on where the rally never crossed a road. Empty on an
+   * endless stage, which carries no tarmac at all, and on a synthetic rig. */
+  publicRoads: PublicRoad[];
   /** R37 — the homesteads off the stage: each a house on its yard, the
    * cars outside it, the lane down to the road and the barrier across the
    * lane's mouth. Their own list, not among the branches: a drive is a road
@@ -752,7 +759,12 @@ const ROAD_DISTANCE_REACH = 220;
  * Strided to match the stage's own coarsening, and the slack is taken off
  * the answer so this can only ever under-report the room a branch has,
  * never invent some. */
-function branchClearance(list: Spur[]): (x: number, z: number, except?: Spur) => number {
+function branchClearance(
+  /** Every road off the stage: the abandoned branches, and the public roads
+   * the route never met (R17) — a lot, a yard and a fence keep off both, and
+   * nothing about the rule cares which kind of road it is measuring. */
+  list: readonly (Spur | PublicRoad)[],
+): (x: number, z: number, except?: Spur) => number {
   const STRIDE = 8;
   const slack = BRANCH_DISTANCE_SLACK;
   return (x: number, z: number, except?: Spur): number => {
@@ -2578,6 +2590,10 @@ function createCompiler(
     // that flares it — and for the minor arm on BOTH sides of the meeting
     // point to have been walked.
     buildForks();
+    // R17 — the public roads the route never met, built along their own
+    // lines before anything is placed beside a road: a town, a homestead
+    // and a turbine all keep off every road there is, and this is one.
+    buildPublic();
     // R39 — the towns, once the forks are built: a town stands on the
     // borrowed tarmac or on an abandoned arm, and keeps off every other
     // road there is.
@@ -2589,6 +2605,36 @@ function createCompiler(
     // R43 — and the energy after the settled places, because a turbine and
     // a fence both keep off a yard, and never the other way round.
     buildEnergy();
+  };
+
+  /** R17 — build the public roads the route never met (`publicroad.ts`).
+   * Once per stage: the lines are a pure function of the seed and the
+   * country, and an endless stage carries none of them. */
+  const buildPublic = (): void => {
+    if (track.endless || track.publicRoads.length > 0 || track.highways.length === 0) return;
+    const whole = roadDistanceField()({ x: 0, z: 0 });
+    track.publicRoads.push(
+      ...buildPublicRoads(track.highways, {
+        land,
+        bounds: track.bounds,
+        routeDistance: (x, z) => whole(x, z, false),
+        routeClear: roadClearance(track.width),
+        shelfBand,
+        routeS: (x, z) => {
+          let best = Infinity;
+          let at = 0;
+          for (let i = 0; i < track.samples.length; i += 8) {
+            const sample = track.samples[i];
+            const d = (sample.x - x) ** 2 + (sample.z - z) ** 2;
+            if (d < best) {
+              best = d;
+              at = sample.s;
+            }
+          }
+          return at;
+        },
+      }),
+    );
   };
 
   /** R39 — the towns whose streets are settled on road committed since the
@@ -2605,7 +2651,7 @@ function createCompiler(
     }
     if (to <= townFrom) return;
     const whole = roadDistanceField()({ x: 0, z: 0 });
-    const branches = branchClearance(track.spurs);
+    const branches = branchClearance([...track.spurs, ...track.publicRoads]);
     const placed = placeTowns({
       seed: track.seed,
       width: track.width,
@@ -2670,7 +2716,7 @@ function createCompiler(
       finishS: track.finishS,
       land,
       routeDistance: roadDistanceField(),
-      branchDistance: branchClearance(track.spurs),
+      branchDistance: branchClearance([...track.spurs, ...track.publicRoads]),
       highwayDistance: (x, z) => highways.nearest(x, z, undefined, HIGHWAY_LOOK)?.d ?? Infinity,
       shelfBand,
       townDistance: (x, z) => {
@@ -2727,7 +2773,7 @@ function createCompiler(
       land,
       routeDistance: (x: number, z: number) =>
         Math.min(whole(x, z, false), ahead.length > 0 ? aheadDistance(x, z) : Infinity),
-      branchDistance: branchClearance(track.spurs),
+      branchDistance: branchClearance([...track.spurs, ...track.publicRoads]),
       highwayDistance: (x: number, z: number) =>
         highways.nearest(x, z, undefined, HIGHWAY_LOOK)?.d ?? Infinity,
       shelfBand,
@@ -3046,6 +3092,7 @@ function emptyTrack(seed: number, endless: boolean, knobs: StageKnobs, circuit =
     knobs,
     highways: [],
     spurs: [],
+    publicRoads: [],
     homesteads: [],
     towns: [],
     windFarms: [],

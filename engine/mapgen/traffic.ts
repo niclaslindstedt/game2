@@ -20,7 +20,7 @@
 
 import { STAGE_RULES as R } from "./rules.ts";
 import type { CarPark } from "./carparks.ts";
-import type { Spur } from "./spurs.ts";
+import type { Spur, SpurLine } from "./spurs.ts";
 import type { Town } from "./towns.ts";
 
 /** Somewhere a journey starts or ends — or a place on the road that is
@@ -113,7 +113,11 @@ const TERMINAL: ReadonlySet<TrafficPlace> = new Set(["map", "block", "town", "pa
 /** Plan every journey the network carries, and stand its signs. `carParks`
  * is the terrain field's list — the parks live there, not on the track. */
 export function planTraffic(
-  track: { spurs: readonly Spur[]; towns: readonly Town[] },
+  track: {
+    spurs: readonly Spur[];
+    publicRoads: readonly SpurLine[];
+    towns: readonly Town[];
+  },
   carParks: readonly CarPark[],
 ): TrafficPlan {
   const lines: Line[] = [];
@@ -124,11 +128,29 @@ export function planTraffic(
     lines.push(line);
     arms.push(line);
   }
+  // R17 — and the public roads the route never met, which carry traffic for
+  // the reason they exist: they run rim to rim, so a journey down one is a
+  // journey from off the map to off the map.
+  const roads: Line[] = [];
+  for (const road of track.publicRoads) {
+    const line = publicLine(road);
+    if (!line) continue;
+    lines.push(line);
+    roads.push(line);
+  }
   // The lanes, in the order they were placed: a lane that leaves another
   // lane (`access: "park"`) leaves one placed before it.
   const lanes: Line[] = [];
   for (const park of carParks) {
-    const line = laneLine(park, park.access === "arm" ? arms : lanes);
+    const parents =
+      park.access === "arm"
+        ? arms
+        : park.access === "road"
+          ? roads
+          : park.access === "park"
+            ? lanes
+            : [];
+    const line = laneLine(park, parents);
     if (!line) continue;
     lines.push(line);
     lanes.push(line);
@@ -199,10 +221,34 @@ function armLine(spur: Spur, towns: readonly Town[]): Line | null {
   return line;
 }
 
+/** R17 — a public road the route never met, as a road of the network: rim
+ * to rim, at the country limit, with nothing shut on it. */
+function publicLine(road: SpurLine): Line | null {
+  if (road.samples.length < 8) return null;
+  const name = `road@${Math.round(road.atS)}`;
+  return {
+    pts: road.samples.map((p) => ({
+      x: p.x,
+      z: p.z,
+      y: p.elevation,
+      limit: TRAFFIC_LIMITS.country * KMH,
+    })),
+    width: road.width,
+    atS: road.atS,
+    head: "map",
+    tail: "map",
+    headKey: `${name}:in`,
+    tailKey: `${name}:out`,
+    cuts: new Map(),
+    joined: null,
+  };
+}
+
 /** A car park's lane as a road of the network, from the outside world to
- * the pad. Off an arm or off an earlier lane, its first sample lies on that
- * road's own centerline, so the nearest point of the parent is the turning
- * — and a lane whose parent was never built is a lane from nowhere. */
+ * the pad. Off an arm, a public road or an earlier lane, its first sample
+ * lies on that road's own centerline, so the nearest point of the parent is
+ * the turning — and a lane whose parent was never built is a lane from
+ * nowhere. */
 function laneLine(park: CarPark, parents: readonly Line[]): Line | null {
   const samples = park.road.samples;
   if (samples.length < 4) return null;

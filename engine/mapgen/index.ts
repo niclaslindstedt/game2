@@ -155,9 +155,11 @@ export {
   type KerbRole,
   type KerbZone,
 } from "./kerbs.ts";
-export { createStandField, type Stand, type StandField } from "./stands.ts";
+export { createStandField, standHeads, type Stand, type StandField } from "./stands.ts";
+export { buildPublicRoads, type PublicRoad, type PublicRoadContext } from "./publicroad.ts";
 export {
   bayLayout,
+  carsFor,
   carParkSolids,
   carParkTally,
   createCarParkField,
@@ -168,10 +170,17 @@ export {
   type CarParkPad,
   type CarParkContext,
   type CarParkField,
+} from "./carparks.ts";
+export {
+  signTrail,
+  standBack,
+  trailClearance,
+  walkTrail,
   type Trail,
+  type TrailProbe,
   type TrailSample,
   type TrailSign,
-} from "./carparks.ts";
+} from "./carpark-trail.ts";
 export {
   createTerrain,
   builtTerrain,

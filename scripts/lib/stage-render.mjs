@@ -641,6 +641,8 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
   // puts the route's mat over the branch's lines, and the through road's
   // paint then stops dead at the crossing it is supposed to run past.
   for (const spur of track.spurs) if (!spur.rail) drawRoad(spur.samples, spur.width);
+  // R17 — the public roads the route never met, built along their own lines.
+  for (const road of track.publicRoads ?? []) drawRoad(road.samples, road.width);
   // R37 — the drives down to the homesteads, before the route for the same
   // reason as the branches: the stage's mat goes over the mouth.
   for (const homestead of track.homesteads) {
@@ -671,6 +673,7 @@ export function renderStage({ track, terrain, engine, width = 1280, height = 800
   // A branch IS the main road continued past the crossing, so its paint
   // runs the whole way to the meeting point.
   for (const spur of track.spurs) if (!spur.rail) drawMarkings(spur.samples, spur.width, true);
+  for (const road of track.publicRoads ?? []) drawMarkings(road.samples, road.width, true);
   drawMarkings(track.samples, track.width);
   // The tape and cones across every abandoned branch: the stage does not
   // go this way. Drawn LAST, because a closure the road is painted over is

@@ -737,21 +737,31 @@ export function analyzeRoads(track: Track, terrain: TerrainField): MetricReport 
   const C = STAGE_RULES.carPark;
   for (const park of parks) {
     const wrong: string[] = [];
-    if (park.cars.length < R.parkCars) wrong.push(`holds ${park.cars.length} cars`);
+    // R42 — the two halves of the crowd-and-cars rule. Every car could have
+    // been driven by somebody standing at the corner, and every spectator
+    // could have got here in one of the cars.
+    const cars = park.cars.length;
+    if (cars > park.heads) wrong.push(`${cars} cars for a crowd of ${park.heads}`);
+    if (cars * C.occupancy.max < park.heads) {
+      wrong.push(`${cars} cars could not have carried ${park.heads} people`);
+    }
     const road = park.road.samples;
     const first = road[0];
     const last = road[road.length - 1];
     if (Math.hypot(last.x - park.pad.x, last.z - park.pad.z) > 1) {
       wrong.push("its lane does not reach the pad");
     }
+    // R42 — and it goes somewhere: onto a road that is THERE (an arm, a
+    // public road the route never met, or another car park's lane, which
+    // leaves one of those itself), or off the map past the fog.
     if (park.access === "map") {
       const b = track.bounds;
       const out = Math.max(b.minX - first.x, first.x - b.maxX, b.minZ - first.z, first.z - b.maxZ);
       if (out < R.escape) wrong.push(`its lane stops ${out.toFixed(0)} m past the box, in a field`);
     } else {
-      // Into a road that is there: an arm, or another car park's lane.
       const lines = [
         ...track.spurs.filter((s) => !s.rail).map((s) => s.samples),
+        ...track.publicRoads.map((r) => r.samples),
         ...parks.filter((p) => p !== park).map((p) => p.road.samples),
       ];
       const joined = lines.some((line) =>
@@ -759,6 +769,16 @@ export function analyzeRoads(track: Track, terrain: TerrainField): MetricReport 
       );
       if (!joined) wrong.push("its lane leaves no road the track has");
     }
+    // R42 — a field off the course, not a lay-by beside it. Measured over
+    // the samples themselves rather than through the terrain's road field,
+    // which stops answering three grid cells out — 144 m, which is inside
+    // the number being checked.
+    let off = Infinity;
+    for (const sample of track.samples) {
+      const d = Math.hypot(sample.x - park.pad.x, sample.z - park.pad.z);
+      if (d < off) off = d;
+    }
+    if (off < C.standOff) wrong.push(`its pad stands ${off.toFixed(0)} m off the route`);
     if (
       terrain.roadDistanceAt(park.pad.x, park.pad.z) <
       park.pad.radius + half + ROAD_CROSS.reach

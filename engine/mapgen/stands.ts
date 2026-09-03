@@ -4,22 +4,33 @@
 // Spectators do not line a stage evenly; they walk in from wherever they
 // could park and they stand where something happens. So do these: at the
 // finish, where the biggest bank of them is guaranteed, and at the corners
-// worth watching — the same corners R26 bothers to mark, a shade looser,
-// because a hairpin is where a rally crowd goes and a fourth-gear kink is
-// not.
+// worth the walk — the hairpins and the tight thirds, not every kink R26
+// bothers to mark.
 //
-// And they stand on the OUTSIDE of the bend, back off the road. That is not
-// dressing: the inside of a corner is where a car that loses it arrives, and
-// a crowd placed there would be a crowd placed in the one spot the game
-// spends its whole time teaching you to cut. The outside is where a marshal
-// puts them and it is where they can see the corner from.
+// And they stand on the INSIDE of the bend, back off the road. That is the
+// safety rule every rally in the world briefs its spectators on, and it is
+// a rule about where a car GOES when it lets go: it goes wide. A car that
+// loses the back end at the apex, aquaplanes, or simply arrives too fast
+// leaves at a tangent and finishes up on the OUTSIDE of the corner, which
+// is why marshals tape the outside off and stand the crowd opposite. The
+// inside is also where the corner can be seen from — a spectator on the
+// inside watches the car come at them and go away again, rather than
+// watching the back of it disappear.
 //
-// This module decides WHERE a stand is, HOW BIG it is, and which way it
-// faces. It does not decide what a person looks like — the renderer owns
-// that. Like the corner guards (R14) it is placed against the world rather
-// than against the plan, so it lives on the terrain field and takes the same
-// road-distance and blocked probes: a crowd standing in a lake is worse than
-// a corner with nobody at it.
+// A stand is only worth placing at all where the crowd could have GOT
+// there: R42 walks in from a car park, the car park hangs off a public
+// road, and a corner with no such country behind it gets nobody. The
+// refusal is the car park field's (it hands back the stands it could not
+// serve) and the removal is `drop`'s.
+//
+// This module decides WHERE a stand is, HOW BIG it is, HOW MANY PEOPLE are
+// standing in it (`standHeads` — the car park is sized from that number, so
+// it cannot be the renderer's private business), and which way it faces. It
+// does not decide what a person looks like — the renderer owns that. Like
+// the corner guards (R14) it is placed against the world rather than
+// against the plan, so it lives on the terrain field and takes the same
+// road-distance and blocked probes: a crowd standing in a lake is worse
+// than a corner with nobody at it.
 
 import { hash2 } from "../lib/noise.ts";
 import type { Track } from "./compile.ts";
@@ -49,6 +60,15 @@ export type Stand = {
   finish: boolean;
 };
 
+/** R27 — how many people are standing in a stand: the front row at the
+ * crowd's own density, as many rows deep as it is. One function, two
+ * readers — the car park that has to hold their cars (R42) and the renderer
+ * that draws them — because a crowd of eighteen served by a car park sized
+ * for twenty-four is what two private answers to one question look like. */
+export function standHeads(stand: Pick<Stand, "width" | "rows">): number {
+  return Math.max(2, Math.round(stand.width * R.crowd.density)) * stand.rows;
+}
+
 export type StandField = {
   stands: Stand[];
   /** Place stands for every corner the road has committed up to `upToS`,
@@ -58,6 +78,13 @@ export type StandField = {
     roadDistance: (x: number, z: number) => number,
     blocked: (x: number, z: number) => boolean,
   ) => void;
+  /** R42 — take out the stands the crowd could never have reached. Called
+   * with the ones the car park field refused, once it has decided them. */
+  drop: (stands: readonly Stand[]) => void;
+  /** How many times the list has CHANGED — a stand added or one dropped.
+   * The renderer rebuilds its people off this rather than off the length,
+   * which a sync that places two stands and drops two leaves unmoved. */
+  revision: number;
   /** Endless: forget the crowds the run has left far behind. */
   pruneBefore: (s: number) => void;
 };
@@ -123,6 +150,7 @@ export function createStandField(track: Track): StandField {
       if (roadDistance(px, pz) < half + ROAD_CLEAR) return false;
     }
     placed += 1;
+    field.revision++;
     stands.push({
       x,
       z,
@@ -175,20 +203,36 @@ export function createStandField(track: Track): StandField {
       // The finish has its own crowd; a corner inside its reach would put a
       // second stand in the middle of it.
       if (line !== null && at > line - C.finishReach) continue;
-      // The note's `dir` is the inside of the bend; the crowd is opposite.
-      const outside = -note.dir as -1 | 1;
+      // The note's `dir` IS the inside of the bend, and the inside is where
+      // the crowd stands: a car that lets go leaves at a tangent and
+      // finishes on the outside, which is the side a marshal tapes off.
+      const inside = note.dir;
       // How big a crowd a corner draws is how much of a corner it is.
       const size = Math.min(1, 0.35 + (note.angle - C.minAngle) * 0.5);
-      if (plant(at, outside, size, false, roadDistance, blocked)) lastS = at;
+      if (plant(at, inside, size, false, roadDistance, blocked)) lastS = at;
     }
     stands.sort((a, b) => a.s - b.s);
+  };
+
+  const drop: StandField["drop"] = (refused) => {
+    if (refused.length === 0) return;
+    const gone = new Set(refused);
+    for (let i = stands.length - 1; i >= 0; i--) {
+      if (!gone.has(stands[i])) continue;
+      stands.splice(i, 1);
+      field.revision++;
+    }
   };
 
   const pruneBefore = (s: number): void => {
     let cut = 0;
     while (cut < stands.length && stands[cut].s < s) cut++;
-    if (cut > 0) stands.splice(0, cut);
+    if (cut > 0) {
+      stands.splice(0, cut);
+      field.revision++;
+    }
   };
 
-  return { stands, extend, pruneBefore };
+  const field: StandField = { stands, extend, drop, revision: 0, pruneBefore };
+  return field;
 }

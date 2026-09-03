@@ -325,23 +325,18 @@ export const ANALYSIS = {
      * than a house. Past this the building is not ON the street. */
     townFront: 12,
 
-    /** R42 — how many cars a car park has to hold. Twenty is the brief: a
-     * rally crowd's car park is a field with a few dozen cars in it, and a
-     * pad with six is a lay-by. */
-    parkCars: 20,
     /** ...how long a trail from a car park to a stand may be, m — the
      * placer's own walk (`STAGE_RULES.carPark.walk`), plus the pad the
      * trail starts at the rim of. */
-    parkWalk: 370,
+    parkWalk: 500,
     /** ...and the share of a stage's stands that may go without a car park
-     * before the check starts scoring. Not zero, and honestly so: a stand
-     * in a pocket the stage has folded shut has no country a road could
-     * leave from without crossing the route (R23), and a stand on a
-     * hillside no pad can be graded on has nowhere to park. Measured over
-     * seeds 1-852 (24 stages) at medium the placer serves 54% of the
-     * stands; the budget is the half the country refuses, and the number
-     * to move DOWN as the placer gets better at reading the country. */
-    unservedShare: 0.5,
+     * before the check starts scoring. ZERO, and it is a structural zero
+     * rather than an aspiration: a stand the placer cannot serve is now a
+     * stand it hands back, and the crowd at that corner is taken off the
+     * stage rather than left standing in a field nobody could have walked
+     * in from (R42). Anything this finds is a stand that outlived its
+     * refusal — a bug in the hand-back, not a hard seed. */
+    unservedShare: 0,
 
     /** R43 — how much more fall a solar farm's ground may show, as a
      * multiple of the placer's own `energy.solar.slope`, before it is a

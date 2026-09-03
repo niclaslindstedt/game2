@@ -72,6 +72,15 @@ function lanesOf(track: Track, terrain: TerrainField): Lane[] {
       after: 0,
     });
   }
+  for (const road of track.publicRoads) {
+    lanes.push({
+      name: `the public road @${road.atS.toFixed(0)} m`,
+      line: road,
+      maxGrade: SPUR.maxGrade,
+      before: 0,
+      after: 0,
+    });
+  }
   for (const h of track.homesteads) {
     lanes.push({
       name: `the drive @${h.atS.toFixed(0)} m`,

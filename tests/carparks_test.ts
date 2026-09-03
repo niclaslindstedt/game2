@@ -56,17 +56,23 @@ function routeDistance(track: Track, x: number, z: number): number {
 }
 
 describe("car parks (R42)", () => {
-  it("serves the stands from car parks, on most stages and for most of the crowd", () => {
+  it("serves EVERY stand from a car park, and takes off the stage the ones it cannot", () => {
     const all = sweep();
-    expect(all.length).toBeGreaterThan(SEEDS.length * 2);
+    expect(all.length).toBeGreaterThan(SEEDS.length);
     const withOne = SEEDS.filter((seed) => stage(seed).terrain.carParks.length > 0);
     expect(withOne.length).toBeGreaterThan(SEEDS.length * 0.8);
-    let stands = 0;
-    let served = 0;
     for (const seed of SEEDS) {
       const { terrain } = stage(seed);
-      stands += terrain.stands.length;
-      for (const park of terrain.carParks) served += park.trails.length;
+      // R42 — a crowd that could not have driven here does not stand here:
+      // every stand left on the stage has a trail from some pad to it.
+      const trailed = new Set(
+        terrain.carParks.flatMap((park) =>
+          park.trails.map((t) => `${t.standS.toFixed(2)}/${t.standFacing.toFixed(4)}`),
+        ),
+      );
+      for (const stand of terrain.stands) {
+        expect(trailed.has(`${stand.s.toFixed(2)}/${stand.facing.toFixed(4)}`)).toBe(true);
+      }
       // In stage order, never two pads on top of each other.
       const parks = terrain.carParks;
       for (let i = 1; i < parks.length; i++) {
@@ -80,17 +86,18 @@ describe("car parks (R42)", () => {
         }
       }
     }
-    // The country refuses some — a stand in a pocket the stage has folded
-    // shut, a hillside no pad fits on — but never most.
-    expect(served / stands).toBeGreaterThan(0.4);
   });
 
-  it("holds at least twenty cars in marked bays, on the pad's own plane", () => {
+  it("holds the crowd's own cars — enough to have carried them, never more than there are people", () => {
     for (const { park } of sweep()) {
-      expect(park.bays).toBeGreaterThanOrEqual(C.bays.count.min);
-      expect(park.bays).toBeLessThanOrEqual(C.bays.count.max);
-      expect(park.cars.length).toBeGreaterThanOrEqual(20);
+      expect(park.heads).toBeGreaterThan(0);
+      expect(park.cars.length).toBeGreaterThan(0);
       expect(park.cars.length).toBeLessThanOrEqual(park.bays);
+      expect(park.bays).toBeLessThanOrEqual(C.bays.most + C.bays.spare.max + 1);
+      // Both halves of the rule: the cars could have brought the crowd, and
+      // the crowd could have filled the cars.
+      expect(park.cars.length * C.occupancy.max).toBeGreaterThanOrEqual(park.heads);
+      expect(park.cars.length).toBeLessThanOrEqual(park.heads);
       expect(Math.hypot(park.pad.grade.x, park.pad.grade.z)).toBeLessThanOrEqual(
         C.pad.maxGrade + 1e-9,
       );
@@ -101,8 +108,14 @@ describe("car parks (R42)", () => {
     }
   });
 
+  it("stands every pad a few hundred metres off the course", () => {
+    for (const { track, park } of sweep()) {
+      expect(routeDistance(track, park.pad.x, park.pad.z)).toBeGreaterThanOrEqual(C.standOff);
+    }
+  });
+
   it("reaches every pad by a lane from a public road or from the edge of the map", () => {
-    const kinds = { arm: 0, park: 0, map: 0 };
+    const kinds = { arm: 0, road: 0, park: 0, map: 0 };
     for (const { track, terrain, park } of sweep()) {
       kinds[park.access]++;
       const road = park.road.samples;
@@ -124,12 +137,15 @@ describe("car parks (R42)", () => {
         );
         expect(out).toBeGreaterThanOrEqual(SPUR.escape - SPUR.step - 1);
       } else {
-        // ...or on a road that is there: an arm past its barrier, or an
-        // earlier car park's lane, at that road's own height.
+        // ...or on a road that is there: an arm past its barrier, a public
+        // road the route never met, or an earlier car park's lane, at that
+        // road's own height.
         const lines =
           park.access === "arm"
             ? track.spurs.filter((s) => !s.rail).map((s) => s.samples)
-            : terrain.carParks.filter((p) => p !== park).map((p) => p.road.samples);
+            : park.access === "road"
+              ? track.publicRoads.map((r) => r.samples)
+              : terrain.carParks.filter((p) => p !== park).map((p) => p.road.samples);
         const on = lines.flat().find((s) => Math.hypot(s.x - first.x, s.z - first.z) < 0.01);
         expect(on).toBeDefined();
         // On that road's crown: its own height, plus the camber a lane
@@ -137,9 +153,10 @@ describe("car parks (R42)", () => {
         expect(Math.abs(first.elevation - (on?.elevation ?? NaN))).toBeLessThan(0.1);
       }
     }
-    // Every way in is used somewhere on the sweep.
+    // Every way in is used somewhere on the sweep, and the rim is the
+    // fallback rather than the answer wherever a road is in reach.
     expect(kinds.map).toBeGreaterThan(0);
-    expect(kinds.arm + kinds.park).toBeGreaterThan(0);
+    expect(kinds.arm + kinds.road + kinds.park).toBeGreaterThan(0);
   });
 
   it("keeps the pad, the lane and the trails off the route and out of the water", () => {
@@ -290,7 +307,7 @@ describe("car parks (R42)", () => {
     // bounds and cannot end, on a stage that never ends.
     let matched = 0;
     for (const park of tb.carParks) {
-      expect(park.cars.length).toBeGreaterThanOrEqual(20);
+      expect(park.cars.length * C.occupancy.max).toBeGreaterThanOrEqual(park.heads);
       expect(park.trails.length).toBeGreaterThan(0);
       if (ta.carParks.some((o) => o.atS === park.atS)) matched++;
     }
