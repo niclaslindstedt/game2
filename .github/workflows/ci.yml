@@ -40,27 +40,35 @@ concurrency:
 
 jobs:
   # The suite is the long pole — around three quarters of the serial run —
-  # so it is the one thing that gets its own runners. `--shard` splits at
-  # FILE granularity, which puts a floor under this: tests/analysis_test.ts
-  # generates and scores real stages and takes ~25s by itself, and no
-  # number of shards makes that file faster. Three is where the curve flattens
-  # (measured: 26s / 11s / 13s at three, and a fourth runner shaves 0.3s off
-  # the total while paying another install), so three is what CI buys.
+  # so it is the one thing that gets its own runners.
+  #
+  # `--shard` splits at FILE granularity, which means the SLOWEST SINGLE FILE
+  # is the floor and no number of runners gets under it. That floor is what
+  # to work on when this job is too slow, and there are two ways at it: stop
+  # a file rebuilding the same stages once per rule (`tests/support/stages.ts`
+  # hands out the corpus a rule suite shares), and split a file whose subject
+  # is really two subjects. Both were done in the change that brought this
+  # matrix from three to ten: the suite's slowest file was `mapgen_test.ts` at
+  # ~3m40s on its own, which is why three shards still reported in ~2m.
+  #
+  # With no file over a minute, ten runners is where the curve flattens —
+  # each shard is now its own slowest file plus change, and a wider matrix
+  # would only buy more `npm ci`.
   test:
     runs-on: ubuntu-latest
     strategy:
       # Let the other shards finish and report. A failure in one slice says
-      # nothing about the other two, and their results are what tell you
+      # nothing about the other nine, and their results are what tell you
       # whether the break is local or general.
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-      - run: make test SHARD=${{ matrix.shard }}/3
+      - run: make test SHARD=${{ matrix.shard }}/10
 
   # One stable check name over a matrix whose width is an implementation
   # detail. Branch protection requires `tests`; the shard count can then

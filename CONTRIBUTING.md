@@ -66,7 +66,7 @@ make tauri-lint  # clippy at zero warnings, both crates (needs the webview dev l
 
 ## Review and merging
 
-Every PR needs green CI (`tests`, `format`, `lint`, `build`, `simulate`, `seo`, `shell-lint`, `changeset`) and maintainer approval. Those all run beside each other, so the run costs its slowest job rather than the sum of them; `tests` is one check over a three-way shard of the suite, and it is the one to require rather than the individual `test (1..3)` shards. PRs are **squash-merged**, so the PR title must itself be a conventional-commit subject — it becomes the commit on `main`. Review normally lands within a few days; small, focused PRs merge much faster than sprawling ones.
+Every PR needs green CI (`tests`, `format`, `lint`, `build`, `simulate`, `seo`, `shell-lint`, `changeset`) and maintainer approval. Those all run beside each other, so the run costs its slowest job rather than the sum of them; `tests` is one check over a ten-way shard of the suite, and it is the one to require rather than the individual `test (1..10)` shards. PRs are **squash-merged**, so the PR title must itself be a conventional-commit subject — it becomes the commit on `main`. Review normally lands within a few days; small, focused PRs merge much faster than sprawling ones.
 
 ## Governance
 

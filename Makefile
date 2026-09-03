@@ -4,13 +4,14 @@ build:
 	npm run build
 
 # The vitest suite. SHARD=i/N runs only the i-th of N slices of the test
-# FILES — how CI fans the suite out across runners; a bare `make test` is
-# still the whole thing, and stays the definition of green.
+# FILES — how CI fans the suite out across runners (ten of them); a bare
+# `make test` is still the whole thing, and stays the definition of green.
 #
-# Sharding splits at file granularity, so the slowest single file is the
-# floor: tests/analysis_test.ts generates and scores real stages and takes
-# ~25s on its own, which is why CI stops at three shards. A fourth runner
-# lands beside it and saves nothing.
+# Sharding splits at file granularity, so the SLOWEST SINGLE FILE is the
+# floor and more runners cannot get under it. Keeping that floor down is
+# what keeps the fan-out worth having: a rule suite shares one corpus of
+# built stages through tests/support/stages.ts rather than rebuilding it
+# per rule, and a file whose subject is really two gets split.
 test:
 	npm test -- $(if $(SHARD),--shard=$(SHARD),)
 

@@ -9,7 +9,7 @@ This repository conforms to [`OSS_SPEC.md`](OSS_SPEC.md) (the committed copy is 
 ```sh
 npm install       # needs a GitHub Packages read token — see below
 make build        # typecheck + production build (pwa/dist/)
-make test         # vitest: generator rules, drift/jump physics, bot sims (SHARD=i/N slices it; CI runs three)
+make test         # vitest: generator rules, drift/jump physics, bot sims (SHARD=i/N slices it; CI runs ten)
 make lint         # eslint + typecheck, zero warnings
 make fmt          # prettier in place; fmt-check is what CI runs
 make sim          # headless balance sweep — REQUIRED before/after any handling or generator change
@@ -56,7 +56,7 @@ make desktop      # package this machine's desktop downloads into tauri/release/
 
 **Scope the linter, never the typechecker, and leave the suite to CI.** `npx eslint <changed files>` is 2 s where the whole repo is 24; `npx tsc --noEmit` is 3 s and must stay whole-program, because it checks a PROGRAM (naming files makes it ignore `tsconfig.json`) and because a changed signature breaks its CALLERS — the files you did not touch.
 
-**`make fmt` is the Make target to run; `make test` is CI's.** The whole suite is a thousand cases and ten minutes serially, and the PR runs it sharded across three runners on every push — so locally, run the FILES that cover the change (`npx vitest run tests/<topic>_test.ts`) and let the PR find the rest. The Make target is still the definition of green; it is just not worth running here to learn what three parallel runners are about to say.
+**`make fmt` is the Make target to run; `make test` is CI's.** The whole suite is a thousand cases and thirteen minutes serially, and the PR runs it sharded across ten runners on every push and reports in about a minute — so locally, run the FILES that cover the change (`npx vitest run tests/<topic>_test.ts`) and let the PR find the rest. The Make target is still the definition of green; it is just not worth running here to learn what ten parallel runners are about to say.
 
 ## How work is done here
 
@@ -287,6 +287,8 @@ Beside them, OUTSIDE the npm workspace and outside the root suite's path:
 - Runner: vitest via `make test`; config in `vitest.config.ts` (alias `@engine` → `engine/index.ts`). No DOM, no browser — engine tests only.
 - Physics tests build synthetic tracks via `compileTrack(seed, segments)` and script inputs step by step; widen the injected track's `width` when a scenario slides far sideways.
 - Simulation tests use `simulateStage` — deterministic, so digests can be compared exactly.
+- **A file that asserts a dozen rules over the same spread of seeds takes its stages from `tests/support/stages.ts`** (`stagePlans`, `stageTrack`, `stageTerrain`) rather than generating them per `it`. The generator is deterministic per seed, so the second build can only return the first one's answer, and building one is the most expensive thing the engine does — written literally, one rule suite was the same twenty-four stages built seven times and four minutes of CI's critical path. What comes back is SHARED and must be treated as read-only; anything needing its own build (an endless stage it will `extend()`, a determinism check that has to see two independent builds) calls the engine directly.
+- **Sharding splits at FILE granularity, so the slowest single file is the floor under `make test` on CI.** Keep a test file under a minute: share the corpus, and split a file whose subject is really two (`mapgen_test` / `mapgen_bands_test` / `mapgen_dials_test`, `water_test` / `drown_test`).
 - No extra test dependencies; everything runs on plain Node.
 
 ## Documentation sync points
