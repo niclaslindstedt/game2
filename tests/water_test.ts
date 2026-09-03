@@ -621,9 +621,20 @@ describe("driving out again (TUNING.crash.drown.shallows)", () => {
   // search SPACE, and it is wide on purpose so that a generator change
   // costs the suite a few seconds of scanning rather than a red test.
   const SHORE_SEEDS = [
-    // 109 leads since the body took its own momentum over a bank: a car
-    // that used to drive down 69's shore now flies off it into deeper
-    // water, sideways, and paddles.
+    // 120 leads because it is the first of a whole handful that scramble
+    // out — the drive that finds the water is a minute of full lock over
+    // open country, so a car that reaches a given shore is a car that has
+    // not rolled, wedged or drowned on the way, and which seeds those are
+    // moves with the handling as readily as with the roads.
+    120,
+    128,
+    158,
+    211,
+    219,
+    234,
+    247,
+    249,
+    272,
     109,
     69,
     87,

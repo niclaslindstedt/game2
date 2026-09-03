@@ -40,6 +40,7 @@ export {
   DAMAGE_ZONES,
   INTERNAL_SYSTEMS,
   WHEEL_PARTS,
+  rollTilt,
   updateSlip,
   type RetireReason,
   type CarDamage,
@@ -88,6 +89,10 @@ export { askedSlide, cornerSpeed, latCeiling, slideFloor, wheelSlide } from "./g
 // ...and how much of the car is standing on the road at this instant, which
 // every one of those limits is spent through (car.ts).
 export { tyreLoad } from "./game/car.ts";
+// ...and what a body OFF its wheels does: whether a roll it has been handed
+// is worth the lift over its own sill corner, and how far past that corner
+// a car can be left lying and still be a car anybody drives away (roll.ts).
+export { WHEEL_BASIN, goesOver, onItsWheels } from "./game/roll.ts";
 
 // The stage generator.
 export {

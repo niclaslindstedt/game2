@@ -1402,11 +1402,13 @@ export const TUNING = {
      * scrubs and stays on its wheels... */
     tripSlide: 9,
     /** ...and past it, the roll rate every further m/s of sideways speed
-     * puts into the body, rad/s. With `tumbleAt` this puts the roll at
-     * about twelve m/s across the car: 26° of yaw at 100 km/h, 20° at 130,
-     * 15° at 170 — the faster the jump, the straighter it has to be landed,
-     * which is the whole reason a flick before a lip is a mistake. Between
-     * `tripSlide` and there the car only leans. */
+     * puts into the body, rad/s. Whether that is enough to go over is not
+     * a threshold here — it is `roll.inertia` against the lift up to the
+     * body's own sill corner — but it works out at around twelve m/s
+     * across the car: 26° of yaw at 100 km/h, 20° at 130, 15° at 170. The
+     * faster the jump, the straighter it has to be landed, which is the
+     * whole reason a flick before a lip is a mistake. Under that the car
+     * lurches on its springs and the ground takes it back. */
     tripRoll: 0.75,
     /** ...capped here, rad/s: a body does not go over faster than about a
      * turn and a half a second whatever it was doing, because past that
@@ -1418,28 +1420,98 @@ export const TUNING = {
     /** How much of the sideways speed the trip leaves in the car, 0..1 —
      * the tyres dug in and the rest went into the roll. */
     tripKeep: 0.35,
-    /** THE TUMBLE. Roll rate a trip has to reach before the car actually
-     * goes over, rad/s: under it the body lurches on its springs and the
-     * ground takes it back, past it the inside wheels come up and the car
-     * is ROLLING — off its wheels, flying a little, and coming down on
-     * whichever side is next. */
-    tumbleAt: 2.4,
-    /** ...the lift a roll throws the body up with each time it goes over,
-     * m/s — the centre of mass rising over the wheels it pivots on. */
-    tumbleHop: 2.6,
-    /** ...how much of the roll survives each side hitting the ground, 0..1.
-     * Under 1 so a roll is over in two or three turns and never a barrel
-     * roll down the whole stage. */
-    tumbleKeep: 0.62,
-    /** ...how much of the forward speed each contact leaves, 0..1, on top
-     * of what a sloppy landing already costs. A roll is the most expensive
-     * thing a car can do short of a tree. */
-    tumbleScrub: 0.72,
-    /** ...and how hard each side hits, m/s of landing slam per rad/s of
-     * roll rate — the flank arriving at the ground at the roll's own speed,
-     * which is what folds it (collision.ts `landingDamage` reads the roll
-     * to pick the side). */
-    tumbleSlam: 2.2,
+    /** THE ROLL. What the car does once the trip has actually put it past
+     * its outside wheels — and, deliberately, NOT how far it goes. There
+     * is no turn count here and no rate at which a roll is declared over:
+     * `game/roll.ts` turns the body over the corners of the box above on
+     * the roll it is carrying, and it goes over exactly as long as it can
+     * lift its own centre to the next corner. Two or three turns is what
+     * these numbers usually buy; a big arrival buys more, a small one buys
+     * a lurch and nothing else, and whichever face the energy runs out on
+     * is the face the car is left lying on. */
+    roll: {
+      /** The body's roll inertia about the EDGE it is turning over, m² (a
+       * radius of gyration squared). It is what a given roll rate is worth
+       * against the corners: the barrier from the wheels up over the sill
+       * is 0.45 m of lift, so this puts going over at about 2.6 rad/s and
+       * flank-to-roof at 2.4. Well under the 1.7 m² a solid box of these
+       * dimensions would carry, because a car is not one: the engine, the
+       * floor, the tank and the crew are all low and close to the middle. */
+      inertia: 1.3,
+      /** ...and about its OWN centre, m². A second quantity, and a
+       * different question: this one decides how much of the roll survives
+       * a FACE arriving flat on the ground, where the body stops turning
+       * about the corner it came over and starts turning about the far
+       * corner of the face it has just landed on. The geometry does the
+       * rest, and it is what makes the three faces behave differently — a
+       * flank keeps about half the roll and carries the car on over, while
+       * landing square on the wheels or the roof keeps under a fifth and
+       * is where a roll stops. */
+      spin: 0.4,
+      /** ...and how much of that exchange a SPRUNG corner gives back
+       * instead of taking, 0..1. A shell corner arriving at the ground is
+       * sheet metal and pays the swap in full; a WHEEL arriving is what
+       * the springs are there to swallow, and they hand the blow back to
+       * the body rather than dissipating it. High, because they are good
+       * at it — and because near zero a car cannot be rolled at all: the
+       * first thing any trip does is lever the body up through level, and
+       * charging that as a flat-on-both-wheels impact takes nine tenths of
+       * the trip before the car has even come off its wheels. */
+      sprung: 0.88,
+      /** How hard the GROUND DRIVES THE ROLL ON, as an effective friction
+       * coefficient under a body that is still travelling sideways,
+       * working on the lever of its own centre height. This is the whole
+       * reason a roll is a roll rather than one flip: a car with fifteen
+       * metres a second still across it is a car the ground keeps turning
+       * over. It is also why one STOPS — the roll ends when the travel
+       * does, not when a counter runs out. */
+      grip: 0.85,
+      /** How fast the roll bleeds into the ground it is grinding round on,
+       * 1/s. Panels are not tyres. */
+      drag: 0.9,
+      /** How much of the car's TRAVEL each second on its side costs, 1/s —
+       * on top of what the landing already took. A roll is the most
+       * expensive thing a car can do short of a tree. */
+      scrub: 2.6,
+      /** ...and of its yaw, 1/s: a car on its roof is not turning in to
+       * anything. */
+      yawDamp: 2.2,
+      /** The roll is over when the body is lying within this of a face of
+       * it (rad) and turning slower than `rest` (rad/s) — the rock has
+       * died out and the car is where it is going to stay. */
+      settled: 0.12,
+      rest: 0.7,
+      /** How close the NEXT corner of the hull has to be to the ground for
+       * a contact to reach the rotation, m. A body lying flat on a face
+       * has it at zero and pays `spin`'s exchange in full; a body balanced
+       * on one corner with the next one this far up pays none of it,
+       * because the ground has arrived at the corner it was already
+       * turning about. It is the difference between a roll tapping its way
+       * round and a roll stopping dead on the face it puts down. */
+      reach: 0.3,
+      /** Roll rate under which a face arriving at the ground is a settle
+       * rather than a slam, rad/s: nothing folds and nothing is heard. */
+      slamAt: 0.9,
+      /** How hard a contact HITS, m/s of landing slam per rad/s of the roll
+       * the ground took out of the body — the arriving corner meeting the
+       * ground, stated on the LANDING's scale so `landingDamage` can price
+       * it (it reads the roll to pick which flank folds).
+       *
+       * Well over the metre-odd of arm the corner actually swings on,
+       * because that scale is a scale for a SPRUNG arrival:
+       * `collision.hardLandSpeed` is what a suspension travels through for
+       * free, and a corner of the shell has nothing under it at all. The
+       * rest of the model keeps this honest — a grinding contact takes no
+       * roll and so pays nothing, a wheel arriving is swallowed by its
+       * spring, and what is left to price here is sheet metal meeting the
+       * ground. */
+      slam: 6.5,
+      /** How long a car lies there once the roll has stopped with it OFF
+       * ITS WHEELS, s, before the crew are sent back to the last split
+       * board. A car on its roof is not a car anybody is driving away, so
+       * there is nothing to wait for beyond reading what happened. */
+      lieFor: 1.4,
+    },
   },
 
   surfaces: {
@@ -1720,6 +1792,21 @@ export const TUNING = {
      * early scrape, which is invisible. */
     halfLength: 2.1,
     halfWidth: 0.92,
+    /** ...and the rest of that box, STANDING UP, m — measured from the
+     * wheel contact plane, which is what `CarState.y` is. Where the wheels
+     * meet the ground across the car, how high the sill and the roof sit,
+     * and how high the weight in it rides.
+     *
+     * The ROLL is the only thing that reads them (`game/roll.ts`), and it
+     * reads all four: they are the outline a car off its wheels turns over
+     * on, and the height its centre has to be lifted through to get from
+     * one face of it to the next. Everything about where a roll ENDS comes
+     * out of these four numbers and nothing else.
+     * tests/car_geometry_test.ts holds them against the drawn shells. */
+    halfTrack: 0.74,
+    floorY: 0.28,
+    roofY: 1.4,
+    centreY: 0.5,
     /** Fraction of the closing speed bounced back off a solid, 0..1 — low:
      * a tree absorbs a rally car, it does not trampoline it. */
     restitution: 0.3,

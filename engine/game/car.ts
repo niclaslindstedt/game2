@@ -19,6 +19,7 @@ import type { CarSpec } from "./defs/cars.ts";
 import { TUNING } from "./defs/tuning.ts";
 import {
   rollTilt,
+  rotateFrame,
   updateSlip,
   type CarInput,
   type CarState,
@@ -27,23 +28,13 @@ import {
 } from "./state.ts";
 import { landingDamage } from "./collision.ts";
 import { footOn, groundJolt, readSeat, standOn, wheelSpeed, type GroundUnder } from "./ground.ts";
+import { beginRoll, goesOver, landRolled, onItsWheels, rollStand } from "./roll.ts";
 import type { Rng } from "../lib/prng.ts";
 import type { Surface } from "../mapgen/index.ts";
 
 const T = TUNING;
 /** The drift group, used on nearly every line below. */
 const D = TUNING.drift;
-
-/** Rotate the car-frame velocity when the nose turns by `delta`. The world
- * velocity is unchanged — this is what makes yawing at speed build slip. */
-function rotateFrame(car: CarState, delta: number): void {
-  const cos = Math.cos(delta);
-  const sin = Math.sin(delta);
-  const u = car.u * cos + car.w * sin;
-  const w = -car.u * sin + car.w * cos;
-  car.u = u;
-  car.w = w;
-}
 
 /** Where inside the current gear the engine is, 0 at the bottom and 1 at
  * the top. Both halves of `spec.torque` run off it — the curve that decides
@@ -1284,6 +1275,13 @@ export function stepGrounded(
   // player gets to see before the one that goes over.
   car.roll += car.rollRate * dt;
   car.rollRate *= Math.exp(-T.air.leanDamp * dt);
+  // ...unless the lurch is worth the lift up over the body's own sill
+  // corner, at which point there is no near-miss and no recovery: the car
+  // is past its outside wheels and the roll owns it from here (roll.ts).
+  if (goesOver(car.roll, car.rollRate) || !onItsWheels(car.roll)) {
+    beginRoll(car, events, stats);
+    return;
+  }
   const camber = ctx.slopeLat ? Math.atan(ctx.slopeLat) : 0;
   car.roll += (camber - rollTilt(car.roll)) * clamp(T.air.rollRecover * dt, 0, 1);
   settlePitch(car, Math.atan(ctx.slope));
@@ -1621,8 +1619,19 @@ export function stepAirborne(
     events.push({ type: "takeoff", vy: car.vy });
     stats.jumps += 1;
   }
-  if (car.y <= groundNow) {
-    car.y = groundNow;
+  // WHERE THE CAR MEETS THE GROUND. Its wheels on an ordinary flight; a
+  // corner of the shell on one that is going over (roll.ts, `rollStand` —
+  // exactly zero for any car that is not rolling, so a jump is unchanged
+  // by its being here).
+  const meets = groundNow + rollStand(car);
+  if (car.y <= meets && (car.rolling || !onItsWheels(car.roll))) {
+    // Nothing for the tyres to do: it is a corner of the body arriving,
+    // and the roll that put it there carries on from the contact.
+    landRolled(spec, car, groundNow, events, stats);
+    return;
+  }
+  if (car.y <= meets) {
+    car.y = meets;
     car.airborne = false;
     // The wheels arrive at the ground's own speed along the path — read off
     // the ground itself over the last step's travel, never off the smoothed
@@ -1666,15 +1675,10 @@ export function stepAirborne(
     }
     // ...and a car that came down going SIDEWAYS may not be coming down on
     // its wheels for long: the tyres bite, the body does not, and it trips.
-    const tumbling = !soft && tripOnLanding(car, events, stats);
+    const tumbling = !soft && tripOnLanding(spec, car, ctx.surface, events, stats);
     // The ground hits back: descent the suspension cannot absorb crushes
-    // the underside — or the flank the car came down on (collision.ts). A
-    // rolling car's flank arrives at the roll's own speed, which is the
-    // whole reason a roll is the end of a car.
-    const descentHit = car.u * ctx.slope - car.vy;
-    const slam = car.rolling
-      ? Math.max(descentHit, Math.abs(car.rollRate) * T.air.tumbleSlam)
-      : descentHit;
+    // the underside (collision.ts).
+    const slam = car.u * ctx.slope - car.vy;
     // ...and the wheels start hopping on their own tires. That is what the
     // car is doing for the next half second, and until it stops the tires
     // are only intermittently holding anything (`tyreLoad`). It takes the
@@ -1690,13 +1694,11 @@ export function stepAirborne(
     events.push({ type: "landing", airTime: car.airTime, slam, clean });
     car.airTime = 0;
     if (tumbling) {
-      // OVER IT GOES: the centre of mass lifts over the wheels it is
-      // pivoting on and the car is off the ground again, rolling. A flight
-      // in its own right — turbulence and all — because nothing under it is
-      // holding anything.
-      car.airborne = true;
+      // OVER IT GOES: the trip is worth more than the lift up over the
+      // body's own sill corner, so the centre carries past it and nothing
+      // brings the car back. Neither a bounce nor a flight — the roll owns
+      // it from the next step, on the ground, turning (roll.ts).
       car.settling = false;
-      car.vy += T.air.tumbleHop;
     } else {
       // Past what the springs can travel through, the CHASSIS comes back
       // off the ground — a real bounce, small and capped, that lands again
@@ -1724,39 +1726,46 @@ export function stepAirborne(
  * sideways has tyres that stop and a roof that does not: the bottom of the
  * car catches on the ground it has just been handed and the top keeps
  * going, over the outside wheels. Below `air.tripSlide` of sideways speed
- * the tyres spend it as a skip; past it, every further m/s is roll put into
- * the body — a lean the springs take back (`leanDamp`, `rollRecover`), or
- * past `tumbleAt` the car going OVER.
+ * the tyres spend it as a skip; past it, every further m/s is roll put
+ * into the body.
  *
- * Once it is rolling, every side that comes down is another contact of the
- * same roll: the roll loses `tumbleKeep` of itself and the car
- * `tumbleScrub` of its speed each time, and it is over when the roll has
- * died or the car comes down close enough to its wheels for the ground to
- * take it back. Returns true when the car is leaving the ground again. */
-function tripOnLanding(car: CarState, events: GameEvent[], stats: RunStats): boolean {
+ * Whether that is a LEAN or a ROLL is not decided here and is not a number
+ * anywhere: `goesOver` weighs the roll the body has just been handed
+ * against the lift up to its own sill corner (roll.ts). Under it the
+ * springs take the lurch back (`leanDamp`, `rollRecover`) and the car
+ * drives on; over it the car is past its outside wheels and the roll owns
+ * it — which is why the same landing can be survivable at one attitude and
+ * not at another.
+ *
+ * WHAT THE TYRES ARE STANDING ON decides how hard it is, because the trip
+ * IS the tyre biting: rubber that grips checks the bottom of the car hard
+ * and sends the top over it, rubber that ploughs lets the whole car wash
+ * sideways instead. It scales the ROLL the bite puts in and not the
+ * sideways speed that is spent skipping first — that one is the tyre
+ * failing to bite at all, which is the same speed whatever it is failing
+ * to bite on, and scaling both would price the surface into the trip
+ * twice. Read against gravel, which is the surface the numbers above are
+ * written for: a crossed-up landing on tarmac is the one that goes over,
+ * and the same landing in a sand section is a long ugly slide that stays
+ * on its wheels. Returns true when the car is going over. */
+function tripOnLanding(
+  spec: CarSpec,
+  car: CarState,
+  surface: Surface | "nature",
+  events: GameEvent[],
+  stats: RunStats,
+): boolean {
   const A = T.air;
+  const bite = surfaceGripFor(spec, surface) / surfaceGripFor(spec, "gravel");
   const over = Math.abs(car.w) - A.tripSlide;
   if (over > 0) {
     // Sliding to the right, the right wheels dig in and the body goes over
     // them: the right side down, which is negative roll.
-    car.rollRate -= Math.sign(car.w) * Math.min(over * A.tripRoll, A.tripMax);
+    car.rollRate -= Math.sign(car.w) * Math.min(over * A.tripRoll * bite, A.tripMax);
     car.w *= A.tripKeep;
     updateSlip(car);
   }
-  const onSide = Math.abs(rollTilt(car.roll)) >= A.rollLandLimit;
-  if (car.rolling) {
-    // One more side hitting the ground.
-    car.rollRate *= A.tumbleKeep;
-    car.u *= A.tumbleScrub;
-    if (Math.abs(car.rollRate) < A.tumbleAt || !onSide) {
-      car.rolling = false;
-      return false;
-    }
-    return true;
-  }
-  if (Math.abs(car.rollRate) < A.tumbleAt) return false;
-  car.rolling = true;
-  events.push({ type: "rollover", rate: Math.abs(car.rollRate), speed: Math.hypot(car.u, car.w) });
-  stats.rolls += 1;
+  if (!goesOver(car.roll, car.rollRate)) return false;
+  beginRoll(car, events, stats);
   return true;
 }

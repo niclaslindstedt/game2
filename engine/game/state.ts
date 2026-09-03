@@ -444,6 +444,19 @@ export function stillCar(car: CarState): void {
   updateSlip(car);
 }
 
+/** Rotate the car-frame velocity when the nose turns by `delta`. The world
+ * velocity is unchanged — this is what makes yawing at speed build slip.
+ * Kept here beside `updateSlip` because both the handling model and the
+ * roll turn the nose over a velocity the world is holding still. */
+export function rotateFrame(car: CarState, delta: number): void {
+  const cos = Math.cos(delta);
+  const sin = Math.sin(delta);
+  const u = car.u * cos + car.w * sin;
+  const w = -car.u * sin + car.w * cos;
+  car.u = u;
+  car.w = w;
+}
+
 /** Refresh the slip angle after anything rewrites `u`/`w` directly — the
  * grounded step's lateral-grip redirect rebuilds the velocity FROM this
  * angle, so a stale slip silently erases the change (collision impulses
@@ -678,6 +691,14 @@ export type GameState = {
    * The renderer reads it to boil the surface around the hull, and the bot
    * and the HUD to know that nothing they ask for is being listened to. */
   drowning: DrownState | null;
+  /** Set the moment a roll stops with the car NOT on its wheels, with the
+   * sim time it came to rest at; null the rest of the time. Nobody drives
+   * away from a car lying on its flank or its roof, so the run has ended
+   * where it lies: the seconds on this clock are there to be looked at,
+   * and at the end of them the crew are back at the last split board
+   * (`TUNING.air.roll.lieFor`). The renderer and the HUD read it to say so
+   * — and so does every rival, who is stepped through exactly this. */
+  overturned: { since: number } | null;
   /** Sim time since creation, seconds. */
   t: number;
   /** Time spent racing (excludes countdown), seconds — it stops at the

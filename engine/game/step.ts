@@ -25,6 +25,7 @@ import { clutchDump, spinHeadroom, stepAirborne, stepGrounded, type GroundContex
 import { clipKerbs, clipSolids, collideCar } from "./collision.ts";
 import { beyondDriving } from "./damage.ts";
 import { plant, seatOn } from "./ground.ts";
+import { onItsWheels, stepRolling } from "./roll.ts";
 import {
   boardHalfWidth,
   crossedFinish,
@@ -254,6 +255,7 @@ export function createGame(options: CreateGameOptions): GameState {
     wrongWayAt: 0,
     stuck: { x: car.x, z: car.z, since: 0 },
     drowning: null,
+    overturned: null,
     // What the car is stood on before its first step: the road it starts
     // on, whatever this country blades its roads out of (R40).
     surface: track.samples[0]?.surface ?? "gravel",
@@ -304,6 +306,7 @@ function respawn(state: GameState, events: GameEvent[], home: WayHome): void {
   // parts and the hurt systems all stay.
   if (car.damage.wear >= 1) car.damage.wear = T.collision.repairTo;
   state.drowning = null;
+  state.overturned = null;
   state.progressIndex = home.index;
   state.nearIndex = home.index;
   state.progressS = state.track.samples[home.index].s;
@@ -484,6 +487,27 @@ function stepDrowning(state: GameState, events: GameEvent[]): void {
   }
 
   if (age >= D.duration) respawn(state, events, lastCheckpoint(state));
+}
+
+/** ON ITS ROOF. The roll is over and the car is lying on a face of itself
+ * that is not its wheels, which — unlike every other way a run goes wrong
+ * — is not something a driver can work out of: there is no tyre on the
+ * ground, so the throttle, the wheel and the lever all reach nothing. So
+ * the beat is simply looked at, and then the crew are put back at the last
+ * split board (R28) exactly as a drowning does.
+ *
+ * The car is left EXACTLY as the roll left it: nothing settles it further,
+ * nothing rocks it, and nothing rights it. What is on the screen for these
+ * seconds is the pose the physics chose.
+ *
+ * This is also how the RIVALS behave, without a line of their own: every
+ * car in the field is stepped through here (sim/field.ts), so a crew that
+ * rolls out is back at their own last board a beat later and drives the
+ * rest of the stage from it. */
+function stepOverturned(state: GameState, events: GameEvent[]): void {
+  const lying = state.overturned as NonNullable<GameState["overturned"]>;
+  if (state.t - lying.since < T.air.roll.lieFor) return;
+  respawn(state, events, lastCheckpoint(state));
 }
 
 /** The wedge check: a car pinned against a trunk with the throttle buried
@@ -752,6 +776,14 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     stepDrowning(state, events);
     return events;
   }
+  // ...and neither is a car lying on its roof. The roll has stopped and it
+  // has stopped somewhere nobody drives away from, so the same rule holds:
+  // the clock above runs and nothing below it does, until the crew are put
+  // back at the last split board.
+  if (state.overturned) {
+    stepOverturned(state, events);
+    return events;
+  }
   const drive = state.phase === "rollout" ? rollOutInput(state) : input;
   const car = state.car;
   const track = state.track;
@@ -884,10 +916,28 @@ export function step(state: GameState, input: CarInput): GameEvent[] {
     ctx.wild = false;
   }
 
-  if (car.airborne) {
+  if (car.rolling) {
+    // Past its outside wheels and turning: there is no tyre on the ground
+    // to steer or drive with, so the input is not read and the body is
+    // simply a shape going over (roll.ts) — including the flights BETWEEN
+    // its contacts, which belong to the roll and not to the ordinary air,
+    // because a turning body flies about its own centre while the wheel
+    // plane the air flies goes round with it. It ends either back on its
+    // wheels or lying on a flank or its roof, and `stepOverturned` below
+    // is what happens in the second case.
+    stepRolling(state.spec, car, ctx, events, state.stats);
+  } else if (car.airborne) {
     stepAirborne(state.spec, car, drive, ctx, events, state.stats);
   } else {
     stepGrounded(state.spec, car, drive, ctx, events, state.stats);
+  }
+  // ...and WHERE that roll stopped is the whole of the question. Asked of
+  // a body that has finished moving, so a car mid-roll and a car in the
+  // air are both still having their go: only one that is down, still and
+  // past the basin its own weight could right it from has actually come to
+  // rest on something that is not its wheels.
+  if (!car.rolling && !car.airborne && !onItsWheels(car.roll)) {
+    state.overturned = { since: state.t };
   }
 
   const fix = locatePoint(track, car.x, car.z, state.nearIndex);
